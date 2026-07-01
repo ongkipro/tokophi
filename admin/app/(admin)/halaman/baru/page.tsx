@@ -232,79 +232,80 @@ export default function Page() {
             </CardContent>
           </Card>
 
-          {/* SEO */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Pratinjau mesin pencari</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              {/* Google-style preview */}
-              <div className="rounded-md border border-border bg-background p-3">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Globe className="size-3" />
-                  <span className="truncate text-emerald-700 dark:text-emerald-500">
-                    indostore.id › pages › {previewHandle}
-                  </span>
-                </div>
-                <p className="mt-1 truncate text-base font-medium text-blue-700 dark:text-blue-400">
-                  {previewTitle}
-                </p>
-                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                  {previewDesc}
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="seo-title">Judul halaman (SEO)</Label>
-                <Input
-                  id="seo-title"
-                  placeholder={title || "mis. Tentang Kami"}
-                  value={seoTitle}
-                  onChange={(e) => setSeoTitle(e.target.value)}
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="seo-desc">Deskripsi meta</Label>
-                  <span className={`text-xs tabular-nums ${metaTone}`}>
-                    {metaLen} / 155
-                  </span>
-                </div>
-                <Textarea
-                  id="seo-desc"
-                  placeholder="Ringkasan singkat yang muncul di hasil pencarian."
-                  className="min-h-20"
-                  value={metaDesc}
-                  onChange={(e) => setMetaDesc(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Idealnya 120–155 karakter.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="handle">URL &amp; handle</Label>
-                <div className="flex items-center rounded-md border border-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
-                  <span className="pl-2.5 text-sm text-muted-foreground">
-                    /pages/
-                  </span>
-                  <Input
-                    id="handle"
-                    value={effectiveHandle}
-                    onChange={(e) => {
-                      setHandleEdited(true);
-                      setHandle(slugify(e.target.value));
-                    }}
-                    placeholder="handle"
-                    className="border-0 pl-1 focus-visible:ring-0"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
+
+      {/* SEO */}
+      <Card className="mt-5">
+        <CardHeader>
+          <CardTitle>Pratinjau mesin pencari</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {/* Google-style preview */}
+          <div className="max-w-2xl rounded-md border border-border bg-background p-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Globe className="size-3" />
+              <span className="truncate text-emerald-700 dark:text-emerald-500">
+                indostore.id › pages › {previewHandle}
+              </span>
+            </div>
+            <p className="mt-1 truncate text-base font-medium text-blue-700 dark:text-blue-400">
+              {previewTitle}
+            </p>
+            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+              {previewDesc}
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="seo-title">Judul halaman (SEO)</Label>
+            <Input
+              id="seo-title"
+              placeholder={title || "mis. Tentang Kami"}
+              value={seoTitle}
+              onChange={(e) => setSeoTitle(e.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="seo-desc">Deskripsi meta</Label>
+              <span className={`text-xs tabular-nums ${metaTone}`}>
+                {metaLen} / 155
+              </span>
+            </div>
+            <Textarea
+              id="seo-desc"
+              placeholder="Ringkasan singkat yang muncul di hasil pencarian."
+              className="min-h-20"
+              value={metaDesc}
+              onChange={(e) => setMetaDesc(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Idealnya 120–155 karakter.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="handle">URL &amp; handle</Label>
+            <div className="flex items-center rounded-md border border-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+              <span className="pl-2.5 text-sm text-muted-foreground">
+                /pages/
+              </span>
+              <Input
+                id="handle"
+                value={effectiveHandle}
+                onChange={(e) => {
+                  setHandleEdited(true);
+                  setHandle(slugify(e.target.value));
+                }}
+                placeholder="handle"
+                className="border-0 pl-1 focus-visible:ring-0"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

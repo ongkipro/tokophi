@@ -233,66 +233,67 @@ export default function Page() {
             </CardContent>
           </Card>
 
-          {/* SEO */}
-          <Card>
-            <CardHeader>
-              <CardTitle>SEO</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              {/* Google preview */}
-              <div className="rounded-lg border bg-background p-3">
-                <p className="truncate text-xs text-muted-foreground">
-                  tokoanda.com › blogs › {blog.toLowerCase().replace(/\s+/g, "-")}{" "}
-                  › {handle || "judul-artikel"}
-                </p>
-                <p className="mt-0.5 truncate text-sm font-medium text-[#1a0dab] dark:text-blue-400">
-                  Judul artikel Anda - Toko Anda
-                </p>
-                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                  {metaDesc ||
-                    "Deskripsi meta akan tampil di sini sebagai cuplikan hasil pencarian Google."}
-                </p>
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="seo-judul">Judul SEO</Label>
-                <Input id="seo-judul" placeholder="Judul untuk mesin pencari" />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="seo-desc">Deskripsi meta</Label>
-                <Textarea
-                  id="seo-desc"
-                  rows={3}
-                  maxLength={META_LIMIT}
-                  value={metaDesc}
-                  onChange={(e) => setMetaDesc(e.target.value)}
-                  placeholder="Ringkasan yang muncul di hasil pencarian…"
-                />
-                <p className="text-right text-xs text-muted-foreground tabular-nums">
-                  {metaDesc.length}/{META_LIMIT}
-                </p>
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="handle">Handle URL</Label>
-                <div className="flex items-center rounded-md border bg-muted/30 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
-                  <span className="pl-3 text-sm text-muted-foreground whitespace-nowrap">
-                    /blogs/…/
-                  </span>
-                  <Input
-                    id="handle"
-                    value={handle}
-                    onChange={(e) => setHandle(e.target.value)}
-                    placeholder="judul-artikel"
-                    className="border-0 bg-transparent pl-1 shadow-none focus-visible:border-0 focus-visible:ring-0"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
+
+      {/* SEO */}
+      <Card className="mt-5">
+        <CardHeader>
+          <CardTitle>Pratinjau mesin pencari</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {/* Google preview */}
+          <div className="max-w-2xl rounded-lg border bg-background p-3">
+            <p className="truncate text-xs text-muted-foreground">
+              tokoanda.com › blogs › {blog.toLowerCase().replace(/\s+/g, "-")}{" "}
+              › {handle || "judul-artikel"}
+            </p>
+            <p className="mt-0.5 truncate text-sm font-medium text-[#1a0dab] dark:text-blue-400">
+              Judul artikel Anda - Toko Anda
+            </p>
+            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+              {metaDesc ||
+                "Deskripsi meta akan tampil di sini sebagai cuplikan hasil pencarian Google."}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="seo-judul">Judul SEO</Label>
+            <Input id="seo-judul" placeholder="Judul untuk mesin pencari" />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="seo-desc">Deskripsi meta</Label>
+            <Textarea
+              id="seo-desc"
+              rows={3}
+              maxLength={META_LIMIT}
+              value={metaDesc}
+              onChange={(e) => setMetaDesc(e.target.value)}
+              placeholder="Ringkasan yang muncul di hasil pencarian…"
+            />
+            <p className="text-right text-xs text-muted-foreground tabular-nums">
+              {metaDesc.length}/{META_LIMIT}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="handle">Handle URL</Label>
+            <div className="flex items-center rounded-md border bg-muted/30 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+              <span className="pl-3 text-sm text-muted-foreground whitespace-nowrap">
+                /blogs/…/
+              </span>
+              <Input
+                id="handle"
+                value={handle}
+                onChange={(e) => setHandle(e.target.value)}
+                placeholder="judul-artikel"
+                className="border-0 bg-transparent pl-1 shadow-none focus-visible:border-0 focus-visible:ring-0"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

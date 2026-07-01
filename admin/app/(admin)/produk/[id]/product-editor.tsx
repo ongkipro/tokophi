@@ -14,6 +14,12 @@ import {
   Trash2,
   ChevronDown,
   X,
+  MoreHorizontal,
+  Tags,
+  Boxes,
+  ShoppingCart,
+  Copy,
+  Archive,
 } from "lucide-react";
 
 import { type Product } from "@/lib/mock/store";
@@ -40,7 +46,17 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
 
 const CATEGORIES = [
   "Fashion",
@@ -118,6 +134,30 @@ export function ProductEditor({ product }: { product?: Product }) {
   );
   const [handleEdited, setHandleEdited] = React.useState(false);
 
+  // Quick-action dialogs (Tindakan lainnya)
+  const [catOpen, setCatOpen] = React.useState(false);
+  const [stockOpen, setStockOpen] = React.useState(false);
+  const [stockMode, setStockMode] = React.useState<"set" | "add" | "sub">("add");
+  const [stockAmount, setStockAmount] = React.useState("");
+  const [stockReason, setStockReason] = React.useState("");
+  const [poOpen, setPoOpen] = React.useState(false);
+  const [poSupplier, setPoSupplier] = React.useState("");
+  const [poQty, setPoQty] = React.useState("");
+  const [poCost, setPoCost] = React.useState("");
+  const [poEta, setPoEta] = React.useState("");
+
+  const curStock = Number(qty) || 0;
+  const stockAmt = Number(stockAmount) || 0;
+  const newStock =
+    stockMode === "set" ? stockAmt : stockMode === "add" ? curStock + stockAmt : Math.max(0, curStock - stockAmt);
+  const applyStock = () => {
+    setQty(String(newStock));
+    setStockOpen(false);
+    setStockAmount("");
+    setStockReason("");
+  };
+  const poTotal = (Number(poQty) || 0) * (Number(poCost) || seedCost || 0);
+
   // Keep the handle synced to the title until the user edits it manually.
   React.useEffect(() => {
     if (!handleEdited) setHandle(slugify(name));
@@ -175,6 +215,31 @@ export function ProductEditor({ product }: { product?: Product }) {
             <Badge variant="outline" className="text-muted-foreground">
               Draft
             </Badge>
+          )}
+          {isEdit && (
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" />}>
+                <MoreHorizontal /> Tindakan lainnya <ChevronDown className="text-muted-foreground" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuItem onClick={() => setCatOpen(true)}>
+                  <Tags /> Ubah kategori
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStockOpen(true)}>
+                  <Boxes /> Perbarui stok / inventori
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setPoOpen(true)}>
+                  <ShoppingCart /> Buat pesanan pembelian
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                  <Copy /> Duplikat
+                </DropdownMenuItem>
+                <DropdownMenuItem variant="destructive">
+                  <Archive /> Arsipkan
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           {isEdit && (
             <Button variant="ghost" className="text-destructive hover:bg-destructive/10">
@@ -653,71 +718,179 @@ export function ProductEditor({ product }: { product?: Product }) {
             </CardContent>
           </Card>
 
-          {/* SEO */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Pratinjau mesin pencari</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="seo-title">Judul SEO</Label>
-                <Input
-                  id="seo-title"
-                  value={seoTitle}
-                  onChange={(e) => setSeoTitle(e.target.value)}
-                  placeholder={name || "Judul produk"}
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="seo-desc">Deskripsi meta</Label>
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {num(metaDesc.length)}/160
-                  </span>
-                </div>
-                <Textarea
-                  id="seo-desc"
-                  value={metaDesc}
-                  maxLength={160}
-                  onChange={(e) => setMetaDesc(e.target.value)}
-                  placeholder="Ringkasan singkat untuk hasil pencarian…"
-                  className="min-h-20"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="seo-handle">Handle URL</Label>
-                <div className="flex items-center overflow-hidden rounded-lg border focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
-                  <span className="border-r bg-muted/40 px-2.5 py-1 text-sm text-muted-foreground">
-                    /products/
-                  </span>
-                  <Input
-                    id="seo-handle"
-                    value={handle}
-                    onChange={(e) => {
-                      setHandleEdited(true);
-                      setHandle(e.target.value);
-                    }}
-                    placeholder="handle-produk"
-                    className="rounded-none border-0 focus-visible:ring-0"
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-lg border bg-muted/30 p-3">
-                <p className="truncate text-xs text-emerald-700 dark:text-emerald-400">
-                  {seoUrl}
-                </p>
-                <p className="mt-0.5 truncate text-sm text-primary">
-                  {seoTitleText}
-                </p>
-                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                  {seoDescText}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
+
+      {/* SEO */}
+      <Card className="mt-5">
+        <CardHeader>
+          <CardTitle>Pratinjau mesin pencari</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="seo-title">Judul SEO</Label>
+            <Input
+              id="seo-title"
+              value={seoTitle}
+              onChange={(e) => setSeoTitle(e.target.value)}
+              placeholder={name || "Judul produk"}
+            />
+          </div>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="seo-desc">Deskripsi meta</Label>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {num(metaDesc.length)}/160
+              </span>
+            </div>
+            <Textarea
+              id="seo-desc"
+              value={metaDesc}
+              maxLength={160}
+              onChange={(e) => setMetaDesc(e.target.value)}
+              placeholder="Ringkasan singkat untuk hasil pencarian…"
+              className="min-h-20"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="seo-handle">Handle URL</Label>
+            <div className="flex items-center overflow-hidden rounded-lg border focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+              <span className="border-r bg-muted/40 px-2.5 py-1 text-sm text-muted-foreground">
+                /products/
+              </span>
+              <Input
+                id="seo-handle"
+                value={handle}
+                onChange={(e) => {
+                  setHandleEdited(true);
+                  setHandle(e.target.value);
+                }}
+                placeholder="handle-produk"
+                className="rounded-none border-0 focus-visible:ring-0"
+              />
+            </div>
+          </div>
+
+          <div className="max-w-2xl rounded-lg border bg-muted/30 p-3">
+            <p className="truncate text-xs text-emerald-700 dark:text-emerald-400">
+              {seoUrl}
+            </p>
+            <p className="mt-0.5 truncate text-sm text-primary">
+              {seoTitleText}
+            </p>
+            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+              {seoDescText}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Ubah kategori */}
+      <Dialog open={catOpen} onOpenChange={setCatOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Ubah kategori</DialogTitle>
+            <DialogDescription>Pilih kategori untuk produk ini.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Label>Kategori</Label>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" className="w-full justify-between font-normal" />}>
+                {category}
+                <ChevronDown className="text-muted-foreground" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-(--anchor-width)">
+                {CATEGORIES.map((c) => (
+                  <DropdownMenuItem key={c} onClick={() => setCategory(c)}>{c}</DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline">Batal</Button>} />
+            <DialogClose render={<Button>Simpan</Button>} />
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Perbarui stok / inventori */}
+      <Dialog open={stockOpen} onOpenChange={setStockOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Perbarui stok</DialogTitle>
+            <DialogDescription>Sesuaikan jumlah inventori produk ini.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Stok saat ini</span>
+              <span className="font-semibold tabular-nums">{num(curStock)}</span>
+            </div>
+            <div className="grid gap-2">
+              <Label>Tindakan</Label>
+              <div className="grid grid-cols-3 gap-1 rounded-lg border bg-background p-0.5">
+                {([["set", "Tetapkan"], ["add", "Tambah"], ["sub", "Kurangi"]] as const).map(([m, lbl]) => (
+                  <Button key={m} type="button" size="sm" variant={stockMode === m ? "secondary" : "ghost"} onClick={() => setStockMode(m)}>
+                    {lbl}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="stok-jumlah">Jumlah</Label>
+              <Input id="stok-jumlah" inputMode="numeric" value={stockAmount} onChange={(e) => setStockAmount(e.target.value)} placeholder="0" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="stok-alasan">Alasan (opsional)</Label>
+              <Input id="stok-alasan" value={stockReason} onChange={(e) => setStockReason(e.target.value)} placeholder="mis. Stok masuk, koreksi, retur…" />
+            </div>
+            {stockAmount !== "" && (
+              <p className="text-sm text-muted-foreground">Stok menjadi <span className="font-semibold text-foreground tabular-nums">{num(newStock)}</span></p>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline">Batal</Button>} />
+            <Button onClick={applyStock}>Perbarui stok</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Buat pesanan pembelian (Purchase Order) */}
+      <Dialog open={poOpen} onOpenChange={setPoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Buat pesanan pembelian</DialogTitle>
+            <DialogDescription>Pesan stok dari pemasok untuk produk ini.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="po-pemasok">Pemasok</Label>
+              <Input id="po-pemasok" value={poSupplier} onChange={(e) => setPoSupplier(e.target.value)} placeholder="mis. CV Sumber Rejeki" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="po-jumlah">Jumlah</Label>
+                <Input id="po-jumlah" inputMode="numeric" value={poQty} onChange={(e) => setPoQty(e.target.value)} placeholder="0" />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="po-biaya">Biaya / unit</Label>
+                <Input id="po-biaya" inputMode="numeric" value={poCost} onChange={(e) => setPoCost(e.target.value)} placeholder={seedCost ? `Rp ${num(seedCost)}` : "Rp 0"} />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="po-eta">Estimasi tiba</Label>
+              <Input id="po-eta" type="date" value={poEta} onChange={(e) => setPoEta(e.target.value)} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Total pembelian</span>
+              <span className="font-semibold tabular-nums">{IDR(poTotal)}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline">Batal</Button>} />
+            <DialogClose render={<Button>Buat PO</Button>} />
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
