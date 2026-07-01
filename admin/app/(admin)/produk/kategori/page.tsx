@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Plus, Search, MoreHorizontal, Pencil, ExternalLink, Trash2,
   Zap, Hand, FolderTree, Sparkles,
@@ -9,19 +11,12 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { num } from "@/lib/format";
 import { COLLECTIONS, type Collection } from "@/lib/mock/store";
-import { cn } from "@/lib/utils";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator,
@@ -65,76 +60,8 @@ function RowActions() {
   );
 }
 
-function CreateDialog() {
-  const [type, setType] = React.useState<Collection["type"]>("manual");
-  const [published, setPublished] = React.useState(true);
-
-  return (
-    <Dialog>
-      <DialogTrigger render={<Button><Plus /> Buat kategori</Button>} />
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Buat kategori baru</DialogTitle>
-          <DialogDescription>
-            Kelompokkan produk agar mudah ditemukan pelanggan di toko.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-4 py-1">
-          <div className="grid gap-2">
-            <Label htmlFor="kategori-nama">Nama kategori</Label>
-            <Input id="kategori-nama" placeholder="mis. Promo Gajian" autoComplete="off" />
-          </div>
-
-          <div className="grid gap-2">
-            <Label>Tipe koleksi</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setType("manual")}
-                aria-pressed={type === "manual"}
-                className={cn(
-                  "flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors",
-                  type === "manual" ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:bg-muted/50",
-                )}
-              >
-                <span className="flex items-center gap-1.5 text-sm font-medium"><Hand className="size-3.5" /> Manual</span>
-                <span className="text-xs text-muted-foreground">Pilih produk satu per satu.</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setType("otomatis")}
-                aria-pressed={type === "otomatis"}
-                className={cn(
-                  "flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors",
-                  type === "otomatis" ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:bg-muted/50",
-                )}
-              >
-                <span className="flex items-center gap-1.5 text-sm font-medium"><Zap className="size-3.5 text-primary" /> Otomatis</span>
-                <span className="text-xs text-muted-foreground">Produk masuk lewat aturan.</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div>
-              <Label htmlFor="kategori-terbit" className="cursor-pointer">Terbitkan</Label>
-              <p className="text-xs text-muted-foreground">Tampilkan kategori ini di toko.</p>
-            </div>
-            <Switch id="kategori-terbit" checked={published} onCheckedChange={setPublished} />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline">Batal</Button>} />
-          <DialogClose render={<Button>Simpan</Button>} />
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function Page() {
+  const router = useRouter();
   const [search, setSearch] = React.useState("");
 
   const filtered = React.useMemo(() => {
@@ -146,7 +73,9 @@ export default function Page() {
   return (
     <div>
       <PageHeader title="Kategori" desc="Kelompokkan produk ke dalam koleksi yang tampil di toko.">
-        <CreateDialog />
+        <Button nativeButton={false} render={<Link href="/produk/kategori/baru" />}>
+          <Plus /> Buat kategori
+        </Button>
       </PageHeader>
 
       {/* Helper: Otomatis vs Manual */}
@@ -188,7 +117,11 @@ export default function Page() {
             </TableHeader>
             <TableBody>
               {filtered.map((c) => (
-                <TableRow key={c.id} className="group cursor-pointer">
+                <TableRow
+                  key={c.id}
+                  className="group cursor-pointer"
+                  onClick={() => router.push(`/produk/kategori/${c.id}`)}
+                >
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-xl">{c.emoji}</div>
@@ -206,7 +139,12 @@ export default function Page() {
                   </TableCell>
                   <TableCell className="hidden sm:table-cell"><TypeBadge type={c.type} /></TableCell>
                   <TableCell><StatusBadge published={c.published} /></TableCell>
-                  <TableCell className="text-right"><RowActions /></TableCell>
+                  <TableCell
+                    className="text-right"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <RowActions />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

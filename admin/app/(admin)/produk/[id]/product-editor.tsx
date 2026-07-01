@@ -583,6 +583,70 @@ export function ProductEditor({ product }: { product?: Product }) {
               )}
             </CardContent>
           </Card>
+
+          {/* SEO */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Pratinjau mesin pencari</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="seo-title">Judul SEO</Label>
+                <Input
+                  id="seo-title"
+                  value={seoTitle}
+                  onChange={(e) => setSeoTitle(e.target.value)}
+                  placeholder={name || "Judul produk"}
+                />
+              </div>
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="seo-desc">Deskripsi meta</Label>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {num(metaDesc.length)}/160
+                  </span>
+                </div>
+                <Textarea
+                  id="seo-desc"
+                  value={metaDesc}
+                  maxLength={160}
+                  onChange={(e) => setMetaDesc(e.target.value)}
+                  placeholder="Ringkasan singkat untuk hasil pencarian…"
+                  className="min-h-20"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="seo-handle">Handle URL</Label>
+                <div className="flex items-center overflow-hidden rounded-lg border focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+                  <span className="border-r bg-muted/40 px-2.5 py-1 text-sm text-muted-foreground">
+                    /products/
+                  </span>
+                  <Input
+                    id="seo-handle"
+                    value={handle}
+                    onChange={(e) => {
+                      setHandleEdited(true);
+                      setHandle(e.target.value);
+                    }}
+                    placeholder="handle-produk"
+                    className="rounded-none border-0 focus-visible:ring-0"
+                  />
+                </div>
+              </div>
+
+              <div className="max-w-2xl rounded-lg border bg-muted/30 p-3">
+                <p className="truncate text-xs text-emerald-700 dark:text-emerald-400">
+                  {seoUrl}
+                </p>
+                <p className="mt-0.5 truncate text-sm text-primary">
+                  {seoTitleText}
+                </p>
+                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                  {seoDescText}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* SIDEBAR */}
@@ -720,70 +784,6 @@ export function ProductEditor({ product }: { product?: Product }) {
 
         </div>
       </div>
-
-      {/* SEO */}
-      <Card className="mt-5">
-        <CardHeader>
-          <CardTitle>Pratinjau mesin pencari</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="seo-title">Judul SEO</Label>
-            <Input
-              id="seo-title"
-              value={seoTitle}
-              onChange={(e) => setSeoTitle(e.target.value)}
-              placeholder={name || "Judul produk"}
-            />
-          </div>
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="seo-desc">Deskripsi meta</Label>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {num(metaDesc.length)}/160
-              </span>
-            </div>
-            <Textarea
-              id="seo-desc"
-              value={metaDesc}
-              maxLength={160}
-              onChange={(e) => setMetaDesc(e.target.value)}
-              placeholder="Ringkasan singkat untuk hasil pencarian…"
-              className="min-h-20"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="seo-handle">Handle URL</Label>
-            <div className="flex items-center overflow-hidden rounded-lg border focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
-              <span className="border-r bg-muted/40 px-2.5 py-1 text-sm text-muted-foreground">
-                /products/
-              </span>
-              <Input
-                id="seo-handle"
-                value={handle}
-                onChange={(e) => {
-                  setHandleEdited(true);
-                  setHandle(e.target.value);
-                }}
-                placeholder="handle-produk"
-                className="rounded-none border-0 focus-visible:ring-0"
-              />
-            </div>
-          </div>
-
-          <div className="max-w-2xl rounded-lg border bg-muted/30 p-3">
-            <p className="truncate text-xs text-emerald-700 dark:text-emerald-400">
-              {seoUrl}
-            </p>
-            <p className="mt-0.5 truncate text-sm text-primary">
-              {seoTitleText}
-            </p>
-            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-              {seoDescText}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Ubah kategori */}
       <Dialog open={catOpen} onOpenChange={setCatOpen}>
