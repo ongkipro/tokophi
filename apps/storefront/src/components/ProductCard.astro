@@ -1,0 +1,44 @@
+---
+import { IDR } from "@indostore/lib/format";
+import type { Product } from "../data/catalog";
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+---
+
+<a
+  href={`/produk/${product.handle}`}
+  class="group block overflow-hidden rounded-2xl bg-white ring-1 ring-line transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-200/40"
+>
+  <div class="relative aspect-[3/4] overflow-hidden bg-brand-50">
+    <img
+      src={product.image}
+      alt={product.name}
+      loading="lazy"
+      decoding="async"
+      class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+    />
+    {
+      product.badge && (
+        <span class="absolute left-3 top-3 rounded-full bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+          {product.badge}
+        </span>
+      )
+    }
+  </div>
+  <div class="p-4">
+    <h3 class="truncate font-medium text-ink">{product.name}</h3>
+    <p class="mt-1 text-sm text-muted">{product.category}</p>
+    <div class="mt-2 flex items-baseline gap-2">
+      <span class="font-semibold text-ink tabular-nums">{IDR(product.price)}</span>
+      {
+        product.compareAt && (
+          <span class="text-sm text-muted line-through tabular-nums">{IDR(product.compareAt)}</span>
+        )
+      }
+    </div>
+  </div>
+</a>

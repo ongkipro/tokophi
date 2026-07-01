@@ -1,0 +1,160 @@
+---
+import Layout from "../layouts/Layout.astro";
+import ProductCard from "../components/ProductCard.astro";
+import { STORE, COLLECTIONS, PRODUCTS, bestsellers } from "../data/catalog";
+
+const best = bestsellers();
+const heroProducts = [
+  PRODUCTS.find((p) => p.handle === "dress-batik"),
+  PRODUCTS.find((p) => p.handle === "gamis-syari"),
+  PRODUCTS.find((p) => p.handle === "dress-midi-bunga"),
+].filter(Boolean);
+---
+
+<Layout
+  title="Beranda"
+  description={`${STORE.name} — ${STORE.tagline}. Belanja dress, atasan, bawahan, busana muslim & outerwear wanita. Kirim se-Indonesia.`}
+>
+  <!-- Hero -->
+  <section class="relative overflow-hidden bg-gradient-to-b from-brand-50 to-cream">
+    <div class="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 md:grid-cols-2 md:py-24">
+      <div class="fadeup">
+        <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-medium text-brand-600 ring-1 ring-brand-200">
+          ✨ Koleksi {STORE.city}
+        </span>
+        <h1 class="mt-5 font-display text-4xl font-semibold leading-[1.1] text-ink sm:text-5xl md:text-6xl">
+          {STORE.tagline}
+        </h1>
+        <p class="mt-5 max-w-md text-lg text-muted">
+          Busana wanita yang anggun dan nyaman — dari batik bernilai budaya hingga
+          ready-to-wear kekinian. Dibuat untuk keseharianmu.
+        </p>
+        <div class="mt-8 flex flex-wrap items-center gap-3">
+          <a
+            href="/kategori/dress"
+            class="rounded-full bg-brand-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-200/60 transition-colors hover:bg-brand-700"
+          >
+            Belanja Sekarang
+          </a>
+          <a
+            href={`https://wa.me/${STORE.whatsapp}`}
+            target="_blank"
+            rel="noopener"
+            class="rounded-full border border-line bg-white px-7 py-3 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600"
+          >
+            Tanya via WhatsApp
+          </a>
+        </div>
+      </div>
+
+      <div class="fadeup grid grid-cols-2 gap-4">
+        {
+          heroProducts.map((p, i) => (
+            <a
+              href={`/produk/${p!.handle}`}
+              class:list={[
+                "group relative block overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-line",
+                i === 0 ? "col-span-2 aspect-[16/10]" : "aspect-[3/4]",
+              ]}
+            >
+              <img
+                src={p!.image}
+                alt={p!.name}
+                loading={i === 0 ? "eager" : "lazy"}
+                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+              <span class="absolute bottom-3 left-3 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-ink backdrop-blur">
+                {p!.name}
+              </span>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Collections -->
+  <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+    <div class="flex items-end justify-between">
+      <div>
+        <h2 class="font-display text-3xl font-semibold text-ink">Jelajahi Koleksi</h2>
+        <p class="mt-2 text-muted">Temukan gaya yang paling kamu banget.</p>
+      </div>
+    </div>
+    <div class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3">
+      {
+        COLLECTIONS.map((c) => (
+          <a
+            href={`/kategori/${c.handle}`}
+            class="group rounded-2xl border border-line bg-white p-6 transition-all hover:-translate-y-1 hover:border-brand-200 hover:shadow-lg hover:shadow-brand-200/30"
+          >
+            <span class="text-3xl">{c.emoji}</span>
+            <h3 class="mt-3 font-display text-lg font-semibold text-ink group-hover:text-brand-600">
+              {c.name}
+            </h3>
+            <p class="mt-1 text-sm text-muted">{c.blurb}</p>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Bestsellers -->
+  <section class="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+    <div class="flex items-end justify-between">
+      <div>
+        <h2 class="font-display text-3xl font-semibold text-ink">Paling Dicari</h2>
+        <p class="mt-2 text-muted">Favorit pelanggan minggu ini.</p>
+      </div>
+      <a href="/kategori/dress" class="hidden text-sm font-medium text-brand-600 hover:text-brand-700 sm:block">
+        Lihat semua →
+      </a>
+    </div>
+    <div class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      {best.map((p) => <ProductCard product={p} />)}
+    </div>
+  </section>
+
+  <!-- Values band -->
+  <section class="mt-16 bg-brand-50">
+    <div class="mx-auto grid max-w-7xl gap-8 px-4 py-14 sm:px-6 md:grid-cols-3">
+      <div class="flex items-start gap-4">
+        <span class="text-3xl">🚚</span>
+        <div>
+          <h3 class="font-display text-lg font-semibold text-ink">Kirim se-Indonesia</h3>
+          <p class="mt-1 text-sm text-muted">Pengiriman ke seluruh nusantara lewat kurir terpercaya.</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-4">
+        <span class="text-3xl">💵</span>
+        <div>
+          <h3 class="font-display text-lg font-semibold text-ink">COD Tersedia</h3>
+          <p class="mt-1 text-sm text-muted">Bayar di tempat untuk area terpilih. Belanja tanpa khawatir.</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-4">
+        <span class="text-3xl">📱</span>
+        <div>
+          <h3 class="font-display text-lg font-semibold text-ink">QRIS & E-Wallet</h3>
+          <p class="mt-1 text-sm text-muted">Bayar praktis pakai QRIS, transfer, atau dompet digital.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Closing CTA -->
+  <section class="mx-auto max-w-7xl px-4 py-20 text-center sm:px-6">
+    <h2 class="mx-auto max-w-2xl font-display text-3xl font-semibold text-ink sm:text-4xl">
+      Siap tampil anggun setiap hari?
+    </h2>
+    <p class="mx-auto mt-4 max-w-lg text-muted">
+      Jelajahi koleksi {STORE.name} dan temukan busana yang membuatmu percaya diri.
+    </p>
+    <a
+      href="/kategori/dress"
+      class="mt-8 inline-block rounded-full bg-brand-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-200/60 transition-colors hover:bg-brand-700"
+    >
+      Mulai Belanja
+    </a>
+  </section>
+</Layout>

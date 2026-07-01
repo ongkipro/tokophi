@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+/* Brand: elegant women's fashion (Batik Nusantara demo) */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Playfair Display", Georgia, "Times New Roman", serif;
+
+  --color-cream: #faf6f2;
+  --color-ink: #2b2326;
+  --color-muted: #8a7f82;
+  --color-line: #ece3dd;
+
+  --color-brand-50: #fdf2f5;
+  --color-brand-100: #fbe6ec;
+  --color-brand-200: #f5cdd8;
+  --color-brand-400: #d98aa1;
+  --color-brand-500: #c4708a;
+  --color-brand-600: #a85572;
+  --color-brand-700: #8a445d;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+body {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* simple fade-in for cards */
+@keyframes fadeup {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fadeup { animation: fadeup 0.5s ease both; }

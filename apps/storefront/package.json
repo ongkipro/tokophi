@@ -1,0 +1,19 @@
+{
+  "name": "@indostore/storefront",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@indostore/lib": "*",
+    "astro": "^5.14.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4",
+    "tailwindcss": "^4"
+  }
+}

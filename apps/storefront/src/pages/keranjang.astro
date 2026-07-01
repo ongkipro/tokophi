@@ -1,0 +1,141 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { STORE } from "../data/catalog";
+---
+
+<Layout title="Keranjang" description={`Keranjang belanja di ${STORE.name}. Checkout mudah via WhatsApp.`}>
+  <section class="mx-auto max-w-4xl px-4 py-12 sm:px-6">
+    <h1 class="font-display text-3xl font-semibold text-ink">Keranjang Belanja</h1>
+
+    <div id="cart-root" class="mt-8"></div>
+  </section>
+</Layout>
+
+<script define:vars={{ whatsapp: STORE.whatsapp, storeName: STORE.name }}>
+  (function () {
+    var root = document.getElementById("cart-root");
+    if (!root) return;
+
+    var idr = new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      maximumFractionDigits: 0,
+    });
+
+    function readCart() {
+      try {
+        return JSON.parse(localStorage.getItem("cart") || "[]");
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function writeCart(cart) {
+      localStorage.setItem("cart", JSON.stringify(cart));
+      window.dispatchEvent(new Event("cart:updated"));
+    }
+
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+
+    function render() {
+      var cart = readCart();
+
+      if (!cart.length) {
+        root.innerHTML =
+          '<div class="rounded-2xl border border-dashed border-line bg-white py-20 text-center">' +
+          '<p class="text-4xl">🛒</p>' +
+          '<h2 class="mt-4 font-display text-2xl font-semibold text-ink">Keranjangmu masih kosong</h2>' +
+          '<p class="mt-2 text-muted">Yuk jelajahi koleksi dan temukan busana favoritmu.</p>' +
+          '<a href="/" class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700">Mulai Belanja</a>' +
+          "</div>";
+        return;
+      }
+
+      var total = 0;
+      var rows = cart
+        .map(function (item, idx) {
+          var sub = item.price * item.qty;
+          total += sub;
+          return (
+            '<div class="flex items-center gap-4 border-b border-line py-4">' +
+            '<img src="' + esc(item.image) + '" alt="' + esc(item.name) + '" class="h-24 w-20 shrink-0 rounded-lg object-cover bg-brand-50" loading="lazy" />' +
+            '<div class="min-w-0 flex-1">' +
+            '<p class="truncate font-medium text-ink">' + esc(item.name) + "</p>" +
+            (item.size ? '<p class="mt-0.5 text-sm text-muted">Ukuran: ' + esc(item.size) + "</p>" : "") +
+            '<div class="mt-2 inline-flex items-center rounded-lg border border-line">' +
+            '<button type="button" data-dec="' + idx + '" class="px-3 py-1 text-muted hover:text-ink" aria-label="Kurangi">−</button>' +
+            '<span class="w-8 text-center text-sm tabular-nums">' + item.qty + "</span>" +
+            '<button type="button" data-inc="' + idx + '" class="px-3 py-1 text-muted hover:text-ink" aria-label="Tambah">+</button>' +
+            "</div>" +
+            "</div>" +
+            '<div class="text-right">' +
+            '<p class="font-semibold text-ink tabular-nums">' + idr.format(sub) + "</p>" +
+            '<button type="button" data-remove="' + idx + '" class="mt-2 text-sm text-muted underline hover:text-brand-600">Hapus</button>' +
+            "</div>" +
+            "</div>"
+          );
+        })
+        .join("");
+
+      root.innerHTML =
+        '<div class="rounded-2xl border border-line bg-white p-4 sm:p-6">' + rows +
+        '<div class="mt-6 flex items-center justify-between">' +
+        '<span class="text-lg font-medium text-ink">Total</span>' +
+        '<span class="font-display text-2xl font-semibold text-ink tabular-nums">' + idr.format(total) + "</span>" +
+        "</div>" +
+        '<button type="button" id="checkout" class="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-[#25D366] px-6 py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90">Checkout via WhatsApp</button>' +
+        '<a href="/" class="mt-3 block text-center text-sm text-muted underline hover:text-brand-600">Lanjut belanja</a>' +
+        "</div>";
+
+      root.querySelectorAll("[data-remove]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var c = readCart();
+          c.splice(Number(b.getAttribute("data-remove")), 1);
+          writeCart(c);
+          render();
+        });
+      });
+      root.querySelectorAll("[data-inc]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var c = readCart();
+          var i = Number(b.getAttribute("data-inc"));
+          c[i].qty = Math.min(99, c[i].qty + 1);
+          writeCart(c);
+          render();
+        });
+      });
+      root.querySelectorAll("[data-dec]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var c = readCart();
+          var i = Number(b.getAttribute("data-dec"));
+          c[i].qty = Math.max(1, c[i].qty - 1);
+          writeCart(c);
+          render();
+        });
+      });
+
+      var checkout = document.getElementById("checkout");
+      checkout?.addEventListener("click", function () {
+        var c = readCart();
+        var lines = c.map(function (item) {
+          return (
+            "• " + item.name + (item.size ? " (" + item.size + ")" : "") +
+            " x" + item.qty + " — " + idr.format(item.price * item.qty)
+          );
+        });
+        var msg =
+          "Halo " + storeName + ", saya mau checkout pesanan berikut:\n\n" +
+          lines.join("\n") +
+          "\n\n*Total: " + idr.format(total) + "*";
+        window.open("https://wa.me/" + whatsapp + "?text=" + encodeURIComponent(msg), "_blank");
+      });
+    }
+
+    render();
+    window.addEventListener("cart:updated", render);
+  })();
+</script>
