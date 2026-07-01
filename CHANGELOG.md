@@ -80,3 +80,4 @@ All notable changes to the admin. Dates are absolute. Phase: UI/UX-first (mock d
 - Restructured to a **monorepo** (npm workspaces): apps/admin + apps/super-admin + packages/ui (shared shadcn/Base UI) + packages/lib (formatters). Both apps build.
 - **Super Admin** platform control plane (Dashboard/Toko/Paket & Billing/Analitik/Pengaturan) on the shared design system; 18 mock merchant stores; runs on :3001.
 - Docs: AGENTS/README/PRD/BACKLOG updated for the monorepo + 3-surface model.
+- Docs: PRD v0.3 (payments/shipping model + doc links), **UML.md** (Mermaid: components/ER/sequence/deployment/roles), **TASKS.md** (prototype task breakdown, Epics 0–6).
