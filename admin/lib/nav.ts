@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, ShoppingBag, Package, Users, TicketPercent,
-  BarChart3, Settings, FileText, Newspaper, ListTree, type LucideIcon,
+  BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, type LucideIcon,
 } from "lucide-react";
 
 export type NavItem = { label: string; href: string; icon: LucideIcon; badge?: string };
@@ -16,6 +16,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Pelanggan", href: "/pelanggan", icon: Users },
       { label: "Diskon", href: "/diskon", icon: TicketPercent },
       { label: "Analitik", href: "/analitik", icon: BarChart3 },
+      { label: "Pemasaran", href: "/pemasaran", icon: Megaphone },
     ],
   },
   {

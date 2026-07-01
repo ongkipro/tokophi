@@ -285,3 +285,71 @@ export const MENUS: NavMenu[] = [
     ],
   },
 ];
+
+// ---- marketing: ad channels + tracking pixels (Meta / Google / TikTok) ----
+export type AdChannelKey = "meta" | "google" | "tiktok";
+export type AdCampaign = { name: string; spend: number; conversions: number; revenue: number };
+export type AdChannel = {
+  key: AdChannelKey; name: string; brand: string; connected: boolean;
+  pixelLabel: string; pixelId: string; pixelActive: boolean; capiActive: boolean;
+  spend: number; impressions: number; clicks: number; conversions: number; revenue: number;
+  campaigns: AdCampaign[];
+};
+export const AD_CHANNELS: AdChannel[] = [
+  {
+    key: "meta", name: "Meta Ads", brand: "#0866FF", connected: true,
+    pixelLabel: "Meta Pixel + Conversions API", pixelId: "1029384756574839", pixelActive: true, capiActive: true,
+    spend: 18_500_000, impressions: 1_240_000, clicks: 38_400, conversions: 421, revenue: 78_200_000,
+    campaigns: [
+      { name: "Prospecting — Fashion", spend: 7_800_000, conversions: 168, revenue: 31_500_000 },
+      { name: "Retargeting — Keranjang", spend: 5_200_000, conversions: 143, revenue: 28_900_000 },
+      { name: "Lookalike — Pembeli 90 hari", spend: 5_500_000, conversions: 110, revenue: 17_800_000 },
+    ],
+  },
+  {
+    key: "google", name: "Google Ads", brand: "#1A73E8", connected: true,
+    pixelLabel: "Google Tag (GA4) + Konversi Google Ads", pixelId: "G-8K2ZQ7WYX1", pixelActive: true, capiActive: false,
+    spend: 12_100_000, impressions: 684_000, clicks: 21_900, conversions: 258, revenue: 52_400_000,
+    campaigns: [
+      { name: "Search — Brand", spend: 3_100_000, conversions: 96, revenue: 21_200_000 },
+      { name: "Shopping — Katalog", spend: 5_400_000, conversions: 102, revenue: 20_600_000 },
+      { name: "Performance Max", spend: 3_600_000, conversions: 60, revenue: 10_600_000 },
+    ],
+  },
+  {
+    key: "tiktok", name: "TikTok Ads", brand: "#FE2C55", connected: false,
+    pixelLabel: "TikTok Pixel + Events API", pixelId: "", pixelActive: false, capiActive: false,
+    spend: 9_050_000, impressions: 2_130_000, clicks: 40_800, conversions: 176, revenue: 30_900_000,
+    campaigns: [
+      { name: "Spark Ads — Video Produk", spend: 5_050_000, conversions: 112, revenue: 19_400_000 },
+      { name: "VSA — Katalog", spend: 4_000_000, conversions: 64, revenue: 11_500_000 },
+    ],
+  },
+];
+
+// ---- analytics extras (funnel, region, device, new-vs-returning) ----
+export const FUNNEL = [
+  { step: "Kunjungan", count: 18_816 },
+  { step: "Lihat Produk", count: 11_740 },
+  { step: "Tambah ke Keranjang", count: 4_180 },
+  { step: "Mulai Checkout", count: 1_512 },
+  { step: "Pembelian", count: 646 },
+];
+export const REGION_SALES = [
+  { city: "Jakarta", sales: 31_400_000 },
+  { city: "Bandung", sales: 18_900_000 },
+  { city: "Surabaya", sales: 16_200_000 },
+  { city: "Medan", sales: 11_800_000 },
+  { city: "Semarang", sales: 9_600_000 },
+  { city: "Makassar", sales: 7_300_000 },
+  { city: "Lainnya", sales: 22_732_299 },
+];
+export const DEVICE_SPLIT = [
+  { device: "Ponsel", value: 78 },
+  { device: "Desktop", value: 18 },
+  { device: "Tablet", value: 4 },
+];
+export const NEW_VS_RETURNING = [
+  { type: "Pelanggan Baru", value: 62 },
+  { type: "Pelanggan Kembali", value: 38 },
+];
