@@ -1,0 +1,11 @@
+# deps & build
+**/node_modules/
+**/.next/
+**/dist/
+**/.turbo/
+# env & misc
+**/.env*
+!**/.env.example
+.DS_Store
+*.log
+**/.wrangler/
