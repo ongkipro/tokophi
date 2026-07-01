@@ -114,6 +114,11 @@ export const PRODUCTS: Product[] = PRODUCT_SEED.map(([name, emoji, price, catego
     unitsSold: Math.round(30 + rnd() * 900),
   };
 });
+// Curated variety for a realistic demo (a couple of drafts + low-stock items).
+PRODUCTS[7].status = "draft";   // Lip Cream Matte
+PRODUCTS[12].status = "draft";  // Mainan Edukasi Kayu
+PRODUCTS[9].stock = 8;          // Earphone Bluetooth TWS — menipis
+PRODUCTS[3].stock = 14;         // Tas Ransel Anti Air — menipis
 
 // ---- orders ----
 export type OrderStatus = "baru" | "diproses" | "dikirim" | "selesai" | "batal";

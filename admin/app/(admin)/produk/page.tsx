@@ -4,407 +4,336 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Plus,
-  Upload,
-  Search,
-  LayoutGrid,
-  List,
-  ChevronDown,
-  MoreHorizontal,
-  Pencil,
-  Copy,
-  Archive,
-  Package,
-  CheckCircle2,
-  AlertTriangle,
-  Tags,
-  Check,
+  Plus, Upload, Search, LayoutGrid, List, ChevronDown, MoreHorizontal,
+  Pencil, Copy, Archive, Package, CheckCircle2, AlertTriangle, Tags, Check,
+  ArrowUpDown, X, Trash2, CircleCheck, FileText,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { IDR, num } from "@/lib/format";
 import { PRODUCTS, type Product } from "@/lib/mock/store";
+import { cn } from "@/lib/utils";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
 const LOW_STOCK = 20;
-
 const CATEGORIES = Array.from(new Set(PRODUCTS.map((p) => p.category)));
 
-type StatusFilter = "all" | "active" | "draft";
+type TabKey = "all" | "active" | "draft" | "low";
+type SortKey = "unggulan" | "nama" | "harga-desc" | "harga-asc" | "stok-asc" | "terlaris";
+
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: "unggulan", label: "Unggulan" },
+  { key: "nama", label: "Nama A–Z" },
+  { key: "harga-desc", label: "Harga tertinggi" },
+  { key: "harga-asc", label: "Harga terendah" },
+  { key: "stok-asc", label: "Stok paling sedikit" },
+  { key: "terlaris", label: "Terlaris" },
+];
 
 function StockBadge({ stock }: { stock: number }) {
-  if (stock <= 0) {
-    return <Badge variant="destructive">Habis</Badge>;
-  }
-  if (stock < LOW_STOCK) {
-    return (
-      <Badge className="border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/50 dark:text-amber-400">
-        Menipis · {num(stock)}
-      </Badge>
-    );
-  }
-  return (
-    <Badge className="border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/50 dark:text-emerald-400">
-      Stok {num(stock)}
-    </Badge>
-  );
+  if (stock <= 0) return <Badge variant="destructive">Habis</Badge>;
+  if (stock < LOW_STOCK)
+    return <Badge className="border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/50 dark:text-amber-400">Menipis · {num(stock)}</Badge>;
+  return <Badge className="border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/50 dark:text-emerald-400">Stok {num(stock)}</Badge>;
 }
 
 function StatusBadge({ status }: { status: Product["status"] }) {
-  return status === "active" ? (
-    <Badge variant="secondary">Aktif</Badge>
-  ) : (
-    <Badge variant="outline" className="text-muted-foreground">
-      Draft
-    </Badge>
-  );
+  return status === "active"
+    ? <Badge variant="secondary">Aktif</Badge>
+    : <Badge variant="outline" className="text-muted-foreground">Draft</Badge>;
 }
 
 function RowActions() {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button variant="ghost" size="icon-sm" aria-label="Aksi produk" />
-        }
-      >
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi produk" />}>
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem>
-          <Pencil />
-          Edit
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Copy />
-          Duplikat
-        </DropdownMenuItem>
+        <DropdownMenuItem><Pencil /> Edit</DropdownMenuItem>
+        <DropdownMenuItem><Copy /> Duplikat</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive">
-          <Archive />
-          Arsipkan
-        </DropdownMenuItem>
+        <DropdownMenuItem variant="destructive"><Archive /> Arsipkan</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-function StatCard({
-  icon,
-  label,
-  value,
-  accent,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  accent?: string;
+function StatCard({ icon, label, value, accent, active, onClick }: {
+  icon: React.ReactNode; label: string; value: string; accent?: string; active?: boolean; onClick?: () => void;
 }) {
   return (
-    <Card className="py-0">
-      <CardContent className="flex items-center gap-3 p-4">
-        <div
-          className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${
-            accent ?? "bg-muted text-muted-foreground"
-          }`}
-        >
-          {icon}
-        </div>
-        <div className="min-w-0">
-          <p className="truncate text-xs text-muted-foreground">{label}</p>
-          <p className="text-lg font-semibold tabular-nums tracking-tight">
-            {value}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+    <button type="button" onClick={onClick} className="text-left">
+      <Card className={cn("py-0 transition-colors hover:border-primary/40", active && "border-primary ring-1 ring-primary/30")}>
+        <CardContent className="flex items-center gap-3 p-4">
+          <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", accent ?? "bg-muted text-muted-foreground")}>{icon}</div>
+          <div className="min-w-0">
+            <p className="truncate text-xs text-muted-foreground">{label}</p>
+            <p className="text-lg font-semibold tabular-nums tracking-tight">{value}</p>
+          </div>
+        </CardContent>
+      </Card>
+    </button>
   );
 }
 
 export default function Page() {
   const router = useRouter();
   const [search, setSearch] = React.useState("");
-  const [category, setCategory] = React.useState<string>("all");
-  const [status, setStatus] = React.useState<StatusFilter>("all");
+  const [category, setCategory] = React.useState("all");
+  const [tab, setTab] = React.useState<TabKey>("all");
+  const [sort, setSort] = React.useState<SortKey>("unggulan");
   const [view, setView] = React.useState<"grid" | "list">("grid");
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
 
-  const stats = React.useMemo(() => {
-    const total = PRODUCTS.length;
-    const active = PRODUCTS.filter((p) => p.status === "active").length;
-    const low = PRODUCTS.filter((p) => p.stock < LOW_STOCK).length;
-    const categories = new Set(PRODUCTS.map((p) => p.category)).size;
-    return { total, active, low, categories };
-  }, []);
+  const counts = React.useMemo(() => ({
+    all: PRODUCTS.length,
+    active: PRODUCTS.filter((p) => p.status === "active").length,
+    draft: PRODUCTS.filter((p) => p.status === "draft").length,
+    low: PRODUCTS.filter((p) => p.stock < LOW_STOCK).length,
+  }), []);
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
-    return PRODUCTS.filter((p) => {
+    const arr = PRODUCTS.filter((p) => {
       if (q && !p.name.toLowerCase().includes(q)) return false;
       if (category !== "all" && p.category !== category) return false;
-      if (status !== "all" && p.status !== status) return false;
+      if (tab === "active" && p.status !== "active") return false;
+      if (tab === "draft" && p.status !== "draft") return false;
+      if (tab === "low" && p.stock >= LOW_STOCK) return false;
       return true;
     });
-  }, [search, category, status]);
+    const sorted = [...arr];
+    if (sort === "nama") sorted.sort((a, b) => a.name.localeCompare(b.name, "id"));
+    else if (sort === "harga-desc") sorted.sort((a, b) => b.price - a.price);
+    else if (sort === "harga-asc") sorted.sort((a, b) => a.price - b.price);
+    else if (sort === "stok-asc") sorted.sort((a, b) => a.stock - b.stock);
+    else if (sort === "terlaris") sorted.sort((a, b) => b.unitsSold - a.unitsSold);
+    return sorted;
+  }, [search, category, tab, sort]);
 
-  const statusLabel =
-    status === "all" ? "Semua" : status === "active" ? "Aktif" : "Draft";
+  const TABS: { key: TabKey; label: string; count: number }[] = [
+    { key: "all", label: "Semua", count: counts.all },
+    { key: "active", label: "Aktif", count: counts.active },
+    { key: "draft", label: "Draft", count: counts.draft },
+    { key: "low", label: "Stok Menipis", count: counts.low },
+  ];
+
+  const toggle = (id: string) =>
+    setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const clearSel = () => setSelected(new Set());
+  const visibleIds = filtered.map((p) => p.id);
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(visibleIds));
+
+  const hasFilters = search !== "" || category !== "all" || tab !== "all";
+  const resetFilters = () => { setSearch(""); setCategory("all"); setTab("all"); };
 
   return (
     <div>
       <PageHeader title="Produk" desc="Kelola katalog, stok, dan status produk.">
-        <Button variant="outline">
-          <Upload />
-          Impor
-        </Button>
-        <Button nativeButton={false} render={<Link href="/produk/baru" />}>
-          <Plus />
-          Tambah Produk
-        </Button>
+        <Button variant="outline"><Upload /> Impor</Button>
+        <Button nativeButton={false} render={<Link href="/produk/baru" />}><Plus /> Tambah Produk</Button>
       </PageHeader>
 
-      {/* Stat row */}
+      {/* Stat row (clickable quick-filters) */}
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          icon={<Package className="size-4" />}
-          label="Total Produk"
-          value={num(stats.total)}
-        />
-        <StatCard
-          icon={<CheckCircle2 className="size-4" />}
-          label="Produk Aktif"
-          value={num(stats.active)}
-          accent="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
-        />
-        <StatCard
-          icon={<AlertTriangle className="size-4" />}
-          label="Stok Menipis"
-          value={num(stats.low)}
-          accent="bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
-        />
-        <StatCard
-          icon={<Tags className="size-4" />}
-          label="Kategori"
-          value={num(stats.categories)}
-        />
+        <StatCard icon={<Package className="size-4" />} label="Total Produk" value={num(counts.all)} active={tab === "all"} onClick={() => setTab("all")} />
+        <StatCard icon={<CheckCircle2 className="size-4" />} label="Produk Aktif" value={num(counts.active)} accent="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400" active={tab === "active"} onClick={() => setTab("active")} />
+        <StatCard icon={<AlertTriangle className="size-4" />} label="Stok Menipis" value={num(counts.low)} accent="bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400" active={tab === "low"} onClick={() => setTab("low")} />
+        <StatCard icon={<Tags className="size-4" />} label="Kategori" value={num(new Set(PRODUCTS.map((p) => p.category)).size)} />
+      </div>
+
+      {/* Status tabs */}
+      <div className="mb-3 flex items-center gap-1 overflow-x-auto border-b">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={cn(
+              "flex items-center gap-2 whitespace-nowrap border-b-2 px-3 pb-2.5 pt-1 text-sm font-medium transition-colors",
+              tab === t.key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.label}
+            <span className={cn("rounded-full px-1.5 text-[11px] tabular-nums", tab === t.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>{t.count}</span>
+          </button>
+        ))}
       </div>
 
       {/* Toolbar */}
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:max-w-xs">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari produk…"
-            className="pl-8"
-          />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari produk…" className="pl-8" />
         </div>
-
         <div className="flex flex-wrap items-center gap-2">
-          {/* Category filter */}
           <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<Button variant="outline" size="sm" />}
-            >
-              <Tags />
-              {category === "all" ? "Kategori" : category}
-              <ChevronDown className="text-muted-foreground" />
+            <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+              <Tags /> {category === "all" ? "Kategori" : category} <ChevronDown className="text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
               <DropdownMenuLabel>Kategori</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => setCategory("all")}>
-                Semua
-                {category === "all" && <Check className="ml-auto" />}
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCategory("all")}>Semua {category === "all" && <Check className="ml-auto" />}</DropdownMenuItem>
               <DropdownMenuSeparator />
               {CATEGORIES.map((c) => (
-                <DropdownMenuItem key={c} onClick={() => setCategory(c)}>
-                  {c}
-                  {category === c && <Check className="ml-auto" />}
-                </DropdownMenuItem>
+                <DropdownMenuItem key={c} onClick={() => setCategory(c)}>{c} {category === c && <Check className="ml-auto" />}</DropdownMenuItem>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Status filter */}
           <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<Button variant="outline" size="sm" />}
-            >
-              Status: {statusLabel}
-              <ChevronDown className="text-muted-foreground" />
+            <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+              <ArrowUpDown /> {SORTS.find((s) => s.key === sort)!.label} <ChevronDown className="text-muted-foreground" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-36">
-              <DropdownMenuItem onClick={() => setStatus("all")}>
-                Semua
-                {status === "all" && <Check className="ml-auto" />}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatus("active")}>
-                Aktif
-                {status === "active" && <Check className="ml-auto" />}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatus("draft")}>
-                Draft
-                {status === "draft" && <Check className="ml-auto" />}
-              </DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel>Urutkan</DropdownMenuLabel>
+              {SORTS.map((s) => (
+                <DropdownMenuItem key={s.key} onClick={() => setSort(s.key)}>{s.label} {sort === s.key && <Check className="ml-auto" />}</DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
 
           <Separator orientation="vertical" className="hidden h-6 sm:block" />
-
-          {/* View toggle */}
           <div className="flex items-center gap-1 rounded-lg border bg-background p-0.5">
-            <Button
-              variant={view === "grid" ? "secondary" : "ghost"}
-              size="icon-sm"
-              aria-label="Tampilan grid"
-              aria-pressed={view === "grid"}
-              onClick={() => setView("grid")}
-            >
-              <LayoutGrid />
-            </Button>
-            <Button
-              variant={view === "list" ? "secondary" : "ghost"}
-              size="icon-sm"
-              aria-label="Tampilan daftar"
-              aria-pressed={view === "list"}
-              onClick={() => setView("list")}
-            >
-              <List />
-            </Button>
+            <Button variant={view === "grid" ? "secondary" : "ghost"} size="icon-sm" aria-label="Tampilan grid" aria-pressed={view === "grid"} onClick={() => setView("grid")}><LayoutGrid /></Button>
+            <Button variant={view === "list" ? "secondary" : "ghost"} size="icon-sm" aria-label="Tampilan daftar" aria-pressed={view === "list"} onClick={() => setView("list")}><List /></Button>
           </div>
         </div>
       </div>
 
-      {/* Result count */}
-      <p className="mb-3 text-xs text-muted-foreground">
-        Menampilkan {num(filtered.length)} dari {num(PRODUCTS.length)} produk
-      </p>
+      {/* Active filter chips */}
+      {hasFilters && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {tab !== "all" && (
+            <Badge variant="secondary" className="gap-1 pr-1">{TABS.find((t) => t.key === tab)!.label}
+              <button onClick={() => setTab("all")} className="rounded-full p-0.5 hover:bg-foreground/10" aria-label="Hapus filter status"><X className="size-3" /></button>
+            </Badge>
+          )}
+          {category !== "all" && (
+            <Badge variant="secondary" className="gap-1 pr-1">{category}
+              <button onClick={() => setCategory("all")} className="rounded-full p-0.5 hover:bg-foreground/10" aria-label="Hapus filter kategori"><X className="size-3" /></button>
+            </Badge>
+          )}
+          {search && (
+            <Badge variant="secondary" className="gap-1 pr-1">&quot;{search}&quot;
+              <button onClick={() => setSearch("")} className="rounded-full p-0.5 hover:bg-foreground/10" aria-label="Hapus pencarian"><X className="size-3" /></button>
+            </Badge>
+          )}
+          <Button variant="ghost" size="sm" className="h-6 text-muted-foreground" onClick={resetFilters}>Bersihkan semua</Button>
+        </div>
+      )}
 
+      {/* Selection bar OR result count */}
+      {selected.size > 0 ? (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-primary/5 px-3 py-2">
+          <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Pilih semua" />
+          <span className="text-sm font-medium">{num(selected.size)} dipilih</span>
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            <Button variant="outline" size="sm" onClick={clearSel}><CircleCheck /> Jadikan Aktif</Button>
+            <Button variant="outline" size="sm" onClick={clearSel}><FileText /> Jadikan Draft</Button>
+            <Button variant="outline" size="sm" className="text-destructive" onClick={clearSel}><Trash2 /> Hapus</Button>
+            <Button variant="ghost" size="sm" onClick={clearSel}>Batal</Button>
+          </div>
+        </div>
+      ) : (
+        <p className="mb-3 text-xs text-muted-foreground">Menampilkan {num(filtered.length)} dari {num(PRODUCTS.length)} produk</p>
+      )}
+
+      {/* Content */}
       {filtered.length === 0 ? (
         <Card className="py-0">
           <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
             <Package className="size-8 text-muted-foreground" />
             <p className="text-sm font-medium">Tidak ada produk ditemukan</p>
-            <p className="text-sm text-muted-foreground">
-              Coba ubah kata kunci atau filter Anda.
-            </p>
+            <p className="text-sm text-muted-foreground">Coba ubah kata kunci atau filter Anda.</p>
+            {hasFilters && <Button variant="outline" size="sm" className="mt-2" onClick={resetFilters}>Bersihkan filter</Button>}
           </CardContent>
         </Card>
       ) : view === "grid" ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filtered.map((p) => (
-            <Card
-              key={p.id}
-              className="group relative cursor-pointer overflow-hidden py-0 transition-all hover:-translate-y-0.5 hover:shadow-md"
-            >
-              <Link
-                href={`/produk/${p.id}`}
-                aria-label={p.name}
-                className="absolute inset-0 z-[1] rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-              />
-              <CardContent className="flex h-full flex-col gap-3 p-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex size-14 items-center justify-center rounded-xl bg-muted text-3xl">
-                    {p.emoji}
+          {filtered.map((p) => {
+            const isSel = selected.has(p.id);
+            return (
+              <Card key={p.id} className={cn("group relative overflow-hidden py-0 transition-all hover:-translate-y-0.5 hover:shadow-md", isSel && "ring-2 ring-primary")}>
+                <Link href={`/produk/${p.id}`} aria-label={p.name} className="absolute inset-0 z-[1] rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none" />
+                {/* image */}
+                <div className={cn("relative flex aspect-[5/4] items-center justify-center bg-gradient-to-br from-muted to-muted/40 text-6xl", p.status === "draft" && "opacity-70")}>
+                  <span>{p.emoji}</span>
+                  <div className={cn("absolute left-2 top-2 z-[2] transition-opacity", isSel ? "opacity-100" : "opacity-0 group-hover:opacity-100")} onClick={(e) => e.stopPropagation()}>
+                    <Checkbox checked={isSel} onCheckedChange={() => toggle(p.id)} aria-label={`Pilih ${p.name}`} className="border-2 bg-background/90 shadow-sm" />
                   </div>
-                  <div className="relative z-[2]">
-                    <RowActions />
+                  <div className="absolute right-2 top-2 z-[2]"><RowActions /></div>
+                  {p.status === "draft" && <Badge variant="outline" className="absolute bottom-2 left-2 z-[2] bg-background/85">Draft</Badge>}
+                </div>
+                {/* body */}
+                <div className="space-y-2 p-3">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-medium" title={p.name}>{p.name}</h3>
+                    <p className="text-xs text-muted-foreground">{p.category}</p>
                   </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-base font-semibold tabular-nums">{IDR(p.price)}</span>
+                    <StockBadge stock={p.stock} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">{num(p.unitsSold)} terjual</p>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-sm font-medium" title={p.name}>
-                    {p.name}
-                  </h3>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {p.category}
-                  </p>
-                  <p className="mt-2 text-base font-semibold tabular-nums">
-                    {IDR(p.price)}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <StockBadge stock={p.stock} />
-                  <StatusBadge status={p.status} />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <Card className="overflow-hidden py-0">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Pilih semua" /></TableHead>
                 <TableHead>Produk</TableHead>
+                <TableHead className="hidden md:table-cell">Kategori</TableHead>
                 <TableHead className="text-right">Harga</TableHead>
                 <TableHead>Stok</TableHead>
-                <TableHead className="text-right">Terjual</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">Terjual</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((p) => (
-                <TableRow
-                  key={p.id}
-                  className="cursor-pointer"
-                  onClick={() => router.push(`/produk/${p.id}`)}
-                >
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-xl">
-                        {p.emoji}
+              {filtered.map((p) => {
+                const isSel = selected.has(p.id);
+                return (
+                  <TableRow key={p.id} data-state={isSel ? "selected" : undefined} className="cursor-pointer" onClick={() => router.push(`/produk/${p.id}`)}>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox checked={isSel} onCheckedChange={() => toggle(p.id)} aria-label={`Pilih ${p.name}`} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-xl">{p.emoji}</div>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{p.name}</p>
+                          <p className="text-xs text-muted-foreground md:hidden">{p.category}</p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{p.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {p.category}
-                        </p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">
-                    {IDR(p.price)}
-                  </TableCell>
-                  <TableCell>
-                    <StockBadge stock={p.stock} />
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {num(p.unitsSold)}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={p.status} />
-                  </TableCell>
-                  <TableCell
-                    className="text-right"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <RowActions />
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell className="hidden text-sm text-muted-foreground md:table-cell">{p.category}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">{IDR(p.price)}</TableCell>
+                    <TableCell><StockBadge stock={p.stock} /></TableCell>
+                    <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">{num(p.unitsSold)}</TableCell>
+                    <TableCell><StatusBadge status={p.status} /></TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}><RowActions /></TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </Card>
