@@ -122,7 +122,7 @@ export default function Page() {
         title="Halaman"
         desc="Kelola halaman statis toko seperti Tentang Kami, Kontak, dan Kebijakan."
       >
-        <Button render={<Link href="/halaman/baru" />}>
+        <Button nativeButton={false} render={<Link href="/halaman/baru" />}>
           <Plus />
           Tambah halaman
         </Button>

@@ -128,7 +128,7 @@ export default function Page() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button render={<Link href="/blog/baru" />}>
+        <Button nativeButton={false} render={<Link href="/blog/baru" />}>
           <Plus />
           Tambah artikel
         </Button>

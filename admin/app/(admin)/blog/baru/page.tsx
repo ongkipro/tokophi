@@ -88,7 +88,7 @@ export default function Page() {
           Blog
         </Link>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" render={<Link href="/blog" />}>
+          <Button nativeButton={false} variant="ghost" render={<Link href="/blog" />}>
             Batal
           </Button>
           <Button>Simpan</Button>
