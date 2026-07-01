@@ -1,6 +1,7 @@
 import {
   LayoutDashboard, ShoppingBag, Package, Users, TicketPercent,
-  BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, type LucideIcon,
+  BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree,
+  MessagesSquare, type LucideIcon,
 } from "lucide-react";
 
 export type NavChild = { label: string; href: string };
@@ -26,6 +27,14 @@ export const NAV_GROUPS: NavGroup[] = [
         children: [
           { label: "Segmen", href: "/pelanggan/segmen" },
           { label: "Ulasan", href: "/pelanggan/ulasan" },
+        ],
+      },
+      {
+        label: "CRM", href: "/crm", icon: MessagesSquare,
+        children: [
+          { label: "Follow-up WA", href: "/crm/followup" },
+          { label: "Pipeline", href: "/crm/pipeline" },
+          { label: "Template", href: "/crm/template" },
         ],
       },
       { label: "Diskon", href: "/diskon", icon: TicketPercent },

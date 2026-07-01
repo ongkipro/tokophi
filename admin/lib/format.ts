@@ -25,3 +25,14 @@ export const timeAgo = (minutes: number) => {
   if (h < 24) return `${h} jam lalu`;
   return `${Math.floor(h / 24)} hari lalu`;
 };
+
+// Build a wa.me deep link from an Indonesian phone (digits only) + optional prefilled message.
+export function waLink(phone: string, message = ""): string {
+  const p = String(phone).replace(/\D/g, "");
+  return `https://wa.me/${p}${message ? `?text=${encodeURIComponent(message)}` : ""}`;
+}
+
+// Fill {{placeholder}} tokens in a WhatsApp template with values (unknown tokens left as-is).
+export function fillTemplate(body: string, vars: Record<string, string>): string {
+  return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
+}

@@ -426,3 +426,50 @@ export const AD_PROVINCES: ProvinceStat[] = [
   { province: "Kalimantan Timur", spend: 1_100_000,  impressions: 138_000,   clicks: 3_900,  conversions: 26,  revenue: 4_300_000,  reach: 74_000 },
   { province: "Lainnya",         spend: 1_150_000,  impressions: 164_000,   clicks: 4_500,  conversions: 30,  revenue: 5_100_000,  reach: 86_000 },
 ];
+
+// ---- CRM: sales pipeline (leads), WhatsApp follow-ups, message templates ----
+export type LeadSource = "WhatsApp" | "Instagram" | "TikTok" | "Referral" | "Marketplace";
+export type LeadStage = "baru" | "dihubungi" | "nego" | "closing" | "menang" | "kalah";
+export type Lead = { id: string; name: string; phone: string; source: LeadSource; stage: LeadStage; value_idr: number; lastContactDaysAgo: number; note: string };
+export const LEADS: Lead[] = [
+  { id: "LD-1", name: "Rina Wijaya", phone: "6281234500001", source: "WhatsApp", stage: "baru", value_idr: 450_000, lastContactDaysAgo: 0, note: "Tanya stok kaos ukuran XL" },
+  { id: "LD-2", name: "Budi Santoso", phone: "6281234500002", source: "Instagram", stage: "baru", value_idr: 275_000, lastContactDaysAgo: 0, note: "DM soal sepatu sneakers" },
+  { id: "LD-3", name: "Maya Sari", phone: "6281234500003", source: "TikTok", stage: "dihubungi", value_idr: 780_000, lastContactDaysAgo: 1, note: "Minta katalog lengkap" },
+  { id: "LD-4", name: "Andi Pratama", phone: "6281234500004", source: "WhatsApp", stage: "dihubungi", value_idr: 210_000, lastContactDaysAgo: 2, note: "Nanya ongkir ke Medan" },
+  { id: "LD-5", name: "Dewi Lestari", phone: "6281234500005", source: "Referral", stage: "nego", value_idr: 1_250_000, lastContactDaysAgo: 1, note: "Minta diskon beli 5 pcs" },
+  { id: "LD-6", name: "Rizky Ramadhan", phone: "6281234500006", source: "WhatsApp", stage: "nego", value_idr: 640_000, lastContactDaysAgo: 3, note: "Nego harga grosir" },
+  { id: "LD-7", name: "Putri Ayu", phone: "6281234500007", source: "Instagram", stage: "closing", value_idr: 920_000, lastContactDaysAgo: 0, note: "Siap transfer, tunggu invoice" },
+  { id: "LD-8", name: "Hendra Gunawan", phone: "6281234500008", source: "Marketplace", stage: "closing", value_idr: 355_000, lastContactDaysAgo: 1, note: "Konfirmasi alamat kirim" },
+  { id: "LD-9", name: "Wulan Dari", phone: "6281234500009", source: "WhatsApp", stage: "menang", value_idr: 1_480_000, lastContactDaysAgo: 2, note: "Sudah bayar, repeat order" },
+  { id: "LD-10", name: "Fajar Nugroho", phone: "6281234500010", source: "TikTok", stage: "menang", value_idr: 530_000, lastContactDaysAgo: 4, note: "Closing dari live TikTok" },
+  { id: "LD-11", name: "Indah Permata", phone: "6281234500011", source: "Instagram", stage: "kalah", value_idr: 180_000, lastContactDaysAgo: 6, note: "Pindah ke kompetitor" },
+  { id: "LD-12", name: "Doni Kusuma", phone: "6281234500012", source: "WhatsApp", stage: "baru", value_idr: 390_000, lastContactDaysAgo: 0, note: "Tanya ready stock power bank" },
+];
+
+export type FollowupType = "keranjang" | "pembayaran" | "konfirmasi" | "pascabeli" | "repeat" | "ulasan";
+export type FollowupStatus = "menunggu" | "terkirim" | "dibalas" | "selesai";
+export type Followup = { id: string; customer: string; phone: string; type: FollowupType; context: string; dueDays: number; status: FollowupStatus; lastMessage: string };
+// dueDays: 0 = hari ini, negatif = telat, positif = akan datang
+export const FOLLOWUPS: Followup[] = [
+  { id: "FU-1", customer: "Siti Nurhaliza", phone: "6281234511001", type: "keranjang", context: "Kopi Arabika Gayo 250g", dueDays: 0, status: "menunggu", lastMessage: "" },
+  { id: "FU-2", customer: "Agus Salim", phone: "6281234511002", type: "pembayaran", context: "#INV-4821 · Rp275.000", dueDays: 0, status: "menunggu", lastMessage: "" },
+  { id: "FU-3", customer: "Rina Wijaya", phone: "6281234511003", type: "keranjang", context: "Skincare Serum Vitamin C", dueDays: -1, status: "menunggu", lastMessage: "" },
+  { id: "FU-4", customer: "Budi Santoso", phone: "6281234511004", type: "pembayaran", context: "#INV-4818 · Rp189.000", dueDays: -2, status: "menunggu", lastMessage: "" },
+  { id: "FU-5", customer: "Maya Sari", phone: "6281234511005", type: "pascabeli", context: "#INV-4815 · Tas Ransel Anti Air", dueDays: 0, status: "terkirim", lastMessage: "Terima kasih sudah belanja! 🙏" },
+  { id: "FU-6", customer: "Andi Pratama", phone: "6281234511006", type: "ulasan", context: "Earphone Bluetooth TWS", dueDays: 1, status: "menunggu", lastMessage: "" },
+  { id: "FU-7", customer: "Dewi Lestari", phone: "6281234511007", type: "repeat", context: "Terakhir beli 32 hari lalu", dueDays: 0, status: "menunggu", lastMessage: "" },
+  { id: "FU-8", customer: "Putri Ayu", phone: "6281234511008", type: "konfirmasi", context: "#INV-4820 · siap dikirim", dueDays: 0, status: "dibalas", lastMessage: "Oke kak, ditunggu ya" },
+  { id: "FU-9", customer: "Hendra Gunawan", phone: "6281234511009", type: "pascabeli", context: "#INV-4809 · Madu Hutan Asli", dueDays: -1, status: "selesai", lastMessage: "Barang sudah diterima 👍" },
+  { id: "FU-10", customer: "Wulan Dari", phone: "6281234511010", type: "repeat", context: "Pelanggan VIP · 45 hari", dueDays: 2, status: "menunggu", lastMessage: "" },
+];
+
+export type WaTemplate = { id: string; name: string; type: FollowupType | "broadcast"; body: string };
+// placeholders: {{nama}} {{produk}} {{no_pesanan}} {{total}} {{toko}}
+export const WA_TEMPLATES: WaTemplate[] = [
+  { id: "WT-1", name: "Keranjang ditinggalkan", type: "keranjang", body: "Halo kak {{nama}} 👋, produk *{{produk}}* masih ada di keranjang. Mau saya bantu proses sekarang? Stok terbatas ya kak 😊 — {{toko}}" },
+  { id: "WT-2", name: "Pengingat pembayaran", type: "pembayaran", body: "Hai kak {{nama}}, pesanan {{no_pesanan}} sebesar *{{total}}* menunggu pembayaran. Konfirmasi ya kak biar segera kami kirim 🙏 — {{toko}}" },
+  { id: "WT-3", name: "Konfirmasi pesanan", type: "konfirmasi", body: "Halo kak {{nama}}, pesanan {{no_pesanan}} sudah kami terima dan sedang diproses. Terima kasih sudah belanja di {{toko}}! 📦" },
+  { id: "WT-4", name: "Terima kasih (pasca-beli)", type: "pascabeli", body: "Terima kasih kak {{nama}} sudah belanja di {{toko}} 🙏 Semoga suka dengan {{produk}}-nya! Kalau butuh apa-apa, chat kami ya 😊" },
+  { id: "WT-5", name: "Minta ulasan", type: "ulasan", body: "Hai kak {{nama}}, gimana {{produk}}-nya? 😊 Boleh minta tolong kasih ulasan/bintang ya kak, sangat membantu toko kami 🙏 — {{toko}}" },
+  { id: "WT-6", name: "Ajakan repeat order", type: "repeat", body: "Halo kak {{nama}} 👋 Sudah lama nih! Ada produk baru & promo spesial buat pelanggan setia {{toko}}. Mau saya kirim katalognya? 🛍️" },
+];
