@@ -1,11 +1,10 @@
-# deps & build
-**/node_modules/
-**/.next/
-**/dist/
-**/.turbo/
-# env & misc
-**/.env*
-!**/.env.example
+node_modules/
+.next/
+.turbo/
+out/
+build/
+dist/
+*.tsbuildinfo
+.env*
+!.env.example
 .DS_Store
-*.log
-**/.wrangler/
