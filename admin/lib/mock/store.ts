@@ -358,3 +358,71 @@ export const NEW_VS_RETURNING = [
   { type: "Pelanggan Baru", value: 62 },
   { type: "Pelanggan Kembali", value: 38 },
 ];
+
+// ---- product sub-modules: collections (Kategori), purchase orders (Pembelian) ----
+export type Collection = { id: string; name: string; emoji: string; products: number; type: "manual" | "otomatis"; published: boolean };
+export const COLLECTIONS: Collection[] = [
+  { id: "COL-1", name: "Fashion", emoji: "👕", products: 3, type: "otomatis", published: true },
+  { id: "COL-2", name: "Elektronik", emoji: "🔌", products: 2, type: "otomatis", published: true },
+  { id: "COL-3", name: "Kecantikan", emoji: "💄", products: 2, type: "otomatis", published: true },
+  { id: "COL-4", name: "F&B", emoji: "☕", products: 2, type: "otomatis", published: true },
+  { id: "COL-5", name: "Promo Gajian", emoji: "🏷️", products: 8, type: "manual", published: true },
+  { id: "COL-6", name: "Produk Terlaris", emoji: "🔥", products: 10, type: "otomatis", published: true },
+  { id: "COL-7", name: "Baru Rilis", emoji: "✨", products: 6, type: "otomatis", published: true },
+  { id: "COL-8", name: "Rumah Tangga", emoji: "🏠", products: 2, type: "otomatis", published: false },
+];
+
+export type POStatus = "draft" | "dipesan" | "sebagian" | "diterima";
+export type PurchaseOrder = { id: string; supplier: string; status: POStatus; items: number; total: number; etaDays: number; createdDaysAgo: number };
+export const PURCHASE_ORDERS: PurchaseOrder[] = [
+  { id: "PO-1042", supplier: "CV Sumber Rejeki", status: "dipesan", items: 4, total: 12_400_000, etaDays: 5, createdDaysAgo: 2 },
+  { id: "PO-1041", supplier: "PT Grosir Nusantara", status: "sebagian", items: 6, total: 8_950_000, etaDays: 2, createdDaysAgo: 6 },
+  { id: "PO-1040", supplier: "Toko Elektronik Jaya", status: "diterima", items: 3, total: 15_600_000, etaDays: -1, createdDaysAgo: 12 },
+  { id: "PO-1039", supplier: "CV Sumber Rejeki", status: "diterima", items: 2, total: 4_200_000, etaDays: -4, createdDaysAgo: 18 },
+  { id: "PO-1038", supplier: "Kopi Gayo Supplier", status: "draft", items: 1, total: 2_340_000, etaDays: 10, createdDaysAgo: 1 },
+  { id: "PO-1037", supplier: "PT Grosir Nusantara", status: "dipesan", items: 5, total: 9_800_000, etaDays: 7, createdDaysAgo: 3 },
+];
+
+// ---- customer sub-modules: segments (Segmen), reviews (Ulasan) ----
+export type CustSegment = { id: string; name: string; count: number; growth: number; description: string };
+export const SEGMENTS: CustSegment[] = [
+  { id: "SEG-1", name: "Pelanggan VIP", count: 128, growth: 12.4, description: "Total belanja lebih dari Rp6 juta" },
+  { id: "SEG-2", name: "Pelanggan Loyal", count: 356, growth: 8.1, description: "Lebih dari 12 pesanan" },
+  { id: "SEG-3", name: "Pelanggan Baru (30 hari)", count: 271, growth: 24.8, description: "Bergabung dalam 30 hari terakhir" },
+  { id: "SEG-4", name: "Belum Pernah Belanja", count: 642, growth: -3.2, description: "Terdaftar tapi belum ada pesanan" },
+  { id: "SEG-5", name: "Berisiko Churn", count: 89, growth: 5.6, description: "Tidak belanja lebih dari 90 hari" },
+  { id: "SEG-6", name: "Pelanggan Kota Besar", count: 1204, growth: 6.9, description: "Jakarta, Bandung, Surabaya" },
+];
+
+export type ReviewStatus = "terbit" | "menunggu";
+export type Review = { id: string; customer: string; product: string; emoji: string; rating: number; text: string; status: ReviewStatus; daysAgo: number };
+export const REVIEWS: Review[] = [
+  { id: "RV-1", customer: "Siti Nurhaliza", product: "Kopi Arabika Gayo 250g", emoji: "☕", rating: 5, text: "Kopinya wangi dan segar, pengiriman cepat. Recommended!", status: "terbit", daysAgo: 1 },
+  { id: "RV-2", customer: "Budi Santoso", product: "Sepatu Sneakers Lokal", emoji: "👟", rating: 4, text: "Bahan bagus, ukuran pas. Cuma warnanya sedikit beda dari foto.", status: "terbit", daysAgo: 2 },
+  { id: "RV-3", customer: "Rina Wijaya", product: "Skincare Serum Vitamin C", emoji: "🧴", rating: 5, text: "Cocok di kulit saya, hasilnya cerah dalam 2 minggu.", status: "menunggu", daysAgo: 1 },
+  { id: "RV-4", customer: "Andi Pratama", product: "Earphone Bluetooth TWS", emoji: "🎧", rating: 3, text: "Suara oke, tapi baterai agak boros. Lumayan untuk harganya.", status: "terbit", daysAgo: 4 },
+  { id: "RV-5", customer: "Maya Sari", product: "Tas Ransel Anti Air", emoji: "🎒", rating: 5, text: "Kuat dan benar-benar anti air. Muat banyak juga.", status: "menunggu", daysAgo: 2 },
+  { id: "RV-6", customer: "Doni Kusuma", product: "Power Bank 10.000mAh", emoji: "🔋", rating: 4, text: "Ngecas cepat, ringkas dibawa. Puas.", status: "terbit", daysAgo: 6 },
+  { id: "RV-7", customer: "Putri Ayu", product: "Lip Cream Matte", emoji: "💄", rating: 2, text: "Warnanya bagus tapi bikin bibir kering.", status: "menunggu", daysAgo: 3 },
+  { id: "RV-8", customer: "Hendra Gunawan", product: "Madu Hutan Asli 500ml", emoji: "🍯", rating: 5, text: "Madunya asli, rasa mantap. Langganan terus.", status: "terbit", daysAgo: 8 },
+];
+
+// ---- marketing: performance by Indonesian province (for Pemasaran province filter) ----
+export const PROVINCES = [
+  "Semua Provinsi", "DKI Jakarta", "Jawa Barat", "Jawa Timur", "Jawa Tengah", "Banten",
+  "Sumatera Utara", "Bali", "DI Yogyakarta", "Sulawesi Selatan", "Kalimantan Timur", "Lainnya",
+];
+export type ProvinceStat = { province: string; spend: number; impressions: number; clicks: number; conversions: number; revenue: number; reach: number };
+export const AD_PROVINCES: ProvinceStat[] = [
+  { province: "DKI Jakarta",      spend: 11_200_000, impressions: 1_180_000, clicks: 34_800, conversions: 268, revenue: 52_400_000, reach: 640_000 },
+  { province: "Jawa Barat",       spend: 7_400_000,  impressions: 820_000,   clicks: 24_100, conversions: 172, revenue: 31_800_000, reach: 470_000 },
+  { province: "Jawa Timur",       spend: 6_100_000,  impressions: 690_000,   clicks: 19_600, conversions: 141, revenue: 26_500_000, reach: 390_000 },
+  { province: "Jawa Tengah",      spend: 4_300_000,  impressions: 512_000,   clicks: 13_800, conversions: 98,  revenue: 17_900_000, reach: 288_000 },
+  { province: "Banten",          spend: 3_050_000,  impressions: 356_000,   clicks: 10_200, conversions: 74,  revenue: 13_100_000, reach: 205_000 },
+  { province: "Sumatera Utara",   spend: 2_400_000,  impressions: 298_000,   clicks: 8_100,  conversions: 52,  revenue: 8_900_000,  reach: 168_000 },
+  { province: "Bali",            spend: 2_050_000,  impressions: 244_000,   clicks: 7_400,  conversions: 61,  revenue: 12_600_000, reach: 142_000 },
+  { province: "DI Yogyakarta",    spend: 1_500_000,  impressions: 190_000,   clicks: 6_100,  conversions: 44,  revenue: 7_200_000,  reach: 112_000 },
+  { province: "Sulawesi Selatan", spend: 1_350_000,  impressions: 176_000,   clicks: 5_200,  conversions: 33,  revenue: 5_400_000,  reach: 98_000 },
+  { province: "Kalimantan Timur", spend: 1_100_000,  impressions: 138_000,   clicks: 3_900,  conversions: 26,  revenue: 4_300_000,  reach: 74_000 },
+  { province: "Lainnya",         spend: 1_150_000,  impressions: 164_000,   clicks: 4_500,  conversions: 30,  revenue: 5_100_000,  reach: 86_000 },
+];

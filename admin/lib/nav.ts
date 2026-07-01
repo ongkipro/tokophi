@@ -3,17 +3,31 @@ import {
   BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, type LucideIcon,
 } from "lucide-react";
 
-export type NavItem = { label: string; href: string; icon: LucideIcon; badge?: string };
+export type NavChild = { label: string; href: string };
+export type NavItem = { label: string; href: string; icon: LucideIcon; badge?: string; children?: NavChild[] };
 export type NavGroup = { label?: string; items: NavItem[] };
 
-// Shopify-core IA minus Themes & Apps/Plugins; content grouped under "Toko Online".
+// Shopify-core IA minus Themes & Apps/Plugins; Produk & Pelanggan have submenus.
 export const NAV_GROUPS: NavGroup[] = [
   {
     items: [
       { label: "Dashboard", href: "/", icon: LayoutDashboard },
       { label: "Pesanan", href: "/pesanan", icon: ShoppingBag, badge: "7" },
-      { label: "Produk", href: "/produk", icon: Package },
-      { label: "Pelanggan", href: "/pelanggan", icon: Users },
+      {
+        label: "Produk", href: "/produk", icon: Package,
+        children: [
+          { label: "Kategori", href: "/produk/kategori" },
+          { label: "Inventori", href: "/produk/inventori" },
+          { label: "Pembelian", href: "/produk/pembelian" },
+        ],
+      },
+      {
+        label: "Pelanggan", href: "/pelanggan", icon: Users,
+        children: [
+          { label: "Segmen", href: "/pelanggan/segmen" },
+          { label: "Ulasan", href: "/pelanggan/ulasan" },
+        ],
+      },
       { label: "Diskon", href: "/diskon", icon: TicketPercent },
       { label: "Analitik", href: "/analitik", icon: BarChart3 },
       { label: "Pemasaran", href: "/pemasaran", icon: Megaphone },
