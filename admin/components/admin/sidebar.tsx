@@ -9,7 +9,6 @@ export function Sidebar() {
         <Brand />
       </div>
       <div className="flex-1 overflow-y-auto py-4">
-        <p className="px-6 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Menu</p>
         <NavLinks />
       </div>
       <div className="p-3">

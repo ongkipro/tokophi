@@ -229,3 +229,59 @@ export const DISCOUNTS: Discount[] = [
   { id: "D5", code: "RAMADHAN15", type: "persen", value: 15, status: "kadaluarsa", used: 890, limit: 900, endsInDays: -10 },
   { id: "D6", code: "MEMBERVIP", type: "nominal", value: 100_000, status: "aktif", used: 76, limit: 300, endsInDays: 60 },
 ];
+
+// ---- CMS: pages (modeled on Shopify Page: title/handle/body/isPublished/templateSuffix/seo) ----
+export type CmsPage = { id: string; title: string; handle: string; published: boolean; updatedDaysAgo: number; template: string; views: number };
+export const PAGES: CmsPage[] = [
+  { id: "PG-1", title: "Tentang Kami", handle: "tentang-kami", published: true, updatedDaysAgo: 3, template: "page", views: 1240 },
+  { id: "PG-2", title: "Kontak", handle: "kontak", published: true, updatedDaysAgo: 12, template: "page.contact", views: 980 },
+  { id: "PG-3", title: "Cara Pemesanan", handle: "cara-pemesanan", published: true, updatedDaysAgo: 8, template: "page", views: 2110 },
+  { id: "PG-4", title: "Kebijakan Pengembalian & Refund", handle: "kebijakan-pengembalian", published: true, updatedDaysAgo: 21, template: "page", views: 640 },
+  { id: "PG-5", title: "Syarat & Ketentuan", handle: "syarat-ketentuan", published: true, updatedDaysAgo: 30, template: "page", views: 410 },
+  { id: "PG-6", title: "Kebijakan Privasi", handle: "kebijakan-privasi", published: true, updatedDaysAgo: 30, template: "page", views: 305 },
+  { id: "PG-7", title: "FAQ — Pertanyaan Umum", handle: "faq", published: false, updatedDaysAgo: 1, template: "page", views: 0 },
+];
+
+// ---- CMS: blog + articles (modeled on Shopify Blog + Article) ----
+export const BLOG_CATEGORIES = ["Berita Toko", "Tips & Panduan"] as const;
+export type BlogPost = { id: string; title: string; handle: string; blog: string; author: string; published: boolean; publishedDaysAgo: number; excerpt: string; comments: number };
+export const BLOG_POSTS: BlogPost[] = [
+  { id: "BP-1", title: "Promo Gajian: Diskon s/d 40% Sepanjang Bulan Ini", handle: "promo-gajian-diskon", blog: "Berita Toko", author: "Ongki Pratama", published: true, publishedDaysAgo: 2, excerpt: "Nikmati potongan harga untuk ratusan produk pilihan selama periode gajian.", comments: 8 },
+  { id: "BP-2", title: "5 Tips Memilih Ukuran Baju yang Pas saat Belanja Online", handle: "tips-memilih-ukuran-baju", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 5, excerpt: "Panduan singkat agar tidak salah ukuran ketika belanja fashion secara online.", comments: 3 },
+  { id: "BP-3", title: "Cara Merawat Sepatu Sneakers Agar Awet", handle: "cara-merawat-sneakers", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 9, excerpt: "Langkah mudah membersihkan dan menyimpan sneakers kesayangan.", comments: 12 },
+  { id: "BP-4", title: "Kami Kini Melayani Pengiriman Instan Se-Jabodetabek", handle: "pengiriman-instan-jabodetabek", blog: "Berita Toko", author: "Ongki Pratama", published: true, publishedDaysAgo: 14, excerpt: "Pesanan sampai di hari yang sama dengan GoSend & GrabExpress.", comments: 5 },
+  { id: "BP-5", title: "Rekomendasi Hadiah untuk Anak Sesuai Usia", handle: "rekomendasi-hadiah-anak", blog: "Tips & Panduan", author: "Dewi Anggraini", published: false, publishedDaysAgo: 1, excerpt: "Bingung memilih mainan edukatif? Simak rekomendasi berdasarkan usia anak.", comments: 0 },
+  { id: "BP-6", title: "Panduan Klaim Garansi Produk Elektronik", handle: "panduan-klaim-garansi", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 25, excerpt: "Ketahui prosedur dan syarat klaim garansi agar prosesnya cepat.", comments: 2 },
+];
+
+// ---- Navigation menus (modeled on Shopify Menu + MenuItem, itemType ~ MenuItemType) ----
+export type NavItemType = "beranda" | "koleksi" | "produk" | "halaman" | "blog" | "url";
+export type NavItem = { id: string; title: string; type: NavItemType; target: string; children?: NavItem[] };
+export type NavMenu = { handle: string; title: string; isDefault: boolean; items: NavItem[] };
+export const MENUS: NavMenu[] = [
+  {
+    handle: "main-menu", title: "Menu Utama", isDefault: true,
+    items: [
+      { id: "m1", title: "Beranda", type: "beranda", target: "/" },
+      { id: "m2", title: "Semua Produk", type: "koleksi", target: "/collections/all" },
+      { id: "m3", title: "Kategori", type: "url", target: "#", children: [
+        { id: "m3a", title: "Fashion", type: "koleksi", target: "/collections/fashion" },
+        { id: "m3b", title: "Elektronik", type: "koleksi", target: "/collections/elektronik" },
+        { id: "m3c", title: "Kecantikan", type: "koleksi", target: "/collections/kecantikan" },
+      ]},
+      { id: "m4", title: "Promo", type: "koleksi", target: "/collections/promo" },
+      { id: "m5", title: "Blog", type: "blog", target: "/blogs/berita-toko" },
+      { id: "m6", title: "Kontak", type: "halaman", target: "/pages/kontak" },
+    ],
+  },
+  {
+    handle: "footer", title: "Menu Footer", isDefault: false,
+    items: [
+      { id: "f1", title: "Tentang Kami", type: "halaman", target: "/pages/tentang-kami" },
+      { id: "f2", title: "Cara Pemesanan", type: "halaman", target: "/pages/cara-pemesanan" },
+      { id: "f3", title: "Kebijakan Pengembalian", type: "halaman", target: "/pages/kebijakan-pengembalian" },
+      { id: "f4", title: "Kebijakan Privasi", type: "halaman", target: "/pages/kebijakan-privasi" },
+      { id: "f5", title: "FAQ", type: "halaman", target: "/pages/faq" },
+    ],
+  },
+];
