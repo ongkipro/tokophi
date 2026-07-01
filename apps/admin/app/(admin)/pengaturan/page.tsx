@@ -16,8 +16,10 @@ import {
   Info,
   UserPlus,
   Save,
+  Check,
 } from "lucide-react"
 
+import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/admin/page-header"
 import { ToggleRow } from "@/components/admin/pengaturan/toggle-row"
 import {
@@ -70,6 +72,16 @@ const SECTIONS: {
   },
 ]
 
+const COURIERS = [
+  { key: "jne", name: "JNE", services: [{ key: "reg", name: "Reguler" }, { key: "yes", name: "YES" }, { key: "oke", name: "OKE" }] },
+  { key: "jnt", name: "J&T Express", services: [{ key: "ez", name: "EZ" }, { key: "eco", name: "Ekonomi" }] },
+  { key: "sicepat", name: "SiCepat", services: [{ key: "reg", name: "REG" }, { key: "best", name: "BEST" }, { key: "gokil", name: "GOKIL" }] },
+  { key: "anteraja", name: "AnterAja", services: [{ key: "reg", name: "Reguler" }, { key: "sameday", name: "Same Day" }] },
+  { key: "pos", name: "Pos Indonesia", services: [{ key: "kilat", name: "Kilat Khusus" }, { key: "reg", name: "Reguler" }] },
+  { key: "gosend", name: "GoSend", services: [{ key: "instant", name: "Instant" }, { key: "sameday", name: "Same Day" }] },
+  { key: "grab", name: "GrabExpress", services: [{ key: "instant", name: "Instant" }, { key: "sameday", name: "Same Day" }] },
+] as const
+
 function Field({
   label,
   htmlFor,
@@ -117,7 +129,7 @@ export default function Page() {
   })
 
   // Pengiriman
-  const [kurir, setKurir] = React.useState({
+  const [courierOn, setCourierOn] = React.useState<Record<string, boolean>>({
     jne: true,
     jnt: true,
     sicepat: true,
@@ -126,6 +138,17 @@ export default function Page() {
     gosend: true,
     grab: false,
   })
+  const [serviceOn, setServiceOn] = React.useState<Record<string, boolean>>(
+    () => {
+      const s: Record<string, boolean> = {}
+      COURIERS.forEach((c) =>
+        c.services.forEach((sv) => {
+          s[c.key + "." + sv.key] = true
+        }),
+      )
+      return s
+    },
+  )
   const [gratisOngkir, setGratisOngkir] = React.useState(true)
   const [pickup, setPickup] = React.useState(false)
 
@@ -144,14 +167,12 @@ export default function Page() {
 
   const setPayKey = (k: keyof typeof pay) => (v: boolean) =>
     setPay((s) => ({ ...s, [k]: v }))
-  const setKurirKey = (k: keyof typeof kurir) => (v: boolean) =>
-    setKurir((s) => ({ ...s, [k]: v }))
   const setNotifKey = (k: keyof typeof notif) => (v: boolean) =>
     setNotif((s) => ({ ...s, [k]: v }))
 
   const payTotal = Object.keys(pay).length
   const payActive = Object.values(pay).filter(Boolean).length
-  const kurirActive = Object.values(kurir).filter(Boolean).length
+  const kurirActive = Object.values(courierOn).filter(Boolean).length
 
   const team = [
     {
@@ -471,7 +492,8 @@ export default function Page() {
               <CardHeader>
                 <CardTitle>Kurir Pengiriman</CardTitle>
                 <CardDescription>
-                  Pilih jasa kurir yang dapat dipilih pelanggan saat checkout.
+                  Pilih kurir dan layanan (ekspedisi) yang ingin ditawarkan ke
+                  pelanggan. Integrasi &amp; tarif dikelola Indostore.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3">
@@ -482,55 +504,68 @@ export default function Page() {
                     <span className="font-medium text-foreground">Indostore</span>. Anda cukup memilih kurir yang ingin ditawarkan — resi &amp; tarif otomatis.
                   </span>
                 </div>
-                <ToggleRow
-                  icon={<Truck />}
-                  title="JNE"
-                  description="Reguler, YES, OKE"
-                  checked={kurir.jne}
-                  onCheckedChange={setKurirKey("jne")}
-                />
-                <ToggleRow
-                  icon={<Truck />}
-                  title="J&T Express"
-                  description="Reguler & ekonomi"
-                  checked={kurir.jnt}
-                  onCheckedChange={setKurirKey("jnt")}
-                />
-                <ToggleRow
-                  icon={<Truck />}
-                  title="SiCepat"
-                  description="REG, BEST, GOKIL"
-                  checked={kurir.sicepat}
-                  onCheckedChange={setKurirKey("sicepat")}
-                />
-                <ToggleRow
-                  icon={<Truck />}
-                  title="AnterAja"
-                  description="Reguler & same day"
-                  checked={kurir.anteraja}
-                  onCheckedChange={setKurirKey("anteraja")}
-                />
-                <ToggleRow
-                  icon={<Truck />}
-                  title="Pos Indonesia"
-                  description="Kilat khusus & reguler"
-                  checked={kurir.pos}
-                  onCheckedChange={setKurirKey("pos")}
-                />
-                <ToggleRow
-                  icon={<Truck />}
-                  title="GoSend (instan)"
-                  description="Pengiriman instan dalam kota"
-                  checked={kurir.gosend}
-                  onCheckedChange={setKurirKey("gosend")}
-                />
-                <ToggleRow
-                  icon={<Truck />}
-                  title="GrabExpress"
-                  description="Same day & instant"
-                  checked={kurir.grab}
-                  onCheckedChange={setKurirKey("grab")}
-                />
+                {COURIERS.map((c) => {
+                  const on = courierOn[c.key]
+                  const activeServices = c.services.filter(
+                    (sv) => serviceOn[c.key + "." + sv.key],
+                  ).length
+                  return (
+                    <div
+                      key={c.key}
+                      className={cn(
+                        "rounded-lg border p-3 transition-opacity",
+                        !on && "opacity-60",
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-4">
+                          <Truck />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">{c.name}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {on
+                              ? `${activeServices} layanan aktif`
+                              : "Nonaktif"}
+                          </p>
+                        </div>
+                        <Switch
+                          checked={on}
+                          onCheckedChange={(v) =>
+                            setCourierOn((s) => ({ ...s, [c.key]: v }))
+                          }
+                        />
+                      </div>
+
+                      {on && (
+                        <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
+                          {c.services.map((sv) => {
+                            const id = c.key + "." + sv.key
+                            const svOn = serviceOn[id]
+                            return (
+                              <button
+                                key={sv.key}
+                                type="button"
+                                onClick={() =>
+                                  setServiceOn((s) => ({ ...s, [id]: !s[id] }))
+                                }
+                                className={cn(
+                                  "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition-colors",
+                                  svOn
+                                    ? "border-primary bg-primary/10 text-primary font-medium"
+                                    : "border-border text-muted-foreground hover:bg-muted",
+                                )}
+                              >
+                                {svOn && <Check className="size-3" />}
+                                {sv.name}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
 
                 <Separator className="my-1" />
 

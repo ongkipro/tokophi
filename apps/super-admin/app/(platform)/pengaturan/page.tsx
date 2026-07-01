@@ -29,8 +29,12 @@ const INITIAL_GATEWAYS: Toggle[] = [
 
 const INITIAL_COURIERS: Toggle[] = [
   { key: "jne", name: "JNE", desc: "Reguler, YES, OKE", on: true },
-  { key: "jnt", name: "J&T Express", desc: "Reguler & ekonomi", on: true },
-  { key: "sicepat", name: "SiCepat", desc: "REG, BEST, Halu", on: false },
+  { key: "jnt", name: "J&T Express", desc: "EZ, Ekonomi", on: true },
+  { key: "sicepat", name: "SiCepat", desc: "REG, BEST, GOKIL", on: true },
+  { key: "anteraja", name: "AnterAja", desc: "Reguler, Same Day", on: true },
+  { key: "pos", name: "Pos Indonesia", desc: "Kilat Khusus, Reguler", on: false },
+  { key: "gosend", name: "GoSend", desc: "Instant, Same Day", on: true },
+  { key: "grab", name: "GrabExpress", desc: "Instant, Same Day", on: true },
 ];
 
 const TEAM = [
@@ -127,6 +131,18 @@ export default function PengaturanPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-0">
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+            <div className="flex items-center gap-2 text-sm">
+              <Truck className="size-4 text-emerald-600 dark:text-emerald-400" />
+              <span>
+                Agregator pengiriman: <span className="font-medium">Biteship</span> · API kurir dikelola platform
+              </span>
+            </div>
+            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Terhubung</Badge>
+          </div>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Kurir disediakan lewat agregator. Aktifkan yang tersedia untuk semua toko — merchant lalu memilih kurir &amp; layanannya.
+          </p>
           {couriers.map((c, i) => (
             <div key={c.key}>
               {i > 0 && <Separator />}
