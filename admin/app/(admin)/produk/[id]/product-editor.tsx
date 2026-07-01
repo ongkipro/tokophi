@@ -119,8 +119,6 @@ export function ProductEditor({ product }: { product?: Product }) {
   );
 
   const [chOnline, setChOnline] = React.useState(true);
-  const [chInstagram, setChInstagram] = React.useState(true);
-  const [chTiktok, setChTiktok] = React.useState(true);
 
   const [category, setCategory] = React.useState(product?.category ?? "Fashion");
   const [productType, setProductType] = React.useState("");
@@ -699,22 +697,10 @@ export function ProductEditor({ product }: { product?: Product }) {
                   onCheckedChange={setChOnline}
                 />
               </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="ch-ig">Instagram</Label>
-                <Switch
-                  id="ch-ig"
-                  checked={chInstagram}
-                  onCheckedChange={setChInstagram}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="ch-tt">TikTok Shop</Label>
-                <Switch
-                  id="ch-tt"
-                  checked={chTiktok}
-                  onCheckedChange={setChTiktok}
-                />
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Produk dijual lewat toko online Anda. Sumber trafik &amp; konversi (Meta Ads,
+                TikTok Ads, Google Ads, Organic) dilacak terpisah di Analitik &amp; Pemasaran.
+              </p>
             </CardContent>
           </Card>
 

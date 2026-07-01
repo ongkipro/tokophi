@@ -111,8 +111,9 @@ export function getTopProducts(key: RangeKey, limit = 5): TopProduct[] {
 }
 
 export type ChannelSlice = { channel: string; value: number };
+// Attribution source (where the conversion came from), not a sales channel.
 const CHANNEL_WEIGHTS: [string, number][] = [
-  ["Toko Online", 0.44], ["Instagram", 0.21], ["WhatsApp", 0.18], ["TikTok Shop", 0.12], ["Google", 0.05],
+  ["Meta Ads", 0.34], ["Organic", 0.24], ["Google Ads", 0.18], ["TikTok Ads", 0.16], ["Other", 0.08],
 ];
 export function getChannels(key: RangeKey): ChannelSlice[] {
   const total = sum(resolve(key).days, "sales");

@@ -138,7 +138,8 @@ const NAMES = [
   "Indah Permata", "Doni Kusuma", "Lina Marlina", "Hendra Gunawan", "Wulan Dari",
 ];
 const CITIES = ["Jakarta", "Bandung", "Surabaya", "Medan", "Makassar", "Semarang", "Yogyakarta", "Denpasar", "Bekasi", "Depok"];
-const CHANNELS = ["Toko Online", "Instagram", "WhatsApp", "TikTok Shop", "Google"];
+// Attribution/traffic source (NOT a sales channel — the only sales channel is Toko Online).
+const CHANNELS = ["Meta Ads", "TikTok Ads", "Google Ads", "Organic", "Other"];
 
 function buildOrders(): Order[] {
   const rnd = mulberry32(555);

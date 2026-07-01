@@ -103,7 +103,6 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
   // Publikasikan
   const [published, setPublished] = React.useState(collection?.published ?? false);
   const [chOnline, setChOnline] = React.useState(true);
-  const [chInstagram, setChInstagram] = React.useState(true);
 
   // Template tema
   const [template, setTemplate] = React.useState<string>(TEMPLATES[0]);
@@ -609,14 +608,6 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
                     id="c-ch-online"
                     checked={chOnline}
                     onCheckedChange={setChOnline}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="c-ch-ig">Instagram</Label>
-                  <Switch
-                    id="c-ch-ig"
-                    checked={chInstagram}
-                    onCheckedChange={setChInstagram}
                   />
                 </div>
               </div>

@@ -245,13 +245,13 @@ export default function PesananPage() {
                 render={
                   <Button variant="outline" className="gap-2">
                     <Store className="size-4" />
-                    {channel === "Semua" ? "Channel" : channel}
+                    {channel === "Semua" ? "Sumber" : channel}
                     <ChevronDown className="size-4 text-muted-foreground" />
                   </Button>
                 }
               />
               <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuLabel>Channel</DropdownMenuLabel>
+                <DropdownMenuLabel>Sumber</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {CHANNELS.map((c) => (
                   <DropdownMenuItem key={c} onClick={() => resetPage(() => setChannel(c))}>
@@ -278,7 +278,7 @@ export default function PesananPage() {
               <TableHead>Invoice</TableHead>
               <TableHead>Pelanggan</TableHead>
               <TableHead>Waktu</TableHead>
-              <TableHead>Channel</TableHead>
+              <TableHead>Sumber</TableHead>
               <TableHead>Items</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Total</TableHead>
