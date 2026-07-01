@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Plus,
   Upload,
@@ -27,9 +29,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import {
   Table,
@@ -39,16 +38,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -154,6 +143,7 @@ function StatCard({
 }
 
 export default function Page() {
+  const router = useRouter();
   const [search, setSearch] = React.useState("");
   const [category, setCategory] = React.useState<string>("all");
   const [status, setStatus] = React.useState<StatusFilter>("all");
@@ -187,82 +177,10 @@ export default function Page() {
           <Upload />
           Impor
         </Button>
-        <Dialog>
-          <DialogTrigger
-            render={
-              <Button>
-                <Plus />
-                Tambah Produk
-              </Button>
-            }
-          />
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Tambah Produk</DialogTitle>
-              <DialogDescription>
-                Lengkapi detail produk. Produk akan muncul di katalog toko Anda.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="p-nama">Nama produk</Label>
-                <Input id="p-nama" placeholder="Contoh: Kaos Polos Premium" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2">
-                  <Label htmlFor="p-harga">Harga</Label>
-                  <Input id="p-harga" inputMode="numeric" placeholder="Rp 0" />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="p-stok">Stok</Label>
-                  <Input id="p-stok" inputMode="numeric" placeholder="0" />
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label>Kategori</Label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        variant="outline"
-                        className="w-full justify-between font-normal"
-                      />
-                    }
-                  >
-                    Pilih kategori
-                    <ChevronDown className="text-muted-foreground" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[--anchor-width]">
-                    {CATEGORIES.map((c) => (
-                      <DropdownMenuItem key={c}>{c}</DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="p-desc">Deskripsi</Label>
-                <Textarea
-                  id="p-desc"
-                  rows={3}
-                  placeholder="Ceritakan keunggulan produk ini…"
-                />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <Label htmlFor="p-aktif">Aktifkan produk</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Produk aktif langsung tampil di toko.
-                  </p>
-                </div>
-                <Switch id="p-aktif" defaultChecked />
-              </div>
-            </div>
-            <DialogFooter>
-              <DialogClose render={<Button variant="outline">Batal</Button>} />
-              <DialogClose render={<Button>Simpan</Button>} />
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button nativeButton={false} render={<Link href="/produk/baru" />}>
+          <Plus />
+          Tambah Produk
+        </Button>
       </PageHeader>
 
       {/* Stat row */}
@@ -399,14 +317,21 @@ export default function Page() {
           {filtered.map((p) => (
             <Card
               key={p.id}
-              className="group overflow-hidden py-0 transition-all hover:-translate-y-0.5 hover:shadow-md"
+              className="group relative cursor-pointer overflow-hidden py-0 transition-all hover:-translate-y-0.5 hover:shadow-md"
             >
+              <Link
+                href={`/produk/${p.id}`}
+                aria-label={p.name}
+                className="absolute inset-0 z-[1] rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+              />
               <CardContent className="flex h-full flex-col gap-3 p-3">
                 <div className="flex items-start justify-between">
                   <div className="flex size-14 items-center justify-center rounded-xl bg-muted text-3xl">
                     {p.emoji}
                   </div>
-                  <RowActions />
+                  <div className="relative z-[2]">
+                    <RowActions />
+                  </div>
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate text-sm font-medium" title={p.name}>
@@ -442,7 +367,11 @@ export default function Page() {
             </TableHeader>
             <TableBody>
               {filtered.map((p) => (
-                <TableRow key={p.id}>
+                <TableRow
+                  key={p.id}
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/produk/${p.id}`)}
+                >
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-xl">
@@ -468,7 +397,10 @@ export default function Page() {
                   <TableCell>
                     <StatusBadge status={p.status} />
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell
+                    className="text-right"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <RowActions />
                   </TableCell>
                 </TableRow>
