@@ -1,0 +1,45 @@
+# Indostore — Backlog & task board
+
+> Prioritized work list derived from a full screening of the codebase. Living doc — update as items ship.
+> Companion to `CONCEPT.md` (what/why), `SCHEMA.md` (backend target), `UI_INVENTORY.md` (screen status), `../PRD.md`.
+> Legend: `[ ]` todo · `[~]` partial · `[x]` done. Updated 2026-07-02.
+
+## P0 — Foundation (do before/for backend)
+- [ ] **Backend (Supabase)** — Auth + Postgres + Storage + RLS by `store_id`. Nothing persists today. See `SCHEMA.md` for the target tables + migration steps. *(Deliberately deferred; the mock-first seam makes it a contained swap.)*
+- [~] **Extend the data-layer seam to ALL screens.** Only `lib/data/dashboard.ts` wraps the mock today; **~28 screens import `@/lib/mock/store` directly**. Wrap product/order/customer/collection/… reads in `lib/data/*` selectors (keep signatures) so M3 is "fill query bodies, don't touch UI". *(Highest-leverage pre-backend task.)*
+- [ ] **Auth + real multi-tenant.** Store switcher is cosmetic; make it scope data by `store_id` once backend lands.
+
+## P1 — Functional completeness (mostly wireable now, no backend)
+- [ ] **De-dup: migrate `apps/admin` to consume `@indostore/ui` + `@indostore/lib`** and delete its local `components/ui` + `lib/format`/`utils`. (Monorepo is set up; super-admin already uses the shared packages; admin still has its own copies — see AGENTS.md. Do this carefully so the mature admin keeps building.)
+- [ ] **Super-admin: deepen** — provisioning (create store) flow, real impersonation stub, support/tickets, platform-wide settings persistence, saved reports. (Dashboard/Toko/Paket/Analitik/Pengaturan shells done.)
+- [x] Edit routes for content: `/halaman/[id]`, `/blog/[id]` (prefilled) — done.
+- [x] Fix no-op "Edit" menu items (Produk, Kategori) — now open editors.
+- [x] Storefront slugs Indonesian & consistent: `/produk/`, `/kategori/`, nav uses `/blog//halaman/` — done.
+- [x] Toasts (sonner) on save/delete for Produk, Koleksi, Menu — done. **[ ] extend** to remaining editors (Halaman, Blog, Pelanggan, Pengaturan, Diskon) + destructive **confirm dialogs** before delete.
+- [ ] **Pesanan detail page** `/pesanan/[id]` (today only a Sheet); draft/manual order; refund/return; abandoned checkout.
+- [ ] **Diskon edit route** `/diskon/[id]` (today create-only dialog).
+- [ ] **Real variants** — the product "Varian" toggle is UI-only; model per-variant sku/price/stock + inventory per location.
+- [ ] **Real media upload** — image + the single video slot are mock; wire Storage + a real uploader; **rich-text editor** (Tiptap) for product/page/article bodies (currently textarea + decorative toolbar).
+- [ ] **Ekspor** buttons (Analitik, Inventori, Pemasaran) do nothing — wire CSV export.
+- [ ] Topbar **global search** (⌘K) is cosmetic — make it return real results.
+
+## P2 — Missing modules (from the concept feature map)
+- [ ] **Storefront (Astro)** — 1 sample brand reading the same catalog (M2). Makes "Lihat di toko" real.
+- [ ] Produk: **transfer stok** antar-lokasi, **pemasok (supplier) CRUD** (PO references suppliers).
+- [ ] Pelanggan: **loyalitas/poin**.
+- [ ] CRM: **broadcast & otomasi WhatsApp** (today: follow-up worklist + templates + pipeline only).
+- [ ] Pemasaran: **kampanye email/WA**, automations (welcome, abandoned-cart).
+- [ ] **Kartu hadiah (gift cards)**, **Domain**, **Template notifikasi** (toggles exist in Pengaturan; message editor doesn't).
+- [ ] Analitik: **laporan kustom** + saved reports.
+
+## P3 — Polish
+- [ ] Loading/skeleton states (all static today).
+- [ ] Full dark-mode visual QA pass.
+- [ ] Accessibility audit (aria mostly present; not formally checked).
+- [ ] Tests (none yet) — at least smoke tests per route.
+- [ ] "Rentang khusus…" custom date range (currently disabled "segera").
+
+## Recently shipped (context)
+**Monorepo** (npm workspaces): `apps/admin` + `apps/super-admin` + `packages/ui` (shared shadcn/Base UI) + `packages/lib` (formatters). **Super Admin platform panel** (Dashboard MRR/GMV/churn, Toko/merchant management + detail, Paket & Billing, Analitik, Pengaturan) on the shared design system, :3001. · CRM module (Follow-up WA/Pipeline/Template) · product sub-modules (Kategori/Koleksi editor Manual+Otomatis, Inventori stepper, Purchase Orders) · customer detail page · collection editor · Halaman/Blog edit routes · Pemasaran province filter · Pengaturan redesign (settings-nav + Notifikasi) · **fashion-niche demo with 14 AI-generated product photos** · product list → Shopify-style compact table · channel model (sales channel = Toko Online; attribution = Meta/TikTok/Google Ads + Organic/Other) · concept docs (CONCEPT/SCHEMA/UI_INVENTORY).
+
+*How to use: pull the top unchecked P0/P1 item, ship it, check it, add a CHANGELOG line, and update `UI_INVENTORY.md` if a screen changed.*
