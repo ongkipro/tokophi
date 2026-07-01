@@ -1,0 +1,239 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { Check, Wallet, Users, Receipt } from "lucide-react";
+
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@indostore/ui/card";
+import { Button } from "@indostore/ui/button";
+import { Badge } from "@indostore/ui/badge";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@indostore/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@indostore/ui/tabs";
+import { cn } from "@indostore/ui/lib/utils";
+
+import {
+  PLANS,
+  INVOICES,
+  PLATFORM,
+  STORES,
+  planDistribution,
+  planName,
+  type Plan,
+  type Invoice,
+} from "@/lib/mock";
+import { IDR, num } from "@indostore/lib/format";
+
+const PLAN_CLASS: Record<Plan, string> = {
+  pemula: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  bisnis: "bg-primary/10 text-primary",
+  skala: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+};
+
+const INV_STATUS_CLASS: Record<Invoice["status"], string> = {
+  dibayar: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  menunggu: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  gagal: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+};
+
+const INV_STATUS_LABEL: Record<Invoice["status"], string> = {
+  dibayar: "Dibayar",
+  menunggu: "Menunggu",
+  gagal: "Gagal",
+};
+
+const INV_TABS: { key: "semua" | Invoice["status"]; label: string }[] = [
+  { key: "semua", label: "Semua" },
+  { key: "dibayar", label: "Dibayar" },
+  { key: "menunggu", label: "Menunggu" },
+  { key: "gagal", label: "Gagal" },
+];
+
+function subscriberCount(plan: Plan) {
+  return planDistribution.find((d) => d.plan === plan)?.count ?? 0;
+}
+
+export default function PaketPage() {
+  const [tab, setTab] = useState<"semua" | Invoice["status"]>("semua");
+
+  const summary = useMemo(
+    () => [
+      { label: "MRR", value: IDR(PLATFORM.mrr, { compact: true }), icon: Wallet },
+      {
+        label: "Pelanggan berbayar",
+        value: num(STORES.filter((s) => s.status === "aktif").length),
+        icon: Users,
+      },
+      {
+        label: "Tagihan bulan ini",
+        value: num(INVOICES.length),
+        icon: Receipt,
+      },
+    ],
+    [],
+  );
+
+  const invoices = useMemo(
+    () => (tab === "semua" ? INVOICES : INVOICES.filter((i) => i.status === tab)),
+    [tab],
+  );
+
+  return (
+    <div className="mx-auto max-w-[1400px] space-y-5">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Paket &amp; Billing</h1>
+        <p className="text-sm text-muted-foreground">
+          Kelola paket langganan dan tagihan platform.
+        </p>
+      </div>
+
+      {/* summary cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {summary.map((s) => (
+          <Card key={s.label} className="gap-0 p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground">
+                {s.label}
+              </span>
+              <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                <s.icon className="size-4" />
+              </span>
+            </div>
+            <div className="mt-3 text-2xl font-bold tracking-tight tabular-nums">
+              {s.value}
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* plan cards */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {PLANS.map((p) => {
+          const popular = p.key === "bisnis";
+          return (
+            <Card
+              key={p.key}
+              className={cn(
+                "flex flex-col",
+                popular && "ring-2 ring-primary",
+              )}
+            >
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    {p.name}
+                    {popular && (
+                      <Badge className="bg-primary text-primary-foreground">
+                        Populer
+                      </Badge>
+                    )}
+                  </span>
+                  <Badge className={cn(PLAN_CLASS[p.key])}>
+                    {num(subscriberCount(p.key))} toko
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-1 flex-col">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-bold tracking-tight tabular-nums">
+                    {IDR(p.price)}
+                  </span>
+                  <span className="text-sm text-muted-foreground">/bln</span>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">{p.blurb}</p>
+                <ul className="mt-4 space-y-2 text-sm">
+                  {p.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2">
+                      <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4 border-t pt-3 text-xs text-muted-foreground">
+                  {num(subscriberCount(p.key))} toko berlangganan
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* invoices */}
+      <Card className="gap-0 py-0">
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle>Tagihan</CardTitle>
+          <Tabs
+            value={tab}
+            onValueChange={(v) => setTab(v as "semua" | Invoice["status"])}
+          >
+            <TabsList>
+              {INV_TABS.map((t) => (
+                <TabsTrigger key={t.key} value={t.key}>
+                  {t.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+        <div className="overflow-x-auto border-t">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>No.</TableHead>
+                <TableHead>Toko</TableHead>
+                <TableHead>Paket</TableHead>
+                <TableHead className="text-right">Jumlah</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Tanggal</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {invoices.map((inv) => (
+                <TableRow key={inv.id}>
+                  <TableCell className="font-mono text-xs">{inv.id}</TableCell>
+                  <TableCell className="font-medium">{inv.store}</TableCell>
+                  <TableCell>
+                    <Badge className={cn(PLAN_CLASS[inv.plan])}>
+                      {planName(inv.plan)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {IDR(inv.amount)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={cn(INV_STATUS_CLASS[inv.status])}>
+                      {INV_STATUS_LABEL[inv.status]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                    {inv.daysAgo} hari lalu
+                  </TableCell>
+                </TableRow>
+              ))}
+              {invoices.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="py-10 text-center text-muted-foreground"
+                  >
+                    Tidak ada tagihan.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </Card>
+    </div>
+  );
+}
