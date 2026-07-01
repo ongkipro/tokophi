@@ -11,11 +11,14 @@ import {
   Radio,
   Plug,
   Settings2,
+  MapPin,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { IDR, num } from "@/lib/format";
-import { AD_CHANNELS, type AdChannel } from "@/lib/mock/store";
+import { AD_CHANNELS, type AdChannel, PROVINCES, AD_PROVINCES } from "@/lib/mock/store";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +37,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 import { SpendRevenueChart } from "@/components/admin/pemasaran/spend-revenue-chart";
 
 // ---- derived metrics ----
@@ -105,42 +115,27 @@ function StatCard({
 }
 
 // ---- Tab 1: Ringkasan ----
-function RingkasanTab() {
+function RingkasanTab({ province }: { province: string }) {
   const chartData = AD_CHANNELS.map((c) => ({
     name: c.name.replace(" Ads", ""),
     brand: c.brand,
     spend: c.spend,
     revenue: c.revenue,
   }));
-  const blendedRoas = roasOf(totals);
+  const prov = province === "Semua Provinsi" ? null : AD_PROVINCES.find((p) => p.province === province);
+  const active = prov
+    ? { spend: prov.spend, revenue: prov.revenue, conversions: prov.conversions }
+    : { spend: totals.spend, revenue: totals.revenue, conversions: totals.conversions };
+  const activeRoas = roasOf(active);
+  const scopeHelper = prov ? `Wilayah: ${province} · 30 hari` : "Gabungan 3 saluran · 30 hari terakhir";
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Total Belanja Iklan"
-          value={IDR(totals.spend, { compact: true })}
-          helper="Gabungan 3 saluran, 30 hari terakhir"
-          icon={Wallet}
-        />
-        <StatCard
-          label="Pendapatan dari Iklan"
-          value={IDR(totals.revenue, { compact: true })}
-          helper="Nilai konversi terlacak"
-          icon={TrendingUp}
-        />
-        <StatCard
-          label="ROAS Gabungan"
-          value={fmtRoas(blendedRoas)}
-          helper="Pendapatan per Rp1 belanja"
-          icon={Gauge}
-        />
-        <StatCard
-          label="Total Konversi"
-          value={num(totals.conversions)}
-          helper="Pembelian dari iklan"
-          icon={ShoppingCart}
-        />
+        <StatCard label="Total Belanja Iklan" value={IDR(active.spend, { compact: true })} helper={scopeHelper} icon={Wallet} />
+        <StatCard label="Pendapatan dari Iklan" value={IDR(active.revenue, { compact: true })} helper="Nilai konversi terlacak" icon={TrendingUp} />
+        <StatCard label={prov ? "ROAS Wilayah" : "ROAS Gabungan"} value={fmtRoas(activeRoas)} helper="Pendapatan per Rp1 belanja" icon={Gauge} />
+        <StatCard label="Total Konversi" value={num(active.conversions)} helper="Pembelian dari iklan" icon={ShoppingCart} />
       </div>
 
       <Card>
@@ -265,6 +260,57 @@ function RingkasanTab() {
                   </TableCell>
                 </TableRow>
               </TableFooter>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="size-4 text-muted-foreground" /> Performa per Provinsi
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Belanja iklan &amp; hasil berdasarkan wilayah pembeli{prov ? ` — disorot: ${province}` : ""}
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Provinsi</TableHead>
+                  <TableHead className="text-right">Belanja</TableHead>
+                  <TableHead className="text-right">Konversi</TableHead>
+                  <TableHead>Pendapatan</TableHead>
+                  <TableHead className="text-right">ROAS</TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">Jangkauan</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[...AD_PROVINCES].sort((a, b) => b.revenue - a.revenue).map((p) => {
+                  const maxRev = Math.max(...AD_PROVINCES.map((x) => x.revenue));
+                  const sel = p.province === province;
+                  const r = roasOf(p);
+                  return (
+                    <TableRow key={p.province} className={sel ? "bg-primary/5" : undefined}>
+                      <TableCell className="font-medium">{p.province}</TableCell>
+                      <TableCell className="text-right tabular-nums">{IDR(p.spend, { compact: true })}</TableCell>
+                      <TableCell className="text-right tabular-nums">{num(p.conversions)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-muted sm:block">
+                            <div className="h-full rounded-full bg-primary" style={{ width: `${(p.revenue / maxRev) * 100}%` }} />
+                          </div>
+                          <span className="tabular-nums">{IDR(p.revenue, { compact: true })}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className={`text-right font-semibold tabular-nums ${r >= 3 ? "text-emerald-600 dark:text-emerald-400" : ""}`}>{fmtRoas(r)}</TableCell>
+                      <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">{num(p.reach)}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
             </Table>
           </div>
         </CardContent>
@@ -578,6 +624,7 @@ function PelacakanTab() {
 // ---- page ----
 export default function PemasaranPage() {
   const [tab, setTab] = React.useState("ringkasan");
+  const [province, setProvince] = React.useState("Semua Provinsi");
 
   return (
     <>
@@ -585,6 +632,22 @@ export default function PemasaranPage() {
         title="Pemasaran"
         desc="Kelola iklan dan pelacakan konversi dari Meta, Google, dan TikTok."
       >
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="outline" />}>
+            <MapPin className="text-muted-foreground" />
+            {province}
+            <ChevronDown className="text-muted-foreground" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="max-h-72 w-56 overflow-y-auto">
+            <DropdownMenuLabel>Filter Provinsi</DropdownMenuLabel>
+            {PROVINCES.map((pv) => (
+              <DropdownMenuItem key={pv} onClick={() => setProvince(pv)}>
+                {pv}
+                {province === pv && <Check className="ml-auto" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button variant="outline">
           <Download /> Ekspor laporan
         </Button>
@@ -598,7 +661,7 @@ export default function PemasaranPage() {
         </TabsList>
 
         <TabsContent value="ringkasan">
-          <RingkasanTab />
+          <RingkasanTab province={province} />
         </TabsContent>
         <TabsContent value="saluran">
           <SaluranTab />
