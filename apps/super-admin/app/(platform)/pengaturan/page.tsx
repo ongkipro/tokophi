@@ -24,6 +24,7 @@ const INITIAL_GATEWAYS: Toggle[] = [
   { key: "midtrans", name: "Midtrans", desc: "QRIS, VA, kartu kredit", on: true },
   { key: "xendit", name: "Xendit", desc: "VA, e-wallet, retail", on: true },
   { key: "duitku", name: "Duitku", desc: "VA & e-wallet", on: false },
+  { key: "cod", name: "COD (Bayar di Tempat)", desc: "Ditanggung platform; limit & area diatur di sini", on: true },
 ];
 
 const INITIAL_COURIERS: Toggle[] = [
@@ -68,7 +69,8 @@ export default function PengaturanPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Pengaturan</h1>
         <p className="text-sm text-muted-foreground">
-          Konfigurasi platform, integrasi, dan tim.
+          Gateway pembayaran, COD, dan kurir diatur di sini oleh platform — berlaku untuk{" "}
+          <span className="font-medium text-foreground">semua toko</span>. Merchant hanya mengaktifkan metode di tokonya.
         </p>
       </div>
 

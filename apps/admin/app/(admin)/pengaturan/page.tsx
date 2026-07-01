@@ -13,6 +13,7 @@ import {
   Wallet,
   HandCoins,
   Store,
+  Info,
   UserPlus,
   Save,
 } from "lucide-react"
@@ -403,6 +404,13 @@ export default function Page() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3">
+                <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+                  <Info className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <span>
+                    Gateway pembayaran &amp; COD disediakan dan dikelola oleh{" "}
+                    <span className="font-medium text-foreground">Indostore</span>. Anda cukup mengaktifkan metode yang ingin diterima — tanpa daftar akun atau isi API sendiri.
+                  </span>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   <span className="font-medium tabular-nums text-foreground">
                     {payActive}
@@ -467,6 +475,13 @@ export default function Page() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3">
+                <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+                  <Info className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <span>
+                    Integrasi kurir &amp; tarif ongkir dikelola oleh{" "}
+                    <span className="font-medium text-foreground">Indostore</span>. Anda cukup memilih kurir yang ingin ditawarkan — resi &amp; tarif otomatis.
+                  </span>
+                </div>
                 <ToggleRow
                   icon={<Truck />}
                   title="JNE"
