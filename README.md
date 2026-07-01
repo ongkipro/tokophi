@@ -29,7 +29,7 @@ Next.js · React · TypeScript · Tailwind CSS · shadcn/ui (Radix) · Recharts 
 
 ## Status
 - [x] Repo + PRD
-- [ ] Admin shell (nav + top bar) + **Dashboard** (mock)  ← in progress
+- [x] Admin shell (sidebar + topbar, dark mode) + **Dashboard** (mock) — analytics, FB-style date range, charts, live feed
 - [ ] Orders / Products / Customers
 - [ ] Discounts / Analytics / Settings
 - [ ] Sample Astro storefront

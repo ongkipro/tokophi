@@ -186,3 +186,46 @@ export const ACTIVITIES: Activity[] = (() => {
 
 export const ONLINE_NOW = 47; // stable mock; realtime ticker jitters this client-side
 export const CUSTOMER_COUNT = 3128;
+
+// ---- customers ----
+export type Segment = "baru" | "reguler" | "loyal" | "vip";
+export type Customer = {
+  id: string; name: string; email: string; phone: string; city: string;
+  orders: number; spent: number; segment: Segment; joinedDaysAgo: number;
+};
+export const CUSTOMERS: Customer[] = (() => {
+  const rnd = mulberry32(4242);
+  const out: Customer[] = [];
+  const pool = [...NAMES, "Bayu Aji", "Citra Kirana", "Eko Prasetyo", "Fitri Handayani", "Gilang Ramadhan", "Hana Salsabila", "Irfan Maulana", "Kartika Sari", "Lukman Hakim", "Nadia Zahra"];
+  for (let i = 0; i < 24; i++) {
+    const name = pool[i % pool.length];
+    const orders = Math.round(1 + rnd() * 38);
+    const spent = orders * (90_000 + Math.round(rnd() * 260_000));
+    const segment: Segment = spent > 6_000_000 ? "vip" : orders > 12 ? "loyal" : orders > 3 ? "reguler" : "baru";
+    out.push({
+      id: `CUST-${2001 + i}`,
+      name,
+      email: name.toLowerCase().replace(/[^a-z]+/g, ".") + "@mail.com",
+      phone: "0812" + String(1000000 + Math.floor(rnd() * 8999999)),
+      city: CITIES[Math.floor(rnd() * CITIES.length)],
+      orders, spent, segment,
+      joinedDaysAgo: Math.round(rnd() * 400),
+    });
+  }
+  return out.sort((a, b) => b.spent - a.spent);
+})();
+
+// ---- discounts ----
+export type DiscountType = "persen" | "nominal" | "ongkir";
+export type Discount = {
+  id: string; code: string; type: DiscountType; value: number;
+  status: "aktif" | "terjadwal" | "kadaluarsa"; used: number; limit: number; endsInDays: number;
+};
+export const DISCOUNTS: Discount[] = [
+  { id: "D1", code: "GAJIAN25", type: "persen", value: 25, status: "aktif", used: 342, limit: 1000, endsInDays: 4 },
+  { id: "D2", code: "ONGKIRGRATIS", type: "ongkir", value: 0, status: "aktif", used: 1289, limit: 5000, endsInDays: 12 },
+  { id: "D3", code: "NEWUSER50K", type: "nominal", value: 50_000, status: "aktif", used: 210, limit: 500, endsInDays: 30 },
+  { id: "D4", code: "FLASH1212", type: "persen", value: 40, status: "terjadwal", used: 0, limit: 2000, endsInDays: 45 },
+  { id: "D5", code: "RAMADHAN15", type: "persen", value: 15, status: "kadaluarsa", used: 890, limit: 900, endsInDays: -10 },
+  { id: "D6", code: "MEMBERVIP", type: "nominal", value: 100_000, status: "aktif", used: 76, limit: 300, endsInDays: 60 },
+];
