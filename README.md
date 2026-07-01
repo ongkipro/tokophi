@@ -30,7 +30,13 @@ Next.js · React · TypeScript · Tailwind CSS · shadcn/ui (Radix) · Recharts 
 ## Status
 - [x] Repo + PRD
 - [x] Admin shell (sidebar + topbar, dark mode) + **Dashboard** (mock) — analytics, FB-style date range, charts, live feed
-- [ ] Orders / Products / Customers
-- [ ] Discounts / Analytics / Settings
+- [x] **Pesanan** — status tabs+counts, filters, table, detail sheet, pagination
+- [x] **Produk** — stat cards, grid/list toggle, filters, add-product dialog
+- [x] **Pelanggan** — segments, stats, sortable table, profile sheet
+- [x] **Diskon** — usage progress, status tabs, create dialog
+- [x] **Analitik** — KPIs + sales trend + category bar + channel donut + top products
+- [x] **Pengaturan** — Profil/Pembayaran/Pengiriman/Pajak/Pengguna (couriers + e-wallets)
 - [ ] Sample Astro storefront
 - [ ] Supabase backend (replace mock data layer)
+
+Run: `cd admin && npm run dev` → http://localhost:3000 (all 8 routes live).
