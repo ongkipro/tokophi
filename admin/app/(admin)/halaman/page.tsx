@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Plus,
   Search,
@@ -54,7 +55,7 @@ function daysAgoLabel(days: number): string {
   return `${days} hari lalu`;
 }
 
-function RowActions({ handle }: { handle: string }) {
+function RowActions({ id }: { id: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -65,19 +66,11 @@ function RowActions({ handle }: { handle: string }) {
         }
       />
       <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuItem render={<Link href="/halaman/baru" />}>
+        <DropdownMenuItem render={<Link href={`/halaman/${id}`} />}>
           <Pencil />
           Edit
         </DropdownMenuItem>
-        <DropdownMenuItem
-          render={
-            <a
-              href={`/pages/${handle}`}
-              target="_blank"
-              rel="noreferrer"
-            />
-          }
-        >
+        <DropdownMenuItem>
           <ExternalLink />
           Lihat di toko
         </DropdownMenuItem>
@@ -96,6 +89,7 @@ function RowActions({ handle }: { handle: string }) {
 }
 
 export default function Page() {
+  const router = useRouter();
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("semua");
 
@@ -179,22 +173,26 @@ export default function Page() {
             </TableHeader>
             <TableBody>
               {rows.map((p) => (
-                <TableRow key={p.id} className="group">
-                  <TableCell className="pl-4">
+                <TableRow
+                  key={p.id}
+                  className="group cursor-pointer"
+                  onClick={() => router.push(`/halaman/${p.id}`)}
+                >
+                  <TableCell
+                    className="pl-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Checkbox aria-label={`Pilih ${p.title}`} />
                   </TableCell>
                   <TableCell>
-                    <Link
-                      href="/halaman/baru"
-                      className="flex flex-col gap-0.5"
-                    >
+                    <div className="flex flex-col gap-0.5">
                       <span className="font-semibold group-hover:underline">
                         {p.title}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         /pages/{p.handle}
                       </span>
-                    </Link>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <PageStatusBadge published={p.published} />
@@ -210,8 +208,11 @@ export default function Page() {
                   <TableCell className="text-sm text-muted-foreground">
                     {daysAgoLabel(p.updatedDaysAgo)}
                   </TableCell>
-                  <TableCell className="pr-4 text-right">
-                    <RowActions handle={p.handle} />
+                  <TableCell
+                    className="pr-4 text-right"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <RowActions id={p.id} />
                   </TableCell>
                 </TableRow>
               ))}

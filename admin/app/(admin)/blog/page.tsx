@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Plus,
   Search,
@@ -52,7 +53,7 @@ function daysAgoLabel(days: number) {
   return `${num(days)} hari lalu`;
 }
 
-function RowActions() {
+function RowActions({ id }: { id: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -61,7 +62,7 @@ function RowActions() {
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem render={<Link href="/blog/baru" />}>
+        <DropdownMenuItem render={<Link href={`/blog/${id}`} />}>
           <Pencil />
           Edit
         </DropdownMenuItem>
@@ -84,6 +85,7 @@ function RowActions() {
 }
 
 export default function Page() {
+  const router = useRouter();
   const [search, setSearch] = React.useState("");
   const [blog, setBlog] = React.useState<string>("all");
 
@@ -196,8 +198,12 @@ export default function Page() {
             </TableHeader>
             <TableBody>
               {filtered.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell>
+                <TableRow
+                  key={p.id}
+                  onClick={() => router.push(`/blog/${p.id}`)}
+                  className="cursor-pointer"
+                >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <Checkbox aria-label={`Pilih ${p.title}`} />
                   </TableCell>
                   <TableCell className="max-w-sm">
@@ -224,8 +230,11 @@ export default function Page() {
                       {num(p.comments)}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <RowActions />
+                  <TableCell
+                    className="text-right"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <RowActions id={p.id} />
                   </TableCell>
                 </TableRow>
               ))}

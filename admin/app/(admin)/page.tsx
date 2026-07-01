@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { Wallet, ShoppingBag, Users, Target, Download } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,7 +85,7 @@ export default function DashboardPage() {
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <div><CardTitle>Pesanan Terbaru</CardTitle><CardDescription>Pesanan yang masuk baru-baru ini</CardDescription></div>
-            <Button variant="ghost" size="sm">Lihat semua</Button>
+            <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/pesanan" />}>Lihat semua</Button>
           </CardHeader>
           <CardContent className="px-2"><RecentOrders orders={getRecentOrders(6)} /></CardContent>
         </Card>
