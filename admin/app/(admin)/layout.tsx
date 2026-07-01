@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/admin/sidebar";
 import { Topbar } from "@/components/admin/topbar";
+import { Toaster } from "sonner";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,6 +10,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <Topbar />
         <main className="flex-1 bg-muted/30 p-4 sm:p-6">{children}</main>
       </div>
+      <Toaster position="top-center" richColors closeButton />
     </div>
   );
 }

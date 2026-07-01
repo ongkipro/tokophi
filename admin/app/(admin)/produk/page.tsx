@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
+import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num, dateTimeShort, dateShort } from "@/lib/format";
 import { PRODUCTS, TODAY, type Product } from "@/lib/mock/store";
 import { cn } from "@/lib/utils";
@@ -61,14 +62,14 @@ function StatusBadge({ status }: { status: Product["status"] }) {
     : <Badge variant="outline" className="text-muted-foreground">Draft</Badge>;
 }
 
-function RowActions() {
+function RowActions({ id }: { id: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi produk" />}>
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem><Pencil /> Edit</DropdownMenuItem>
+        <DropdownMenuItem render={<Link href={`/produk/${id}`} />}><Pencil /> Edit</DropdownMenuItem>
         <DropdownMenuItem><Copy /> Duplikat</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive"><Archive /> Arsipkan</DropdownMenuItem>
@@ -295,12 +296,12 @@ export default function Page() {
               <Card key={p.id} className={cn("group relative overflow-hidden py-0 transition-all hover:-translate-y-0.5 hover:shadow-md", isSel && "ring-2 ring-primary")}>
                 <Link href={`/produk/${p.id}`} aria-label={p.name} className="absolute inset-0 z-[1] rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none" />
                 {/* image */}
-                <div className={cn("relative flex aspect-[5/4] items-center justify-center bg-gradient-to-br from-muted to-muted/40 text-6xl", p.status === "draft" && "opacity-70")}>
-                  <span>{p.emoji}</span>
+                <div className={cn("relative aspect-[5/4]", p.status === "draft" && "opacity-70")}>
+                  <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="absolute inset-0 size-full rounded-none" emojiClassName="text-6xl" />
                   <div className={cn("absolute left-2 top-2 z-[2] transition-opacity", isSel ? "opacity-100" : "opacity-0 group-hover:opacity-100")} onClick={(e) => e.stopPropagation()}>
                     <Checkbox checked={isSel} onCheckedChange={() => toggle(p.id)} aria-label={`Pilih ${p.name}`} className="border-2 bg-background/90 shadow-sm" />
                   </div>
-                  <div className="absolute right-2 top-2 z-[2]"><RowActions /></div>
+                  <div className="absolute right-2 top-2 z-[2]"><RowActions id={p.id} /></div>
                   {p.status === "draft" && <Badge variant="outline" className="absolute bottom-2 left-2 z-[2] bg-background/85">Draft</Badge>}
                 </div>
                 {/* body */}
@@ -346,7 +347,7 @@ export default function Page() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-xl">{p.emoji}</div>
+                        <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9" />
                         <div className="min-w-0">
                           <p className="truncate font-medium">{p.name}</p>
                           <p className="text-xs text-muted-foreground md:hidden">{p.category}</p>
@@ -359,7 +360,7 @@ export default function Page() {
                     <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">{num(p.unitsSold)}</TableCell>
                     <TableCell><StatusBadge status={p.status} /></TableCell>
                     <TableCell className="hidden lg:table-cell text-sm text-muted-foreground tabular-nums whitespace-nowrap">{dateTimeShort(p.addedTs)}</TableCell>
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}><RowActions /></TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}><RowActions id={p.id} /></TableCell>
                   </TableRow>
                 );
               })}

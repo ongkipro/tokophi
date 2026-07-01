@@ -97,7 +97,7 @@ export function getSeries(key: RangeKey): { points: SeriesPoint[]; granularity: 
   };
 }
 
-export type TopProduct = { id: string; name: string; emoji: string; revenue: number; units: number };
+export type TopProduct = { id: string; name: string; emoji: string; image: string; revenue: number; units: number };
 
 export function getTopProducts(key: RangeKey, limit = 5): TopProduct[] {
   const { days } = resolve(key);
@@ -106,7 +106,7 @@ export function getTopProducts(key: RangeKey, limit = 5): TopProduct[] {
   const weightSum = ranked.reduce((a, p) => a + p.unitsSold, 0);
   return ranked.slice(0, limit).map((p) => {
     const revenue = Math.round(total * (p.unitsSold / weightSum) * 1.9);
-    return { id: p.id, name: p.name, emoji: p.emoji, revenue, units: Math.max(1, Math.round(revenue / p.price)) };
+    return { id: p.id, name: p.name, emoji: p.emoji, image: p.image, revenue, units: Math.max(1, Math.round(revenue / p.price)) };
   });
 }
 

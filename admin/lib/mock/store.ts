@@ -79,6 +79,7 @@ export type Product = {
   id: string;
   name: string;
   emoji: string;
+  image: string; // /products/<slug>.webp
   price: number;
   stock: number;
   status: "active" | "draft";
@@ -86,28 +87,30 @@ export type Product = {
   unitsSold: number;
   addedTs: number; // when the product was added (ms since epoch, deterministic)
 };
-const PRODUCT_SEED: Array<[string, string, number, string]> = [
-  ["Kaos Polos Premium Cotton", "👕", 89_000, "Fashion"],
-  ["Hijab Voal Segi Empat", "🧕", 55_000, "Fashion"],
-  ["Sepatu Sneakers Lokal", "👟", 275_000, "Fashion"],
-  ["Tas Ransel Anti Air", "🎒", 189_000, "Aksesoris"],
-  ["Kopi Arabika Gayo 250g", "☕", 78_000, "F&B"],
-  ["Madu Hutan Asli 500ml", "🍯", 120_000, "F&B"],
-  ["Skincare Serum Vitamin C", "🧴", 145_000, "Kecantikan"],
-  ["Lip Cream Matte", "💄", 65_000, "Kecantikan"],
-  ["Power Bank 10.000mAh", "🔋", 165_000, "Elektronik"],
-  ["Earphone Bluetooth TWS", "🎧", 210_000, "Elektronik"],
-  ["Botol Minum Termos 1L", "🍶", 95_000, "Rumah Tangga"],
-  ["Set Peralatan Masak", "🍳", 320_000, "Rumah Tangga"],
-  ["Mainan Edukasi Kayu", "🧩", 135_000, "Anak"],
-  ["Vitamin Anak Gummy", "🐻", 88_000, "Kesehatan"],
+// Fashion niche (women's clothing). image = /products/<slug>.webp (AI-generated catalog photos).
+const PRODUCT_SEED: Array<[string, string, number, string, string]> = [
+  ["Dress Midi Motif Bunga", "👗", 189_000, "Dress", "dress-midi-bunga"],
+  ["Blouse Katun Lengan Balon", "👚", 95_000, "Atasan", "blouse-katun"],
+  ["Kemeja Oversized Wanita", "👔", 120_000, "Atasan", "kemeja-oversized"],
+  ["Rok Plisket Panjang", "🩱", 89_000, "Bawahan", "rok-plisket"],
+  ["Celana Kulot Wide Leg", "👖", 110_000, "Bawahan", "celana-kulot"],
+  ["Hijab Voal Segi Empat", "🧕", 45_000, "Hijab", "hijab-voal"],
+  ["Khimar Instan Jumbo", "🧕", 75_000, "Hijab", "khimar-instan"],
+  ["Gamis Syari Polos", "🧕", 245_000, "Busana Muslim", "gamis-syari"],
+  ["Tunik Katun Rayon", "👚", 98_000, "Atasan", "tunik-rayon"],
+  ["Cardigan Rajut Wanita", "🧥", 135_000, "Outerwear", "cardigan-rajut"],
+  ["Set Piyama Satin Wanita", "🩱", 125_000, "Loungewear", "piyama-satin"],
+  ["Blazer Formal Wanita", "🧥", 199_000, "Outerwear", "blazer-wanita"],
+  ["Dress Batik Modern", "👗", 215_000, "Dress", "dress-batik"],
+  ["Jumpsuit Kulot Casual", "👗", 175_000, "Dress", "jumpsuit-kulot"],
 ];
-export const PRODUCTS: Product[] = PRODUCT_SEED.map(([name, emoji, price, category], i) => {
+export const PRODUCTS: Product[] = PRODUCT_SEED.map(([name, emoji, price, category, image], i) => {
   const rnd = mulberry32(1000 + i * 7);
   return {
     id: `PRD-${1001 + i}`,
     name,
     emoji,
+    image: `/products/${image}.webp`,
     price,
     stock: Math.round(5 + rnd() * 240),
     status: rnd() > 0.12 ? "active" : "draft",
@@ -370,14 +373,14 @@ export const NEW_VS_RETURNING = [
 // ---- product sub-modules: collections (Kategori), purchase orders (Pembelian) ----
 export type Collection = { id: string; name: string; emoji: string; products: number; type: "manual" | "otomatis"; published: boolean };
 export const COLLECTIONS: Collection[] = [
-  { id: "COL-1", name: "Fashion", emoji: "👕", products: 3, type: "otomatis", published: true },
-  { id: "COL-2", name: "Elektronik", emoji: "🔌", products: 2, type: "otomatis", published: true },
-  { id: "COL-3", name: "Kecantikan", emoji: "💄", products: 2, type: "otomatis", published: true },
-  { id: "COL-4", name: "F&B", emoji: "☕", products: 2, type: "otomatis", published: true },
+  { id: "COL-1", name: "Dress", emoji: "👗", products: 4, type: "otomatis", published: true },
+  { id: "COL-2", name: "Atasan", emoji: "👚", products: 3, type: "otomatis", published: true },
+  { id: "COL-3", name: "Bawahan", emoji: "👖", products: 2, type: "otomatis", published: true },
+  { id: "COL-4", name: "Busana Muslim", emoji: "🧕", products: 3, type: "otomatis", published: true },
   { id: "COL-5", name: "Promo Gajian", emoji: "🏷️", products: 8, type: "manual", published: true },
   { id: "COL-6", name: "Produk Terlaris", emoji: "🔥", products: 10, type: "otomatis", published: true },
-  { id: "COL-7", name: "Baru Rilis", emoji: "✨", products: 6, type: "otomatis", published: true },
-  { id: "COL-8", name: "Rumah Tangga", emoji: "🏠", products: 2, type: "otomatis", published: false },
+  { id: "COL-7", name: "Koleksi Baru", emoji: "✨", products: 6, type: "otomatis", published: true },
+  { id: "COL-8", name: "Outerwear", emoji: "🧥", products: 2, type: "otomatis", published: false },
 ];
 
 export type POStatus = "draft" | "dipesan" | "sebagian" | "diterima";

@@ -44,14 +44,14 @@ function StatusBadge({ published }: { published: boolean }) {
   );
 }
 
-function RowActions() {
+function RowActions({ id }: { id: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi kategori" />}>
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem><Pencil /> Edit</DropdownMenuItem>
+        <DropdownMenuItem render={<Link href={`/produk/kategori/${id}`} />}><Pencil /> Edit</DropdownMenuItem>
         <DropdownMenuItem><ExternalLink /> Lihat di toko</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive"><Trash2 /> Hapus</DropdownMenuItem>
@@ -143,7 +143,7 @@ export default function Page() {
                     className="text-right"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <RowActions />
+                    <RowActions id={c.id} />
                   </TableCell>
                 </TableRow>
               ))}

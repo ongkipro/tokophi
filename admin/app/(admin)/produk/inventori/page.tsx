@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
+import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num } from "@/lib/format";
 import { PRODUCTS, type Product } from "@/lib/mock/store";
 import { cn } from "@/lib/utils";
@@ -196,7 +197,7 @@ export default function Page() {
                   <TableRow key={p.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-xl">{p.emoji}</div>
+                        <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9" />
                         <div className="min-w-0">
                           <p className="truncate font-medium">{p.name}</p>
                           <p className="text-xs text-muted-foreground">{p.category}</p>

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { type Product } from "@/lib/mock/store";
+import { toast } from "sonner";
 import { IDR, num } from "@/lib/format";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -60,14 +61,14 @@ import {
 } from "@/components/ui/dialog";
 
 const CATEGORIES = [
-  "Fashion",
+  "Dress",
+  "Atasan",
+  "Bawahan",
+  "Hijab",
+  "Busana Muslim",
+  "Outerwear",
+  "Loungewear",
   "Aksesoris",
-  "F&B",
-  "Kecantikan",
-  "Elektronik",
-  "Rumah Tangga",
-  "Anak",
-  "Kesehatan",
 ];
 
 const LOW_STOCK = 20;
@@ -177,7 +178,7 @@ export function ProductEditor({ product }: { product?: Product }) {
   const seoTitleText = seoTitle || name || "Judul produk";
   const seoDescText =
     metaDesc || "Deskripsi meta produk akan tampil di sini pada hasil pencarian.";
-  const seoUrl = `tokoanda.com › products › ${handle || "produk"}`;
+  const seoUrl = `tokoanda.com › produk › ${handle || "produk"}`;
 
   return (
     <div>
@@ -241,7 +242,11 @@ export function ProductEditor({ product }: { product?: Product }) {
             </DropdownMenu>
           )}
           {isEdit && (
-            <Button variant="ghost" className="text-destructive hover:bg-destructive/10">
+            <Button
+              variant="ghost"
+              className="text-destructive hover:bg-destructive/10"
+              onClick={() => toast.success("Produk dihapus")}
+            >
               <Trash2 />
               Hapus produk
             </Button>
@@ -249,7 +254,9 @@ export function ProductEditor({ product }: { product?: Product }) {
           <Button variant="ghost" nativeButton={false} render={<Link href="/produk" />}>
             Batal
           </Button>
-          <Button>Simpan</Button>
+          <Button onClick={() => toast.success(isEdit ? "Perubahan produk disimpan" : "Produk baru disimpan")}>
+            Simpan
+          </Button>
         </div>
       </div>
 
@@ -311,8 +318,13 @@ export function ProductEditor({ product }: { product?: Product }) {
               {/* Image grid */}
               <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
                 {isEdit ? (
-                  <div className="relative flex aspect-square items-center justify-center rounded-lg bg-muted text-4xl">
-                    {product?.emoji}
+                  <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
+                    {product?.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={product.image} alt={product.name} className="size-full object-cover" />
+                    ) : (
+                      <div className="flex size-full items-center justify-center text-4xl">{product?.emoji}</div>
+                    )}
                     <span className="absolute left-1 top-1 rounded bg-foreground/80 px-1.5 py-0.5 text-[10px] font-medium text-background">
                       Utama
                     </span>
@@ -655,7 +667,7 @@ export function ProductEditor({ product }: { product?: Product }) {
                 <Label htmlFor="seo-handle">Handle URL</Label>
                 <div className="flex items-center overflow-hidden rounded-lg border focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
                   <span className="border-r bg-muted/40 px-2.5 py-1 text-sm text-muted-foreground">
-                    /products/
+                    /produk/
                   </span>
                   <Input
                     id="seo-handle"
