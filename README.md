@@ -36,6 +36,10 @@ Next.js · React · TypeScript · Tailwind CSS · shadcn/ui (Radix) · Recharts 
 - [x] **Diskon** — usage progress, status tabs, create dialog
 - [x] **Analitik** — KPIs + sales trend + category bar + channel donut + top products
 - [x] **Pengaturan** — Profil/Pembayaran/Pengiriman/Pajak/Pengguna (couriers + e-wallets)
+- [x] **Toko Online** section (Shopify-modeled, structure screened via Shopify CLI):
+  - **Halaman** — pages list + Shopify-style editor (content, visibility, template, SEO preview)
+  - **Blog** — posts list + article editor (content, excerpt, image, tags, SEO)
+  - **Navigasi** — menu builder (Menu Utama/Footer, nested typed items, add/edit/delete)
 - [ ] Sample Astro storefront
 - [ ] Supabase backend (replace mock data layer)
 
