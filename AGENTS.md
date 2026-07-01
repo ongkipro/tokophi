@@ -1,14 +1,31 @@
 # Indostore — working agreement (read before coding)
 
-Shopify-style commerce SaaS for Indonesia: **one shared Next.js admin** (multi-store) + **per-client Astro storefronts** (bespoke). **No Themes menu, no Apps/Plugins.** Phase 1 = **UI/UX with mock data** — backend deferred. Bahasa Indonesia UI, IDR. Full spec: `~/Documents/Development/indostore/PRD.md`.
+Shopify-style commerce SaaS for Indonesia. **No Themes menu, no Apps/Plugins.** Phase 1 = **UI/UX with mock data** — backend deferred. Bahasa Indonesia UI, IDR. Full spec: `~/Documents/Development/indostore/PRD.md`.
+
+## Monorepo (npm workspaces) — 3 surfaces
+```
+indostore/
+  apps/
+    admin/        # merchant/store admin (@indostore/admin) — what a shop owner uses
+    super-admin/  # platform control plane (@indostore/super-admin) — what WE use (manage all stores/plans/billing)
+    storefront/   # Astro shopper site (planned, M2)
+  packages/
+    ui/           # @indostore/ui — shared shadcn/Base UI components + cn + Tailwind v4 tokens (styles.css)
+    lib/          # @indostore/lib — shared formatters (IDR/num/…)
+```
+- **super-admin** imports shared code via `@indostore/ui/<component>` + `@indostore/lib/format`; Tailwind picks up the shared components via `@source` in its `globals.css`.
+- **admin still has its OWN local `components/ui` + `lib`** (untouched during the monorepo move). **TODO/BACKLOG:** migrate admin to consume `@indostore/ui`/`@indostore/lib` and delete the local copies (de-dup). Until then, edit shared components in `packages/ui`; admin-only tweaks stay in `apps/admin`.
 
 ## Run
 ```bash
-cd admin && npm run dev      # http://localhost:3000  (Turbopack)
-npm run build                # typecheck + lint + static build (13 routes)
+# from repo root (workspaces):
+npm run dev:admin   # apps/admin        → http://localhost:3000
+npm run dev:super   # apps/super-admin  → http://localhost:3001
+# or per app:  cd apps/admin && npm run dev
+npm run build:admin ; npm run build:super   # typecheck + lint + static build
 ```
 
-## Structure (admin/)
+## Structure (apps/admin/)
 - `app/(admin)/` — route group. `page.tsx` = Dashboard (`/`). Sections: pesanan, produk, pelanggan, diskon, analitik, halaman(+baru), blog(+baru), navigasi, pengaturan.
 - `components/admin/` — shell (sidebar, topbar, nav-links, brand) + shared bits (page-header, order-status, kpi-card, *-chart, …) + per-screen subfolders.
 - `components/ui/` — shadcn/ui primitives (**on Base UI**).

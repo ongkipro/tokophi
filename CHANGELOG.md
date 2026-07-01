@@ -75,3 +75,8 @@ All notable changes to the admin. Dates are absolute. Phase: UI/UX-first (mock d
 - M2: sample Astro storefront; deepen admin interactions (submitting forms → state, detail pages).
 - M3: Supabase backend (auth + DB + RLS `store_id`) replacing the mock data layer.
 - M4: payments/couriers integration, multi-store provisioning, storefront deploy pipeline.
+
+## 2026-07-02 — Monorepo + Super Admin
+- Restructured to a **monorepo** (npm workspaces): apps/admin + apps/super-admin + packages/ui (shared shadcn/Base UI) + packages/lib (formatters). Both apps build.
+- **Super Admin** platform control plane (Dashboard/Toko/Paket & Billing/Analitik/Pengaturan) on the shared design system; 18 mock merchant stores; runs on :3001.
+- Docs: AGENTS/README/PRD/BACKLOG updated for the monorepo + 3-surface model.
