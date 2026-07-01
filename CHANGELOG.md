@@ -4,6 +4,10 @@ All notable changes to the admin. Dates are absolute. Phase: UI/UX-first (mock d
 
 ## 2026-07-01
 
+### M1 — Indonesian collection slug + product added-date filter
+- Collection (Kategori) storefront slug is now Bahasa Indonesia: /kategori/ (was /collections/).
+- Products carry a deterministic addedTs (date+time added). Product list shows "Ditambahkan <tgl>" on cards and a "Ditambahkan" column (date+time) in the table view, plus a date-range filter (Semua/7/30/90 hari). Helpers dateTimeShort/dateShort in lib/format.
+
 ### M1 — CRM (WhatsApp follow-up) + concept docs + channel model
 - New CRM module (submenu): Overview, Follow-up WA (wa.me deep links + templates), Pipeline kanban, Template WA.
 - Concept matured in docs/: CONCEPT.md, SCHEMA.md (backend-ready, proves Supabase-defer is safe), UI_INVENTORY.md.

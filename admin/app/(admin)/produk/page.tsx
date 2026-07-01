@@ -6,12 +6,12 @@ import { useRouter } from "next/navigation";
 import {
   Plus, Upload, Search, LayoutGrid, List, ChevronDown, MoreHorizontal,
   Pencil, Copy, Archive, Package, CheckCircle2, AlertTriangle, Tags, Check,
-  ArrowUpDown, X, Trash2, CircleCheck, FileText,
+  ArrowUpDown, X, Trash2, CircleCheck, FileText, Calendar,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
-import { IDR, num } from "@/lib/format";
-import { PRODUCTS, type Product } from "@/lib/mock/store";
+import { IDR, num, dateTimeShort, dateShort } from "@/lib/format";
+import { PRODUCTS, TODAY, type Product } from "@/lib/mock/store";
 import { cn } from "@/lib/utils";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,6 +39,13 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: "harga-asc", label: "Harga terendah" },
   { key: "stok-asc", label: "Stok paling sedikit" },
   { key: "terlaris", label: "Terlaris" },
+];
+
+const DATE_RANGES = [
+  { days: 0, label: "Semua tanggal" },
+  { days: 7, label: "7 hari terakhir" },
+  { days: 30, label: "30 hari terakhir" },
+  { days: 90, label: "90 hari terakhir" },
 ];
 
 function StockBadge({ stock }: { stock: number }) {
@@ -94,6 +101,7 @@ export default function Page() {
   const [category, setCategory] = React.useState("all");
   const [tab, setTab] = React.useState<TabKey>("all");
   const [sort, setSort] = React.useState<SortKey>("unggulan");
+  const [dateRange, setDateRange] = React.useState<number>(0);
   const [view, setView] = React.useState<"grid" | "list">("grid");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
 
@@ -112,6 +120,7 @@ export default function Page() {
       if (tab === "active" && p.status !== "active") return false;
       if (tab === "draft" && p.status !== "draft") return false;
       if (tab === "low" && p.stock >= LOW_STOCK) return false;
+      if (dateRange > 0 && p.addedTs < TODAY.getTime() - dateRange * 86_400_000) return false;
       return true;
     });
     const sorted = [...arr];
@@ -121,7 +130,7 @@ export default function Page() {
     else if (sort === "stok-asc") sorted.sort((a, b) => a.stock - b.stock);
     else if (sort === "terlaris") sorted.sort((a, b) => b.unitsSold - a.unitsSold);
     return sorted;
-  }, [search, category, tab, sort]);
+  }, [search, category, tab, sort, dateRange]);
 
   const TABS: { key: TabKey; label: string; count: number }[] = [
     { key: "all", label: "Semua", count: counts.all },
@@ -137,8 +146,8 @@ export default function Page() {
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(visibleIds));
 
-  const hasFilters = search !== "" || category !== "all" || tab !== "all";
-  const resetFilters = () => { setSearch(""); setCategory("all"); setTab("all"); };
+  const hasFilters = search !== "" || category !== "all" || tab !== "all" || dateRange !== 0;
+  const resetFilters = () => { setSearch(""); setCategory("all"); setTab("all"); setDateRange(0); };
 
   return (
     <div>
@@ -205,6 +214,18 @@ export default function Page() {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+              <Calendar /> {DATE_RANGES.find((d) => d.days === dateRange)!.label} <ChevronDown className="text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel>Tanggal ditambahkan</DropdownMenuLabel>
+              {DATE_RANGES.map((d) => (
+                <DropdownMenuItem key={d.days} onClick={() => setDateRange(d.days)}>{d.label} {dateRange === d.days && <Check className="ml-auto" />}</DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Separator orientation="vertical" className="hidden h-6 sm:block" />
           <div className="flex items-center gap-1 rounded-lg border bg-background p-0.5">
             <Button variant={view === "grid" ? "secondary" : "ghost"} size="icon-sm" aria-label="Tampilan grid" aria-pressed={view === "grid"} onClick={() => setView("grid")}><LayoutGrid /></Button>
@@ -224,6 +245,11 @@ export default function Page() {
           {category !== "all" && (
             <Badge variant="secondary" className="gap-1 pr-1">{category}
               <button onClick={() => setCategory("all")} className="rounded-full p-0.5 hover:bg-foreground/10" aria-label="Hapus filter kategori"><X className="size-3" /></button>
+            </Badge>
+          )}
+          {dateRange !== 0 && (
+            <Badge variant="secondary" className="gap-1 pr-1">{DATE_RANGES.find((d) => d.days === dateRange)!.label}
+              <button onClick={() => setDateRange(0)} className="rounded-full p-0.5 hover:bg-foreground/10" aria-label="Hapus filter tanggal"><X className="size-3" /></button>
             </Badge>
           )}
           {search && (
@@ -288,6 +314,7 @@ export default function Page() {
                     <StockBadge stock={p.stock} />
                   </div>
                   <p className="text-xs text-muted-foreground">{num(p.unitsSold)} terjual</p>
+                  <p className="text-xs text-muted-foreground">Ditambahkan {dateShort(p.addedTs)}</p>
                 </div>
               </Card>
             );
@@ -305,6 +332,7 @@ export default function Page() {
                 <TableHead>Stok</TableHead>
                 <TableHead className="hidden text-right sm:table-cell">Terjual</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="hidden lg:table-cell">Ditambahkan</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
@@ -330,6 +358,7 @@ export default function Page() {
                     <TableCell><StockBadge stock={p.stock} /></TableCell>
                     <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">{num(p.unitsSold)}</TableCell>
                     <TableCell><StatusBadge status={p.status} /></TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm text-muted-foreground tabular-nums whitespace-nowrap">{dateTimeShort(p.addedTs)}</TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}><RowActions /></TableCell>
                   </TableRow>
                 );

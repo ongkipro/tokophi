@@ -129,7 +129,7 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
   const seoDescText =
     metaDesc ||
     "Deskripsi meta koleksi akan tampil di sini pada hasil pencarian.";
-  const seoUrl = `tokoanda.com › collections › ${handle || "koleksi"}`;
+  const seoUrl = `tokoanda.com › kategori › ${handle || "koleksi"}`;
 
   return (
     <div>
@@ -563,7 +563,7 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
                 <Label htmlFor="seo-handle">Handle URL</Label>
                 <div className="flex items-center overflow-hidden rounded-lg border focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
                   <span className="border-r bg-muted/40 px-2.5 py-1 text-sm text-muted-foreground">
-                    /collections/
+                    /kategori/
                   </span>
                   <Input
                     id="seo-handle"

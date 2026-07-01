@@ -84,6 +84,7 @@ export type Product = {
   status: "active" | "draft";
   category: string;
   unitsSold: number;
+  addedTs: number; // when the product was added (ms since epoch, deterministic)
 };
 const PRODUCT_SEED: Array<[string, string, number, string]> = [
   ["Kaos Polos Premium Cotton", "👕", 89_000, "Fashion"],
@@ -112,6 +113,12 @@ export const PRODUCTS: Product[] = PRODUCT_SEED.map(([name, emoji, price, catego
     status: rnd() > 0.12 ? "active" : "draft",
     category,
     unitsSold: Math.round(30 + rnd() * 900),
+    // added 1–80 days ago at a seeded time of day (08:00–18:59)
+    addedTs:
+      TODAY.getTime() -
+      (1 + Math.floor(rnd() * 80)) * 86_400_000 +
+      (8 + Math.floor(rnd() * 11)) * 3_600_000 +
+      Math.floor(rnd() * 60) * 60_000,
   };
 });
 // Curated variety for a realistic demo (a couple of drafts + low-stock items).

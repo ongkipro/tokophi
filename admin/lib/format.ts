@@ -26,6 +26,18 @@ export const timeAgo = (minutes: number) => {
   return `${Math.floor(h / 24)} hari lalu`;
 };
 
+// Date + time, id-ID, e.g. "1 Jul 2026, 14.30".
+export function dateTimeShort(ts: number): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+  }).format(new Date(ts));
+}
+
+// Date only, id-ID, e.g. "1 Jul 2026".
+export function dateShort(ts: number): string {
+  return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(new Date(ts));
+}
+
 // Build a wa.me deep link from an Indonesian phone (digits only) + optional prefilled message.
 export function waLink(phone: string, message = ""): string {
   const p = String(phone).replace(/\D/g, "");
