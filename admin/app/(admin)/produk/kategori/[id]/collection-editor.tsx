@@ -24,6 +24,7 @@ import { type Collection, PRODUCTS } from "@/lib/mock/store";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -170,6 +171,7 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
             <Button
               variant="ghost"
               className="text-destructive hover:bg-destructive/10"
+              onClick={() => toast.success("Koleksi dihapus")}
             >
               <Trash2 />
               Hapus koleksi
@@ -182,7 +184,9 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
           >
             Batal
           </Button>
-          <Button>Simpan</Button>
+          <Button onClick={() => toast.success(isEdit ? "Perubahan koleksi disimpan" : "Koleksi baru disimpan")}>
+            Simpan
+          </Button>
         </div>
       </div>
 

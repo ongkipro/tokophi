@@ -11,7 +11,7 @@ import {
 
 import { PageHeader } from "@/components/admin/page-header";
 import { ProductThumb } from "@/components/admin/product-thumb";
-import { IDR, num, dateTimeShort, dateShort } from "@/lib/format";
+import { IDR, num, dateTimeShort } from "@/lib/format";
 import { PRODUCTS, TODAY, type Product } from "@/lib/mock/store";
 import { cn } from "@/lib/utils";
 
@@ -103,7 +103,7 @@ export default function Page() {
   const [tab, setTab] = React.useState<TabKey>("all");
   const [sort, setSort] = React.useState<SortKey>("unggulan");
   const [dateRange, setDateRange] = React.useState<number>(0);
-  const [view, setView] = React.useState<"grid" | "list">("grid");
+  const [view, setView] = React.useState<"grid" | "list">("list");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
 
   const counts = React.useMemo(() => ({
@@ -289,33 +289,28 @@ export default function Page() {
           </CardContent>
         </Card>
       ) : view === "grid" ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
           {filtered.map((p) => {
             const isSel = selected.has(p.id);
             return (
               <Card key={p.id} className={cn("group relative overflow-hidden py-0 transition-all hover:-translate-y-0.5 hover:shadow-md", isSel && "ring-2 ring-primary")}>
                 <Link href={`/produk/${p.id}`} aria-label={p.name} className="absolute inset-0 z-[1] rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none" />
                 {/* image */}
-                <div className={cn("relative aspect-[5/4]", p.status === "draft" && "opacity-70")}>
-                  <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="absolute inset-0 size-full rounded-none" emojiClassName="text-6xl" />
-                  <div className={cn("absolute left-2 top-2 z-[2] transition-opacity", isSel ? "opacity-100" : "opacity-0 group-hover:opacity-100")} onClick={(e) => e.stopPropagation()}>
+                <div className={cn("relative aspect-square", p.status === "draft" && "opacity-70")}>
+                  <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="absolute inset-0 size-full rounded-none" emojiClassName="text-5xl" />
+                  <div className={cn("absolute left-1.5 top-1.5 z-[2] transition-opacity", isSel ? "opacity-100" : "opacity-0 group-hover:opacity-100")} onClick={(e) => e.stopPropagation()}>
                     <Checkbox checked={isSel} onCheckedChange={() => toggle(p.id)} aria-label={`Pilih ${p.name}`} className="border-2 bg-background/90 shadow-sm" />
                   </div>
-                  <div className="absolute right-2 top-2 z-[2]"><RowActions id={p.id} /></div>
-                  {p.status === "draft" && <Badge variant="outline" className="absolute bottom-2 left-2 z-[2] bg-background/85">Draft</Badge>}
+                  <div className="absolute right-1.5 top-1.5 z-[2]"><RowActions id={p.id} /></div>
+                  {p.status === "draft" && <Badge variant="outline" className="absolute bottom-1.5 left-1.5 z-[2] bg-background/85 text-[10px]">Draft</Badge>}
                 </div>
                 {/* body */}
-                <div className="space-y-2 p-3">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-sm font-medium" title={p.name}>{p.name}</h3>
-                    <p className="text-xs text-muted-foreground">{p.category}</p>
-                  </div>
+                <div className="space-y-1 p-2.5">
+                  <h3 className="truncate text-sm font-medium" title={p.name}>{p.name}</h3>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-base font-semibold tabular-nums">{IDR(p.price)}</span>
+                    <span className="text-sm font-semibold tabular-nums">{IDR(p.price)}</span>
                     <StockBadge stock={p.stock} />
                   </div>
-                  <p className="text-xs text-muted-foreground">{num(p.unitsSold)} terjual</p>
-                  <p className="text-xs text-muted-foreground">Ditambahkan {dateShort(p.addedTs)}</p>
                 </div>
               </Card>
             );

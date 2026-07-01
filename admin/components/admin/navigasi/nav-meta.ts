@@ -31,9 +31,9 @@ export const TYPE_OPTIONS: NavItemType[] = [
 // Sensible default target hint per type, shown as the input placeholder.
 export const TARGET_PLACEHOLDER: Record<NavItemType, string> = {
   beranda: "/",
-  koleksi: "/collections/nama-koleksi",
-  produk: "/products/nama-produk",
-  halaman: "/pages/nama-halaman",
-  blog: "/blogs/nama-blog",
+  koleksi: "/kategori/nama-koleksi",
+  produk: "/produk/nama-produk",
+  halaman: "/halaman/nama-halaman",
+  blog: "/blog/nama-blog",
   url: "https://",
 };

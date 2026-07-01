@@ -12,6 +12,7 @@ import {
 
 import { PageHeader } from "@/components/admin/page-header";
 import { MENUS, type NavMenu, type NavItem } from "@/lib/mock/store";
+import { toast } from "sonner";
 import { TYPE_META } from "@/components/admin/navigasi/nav-meta";
 import {
   ItemFormDialog,
@@ -431,7 +432,7 @@ export default function Page() {
               <Button variant="outline" onClick={() => setMenus(seedMenus())}>
                 Batal
               </Button>
-              <Button>Simpan menu</Button>
+              <Button onClick={() => toast.success("Menu disimpan")}>Simpan menu</Button>
             </CardContent>
           </Card>
         ) : (
