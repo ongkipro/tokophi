@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Users,
   Crown,
@@ -14,9 +15,6 @@ import {
   Eye,
   MessageCircle,
   Trash2,
-  Mail,
-  Phone,
-  MapPin,
 } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { Card } from "@/components/ui/card";
@@ -35,14 +33,6 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
-import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -50,10 +40,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { CUSTOMERS, type Customer, type Segment } from "@/lib/mock/store";
+import { CUSTOMERS, type Segment } from "@/lib/mock/store";
 import { IDR, num } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { SegmentBadge, SEGMENTS } from "@/components/admin/pelanggan/segment-badge";
+import { SegmentBadge } from "@/components/admin/pelanggan/segment-badge";
 
 // ---- helpers ----
 function initials(name: string) {
@@ -74,23 +64,6 @@ function joinedLabel(days: number) {
   return rem ? `${years} thn ${rem} bln lalu` : `${years} thn lalu`;
 }
 
-// deterministic mock order history per customer
-const HIST_STATUS = ["Selesai", "Dikirim", "Diproses", "Selesai"] as const;
-function orderHistory(c: Customer) {
-  const n = Math.min(4, Math.max(3, (c.id.charCodeAt(6) % 2) + 3));
-  const rows = [];
-  for (let i = 0; i < n; i++) {
-    const seed = (c.id.charCodeAt(5) * 7 + i * 13 + c.spent) % 900;
-    const amount = 90_000 + seed * 3_500;
-    rows.push({
-      inv: `#INV-${4000 + ((c.id.charCodeAt(7) * 31 + i * 17) % 900)}`,
-      amount,
-      status: HIST_STATUS[i % HIST_STATUS.length],
-    });
-  }
-  return rows;
-}
-
 const SEGMENT_TABS: Array<{ key: "semua" | Segment; label: string }> = [
   { key: "semua", label: "Semua" },
   { key: "baru", label: "Baru" },
@@ -107,11 +80,11 @@ const SORTS: Record<SortKey, string> = {
 };
 
 export default function PelangganPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<"semua" | Segment>("semua");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("spent");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [active, setActive] = useState<Customer | null>(null);
 
   // ---- stats ----
   const totalDisplay = num(3128);
@@ -311,7 +284,7 @@ export default function PelangganPage() {
                 key={c.id}
                 className="cursor-pointer"
                 data-state={selected.has(c.id) ? "selected" : undefined}
-                onClick={() => setActive(c)}
+                onClick={() => router.push(`/pelanggan/${c.id}`)}
               >
                 <TableCell
                   className="pl-4"
@@ -372,7 +345,9 @@ export default function PelangganPage() {
                       }
                     />
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setActive(c)}>
+                      <DropdownMenuItem
+                        onClick={() => router.push(`/pelanggan/${c.id}`)}
+                      >
                         <Eye className="size-4" /> Lihat profil
                       </DropdownMenuItem>
                       <DropdownMenuItem>
@@ -408,145 +383,6 @@ export default function PelangganPage() {
           </span>
         </div>
       </Card>
-
-      {/* detail sheet */}
-      <CustomerSheet
-        customer={active}
-        onOpenChange={(o) => !o && setActive(null)}
-      />
-    </div>
-  );
-}
-
-function CustomerSheet({
-  customer,
-  onOpenChange,
-}: {
-  customer: Customer | null;
-  onOpenChange: (open: boolean) => void;
-}) {
-  return (
-    <Sheet open={!!customer} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-md">
-        {customer && (
-          <>
-            <SheetHeader className="p-5 pb-4">
-              <div className="flex items-center gap-3">
-                <Avatar className="size-14">
-                  <AvatarFallback
-                    className={cn(
-                      "text-lg font-semibold",
-                      SEGMENTS[customer.segment].cls,
-                    )}
-                  >
-                    {initials(customer.name)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <SheetTitle className="truncate text-lg">
-                    {customer.name}
-                  </SheetTitle>
-                  <div className="mt-1 flex items-center gap-2">
-                    <SegmentBadge segment={customer.segment} />
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {customer.id}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <SheetDescription className="sr-only">
-                Detail profil pelanggan
-              </SheetDescription>
-            </SheetHeader>
-
-            <Separator />
-
-            {/* contact */}
-            <div className="space-y-2.5 p-5">
-              <InfoRow icon={Mail} value={customer.email} />
-              <InfoRow icon={Phone} value={customer.phone} />
-              <InfoRow icon={MapPin} value={customer.city} />
-            </div>
-
-            <Separator />
-
-            {/* stat tiles */}
-            <div className="grid grid-cols-3 gap-px bg-border">
-              <StatTile label="Total pesanan" value={num(customer.orders)} />
-              <StatTile
-                label="Total belanja"
-                value={IDR(customer.spent, { compact: true })}
-              />
-              <StatTile
-                label="Rata-rata/pesanan"
-                value={IDR(
-                  Math.round(customer.spent / Math.max(1, customer.orders)),
-                  { compact: true },
-                )}
-              />
-            </div>
-
-            <Separator />
-
-            {/* order history */}
-            <div className="p-5">
-              <h3 className="mb-3 text-sm font-medium">Riwayat Pesanan</h3>
-              <div className="space-y-1">
-                {orderHistory(customer).map((o, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between rounded-lg px-2.5 py-2 hover:bg-muted/60"
-                  >
-                    <div>
-                      <div className="font-mono text-sm font-medium">
-                        {o.inv}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {o.status}
-                      </div>
-                    </div>
-                    <div className="text-sm font-semibold tabular-nums">
-                      {IDR(o.amount)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <SheetFooter className="p-5 pt-0">
-              <Button className="w-full gap-2 bg-emerald-600 text-white hover:bg-emerald-600/90">
-                <MessageCircle className="size-4" /> Kirim WhatsApp
-              </Button>
-            </SheetFooter>
-          </>
-        )}
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function InfoRow({
-  icon: Icon,
-  value,
-}: {
-  icon: typeof Mail;
-  value: string;
-}) {
-  return (
-    <div className="flex items-center gap-2.5 text-sm">
-      <Icon className="size-4 shrink-0 text-muted-foreground" />
-      <span className="truncate">{value}</span>
-    </div>
-  );
-}
-
-function StatTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-popover px-3 py-4 text-center">
-      <div className="text-base font-bold tracking-tight tabular-nums">
-        {value}
-      </div>
-      <div className="mt-0.5 text-[11px] text-muted-foreground">{label}</div>
     </div>
   );
 }

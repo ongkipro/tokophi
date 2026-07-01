@@ -368,7 +368,7 @@ export default function FollowupPage() {
               <TableHead>Pelanggan</TableHead>
               <TableHead className="hidden sm:table-cell">Jenis</TableHead>
               <TableHead className="hidden lg:table-cell">Konteks</TableHead>
-              <TableHead className="hidden md:table-cell">Jatuh tempo</TableHead>
+              <TableHead className="hidden md:table-cell">Jadwal</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[1%] pr-4 text-right">Aksi</TableHead>
             </TableRow>
@@ -421,7 +421,7 @@ export default function FollowupPage() {
                     </span>
                   </TableCell>
 
-                  {/* Jatuh tempo */}
+                  {/* Jadwal */}
                   <TableCell className="hidden md:table-cell">
                     <DueLabel dueDays={f.dueDays} />
                   </TableCell>

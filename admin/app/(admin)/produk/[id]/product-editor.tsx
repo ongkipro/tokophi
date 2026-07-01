@@ -8,9 +8,10 @@ import {
   Italic,
   List,
   Link2,
-  ImageUp,
   ImagePlus,
   Plus,
+  Film,
+  Play,
   Trash2,
   ChevronDown,
   X,
@@ -306,33 +307,70 @@ export function ProductEditor({ product }: { product?: Product }) {
             <CardHeader>
               <CardTitle>Media</CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              {isEdit && (
-                <div className="flex flex-wrap gap-3">
-                  <div className="flex size-24 items-center justify-center rounded-xl bg-muted text-5xl ring-1 ring-foreground/10">
+            <CardContent className="flex flex-col gap-4">
+              {/* Image grid */}
+              <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
+                {isEdit ? (
+                  <div className="relative flex aspect-square items-center justify-center rounded-lg bg-muted text-4xl">
                     {product?.emoji}
+                    <span className="absolute left-1 top-1 rounded bg-foreground/80 px-1.5 py-0.5 text-[10px] font-medium text-background">
+                      Utama
+                    </span>
                   </div>
+                ) : (
                   <button
                     type="button"
-                    className="flex size-24 flex-col items-center justify-center gap-1 rounded-xl border border-dashed text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                    className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                  >
+                    <ImagePlus className="size-5" />
+                    <span className="text-xs">Foto</span>
+                  </button>
+                )}
+                {[0, 1, 2].map((i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className="flex aspect-square cursor-pointer items-center justify-center rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
                   >
                     <Plus className="size-5" />
-                    <span className="text-xs">Tambah</span>
                   </button>
-                </div>
-              )}
-              <button
-                type="button"
-                className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-10 text-center text-muted-foreground transition-colors hover:border-primary hover:bg-muted/40 hover:text-foreground"
-              >
-                <ImageUp className="size-6" />
-                <span className="text-sm">
-                  Seret gambar atau klik untuk unggah
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  PNG/JPG hingga 5 MB
-                </span>
-              </button>
+                ))}
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Foto pertama jadi gambar utama. Format JPG/PNG, maks 5 MB.
+              </p>
+
+              {/* Video slot */}
+              <div className="flex flex-col gap-2 border-t pt-4">
+                <p className="text-sm font-medium">
+                  Video produk{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (opsional)
+                  </span>
+                </p>
+                {isEdit ? (
+                  <button
+                    type="button"
+                    className="group relative flex aspect-video max-w-[220px] cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-muted"
+                  >
+                    <span className="flex size-10 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm transition-transform group-hover:scale-105">
+                      <Play className="size-5 translate-x-px" />
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="flex aspect-video max-w-[220px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                  >
+                    <Film className="size-5" />
+                    <span className="text-sm">Tambah video</span>
+                  </button>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  1 video · MP4/MOV maks 50 MB
+                </p>
+              </div>
             </CardContent>
           </Card>
 
