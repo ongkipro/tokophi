@@ -49,6 +49,44 @@ export const PRODUCTS: Product[] = [
   { handle: "jumpsuit-kulot", name: "Jumpsuit Kulot Casual", price: 175000, category: "Dress", categoryHandle: "dress", image: "/products/jumpsuit-kulot.webp", description: "Jumpsuit kulot warna terracotta, satu set praktis yang tetap stylish. Nyaman untuk jalan seharian.", sizes: ["M", "L"] },
 ];
 
+// ---- ratings ----
+// Product review data (avg score + total ulasan). Phase 1: seeded here — the storefront's
+// source of truth; later this aggregates from real orders/reviews across the platform.
+export type Rating = { value: number; count: number };
+
+const RATINGS: Record<string, Rating> = {
+  "dress-midi-bunga": { value: 4.8, count: 214 },
+  "blouse-katun": { value: 4.7, count: 156 },
+  "kemeja-oversized": { value: 4.5, count: 62 },
+  "rok-plisket": { value: 4.6, count: 88 },
+  "celana-kulot": { value: 4.4, count: 74 },
+  "hijab-voal": { value: 4.9, count: 342 },
+  "khimar-instan": { value: 4.6, count: 97 },
+  "gamis-syari": { value: 4.7, count: 128 },
+  "tunik-rayon": { value: 4.5, count: 71 },
+  "cardigan-rajut": { value: 4.6, count: 83 },
+  "piyama-satin": { value: 4.8, count: 110 },
+  "blazer-wanita": { value: 4.5, count: 59 },
+  "dress-batik": { value: 4.9, count: 187 },
+  "jumpsuit-kulot": { value: 4.6, count: 66 },
+};
+
+export const productRating = (p: Product | string): Rating => {
+  const handle = typeof p === "string" ? p : p.handle;
+  return RATINGS[handle] ?? { value: 4.5, count: 40 };
+};
+
+// Deterministic 5→1 star distribution that sums to `count` (for the review summary).
+export const ratingBreakdown = (r: Rating): number[] => {
+  // heavier weight toward 5★, skewed by how high the average is
+  const skew = (r.value - 4) / 1; // ~0.4–0.9
+  const weights = [0.55 + skew * 0.35, 0.28 - skew * 0.12, 0.1, 0.045, 0.025];
+  const raw = weights.map((w) => Math.round(w * r.count));
+  const diff = r.count - raw.reduce((a, b) => a + b, 0);
+  raw[0] += diff; // reconcile rounding into the 5★ bucket
+  return raw; // [5★, 4★, 3★, 2★, 1★]
+};
+
 // Each product has a 5-image gallery: base + -2..-5 (AI-generated catalog shots).
 export const productImages = (p: Product): string[] => [
   p.image,

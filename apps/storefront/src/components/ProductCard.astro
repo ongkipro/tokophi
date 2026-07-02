@@ -1,12 +1,14 @@
 ---
 import { IDR } from "@indostore/lib/format";
-import type { Product } from "../data/catalog";
+import { productRating, type Product } from "../data/catalog";
+import Stars from "./Stars.astro";
 
 interface Props {
   product: Product;
 }
 
 const { product } = Astro.props;
+const rating = productRating(product);
 ---
 
 <a
@@ -44,6 +46,7 @@ const { product } = Astro.props;
     <h3 class="mt-1 truncate font-medium text-ink transition-colors group-hover:text-brand-700">
       {product.name}
     </h3>
+    <Stars value={rating.value} count={rating.count} class="mt-1.5" />
     <div class="mt-2 flex items-baseline gap-2">
       <span class="font-semibold text-ink tabular-nums">{IDR(product.price)}</span>
       {
