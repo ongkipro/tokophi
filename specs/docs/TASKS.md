@@ -38,11 +38,12 @@
 - [ ] *(Why: makes M3 a "fill query bodies" job, not a UI rewrite.)*
 
 ## Epic 4 — Storefront (M2)
-- [ ] **Scaffold `apps/storefront`** · **M** · Astro + Tailwind, shared design tokens; workspace-linked. AC: builds + deploys to Cloudflare.
-- [ ] **Pages** · **L** · beranda (hero/unggulan/kategori), `/kategori/[handle]`, `/produk/[handle]`, keranjang, checkout (mock). AC: navigable, uses fashion demo catalog.
-- [ ] **Data source** · **M** · read the same seed catalog (static build or read API). AC: products/collections match admin.
-- [ ] **SEO-first** · **S** · per-page meta, sitemap, feed (petcue/pixsgo pattern).
-- [ ] **1 bespoke brand theme** · **M** · style the fashion demo distinctly (proof of "per-client look").
+- [x] **Scaffold `apps/storefront`** · Astro 5 + Tailwind v4, workspace-linked, uses `@indostore/lib`. Builds clean (22 pages).
+- [x] **Pages** · beranda (hero/unggulan/koleksi/values), `/kategori/[handle]`, `/produk/[handle]` (size + add-to-cart + Beli via WA), `keranjang` (cart + WA checkout).
+- [~] **Data source** · self-contained catalog mirroring the admin fashion demo. **TODO:** share via `packages/data` so admin+storefront read one source.
+- [~] **SEO** · per-page title/description done. **TODO:** sitemap + feed.
+- [x] **Bespoke brand theme** · editorial women's-fashion look (Playfair display + rose/cream tokens) — proves the "per-client look".
+- [ ] **Deploy to Cloudflare** · **S** · wire CF Pages/Workers deploy.
 
 ## Epic 5 — Backend (M3 — Supabase)
 - [ ] **Schema + RLS** · **L** · create tables/enums from `SCHEMA.md`; RLS `store_id = auth_store()`; platform role bypass. AC: seed one demo store = parity with mock.

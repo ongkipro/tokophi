@@ -21,7 +21,7 @@ A **Shopify-style commerce platform for the Indonesian market**: one shared, mod
 |---|---|---|---|
 | **Super Admin** (`apps/super-admin`, :3001) | **platform = us** | Next.js + shared UI | **1**, manages all stores/plans/billing |
 | **Admin** (`apps/admin`, :3000) | merchant operators | Next.js + shadcn/ui | **1 shared app**, multi-store |
-| **Storefront** (planned) | end shoppers | Astro + Tailwind | **1 per client**, custom look |
+| **Storefront** (`apps/storefront`, :dev) ✅ | end shoppers | Astro 5 + Tailwind | **1 per client**, custom look (fashion demo built) |
 
 Super-admin & merchant-admin **share the design system** (`@indostore/ui`) + formatters (`@indostore/lib`). Backend later = one Supabase; super-admin = platform role (cross-tenant), admin = `store_id`-scoped (RLS).
 
