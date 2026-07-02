@@ -2,6 +2,8 @@
 // Everything is anchored to a fixed TODAY so server & client render identically
 // (no hydration mismatch) and the demo is stable. Swap this file for a real API later.
 
+import { MAIN_MENU, FOOTER_MENU, type MenuItem } from "@indostore/data/menu";
+
 export const TODAY = new Date("2026-06-30T00:00:00");
 
 // ---- seeded PRNG (mulberry32) ----
@@ -280,35 +282,21 @@ export const BLOG_POSTS: BlogPost[] = [
 export type NavItemType = "beranda" | "koleksi" | "produk" | "halaman" | "blog" | "url";
 export type NavItem = { id: string; title: string; type: NavItemType; target: string; children?: NavItem[] };
 export type NavMenu = { handle: string; title: string; isDefault: boolean; items: NavItem[] };
+// Derived from the shared @indostore/data source so the admin menu builder and
+// the storefront nav never drift (single source of truth). label→title, href→target.
+function toNavItems(items: MenuItem[]): NavItem[] {
+  return items.map((it) => ({
+    id: it.id,
+    title: it.label,
+    type: it.type,
+    target: it.href,
+    children: it.children ? toNavItems(it.children) : undefined,
+  }));
+}
+
 export const MENUS: NavMenu[] = [
-  {
-    handle: "main-menu", title: "Menu Utama", isDefault: true,
-    items: [
-      { id: "m1", title: "Beranda", type: "beranda", target: "/" },
-      { id: "m2", title: "Semua Produk", type: "koleksi", target: "/kategori/semua" },
-      { id: "m3", title: "Kategori", type: "url", target: "#", children: [
-        { id: "m3a", title: "Dress", type: "koleksi", target: "/kategori/dress" },
-        { id: "m3b", title: "Atasan", type: "koleksi", target: "/kategori/atasan" },
-        { id: "m3c", title: "Bawahan", type: "koleksi", target: "/kategori/bawahan" },
-        { id: "m3d", title: "Busana Muslim", type: "koleksi", target: "/kategori/busana-muslim" },
-        { id: "m3e", title: "Outerwear", type: "koleksi", target: "/kategori/outerwear" },
-        { id: "m3f", title: "Loungewear", type: "koleksi", target: "/kategori/loungewear" },
-      ]},
-      { id: "m4", title: "Promo Gajian", type: "koleksi", target: "/kategori/promo-gajian" },
-      { id: "m5", title: "Blog", type: "blog", target: "/blog/berita-toko" },
-      { id: "m6", title: "Kontak", type: "halaman", target: "/halaman/kontak" },
-    ],
-  },
-  {
-    handle: "footer", title: "Menu Footer", isDefault: false,
-    items: [
-      { id: "f1", title: "Tentang Kami", type: "halaman", target: "/halaman/tentang-kami" },
-      { id: "f2", title: "Cara Pemesanan", type: "halaman", target: "/halaman/cara-pemesanan" },
-      { id: "f3", title: "Kebijakan Pengembalian", type: "halaman", target: "/halaman/kebijakan-pengembalian" },
-      { id: "f4", title: "Kebijakan Privasi", type: "halaman", target: "/halaman/kebijakan-privasi" },
-      { id: "f5", title: "FAQ", type: "halaman", target: "/halaman/faq" },
-    ],
-  },
+  { handle: "main-menu", title: "Menu Utama", isDefault: true, items: toNavItems(MAIN_MENU) },
+  { handle: "footer", title: "Menu Footer", isDefault: false, items: toNavItems(FOOTER_MENU) },
 ];
 
 // ---- marketing: ad channels + tracking pixels (Meta / Google / TikTok) ----
