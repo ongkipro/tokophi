@@ -1,46 +1,67 @@
 # Indostore
 
-Shopify-style commerce platform for the Indonesian market — a **shared, modern-SaaS admin panel** (multi-store) plus **per-client Astro storefronts** (each hand-built per brand).
+**Shopify-style commerce SaaS for the Indonesian market.** A shared, modern-SaaS **admin panel** runs many merchant stores; a **super-admin** control plane is what we (the platform) use to manage all stores/plans/billing; each client gets a bespoke **Astro storefront** (hand-built per brand — no theme editor).
 
-> Deliberately **no Themes menu** and **no Apps/Plugins marketplace**. Curated, lightweight, Bahasa Indonesia UI with modern-SaaS polish. UI/UX-first: everything runs on **mock data** so backend is "just wiring later."
+> Deliberately **no Themes menu** and **no Apps/Plugins marketplace**. Curated, lightweight, **Bahasa Indonesia** UI tuned for local sellers (WhatsApp, COD, QRIS/e-wallets, local couriers) with modern-SaaS polish. Currently **UI/UX-first with deterministic mock data** — backend deferred so it's "just wiring later."
 
-Full spec: `~/Documents/Development/indostore/PRD.md`.
+Full spec & docs: [`specs/`](specs/) (mirrors `~/Documents/Development/indostore/`) — start with [`specs/PRD.md`](specs/PRD.md), [`specs/docs/ARCHITECTURE.md`](specs/docs/ARCHITECTURE.md), [`specs/docs/GUIDE.md`](specs/docs/GUIDE.md).
 
-## Structure
+## The three surfaces
+
+| Surface | App | Who | Tech | Port |
+|---|---|---|---|---|
+| **Admin** | `apps/admin` | merchant operators | Next 16 (App Router) + shadcn on Base UI | :3000 |
+| **Super Admin** | `apps/super-admin` | the platform (us) | Next 16 + shared UI | :3001 |
+| **Storefront** | `apps/storefront` | end shoppers | Astro 5 + Tailwind v4 | :4327 |
+
+Demo storefront = **"Batik Nusantara"** (women's fashion, 14 products × 5 AI-generated images).
+
+## Monorepo layout (npm workspaces)
+
 ```
 indostore/
-  admin/         # Next.js (App Router) + Tailwind + shadcn/ui — the shared admin (build first)
-  storefront/    # Astro sample storefront (per-client look) — later
-  packages/      # shared design tokens / Tailwind preset — later
+  apps/
+    admin/         # merchant store admin (:3000)
+    super-admin/   # platform control plane (:3001)
+    storefront/    # per-client Astro shopper site (:4327)
+  packages/
+    ui/            # @indostore/ui   — shadcn on Base UI + design tokens
+    lib/           # @indostore/lib  — IDR / number formatters
+    data/          # @indostore/data — canonical nav (single source of truth)
+  specs/           # mirror of the docs (PRD, ARCHITECTURE, GUIDE, UML, ADRs, …)
 ```
 
-## Apps
-### admin — Next.js
+`@indostore/data` holds `MAIN_MENU` / `FOOTER_MENU`, consumed by **both** the admin menu builder and the storefront header — edit once, both stay in sync on rebuild.
+
+## Quickstart
+
 ```bash
-cd admin && npm run dev     # http://localhost:3000
-```
-Flagship screen: **Dashboard** — KPI cards, sales charts, live activity, and a Facebook-style date-range switcher (Hari ini / Kemarin / 7 Hari / 30 Hari / custom + compare-to-previous). Data comes from `admin/lib/mock/*` via a thin data layer (`lib/data/*`) so mock→API is a one-file swap.
+npm install                          # installs all workspaces
 
-### storefront — Astro (coming next)
-Per-client Astro store wired to the same mock catalog; SEO-first, visually bespoke per brand.
+npm run dev:admin                    # merchant admin → http://localhost:3000
+npm run dev:super                    # super-admin    → http://localhost:3001
+cd apps/storefront && npm run dev    # storefront      → http://localhost:4327
+```
+
+Build: `npm run build:admin` · `npm run build:super` · (storefront) `cd apps/storefront && npm run build`.
 
 ## Stack
-Next.js · React · TypeScript · Tailwind CSS · shadcn/ui (Radix) · Recharts · (later) Supabase.
 
-## Status
-- [x] Repo + PRD
-- [x] Admin shell (sidebar + topbar, dark mode) + **Dashboard** (mock) — analytics, FB-style date range, charts, live feed
-- [x] **Pesanan** — status tabs+counts, filters, table, detail sheet, pagination
-- [x] **Produk** — stat cards, grid/list toggle, filters, add-product dialog
-- [x] **Pelanggan** — segments, stats, sortable table, profile sheet
-- [x] **Diskon** — usage progress, status tabs, create dialog
-- [x] **Analitik** — KPIs + sales trend + category bar + channel donut + top products
-- [x] **Pengaturan** — Profil/Pembayaran/Pengiriman/Pajak/Pengguna (couriers + e-wallets)
-- [x] **Toko Online** section (Shopify-modeled, structure screened via Shopify CLI):
-  - **Halaman** — pages list + Shopify-style editor (content, visibility, template, SEO preview)
-  - **Blog** — posts list + article editor (content, excerpt, image, tags, SEO)
-  - **Navigasi** — menu builder (Menu Utama/Footer, nested typed items, add/edit/delete)
-- [ ] Sample Astro storefront
-- [ ] Supabase backend (replace mock data layer)
+Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 · **shadcn/ui on Base UI (`@base-ui/react`)** · Recharts · lucide-react · date-fns · Astro 5 (storefront) · (later) Supabase.
 
-Run: `cd admin && npm run dev` → http://localhost:3000 (all 8 routes live).
+## Key conventions
+
+- **UI = shadcn on Base UI** (`@base-ui/react`), **not Radix**: use the **`render` prop, not `asChild`**; there is **no `Select`** primitive; `Button`-as-link needs `nativeButton={false}`. See [`apps/admin/AGENTS.md`](apps/admin/AGENTS.md).
+- **Determinism:** all mock data is seeded (mulberry32) and anchored to `TODAY = 2026-06-30` — SSR===client, stable across reloads.
+- **Money** in IDR via `@indostore/lib`; **nav** via `@indostore/data`.
+- **Payments & shipping are platform-managed** (ADR 0004): the platform configures gateways (Midtrans/Xendit/Duitku) + COD + Biteship aggregator; merchants only enable methods and pick couriers/services.
+- Sales channel = **Toko Online only**; analytics attribution = Meta / TikTok / Google Ads + Organic / Other.
+- Keep it **console-clean** (no Base UI warnings) and responsive; `npm run build` must pass.
+
+## Status (2026-07-02) — all three surfaces built as clickable mock prototypes
+
+- **Admin:** Dashboard (KPIs, FB-style date range, charts) · Pesanan (+detail) · Produk (+editor, Kategori/Inventori/Pembelian) · Pelanggan (+detail/Segmen/Ulasan) · CRM (Follow-up WA/Pipeline/Template) · Diskon (+editor) · Analitik · Pemasaran (per-provinsi) · Halaman & Blog (create+edit) · **Navigasi** (drag-and-drop menu builder + up/down + sub-menu) · Pengaturan.
+- **Super Admin:** Dashboard (MRR/GMV) · Toko (+detail) · Paket · Analitik · Pengaturan (gateways + Biteship + couriers).
+- **Storefront:** beranda · kategori (+ virtual "semua"/"promo-gajian") · produk (**5-image gallery**) · keranjang · **checkout → sukses** · akun (mock login) · blog · kontak — localStorage cart, 70 AI product images, nav mirrors the admin menu.
+
+**Next:** Supabase backend (M3) → payment/courier integrations + multi-store provisioning (M4). Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md); task breakdown in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).
