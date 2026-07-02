@@ -18,7 +18,6 @@ import { toast } from "sonner";
 
 import { Card } from "@indostore/ui/card";
 import { Button } from "@indostore/ui/button";
-import { Badge } from "@indostore/ui/badge";
 import { Input } from "@indostore/ui/input";
 import { Avatar, AvatarFallback } from "@indostore/ui/avatar";
 import {
@@ -37,37 +36,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@indostore/ui/dropdown-menu";
-import { cn } from "@indostore/ui/lib/utils";
 
-import { STORES, planName, type Plan, type Store } from "@/lib/mock";
+import { STORES, type Plan, type Store } from "@/lib/mock";
+import { initials, PlanBadge, StatusBadge } from "@/components/bits";
 import { IDR, num } from "@indostore/lib/format";
-
-const PLAN_CLASS: Record<Plan, string> = {
-  pemula: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  bisnis: "bg-primary/10 text-primary",
-  skala: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-};
-
-const STATUS_CLASS: Record<Store["status"], string> = {
-  aktif: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-  trial: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  ditangguhkan: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-};
-
-const STATUS_LABEL: Record<Store["status"], string> = {
-  aktif: "Aktif",
-  trial: "Trial",
-  ditangguhkan: "Ditangguhkan",
-};
-
-function initials(name: string) {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
-}
 
 type PlanFilter = "semua" | Plan;
 type StatusFilter = "semua" | Store["status"];
@@ -245,7 +217,7 @@ export default function TokoPage() {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="size-9">
-                        <AvatarFallback className="text-xs font-medium">
+                        <AvatarFallback className="bg-primary/12 text-xs font-semibold text-primary">
                           {initials(s.name)}
                         </AvatarFallback>
                       </Avatar>
@@ -266,14 +238,10 @@ export default function TokoPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge className={cn(PLAN_CLASS[s.plan])}>
-                      {planName(s.plan)}
-                    </Badge>
+                    <PlanBadge plan={s.plan} />
                   </TableCell>
                   <TableCell>
-                    <Badge className={cn(STATUS_CLASS[s.status])}>
-                      {STATUS_LABEL[s.status]}
-                    </Badge>
+                    <StatusBadge status={s.status} />
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {IDR(s.gmv, { compact: true })}

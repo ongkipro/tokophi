@@ -17,6 +17,7 @@ import { Label } from "@indostore/ui/label";
 import { Separator } from "@indostore/ui/separator";
 import { Avatar, AvatarFallback } from "@indostore/ui/avatar";
 import { cn } from "@indostore/ui/lib/utils";
+import { initials } from "@/components/bits";
 
 type Toggle = { key: string; name: string; desc: string; on: boolean };
 
@@ -44,19 +45,10 @@ const TEAM = [
 ];
 
 const ROLE_CLASS: Record<string, string> = {
-  Owner: "bg-primary/10 text-primary",
-  Admin: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-  Support: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  Owner: "bg-primary/12 text-primary",
+  Admin: "bg-chart-3/15 text-chart-3",
+  Support: "bg-muted text-foreground",
 };
-
-function initials(name: string) {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
-}
 
 export default function PengaturanPage() {
   const [gateways, setGateways] = useState(INITIAL_GATEWAYS);
@@ -97,7 +89,7 @@ export default function PengaturanPage() {
                       {g.name}
                     </Label>
                     {g.on && (
-                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                      <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
                         Terhubung
                       </Badge>
                     )}
@@ -138,7 +130,7 @@ export default function PengaturanPage() {
                 Agregator pengiriman: <span className="font-medium">Biteship</span> · API kurir dikelola platform
               </span>
             </div>
-            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Terhubung</Badge>
+            <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Terhubung</Badge>
           </div>
           <p className="mb-2 text-xs text-muted-foreground">
             Kurir disediakan lewat agregator. Aktifkan yang tersedia untuk semua toko — merchant lalu memilih kurir &amp; layanannya.
@@ -153,7 +145,7 @@ export default function PengaturanPage() {
                       {c.name}
                     </Label>
                     {c.on && (
-                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                      <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
                         Aktif
                       </Badge>
                     )}
@@ -201,7 +193,7 @@ export default function PengaturanPage() {
               <div className="flex items-center justify-between py-3">
                 <div className="flex items-center gap-3">
                   <Avatar className="size-9">
-                    <AvatarFallback className="text-xs font-medium">
+                    <AvatarFallback className="bg-primary/12 text-xs font-semibold text-primary">
                       {initials(m.name)}
                     </AvatarFallback>
                   </Avatar>

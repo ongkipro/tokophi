@@ -108,13 +108,34 @@ const MONTHS = ["Ags", "Sep", "Okt", "Nov", "Des", "Jan", "Feb", "Mar", "Apr", "
 export const MRR_SERIES = (() => {
   const rnd = mulberry32(4242);
   let v = PLATFORM.mrr * 0.42;
-  return MONTHS.map((m) => {
+  const pts = MONTHS.map((m) => {
     v = v * (1.06 + rnd() * 0.05);
     return { month: m, mrr: Math.round(v) };
   });
+  // scale the whole series so the final point lands exactly on the real MRR —
+  // keeps the uptrend shape (last month stays the peak → MoM delta stays positive).
+  const last = pts[pts.length - 1]?.mrr || 1;
+  const k = PLATFORM.mrr / last;
+  return pts.map((p) => ({ ...p, mrr: Math.round(p.mrr * k) }));
 })();
-// pin the last point to the real MRR
-if (MRR_SERIES.length) MRR_SERIES[MRR_SERIES.length - 1].mrr = PLATFORM.mrr;
+
+// ---- month-over-month deltas (for KPI cards) ----
+const mrrPrev = MRR_SERIES.length >= 2 ? MRR_SERIES[MRR_SERIES.length - 2].mrr : PLATFORM.mrr;
+export const DELTAS = {
+  mrr: mrrPrev ? Number((((PLATFORM.mrr - mrrPrev) / mrrPrev) * 100).toFixed(1)) : 0,
+  gmv: 12.4,
+  activeStores: 3, // net new active stores this month (count)
+  newSignups30d: 16.7,
+  churn: -0.6, // percentage-point change vs last month (down = good)
+  arpu: 4.2,
+};
+
+// ---- store status distribution ----
+export const statusDistribution: { status: StoreStatus; label: string; count: number }[] = [
+  { status: "aktif", label: "Aktif", count: PLATFORM.activeStores },
+  { status: "trial", label: "Trial", count: PLATFORM.trialStores },
+  { status: "ditangguhkan", label: "Ditangguhkan", count: PLATFORM.suspendedStores },
+];
 
 // ---- invoices ----
 export type InvoiceStatus = "dibayar" | "menunggu" | "gagal";

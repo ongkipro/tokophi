@@ -1,8 +1,8 @@
 // Small, server-safe display helpers shared across platform pages.
-import { UserPlus, ArrowUpRight, CreditCard, TrendingDown, LifeBuoy, type LucideIcon } from "lucide-react";
+import { UserPlus, ArrowUpRight, CreditCard, TrendingDown, LifeBuoy, ArrowUp, ArrowDown, type LucideIcon } from "lucide-react";
 import { Badge } from "@indostore/ui/badge";
 import { cn } from "@indostore/ui/lib/utils";
-import type { Plan, StoreStatus, PActivity } from "@/lib/mock";
+import type { Plan, StoreStatus, PActivity, InvoiceStatus } from "@/lib/mock";
 
 // Initials from a person or store name, e.g. "Batik Nusantara" -> "BN".
 export function initials(name: string): string {
@@ -47,6 +47,58 @@ export function StatusBadge({ status, className }: { status: StoreStatus; classN
     <Badge variant="secondary" className={cn("border-transparent", STATUS_STYLES[status], className)}>
       {STATUS_LABEL[status]}
     </Badge>
+  );
+}
+
+const INVOICE_STYLES: Record<InvoiceStatus, string> = {
+  dibayar: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400",
+  menunggu: "bg-amber-500/12 text-amber-600 dark:text-amber-400",
+  gagal: "bg-destructive/12 text-destructive",
+};
+const INVOICE_LABEL: Record<InvoiceStatus, string> = {
+  dibayar: "Dibayar",
+  menunggu: "Menunggu",
+  gagal: "Gagal",
+};
+
+export function InvoiceBadge({ status, className }: { status: InvoiceStatus; className?: string }) {
+  return (
+    <Badge variant="secondary" className={cn("border-transparent", INVOICE_STYLES[status], className)}>
+      {INVOICE_LABEL[status]}
+    </Badge>
+  );
+}
+
+// Delta chip: ▲/▼ with green(good)/red(bad) coloring. `invert` = down is good (e.g. churn).
+export function Delta({
+  value,
+  invert = false,
+  unit = "%",
+  className,
+}: {
+  value: number;
+  invert?: boolean;
+  unit?: string;
+  className?: string;
+}) {
+  const up = value >= 0;
+  const good = invert ? !up : up;
+  const Icon = up ? ArrowUp : ArrowDown;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums",
+        good
+          ? "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400"
+          : "bg-destructive/12 text-destructive",
+        className,
+      )}
+    >
+      <Icon className="size-3" />
+      {up ? "+" : "−"}
+      {Math.abs(value)}
+      {unit}
+    </span>
   );
 }
 

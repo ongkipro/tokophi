@@ -1,32 +1,71 @@
-import { Wallet, ShoppingBag, Store, UserPlus, TrendingDown, Coins, type LucideIcon } from "lucide-react";
+import Link from "next/link";
+import {
+  Wallet,
+  ShoppingBag,
+  Store,
+  UserPlus,
+  TrendingDown,
+  Coins,
+  ArrowUpRight,
+  type LucideIcon,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@indostore/ui/card";
 import { Avatar, AvatarFallback } from "@indostore/ui/avatar";
 import { IDR, num, pct, timeAgo } from "@indostore/lib/format";
-import { PLATFORM, STORES, MRR_SERIES, planDistribution, P_ACTIVITY } from "@/lib/mock";
-import { initials, PlanBadge, ActivityIcon } from "@/components/bits";
+import {
+  PLATFORM,
+  DELTAS,
+  STORES,
+  planDistribution,
+  statusDistribution,
+  INVOICES,
+  P_ACTIVITY,
+  type StoreStatus,
+} from "@/lib/mock";
+import { initials, PlanBadge, ActivityIcon, InvoiceBadge, Delta } from "@/components/bits";
 import { MrrChart } from "./mrr-chart";
 
-type Kpi = { label: string; value: string; helper: string; icon: LucideIcon };
+type Kpi = {
+  label: string;
+  value: string;
+  helper: string;
+  icon: LucideIcon;
+  delta: number;
+  invert?: boolean;
+  unit?: string;
+};
 
 const KPIS: Kpi[] = [
-  { label: "MRR", value: IDR(PLATFORM.mrr, { compact: true }), helper: "Pendapatan berulang bulanan", icon: Wallet },
-  { label: "GMV total", value: IDR(PLATFORM.gmv, { compact: true }), helper: "Nilai transaksi seluruh toko", icon: ShoppingBag },
-  { label: "Toko Aktif", value: `${num(PLATFORM.activeStores)} / ${num(PLATFORM.totalStores)}`, helper: "toko aktif dari total", icon: Store },
-  { label: "Pendaftar baru (30h)", value: num(PLATFORM.newSignups30d), helper: "30 hari terakhir", icon: UserPlus },
-  { label: "Churn", value: pct(PLATFORM.churnRate), helper: "Tingkat pembatalan bulanan", icon: TrendingDown },
-  { label: "ARPU", value: IDR(PLATFORM.arpu), helper: "Rata-rata pendapatan / toko", icon: Coins },
+  { label: "MRR", value: IDR(PLATFORM.mrr, { compact: true }), helper: "Pendapatan berulang bulanan", icon: Wallet, delta: DELTAS.mrr },
+  { label: "GMV total", value: IDR(PLATFORM.gmv, { compact: true }), helper: "Nilai transaksi seluruh toko", icon: ShoppingBag, delta: DELTAS.gmv },
+  { label: "Toko Aktif", value: `${num(PLATFORM.activeStores)} / ${num(PLATFORM.totalStores)}`, helper: "toko aktif dari total", icon: Store, delta: DELTAS.activeStores, unit: "" },
+  { label: "Pendaftar baru (30h)", value: num(PLATFORM.newSignups30d), helper: "30 hari terakhir", icon: UserPlus, delta: DELTAS.newSignups30d },
+  { label: "Churn", value: pct(PLATFORM.churnRate), helper: "Tingkat pembatalan bulanan", icon: TrendingDown, delta: DELTAS.churn, invert: true, unit: "pp" },
+  { label: "ARPU", value: IDR(PLATFORM.arpu), helper: "Rata-rata pendapatan / toko", icon: Coins, delta: DELTAS.arpu },
 ];
+
+const STATUS_BAR: Record<StoreStatus, string> = {
+  aktif: "bg-emerald-500",
+  trial: "bg-amber-500",
+  ditangguhkan: "bg-destructive",
+};
 
 export default function PlatformDashboard() {
   const maxCount = Math.max(...planDistribution.map((p) => p.count), 1);
   const topStores = [...STORES].sort((a, b) => b.gmv - a.gmv).slice(0, 5);
+  const totalStatus = statusDistribution.reduce((a, s) => a + s.count, 0) || 1;
+  const recentInvoices = [...INVOICES].sort((a, b) => a.daysAgo - b.daysAgo).slice(0, 6);
+  const outstanding = INVOICES.filter((i) => i.status !== "dibayar").reduce((a, i) => a + i.amount, 0);
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Ringkasan performa seluruh platform</p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Ringkasan performa seluruh platform</p>
+        </div>
+        <span className="text-xs text-muted-foreground">Perbandingan vs bulan lalu</span>
       </div>
 
       {/* KPIs */}
@@ -41,6 +80,9 @@ export default function PlatformDashboard() {
                   <Icon className="size-4 text-muted-foreground" />
                 </div>
                 <div className="text-xl font-bold tabular-nums">{k.value}</div>
+                <div className="flex items-center gap-1.5">
+                  <Delta value={k.delta} invert={k.invert} unit={k.unit} />
+                </div>
                 <div className="text-xs text-muted-foreground">{k.helper}</div>
               </CardContent>
             </Card>
@@ -51,8 +93,12 @@ export default function PlatformDashboard() {
       {/* MRR trend + Plan distribution */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader>
+          <CardHeader className="flex-row items-center justify-between">
             <CardTitle>Pertumbuhan MRR</CardTitle>
+            <span className="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+              {DELTAS.mrr >= 0 ? "+" : "−"}
+              {Math.abs(DELTAS.mrr)}% MoM
+            </span>
           </CardHeader>
           <CardContent>
             <div className="h-64 w-full">
@@ -86,15 +132,105 @@ export default function PlatformDashboard() {
         </Card>
       </div>
 
+      {/* Recent invoices + Store status */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Tagihan Terbaru</CardTitle>
+            <Link href="/paket" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+              Lihat semua <ArrowUpRight className="size-3.5" />
+            </Link>
+          </CardHeader>
+          <CardContent className="px-0 pb-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="px-6 pb-2 font-medium">Invoice</th>
+                    <th className="px-2 pb-2 font-medium">Toko</th>
+                    <th className="px-2 pb-2 font-medium">Paket</th>
+                    <th className="px-2 pb-2 text-right font-medium">Jumlah</th>
+                    <th className="px-2 pb-2 font-medium">Status</th>
+                    <th className="px-6 pb-2 text-right font-medium">Waktu</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentInvoices.map((inv) => (
+                    <tr key={inv.id} className="border-b last:border-0 hover:bg-muted/40">
+                      <td className="px-6 py-2.5 font-mono text-xs">{inv.id}</td>
+                      <td className="max-w-[10rem] truncate px-2 py-2.5 font-medium">{inv.store}</td>
+                      <td className="px-2 py-2.5">
+                        <PlanBadge plan={inv.plan} />
+                      </td>
+                      <td className="px-2 py-2.5 text-right tabular-nums">{IDR(inv.amount)}</td>
+                      <td className="px-2 py-2.5">
+                        <InvoiceBadge status={inv.status} />
+                      </td>
+                      <td className="px-6 py-2.5 text-right text-xs text-muted-foreground">
+                        {timeAgo(inv.daysAgo * 1440)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between border-t px-6 py-3 text-sm">
+              <span className="text-muted-foreground">Tagihan tertunggak</span>
+              <span className="font-semibold tabular-nums text-amber-600 dark:text-amber-400">{IDR(outstanding)}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Status Toko</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex h-3 overflow-hidden rounded-full">
+              {statusDistribution.map((s) => (
+                <div
+                  key={s.status}
+                  className={STATUS_BAR[s.status]}
+                  style={{ width: `${(s.count / totalStatus) * 100}%` }}
+                  title={`${s.label}: ${s.count}`}
+                />
+              ))}
+            </div>
+            <div className="space-y-2.5">
+              {statusDistribution.map((s) => (
+                <div key={s.status} className="flex items-center gap-2.5 text-sm">
+                  <span className={`size-2.5 shrink-0 rounded-full ${STATUS_BAR[s.status]}`} />
+                  <span className="flex-1">{s.label}</span>
+                  <span className="font-semibold tabular-nums">{s.count}</span>
+                  <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+                    {pct((s.count / totalStatus) * 100)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-lg bg-amber-500/10 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-400">
+              {PLATFORM.trialStores} toko dalam masa trial — peluang konversi ke berbayar.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Top stores + Activity */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader>
+          <CardHeader className="flex-row items-center justify-between">
             <CardTitle>Toko Teratas (GMV)</CardTitle>
+            <Link href="/toko" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+              Semua toko <ArrowUpRight className="size-3.5" />
+            </Link>
           </CardHeader>
           <CardContent className="space-y-1">
             {topStores.map((s) => (
-              <div key={s.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/60">
+              <Link
+                key={s.id}
+                href={`/toko/${s.id}`}
+                className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/60"
+              >
                 <Avatar className="size-9">
                   <AvatarFallback className="bg-primary/12 text-xs font-semibold text-primary">
                     {initials(s.name)}
@@ -102,13 +238,15 @@ export default function PlatformDashboard() {
                 </Avatar>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{s.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">{s.city}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {s.city} · {num(s.orders)} pesanan
+                  </div>
                 </div>
                 <PlanBadge plan={s.plan} />
                 <div className="w-24 text-right text-sm font-semibold tabular-nums">
                   {IDR(s.gmv, { compact: true })}
                 </div>
-              </div>
+              </Link>
             ))}
           </CardContent>
         </Card>

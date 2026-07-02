@@ -9,7 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@indostore/ui/card";
-import { Button } from "@indostore/ui/button";
 import { Badge } from "@indostore/ui/badge";
 import {
   Table,
@@ -28,29 +27,11 @@ import {
   PLATFORM,
   STORES,
   planDistribution,
-  planName,
   type Plan,
   type Invoice,
 } from "@/lib/mock";
+import { PlanBadge, InvoiceBadge } from "@/components/bits";
 import { IDR, num } from "@indostore/lib/format";
-
-const PLAN_CLASS: Record<Plan, string> = {
-  pemula: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  bisnis: "bg-primary/10 text-primary",
-  skala: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-};
-
-const INV_STATUS_CLASS: Record<Invoice["status"], string> = {
-  dibayar: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-  menunggu: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  gagal: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-};
-
-const INV_STATUS_LABEL: Record<Invoice["status"], string> = {
-  dibayar: "Dibayar",
-  menunggu: "Menunggu",
-  gagal: "Gagal",
-};
 
 const INV_TABS: { key: "semua" | Invoice["status"]; label: string }[] = [
   { key: "semua", label: "Semua" },
@@ -138,7 +119,7 @@ export default function PaketPage() {
                       </Badge>
                     )}
                   </span>
-                  <Badge className={cn(PLAN_CLASS[p.key])}>
+                  <Badge variant="secondary" className="border-transparent">
                     {num(subscriberCount(p.key))} toko
                   </Badge>
                 </CardTitle>
@@ -203,17 +184,13 @@ export default function PaketPage() {
                   <TableCell className="font-mono text-xs">{inv.id}</TableCell>
                   <TableCell className="font-medium">{inv.store}</TableCell>
                   <TableCell>
-                    <Badge className={cn(PLAN_CLASS[inv.plan])}>
-                      {planName(inv.plan)}
-                    </Badge>
+                    <PlanBadge plan={inv.plan} />
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {IDR(inv.amount)}
                   </TableCell>
                   <TableCell>
-                    <Badge className={cn(INV_STATUS_CLASS[inv.status])}>
-                      {INV_STATUS_LABEL[inv.status]}
-                    </Badge>
+                    <InvoiceBadge status={inv.status} />
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {inv.daysAgo} hari lalu

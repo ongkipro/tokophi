@@ -27,30 +27,12 @@ import {
   CardTitle,
 } from "@indostore/ui/card";
 import { Button } from "@indostore/ui/button";
-import { Badge } from "@indostore/ui/badge";
 import { Separator } from "@indostore/ui/separator";
 import { cn } from "@indostore/ui/lib/utils";
 
-import { planName, planPrice, type Store, type Plan } from "@/lib/mock";
+import { planName, planPrice, type Store } from "@/lib/mock";
+import { PlanBadge, StatusBadge } from "@/components/bits";
 import { IDR, num } from "@indostore/lib/format";
-
-const PLAN_CLASS: Record<Plan, string> = {
-  pemula: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  bisnis: "bg-primary/10 text-primary",
-  skala: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-};
-
-const STATUS_CLASS: Record<Store["status"], string> = {
-  aktif: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-  trial: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  ditangguhkan: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-};
-
-const STATUS_LABEL: Record<Store["status"], string> = {
-  aktif: "Aktif",
-  trial: "Trial",
-  ditangguhkan: "Ditangguhkan",
-};
 
 export function StoreDetail({ store }: { store: Store }) {
   const suspended = store.status === "ditangguhkan";
@@ -104,12 +86,8 @@ export function StoreDetail({ store }: { store: Store }) {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight">{store.name}</h1>
-            <Badge className={cn(PLAN_CLASS[store.plan])}>
-              {planName(store.plan)}
-            </Badge>
-            <Badge className={cn(STATUS_CLASS[store.status])}>
-              {STATUS_LABEL[store.status]}
-            </Badge>
+            <PlanBadge plan={store.plan} />
+            <StatusBadge status={store.status} />
           </div>
         </div>
         <div className="flex gap-2">
@@ -240,9 +218,7 @@ export function StoreDetail({ store }: { store: Store }) {
               <div className="rounded-lg border p-4">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold">{planName(store.plan)}</span>
-                  <Badge className={cn(STATUS_CLASS[store.status])}>
-                    {STATUS_LABEL[store.status]}
-                  </Badge>
+                  <StatusBadge status={store.status} />
                 </div>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className="text-2xl font-bold tracking-tight tabular-nums">
