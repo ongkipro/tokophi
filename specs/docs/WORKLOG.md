@@ -24,6 +24,8 @@
 - [x] **Removed WhatsApp checkout** — product "Beli via WhatsApp" → **"Beli Sekarang"** (add+redirect /checkout); cart WA checkout removed. (Contact WA in header/footer kept as CS.)
 - [x] **Admin ↔ storefront 1:1** — copied all 70 images into `apps/admin/public/products`; admin `productImages()` helper; **product editor Media shows the 5-image gallery** (same files as storefront). Same products/prices/categories/images both sides.
 
+**Storefront UI/UX polish (2026-07-02):** collection cards use real product photos + gradient; brand-story band; newsletter; refined values/hero ("Lihat Koleksi" replaces WA); **mobile hamburger drawer nav** (fixed the missing mobile category nav); premium ProductCard (hover-zoom, wishlist, eyebrow); category page eyebrow header + sort dropdown; product page micro-polish (gallery intact). Storefront build + console clean.
+
 **Next up (resume here):**
 1. **E1 sisa** — confirm-dialog + toast pada aksi destruktif (Hapus di Halaman/Blog/Pelanggan/Produk list); Ekspor CSV (Analitik/Inventori/Pemasaran); global search ⌘K.
 2. **E0** de-dup `apps/admin` → `@indostore/ui`/`@indostore/lib` (hati-hati; admin matang) + Turborepo.

@@ -1,19 +1,40 @@
 ---
 import { STORE, COLLECTIONS } from "../data/catalog";
+
+const pathname = Astro.url.pathname;
+const isActive = (href: string) =>
+  href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
+
+const navLinks = [
+  { href: "/", label: "Beranda" },
+  ...COLLECTIONS.map((c) => ({ href: `/kategori/${c.handle}`, label: c.name })),
+];
+const waHref = `https://wa.me/${STORE.whatsapp}`;
 ---
 
-<header class="sticky top-0 z-40 border-b border-line bg-cream/90 backdrop-blur">
+<header class="sticky top-0 z-40 border-b border-line bg-cream/85 backdrop-blur">
   <div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6">
-    <a href="/" class="shrink-0 font-display text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+    <a
+      href="/"
+      class="shrink-0 rounded-md font-display text-xl font-semibold tracking-tight text-ink transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:text-2xl"
+    >
       {STORE.name}
     </a>
 
-    <nav class="mx-auto hidden items-center gap-6 text-sm font-medium text-muted lg:flex">
-      <a href="/" class="transition-colors hover:text-brand-600">Beranda</a>
+    <nav class="mx-auto hidden items-center gap-7 text-sm text-muted lg:flex">
       {
-        COLLECTIONS.map((c) => (
-          <a href={`/kategori/${c.handle}`} class="transition-colors hover:text-brand-600">
-            {c.name}
+        navLinks.map((link) => (
+          <a
+            href={link.href}
+            aria-current={isActive(link.href) ? "page" : undefined}
+            class:list={[
+              "relative rounded-sm py-1 transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+              isActive(link.href)
+                ? "font-medium text-brand-700 after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-full after:bg-brand-600"
+                : "",
+            ]}
+          >
+            {link.label}
           </a>
         ))
       }
@@ -21,10 +42,10 @@ import { STORE, COLLECTIONS } from "../data/catalog";
 
     <div class="ml-auto flex items-center gap-2 lg:ml-0">
       <a
-        href={`https://wa.me/${STORE.whatsapp}`}
+        href={waHref}
         target="_blank"
         rel="noopener"
-        class="hidden items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-600 sm:inline-flex"
+        class="hidden items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:inline-flex"
       >
         <svg viewBox="0 0 24 24" class="h-4 w-4 fill-current" aria-hidden="true">
           <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2Zm0 18.02h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.37c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.83 2.42a8.19 8.19 0 0 1 2.41 5.83c0 4.54-3.7 8.4-8.28 8.4Zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.13-.16.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.13-.15.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.43l-.48-.01c-.17 0-.43.06-.66.31-.23.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.14-1.18-.06-.1-.22-.16-.47-.28Z" />
@@ -34,7 +55,7 @@ import { STORE, COLLECTIONS } from "../data/catalog";
 
       <a
         href="/keranjang"
-        class="relative inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-1.5 text-sm font-medium text-cream transition-colors hover:bg-brand-700"
+        class="relative inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-1.5 text-sm font-medium text-cream transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
         aria-label="Keranjang"
       >
         <svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
@@ -49,9 +70,89 @@ import { STORE, COLLECTIONS } from "../data/catalog";
           >0</span
         >
       </a>
+
+      <button
+        type="button"
+        id="menu-open"
+        aria-expanded="false"
+        aria-controls="mobile-drawer"
+        aria-label="Buka menu"
+        class="inline-flex items-center justify-center rounded-full border border-line p-2 text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 lg:hidden"
+      >
+        <svg viewBox="0 0 24 24" class="h-5 w-5 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
+          <path d="M3.5 6h17M3.5 12h17M3.5 18h17" stroke-linecap="round" />
+        </svg>
+      </button>
     </div>
   </div>
 </header>
+
+<!-- Mobile drawer -->
+<div id="mobile-menu" class="lg:hidden">
+  <div
+    id="menu-overlay"
+    class="pointer-events-none fixed inset-0 z-50 bg-ink/40 opacity-0 backdrop-blur-sm transition-opacity duration-300"
+  >
+  </div>
+  <aside
+    id="mobile-drawer"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Menu navigasi"
+    class="fixed inset-y-0 right-0 z-50 flex w-[85%] max-w-sm translate-x-full flex-col bg-cream shadow-2xl transition-transform duration-300 ease-out"
+  >
+    <div class="flex items-center justify-between border-b border-line px-5 py-4">
+      <a href="/" class="font-display text-xl font-semibold tracking-tight text-ink">{STORE.name}</a>
+      <button
+        type="button"
+        id="menu-close"
+        aria-label="Tutup menu"
+        class="inline-flex items-center justify-center rounded-full border border-line p-2 text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+      >
+        <svg viewBox="0 0 24 24" class="h-5 w-5 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round" />
+        </svg>
+      </button>
+    </div>
+
+    <nav class="flex-1 overflow-y-auto px-3 py-4">
+      <ul class="flex flex-col gap-1">
+        {
+          navLinks.map((link) => (
+            <li>
+              <a
+                href={link.href}
+                aria-current={isActive(link.href) ? "page" : undefined}
+                class:list={[
+                  "block rounded-xl px-4 py-3 text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+                  isActive(link.href)
+                    ? "bg-brand-50 font-medium text-brand-700"
+                    : "text-ink hover:bg-brand-50/60 hover:text-brand-700",
+                ]}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    <div class="border-t border-line px-5 py-4">
+      <a
+        href={waHref}
+        target="_blank"
+        rel="noopener"
+        class="inline-flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+      >
+        <svg viewBox="0 0 24 24" class="h-4 w-4 fill-current" aria-hidden="true">
+          <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2Zm0 18.02h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.37c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.83 2.42a8.19 8.19 0 0 1 2.41 5.83c0 4.54-3.7 8.4-8.28 8.4Zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.13-.16.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.13-.15.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.43l-.48-.01c-.17 0-.43.06-.66.31-.23.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.14-1.18-.06-.1-.22-.16-.47-.28Z" />
+        </svg>
+        Hubungi via WhatsApp
+      </a>
+    </div>
+  </aside>
+</div>
 
 <script is:inline>
   (function () {
@@ -68,5 +169,39 @@ import { STORE, COLLECTIONS } from "../data/catalog";
     updateBadge();
     window.addEventListener("storage", updateBadge);
     window.addEventListener("cart:updated", updateBadge);
+  })();
+</script>
+
+<script is:inline>
+  (function () {
+    var openBtn = document.getElementById("menu-open");
+    var closeBtn = document.getElementById("menu-close");
+    var overlay = document.getElementById("menu-overlay");
+    var drawer = document.getElementById("mobile-drawer");
+    if (!openBtn || !drawer || !overlay) return;
+
+    function open() {
+      overlay.classList.remove("pointer-events-none", "opacity-0");
+      drawer.classList.remove("translate-x-full");
+      openBtn.setAttribute("aria-expanded", "true");
+      document.body.style.overflow = "hidden";
+    }
+    function close() {
+      overlay.classList.add("pointer-events-none", "opacity-0");
+      drawer.classList.add("translate-x-full");
+      openBtn.setAttribute("aria-expanded", "false");
+      document.body.style.overflow = "";
+    }
+
+    openBtn.addEventListener("click", open);
+    if (closeBtn) closeBtn.addEventListener("click", close);
+    overlay.addEventListener("click", close);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") close();
+    });
+    // close after navigating to a link inside the drawer
+    drawer.querySelectorAll("a[href]").forEach(function (a) {
+      a.addEventListener("click", close);
+    });
   })();
 </script>
