@@ -1,21 +1,56 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import ProductCard from "../../components/ProductCard.astro";
-import { COLLECTIONS, byCollection, type Collection } from "../../data/catalog";
+import {
+  COLLECTIONS,
+  PRODUCTS,
+  byCollection,
+  type Product,
+} from "../../data/catalog";
+
+type ResolvedCollection = { name: string; emoji: string; blurb: string };
 
 export function getStaticPaths() {
-  return COLLECTIONS.map((collection) => ({
+  // Virtual (non-catalog) collections used by the nav. Defined inside
+  // getStaticPaths because Astro hoists this function into its own scope.
+  const VIRTUAL: Record<string, ResolvedCollection & { products: Product[] }> = {
+    semua: {
+      name: "Semua Produk",
+      emoji: "🛍️",
+      blurb: "Semua koleksi Batik Nusantara",
+      products: PRODUCTS,
+    },
+    "promo-gajian": {
+      name: "Promo Gajian",
+      emoji: "🏷️",
+      blurb: "Diskon spesial periode gajian",
+      products: PRODUCTS.filter((p) => p.compareAt || p.bestseller),
+    },
+  };
+
+  const real = COLLECTIONS.map((collection) => ({
     params: { handle: collection.handle },
-    props: { collection },
+    props: {
+      collection: { name: collection.name, emoji: collection.emoji, blurb: collection.blurb },
+      products: byCollection(collection.handle),
+    },
   }));
+  const virtual = Object.entries(VIRTUAL).map(([handle, def]) => ({
+    params: { handle },
+    props: {
+      collection: { name: def.name, emoji: def.emoji, blurb: def.blurb },
+      products: def.products,
+    },
+  }));
+  return [...real, ...virtual];
 }
 
 interface Props {
-  collection: Collection;
+  collection: ResolvedCollection;
+  products: Product[];
 }
 
-const { collection } = Astro.props;
-const products = byCollection(collection.handle);
+const { collection, products } = Astro.props;
 ---
 
 <Layout

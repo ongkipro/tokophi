@@ -1,14 +1,16 @@
 ---
-import { STORE, COLLECTIONS } from "../data/catalog";
+import { STORE } from "../data/catalog";
+import { MAIN_NAV, type NavItem } from "../data/nav";
 
 const pathname = Astro.url.pathname;
 const isActive = (href: string) =>
   href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
-const navLinks = [
-  { href: "/", label: "Beranda" },
-  ...COLLECTIONS.map((c) => ({ href: `/kategori/${c.handle}`, label: c.name })),
-];
+// A parent item is "active" when its own href matches or any child link matches.
+const isItemActive = (item: NavItem) => {
+  if (item.href && isActive(item.href)) return true;
+  return !!item.children?.some((c) => isActive(c.href));
+};
 ---
 
 <header class="sticky top-0 z-40 border-b border-line bg-cream/85 backdrop-blur">
@@ -22,20 +24,66 @@ const navLinks = [
 
     <nav class="mx-auto hidden items-center gap-7 text-sm text-muted lg:flex">
       {
-        navLinks.map((link) => (
-          <a
-            href={link.href}
-            aria-current={isActive(link.href) ? "page" : undefined}
-            class:list={[
-              "relative rounded-sm py-1 transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
-              isActive(link.href)
-                ? "font-medium text-brand-700 after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-full after:bg-brand-600"
-                : "",
-            ]}
-          >
-            {link.label}
-          </a>
-        ))
+        MAIN_NAV.map((item) =>
+          item.children ? (
+            <div class="dropdown relative" data-dropdown>
+              <button
+                type="button"
+                class:list={[
+                  "dropdown-trigger relative flex items-center gap-1 rounded-sm py-1 transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+                  isItemActive(item)
+                    ? "font-medium text-brand-700 after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-full after:bg-brand-600"
+                    : "",
+                ]}
+                aria-expanded="false"
+                aria-haspopup="true"
+              >
+                {item.label}
+                <svg
+                  viewBox="0 0 24 24"
+                  class="dropdown-chevron h-3.5 w-3.5 fill-none stroke-current transition-transform duration-200"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+              <div
+                class="dropdown-panel invisible absolute left-1/2 top-full z-50 mt-2 w-[22rem] -translate-x-1/2 translate-y-1 rounded-2xl border border-line bg-cream/95 p-2 opacity-0 shadow-xl backdrop-blur transition-all duration-200"
+              >
+                <div class="grid grid-cols-2 gap-1">
+                  {item.children.map((child) => (
+                    <a
+                      href={child.href}
+                      aria-current={isActive(child.href) ? "page" : undefined}
+                      class:list={[
+                        "block rounded-xl px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+                        isActive(child.href)
+                          ? "bg-brand-50 font-medium text-brand-700"
+                          : "text-ink hover:bg-brand-50/70 hover:text-brand-700",
+                      ]}
+                    >
+                      {child.label}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <a
+              href={item.href}
+              aria-current={isActive(item.href!) ? "page" : undefined}
+              class:list={[
+                "relative rounded-sm py-1 transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+                isActive(item.href!)
+                  ? "font-medium text-brand-700 after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-full after:bg-brand-600"
+                  : "",
+              ]}
+            >
+              {item.label}
+            </a>
+          )
+        )
       }
     </nav>
 
@@ -117,22 +165,70 @@ const navLinks = [
     <nav class="flex-1 overflow-y-auto px-3 py-4">
       <ul class="flex flex-col gap-1">
         {
-          navLinks.map((link) => (
-            <li>
-              <a
-                href={link.href}
-                aria-current={isActive(link.href) ? "page" : undefined}
-                class:list={[
-                  "block rounded-xl px-4 py-3 text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
-                  isActive(link.href)
-                    ? "bg-brand-50 font-medium text-brand-700"
-                    : "text-ink hover:bg-brand-50/60 hover:text-brand-700",
-                ]}
-              >
-                {link.label}
-              </a>
-            </li>
-          ))
+          MAIN_NAV.map((item) =>
+            item.children ? (
+              <li data-accordion>
+                <button
+                  type="button"
+                  class:list={[
+                    "accordion-trigger flex w-full items-center justify-between rounded-xl px-4 py-3 text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+                    isItemActive(item)
+                      ? "bg-brand-50 font-medium text-brand-700"
+                      : "text-ink hover:bg-brand-50/60 hover:text-brand-700",
+                  ]}
+                  aria-expanded={isItemActive(item) ? "true" : "false"}
+                >
+                  <span>{item.label}</span>
+                  <svg
+                    viewBox="0 0 24 24"
+                    class="accordion-chevron h-4 w-4 fill-none stroke-current transition-transform duration-200"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+                <ul
+                  class:list={[
+                    "accordion-panel mt-1 flex flex-col gap-0.5 overflow-hidden pl-3 transition-all",
+                    isItemActive(item) ? "" : "hidden",
+                  ]}
+                >
+                  {item.children.map((child) => (
+                    <li>
+                      <a
+                        href={child.href}
+                        aria-current={isActive(child.href) ? "page" : undefined}
+                        class:list={[
+                          "block rounded-xl px-4 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+                          isActive(child.href)
+                            ? "bg-brand-50 font-medium text-brand-700"
+                            : "text-muted hover:bg-brand-50/60 hover:text-brand-700",
+                        ]}
+                      >
+                        {child.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ) : (
+              <li>
+                <a
+                  href={item.href}
+                  aria-current={isActive(item.href!) ? "page" : undefined}
+                  class:list={[
+                    "block rounded-xl px-4 py-3 text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+                    isActive(item.href!)
+                      ? "bg-brand-50 font-medium text-brand-700"
+                      : "text-ink hover:bg-brand-50/60 hover:text-brand-700",
+                  ]}
+                >
+                  {item.label}
+                </a>
+              </li>
+            )
+          )
         }
       </ul>
     </nav>
@@ -200,6 +296,90 @@ const navLinks = [
     // close after navigating to a link inside the drawer
     drawer.querySelectorAll("a[href]").forEach(function (a) {
       a.addEventListener("click", close);
+    });
+  })();
+</script>
+
+<style>
+  /* Desktop dropdown: open on hover / keyboard focus-within, or when JS marks it open */
+  .dropdown:hover > .dropdown-panel,
+  .dropdown:focus-within > .dropdown-panel,
+  .dropdown.is-open > .dropdown-panel {
+    visibility: visible;
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  .dropdown:hover .dropdown-chevron,
+  .dropdown:focus-within .dropdown-chevron,
+  .dropdown.is-open .dropdown-chevron {
+    transform: rotate(180deg);
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    // --- Desktop dropdown (hover via CSS; click + keyboard + outside-click here) ---
+    var dropdowns = Array.prototype.slice.call(document.querySelectorAll("[data-dropdown]"));
+    dropdowns.forEach(function (dd) {
+      var trigger = dd.querySelector(".dropdown-trigger");
+      if (!trigger) return;
+
+      function openDD() {
+        dd.classList.add("is-open");
+        trigger.setAttribute("aria-expanded", "true");
+      }
+      function closeDD() {
+        dd.classList.remove("is-open");
+        trigger.setAttribute("aria-expanded", "false");
+      }
+
+      trigger.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (dd.classList.contains("is-open")) closeDD();
+        else openDD();
+      });
+      // keep aria in sync when hovering opens it
+      dd.addEventListener("mouseenter", function () {
+        trigger.setAttribute("aria-expanded", "true");
+      });
+      dd.addEventListener("mouseleave", function () {
+        if (!dd.classList.contains("is-open")) trigger.setAttribute("aria-expanded", "false");
+      });
+      dd.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+          closeDD();
+          trigger.focus();
+        }
+      });
+      dd.__closeDD = closeDD;
+    });
+
+    document.addEventListener("click", function (e) {
+      dropdowns.forEach(function (dd) {
+        if (!dd.contains(e.target) && dd.__closeDD) dd.__closeDD();
+      });
+    });
+
+    // --- Mobile accordion (parent expand/collapse) ---
+    document.querySelectorAll("[data-accordion]").forEach(function (acc) {
+      var trigger = acc.querySelector(".accordion-trigger");
+      var panel = acc.querySelector(".accordion-panel");
+      var chevron = acc.querySelector(".accordion-chevron");
+      if (!trigger || !panel) return;
+      // sync initial chevron with server-rendered expanded state
+      if (chevron && !panel.classList.contains("hidden")) chevron.style.transform = "rotate(180deg)";
+      trigger.addEventListener("click", function () {
+        var isOpen = !panel.classList.contains("hidden");
+        if (isOpen) {
+          panel.classList.add("hidden");
+          trigger.setAttribute("aria-expanded", "false");
+          if (chevron) chevron.style.transform = "";
+        } else {
+          panel.classList.remove("hidden");
+          trigger.setAttribute("aria-expanded", "true");
+          if (chevron) chevron.style.transform = "rotate(180deg)";
+        }
+      });
     });
   })();
 </script>

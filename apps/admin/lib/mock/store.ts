@@ -289,7 +289,10 @@ export const MENUS: NavMenu[] = [
       { id: "m3", title: "Kategori", type: "url", target: "#", children: [
         { id: "m3a", title: "Dress", type: "koleksi", target: "/kategori/dress" },
         { id: "m3b", title: "Atasan", type: "koleksi", target: "/kategori/atasan" },
-        { id: "m3c", title: "Busana Muslim", type: "koleksi", target: "/kategori/busana-muslim" },
+        { id: "m3c", title: "Bawahan", type: "koleksi", target: "/kategori/bawahan" },
+        { id: "m3d", title: "Busana Muslim", type: "koleksi", target: "/kategori/busana-muslim" },
+        { id: "m3e", title: "Outerwear", type: "koleksi", target: "/kategori/outerwear" },
+        { id: "m3f", title: "Loungewear", type: "koleksi", target: "/kategori/loungewear" },
       ]},
       { id: "m4", title: "Promo Gajian", type: "koleksi", target: "/kategori/promo-gajian" },
       { id: "m5", title: "Blog", type: "blog", target: "/blog/berita-toko" },

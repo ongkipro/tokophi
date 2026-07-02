@@ -8,6 +8,10 @@ import {
   GripVertical,
   ChevronRight,
   Menu as MenuIcon,
+  MoreHorizontal,
+  IndentIncrease,
+  IndentDecrease,
+  CornerDownRight,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
@@ -18,6 +22,15 @@ import {
   ItemFormDialog,
   type ItemDraft,
 } from "@/components/admin/navigasi/item-form-dialog";
+import {
+  moveWithinLevel,
+  indentItem,
+  outdentItem,
+  canIndent,
+  canOutdent,
+  parentIdOf,
+  type DropPos,
+} from "@/components/admin/navigasi/tree-ops";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +48,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // ---- local state helpers ----
 function cloneItems(items: NavItem[]): NavItem[] {
@@ -99,70 +119,205 @@ function findItem(items: NavItem[], id: string): NavItem | null {
   return null;
 }
 
+// ---- drag-and-drop context passed down to every row ----
+type Dnd = {
+  dragId: string | null;
+  overId: string | null;
+  overPos: DropPos | null;
+  onDragStart: (id: string) => void;
+  onDragOverItem: (id: string, pos: DropPos) => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
+};
+
 // ---- row ----
 function ItemRow({
   item,
   depth,
+  canIndentItem,
+  canOutdentItem,
   onEdit,
   onDelete,
+  onIndent,
+  onOutdent,
+  dnd,
 }: {
   item: NavItem;
   depth: number;
+  canIndentItem: (id: string) => boolean;
+  canOutdentItem: (id: string) => boolean;
   onEdit: (item: NavItem) => void;
   onDelete: (id: string) => void;
+  onIndent: (id: string) => void;
+  onOutdent: (id: string) => void;
+  dnd: Dnd;
 }) {
   const meta = TYPE_META[item.type];
   const Icon = meta.icon;
+  const hasChildren = !!item.children && item.children.length > 0;
+
+  const isDragging = dnd.dragId === item.id;
+  const showBefore = dnd.overId === item.id && dnd.overPos === "before";
+  const showAfter = dnd.overId === item.id && dnd.overPos === "after";
+
+  const indentable = canIndentItem(item.id);
+  const outdentable = canOutdentItem(item.id);
+
   return (
     <div>
-      <div className="group flex items-center gap-3 rounded-lg border bg-card px-2.5 py-2 ring-foreground/5 transition-colors hover:bg-muted/40">
-        <GripVertical className="size-4 shrink-0 cursor-grab text-muted-foreground/50" />
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-          <Icon className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold leading-tight">{item.title}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {meta.label}
-            {item.target && (
-              <>
-                {" · "}
-                <span className="font-mono">{item.target}</span>
-              </>
-            )}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Edit ${item.title}`}
-            onClick={() => onEdit(item)}
-          >
-            <Pencil />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Hapus ${item.title}`}
-            className="text-muted-foreground hover:text-destructive"
-            onClick={() => onDelete(item.id)}
-          >
-            <Trash2 />
-          </Button>
+      <div
+        className="relative"
+        draggable
+        onDragStart={(e) => {
+          e.stopPropagation();
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", item.id);
+          dnd.onDragStart(item.id);
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "move";
+          const rect = e.currentTarget.getBoundingClientRect();
+          const pos: DropPos =
+            e.clientY - rect.top < rect.height / 2 ? "before" : "after";
+          dnd.onDragOverItem(item.id, pos);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dnd.onDrop();
+        }}
+        onDragEnd={(e) => {
+          e.stopPropagation();
+          dnd.onDragEnd();
+        }}
+      >
+        {/* drop indicators */}
+        {showBefore && (
+          <div className="pointer-events-none absolute inset-x-0 -top-1 z-10 h-0.5 rounded-full bg-primary" />
+        )}
+        {showAfter && (
+          <div className="pointer-events-none absolute inset-x-0 -bottom-1 z-10 h-0.5 rounded-full bg-primary" />
+        )}
+
+        <div
+          className={[
+            "group flex items-center gap-3 rounded-lg border bg-card px-2.5 py-2 ring-foreground/5 transition-colors hover:bg-muted/40",
+            isDragging ? "opacity-40" : "",
+          ].join(" ")}
+        >
+          <GripVertical
+            className="size-4 shrink-0 cursor-grab text-muted-foreground/50 active:cursor-grabbing"
+            aria-hidden
+          />
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+            <Icon className="size-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <p className="truncate text-sm font-semibold leading-tight">
+                {item.title}
+              </p>
+              {hasChildren && (
+                <Badge variant="outline" className="h-4 px-1 text-[10px]">
+                  Sub-menu
+                </Badge>
+              )}
+            </div>
+            <p className="truncate text-xs text-muted-foreground">
+              {meta.label}
+              {item.target && (
+                <>
+                  {" · "}
+                  <span className="font-mono">{item.target}</span>
+                </>
+              )}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Edit ${item.title}`}
+              onClick={() => onEdit(item)}
+            >
+              <Pencil />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Hapus ${item.title}`}
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => onDelete(item.id)}
+            >
+              <Trash2 />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Aksi lain untuk ${item.title}`}
+                  >
+                    <MoreHorizontal />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem
+                  disabled={!indentable}
+                  onClick={() => onIndent(item.id)}
+                >
+                  <IndentIncrease />
+                  Jadikan sub-menu
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!outdentable}
+                  onClick={() => onOutdent(item.id)}
+                >
+                  <IndentDecrease />
+                  Naikkan jadi menu induk
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => onEdit(item)}>
+                  <Pencil />
+                  Sunting
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() => onDelete(item.id)}
+                >
+                  <Trash2 />
+                  Hapus
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
-      {item.children && item.children.length > 0 && (
+      {hasChildren && (
         <div className="ml-6 mt-2 flex flex-col gap-2 border-l pl-6">
-          {item.children.map((child) => (
-            <ItemRow
-              key={child.id}
-              item={child}
-              depth={depth + 1}
-              onEdit={onEdit}
-              onDelete={onDelete}
-            />
+          {item.children!.map((child) => (
+            <div key={child.id} className="relative">
+              <CornerDownRight
+                className="pointer-events-none absolute -left-[1.35rem] top-3.5 size-3.5 text-muted-foreground/40"
+                aria-hidden
+              />
+              <ItemRow
+                item={child}
+                depth={depth + 1}
+                canIndentItem={canIndentItem}
+                canOutdentItem={canOutdentItem}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onIndent={onIndent}
+                onOutdent={onOutdent}
+                dnd={dnd}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -242,6 +397,12 @@ export default function Page() {
   const [itemDialogOpen, setItemDialogOpen] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
 
+  // Drag-and-drop state (native HTML5 DnD).
+  const [dragId, setDragId] = React.useState<string | null>(null);
+  const [over, setOver] = React.useState<{ id: string; pos: DropPos } | null>(
+    null,
+  );
+
   const activeMenu =
     menus.find((m) => m.handle === activeHandle) ?? menus[0] ?? null;
 
@@ -279,6 +440,59 @@ export default function Page() {
       patchActive((m) => ({ ...m, items: [...m.items, newItem] }));
     }
   }
+
+  function handleIndent(id: string) {
+    patchActive((m) => ({ ...m, items: indentItem(m.items, id) }));
+  }
+  function handleOutdent(id: string) {
+    patchActive((m) => ({ ...m, items: outdentItem(m.items, id) }));
+  }
+
+  // ---- drag-and-drop handlers (reorder within the same level only) ----
+  const dnd: Dnd = {
+    dragId,
+    overId: over?.id ?? null,
+    overPos: over?.pos ?? null,
+    onDragStart: (id) => setDragId(id),
+    onDragOverItem: (id, pos) => {
+      const items = activeMenu?.items ?? [];
+      if (!dragId || dragId === id) {
+        setOver(null);
+        return;
+      }
+      // Only allow (and highlight) a drop when both rows share a level.
+      if (parentIdOf(items, dragId) !== parentIdOf(items, id)) {
+        setOver(null);
+        return;
+      }
+      setOver((prev) =>
+        prev && prev.id === id && prev.pos === pos ? prev : { id, pos },
+      );
+    },
+    onDrop: () => {
+      if (dragId && over) {
+        patchActive((m) => ({
+          ...m,
+          items: moveWithinLevel(m.items, dragId, over.id, over.pos),
+        }));
+      }
+      setDragId(null);
+      setOver(null);
+    },
+    onDragEnd: () => {
+      setDragId(null);
+      setOver(null);
+    },
+  };
+
+  const itemCanIndent = React.useCallback(
+    (id: string) => (activeMenu ? canIndent(activeMenu.items, id) : false),
+    [activeMenu],
+  );
+  const itemCanOutdent = React.useCallback(
+    (id: string) => (activeMenu ? canOutdent(activeMenu.items, id) : false),
+    [activeMenu],
+  );
 
   function handleCreateMenu(title: string) {
     const base = toHandle(title);
@@ -394,6 +608,10 @@ export default function Page() {
                   {countItems(activeMenu.items)} item
                 </span>
               </div>
+              <p className="-mt-1 text-xs text-muted-foreground">
+                Seret untuk mengurutkan, atau pakai “Jadikan sub-menu” untuk
+                membuat menu bertingkat.
+              </p>
 
               {activeMenu.items.length > 0 ? (
                 <div className="flex flex-col gap-2">
@@ -402,8 +620,13 @@ export default function Page() {
                       key={item.id}
                       item={item}
                       depth={0}
+                      canIndentItem={itemCanIndent}
+                      canOutdentItem={itemCanOutdent}
                       onEdit={openEdit}
                       onDelete={handleDelete}
+                      onIndent={handleIndent}
+                      onOutdent={handleOutdent}
+                      dnd={dnd}
                     />
                   ))}
                 </div>
