@@ -49,6 +49,12 @@ export const PRODUCTS: Product[] = [
   { handle: "jumpsuit-kulot", name: "Jumpsuit Kulot Casual", price: 175000, category: "Dress", categoryHandle: "dress", image: "/products/jumpsuit-kulot.webp", description: "Jumpsuit kulot warna terracotta, satu set praktis yang tetap stylish. Nyaman untuk jalan seharian.", sizes: ["M", "L"] },
 ];
 
+// Each product has a 5-image gallery: base + -2..-5 (AI-generated catalog shots).
+export const productImages = (p: Product): string[] => [
+  p.image,
+  ...[2, 3, 4, 5].map((n) => p.image.replace(/\.webp$/, `-${n}.webp`)),
+];
+
 export const bestsellers = () => PRODUCTS.filter((p) => p.bestseller);
 export const byCollection = (handle: string) => PRODUCTS.filter((p) => p.categoryHandle === handle);
 export const findProduct = (handle: string) => PRODUCTS.find((p) => p.handle === handle);

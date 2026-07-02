@@ -87,7 +87,7 @@ import { STORE } from "../data/catalog";
         '<span class="text-lg font-medium text-ink">Total</span>' +
         '<span class="font-display text-2xl font-semibold text-ink tabular-nums">' + idr.format(total) + "</span>" +
         "</div>" +
-        '<button type="button" id="checkout" class="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-[#25D366] px-6 py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90">Checkout via WhatsApp</button>' +
+        '<a href="/checkout" class="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-200/50 transition-colors hover:bg-brand-700">Lanjut ke Checkout</a>' +
         '<a href="/" class="mt-3 block text-center text-sm text-muted underline hover:text-brand-600">Lanjut belanja</a>' +
         "</div>";
 
@@ -118,21 +118,6 @@ import { STORE } from "../data/catalog";
         });
       });
 
-      var checkout = document.getElementById("checkout");
-      checkout?.addEventListener("click", function () {
-        var c = readCart();
-        var lines = c.map(function (item) {
-          return (
-            "• " + item.name + (item.size ? " (" + item.size + ")" : "") +
-            " x" + item.qty + " — " + idr.format(item.price * item.qty)
-          );
-        });
-        var msg =
-          "Halo " + storeName + ", saya mau checkout pesanan berikut:\n\n" +
-          lines.join("\n") +
-          "\n\n*Total: " + idr.format(total) + "*";
-        window.open("https://wa.me/" + whatsapp + "?text=" + encodeURIComponent(msg), "_blank");
-      });
     }
 
     render();

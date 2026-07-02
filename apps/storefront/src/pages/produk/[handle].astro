@@ -2,7 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import ProductCard from "../../components/ProductCard.astro";
 import { IDR } from "@indostore/lib/format";
-import { PRODUCTS, STORE, byCollection, type Product } from "../../data/catalog";
+import { PRODUCTS, STORE, byCollection, productImages, type Product } from "../../data/catalog";
 
 export function getStaticPaths() {
   return PRODUCTS.map((product) => ({
@@ -26,29 +26,58 @@ const discount =
     ? Math.round(((product.compareAt - product.price) / product.compareAt) * 100)
     : 0;
 
-const waText = encodeURIComponent(
-  `Halo ${STORE.name}, saya mau pesan *${product.name}* (${IDR(product.price)}). Masih tersedia?`,
-);
-const waHref = `https://wa.me/${STORE.whatsapp}?text=${waText}`;
+const gallery = productImages(product);
 ---
 
 <Layout title={product.name} description={product.description}>
   <section class="mx-auto max-w-7xl px-4 py-10 sm:px-6">
     <div class="grid gap-10 md:grid-cols-2">
-      <!-- Image -->
-      <div class="relative aspect-[3/4] overflow-hidden rounded-xl bg-brand-50 ring-1 ring-line">
-        <img src={product.image} alt={product.name} class="h-full w-full object-cover" />
-        {
-          product.badge && (
-            <span class="absolute left-4 top-4 rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white">
-              {product.badge}
-            </span>
-          )
-        }
+      <!-- Gallery -->
+      <div class="flex flex-col gap-4 sm:flex-row-reverse">
+        <!-- Main image -->
+        <div class="relative aspect-[3/4] flex-1 overflow-hidden rounded-xl bg-brand-50 ring-1 ring-line">
+          <img
+            id="gallery-main"
+            src={gallery[0]}
+            alt={product.name}
+            class="h-full w-full object-cover transition-opacity duration-200"
+          />
+          {
+            product.badge && (
+              <span class="absolute left-4 top-4 rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white">
+                {product.badge}
+              </span>
+            )
+          }
+        </div>
+
+        <!-- Thumbnails -->
+        <div
+          id="gallery-thumbs"
+          class="flex gap-3 overflow-x-auto pb-1 sm:w-20 sm:flex-col sm:overflow-visible sm:pb-0"
+        >
+          {
+            gallery.map((src, i) => (
+              <button
+                type="button"
+                data-thumb={i}
+                data-src={src}
+                aria-label={`Gambar ${i + 1}`}
+                aria-pressed={i === 0 ? "true" : "false"}
+                class:list={[
+                  "gallery-thumb relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-lg bg-brand-50 ring-2 transition-all sm:w-full",
+                  i === 0 ? "ring-brand-600" : "ring-transparent hover:ring-brand-300",
+                ]}
+              >
+                <img src={src} alt={`${product.name} — tampilan ${i + 1}`} class="h-full w-full object-cover" loading="lazy" />
+              </button>
+            ))
+          }
+        </div>
       </div>
 
       <!-- Info -->
-      <div>
+      <div class="md:sticky md:top-24 md:self-start">
         <nav class="text-sm text-muted">
           <a href="/" class="hover:text-brand-600">Beranda</a>
           <span class="mx-1">/</span>
@@ -122,17 +151,17 @@ const waHref = `https://wa.me/${STORE.whatsapp}?text=${waText}`;
           >
             Tambah ke Keranjang
           </button>
-          <a
-            href={waHref}
-            target="_blank"
-            rel="noopener"
-            class="flex flex-1 items-center justify-center gap-2 rounded-full bg-[#25D366] px-6 py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          <button
+            type="button"
+            id="buy-now"
+            data-handle={product.handle}
+            data-name={product.name}
+            data-price={product.price}
+            data-image={product.image}
+            class="flex-1 rounded-full border border-brand-600 px-6 py-3.5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"
           >
-            <svg viewBox="0 0 24 24" class="h-5 w-5 fill-current" aria-hidden="true">
-              <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2Zm5.62 14.02c-.21.58-1.2 1.11-1.68 1.18-.43.06-.97.09-1.56-.1-.36-.11-.82-.26-1.41-.52-2.48-1.07-4.11-3.57-4.23-3.74-.12-.16-1.01-1.34-1.01-2.56 0-1.22.63-1.82.86-2.07.23-.25.49-.31.66-.31l.48.01c.16.01.36-.05.56.43.2.5.7 1.72.76 1.84.06.12.1.26.02.43-.08.16-.12.26-.25.41-.12.14-.26.32-.37.43-.13.13-.25.26-.11.51.14.25.63 1.06 1.38 1.72.94.84 1.74 1.11 1.99 1.23.25.13.4.11.54-.06.15-.16.63-.72.79-.97.17-.25.33-.21.56-.13.22.09 1.44.69 1.69.81.25.12.41.18.47.28.07.11.07.6-.14 1.18Z" />
-            </svg>
-            Beli via WhatsApp
-          </a>
+            Beli Sekarang
+          </button>
         </div>
 
         <p id="cart-toast" class="mt-4 hidden rounded-lg bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
@@ -160,6 +189,30 @@ const waHref = `https://wa.me/${STORE.whatsapp}?text=${waText}`;
 
 <script is:inline>
   (function () {
+    // Gallery
+    var main = document.getElementById("gallery-main");
+    var thumbs = document.getElementById("gallery-thumbs");
+    if (main && thumbs) {
+      thumbs.addEventListener("click", function (e) {
+        var btn = e.target.closest(".gallery-thumb");
+        if (!btn) return;
+        main.style.opacity = "0";
+        var src = btn.getAttribute("data-src");
+        setTimeout(function () {
+          main.src = src;
+          main.style.opacity = "1";
+        }, 120);
+        thumbs.querySelectorAll(".gallery-thumb").forEach(function (b) {
+          b.classList.remove("ring-brand-600");
+          b.classList.add("ring-transparent", "hover:ring-brand-300");
+          b.setAttribute("aria-pressed", "false");
+        });
+        btn.classList.add("ring-brand-600");
+        btn.classList.remove("ring-transparent", "hover:ring-brand-300");
+        btn.setAttribute("aria-pressed", "true");
+      });
+    }
+
     var selectedSize =
       (document.querySelector(".size-btn[aria-pressed='true']") || {}).dataset?.size || null;
 
@@ -227,6 +280,20 @@ const waHref = `https://wa.me/${STORE.whatsapp}?text=${waText}`;
           toast.classList.add("hidden");
         }, 4000);
       }
+    });
+
+    var buyBtn = document.getElementById("buy-now");
+    buyBtn?.addEventListener("click", function () {
+      var d = buyBtn.dataset;
+      var cart = [];
+      try { cart = JSON.parse(localStorage.getItem("cart") || "[]"); } catch (e) { cart = []; }
+      var size = selectedSize || "";
+      var existing = cart.find(function (i) { return i.handle === d.handle && i.size === size; });
+      if (existing) { existing.qty += qty; }
+      else { cart.push({ handle: d.handle, name: d.name, price: Number(d.price), image: d.image, size: size, qty: qty }); }
+      localStorage.setItem("cart", JSON.stringify(cart));
+      window.dispatchEvent(new Event("cart:updated"));
+      window.location.href = "/checkout";
     });
   })();
 </script>

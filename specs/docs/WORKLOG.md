@@ -17,6 +17,13 @@
 - [x] **Pesanan detail page** `/pesanan/[id]` — full page (item + foto, ringkasan rekonsiliasi ke total, linimasa, sidebar pelanggan/pengiriman/pembayaran w/ Sumber). Sheet quick-view removed; rows navigate. Build+console clean.
 - [x] **Diskon create+edit** — `/diskon/baru` + `/diskon/[id]` reusable DiscountEditor; list "Buat/Edit"+rows wired; create dialog removed.
 
+**Also done (storefront + galeri + checkout, 2026-07-02):**
+- [x] **5 gambar/produk** — generated 56 more AI photos (14×4) via `count:4` + `show_generations` file→jq→download (avoids 56 polls) → **70 webp** (1.6MB), 5 per product. *(Gotcha: `show_generations` big result saves to a file; jq it. Later products lag completion — re-fetch.)*
+- [x] **Storefront gallery** (Shopify PDP: main + 5 thumbnails) via `productImages()`.
+- [x] **Checkout flow** — `/checkout` (kontak/alamat/pengiriman/pembayaran + sticky ringkasan) → `/checkout/sukses` (clears cart). Cart CTA "Lanjut ke Checkout".
+- [x] **Removed WhatsApp checkout** — product "Beli via WhatsApp" → **"Beli Sekarang"** (add+redirect /checkout); cart WA checkout removed. (Contact WA in header/footer kept as CS.)
+- [x] **Admin ↔ storefront 1:1** — copied all 70 images into `apps/admin/public/products`; admin `productImages()` helper; **product editor Media shows the 5-image gallery** (same files as storefront). Same products/prices/categories/images both sides.
+
 **Next up (resume here):**
 1. **E1 sisa** — confirm-dialog + toast pada aksi destruktif (Hapus di Halaman/Blog/Pelanggan/Produk list); Ekspor CSV (Analitik/Inventori/Pemasaran); global search ⌘K.
 2. **E0** de-dup `apps/admin` → `@indostore/ui`/`@indostore/lib` (hati-hati; admin matang) + Turborepo.

@@ -23,7 +23,7 @@ import {
   Archive,
 } from "lucide-react";
 
-import { type Product } from "@/lib/mock/store";
+import { type Product, productImages } from "@/lib/mock/store";
 import { toast } from "sonner";
 import { IDR, num } from "@/lib/format";
 
@@ -316,20 +316,28 @@ export function ProductEditor({ product }: { product?: Product }) {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               {/* Image grid */}
-              <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
-                {isEdit ? (
-                  <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
-                    {product?.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={product.image} alt={product.name} className="size-full object-cover" />
-                    ) : (
-                      <div className="flex size-full items-center justify-center text-4xl">{product?.emoji}</div>
-                    )}
-                    <span className="absolute left-1 top-1 rounded bg-foreground/80 px-1.5 py-0.5 text-[10px] font-medium text-background">
-                      Utama
-                    </span>
-                  </div>
-                ) : (
+              {isEdit ? (
+                <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
+                  {productImages(product!).map((src, i) => (
+                    <div key={i} className="relative aspect-square overflow-hidden rounded-lg border bg-muted">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={src} alt={`${product!.name} ${i + 1}`} loading="lazy" className="size-full object-cover" />
+                      {i === 0 && (
+                        <span className="absolute left-1 top-1 rounded bg-foreground/80 px-1.5 py-0.5 text-[10px] font-medium text-background">
+                          Utama
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="flex aspect-square cursor-pointer items-center justify-center rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                  >
+                    <Plus className="size-5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
                   <button
                     type="button"
                     className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
@@ -337,17 +345,17 @@ export function ProductEditor({ product }: { product?: Product }) {
                     <ImagePlus className="size-5" />
                     <span className="text-xs">Foto</span>
                   </button>
-                )}
-                {[0, 1, 2].map((i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className="flex aspect-square cursor-pointer items-center justify-center rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                  >
-                    <Plus className="size-5" />
-                  </button>
-                ))}
-              </div>
+                  {[0, 1, 2].map((i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className="flex aspect-square cursor-pointer items-center justify-center rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                    >
+                      <Plus className="size-5" />
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <p className="text-xs text-muted-foreground">
                 Foto pertama jadi gambar utama. Format JPG/PNG, maks 5 MB.

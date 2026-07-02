@@ -130,6 +130,12 @@ PRODUCTS[12].status = "draft";  // Mainan Edukasi Kayu
 PRODUCTS[9].stock = 8;          // Earphone Bluetooth TWS — menipis
 PRODUCTS[3].stock = 14;         // Tas Ransel Anti Air — menipis
 
+// 5-image gallery per product (base + -2..-5) — same files as the storefront (1:1).
+export const productImages = (p: Product): string[] => [
+  p.image,
+  ...[2, 3, 4, 5].map((n) => p.image.replace(/\.webp$/, `-${n}.webp`)),
+];
+
 // ---- orders ----
 export type OrderStatus = "baru" | "diproses" | "dikirim" | "selesai" | "batal";
 export type Order = {

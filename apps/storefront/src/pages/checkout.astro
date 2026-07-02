@@ -1,0 +1,332 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { STORE } from "../data/catalog";
+
+const PROVINCES = [
+  "DKI Jakarta",
+  "Jawa Barat",
+  "Jawa Tengah",
+  "DI Yogyakarta",
+  "Jawa Timur",
+  "Banten",
+  "Bali",
+  "Sumatera Utara",
+  "Sumatera Barat",
+  "Sulawesi Selatan",
+  "Kalimantan Timur",
+];
+
+const SHIPPING = [
+  { id: "jne-reg", label: "JNE Reguler", eta: "2–3 hari", price: 15000 },
+  { id: "sicepat-best", label: "SiCepat BEST", eta: "1–2 hari", price: 22000 },
+  { id: "gosend-instant", label: "GoSend Instant", eta: "Hari ini", price: 30000 },
+];
+
+const PAYMENTS = [
+  { id: "transfer", label: "Transfer Bank", desc: "BCA / Mandiri / BNI" },
+  { id: "qris", label: "QRIS", desc: "Scan dari semua e-wallet & m-banking" },
+  { id: "cod", label: "COD (Bayar di Tempat)", desc: "Bayar tunai saat paket tiba" },
+];
+---
+
+<Layout title="Checkout" description={`Selesaikan pesananmu di ${STORE.name}.`}>
+  <section class="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+    <nav class="text-sm text-muted">
+      <a href="/keranjang" class="hover:text-brand-600">Keranjang</a>
+      <span class="mx-1">/</span>
+      <span class="text-ink">Checkout</span>
+    </nav>
+    <h1 class="mt-3 font-display text-3xl font-semibold text-ink">Checkout</h1>
+
+    <div id="checkout-empty" class="mt-10 hidden rounded-2xl border border-dashed border-line bg-white py-20 text-center">
+      <p class="text-4xl">🛒</p>
+      <h2 class="mt-4 font-display text-2xl font-semibold text-ink">Keranjangmu masih kosong</h2>
+      <p class="mt-2 text-muted">Tambahkan produk dulu sebelum checkout.</p>
+      <a href="/" class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700">Mulai Belanja</a>
+    </div>
+
+    <form id="checkout-form" class="mt-8 grid gap-8 lg:grid-cols-[1.4fr_1fr] lg:items-start">
+      <!-- LEFT: form -->
+      <div class="space-y-8">
+        <!-- Kontak -->
+        <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
+          <legend class="px-2 font-display text-lg font-semibold text-ink">Kontak</legend>
+          <label class="block">
+            <span class="text-sm font-medium text-ink">Email</span>
+            <input
+              type="email"
+              name="email"
+              required
+              placeholder="nama@email.com"
+              class="mt-1.5 w-full rounded-lg border border-line bg-cream px-3.5 py-2.5 text-sm text-ink outline-none transition-colors focus:border-brand-400 focus:bg-white"
+            />
+          </label>
+        </fieldset>
+
+        <!-- Alamat pengiriman -->
+        <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
+          <legend class="px-2 font-display text-lg font-semibold text-ink">Alamat Pengiriman</legend>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block">
+              <span class="text-sm font-medium text-ink">Nama Lengkap</span>
+              <input type="text" name="nama" required autocomplete="name" class="input-field" />
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium text-ink">No. WhatsApp</span>
+              <input type="tel" name="whatsapp" required inputmode="tel" placeholder="08xxxxxxxxxx" autocomplete="tel" class="input-field" />
+            </label>
+            <label class="block sm:col-span-2">
+              <span class="text-sm font-medium text-ink">Alamat Lengkap</span>
+              <textarea name="alamat" required rows="2" placeholder="Nama jalan, no. rumah, RT/RW, patokan" class="input-field resize-none"></textarea>
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium text-ink">Kota / Kabupaten</span>
+              <input type="text" name="kota" required autocomplete="address-level2" class="input-field" />
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium text-ink">Provinsi</span>
+              <input type="text" name="provinsi" required list="provinsi-list" autocomplete="address-level1" class="input-field" />
+              <datalist id="provinsi-list">
+                {PROVINCES.map((p) => <option value={p} />)}
+              </datalist>
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium text-ink">Kode Pos</span>
+              <input type="text" name="kodepos" required inputmode="numeric" autocomplete="postal-code" class="input-field" />
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- Pengiriman -->
+        <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
+          <legend class="px-2 font-display text-lg font-semibold text-ink">Pengiriman</legend>
+          <div class="space-y-3">
+            {
+              SHIPPING.map((s, i) => (
+                <label class="ship-option flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
+                  <input
+                    type="radio"
+                    name="shipping"
+                    value={s.id}
+                    data-price={s.price}
+                    data-label={s.label}
+                    checked={i === 0}
+                    required
+                    class="h-4 w-4 accent-brand-600"
+                  />
+                  <span class="flex-1">
+                    <span class="block text-sm font-medium text-ink">{s.label}</span>
+                    <span class="block text-xs text-muted">Estimasi {s.eta}</span>
+                  </span>
+                  <span class="text-sm font-semibold text-ink tabular-nums" data-money={s.price}>Rp{s.price.toLocaleString("id-ID")}</span>
+                </label>
+              ))
+            }
+          </div>
+        </fieldset>
+
+        <!-- Pembayaran -->
+        <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
+          <legend class="px-2 font-display text-lg font-semibold text-ink">Pembayaran</legend>
+          <div class="space-y-3">
+            {
+              PAYMENTS.map((p, i) => (
+                <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
+                  <input
+                    type="radio"
+                    name="payment"
+                    value={p.id}
+                    data-label={p.label}
+                    checked={i === 0}
+                    required
+                    class="h-4 w-4 accent-brand-600"
+                  />
+                  <span class="flex-1">
+                    <span class="block text-sm font-medium text-ink">{p.label}</span>
+                    <span class="block text-xs text-muted">{p.desc}</span>
+                  </span>
+                </label>
+              ))
+            }
+          </div>
+          <p class="mt-4 text-xs text-muted">Pembayaran diproses aman — disediakan Indostore.</p>
+        </fieldset>
+      </div>
+
+      <!-- RIGHT: order summary -->
+      <aside class="lg:sticky lg:top-24">
+        <div class="rounded-2xl border border-line bg-white p-5 sm:p-6">
+          <h2 class="font-display text-lg font-semibold text-ink">Ringkasan Pesanan</h2>
+
+          <div id="summary-items" class="mt-4 space-y-4"></div>
+
+          <div class="mt-6 space-y-2 border-t border-line pt-4 text-sm">
+            <div class="flex items-center justify-between">
+              <span class="text-muted">Subtotal</span>
+              <span id="summary-subtotal" class="font-medium text-ink tabular-nums">Rp0</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-muted">Ongkir</span>
+              <span id="summary-shipping" class="font-medium text-ink tabular-nums">Rp0</span>
+            </div>
+          </div>
+
+          <div class="mt-4 flex items-center justify-between border-t border-line pt-4">
+            <span class="text-base font-medium text-ink">Total</span>
+            <span id="summary-total" class="font-display text-2xl font-semibold text-ink tabular-nums">Rp0</span>
+          </div>
+
+          <button
+            type="submit"
+            id="pay-btn"
+            class="mt-6 w-full rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-200/50 transition-colors hover:bg-brand-700"
+          >
+            Bayar Sekarang
+          </button>
+          <p id="form-error" class="mt-3 hidden text-center text-sm font-medium text-brand-700"></p>
+          <a href="/keranjang" class="mt-3 block text-center text-sm text-muted underline hover:text-brand-600">Kembali ke keranjang</a>
+        </div>
+      </aside>
+    </form>
+  </section>
+</Layout>
+
+<style is:global>
+  .input-field {
+    margin-top: 0.375rem;
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-line);
+    background: var(--color-cream);
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    color: var(--color-ink);
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .input-field:focus {
+    border-color: var(--color-brand-400);
+    background: #fff;
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    var idr = new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      maximumFractionDigits: 0,
+    });
+
+    function readCart() {
+      try {
+        return JSON.parse(localStorage.getItem("cart") || "[]");
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+
+    var cart = readCart();
+    var form = document.getElementById("checkout-form");
+    var empty = document.getElementById("checkout-empty");
+
+    if (!cart.length) {
+      if (form) form.classList.add("hidden");
+      if (empty) empty.classList.remove("hidden");
+      return;
+    }
+
+    var subtotal = 0;
+    var itemsHtml = cart
+      .map(function (item) {
+        var sub = item.price * item.qty;
+        subtotal += sub;
+        return (
+          '<div class="flex items-center gap-3">' +
+          '<div class="relative shrink-0">' +
+          '<img src="' + esc(item.image) + '" alt="' + esc(item.name) + '" class="h-16 w-14 rounded-lg object-cover bg-brand-50" loading="lazy" />' +
+          '<span class="absolute -right-2 -top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-xs font-semibold text-cream">' + item.qty + "</span>" +
+          "</div>" +
+          '<div class="min-w-0 flex-1">' +
+          '<p class="truncate text-sm font-medium text-ink">' + esc(item.name) + "</p>" +
+          (item.size ? '<p class="text-xs text-muted">Ukuran: ' + esc(item.size) + "</p>" : "") +
+          "</div>" +
+          '<span class="text-sm font-medium text-ink tabular-nums">' + idr.format(sub) + "</span>" +
+          "</div>"
+        );
+      })
+      .join("");
+
+    document.getElementById("summary-items").innerHTML = itemsHtml;
+    document.getElementById("summary-subtotal").textContent = idr.format(subtotal);
+
+    function selectedShipping() {
+      var el = form.querySelector('input[name="shipping"]:checked');
+      return el ? Number(el.getAttribute("data-price")) : 0;
+    }
+
+    function recompute() {
+      var ship = selectedShipping();
+      document.getElementById("summary-shipping").textContent = idr.format(ship);
+      document.getElementById("summary-total").textContent = idr.format(subtotal + ship);
+    }
+
+    form.querySelectorAll('input[name="shipping"]').forEach(function (el) {
+      el.addEventListener("change", recompute);
+    });
+    recompute();
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var err = document.getElementById("form-error");
+
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      if (err) err.classList.add("hidden");
+
+      var fd = new FormData(form);
+      var shipEl = form.querySelector('input[name="shipping"]:checked');
+      var payEl = form.querySelector('input[name="payment"]:checked');
+      var ship = shipEl ? Number(shipEl.getAttribute("data-price")) : 0;
+
+      var order = {
+        createdAt: new Date().toISOString(),
+        contact: { email: fd.get("email") },
+        shippingAddress: {
+          nama: fd.get("nama"),
+          whatsapp: fd.get("whatsapp"),
+          alamat: fd.get("alamat"),
+          kota: fd.get("kota"),
+          provinsi: fd.get("provinsi"),
+          kodepos: fd.get("kodepos"),
+        },
+        shipping: {
+          id: shipEl ? shipEl.value : "",
+          label: shipEl ? shipEl.getAttribute("data-label") : "",
+          price: ship,
+        },
+        payment: {
+          id: payEl ? payEl.value : "",
+          label: payEl ? payEl.getAttribute("data-label") : "",
+        },
+        items: cart,
+        subtotal: subtotal,
+        total: subtotal + ship,
+      };
+
+      try {
+        localStorage.setItem("lastOrder", JSON.stringify(order));
+      } catch (e2) {}
+
+      window.location.href = "/checkout/sukses";
+    });
+  })();
+</script>
