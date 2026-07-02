@@ -144,6 +144,19 @@ domains(id, store_id, hostname, verified bool)                          -- plann
 notification_templates(id, store_id, event, channel[email|wa], subject, body)  -- planned
 ```
 
+## Platform & billing (super-admin control plane)
+> Source: `apps/super-admin/lib/mock.ts`. Not store-scoped — these live at the **platform/account** level (no `store_id`); only platform-admins read them.
+```
+plans(id, key enum[pemula|bisnis|skala], name, price_idr, blurb, features jsonb)   -- subscription tiers
+invoices(id, account_id→accounts, store_id→stores null, plan_key, amount_idr,
+         status enum[dibayar|menunggu|gagal], issued_at)                            -- subscription billing
+platform_activity(id, kind enum[signup|upgrade|payment|churn|support], text, ts)   -- platform feed
+-- Derived (computed in queries/views, never stored):
+--   MRR = sum(plan price of active accounts); GMV = sum(store gmv);
+--   ARPU = MRR/active; churn_rate; plan_distribution; MRR_SERIES (monthly trend)
+```
+`accounts.plan` (see Identity & tenancy) references `plans.key`; `stores.status` = trial|active|suspended (UI: aktif|trial|ditangguhkan).
+
 ## Mock → table map (keep in sync)
 | Mock (`lib/mock/store.ts`) | Target table(s) |
 |---|---|
@@ -156,7 +169,9 @@ notification_templates(id, store_id, event, channel[email|wa], subject, body)  -
 | `DISCOUNTS` | `discounts` |
 | `PAGES` / `BLOG_POSTS` / `MENUS` | `pages` / `articles`(+`blogs`) / `menus`(+`menu_items`) |
 | `AD_CHANNELS` / `AD_PROVINCES` / `DAYS` | `ad_channels` / `ad_metrics` |
-| `STORES` | `stores` (+ `accounts`, `store_users`) |
+| `MENUS` (admin) ← `MAIN_MENU`/`FOOTER_MENU` (`@indostore/data`) | `menus` (+ `menu_items`) |
+| `STORES` (super-admin) | `stores` (+ `accounts`, `store_users`) |
+| `PLANS` / `INVOICES` / `P_ACTIVITY` (super-admin) | `plans` / `invoices` / `platform_activity` |
 
 ## M3 migration steps (safe, contained)
 1. Supabase project; write these tables + enums; enable **RLS** with `store_id = auth_store()`.

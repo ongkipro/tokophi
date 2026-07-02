@@ -28,6 +28,8 @@
 
 **Navigasi + nav presisi (2026-07-02):** admin Navigasi = menu builder parent/child dengan **drag-and-drop reorder** (HTML5, tree-ops.ts) + aksi "Jadikan sub-menu"/"Naikkan jadi induk" (2 level). Storefront header kini **cermin presisi Menu Utama admin**: Beranda · Semua Produk · Kategori▾(6) · Promo Gajian · Blog · Kontak (dropdown desktop + accordion mobile via nav.ts). Halaman baru: /blog, /kontak, /kategori/semua, /kategori/promo-gajian (koleksi virtual). Data admin: hijab→Busana Muslim, +Loungewear. Supabase: belum (M3). Build+console clean.
 
+**Docs pass + auto-connect (2026-07-02):** new **@indostore/data** package = single source of truth for nav; admin menu builder + storefront header both derive from it (auto-sync on rebuild). Declared @indostore/data dep in admin+storefront package.json. Full docs refresh: PRD→v0.4, README, ARCHITECTURE, **new GUIDE.md**, UML (9 Mermaid diagrams), ADR 0005 (monorepo) + 0006 (shared nav), UI_INVENTORY/DATA_MODEL/SCHEMA. Known gaps flagged: storefront /halaman/[handle] + /blog/[handle] not built; /akun is a no-auth stub.
+
 **Next up (resume here):**
 1. **E1 sisa** — confirm-dialog + toast pada aksi destruktif (Hapus di Halaman/Blog/Pelanggan/Produk list); Ekspor CSV (Analitik/Inventori/Pemasaran); global search ⌘K.
 2. **E0** de-dup `apps/admin` → `@indostore/ui`/`@indostore/lib` (hati-hati; admin matang) + Turborepo.
