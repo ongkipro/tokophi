@@ -94,8 +94,8 @@ const PRODUCT_SEED: Array<[string, string, number, string, string]> = [
   ["Kemeja Oversized Wanita", "👔", 120_000, "Atasan", "kemeja-oversized"],
   ["Rok Plisket Panjang", "🩱", 89_000, "Bawahan", "rok-plisket"],
   ["Celana Kulot Wide Leg", "👖", 110_000, "Bawahan", "celana-kulot"],
-  ["Hijab Voal Segi Empat", "🧕", 45_000, "Hijab", "hijab-voal"],
-  ["Khimar Instan Jumbo", "🧕", 75_000, "Hijab", "khimar-instan"],
+  ["Hijab Voal Segi Empat", "🧕", 45_000, "Busana Muslim", "hijab-voal"],
+  ["Khimar Instan Jumbo", "🧕", 75_000, "Busana Muslim", "khimar-instan"],
   ["Gamis Syari Polos", "🧕", 245_000, "Busana Muslim", "gamis-syari"],
   ["Tunik Katun Rayon", "👚", 98_000, "Atasan", "tunik-rayon"],
   ["Cardigan Rajut Wanita", "🧥", 135_000, "Outerwear", "cardigan-rajut"],
@@ -385,7 +385,7 @@ export const COLLECTIONS: Collection[] = [
   { id: "COL-4", name: "Busana Muslim", emoji: "🧕", products: 3, type: "otomatis", published: true },
   { id: "COL-5", name: "Promo Gajian", emoji: "🏷️", products: 8, type: "manual", published: true },
   { id: "COL-6", name: "Produk Terlaris", emoji: "🔥", products: 10, type: "otomatis", published: true },
-  { id: "COL-7", name: "Koleksi Baru", emoji: "✨", products: 6, type: "otomatis", published: true },
+  { id: "COL-7", name: "Loungewear", emoji: "🩱", products: 1, type: "otomatis", published: true },
   { id: "COL-8", name: "Outerwear", emoji: "🧥", products: 2, type: "otomatis", published: false },
 ];
 

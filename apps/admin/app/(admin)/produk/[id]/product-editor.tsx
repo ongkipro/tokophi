@@ -64,7 +64,6 @@ const CATEGORIES = [
   "Dress",
   "Atasan",
   "Bawahan",
-  "Hijab",
   "Busana Muslim",
   "Outerwear",
   "Loungewear",

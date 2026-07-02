@@ -1,0 +1,45 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { STORE } from "../data/catalog";
+---
+
+<Layout title="Akun" description={`Masuk atau daftar akun ${STORE.name}.`}>
+  <section class="mx-auto max-w-md px-4 py-16 sm:py-24">
+    <div class="text-center">
+      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Akun</p>
+      <h1 class="mt-2 font-display text-3xl font-semibold text-ink">Masuk</h1>
+      <p class="mt-2 text-sm text-muted">Masuk untuk melihat pesanan & checkout lebih cepat.</p>
+    </div>
+
+    <form class="mt-8 flex flex-col gap-4 rounded-2xl border border-line bg-white/70 p-6 shadow-sm" onsubmit="event.preventDefault(); document.getElementById('akun-note')?.classList.remove('hidden');">
+      <div class="flex flex-col gap-1.5">
+        <label for="email" class="text-sm font-medium text-ink">Email</label>
+        <input id="email" type="email" required placeholder="nama@email.com"
+          class="rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-400/40" />
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <div class="flex items-center justify-between">
+          <label for="pw" class="text-sm font-medium text-ink">Kata sandi</label>
+          <a href="#" class="text-xs text-brand-600 hover:underline">Lupa sandi?</a>
+        </div>
+        <input id="pw" type="password" required placeholder="••••••••"
+          class="rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-400/40" />
+      </div>
+      <button type="submit"
+        class="mt-1 rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-200/50 transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">
+        Masuk
+      </button>
+      <p id="akun-note" class="hidden rounded-lg bg-brand-50 px-4 py-3 text-center text-sm text-brand-700">
+        Demo — sistem akun aktif setelah backend terhubung. 🙂
+      </p>
+    </form>
+
+    <p class="mt-6 text-center text-sm text-muted">
+      Belum punya akun?
+      <a href="/akun" class="font-medium text-brand-700 hover:underline">Daftar sekarang</a>
+    </p>
+    <p class="mt-2 text-center text-xs text-muted">
+      Atau <a href="/" class="underline hover:text-brand-600">lanjut belanja sebagai tamu</a>.
+    </p>
+  </section>
+</Layout>
