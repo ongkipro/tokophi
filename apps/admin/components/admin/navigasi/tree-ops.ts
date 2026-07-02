@@ -93,6 +93,64 @@ export function canOutdent(items: NavItem[], id: string): boolean {
   return typeof parentIdOf(items, id) === "string";
 }
 
+// --- simple up/down reorder (button-driven, works at any level) ---
+
+// The sibling list that contains `id` (top-level items, or a parent's children).
+function siblingsOf(items: NavItem[], id: string): NavItem[] {
+  const parent = parentIdOf(items, id);
+  if (parent === null) return items;
+  if (typeof parent === "string")
+    return items.find((i) => i.id === parent)?.children ?? [];
+  return [];
+}
+
+function swapInList(list: NavItem[], id: string, dir: -1 | 1): NavItem[] {
+  const idx = list.findIndex((i) => i.id === id);
+  const j = idx + dir;
+  if (idx === -1 || j < 0 || j >= list.length) return list;
+  const next = [...list];
+  [next[idx], next[j]] = [next[j], next[idx]];
+  return next;
+}
+
+// Can this item move up (dir -1) / down (dir +1) within its own level?
+export function canMoveItem(items: NavItem[], id: string, dir: -1 | 1): boolean {
+  const list = siblingsOf(items, id);
+  const idx = list.findIndex((i) => i.id === id);
+  const j = idx + dir;
+  return idx !== -1 && j >= 0 && j < list.length;
+}
+
+// Move an item one slot up/down within its own level (top-level or children).
+export function moveItem(items: NavItem[], id: string, dir: -1 | 1): NavItem[] {
+  const parent = parentIdOf(items, id);
+  if (parent === undefined) return items;
+  if (parent === null) return swapInList(items, id, dir);
+  return items.map((it) =>
+    it.id === parent && it.children
+      ? { ...it, children: swapInList(it.children, id, dir) }
+      : it,
+  );
+}
+
+// Append a new child under a specific parent (keeps the 2-level shape).
+export function addChild(
+  items: NavItem[],
+  parentId: string,
+  child: NavItem,
+): NavItem[] {
+  return items.map((it) =>
+    it.id === parentId
+      ? { ...it, children: [...(it.children ?? []), { ...child, children: undefined }] }
+      : it,
+  );
+}
+
+// Can this item be a parent (i.e. accept sub-menu items)? Only top-level items.
+export function canHaveChildren(items: NavItem[], id: string): boolean {
+  return parentIdOf(items, id) === null;
+}
+
 // Promote a child back to top-level, inserted right after its former parent.
 export function outdentItem(items: NavItem[], id: string): NavItem[] {
   for (let pi = 0; pi < items.length; pi++) {

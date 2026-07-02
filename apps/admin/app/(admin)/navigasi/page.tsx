@@ -7,11 +7,14 @@ import {
   Trash2,
   GripVertical,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Menu as MenuIcon,
   MoreHorizontal,
   IndentIncrease,
   IndentDecrease,
   CornerDownRight,
+  ListPlus,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
@@ -29,6 +32,10 @@ import {
   canIndent,
   canOutdent,
   parentIdOf,
+  moveItem,
+  canMoveItem,
+  addChild,
+  canHaveChildren,
   type DropPos,
 } from "@/components/admin/navigasi/tree-ops";
 
@@ -136,20 +143,30 @@ function ItemRow({
   depth,
   canIndentItem,
   canOutdentItem,
+  canMoveUpItem,
+  canMoveDownItem,
+  canAddChildItem,
   onEdit,
   onDelete,
   onIndent,
   onOutdent,
+  onMove,
+  onAddChild,
   dnd,
 }: {
   item: NavItem;
   depth: number;
   canIndentItem: (id: string) => boolean;
   canOutdentItem: (id: string) => boolean;
+  canMoveUpItem: (id: string) => boolean;
+  canMoveDownItem: (id: string) => boolean;
+  canAddChildItem: (id: string) => boolean;
   onEdit: (item: NavItem) => void;
   onDelete: (id: string) => void;
   onIndent: (id: string) => void;
   onOutdent: (id: string) => void;
+  onMove: (id: string, dir: -1 | 1) => void;
+  onAddChild: (id: string) => void;
   dnd: Dnd;
 }) {
   const meta = TYPE_META[item.type];
@@ -162,6 +179,9 @@ function ItemRow({
 
   const indentable = canIndentItem(item.id);
   const outdentable = canOutdentItem(item.id);
+  const movableUp = canMoveUpItem(item.id);
+  const movableDown = canMoveDownItem(item.id);
+  const addChildable = canAddChildItem(item.id);
 
   return (
     <div>
@@ -239,6 +259,24 @@ function ItemRow({
             <Button
               variant="ghost"
               size="icon-sm"
+              aria-label={`Naikkan ${item.title}`}
+              disabled={!movableUp}
+              onClick={() => onMove(item.id, -1)}
+            >
+              <ChevronUp />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Turunkan ${item.title}`}
+              disabled={!movableDown}
+              onClick={() => onMove(item.id, 1)}
+            >
+              <ChevronDown />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
               aria-label={`Edit ${item.title}`}
               onClick={() => onEdit(item)}
             >
@@ -266,6 +304,15 @@ function ItemRow({
                 }
               />
               <DropdownMenuContent align="end" className="w-56">
+                {addChildable && (
+                  <>
+                    <DropdownMenuItem onClick={() => onAddChild(item.id)}>
+                      <ListPlus />
+                      Tambah sub-menu
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem
                   disabled={!indentable}
                   onClick={() => onIndent(item.id)}
@@ -311,10 +358,15 @@ function ItemRow({
                 depth={depth + 1}
                 canIndentItem={canIndentItem}
                 canOutdentItem={canOutdentItem}
+                canMoveUpItem={canMoveUpItem}
+                canMoveDownItem={canMoveDownItem}
+                canAddChildItem={canAddChildItem}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onIndent={onIndent}
                 onOutdent={onOutdent}
+                onMove={onMove}
+                onAddChild={onAddChild}
                 dnd={dnd}
               />
             </div>
@@ -396,6 +448,8 @@ export default function Page() {
   // Item add/edit dialog state.
   const [itemDialogOpen, setItemDialogOpen] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
+  // When adding a sub-menu, the parent it will be nested under.
+  const [addParentId, setAddParentId] = React.useState<string | null>(null);
 
   // Drag-and-drop state (native HTML5 DnD).
   const [dragId, setDragId] = React.useState<string | null>(null);
@@ -425,20 +479,31 @@ export default function Page() {
 
   function openAdd() {
     setEditingId(null);
+    setAddParentId(null);
     setItemDialogOpen(true);
   }
   function openEdit(item: NavItem) {
     setEditingId(item.id);
+    setAddParentId(null);
+    setItemDialogOpen(true);
+  }
+  function openAddChild(parentId: string) {
+    setEditingId(null);
+    setAddParentId(parentId);
     setItemDialogOpen(true);
   }
 
   function handleItemSubmit(draft: ItemDraft) {
     if (editingId) {
       patchActive((m) => ({ ...m, items: updateItem(m.items, editingId, draft) }));
+    } else if (addParentId) {
+      const child: NavItem = { id: makeId(), ...draft };
+      patchActive((m) => ({ ...m, items: addChild(m.items, addParentId, child) }));
     } else {
       const newItem: NavItem = { id: makeId(), ...draft };
       patchActive((m) => ({ ...m, items: [...m.items, newItem] }));
     }
+    setAddParentId(null);
   }
 
   function handleIndent(id: string) {
@@ -446,6 +511,9 @@ export default function Page() {
   }
   function handleOutdent(id: string) {
     patchActive((m) => ({ ...m, items: outdentItem(m.items, id) }));
+  }
+  function handleMove(id: string, dir: -1 | 1) {
+    patchActive((m) => ({ ...m, items: moveItem(m.items, id, dir) }));
   }
 
   // ---- drag-and-drop handlers (reorder within the same level only) ----
@@ -491,6 +559,18 @@ export default function Page() {
   );
   const itemCanOutdent = React.useCallback(
     (id: string) => (activeMenu ? canOutdent(activeMenu.items, id) : false),
+    [activeMenu],
+  );
+  const itemCanMoveUp = React.useCallback(
+    (id: string) => (activeMenu ? canMoveItem(activeMenu.items, id, -1) : false),
+    [activeMenu],
+  );
+  const itemCanMoveDown = React.useCallback(
+    (id: string) => (activeMenu ? canMoveItem(activeMenu.items, id, 1) : false),
+    [activeMenu],
+  );
+  const itemCanAddChild = React.useCallback(
+    (id: string) => (activeMenu ? canHaveChildren(activeMenu.items, id) : false),
     [activeMenu],
   );
 
@@ -609,8 +689,8 @@ export default function Page() {
                 </span>
               </div>
               <p className="-mt-1 text-xs text-muted-foreground">
-                Seret untuk mengurutkan, atau pakai “Jadikan sub-menu” untuk
-                membuat menu bertingkat.
+                Urutkan dengan tombol ↑ ↓ (atau seret). Pakai “Tambah sub-menu”
+                di item induk, atau “Jadikan sub-menu” untuk menyusun bertingkat.
               </p>
 
               {activeMenu.items.length > 0 ? (
@@ -622,10 +702,15 @@ export default function Page() {
                       depth={0}
                       canIndentItem={itemCanIndent}
                       canOutdentItem={itemCanOutdent}
+                      canMoveUpItem={itemCanMoveUp}
+                      canMoveDownItem={itemCanMoveDown}
+                      canAddChildItem={itemCanAddChild}
                       onEdit={openEdit}
                       onDelete={handleDelete}
                       onIndent={handleIndent}
                       onOutdent={handleOutdent}
+                      onMove={handleMove}
+                      onAddChild={openAddChild}
                       dnd={dnd}
                     />
                   ))}
