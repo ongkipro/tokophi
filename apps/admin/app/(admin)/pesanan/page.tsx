@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search,
   Download,
@@ -8,27 +9,21 @@ import {
   MoreHorizontal,
   ChevronDown,
   Check,
-  Printer,
   PackageCheck,
   Eye,
   XCircle,
-  Truck,
-  CreditCard,
-  ClipboardList,
   Store,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { OrderStatusBadge } from "@/components/admin/order-status";
-import { IDR, num, timeAgo } from "@/lib/format";
-import { ORDERS, PRODUCTS, type Order, type OrderStatus } from "@/lib/mock/store";
+import { IDR, timeAgo } from "@/lib/format";
+import { ORDERS, type OrderStatus } from "@/lib/mock/store";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Table,
@@ -39,13 +34,6 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -87,65 +75,15 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-// Deterministic hash from an order id → seed.
-function hash(str: string) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-type Line = { name: string; emoji: string; qty: number; price: number };
-
-// Fabricate a plausible line-item breakdown for an order whose subtotal
-// lands near order.total, plus a deterministic shipping fee.
-function lineItemsFor(order: Order): { lines: Line[]; subtotal: number; ongkir: number; total: number } {
-  const seed = hash(order.id);
-  const lines: Line[] = [];
-  for (let i = 0; i < order.items; i++) {
-    const p = PRODUCTS[(seed + i * 7) % PRODUCTS.length];
-    const qty = ((seed >> (i + 2)) & 3) === 0 ? 2 : 1;
-    lines.push({ name: p.name, emoji: p.emoji, qty, price: p.price });
-  }
-  const subtotal = lines.reduce((s, l) => s + l.qty * l.price, 0);
-  const ongkir = [0, 15_000, 20_000, 25_000][seed % 4];
-  return { lines, subtotal, ongkir, total: subtotal + ongkir };
-}
-
-// Timeline steps and the active index per status.
-const TIMELINE = [
-  { key: "dibuat", label: "Pesanan dibuat", icon: ClipboardList },
-  { key: "bayar", label: "Pembayaran", icon: CreditCard },
-  { key: "proses", label: "Diproses", icon: PackageCheck },
-  { key: "kirim", label: "Dikirim", icon: Truck },
-] as const;
-
-function activeStep(status: OrderStatus): number {
-  switch (status) {
-    case "baru":
-      return 1;
-    case "diproses":
-      return 2;
-    case "dikirim":
-      return 3;
-    case "selesai":
-      return 4;
-    case "batal":
-      return -1;
-  }
-}
-
 // ------- page -------
 
 export default function PesananPage() {
+  const router = useRouter();
   const [status, setStatus] = useState<OrderStatus | "semua">("semua");
   const [query, setQuery] = useState("");
   const [channel, setChannel] = useState("Semua");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [active, setActive] = useState<Order | null>(null);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { semua: ORDERS.length };
@@ -298,7 +236,7 @@ export default function PesananPage() {
                 key={o.id}
                 className="cursor-pointer"
                 data-state={selected.has(o.id) ? "selected" : undefined}
-                onClick={() => setActive(o)}
+                onClick={() => router.push(`/pesanan/${o.id.replace("#", "")}`)}
               >
                 <TableCell className="pl-4" onClick={(e) => e.stopPropagation()}>
                   <Checkbox
@@ -336,7 +274,7 @@ export default function PesananPage() {
                       }
                     />
                     <DropdownMenuContent align="end" className="w-44">
-                      <DropdownMenuItem onClick={() => setActive(o)}>
+                      <DropdownMenuItem onClick={() => router.push(`/pesanan/${o.id.replace("#", "")}`)}>
                         <Eye className="size-4" /> Lihat detail
                       </DropdownMenuItem>
                       <DropdownMenuItem>
@@ -394,165 +332,6 @@ export default function PesananPage() {
           </Pagination>
         </div>
       </Card>
-
-      {/* detail sheet */}
-      <OrderDetailSheet order={active} onClose={() => setActive(null)} />
     </div>
-  );
-}
-
-// ------- detail sheet -------
-
-function OrderDetailSheet({ order, onClose }: { order: Order | null; onClose: () => void }) {
-  return (
-    <Sheet open={order !== null} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="w-full gap-0 overflow-y-auto sm:max-w-md">
-        {order && <OrderDetail order={order} />}
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function OrderDetail({ order }: { order: Order }) {
-  const { lines, subtotal, ongkir, total } = lineItemsFor(order);
-  const step = activeStep(order.status);
-  const cancelled = order.status === "batal";
-
-  return (
-    <>
-      <SheetHeader className="border-b">
-        <div className="flex items-center justify-between gap-2 pr-8">
-          <SheetTitle className="font-mono text-base">{order.id}</SheetTitle>
-          <OrderStatusBadge status={order.status} />
-        </div>
-        <SheetDescription>Dibuat {timeAgo(order.minutesAgo)} · {order.channel}</SheetDescription>
-      </SheetHeader>
-
-      <div className="space-y-5 p-4">
-        {/* customer */}
-        <div className="flex items-center gap-3">
-          <Avatar>
-            <AvatarFallback>{initials(order.customer)}</AvatarFallback>
-          </Avatar>
-          <div className="leading-tight">
-            <div className="font-medium">{order.customer}</div>
-            <div className="text-sm text-muted-foreground">{order.city}</div>
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* items */}
-        <div>
-          <h3 className="mb-2.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Item Pesanan
-          </h3>
-          <div className="space-y-3">
-            {lines.map((l, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-md border bg-muted/40 text-lg">
-                  {l.emoji}
-                </div>
-                <div className="min-w-0 flex-1 leading-tight">
-                  <div className="truncate text-sm font-medium">{l.name}</div>
-                  <div className="text-xs text-muted-foreground tabular-nums">
-                    {l.qty} × {IDR(l.price)}
-                  </div>
-                </div>
-                <div className="text-sm font-medium tabular-nums">{IDR(l.qty * l.price)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* totals */}
-        <div className="space-y-1.5 text-sm">
-          <div className="flex justify-between text-muted-foreground">
-            <span>Subtotal</span>
-            <span className="tabular-nums">{IDR(subtotal)}</span>
-          </div>
-          <div className="flex justify-between text-muted-foreground">
-            <span>Ongkos kirim</span>
-            <span className="tabular-nums">{ongkir === 0 ? "Gratis" : IDR(ongkir)}</span>
-          </div>
-          <div className="flex justify-between pt-1 text-base font-semibold">
-            <span>Total</span>
-            <span className="tabular-nums">{IDR(total)}</span>
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* timeline */}
-        <div>
-          <h3 className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Riwayat Status
-          </h3>
-          {cancelled ? (
-            <div className="flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/5 p-3">
-              <XCircle className="size-5 text-red-500" />
-              <div className="text-sm">
-                <div className="font-medium text-red-600 dark:text-red-400">Pesanan dibatalkan</div>
-                <div className="text-muted-foreground">Transaksi tidak dilanjutkan.</div>
-              </div>
-            </div>
-          ) : (
-            <ol className="relative space-y-4">
-              {TIMELINE.map((t, i) => {
-                const done = i < step;
-                const isCurrent = i === step;
-                const Icon = t.icon;
-                return (
-                  <li key={t.key} className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                      <div
-                        className={
-                          "flex size-7 shrink-0 items-center justify-center rounded-full border " +
-                          (done
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : isCurrent
-                              ? "border-primary bg-primary/10 text-primary"
-                              : "border-border bg-background text-muted-foreground")
-                        }
-                      >
-                        {done ? <Check className="size-4" /> : <Icon className="size-3.5" />}
-                      </div>
-                      {i < TIMELINE.length - 1 && (
-                        <div className={"mt-1 w-px flex-1 " + (done ? "bg-primary" : "bg-border")} />
-                      )}
-                    </div>
-                    <div className="pb-1 pt-0.5">
-                      <div
-                        className={
-                          "text-sm font-medium " +
-                          (done || isCurrent ? "text-foreground" : "text-muted-foreground")
-                        }
-                      >
-                        {t.label}
-                      </div>
-                      {isCurrent && (
-                        <div className="text-xs text-primary">Sedang berlangsung</div>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-        </div>
-      </div>
-
-      {/* actions */}
-      <div className="sticky bottom-0 mt-auto flex gap-2 border-t bg-popover p-4">
-        <Button className="flex-1 gap-2" disabled={cancelled}>
-          <PackageCheck className="size-4" /> Proses
-        </Button>
-        <Button variant="outline" className="flex-1 gap-2">
-          <Printer className="size-4" /> Cetak Label
-        </Button>
-      </div>
-    </>
   );
 }

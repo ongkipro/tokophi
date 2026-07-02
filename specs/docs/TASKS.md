@@ -14,11 +14,11 @@
 - [ ] **Shared config** · **S** · `packages/config` (tsconfig + eslint + tailwind preset) consumed by all apps/packages.
 
 ## Epic 1 — Admin prototype completeness (still mock)
-- [ ] **Pesanan detail page** `/pesanan/[id]` · **M** · full page (line items, timeline, pembayaran/pengiriman, actions) replacing/expanding the Sheet. AC: rows open the page; toast on status change.
+- [x] **Pesanan detail page** `/pesanan/[id]` — full page (line items+foto, ringkasan→total, linimasa, pelanggan/pengiriman/pembayaran, status actions+toast). Sheet removed; rows navigate.
 - [ ] **Draft / pesanan manual** create flow · **M** · new-order form (pilih pelanggan+produk, hitung total). AC: draft appears in list.
 - [ ] **Varian produk (real)** · **L** · per-variant SKU/harga/stok table + option combinations; mock model in store. AC: varian toggle produces an editable variant grid.
 - [ ] **Media upload UI** · **M** · multi-image add/reorder/remove (mock) + the 1 video slot wired. AC: reorder works; primary image settable.
-- [ ] **Diskon edit route** `/diskon/[id]` · **S** · prefilled editor (parallel to produk/kategori). AC: rows/Edit open it.
+- [x] **Diskon create + edit** — `/diskon/baru` + `/diskon/[id]` reusable DiscountEditor; list Buat/Edit/rows wired; create dialog removed.
 - [ ] **Toasts + confirm dialogs** everywhere · **S** · destructive actions (Hapus di Halaman/Blog/Pelanggan/Diskon/Produk list) get a confirm dialog + toast. AC: no silent destructive clicks.
 - [ ] **Ekspor CSV** · **S** · Analitik/Inventori/Pemasaran export buttons generate a client-side CSV from mock. AC: file downloads.
 - [ ] **Global search (⌘K)** · **M** · topbar search returns real matches across produk/pesanan/pelanggan. AC: results navigate.

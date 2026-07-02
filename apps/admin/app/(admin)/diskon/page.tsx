@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Plus,
   Copy,
@@ -13,8 +15,6 @@ import {
   PauseCircle,
   Trash2,
   Ticket,
-  Dice5,
-  ChevronDown,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
@@ -25,22 +25,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,12 +43,6 @@ const TYPE_META: Record<DiscountType, { label: string; icon: React.ElementType }
   nominal: { label: "Potongan", icon: Tag },
   ongkir: { label: "Gratis Ongkir", icon: Truck },
 };
-
-const TYPE_OPTIONS: { value: DiscountType; label: string }[] = [
-  { value: "persen", label: "Persentase" },
-  { value: "nominal", label: "Potongan Nominal" },
-  { value: "ongkir", label: "Gratis Ongkir" },
-];
 
 const STATUS_META: Record<StatusKey, { label: string; className: string }> = {
   aktif: {
@@ -122,7 +102,8 @@ function CopyButton({ code }: { code: string }) {
       size="icon-xs"
       aria-label={`Salin kode ${code}`}
       className="text-muted-foreground hover:text-foreground"
-      onClick={() => {
+      onClick={(e) => {
+        e.stopPropagation();
         try {
           navigator.clipboard?.writeText(code);
         } catch {
@@ -185,7 +166,7 @@ function UsageCell({ used, limit }: { used: number; limit: number }) {
   );
 }
 
-function RowActions() {
+function RowActions({ id }: { id: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -196,7 +177,7 @@ function RowActions() {
         }
       />
       <DropdownMenuContent align="end" className="w-40">
-        <DropdownMenuItem>
+        <DropdownMenuItem render={<Link href={`/diskon/${id}`} />}>
           <Pencil />
           Edit
         </DropdownMenuItem>
@@ -214,127 +195,9 @@ function RowActions() {
   );
 }
 
-// ---- create dialog ----
-function randomCode() {
-  const words = ["HEMAT", "PROMO", "GAJIAN", "FLASH", "SPESIAL", "MERDEKA"];
-  const w = words[Math.floor(Math.random() * words.length)];
-  return `${w}${Math.floor(10 + Math.random() * 89)}`;
-}
-
-function CreateDiscountDialog() {
-  const [code, setCode] = React.useState("");
-  const [type, setType] = React.useState<DiscountType>("persen");
-  const typeLabel =
-    TYPE_OPTIONS.find((o) => o.value === type)?.label ?? "Persentase";
-
-  return (
-    <Dialog>
-      <DialogTrigger
-        render={
-          <Button>
-            <Plus />
-            Buat Diskon
-          </Button>
-        }
-      />
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Buat Diskon</DialogTitle>
-          <DialogDescription>
-            Buat kode promo baru untuk pelanggan Anda.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-4 py-1">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="kode">Kode diskon</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                id="kode"
-                placeholder="mis. GAJIAN25"
-                className="font-mono uppercase"
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                onClick={() => setCode(randomCode())}
-              >
-                <Dice5 />
-                Buat acak
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label>Tipe diskon</Label>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button variant="outline" className="justify-between font-normal">
-                    {typeLabel}
-                    <ChevronDown className="text-muted-foreground" />
-                  </Button>
-                }
-              />
-              <DropdownMenuContent className="w-(--anchor-width)">
-                {TYPE_OPTIONS.map((o) => (
-                  <DropdownMenuItem key={o.value} onClick={() => setType(o.value)}>
-                    {o.value === type ? (
-                      <Check className="text-emerald-500" />
-                    ) : (
-                      <span className="size-4" />
-                    )}
-                    {o.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="nilai">Nilai</Label>
-              <Input
-                id="nilai"
-                inputMode="numeric"
-                placeholder={type === "persen" ? "25" : "50000"}
-                disabled={type === "ongkir"}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="batas">Batas penggunaan</Label>
-              <Input id="batas" inputMode="numeric" placeholder="1000" />
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col">
-              <Label htmlFor="aktifkan">Aktifkan sekarang</Label>
-              <span className="text-xs text-muted-foreground">
-                Diskon langsung dapat digunakan pelanggan.
-              </span>
-            </div>
-            <Switch id="aktifkan" defaultChecked />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline">Batal</Button>} />
-          <DialogClose render={<Button>Simpan</Button>} />
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ---- page ----
 export default function Page() {
+  const router = useRouter();
   const [filter, setFilter] = React.useState<"semua" | StatusKey>("semua");
 
   const counts = React.useMemo(() => {
@@ -365,7 +228,10 @@ export default function Page() {
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader title="Diskon" desc="Kelola kode promo dan diskon otomatis.">
-        <CreateDiscountDialog />
+        <Button nativeButton={false} render={<Link href="/diskon/baru" />}>
+          <Plus />
+          Buat Diskon
+        </Button>
       </PageHeader>
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
@@ -417,7 +283,11 @@ export default function Page() {
                   {rows.map((d) => {
                     const ends = endsLabel(d.endsInDays);
                     return (
-                      <TableRow key={d.id}>
+                      <TableRow
+                        key={d.id}
+                        className="cursor-pointer"
+                        onClick={() => router.push(`/diskon/${d.id}`)}
+                      >
                         <TableCell className="pl-4">
                           <div className="flex items-center gap-1">
                             <span className="font-mono text-sm font-bold">{d.code}</span>
@@ -445,8 +315,11 @@ export default function Page() {
                         >
                           {ends.text}
                         </TableCell>
-                        <TableCell className="pr-4 text-right">
-                          <RowActions />
+                        <TableCell
+                          className="pr-4 text-right"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <RowActions id={d.id} />
                         </TableCell>
                       </TableRow>
                     );

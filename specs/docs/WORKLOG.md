@@ -13,8 +13,12 @@
 
 **Gotcha logged:** the box runs MANY other `astro dev` servers (report-petani-sejahtera, homeimprovement/"RIVA HOME", …). Our storefront's `--port 4322` was taken → Astro fell through to **:4327**. Always confirm the actual port from the dev log; pick a high free port and verify the page title before screenshotting.
 
+**Also done this session (E1):**
+- [x] **Pesanan detail page** `/pesanan/[id]` — full page (item + foto, ringkasan rekonsiliasi ke total, linimasa, sidebar pelanggan/pengiriman/pembayaran w/ Sumber). Sheet quick-view removed; rows navigate. Build+console clean.
+- [x] **Diskon create+edit** — `/diskon/baru` + `/diskon/[id]` reusable DiscountEditor; list "Buat/Edit"+rows wired; create dialog removed.
+
 **Next up (resume here):**
-1. **E0** de-dup `apps/admin` → `@indostore/ui`/`@indostore/lib` (careful; admin is mature). + Turborepo.
-2. **E3** data-layer seam — wrap all reads in `lib/data`, shared types in `@indostore/lib` (unblocks M3).
-3. **E1** admin completeness — Pesanan detail `/pesanan/[id]`, Diskon edit `/diskon/[id]`, confirm-dialog+toast on destructive actions, Ekspor CSV.
+1. **E1 sisa** — confirm-dialog + toast pada aksi destruktif (Hapus di Halaman/Blog/Pelanggan/Produk list); Ekspor CSV (Analitik/Inventori/Pemasaran); global search ⌘K.
+2. **E0** de-dup `apps/admin` → `@indostore/ui`/`@indostore/lib` (hati-hati; admin matang) + Turborepo.
+3. **E3** data-layer seam — bungkus semua baca di `lib/data`, shared types di `@indostore/lib` (buka jalan M3).
 4. (later) share storefront catalog via `packages/data`; M3 Supabase; M4 integrations.
