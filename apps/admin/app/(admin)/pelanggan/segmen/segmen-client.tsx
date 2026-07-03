@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createSegment, deleteSegment } from "@/lib/actions/segments";
 import { PageHeader } from "@/components/admin/page-header";
+import { useCan } from "@/components/admin/permissions";
 import { num, pct } from "@/lib/format";
 import { type CustSegment } from "@/lib/mock/store";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,7 @@ function segmentVisual(name: string): { Icon: typeof Users; tint: string } {
 
 function SegmentActions({ segment }: { segment: CustSegment }) {
   const router = useRouter();
+  const canWrite = useCan("crm:write");
   const [pending, startTransition] = React.useTransition();
   const remove = () =>
     startTransition(async () => {
@@ -60,9 +62,9 @@ function SegmentActions({ segment }: { segment: CustSegment }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem><Users /> Lihat pelanggan</DropdownMenuItem>
-        <DropdownMenuItem><Sparkles /> Edit</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" disabled={pending} onClick={remove}><TrendingDown /> Hapus</DropdownMenuItem>
+        {canWrite && <DropdownMenuItem><Sparkles /> Edit</DropdownMenuItem>}
+        {canWrite && <DropdownMenuSeparator />}
+        {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={remove}><TrendingDown /> Hapus</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -104,6 +106,7 @@ function SegmentCard({ segment }: { segment: CustSegment }) {
 
 function CreateSegmentDialog() {
   const router = useRouter();
+  const canWrite = useCan("crm:write");
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const [desc, setDesc] = React.useState("");
@@ -126,6 +129,7 @@ function CreateSegmentDialog() {
       }
     });
   };
+  if (!canWrite) return null;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button><Plus /> Buat segmen</Button>} />

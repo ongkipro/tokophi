@@ -22,6 +22,7 @@ import { type NavMenu, type NavItem } from "@/lib/mock/store";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { saveMenu } from "@/lib/actions/menus";
+import { useCan } from "@/components/admin/permissions";
 import { TYPE_META } from "@/components/admin/navigasi/nav-meta";
 import {
   ItemFormDialog,
@@ -461,9 +462,11 @@ export function NavigasiClient({ menus: initialMenus }: { menus: NavMenu[] }) {
     menus.find((m) => m.handle === activeHandle) ?? menus[0] ?? null;
 
   const router = useRouter();
+  const canWrite = useCan("content:write");
   const [saving, startSaving] = React.useTransition();
   const handleSaveMenu = () => {
     if (!activeMenu) return;
+    if (!canWrite) { toast.error("Akses ditolak — peran Anda tidak bisa mengubah menu"); return; }
     startSaving(async () => {
       try {
         await saveMenu(activeMenu.handle, activeMenu.items);
@@ -755,7 +758,7 @@ export function NavigasiClient({ menus: initialMenus }: { menus: NavMenu[] }) {
               <Button variant="outline" onClick={() => setMenus(initialMenus.map((m) => ({ ...m, items: cloneItems(m.items) })))}>
                 Batal
               </Button>
-              <Button onClick={handleSaveMenu} disabled={saving}>{saving ? "Menyimpan…" : "Simpan menu"}</Button>
+              {canWrite && <Button onClick={handleSaveMenu} disabled={saving}>{saving ? "Menyimpan…" : "Simpan menu"}</Button>}
             </CardContent>
           </Card>
         ) : (

@@ -13,6 +13,7 @@ import { IDR, num } from "@/lib/format";
 import { type PurchaseOrder, type POStatus } from "@/lib/mock/store";
 import { type POProduct } from "@/lib/data/purchases";
 import { createPurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder } from "@/lib/actions/purchases";
+import { useCan } from "@/components/admin/permissions";
 import { cn } from "@/lib/utils";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -91,6 +92,7 @@ function StatCard({ icon, label, value, accent, hint }: {
 
 function RowActions({ po }: { po: PurchaseOrder }) {
   const router = useRouter();
+  const canWrite = useCan("purchases:write");
   const [pending, startTransition] = React.useTransition();
   const receive = () =>
     startTransition(async () => {
@@ -119,9 +121,9 @@ function RowActions({ po }: { po: PurchaseOrder }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuItem><Eye /> Lihat</DropdownMenuItem>
-        <DropdownMenuItem disabled={pending || po.status === "diterima"} onClick={receive}><PackageCheck /> Tandai diterima</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" disabled={pending} onClick={cancel}><XCircle /> Batalkan</DropdownMenuItem>
+        {canWrite && <DropdownMenuItem disabled={pending || po.status === "diterima"} onClick={receive}><PackageCheck /> Tandai diterima</DropdownMenuItem>}
+        {canWrite && <DropdownMenuSeparator />}
+        {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={cancel}><XCircle /> Batalkan</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -131,6 +133,7 @@ type Line = { variantId: string; qty: number; cost: number };
 
 function CreateOrderDialog({ products }: { products: POProduct[] }) {
   const router = useRouter();
+  const canWrite = useCan("purchases:write");
   const [open, setOpen] = React.useState(false);
   const [supplier, setSupplier] = React.useState("");
   const [eta, setEta] = React.useState("");
@@ -162,6 +165,7 @@ function CreateOrderDialog({ products }: { products: POProduct[] }) {
     });
   };
 
+  if (!canWrite) return null;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button><Plus /> Buat pesanan pembelian</Button>} />

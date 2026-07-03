@@ -20,6 +20,7 @@ import {
 
 import { toast } from "sonner";
 import { setOrderStatus } from "@/lib/actions/orders";
+import { useCan } from "@/components/admin/permissions";
 import { OrderStatusBadge } from "@/components/admin/order-status";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, timeAgo } from "@/lib/format";
@@ -134,6 +135,7 @@ export function OrderDetail({ order }: { order: Order }) {
 
   const action = primaryAction(order.status);
   const router = useRouter();
+  const canWrite = useCan("orders:write");
   const [pending, startTransition] = React.useTransition();
   const advance = () => {
     if (!action) return;
@@ -179,7 +181,7 @@ export function OrderDetail({ order }: { order: Order }) {
           <Button variant="ghost" onClick={() => toast.success("Menyiapkan dokumen cetak…")}>
             <Printer /> Cetak
           </Button>
-          {action && (
+          {action && canWrite && (
             <Button onClick={advance} disabled={pending}>
               <action.icon /> {action.label}
             </Button>

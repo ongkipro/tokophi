@@ -3,19 +3,19 @@
 > Newest first. What we did + what's next, so any session can resume instantly.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/indostore` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-07-04) · RBAC + RLS + RBAC-UI (reference) done · next = roll UI gating to rest, then VPS
+## ▶ CURRENT STATE (2026-07-04) · RBAC + RLS + RBAC-UI (ALL editors) done · next = VPS activation
 
 **Everything runs locally on Linux** (Docker PostgreSQL 16 :5433 + Drizzle `@indostore/db`, 53 tables, migrations 0000–0012). Done + verified end-to-end:
 - **Reads:** all 3 surfaces (super-admin 5 pages + admin 16 modules + storefront) read Postgres.
 - **Writes:** all **12 admin editors** persist via `lib/actions/*` server actions (Produk/Diskon/Halaman/Blog/Kategori CRUD · order-status · Inventori-stock · Navigasi · Pelanggan · CRM follow-up · Segmen · Pembelian PO create/receive→stock/cancel).
 - **Auth (local):** email/password login → jose JWT httpOnly cookie, `middleware.ts` protects the admin (owner `ongki@batiknusantara.id / indostore123`).
-- **RBAC (local):** every mutating server action gates on a capability via `lib/rbac.ts` `requireCapability()` — role→capability matrix (client-safe in `lib/rbac-policy.ts`) for owner/admin/staff/gudang (role comes from the session JWT). Actions also derive `store_id` from the session. **UI:** `PermissionsProvider`/`useCan`/`<Can>` + topbar role badge; **Produk + Pengaturan** hide controls per role (reference — other editors pending, same pattern).
+- **RBAC (local):** every mutating server action gates on a capability via `lib/rbac.ts` `requireCapability()` — role→capability matrix (client-safe in `lib/rbac-policy.ts`) for owner/admin/staff/gudang (role comes from the session JWT). Actions also derive `store_id` from the session. **UI:** `PermissionsProvider`/`useCan`/`<Can>` + topbar role badge; **ALL admin editors** hide their write/delete/create controls per role (Produk, Pengaturan, Diskon, Halaman, Blog, Kategori, Pelanggan, CRM, Segmen, Pembelian, Inventori, Navigasi, Pesanan).
 - **RLS (local):** migration `0012_tenant_rls` enables Row-Level Security + a `tenant_isolation` policy (`USING`/`WITH CHECK` on `store_id = app_current_store_id()`) on all **32 store-scoped tables**, plus a non-owner `indostore_app` role. `withTenant(storeId, fn)` helper sets the `app.store_id` GUC + `SET LOCAL ROLE` per txn. **Verified** via `npm run verify-rls`: right tenant sees 14 products, wrong/missing tenant sees 0, cross-tenant write blocked. (App still connects as owner locally → RLS bypassed until the VPS flips `DATABASE_URL` to `indostore_app` + routes through `withTenant`.)
 - **Media (local):** product image upload → `apps/admin/public/uploads/` + `product_media`.
 
-**RBAC UI (reference done):** `lib/rbac-policy.ts` (client-safe matrix) + `PermissionsProvider`/`useCan`/`<Can>` + topbar role badge; **Produk** (list+editor) + **Pengaturan** gate their write/delete/media/settings controls by role (verified via Playwright: owner/staff/gudang). Server actions stay the security boundary.
+**RBAC UI (ALL editors done):** `lib/rbac-policy.ts` (client-safe matrix) + `PermissionsProvider`/`useCan`/`<Can>` + topbar role badge; every admin editor gates its write/delete/create controls by role (verified via Playwright across owner/staff/gudang). Server actions stay the security boundary.
 
-**▶ RESUME HERE (next session):** **roll RBAC UI gating to the remaining editors** (Diskon, Halaman, Blog, Kategori, Pelanggan, CRM, Segmen, Pembelian, Inventori, Navigasi, Pesanan) — same `useCan(...)` pattern as Produk. Then **VPS activation** (the deferred big one): flip the app's `DATABASE_URL` to the non-owner `indostore_app` role, route reads/writes through `withTenant()` so RLS enforces, then self-hosted Postgres + PostgREST + Storage (MinIO/S3). Detail per-entry below (newest first).
+**▶ RESUME HERE (next session):** **VPS activation** (the deferred big one) — flip the app's `DATABASE_URL` to the non-owner `indostore_app` role + route reads/writes through `withTenant()` so RLS actually enforces at runtime; then self-hosted Postgres + PostgREST + Storage (MinIO/S3). Detail per-entry below (newest first).
 
 ## 2026-07-04 — Session: RBAC + local Postgres RLS ✅
 **State before:** all reads + writes + local auth + local media done on local Postgres; paused at RBAC+RLS (single owner user).
@@ -30,6 +30,12 @@
 - **Note:** locally the app connects as the table owner, which *bypasses* RLS by design — enforcement flips on when the VPS points `DATABASE_URL` at `indostore_app` and queries run via `withTenant`. RBAC (app-layer) is enforced now regardless.
 
 **Next:** RBAC UI polish (hide/disable per role + graceful ForbiddenError toast), then VPS activation. See CURRENT STATE banner.
+
+## 2026-07-04 — Session: RBAC UI rollout to ALL editors ✅
+**Done this session:**
+- [x] Applied the `useCan()`/`<Can>` gating (same pattern as Produk) to **every remaining admin editor**: Diskon, Halaman, Blog, Kategori (editors: Simpan/Hapus; lists: Buat/Tambah CTA + row Hapus), Pelanggan (tag/catatan save), CRM follow-up (Tandai selesai), Segmen (Buat/Edit/Hapus), Pembelian (Buat PO dialog + terima/batalkan row actions), Inventori (Simpan stok), Navigasi (Simpan menu), Pesanan (advance-status button). Each guards its handler + hides the control per capability; server actions still enforce.
+- [x] **Verified via Playwright** (fresh login per role): Diskon Buat = staff✓/gudang✗ (discounts:write); Inventori Simpan + Pembelian Buat = staff✗/gudang✓ (inventory/purchases:write); owner all✓ — orthogonal cross-check of the matrix. `build:admin` compiled clean.
+- **Next:** VPS activation (connect as `indostore_app` + route through `withTenant()` so RLS enforces).
 
 ## 2026-07-04 — Session: RBAC UI (role-aware controls) ✅
 **Done this session:**

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { updateCustomer } from "@/lib/actions/customers";
+import { useCan } from "@/components/admin/permissions";
 import {
   ChevronLeft,
   MessageCircle,
@@ -138,8 +139,13 @@ export function CustomerDetail({ customer }: { customer: Customer }) {
   }
 
   const router = useRouter();
+  const canWrite = useCan("customers:write");
   const [saving, startSaving] = React.useTransition();
   const saveProfile = () => {
+    if (!canWrite) {
+      toast.error("Akses ditolak — peran Anda tidak bisa mengubah pelanggan");
+      return;
+    }
     startSaving(async () => {
       try {
         await updateCustomer(customer.id, { tags, notes: note });
@@ -450,9 +456,11 @@ export function CustomerDetail({ customer }: { customer: Customer }) {
                   className="min-h-20 resize-none"
                 />
               </div>
-              <Button onClick={saveProfile} disabled={saving} className="w-full">
-                {saving ? "Menyimpan…" : "Simpan tag & catatan"}
-              </Button>
+              {canWrite && (
+                <Button onClick={saveProfile} disabled={saving} className="w-full">
+                  {saving ? "Menyimpan…" : "Simpan tag & catatan"}
+                </Button>
+              )}
             </CardContent>
           </Card>
 

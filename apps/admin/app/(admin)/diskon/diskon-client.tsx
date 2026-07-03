@@ -19,6 +19,7 @@ import {
 
 import { PageHeader } from "@/components/admin/page-header";
 import { IDR, num } from "@/lib/format";
+import { useCan } from "@/components/admin/permissions";
 import { type Discount, type DiscountType } from "@/lib/mock/store";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -167,6 +168,7 @@ function UsageCell({ used, limit }: { used: number; limit: number }) {
 }
 
 function RowActions({ id }: { id: string }) {
+  const canWrite = useCan("discounts:write");
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -181,15 +183,19 @@ function RowActions({ id }: { id: string }) {
           <Pencil />
           Edit
         </DropdownMenuItem>
-        <DropdownMenuItem>
-          <PauseCircle />
-          Nonaktifkan
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive">
-          <Trash2 />
-          Hapus
-        </DropdownMenuItem>
+        {canWrite && (
+          <DropdownMenuItem>
+            <PauseCircle />
+            Nonaktifkan
+          </DropdownMenuItem>
+        )}
+        {canWrite && <DropdownMenuSeparator />}
+        {canWrite && (
+          <DropdownMenuItem variant="destructive">
+            <Trash2 />
+            Hapus
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -198,6 +204,7 @@ function RowActions({ id }: { id: string }) {
 // ---- page ----
 export function DiskonClient({ discounts }: { discounts: Discount[] }) {
   const router = useRouter();
+  const canWrite = useCan("discounts:write");
   const [filter, setFilter] = React.useState<"semua" | StatusKey>("semua");
 
   const counts = React.useMemo(() => {
@@ -228,10 +235,12 @@ export function DiskonClient({ discounts }: { discounts: Discount[] }) {
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader title="Diskon" desc="Kelola kode promo dan diskon otomatis.">
-        <Button nativeButton={false} render={<Link href="/diskon/baru" />}>
-          <Plus />
-          Buat Diskon
-        </Button>
+        {canWrite && (
+          <Button nativeButton={false} render={<Link href="/diskon/baru" />}>
+            <Plus />
+            Buat Diskon
+          </Button>
+        )}
       </PageHeader>
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">

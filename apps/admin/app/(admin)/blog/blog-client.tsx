@@ -19,6 +19,7 @@ import {
 
 import { PageHeader } from "@/components/admin/page-header";
 import { num } from "@/lib/format";
+import { useCan } from "@/components/admin/permissions";
 import { BLOG_CATEGORIES, type BlogPost } from "@/lib/mock/store";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,6 +55,7 @@ function daysAgoLabel(days: number) {
 }
 
 function RowActions({ id }: { id: string }) {
+  const canWrite = useCan("content:write");
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -74,11 +76,13 @@ function RowActions({ id }: { id: string }) {
           <Copy />
           Duplikat
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive">
-          <Trash2 />
-          Hapus
-        </DropdownMenuItem>
+        {canWrite && <DropdownMenuSeparator />}
+        {canWrite && (
+          <DropdownMenuItem variant="destructive">
+            <Trash2 />
+            Hapus
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -86,6 +90,7 @@ function RowActions({ id }: { id: string }) {
 
 export function BlogClient({ posts }: { posts: BlogPost[] }) {
   const router = useRouter();
+  const canWrite = useCan("content:write");
   const [search, setSearch] = React.useState("");
   const [blog, setBlog] = React.useState<string>("all");
 
@@ -130,10 +135,12 @@ export function BlogClient({ posts }: { posts: BlogPost[] }) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button nativeButton={false} render={<Link href="/blog/baru" />}>
-          <Plus />
-          Tambah artikel
-        </Button>
+        {canWrite && (
+          <Button nativeButton={false} render={<Link href="/blog/baru" />}>
+            <Plus />
+            Tambah artikel
+          </Button>
+        )}
       </PageHeader>
 
       {/* Blog filter tabs */}

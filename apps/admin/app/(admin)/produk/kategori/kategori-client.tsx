@@ -10,6 +10,7 @@ import {
 
 import { PageHeader } from "@/components/admin/page-header";
 import { num } from "@/lib/format";
+import { useCan } from "@/components/admin/permissions";
 import { type Collection } from "@/lib/mock/store";
 
 import { Card } from "@/components/ui/card";
@@ -45,6 +46,7 @@ function StatusBadge({ published }: { published: boolean }) {
 }
 
 function RowActions({ id }: { id: string }) {
+  const canWrite = useCan("content:write");
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi kategori" />}>
@@ -53,8 +55,8 @@ function RowActions({ id }: { id: string }) {
       <DropdownMenuContent align="end">
         <DropdownMenuItem render={<Link href={`/produk/kategori/${id}`} />}><Pencil /> Edit</DropdownMenuItem>
         <DropdownMenuItem><ExternalLink /> Lihat di toko</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive"><Trash2 /> Hapus</DropdownMenuItem>
+        {canWrite && <DropdownMenuSeparator />}
+        {canWrite && <DropdownMenuItem variant="destructive"><Trash2 /> Hapus</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -62,6 +64,7 @@ function RowActions({ id }: { id: string }) {
 
 export function KategoriClient({ collections }: { collections: Collection[] }) {
   const router = useRouter();
+  const canWrite = useCan("content:write");
   const [search, setSearch] = React.useState("");
 
   const filtered = React.useMemo(() => {
@@ -73,9 +76,11 @@ export function KategoriClient({ collections }: { collections: Collection[] }) {
   return (
     <div>
       <PageHeader title="Kategori" desc="Kelompokkan produk ke dalam koleksi yang tampil di toko.">
-        <Button nativeButton={false} render={<Link href="/produk/kategori/baru" />}>
-          <Plus /> Buat kategori
-        </Button>
+        {canWrite && (
+          <Button nativeButton={false} render={<Link href="/produk/kategori/baru" />}>
+            <Plus /> Buat kategori
+          </Button>
+        )}
       </PageHeader>
 
       {/* Helper: Otomatis vs Manual */}

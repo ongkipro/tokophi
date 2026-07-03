@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createPage, updatePage, deletePage, type PageInput } from "@/lib/actions/pages";
+import { useCan } from "@/components/admin/permissions";
 import {
   ArrowLeft,
   Bold,
@@ -70,6 +71,7 @@ function seedBody(title: string): string {
 
 export function PageEditor({ page }: { page?: CmsPage }) {
   const isEdit = Boolean(page);
+  const canWrite = useCan("content:write");
 
   const [title, setTitle] = React.useState(page?.title ?? "");
   const [handle, setHandle] = React.useState(page?.handle ?? "");
@@ -99,6 +101,10 @@ export function PageEditor({ page }: { page?: CmsPage }) {
     template,
   });
   const handleSave = () => {
+    if (!canWrite) {
+      toast.error("Akses ditolak — peran Anda tidak bisa mengubah halaman");
+      return;
+    }
     if (!title.trim()) {
       toast.error("Judul halaman wajib diisi");
       return;
@@ -164,7 +170,7 @@ export function PageEditor({ page }: { page?: CmsPage }) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {isEdit && (
+          {isEdit && canWrite && (
             <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={handleDelete} disabled={pending}>
               <Trash2 />
               Hapus halaman
@@ -173,7 +179,7 @@ export function PageEditor({ page }: { page?: CmsPage }) {
           <Button nativeButton={false} variant="ghost" render={<Link href="/halaman" />}>
             Batal
           </Button>
-          <Button onClick={handleSave} disabled={pending}>{pending ? "Menyimpan…" : "Simpan"}</Button>
+          {canWrite && <Button onClick={handleSave} disabled={pending}>{pending ? "Menyimpan…" : "Simpan"}</Button>}
         </div>
       </div>
 

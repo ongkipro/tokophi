@@ -18,6 +18,7 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { PageStatusBadge } from "@/components/admin/halaman/status-badge";
 import { num } from "@/lib/format";
+import { useCan } from "@/components/admin/permissions";
 import { type CmsPage } from "@/lib/mock/store";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -56,6 +57,7 @@ function daysAgoLabel(days: number): string {
 }
 
 function RowActions({ id }: { id: string }) {
+  const canWrite = useCan("content:write");
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -78,11 +80,13 @@ function RowActions({ id }: { id: string }) {
           <Copy />
           Duplikat
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive">
-          <Trash2 />
-          Hapus
-        </DropdownMenuItem>
+        {canWrite && <DropdownMenuSeparator />}
+        {canWrite && (
+          <DropdownMenuItem variant="destructive">
+            <Trash2 />
+            Hapus
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -90,6 +94,7 @@ function RowActions({ id }: { id: string }) {
 
 export function HalamanClient({ pages }: { pages: CmsPage[] }) {
   const router = useRouter();
+  const canWrite = useCan("content:write");
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("semua");
 
@@ -116,10 +121,12 @@ export function HalamanClient({ pages }: { pages: CmsPage[] }) {
         title="Halaman"
         desc="Kelola halaman statis toko seperti Tentang Kami, Kontak, dan Kebijakan."
       >
-        <Button nativeButton={false} render={<Link href="/halaman/baru" />}>
-          <Plus />
-          Tambah halaman
-        </Button>
+        {canWrite && (
+          <Button nativeButton={false} render={<Link href="/halaman/baru" />}>
+            <Plus />
+            Tambah halaman
+          </Button>
+        )}
       </PageHeader>
 
       {/* Toolbar */}

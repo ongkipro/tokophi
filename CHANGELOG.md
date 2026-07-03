@@ -7,8 +7,8 @@ All notable changes. Dates are absolute. Phase: UI/UX-first → **backend M3 sta
 ### RBAC UI — role-aware controls
 - **Client-safe policy** (`lib/rbac-policy.ts`) — the role→capability matrix + `can()` extracted so the UI and the server guard (`lib/rbac.ts`) share ONE source of truth.
 - **`PermissionsProvider` + `useCan()` + `<Can>`** (`components/admin/permissions.tsx`) — role flows from the session (layout) to client components; the topbar shows a role badge (Pemilik/Admin/Staf/Gudang).
-- **Produk** (list + editor) + **Pengaturan** gated as the reference: Simpan hidden without `products:write`, Hapus/Arsipkan without `products:delete`, media Unggah/delete without `media:write`, settings save is owner-only. Server actions remain the security boundary (they still throw `ForbiddenError`); the UI just stops offering actions the role can't do.
-- **Verified** via Playwright across roles (owner/staff/gudang): owner sees Simpan+Hapus; staff sees Simpan, no Hapus; gudang sees neither + no media upload. (Rollout to the remaining editors is a tracked follow-up.)
+- **Gated across ALL admin editors** (write/delete/create controls hidden per role; server actions stay the security boundary): Produk (list+editor), Pengaturan (owner-only), Diskon, Halaman, Blog, Kategori (editors + list CTAs + row Hapus), Pelanggan (tag/catatan save), CRM follow-up (Tandai selesai), Segmen (Buat/Hapus), Pembelian (Buat PO / terima / batalkan), Inventori (Simpan stok), Navigasi (Simpan menu), Pesanan (advance status).
+- **Verified** via Playwright across roles (owner/staff/gudang): e.g. Produk owner sees Simpan+Hapus, staff Simpan-only, gudang neither+no media; Diskon Buat = staff✓/gudang✗; Inventori & Pembelian = staff✗/gudang✓; owner all✓.
 
 ### M3 — RBAC + Row-Level Security (tenant isolation)
 - **RBAC (`apps/admin/lib/rbac.ts`)** — capability model + role→capability matrix (owner=all · admin=all−settings · staff=shop ops (no product-delete / warehouse / settings) · gudang=inventori+pembelian only). `can(role, cap)` + `requireCapability(cap)` (returns the session JWT or throws `ForbiddenError`).

@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { setFollowupStatus } from "@/lib/actions/crm";
+import { useCan } from "@/components/admin/permissions";
 import {
   Send,
   MoreHorizontal,
@@ -170,6 +171,7 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
   const [typeFilter, setTypeFilter] = useState<"semua" | FollowupType>("semua");
   const [done, setDone] = useState<Set<string>>(new Set());
   const router = useRouter();
+  const canWrite = useCan("crm:write");
   const [, startTransition] = useTransition();
 
   function markDone(id: string) {
@@ -505,13 +507,15 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
                               <MessageCircle className="size-4" /> {t.name}
                             </DropdownMenuItem>
                           ))}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            disabled={isDone}
-                            onClick={() => markDone(f.id)}
-                          >
-                            <Check className="size-4" /> Tandai selesai
-                          </DropdownMenuItem>
+                          {canWrite && <DropdownMenuSeparator />}
+                          {canWrite && (
+                            <DropdownMenuItem
+                              disabled={isDone}
+                              onClick={() => markDone(f.id)}
+                            >
+                              <Check className="size-4" /> Tandai selesai
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem
                             render={<a href={`/pelanggan?cari=${encodeURIComponent(f.customer)}`} />}
                           >

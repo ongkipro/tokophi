@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Percent, Tag, Truck, Dice5, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { createDiscount, updateDiscount, deleteDiscount, type DiscountInput } from "@/lib/actions/discounts";
+import { useCan } from "@/components/admin/permissions";
 
 import {
   Card,
@@ -62,6 +63,7 @@ function randomCode() {
 
 export function DiscountEditor({ discount }: { discount?: Discount }) {
   const isEdit = Boolean(discount);
+  const canWrite = useCan("discounts:write");
 
   const [code, setCode] = React.useState(discount?.code ?? "");
   const [type, setType] = React.useState<DiscountType>(discount?.type ?? "persen");
@@ -103,6 +105,10 @@ export function DiscountEditor({ discount }: { discount?: Discount }) {
     period: Number(period) || 0,
   });
   function handleSave() {
+    if (!canWrite) {
+      toast.error("Akses ditolak — peran Anda tidak bisa mengubah diskon");
+      return;
+    }
     if (!code.trim()) {
       toast.error("Kode diskon wajib diisi");
       return;
@@ -159,7 +165,7 @@ export function DiscountEditor({ discount }: { discount?: Discount }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {isEdit && (
+          {isEdit && canWrite && (
             <Button
               variant="ghost"
               className="text-destructive hover:text-destructive"
@@ -173,7 +179,7 @@ export function DiscountEditor({ discount }: { discount?: Discount }) {
           <Button nativeButton={false} variant="ghost" render={<Link href="/diskon" />}>
             Batal
           </Button>
-          <Button onClick={handleSave} disabled={pending}>{pending ? "Menyimpan…" : "Simpan"}</Button>
+          {canWrite && <Button onClick={handleSave} disabled={pending}>{pending ? "Menyimpan…" : "Simpan"}</Button>}
         </div>
       </div>
 

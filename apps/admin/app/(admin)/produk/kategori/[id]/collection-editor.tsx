@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createCollection, updateCollection, deleteCollection, type CollectionInput } from "@/lib/actions/collections";
+import { useCan } from "@/components/admin/permissions";
 import {
   ChevronLeft,
   ChevronDown,
@@ -75,6 +76,7 @@ type Condition = { id: number; field: string; op: string; value: string };
 
 export function CollectionEditor({ collection }: { collection?: Collection }) {
   const isEdit = Boolean(collection);
+  const canWrite = useCan("content:write");
 
   // ---- form state ----
   const [name, setName] = React.useState(collection?.name ?? "");
@@ -122,6 +124,10 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
     published,
   });
   const handleSave = () => {
+    if (!canWrite) {
+      toast.error("Akses ditolak — peran Anda tidak bisa mengubah koleksi");
+      return;
+    }
     if (!name.trim()) {
       toast.error("Nama koleksi wajib diisi");
       return;
@@ -214,7 +220,7 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
               Draft
             </Badge>
           )}
-          {isEdit && (
+          {isEdit && canWrite && (
             <Button
               variant="ghost"
               className="text-destructive hover:bg-destructive/10"
@@ -232,9 +238,11 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
           >
             Batal
           </Button>
-          <Button onClick={handleSave} disabled={pending}>
-            {pending ? "Menyimpan…" : "Simpan"}
-          </Button>
+          {canWrite && (
+            <Button onClick={handleSave} disabled={pending}>
+              {pending ? "Menyimpan…" : "Simpan"}
+            </Button>
+          )}
         </div>
       </div>
 

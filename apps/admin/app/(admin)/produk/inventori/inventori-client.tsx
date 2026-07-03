@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { updateStock } from "@/lib/actions/inventory";
+import { useCan } from "@/components/admin/permissions";
 import {
   Boxes, Minus, Plus, Search, AlertTriangle, PackageX, Warehouse, Download,
 } from "lucide-react";
@@ -79,9 +80,11 @@ export function InventoriClient({ products }: { products: Product[] }) {
 
   // Persist only the rows whose stock the user changed.
   const router = useRouter();
+  const canWrite = useCan("inventory:write");
   const [pending, startTransition] = React.useTransition();
   const changed = products.filter((p) => (qty[p.id] ?? 0) !== p.stock);
   const save = () => {
+    if (!canWrite) { toast.error("Akses ditolak — peran Anda tidak bisa mengubah stok"); return; }
     if (!changed.length) return;
     startTransition(async () => {
       try {
@@ -133,9 +136,11 @@ export function InventoriClient({ products }: { products: Product[] }) {
     <div>
       <PageHeader title="Inventori" desc="Pantau dan sesuaikan stok produk Anda.">
         <Button variant="outline"><Download /> Ekspor</Button>
-        <Button onClick={save} disabled={pending || changed.length === 0}>
-          {pending ? "Menyimpan…" : changed.length ? `Simpan ${changed.length} perubahan` : "Simpan"}
-        </Button>
+        {canWrite && (
+          <Button onClick={save} disabled={pending || changed.length === 0}>
+            {pending ? "Menyimpan…" : changed.length ? `Simpan ${changed.length} perubahan` : "Simpan"}
+          </Button>
+        )}
       </PageHeader>
 
       {/* Stat cards */}

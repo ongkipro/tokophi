@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createArticle, updateArticle, deleteArticle, type ArticleInput } from "@/lib/actions/articles";
+import { useCan } from "@/components/admin/permissions";
 import {
   ArrowLeft,
   Bold,
@@ -74,6 +75,7 @@ function EditorToolbar() {
 
 export function ArticleEditor({ post }: { post?: BlogPost }) {
   const isEdit = Boolean(post);
+  const canWrite = useCan("content:write");
 
   const [title, setTitle] = React.useState(post?.title ?? "");
   const [body, setBody] = React.useState(
@@ -105,6 +107,10 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
     published,
   });
   const handleSave = () => {
+    if (!canWrite) {
+      toast.error("Akses ditolak — peran Anda tidak bisa mengubah artikel");
+      return;
+    }
     if (!title.trim()) {
       toast.error("Judul artikel wajib diisi");
       return;
@@ -154,7 +160,7 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
           <h1 className="text-xl font-semibold tracking-tight">{topBarTitle}</h1>
         </div>
         <div className="flex items-center gap-2">
-          {isEdit && (
+          {isEdit && canWrite && (
             <Button variant="outline" className="text-destructive hover:text-destructive" onClick={handleDelete} disabled={pending}>
               <Trash2 />
               Hapus artikel
@@ -163,7 +169,7 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
           <Button nativeButton={false} variant="ghost" render={<Link href="/blog" />}>
             Batal
           </Button>
-          <Button onClick={handleSave} disabled={pending}>{pending ? "Menyimpan…" : "Simpan"}</Button>
+          {canWrite && <Button onClick={handleSave} disabled={pending}>{pending ? "Menyimpan…" : "Simpan"}</Button>}
         </div>
       </div>
 
