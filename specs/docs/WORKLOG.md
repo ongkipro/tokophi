@@ -124,9 +124,14 @@
 - [x] **`lib/auth.ts`** (server-only): `verifyPassword` (scrypt), `findLogin` (users ⋈ store_users), `signSession`/`getSession` (**jose JWT** in httpOnly `session` cookie, `AUTH_SECRET`). **`lib/actions/auth.ts`** `signIn`/`signOut`. **`app/login/page.tsx`** (email+password, `useActionState`). **`middleware.ts`** (edge-safe JWT verify → redirect to `/login`; matcher excludes `_next`/static/`products/`). `(admin)/layout.tsx` is now async → reads session → Topbar shows the user + "Keluar".
 - [x] **Verified end-to-end**: unauthenticated `/` + `/produk` → 307 `/login`; wrong password → inline error; correct → dashboard (user shown in topbar); logout → `/login`. `tsc` + `build:admin` clean (Middleware compiled; postgres stays out of the edge bundle). Added `AUTH_SECRET` to `.env`/`.env.local`/`.env.example`.
 
+**Local media upload — product images → product_media (2026-07-03):**
+- [x] **Seed** now loads **5 `product_media` rows/product** (base + `-2..-5`, positions 0–4) instead of 1 → 70 media rows. `getProduct` returns the real `media[]`; `Product` type += `media?`.
+- [x] **`lib/actions/media.ts`** `uploadProductImage(productId, formData)` (writes the file to `apps/admin/public/uploads/`, 5MB image cap, inserts a `product_media` row at next position) + `deleteProductImage(mediaId, productId)` (removes the row + the local file). `public/uploads/` gitignored.
+- [x] **Product editor Media section** rewritten to show the real `media[]` (was the derived `productImages()`), with a hidden file input + "Unggah" button (`useTransition`) and a hover **delete** per image.
+- [x] **Verified end-to-end via UI** (behind login): uploaded a PNG → tile 5→6 + `product_media` row + file on disk; deleted it → 6→5 + row + file gone. `tsc` + `build:admin` clean.
+
 **Next up (resume here):**
 1. **RBAC + RLS (local)**: gate actions/routes by `store_users.role` (owner/admin/staff/gudang); then enable Postgres RLS (`store_id` from the JWT) once a request-scoped DB role/GUC is wired.
-2. **Media upload (local)**: replace the toast-only image pickers with real upload to local storage (public/ or a local MinIO), persist `product_media.url`.
-3. **Then VPS (prod)**: self-hosted Postgres + PostgREST + Storage; multi-tenant + per-client storefront `STORE_SLUG`.
+2. **(later) VPS**: self-hosted Postgres + PostgREST + Storage (MinIO/S3 for the uploads); multi-tenant + per-client storefront `STORE_SLUG`.
 2. **Deploy to VPS**: stand up self-hosted Postgres + PostgREST; wire JWT Auth (login/RBAC via `store_users`) + Storage (media uploads) + enable RLS; then multi-tenant (beyond single-store seed) + per-client storefront via `STORE_SLUG`.
 3. **E1 sisa / E0 de-dup / Turborepo** (unchanged).

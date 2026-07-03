@@ -460,7 +460,14 @@ async function main() {
     }).returning();
     const [v] = await db.insert(schema.productVariants).values({ productId: p.id, storeId: store.id, title: "Default", priceIdr: c.price, compareAtIdr: meta?.compareAt ?? null, position: 0 }).returning();
     await db.insert(schema.inventoryLevels).values({ variantId: v.id, locationId: loc.id, available: c.stock });
-    await db.insert(schema.productMedia).values({ productId: p.id, url: `/products/${c.slug}.webp`, position: 0 });
+    // 5-image gallery: base + -2..-5 (files exist in public/products/)
+    await db.insert(schema.productMedia).values(
+      [0, 1, 2, 3, 4].map((n) => ({
+        productId: p.id,
+        url: n === 0 ? `/products/${c.slug}.webp` : `/products/${c.slug}-${n + 1}.webp`,
+        position: n,
+      })),
+    );
     seededProducts.push({ id: p.id, variantId: v.id, category: c.category, unitsSold: c.unitsSold });
   }
 

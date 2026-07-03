@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createProduct, updateProduct, deleteProduct, type ProductInput } from "@/lib/actions/products";
+import { uploadProductImage, deleteProductImage } from "@/lib/actions/media";
 import {
   ChevronLeft,
   Bold,
@@ -25,7 +26,7 @@ import {
   Archive,
 } from "lucide-react";
 
-import { type Product, productImages } from "@/lib/mock/store";
+import { type Product } from "@/lib/mock/store";
 import { toast } from "sonner";
 import { IDR, num } from "@/lib/format";
 
@@ -212,6 +213,38 @@ export function ProductEditor({ product }: { product?: Product }) {
     });
   };
 
+  // ---- media upload/delete (local storage → product_media) ----
+  const fileRef = React.useRef<HTMLInputElement>(null);
+  const [uploading, startUpload] = React.useTransition();
+  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file || !product) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    startUpload(async () => {
+      try {
+        await uploadProductImage(product.id, fd);
+        toast.success("Gambar diunggah");
+        router.refresh();
+      } catch {
+        toast.error("Gagal mengunggah gambar (maks 5MB, format gambar)");
+      }
+    });
+  };
+  const removeImage = (mediaId: string) => {
+    if (!product) return;
+    startUpload(async () => {
+      try {
+        await deleteProductImage(mediaId, product.id);
+        toast.success("Gambar dihapus");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus gambar");
+      }
+    });
+  };
+
   // Keep the handle synced to the title until the user edits it manually.
   React.useEffect(() => {
     if (!handleEdited) setHandle(slugify(name));
@@ -373,23 +406,35 @@ export function ProductEditor({ product }: { product?: Product }) {
               {/* Image grid */}
               {isEdit ? (
                 <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
-                  {productImages(product!).map((src, i) => (
-                    <div key={i} className="relative aspect-square overflow-hidden rounded-lg border bg-muted">
+                  {(product!.media ?? []).map((m, i) => (
+                    <div key={m.id} className="group relative aspect-square overflow-hidden rounded-lg border bg-muted">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={src} alt={`${product!.name} ${i + 1}`} loading="lazy" className="size-full object-cover" />
+                      <img src={m.url} alt={`${product!.name} ${i + 1}`} loading="lazy" className="size-full object-cover" />
                       {i === 0 && (
                         <span className="absolute left-1 top-1 rounded bg-foreground/80 px-1.5 py-0.5 text-[10px] font-medium text-background">
                           Utama
                         </span>
                       )}
+                      <button
+                        type="button"
+                        aria-label={`Hapus gambar ${i + 1}`}
+                        disabled={uploading}
+                        onClick={() => removeImage(m.id)}
+                        className="absolute right-1 top-1 rounded bg-background/85 p-1 text-destructive opacity-0 transition-opacity hover:bg-background group-hover:opacity-100 disabled:opacity-50"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
                     </div>
                   ))}
                   <button
                     type="button"
-                    className="flex aspect-square cursor-pointer items-center justify-center rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                    disabled={uploading}
+                    onClick={() => fileRef.current?.click()}
+                    className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
                   >
-                    <Plus className="size-5" />
+                    {uploading ? <span className="text-[10px]">Mengunggah…</span> : (<><ImagePlus className="size-5" /><span className="text-[10px]">Unggah</span></>)}
                   </button>
+                  <input ref={fileRef} type="file" accept="image/*" onChange={onPickFile} className="hidden" />
                 </div>
               ) : (
                 <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">

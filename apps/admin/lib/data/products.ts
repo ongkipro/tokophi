@@ -52,5 +52,11 @@ export async function getProducts(): Promise<Product[]> {
 
 export async function getProduct(id: string): Promise<Product | null> {
   const rows = await base().where(eq(schema.products.id, id)).limit(1);
-  return rows[0] ? toProduct(rows[0]) : null;
+  if (!rows[0]) return null;
+  const media = await db
+    .select({ id: schema.productMedia.id, url: schema.productMedia.url })
+    .from(schema.productMedia)
+    .where(eq(schema.productMedia.productId, id))
+    .orderBy(schema.productMedia.position);
+  return { ...toProduct(rows[0]), media };
 }
