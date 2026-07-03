@@ -270,6 +270,42 @@ const REVIEWS: Array<{ customer: string; product: string; emoji: string; rating:
   { customer: "Hendra Gunawan", product: "Madu Hutan Asli 500ml", emoji: "🍯", rating: 5, text: "Madunya asli, rasa mantap. Langganan terus.", status: "terbit", daysAgo: 8 },
 ];
 
+// ---- navigation menus (canonical MAIN_MENU / FOOTER_MENU, inlined for seed parity) ----
+type NavType = "beranda" | "koleksi" | "produk" | "halaman" | "blog" | "url";
+const NAV_TO_DB: Record<NavType, "home" | "collection" | "product" | "page" | "blog" | "url"> = {
+  beranda: "home", koleksi: "collection", produk: "product", halaman: "page", blog: "blog", url: "url",
+};
+type MItem = { label: string; type: NavType; href: string; children?: MItem[] };
+const MAIN_MENU: MItem[] = [
+  { label: "Beranda", type: "beranda", href: "/" },
+  { label: "Semua Produk", type: "koleksi", href: "/kategori/semua" },
+  {
+    label: "Kategori", type: "url", href: "#",
+    children: [
+      { label: "Dress", type: "koleksi", href: "/kategori/dress" },
+      { label: "Atasan", type: "koleksi", href: "/kategori/atasan" },
+      { label: "Bawahan", type: "koleksi", href: "/kategori/bawahan" },
+      { label: "Busana Muslim", type: "koleksi", href: "/kategori/busana-muslim" },
+      { label: "Outerwear", type: "koleksi", href: "/kategori/outerwear" },
+      { label: "Loungewear", type: "koleksi", href: "/kategori/loungewear" },
+    ],
+  },
+  { label: "Promo Gajian", type: "koleksi", href: "/kategori/promo-gajian" },
+  { label: "Blog", type: "blog", href: "/blog" },
+  { label: "Kontak", type: "halaman", href: "/kontak" },
+];
+const FOOTER_MENU: MItem[] = [
+  { label: "Tentang Kami", type: "halaman", href: "/halaman/tentang-kami" },
+  { label: "Cara Pemesanan", type: "halaman", href: "/halaman/cara-pemesanan" },
+  { label: "Kebijakan Pengembalian", type: "halaman", href: "/halaman/kebijakan-pengembalian" },
+  { label: "Kebijakan Privasi", type: "halaman", href: "/halaman/kebijakan-privasi" },
+  { label: "FAQ", type: "halaman", href: "/halaman/faq" },
+];
+const MENU_DEFS = [
+  { name: "Menu Utama", handle: "main-menu", items: MAIN_MENU },
+  { name: "Menu Footer", handle: "footer", items: FOOTER_MENU },
+];
+
 async function truncateAll() {
   const rows = await client<{ table_name: string }[]>`
     select table_name from information_schema.tables
@@ -482,6 +518,19 @@ async function main() {
     })),
   );
 
+  // navigation menus + items (recursive, parent_id + position)
+  const insertMenuItems = async (menuId: string, items: MItem[], parentId: string | null): Promise<void> => {
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const [row] = await db.insert(schema.menuItems).values({ menuId, parentId, label: it.label, type: NAV_TO_DB[it.type], target: it.href, position: i }).returning();
+      if (it.children) await insertMenuItems(menuId, it.children, row.id);
+    }
+  };
+  for (const md of MENU_DEFS) {
+    const [menu] = await db.insert(schema.menus).values({ storeId: store.id, name: md.name, handle: md.handle }).returning();
+    await insertMenuItems(menu.id, md.items, null);
+  }
+
   // invoices for this account
   await db.insert(schema.invoices).values(
     INVOICES.map((inv) => ({ number: inv.number, accountId: account.id, storeId: store.id, planKey: STORE.plan, amountIdr: planPrice(STORE.plan), status: inv.status, issuedAt: daysAgo(inv.daysAgo) })),
@@ -510,7 +559,7 @@ async function main() {
   );
   await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
 
-  console.log(`Seeded: ${PLANS.length} plans, 1 store (${STORE.name}), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${SUPPLIERS.length} suppliers/${PURCHASE_ORDERS.length} POs, ${SEGMENTS.length} segments, ${REVIEWS.length} reviews, ${INVOICES.length} invoices, platform settings.`);
+  console.log(`Seeded: ${PLANS.length} plans, 1 store (${STORE.name}), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${SUPPLIERS.length} suppliers/${PURCHASE_ORDERS.length} POs, ${SEGMENTS.length} segments, ${REVIEWS.length} reviews, ${MENU_DEFS.length} menus, ${INVOICES.length} invoices, platform settings.`);
   await client.end();
 }
 

@@ -2,7 +2,7 @@
 
 > The product concept, fleshed out so the backend (Supabase) is later "just implementation."
 > Companion to `../PRD.md`, `SCHEMA.md` (backend-ready tables), `UI_INVENTORY.md` (screen status).
-> Phase: **concept + UI/UX first**; the **backend is now being wired** on local PostgreSQL (Drizzle) — super-admin + 12 admin modules read the DB; the rest still mock. (§8 covers why deferring the full backend early was safe.)
+> Phase: **concept + UI/UX first**; the **backend is now being wired** on local PostgreSQL (Drizzle) — super-admin + 13 admin modules read the DB; the rest still mock. (§8 covers why deferring the full backend early was safe.)
 
 ---
 

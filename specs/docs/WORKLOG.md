@@ -66,8 +66,12 @@
 - [x] **Seed**: 4 suppliers + 6 purchase_orders (+21 po_items for the count), 6 customer_segments, 8 reviews. Schema deltas: `customer_segments.growth` (real), `reviews.product_name` + `reviews.emoji` (denormalized — some demo reviews reference legacy, non-catalog products) — migration `0006`.
 - [x] **`lib/data/{purchases,segments,reviews}.ts`**: `getPurchaseOrders` (supplier via join, items via `count(po_items)`, etaDays from `eta_date`), `getSegments`, `getReviews` (customer via join, product/emoji denormalized). Wired 3 pages (server-wrapper + `*-client.tsx`, `force-dynamic`). **Verified**: `tsc` + `build:admin` clean, screenshots — Pembelian (6 PO, tab counts/supplier/item/total/ETA), Segmen, Ulasan (8, rating avg, customer join) — 0 console errors, parity. **12 admin modules now DB-backed.**
 
+**admin → DB — Navigasi live (2026-07-03):**
+- [x] **Seed** menus/menu_items (recursive, parent_id + position; type NavItemType→DB enum): 2 menus (main-menu 12 items incl. Kategori→6 children, footer 5). Inlined `MAIN_MENU`/`FOOTER_MENU` from `@indostore/data` for seed parity.
+- [x] **`lib/data/menus.ts`** `getMenus()` reconstructs the `NavMenu[]` tree from flat menu_items (parent→children map, type mapped back). Wired Navigasi (server-wrapper + `navigasi-client.tsx`, `force-dynamic`; `seedMenus()`→prop clone). **Verified**: `tsc` + `build:admin` clean, screenshot — 2 menus, hierarchical 12-item builder (Kategori sub-menu + children) — 0 console errors, parity. **13 admin modules now DB-backed.**
+
 **Next up (resume here):**
-1. **admin → DB, remaining (3)**: **Dashboard/Analitik** (aggregate sales/KPIs from `orders` — replaces the synthetic DAYS series; the big one), **Pemasaran** (`ad_channels`/`ad_metrics`/provinces), **Navigasi** (`menus`/`menu_items` — currently `@indostore/data`). Optional: wire OrderDetail + customer order-history to the *real* seeded line-items; then **Supabase** (Auth/Storage/RLS) + mutations.
+1. **admin → DB, remaining (2, analytics-heavy)**: **Dashboard/Analitik** (aggregate sales/KPIs from `orders` — needs a seeded ~120-day series or `analytics_events` rollups; replaces the synthetic DAYS series — the big one), **Pemasaran** (`ad_channels` + `ad_metrics` daily rollups + per-province). Then **storefront → DB** + **Supabase** (Auth/Storage/RLS) + mutations persist.
 2. **storefront → DB**: parameterize by `STORE_SLUG`, read catalog/pages by `store_id` (ADR 0008).
 3. **Mutations** (save/edit/delete) → Drizzle `insert/update`; toasts already in place.
 4. **Supabase**: connect (Auth + Storage + RLS), same migrations; M4 real payment/courier integrations.

@@ -1,7 +1,7 @@
 # Indostore — Backend schema (PostgreSQL, Drizzle)
 
 > **Implemented** as `@indostore/db` (Drizzle) — **52 tables** on local **PostgreSQL 16** (Docker, port 5433). Prod target = Supabase (ADR 0007). Source of truth = `packages/db/src/schema.ts`; this doc is the annotated reference.
-> **Status:** super-admin (all 5) + **12 admin modules** read it **live** via `lib/data/*` (`force-dynamic`); remaining admin screens (Dashboard/Analitik, Pemasaran, Navigasi) + storefront still on mock — swap those next (§M3). Keep `admin/lib/mock/store.ts` shaped like these tables.
+> **Status:** super-admin (all 5) + **13 admin modules** read it **live** via `lib/data/*` (`force-dynamic`); remaining admin screens (Dashboard/Analitik, Pemasaran) + storefront still on mock — swap those next (§M3). Keep `admin/lib/mock/store.ts` shaped like these tables.
 > **Impl deltas vs the design below:** `stores.city`; **`store_stats`** rollup table (platform metrics cache); `invoices.number` ("INV-9001"); `products.emoji` + `products.units_sold`; `collections.emoji`; `pages.template` + `pages.views`; `articles.comments`; `followups.last_message`; `customer_segments.growth`; `reviews.product_name` + `reviews.emoji` (denorm — legacy demo products). RLS policies are written but **not enabled locally** (no `auth.*` on plain Postgres — they light up at Supabase).
 
 ## Conventions
@@ -180,7 +180,7 @@ platform_activity(id, kind enum[signup|upgrade|payment|churn|support], text, ts)
 2. ✅ **Seed (single-tenant MVP)** — one store **Batik Nusantara** (+account/owner/membership/settings/store_stats), 3 plans, 6 invoices, activity, platform payments/shipping/COD. All 3 surfaces center on this one store; the multi-tenant topology (ADR 0008) is the target, seeded 1-store for now.
 3. ✅ **Wire super-admin → DB** (`apps/super-admin/lib/data.ts`; `dynamic="force-dynamic"`) — 5 pages live, signatures unchanged, UI untouched.
 4. 🟡 **Seed the store's catalog** (Batik Nusantara): ✅ products (14) + variants + inventory + media, **collections (8) + membership**, **customers (24)**, **orders (60) + line-items + payments**, **discounts (6)**, **pages (7) + blogs/articles**, **leads (12) + followups (10) + wa_templates (6)**, **suppliers (4) + purchase_orders (6) + items**, **customer_segments (6)**, **reviews (8)**; ⏳ menus, ad_metrics, fulfillments.
-5. 🟡 Replace **`admin/lib/data/*` bodies** with Drizzle — **signatures unchanged**: ✅ **12 modules** — Produk, Diskon, Pelanggan, Kategori, Pesanan, Halaman, Blog, Inventori, CRM, Pembelian, Segmen, Ulasan (list + detail/editor); ⏳ Dashboard/Analitik, Pemasaran, Navigasi.
+5. 🟡 Replace **`admin/lib/data/*` bodies** with Drizzle — **signatures unchanged**: ✅ **13 modules** — Produk, Diskon, Pelanggan, Kategori, Pesanan, Halaman, Blog, Inventori, CRM, Pembelian, Segmen, Ulasan, Navigasi (list + detail/editor); ⏳ Dashboard/Analitik, Pemasaran.
 6. ⏳ Storefront reads its store by `store_id`/`STORE_SLUG` (ADR 0008).
 7. ⏳ **Mutations** (save product/collection/order, stock adjust, PO) → `insert/update`.
 8. ⏳ **Supabase**: point `DATABASE_URL` at it, apply same migrations, enable **RLS** (`store_id = auth_store()`), wire **Auth** (email/OTP + `store_users` RBAC, store switcher) + **Storage** (media) + Tiptap rich-text.

@@ -33,7 +33,7 @@
 
 ## Epic 3 — Data-layer seam (PRE-BACKEND — do before M3)
 - [ ] **Shared domain types** · **M** · move entity types (Product/Order/Customer/Store/…) to `@indostore/lib`; both apps import them. AC: no type drift between apps.
-- [~] **Wrap admin reads in `lib/data/*`** · **L** · ✅ done (as DB queries) for products/orders/customers/collections/inventory/crm/discounts/pages/articles/purchases/segments/reviews — 12 modules. ⏳ Dashboard/Analitik, Pemasaran, Navigasi still import `@/lib/mock` directly.
+- [~] **Wrap admin reads in `lib/data/*`** · **L** · ✅ done (as DB queries) for products/orders/customers/collections/inventory/crm/discounts/pages/articles/purchases/segments/reviews — 12 modules. ⏳ Dashboard/Analitik, Pemasaran still import `@/lib/mock` directly.
 - [x] **Wrap super-admin reads in `lib/data/*`** · **M** · done — `apps/super-admin/lib/data.ts` (stores/plans/invoices/metrics), all pages DB-backed.
 - [ ] *(Why: makes M3 a "fill query bodies" job, not a UI rewrite.)*
 
@@ -47,7 +47,7 @@
 
 ## Epic 5 — Backend (M3 — local Postgres/Drizzle → Supabase)
 - [x] **Schema (`@indostore/db`)** · **L** · 52 tables/enums from `SCHEMA.md` as Drizzle + versioned migrations on **local PostgreSQL 16** (Docker). Seeded single-tenant "Batik Nusantara" = parity with mock. *(RLS policies written; enabled at Supabase — ADR 0007.)*
-- [~] **Swap `lib/data` bodies → queries** · **L** · ✅ super-admin (all 5) + admin 12 modules read the DB (`force-dynamic`). ⏳ remaining admin modules (Dashboard/Analitik, Pemasaran, Navigasi) + storefront.
+- [~] **Swap `lib/data` bodies → queries** · **L** · ✅ super-admin (all 5) + admin 13 modules read the DB (`force-dynamic`). ⏳ remaining admin modules (Dashboard/Analitik, Pemasaran) + storefront.
 - [ ] **Auth + RBAC** · **M** · Supabase Auth (email/OTP) + `store_users`; store switcher scopes data. AC: login → see only your store.
 - [ ] **Mutations persist** · **L** · save product/collection/order, stock adjust, PO, CRM → Drizzle `insert/update`. AC: refresh keeps changes.
 - [ ] **Storage + rich-text** · **M** · media upload to Supabase Storage; Tiptap for bodies.
