@@ -19,13 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { IDR, num, waLink, fillTemplate } from "@/lib/format";
-import {
-  LEADS,
-  FOLLOWUPS,
-  WA_TEMPLATES,
-  type FollowupType,
-  type LeadStage,
-} from "@/lib/mock/store";
+import { type FollowupType, type LeadStage } from "@/lib/mock/store";
+import { getLeads, getFollowups, getWaTemplates } from "@/lib/data/crm";
 import { cn } from "@/lib/utils";
 
 const TOKO = "Batik Nusantara";
@@ -91,7 +86,10 @@ function dueLabel(dueDays: number) {
   return { text: `${dueDays} hari lagi`, late: false };
 }
 
-export default function CrmPage() {
+export const dynamic = "force-dynamic";
+
+export default async function CrmPage() {
+  const [LEADS, FOLLOWUPS, WA_TEMPLATES] = await Promise.all([getLeads(), getFollowups(), getWaTemplates()]);
   // ---- derived data ----
   const dueToday = FOLLOWUPS.filter(
     (f) => f.dueDays <= 0 && f.status === "menunggu",
