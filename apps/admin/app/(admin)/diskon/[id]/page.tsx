@@ -1,10 +1,8 @@
 import { notFound } from "next/navigation";
-import { DISCOUNTS } from "@/lib/mock/store";
+import { getDiscount } from "@/lib/data/discounts";
 import { DiscountEditor } from "./discount-editor";
 
-export function generateStaticParams() {
-  return DISCOUNTS.map((d) => ({ id: d.id }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function EditDiscountPage({
   params,
@@ -12,7 +10,7 @@ export default async function EditDiscountPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const discount = DISCOUNTS.find((d) => d.id === id);
+  const discount = await getDiscount(id);
   if (!discount) notFound();
   return <DiscountEditor discount={discount} />;
 }

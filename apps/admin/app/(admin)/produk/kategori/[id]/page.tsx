@@ -1,14 +1,12 @@
-import { COLLECTIONS } from "@/lib/mock/store";
 import { notFound } from "next/navigation";
+import { getCollection } from "@/lib/data/collections";
 import { CollectionEditor } from "./collection-editor";
 
-export function generateStaticParams() {
-  return COLLECTIONS.map((c) => ({ id: c.id }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function CollectionEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const collection = COLLECTIONS.find((c) => c.id === id);
+  const collection = await getCollection(id);
   if (!collection) notFound();
   return <CollectionEditor collection={collection} />;
 }

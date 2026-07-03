@@ -1,15 +1,12 @@
-import { ORDERS } from "@/lib/mock/store";
 import { notFound } from "next/navigation";
+import { getOrder } from "@/lib/data/orders";
 import { OrderDetail } from "./order-detail";
 
-// Prerender a detail page per order (id without the leading "#").
-export function generateStaticParams() {
-  return ORDERS.map((o) => ({ id: o.id.replace("#", "") }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function OrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const order = ORDERS.find((o) => o.id.replace("#", "") === id);
+  const order = await getOrder(id);
   if (!order) notFound();
   return <OrderDetail order={order} />;
 }

@@ -1,14 +1,12 @@
-import { CUSTOMERS } from "@/lib/mock/store";
 import { notFound } from "next/navigation";
+import { getCustomer } from "@/lib/data/customers";
 import { CustomerDetail } from "./customer-detail";
 
-export function generateStaticParams() {
-  return CUSTOMERS.map((c) => ({ id: c.id }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const customer = CUSTOMERS.find((c) => c.id === id);
+  const customer = await getCustomer(id);
   if (!customer) notFound();
   return <CustomerDetail customer={customer} />;
 }
