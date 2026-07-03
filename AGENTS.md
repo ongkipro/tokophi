@@ -25,6 +25,19 @@ npm run dev:super   # apps/super-admin  → http://localhost:3001
 npm run build:admin ; npm run build:super   # typecheck + lint + static build
 ```
 
+## Database (local Postgres — `@indostore/db`)
+Backend is being wired behind the data layer. Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (schema mirrors `~/Documents/Development/indostore/docs/SCHEMA.md`: 51 tables, snake_case, money = bigint IDR). Auth/Storage (supabase-js) + RLS policies come when a Supabase project is connected — until then tenancy is app-layer `store_id` scoping.
+```bash
+docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted volume)
+npm run migrate -w @indostore/db     # apply versioned migrations (canonical)
+npm run seed    -w @indostore/db     # (re)load demo data — idempotent (truncates first)
+npm run studio  -w @indostore/db     # Drizzle Studio
+npm run generate -w @indostore/db    # after editing src/schema.ts → new migration; `push` = quick dev sync
+```
+- Package: `packages/db` → `import { db, schema } from "@indostore/db"` (server-only; `postgres` is `serverExternalPackages`).
+- `DATABASE_URL` lives in root `.env` (tooling) + each app's `.env.local` (Next). Copy from `.env.example`.
+- Seed today = platform + super-admin slice (plans/stores/invoices/activity/platform settings). Admin per-store catalog seed + `lib/data` DB wiring are the next modules.
+
 ## Structure (apps/admin/)
 - `app/(admin)/` — route group. `page.tsx` = Dashboard (`/`). Sections: pesanan, produk, pelanggan, diskon, analitik, halaman(+baru), blog(+baru), navigasi, pengaturan.
 - `components/admin/` — shell (sidebar, topbar, nav-links, brand) + shared bits (page-header, order-status, kpi-card, *-chart, …) + per-screen subfolders.

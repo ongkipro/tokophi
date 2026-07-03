@@ -1,0 +1,23 @@
+# Local dev database — plain PostgreSQL 16 (matches the Supabase/Postgres target in docs/SCHEMA.md).
+# Start:  docker compose up -d db      Stop: docker compose stop db      Reset: docker compose down -v
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: indostore-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: indostore
+      POSTGRES_PASSWORD: indostore
+      POSTGRES_DB: indostore
+    ports:
+      - "5433:5432" # host 5433 → avoids clashing with any local 5432
+    volumes:
+      - indostore-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U indostore -d indostore"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  indostore-pgdata:

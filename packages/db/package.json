@@ -1,0 +1,28 @@
+{
+  "name": "@indostore/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts",
+    "./client": "./src/client.ts"
+  },
+  "scripts": {
+    "generate": "dotenv -e ../../.env -- drizzle-kit generate",
+    "push": "dotenv -e ../../.env -- drizzle-kit push",
+    "migrate": "dotenv -e ../../.env -- drizzle-kit migrate",
+    "studio": "dotenv -e ../../.env -- drizzle-kit studio",
+    "reset": "dotenv -e ../../.env -- tsx src/reset.ts",
+    "seed": "dotenv -e ../../.env -- tsx src/seed.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.36.4",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^7.4.4",
+    "drizzle-kit": "^0.28.1",
+    "tsx": "^4.19.2"
+  }
+}
