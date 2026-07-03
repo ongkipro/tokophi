@@ -85,7 +85,12 @@
 - [x] **Verified**: `astro build` clean (29 pages, all 14 products + 6 category collections generated from DB), screenshots — home (hero/6-collection grid w/ live counts 3·3·2·3·2·1/bestsellers) + product (rating 4.8·214, price+compareAt −24%, Promo badge, sizes, gallery, review breakdown, related) — **0 console errors, parity**.
 - ✅ **super-admin + all 16 admin modules + storefront all read PostgreSQL.** Reads are done end-to-end.
 
-**Next up (resume here) — reads done everywhere:**
-1. **Mutations persist**: admin save/edit/delete → Drizzle `insert/update/delete` (currently reads live, writes still toasts). Start with Produk/Diskon editors.
+**Mutations — Produk create/edit/delete persist (2026-07-03):**
+- [x] **`apps/admin/lib/actions/products.ts`** (`"use server"`): `createProduct`/`updateProduct`/`deleteProduct` → Drizzle insert/update on products+variant+inventory+media, `revalidatePath("/produk")`. **Delete = archive** (soft: `status='archived'`, products are referenced by historical `order_line_items`); `getProducts` now filters `ne(status,'archived')` so archived drop out of admin list + storefront.
+- [x] **Wired `product-editor.tsx`**: `useRouter` + `useTransition`; Simpan → create/update, Hapus → delete (loading state "Menyimpan…", `router.push("/produk")` + `refresh`, toasts). **Verified end-to-end via UI**: CREATE (persisted + variant/inventory/media, handle slugified) → EDIT (price 157k→209k in DB) → DELETE (archived + gone from list). `tsc` + `build:admin` clean.
+- **Pattern for the rest**: `lib/actions/<entity>.ts` server actions + wire the editor's save/delete + `revalidatePath`. Reseeded to clean state.
+
+**Next up (resume here):**
+1. **Extend mutations** to the other editors (Diskon, Pelanggan, Kategori, Halaman, Blog, Navigasi save, Inventori stock, order status) — same server-action pattern.
 2. **Supabase**: Auth (login/RBAC via `store_users`) + Storage (media uploads) + enable RLS; then multi-tenant (beyond single-store seed) + per-client storefront via `STORE_SLUG`.
 3. **E1 sisa / E0 de-dup / Turborepo** (unchanged).

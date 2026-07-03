@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createProduct, updateProduct, deleteProduct, type ProductInput } from "@/lib/actions/products";
 import {
   ChevronLeft,
   Bold,
@@ -157,6 +159,59 @@ export function ProductEditor({ product }: { product?: Product }) {
   };
   const poTotal = (Number(poQty) || 0) * (Number(poCost) || seedCost || 0);
 
+  // ---- persist to Postgres via server actions ----
+  const router = useRouter();
+  const [pending, startTransition] = React.useTransition();
+  const buildInput = (): ProductInput => ({
+    name: name.trim(),
+    description,
+    status: status === "draft" ? "draft" : "active",
+    category,
+    productType,
+    vendor,
+    handle: handle || slugify(name),
+    price: Number(price) || 0,
+    compareAt: compareAt ? Number(compareAt) : null,
+    cost: cost ? Number(cost) : null,
+    sku: sku || undefined,
+    weightGrams: physical && weight ? Number(weight) : null,
+    stock: Number(qty) || 0,
+  });
+  const handleSave = () => {
+    if (!name.trim()) {
+      toast.error("Nama produk wajib diisi");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        if (isEdit && product) {
+          await updateProduct(product.id, buildInput());
+          toast.success("Perubahan produk disimpan");
+        } else {
+          await createProduct(buildInput());
+          toast.success("Produk baru disimpan");
+        }
+        router.push("/produk");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menyimpan produk");
+      }
+    });
+  };
+  const handleDelete = () => {
+    if (!product) return;
+    startTransition(async () => {
+      try {
+        await deleteProduct(product.id);
+        toast.success("Produk dihapus");
+        router.push("/produk");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus produk");
+      }
+    });
+  };
+
   // Keep the handle synced to the title until the user edits it manually.
   React.useEffect(() => {
     if (!handleEdited) setHandle(slugify(name));
@@ -244,7 +299,8 @@ export function ProductEditor({ product }: { product?: Product }) {
             <Button
               variant="ghost"
               className="text-destructive hover:bg-destructive/10"
-              onClick={() => toast.success("Produk dihapus")}
+              onClick={handleDelete}
+              disabled={pending}
             >
               <Trash2 />
               Hapus produk
@@ -253,8 +309,8 @@ export function ProductEditor({ product }: { product?: Product }) {
           <Button variant="ghost" nativeButton={false} render={<Link href="/produk" />}>
             Batal
           </Button>
-          <Button onClick={() => toast.success(isEdit ? "Perubahan produk disimpan" : "Produk baru disimpan")}>
-            Simpan
+          <Button onClick={handleSave} disabled={pending}>
+            {pending ? "Menyimpan…" : "Simpan"}
           </Button>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import "server-only";
 import { db, schema } from "@indostore/db";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import type { Product } from "@/lib/mock/store";
 
 // Flatten the normalized catalog (products ⋈ default variant ⋈ inventory ⋈ primary media)
@@ -46,7 +46,7 @@ function toProduct(r: {
 }
 
 export async function getProducts(): Promise<Product[]> {
-  const rows = await base().orderBy(desc(schema.products.createdAt));
+  const rows = await base().where(ne(schema.products.status, "archived")).orderBy(desc(schema.products.createdAt));
   return rows.map(toProduct);
 }
 
