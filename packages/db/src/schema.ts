@@ -130,6 +130,8 @@ export const products = pgTable(
     productType: text(),
     vendor: text(),
     category: text(),
+    emoji: text(), // display fallback (mirrors storefront)
+    unitsSold: integer().notNull().default(0), // rollup cache (from order_line_items; seeded for demo)
     hasVariants: boolean().notNull().default(false),
     archivedAt: ts(),
     createdAt: createdAt(),
@@ -192,6 +194,7 @@ export const collections = pgTable(
     handle: text().notNull(),
     description: text(),
     imageUrl: text(),
+    emoji: text(),
     type: collectionType().notNull().default("manual"),
     match: collectionMatch().notNull().default("all"),
     published: boolean().notNull().default(true),
