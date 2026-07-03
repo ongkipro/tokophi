@@ -1,6 +1,6 @@
 # Indostore — Architecture
 
-> Authoritative architecture doc. Companion to [`../PRD.md`](../PRD.md) (product), [`GUIDE.md`](GUIDE.md) (how to build/contribute), [`UML.md`](UML.md) (detailed diagrams), [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md) (future DB). Describes how the three surfaces are built today (mock-first) and how they become a real backend later.
+> Authoritative architecture doc. Companion to [`../PRD.md`](../PRD.md) (product), [`GUIDE.md`](GUIDE.md) (how to build/contribute), [`UML.md`](UML.md) (detailed diagrams), [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md) (DB). Describes how the three surfaces are built, the shared **local-Postgres backend now being wired behind the data layer** (super-admin is already live on it — ADR 0007), and the **per-client topology** (ADR 0008).
 
 ---
 
@@ -22,16 +22,19 @@ flowchart LR
   Platform([Platform team]) --> Super[super-admin :3001<br/>Next.js on Vercel]
   Shopper([Shopper]) --> Store[storefront :4327<br/>Astro on Cloudflare]
 
-  Admin --> Data[(shared packages<br/>ui / lib / data)]
-  Super --> Data
-  Store --> Data
+  Admin --> Shared[(shared packages<br/>ui / lib / data)]
+  Super --> Shared
+  Store --> Shared
 
-  Data -. NOW .-> Mock[mock fixtures<br/>admin lib/mock + storefront catalog]
-  Data -. LATER .-> Supabase[(Supabase<br/>Postgres + Auth + Storage<br/>RLS by store_id)]
+  Super ==>|live now| PG[(local PostgreSQL 16<br/>@indostore/db · Drizzle · store_id)]
+  Admin -. still mock .-> Mock[mock fixtures<br/>admin lib/mock]
+  Store -. still mock .-> Cat[storefront catalog]
+  PG -. prod target .-> Supabase[(Supabase<br/>managed Postgres + Auth + Storage · RLS)]
 ```
 
-- **One admin app, many stores.** A store switcher in the topbar scopes the UI. Later every query is scoped by `store_id` via Postgres RLS. super-admin is the only surface that reads across tenants.
-- **One storefront per client**, hand-built in Astro, sharing design tokens + the shared nav source. Not a self-serve theme editor.
+- **One admin app, many stores.** A store switcher in the topbar scopes the UI; every query is scoped by `store_id` (app-layer now, Postgres RLS at Supabase). super-admin is the only surface that reads across tenants.
+- **One storefront per client**, deployed from one templated Astro codebase (a `STORE_SLUG` per deploy), sharing design tokens + the shared nav source. Not a self-serve theme editor.
+- **Backend status:** super-admin is **live on local Postgres** via `@indostore/db`; admin + storefront still read mock (next). See §9–10 + ADR 0007/0008.
 
 ---
 
@@ -48,8 +51,11 @@ indostore/
 └─ packages/
    ├─ ui/            @indostore/ui    shadcn-on-Base-UI components + cn + Tailwind tokens
    ├─ lib/           @indostore/lib   IDR/num/pct/timeAgo formatters (id-ID)
-   └─ data/          @indostore/data  canonical MAIN_MENU / FOOTER_MENU (shared source of truth)
+   ├─ data/          @indostore/data  canonical MAIN_MENU / FOOTER_MENU (shared source of truth)
+   └─ db/            @indostore/db    Drizzle schema + client + versioned migrations (local Postgres; Supabase-target)
 ```
+
+Plus a root **`docker-compose.yml`** (local PostgreSQL 16, port `5433`) — see §9 + ADR 0007.
 
 ### The three shared packages
 
@@ -58,6 +64,7 @@ indostore/
 | **`@indostore/ui`** | `./styles.css` (Tailwind v4 tokens), `./lib/utils` (`cn`), `./*` (each component, e.g. `@indostore/ui/button`) | shadcn/ui primitives built on **Base UI** (`@base-ui/react`), Recharts, lucide, cva | **super-admin** (Tailwind picks the components up via `@source` in its `globals.css`). |
 | **`@indostore/lib`** | `.` (index), `./format` | Money/number formatters: `IDR()`, `num()`, `pct()`, `timeAgo()` | **super-admin** (`@indostore/lib/format`), **storefront** (`IDR` in Astro pages). |
 | **`@indostore/data`** | `.` (re-exports menu), `./menu` | `MAIN_MENU`, `FOOTER_MENU`, `MenuItem`/`MenuItemType` — the **single source of truth for navigation** | **admin** (menu builder), **storefront** (header/footer nav). |
+| **`@indostore/db`** | `.`, `./schema`, `./client` | Drizzle **schema** (52 tables, snake_case, money=`bigint` IDR), `db` client singleton, inferred types, versioned migrations, seed/reset. **Server-only** (`postgres` in `serverExternalPackages`). | **super-admin** (`lib/data.ts` — live). **admin**/**storefront** next. |
 
 > **admin is a partial migrant.** admin still keeps its **own** local `components/ui` + `lib` (formatters, utils) — de-duping against `@indostore/ui`/`@indostore/lib` is a tracked backlog task. It has, however, already adopted the shared **data** package (`@indostore/data` is in admin's `transpilePackages`). So today: super-admin + storefront consume ui/lib/data; admin consumes only data (plus its local copies of the rest).
 
@@ -157,13 +164,46 @@ flowchart TD
 
 ---
 
-## 9. Path to backend (M3)
+## 9. Backend (in progress) — local Postgres + Drizzle → Supabase
 
-Payments & shipping are **platform-managed** (ADR 0004 in `../decisions/`). The backend is **one Supabase** project:
+The backend is being wired **behind the data-layer seam** (§4). Dev stack = **plain PostgreSQL 16 in Docker + Drizzle** in `@indostore/db` (ADR 0007); prod target = **Supabase** (managed Postgres + Auth + Storage). Payments & shipping stay **platform-managed** (ADR 0004).
 
-1. Postgres + Auth + Storage; **RLS keyed on `store_id`** for tenant isolation. super-admin uses platform-level (cross-tenant) access.
-2. Auth roles (owner / staff); the store switcher reads the user's stores.
-3. Swap each `lib/data/*` body for a query (see §4). Components unchanged.
-4. Storefront reads published data via read API or per-deploy static build.
+**Local dev:**
+```bash
+docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted)
+npm run migrate -w @indostore/db     # apply versioned migrations
+npm run seed    -w @indostore/db     # (re)load demo data (idempotent)
+npm run reset   -w @indostore/db     # drop public + drizzle schemas (then migrate + seed)
+npm run studio  -w @indostore/db     # Drizzle Studio
+```
 
-See [`SCHEMA.md`](SCHEMA.md) for the target tables and [`UML.md`](UML.md) for detailed diagrams.
+**Wiring status (per surface):**
+| Surface | Data source today | Notes |
+|---|---|---|
+| **super-admin** | ✅ **PostgreSQL** (`lib/data.ts`, `dynamic="force-dynamic"`) | all 5 pages live; `getStores/getPlatform/getInvoices/…` |
+| **admin** | mock (`lib/mock/store.ts`) | next: seed demo store catalog → swap `lib/data/*` bodies |
+| **storefront** | mock (`data/catalog.ts`) | after admin: read by `store_id`/`STORE_SLUG` |
+
+**Path to Supabase (no schema rework):** stand up a Supabase project → point `DATABASE_URL` at it → apply the same Drizzle migrations → enable **RLS keyed on `store_id`** (policies written, dormant locally) → wire `supabase-js` Auth (owner/staff via `store_users`) + Storage (media). See [`SCHEMA.md`](SCHEMA.md) for tables, [`UML.md`](UML.md) for diagrams.
+
+---
+
+## 10. Tenancy & per-client provisioning (ADR 0008)
+
+The topology that keeps many clients **easy to manage**: one control plane, one multi-tenant admin, a storefront per client, **one shared database**.
+
+| Layer | Instances | Tenancy |
+|---|---|---|
+| **Super Admin** (`apps/super-admin`) | 1 app, 1 deploy | cross-tenant — create/suspend stores, plans, billing |
+| **Client Admin** (`apps/admin`) | **1 app, 1 deploy — multi-tenant** | merchant signs into the *same* admin; session → `store_id`; RLS scopes to their store |
+| **Storefront** (`apps/storefront`) | 1 codebase, **1 deploy per client** | `STORE_SLUG` per deploy; own domain; reads that store from the shared DB |
+| **Database** | **1 shared PostgreSQL** | `store_id` on every tenant row + RLS; super-admin bypasses |
+
+> **"Client Admin A / B" is the same admin app, scoped by `store_id` — not a separate deploy per client.**
+
+**Onboard a client = 3 steps (no new admin, no new DB):**
+1. super-admin creates the `account` + `store` (+ owner, plan, default settings/location).
+2. Seed starter data / merchant fills it in via their scoped admin.
+3. Deploy one storefront with that store's `STORE_SLUG` + custom domain (Cloudflare — "1 client 1 deploy").
+
+**Why:** patch/ship the admin once for everyone; one DB to migrate & back up; super-admin's cross-tenant view is free; storefronts stay independent (branding/domain/deploy) where it matters. **Trade-off:** RLS correctness is critical (defence-in-depth: also scope in `lib/data`); a client needing hard isolation can be promoted to a dedicated DB (ADR 0003 escape hatch).

@@ -33,7 +33,7 @@ Super-admin & merchant-admin **share the design system** (`@indostore/ui`) + for
 
 ## 2. Current status (what's built)
 
-**Phase 1 = UI/UX with mock data — all three surfaces are clickable, coherent products.** Every screen reads typed mock fixtures through a thin data layer so backend is "just wiring later."
+**Phase 1 = UI/UX with mock data — all three surfaces are clickable, coherent products.** Every screen reads typed fixtures through a thin data layer so backend is "just wiring later." **Backend M3 has started:** **super-admin now reads a real local PostgreSQL** (Drizzle via `@indostore/db`, Docker :5433 — ADR 0007); admin + storefront still on mock. Per-client topology = ADR 0008.
 
 ### Admin — merchant store admin (`apps/admin`, :3000) — DONE
 - **Shell** — grouped sidebar (Utama / Toko Online / Sistem), topbar (store switcher, search ⌘K, notifications, account, **dark-mode toggle**), fully responsive (mobile drawer).
@@ -51,12 +51,13 @@ Super-admin & merchant-admin **share the design system** (`@indostore/ui`) + for
   - **Navigasi** — **menu builder** for Menu Utama / Footer: parent/child (2 levels), typed link picker, **drag-and-drop reorder + ↑/↓ buttons**, "Tambah sub-menu" / "Jadikan sub-menu" / "Naikkan jadi induk", add/edit/delete. Reads/writes against the shared `@indostore/data` menu shape.
 - **Pengaturan** — redesigned settings-nav + store summary; Profil / **Pembayaran** / **Pengiriman** / Pajak / Pengguna / Notifikasi. Payments & shipping shown as **platform-managed** (merchant only toggles methods + picks couriers).
 
-### Super Admin — platform control plane (`apps/super-admin`, :3001) — DONE
-- **Dashboard** — MRR / GMV / platform metrics.
-- **Toko** — all stores list + **detail** (`/toko/[id]`).
-- **Paket** — plans/packages.
-- **Analitik** — cross-tenant platform analytics.
-- **Pengaturan** — payment gateways (**Midtrans / Xendit / Duitku + COD**), shipping aggregator (**Biteship**), courier catalog — the platform-managed config that merchants consume "matang".
+### Super Admin — platform control plane (`apps/super-admin`, :3001) — DONE · **LIVE ON POSTGRESQL**
+> All 5 pages read the database via server-only `lib/data.ts` (`dynamic="force-dynamic"`); no mock. **Single-tenant MVP** — seeded with one real store (**Batik Nusantara**); metrics computed honestly for one store (ADR 0008 = the multi-tenant target). Verified + live-mutation test.
+- **Dashboard** — MRR / GMV / platform metrics, deltas, MRR trend, plan distribution, recent invoices, store status, top stores, activity feed.
+- **Toko** — all stores list + **detail** (`/toko/[id]`, real uuid route).
+- **Paket** — plans/packages + invoices.
+- **Analitik** — cross-tenant GMV per plan / per city + status.
+- **Pengaturan** — payment gateways (**Midtrans / Xendit / Duitku + COD**), shipping aggregator (**Biteship**), courier catalog — read from `platform_*` tables; the platform-managed config merchants consume "matang".
 
 ### Storefront — shopper site (`apps/storefront`, :4327) — DONE (was "next", now built)
 Demo brand **"Batik Nusantara"** — a women's-fashion store.
@@ -75,9 +76,10 @@ Demo brand **"Batik Nusantara"** — a women's-fashion store.
 ### Shared packages
 - **`@indostore/ui`** — shadcn components on **Base UI** (`@base-ui/react`) + design tokens; consumed by both Next apps.
 - **`@indostore/lib`** — formatters (IDR / number, `id-ID`).
-- **`@indostore/data`** (NEW) — canonical `MAIN_MENU` / `FOOTER_MENU`: the **single source of truth for navigation**, consumed by BOTH the admin menu builder (`apps/admin/lib/mock/store.ts`) and the storefront header (`apps/storefront/src/data/nav.ts`). Edit once → both surfaces stay in sync on rebuild.
+- **`@indostore/data`** — canonical `MAIN_MENU` / `FOOTER_MENU`: the **single source of truth for navigation**, consumed by BOTH the admin menu builder (`apps/admin/lib/mock/store.ts`) and the storefront header (`apps/storefront/src/data/nav.ts`). Edit once → both surfaces stay in sync on rebuild.
+- **`@indostore/db`** (NEW) — **Drizzle** schema (52 tables, snake_case, money=`bigint` IDR) + `db` client + versioned migrations + seed/reset. Server-only. Backs super-admin today (see ADR 0007). `docker compose up -d db` → `npm run migrate` → `npm run seed`.
 
-**Non-goals (still):** real DB/API, auth backend, payment/courier integrations, multi-tenant provisioning, live "edit-in-admin → storefront" persistence. All mocked or deferred. See `docs/BACKLOG.md`.
+**Non-goals (still):** auth backend, payment/courier integrations, live "edit-in-admin → storefront" persistence — mocked/deferred. **No longer a non-goal:** the DB is real (local Postgres) and multi-tenant provisioning is decided (ADR 0008). See `docs/BACKLOG.md`.
 
 ---
 
@@ -171,8 +173,14 @@ Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palet
 - **M1 (DONE 2026-07-01):** Pesanan, Produk, Pelanggan, Diskon, Analitik, Pengaturan + Toko Online (Halaman, Blog, Navigasi).
 - **M1.5 (DONE 2026-07-02):** Produk sub-modules (Kategori/Inventori/Pembelian) + CRM + customer & collection editors + Halaman/Blog edit routes + order detail page + Pemasaran province filter + Pengaturan redesign + fashion demo with AI product photos + Shopify-style product list.
 - **M2 — storefront + monorepo (DONE 2026-07-02):** repo restructured to `apps/*` + `packages/*`; **super-admin** control plane; **`@indostore/data`** canonical nav shared by admin + storefront; **Navigasi drag-and-drop** menu builder; **Astro storefront built** — "Batik Nusantara" with beranda, kategori, produk (5-image gallery), keranjang, **checkout (+sukses)**, akun, blog, kontak; localStorage cart; 70 AI product images.
-- **M3 (next):** Wire **Supabase** (auth + DB + Storage + RLS `store_id`) — replace mock data-layer bodies function-by-function; forms persist; live "edit-in-admin → storefront"; real image upload + rich-text.
-- **M4:** Payments/couriers integration (Midtrans/Xendit/Duitku + Biteship), multi-store provisioning, per-client storefront deploy pipeline, billing/plans, full admin↔storefront catalog share, auth.
+- **M3 — backend (IN PROGRESS):**
+  - ✅ **Local PostgreSQL 16 + Drizzle** (`@indostore/db`, ADR 0007): 52 tables, versioned migrations, seed.
+  - ✅ **super-admin wired to DB** (`lib/data.ts`) — live, verified parity.
+  - ⏳ **admin → DB**: seed Batik Nusantara catalog, swap `apps/admin/lib/data/*` bodies (signatures unchanged).
+  - ⏳ **storefront → DB**: parameterize by `STORE_SLUG` (ADR 0008), read by `store_id`.
+  - ⏳ Mutations persist (save/edit/delete); live "edit-in-admin → storefront".
+  - ⏳ **Supabase**: connect for Auth + Storage + RLS (`store_id`), same migrations; image upload + rich-text.
+- **M4:** Payments/couriers integration (Midtrans/Xendit/Duitku + Biteship), per-client storefront deploy pipeline, billing/plans.
 
 > Detailed, prioritized tasks live in **`docs/BACKLOG.md`**.
 
@@ -182,8 +190,8 @@ Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palet
 
 - Final product name & brand accent.
 - Auth model (email+password vs Google; roles owner/staff/gudang).
-- Multi-store: shared DB + `store_id` RLS (leaning) vs DB-per-client.
-- Storefront data delivery: static build per deploy vs live read API.
+- ~~Multi-store: shared DB + `store_id` RLS vs DB-per-client.~~ **Decided:** shared DB + `store_id` (+ RLS at Supabase); one multi-tenant admin; storefront per client — **ADR 0008**.
+- Storefront data delivery: static build per deploy vs live read API (leaning per-deploy static with `STORE_SLUG`).
 - Rich-text editor choice for Halaman/Blog content (currently mock textarea).
 - Catalog-share mechanism: single shared catalog source vs published snapshot per storefront build.
 

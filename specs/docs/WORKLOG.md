@@ -30,8 +30,17 @@
 
 **Docs pass + auto-connect (2026-07-02):** new **@indostore/data** package = single source of truth for nav; admin menu builder + storefront header both derive from it (auto-sync on rebuild). Declared @indostore/data dep in admin+storefront package.json. Full docs refresh: PRD→v0.4, README, ARCHITECTURE, **new GUIDE.md**, UML (9 Mermaid diagrams), ADR 0005 (monorepo) + 0006 (shared nav), UI_INVENTORY/DATA_MODEL/SCHEMA. Known gaps flagged: storefront /halaman/[handle] + /blog/[handle] not built; /akun is a no-auth stub.
 
+**Backend M3 — local Postgres + Drizzle + super-admin live (2026-07-03):**
+- [x] **`@indostore/db`** package (Drizzle): `src/schema.ts` = **52 tables + 32 enums** from SCHEMA.md (snake_case casing, money=`bigint` IDR), `client.ts` singleton, **versioned migrations** (`drizzle/0000..0002`), `seed.ts`, `reset.ts`. Root **`docker-compose.yml`** = PostgreSQL 16 @ :5433. ADR 0007.
+- [x] **Seed** — **single-tenant MVP**: 3 plans + **one store "Batik Nusantara"** (account/owner/`store_users`/settings/`store_stats`), 6 invoices (`number`), 4 activity, platform gateways/couriers(Biteship)/COD. Idempotent (truncate). *(Decision: focus everything on 1 real store; multi-tenant topology = ADR 0008, target.)* super-admin metrics made honest for 1 store (cross-store deltas → 0, `newSignups30d` derived, trial note hidden when 0).
+- [x] **Wire super-admin → DB**: new **server-only `lib/data.ts`** (getStores/getPlatform/getDeltas/getPlanDistribution/getStatusDistribution/getInvoices/getActivity/getMrrSeries/getPaymentGateways/getCouriers/getAggregator). `lib/mock.ts` slimmed to config (types + PLANS). Client pages split into `*-client.tsx` + server wrapper; `mrr-chart` takes `data` prop; all DB pages `dynamic="force-dynamic"`. **Verified**: `tsc` clean, `build:super` (6 ƒ dynamic), 6 screenshots from DB with 0 console errors + **perfect parity**; live-mutation test proved runtime reads.
+- [x] **Screening/perfection**: `menu_items.parent_id` self-FK; 37 inferred type exports; `stores.city` + `store_stats` + `invoices.number` added so the platform view is faithful from DB; `reset` script (drops `public` **and** `drizzle` journal); apps wired (`@indostore/db` dep + `transpilePackages` + `serverExternalPackages:["postgres"]` + `.env.local`).
+- **Impl notes:** toko list now ordered by GMV desc; store-detail "ID toko" shows real uuid (was STR-2005). RLS not enabled locally (plain Postgres) — app-layer `store_id` scoping for now.
+- **Docs:** ADR **0007** (Postgres+Drizzle stack) + **0008** (per-client topology); ARCHITECTURE §9–10, UML §1/§10 (+provisioning sequence), SCHEMA (implemented + deltas), PRD status/roadmap.
+
 **Next up (resume here):**
-1. **E1 sisa** — confirm-dialog + toast pada aksi destruktif (Hapus di Halaman/Blog/Pelanggan/Produk list); Ekspor CSV (Analitik/Inventori/Pemasaran); global search ⌘K.
-2. **E0** de-dup `apps/admin` → `@indostore/ui`/`@indostore/lib` (hati-hati; admin matang) + Turborepo.
-3. **E3** data-layer seam — bungkus semua baca di `lib/data`, shared types di `@indostore/lib` (buka jalan M3).
-4. (later) share storefront catalog via `packages/data`; M3 Supabase; M4 integrations.
+1. **admin → DB** (biggest step to "terhubung keseluruhan"): (a) seed Batik Nusantara catalog into Postgres from `admin/lib/mock/store.ts`; (b) swap `apps/admin/lib/data/*` bodies to Drizzle (signatures unchanged). Then wrap entity-list direct-mock reads in `lib/data`.
+2. **storefront → DB**: parameterize by `STORE_SLUG`, read catalog/pages by `store_id` (ADR 0008).
+3. **Mutations** (save/edit/delete) → Drizzle `insert/update`; toasts already in place.
+4. **Supabase**: connect (Auth + Storage + RLS), same migrations; M4 real payment/courier integrations.
+5. **E1 sisa / E0 de-dup / Turborepo** (unchanged from before).

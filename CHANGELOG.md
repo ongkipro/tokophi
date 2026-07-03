@@ -1,6 +1,15 @@
 # Changelog — Indostore
 
-All notable changes to the admin. Dates are absolute. Phase: UI/UX-first (mock data).
+All notable changes. Dates are absolute. Phase: UI/UX-first → **backend M3 started** (super-admin on local Postgres).
+
+## 2026-07-03
+
+### M3 — backend: local Postgres + Drizzle, super-admin live
+- **`@indostore/db`** (Drizzle): 52 tables + 32 enums from SCHEMA.md, versioned migrations (`drizzle/0000..0002`), seed + reset. Root `docker-compose.yml` = PostgreSQL 16 @ :5433. **ADR 0007**.
+- **super-admin wired to PostgreSQL**: new server-only `lib/data.ts`; `lib/mock.ts` slimmed to config; client pages split (`*-client.tsx` + server wrapper); all DB pages `dynamic="force-dynamic"`. Verified: build clean + parity + live-mutation test.
+- **Schema deltas** for a faithful platform view: `stores.city`, `store_stats` rollup, `invoices.number`; `menu_items.parent_id` self-FK.
+- **Per-client topology decided** — **ADR 0008** (one control plane + one multi-tenant admin + storefront-per-client on one shared DB). Docs refreshed: PRD, ARCHITECTURE (§9–10), UML (§1/§10 + provisioning sequence), SCHEMA, WORKLOG.
+- storefront: product **ratings** (stars on cards + product-detail reviews summary) — data-driven from `catalog.ts`.
 
 ## 2026-07-01
 

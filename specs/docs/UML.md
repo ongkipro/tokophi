@@ -1,9 +1,9 @@
 # Indostore — Diagrams (UML / Mermaid)
 
 > Renders on GitHub / any Mermaid viewer. Kept text-based so it lives with the code.
-> Companion to `../PRD.md`, `SCHEMA.md`, `CONCEPT.md`. Updated 2026-07-02.
+> Companion to `../PRD.md`, `SCHEMA.md`, `CONCEPT.md`. Updated 2026-07-03.
 >
-> **Current state:** monorepo (npm workspaces) with 3 apps — `apps/admin` (Next 16, :3000, merchant admin), `apps/super-admin` (Next 16, :3001, platform control plane), `apps/storefront` (Astro 5, :4327, shopper shop "Batik Nusantara") — and 3 shared packages: `@indostore/ui`, `@indostore/lib`, `@indostore/data`. All screens run on **seeded mock data** (mulberry32, `TODAY=2026-06-30`); backend (Supabase) is M3.
+> **Current state:** monorepo (npm workspaces) with 3 apps — `apps/admin` (Next 16, :3000, merchant admin), `apps/super-admin` (Next 16, :3001, platform control plane), `apps/storefront` (Astro 5, :4327, shopper shop "Batik Nusantara") — and **4 shared packages**: `@indostore/ui`, `@indostore/lib`, `@indostore/data`, **`@indostore/db`** (Drizzle schema/client + migrations). **Backend is being wired:** **super-admin is live on local PostgreSQL 16** (Docker, port 5433) via `@indostore/db`; admin + storefront still run on **seeded mock data** (mulberry32, `TODAY=2026-06-30`). Prod target = Supabase (ADR 0007); per-client topology = ADR 0008.
 
 ## 1. System context / container (C4-ish)
 > Who talks to what: shoppers→storefront, merchants→admin, platform→super-admin; the 3 apps sit on shared packages; Supabase + payment/shipping integrations are platform-managed and land at M3.
@@ -21,13 +21,16 @@ graph TB
       UI["@indostore/ui<br/>shadcn/Base UI + tokens"]
       Lib["@indostore/lib<br/>formatters/types"]
       Data["@indostore/data<br/>canonical MAIN_MENU / FOOTER_MENU"]
+      Db["@indostore/db<br/>Drizzle schema + client"]
     end
   end
 
-  subgraph Backend["Backend — M3 (Supabase, managed)"]
-    Auth["Auth"]
-    DB[("Postgres + RLS by store_id")]
-    Storage["Storage (media)"]
+  subgraph Backend["Backend — Postgres now, Supabase target"]
+    PGSQL[("local PostgreSQL 16<br/>store_id scoping · Drizzle")]
+    subgraph Sb["Supabase — prod target"]
+      Auth["Auth"]
+      Storage["Storage (media)"]
+    end
   end
 
   subgraph Integrations["Platform integrations (set up by us — ADR 0004)"]
@@ -45,10 +48,11 @@ graph TB
   Storefront --> Lib
   Storefront --> Data
 
-  Admin -. M3 .-> DB
-  SuperAdmin -. M3 .-> DB
-  Storefront -. M3 .-> DB
-  DB --- Auth
+  SuperAdmin --> Db
+  Db ==>|live now| PGSQL
+  Admin -. next .-> PGSQL
+  Storefront -. next .-> PGSQL
+  PGSQL -. prod target .-> Sb
   Admin -. M3 .-> Storage
   SuperAdmin -. configures .-> PG
   SuperAdmin -. configures .-> AGG
@@ -376,5 +380,37 @@ graph LR
   Owner["Store owner"] --> AD["admin: produk, pesanan, CRM,<br/>navigasi, aktifkan metode/kurir"]
   Staff["Staf / gudang"] --> AD2["admin: pesanan, stok (peran terbatas)"]
   Buyer["Pembeli"] --> SF2["storefront: belanja, checkout"]
+```
+
+## 10. Per-client topology & provisioning (ADR 0008)
+> One control plane + one **multi-tenant** admin + a **storefront per client**, all on one shared DB. "Client Admin A/B" = the *same* admin app scoped by `store_id` — not a deploy per client.
+```mermaid
+graph TB
+  Super["Super Admin<br/>(1 deploy, cross-tenant)"] --> DB[("shared PostgreSQL<br/>store_id + RLS")]
+  Admin["Client Admin<br/>(1 multi-tenant deploy)"] --> DB
+  subgraph Clients["Per client = a store_id + a storefront deploy"]
+    A["Storefront A<br/>STORE_SLUG=a · domain A"]
+    B["Storefront B<br/>STORE_SLUG=b · domain B"]
+    C["Storefront C<br/>STORE_SLUG=c · domain C"]
+  end
+  A --> DB
+  B --> DB
+  C --> DB
+  MA([Merchant A]) -->|login → store_id=A| Admin
+  MB([Merchant B]) -->|login → store_id=B| Admin
+```
+
+**Onboard a client (3 steps, no new admin/DB):**
+```mermaid
+sequenceDiagram
+  participant P as Platform (super-admin)
+  participant DB as shared Postgres
+  participant CF as Cloudflare
+  participant M as Merchant
+  P->>DB: 1. create account + store (+owner, plan, settings, location)
+  P->>CF: 2. deploy storefront (STORE_SLUG + custom domain)
+  M->>DB: login → admin scoped to store_id (RLS)
+  M->>DB: 3. fill catalog / pages via scoped admin
+  Note over DB,CF: storefront reads that store by slug → live shop
 ```
 *Living doc — update diagrams when the architecture moves.*

@@ -45,9 +45,22 @@ cd apps/storefront && npm run dev    # storefront      → http://localhost:4327
 
 Build: `npm run build:admin` · `npm run build:super` · (storefront) `cd apps/storefront && npm run build`.
 
+## Database (local Postgres — `@indostore/db`)
+
+Backend is being wired behind the data layer: **plain PostgreSQL 16 in Docker + Drizzle** (prod target = Supabase; ADR 0007). **super-admin already reads it live**; admin + storefront still on mock.
+
+```bash
+docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted)
+npm run migrate -w @indostore/db     # apply versioned migrations
+npm run seed    -w @indostore/db     # (re)load demo data — idempotent
+npm run reset   -w @indostore/db     # drop public + drizzle schemas (then migrate + seed)
+npm run studio  -w @indostore/db     # Drizzle Studio
+```
+`DATABASE_URL` in root `.env` (tooling) + each app's `.env.local` (copy from `.env.example`). See `specs/decisions/0007` (stack) + `0008` (per-client topology).
+
 ## Stack
 
-Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 · **shadcn/ui on Base UI (`@base-ui/react`)** · Recharts · lucide-react · date-fns · Astro 5 (storefront) · (later) Supabase.
+Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 · **shadcn/ui on Base UI (`@base-ui/react`)** · Recharts · lucide-react · date-fns · Astro 5 (storefront) · **Drizzle + PostgreSQL 16** (`@indostore/db`, local via Docker) · (later) Supabase (Auth/Storage/RLS).
 
 ## Key conventions
 
@@ -58,10 +71,10 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - Sales channel = **Toko Online only**; analytics attribution = Meta / TikTok / Google Ads + Organic / Other.
 - Keep it **console-clean** (no Base UI warnings) and responsive; `npm run build` must pass.
 
-## Status (2026-07-02) — all three surfaces built as clickable mock prototypes
+## Status (2026-07-03) — three surfaces built; backend M3 started (super-admin live on Postgres)
 
 - **Admin:** Dashboard (KPIs, FB-style date range, charts) · Pesanan (+detail) · Produk (+editor, Kategori/Inventori/Pembelian) · Pelanggan (+detail/Segmen/Ulasan) · CRM (Follow-up WA/Pipeline/Template) · Diskon (+editor) · Analitik · Pemasaran (per-provinsi) · Halaman & Blog (create+edit) · **Navigasi** (drag-and-drop menu builder + up/down + sub-menu) · Pengaturan.
-- **Super Admin:** Dashboard (MRR/GMV) · Toko (+detail) · Paket · Analitik · Pengaturan (gateways + Biteship + couriers).
+- **Super Admin:** Dashboard (MRR/GMV) · Toko (+detail) · Paket · Analitik · Pengaturan (gateways + Biteship + couriers). **← all 5 pages now live on PostgreSQL** via `lib/data.ts` (no mock).
 - **Storefront:** beranda · kategori (+ virtual "semua"/"promo-gajian") · produk (**5-image gallery**) · keranjang · **checkout → sukses** · akun (mock login) · blog · kontak — localStorage cart, 70 AI product images, nav mirrors the admin menu.
 
 **Next:** Supabase backend (M3) → payment/courier integrations + multi-store provisioning (M4). Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md); task breakdown in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).

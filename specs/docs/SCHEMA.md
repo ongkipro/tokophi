@@ -1,7 +1,8 @@
-# Indostore — Backend-ready schema (Supabase/Postgres)
+# Indostore — Backend schema (PostgreSQL, Drizzle)
 
-> The DB design the mock already mirrors, so **M3 = implement this + swap `lib/data/*` bodies**, no UI rework.
-> Not yet built (backend deferred). This is the target. Keep `admin/lib/mock/store.ts` shaped like these tables.
+> **Implemented** as `@indostore/db` (Drizzle) — **52 tables** on local **PostgreSQL 16** (Docker, port 5433). Prod target = Supabase (ADR 0007). Source of truth = `packages/db/src/schema.ts`; this doc is the annotated reference.
+> **Status:** super-admin reads it **live** (`lib/data.ts`); admin + storefront still on mock — swap `lib/data/*` bodies next (§M3). Keep `admin/lib/mock/store.ts` shaped like these tables.
+> **Impl deltas vs the design below:** `stores.city` added; **`store_stats`** rollup table added (platform metrics cache); `invoices.number` added (human "INV-9001"). RLS policies are written but **not enabled locally** (no `auth.*` on plain Postgres — they light up at Supabase).
 
 ## Conventions
 - **Postgres** on Supabase. PK = `id uuid default gen_random_uuid()`. Timestamps `created_at/updated_at timestamptz default now()`.
@@ -14,8 +15,9 @@
 ## Identity & tenancy
 ```
 accounts(id, name, plan enum[pemula|bisnis|skala], created_at)         -- billing owner
-stores(id, account_id→accounts, name, slug unique, currency='IDR', timezone='Asia/Jakarta',
+stores(id, account_id→accounts, name, slug unique, city, currency='IDR', timezone='Asia/Jakarta',
        plan, status enum[trial|active|suspended], created_at)
+store_stats(store_id pk→stores, gmv_idr, orders_count, products_count, updated_at)  -- platform rollup CACHE (super-admin); refreshed by a job, seeded for demo
 users(id, email unique, name, ...)                                      -- maps to auth.users
 store_users(id, store_id→stores, user_id→users, role enum[owner|admin|staff|gudang],
             invited_at, accepted_at)                                    -- membership + RBAC
@@ -148,8 +150,8 @@ notification_templates(id, store_id, event, channel[email|wa], subject, body)  -
 > Source: `apps/super-admin/lib/mock.ts`. Not store-scoped — these live at the **platform/account** level (no `store_id`); only platform-admins read them.
 ```
 plans(id, key enum[pemula|bisnis|skala], name, price_idr, blurb, features jsonb)   -- subscription tiers
-invoices(id, account_id→accounts, store_id→stores null, plan_key, amount_idr,
-         status enum[dibayar|menunggu|gagal], issued_at)                            -- subscription billing
+invoices(id, number unique, account_id→accounts, store_id→stores null, plan_key, amount_idr,
+         status enum[dibayar|menunggu|gagal], issued_at)                            -- subscription billing ("INV-9001")
 platform_activity(id, kind enum[signup|upgrade|payment|churn|support], text, ts)   -- platform feed
 -- Derived (computed in queries/views, never stored):
 --   MRR = sum(plan price of active accounts); GMV = sum(store gmv);
@@ -174,12 +176,14 @@ platform_activity(id, kind enum[signup|upgrade|payment|churn|support], text, ts)
 | `PLANS` / `INVOICES` / `P_ACTIVITY` (super-admin) | `plans` / `invoices` / `platform_activity` |
 
 ## M3 migration steps (safe, contained)
-1. Supabase project; write these tables + enums; enable **RLS** with `store_id = auth_store()`.
-2. Seed one demo store from the current mock (deterministic) → parity with today's demo.
-3. Supabase **Auth** (email/OTP) + `store_users` for RBAC; store switcher reads memberships.
-4. Replace **`admin/lib/data/*` bodies** with Supabase queries — **signatures unchanged** → screens untouched.
-5. Wire mutations (save product/collection/order, stock adjust, PO) to `insert/update`.
-6. **Storage** for `product_media`/collection images (replace mock dropzone); real rich-text (Tiptap) for descriptions/articles.
-7. Real payment/courier integrations behind `payment_methods`/`shipping_methods` config (M4).
+1. ✅ **Local Postgres + Drizzle** (`@indostore/db`): all tables + enums as versioned migrations (`docker compose up -d db` → `npm run migrate`).
+2. ✅ **Seed (single-tenant MVP)** — one store **Batik Nusantara** (+account/owner/membership/settings/store_stats), 3 plans, 6 invoices, activity, platform payments/shipping/COD. All 3 surfaces center on this one store; the multi-tenant topology (ADR 0008) is the target, seeded 1-store for now.
+3. ✅ **Wire super-admin → DB** (`apps/super-admin/lib/data.ts`; `dynamic="force-dynamic"`) — 5 pages live, signatures unchanged, UI untouched.
+4. ⏳ **Seed the demo store's catalog** (Batik Nusantara) from `admin/lib/mock/store.ts`: products/variants/media/inventory, collections, orders/line-items/payments, customers, discounts, pages/blog/menu, ad_metrics.
+5. ⏳ Replace **`admin/lib/data/*` bodies** with Drizzle queries — **signatures unchanged** → screens untouched.
+6. ⏳ Storefront reads its store by `store_id`/`STORE_SLUG` (ADR 0008).
+7. ⏳ **Mutations** (save product/collection/order, stock adjust, PO) → `insert/update`.
+8. ⏳ **Supabase**: point `DATABASE_URL` at it, apply same migrations, enable **RLS** (`store_id = auth_store()`), wire **Auth** (email/OTP + `store_users` RBAC, store switcher) + **Storage** (media) + Tiptap rich-text.
+9. ⏳ Real payment/courier integrations behind `store_payment_methods`/`store_shipping_methods` (M4).
 
 *Living doc — update alongside the mock whenever an entity is added.*
