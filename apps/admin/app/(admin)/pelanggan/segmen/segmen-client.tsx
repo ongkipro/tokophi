@@ -6,6 +6,9 @@ import {
   Crown, UserPlus, Sparkles, MapPin, AlertTriangle,
 } from "lucide-react";
 
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { createSegment, deleteSegment } from "@/lib/actions/segments";
 import { PageHeader } from "@/components/admin/page-header";
 import { num, pct } from "@/lib/format";
 import { type CustSegment } from "@/lib/mock/store";
@@ -37,7 +40,19 @@ function segmentVisual(name: string): { Icon: typeof Users; tint: string } {
   return { Icon: Users, tint: "bg-muted text-muted-foreground" };
 }
 
-function SegmentActions() {
+function SegmentActions({ segment }: { segment: CustSegment }) {
+  const router = useRouter();
+  const [pending, startTransition] = React.useTransition();
+  const remove = () =>
+    startTransition(async () => {
+      try {
+        await deleteSegment(segment.id);
+        toast.success(`Segmen "${segment.name}" dihapus`);
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus segmen");
+      }
+    });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi segmen" />}>
@@ -47,7 +62,7 @@ function SegmentActions() {
         <DropdownMenuItem><Users /> Lihat pelanggan</DropdownMenuItem>
         <DropdownMenuItem><Sparkles /> Edit</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive"><TrendingDown /> Hapus</DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" disabled={pending} onClick={remove}><TrendingDown /> Hapus</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -63,7 +78,7 @@ function SegmentCard({ segment }: { segment: CustSegment }) {
         <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg", tint)}>
           <Icon className="size-5" />
         </div>
-        <SegmentActions />
+        <SegmentActions segment={segment} />
       </div>
 
       <div>
@@ -88,8 +103,31 @@ function SegmentCard({ segment }: { segment: CustSegment }) {
 }
 
 function CreateSegmentDialog() {
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false);
+  const [name, setName] = React.useState("");
+  const [desc, setDesc] = React.useState("");
+  const [pending, startTransition] = React.useTransition();
+  const create = () => {
+    if (!name.trim()) {
+      toast.error("Nama segmen wajib diisi");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await createSegment({ name, description: desc });
+        toast.success("Segmen dibuat");
+        setOpen(false);
+        setName("");
+        setDesc("");
+        router.refresh();
+      } catch {
+        toast.error("Gagal membuat segmen");
+      }
+    });
+  };
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button><Plus /> Buat segmen</Button>} />
       <DialogContent>
         <DialogHeader>
@@ -102,12 +140,12 @@ function CreateSegmentDialog() {
         <div className="grid gap-4 py-1">
           <div className="grid gap-2">
             <Label htmlFor="segmen-nama">Nama segmen</Label>
-            <Input id="segmen-nama" placeholder="mis. Pelanggan Setia" autoComplete="off" />
+            <Input id="segmen-nama" placeholder="mis. Pelanggan Setia" autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="segmen-deskripsi">Deskripsi</Label>
-            <Textarea id="segmen-deskripsi" placeholder="Jelaskan siapa yang termasuk dalam segmen ini." rows={3} />
+            <Textarea id="segmen-deskripsi" placeholder="Jelaskan siapa yang termasuk dalam segmen ini." rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} />
           </div>
 
           <div className="flex items-start gap-2 rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
@@ -121,7 +159,7 @@ function CreateSegmentDialog() {
 
         <DialogFooter>
           <DialogClose render={<Button variant="outline">Batal</Button>} />
-          <DialogClose render={<Button>Simpan</Button>} />
+          <Button onClick={create} disabled={pending}>{pending ? "Menyimpan…" : "Simpan"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

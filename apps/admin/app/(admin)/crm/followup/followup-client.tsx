@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { setFollowupStatus } from "@/lib/actions/crm";
 import {
   Send,
   MoreHorizontal,
@@ -166,12 +169,23 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"semua" | FollowupType>("semua");
   const [done, setDone] = useState<Set<string>>(new Set());
+  const router = useRouter();
+  const [, startTransition] = useTransition();
 
   function markDone(id: string) {
     setDone((prev) => {
       const next = new Set(prev);
       next.add(id);
       return next;
+    });
+    startTransition(async () => {
+      try {
+        await setFollowupStatus(id, "selesai");
+        toast.success("Follow-up ditandai selesai");
+        router.refresh();
+      } catch {
+        toast.error("Gagal memperbarui follow-up");
+      }
     });
   }
 
