@@ -71,7 +71,7 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - Sales channel = **Toko Online only**; analytics attribution = Meta / TikTok / Google Ads + Organic / Other.
 - Keep it **console-clean** (no Base UI warnings) and responsive; `npm run build` must pass.
 
-## Status (2026-07-03) — full local stack: 3 surfaces READ + all admin editors WRITE Postgres, local auth + media upload (local Linux dev)
+## Status (2026-07-04) — full local stack: 3 surfaces READ + all admin editors WRITE Postgres, local auth + RBAC + RLS + media upload (local Linux dev)
 
 > **Current focus = local Linux.** Everything runs locally: PostgreSQL 16 in Docker (:5433) + the two Next dev servers + the Astro storefront. Prod (self-hosted Postgres + PostgREST on a VPS) is deferred until the local stack is feature-complete.
 
@@ -81,15 +81,18 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - **Storefront:** beranda · kategori (+ virtual "semua"/"promo-gajian") · produk (**5-image gallery**) · keranjang · **checkout → sukses** · akun (mock login) · blog · kontak — reads the **same Postgres catalog** (`src/data/catalog.ts` → `@indostore/db` at build/SSR), localStorage cart, 70 AI product images.
 - **Writes — all 12 admin editors persist to Postgres via server actions (`lib/actions/*`):** Produk · Diskon · Halaman · Blog · Kategori (create/edit/delete) · order-status · Inventori-stock · Navigasi · Pelanggan · CRM (follow-up) · Segmen · Pembelian (PO create/receive→stock/cancel).
 - **Auth (local):** email/password login (jose JWT httpOnly cookie) against `users`⋈`store_users`; `middleware.ts` protects the admin, topbar shows the user + logout. Owner: `ongki@batiknusantara.id / indostore123`.
+- **RBAC (local):** every mutating server action gates on a capability (`lib/rbac.ts` `requireCapability`) — role→capability matrix for owner/admin/staff/gudang from the session JWT.
+- **RLS (local):** migration `0012` enables Row-Level Security + a `tenant_isolation` policy (`store_id`) on all 32 store-scoped tables + a non-owner `indostore_app` role; `withTenant()` sets the per-txn GUC. `npm run verify-rls` proves isolation (right tenant 14 / wrong 0 / cross-tenant write blocked). Enforces once the VPS uses the `indostore_app` role.
 - **Media (local):** product editor uploads real images → `public/uploads/` + `product_media` (5MB cap), with per-image delete.
 
-**Next (local Linux):** RBAC (gate by `store_users.role`) + enable Postgres RLS (`store_id`). **Later (prod):** self-hosted Postgres + PostgREST on a VPS + Storage (MinIO/S3) → payments/couriers + multi-store provisioning. Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md); task breakdown in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).
+**Next (local Linux):** RBAC UI polish (hide/disable per role via `can()` + graceful ForbiddenError toast). **Later (prod):** VPS activation — point `DATABASE_URL` at the `indostore_app` role + route through `withTenant()` so RLS enforces; self-hosted Postgres + PostgREST + Storage (MinIO/S3) → payments/couriers + multi-store provisioning. Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md); task breakdown in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).
 
 ## Recent log (newest first)
 
+- **2026-07-04** — **RBAC + Postgres RLS**: capability matrix gates all 13 mutating action files; migration `0012` enables RLS + `tenant_isolation` on 32 tables + `indostore_app` role + `withTenant()`; `verify-rls` proves tenant isolation.
 - **2026-07-03** — **Local media upload**: product editor uploads real images → `public/uploads/` + `product_media` (server action, 5MB cap) + per-image delete.
 - **2026-07-03** — **Local admin auth**: email/password login, jose JWT httpOnly session, `middleware.ts` route protection, topbar user + logout (`users.password_hash` scrypt).
 - **2026-07-03** — **All 12 admin editors now WRITE Postgres** (added Navigasi, Pelanggan, CRM, Segmen, Pembelian incl. a real line-item PO builder with receive→stock) via `lib/actions/*`.
 - **2026-07-03** — Decision: **prod backend = self-hosted Postgres + PostgREST on a VPS (not Supabase)**; all docs reframed. Focus stays **local Linux**.
 - **2026-07-03** — **All three surfaces READ Postgres** (storefront `catalog.ts` reads `@indostore/db`); **admin 100% DB-backed** (16 modules); 53 tables.
-- **⏸️ Paused here** — resume at **RBAC + local RLS** (see [`specs/docs/WORKLOG.md`](specs/docs/WORKLOG.md) "Next up"). Full history: [`CHANGELOG.md`](CHANGELOG.md).
+- **Next up** — RBAC UI polish, then VPS activation (see [`specs/docs/WORKLOG.md`](specs/docs/WORKLOG.md) CURRENT STATE). Full history: [`CHANGELOG.md`](CHANGELOG.md).

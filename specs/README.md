@@ -71,10 +71,10 @@ Build: `npm run build:admin` / `npm run build:super`; storefront `cd apps/storef
 - **Payments & shipping are platform-managed** (ADR 0004): the platform configures gateways (Midtrans/Xendit/Duitku) + COD + Biteship aggregator; merchants only enable methods and pick couriers.
 - Sales channel = **Toko Online only**; analytics attribution = Meta/TikTok/Google Ads + Organic/Other.
 
-## Status (2026-07-03)
+## Status (2026-07-04)
 
 **All three surfaces built as clickable products; backend M3 in progress.** Admin (M0+M1+M1.5): Dashboard, Pesanan (+detail), Produk (+editor, Kategori/Inventori/Pembelian), Pelanggan (+detail/Segmen/Ulasan), CRM, Diskon (+editor), Analitik, Pemasaran, Toko Online (Halaman/Blog with create+edit, Navigasi drag-and-drop menu builder), Pengaturan. Super-admin: Dashboard/Toko/Paket/Analitik/Pengaturan. Storefront: beranda, kategori, produk (5-image gallery), keranjang, checkout (+sukses), akun, blog, kontak — localStorage cart, 70 AI product images.
 
-**Backend (M3):** **local PostgreSQL 16 + Drizzle** (`@indostore/db`, 53 tables, single-tenant "Batik Nusantara") is live — **super-admin (all 5) + 16 admin modules** + storefront all read the DB (reads end-to-end via `lib/data/*` + the storefront catalog); only mutations (writes) don't persist yet. See ADR **0007** (stack) / **0008** (per-client topology).
+**Backend (M3):** **local PostgreSQL 16 + Drizzle** (`@indostore/db`, 53 tables, migrations 0000–0012, single-tenant "Batik Nusantara") is live end-to-end: **super-admin (all 5) + 16 admin modules + storefront read** the DB; **all 12 admin editors write** via `lib/actions/*`; **local auth** (jose JWT) + **RBAC** (capability matrix gates every mutation) + **RLS** (migration 0012 — `tenant_isolation` on 32 tables + `indostore_app` role + `withTenant()`; `npm run verify-rls` green) + **local media upload**. See ADR **0007** (stack) / **0008** (per-client topology).
 
-**Next:** finish admin → DB (Pemasaran) → **self-hosted Postgres (VPS)** (Auth/Storage/RLS) → payment/courier integrations + provisioning (M4). See **[docs/BACKLOG.md](docs/BACKLOG.md)**.
+**Next:** RBAC UI polish (hide/disable per role) → **VPS activation** (connect as `indostore_app` + route through `withTenant()` so RLS enforces; self-hosted Postgres + PostgREST + Storage) → payment/courier integrations + provisioning (M4). See **[docs/BACKLOG.md](docs/BACKLOG.md)**.

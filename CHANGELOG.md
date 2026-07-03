@@ -2,6 +2,16 @@
 
 All notable changes. Dates are absolute. Phase: UI/UX-first → **backend M3 started** (super-admin on local Postgres).
 
+## 2026-07-04
+
+### M3 — RBAC + Row-Level Security (tenant isolation)
+- **RBAC (`apps/admin/lib/rbac.ts`)** — capability model + role→capability matrix (owner=all · admin=all−settings · staff=shop ops (no product-delete / warehouse / settings) · gudang=inventori+pembelian only). `can(role, cap)` + `requireCapability(cap)` (returns the session JWT or throws `ForbiddenError`).
+- **All 13 mutating action files gated** (`lib/actions/*`) — each mutation calls `requireCapability(...)`; store-scoped creates now take `store_id` from the session (removed the per-file "first store" helper).
+- **RLS migration `0012_tenant_rls`** — non-owner `indostore_app` role + grants, `app_current_store_id()` GUC reader, and `ENABLE ROW LEVEL SECURITY` + `tenant_isolation` policy (`USING` + `WITH CHECK` on `store_id`) across all **32 store-scoped tables**. Registered in the drizzle journal so `npm run migrate` applies it.
+- **`withTenant(storeId, fn)`** (`packages/db/src/rls.ts`) — per-txn `set_config('app.store_id', …, true)` + `SET LOCAL ROLE indostore_app`; ready for the VPS switch.
+- **`npm run verify-rls`** proves isolation: right tenant → 14 products, wrong/no-GUC tenant → 0 (fail-closed), cross-tenant INSERT blocked by `WITH CHECK`. Verified; `build:admin` clean.
+- Locally the app connects as the table owner (RLS bypassed by design); enforcement flips on when the VPS points `DATABASE_URL` at `indostore_app` + routes through `withTenant`. RBAC (app-layer) is enforced now.
+
 ## 2026-07-03
 
 ### M3 — backend: local Postgres + Drizzle, super-admin live

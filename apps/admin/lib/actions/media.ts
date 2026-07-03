@@ -4,12 +4,14 @@ import path from "node:path";
 import { db, schema } from "@indostore/db";
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { requireCapability } from "@/lib/rbac";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 const MAX_BYTES = 5 * 1024 * 1024;
 
 // Upload one image to local storage (public/uploads/) and add a product_media row.
 export async function uploadProductImage(productId: string, formData: FormData): Promise<void> {
+  await requireCapability("media:write");
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) throw new Error("no file");
   if (!file.type.startsWith("image/")) throw new Error("not an image");
@@ -32,6 +34,7 @@ export async function uploadProductImage(productId: string, formData: FormData):
 
 // Remove a product_media row (and the local file if it was an upload).
 export async function deleteProductImage(mediaId: string, productId: string): Promise<void> {
+  await requireCapability("media:write");
   const [row] = await db.select({ url: schema.productMedia.url }).from(schema.productMedia).where(and(eq(schema.productMedia.id, mediaId), eq(schema.productMedia.productId, productId))).limit(1);
   if (!row) return;
   await db.delete(schema.productMedia).where(eq(schema.productMedia.id, mediaId));

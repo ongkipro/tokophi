@@ -46,9 +46,10 @@
 - [ ] **Deploy to Cloudflare** · **S** · wire CF Pages/Workers deploy.
 
 ## Epic 5 — Backend (M3 — local Postgres/Drizzle → self-hosted VPS)
-- [x] **Schema (`@indostore/db`)** · **L** · 53 tables/enums from `SCHEMA.md` as Drizzle + versioned migrations on **local PostgreSQL 16** (Docker). Seeded single-tenant "Batik Nusantara" = parity with mock. *(RLS policies written; enabled at self-hosted Postgres — ADR 0007.)*
+- [x] **Schema (`@indostore/db`)** · **L** · 53 tables/enums from `SCHEMA.md` as Drizzle + versioned migrations on **local PostgreSQL 16** (Docker). Seeded single-tenant "Batik Nusantara" = parity with mock.
+- [x] **RLS (tenant isolation)** · **M** · migration `0012` enables Row-Level Security + `tenant_isolation` (`USING`/`WITH CHECK` on `store_id`) across all 32 store-scoped tables + non-owner `indostore_app` role + `withTenant()` GUC helper. `npm run verify-rls` proves isolation. *(Enforces under `indostore_app` on the VPS; owner bypasses locally — ADR 0007.)*
 - [~] **Swap `lib/data` bodies → queries** · **L** · ✅ super-admin (all 5) + admin 16 modules read the DB (`force-dynamic`). ⏳ storefront.
-- [~] **Auth + RBAC** · **M** · ✅ **local auth done** (email/password → jose JWT httpOnly cookie, `middleware.ts` protects admin, owner `ongki@batiknusantara.id`). ⏳ **RBAC** (gate by `store_users.role`) + real multi-tenant scoping.
+- [x] **Auth + RBAC** · **M** · ✅ **local auth** (email/password → jose JWT httpOnly cookie, `middleware.ts` protects admin, owner `ongki@batiknusantara.id`) + ✅ **RBAC** (`lib/rbac.ts` `requireCapability` gates all 13 mutating action files by `store_users.role`; store_id from the session). ⏳ RBAC UI polish (hide/disable per role) is P1.
 - [x] **Mutations persist** · **L** · ✅ all 12 admin editors save/edit/delete → Drizzle `insert/update` (`lib/actions/*`); refresh keeps changes. Incl. PO create/receive→stock, order-status, stock adjust, CRM follow-up.
 - [~] **Storage + rich-text** · **M** · ✅ **local media upload done** (product images → `public/uploads/` + `product_media`). ⏳ Tiptap rich-text for bodies; VPS storage (MinIO/S3) later.
 - [x] **Super-admin cross-tenant** · **M** · reads across `store_id`; MRR/GMV/etc. from DB (single-tenant now).

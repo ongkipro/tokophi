@@ -5,9 +5,9 @@
 > Legend: `[ ]` todo · `[~]` partial · `[x]` done. Updated 2026-07-03.
 
 ## P0 — Foundation (do before/for backend)
-- [~] **Backend** — ✅ **local PostgreSQL 16 + Drizzle** (`@indostore/db`, 53 tables) live: all 3 surfaces read + all 12 admin editors write + local auth (jose JWT) + local media upload. ⏳ **RBAC + RLS by `store_id`** (local), then VPS (self-hosted Postgres + PostgREST + Storage). See `SCHEMA.md` + ADR 0007/0008.
+- [~] **Backend** — ✅ **local PostgreSQL 16 + Drizzle** (`@indostore/db`, 53 tables, migrations 0000–0012) live: all 3 surfaces read + all 12 admin editors write + local auth (jose JWT) + **RBAC** (capability matrix gates all mutations) + **RLS** (migration 0012, `tenant_isolation` on 32 tables + `indostore_app` role + `withTenant()`, `verify-rls` green) + local media upload. ⏳ then VPS (flip to `indostore_app` role so RLS enforces; self-hosted Postgres + PostgREST + Storage). See `SCHEMA.md` + ADR 0007/0008.
 - [x] **Extend the data-layer seam to ALL screens.** ✅ Reads via `lib/data/*` (super-admin + 16 admin modules + storefront `@indostore/db`). ✅ Writes via `lib/actions/*` (all 12 editors). `lib/mock` kept only for decorative bits (live ticker, analitik breakdowns).
-- [~] **Auth + real multi-tenant.** ✅ local login/session done; store switcher still cosmetic — ⏳ scope data by `store_id` (RBAC + RLS from the session JWT).
+- [~] **Auth + real multi-tenant.** ✅ local login/session + **RBAC** (capability matrix, `store_id` from the session) + **RLS** (`store_id` policies, `withTenant()`) done. Store switcher still cosmetic — ⏳ enforce at runtime by connecting as `indostore_app` + routing through `withTenant()` (VPS).
 
 ## P1 — Functional completeness (mostly wireable now, no backend)
 - [ ] **De-dup: migrate `apps/admin` to consume `@indostore/ui` + `@indostore/lib`** and delete its local `components/ui` + `lib/format`/`utils`. (Monorepo is set up; super-admin already uses the shared packages; admin still has its own copies — see AGENTS.md. Do this carefully so the mature admin keeps building.)

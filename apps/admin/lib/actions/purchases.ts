@@ -2,11 +2,7 @@
 import { db, schema } from "@indostore/db";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-
-async function storeId() {
-  const [s] = await db.select({ id: schema.stores.id }).from(schema.stores).limit(1);
-  return s!.id;
-}
+import { requireCapability } from "@/lib/rbac";
 
 function revalidate() {
   revalidatePath("/produk/pembelian");
@@ -22,7 +18,7 @@ export async function createPurchaseOrder(input: {
   note?: string;
   lines: POLine[];
 }): Promise<string> {
-  const sid = await storeId();
+  const { storeId: sid } = await requireCapability("purchases:write");
   const lines = input.lines.filter((l) => l.variantId && l.qty > 0);
   if (!lines.length) throw new Error("no lines");
   // match supplier by name (case-insensitive); nullable if not found
@@ -43,6 +39,7 @@ export async function createPurchaseOrder(input: {
 
 // Receive the goods: bump inventory by the outstanding qty of each line, mark received.
 export async function receivePurchaseOrder(code: string): Promise<void> {
+  await requireCapability("purchases:write");
   const [po] = await db.select({ id: schema.purchaseOrders.id, status: schema.purchaseOrders.status }).from(schema.purchaseOrders).where(eq(schema.purchaseOrders.code, code)).limit(1);
   if (!po || po.status === "diterima") return;
   const items = await db.select().from(schema.purchaseOrderItems).where(eq(schema.purchaseOrderItems.purchaseOrderId, po.id));
@@ -59,6 +56,7 @@ export async function receivePurchaseOrder(code: string): Promise<void> {
 }
 
 export async function cancelPurchaseOrder(code: string): Promise<void> {
+  await requireCapability("purchases:write");
   const [po] = await db.select({ id: schema.purchaseOrders.id }).from(schema.purchaseOrders).where(and(eq(schema.purchaseOrders.code, code))).limit(1);
   if (!po) return;
   await db.delete(schema.purchaseOrderItems).where(eq(schema.purchaseOrderItems.purchaseOrderId, po.id));

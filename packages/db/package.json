@@ -14,7 +14,8 @@
     "migrate": "dotenv -e ../../.env -- drizzle-kit migrate",
     "studio": "dotenv -e ../../.env -- drizzle-kit studio",
     "reset": "dotenv -e ../../.env -- tsx src/reset.ts",
-    "seed": "dotenv -e ../../.env -- tsx src/seed.ts"
+    "seed": "dotenv -e ../../.env -- tsx src/seed.ts",
+    "verify-rls": "dotenv -e ../../.env -- tsx src/verify-rls.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.36.4",

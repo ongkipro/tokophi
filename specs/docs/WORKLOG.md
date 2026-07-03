@@ -3,15 +3,31 @@
 > Newest first. What we did + what's next, so any session can resume instantly.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/indostore` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE — PAUSED (2026-07-03) · resume at RBAC + RLS
+## ▶ CURRENT STATE (2026-07-04) · RBAC + RLS done · next = RBAC UI polish, then VPS
 
-**Everything runs locally on Linux** (Docker PostgreSQL 16 :5433 + Drizzle `@indostore/db`, 53 tables). Done + verified end-to-end:
+**Everything runs locally on Linux** (Docker PostgreSQL 16 :5433 + Drizzle `@indostore/db`, 53 tables, migrations 0000–0012). Done + verified end-to-end:
 - **Reads:** all 3 surfaces (super-admin 5 pages + admin 16 modules + storefront) read Postgres.
 - **Writes:** all **12 admin editors** persist via `lib/actions/*` server actions (Produk/Diskon/Halaman/Blog/Kategori CRUD · order-status · Inventori-stock · Navigasi · Pelanggan · CRM follow-up · Segmen · Pembelian PO create/receive→stock/cancel).
 - **Auth (local):** email/password login → jose JWT httpOnly cookie, `middleware.ts` protects the admin (owner `ongki@batiknusantara.id / indostore123`).
+- **RBAC (local):** every mutating server action gates on a capability via `lib/rbac.ts` `requireCapability()` — role→capability matrix for owner/admin/staff/gudang (role comes from the session JWT). Actions also derive `store_id` from the session (dropped the "first store" helper).
+- **RLS (local):** migration `0012_tenant_rls` enables Row-Level Security + a `tenant_isolation` policy (`USING`/`WITH CHECK` on `store_id = app_current_store_id()`) on all **32 store-scoped tables**, plus a non-owner `indostore_app` role. `withTenant(storeId, fn)` helper sets the `app.store_id` GUC + `SET LOCAL ROLE` per txn. **Verified** via `npm run verify-rls`: right tenant sees 14 products, wrong/missing tenant sees 0, cross-tenant write blocked. (App still connects as owner locally → RLS bypassed until the VPS flips `DATABASE_URL` to `indostore_app` + routes through `withTenant`.)
 - **Media (local):** product image upload → `apps/admin/public/uploads/` + `product_media`.
 
-**▶ RESUME HERE (next session):** **RBAC + local Postgres RLS** — (1) gate server actions/routes by `store_users.role` (owner/admin/staff/gudang); (2) enable RLS keyed on `store_id` (set a per-request GUC from the session JWT, write `USING` policies). Then (later) VPS: self-hosted Postgres + PostgREST + Storage. Detail per-entry below (newest first).
+**▶ RESUME HERE (next session):** **RBAC UI polish** — hide/disable controls per role via `can()` (server-side enforcement already covers security) + graceful `ForbiddenError` → toast in editors. Then **VPS activation** (the deferred big one): flip the app's `DATABASE_URL` to the non-owner `indostore_app` role, route reads/writes through `withTenant()` so RLS enforces, then self-hosted Postgres + PostgREST + Storage (MinIO/S3). Detail per-entry below (newest first).
+
+## 2026-07-04 — Session: RBAC + local Postgres RLS ✅
+**State before:** all reads + writes + local auth + local media done on local Postgres; paused at RBAC+RLS (single owner user).
+
+**Done this session:**
+- [x] **RBAC (`apps/admin/lib/rbac.ts`)** — capability model + role→capability matrix (owner=all · admin=all−settings · staff=shop ops, no product-delete/warehouse/settings · gudang=inventori+pembelian only). `can(role, cap)`, `requireCapability(cap)` (returns the session or throws `ForbiddenError`).
+- [x] **Gated all 13 mutating action files** (`lib/actions/*`, auth.ts excluded): products (write/delete split), discounts, pages, articles, collections, menus (content), orders, inventory, purchases, customers, crm+segments. Each mutation calls `await requireCapability(...)`; store-scoped creates now take `store_id` from the session (removed the per-file "first store" helper).
+- [x] **RLS migration `0012_tenant_rls`** — hand-authored (drizzle-kit doesn't model RLS): non-owner `indostore_app` role + grants, `app_current_store_id()` GUC reader, and `ENABLE ROW LEVEL SECURITY` + `tenant_isolation` policy (`USING` + `WITH CHECK`) on all **32 `store_id` tables**. Registered in the drizzle journal (+ 0012 snapshot) so `npm run migrate` applies it. Applied clean.
+- [x] **`withTenant(storeId, fn)`** (`packages/db/src/rls.ts`, exported) — per-txn `set_config('app.store_id', …, true)` + `SET LOCAL ROLE indostore_app`. Ready for the VPS switch.
+- [x] **`npm run verify-rls`** (`src/verify-rls.ts`) proves isolation: right tenant → 14 products, wrong tenant → 0, no-GUC → 0 (fail-closed), cross-tenant INSERT blocked by `WITH CHECK`. **All ✓.**
+- **Verified:** `build:admin` clean (middleware + all routes intact), `verify-rls` all green.
+- **Note:** locally the app connects as the table owner, which *bypasses* RLS by design — enforcement flips on when the VPS points `DATABASE_URL` at `indostore_app` and queries run via `withTenant`. RBAC (app-layer) is enforced now regardless.
+
+**Next:** RBAC UI polish (hide/disable per role + graceful ForbiddenError toast), then VPS activation. See CURRENT STATE banner.
 
 ## 2026-07-02 — Session: execute tasks (storefront built ✅)
 **State before:** Monorepo (apps/admin :3000, apps/super-admin :3001, packages/ui, packages/lib), both UI-mock prototypes, clean. Pushed to private GitHub — **no further pushes until told**. Payments/shipping platform-managed (ADR 0004). Docs current (PRD v0.3, UML, TASKS, SCHEMA, BACKLOG).

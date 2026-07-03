@@ -2,8 +2,8 @@
 import { db, schema } from "@indostore/db";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { requireCapability } from "@/lib/rbac";
 
-// Single-tenant MVP: everything is scoped to the one store.
 export type ProductInput = {
   name: string;
   description: string;
@@ -19,11 +19,6 @@ export type ProductInput = {
   weightGrams?: number | null;
   stock: number;
 };
-
-async function storeId() {
-  const [s] = await db.select({ id: schema.stores.id }).from(schema.stores).limit(1);
-  return s!.id;
-}
 
 const productFields = (i: ProductInput) => ({
   title: i.name,
@@ -43,7 +38,7 @@ const variantFields = (i: ProductInput) => ({
 });
 
 export async function createProduct(input: ProductInput): Promise<string> {
-  const sid = await storeId();
+  const { storeId: sid } = await requireCapability("products:write");
   const [p] = await db.insert(schema.products).values({ storeId: sid, ...productFields(input) }).returning();
   const [v] = await db
     .insert(schema.productVariants)
@@ -57,6 +52,7 @@ export async function createProduct(input: ProductInput): Promise<string> {
 }
 
 export async function updateProduct(id: string, input: ProductInput): Promise<void> {
+  await requireCapability("products:write");
   await db.update(schema.products).set(productFields(input)).where(eq(schema.products.id, id));
   const [v] = await db
     .select({ id: schema.productVariants.id })
@@ -74,6 +70,7 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
 // Products may be referenced by historical order line-items, so "delete" = archive
 // (soft delete). Archived products drop out of both the admin list and the storefront.
 export async function deleteProduct(id: string): Promise<void> {
+  await requireCapability("products:delete");
   await db.update(schema.products).set({ status: "archived", archivedAt: new Date() }).where(eq(schema.products.id, id));
   revalidatePath("/produk");
 }

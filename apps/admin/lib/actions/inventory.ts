@@ -2,9 +2,11 @@
 import { db, schema } from "@indostore/db";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { requireCapability } from "@/lib/rbac";
 
 // Set available stock on each product's default variant.
 export async function updateStock(updates: { productId: string; available: number }[]): Promise<void> {
+  await requireCapability("inventory:write");
   for (const u of updates) {
     const [v] = await db
       .select({ id: schema.productVariants.id })

@@ -2,6 +2,7 @@
 import { db, schema } from "@indostore/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { requireCapability } from "@/lib/rbac";
 
 type NavItemType = "beranda" | "koleksi" | "produk" | "halaman" | "blog" | "url";
 const NAV_TO_DB: Record<NavItemType, "home" | "collection" | "product" | "page" | "blog" | "url"> = {
@@ -11,6 +12,7 @@ type NavItem = { id: string; title: string; type: NavItemType; target: string; c
 
 // Replace the whole tree for one menu (delete + re-insert with parent_id + position).
 export async function saveMenu(handle: string, items: NavItem[]): Promise<void> {
+  await requireCapability("content:write");
   const [menu] = await db.select({ id: schema.menus.id }).from(schema.menus).where(eq(schema.menus.handle, handle)).limit(1);
   if (!menu) return;
   await db.delete(schema.menuItems).where(eq(schema.menuItems.menuId, menu.id));

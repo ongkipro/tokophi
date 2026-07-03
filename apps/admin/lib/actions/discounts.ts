@@ -2,6 +2,7 @@
 import { db, schema } from "@indostore/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { requireCapability } from "@/lib/rbac";
 
 // Anchored to the seed's frame so derived status (getDiscount) round-trips.
 const ADMIN_TODAY = new Date("2026-06-30T00:00:00Z");
@@ -16,11 +17,6 @@ export type DiscountInput = {
   status: "aktif" | "terjadwal";
   period: number; // days until it ends
 };
-
-async function storeId() {
-  const [s] = await db.select({ id: schema.stores.id }).from(schema.stores).limit(1);
-  return s!.id;
-}
 
 function fields(i: DiscountInput) {
   const days = Math.max(1, i.period || 0);
@@ -38,19 +34,21 @@ function fields(i: DiscountInput) {
 }
 
 export async function createDiscount(input: DiscountInput): Promise<string> {
-  const sid = await storeId();
+  const { storeId: sid } = await requireCapability("discounts:write");
   const [d] = await db.insert(schema.discounts).values({ storeId: sid, ...fields(input) }).returning();
   revalidatePath("/diskon");
   return d.id;
 }
 
 export async function updateDiscount(id: string, input: DiscountInput): Promise<void> {
+  await requireCapability("discounts:write");
   await db.update(schema.discounts).set(fields(input)).where(eq(schema.discounts.id, id));
   revalidatePath("/diskon");
   revalidatePath(`/diskon/${id}`);
 }
 
 export async function deleteDiscount(id: string): Promise<void> {
+  await requireCapability("discounts:write");
   await db.delete(schema.discountUsages).where(eq(schema.discountUsages.discountId, id));
   await db.delete(schema.discounts).where(eq(schema.discounts.id, id));
   revalidatePath("/diskon");
