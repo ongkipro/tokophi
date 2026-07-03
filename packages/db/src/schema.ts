@@ -522,6 +522,20 @@ export const analyticsEvents = pgTable("analytics_events", {
   sessionId: text(),
 });
 
+// Daily sales rollup that the Dashboard/Analitik series read (store_id, date).
+export const analyticsDaily = pgTable(
+  "analytics_daily",
+  {
+    id: pk(),
+    storeId: uuid().notNull().references(() => stores.id),
+    date: date().notNull(),
+    salesIdr: money().notNull().default(0),
+    orders: integer().notNull().default(0),
+    visitors: integer().notNull().default(0),
+  },
+  (t) => [unique().on(t.storeId, t.date)],
+);
+
 // ---------- settings (store + platform-managed) ----------
 export const storeSettings = pgTable("store_settings", {
   storeId: uuid().primaryKey().references(() => stores.id),

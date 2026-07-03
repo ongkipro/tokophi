@@ -306,6 +306,28 @@ const MENU_DEFS = [
   { name: "Menu Footer", handle: "footer", items: FOOTER_MENU },
 ];
 
+// ---- daily sales rollup (mirror admin mock buildDays: mulberry32(20260701), 120 days) ----
+const DAILY = (() => {
+  const rnd = mulberry32(20260701);
+  const out: Array<{ date: string; sales: number; orders: number; visitors: number }> = [];
+  const N = 120;
+  for (let i = N - 1; i >= 0; i--) {
+    const d = new Date(ADMIN_TODAY);
+    d.setUTCDate(d.getUTCDate() - i);
+    const dow = d.getUTCDay();
+    const weekend = dow === 0 || dow === 6 ? 0.82 : 1;
+    const payday = d.getUTCDate() === 25 || d.getUTCDate() === 1 ? 1.35 : 1;
+    const trend = 1 + ((N - i) / N) * 0.55;
+    const noise = 0.8 + rnd() * 0.45;
+    const sales = Math.round(2_600_000 * weekend * payday * trend * noise);
+    const aov = 145_000 + Math.round(rnd() * 90_000);
+    const orders = Math.max(1, Math.round(sales / aov));
+    const visitors = Math.round(orders * (22 + rnd() * 16));
+    out.push({ date: d.toISOString().slice(0, 10), sales, orders, visitors });
+  }
+  return out;
+})();
+
 async function truncateAll() {
   const rows = await client<{ table_name: string }[]>`
     select table_name from information_schema.tables
@@ -531,6 +553,11 @@ async function main() {
     await insertMenuItems(menu.id, md.items, null);
   }
 
+  // daily sales rollup (Dashboard/Analitik series)
+  await db.insert(schema.analyticsDaily).values(
+    DAILY.map((d) => ({ storeId: store.id, date: d.date, salesIdr: d.sales, orders: d.orders, visitors: d.visitors })),
+  );
+
   // invoices for this account
   await db.insert(schema.invoices).values(
     INVOICES.map((inv) => ({ number: inv.number, accountId: account.id, storeId: store.id, planKey: STORE.plan, amountIdr: planPrice(STORE.plan), status: inv.status, issuedAt: daysAgo(inv.daysAgo) })),
@@ -559,7 +586,7 @@ async function main() {
   );
   await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
 
-  console.log(`Seeded: ${PLANS.length} plans, 1 store (${STORE.name}), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${SUPPLIERS.length} suppliers/${PURCHASE_ORDERS.length} POs, ${SEGMENTS.length} segments, ${REVIEWS.length} reviews, ${MENU_DEFS.length} menus, ${INVOICES.length} invoices, platform settings.`);
+  console.log(`Seeded: ${PLANS.length} plans, 1 store (${STORE.name}), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${SUPPLIERS.length} suppliers/${PURCHASE_ORDERS.length} POs, ${SEGMENTS.length} segments, ${REVIEWS.length} reviews, ${MENU_DEFS.length} menus, ${DAILY.length} daily-stats, ${INVOICES.length} invoices, platform settings.`);
   await client.end();
 }
 
