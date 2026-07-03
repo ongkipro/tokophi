@@ -119,8 +119,14 @@
 - [x] **Rebuilt the PO create dialog** into a real **line-item builder** (product dropdown + qty + HPP rows, live total) + wired row actions "Tandai diterima"/"Batalkan". `pembelian-client` takes `products`; `RowActions` takes `po`.
 - [x] **Verified end-to-end via UI**: created PO-xxxxxx (celana-kulot ×7, total 462k, po_items row); received it → status diterima + celana-kulot stock 22→29; cancelled another PO → row+items gone. `tsc` + `build:admin` clean. Reseeded. **✅ All 12 admin editors persist writes (12 write areas).**
 
-**Next up (resume here) — writes complete:**
-1. **Local auth + media** (still local Linux): login/RBAC via `store_users` (JWT), media upload to local storage (replace the toast-only image pickers); enable RLS locally once auth exists.
-2. **Then VPS (prod)**: self-hosted Postgres + PostgREST + Storage; multi-tenant + per-client storefront `STORE_SLUG`.
+**Local admin auth — login + session + route protection (2026-07-03):**
+- [x] **Schema** `users.password_hash` (migration `0011`); seed hashes the owner password (scrypt `salt:hash`) — **ongki@batiknusantara.id / indostore123**, role owner.
+- [x] **`lib/auth.ts`** (server-only): `verifyPassword` (scrypt), `findLogin` (users ⋈ store_users), `signSession`/`getSession` (**jose JWT** in httpOnly `session` cookie, `AUTH_SECRET`). **`lib/actions/auth.ts`** `signIn`/`signOut`. **`app/login/page.tsx`** (email+password, `useActionState`). **`middleware.ts`** (edge-safe JWT verify → redirect to `/login`; matcher excludes `_next`/static/`products/`). `(admin)/layout.tsx` is now async → reads session → Topbar shows the user + "Keluar".
+- [x] **Verified end-to-end**: unauthenticated `/` + `/produk` → 307 `/login`; wrong password → inline error; correct → dashboard (user shown in topbar); logout → `/login`. `tsc` + `build:admin` clean (Middleware compiled; postgres stays out of the edge bundle). Added `AUTH_SECRET` to `.env`/`.env.local`/`.env.example`.
+
+**Next up (resume here):**
+1. **RBAC + RLS (local)**: gate actions/routes by `store_users.role` (owner/admin/staff/gudang); then enable Postgres RLS (`store_id` from the JWT) once a request-scoped DB role/GUC is wired.
+2. **Media upload (local)**: replace the toast-only image pickers with real upload to local storage (public/ or a local MinIO), persist `product_media.url`.
+3. **Then VPS (prod)**: self-hosted Postgres + PostgREST + Storage; multi-tenant + per-client storefront `STORE_SLUG`.
 2. **Deploy to VPS**: stand up self-hosted Postgres + PostgREST; wire JWT Auth (login/RBAC via `store_users`) + Storage (media uploads) + enable RLS; then multi-tenant (beyond single-store seed) + per-client storefront via `STORE_SLUG`.
 3. **E1 sisa / E0 de-dup / Turborepo** (unchanged).

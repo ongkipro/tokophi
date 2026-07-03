@@ -2,6 +2,14 @@
 // (the same store the admin manages and the storefront sells). Run:
 //   npm run seed -w @indostore/db   (idempotent — truncates public tables first)
 import { db, client, schema } from "./client";
+import { scryptSync, randomBytes } from "node:crypto";
+
+// Local auth: scrypt "salt:hash". Dev owner password below (change for real deploys).
+const DEV_OWNER_PASSWORD = "indostore123";
+function hashPassword(pw: string): string {
+  const salt = randomBytes(16).toString("hex");
+  return `${salt}:${scryptSync(pw, salt, 64).toString("hex")}`;
+}
 
 const TODAY = new Date("2026-07-02T00:00:00Z");
 const daysAgo = (n: number) => new Date(TODAY.getTime() - n * 86_400_000);
@@ -414,7 +422,7 @@ async function main() {
 
   // the one account + owner + store + membership + settings + stats
   const [account] = await db.insert(schema.accounts).values({ name: STORE.name, plan: STORE.plan, createdAt: daysAgo(STORE.createdDaysAgo) }).returning();
-  const [user] = await db.insert(schema.users).values({ email: STORE.email, name: STORE.owner }).returning();
+  const [user] = await db.insert(schema.users).values({ email: STORE.email, name: STORE.owner, passwordHash: hashPassword(DEV_OWNER_PASSWORD) }).returning();
   const [store] = await db.insert(schema.stores).values({
     accountId: account.id,
     name: STORE.name,

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { NavLinks } from "./nav-links";
 import { Brand } from "./brand";
+import { signOut } from "@/lib/actions/auth";
 import { STORES } from "@/lib/nav";
 
 function ThemeToggle() {
@@ -32,8 +33,11 @@ function ThemeToggle() {
   );
 }
 
-export function Topbar() {
+export function Topbar({ user }: { user?: { name: string; email: string } }) {
   const [store, setStore] = useState(STORES[0]);
+  const name = user?.name || "Ongki Pratama";
+  const email = user?.email || "owner@indostore.id";
+  const initials = name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "OP";
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
       {/* mobile menu */}
@@ -116,21 +120,21 @@ export function Topbar() {
           <DropdownMenuTrigger
             render={
               <Button variant="ghost" className="gap-2 pl-1.5 pr-2">
-                <Avatar className="size-7"><AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">OP</AvatarFallback></Avatar>
-                <span className="hidden text-sm font-medium sm:inline">Ongki</span>
+                <Avatar className="size-7"><AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">{initials}</AvatarFallback></Avatar>
+                <span className="hidden text-sm font-medium sm:inline">{name.split(" ")[0]}</span>
               </Button>
             }
           />
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel className="font-normal">
-              <div className="text-sm font-medium">Ongki Pratama</div>
-              <div className="text-xs text-muted-foreground">owner@indostore.id</div>
+              <div className="text-sm font-medium">{name}</div>
+              <div className="text-xs text-muted-foreground">{email}</div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="gap-2"><User className="size-4" /> Profil</DropdownMenuItem>
             <DropdownMenuItem className="gap-2"><CreditCard className="size-4" /> Langganan</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 text-destructive"><LogOut className="size-4" /> Keluar</DropdownMenuItem>
+            <DropdownMenuItem className="gap-2 text-destructive" onClick={() => signOut()}><LogOut className="size-4" /> Keluar</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

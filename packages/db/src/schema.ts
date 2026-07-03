@@ -94,6 +94,7 @@ export const users = pgTable("users", {
   id: pk(),
   email: text().notNull().unique(),
   name: text(),
+  passwordHash: text(), // scrypt "salt:hash" (local auth)
   createdAt: createdAt(),
 });
 

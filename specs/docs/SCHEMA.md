@@ -18,7 +18,7 @@ accounts(id, name, plan enum[pemula|bisnis|skala], created_at)         -- billin
 stores(id, account_id→accounts, name, slug unique, city, currency='IDR', timezone='Asia/Jakarta',
        plan, status enum[trial|active|suspended], created_at)
 store_stats(store_id pk→stores, gmv_idr, orders_count, products_count, updated_at)  -- platform rollup CACHE (super-admin); refreshed by a job, seeded for demo
-users(id, email unique, name, ...)                                      -- maps to auth.users
+users(id, email unique, name, password_hash, ...)                       -- local auth (scrypt salt:hash); JWT session
 store_users(id, store_id→stores, user_id→users, role enum[owner|admin|staff|gudang],
             invited_at, accepted_at)                                    -- membership + RBAC
 locations(id, store_id, name, address, is_default bool)                 -- gudang/lokasi stok
