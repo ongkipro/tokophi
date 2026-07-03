@@ -176,7 +176,7 @@ Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palet
 - **M3 — backend (IN PROGRESS):**
   - ✅ **Local PostgreSQL 16 + Drizzle** (`@indostore/db`, ADR 0007): 52 tables, versioned migrations, seed.
   - ✅ **super-admin wired to DB** (`lib/data.ts`) — live, verified parity.
-  - 🟡 **admin → DB**: ✅ **Produk / Diskon / Pelanggan / Kategori / Pesanan** (seeded 14 products + 8 collections + 24 customers + 60 orders + line-items/payments + 6 discounts; list + detail/editor via `lib/data/*`, `force-dynamic`). ⏳ Dashboard/Analitik (sales rollups), Inventori/Halaman/Blog.
+  - 🟡 **admin → DB**: ✅ **Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog** (seeded 14 products + 8 collections + 24 customers + 60 orders + 6 discounts + 7 pages + 6 articles; list + detail/editor via `lib/data/*`, `force-dynamic`). ⏳ Dashboard/Analitik (sales rollups), Inventori, CRM, Pemasaran, Navigasi.
   - ⏳ **storefront → DB**: parameterize by `STORE_SLUG` (ADR 0008), read by `store_id`.
   - ⏳ Mutations persist (save/edit/delete); live "edit-in-admin → storefront".
   - ⏳ **Supabase**: connect for Auth + Storage + RLS (`store_id`), same migrations; image upload + rich-text.

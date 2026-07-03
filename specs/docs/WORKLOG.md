@@ -53,8 +53,13 @@
 - [x] **`lib/data/orders.ts`**: `getOrders`/`getOrder(number)` → flat admin `Order` (items count from `order_line_items`, channel display-mapped, `minutesAgo` from `placedAt`). Route keyed by human number (`/pesanan/INV-4819`).
 - [x] **Wire Pesanan list + detail**: server-wrapper + `pesanan-client.tsx`; detail via `getOrder` (`force-dynamic`). OrderDetail still *fabricates* line-items from the flat order (reconciles to total) — real line-items are seeded for later. **Verified**: `tsc` + `build:admin` clean, screenshots — list (60, tab counts/customer/items/status/total) + detail (customer/channel/total/time from DB) — 0 console errors, parity.
 
+**admin → DB — Halaman + Blog live (2026-07-03):**
+- [x] **Seed CMS**: 7 pages (status/template/views/updatedAt), 2 blogs + 6 articles (blog channel, author, comments, publishedAt). Schema deltas: `pages.template` + `pages.views`, `articles.comments` — migration `0004`.
+- [x] **`lib/data/{pages,articles}.ts`**: `getPages/getPage`, `getArticles/getArticle` → flat `CmsPage`/`BlogPost` (published from status enum, blog channel via join, days-ago from timestamps).
+- [x] **Wire Halaman + Blog list + editors**: server-wrapper + `*-client.tsx`; detail via `getX(id)` (`force-dynamic`). **Verified**: `tsc` + `build:admin` clean, screenshots — Halaman (7, status/template/views) + Blog (6, tabs/blog/author/comments) — 0 console errors, parity.
+
 **Next up (resume here):**
-1. **admin → DB, remaining**: **Dashboard/Analitik** (aggregate sales/KPIs from `orders` — replaces the synthetic DAYS series; the big one), Inventori (variant/inventory edit), Halaman/Blog (`pages`/`articles`), CRM/Pemasaran/Navigasi. Optional: wire OrderDetail + customer order-history to the *real* seeded line-items.
+1. **admin → DB, remaining**: **Dashboard/Analitik** (aggregate sales/KPIs from `orders` — replaces the synthetic DAYS series; the big one), Inventori (variant/inventory edit), CRM (`leads`/`followups`/`wa_templates`), Pemasaran (`ad_channels`/`ad_metrics`), Navigasi (`menus`/`menu_items` — currently `@indostore/data`). Optional: wire OrderDetail + customer order-history to the *real* seeded line-items.
 2. **storefront → DB**: parameterize by `STORE_SLUG`, read catalog/pages by `store_id` (ADR 0008).
 3. **Mutations** (save/edit/delete) → Drizzle `insert/update`; toasts already in place.
 4. **Supabase**: connect (Auth + Storage + RLS), same migrations; M4 real payment/courier integrations.
