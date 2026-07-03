@@ -1,7 +1,17 @@
 # Indostore — Worklog (session log)
 
 > Newest first. What we did + what's next, so any session can resume instantly.
-> Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Git: local commits only — **do not push until told**.
+> Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/indostore` (private) — commit + push each increment.
+
+## ▶ CURRENT STATE — PAUSED (2026-07-03) · resume at RBAC + RLS
+
+**Everything runs locally on Linux** (Docker PostgreSQL 16 :5433 + Drizzle `@indostore/db`, 53 tables). Done + verified end-to-end:
+- **Reads:** all 3 surfaces (super-admin 5 pages + admin 16 modules + storefront) read Postgres.
+- **Writes:** all **12 admin editors** persist via `lib/actions/*` server actions (Produk/Diskon/Halaman/Blog/Kategori CRUD · order-status · Inventori-stock · Navigasi · Pelanggan · CRM follow-up · Segmen · Pembelian PO create/receive→stock/cancel).
+- **Auth (local):** email/password login → jose JWT httpOnly cookie, `middleware.ts` protects the admin (owner `ongki@batiknusantara.id / indostore123`).
+- **Media (local):** product image upload → `apps/admin/public/uploads/` + `product_media`.
+
+**▶ RESUME HERE (next session):** **RBAC + local Postgres RLS** — (1) gate server actions/routes by `store_users.role` (owner/admin/staff/gudang); (2) enable RLS keyed on `store_id` (set a per-request GUC from the session JWT, write `USING` policies). Then (later) VPS: self-hosted Postgres + PostgREST + Storage. Detail per-entry below (newest first).
 
 ## 2026-07-02 — Session: execute tasks (storefront built ✅)
 **State before:** Monorepo (apps/admin :3000, apps/super-admin :3001, packages/ui, packages/lib), both UI-mock prototypes, clean. Pushed to private GitHub — **no further pushes until told**. Payments/shipping platform-managed (ADR 0004). Docs current (PRD v0.3, UML, TASKS, SCHEMA, BACKLOG).

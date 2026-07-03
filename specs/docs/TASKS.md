@@ -48,9 +48,9 @@
 ## Epic 5 — Backend (M3 — local Postgres/Drizzle → self-hosted VPS)
 - [x] **Schema (`@indostore/db`)** · **L** · 53 tables/enums from `SCHEMA.md` as Drizzle + versioned migrations on **local PostgreSQL 16** (Docker). Seeded single-tenant "Batik Nusantara" = parity with mock. *(RLS policies written; enabled at self-hosted Postgres — ADR 0007.)*
 - [~] **Swap `lib/data` bodies → queries** · **L** · ✅ super-admin (all 5) + admin 16 modules read the DB (`force-dynamic`). ⏳ storefront.
-- [ ] **Auth + RBAC** · **M** · self-hosted Auth (JWT) (email/OTP) + `store_users`; store switcher scopes data. AC: login → see only your store.
-- [ ] **Mutations persist** · **L** · save product/collection/order, stock adjust, PO, CRM → Drizzle `insert/update`. AC: refresh keeps changes.
-- [ ] **Storage + rich-text** · **M** · media upload to self-hosted Storage (VPS); Tiptap for bodies.
+- [~] **Auth + RBAC** · **M** · ✅ **local auth done** (email/password → jose JWT httpOnly cookie, `middleware.ts` protects admin, owner `ongki@batiknusantara.id`). ⏳ **RBAC** (gate by `store_users.role`) + real multi-tenant scoping.
+- [x] **Mutations persist** · **L** · ✅ all 12 admin editors save/edit/delete → Drizzle `insert/update` (`lib/actions/*`); refresh keeps changes. Incl. PO create/receive→stock, order-status, stock adjust, CRM follow-up.
+- [~] **Storage + rich-text** · **M** · ✅ **local media upload done** (product images → `public/uploads/` + `product_media`). ⏳ Tiptap rich-text for bodies; VPS storage (MinIO/S3) later.
 - [x] **Super-admin cross-tenant** · **M** · reads across `store_id`; MRR/GMV/etc. from DB (single-tenant now).
 
 ## Epic 6 — Platform integrations (M4)

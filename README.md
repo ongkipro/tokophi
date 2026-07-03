@@ -71,7 +71,7 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - Sales channel = **Toko Online only**; analytics attribution = Meta / TikTok / Google Ads + Organic / Other.
 - Keep it **console-clean** (no Base UI warnings) and responsive; `npm run build` must pass.
 
-## Status (2026-07-03) — all three surfaces READ Postgres end-to-end; write-mutations in progress (local Linux dev)
+## Status (2026-07-03) — full local stack: 3 surfaces READ + all admin editors WRITE Postgres, local auth + media upload (local Linux dev)
 
 > **Current focus = local Linux.** Everything runs locally: PostgreSQL 16 in Docker (:5433) + the two Next dev servers + the Astro storefront. Prod (self-hosted Postgres + PostgREST on a VPS) is deferred until the local stack is feature-complete.
 
@@ -79,14 +79,17 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - **Super Admin:** Dashboard (MRR/GMV) · Toko (+detail) · Paket · Analitik · Pengaturan (gateways + Biteship + couriers). **← all 5 pages live on PostgreSQL** via `lib/data.ts`.
 - **DB-backed (admin, 16):** Produk · Diskon · Pelanggan · Kategori · Pesanan · Halaman · Blog · Inventori · CRM · Pembelian · Segmen · Ulasan · Navigasi · Dashboard · Analitik · Pemasaran read from PostgreSQL via `lib/data/*` (`force-dynamic`). all admin modules now read PostgreSQL.
 - **Storefront:** beranda · kategori (+ virtual "semua"/"promo-gajian") · produk (**5-image gallery**) · keranjang · **checkout → sukses** · akun (mock login) · blog · kontak — reads the **same Postgres catalog** (`src/data/catalog.ts` → `@indostore/db` at build/SSR), localStorage cart, 70 AI product images.
-- **Writes (mutations) — persist to Postgres via server actions (`lib/actions/*`):** Produk · Diskon · Halaman · Blog · Kategori (create/edit/delete) · order-status advance · Inventori bulk stock. Remaining editors (Pelanggan, Navigasi, CRM, Segmen, Pembelian) still toast-only.
+- **Writes — all 12 admin editors persist to Postgres via server actions (`lib/actions/*`):** Produk · Diskon · Halaman · Blog · Kategori (create/edit/delete) · order-status · Inventori-stock · Navigasi · Pelanggan · CRM (follow-up) · Segmen · Pembelian (PO create/receive→stock/cancel).
+- **Auth (local):** email/password login (jose JWT httpOnly cookie) against `users`⋈`store_users`; `middleware.ts` protects the admin, topbar shows the user + logout. Owner: `ongki@batiknusantara.id / indostore123`.
+- **Media (local):** product editor uploads real images → `public/uploads/` + `product_media` (5MB cap), with per-image delete.
 
-**Next (local Linux):** finish the remaining write-mutations, then local auth/RBAC + media storage. **Later (prod):** self-hosted Postgres + PostgREST on a VPS + RLS → payments/couriers + multi-store provisioning. Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md); task breakdown in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).
+**Next (local Linux):** RBAC (gate by `store_users.role`) + enable Postgres RLS (`store_id`). **Later (prod):** self-hosted Postgres + PostgREST on a VPS + Storage (MinIO/S3) → payments/couriers + multi-store provisioning. Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md); task breakdown in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).
 
 ## Recent log (newest first)
 
-- **2026-07-03** — Decision: **prod backend = self-hosted Postgres + PostgREST on a VPS (not Supabase)**; all docs reframed. Focus stays **local Linux** until feature-complete.
-- **2026-07-03** — **Mutations**: 7 write operations now persist (Produk/Diskon/Halaman/Blog/Kategori CRUD + order-status + Inventori-stock) via `lib/actions/*` server actions, verified end-to-end.
-- **2026-07-03** — **Storefront → DB**: `catalog.ts` reads `@indostore/db` (top-level await); **all three surfaces now read Postgres**. Migration 0009 enriched `products` (sizes/badge/bestseller/rating).
-- **2026-07-03** — **Admin 100% DB-backed** (16 modules) incl. Dashboard/Analitik (`analytics_daily` rollup) + Pemasaran (`ad_channels`/`ad_metrics`); 53 tables.
-- Full history: [`CHANGELOG.md`](CHANGELOG.md) + [`specs/docs/WORKLOG.md`](specs/docs/WORKLOG.md).
+- **2026-07-03** — **Local media upload**: product editor uploads real images → `public/uploads/` + `product_media` (server action, 5MB cap) + per-image delete.
+- **2026-07-03** — **Local admin auth**: email/password login, jose JWT httpOnly session, `middleware.ts` route protection, topbar user + logout (`users.password_hash` scrypt).
+- **2026-07-03** — **All 12 admin editors now WRITE Postgres** (added Navigasi, Pelanggan, CRM, Segmen, Pembelian incl. a real line-item PO builder with receive→stock) via `lib/actions/*`.
+- **2026-07-03** — Decision: **prod backend = self-hosted Postgres + PostgREST on a VPS (not Supabase)**; all docs reframed. Focus stays **local Linux**.
+- **2026-07-03** — **All three surfaces READ Postgres** (storefront `catalog.ts` reads `@indostore/db`); **admin 100% DB-backed** (16 modules); 53 tables.
+- **⏸️ Paused here** — resume at **RBAC + local RLS** (see [`specs/docs/WORKLOG.md`](specs/docs/WORKLOG.md) "Next up"). Full history: [`CHANGELOG.md`](CHANGELOG.md).

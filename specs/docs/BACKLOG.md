@@ -5,9 +5,9 @@
 > Legend: `[ ]` todo · `[~]` partial · `[x]` done. Updated 2026-07-03.
 
 ## P0 — Foundation (do before/for backend)
-- [~] **Backend** — ✅ **local PostgreSQL 16 + Drizzle** (`@indostore/db`, 53 tables, versioned migrations, seed) is live; super-admin + 16 admin modules read it. ⏳ **self-hosted Postgres** (Auth + Storage + RLS by `store_id`) when a project is connected; mutations don't persist yet. See `SCHEMA.md` + ADR 0007/0008.
-- [~] **Extend the data-layer seam to ALL screens.** ✅ Reads wrapped in `lib/data/*` (as DB queries) for super-admin + admin's 16 wired modules. ✅ storefront reads `@indostore/db` (catalog.ts, build/SSR). ⏳ Only mutations (writes) remain — admin `lib/mock` kept for decorative bits (live ticker, analitik breakdowns).
-- [ ] **Auth + real multi-tenant.** Store switcher is cosmetic; make it scope data by `store_id` once backend lands.
+- [~] **Backend** — ✅ **local PostgreSQL 16 + Drizzle** (`@indostore/db`, 53 tables) live: all 3 surfaces read + all 12 admin editors write + local auth (jose JWT) + local media upload. ⏳ **RBAC + RLS by `store_id`** (local), then VPS (self-hosted Postgres + PostgREST + Storage). See `SCHEMA.md` + ADR 0007/0008.
+- [x] **Extend the data-layer seam to ALL screens.** ✅ Reads via `lib/data/*` (super-admin + 16 admin modules + storefront `@indostore/db`). ✅ Writes via `lib/actions/*` (all 12 editors). `lib/mock` kept only for decorative bits (live ticker, analitik breakdowns).
+- [~] **Auth + real multi-tenant.** ✅ local login/session done; store switcher still cosmetic — ⏳ scope data by `store_id` (RBAC + RLS from the session JWT).
 
 ## P1 — Functional completeness (mostly wireable now, no backend)
 - [ ] **De-dup: migrate `apps/admin` to consume `@indostore/ui` + `@indostore/lib`** and delete its local `components/ui` + `lib/format`/`utils`. (Monorepo is set up; super-admin already uses the shared packages; admin still has its own copies — see AGENTS.md. Do this carefully so the mature admin keeps building.)

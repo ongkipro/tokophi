@@ -1,7 +1,7 @@
 # Indostore — Product Requirements Document (PRD v0.4)
 
 > **Working name:** Indostore (rename trivial) · **Owner:** Paduka Ongki / ongkipro
-> **Phase:** UI/UX-first → **backend M3 in progress, local Linux focus** — all 3 surfaces READ local PostgreSQL/Drizzle; write-mutations landing editor-by-editor. Prod (self-hosted Postgres + PostgREST on a VPS) deferred until the local stack is feature-complete. · **Updated:** 2026-07-03
+> **Phase:** UI/UX-first → **backend M3, local Linux** — all 3 surfaces READ + all 12 admin editors WRITE local PostgreSQL/Drizzle; local auth (login/session) + local media upload done. **Paused at RBAC + RLS.** Prod (self-hosted Postgres + PostgREST on a VPS) deferred. · **Updated:** 2026-07-03
 > **Code:** `~/projects/indostore` (monorepo) · **Docs:** `~/Documents/Development/indostore`
 > **Run:** `npm i` at root, then `npm run dev:admin` (→ :3000) · `npm run dev:super` (→ :3001) · `cd apps/storefront && npm run dev` (→ :4327)
 
@@ -33,7 +33,7 @@ Super-admin & merchant-admin **share the design system** (`@indostore/ui`) + for
 
 ## 2. Current status (what's built)
 
-**All three surfaces are clickable, coherent products; backend M3 in progress.** Every screen reads typed fixtures through a thin data layer so backend is "just wiring." **On local PostgreSQL** (Drizzle via `@indostore/db`, Docker :5433 — ADR 0007): **super-admin (all 5) + 16 admin modules** read the DB via `lib/data/*` (`force-dynamic`); all three surfaces (super-admin + admin + storefront) read it. **Write-mutations** (`lib/actions/*` server actions) now persist for the core editors — Produk/Diskon/Halaman/Blog/Kategori (create/edit/delete) + order-status advance + Inventori bulk stock; the remaining editors (Pelanggan/Navigasi/CRM/Segmen/Pembelian) still toast-only. **Dev runs entirely on local Linux** (Docker Postgres :5433). Single-tenant "Batik Nusantara" MVP; per-client topology = ADR 0008.
+**All three surfaces are clickable, coherent products; backend M3 in progress.** Every screen reads typed fixtures through a thin data layer so backend is "just wiring." **On local PostgreSQL** (Drizzle via `@indostore/db`, Docker :5433 — ADR 0007): **super-admin (all 5) + 16 admin modules** read the DB via `lib/data/*` (`force-dynamic`); all three surfaces (super-admin + admin + storefront) read it. **All 12 admin editors now WRITE** (`lib/actions/*` server actions) — Produk/Diskon/Halaman/Blog/Kategori CRUD, order-status, Inventori-stock, Navigasi, Pelanggan, CRM (follow-up), Segmen, Pembelian (PO create/receive→stock/cancel). **Local auth** (email/password login, jose JWT cookie, route-protecting middleware) + **local media upload** (product images → `public/uploads/` + `product_media`) are done. **Dev runs entirely on local Linux** (Docker Postgres :5433). Paused at RBAC + RLS. Single-tenant "Batik Nusantara" MVP; per-client topology = ADR 0008.
 
 ### Admin — merchant store admin (`apps/admin`, :3000) — DONE
 - **Shell** — grouped sidebar (Utama / Toko Online / Sistem), topbar (store switcher, search ⌘K, notifications, account, **dark-mode toggle**), fully responsive (mobile drawer).

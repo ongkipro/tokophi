@@ -1,6 +1,6 @@
 # Indostore — working agreement (read before coding)
 
-Shopify-style commerce SaaS for Indonesia. **No Themes menu, no Apps/Plugins.** UI/UX-first; **backend now being wired** on local PostgreSQL — super-admin + 16 admin modules read the DB (see Database below). Bahasa Indonesia UI, IDR. Full spec: `~/Documents/Development/indostore/PRD.md`.
+Shopify-style commerce SaaS for Indonesia. **No Themes menu, no Apps/Plugins.** **Backend live on local PostgreSQL** (Docker :5433, Drizzle): all 3 surfaces READ + all 12 admin editors WRITE the DB, plus local auth (login/session) + local media upload (see Database below). Bahasa Indonesia UI, IDR. **Prod target = self-hosted Postgres + PostgREST on a VPS (NOT Supabase), deferred.** Full spec: `~/Documents/Development/indostore/PRD.md`.
 
 ## Monorepo (npm workspaces) — 3 surfaces
 ```
