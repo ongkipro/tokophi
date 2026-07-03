@@ -2,11 +2,11 @@
 
 > Prioritized work list derived from a full screening of the codebase. Living doc — update as items ship.
 > Companion to `CONCEPT.md` (what/why), `SCHEMA.md` (backend target), `UI_INVENTORY.md` (screen status), `../PRD.md`.
-> Legend: `[ ]` todo · `[~]` partial · `[x]` done. Updated 2026-07-02.
+> Legend: `[ ]` todo · `[~]` partial · `[x]` done. Updated 2026-07-03.
 
 ## P0 — Foundation (do before/for backend)
-- [~] **Backend** — ✅ **local PostgreSQL 16 + Drizzle** (`@indostore/db`, 52 tables, versioned migrations, seed) is live; super-admin + 9 admin modules read it. ⏳ **Supabase** (Auth + Storage + RLS by `store_id`) when a project is connected; mutations don't persist yet. See `SCHEMA.md` + ADR 0007/0008.
-- [~] **Extend the data-layer seam to ALL screens.** ✅ Reads wrapped in `lib/data/*` (as DB queries) for super-admin + admin's 9 wired modules. ⏳ Remaining admin screens (Dashboard/Analitik, Pemasaran, Navigasi, Segmen/Ulasan, Pembelian) + storefront still import `@/lib/mock` / `data/catalog` directly.
+- [~] **Backend** — ✅ **local PostgreSQL 16 + Drizzle** (`@indostore/db`, 52 tables, versioned migrations, seed) is live; super-admin + 12 admin modules read it. ⏳ **Supabase** (Auth + Storage + RLS by `store_id`) when a project is connected; mutations don't persist yet. See `SCHEMA.md` + ADR 0007/0008.
+- [~] **Extend the data-layer seam to ALL screens.** ✅ Reads wrapped in `lib/data/*` (as DB queries) for super-admin + admin's 12 wired modules. ⏳ Remaining admin screens (Dashboard/Analitik, Pemasaran, Navigasi) + storefront still import `@/lib/mock` / `data/catalog` directly.
 - [ ] **Auth + real multi-tenant.** Store switcher is cosmetic; make it scope data by `store_id` once backend lands.
 
 ## P1 — Functional completeness (mostly wireable now, no backend)

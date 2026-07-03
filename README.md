@@ -2,7 +2,7 @@
 
 **Shopify-style commerce SaaS for the Indonesian market.** A shared, modern-SaaS **admin panel** runs many merchant stores; a **super-admin** control plane is what we (the platform) use to manage all stores/plans/billing; each client gets a bespoke **Astro storefront** (hand-built per brand — no theme editor).
 
-> Deliberately **no Themes menu** and **no Apps/Plugins marketplace**. Curated, lightweight, **Bahasa Indonesia** UI tuned for local sellers (WhatsApp, COD, QRIS/e-wallets, local couriers) with modern-SaaS polish. Currently **UI/UX-first with deterministic mock data** — backend deferred so it's "just wiring later."
+> Deliberately **no Themes menu** and **no Apps/Plugins marketplace**. Curated, lightweight, **Bahasa Indonesia** UI tuned for local sellers (WhatsApp, COD, QRIS/e-wallets, local couriers) with modern-SaaS polish. UI/UX-first; the **backend is now being wired** on local PostgreSQL (Drizzle) — super-admin + 12 admin modules read the DB.
 
 Full spec & docs: [`specs/`](specs/) (mirrors `~/Documents/Development/indostore/`) — start with [`specs/PRD.md`](specs/PRD.md), [`specs/docs/ARCHITECTURE.md`](specs/docs/ARCHITECTURE.md), [`specs/docs/GUIDE.md`](specs/docs/GUIDE.md).
 
@@ -47,7 +47,7 @@ Build: `npm run build:admin` · `npm run build:super` · (storefront) `cd apps/s
 
 ## Database (local Postgres — `@indostore/db`)
 
-Backend is being wired behind the data layer: **plain PostgreSQL 16 in Docker + Drizzle** (prod target = Supabase; ADR 0007). **super-admin already reads it live**; admin + storefront still on mock.
+Backend is being wired behind the data layer: **plain PostgreSQL 16 in Docker + Drizzle** (52 tables, single-tenant "Batik Nusantara"; prod target = Supabase — ADR 0007). **super-admin (all 5) + 12 admin modules read it live**; the rest + storefront still on mock.
 
 ```bash
 docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted)
@@ -71,11 +71,11 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - Sales channel = **Toko Online only**; analytics attribution = Meta / TikTok / Google Ads + Organic / Other.
 - Keep it **console-clean** (no Base UI warnings) and responsive; `npm run build` must pass.
 
-## Status (2026-07-03) — three surfaces built; backend M3 in progress (super-admin + 9 admin modules live on Postgres)
+## Status (2026-07-03) — three surfaces built; backend M3 in progress (super-admin + 12 admin modules live on Postgres)
 
 - **Admin:** Dashboard (KPIs, FB-style date range, charts) · Pesanan (+detail) · Produk (+editor, Kategori/Inventori/Pembelian) · Pelanggan (+detail/Segmen/Ulasan) · CRM (Follow-up WA/Pipeline/Template) · Diskon (+editor) · Analitik · Pemasaran (per-provinsi) · Halaman & Blog (create+edit) · **Navigasi** (drag-and-drop menu builder + up/down + sub-menu) · Pengaturan.
 - **Super Admin:** Dashboard (MRR/GMV) · Toko (+detail) · Paket · Analitik · Pengaturan (gateways + Biteship + couriers). **← all 5 pages live on PostgreSQL** via `lib/data.ts`.
-- **DB-backed (admin):** Produk · Diskon · Pelanggan · Kategori · Pesanan · Halaman · Blog · Inventori · CRM read from PostgreSQL via `lib/data/*` (`force-dynamic`). Dashboard/Analitik, Pemasaran, Navigasi still mock.
+- **DB-backed (admin, 12):** Produk · Diskon · Pelanggan · Kategori · Pesanan · Halaman · Blog · Inventori · CRM · Pembelian · Segmen · Ulasan read from PostgreSQL via `lib/data/*` (`force-dynamic`). Dashboard/Analitik, Pemasaran, Navigasi still mock.
 - **Storefront:** beranda · kategori (+ virtual "semua"/"promo-gajian") · produk (**5-image gallery**) · keranjang · **checkout → sukses** · akun (mock login) · blog · kontak — localStorage cart, 70 AI product images, nav mirrors the admin menu.
 
 **Next:** Supabase backend (M3) → payment/courier integrations + multi-store provisioning (M4). Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md); task breakdown in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).

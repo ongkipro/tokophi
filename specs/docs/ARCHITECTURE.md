@@ -14,7 +14,7 @@ Indostore is a Shopify-style commerce SaaS for Indonesia (Bahasa Indonesia UI, I
 | **super-admin** | `@indostore/super-admin` | Next.js 16 | `:3001` | **We (the platform)** — cross-tenant control plane: all stores, plans, billing. |
 | **storefront** | `@indostore/storefront` | Astro 5 + Tailwind v4 | `:4327` | A **shopper** — one hand-built static storefront per client (browse, cart, checkout, blog, account, contact). |
 
-Started as **UI/UX with mock data**; the **backend is now being wired** on local PostgreSQL (see §9) — super-admin + 9 admin modules read the DB, the rest still mock.
+Started as **UI/UX with mock data**; the **backend is now being wired** on local PostgreSQL (see §9) — super-admin + 12 admin modules read the DB, the rest still mock.
 
 ```mermaid
 flowchart LR
@@ -181,7 +181,7 @@ npm run studio  -w @indostore/db     # Drizzle Studio
 | Surface | Data source today | Notes |
 |---|---|---|
 | **super-admin** | ✅ **PostgreSQL** (`lib/data.ts`, `dynamic="force-dynamic"`) | all 5 pages live; `getStores/getPlatform/getInvoices/…` |
-| **admin** | 🟡 **mostly PostgreSQL** | ✅ **Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM** (9 modules, list + detail/editor via `lib/data/*`); rest still mock — Dashboard/Analitik (sales rollups), Pemasaran, Navigasi next |
+| **admin** | 🟡 **mostly PostgreSQL** | ✅ **12 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan (list + detail/editor via `lib/data/*`); rest still mock — Dashboard/Analitik (sales rollups), Pemasaran, Navigasi next |
 | **storefront** | mock (`data/catalog.ts`) | after admin: read by `store_id`/`STORE_SLUG` |
 
 **Path to Supabase (no schema rework):** stand up a Supabase project → point `DATABASE_URL` at it → apply the same Drizzle migrations → enable **RLS keyed on `store_id`** (policies written, dormant locally) → wire `supabase-js` Auth (owner/staff via `store_users`) + Storage (media). See [`SCHEMA.md`](SCHEMA.md) for tables, [`UML.md`](UML.md) for diagrams.

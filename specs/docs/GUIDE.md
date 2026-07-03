@@ -2,7 +2,7 @@
 
 > Practical "how do I…" guide. For the *why* and the big picture read [`ARCHITECTURE.md`](ARCHITECTURE.md); for the product spec see [`../PRD.md`](../PRD.md); for the future DB see [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md); for diagrams [`UML.md`](UML.md).
 
-Indostore is a Shopify-style commerce SaaS for Indonesia: **Bahasa Indonesia UI, IDR.** UI/UX-first, and the **backend is now being wired** on local PostgreSQL (Drizzle, `@indostore/db`) — super-admin + 9 admin modules read the DB; the rest is still mock. No Themes menu, no Apps/Plugins.
+Indostore is a Shopify-style commerce SaaS for Indonesia: **Bahasa Indonesia UI, IDR.** UI/UX-first, and the **backend is now being wired** on local PostgreSQL (Drizzle, `@indostore/db`) — super-admin + 12 admin modules read the DB; the rest is still mock. No Themes menu, no Apps/Plugins.
 
 ---
 
