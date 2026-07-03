@@ -495,15 +495,25 @@ export const adChannels = pgTable("ad_channels", {
   id: pk(),
   storeId: uuid().notNull().references(() => stores.id),
   key: adChannelKey().notNull(),
+  name: text(),
+  brand: text(),
   connected: boolean().notNull().default(false),
+  pixelLabel: text(),
   pixelId: text(),
+  pixelActive: boolean().notNull().default(false),
   capiEnabled: boolean().notNull().default(false),
+  spendIdr: money().notNull().default(0), // aggregate rollup cache (period)
+  impressions: integer().notNull().default(0),
+  clicks: integer().notNull().default(0),
+  conversions: integer().notNull().default(0),
+  revenueIdr: money().notNull().default(0),
+  campaigns: jsonb(), // AdCampaign[] { name, spend, conversions, revenue }
 });
 
 export const adMetrics = pgTable("ad_metrics", {
   id: pk(),
   storeId: uuid().notNull().references(() => stores.id),
-  channelKey: adChannelKey().notNull(),
+  channelKey: adChannelKey(), // null = province rollup across all channels
   date: date().notNull(),
   province: text(),
   spendIdr: money().notNull().default(0),

@@ -328,6 +328,57 @@ const DAILY = (() => {
   return out;
 })();
 
+// ---- marketing: ad channels + per-province rollup ----
+const AD_CHANNELS: Array<{
+  key: "meta" | "google" | "tiktok"; name: string; brand: string; connected: boolean;
+  pixelLabel: string; pixelId: string; pixelActive: boolean; capiActive: boolean;
+  spend: number; impressions: number; clicks: number; conversions: number; revenue: number;
+  campaigns: Array<{ name: string; spend: number; conversions: number; revenue: number }>;
+}> = [
+  {
+    key: "meta", name: "Meta Ads", brand: "#0866FF", connected: true,
+    pixelLabel: "Meta Pixel + Conversions API", pixelId: "1029384756574839", pixelActive: true, capiActive: true,
+    spend: 18_500_000, impressions: 1_240_000, clicks: 38_400, conversions: 421, revenue: 78_200_000,
+    campaigns: [
+      { name: "Prospecting — Fashion", spend: 7_800_000, conversions: 168, revenue: 31_500_000 },
+      { name: "Retargeting — Keranjang", spend: 5_200_000, conversions: 143, revenue: 28_900_000 },
+      { name: "Lookalike — Pembeli 90 hari", spend: 5_500_000, conversions: 110, revenue: 17_800_000 },
+    ],
+  },
+  {
+    key: "google", name: "Google Ads", brand: "#1A73E8", connected: true,
+    pixelLabel: "Google Tag (GA4) + Konversi Google Ads", pixelId: "G-8K2ZQ7WYX1", pixelActive: true, capiActive: false,
+    spend: 12_100_000, impressions: 684_000, clicks: 21_900, conversions: 258, revenue: 52_400_000,
+    campaigns: [
+      { name: "Search — Brand", spend: 3_100_000, conversions: 96, revenue: 21_200_000 },
+      { name: "Shopping — Katalog", spend: 5_400_000, conversions: 102, revenue: 20_600_000 },
+      { name: "Performance Max", spend: 3_600_000, conversions: 60, revenue: 10_600_000 },
+    ],
+  },
+  {
+    key: "tiktok", name: "TikTok Ads", brand: "#FE2C55", connected: false,
+    pixelLabel: "TikTok Pixel + Events API", pixelId: "", pixelActive: false, capiActive: false,
+    spend: 9_050_000, impressions: 2_130_000, clicks: 40_800, conversions: 176, revenue: 30_900_000,
+    campaigns: [
+      { name: "Spark Ads — Video Produk", spend: 5_050_000, conversions: 112, revenue: 19_400_000 },
+      { name: "VSA — Katalog", spend: 4_000_000, conversions: 64, revenue: 11_500_000 },
+    ],
+  },
+];
+const AD_PROVINCES: Array<{ province: string; spend: number; impressions: number; clicks: number; conversions: number; revenue: number; reach: number }> = [
+  { province: "DKI Jakarta", spend: 11_200_000, impressions: 1_180_000, clicks: 34_800, conversions: 268, revenue: 52_400_000, reach: 640_000 },
+  { province: "Jawa Barat", spend: 7_400_000, impressions: 820_000, clicks: 24_100, conversions: 172, revenue: 31_800_000, reach: 470_000 },
+  { province: "Jawa Timur", spend: 6_100_000, impressions: 690_000, clicks: 19_600, conversions: 141, revenue: 26_500_000, reach: 390_000 },
+  { province: "Jawa Tengah", spend: 4_300_000, impressions: 512_000, clicks: 13_800, conversions: 98, revenue: 17_900_000, reach: 288_000 },
+  { province: "Banten", spend: 3_050_000, impressions: 356_000, clicks: 10_200, conversions: 74, revenue: 13_100_000, reach: 205_000 },
+  { province: "Sumatera Utara", spend: 2_400_000, impressions: 298_000, clicks: 8_100, conversions: 52, revenue: 8_900_000, reach: 168_000 },
+  { province: "Bali", spend: 2_050_000, impressions: 244_000, clicks: 7_400, conversions: 61, revenue: 12_600_000, reach: 142_000 },
+  { province: "DI Yogyakarta", spend: 1_500_000, impressions: 190_000, clicks: 6_100, conversions: 44, revenue: 7_200_000, reach: 112_000 },
+  { province: "Sulawesi Selatan", spend: 1_350_000, impressions: 176_000, clicks: 5_200, conversions: 33, revenue: 5_400_000, reach: 98_000 },
+  { province: "Kalimantan Timur", spend: 1_100_000, impressions: 138_000, clicks: 3_900, conversions: 26, revenue: 4_300_000, reach: 74_000 },
+  { province: "Lainnya", spend: 1_150_000, impressions: 164_000, clicks: 4_500, conversions: 30, revenue: 5_100_000, reach: 86_000 },
+];
+
 async function truncateAll() {
   const rows = await client<{ table_name: string }[]>`
     select table_name from information_schema.tables
@@ -558,6 +609,22 @@ async function main() {
     DAILY.map((d) => ({ storeId: store.id, date: d.date, salesIdr: d.sales, orders: d.orders, visitors: d.visitors })),
   );
 
+  // marketing: ad channels (denormalized config + aggregate + campaigns) + per-province rollup
+  await db.insert(schema.adChannels).values(
+    AD_CHANNELS.map((c) => ({
+      storeId: store.id, key: c.key, name: c.name, brand: c.brand, connected: c.connected,
+      pixelLabel: c.pixelLabel, pixelId: c.pixelId || null, pixelActive: c.pixelActive, capiEnabled: c.capiActive,
+      spendIdr: c.spend, impressions: c.impressions, clicks: c.clicks, conversions: c.conversions, revenueIdr: c.revenue,
+      campaigns: c.campaigns,
+    })),
+  );
+  await db.insert(schema.adMetrics).values(
+    AD_PROVINCES.map((p) => ({
+      storeId: store.id, channelKey: null, date: ADMIN_TODAY.toISOString().slice(0, 10), province: p.province,
+      spendIdr: p.spend, impressions: p.impressions, clicks: p.clicks, conversions: p.conversions, revenueIdr: p.revenue, reach: p.reach,
+    })),
+  );
+
   // invoices for this account
   await db.insert(schema.invoices).values(
     INVOICES.map((inv) => ({ number: inv.number, accountId: account.id, storeId: store.id, planKey: STORE.plan, amountIdr: planPrice(STORE.plan), status: inv.status, issuedAt: daysAgo(inv.daysAgo) })),
@@ -586,7 +653,7 @@ async function main() {
   );
   await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
 
-  console.log(`Seeded: ${PLANS.length} plans, 1 store (${STORE.name}), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${SUPPLIERS.length} suppliers/${PURCHASE_ORDERS.length} POs, ${SEGMENTS.length} segments, ${REVIEWS.length} reviews, ${MENU_DEFS.length} menus, ${DAILY.length} daily-stats, ${INVOICES.length} invoices, platform settings.`);
+  console.log(`Seeded: ${PLANS.length} plans, 1 store (${STORE.name}), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${SUPPLIERS.length} suppliers/${PURCHASE_ORDERS.length} POs, ${SEGMENTS.length} segments, ${REVIEWS.length} reviews, ${MENU_DEFS.length} menus, ${DAILY.length} daily-stats, ${AD_CHANNELS.length} ad-channels/${AD_PROVINCES.length} provinces, ${INVOICES.length} invoices, platform settings.`);
   await client.end();
 }
 

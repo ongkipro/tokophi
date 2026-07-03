@@ -57,6 +57,13 @@
       "when": 1783074056379,
       "tag": "0007_spooky_luke_cage",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783074831239,
+      "tag": "0008_dashing_human_cannonball",
+      "breakpoints": true
     }
   ]
 }
