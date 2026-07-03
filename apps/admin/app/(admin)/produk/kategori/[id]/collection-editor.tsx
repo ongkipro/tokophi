@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createCollection, updateCollection, deleteCollection, type CollectionInput } from "@/lib/actions/collections";
 import {
   ChevronLeft,
   ChevronDown,
@@ -109,6 +111,51 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
   // Template tema
   const [template, setTemplate] = React.useState<string>(TEMPLATES[0]);
 
+  // ---- persist (core collection fields; member/condition management is separate) ----
+  const router = useRouter();
+  const [pending, startTransition] = React.useTransition();
+  const buildInput = (): CollectionInput => ({
+    name: name.trim(),
+    description,
+    type,
+    match: match === "semua" ? "all" : "any",
+    published,
+  });
+  const handleSave = () => {
+    if (!name.trim()) {
+      toast.error("Nama koleksi wajib diisi");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        if (isEdit && collection) {
+          await updateCollection(collection.id, buildInput());
+          toast.success("Perubahan koleksi disimpan");
+        } else {
+          await createCollection(buildInput());
+          toast.success("Koleksi baru disimpan");
+        }
+        router.push("/produk/kategori");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menyimpan koleksi");
+      }
+    });
+  };
+  const handleDelete = () => {
+    if (!collection) return;
+    startTransition(async () => {
+      try {
+        await deleteCollection(collection.id);
+        toast.success("Koleksi dihapus");
+        router.push("/produk/kategori");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus koleksi");
+      }
+    });
+  };
+
   // SEO
   const [seoTitle, setSeoTitle] = React.useState("");
   const [metaDesc, setMetaDesc] = React.useState("");
@@ -171,7 +218,8 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
             <Button
               variant="ghost"
               className="text-destructive hover:bg-destructive/10"
-              onClick={() => toast.success("Koleksi dihapus")}
+              onClick={handleDelete}
+              disabled={pending}
             >
               <Trash2 />
               Hapus koleksi
@@ -184,8 +232,8 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
           >
             Batal
           </Button>
-          <Button onClick={() => toast.success(isEdit ? "Perubahan koleksi disimpan" : "Koleksi baru disimpan")}>
-            Simpan
+          <Button onClick={handleSave} disabled={pending}>
+            {pending ? "Menyimpan…" : "Simpan"}
           </Button>
         </div>
       </div>

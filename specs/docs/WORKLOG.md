@@ -94,7 +94,13 @@
 - [x] **`lib/actions/{discounts,pages,articles}.ts`** (`"use server"`) — create/update/delete → Drizzle + `revalidatePath`. Diskon: status+period → `startsAt`/`endsAt` (anchored to `ADMIN_TODAY` so derived status round-trips), `type`→`kind`. Halaman: `published`→`status`, `updatedAt=now`. Blog: new articles assigned to the store's first blog (no picker), `published`→`status`+`publishedAt`. All hard-delete (no history FK). Wired each editor's Simpan/Hapus (`useRouter`+`useTransition`, added missing `toast` imports to page/article editors).
 - [x] **Verified end-to-end via UI**: created a discount + page + article (all appear in their lists + DB), deleted the discount (gone from DB; fresh list load confirms). `tsc` + `build:admin` clean. Reseeded. *(Note: after a delete-redirect the list can show the row for one tick — router-cache timing; a fresh navigation is correct.)*
 
+**Mutations — order status + Inventori stock + Kategori persist (2026-07-03):**
+- [x] **`lib/actions/orders.ts`** `setOrderStatus(orderId, status)` — order-detail's primary action advances baru→diproses→dikirim→selesai (real DB write + `revalidatePath`).
+- [x] **`lib/actions/inventory.ts`** `updateStock(updates[])` — Inventori stepper now tracks dirty rows + a "Simpan N perubahan" button writes all changed stock to `inventory_levels` (via each product's default variant).
+- [x] **`lib/actions/collections.ts`** create/update/delete — Kategori editor persists core fields (title/handle/description/type/match/published); member/condition management deferred. Delete clears `collection_products`+`collection_conditions` first (hard delete).
+- [x] **Verified end-to-end via UI**: order INV-4789 baru→diproses; celana-kulot stock 22→27; collection create + delete — all confirmed in DB. `tsc` + `build:admin` clean. Reseeded. **7 write operations now persist** (Produk/Diskon/Halaman/Blog/Kategori editors + order-status + Inventori-stock).
+
 **Next up (resume here):**
-1. **Extend mutations** to the remaining editors (Pelanggan, Kategori/collections, Navigasi save, Inventori stock stepper, order status) — same server-action pattern.
+1. **Remaining mutations** (lower-frequency): Pelanggan edit, Navigasi menu save, CRM lead/follow-up, Segmen, Pembelian PO.
 2. **Supabase**: Auth (login/RBAC via `store_users`) + Storage (media uploads) + enable RLS; then multi-tenant (beyond single-store seed) + per-client storefront via `STORE_SLUG`.
 3. **E1 sisa / E0 de-dup / Turborepo** (unchanged).

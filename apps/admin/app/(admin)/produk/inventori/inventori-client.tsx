@@ -1,6 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { updateStock } from "@/lib/actions/inventory";
 import {
   Boxes, Minus, Plus, Search, AlertTriangle, PackageX, Warehouse, Download,
 } from "lucide-react";
@@ -74,6 +77,23 @@ export function InventoriClient({ products }: { products: Product[] }) {
     setQty((s) => ({ ...s, [id]: Math.max(0, Math.round(Number.isFinite(next) ? next : 0)) }));
   const bump = (id: string, delta: number) => setStock(id, (qty[id] ?? 0) + delta);
 
+  // Persist only the rows whose stock the user changed.
+  const router = useRouter();
+  const [pending, startTransition] = React.useTransition();
+  const changed = products.filter((p) => (qty[p.id] ?? 0) !== p.stock);
+  const save = () => {
+    if (!changed.length) return;
+    startTransition(async () => {
+      try {
+        await updateStock(changed.map((p) => ({ productId: p.id, available: qty[p.id] ?? 0 })));
+        toast.success(`Stok ${changed.length} produk diperbarui`);
+        router.refresh();
+      } catch {
+        toast.error("Gagal memperbarui stok");
+      }
+    });
+  };
+
   // Stats recompute live from the edited quantities (Total SKU is constant).
   const stats = React.useMemo(() => {
     let low = 0, out = 0, value = 0;
@@ -113,6 +133,9 @@ export function InventoriClient({ products }: { products: Product[] }) {
     <div>
       <PageHeader title="Inventori" desc="Pantau dan sesuaikan stok produk Anda.">
         <Button variant="outline"><Download /> Ekspor</Button>
+        <Button onClick={save} disabled={pending || changed.length === 0}>
+          {pending ? "Menyimpan…" : changed.length ? `Simpan ${changed.length} perubahan` : "Simpan"}
+        </Button>
       </PageHeader>
 
       {/* Stat cards */}

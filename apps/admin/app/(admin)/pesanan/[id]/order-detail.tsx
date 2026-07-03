@@ -1,6 +1,8 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   Printer,
@@ -17,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { toast } from "sonner";
+import { setOrderStatus } from "@/lib/actions/orders";
 import { OrderStatusBadge } from "@/components/admin/order-status";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, timeAgo } from "@/lib/format";
@@ -103,14 +106,14 @@ function currentStep(status: OrderStatus): number {
 }
 
 // Right-side primary action per status.
-function primaryAction(status: OrderStatus): { label: string; icon: typeof PackageCheck; toast: string } | null {
+function primaryAction(status: OrderStatus): { label: string; icon: typeof PackageCheck; toast: string; next: OrderStatus } | null {
   switch (status) {
     case "baru":
-      return { label: "Proses pesanan", icon: PackageCheck, toast: "Pesanan mulai diproses" };
+      return { label: "Proses pesanan", icon: PackageCheck, toast: "Pesanan mulai diproses", next: "diproses" };
     case "diproses":
-      return { label: "Tandai dikirim", icon: Truck, toast: "Pesanan ditandai dikirim" };
+      return { label: "Tandai dikirim", icon: Truck, toast: "Pesanan ditandai dikirim", next: "dikirim" };
     case "dikirim":
-      return { label: "Tandai selesai", icon: CheckCircle2, toast: "Pesanan ditandai selesai" };
+      return { label: "Tandai selesai", icon: CheckCircle2, toast: "Pesanan ditandai selesai", next: "selesai" };
     default:
       return null;
   }
@@ -130,6 +133,20 @@ export function OrderDetail({ order }: { order: Order }) {
   const paid = order.status !== "baru" && order.status !== "batal";
 
   const action = primaryAction(order.status);
+  const router = useRouter();
+  const [pending, startTransition] = React.useTransition();
+  const advance = () => {
+    if (!action) return;
+    startTransition(async () => {
+      try {
+        await setOrderStatus(order.id, action.next);
+        toast.success(action.toast);
+        router.refresh();
+      } catch {
+        toast.error("Gagal memperbarui status pesanan");
+      }
+    });
+  };
 
   return (
     <div className="mx-auto max-w-[1100px]">
@@ -163,7 +180,7 @@ export function OrderDetail({ order }: { order: Order }) {
             <Printer /> Cetak
           </Button>
           {action && (
-            <Button onClick={() => toast.success(action.toast)}>
+            <Button onClick={advance} disabled={pending}>
               <action.icon /> {action.label}
             </Button>
           )}
