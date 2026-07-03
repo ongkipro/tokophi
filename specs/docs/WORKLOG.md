@@ -103,7 +103,12 @@
 **Decision — prod backend = self-hosted Postgres + PostgREST on VPS, NOT Supabase (2026-07-03):**
 - User: "gak pakai supabase, nanti pakai local → postgrest sql - vps". Prod target = **self-hosted PostgreSQL + PostgREST on a VPS** (RLS for `store_id`, JWT auth, self-hosted Storage MinIO/S3). Local dev is already plain Postgres, so the same Drizzle migrations carry up with no rework. **Reframed all docs** (ADR 0007 + PRD/README/AGENTS/ARCHITECTURE/UML/SCHEMA/TASKS/BACKLOG/CONCEPT/CHANGELOG + `.env.example`) from "Supabase" → "self-hosted Postgres (VPS)"; removed the `NEXT_PUBLIC_SUPABASE_*` env vars.
 
+**Mutations — Navigasi menu + Pelanggan tags/notes persist (2026-07-03):**
+- [x] **`lib/actions/menus.ts`** `saveMenu(handle, items)` — "Simpan menu" now persists the whole tree (delete all `menu_items` for that menu → re-insert recursively with `parent_id`/`position`, type mapped beranda→home etc.). Wired navigasi-client (`useRouter`+`useTransition`).
+- [x] **`lib/actions/customers.ts`** `updateCustomer(id, {tags, notes})` — customer detail's tags/notes now persist (migration `0010` added `customers.tags` jsonb + `notes` text; seeded `tags=["pelanggan", <segment>]`). Added a "Simpan tag & catatan" button; `getCustomer` returns tags/notes; `Customer` type += `tags?`/`notes?`.
+- [x] **Verified end-to-end via UI**: deleted "Kontak" + Simpan menu → main-menu 12→11 (Kontak gone in DB, tree intact); added tag "uji-db" + note → persisted. `tsc` + `build:admin` clean. Reseeded. **9 write operations now persist.**
+
 **Next up (resume here):**
-1. **Remaining mutations** (lower-frequency): Pelanggan edit, Navigasi menu save, CRM lead/follow-up, Segmen, Pembelian PO.
+1. **Remaining mutations** (lower-frequency): CRM lead/follow-up, Segmen, Pembelian PO.
 2. **Deploy to VPS**: stand up self-hosted Postgres + PostgREST; wire JWT Auth (login/RBAC via `store_users`) + Storage (media uploads) + enable RLS; then multi-tenant (beyond single-store seed) + per-client storefront via `STORE_SLUG`.
 3. **E1 sisa / E0 de-dup / Turborepo** (unchanged).

@@ -20,6 +20,8 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { type NavMenu, type NavItem } from "@/lib/mock/store";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { saveMenu } from "@/lib/actions/menus";
 import { TYPE_META } from "@/components/admin/navigasi/nav-meta";
 import {
   ItemFormDialog,
@@ -458,6 +460,21 @@ export function NavigasiClient({ menus: initialMenus }: { menus: NavMenu[] }) {
   const activeMenu =
     menus.find((m) => m.handle === activeHandle) ?? menus[0] ?? null;
 
+  const router = useRouter();
+  const [saving, startSaving] = React.useTransition();
+  const handleSaveMenu = () => {
+    if (!activeMenu) return;
+    startSaving(async () => {
+      try {
+        await saveMenu(activeMenu.handle, activeMenu.items);
+        toast.success("Menu disimpan");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menyimpan menu");
+      }
+    });
+  };
+
   const editingItem =
     editingId && activeMenu ? findItem(activeMenu.items, editingId) : null;
 
@@ -738,7 +755,7 @@ export function NavigasiClient({ menus: initialMenus }: { menus: NavMenu[] }) {
               <Button variant="outline" onClick={() => setMenus(initialMenus.map((m) => ({ ...m, items: cloneItems(m.items) })))}>
                 Batal
               </Button>
-              <Button onClick={() => toast.success("Menu disimpan")}>Simpan menu</Button>
+              <Button onClick={handleSaveMenu} disabled={saving}>{saving ? "Menyimpan…" : "Simpan menu"}</Button>
             </CardContent>
           </Card>
         ) : (

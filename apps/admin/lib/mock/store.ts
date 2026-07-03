@@ -216,6 +216,7 @@ export type Segment = "baru" | "reguler" | "loyal" | "vip";
 export type Customer = {
   id: string; name: string; email: string; phone: string; city: string;
   orders: number; spent: number; segment: Segment; joinedDaysAgo: number;
+  tags?: string[]; notes?: string;
 };
 export const CUSTOMERS: Customer[] = (() => {
   const rnd = mulberry32(4242);

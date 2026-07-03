@@ -467,6 +467,7 @@ async function main() {
       ordersCount: c.orders,
       totalSpentIdr: c.spent,
       segment: c.segment,
+      tags: ["pelanggan", c.segment],
       createdAt: new Date(ADMIN_TODAY.getTime() - c.joinedDaysAgo * 86_400_000),
     })),
   ).returning({ id: schema.customers.id, name: schema.customers.name });

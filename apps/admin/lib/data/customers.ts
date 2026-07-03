@@ -8,6 +8,7 @@ const ADMIN_TODAY = new Date("2026-06-30T00:00:00Z");
 function toCustomer(r: {
   id: string; name: string; email: string | null; phone: string | null; city: string | null;
   ordersCount: number; totalSpentIdr: number; segment: "baru" | "reguler" | "loyal" | "vip"; createdAt: Date;
+  tags?: unknown; notes?: string | null;
 }): Customer {
   return {
     id: r.id,
@@ -19,6 +20,8 @@ function toCustomer(r: {
     spent: r.totalSpentIdr,
     segment: r.segment,
     joinedDaysAgo: Math.round((ADMIN_TODAY.getTime() - r.createdAt.getTime()) / 86_400_000),
+    tags: (r.tags as string[] | null) ?? undefined,
+    notes: r.notes ?? undefined,
   };
 }
 

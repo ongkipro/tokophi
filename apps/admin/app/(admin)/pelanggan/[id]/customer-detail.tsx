@@ -2,6 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { updateCustomer } from "@/lib/actions/customers";
 import {
   ChevronLeft,
   MessageCircle,
@@ -114,13 +117,12 @@ export function CustomerDetail({ customer }: { customer: Customer }) {
       ? IDR(Math.round(customer.spent / customer.orders))
       : "—";
 
-  // ---- editable tags + notes (mock, local state) ----
-  const [tags, setTags] = React.useState<string[]>([
-    "pelanggan",
-    SEGMENT_META[customer.segment].label.toLowerCase(),
-  ]);
+  // ---- editable tags + notes (persist to Postgres) ----
+  const [tags, setTags] = React.useState<string[]>(
+    customer.tags ?? ["pelanggan", SEGMENT_META[customer.segment].label.toLowerCase()],
+  );
   const [tagInput, setTagInput] = React.useState("");
-  const [note, setNote] = React.useState("");
+  const [note, setNote] = React.useState(customer.notes ?? "");
 
   function addTag() {
     const t = tagInput.trim().toLowerCase();
@@ -134,6 +136,20 @@ export function CustomerDetail({ customer }: { customer: Customer }) {
   function removeTag(t: string) {
     setTags((prev) => prev.filter((x) => x !== t));
   }
+
+  const router = useRouter();
+  const [saving, startSaving] = React.useTransition();
+  const saveProfile = () => {
+    startSaving(async () => {
+      try {
+        await updateCustomer(customer.id, { tags, notes: note });
+        toast.success("Catatan pelanggan disimpan");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menyimpan");
+      }
+    });
+  };
 
   const addr = fakeAddress(customer);
   const waHref = waLink(customer.phone, `Halo kak ${customer.name} 👋`);
@@ -434,6 +450,9 @@ export function CustomerDetail({ customer }: { customer: Customer }) {
                   className="min-h-20 resize-none"
                 />
               </div>
+              <Button onClick={saveProfile} disabled={saving} className="w-full">
+                {saving ? "Menyimpan…" : "Simpan tag & catatan"}
+              </Button>
             </CardContent>
           </Card>
 

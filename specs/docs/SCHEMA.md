@@ -78,7 +78,7 @@ fulfillments(id, order_id, courier text, tracking_no, status, shipped_at)  -- JN
 
 ## Customers
 ```
-customers(id, store_id, name, email, phone, city, province,
+customers(id, store_id, name, email, phone, city, province, tags jsonb, notes,
           orders_count int, total_spent_idr int, segment enum[baru|reguler|loyal|vip],
           created_at)
 customer_addresses(id, customer_id, label, recipient, phone, address, city, province, postcode)

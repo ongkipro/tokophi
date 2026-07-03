@@ -282,6 +282,8 @@ export const customers = pgTable("customers", {
   ordersCount: integer().notNull().default(0),
   totalSpentIdr: money().notNull().default(0),
   segment: customerSegment().notNull().default("baru"),
+  tags: jsonb(), // string[] labels (CRM)
+  notes: text(), // internal note
   createdAt: createdAt(),
 });
 
