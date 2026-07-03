@@ -3,12 +3,16 @@
 import * as React from "react";
 import {
   Plus, MoreHorizontal, Eye, PackageCheck, XCircle,
-  ClipboardList, Wallet, Truck, PackageOpen,
+  ClipboardList, Wallet, Truck, PackageOpen, ChevronDown, Trash2,
 } from "lucide-react";
 
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/page-header";
 import { IDR, num } from "@/lib/format";
 import { type PurchaseOrder, type POStatus } from "@/lib/mock/store";
+import { type POProduct } from "@/lib/data/purchases";
+import { createPurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder } from "@/lib/actions/purchases";
 import { cn } from "@/lib/utils";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -85,7 +89,29 @@ function StatCard({ icon, label, value, accent, hint }: {
   );
 }
 
-function RowActions() {
+function RowActions({ po }: { po: PurchaseOrder }) {
+  const router = useRouter();
+  const [pending, startTransition] = React.useTransition();
+  const receive = () =>
+    startTransition(async () => {
+      try {
+        await receivePurchaseOrder(po.id);
+        toast.success(`${po.id} diterima — stok diperbarui`);
+        router.refresh();
+      } catch {
+        toast.error("Gagal menerima pesanan");
+      }
+    });
+  const cancel = () =>
+    startTransition(async () => {
+      try {
+        await cancelPurchaseOrder(po.id);
+        toast.success(`${po.id} dibatalkan`);
+        router.refresh();
+      } catch {
+        toast.error("Gagal membatalkan pesanan");
+      }
+    });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi pesanan" />}>
@@ -93,62 +119,124 @@ function RowActions() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuItem><Eye /> Lihat</DropdownMenuItem>
-        <DropdownMenuItem><PackageCheck /> Tandai diterima</DropdownMenuItem>
+        <DropdownMenuItem disabled={pending || po.status === "diterima"} onClick={receive}><PackageCheck /> Tandai diterima</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive"><XCircle /> Batalkan</DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" disabled={pending} onClick={cancel}><XCircle /> Batalkan</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-function CreateOrderDialog() {
+type Line = { variantId: string; qty: number; cost: number };
+
+function CreateOrderDialog({ products }: { products: POProduct[] }) {
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false);
   const [supplier, setSupplier] = React.useState("");
-  const [items, setItems] = React.useState("");
   const [eta, setEta] = React.useState("");
   const [note, setNote] = React.useState("");
+  const [lines, setLines] = React.useState<Line[]>([]);
+  const [pending, startTransition] = React.useTransition();
+
+  const addLine = () => setLines((l) => [...l, { variantId: "", qty: 1, cost: 0 }]);
+  const setLine = (i: number, patch: Partial<Line>) => setLines((l) => l.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const removeLine = (i: number) => setLines((l) => l.filter((_, j) => j !== i));
+  const nameOf = (vid: string) => products.find((p) => p.variantId === vid)?.name ?? "Pilih produk";
+  const total = lines.reduce((a, l) => a + l.qty * l.cost, 0);
+  const reset = () => { setSupplier(""); setEta(""); setNote(""); setLines([]); };
+
+  const create = () => {
+    if (!supplier.trim()) { toast.error("Pemasok wajib diisi"); return; }
+    const valid = lines.filter((l) => l.variantId && l.qty > 0);
+    if (!valid.length) { toast.error("Tambah minimal 1 item"); return; }
+    startTransition(async () => {
+      try {
+        await createPurchaseOrder({ supplier, etaDate: eta, note, lines: valid });
+        toast.success("Pesanan pembelian dibuat");
+        setOpen(false);
+        reset();
+        router.refresh();
+      } catch {
+        toast.error("Gagal membuat pesanan");
+      }
+    });
+  };
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button><Plus /> Buat pesanan pembelian</Button>} />
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Buat pesanan pembelian</DialogTitle>
           <DialogDescription>
-            Pesan stok baru ke pemasok. Draf dapat diubah sebelum dikirim.
+            Pesan stok baru ke pemasok. &ldquo;Terima barang&rdquo; nanti menambah stok otomatis.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4 py-1">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="po-supplier">Pemasok</Label>
-            <Input id="po-supplier" placeholder="mis. CV Sumber Rejeki" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
-          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="po-items">Jumlah item</Label>
-              <Input id="po-items" type="number" min={1} inputMode="numeric" placeholder="0" value={items} onChange={(e) => setItems(e.target.value)} />
+              <Label htmlFor="po-supplier">Pemasok</Label>
+              <Input id="po-supplier" placeholder="mis. CV Sumber Rejeki" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="po-eta">Estimasi tiba</Label>
               <Input id="po-eta" type="date" value={eta} onChange={(e) => setEta(e.target.value)} />
             </div>
           </div>
+
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <Label>Item</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addLine}><Plus className="size-3.5" /> Tambah item</Button>
+            </div>
+            {lines.length === 0 && (
+              <p className="text-xs text-muted-foreground">Belum ada item — klik &ldquo;Tambah item&rdquo;.</p>
+            )}
+            {lines.map((l, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="min-w-0 flex-1 justify-between font-normal" />}>
+                    <span className="truncate">{nameOf(l.variantId)}</span>
+                    <ChevronDown className="size-3.5 shrink-0 opacity-60" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
+                    {products.map((p) => (
+                      <DropdownMenuItem key={p.variantId} onClick={() => setLine(i, { variantId: p.variantId, cost: l.cost || Math.round(p.price * 0.6) })}>
+                        {p.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Input aria-label="Jumlah" type="number" min={1} value={l.qty} onChange={(e) => setLine(i, { qty: parseInt(e.target.value) || 0 })} className="w-16 text-center" />
+                <Input aria-label="HPP" type="number" min={0} value={l.cost} onChange={(e) => setLine(i, { cost: parseInt(e.target.value) || 0 })} className="w-24 text-right tabular-nums" />
+                <Button type="button" variant="ghost" size="icon-sm" aria-label="Hapus item" onClick={() => removeLine(i)}><Trash2 className="size-4" /></Button>
+              </div>
+            ))}
+            {lines.length > 0 && (
+              <div className="flex justify-between border-t pt-2 text-sm">
+                <span className="text-muted-foreground">Total</span>
+                <span className="font-semibold tabular-nums">{IDR(total)}</span>
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-col gap-2">
             <Label htmlFor="po-note">Catatan</Label>
-            <Textarea id="po-note" rows={3} placeholder="Catatan untuk pemasok (opsional)…" value={note} onChange={(e) => setNote(e.target.value)} />
+            <Textarea id="po-note" rows={2} placeholder="Catatan untuk pemasok (opsional)…" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
         </div>
 
         <DialogFooter>
           <DialogClose render={<Button variant="outline">Batal</Button>} />
-          <DialogClose render={<Button>Buat</Button>} />
+          <Button onClick={create} disabled={pending}>{pending ? "Membuat…" : "Buat"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-export function PembelianClient({ orders }: { orders: PurchaseOrder[] }) {
+export function PembelianClient({ orders, products }: { orders: PurchaseOrder[]; products: POProduct[] }) {
   const [tab, setTab] = React.useState<TabKey>("semua");
 
   const counts = React.useMemo(() => {
@@ -172,7 +260,7 @@ export function PembelianClient({ orders }: { orders: PurchaseOrder[] }) {
   return (
     <div>
       <PageHeader title="Pembelian" desc="Kelola pesanan pembelian stok ke pemasok.">
-        <CreateOrderDialog />
+        <CreateOrderDialog products={products} />
       </PageHeader>
 
       {/* Stat cards */}
@@ -255,7 +343,7 @@ export function PembelianClient({ orders }: { orders: PurchaseOrder[] }) {
                       <span className={cn("text-sm tabular-nums", eta.muted && "text-muted-foreground")}>{eta.text}</span>
                     </TableCell>
                     <TableCell className="hidden text-right text-sm tabular-nums text-muted-foreground lg:table-cell">{num(po.createdDaysAgo)} hari lalu</TableCell>
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}><RowActions /></TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}><RowActions po={po} /></TableCell>
                   </TableRow>
                 );
               })}

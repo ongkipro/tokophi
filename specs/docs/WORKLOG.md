@@ -114,7 +114,13 @@
 - [x] **Verified end-to-end via UI**: marked a follow-up done (selesai 1→2 in DB); created "Segmen Uji DB" (in DB) + deleted it (gone). `tsc` + `build:admin` clean. Reseeded. **11 write operations now persist.**
 - **Pembelian deferred**: the PO create dialog is a simplified item-*count*, not real line items — persisting it faithfully needs a proper line-item PO builder (pick products + qty) + a "Terima barang" flow that adds stock. Tracked for later.
 
-**Next up (resume here):**
-1. **Pembelian** — build a real line-item PO editor (products + qty → `po_items`) + "Terima barang" (status → diterima, add to `inventory_levels`).
+**Mutations — Pembelian PO builder · ALL ADMIN EDITORS NOW PERSIST (2026-07-03):**
+- [x] **`lib/actions/purchases.ts`** `createPurchaseOrder` (line items → `purchase_orders` + `po_items`, supplier matched by name, unique code, total from lines), `receivePurchaseOrder` (status→diterima + add each outstanding line qty to `inventory_levels`, set `received_qty`), `cancelPurchaseOrder` (delete items + PO). `getPurchaseProducts()` feeds the picker.
+- [x] **Rebuilt the PO create dialog** into a real **line-item builder** (product dropdown + qty + HPP rows, live total) + wired row actions "Tandai diterima"/"Batalkan". `pembelian-client` takes `products`; `RowActions` takes `po`.
+- [x] **Verified end-to-end via UI**: created PO-xxxxxx (celana-kulot ×7, total 462k, po_items row); received it → status diterima + celana-kulot stock 22→29; cancelled another PO → row+items gone. `tsc` + `build:admin` clean. Reseeded. **✅ All 12 admin editors persist writes (12 write areas).**
+
+**Next up (resume here) — writes complete:**
+1. **Local auth + media** (still local Linux): login/RBAC via `store_users` (JWT), media upload to local storage (replace the toast-only image pickers); enable RLS locally once auth exists.
+2. **Then VPS (prod)**: self-hosted Postgres + PostgREST + Storage; multi-tenant + per-client storefront `STORE_SLUG`.
 2. **Deploy to VPS**: stand up self-hosted Postgres + PostgREST; wire JWT Auth (login/RBAC via `store_users`) + Storage (media uploads) + enable RLS; then multi-tenant (beyond single-store seed) + per-client storefront via `STORE_SLUG`.
 3. **E1 sisa / E0 de-dup / Turborepo** (unchanged).
