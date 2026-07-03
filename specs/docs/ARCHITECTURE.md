@@ -27,14 +27,14 @@ flowchart LR
   Store --> Shared
 
   Super ==>|live now| PG[(local PostgreSQL 16<br/>@indostore/db · Drizzle · store_id)]
-  Admin -. still mock .-> Mock[mock fixtures<br/>admin lib/mock]
-  Store -. still mock .-> Cat[storefront catalog]
+  Admin ==>|live now| PG
+  Store ==>|live now| PG
   PG -. prod target .-> Supabase[(Supabase<br/>managed Postgres + Auth + Storage · RLS)]
 ```
 
 - **One admin app, many stores.** A store switcher in the topbar scopes the UI; every query is scoped by `store_id` (app-layer now, Postgres RLS at Supabase). super-admin is the only surface that reads across tenants.
 - **One storefront per client**, deployed from one templated Astro codebase (a `STORE_SLUG` per deploy), sharing design tokens + the shared nav source. Not a self-serve theme editor.
-- **Backend status:** super-admin + **16 admin modules** are **live on local Postgres** via `@indostore/db`; the storefront still read mock. See §9–10 + ADR 0007/0008.
+- **Backend status:** **super-admin + all 16 admin modules + storefront** are **live on local Postgres** via `@indostore/db` (reads end-to-end); only writes (mutations) pending. See §9–10 + ADR 0007/0008.
 
 ---
 

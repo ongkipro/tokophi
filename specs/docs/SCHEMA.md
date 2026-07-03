@@ -1,8 +1,8 @@
 # Indostore — Backend schema (PostgreSQL, Drizzle)
 
 > **Implemented** as `@indostore/db` (Drizzle) — **53 tables** on local **PostgreSQL 16** (Docker, port 5433). Prod target = Supabase (ADR 0007). Source of truth = `packages/db/src/schema.ts`; this doc is the annotated reference.
-> **Status:** super-admin (all 5) + **16 admin modules** read it **live** via `lib/data/*` (`force-dynamic`); only the storefront still on mock (admin fully wired) — swap those next (§M3). Keep `admin/lib/mock/store.ts` shaped like these tables.
-> **Impl deltas vs the design below:** `stores.city`; **`store_stats`** rollup table (platform metrics cache); `invoices.number` ("INV-9001"); `products.emoji` + `products.units_sold`; `collections.emoji`; `pages.template` + `pages.views`; `articles.comments`; `followups.last_message`; `customer_segments.growth`; `reviews.product_name` + `reviews.emoji` (denorm — legacy demo products). RLS policies are written but **not enabled locally** (no `auth.*` on plain Postgres — they light up at Supabase).
+> **Status:** super-admin (all 5) + **16 admin modules** read it **live** via `lib/data/*` (`force-dynamic`); all three surfaces (super-admin + admin + storefront) read it; only writes pending — swap those next (§M3). Keep `admin/lib/mock/store.ts` shaped like these tables.
+> **Impl deltas vs the design below:** `stores.city`; **`store_stats`** rollup table (platform metrics cache); `invoices.number` ("INV-9001"); `products.emoji` + `products.units_sold` + storefront fields (`sizes`/`badge`/`bestseller`/`rating_value`/`rating_count`); `analytics_daily` rollup; `ad_channels` enriched (name/brand/pixel/aggregate/`campaigns` jsonb) + `ad_metrics.channel_key` nullable; `collections.emoji`; `pages.template` + `pages.views`; `articles.comments`; `followups.last_message`; `customer_segments.growth`; `reviews.product_name` + `reviews.emoji` (denorm — legacy demo products). RLS policies are written but **not enabled locally** (no `auth.*` on plain Postgres — they light up at Supabase).
 
 ## Conventions
 - **Postgres** on Supabase. PK = `id uuid default gen_random_uuid()`. Timestamps `created_at/updated_at timestamptz default now()`.
@@ -28,7 +28,8 @@ locations(id, store_id, name, address, is_default bool)                 -- gudan
 ## Catalog — products
 ```
 products(id, store_id, title, handle, description, status enum[active|draft|archived],
-         product_type, vendor, category, has_variants bool, archived_at, created_at)
+         product_type, vendor, category, emoji, units_sold, has_variants bool, archived_at, created_at,
+         sizes jsonb, badge, bestseller bool, rating_value real, rating_count)  -- storefront-facing fields
 product_media(id, product_id→products, url, alt, position)             -- real images (Storage)
 product_options(id, product_id, name, position)                        -- e.g. "Ukuran","Warna"
 product_variants(id, product_id, store_id, title, sku, barcode,

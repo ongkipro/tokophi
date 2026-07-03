@@ -79,8 +79,13 @@
 - [x] **`lib/data/marketing.ts`** (`getAdChannels`/`getProvinceStats`). Split Pemasaran (server-wrapper + `pemasaran-client.tsx`, `force-dynamic`); threaded `channels`/`provinces` through sub-tabs, `blendedTotals()` from props. **Verified**: `tsc` + `build:admin` clean, screenshot (stats/ROAS table/per-province) — 0 console errors, parity.
 - ✅ **All 16 admin modules read PostgreSQL** (Produk/Diskon/Pelanggan/Kategori/Pesanan/Halaman/Blog/Inventori/CRM/Pembelian/Segmen/Ulasan/Navigasi/Dashboard/Analitik/Pemasaran). Only decorative bits stay mock (live-activity ticker; analitik funnel/region/device breakdowns).
 
-**Next up (resume here) — admin done:**
-1. **storefront → DB**: parameterize by `STORE_SLUG`; read catalog/collections/pages/nav by `store_id` (replaces `apps/storefront/src/data/catalog.ts`).
-2. **Mutations persist**: admin save/edit/delete → Drizzle `insert/update/delete` (reads are live; writes still toasts).
-3. **Supabase**: Auth (login/RBAC via `store_users`) + Storage (media) + enable RLS; then multi-tenant (beyond single-store seed).
-4. **E1 sisa / E0 de-dup / Turborepo** (unchanged).
+**storefront → DB · ALL THREE SURFACES NOW READ POSTGRESQL (2026-07-03):**
+- [x] **Enriched `products`** (migration `0009`): `sizes` (jsonb), `badge`, `bestseller`, `rating_value`, `rating_count`; seeded `description` + `variant.compare_at_idr` + `collections.description` (category blurbs) — from the storefront catalog values. (Admin catalog already matched storefront: same 14 handles/prices.)
+- [x] **Rewrote `apps/storefront/src/data/catalog.ts`** to read `@indostore/db` via **top-level await** (build/SSR time) — **same exports** (`STORE`/`COLLECTIONS`/`PRODUCTS`/`productRating`/`bestsellers`/`byCollection`/`findProduct`/…), so all ~12 `.astro` consumers are unchanged. `astro.config.mjs` surfaces `DATABASE_URL` onto `process.env` (`loadEnv`) + `ssr.external:["postgres"]`; `apps/storefront/.env`(+example). `@indostore/db` added to deps.
+- [x] **Verified**: `astro build` clean (29 pages, all 14 products + 6 category collections generated from DB), screenshots — home (hero/6-collection grid w/ live counts 3·3·2·3·2·1/bestsellers) + product (rating 4.8·214, price+compareAt −24%, Promo badge, sizes, gallery, review breakdown, related) — **0 console errors, parity**.
+- ✅ **super-admin + all 16 admin modules + storefront all read PostgreSQL.** Reads are done end-to-end.
+
+**Next up (resume here) — reads done everywhere:**
+1. **Mutations persist**: admin save/edit/delete → Drizzle `insert/update/delete` (currently reads live, writes still toasts). Start with Produk/Diskon editors.
+2. **Supabase**: Auth (login/RBAC via `store_users`) + Storage (media uploads) + enable RLS; then multi-tenant (beyond single-store seed) + per-client storefront via `STORE_SLUG`.
+3. **E1 sisa / E0 de-dup / Turborepo** (unchanged).
