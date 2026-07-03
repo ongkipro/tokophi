@@ -200,6 +200,47 @@ const ARTICLES: Array<{ title: string; handle: string; blog: string; author: str
   { title: "Panduan Klaim Garansi Produk Elektronik", handle: "panduan-klaim-garansi", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 25, excerpt: "Ketahui prosedur dan syarat klaim garansi agar prosesnya cepat.", comments: 2 },
 ];
 
+// ---- CRM: leads, followups, wa templates ----
+const LEAD_SOURCE: Record<string, "whatsapp" | "instagram" | "tiktok" | "referral" | "marketplace"> = {
+  WhatsApp: "whatsapp", Instagram: "instagram", TikTok: "tiktok", Referral: "referral", Marketplace: "marketplace",
+};
+const LEADS: Array<{ name: string; phone: string; source: string; stage: "baru" | "dihubungi" | "nego" | "closing" | "menang" | "kalah"; value: number; lastContactDaysAgo: number; note: string }> = [
+  { name: "Rina Wijaya", phone: "6281234500001", source: "WhatsApp", stage: "baru", value: 450_000, lastContactDaysAgo: 0, note: "Tanya stok kaos ukuran XL" },
+  { name: "Budi Santoso", phone: "6281234500002", source: "Instagram", stage: "baru", value: 275_000, lastContactDaysAgo: 0, note: "DM soal sepatu sneakers" },
+  { name: "Maya Sari", phone: "6281234500003", source: "TikTok", stage: "dihubungi", value: 780_000, lastContactDaysAgo: 1, note: "Minta katalog lengkap" },
+  { name: "Andi Pratama", phone: "6281234500004", source: "WhatsApp", stage: "dihubungi", value: 210_000, lastContactDaysAgo: 2, note: "Nanya ongkir ke Medan" },
+  { name: "Dewi Lestari", phone: "6281234500005", source: "Referral", stage: "nego", value: 1_250_000, lastContactDaysAgo: 1, note: "Minta diskon beli 5 pcs" },
+  { name: "Rizky Ramadhan", phone: "6281234500006", source: "WhatsApp", stage: "nego", value: 640_000, lastContactDaysAgo: 3, note: "Nego harga grosir" },
+  { name: "Putri Ayu", phone: "6281234500007", source: "Instagram", stage: "closing", value: 920_000, lastContactDaysAgo: 0, note: "Siap transfer, tunggu invoice" },
+  { name: "Hendra Gunawan", phone: "6281234500008", source: "Marketplace", stage: "closing", value: 355_000, lastContactDaysAgo: 1, note: "Konfirmasi alamat kirim" },
+  { name: "Wulan Dari", phone: "6281234500009", source: "WhatsApp", stage: "menang", value: 1_480_000, lastContactDaysAgo: 2, note: "Sudah bayar, repeat order" },
+  { name: "Fajar Nugroho", phone: "6281234500010", source: "TikTok", stage: "menang", value: 530_000, lastContactDaysAgo: 4, note: "Closing dari live TikTok" },
+  { name: "Indah Permata", phone: "6281234500011", source: "Instagram", stage: "kalah", value: 180_000, lastContactDaysAgo: 6, note: "Pindah ke kompetitor" },
+  { name: "Doni Kusuma", phone: "6281234500012", source: "WhatsApp", stage: "baru", value: 390_000, lastContactDaysAgo: 0, note: "Tanya ready stock power bank" },
+];
+type FType = "keranjang" | "pembayaran" | "konfirmasi" | "pascabeli" | "repeat" | "ulasan";
+type FStatus = "menunggu" | "terkirim" | "dibalas" | "selesai";
+const FOLLOWUPS: Array<{ customer: string; phone: string; type: FType; context: string; dueDays: number; status: FStatus; lastMessage: string }> = [
+  { customer: "Siti Nurhaliza", phone: "6281234511001", type: "keranjang", context: "Kopi Arabika Gayo 250g", dueDays: 0, status: "menunggu", lastMessage: "" },
+  { customer: "Agus Salim", phone: "6281234511002", type: "pembayaran", context: "#INV-4821 · Rp275.000", dueDays: 0, status: "menunggu", lastMessage: "" },
+  { customer: "Rina Wijaya", phone: "6281234511003", type: "keranjang", context: "Skincare Serum Vitamin C", dueDays: -1, status: "menunggu", lastMessage: "" },
+  { customer: "Budi Santoso", phone: "6281234511004", type: "pembayaran", context: "#INV-4818 · Rp189.000", dueDays: -2, status: "menunggu", lastMessage: "" },
+  { customer: "Maya Sari", phone: "6281234511005", type: "pascabeli", context: "#INV-4815 · Tas Ransel Anti Air", dueDays: 0, status: "terkirim", lastMessage: "Terima kasih sudah belanja! 🙏" },
+  { customer: "Andi Pratama", phone: "6281234511006", type: "ulasan", context: "Earphone Bluetooth TWS", dueDays: 1, status: "menunggu", lastMessage: "" },
+  { customer: "Dewi Lestari", phone: "6281234511007", type: "repeat", context: "Terakhir beli 32 hari lalu", dueDays: 0, status: "menunggu", lastMessage: "" },
+  { customer: "Putri Ayu", phone: "6281234511008", type: "konfirmasi", context: "#INV-4820 · siap dikirim", dueDays: 0, status: "dibalas", lastMessage: "Oke kak, ditunggu ya" },
+  { customer: "Hendra Gunawan", phone: "6281234511009", type: "pascabeli", context: "#INV-4809 · Madu Hutan Asli", dueDays: -1, status: "selesai", lastMessage: "Barang sudah diterima 👍" },
+  { customer: "Wulan Dari", phone: "6281234511010", type: "repeat", context: "Pelanggan VIP · 45 hari", dueDays: 2, status: "menunggu", lastMessage: "" },
+];
+const WA_TEMPLATES: Array<{ name: string; type: string; body: string }> = [
+  { name: "Keranjang ditinggalkan", type: "keranjang", body: "Halo kak {{nama}} 👋, produk *{{produk}}* masih ada di keranjang. Mau saya bantu proses sekarang? Stok terbatas ya kak 😊 — {{toko}}" },
+  { name: "Pengingat pembayaran", type: "pembayaran", body: "Hai kak {{nama}}, pesanan {{no_pesanan}} sebesar *{{total}}* menunggu pembayaran. Konfirmasi ya kak biar segera kami kirim 🙏 — {{toko}}" },
+  { name: "Konfirmasi pesanan", type: "konfirmasi", body: "Halo kak {{nama}}, pesanan {{no_pesanan}} sudah kami terima dan sedang diproses. Terima kasih sudah belanja di {{toko}}! 📦" },
+  { name: "Terima kasih (pasca-beli)", type: "pascabeli", body: "Terima kasih kak {{nama}} sudah belanja di {{toko}} 🙏 Semoga suka dengan {{produk}}-nya! Kalau butuh apa-apa, chat kami ya 😊" },
+  { name: "Minta ulasan", type: "ulasan", body: "Hai kak {{nama}}, gimana {{produk}}-nya? 😊 Boleh minta tolong kasih ulasan/bintang ya kak, sangat membantu toko kami 🙏 — {{toko}}" },
+  { name: "Ajakan repeat order", type: "repeat", body: "Halo kak {{nama}} 👋 Sudah lama nih! Ada produk baru & promo spesial buat pelanggan setia {{toko}}. Mau saya kirim katalognya? 🛍️" },
+];
+
 async function truncateAll() {
   const rows = await client<{ table_name: string }[]>`
     select table_name from information_schema.tables
@@ -349,6 +390,33 @@ async function main() {
     })),
   );
 
+  // CRM: leads, followups (customer by name), wa templates
+  await db.insert(schema.leads).values(
+    LEADS.map((l) => ({
+      storeId: store.id,
+      name: l.name,
+      phone: l.phone,
+      source: LEAD_SOURCE[l.source],
+      stage: l.stage,
+      valueIdr: l.value,
+      note: l.note,
+      lastContactAt: new Date(ADMIN_TODAY.getTime() - l.lastContactDaysAgo * 86_400_000),
+    })),
+  );
+  await db.insert(schema.followups).values(
+    FOLLOWUPS.map((f) => ({
+      storeId: store.id,
+      customerId: custByName.get(f.customer) ?? null,
+      phone: f.phone,
+      type: f.type,
+      context: f.context,
+      dueAt: new Date(ADMIN_TODAY.getTime() + f.dueDays * 86_400_000),
+      status: f.status,
+      lastMessage: f.lastMessage || null,
+    })),
+  );
+  await db.insert(schema.waTemplates).values(WA_TEMPLATES.map((t) => ({ storeId: store.id, name: t.name, type: t.type, body: t.body })));
+
   // invoices for this account
   await db.insert(schema.invoices).values(
     INVOICES.map((inv) => ({ number: inv.number, accountId: account.id, storeId: store.id, planKey: STORE.plan, amountIdr: planPrice(STORE.plan), status: inv.status, issuedAt: daysAgo(inv.daysAgo) })),
@@ -377,7 +445,7 @@ async function main() {
   );
   await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
 
-  console.log(`Seeded: ${PLANS.length} plans, 1 store (${STORE.name}), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${INVOICES.length} invoices, platform settings.`);
+  console.log(`Seeded: ${PLANS.length} plans, 1 store (${STORE.name}), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${INVOICES.length} invoices, platform settings.`);
   await client.end();
 }
 

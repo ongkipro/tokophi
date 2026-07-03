@@ -380,6 +380,7 @@ export const followups = pgTable("followups", {
   context: text(),
   dueAt: ts(),
   status: followupStatus().notNull().default("menunggu"),
+  lastMessage: text(),
   sentAt: ts(),
 });
 
