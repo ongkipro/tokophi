@@ -180,6 +180,26 @@ const ORDERS_SEED = (() => {
   return out.sort((a, b) => a.minutesAgo - b.minutesAgo);
 })();
 
+// ---- CMS: pages, blogs, articles ----
+const PAGES: Array<{ title: string; handle: string; published: boolean; updatedDaysAgo: number; template: string; views: number }> = [
+  { title: "Tentang Kami", handle: "tentang-kami", published: true, updatedDaysAgo: 3, template: "page", views: 1240 },
+  { title: "Kontak", handle: "kontak", published: true, updatedDaysAgo: 12, template: "page.contact", views: 980 },
+  { title: "Cara Pemesanan", handle: "cara-pemesanan", published: true, updatedDaysAgo: 8, template: "page", views: 2110 },
+  { title: "Kebijakan Pengembalian & Refund", handle: "kebijakan-pengembalian", published: true, updatedDaysAgo: 21, template: "page", views: 640 },
+  { title: "Syarat & Ketentuan", handle: "syarat-ketentuan", published: true, updatedDaysAgo: 30, template: "page", views: 410 },
+  { title: "Kebijakan Privasi", handle: "kebijakan-privasi", published: true, updatedDaysAgo: 30, template: "page", views: 305 },
+  { title: "FAQ — Pertanyaan Umum", handle: "faq", published: false, updatedDaysAgo: 1, template: "page", views: 0 },
+];
+const BLOGS = ["Berita Toko", "Tips & Panduan"];
+const ARTICLES: Array<{ title: string; handle: string; blog: string; author: string; published: boolean; publishedDaysAgo: number; excerpt: string; comments: number }> = [
+  { title: "Promo Gajian: Diskon s/d 40% Sepanjang Bulan Ini", handle: "promo-gajian-diskon", blog: "Berita Toko", author: "Ongki Pratama", published: true, publishedDaysAgo: 2, excerpt: "Nikmati potongan harga untuk ratusan produk pilihan selama periode gajian.", comments: 8 },
+  { title: "5 Tips Memilih Ukuran Baju yang Pas saat Belanja Online", handle: "tips-memilih-ukuran-baju", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 5, excerpt: "Panduan singkat agar tidak salah ukuran ketika belanja fashion secara online.", comments: 3 },
+  { title: "Cara Merawat Sepatu Sneakers Agar Awet", handle: "cara-merawat-sneakers", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 9, excerpt: "Langkah mudah membersihkan dan menyimpan sneakers kesayangan.", comments: 12 },
+  { title: "Kami Kini Melayani Pengiriman Instan Se-Jabodetabek", handle: "pengiriman-instan-jabodetabek", blog: "Berita Toko", author: "Ongki Pratama", published: true, publishedDaysAgo: 14, excerpt: "Pesanan sampai di hari yang sama dengan GoSend & GrabExpress.", comments: 5 },
+  { title: "Rekomendasi Hadiah untuk Anak Sesuai Usia", handle: "rekomendasi-hadiah-anak", blog: "Tips & Panduan", author: "Dewi Anggraini", published: false, publishedDaysAgo: 1, excerpt: "Bingung memilih mainan edukatif? Simak rekomendasi berdasarkan usia anak.", comments: 0 },
+  { title: "Panduan Klaim Garansi Produk Elektronik", handle: "panduan-klaim-garansi", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 25, excerpt: "Ketahui prosedur dan syarat klaim garansi agar prosesnya cepat.", comments: 2 },
+];
+
 async function truncateAll() {
   const rows = await client<{ table_name: string }[]>`
     select table_name from information_schema.tables
@@ -299,6 +319,36 @@ async function main() {
     await db.insert(schema.payments).values({ orderId: ord.id, method: "transfer", amountIdr: o.total, status: o.status === "batal" ? "gagal" : "berhasil", paidAt: o.status === "batal" ? null : minutesAgo(o.minutesAgo) });
   }
 
+  // CMS: pages
+  await db.insert(schema.pages).values(
+    PAGES.map((p) => ({
+      storeId: store.id,
+      title: p.title,
+      handle: p.handle,
+      status: (p.published ? "terbit" : "draft") as "terbit" | "draft",
+      template: p.template,
+      views: p.views,
+      updatedAt: new Date(ADMIN_TODAY.getTime() - p.updatedDaysAgo * 86_400_000),
+    })),
+  );
+
+  // CMS: blogs + articles
+  const blogRows = await db.insert(schema.blogs).values(BLOGS.map((b) => ({ storeId: store.id, title: b, handle: slugify(b) }))).returning({ id: schema.blogs.id, title: schema.blogs.title });
+  const blogByName = new Map(blogRows.map((b) => [b.title, b.id]));
+  await db.insert(schema.articles).values(
+    ARTICLES.map((a) => ({
+      blogId: blogByName.get(a.blog)!,
+      storeId: store.id,
+      title: a.title,
+      handle: a.handle,
+      excerpt: a.excerpt,
+      author: a.author,
+      status: (a.published ? "terbit" : "draft") as "terbit" | "draft",
+      comments: a.comments,
+      publishedAt: new Date(ADMIN_TODAY.getTime() - a.publishedDaysAgo * 86_400_000),
+    })),
+  );
+
   // invoices for this account
   await db.insert(schema.invoices).values(
     INVOICES.map((inv) => ({ number: inv.number, accountId: account.id, storeId: store.id, planKey: STORE.plan, amountIdr: planPrice(STORE.plan), status: inv.status, issuedAt: daysAgo(inv.daysAgo) })),
@@ -327,7 +377,7 @@ async function main() {
   );
   await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
 
-  console.log(`Seeded: ${PLANS.length} plans, 1 store (${STORE.name}), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${INVOICES.length} invoices, ${ACTIVITY.length} activity, platform payments/shipping/COD.`);
+  console.log(`Seeded: ${PLANS.length} plans, 1 store (${STORE.name}), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${INVOICES.length} invoices, platform settings.`);
   await client.end();
 }
 

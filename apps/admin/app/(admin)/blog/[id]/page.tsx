@@ -1,10 +1,8 @@
-import { BLOG_POSTS } from "@/lib/mock/store";
 import { notFound } from "next/navigation";
+import { getArticle } from "@/lib/data/articles";
 import { ArticleEditor } from "./article-editor";
 
-export function generateStaticParams() {
-  return BLOG_POSTS.map((p) => ({ id: p.id }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function EditArticlePage({
   params,
@@ -12,7 +10,7 @@ export default async function EditArticlePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const post = BLOG_POSTS.find((p) => p.id === id);
+  const post = await getArticle(id);
   if (!post) notFound();
   return <ArticleEditor post={post} />;
 }

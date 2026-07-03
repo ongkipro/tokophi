@@ -1,10 +1,8 @@
-import { PAGES } from "@/lib/mock/store";
 import { notFound } from "next/navigation";
+import { getPage } from "@/lib/data/pages";
 import { PageEditor } from "./page-editor";
 
-export function generateStaticParams() {
-  return PAGES.map((p) => ({ id: p.id }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function EditHalamanPage({
   params,
@@ -12,7 +10,7 @@ export default async function EditHalamanPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const page = PAGES.find((p) => p.id === id);
+  const page = await getPage(id);
   if (!page) notFound();
   return <PageEditor page={page} />;
 }
