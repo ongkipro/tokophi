@@ -64,6 +64,13 @@
       "when": 1783074831239,
       "tag": "0008_dashing_human_cannonball",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783075955467,
+      "tag": "0009_clumsy_hex",
+      "breakpoints": true
     }
   ]
 }

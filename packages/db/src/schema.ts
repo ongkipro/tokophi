@@ -133,6 +133,11 @@ export const products = pgTable(
     category: text(),
     emoji: text(), // display fallback (mirrors storefront)
     unitsSold: integer().notNull().default(0), // rollup cache (from order_line_items; seeded for demo)
+    sizes: jsonb(), // storefront size options e.g. ["S","M","L"] / ["All Size"]
+    badge: text(), // storefront ribbon e.g. "Promo" / "Signature"
+    bestseller: boolean().notNull().default(false),
+    ratingValue: real(), // aggregate review score (storefront)
+    ratingCount: integer().notNull().default(0),
     hasVariants: boolean().notNull().default(false),
     archivedAt: ts(),
     createdAt: createdAt(),

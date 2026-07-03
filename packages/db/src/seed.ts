@@ -91,6 +91,24 @@ CATALOG[12].status = "draft";
 CATALOG[9].stock = 8;
 CATALOG[3].stock = 14;
 
+// storefront-facing metadata (description, sizes, badge, bestseller, rating, compareAt) — keyed by slug
+const STOREFRONT_META: Record<string, { description: string; sizes: string[]; badge?: string; bestseller?: boolean; rating: [number, number]; compareAt?: number }> = {
+  "dress-midi-bunga": { description: "Dress midi bahan adem dengan motif bunga pastel. Potongan flowy yang anggun untuk hangout maupun acara semi-formal.", sizes: ["S", "M", "L", "XL"], badge: "Promo", bestseller: true, rating: [4.8, 214], compareAt: 249_000 },
+  "blouse-katun": { description: "Blouse katun premium dengan lengan balon yang manis. Ringan, adem, dan mudah dipadupadankan.", sizes: ["S", "M", "L"], bestseller: true, rating: [4.7, 156] },
+  "kemeja-oversized": { description: "Kemeja oversized warna soft, tampil effortless dan kekinian. Cocok untuk gaya kasual maupun kerja.", sizes: ["M", "L", "XL"], rating: [4.5, 62] },
+  "rok-plisket": { description: "Rok plisket panjang yang jatuh cantik saat bergerak. Pinggang karet, nyaman dipakai seharian.", sizes: ["All Size"], rating: [4.6, 88] },
+  "celana-kulot": { description: "Kulot wide leg warna netral, memberi kesan tinggi dan rapi. Bahan tidak menerawang.", sizes: ["S", "M", "L", "XL"], rating: [4.4, 74] },
+  "hijab-voal": { description: "Hijab voal ultrafine, jatuh sempurna dan tidak licin. Tersedia warna-warna pastel favorit.", sizes: ["115x115 cm"], bestseller: true, rating: [4.9, 342] },
+  "khimar-instan": { description: "Khimar instan jumbo, praktis langsung pakai dengan pet antem. Menutup sempurna dan adem.", sizes: ["All Size"], rating: [4.6, 97] },
+  "gamis-syari": { description: "Gamis syari polos bahan wollycrepe yang jatuh dan tidak kaku. Elegan untuk sehari-hari maupun acara.", sizes: ["S", "M", "L", "XL"], rating: [4.7, 128] },
+  "tunik-rayon": { description: "Tunik rayon adem dengan panjang menutup pinggul. Warna mustard yang hangat dan mudah dipadukan.", sizes: ["M", "L", "XL"], rating: [4.5, 71] },
+  "cardigan-rajut": { description: "Cardigan rajut lembut warna oatmeal. Cocok jadi outer manis untuk berbagai outfit.", sizes: ["All Size"], rating: [4.6, 83] },
+  "piyama-satin": { description: "Set piyama satin halus warna sage. Mewah dan nyaman untuk tidur maupun santai di rumah.", sizes: ["M", "L", "XL"], rating: [4.8, 110] },
+  "blazer-wanita": { description: "Blazer tailored hitam yang menegaskan siluet. Wajib punya untuk tampilan profesional.", sizes: ["S", "M", "L"], rating: [4.5, 59] },
+  "dress-batik": { description: "Dress batik motif modern hasil kolaborasi pengrajin lokal. Anggun, berkelas, dan bernilai budaya.", sizes: ["S", "M", "L", "XL"], badge: "Signature", rating: [4.9, 187], compareAt: 275_000 },
+  "jumpsuit-kulot": { description: "Jumpsuit kulot warna terracotta, satu set praktis yang tetap stylish. Nyaman untuk jalan seharian.", sizes: ["M", "L"], rating: [4.6, 66] },
+};
+
 // ---- customers (mirror admin mock: mulberry32(4242)) ----
 const CUST_POOL = [
   "Budi Santoso", "Siti Nurhaliza", "Dewi Lestari", "Agus Salim", "Rina Wijaya",
@@ -134,15 +152,15 @@ const DISCOUNTS: Array<{ code: string; kind: "persen" | "nominal" | "gratis_ongk
 ];
 
 // ---- collections (Kategori) — membership seeded so product counts are real ----
-const COLLECTIONS: Array<{ name: string; emoji: string; type: "manual" | "otomatis"; published: boolean }> = [
-  { name: "Dress", emoji: "👗", type: "otomatis", published: true },
-  { name: "Atasan", emoji: "👚", type: "otomatis", published: true },
-  { name: "Bawahan", emoji: "👖", type: "otomatis", published: true },
-  { name: "Busana Muslim", emoji: "🧕", type: "otomatis", published: true },
+const COLLECTIONS: Array<{ name: string; emoji: string; type: "manual" | "otomatis"; published: boolean; blurb?: string }> = [
+  { name: "Dress", emoji: "👗", type: "otomatis", published: true, blurb: "Dress harian sampai acara spesial" },
+  { name: "Atasan", emoji: "👚", type: "otomatis", published: true, blurb: "Blouse, kemeja, & tunik" },
+  { name: "Bawahan", emoji: "👖", type: "otomatis", published: true, blurb: "Rok & celana kulot" },
+  { name: "Busana Muslim", emoji: "🧕", type: "otomatis", published: true, blurb: "Hijab, khimar, & gamis" },
   { name: "Promo Gajian", emoji: "🏷️", type: "manual", published: true },
   { name: "Produk Terlaris", emoji: "🔥", type: "otomatis", published: true },
-  { name: "Loungewear", emoji: "🩱", type: "otomatis", published: true },
-  { name: "Outerwear", emoji: "🧥", type: "otomatis", published: false },
+  { name: "Loungewear", emoji: "🩱", type: "otomatis", published: true, blurb: "Nyaman untuk di rumah" },
+  { name: "Outerwear", emoji: "🧥", type: "otomatis", published: false, blurb: "Cardigan & blazer" },
 ];
 
 // ---- orders (mirror admin mock buildOrders: mulberry32(555)) ----
@@ -414,18 +432,25 @@ async function main() {
   // catalog: product → 1 default variant (price) + inventory (stock) + base media (image)
   const seededProducts: Array<{ id: string; variantId: string; category: string; unitsSold: number }> = [];
   for (const c of CATALOG) {
+    const meta = STOREFRONT_META[c.slug];
     const [p] = await db.insert(schema.products).values({
       storeId: store.id,
       title: c.name,
       handle: c.slug,
+      description: meta?.description ?? null,
       category: c.category,
       status: c.status,
       emoji: c.emoji,
       unitsSold: c.unitsSold,
+      sizes: meta?.sizes ?? null,
+      badge: meta?.badge ?? null,
+      bestseller: meta?.bestseller ?? false,
+      ratingValue: meta?.rating[0] ?? null,
+      ratingCount: meta?.rating[1] ?? 0,
       hasVariants: false,
       createdAt: new Date(c.addedTs),
     }).returning();
-    const [v] = await db.insert(schema.productVariants).values({ productId: p.id, storeId: store.id, title: "Default", priceIdr: c.price, position: 0 }).returning();
+    const [v] = await db.insert(schema.productVariants).values({ productId: p.id, storeId: store.id, title: "Default", priceIdr: c.price, compareAtIdr: meta?.compareAt ?? null, position: 0 }).returning();
     await db.insert(schema.inventoryLevels).values({ variantId: v.id, locationId: loc.id, available: c.stock });
     await db.insert(schema.productMedia).values({ productId: p.id, url: `/products/${c.slug}.webp`, position: 0 });
     seededProducts.push({ id: p.id, variantId: v.id, category: c.category, unitsSold: c.unitsSold });
@@ -464,7 +489,7 @@ async function main() {
 
   // collections + membership (counts become real)
   for (const col of COLLECTIONS) {
-    const [c] = await db.insert(schema.collections).values({ storeId: store.id, title: col.name, handle: slugify(col.name), emoji: col.emoji, type: col.type, published: col.published }).returning();
+    const [c] = await db.insert(schema.collections).values({ storeId: store.id, title: col.name, handle: slugify(col.name), emoji: col.emoji, description: col.blurb ?? null, type: col.type, published: col.published }).returning();
     let members: string[];
     if (col.name === "Produk Terlaris") {
       members = [...seededProducts].sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 10).map((p) => p.id);
