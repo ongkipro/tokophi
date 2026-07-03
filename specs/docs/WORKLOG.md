@@ -38,8 +38,23 @@
 - **Impl notes:** toko list now ordered by GMV desc; store-detail "ID toko" shows real uuid (was STR-2005). RLS not enabled locally (plain Postgres) — app-layer `store_id` scoping for now.
 - **Docs:** ADR **0007** (Postgres+Drizzle stack) + **0008** (per-client topology); ARCHITECTURE §9–10, UML §1/§10 (+provisioning sequence), SCHEMA (implemented + deltas), PRD status/roadmap.
 
+**admin → DB — Produk (catalog) live (2026-07-03):**
+- [x] **Seed catalog** into Postgres (single-tenant): 14 products (Batik Nusantara) → each 1 default variant (price), inventory (stock), primary media (image). Deterministic from the admin mock (mulberry32, curated drafts/low-stock preserved). Schema deltas: `products.emoji` + `products.units_sold` (rollup cache), `collections.emoji` — migration `0003`.
+- [x] **`apps/admin/lib/data/products.ts`** (server-only): `getProducts()` / `getProduct(id)` flatten products ⋈ variant ⋈ inventory ⋈ media → the admin `Product` shape (signatures unchanged).
+- [x] **Wire Produk list + detail**: `produk/page.tsx` = server wrapper → `produk-client.tsx` (interactive); `produk/[id]` fetches `getProduct(id)` → existing `ProductEditor` (uuid route, `force-dynamic`, dropped `generateStaticParams`). **Verified**: `tsc` clean, `build:admin` (`/produk` + `/produk/[id]` ƒ dynamic), screenshots from DB — list (14 products, prices/stock/terjual/status/dates, low-stock + drafts match) + editor (5-image gallery, price/margin, category) — **0 console errors, parity**.
+
+**admin → DB — Diskon + Pelanggan + Kategori live (2026-07-03):**
+- [x] **Seed**: 24 customers (mulberry32(4242) parity), 6 discounts (startsAt/endsAt anchored → real terjadwal/aktif/kadaluarsa), 8 collections + **32 collection_products membership** (counts derived, real: Dress 3 / Terlaris 10 / Promo 8…).
+- [x] **`lib/data/{discounts,customers,collections}.ts`** (server-only): `getDiscounts/getDiscount`, `getCustomers/getCustomer`, `getCollections/getCollection` → flat admin shapes. Discount status + `endsInDays` derived from dates; collection count via `count(collection_products)`.
+- [x] **Wire 6 routes**: Diskon list+editor, Pelanggan list+detail, Kategori list+editor — each server-wrapper + `*-client.tsx`, detail via `getX(id)` (uuid, `force-dynamic`, dropped `generateStaticParams`). Detail/editor components take the flat entity (order-history/member-picker still read mock exports until orders seeded). **Verified**: `tsc` + `build:admin` clean (8 admin routes ƒ dynamic), screenshots from DB — 0 console errors, parity.
+
+**admin → DB — Pesanan + orders live (2026-07-03):**
+- [x] **Seed orders** (mirror buildOrders `mulberry32(555)` parity): **60 orders + 153 line-items + 60 payments**, linked to customers by name + product variants by pick-index; status dist matches (dikirim 17 / selesai 16 / diproses 15 / baru 7 / batal 5); channel enum-mapped; `placedAt` from `minutesAgo`.
+- [x] **`lib/data/orders.ts`**: `getOrders`/`getOrder(number)` → flat admin `Order` (items count from `order_line_items`, channel display-mapped, `minutesAgo` from `placedAt`). Route keyed by human number (`/pesanan/INV-4819`).
+- [x] **Wire Pesanan list + detail**: server-wrapper + `pesanan-client.tsx`; detail via `getOrder` (`force-dynamic`). OrderDetail still *fabricates* line-items from the flat order (reconciles to total) — real line-items are seeded for later. **Verified**: `tsc` + `build:admin` clean, screenshots — list (60, tab counts/customer/items/status/total) + detail (customer/channel/total/time from DB) — 0 console errors, parity.
+
 **Next up (resume here):**
-1. **admin → DB** (biggest step to "terhubung keseluruhan"): (a) seed Batik Nusantara catalog into Postgres from `admin/lib/mock/store.ts`; (b) swap `apps/admin/lib/data/*` bodies to Drizzle (signatures unchanged). Then wrap entity-list direct-mock reads in `lib/data`.
+1. **admin → DB, remaining**: **Dashboard/Analitik** (aggregate sales/KPIs from `orders` — replaces the synthetic DAYS series; the big one), Inventori (variant/inventory edit), Halaman/Blog (`pages`/`articles`), CRM/Pemasaran/Navigasi. Optional: wire OrderDetail + customer order-history to the *real* seeded line-items.
 2. **storefront → DB**: parameterize by `STORE_SLUG`, read catalog/pages by `store_id` (ADR 0008).
 3. **Mutations** (save/edit/delete) → Drizzle `insert/update`; toasts already in place.
 4. **Supabase**: connect (Auth + Storage + RLS), same migrations; M4 real payment/courier integrations.
