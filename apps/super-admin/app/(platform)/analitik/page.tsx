@@ -1,33 +1,10 @@
 import { Store, CheckCircle2, Clock, Ban } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@indostore/ui/card";
 import { IDR, num, pct } from "@indostore/lib/format";
-import { STORES, PLANS, PLATFORM, type StoreStatus } from "@/lib/mock";
+import { PLANS, type StoreStatus } from "@/lib/mock";
+import { getStores, getPlatform } from "@/lib/data";
 
-// GMV aggregated per plan.
-const gmvPerPlan = PLANS.map((p) => ({
-  key: p.key,
-  name: p.name,
-  gmv: STORES.filter((s) => s.plan === p.key).reduce((a, s) => a + s.gmv, 0),
-  count: STORES.filter((s) => s.plan === p.key).length,
-}));
-
-// GMV aggregated per city (top 8).
-const gmvPerCity = Object.values(
-  STORES.reduce<Record<string, { city: string; gmv: number; count: number }>>((acc, s) => {
-    acc[s.city] ??= { city: s.city, gmv: 0, count: 0 };
-    acc[s.city].gmv += s.gmv;
-    acc[s.city].count += 1;
-    return acc;
-  }, {}),
-)
-  .sort((a, b) => b.gmv - a.gmv)
-  .slice(0, 8);
-
-const STATUS_CARDS: { status: StoreStatus; label: string; count: number; icon: typeof Store; tint: string }[] = [
-  { status: "aktif", label: "Toko Aktif", count: PLATFORM.activeStores, icon: CheckCircle2, tint: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" },
-  { status: "trial", label: "Toko Trial", count: PLATFORM.trialStores, icon: Clock, tint: "bg-amber-500/12 text-amber-600 dark:text-amber-400" },
-  { status: "ditangguhkan", label: "Ditangguhkan", count: PLATFORM.suspendedStores, icon: Ban, tint: "bg-destructive/12 text-destructive" },
-];
+export const dynamic = "force-dynamic";
 
 function BarRow({ label, sub, value, max }: { label: string; sub: string; value: number; max: number }) {
   return (
@@ -43,10 +20,38 @@ function BarRow({ label, sub, value, max }: { label: string; sub: string; value:
   );
 }
 
-export default function AnalitikPage() {
+export default async function AnalitikPage() {
+  const [stores, platform] = await Promise.all([getStores(), getPlatform()]);
+
+  // GMV aggregated per plan.
+  const gmvPerPlan = PLANS.map((p) => ({
+    key: p.key,
+    name: p.name,
+    gmv: stores.filter((s) => s.plan === p.key).reduce((a, s) => a + s.gmv, 0),
+    count: stores.filter((s) => s.plan === p.key).length,
+  }));
+
+  // GMV aggregated per city (top 8).
+  const gmvPerCity = Object.values(
+    stores.reduce<Record<string, { city: string; gmv: number; count: number }>>((acc, s) => {
+      acc[s.city] ??= { city: s.city, gmv: 0, count: 0 };
+      acc[s.city].gmv += s.gmv;
+      acc[s.city].count += 1;
+      return acc;
+    }, {}),
+  )
+    .sort((a, b) => b.gmv - a.gmv)
+    .slice(0, 8);
+
+  const statusCards: { status: StoreStatus; label: string; count: number; icon: typeof Store; tint: string }[] = [
+    { status: "aktif", label: "Toko Aktif", count: platform.activeStores, icon: CheckCircle2, tint: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" },
+    { status: "trial", label: "Toko Trial", count: platform.trialStores, icon: Clock, tint: "bg-amber-500/12 text-amber-600 dark:text-amber-400" },
+    { status: "ditangguhkan", label: "Ditangguhkan", count: platform.suspendedStores, icon: Ban, tint: "bg-destructive/12 text-destructive" },
+  ];
+
   const maxPlanGmv = Math.max(...gmvPerPlan.map((p) => p.gmv), 1);
   const maxCityGmv = Math.max(...gmvPerCity.map((c) => c.gmv), 1);
-  const totalStatus = PLATFORM.totalStores || 1;
+  const totalStatus = platform.totalStores || 1;
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
@@ -58,7 +63,7 @@ export default function AnalitikPage() {
 
       {/* Status summary */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {STATUS_CARDS.map((c) => {
+        {statusCards.map((c) => {
           const Icon = c.icon;
           return (
             <Card key={c.status} size="sm">

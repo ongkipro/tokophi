@@ -12,18 +12,21 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@indostore/ui/card";
 import { Avatar, AvatarFallback } from "@indostore/ui/avatar";
 import { IDR, num, pct, timeAgo } from "@indostore/lib/format";
-import {
-  PLATFORM,
-  DELTAS,
-  STORES,
-  planDistribution,
-  statusDistribution,
-  INVOICES,
-  P_ACTIVITY,
-  type StoreStatus,
-} from "@/lib/mock";
+import { type StoreStatus } from "@/lib/mock";
 import { initials, PlanBadge, ActivityIcon, InvoiceBadge, Delta } from "@/components/bits";
 import { MrrChart } from "./mrr-chart";
+import {
+  getPlatform,
+  getDeltas,
+  getStores,
+  getPlanDistribution,
+  getStatusDistribution,
+  getInvoices,
+  getActivity,
+  getMrrSeries,
+} from "@/lib/data";
+
+export const dynamic = "force-dynamic";
 
 type Kpi = {
   label: string;
@@ -35,27 +38,39 @@ type Kpi = {
   unit?: string;
 };
 
-const KPIS: Kpi[] = [
-  { label: "MRR", value: IDR(PLATFORM.mrr, { compact: true }), helper: "Pendapatan berulang bulanan", icon: Wallet, delta: DELTAS.mrr },
-  { label: "GMV total", value: IDR(PLATFORM.gmv, { compact: true }), helper: "Nilai transaksi seluruh toko", icon: ShoppingBag, delta: DELTAS.gmv },
-  { label: "Toko Aktif", value: `${num(PLATFORM.activeStores)} / ${num(PLATFORM.totalStores)}`, helper: "toko aktif dari total", icon: Store, delta: DELTAS.activeStores, unit: "" },
-  { label: "Pendaftar baru (30h)", value: num(PLATFORM.newSignups30d), helper: "30 hari terakhir", icon: UserPlus, delta: DELTAS.newSignups30d },
-  { label: "Churn", value: pct(PLATFORM.churnRate), helper: "Tingkat pembatalan bulanan", icon: TrendingDown, delta: DELTAS.churn, invert: true, unit: "pp" },
-  { label: "ARPU", value: IDR(PLATFORM.arpu), helper: "Rata-rata pendapatan / toko", icon: Coins, delta: DELTAS.arpu },
-];
-
 const STATUS_BAR: Record<StoreStatus, string> = {
   aktif: "bg-emerald-500",
   trial: "bg-amber-500",
   ditangguhkan: "bg-destructive",
 };
 
-export default function PlatformDashboard() {
+export default async function PlatformDashboard() {
+  const [platform, deltas, stores, planDistribution, statusDistribution, invoices, activity, mrrSeries] =
+    await Promise.all([
+      getPlatform(),
+      getDeltas(),
+      getStores(),
+      getPlanDistribution(),
+      getStatusDistribution(),
+      getInvoices(),
+      getActivity(),
+      getMrrSeries(),
+    ]);
+
+  const KPIS: Kpi[] = [
+    { label: "MRR", value: IDR(platform.mrr, { compact: true }), helper: "Pendapatan berulang bulanan", icon: Wallet, delta: deltas.mrr },
+    { label: "GMV total", value: IDR(platform.gmv, { compact: true }), helper: "Nilai transaksi seluruh toko", icon: ShoppingBag, delta: deltas.gmv },
+    { label: "Toko Aktif", value: `${num(platform.activeStores)} / ${num(platform.totalStores)}`, helper: "toko aktif dari total", icon: Store, delta: deltas.activeStores, unit: "" },
+    { label: "Pendaftar baru (30h)", value: num(platform.newSignups30d), helper: "30 hari terakhir", icon: UserPlus, delta: deltas.newSignups30d },
+    { label: "Churn", value: pct(platform.churnRate), helper: "Tingkat pembatalan bulanan", icon: TrendingDown, delta: deltas.churn, invert: true, unit: "pp" },
+    { label: "ARPU", value: IDR(platform.arpu), helper: "Rata-rata pendapatan / toko", icon: Coins, delta: deltas.arpu },
+  ];
+
   const maxCount = Math.max(...planDistribution.map((p) => p.count), 1);
-  const topStores = [...STORES].sort((a, b) => b.gmv - a.gmv).slice(0, 5);
+  const topStores = [...stores].sort((a, b) => b.gmv - a.gmv).slice(0, 5);
   const totalStatus = statusDistribution.reduce((a, s) => a + s.count, 0) || 1;
-  const recentInvoices = [...INVOICES].sort((a, b) => a.daysAgo - b.daysAgo).slice(0, 6);
-  const outstanding = INVOICES.filter((i) => i.status !== "dibayar").reduce((a, i) => a + i.amount, 0);
+  const recentInvoices = [...invoices].sort((a, b) => a.daysAgo - b.daysAgo).slice(0, 6);
+  const outstanding = invoices.filter((i) => i.status !== "dibayar").reduce((a, i) => a + i.amount, 0);
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
@@ -96,13 +111,13 @@ export default function PlatformDashboard() {
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>Pertumbuhan MRR</CardTitle>
             <span className="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
-              {DELTAS.mrr >= 0 ? "+" : "−"}
-              {Math.abs(DELTAS.mrr)}% MoM
+              {deltas.mrr >= 0 ? "+" : "−"}
+              {Math.abs(deltas.mrr)}% MoM
             </span>
           </CardHeader>
           <CardContent>
             <div className="h-64 w-full">
-              <MrrChart />
+              <MrrChart data={mrrSeries} />
             </div>
           </CardContent>
         </Card>
@@ -208,9 +223,11 @@ export default function PlatformDashboard() {
                 </div>
               ))}
             </div>
-            <div className="rounded-lg bg-amber-500/10 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-400">
-              {PLATFORM.trialStores} toko dalam masa trial — peluang konversi ke berbayar.
-            </div>
+            {platform.trialStores > 0 && (
+              <div className="rounded-lg bg-amber-500/10 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-400">
+                {platform.trialStores} toko dalam masa trial — peluang konversi ke berbayar.
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -256,7 +273,7 @@ export default function PlatformDashboard() {
             <CardTitle>Aktivitas Platform</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {P_ACTIVITY.map((a) => (
+            {activity.map((a) => (
               <div key={a.id} className="flex items-start gap-3">
                 <ActivityIcon kind={a.kind} />
                 <div className="min-w-0 flex-1">

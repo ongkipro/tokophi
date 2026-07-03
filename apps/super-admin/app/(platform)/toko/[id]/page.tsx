@@ -1,11 +1,9 @@
 import { notFound } from "next/navigation";
 
-import { STORES } from "@/lib/mock";
+import { getStoreById } from "@/lib/data";
 import { StoreDetail } from "./store-detail";
 
-export function generateStaticParams() {
-  return STORES.map((s) => ({ id: s.id }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function StoreDetailPage({
   params,
@@ -13,7 +11,7 @@ export default async function StoreDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const store = STORES.find((s) => s.id === id);
+  const store = await getStoreById(id);
   if (!store) notFound();
   return <StoreDetail store={store} />;
 }
