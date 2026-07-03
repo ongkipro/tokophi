@@ -181,7 +181,7 @@ npm run studio  -w @indostore/db     # Drizzle Studio
 | Surface | Data source today | Notes |
 |---|---|---|
 | **super-admin** | ✅ **PostgreSQL** (`lib/data.ts`, `dynamic="force-dynamic"`) | all 5 pages live; `getStores/getPlatform/getInvoices/…` |
-| **admin** | 🟡 **mostly PostgreSQL** | ✅ **Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog** (list + detail/editor via `lib/data/*`); rest still mock — Dashboard/Analitik (sales rollups), Inventori, CRM, Pemasaran, Navigasi next |
+| **admin** | 🟡 **mostly PostgreSQL** | ✅ **Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM** (9 modules, list + detail/editor via `lib/data/*`); rest still mock — Dashboard/Analitik (sales rollups), Pemasaran, Navigasi next |
 | **storefront** | mock (`data/catalog.ts`) | after admin: read by `store_id`/`STORE_SLUG` |
 
 **Path to Supabase (no schema rework):** stand up a Supabase project → point `DATABASE_URL` at it → apply the same Drizzle migrations → enable **RLS keyed on `store_id`** (policies written, dormant locally) → wire `supabase-js` Auth (owner/staff via `store_users`) + Storage (media). See [`SCHEMA.md`](SCHEMA.md) for tables, [`UML.md`](UML.md) for diagrams.

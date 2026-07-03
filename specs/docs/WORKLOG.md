@@ -58,8 +58,12 @@
 - [x] **`lib/data/{pages,articles}.ts`**: `getPages/getPage`, `getArticles/getArticle` → flat `CmsPage`/`BlogPost` (published from status enum, blog channel via join, days-ago from timestamps).
 - [x] **Wire Halaman + Blog list + editors**: server-wrapper + `*-client.tsx`; detail via `getX(id)` (`force-dynamic`). **Verified**: `tsc` + `build:admin` clean, screenshots — Halaman (7, status/template/views) + Blog (6, tabs/blog/author/comments) — 0 console errors, parity.
 
+**admin → DB — Inventori + CRM live (2026-07-03):**
+- [x] **Inventori**: server-wrapper reuses `getProducts()` → `inventori-client.tsx` (stock stepper from real inventory). No new data.
+- [x] **CRM**: seed 12 leads + 10 followups + 6 wa_templates (schema delta `followups.last_message`, migration `0005`); `lib/data/crm.ts` (`getLeads`/`getFollowups` [customer via join]/`getWaTemplates`; source display-mapped, dueDays/lastContact from timestamps, discount... status derived). Wired 4 CRM routes: overview (async server), Follow-up / Pipeline / Template (server-wrapper + `*-client.tsx`, `force-dynamic`). Pipeline `leadWaHref` moved into the component (passes `waHref` prop to `LeadCard`). **Verified**: `tsc` + `build:admin` clean, screenshots — Inventori (14 SKU), Pipeline (kanban 9 leads by stage), Follow-up (10, dueDays sort, customer join) — 0 console errors, parity.
+
 **Next up (resume here):**
-1. **admin → DB, remaining**: **Dashboard/Analitik** (aggregate sales/KPIs from `orders` — replaces the synthetic DAYS series; the big one), Inventori (variant/inventory edit), CRM (`leads`/`followups`/`wa_templates`), Pemasaran (`ad_channels`/`ad_metrics`), Navigasi (`menus`/`menu_items` — currently `@indostore/data`). Optional: wire OrderDetail + customer order-history to the *real* seeded line-items.
+1. **admin → DB, remaining**: **Dashboard/Analitik** (aggregate sales/KPIs from `orders` — replaces the synthetic DAYS series; the big one), **Pemasaran** (`ad_channels`/`ad_metrics`/provinces), **Navigasi** (`menus`/`menu_items` — currently `@indostore/data`), Pelanggan Segmen/Ulasan (`customer_segments`/`reviews`), Pembelian (`purchase_orders`). Optional: wire OrderDetail + customer order-history to the *real* seeded line-items.
 2. **storefront → DB**: parameterize by `STORE_SLUG`, read catalog/pages by `store_id` (ADR 0008).
 3. **Mutations** (save/edit/delete) → Drizzle `insert/update`; toasts already in place.
 4. **Supabase**: connect (Auth + Storage + RLS), same migrations; M4 real payment/courier integrations.
