@@ -68,16 +68,19 @@
 
 **admin → DB — Navigasi live (2026-07-03):**
 - [x] **Seed** menus/menu_items (recursive, parent_id + position; type NavItemType→DB enum): 2 menus (main-menu 12 items incl. Kategori→6 children, footer 5). Inlined `MAIN_MENU`/`FOOTER_MENU` from `@indostore/data` for seed parity.
-- [x] **`lib/data/menus.ts`** `getMenus()` reconstructs the `NavMenu[]` tree from flat menu_items (parent→children map, type mapped back). Wired Navigasi (server-wrapper + `navigasi-client.tsx`, `force-dynamic`; `seedMenus()`→prop clone). **Verified**: `tsc` + `build:admin` clean, screenshot — 2 menus, hierarchical 12-item builder (Kategori sub-menu + children) — 0 console errors, parity. **15 admin modules now DB-backed.**
+- [x] **`lib/data/menus.ts`** `getMenus()` reconstructs the `NavMenu[]` tree from flat menu_items (parent→children map, type mapped back). Wired Navigasi (server-wrapper + `navigasi-client.tsx`, `force-dynamic`; `seedMenus()`→prop clone). **Verified**: `tsc` + `build:admin` clean, screenshot — 2 menus, hierarchical 12-item builder (Kategori sub-menu + children) — 0 console errors, parity. **16 admin modules now DB-backed.**
 
 **admin → DB — Dashboard + Analitik live (2026-07-03):**
 - [x] **Seed** `analytics_daily` rollup (new table, migration `0007`): 120-day daily sales/orders/visitors series (mirror mock `buildDays`, mulberry32(20260701)).
 - [x] **Refactored `lib/data/dashboard.ts` → pure functions** (take `days`/`products`/`orders`/`activities` as params — client-safe, range switcher re-derives). `lib/data/analytics.ts` `getDailyStats()`. Split Dashboard (`page.tsx` server → `dashboard-client.tsx`) + Analitik (server → `analitik-client.tsx`), both `force-dynamic`, fetching daily-stats + products + orders. Live-activity feed + online count kept from mock (decorative realtime); Analitik's funnel/region/device/ROAS breakdowns kept mock. **Verified**: `tsc` + `build:admin` clean, screenshots — Dashboard (KPIs/sales chart/top products/status from DB) + Analitik — 0 console errors, parity.
 
-**Only Pemasaran left. Next up (resume here):**
-1. **Pemasaran → DB** (`ad_channels` + `ad_metrics` daily rollups + per-province + campaigns) — the last admin module; analytics-heavy.
-2. **storefront → DB** (parameterize by `STORE_SLUG`), then **Supabase** (Auth/Storage/RLS) + **mutations persist** (save/edit/delete → Drizzle insert/update).
-2. **storefront → DB**: parameterize by `STORE_SLUG`, read catalog/pages by `store_id` (ADR 0008).
-3. **Mutations** (save/edit/delete) → Drizzle `insert/update`; toasts already in place.
-4. **Supabase**: connect (Auth + Storage + RLS), same migrations; M4 real payment/courier integrations.
-5. **E1 sisa / E0 de-dup / Turborepo** (unchanged from before).
+**admin → DB — Pemasaran live · ADMIN NOW 100% DB-BACKED (2026-07-03):**
+- [x] **Seed**: 3 ad_channels (denorm config + aggregate + `campaigns` jsonb) + 11 per-province rows into `ad_metrics` (`channel_key` NULL = province rollup). Schema deltas (migration `0008`): `ad_channels` +name/brand/pixel_label/pixel_active/spend_idr/impressions/clicks/conversions/revenue_idr/campaigns; `ad_metrics.channel_key` nullable.
+- [x] **`lib/data/marketing.ts`** (`getAdChannels`/`getProvinceStats`). Split Pemasaran (server-wrapper + `pemasaran-client.tsx`, `force-dynamic`); threaded `channels`/`provinces` through sub-tabs, `blendedTotals()` from props. **Verified**: `tsc` + `build:admin` clean, screenshot (stats/ROAS table/per-province) — 0 console errors, parity.
+- ✅ **All 16 admin modules read PostgreSQL** (Produk/Diskon/Pelanggan/Kategori/Pesanan/Halaman/Blog/Inventori/CRM/Pembelian/Segmen/Ulasan/Navigasi/Dashboard/Analitik/Pemasaran). Only decorative bits stay mock (live-activity ticker; analitik funnel/region/device breakdowns).
+
+**Next up (resume here) — admin done:**
+1. **storefront → DB**: parameterize by `STORE_SLUG`; read catalog/collections/pages/nav by `store_id` (replaces `apps/storefront/src/data/catalog.ts`).
+2. **Mutations persist**: admin save/edit/delete → Drizzle `insert/update/delete` (reads are live; writes still toasts).
+3. **Supabase**: Auth (login/RBAC via `store_users`) + Storage (media) + enable RLS; then multi-tenant (beyond single-store seed).
+4. **E1 sisa / E0 de-dup / Turborepo** (unchanged).

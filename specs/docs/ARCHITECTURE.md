@@ -14,7 +14,7 @@ Indostore is a Shopify-style commerce SaaS for Indonesia (Bahasa Indonesia UI, I
 | **super-admin** | `@indostore/super-admin` | Next.js 16 | `:3001` | **We (the platform)** — cross-tenant control plane: all stores, plans, billing. |
 | **storefront** | `@indostore/storefront` | Astro 5 + Tailwind v4 | `:4327` | A **shopper** — one hand-built static storefront per client (browse, cart, checkout, blog, account, contact). |
 
-Started as **UI/UX with mock data**; the **backend is now being wired** on local PostgreSQL (see §9) — super-admin + 15 admin modules read the DB, the rest still mock.
+Started as **UI/UX with mock data**; the **backend is now being wired** on local PostgreSQL (see §9) — super-admin + 16 admin modules read the DB, the rest still mock.
 
 ```mermaid
 flowchart LR
@@ -34,7 +34,7 @@ flowchart LR
 
 - **One admin app, many stores.** A store switcher in the topbar scopes the UI; every query is scoped by `store_id` (app-layer now, Postgres RLS at Supabase). super-admin is the only surface that reads across tenants.
 - **One storefront per client**, deployed from one templated Astro codebase (a `STORE_SLUG` per deploy), sharing design tokens + the shared nav source. Not a self-serve theme editor.
-- **Backend status:** super-admin + **15 admin modules** are **live on local Postgres** via `@indostore/db`; remaining admin screens (Pemasaran) + storefront still read mock. See §9–10 + ADR 0007/0008.
+- **Backend status:** super-admin + **16 admin modules** are **live on local Postgres** via `@indostore/db`; the storefront still read mock. See §9–10 + ADR 0007/0008.
 
 ---
 
@@ -181,7 +181,7 @@ npm run studio  -w @indostore/db     # Drizzle Studio
 | Surface | Data source today | Notes |
 |---|---|---|
 | **super-admin** | ✅ **PostgreSQL** (`lib/data.ts`, `dynamic="force-dynamic"`) | all 5 pages live; `getStores/getPlatform/getInvoices/…` |
-| **admin** | 🟡 **mostly PostgreSQL** | ✅ **15 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan / Navigasi / Dashboard / Analitik (list + detail/editor via `lib/data/*`); rest still mock — Pemasaran next |
+| **admin** | ✅ **all reads on PostgreSQL** | ✅ **all 16 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan / Navigasi / Dashboard / Analitik / Pemasaran — the WHOLE admin reads `lib/data/*`; only the storefront + admin writes still mock |
 | **storefront** | mock (`data/catalog.ts`) | after admin: read by `store_id`/`STORE_SLUG` |
 
 **Path to Supabase (no schema rework):** stand up a Supabase project → point `DATABASE_URL` at it → apply the same Drizzle migrations → enable **RLS keyed on `store_id`** (policies written, dormant locally) → wire `supabase-js` Auth (owner/staff via `store_users`) + Storage (media). See [`SCHEMA.md`](SCHEMA.md) for tables, [`UML.md`](UML.md) for diagrams.

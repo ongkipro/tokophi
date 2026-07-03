@@ -1,7 +1,7 @@
 # Indostore — Product Requirements Document (PRD v0.4)
 
 > **Working name:** Indostore (rename trivial) · **Owner:** Paduka Ongki / ongkipro
-> **Phase:** UI/UX-first → **backend M3 in progress** (local PostgreSQL/Drizzle; super-admin + 15 admin modules live) · **Updated:** 2026-07-03
+> **Phase:** UI/UX-first → **backend M3 in progress** (local PostgreSQL/Drizzle; super-admin + 16 admin modules live) · **Updated:** 2026-07-03
 > **Code:** `~/projects/indostore` (monorepo) · **Docs:** `~/Documents/Development/indostore`
 > **Run:** `npm i` at root, then `npm run dev:admin` (→ :3000) · `npm run dev:super` (→ :3001) · `cd apps/storefront && npm run dev` (→ :4327)
 
@@ -33,7 +33,7 @@ Super-admin & merchant-admin **share the design system** (`@indostore/ui`) + for
 
 ## 2. Current status (what's built)
 
-**All three surfaces are clickable, coherent products; backend M3 in progress.** Every screen reads typed fixtures through a thin data layer so backend is "just wiring." **On local PostgreSQL** (Drizzle via `@indostore/db`, Docker :5433 — ADR 0007): **super-admin (all 5) + 15 admin modules** read the DB via `lib/data/*` (`force-dynamic`); remaining admin screens (Pemasaran) + storefront still on mock; mutations don't persist yet. Single-tenant "Batik Nusantara" MVP; per-client topology = ADR 0008.
+**All three surfaces are clickable, coherent products; backend M3 in progress.** Every screen reads typed fixtures through a thin data layer so backend is "just wiring." **On local PostgreSQL** (Drizzle via `@indostore/db`, Docker :5433 — ADR 0007): **super-admin (all 5) + 16 admin modules** read the DB via `lib/data/*` (`force-dynamic`); only the storefront still on mock (admin fully wired); mutations don't persist yet. Single-tenant "Batik Nusantara" MVP; per-client topology = ADR 0008.
 
 ### Admin — merchant store admin (`apps/admin`, :3000) — DONE
 - **Shell** — grouped sidebar (Utama / Toko Online / Sistem), topbar (store switcher, search ⌘K, notifications, account, **dark-mode toggle**), fully responsive (mobile drawer).
@@ -176,7 +176,7 @@ Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palet
 - **M3 — backend (IN PROGRESS):**
   - ✅ **Local PostgreSQL 16 + Drizzle** (`@indostore/db`, ADR 0007): 53 tables, versioned migrations, seed.
   - ✅ **super-admin wired to DB** (`lib/data.ts`) — live, verified parity.
-  - 🟡 **admin → DB**: ✅ **15 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan / Navigasi / Dashboard / Analitik (seeded full demo: products/collections/customers/orders/discounts/pages/articles/leads/followups/templates/suppliers+POs/segments/reviews; via `lib/data/*`, `force-dynamic`). ⏳ Pemasaran.
+  - 🟡 **admin → DB**: ✅ **all 16 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan / Navigasi / Dashboard / Analitik / Pemasaran (seeded full demo: products/collections/customers/orders/discounts/pages/articles/leads/followups/templates/suppliers+POs/segments/reviews/menus/daily-stats/ad-channels; via `lib/data/*`, `force-dynamic`). Admin fully wired; ⏳ storefront + mutations.
   - ⏳ **storefront → DB**: parameterize by `STORE_SLUG` (ADR 0008), read by `store_id`.
   - ⏳ Mutations persist (save/edit/delete); live "edit-in-admin → storefront".
   - ⏳ **Supabase**: connect for Auth + Storage + RLS (`store_id`), same migrations; image upload + rich-text.

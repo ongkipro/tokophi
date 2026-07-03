@@ -1,6 +1,6 @@
 # Indostore — working agreement (read before coding)
 
-Shopify-style commerce SaaS for Indonesia. **No Themes menu, no Apps/Plugins.** UI/UX-first; **backend now being wired** on local PostgreSQL — super-admin + 15 admin modules read the DB (see Database below). Bahasa Indonesia UI, IDR. Full spec: `~/Documents/Development/indostore/PRD.md`.
+Shopify-style commerce SaaS for Indonesia. **No Themes menu, no Apps/Plugins.** UI/UX-first; **backend now being wired** on local PostgreSQL — super-admin + 16 admin modules read the DB (see Database below). Bahasa Indonesia UI, IDR. Full spec: `~/Documents/Development/indostore/PRD.md`.
 
 ## Monorepo (npm workspaces) — 3 surfaces
 ```
@@ -36,7 +36,7 @@ npm run generate -w @indostore/db    # after editing src/schema.ts → new migra
 ```
 - Package: `packages/db` → `import { db, schema } from "@indostore/db"` (server-only; `postgres` is `serverExternalPackages`). `npm run reset` drops `public` + `drizzle` schemas.
 - `DATABASE_URL` lives in root `.env` (tooling) + each app's `.env.local` (Next). Copy from `.env.example`.
-- **Wired to DB** (read via server-only `lib/data/*`, pages `dynamic="force-dynamic"`): **super-admin** (all 5) + **admin** (Produk, Diskon, Pelanggan, Kategori, Pesanan, Halaman, Blog, Inventori, CRM, Pembelian, Segmen, Ulasan, Navigasi, Dashboard, Analitik — 15 modules). **Still mock:** admin Pemasaran, **storefront** (all).
+- **Wired to DB** (read via server-only `lib/data/*`, pages `dynamic="force-dynamic"`): **super-admin** (all 5) + **admin** (Produk, Diskon, Pelanggan, Kategori, Pesanan, Halaman, Blog, Inventori, CRM, Pembelian, Segmen, Ulasan, Navigasi, Dashboard, Analitik, Pemasaran — 16 modules). **Still mock:** **storefront** (all) + admin writes (mutations).
 - **Wiring pattern:** seed the entity in `packages/db/src/seed.ts` (parity with the mock's mulberry32) → add `lib/data/<entity>.ts` returning the *same flat shape* → split the client page into a server wrapper + `*-client.tsx` (props) → point detail routes at `getX(id)`. Impedance columns added where the flat mock shape needs them (e.g. `products.emoji/units_sold`, `store_stats`, `invoices.number`).
 
 ## Structure (apps/admin/)
