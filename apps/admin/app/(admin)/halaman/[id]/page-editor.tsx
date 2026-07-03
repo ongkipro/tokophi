@@ -2,6 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { createPage, updatePage, deletePage, type PageInput } from "@/lib/actions/pages";
 import {
   ArrowLeft,
   Bold,
@@ -85,6 +88,51 @@ export function PageEditor({ page }: { page?: CmsPage }) {
     metaDesc ||
     "Tambahkan deskripsi meta agar cuplikan ini menarik di hasil pencarian.";
 
+  // ---- persist ----
+  const router = useRouter();
+  const [pending, startTransition] = React.useTransition();
+  const buildInput = (): PageInput => ({
+    title: title.trim(),
+    handle: effectiveHandle,
+    body,
+    published,
+    template,
+  });
+  const handleSave = () => {
+    if (!title.trim()) {
+      toast.error("Judul halaman wajib diisi");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        if (isEdit && page) {
+          await updatePage(page.id, buildInput());
+          toast.success("Halaman disimpan");
+        } else {
+          await createPage(buildInput());
+          toast.success("Halaman dibuat");
+        }
+        router.push("/halaman");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menyimpan halaman");
+      }
+    });
+  };
+  const handleDelete = () => {
+    if (!page) return;
+    startTransition(async () => {
+      try {
+        await deletePage(page.id);
+        toast.success("Halaman dihapus");
+        router.push("/halaman");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus halaman");
+      }
+    });
+  };
+
   const metaLen = metaDesc.length;
   const metaTone =
     metaLen === 0
@@ -117,7 +165,7 @@ export function PageEditor({ page }: { page?: CmsPage }) {
         </div>
         <div className="flex items-center gap-2">
           {isEdit && (
-            <Button variant="ghost" className="text-destructive hover:text-destructive">
+            <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={handleDelete} disabled={pending}>
               <Trash2 />
               Hapus halaman
             </Button>
@@ -125,7 +173,7 @@ export function PageEditor({ page }: { page?: CmsPage }) {
           <Button nativeButton={false} variant="ghost" render={<Link href="/halaman" />}>
             Batal
           </Button>
-          <Button>Simpan</Button>
+          <Button onClick={handleSave} disabled={pending}>{pending ? "Menyimpan…" : "Simpan"}</Button>
         </div>
       </div>
 

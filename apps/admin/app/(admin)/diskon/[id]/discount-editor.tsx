@@ -2,8 +2,10 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Percent, Tag, Truck, Dice5, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { createDiscount, updateDiscount, deleteDiscount, type DiscountInput } from "@/lib/actions/discounts";
 
 import {
   Card,
@@ -90,12 +92,49 @@ export function DiscountEditor({ discount }: { discount?: Discount }) {
         : "gratis ongkir";
   const previewCode = code || "KODE";
 
+  const router = useRouter();
+  const [pending, startTransition] = React.useTransition();
+  const buildInput = (): DiscountInput => ({
+    code: code.trim(),
+    type,
+    value: numericValue,
+    limit: limit ? Number(limit) : null,
+    status,
+    period: Number(period) || 0,
+  });
   function handleSave() {
-    toast.success(isEdit ? "Perubahan disimpan" : "Diskon dibuat");
+    if (!code.trim()) {
+      toast.error("Kode diskon wajib diisi");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        if (isEdit && discount) {
+          await updateDiscount(discount.id, buildInput());
+          toast.success("Perubahan disimpan");
+        } else {
+          await createDiscount(buildInput());
+          toast.success("Diskon dibuat");
+        }
+        router.push("/diskon");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menyimpan diskon (kode mungkin sudah dipakai)");
+      }
+    });
   }
-
   function handleDelete() {
-    toast.success(`Diskon ${discount?.code ?? ""} dihapus`);
+    if (!discount) return;
+    startTransition(async () => {
+      try {
+        await deleteDiscount(discount.id);
+        toast.success(`Diskon ${discount.code} dihapus`);
+        router.push("/diskon");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus diskon");
+      }
+    });
   }
 
   const topBarTitle = isEdit ? code || "Tanpa kode" : "Buat diskon";
@@ -125,6 +164,7 @@ export function DiscountEditor({ discount }: { discount?: Discount }) {
               variant="ghost"
               className="text-destructive hover:text-destructive"
               onClick={handleDelete}
+              disabled={pending}
             >
               <Trash2 />
               Hapus diskon
@@ -133,7 +173,7 @@ export function DiscountEditor({ discount }: { discount?: Discount }) {
           <Button nativeButton={false} variant="ghost" render={<Link href="/diskon" />}>
             Batal
           </Button>
-          <Button onClick={handleSave}>Simpan</Button>
+          <Button onClick={handleSave} disabled={pending}>{pending ? "Menyimpan…" : "Simpan"}</Button>
         </div>
       </div>
 

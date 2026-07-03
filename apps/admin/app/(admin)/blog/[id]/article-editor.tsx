@@ -2,6 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { createArticle, updateArticle, deleteArticle, type ArticleInput } from "@/lib/actions/articles";
 import {
   ArrowLeft,
   Bold,
@@ -89,6 +92,53 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
     ? title || "Tanpa judul"
     : title || "Artikel baru";
 
+  // ---- persist ----
+  const router = useRouter();
+  const [pending, startTransition] = React.useTransition();
+  const slugFallback = title.trim().toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const buildInput = (): ArticleInput => ({
+    title: title.trim(),
+    handle: handle.trim() || slugFallback,
+    body,
+    excerpt,
+    author,
+    published,
+  });
+  const handleSave = () => {
+    if (!title.trim()) {
+      toast.error("Judul artikel wajib diisi");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        if (isEdit && post) {
+          await updateArticle(post.id, buildInput());
+          toast.success("Artikel disimpan");
+        } else {
+          await createArticle(buildInput());
+          toast.success("Artikel dibuat");
+        }
+        router.push("/blog");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menyimpan artikel");
+      }
+    });
+  };
+  const handleDelete = () => {
+    if (!post) return;
+    startTransition(async () => {
+      try {
+        await deleteArticle(post.id);
+        toast.success("Artikel dihapus");
+        router.push("/blog");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus artikel");
+      }
+    });
+  };
+
   return (
     <div>
       {/* Top bar */}
@@ -105,7 +155,7 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
         </div>
         <div className="flex items-center gap-2">
           {isEdit && (
-            <Button variant="outline" className="text-destructive hover:text-destructive">
+            <Button variant="outline" className="text-destructive hover:text-destructive" onClick={handleDelete} disabled={pending}>
               <Trash2 />
               Hapus artikel
             </Button>
@@ -113,7 +163,7 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
           <Button nativeButton={false} variant="ghost" render={<Link href="/blog" />}>
             Batal
           </Button>
-          <Button>Simpan</Button>
+          <Button onClick={handleSave} disabled={pending}>{pending ? "Menyimpan…" : "Simpan"}</Button>
         </div>
       </div>
 
