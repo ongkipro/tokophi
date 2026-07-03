@@ -71,11 +71,22 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - Sales channel = **Toko Online only**; analytics attribution = Meta / TikTok / Google Ads + Organic / Other.
 - Keep it **console-clean** (no Base UI warnings) and responsive; `npm run build` must pass.
 
-## Status (2026-07-03) — three surfaces built; backend M3 in progress (super-admin + 16 admin modules live on Postgres)
+## Status (2026-07-03) — all three surfaces READ Postgres end-to-end; write-mutations in progress (local Linux dev)
+
+> **Current focus = local Linux.** Everything runs locally: PostgreSQL 16 in Docker (:5433) + the two Next dev servers + the Astro storefront. Prod (self-hosted Postgres + PostgREST on a VPS) is deferred until the local stack is feature-complete.
 
 - **Admin:** Dashboard (KPIs, FB-style date range, charts) · Pesanan (+detail) · Produk (+editor, Kategori/Inventori/Pembelian) · Pelanggan (+detail/Segmen/Ulasan) · CRM (Follow-up WA/Pipeline/Template) · Diskon (+editor) · Analitik · Pemasaran (per-provinsi) · Halaman & Blog (create+edit) · **Navigasi** (drag-and-drop menu builder + up/down + sub-menu) · Pengaturan.
 - **Super Admin:** Dashboard (MRR/GMV) · Toko (+detail) · Paket · Analitik · Pengaturan (gateways + Biteship + couriers). **← all 5 pages live on PostgreSQL** via `lib/data.ts`.
 - **DB-backed (admin, 16):** Produk · Diskon · Pelanggan · Kategori · Pesanan · Halaman · Blog · Inventori · CRM · Pembelian · Segmen · Ulasan · Navigasi · Dashboard · Analitik · Pemasaran read from PostgreSQL via `lib/data/*` (`force-dynamic`). all admin modules now read PostgreSQL.
-- **Storefront:** beranda · kategori (+ virtual "semua"/"promo-gajian") · produk (**5-image gallery**) · keranjang · **checkout → sukses** · akun (mock login) · blog · kontak — localStorage cart, 70 AI product images, nav mirrors the admin menu.
+- **Storefront:** beranda · kategori (+ virtual "semua"/"promo-gajian") · produk (**5-image gallery**) · keranjang · **checkout → sukses** · akun (mock login) · blog · kontak — reads the **same Postgres catalog** (`src/data/catalog.ts` → `@indostore/db` at build/SSR), localStorage cart, 70 AI product images.
+- **Writes (mutations) — persist to Postgres via server actions (`lib/actions/*`):** Produk · Diskon · Halaman · Blog · Kategori (create/edit/delete) · order-status advance · Inventori bulk stock. Remaining editors (Pelanggan, Navigasi, CRM, Segmen, Pembelian) still toast-only.
 
-**Next:** self-hosted Postgres/PostgREST backend (M3) → payment/courier integrations + multi-store provisioning (M4). Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md); task breakdown in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).
+**Next (local Linux):** finish the remaining write-mutations, then local auth/RBAC + media storage. **Later (prod):** self-hosted Postgres + PostgREST on a VPS + RLS → payments/couriers + multi-store provisioning. Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md); task breakdown in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).
+
+## Recent log (newest first)
+
+- **2026-07-03** — Decision: **prod backend = self-hosted Postgres + PostgREST on a VPS (not Supabase)**; all docs reframed. Focus stays **local Linux** until feature-complete.
+- **2026-07-03** — **Mutations**: 7 write operations now persist (Produk/Diskon/Halaman/Blog/Kategori CRUD + order-status + Inventori-stock) via `lib/actions/*` server actions, verified end-to-end.
+- **2026-07-03** — **Storefront → DB**: `catalog.ts` reads `@indostore/db` (top-level await); **all three surfaces now read Postgres**. Migration 0009 enriched `products` (sizes/badge/bestseller/rating).
+- **2026-07-03** — **Admin 100% DB-backed** (16 modules) incl. Dashboard/Analitik (`analytics_daily` rollup) + Pemasaran (`ad_channels`/`ad_metrics`); 53 tables.
+- Full history: [`CHANGELOG.md`](CHANGELOG.md) + [`specs/docs/WORKLOG.md`](specs/docs/WORKLOG.md).
