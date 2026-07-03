@@ -1,5 +1,6 @@
 import "server-only";
-import { db, schema } from "@indostore/db";
+import { schema } from "@indostore/db";
+import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { desc, eq } from "drizzle-orm";
 import type { BlogPost } from "@/lib/mock/store";
 
@@ -17,7 +18,7 @@ const sel = {
   publishedAt: schema.articles.publishedAt,
 };
 
-function q() {
+function q(db: Tx) {
   return db.select(sel).from(schema.articles).innerJoin(schema.blogs, eq(schema.blogs.id, schema.articles.blogId));
 }
 
@@ -39,11 +40,15 @@ function toPost(r: {
 }
 
 export async function getArticles(): Promise<BlogPost[]> {
-  const rows = await q().orderBy(desc(schema.articles.publishedAt));
-  return rows.map(toPost);
+  return withCurrentTenant(async (db) => {
+    const rows = await q(db).orderBy(desc(schema.articles.publishedAt));
+    return rows.map(toPost);
+  });
 }
 
 export async function getArticle(id: string): Promise<BlogPost | null> {
-  const rows = await q().where(eq(schema.articles.id, id)).limit(1);
-  return rows[0] ? toPost(rows[0]) : null;
+  return withCurrentTenant(async (db) => {
+    const rows = await q(db).where(eq(schema.articles.id, id)).limit(1);
+    return rows[0] ? toPost(rows[0]) : null;
+  });
 }

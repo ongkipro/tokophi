@@ -1,5 +1,6 @@
 import "server-only";
-import { db, schema } from "@indostore/db";
+import { schema } from "@indostore/db";
+import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { and, desc, eq, ne } from "drizzle-orm";
 import type { Product } from "@/lib/mock/store";
 
@@ -18,7 +19,7 @@ const selectProduct = {
   image: schema.productMedia.url,
 };
 
-function base() {
+function base(db: Tx) {
   return db
     .select(selectProduct)
     .from(schema.products)
@@ -46,17 +47,21 @@ function toProduct(r: {
 }
 
 export async function getProducts(): Promise<Product[]> {
-  const rows = await base().where(ne(schema.products.status, "archived")).orderBy(desc(schema.products.createdAt));
-  return rows.map(toProduct);
+  return withCurrentTenant(async (db) => {
+    const rows = await base(db).where(ne(schema.products.status, "archived")).orderBy(desc(schema.products.createdAt));
+    return rows.map(toProduct);
+  });
 }
 
 export async function getProduct(id: string): Promise<Product | null> {
-  const rows = await base().where(eq(schema.products.id, id)).limit(1);
-  if (!rows[0]) return null;
-  const media = await db
-    .select({ id: schema.productMedia.id, url: schema.productMedia.url })
-    .from(schema.productMedia)
-    .where(eq(schema.productMedia.productId, id))
-    .orderBy(schema.productMedia.position);
-  return { ...toProduct(rows[0]), media };
+  return withCurrentTenant(async (db) => {
+    const rows = await base(db).where(eq(schema.products.id, id)).limit(1);
+    if (!rows[0]) return null;
+    const media = await db
+      .select({ id: schema.productMedia.id, url: schema.productMedia.url })
+      .from(schema.productMedia)
+      .where(eq(schema.productMedia.productId, id))
+      .orderBy(schema.productMedia.position);
+    return { ...toProduct(rows[0]), media };
+  });
 }

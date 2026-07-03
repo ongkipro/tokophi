@@ -1,5 +1,6 @@
 import "server-only";
-import { db, schema } from "@indostore/db";
+import { schema } from "@indostore/db";
+import { withCurrentTenant } from "@/lib/tenant";
 import { desc, eq } from "drizzle-orm";
 import type { CmsPage } from "@/lib/mock/store";
 
@@ -20,11 +21,15 @@ function toPage(r: {
 }
 
 export async function getPages(): Promise<CmsPage[]> {
-  const rows = await db.select().from(schema.pages).orderBy(desc(schema.pages.updatedAt));
-  return rows.map(toPage);
+  return withCurrentTenant(async (db) => {
+    const rows = await db.select().from(schema.pages).orderBy(desc(schema.pages.updatedAt));
+    return rows.map(toPage);
+  });
 }
 
 export async function getPage(id: string): Promise<CmsPage | null> {
-  const rows = await db.select().from(schema.pages).where(eq(schema.pages.id, id)).limit(1);
-  return rows[0] ? toPage(rows[0]) : null;
+  return withCurrentTenant(async (db) => {
+    const rows = await db.select().from(schema.pages).where(eq(schema.pages.id, id)).limit(1);
+    return rows[0] ? toPage(rows[0]) : null;
+  });
 }

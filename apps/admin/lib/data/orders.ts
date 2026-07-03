@@ -1,5 +1,6 @@
 import "server-only";
-import { db, schema } from "@indostore/db";
+import { schema } from "@indostore/db";
+import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { eq, sql } from "drizzle-orm";
 import type { Order } from "@/lib/mock/store";
 
@@ -19,7 +20,7 @@ const sel = {
   items: sql<number>`count(${schema.orderLineItems.id})`.mapWith(Number),
 };
 
-function q() {
+function q(db: Tx) {
   return db
     .select(sel)
     .from(schema.orders)
@@ -45,11 +46,15 @@ function toOrder(r: {
 }
 
 export async function getOrders(): Promise<Order[]> {
-  const rows = await q();
-  return rows.map(toOrder).sort((a, b) => a.minutesAgo - b.minutesAgo);
+  return withCurrentTenant(async (db) => {
+    const rows = await q(db);
+    return rows.map(toOrder).sort((a, b) => a.minutesAgo - b.minutesAgo);
+  });
 }
 
 export async function getOrder(number: string): Promise<Order | null> {
-  const rows = await q().where(eq(schema.orders.number, number)).limit(1);
-  return rows[0] ? toOrder(rows[0]) : null;
+  return withCurrentTenant(async (db) => {
+    const rows = await q(db).where(eq(schema.orders.number, number)).limit(1);
+    return rows[0] ? toOrder(rows[0]) : null;
+  });
 }

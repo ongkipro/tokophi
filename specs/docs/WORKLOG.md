@@ -3,19 +3,19 @@
 > Newest first. What we did + what's next, so any session can resume instantly.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/indostore` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-07-04) · RBAC + RLS + RBAC-UI (ALL editors) done · next = VPS activation
+## ▶ CURRENT STATE (2026-07-04) · RBAC + RLS (ENFORCING at runtime) + RBAC-UI done · next = VPS server itself
 
 **Everything runs locally on Linux** (Docker PostgreSQL 16 :5433 + Drizzle `@indostore/db`, 53 tables, migrations 0000–0012). Done + verified end-to-end:
 - **Reads:** all 3 surfaces (super-admin 5 pages + admin 16 modules + storefront) read Postgres.
 - **Writes:** all **12 admin editors** persist via `lib/actions/*` server actions (Produk/Diskon/Halaman/Blog/Kategori CRUD · order-status · Inventori-stock · Navigasi · Pelanggan · CRM follow-up · Segmen · Pembelian PO create/receive→stock/cancel).
 - **Auth (local):** email/password login → jose JWT httpOnly cookie, `middleware.ts` protects the admin (owner `ongki@batiknusantara.id / indostore123`).
 - **RBAC (local):** every mutating server action gates on a capability via `lib/rbac.ts` `requireCapability()` — role→capability matrix (client-safe in `lib/rbac-policy.ts`) for owner/admin/staff/gudang (role comes from the session JWT). Actions also derive `store_id` from the session. **UI:** `PermissionsProvider`/`useCan`/`<Can>` + topbar role badge; **ALL admin editors** hide their write/delete/create controls per role (Produk, Pengaturan, Diskon, Halaman, Blog, Kategori, Pelanggan, CRM, Segmen, Pembelian, Inventori, Navigasi, Pesanan).
-- **RLS (local):** migration `0012_tenant_rls` enables Row-Level Security + a `tenant_isolation` policy (`USING`/`WITH CHECK` on `store_id = app_current_store_id()`) on all **32 store-scoped tables**, plus a non-owner `indostore_app` role. `withTenant(storeId, fn)` helper sets the `app.store_id` GUC + `SET LOCAL ROLE` per txn. **Verified** via `npm run verify-rls`: right tenant sees 14 products, wrong/missing tenant sees 0, cross-tenant write blocked. (App still connects as owner locally → RLS bypassed until the VPS flips `DATABASE_URL` to `indostore_app` + routes through `withTenant`.)
+- **RLS (local, ENFORCING at runtime):** migration `0012_tenant_rls` = `tenant_isolation` policy (`USING`/`WITH CHECK` on `store_id = app_current_store_id()`) on all **32 store-scoped tables** + non-owner `indostore_app` role. **The admin now runs every query through `withTenant`** (`lib/tenant.ts`): all 14 `lib/data` reads via `withCurrentTenant` (session→GUC), all 13 `lib/actions` writes via `withTenant(session.storeId)` — each txn sets `app.store_id` + `SET LOCAL ROLE indostore_app`, so RLS enforces live (the process connects as owner, but tenant queries drop to the restricted role). Auth (pre-session `store_users` read) + super-admin (cross-tenant) + storefront (per-client build) stay owner. **Verified**: `verify-rls` + `verify-rls-app` (the real withTenant path — read/write/isolation/WITH-CHECK) + Playwright E2E (all pages render, in-app write persists, 0 errors).
 - **Media (local):** product image upload → `apps/admin/public/uploads/` + `product_media`.
 
 **RBAC UI (ALL editors done):** `lib/rbac-policy.ts` (client-safe matrix) + `PermissionsProvider`/`useCan`/`<Can>` + topbar role badge; every admin editor gates its write/delete/create controls by role (verified via Playwright across owner/staff/gudang). Server actions stay the security boundary.
 
-**▶ RESUME HERE (next session):** **VPS activation** (the deferred big one) — flip the app's `DATABASE_URL` to the non-owner `indostore_app` role + route reads/writes through `withTenant()` so RLS actually enforces at runtime; then self-hosted Postgres + PostgREST + Storage (MinIO/S3). Detail per-entry below (newest first).
+**▶ RESUME HERE (next session):** **the VPS server itself** — the app-side is done (RLS enforces at runtime via `withTenant`, `indostore_app` role ready). Remaining is infra: provision the VPS, run the same migrations on its Postgres, front it with PostgREST (JWT `store_id` claim → `app.store_id` GUC, connect as `indostore_app`), swap local `public/uploads` for MinIO/S3 storage, wire the deploy pipeline. Needs an actual server (was deferred pending that). Detail per-entry below (newest first).
 
 ## 2026-07-04 — Session: RBAC + local Postgres RLS ✅
 **State before:** all reads + writes + local auth + local media done on local Postgres; paused at RBAC+RLS (single owner user).
@@ -30,6 +30,16 @@
 - **Note:** locally the app connects as the table owner, which *bypasses* RLS by design — enforcement flips on when the VPS points `DATABASE_URL` at `indostore_app` and queries run via `withTenant`. RBAC (app-layer) is enforced now regardless.
 
 **Next:** RBAC UI polish (hide/disable per role + graceful ForbiddenError toast), then VPS activation. See CURRENT STATE banner.
+
+## 2026-07-04 — Session: RLS runtime enforcement (local) ✅
+**Done this session:**
+- [x] **`apps/admin/lib/tenant.ts`** — `withCurrentTenant(fn)` (session→`withTenant`) + re-export `withTenant`. Makes every admin query run in a txn that sets `app.store_id` + `SET LOCAL ROLE indostore_app`, so RLS enforces at runtime (process connects as owner; tenant queries drop to the non-owner role — the VPS/PostgREST model).
+- [x] **All 14 `lib/data/*` reads** wrapped in `withCurrentTenant` (helpers threaded as `base(db: Tx)` where needed) — done via subagent, build-verified.
+- [x] **All 13 `lib/actions/*` writes** wrapped in `withTenant(session.storeId, …)` (store_id from the RBAC session; single-statement → arrow, multi-statement → one atomic txn). `media.ts` keeps fs outside the txn.
+- [x] **Kept owner (correctly):** `lib/auth.ts` (reads `store_users` before a session exists — else login locks out), super-admin (cross-tenant), storefront (per-client build, no session).
+- [x] **`npm run verify-rls-app`** (new) exercises the REAL `withTenant` path: own-tenant read + write-and-read-back its own discount; foreign tenant sees 0 of both; WITH CHECK blocks cross-store write; cleanup. All ✓.
+- [x] **Playwright E2E**: logged in as owner, every admin page renders its data (pelanggan 24, inventori 14, diskon 6, kategori 8, halaman 7, blog 6, segmen 17, crm 10, dashboard) with 0 runtime errors / 0 permission-denials; an in-app customer-note write persisted across reload — all through `indostore_app`. `build:admin` + `build:super` + storefront all clean.
+- **Next:** the VPS server itself (infra) — app side is done.
 
 ## 2026-07-04 — Session: RBAC UI rollout to ALL editors ✅
 **Done this session:**

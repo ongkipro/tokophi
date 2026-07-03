@@ -1,8 +1,9 @@
 "use server";
-import { db, schema } from "@indostore/db";
+import { schema } from "@indostore/db";
 import { asc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
+import { withTenant } from "@/lib/tenant";
 
 const ADMIN_TODAY = new Date("2026-06-30T00:00:00Z");
 
@@ -27,22 +28,25 @@ const fields = (i: ArticleInput) => ({
 
 export async function createArticle(input: ArticleInput): Promise<string> {
   const { storeId: sid } = await requireCapability("content:write");
-  // No blog picker in the editor → assign new articles to the store's first blog.
-  const [blog] = await db.select({ id: schema.blogs.id }).from(schema.blogs).where(eq(schema.blogs.storeId, sid)).orderBy(asc(schema.blogs.title)).limit(1);
-  const [a] = await db.insert(schema.articles).values({ storeId: sid, blogId: blog!.id, comments: 0, ...fields(input) }).returning();
+  const id = await withTenant(sid, async (db) => {
+    // No blog picker in the editor → assign new articles to the store's first blog.
+    const [blog] = await db.select({ id: schema.blogs.id }).from(schema.blogs).where(eq(schema.blogs.storeId, sid)).orderBy(asc(schema.blogs.title)).limit(1);
+    const [a] = await db.insert(schema.articles).values({ storeId: sid, blogId: blog!.id, comments: 0, ...fields(input) }).returning();
+    return a.id;
+  });
   revalidatePath("/blog");
-  return a.id;
+  return id;
 }
 
 export async function updateArticle(id: string, input: ArticleInput): Promise<void> {
-  await requireCapability("content:write");
-  await db.update(schema.articles).set(fields(input)).where(eq(schema.articles.id, id));
+  const { storeId: sid } = await requireCapability("content:write");
+  await withTenant(sid, (db) => db.update(schema.articles).set(fields(input)).where(eq(schema.articles.id, id)));
   revalidatePath("/blog");
   revalidatePath(`/blog/${id}`);
 }
 
 export async function deleteArticle(id: string): Promise<void> {
-  await requireCapability("content:write");
-  await db.delete(schema.articles).where(eq(schema.articles.id, id));
+  const { storeId: sid } = await requireCapability("content:write");
+  await withTenant(sid, (db) => db.delete(schema.articles).where(eq(schema.articles.id, id)));
   revalidatePath("/blog");
 }

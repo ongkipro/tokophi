@@ -1,5 +1,6 @@
 import "server-only";
-import { db, schema } from "@indostore/db";
+import { schema } from "@indostore/db";
+import { withCurrentTenant } from "@/lib/tenant";
 import { asc, eq, sql } from "drizzle-orm";
 import type { Collection } from "@/lib/mock/store";
 
@@ -19,22 +20,26 @@ function toCollection(r: {
 }
 
 export async function getCollections(): Promise<Collection[]> {
-  const rows = await db
-    .select(selectCollection)
-    .from(schema.collections)
-    .leftJoin(schema.collectionProducts, eq(schema.collectionProducts.collectionId, schema.collections.id))
-    .groupBy(schema.collections.id)
-    .orderBy(asc(schema.collections.title));
-  return rows.map(toCollection);
+  return withCurrentTenant(async (db) => {
+    const rows = await db
+      .select(selectCollection)
+      .from(schema.collections)
+      .leftJoin(schema.collectionProducts, eq(schema.collectionProducts.collectionId, schema.collections.id))
+      .groupBy(schema.collections.id)
+      .orderBy(asc(schema.collections.title));
+    return rows.map(toCollection);
+  });
 }
 
 export async function getCollection(id: string): Promise<Collection | null> {
-  const rows = await db
-    .select(selectCollection)
-    .from(schema.collections)
-    .leftJoin(schema.collectionProducts, eq(schema.collectionProducts.collectionId, schema.collections.id))
-    .where(eq(schema.collections.id, id))
-    .groupBy(schema.collections.id)
-    .limit(1);
-  return rows[0] ? toCollection(rows[0]) : null;
+  return withCurrentTenant(async (db) => {
+    const rows = await db
+      .select(selectCollection)
+      .from(schema.collections)
+      .leftJoin(schema.collectionProducts, eq(schema.collectionProducts.collectionId, schema.collections.id))
+      .where(eq(schema.collections.id, id))
+      .groupBy(schema.collections.id)
+      .limit(1);
+    return rows[0] ? toCollection(rows[0]) : null;
+  });
 }

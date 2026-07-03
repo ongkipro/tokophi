@@ -1,5 +1,6 @@
 import "server-only";
-import { db, schema } from "@indostore/db";
+import { schema } from "@indostore/db";
+import { withCurrentTenant } from "@/lib/tenant";
 import { asc, eq } from "drizzle-orm";
 import type { Discount } from "@/lib/mock/store";
 
@@ -28,11 +29,15 @@ function toDiscount(r: {
 }
 
 export async function getDiscounts(): Promise<Discount[]> {
-  const rows = await db.select().from(schema.discounts).orderBy(asc(schema.discounts.code));
-  return rows.map(toDiscount);
+  return withCurrentTenant(async (db) => {
+    const rows = await db.select().from(schema.discounts).orderBy(asc(schema.discounts.code));
+    return rows.map(toDiscount);
+  });
 }
 
 export async function getDiscount(id: string): Promise<Discount | null> {
-  const rows = await db.select().from(schema.discounts).where(eq(schema.discounts.id, id)).limit(1);
-  return rows[0] ? toDiscount(rows[0]) : null;
+  return withCurrentTenant(async (db) => {
+    const rows = await db.select().from(schema.discounts).where(eq(schema.discounts.id, id)).limit(1);
+    return rows[0] ? toDiscount(rows[0]) : null;
+  });
 }

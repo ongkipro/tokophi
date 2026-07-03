@@ -1,5 +1,6 @@
 import "server-only";
-import { db, schema } from "@indostore/db";
+import { schema } from "@indostore/db";
+import { withCurrentTenant } from "@/lib/tenant";
 import { desc, eq } from "drizzle-orm";
 import type { Customer } from "@/lib/mock/store";
 
@@ -26,11 +27,15 @@ function toCustomer(r: {
 }
 
 export async function getCustomers(): Promise<Customer[]> {
-  const rows = await db.select().from(schema.customers).orderBy(desc(schema.customers.totalSpentIdr));
-  return rows.map(toCustomer);
+  return withCurrentTenant(async (db) => {
+    const rows = await db.select().from(schema.customers).orderBy(desc(schema.customers.totalSpentIdr));
+    return rows.map(toCustomer);
+  });
 }
 
 export async function getCustomer(id: string): Promise<Customer | null> {
-  const rows = await db.select().from(schema.customers).where(eq(schema.customers.id, id)).limit(1);
-  return rows[0] ? toCustomer(rows[0]) : null;
+  return withCurrentTenant(async (db) => {
+    const rows = await db.select().from(schema.customers).where(eq(schema.customers.id, id)).limit(1);
+    return rows[0] ? toCustomer(rows[0]) : null;
+  });
 }

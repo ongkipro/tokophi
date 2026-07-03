@@ -1,8 +1,9 @@
 "use server";
-import { db, schema } from "@indostore/db";
+import { schema } from "@indostore/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
+import { withTenant } from "@/lib/tenant";
 
 // Anchored to the seed's frame so derived status (getDiscount) round-trips.
 const ADMIN_TODAY = new Date("2026-06-30T00:00:00Z");
@@ -35,21 +36,26 @@ function fields(i: DiscountInput) {
 
 export async function createDiscount(input: DiscountInput): Promise<string> {
   const { storeId: sid } = await requireCapability("discounts:write");
-  const [d] = await db.insert(schema.discounts).values({ storeId: sid, ...fields(input) }).returning();
+  const id = await withTenant(sid, async (db) => {
+    const [d] = await db.insert(schema.discounts).values({ storeId: sid, ...fields(input) }).returning();
+    return d.id;
+  });
   revalidatePath("/diskon");
-  return d.id;
+  return id;
 }
 
 export async function updateDiscount(id: string, input: DiscountInput): Promise<void> {
-  await requireCapability("discounts:write");
-  await db.update(schema.discounts).set(fields(input)).where(eq(schema.discounts.id, id));
+  const { storeId: sid } = await requireCapability("discounts:write");
+  await withTenant(sid, (db) => db.update(schema.discounts).set(fields(input)).where(eq(schema.discounts.id, id)));
   revalidatePath("/diskon");
   revalidatePath(`/diskon/${id}`);
 }
 
 export async function deleteDiscount(id: string): Promise<void> {
-  await requireCapability("discounts:write");
-  await db.delete(schema.discountUsages).where(eq(schema.discountUsages.discountId, id));
-  await db.delete(schema.discounts).where(eq(schema.discounts.id, id));
+  const { storeId: sid } = await requireCapability("discounts:write");
+  await withTenant(sid, async (db) => {
+    await db.delete(schema.discountUsages).where(eq(schema.discountUsages.discountId, id));
+    await db.delete(schema.discounts).where(eq(schema.discounts.id, id));
+  });
   revalidatePath("/diskon");
 }

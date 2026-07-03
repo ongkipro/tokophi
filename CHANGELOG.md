@@ -4,6 +4,11 @@ All notable changes. Dates are absolute. Phase: UI/UX-first → **backend M3 sta
 
 ## 2026-07-04
 
+### RLS runtime enforcement (local) — admin runs as the non-owner role
+- **`apps/admin/lib/tenant.ts`** — `withCurrentTenant(fn)` (reads the session → runs inside `withTenant`) + re-exports `withTenant`. Every tenant query now runs in a transaction that sets `app.store_id` + `SET LOCAL ROLE indostore_app`, so Postgres RLS **actually enforces at runtime** (the app process still connects as owner, but each tenant query drops to the restricted role — the exact VPS/PostgREST model).
+- **All 14 admin `lib/data/*` reads** wrapped in `withCurrentTenant`; **all 13 `lib/actions/*` writes** wrapped in `withTenant(session.storeId, …)` (store_id from the RBAC session). `lib/auth.ts` (login, reads `store_users` pre-session) + super-admin (cross-tenant) + storefront (per-client build) intentionally stay on the owner connection.
+- **`npm run verify-rls-app`** proves the actual `withTenant` path: own tenant reads its rows + writes/reads-back its own discount; a foreign tenant sees 0 of either; `WITH CHECK` blocks cross-store writes; cleanup ok. Playwright E2E: all admin pages render their data (customers 24 / inventori 14 / diskon 6 / …) with zero errors, and an in-app customer-note write persists — all through the restricted role. `build:admin`/`build:super`/storefront all clean.
+
 ### RBAC UI — role-aware controls
 - **Client-safe policy** (`lib/rbac-policy.ts`) — the role→capability matrix + `can()` extracted so the UI and the server guard (`lib/rbac.ts`) share ONE source of truth.
 - **`PermissionsProvider` + `useCan()` + `<Can>`** (`components/admin/permissions.tsx`) — role flows from the session (layout) to client components; the topbar shows a role badge (Pemilik/Admin/Staf/Gudang).
@@ -16,7 +21,7 @@ All notable changes. Dates are absolute. Phase: UI/UX-first → **backend M3 sta
 - **RLS migration `0012_tenant_rls`** — non-owner `indostore_app` role + grants, `app_current_store_id()` GUC reader, and `ENABLE ROW LEVEL SECURITY` + `tenant_isolation` policy (`USING` + `WITH CHECK` on `store_id`) across all **32 store-scoped tables**. Registered in the drizzle journal so `npm run migrate` applies it.
 - **`withTenant(storeId, fn)`** (`packages/db/src/rls.ts`) — per-txn `set_config('app.store_id', …, true)` + `SET LOCAL ROLE indostore_app`; ready for the VPS switch.
 - **`npm run verify-rls`** proves isolation: right tenant → 14 products, wrong/no-GUC tenant → 0 (fail-closed), cross-tenant INSERT blocked by `WITH CHECK`. Verified; `build:admin` clean.
-- Locally the app connects as the table owner (RLS bypassed by design); enforcement flips on when the VPS points `DATABASE_URL` at `indostore_app` + routes through `withTenant`. RBAC (app-layer) is enforced now.
+- At this stage RLS was policy-only (app connected as owner, bypassing it). **Superseded the same day** by the "RLS runtime enforcement" entry above — the admin now routes every read/write through `indostore_app` via `withTenant`, so RLS enforces live. RBAC (app-layer) is enforced.
 
 ## 2026-07-03
 
