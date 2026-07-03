@@ -9,6 +9,7 @@ import {
   boolean,
   integer,
   bigint,
+  real,
   date,
   timestamp,
   jsonb,
@@ -345,6 +346,7 @@ export const customerSegments = pgTable("customer_segments", {
   description: text(),
   rule: jsonb(),
   memberCount: integer().notNull().default(0),
+  growth: real().notNull().default(0),
 });
 
 export const reviews = pgTable("reviews", {
@@ -352,6 +354,8 @@ export const reviews = pgTable("reviews", {
   storeId: uuid().notNull().references(() => stores.id),
   customerId: uuid().references(() => customers.id),
   productId: uuid().references(() => products.id),
+  productName: text(), // denormalized display (some demo reviews reference legacy, non-catalog products)
+  emoji: text(),
   rating: integer().notNull().default(5),
   body: text(),
   status: reviewStatus().notNull().default("menunggu"),

@@ -241,6 +241,35 @@ const WA_TEMPLATES: Array<{ name: string; type: string; body: string }> = [
   { name: "Ajakan repeat order", type: "repeat", body: "Halo kak {{nama}} 👋 Sudah lama nih! Ada produk baru & promo spesial buat pelanggan setia {{toko}}. Mau saya kirim katalognya? 🛍️" },
 ];
 
+// ---- purchasing, segments, reviews ----
+const SUPPLIERS = ["CV Sumber Rejeki", "PT Grosir Nusantara", "Toko Elektronik Jaya", "Kopi Gayo Supplier"];
+const PURCHASE_ORDERS: Array<{ code: string; supplier: string; status: "draft" | "dipesan" | "sebagian" | "diterima"; items: number; total: number; etaDays: number; createdDaysAgo: number }> = [
+  { code: "PO-1042", supplier: "CV Sumber Rejeki", status: "dipesan", items: 4, total: 12_400_000, etaDays: 5, createdDaysAgo: 2 },
+  { code: "PO-1041", supplier: "PT Grosir Nusantara", status: "sebagian", items: 6, total: 8_950_000, etaDays: 2, createdDaysAgo: 6 },
+  { code: "PO-1040", supplier: "Toko Elektronik Jaya", status: "diterima", items: 3, total: 15_600_000, etaDays: -1, createdDaysAgo: 12 },
+  { code: "PO-1039", supplier: "CV Sumber Rejeki", status: "diterima", items: 2, total: 4_200_000, etaDays: -4, createdDaysAgo: 18 },
+  { code: "PO-1038", supplier: "Kopi Gayo Supplier", status: "draft", items: 1, total: 2_340_000, etaDays: 10, createdDaysAgo: 1 },
+  { code: "PO-1037", supplier: "PT Grosir Nusantara", status: "dipesan", items: 5, total: 9_800_000, etaDays: 7, createdDaysAgo: 3 },
+];
+const SEGMENTS: Array<{ name: string; count: number; growth: number; description: string }> = [
+  { name: "Pelanggan VIP", count: 128, growth: 12.4, description: "Total belanja lebih dari Rp6 juta" },
+  { name: "Pelanggan Loyal", count: 356, growth: 8.1, description: "Lebih dari 12 pesanan" },
+  { name: "Pelanggan Baru (30 hari)", count: 271, growth: 24.8, description: "Bergabung dalam 30 hari terakhir" },
+  { name: "Belum Pernah Belanja", count: 642, growth: -3.2, description: "Terdaftar tapi belum ada pesanan" },
+  { name: "Berisiko Churn", count: 89, growth: 5.6, description: "Tidak belanja lebih dari 90 hari" },
+  { name: "Pelanggan Kota Besar", count: 1204, growth: 6.9, description: "Jakarta, Bandung, Surabaya" },
+];
+const REVIEWS: Array<{ customer: string; product: string; emoji: string; rating: number; text: string; status: "terbit" | "menunggu"; daysAgo: number }> = [
+  { customer: "Siti Nurhaliza", product: "Kopi Arabika Gayo 250g", emoji: "☕", rating: 5, text: "Kopinya wangi dan segar, pengiriman cepat. Recommended!", status: "terbit", daysAgo: 1 },
+  { customer: "Budi Santoso", product: "Sepatu Sneakers Lokal", emoji: "👟", rating: 4, text: "Bahan bagus, ukuran pas. Cuma warnanya sedikit beda dari foto.", status: "terbit", daysAgo: 2 },
+  { customer: "Rina Wijaya", product: "Skincare Serum Vitamin C", emoji: "🧴", rating: 5, text: "Cocok di kulit saya, hasilnya cerah dalam 2 minggu.", status: "menunggu", daysAgo: 1 },
+  { customer: "Andi Pratama", product: "Earphone Bluetooth TWS", emoji: "🎧", rating: 3, text: "Suara oke, tapi baterai agak boros. Lumayan untuk harganya.", status: "terbit", daysAgo: 4 },
+  { customer: "Maya Sari", product: "Tas Ransel Anti Air", emoji: "🎒", rating: 5, text: "Kuat dan benar-benar anti air. Muat banyak juga.", status: "menunggu", daysAgo: 2 },
+  { customer: "Doni Kusuma", product: "Power Bank 10.000mAh", emoji: "🔋", rating: 4, text: "Ngecas cepat, ringkas dibawa. Puas.", status: "terbit", daysAgo: 6 },
+  { customer: "Putri Ayu", product: "Lip Cream Matte", emoji: "💄", rating: 2, text: "Warnanya bagus tapi bikin bibir kering.", status: "menunggu", daysAgo: 3 },
+  { customer: "Hendra Gunawan", product: "Madu Hutan Asli 500ml", emoji: "🍯", rating: 5, text: "Madunya asli, rasa mantap. Langganan terus.", status: "terbit", daysAgo: 8 },
+];
+
 async function truncateAll() {
   const rows = await client<{ table_name: string }[]>`
     select table_name from information_schema.tables
@@ -417,6 +446,42 @@ async function main() {
   );
   await db.insert(schema.waTemplates).values(WA_TEMPLATES.map((t) => ({ storeId: store.id, name: t.name, type: t.type, body: t.body })));
 
+  // purchasing: suppliers + purchase orders (+ items for the count)
+  const supRows = await db.insert(schema.suppliers).values(SUPPLIERS.map((n) => ({ storeId: store.id, name: n }))).returning({ id: schema.suppliers.id, name: schema.suppliers.name });
+  const supByName = new Map(supRows.map((s) => [s.name, s.id]));
+  const anyVariant = seededProducts[0].variantId;
+  for (const po of PURCHASE_ORDERS) {
+    const [row] = await db.insert(schema.purchaseOrders).values({
+      storeId: store.id,
+      supplierId: supByName.get(po.supplier) ?? null,
+      code: po.code,
+      status: po.status,
+      totalIdr: po.total,
+      etaDate: new Date(ADMIN_TODAY.getTime() + po.etaDays * 86_400_000).toISOString().slice(0, 10),
+      createdAt: new Date(ADMIN_TODAY.getTime() - po.createdDaysAgo * 86_400_000),
+    }).returning();
+    await db.insert(schema.purchaseOrderItems).values(
+      Array.from({ length: po.items }, () => ({ purchaseOrderId: row.id, variantId: anyVariant, qty: 1, costIdr: Math.round(po.total / po.items) })),
+    );
+  }
+
+  // customer segments (saved segments — demo aggregates)
+  await db.insert(schema.customerSegments).values(SEGMENTS.map((s) => ({ storeId: store.id, name: s.name, description: s.description, memberCount: s.count, growth: s.growth })));
+
+  // reviews (customer linked; product denormalized — legacy demo products)
+  await db.insert(schema.reviews).values(
+    REVIEWS.map((r) => ({
+      storeId: store.id,
+      customerId: custByName.get(r.customer) ?? null,
+      productName: r.product,
+      emoji: r.emoji,
+      rating: r.rating,
+      body: r.text,
+      status: r.status,
+      createdAt: new Date(ADMIN_TODAY.getTime() - r.daysAgo * 86_400_000),
+    })),
+  );
+
   // invoices for this account
   await db.insert(schema.invoices).values(
     INVOICES.map((inv) => ({ number: inv.number, accountId: account.id, storeId: store.id, planKey: STORE.plan, amountIdr: planPrice(STORE.plan), status: inv.status, issuedAt: daysAgo(inv.daysAgo) })),
@@ -445,7 +510,7 @@ async function main() {
   );
   await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
 
-  console.log(`Seeded: ${PLANS.length} plans, 1 store (${STORE.name}), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${INVOICES.length} invoices, platform settings.`);
+  console.log(`Seeded: ${PLANS.length} plans, 1 store (${STORE.name}), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${SUPPLIERS.length} suppliers/${PURCHASE_ORDERS.length} POs, ${SEGMENTS.length} segments, ${REVIEWS.length} reviews, ${INVOICES.length} invoices, platform settings.`);
   await client.end();
 }
 
