@@ -1,4 +1,4 @@
-# Local dev database — plain PostgreSQL 16 (matches the Supabase/Postgres target in docs/SCHEMA.md).
+# Local dev database — plain PostgreSQL 16 (matches the self-hosted Postgres (VPS) target in docs/SCHEMA.md).
 # Start:  docker compose up -d db      Stop: docker compose stop db      Reset: docker compose down -v
 services:
   db:

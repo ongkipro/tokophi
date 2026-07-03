@@ -47,7 +47,7 @@ Build: `npm run build:admin` · `npm run build:super` · (storefront) `cd apps/s
 
 ## Database (local Postgres — `@indostore/db`)
 
-Backend is being wired behind the data layer: **plain PostgreSQL 16 in Docker + Drizzle** (53 tables, single-tenant "Batik Nusantara"; prod target = Supabase — ADR 0007). **super-admin (all 5) + 16 admin modules + storefront read it live**; only writes (mutations) still mock.
+Backend is being wired behind the data layer: **plain PostgreSQL 16 in Docker + Drizzle** (53 tables, single-tenant "Batik Nusantara"; prod target = self-hosted Postgres + PostgREST (VPS) — ADR 0007). **super-admin (all 5) + 16 admin modules + storefront read it live**; only writes (mutations) still mock.
 
 ```bash
 docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted)
@@ -60,7 +60,7 @@ npm run studio  -w @indostore/db     # Drizzle Studio
 
 ## Stack
 
-Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 · **shadcn/ui on Base UI (`@base-ui/react`)** · Recharts · lucide-react · date-fns · Astro 5 (storefront) · **Drizzle + PostgreSQL 16** (`@indostore/db`, local via Docker) · (later) Supabase (Auth/Storage/RLS).
+Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 · **shadcn/ui on Base UI (`@base-ui/react`)** · Recharts · lucide-react · date-fns · Astro 5 (storefront) · **Drizzle + PostgreSQL 16** (`@indostore/db`, local via Docker) · (later) self-hosted Auth + Storage + Postgres RLS.
 
 ## Key conventions
 
@@ -78,4 +78,4 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - **DB-backed (admin, 16):** Produk · Diskon · Pelanggan · Kategori · Pesanan · Halaman · Blog · Inventori · CRM · Pembelian · Segmen · Ulasan · Navigasi · Dashboard · Analitik · Pemasaran read from PostgreSQL via `lib/data/*` (`force-dynamic`). all admin modules now read PostgreSQL.
 - **Storefront:** beranda · kategori (+ virtual "semua"/"promo-gajian") · produk (**5-image gallery**) · keranjang · **checkout → sukses** · akun (mock login) · blog · kontak — localStorage cart, 70 AI product images, nav mirrors the admin menu.
 
-**Next:** Supabase backend (M3) → payment/courier integrations + multi-store provisioning (M4). Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md); task breakdown in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).
+**Next:** self-hosted Postgres/PostgREST backend (M3) → payment/courier integrations + multi-store provisioning (M4). Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md); task breakdown in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).

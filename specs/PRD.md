@@ -23,7 +23,7 @@ A **Shopify-style commerce platform for the Indonesian market**: one shared, mod
 | **Admin** (`apps/admin`) | merchant operators | Next 16 + shadcn/Base UI | :3000 | **1 shared app**, multi-store |
 | **Storefront** (`apps/storefront`) ✅ | end shoppers | Astro 5 + Tailwind v4 | :4327 | **1 per client** ("Batik Nusantara" demo built) |
 
-Super-admin & merchant-admin **share the design system** (`@indostore/ui`) + formatters (`@indostore/lib`); admin & storefront **share the canonical nav** (`@indostore/data`). Backend later = one Supabase; super-admin = platform role (cross-tenant), admin = `store_id`-scoped (RLS).
+Super-admin & merchant-admin **share the design system** (`@indostore/ui`) + formatters (`@indostore/lib`); admin & storefront **share the canonical nav** (`@indostore/data`). Backend later = one self-hosted Postgres; super-admin = platform role (cross-tenant), admin = `store_id`-scoped (RLS).
 
 **Payments & shipping are platform-managed (merchant "terima matang")** — ADR 0004. We (platform) set up payment gateways (Midtrans/Xendit/Duitku) + **COD** and connect ONE **shipping aggregator** (Biteship → all couriers). The merchant only **enables which payment methods to accept** and **picks which couriers + services (ekspedisi)** to offer; credentials, resi & tariffs are automatic. Money flow: platform collects → settles/payouts to merchant (fee/margin).
 
@@ -87,7 +87,7 @@ Demo brand **"Batik Nusantara"** — a women's-fashion store.
 
 ```
 Shopper ──▶ Astro storefront (per client, CF Pages/Workers) ─┐
-                                                              ├─▶ (later) API / Supabase (shared)
+                                                              ├─▶ (later) API / self-hosted Postgres (shared)
 Merchant ─▶ Next.js admin (shared, Vercel) ───────────────────┤
 Platform ─▶ Next.js super-admin (cross-tenant) ───────────────┘
 ```
@@ -95,7 +95,7 @@ Platform ─▶ Next.js super-admin (cross-tenant) ─────────�
 - **Now:** every screen reads typed mock fixtures (`apps/admin/lib/mock/store.ts`) through a thin data layer (`apps/admin/lib/data/*`). Swapping mock → API is a per-function change; component contracts stay identical.
 - **Determinism:** all mock data is seeded (mulberry32) and anchored to a fixed `TODAY = 2026-06-30`, so SSR and client render identically (no hydration mismatch) and the demo is stable across reloads.
 - **Nav auto-connect:** admin menu builder + storefront header both derive from `@indostore/data/menu` — one edit propagates to both on rebuild (live edit-in-UI persistence needs M3 backend). Admin↔storefront product data is aligned 1:1 today via separate catalog mocks; full catalog-share is a backlog item.
-- **Later:** Supabase (Postgres + Auth + Storage) as the shared backend; each store = a `store_id` scope with Row-Level Security. Storefronts consume published data via a read API or a static build per deploy.
+- **Later:** self-hosted Postgres (Postgres + Auth + Storage) as the shared backend; each store = a `store_id` scope with Row-Level Security. Storefronts consume published data via a read API or a static build per deploy.
 
 **Stack:** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 · **shadcn/ui on Base UI (`@base-ui/react`)** — `render` prop (not `asChild`), no `Select` · Astro 5 · Recharts · lucide-react · date-fns. Brand accent = indigo. Private GitHub repo `ongkipro/indostore`.
 
@@ -179,7 +179,7 @@ Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palet
   - 🟡 **admin → DB**: ✅ **all 16 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan / Navigasi / Dashboard / Analitik / Pemasaran (seeded full demo: products/collections/customers/orders/discounts/pages/articles/leads/followups/templates/suppliers+POs/segments/reviews/menus/daily-stats/ad-channels; via `lib/data/*`, `force-dynamic`). Admin fully wired; ⏳ storefront + mutations.
   - ⏳ **storefront → DB**: parameterize by `STORE_SLUG` (ADR 0008), read by `store_id`.
   - ⏳ Mutations persist (save/edit/delete); live "edit-in-admin → storefront".
-  - ⏳ **Supabase**: connect for Auth + Storage + RLS (`store_id`), same migrations; image upload + rich-text.
+  - ⏳ **self-hosted Postgres**: connect for Auth + Storage + RLS (`store_id`), same migrations; image upload + rich-text.
 - **M4:** Payments/couriers integration (Midtrans/Xendit/Duitku + Biteship), per-client storefront deploy pipeline, billing/plans.
 
 > Detailed, prioritized tasks live in **`docs/BACKLOG.md`**.
@@ -190,7 +190,7 @@ Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palet
 
 - Final product name & brand accent.
 - Auth model (email+password vs Google; roles owner/staff/gudang).
-- ~~Multi-store: shared DB + `store_id` RLS vs DB-per-client.~~ **Decided:** shared DB + `store_id` (+ RLS at Supabase); one multi-tenant admin; storefront per client — **ADR 0008**.
+- ~~Multi-store: shared DB + `store_id` RLS vs DB-per-client.~~ **Decided:** shared DB + `store_id` (+ RLS at self-hosted Postgres); one multi-tenant admin; storefront per client — **ADR 0008**.
 - Storefront data delivery: static build per deploy vs live read API (leaning per-deploy static with `STORE_SLUG`).
 - Rich-text editor choice for Halaman/Blog content (currently mock textarea).
 - Catalog-share mechanism: single shared catalog source vs published snapshot per storefront build.

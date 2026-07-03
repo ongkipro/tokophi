@@ -5,6 +5,7 @@ All notable changes. Dates are absolute. Phase: UI/UX-first → **backend M3 sta
 ## 2026-07-03
 
 ### M3 — backend: local Postgres + Drizzle, super-admin live
+- **Decision: prod backend = self-hosted PostgreSQL + PostgREST on a VPS (NOT Supabase).** Local dev already plain Postgres → same Drizzle migrations carry up, no rework. Reframed all docs + ADR 0007 + `.env.example` (dropped `NEXT_PUBLIC_SUPABASE_*`); Auth (JWT) / Storage (VPS/MinIO/S3) / RLS are self-hosted.
 - **`@indostore/db`** (Drizzle): 52 tables + 32 enums from SCHEMA.md, versioned migrations (`drizzle/0000..0002`), seed + reset. Root `docker-compose.yml` = PostgreSQL 16 @ :5433. **ADR 0007**.
 - **super-admin wired to PostgreSQL**: new server-only `lib/data.ts`; `lib/mock.ts` slimmed to config; client pages split (`*-client.tsx` + server wrapper); all DB pages `dynamic="force-dynamic"`. Verified: build clean + parity + live-mutation test.
 - **Schema deltas** for a faithful platform view: `stores.city`, `store_stats` rollup, `invoices.number`; `menu_items.parent_id` self-FK.
@@ -21,7 +22,7 @@ All notable changes. Dates are absolute. Phase: UI/UX-first → **backend M3 sta
 - **Mutations — order status + Inventori stock + Kategori persist**: `lib/actions/{orders,inventory,collections}.ts` (`"use server"`). Order detail's primary action advances status (baru→diproses→dikirim→selesai); Inventori tracks dirty rows + a "Simpan N perubahan" button writes stock to `inventory_levels`; Kategori editor persists the core collection (create/edit/delete). Verified via UI (INV-4789→diproses, stock 22→27, collection create+delete). **7 write operations now persist.**
 - **Mutations — Diskon + Halaman + Blog create/edit/delete persist**: `lib/actions/{discounts,pages,articles}.ts` (`"use server"`) → Drizzle + `revalidatePath`; each editor's Simpan/Hapus wired (`useRouter`/`useTransition`). Diskon maps status+period→dates; new articles go to the store's first blog. Hard delete (no history FK). Verified via UI (create discount/page/article + delete). 4 editors now persist (Produk + these 3).
 - **Mutations — Produk create/edit/delete persist**: `apps/admin/lib/actions/products.ts` (`"use server"`) → Drizzle insert/update on products+variant+inventory+media + `revalidatePath`; product editor Simpan/Hapus wired (`useRouter`/`useTransition`). Delete = archive (products referenced by order line-items); `getProducts` filters archived. Verified end-to-end via UI (create → edit price → delete). Establishes the write pattern for the remaining editors.
-- **storefront → DB — ALL THREE SURFACES NOW READ POSTGRESQL**: migration 0009 enriches `products` (`sizes` jsonb, `badge`, `bestseller`, `rating_value`, `rating_count`) + seeds `description`/`compare_at`/collection blurbs; `apps/storefront/src/data/catalog.ts` rewritten to read `@indostore/db` via top-level await (same exports → ~12 `.astro` consumers unchanged); `astro.config` surfaces `DATABASE_URL` + `ssr.external:["postgres"]`. `astro build` clean (29 pages from DB); home + product verified — 0 console errors, parity. **Reads are done end-to-end.** Next: mutations persist, Supabase (Auth/Storage/RLS).
+- **storefront → DB — ALL THREE SURFACES NOW READ POSTGRESQL**: migration 0009 enriches `products` (`sizes` jsonb, `badge`, `bestseller`, `rating_value`, `rating_count`) + seeds `description`/`compare_at`/collection blurbs; `apps/storefront/src/data/catalog.ts` rewritten to read `@indostore/db` via top-level await (same exports → ~12 `.astro` consumers unchanged); `astro.config` surfaces `DATABASE_URL` + `ssr.external:["postgres"]`. `astro build` clean (29 pages from DB); home + product verified — 0 console errors, parity. **Reads are done end-to-end.** Next: mutations persist, self-hosted Auth + Storage + Postgres RLS.
 - **docs perfected** — de-staled all docs to current backend state (no more "backend deferred / 51 tables / 9 modules"); AGENTS/PRD/ARCHITECTURE/GUIDE/UML/UI_INVENTORY/DATA_MODEL/TASKS/BACKLOG/README reflect 52 tables + super-admin + 12 admin modules; wiring pattern documented.
 - storefront: product **ratings** (stars on cards + product-detail reviews summary) — data-driven from `catalog.ts`.
 
@@ -36,7 +37,7 @@ All notable changes. Dates are absolute. Phase: UI/UX-first → **backend M3 sta
 
 ### M1 — CRM (WhatsApp follow-up) + concept docs + channel model
 - New CRM module (submenu): Overview, Follow-up WA (wa.me deep links + templates), Pipeline kanban, Template WA.
-- Concept matured in docs/: CONCEPT.md, SCHEMA.md (backend-ready, proves Supabase-defer is safe), UI_INVENTORY.md.
+- Concept matured in docs/: CONCEPT.md, SCHEMA.md (backend-ready, proves backend-defer is safe), UI_INVENTORY.md.
 - Channel model clarified: sales channel = Toko Online only; analytics attribution = Meta Ads / TikTok Ads / Google Ads / Organic / Other (Dashboard/Analitik "Sumber Penjualan", Pesanan "Sumber").
 
 ### M1 — Collection editor + SEO alignment
@@ -96,7 +97,7 @@ All notable changes. Dates are absolute. Phase: UI/UX-first → **backend M3 sta
 
 ## Unreleased / next
 - M2: sample Astro storefront; deepen admin interactions (submitting forms → state, detail pages).
-- M3: Supabase backend (auth + DB + RLS `store_id`) replacing the mock data layer.
+- M3: self-hosted Postgres/PostgREST backend (auth + DB + RLS `store_id`) replacing the mock data layer.
 - M4: payments/couriers integration, multi-store provisioning, storefront deploy pipeline.
 
 ## 2026-07-02 — Monorepo + Super Admin

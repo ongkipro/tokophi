@@ -1,11 +1,11 @@
 # Indostore — Backend schema (PostgreSQL, Drizzle)
 
-> **Implemented** as `@indostore/db` (Drizzle) — **53 tables** on local **PostgreSQL 16** (Docker, port 5433). Prod target = Supabase (ADR 0007). Source of truth = `packages/db/src/schema.ts`; this doc is the annotated reference.
+> **Implemented** as `@indostore/db` (Drizzle) — **53 tables** on local **PostgreSQL 16** (Docker, port 5433). Prod target = self-hosted Postgres (ADR 0007). Source of truth = `packages/db/src/schema.ts`; this doc is the annotated reference.
 > **Status:** super-admin (all 5) + **16 admin modules** read it **live** via `lib/data/*` (`force-dynamic`); all three surfaces (super-admin + admin + storefront) read it; only writes pending — swap those next (§M3). Keep `admin/lib/mock/store.ts` shaped like these tables.
-> **Impl deltas vs the design below:** `stores.city`; **`store_stats`** rollup table (platform metrics cache); `invoices.number` ("INV-9001"); `products.emoji` + `products.units_sold` + storefront fields (`sizes`/`badge`/`bestseller`/`rating_value`/`rating_count`); `analytics_daily` rollup; `ad_channels` enriched (name/brand/pixel/aggregate/`campaigns` jsonb) + `ad_metrics.channel_key` nullable; `collections.emoji`; `pages.template` + `pages.views`; `articles.comments`; `followups.last_message`; `customer_segments.growth`; `reviews.product_name` + `reviews.emoji` (denorm — legacy demo products). RLS policies are written but **not enabled locally** (no `auth.*` on plain Postgres — they light up at Supabase).
+> **Impl deltas vs the design below:** `stores.city`; **`store_stats`** rollup table (platform metrics cache); `invoices.number` ("INV-9001"); `products.emoji` + `products.units_sold` + storefront fields (`sizes`/`badge`/`bestseller`/`rating_value`/`rating_count`); `analytics_daily` rollup; `ad_channels` enriched (name/brand/pixel/aggregate/`campaigns` jsonb) + `ad_metrics.channel_key` nullable; `collections.emoji`; `pages.template` + `pages.views`; `articles.comments`; `followups.last_message`; `customer_segments.growth`; `reviews.product_name` + `reviews.emoji` (denorm — legacy demo products). RLS policies are written but **not enabled locally** (no `auth.*` on plain Postgres — they light up at self-hosted Postgres).
 
 ## Conventions
-- **Postgres** on Supabase. PK = `id uuid default gen_random_uuid()`. Timestamps `created_at/updated_at timestamptz default now()`.
+- **Postgres** on self-hosted Postgres. PK = `id uuid default gen_random_uuid()`. Timestamps `created_at/updated_at timestamptz default now()`.
 - **Multi-tenant:** almost every table has `store_id uuid references stores(id)`. **RLS ON everywhere**; policy: row visible when `store_id = auth_store()` (a helper reading the caller's active store from JWT/`store_users`). Platform-admin role bypasses.
 - **Money:** integer **rupiah** (no decimals) — column suffix `_idr`. Never floats for money.
 - **Enums** as Postgres `enum` (or `text` + check). **Slugs/handles** unique per store: `unique(store_id, handle)`.
@@ -185,7 +185,7 @@ platform_activity(id, kind enum[signup|upgrade|payment|churn|support], text, ts)
 5. 🟡 Replace **`admin/lib/data/*` bodies** with Drizzle — **signatures unchanged**: ✅ **all 16 modules** — Produk, Diskon, Pelanggan, Kategori, Pesanan, Halaman, Blog, Inventori, CRM, Pembelian, Segmen, Ulasan, Navigasi, Dashboard, Analitik, Pemasaran (list + detail/editor). All 16 admin modules done; ⏳ storefront + mutations next.
 6. ⏳ Storefront reads its store by `store_id`/`STORE_SLUG` (ADR 0008).
 7. ⏳ **Mutations** (save product/collection/order, stock adjust, PO) → `insert/update`.
-8. ⏳ **Supabase**: point `DATABASE_URL` at it, apply same migrations, enable **RLS** (`store_id = auth_store()`), wire **Auth** (email/OTP + `store_users` RBAC, store switcher) + **Storage** (media) + Tiptap rich-text.
+8. ⏳ **self-hosted Postgres**: point `DATABASE_URL` at it, apply same migrations, enable **RLS** (`store_id = auth_store()`), wire **Auth** (email/OTP + `store_users` RBAC, store switcher) + **Storage** (media) + Tiptap rich-text.
 9. ⏳ Real payment/courier integrations behind `store_payment_methods`/`store_shipping_methods` (M4).
 
 *Living doc — update alongside the mock whenever an entity is added.*

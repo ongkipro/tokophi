@@ -26,7 +26,7 @@ npm run build:admin ; npm run build:super   # typecheck + lint + static build
 ```
 
 ## Database (local Postgres — `@indostore/db`)
-Backend is being wired behind the data layer. Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (schema mirrors `~/Documents/Development/indostore/docs/SCHEMA.md`: **53 tables**, snake_case, money = bigint IDR). Single-tenant MVP: one store "Batik Nusantara" (ADR 0008). Auth/Storage (supabase-js) + RLS policies come when a Supabase project is connected — until then tenancy is app-layer `store_id` scoping.
+Backend is being wired behind the data layer. Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (schema mirrors `~/Documents/Development/indostore/docs/SCHEMA.md`: **53 tables**, snake_case, money = bigint IDR). Single-tenant MVP: one store "Batik Nusantara" (ADR 0008). Auth/Storage (self-hosted, JWT) + RLS policies come when the VPS Postgres is connected — until then tenancy is app-layer `store_id` scoping.
 ```bash
 docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted volume)
 npm run migrate -w @indostore/db     # apply versioned migrations (canonical)

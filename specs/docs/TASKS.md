@@ -45,12 +45,12 @@
 - [x] **Bespoke brand theme** · editorial women's-fashion look (Playfair display + rose/cream tokens) — proves the "per-client look".
 - [ ] **Deploy to Cloudflare** · **S** · wire CF Pages/Workers deploy.
 
-## Epic 5 — Backend (M3 — local Postgres/Drizzle → Supabase)
-- [x] **Schema (`@indostore/db`)** · **L** · 53 tables/enums from `SCHEMA.md` as Drizzle + versioned migrations on **local PostgreSQL 16** (Docker). Seeded single-tenant "Batik Nusantara" = parity with mock. *(RLS policies written; enabled at Supabase — ADR 0007.)*
+## Epic 5 — Backend (M3 — local Postgres/Drizzle → self-hosted VPS)
+- [x] **Schema (`@indostore/db`)** · **L** · 53 tables/enums from `SCHEMA.md` as Drizzle + versioned migrations on **local PostgreSQL 16** (Docker). Seeded single-tenant "Batik Nusantara" = parity with mock. *(RLS policies written; enabled at self-hosted Postgres — ADR 0007.)*
 - [~] **Swap `lib/data` bodies → queries** · **L** · ✅ super-admin (all 5) + admin 16 modules read the DB (`force-dynamic`). ⏳ storefront.
-- [ ] **Auth + RBAC** · **M** · Supabase Auth (email/OTP) + `store_users`; store switcher scopes data. AC: login → see only your store.
+- [ ] **Auth + RBAC** · **M** · self-hosted Auth (JWT) (email/OTP) + `store_users`; store switcher scopes data. AC: login → see only your store.
 - [ ] **Mutations persist** · **L** · save product/collection/order, stock adjust, PO, CRM → Drizzle `insert/update`. AC: refresh keeps changes.
-- [ ] **Storage + rich-text** · **M** · media upload to Supabase Storage; Tiptap for bodies.
+- [ ] **Storage + rich-text** · **M** · media upload to self-hosted Storage (VPS); Tiptap for bodies.
 - [x] **Super-admin cross-tenant** · **M** · reads across `store_id`; MRR/GMV/etc. from DB (single-tenant now).
 
 ## Epic 6 — Platform integrations (M4)
@@ -67,7 +67,7 @@
 2. **Epic 3** data-layer seam (unblocks a smooth M3) — do in parallel with Epic 1 polish.
 3. **Epic 1 / Epic 2** finish the mock prototype (demo-complete).
 4. **Epic 4** storefront (M2) — makes it a real end-to-end demo.
-5. **Epic 5** Supabase (M3) — it becomes a working product.
+5. **Epic 5** self-hosted Postgres (M3) — it becomes a working product.
 6. **Epic 6** integrations (M4) — production-grade.
 
 ## Definition of Done (per task)

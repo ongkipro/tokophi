@@ -26,7 +26,7 @@
 
 **Storefront UI/UX polish (2026-07-02):** collection cards use real product photos + gradient; brand-story band; newsletter; refined values/hero ("Lihat Koleksi" replaces WA); **mobile hamburger drawer nav** (fixed the missing mobile category nav); premium ProductCard (hover-zoom, wishlist, eyebrow); category page eyebrow header + sort dropdown; product page micro-polish (gallery intact). Storefront build + console clean.
 
-**Navigasi + nav presisi (2026-07-02):** admin Navigasi = menu builder parent/child dengan **drag-and-drop reorder** (HTML5, tree-ops.ts) + aksi "Jadikan sub-menu"/"Naikkan jadi induk" (2 level). Storefront header kini **cermin presisi Menu Utama admin**: Beranda · Semua Produk · Kategori▾(6) · Promo Gajian · Blog · Kontak (dropdown desktop + accordion mobile via nav.ts). Halaman baru: /blog, /kontak, /kategori/semua, /kategori/promo-gajian (koleksi virtual). Data admin: hijab→Busana Muslim, +Loungewear. Supabase: belum (M3). Build+console clean.
+**Navigasi + nav presisi (2026-07-02):** admin Navigasi = menu builder parent/child dengan **drag-and-drop reorder** (HTML5, tree-ops.ts) + aksi "Jadikan sub-menu"/"Naikkan jadi induk" (2 level). Storefront header kini **cermin presisi Menu Utama admin**: Beranda · Semua Produk · Kategori▾(6) · Promo Gajian · Blog · Kontak (dropdown desktop + accordion mobile via nav.ts). Halaman baru: /blog, /kontak, /kategori/semua, /kategori/promo-gajian (koleksi virtual). Data admin: hijab→Busana Muslim, +Loungewear. self-hosted Postgres: belum (M3). Build+console clean.
 
 **Docs pass + auto-connect (2026-07-02):** new **@indostore/data** package = single source of truth for nav; admin menu builder + storefront header both derive from it (auto-sync on rebuild). Declared @indostore/data dep in admin+storefront package.json. Full docs refresh: PRD→v0.4, README, ARCHITECTURE, **new GUIDE.md**, UML (9 Mermaid diagrams), ADR 0005 (monorepo) + 0006 (shared nav), UI_INVENTORY/DATA_MODEL/SCHEMA. Known gaps flagged: storefront /halaman/[handle] + /blog/[handle] not built; /akun is a no-auth stub.
 
@@ -100,7 +100,10 @@
 - [x] **`lib/actions/collections.ts`** create/update/delete — Kategori editor persists core fields (title/handle/description/type/match/published); member/condition management deferred. Delete clears `collection_products`+`collection_conditions` first (hard delete).
 - [x] **Verified end-to-end via UI**: order INV-4789 baru→diproses; celana-kulot stock 22→27; collection create + delete — all confirmed in DB. `tsc` + `build:admin` clean. Reseeded. **7 write operations now persist** (Produk/Diskon/Halaman/Blog/Kategori editors + order-status + Inventori-stock).
 
+**Decision — prod backend = self-hosted Postgres + PostgREST on VPS, NOT Supabase (2026-07-03):**
+- User: "gak pakai supabase, nanti pakai local → postgrest sql - vps". Prod target = **self-hosted PostgreSQL + PostgREST on a VPS** (RLS for `store_id`, JWT auth, self-hosted Storage MinIO/S3). Local dev is already plain Postgres, so the same Drizzle migrations carry up with no rework. **Reframed all docs** (ADR 0007 + PRD/README/AGENTS/ARCHITECTURE/UML/SCHEMA/TASKS/BACKLOG/CONCEPT/CHANGELOG + `.env.example`) from "Supabase" → "self-hosted Postgres (VPS)"; removed the `NEXT_PUBLIC_SUPABASE_*` env vars.
+
 **Next up (resume here):**
 1. **Remaining mutations** (lower-frequency): Pelanggan edit, Navigasi menu save, CRM lead/follow-up, Segmen, Pembelian PO.
-2. **Supabase**: Auth (login/RBAC via `store_users`) + Storage (media uploads) + enable RLS; then multi-tenant (beyond single-store seed) + per-client storefront via `STORE_SLUG`.
+2. **Deploy to VPS**: stand up self-hosted Postgres + PostgREST; wire JWT Auth (login/RBAC via `store_users`) + Storage (media uploads) + enable RLS; then multi-tenant (beyond single-store seed) + per-client storefront via `STORE_SLUG`.
 3. **E1 sisa / E0 de-dup / Turborepo** (unchanged).

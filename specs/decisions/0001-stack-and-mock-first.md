@@ -14,4 +14,4 @@ Building a Shopify-style commerce platform: a rich, interaction-heavy admin plus
 - The UI built now **is** the production UI — no rebuild.
 - A clean seam (`lib/data`) must be maintained; screens must not import storage directly (list screens read mock arrays for brevity now → wrap in getters at backend time).
 - Two codebases/stacks to maintain, but each fits its job. Shared design tokens keep them visually consistent.
-- Backend (Supabase) is a later, contained migration (ADR 0003 covers multi-tenancy).
+- Backend (self-hosted Postgres) is a later, contained migration (ADR 0003 covers multi-tenancy).

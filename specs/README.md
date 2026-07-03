@@ -50,8 +50,8 @@ Build: `npm run build:admin` / `npm run build:super`; storefront `cd apps/storef
 - **[PRD.md](PRD.md)** — product requirements, current status, roadmap (**v0.4**).
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — how it's built: data-layer seam, determinism, nav auto-connect, rendering, UI system, path to backend.
 - **[docs/CONCEPT.md](docs/CONCEPT.md)** — mature product concept: vision, personas, full feature map, monetization, why deferring backend is safe.
-- **[docs/SCHEMA.md](docs/SCHEMA.md)** — backend-ready Postgres/Supabase schema (tables, RLS, enums) + mock→table map + M3 migration steps.
-- **[docs/DATA_MODEL.md](docs/DATA_MODEL.md)** — mock entities → future Supabase tables (Shopify-modeled content).
+- **[docs/SCHEMA.md](docs/SCHEMA.md)** — backend-ready Postgres schema (tables, RLS, enums) + mock→table map + M3 migration steps.
+- **[docs/DATA_MODEL.md](docs/DATA_MODEL.md)** — mock entities → future Postgres tables (Shopify-modeled content).
 - **[docs/UI_INVENTORY.md](docs/UI_INVENTORY.md)** — every screen, its status, and what backend work it needs.
 - **[docs/TASKS.md](docs/TASKS.md)** — granular prototype task breakdown (Epics, sized, with acceptance criteria).
 - **[docs/BACKLOG.md](docs/BACKLOG.md)** — prioritized task board (P0–P3) from a full codebase screening.
@@ -77,4 +77,4 @@ Build: `npm run build:admin` / `npm run build:super`; storefront `cd apps/storef
 
 **Backend (M3):** **local PostgreSQL 16 + Drizzle** (`@indostore/db`, 53 tables, single-tenant "Batik Nusantara") is live — **super-admin (all 5) + 16 admin modules** + storefront all read the DB (reads end-to-end via `lib/data/*` + the storefront catalog); only mutations (writes) don't persist yet. See ADR **0007** (stack) / **0008** (per-client topology).
 
-**Next:** finish admin → DB (Pemasaran) → **Supabase** (Auth/Storage/RLS) → payment/courier integrations + provisioning (M4). See **[docs/BACKLOG.md](docs/BACKLOG.md)**.
+**Next:** finish admin → DB (Pemasaran) → **self-hosted Postgres (VPS)** (Auth/Storage/RLS) → payment/courier integrations + provisioning (M4). See **[docs/BACKLOG.md](docs/BACKLOG.md)**.

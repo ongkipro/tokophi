@@ -3,10 +3,10 @@
 > Renders on GitHub / any Mermaid viewer. Kept text-based so it lives with the code.
 > Companion to `../PRD.md`, `SCHEMA.md`, `CONCEPT.md`. Updated 2026-07-03.
 >
-> **Current state:** monorepo (npm workspaces) with 3 apps — `apps/admin` (Next 16, :3000, merchant admin), `apps/super-admin` (Next 16, :3001, platform control plane), `apps/storefront` (Astro 5, :4327, shopper shop "Batik Nusantara") — and **4 shared packages**: `@indostore/ui`, `@indostore/lib`, `@indostore/data`, **`@indostore/db`** (Drizzle schema/client + migrations). **Backend is being wired** on **local PostgreSQL 16** (Docker, port 5433) via `@indostore/db`: **super-admin (all 5 pages) + 16 admin modules** + storefront all read the DB (reads done end-to-end); only writes (mutations) still pending. Seeds are deterministic (mulberry32, `TODAY=2026-06-30`). Single-tenant "Batik Nusantara" MVP. Prod target = Supabase (ADR 0007); per-client topology = ADR 0008.
+> **Current state:** monorepo (npm workspaces) with 3 apps — `apps/admin` (Next 16, :3000, merchant admin), `apps/super-admin` (Next 16, :3001, platform control plane), `apps/storefront` (Astro 5, :4327, shopper shop "Batik Nusantara") — and **4 shared packages**: `@indostore/ui`, `@indostore/lib`, `@indostore/data`, **`@indostore/db`** (Drizzle schema/client + migrations). **Backend is being wired** on **local PostgreSQL 16** (Docker, port 5433) via `@indostore/db`: **super-admin (all 5 pages) + 16 admin modules** + storefront all read the DB (reads done end-to-end); only writes (mutations) still pending. Seeds are deterministic (mulberry32, `TODAY=2026-06-30`). Single-tenant "Batik Nusantara" MVP. Prod target = self-hosted Postgres (ADR 0007); per-client topology = ADR 0008.
 
 ## 1. System context / container (C4-ish)
-> Who talks to what: shoppers→storefront, merchants→admin, platform→super-admin; the 3 apps sit on shared packages; Supabase + payment/shipping integrations are platform-managed and land at M3.
+> Who talks to what: shoppers→storefront, merchants→admin, platform→super-admin; the 3 apps sit on shared packages; self-hosted Postgres + payment/shipping integrations are platform-managed and land at M3.
 ```mermaid
 graph TB
   Shopper([Pembeli / shopper]):::user
@@ -25,9 +25,9 @@ graph TB
     end
   end
 
-  subgraph Backend["Backend — Postgres now, Supabase target"]
+  subgraph Backend["Backend — Postgres now, self-hosted VPS target"]
     PGSQL[("local PostgreSQL 16<br/>store_id scoping · Drizzle")]
-    subgraph Sb["Supabase — prod target"]
+    subgraph Sb["Self-hosted Postgres — VPS (prod)"]
       Auth["Auth"]
       Storage["Storage (media)"]
     end
@@ -259,14 +259,14 @@ sequenceDiagram
 ```
 
 ## 5. Checkout + payment + shipping — target (platform-managed, M3)
-> Backend flow once Supabase + integrations land: storefront quotes ongkir via the aggregator, charges through the platform PSP account, writes the order (scoped by `store_id`), and it surfaces in the merchant admin in realtime. Platform settles and pays out (ADR 0004).
+> Backend flow once self-hosted Postgres + integrations land: storefront quotes ongkir via the aggregator, charges through the platform PSP account, writes the order (scoped by `store_id`), and it surfaces in the merchant admin in realtime. Platform settles and pays out (ADR 0004).
 ```mermaid
 sequenceDiagram
   actor Pembeli
   participant SF as Storefront
   participant AGG as Aggregator (Biteship)
   participant PG as Gateway (platform acct)
-  participant DB as Supabase
+  participant DB as VPS Postgres
   participant AD as Merchant admin
 
   Pembeli->>SF: Checkout (pilih kurir/layanan yang diaktifkan toko)
@@ -282,7 +282,7 @@ sequenceDiagram
 ```
 
 ## 6. Shared nav — single source of truth (`@indostore/data`)
-> `@indostore/data/menu` exports canonical `MAIN_MENU` + `FOOTER_MENU`. Both the admin menu builder and the storefront header **derive** from it, so they stay in sync. **Today** this is a build-time sync (edit the file → rebuild both). **M3** persists menus in Supabase so runtime edits in the admin UI go live on the storefront (ADR 0006).
+> `@indostore/data/menu` exports canonical `MAIN_MENU` + `FOOTER_MENU`. Both the admin menu builder and the storefront header **derive** from it, so they stay in sync. **Today** this is a build-time sync (edit the file → rebuild both). **M3** persists menus in self-hosted Postgres so runtime edits in the admin UI go live on the storefront (ADR 0006).
 ```mermaid
 flowchart TB
   subgraph SRC["@indostore/data/menu (canonical)"]
@@ -305,7 +305,7 @@ flowchart TB
   MM --> NAV --> HEADER
   FM --> NAV
 
-  BUILDER -. "M3: persist to Supabase" .-> DB[("menus / menu_items")]
+  BUILDER -. "M3: persist to Postgres" .-> DB[("menus / menu_items")]
   DB -. "M3: live read" .-> HEADER
 
   classDef now fill:#eef,stroke:#88a;
@@ -313,8 +313,8 @@ flowchart TB
 ```
 > Sync direction now is **file → both surfaces (build-time)**. The dotted edges are the M3 upgrade: admin UI edits persist to `menus`/`menu_items` and the storefront reads them live.
 
-## 7. Data-layer seam (mock today → Supabase later)
-> The core of the mock-first bet (ADR 0001): screens never touch storage directly. They read through a thin data layer — `apps/admin/lib/mock/*`, `apps/storefront/src/data/*`, `@indostore/data` — that returns seeded fixtures today and becomes Supabase queries at M3 with the same shapes.
+## 7. Data-layer seam (mock today → self-hosted Postgres (VPS) later)
+> The core of the mock-first bet (ADR 0001): screens never touch storage directly. They read through a thin data layer — `apps/admin/lib/mock/*`, `apps/storefront/src/data/*`, `@indostore/data` — that returns seeded fixtures today and becomes self-hosted Postgres queries at M3 with the same shapes.
 ```mermaid
 graph TB
   subgraph Screens
@@ -330,7 +330,7 @@ graph TB
   end
   subgraph Sources
     MOCK["Seeded mock (mulberry32, TODAY=2026-06-30)"]
-    SB[("Supabase — M3<br/>Postgres + RLS by store_id")]
+    SB[("Self-hosted Postgres — M3<br/>+ PostgREST + RLS by store_id")]
   end
 
   A1 --> AM
@@ -350,7 +350,7 @@ graph TB
 ```
 
 ## 8. Deployment (target)
-> Where each app runs at M3: the two Next admins on Vercel, the per-client Astro storefront on Cloudflare, all backed by managed Supabase.
+> Where each app runs at M3: the two Next admins on Vercel, the per-client Astro storefront on Cloudflare, all backed by self-hosted Postgres (VPS).
 ```mermaid
 graph LR
   subgraph Vercel
@@ -360,7 +360,7 @@ graph LR
   subgraph Cloudflare
     F[apps/storefront — per client]
   end
-  subgraph "Supabase (managed)"
+  subgraph "Self-hosted Postgres (VPS)"
     DB[(Postgres + RLS)]
     AU[Auth]
     ST[Storage]

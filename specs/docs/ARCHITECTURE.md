@@ -29,10 +29,10 @@ flowchart LR
   Super ==>|live now| PG[(local PostgreSQL 16<br/>@indostore/db · Drizzle · store_id)]
   Admin ==>|live now| PG
   Store ==>|live now| PG
-  PG -. prod target .-> Supabase[(Supabase<br/>managed Postgres + Auth + Storage · RLS)]
+  PG -. prod target .-> VPS[(self-hosted Postgres<br/>+ PostgREST + Auth + Storage · RLS)]
 ```
 
-- **One admin app, many stores.** A store switcher in the topbar scopes the UI; every query is scoped by `store_id` (app-layer now, Postgres RLS at Supabase). super-admin is the only surface that reads across tenants.
+- **One admin app, many stores.** A store switcher in the topbar scopes the UI; every query is scoped by `store_id` (app-layer now, Postgres RLS at self-hosted Postgres). super-admin is the only surface that reads across tenants.
 - **One storefront per client**, deployed from one templated Astro codebase (a `STORE_SLUG` per deploy), sharing design tokens + the shared nav source. Not a self-serve theme editor.
 - **Backend status:** **super-admin + all 16 admin modules + storefront** are **live on local Postgres** via `@indostore/db` (reads end-to-end); only writes (mutations) pending. See §9–10 + ADR 0007/0008.
 
@@ -52,7 +52,7 @@ indostore/
    ├─ ui/            @indostore/ui    shadcn-on-Base-UI components + cn + Tailwind tokens
    ├─ lib/           @indostore/lib   IDR/num/pct/timeAgo formatters (id-ID)
    ├─ data/          @indostore/data  canonical MAIN_MENU / FOOTER_MENU (shared source of truth)
-   └─ db/            @indostore/db    Drizzle schema + client + versioned migrations (local Postgres; Supabase-target)
+   └─ db/            @indostore/db    Drizzle schema + client + versioned migrations (local Postgres; VPS-target)
 ```
 
 Plus a root **`docker-compose.yml`** (local PostgreSQL 16, port `5433`) — see §9 + ADR 0007.
@@ -90,7 +90,7 @@ Screens NEVER import raw storage. They call **`lib/data/*`** functions that toda
 ```
 component ─▶ apps/admin/lib/data/dashboard.ts (getSummary, getSeries, getTopProducts, getChannels, …)
                     │  today:                         later (M3):
-                    └▶ apps/admin/lib/mock/store.ts ──▶ swap body → Supabase query / server action / route handler
+                    └▶ apps/admin/lib/mock/store.ts ──▶ swap body → Postgres query / server action / route handler
 ```
 
 - `lib/mock/store.ts` is the **single source of demo data** for admin (deterministic — see §5).
@@ -99,7 +99,7 @@ component ─▶ apps/admin/lib/data/dashboard.ts (getSummary, getSeries, getTop
 - The **storefront** has its own equivalent seam: `apps/storefront/src/data/catalog.ts` (the shopper-facing mock) with helper selectors (`bestsellers`, `byCollection`, `findProduct`, `productImages`).
 
 ### How M3 swaps bodies
-1. Stand up Supabase; model tables from [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md); enable RLS keyed on `store_id`.
+1. Stand up the VPS Postgres; model tables from [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md); enable RLS keyed on `store_id`.
 2. Replace each `lib/data/*` function body with a query (server action / route handler). **Component code unchanged.**
 3. Storefront reads published data via a read API or a static build per deploy.
 
@@ -164,9 +164,9 @@ flowchart TD
 
 ---
 
-## 9. Backend (in progress) — local Postgres + Drizzle → Supabase
+## 9. Backend (in progress) — local Postgres + Drizzle → self-hosted Postgres (VPS)
 
-The backend is being wired **behind the data-layer seam** (§4). Dev stack = **plain PostgreSQL 16 in Docker + Drizzle** in `@indostore/db` (ADR 0007); prod target = **Supabase** (managed Postgres + Auth + Storage). Payments & shipping stay **platform-managed** (ADR 0004).
+The backend is being wired **behind the data-layer seam** (§4). Dev stack = **plain PostgreSQL 16 in Docker + Drizzle** in `@indostore/db` (ADR 0007); prod target = **self-hosted Postgres** (managed Postgres + Auth + Storage). Payments & shipping stay **platform-managed** (ADR 0004).
 
 **Local dev:**
 ```bash
@@ -184,7 +184,7 @@ npm run studio  -w @indostore/db     # Drizzle Studio
 | **admin** | ✅ **all reads on PostgreSQL** | ✅ **all 16 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan / Navigasi / Dashboard / Analitik / Pemasaran — the WHOLE admin reads `lib/data/*`; only the storefront + admin writes still mock |
 | **storefront** | mock (`data/catalog.ts`) | after admin: read by `store_id`/`STORE_SLUG` |
 
-**Path to Supabase (no schema rework):** stand up a Supabase project → point `DATABASE_URL` at it → apply the same Drizzle migrations → enable **RLS keyed on `store_id`** (policies written, dormant locally) → wire `supabase-js` Auth (owner/staff via `store_users`) + Storage (media). See [`SCHEMA.md`](SCHEMA.md) for tables, [`UML.md`](UML.md) for diagrams.
+**Path to the VPS (no schema rework):** stand up the VPS Postgres → point `DATABASE_URL` at it → apply the same Drizzle migrations → enable **RLS keyed on `store_id`** (policies written, dormant locally) → wire self-hosted (JWT) Auth (owner/staff via `store_users`) + Storage (media). See [`SCHEMA.md`](SCHEMA.md) for tables, [`UML.md`](UML.md) for diagrams.
 
 ---
 

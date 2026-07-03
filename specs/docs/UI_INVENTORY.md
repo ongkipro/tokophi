@@ -136,4 +136,4 @@ Draft/manual orders · abandoned checkout · refunds/returns · stock transfers 
 ## Wireframes
 Admin screenshots in `../wireframes/`. Regenerate via Playwright (system Chrome channel) — not `chrome --headless` (mis-sizes Recharts).
 
-*Living doc — add a row when a screen ships; flip Save to ✅ when it persists via Supabase.*
+*Living doc — add a row when a screen ships; flip Save to ✅ when it persists via Postgres.*

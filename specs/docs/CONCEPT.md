@@ -1,6 +1,6 @@
 # Indostore — Concept (mature spec)
 
-> The product concept, fleshed out so the backend (Supabase) is later "just implementation."
+> The product concept, fleshed out so the backend (self-hosted Postgres) is later "just implementation."
 > Companion to `../PRD.md`, `SCHEMA.md` (backend-ready tables), `UI_INVENTORY.md` (screen status).
 > Phase: **concept + UI/UX first**; the **backend is now being wired** on local PostgreSQL (Drizzle) — super-admin + 16 admin modules read the DB; the rest still mock. (§8 covers why deferring the full backend early was safe.)
 
@@ -74,7 +74,7 @@ Tier langganan (UI sudah menyiratkan "Paket Bisnis"):
 Billing & entitlement = kerjaan backend nanti; disimpan per `store`/`account`.
 
 ## 8. Kenapa menunda backend AMAN
-- **Seam data-layer** (`admin/lib/data/*`) memisahkan UI dari sumber data. Hari ini baca mock; nanti isi fungsi yang sama panggil Supabase — **signature & props komponen tak berubah**.
+- **Seam data-layer** (`admin/lib/data/*`) memisahkan UI dari sumber data. Hari ini baca mock; nanti isi fungsi yang sama panggil self-hosted Postgres — **signature & props komponen tak berubah**.
 - **Mock deterministik** (seeded, anchor `TODAY`) = SSR≡client, demo stabil, dan **bentuknya sengaja mencerminkan tabel DB** (lihat `SCHEMA.md`).
 - Maka M3 = **isi query, bukan rombak UI**. Risiko rendah, terkurung.
 - Prasyarat agar tetap aman: (a) layar TERUS baca lewat seam (jangan fetch ad-hoc), (b) mock ⇄ `SCHEMA.md` tetap sinkron saat nambah entitas.
@@ -82,7 +82,7 @@ Billing & entitlement = kerjaan backend nanti; disimpan per `store`/`account`.
 ## 9. Roadmap ke matang
 - **M0–M1 (selesai):** shell + Dashboard + 12 modul + editor produk/koleksi + submenu + pemasaran/analitik + konten. UI matang, mock.
 - **M2 (konsep sekarang):** matangkan konsep + skema (dokumen ini), lengkapi 🟡/⬜ prioritas (varian penuh, media riil, draft order), + **1 sample storefront Astro**.
-- **M3:** Supabase (Auth + Postgres + Storage + RLS `store_id`) → ganti seam mock→query; form benar-benar menyimpan; upload gambar; rich-text asli.
+- **M3:** self-hosted Postgres (Auth + Postgres + Storage + RLS `store_id`) → ganti seam mock→query; form benar-benar menyimpan; upload gambar; rich-text asli.
 - **M4:** integrasi pembayaran & kurir riil, provisioning multi-toko, pipeline deploy storefront per klien, billing/plans.
 
 ## 10. Guardrails (jangan menyimpang)
