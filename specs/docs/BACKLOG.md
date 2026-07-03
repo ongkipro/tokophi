@@ -10,6 +10,7 @@
 - [~] **Auth + real multi-tenant.** ✅ local login/session + **RBAC** (capability matrix, `store_id` from the session) + **RLS** (`store_id` policies, `withTenant()`) done. Store switcher still cosmetic — ⏳ enforce at runtime by connecting as `indostore_app` + routing through `withTenant()` (VPS).
 
 ## P1 — Functional completeness (mostly wireable now, no backend)
+- [~] **RBAC UI rollout.** ✅ infra (`lib/rbac-policy.ts` + `useCan`/`<Can>` + role badge) + Produk/Pengaturan gated (Playwright-verified). ⏳ apply the same `useCan(...)` gating to the remaining editors: Diskon, Halaman, Blog, Kategori, Pelanggan, CRM, Segmen, Pembelian, Inventori, Navigasi, Pesanan. (Server actions already enforce — this is UX.)
 - [ ] **De-dup: migrate `apps/admin` to consume `@indostore/ui` + `@indostore/lib`** and delete its local `components/ui` + `lib/format`/`utils`. (Monorepo is set up; super-admin already uses the shared packages; admin still has its own copies — see AGENTS.md. Do this carefully so the mature admin keeps building.)
 - [ ] **Super-admin: deepen** — provisioning (create store) flow, real impersonation stub, support/tickets, platform-wide settings persistence, saved reports. (Dashboard/Toko/Paket/Analitik/Pengaturan shells done.)
 - [x] Edit routes for content: `/halaman/[id]`, `/blog/[id]` (prefilled) — done.

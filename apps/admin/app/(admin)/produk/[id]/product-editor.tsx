@@ -29,6 +29,7 @@ import {
 import { type Product } from "@/lib/mock/store";
 import { toast } from "sonner";
 import { IDR, num } from "@/lib/format";
+import { useCan } from "@/components/admin/permissions";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -92,6 +93,11 @@ const DESC_TEMPLATE = (name: string) =>
 
 export function ProductEditor({ product }: { product?: Product }) {
   const isEdit = Boolean(product);
+
+  // RBAC (UI): mirror the server guard so we don't offer actions the role can't do.
+  const canWrite = useCan("products:write");
+  const canDelete = useCan("products:delete");
+  const canMedia = useCan("media:write");
 
   // Fabricated demo fields (do NOT change the mock Product type).
   const seedCost = product ? Math.round(product.price * 0.6) : 0;
@@ -179,6 +185,10 @@ export function ProductEditor({ product }: { product?: Product }) {
     stock: Number(qty) || 0,
   });
   const handleSave = () => {
+    if (!canWrite) {
+      toast.error("Akses ditolak — peran Anda tidak bisa menyimpan produk");
+      return;
+    }
     if (!name.trim()) {
       toast.error("Nama produk wajib diisi");
       return;
@@ -328,7 +338,7 @@ export function ProductEditor({ product }: { product?: Product }) {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          {isEdit && (
+          {isEdit && canDelete && (
             <Button
               variant="ghost"
               className="text-destructive hover:bg-destructive/10"
@@ -342,9 +352,11 @@ export function ProductEditor({ product }: { product?: Product }) {
           <Button variant="ghost" nativeButton={false} render={<Link href="/produk" />}>
             Batal
           </Button>
-          <Button onClick={handleSave} disabled={pending}>
-            {pending ? "Menyimpan…" : "Simpan"}
-          </Button>
+          {canWrite && (
+            <Button onClick={handleSave} disabled={pending}>
+              {pending ? "Menyimpan…" : "Simpan"}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -415,25 +427,29 @@ export function ProductEditor({ product }: { product?: Product }) {
                           Utama
                         </span>
                       )}
-                      <button
-                        type="button"
-                        aria-label={`Hapus gambar ${i + 1}`}
-                        disabled={uploading}
-                        onClick={() => removeImage(m.id)}
-                        className="absolute right-1 top-1 rounded bg-background/85 p-1 text-destructive opacity-0 transition-opacity hover:bg-background group-hover:opacity-100 disabled:opacity-50"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
+                      {canMedia && (
+                        <button
+                          type="button"
+                          aria-label={`Hapus gambar ${i + 1}`}
+                          disabled={uploading}
+                          onClick={() => removeImage(m.id)}
+                          className="absolute right-1 top-1 rounded bg-background/85 p-1 text-destructive opacity-0 transition-opacity hover:bg-background group-hover:opacity-100 disabled:opacity-50"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    disabled={uploading}
-                    onClick={() => fileRef.current?.click()}
-                    className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
-                  >
-                    {uploading ? <span className="text-[10px]">Mengunggah…</span> : (<><ImagePlus className="size-5" /><span className="text-[10px]">Unggah</span></>)}
-                  </button>
+                  {canMedia && (
+                    <button
+                      type="button"
+                      disabled={uploading}
+                      onClick={() => fileRef.current?.click()}
+                      className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
+                    >
+                      {uploading ? <span className="text-[10px]">Mengunggah…</span> : (<><ImagePlus className="size-5" /><span className="text-[10px]">Unggah</span></>)}
+                    </button>
+                  )}
                   <input ref={fileRef} type="file" accept="image/*" onChange={onPickFile} className="hidden" />
                 </div>
               ) : (

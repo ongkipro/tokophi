@@ -1,65 +1,11 @@
 import "server-only";
 import { getSession, type Session } from "@/lib/auth";
+import { can, type Capability } from "@/lib/rbac-policy";
 
-// Role-based access control. Roles come from `store_users.role` (in the session JWT).
-// The capability matrix is the single source of truth — server actions gate on a
-// capability, UI can read `can()` to hide/disable controls. Keep in sync with the
-// `store_user_role` enum in packages/db (owner | admin | staff | gudang).
-
-export type Role = "owner" | "admin" | "staff" | "gudang";
-
-export type Capability =
-  | "products:write"
-  | "products:delete"
-  | "discounts:write"
-  | "content:write" // pages, blog/articles, collections, menus
-  | "orders:write"
-  | "inventory:write"
-  | "purchases:write"
-  | "customers:write"
-  | "crm:write" // follow-ups, segments
-  | "media:write"
-  | "settings:write";
-
-const ALL: Capability[] = [
-  "products:write",
-  "products:delete",
-  "discounts:write",
-  "content:write",
-  "orders:write",
-  "inventory:write",
-  "purchases:write",
-  "customers:write",
-  "crm:write",
-  "media:write",
-  "settings:write",
-];
-
-// Who can do what.
-// - owner  : full control (incl. store settings).
-// - admin  : full operational control, minus store-level settings.
-// - staff  : run the shop (produk/pesanan/pelanggan/konten/diskon/crm) — no destructive
-//            product delete, no warehouse (inventori/pembelian), no settings.
-// - gudang : warehouse only — stok + purchase orders.
-export const ROLE_CAPS: Record<Role, readonly Capability[]> = {
-  owner: ALL,
-  admin: ALL.filter((c) => c !== "settings:write"),
-  staff: [
-    "products:write",
-    "discounts:write",
-    "content:write",
-    "orders:write",
-    "customers:write",
-    "crm:write",
-    "media:write",
-  ],
-  gudang: ["inventory:write", "purchases:write"],
-};
-
-export function can(role: Role | string | undefined, cap: Capability): boolean {
-  const caps = ROLE_CAPS[role as Role];
-  return !!caps && caps.includes(cap);
-}
+// Server-side RBAC guard. The role→capability matrix lives in the client-safe
+// lib/rbac-policy.ts (shared with the UI). This module adds the enforcement that
+// only runs on the server: read the session JWT + throw if the role lacks the cap.
+export { can, ROLE_CAPS, ROLE_LABEL, type Role, type Capability } from "@/lib/rbac-policy";
 
 export class ForbiddenError extends Error {
   readonly capability: Capability;

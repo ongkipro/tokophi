@@ -14,6 +14,7 @@ import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num, dateTimeShort } from "@/lib/format";
 import { TODAY, type Product } from "@/lib/mock/store";
 import { cn } from "@/lib/utils";
+import { useCan } from "@/components/admin/permissions";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ function StatusBadge({ status }: { status: Product["status"] }) {
 }
 
 function RowActions({ id }: { id: string }) {
+  const canDelete = useCan("products:delete");
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi produk" />}>
@@ -70,8 +72,8 @@ function RowActions({ id }: { id: string }) {
       <DropdownMenuContent align="end">
         <DropdownMenuItem render={<Link href={`/produk/${id}`} />}><Pencil /> Edit</DropdownMenuItem>
         <DropdownMenuItem><Copy /> Duplikat</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive"><Archive /> Arsipkan</DropdownMenuItem>
+        {canDelete && <DropdownMenuSeparator />}
+        {canDelete && <DropdownMenuItem variant="destructive"><Archive /> Arsipkan</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -98,6 +100,8 @@ function StatCard({ icon, label, value, accent, active, onClick }: {
 export function ProdukClient({ products }: { products: Product[] }) {
   const CATEGORIES = Array.from(new Set(products.map((p) => p.category)));
   const router = useRouter();
+  const canWrite = useCan("products:write");
+  const canDelete = useCan("products:delete");
   const [search, setSearch] = React.useState("");
   const [category, setCategory] = React.useState("all");
   const [tab, setTab] = React.useState<TabKey>("all");
@@ -154,7 +158,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
     <div>
       <PageHeader title="Produk" desc="Kelola katalog, stok, dan status produk.">
         <Button variant="outline"><Upload /> Impor</Button>
-        <Button nativeButton={false} render={<Link href="/produk/baru" />}><Plus /> Tambah Produk</Button>
+        {canWrite && <Button nativeButton={false} render={<Link href="/produk/baru" />}><Plus /> Tambah Produk</Button>}
       </PageHeader>
 
       {/* Stat row (clickable quick-filters) */}
@@ -268,9 +272,9 @@ export function ProdukClient({ products }: { products: Product[] }) {
           <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Pilih semua" />
           <span className="text-sm font-medium">{num(selected.size)} dipilih</span>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            <Button variant="outline" size="sm" onClick={clearSel}><CircleCheck /> Jadikan Aktif</Button>
-            <Button variant="outline" size="sm" onClick={clearSel}><FileText /> Jadikan Draft</Button>
-            <Button variant="outline" size="sm" className="text-destructive" onClick={clearSel}><Trash2 /> Hapus</Button>
+            {canWrite && <Button variant="outline" size="sm" onClick={clearSel}><CircleCheck /> Jadikan Aktif</Button>}
+            {canWrite && <Button variant="outline" size="sm" onClick={clearSel}><FileText /> Jadikan Draft</Button>}
+            {canDelete && <Button variant="outline" size="sm" className="text-destructive" onClick={clearSel}><Trash2 /> Hapus</Button>}
             <Button variant="ghost" size="sm" onClick={clearSel}>Batal</Button>
           </div>
         </div>

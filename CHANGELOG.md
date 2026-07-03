@@ -4,6 +4,12 @@ All notable changes. Dates are absolute. Phase: UI/UX-first → **backend M3 sta
 
 ## 2026-07-04
 
+### RBAC UI — role-aware controls
+- **Client-safe policy** (`lib/rbac-policy.ts`) — the role→capability matrix + `can()` extracted so the UI and the server guard (`lib/rbac.ts`) share ONE source of truth.
+- **`PermissionsProvider` + `useCan()` + `<Can>`** (`components/admin/permissions.tsx`) — role flows from the session (layout) to client components; the topbar shows a role badge (Pemilik/Admin/Staf/Gudang).
+- **Produk** (list + editor) + **Pengaturan** gated as the reference: Simpan hidden without `products:write`, Hapus/Arsipkan without `products:delete`, media Unggah/delete without `media:write`, settings save is owner-only. Server actions remain the security boundary (they still throw `ForbiddenError`); the UI just stops offering actions the role can't do.
+- **Verified** via Playwright across roles (owner/staff/gudang): owner sees Simpan+Hapus; staff sees Simpan, no Hapus; gudang sees neither + no media upload. (Rollout to the remaining editors is a tracked follow-up.)
+
 ### M3 — RBAC + Row-Level Security (tenant isolation)
 - **RBAC (`apps/admin/lib/rbac.ts`)** — capability model + role→capability matrix (owner=all · admin=all−settings · staff=shop ops (no product-delete / warehouse / settings) · gudang=inventori+pembelian only). `can(role, cap)` + `requireCapability(cap)` (returns the session JWT or throws `ForbiddenError`).
 - **All 13 mutating action files gated** (`lib/actions/*`) — each mutation calls `requireCapability(...)`; store-scoped creates now take `store_id` from the session (removed the per-file "first store" helper).

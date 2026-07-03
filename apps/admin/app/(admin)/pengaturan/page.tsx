@@ -32,6 +32,7 @@ import {
   CardFooter,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useCan } from "@/components/admin/permissions"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -103,6 +104,13 @@ function Field({
 }
 
 function SaveFooter() {
+  const canSave = useCan("settings:write")
+  if (!canSave)
+    return (
+      <CardFooter className="justify-end">
+        <p className="text-xs text-muted-foreground">Hanya Pemilik yang dapat mengubah pengaturan toko.</p>
+      </CardFooter>
+    )
   return (
     <CardFooter className="justify-end gap-2">
       <Button variant="ghost">Batal</Button>
@@ -117,6 +125,7 @@ function SaveFooter() {
 export default function Page() {
   // Navigasi
   const [section, setSection] = React.useState<Section>("profil")
+  const canSettings = useCan("settings:write")
 
   // Pembayaran
   const [pay, setPay] = React.useState({
@@ -747,11 +756,17 @@ export default function Page() {
                 <p className="mr-auto text-xs text-muted-foreground">
                   <span className="tabular-nums">{team.length}</span> anggota tim
                 </p>
-                <Button variant="ghost">Batal</Button>
-                <Button>
-                  <Save />
-                  Simpan Perubahan
-                </Button>
+                {canSettings ? (
+                  <>
+                    <Button variant="ghost">Batal</Button>
+                    <Button>
+                      <Save />
+                      Simpan Perubahan
+                    </Button>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Hanya Pemilik yang dapat mengelola pengguna.</p>
+                )}
               </CardFooter>
             </Card>
           )}

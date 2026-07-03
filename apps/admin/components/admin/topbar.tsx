@@ -14,6 +14,7 @@ import { NavLinks } from "./nav-links";
 import { Brand } from "./brand";
 import { signOut } from "@/lib/actions/auth";
 import { STORES } from "@/lib/nav";
+import { ROLE_LABEL, type Role } from "@/lib/rbac-policy";
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false);
@@ -33,10 +34,11 @@ function ThemeToggle() {
   );
 }
 
-export function Topbar({ user }: { user?: { name: string; email: string } }) {
+export function Topbar({ user }: { user?: { name: string; email: string; role?: string } }) {
   const [store, setStore] = useState(STORES[0]);
   const name = user?.name || "Ongki Pratama";
   const email = user?.email || "owner@indostore.id";
+  const roleLabel = user?.role ? ROLE_LABEL[user.role as Role] ?? user.role : null;
   const initials = name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "OP";
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
@@ -127,7 +129,10 @@ export function Topbar({ user }: { user?: { name: string; email: string } }) {
           />
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel className="font-normal">
-              <div className="text-sm font-medium">{name}</div>
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-medium">{name}</div>
+                {roleLabel && <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{roleLabel}</Badge>}
+              </div>
               <div className="text-xs text-muted-foreground">{email}</div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
