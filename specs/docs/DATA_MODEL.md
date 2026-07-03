@@ -1,6 +1,6 @@
 # Indostore — Data Model
 
-> The entities the UI works with, and how they map to the **PostgreSQL** tables (now live via `@indostore/db` — see `SCHEMA.md`). Super-admin + 13 admin modules already read the DB; the rest still read the mock shapes below.
+> The entities the UI works with, and how they map to the **PostgreSQL** tables (now live via `@indostore/db` — see `SCHEMA.md`). Super-admin + 15 admin modules already read the DB; the rest still read the mock shapes below.
 > Mock shapes live in three places:
 > - **admin-mock** → `apps/admin/lib/mock/store.ts`
 > - **super-admin-mock** → `apps/super-admin/lib/mock.ts`

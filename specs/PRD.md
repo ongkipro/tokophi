@@ -1,7 +1,7 @@
 # Indostore — Product Requirements Document (PRD v0.4)
 
 > **Working name:** Indostore (rename trivial) · **Owner:** Paduka Ongki / ongkipro
-> **Phase:** UI/UX-first → **backend M3 in progress** (local PostgreSQL/Drizzle; super-admin + 13 admin modules live) · **Updated:** 2026-07-03
+> **Phase:** UI/UX-first → **backend M3 in progress** (local PostgreSQL/Drizzle; super-admin + 15 admin modules live) · **Updated:** 2026-07-03
 > **Code:** `~/projects/indostore` (monorepo) · **Docs:** `~/Documents/Development/indostore`
 > **Run:** `npm i` at root, then `npm run dev:admin` (→ :3000) · `npm run dev:super` (→ :3001) · `cd apps/storefront && npm run dev` (→ :4327)
 
@@ -33,7 +33,7 @@ Super-admin & merchant-admin **share the design system** (`@indostore/ui`) + for
 
 ## 2. Current status (what's built)
 
-**All three surfaces are clickable, coherent products; backend M3 in progress.** Every screen reads typed fixtures through a thin data layer so backend is "just wiring." **On local PostgreSQL** (Drizzle via `@indostore/db`, Docker :5433 — ADR 0007): **super-admin (all 5) + 13 admin modules** read the DB via `lib/data/*` (`force-dynamic`); remaining admin screens (Dashboard/Analitik, Pemasaran) + storefront still on mock; mutations don't persist yet. Single-tenant "Batik Nusantara" MVP; per-client topology = ADR 0008.
+**All three surfaces are clickable, coherent products; backend M3 in progress.** Every screen reads typed fixtures through a thin data layer so backend is "just wiring." **On local PostgreSQL** (Drizzle via `@indostore/db`, Docker :5433 — ADR 0007): **super-admin (all 5) + 15 admin modules** read the DB via `lib/data/*` (`force-dynamic`); remaining admin screens (Pemasaran) + storefront still on mock; mutations don't persist yet. Single-tenant "Batik Nusantara" MVP; per-client topology = ADR 0008.
 
 ### Admin — merchant store admin (`apps/admin`, :3000) — DONE
 - **Shell** — grouped sidebar (Utama / Toko Online / Sistem), topbar (store switcher, search ⌘K, notifications, account, **dark-mode toggle**), fully responsive (mobile drawer).
@@ -77,7 +77,7 @@ Demo brand **"Batik Nusantara"** — a women's-fashion store.
 - **`@indostore/ui`** — shadcn components on **Base UI** (`@base-ui/react`) + design tokens; consumed by both Next apps.
 - **`@indostore/lib`** — formatters (IDR / number, `id-ID`).
 - **`@indostore/data`** — canonical `MAIN_MENU` / `FOOTER_MENU`: the **single source of truth for navigation**, consumed by BOTH the admin menu builder (`apps/admin/lib/mock/store.ts`) and the storefront header (`apps/storefront/src/data/nav.ts`). Edit once → both surfaces stay in sync on rebuild.
-- **`@indostore/db`** (NEW) — **Drizzle** schema (52 tables, snake_case, money=`bigint` IDR) + `db` client + versioned migrations + seed/reset. Server-only. Backs super-admin today (see ADR 0007). `docker compose up -d db` → `npm run migrate` → `npm run seed`.
+- **`@indostore/db`** (NEW) — **Drizzle** schema (53 tables, snake_case, money=`bigint` IDR) + `db` client + versioned migrations + seed/reset. Server-only. Backs super-admin today (see ADR 0007). `docker compose up -d db` → `npm run migrate` → `npm run seed`.
 
 **Non-goals (still):** auth backend, payment/courier integrations, live "edit-in-admin → storefront" persistence — mocked/deferred. **No longer a non-goal:** the DB is real (local Postgres) and multi-tenant provisioning is decided (ADR 0008). See `docs/BACKLOG.md`.
 
@@ -174,9 +174,9 @@ Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palet
 - **M1.5 (DONE 2026-07-02):** Produk sub-modules (Kategori/Inventori/Pembelian) + CRM + customer & collection editors + Halaman/Blog edit routes + order detail page + Pemasaran province filter + Pengaturan redesign + fashion demo with AI product photos + Shopify-style product list.
 - **M2 — storefront + monorepo (DONE 2026-07-02):** repo restructured to `apps/*` + `packages/*`; **super-admin** control plane; **`@indostore/data`** canonical nav shared by admin + storefront; **Navigasi drag-and-drop** menu builder; **Astro storefront built** — "Batik Nusantara" with beranda, kategori, produk (5-image gallery), keranjang, **checkout (+sukses)**, akun, blog, kontak; localStorage cart; 70 AI product images.
 - **M3 — backend (IN PROGRESS):**
-  - ✅ **Local PostgreSQL 16 + Drizzle** (`@indostore/db`, ADR 0007): 52 tables, versioned migrations, seed.
+  - ✅ **Local PostgreSQL 16 + Drizzle** (`@indostore/db`, ADR 0007): 53 tables, versioned migrations, seed.
   - ✅ **super-admin wired to DB** (`lib/data.ts`) — live, verified parity.
-  - 🟡 **admin → DB**: ✅ **13 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan / Navigasi (seeded full demo: products/collections/customers/orders/discounts/pages/articles/leads/followups/templates/suppliers+POs/segments/reviews; via `lib/data/*`, `force-dynamic`). ⏳ Dashboard/Analitik (sales rollups), Pemasaran.
+  - 🟡 **admin → DB**: ✅ **15 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan / Navigasi / Dashboard / Analitik (seeded full demo: products/collections/customers/orders/discounts/pages/articles/leads/followups/templates/suppliers+POs/segments/reviews; via `lib/data/*`, `force-dynamic`). ⏳ Pemasaran.
   - ⏳ **storefront → DB**: parameterize by `STORE_SLUG` (ADR 0008), read by `store_id`.
   - ⏳ Mutations persist (save/edit/delete); live "edit-in-admin → storefront".
   - ⏳ **Supabase**: connect for Auth + Storage + RLS (`store_id`), same migrations; image upload + rich-text.
