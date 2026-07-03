@@ -71,8 +71,10 @@ Build: `npm run build:admin` / `npm run build:super`; storefront `cd apps/storef
 - **Payments & shipping are platform-managed** (ADR 0004): the platform configures gateways (Midtrans/Xendit/Duitku) + COD + Biteship aggregator; merchants only enable methods and pick couriers.
 - Sales channel = **Toko Online only**; analytics attribution = Meta/TikTok/Google Ads + Organic/Other.
 
-## Status (2026-07-02)
+## Status (2026-07-03)
 
-**All three surfaces built as clickable mock prototypes.** Admin (M0+M1+M1.5): Dashboard, Pesanan (+detail), Produk (+editor, Kategori/Inventori/Pembelian), Pelanggan (+detail/Segmen/Ulasan), CRM, Diskon (+editor), Analitik, Pemasaran, Toko Online (Halaman/Blog with create+edit, Navigasi drag-and-drop menu builder), Pengaturan. Super-admin: Dashboard/Toko/Paket/Analitik/Pengaturan. Storefront: beranda, kategori, produk (5-image gallery), keranjang, checkout (+sukses), akun, blog, kontak — localStorage cart, 70 AI product images.
+**All three surfaces built as clickable products; backend M3 in progress.** Admin (M0+M1+M1.5): Dashboard, Pesanan (+detail), Produk (+editor, Kategori/Inventori/Pembelian), Pelanggan (+detail/Segmen/Ulasan), CRM, Diskon (+editor), Analitik, Pemasaran, Toko Online (Halaman/Blog with create+edit, Navigasi drag-and-drop menu builder), Pengaturan. Super-admin: Dashboard/Toko/Paket/Analitik/Pengaturan. Storefront: beranda, kategori, produk (5-image gallery), keranjang, checkout (+sukses), akun, blog, kontak — localStorage cart, 70 AI product images.
 
-**Next:** Supabase backend (M3) → payment/courier integrations + provisioning (M4). See **[docs/BACKLOG.md](docs/BACKLOG.md)**.
+**Backend (M3):** **local PostgreSQL 16 + Drizzle** (`@indostore/db`, 52 tables, single-tenant "Batik Nusantara") is live — **super-admin (all 5) + 9 admin modules** (Produk/Diskon/Pelanggan/Kategori/Pesanan/Halaman/Blog/Inventori/CRM) read the DB via `lib/data/*`. Remaining admin screens + storefront still mock; mutations don't persist yet. See ADR **0007** (stack) / **0008** (per-client topology).
+
+**Next:** finish admin → DB (Dashboard/Analitik, Pemasaran, Navigasi) → **Supabase** (Auth/Storage/RLS) → payment/courier integrations + provisioning (M4). See **[docs/BACKLOG.md](docs/BACKLOG.md)**.

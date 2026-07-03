@@ -2,7 +2,7 @@
 
 > The go-to map of Indostore's surface area across **all three apps**. Routes enumerated
 > from the actual filesystem (`apps/*/app` and `apps/storefront/src/pages`) on 2026-07-02.
-> All data is **mock** (deterministic, seeded). Nothing persists yet — backend is deferred to M3.
+> Data is moving from mock → **local PostgreSQL** (Drizzle, `@indostore/db`): super-admin + 9 admin modules read the DB (via `lib/data/*`, `dynamic="force-dynamic"`); the rest is still deterministic seeded mock. Mutations don't persist yet (M3).
 
 ## Three surfaces
 | App | Package | Port | Stack | Who uses it |

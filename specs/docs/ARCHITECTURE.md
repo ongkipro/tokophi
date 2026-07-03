@@ -14,7 +14,7 @@ Indostore is a Shopify-style commerce SaaS for Indonesia (Bahasa Indonesia UI, I
 | **super-admin** | `@indostore/super-admin` | Next.js 16 | `:3001` | **We (the platform)** — cross-tenant control plane: all stores, plans, billing. |
 | **storefront** | `@indostore/storefront` | Astro 5 + Tailwind v4 | `:4327` | A **shopper** — one hand-built static storefront per client (browse, cart, checkout, blog, account, contact). |
 
-Phase 1 is **UI/UX with mock data**; the backend is deferred (see §7).
+Started as **UI/UX with mock data**; the **backend is now being wired** on local PostgreSQL (see §9) — super-admin + 9 admin modules read the DB, the rest still mock.
 
 ```mermaid
 flowchart LR

@@ -1,7 +1,7 @@
 # Indostore — Product Requirements Document (PRD v0.4)
 
 > **Working name:** Indostore (rename trivial) · **Owner:** Paduka Ongki / ongkipro
-> **Phase:** UI/UX-first (mock data) — backend deferred · **Updated:** 2026-07-02
+> **Phase:** UI/UX-first → **backend M3 in progress** (local PostgreSQL/Drizzle; super-admin + 9 admin modules live) · **Updated:** 2026-07-03
 > **Code:** `~/projects/indostore` (monorepo) · **Docs:** `~/Documents/Development/indostore`
 > **Run:** `npm i` at root, then `npm run dev:admin` (→ :3000) · `npm run dev:super` (→ :3001) · `cd apps/storefront && npm run dev` (→ :4327)
 

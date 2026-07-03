@@ -1,6 +1,6 @@
 # Indostore — working agreement (read before coding)
 
-Shopify-style commerce SaaS for Indonesia. **No Themes menu, no Apps/Plugins.** Phase 1 = **UI/UX with mock data** — backend deferred. Bahasa Indonesia UI, IDR. Full spec: `~/Documents/Development/indostore/PRD.md`.
+Shopify-style commerce SaaS for Indonesia. **No Themes menu, no Apps/Plugins.** UI/UX-first; **backend now being wired** on local PostgreSQL — super-admin + 9 admin modules read the DB (see Database below). Bahasa Indonesia UI, IDR. Full spec: `~/Documents/Development/indostore/PRD.md`.
 
 ## Monorepo (npm workspaces) — 3 surfaces
 ```
@@ -26,7 +26,7 @@ npm run build:admin ; npm run build:super   # typecheck + lint + static build
 ```
 
 ## Database (local Postgres — `@indostore/db`)
-Backend is being wired behind the data layer. Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (schema mirrors `~/Documents/Development/indostore/docs/SCHEMA.md`: 51 tables, snake_case, money = bigint IDR). Auth/Storage (supabase-js) + RLS policies come when a Supabase project is connected — until then tenancy is app-layer `store_id` scoping.
+Backend is being wired behind the data layer. Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (schema mirrors `~/Documents/Development/indostore/docs/SCHEMA.md`: **52 tables**, snake_case, money = bigint IDR). Single-tenant MVP: one store "Batik Nusantara" (ADR 0008). Auth/Storage (supabase-js) + RLS policies come when a Supabase project is connected — until then tenancy is app-layer `store_id` scoping.
 ```bash
 docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted volume)
 npm run migrate -w @indostore/db     # apply versioned migrations (canonical)
@@ -34,9 +34,10 @@ npm run seed    -w @indostore/db     # (re)load demo data — idempotent (trunca
 npm run studio  -w @indostore/db     # Drizzle Studio
 npm run generate -w @indostore/db    # after editing src/schema.ts → new migration; `push` = quick dev sync
 ```
-- Package: `packages/db` → `import { db, schema } from "@indostore/db"` (server-only; `postgres` is `serverExternalPackages`).
+- Package: `packages/db` → `import { db, schema } from "@indostore/db"` (server-only; `postgres` is `serverExternalPackages`). `npm run reset` drops `public` + `drizzle` schemas.
 - `DATABASE_URL` lives in root `.env` (tooling) + each app's `.env.local` (Next). Copy from `.env.example`.
-- Seed today = platform + super-admin slice (plans/stores/invoices/activity/platform settings). Admin per-store catalog seed + `lib/data` DB wiring are the next modules.
+- **Wired to DB** (read via server-only `lib/data/*`, pages `dynamic="force-dynamic"`): **super-admin** (all 5) + **admin** (Produk, Diskon, Pelanggan, Kategori, Pesanan, Halaman, Blog, Inventori, CRM — 9 modules). **Still mock:** admin Dashboard/Analitik (sales rollups), Pemasaran, Navigasi, Segmen/Ulasan, Pembelian; **storefront** (all).
+- **Wiring pattern:** seed the entity in `packages/db/src/seed.ts` (parity with the mock's mulberry32) → add `lib/data/<entity>.ts` returning the *same flat shape* → split the client page into a server wrapper + `*-client.tsx` (props) → point detail routes at `getX(id)`. Impedance columns added where the flat mock shape needs them (e.g. `products.emoji/units_sold`, `store_stats`, `invoices.number`).
 
 ## Structure (apps/admin/)
 - `app/(admin)/` — route group. `page.tsx` = Dashboard (`/`). Sections: pesanan, produk, pelanggan, diskon, analitik, halaman(+baru), blog(+baru), navigasi, pengaturan.
