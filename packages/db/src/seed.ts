@@ -54,6 +54,33 @@ const ACTIVITY: Array<{ kind: "signup" | "upgrade" | "payment" | "churn" | "supp
   { kind: "signup", text: "Toko “Batik Nusantara” mendaftar", minutesAgo: STORE.createdDaysAgo * 24 * 60 },
 ];
 
+// ---- additional demo stores (platform view + healthcheck variety) ----
+// Each gets account + owner user + store + membership + stats + invoices + a few orders,
+// engineered so the super-admin healthcheck shows a realistic Sehat/Perhatian/Bermasalah spread.
+// (No full catalog — demo stores are platform rows; impersonating them opens an empty admin,
+// which is realistic for new/trial merchants. Batik Nusantara stays the rich, fully-seeded one.)
+type DemoStore = {
+  name: string; owner: string; email: string; city: string;
+  plan: "pemula" | "bisnis" | "skala"; status: "active" | "trial" | "suspended";
+  gmv: number; orders: number; products: number; createdDaysAgo: number;
+  lastOrderDaysAgo: number | null; // null = no orders yet
+  invoices: Array<{ status: "dibayar" | "menunggu" | "gagal"; daysAgo: number }>;
+};
+const DEMO_STORES: DemoStore[] = [
+  // healthy: recent orders, invoices paid
+  { name: "Kopi Senja", owner: "Rangga Saputra", email: "rangga@kopisenja.id", city: "Bandung", plan: "bisnis", status: "active", gmv: 42_600_000, orders: 210, products: 22, createdDaysAgo: 95, lastOrderDaysAgo: 1, invoices: [{ status: "dibayar", daysAgo: 2 }, { status: "dibayar", daysAgo: 32 }] },
+  // BILLING problem: an overdue "menunggu" (>14d) + a failed charge → Bermasalah
+  { name: "Hijab Amara", owner: "Amara Zahwa", email: "amara@hijabamara.id", city: "Bekasi", plan: "pemula", status: "active", gmv: 8_500_000, orders: 64, products: 18, createdDaysAgo: 70, lastOrderDaysAgo: 5, invoices: [{ status: "menunggu", daysAgo: 22 }, { status: "gagal", daysAgo: 22 }, { status: "dibayar", daysAgo: 52 }] },
+  // ACTIVITY problem: last order 46d ago on an active paid store → Bermasalah
+  { name: "Sepatu Lokal Project", owner: "Dimas Prakoso", email: "dimas@sepatulokal.id", city: "Surabaya", plan: "bisnis", status: "active", gmv: 31_200_000, orders: 140, products: 30, createdDaysAgo: 140, lastOrderDaysAgo: 46, invoices: [{ status: "dibayar", daysAgo: 3 }, { status: "dibayar", daysAgo: 33 }] },
+  // TRIAL, no orders yet → Perhatian
+  { name: "Snack Rumahan Bu Tati", owner: "Tati Suryani", email: "tati@snackrumahan.id", city: "Malang", plan: "pemula", status: "trial", gmv: 0, orders: 0, products: 7, createdDaysAgo: 6, lastOrderDaysAgo: null, invoices: [] },
+  // SUSPENDED → Bermasalah
+  { name: "Gadget Murah ID", owner: "Bayu Anggara", email: "bayu@gadgetmurah.id", city: "Jakarta", plan: "bisnis", status: "suspended", gmv: 19_400_000, orders: 88, products: 40, createdDaysAgo: 210, lastOrderDaysAgo: 30, invoices: [{ status: "gagal", daysAgo: 15 }, { status: "menunggu", daysAgo: 15 }] },
+  // ACTIVITY warning: last order 18d ago (14–30d window) → Perhatian
+  { name: "Tas Rajut Handmade", owner: "Sinta Melati", email: "sinta@tasrajut.id", city: "Yogyakarta", plan: "skala", status: "active", gmv: 55_100_000, orders: 260, products: 12, createdDaysAgo: 160, lastOrderDaysAgo: 18, invoices: [{ status: "menunggu", daysAgo: 3 }, { status: "dibayar", daysAgo: 33 }] },
+];
+
 // ---- catalog (mirrors apps/admin/lib/mock/store.ts, deterministic) ----
 function mulberry32(seed: number) {
   return function () {
@@ -674,6 +701,30 @@ async function main() {
   // platform activity
   await db.insert(schema.platformActivity).values(ACTIVITY.map((a) => ({ kind: a.kind, text: a.text, ts: minutesAgo(a.minutesAgo) })));
 
+  // additional demo stores (platform view + healthcheck variety)
+  let invSeq = 9100;
+  let ordSeq = 8000;
+  for (const d of DEMO_STORES) {
+    const [acc] = await db.insert(schema.accounts).values({ name: d.name, plan: d.plan, createdAt: daysAgo(d.createdDaysAgo) }).returning();
+    const [u] = await db.insert(schema.users).values({ email: d.email, name: d.owner, passwordHash: hashPassword(DEV_OWNER_PASSWORD) }).returning();
+    const [st] = await db.insert(schema.stores).values({ accountId: acc.id, name: d.name, slug: slugify(d.name), city: d.city, plan: d.plan, status: d.status, createdAt: daysAgo(d.createdDaysAgo) }).returning();
+    await db.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: daysAgo(d.createdDaysAgo) });
+    await db.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
+    await db.insert(schema.storeSettings).values({ storeId: st.id });
+    await db.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: d.gmv, ordersCount: d.orders, productsCount: d.products, updatedAt: TODAY });
+    if (d.invoices.length) {
+      await db.insert(schema.invoices).values(d.invoices.map((inv) => ({ number: `INV-${invSeq++}`, accountId: acc.id, storeId: st.id, planKey: d.plan, amountIdr: planPrice(d.plan), status: inv.status, issuedAt: daysAgo(inv.daysAgo) })));
+    }
+    if (d.lastOrderDaysAgo !== null) {
+      // a few orders; the most-recent placedAt drives the "activity" health signal
+      const offsets = [d.lastOrderDaysAgo, d.lastOrderDaysAgo + 4, d.lastOrderDaysAgo + 11];
+      await db.insert(schema.orders).values(offsets.map((off) => ({
+        storeId: st.id, number: `ORD-${ordSeq++}`, status: "selesai" as const, financialStatus: "dibayar" as const,
+        channel: "organic" as const, subtotalIdr: 150_000, totalIdr: 150_000, city: d.city, placedAt: daysAgo(off),
+      })));
+    }
+  }
+
   // platform-managed payments / shipping / COD (ADR 0004) — platform-level, not per-store
   await db.insert(schema.platformPaymentGateways).values([
     { provider: "midtrans", enabled: true, isCod: false },
@@ -694,7 +745,7 @@ async function main() {
   );
   await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
 
-  console.log(`Seeded: ${PLANS.length} plans, 1 store (${STORE.name}), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${SUPPLIERS.length} suppliers/${PURCHASE_ORDERS.length} POs, ${SEGMENTS.length} segments, ${REVIEWS.length} reviews, ${MENU_DEFS.length} menus, ${DAILY.length} daily-stats, ${AD_CHANNELS.length} ad-channels/${AD_PROVINCES.length} provinces, ${INVOICES.length} invoices, platform settings.`);
+  console.log(`Seeded: ${PLANS.length} plans, ${1 + DEMO_STORES.length} stores (${STORE.name} + ${DEMO_STORES.length} demo), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${SUPPLIERS.length} suppliers/${PURCHASE_ORDERS.length} POs, ${SEGMENTS.length} segments, ${REVIEWS.length} reviews, ${MENU_DEFS.length} menus, ${DAILY.length} daily-stats, ${AD_CHANNELS.length} ad-channels/${AD_PROVINCES.length} provinces, ${INVOICES.length} invoices, platform settings.`);
   await client.end();
 }
 

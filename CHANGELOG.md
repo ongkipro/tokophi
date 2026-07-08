@@ -4,6 +4,14 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-08
 
+### Super Admin — store healthcheck + impersonation (connected to admin)
+- **Multi-store seed**: 6 demo stores added alongside Batik Nusantara (accounts + owners + stats + invoices + orders), engineered for a realistic health spread (2 sehat / 2 perhatian / 3 bermasalah). The whole platform view (dashboard, plan/status distribution, invoices) is now real cross-store data.
+- **Composite healthcheck** (`apps/super-admin/lib/health.ts`) — per-store verdict (Sehat/Perhatian/Bermasalah) + 0–100 score derived from DB signals: billing (overdue/failed invoices), activity (order recency), stock (out-of-stock products), subscription status. No live pings (single-machine local).
+- **UI**: Toko list gets a Kesehatan column + health filter + Sehat/Perhatian/Bermasalah stat cards; store detail gets a Healthcheck panel (per-check breakdown + score bar); dashboard gets a "Kesehatan Platform" rollup + "Perlu perhatian" list.
+- **Impersonation ("Buka panel admin")** — super-admin mints the admin session cookie for a store's owner (`lib/session.ts` + `lib/actions.ts`, shared `AUTH_SECRET`, localhost host-scoped cookie) and opens the admin (:3000) scoped to that store via RLS. Verified end-to-end (admin serves the impersonated owner, not Batik Nusantara). Admin app untouched.
+- **Store lifecycle actions** — suspend/activate + change plan (super-admin's first mutations, owner connection cross-tenant). `verify-rls` still green; super-admin + admin builds clean; console-clean.
+- **Follow-up**: super-admin has no auth of its own yet — impersonation/lifecycle actions are unguarded and must be gated behind a platform-admin session before any deploy.
+
 ### Rebrand: indostore → TokoΦ
 - Full rename across the monorepo: display brand **TokoΦ** (φ symbol); identifiers `tokophi` (folder, npm scope `@indostore/*` → `@tokophi/*`, root pkg).
 - **DB:** role `indostore_app` → `tokophi_app`; docker container/volume + Postgres user·pass·db → `tokophi`; `DATABASE_URL` updated. Owner login is now **ongki@batiknusantara.id / tokophi123**.

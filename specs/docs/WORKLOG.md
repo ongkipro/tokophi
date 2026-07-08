@@ -3,7 +3,7 @@
 > Newest first. What we did + what's next, so any session can resume instantly.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-07-08) · REBRANDED indostore→TokoΦ · RBAC + RLS (ENFORCING at runtime) + RBAC-UI done · next = admin-client feature depth (Real variants)
+## ▶ CURRENT STATE (2026-07-08) · REBRANDED indostore→TokoΦ · RBAC + RLS enforcing · Super-Admin healthcheck + impersonation done (multi-store) · next = admin-client depth (Real variants) &/or super-admin auth
 
 **Everything runs locally on Linux** (Docker PostgreSQL 16 :5433 + Drizzle `@tokophi/db`, 53 tables, migrations 0000–0012). Done + verified end-to-end:
 - **Reads:** all 3 surfaces (super-admin 5 pages + admin 16 modules + storefront) read Postgres.
@@ -16,6 +16,13 @@
 **RBAC UI (ALL editors done):** `lib/rbac-policy.ts` (client-safe matrix) + `PermissionsProvider`/`useCan`/`<Can>` + topbar role badge; every admin editor gates its write/delete/create controls by role (verified via Playwright across owner/staff/gudang). Server actions stay the security boundary.
 
 **▶ RESUME HERE (next session):** **admin-client feature depth** (user's focus; VPS deferred). Next pick = **Real variants** — schema already supports it (`product_options`, `product_variants` option1/2/3 + sku/price/cost, `inventory_levels` per variant/location); the gap is admin-only: the variant table in `apps/admin/app/(admin)/produk/[id]/product-editor.tsx` is UI-only (not wired/persisted), `lib/data/products.ts` reads only the default variant (position 0), and `lib/actions/products.ts` writes a single `Default` variant. Other admin backlog: `/pesanan/[id]` + `/diskon/[id]` detail routes, Tiptap rich-text, CSV export, de-dup admin → `@tokophi/ui`. (VPS + PostgREST + MinIO/S3 remains the later infra milestone.) Detail per-entry below (newest first).
+
+## 2026-07-08 — Session: Super Admin healthcheck + impersonation ✅
+- **Multi-store seed** (`packages/db/src/seed.ts` `DEMO_STORES`): +6 stores w/ engineered health spread (2 sehat / 2 perhatian / 3 bermasalah). Platform pages now show real cross-store data.
+- **Healthcheck** (`apps/super-admin/lib/health.ts` + `health-types.ts`): composite verdict + score from billing/activity/stock/status signals (owner connection, cross-tenant). Wired into Toko list (column+filter+cards), store detail (panel), dashboard (rollup + perlu-perhatian).
+- **Impersonation** (`lib/session.ts` mirrors admin's token contract + `lib/actions.ts impersonateStore`): "Buka panel admin" mints the admin `session` cookie for a store's owner (shared AUTH_SECRET, localhost cross-port) → admin scopes to that store via RLS. **Verified**: admin serves the impersonated owner (curl + Playwright, console-clean). Admin app unchanged.
+- **Lifecycle**: `setStoreStatus`/`setStorePlan` (suspend/activate/change-plan) — super-admin's first writes. `verify-rls` green; builds clean.
+- **Known gap**: super-admin has no auth → these actions are unguarded (gate before deploy).
 
 ## 2026-07-08 — Session: rebrand indostore → TokoΦ ✅
 - Full rebrand (see CHANGELOG 2026-07-08): scope `@tokophi/*`, DB role `tokophi_app`, folder/repo `tokophi`, display brand **TokoΦ**, Φ favicon. Verified migrate/seed/verify-rls + 3-surface builds clean; zero residual "indostore" in repo + external docs.

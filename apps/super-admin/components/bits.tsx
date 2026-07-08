@@ -3,6 +3,7 @@ import { UserPlus, ArrowUpRight, CreditCard, TrendingDown, LifeBuoy, ArrowUp, Ar
 import { Badge } from "@tokophi/ui/badge";
 import { cn } from "@tokophi/ui/lib/utils";
 import type { Plan, StoreStatus, PActivity, InvoiceStatus } from "@/lib/mock";
+import { type HealthVerdict, verdictMeta } from "@/lib/health-types";
 
 // Initials from a person or store name, e.g. "Batik Nusantara" -> "BN".
 export function initials(name: string): string {
@@ -65,6 +66,22 @@ export function InvoiceBadge({ status, className }: { status: InvoiceStatus; cla
   return (
     <Badge variant="secondary" className={cn("border-transparent", INVOICE_STYLES[status], className)}>
       {INVOICE_LABEL[status]}
+    </Badge>
+  );
+}
+
+const VERDICT_STYLES: Record<HealthVerdict, string> = {
+  sehat: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400",
+  perhatian: "bg-amber-500/12 text-amber-600 dark:text-amber-400",
+  bermasalah: "bg-destructive/12 text-destructive",
+};
+
+// Composite store-health badge (Sehat / Perhatian / Bermasalah) — a colored dot + label.
+export function HealthBadge({ verdict, className }: { verdict: HealthVerdict; className?: string }) {
+  return (
+    <Badge variant="secondary" className={cn("gap-1.5 border-transparent", VERDICT_STYLES[verdict], className)}>
+      <span className="size-1.5 rounded-full bg-current" />
+      {verdictMeta[verdict].label}
     </Badge>
   );
 }

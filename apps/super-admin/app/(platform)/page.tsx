@@ -7,13 +7,17 @@ import {
   TrendingDown,
   Coins,
   ArrowUpRight,
+  HeartPulse,
+  AlertTriangle,
+  CircleAlert,
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import { IDR, num, pct, timeAgo } from "@tokophi/lib/format";
 import { type StoreStatus } from "@/lib/mock";
-import { initials, PlanBadge, ActivityIcon, InvoiceBadge, Delta } from "@/components/bits";
+import { VERDICT_RANK, type HealthVerdict } from "@/lib/health-types";
+import { initials, PlanBadge, ActivityIcon, InvoiceBadge, Delta, HealthBadge } from "@/components/bits";
 import { MrrChart } from "./mrr-chart";
 import {
   getPlatform,
@@ -25,6 +29,7 @@ import {
   getActivity,
   getMrrSeries,
 } from "@/lib/data";
+import { getHealthMap } from "@/lib/health";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +50,7 @@ const STATUS_BAR: Record<StoreStatus, string> = {
 };
 
 export default async function PlatformDashboard() {
-  const [platform, deltas, stores, planDistribution, statusDistribution, invoices, activity, mrrSeries] =
+  const [platform, deltas, stores, planDistribution, statusDistribution, invoices, activity, mrrSeries, healthMap] =
     await Promise.all([
       getPlatform(),
       getDeltas(),
@@ -55,7 +60,27 @@ export default async function PlatformDashboard() {
       getInvoices(),
       getActivity(),
       getMrrSeries(),
+      getHealthMap(),
     ]);
+
+  // platform health rollup
+  const verdictCount: Record<HealthVerdict, number> = { sehat: 0, perhatian: 0, bermasalah: 0 };
+  for (const s of stores) {
+    const v = healthMap.get(s.id)?.verdict ?? "sehat";
+    verdictCount[v] += 1;
+  }
+  const HEALTH_TILES: { verdict: HealthVerdict; label: string; count: number; icon: LucideIcon; tint: string }[] = [
+    { verdict: "sehat", label: "Sehat", count: verdictCount.sehat, icon: HeartPulse, tint: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" },
+    { verdict: "perhatian", label: "Perhatian", count: verdictCount.perhatian, icon: AlertTriangle, tint: "bg-amber-500/12 text-amber-600 dark:text-amber-400" },
+    { verdict: "bermasalah", label: "Bermasalah", count: verdictCount.bermasalah, icon: CircleAlert, tint: "bg-destructive/12 text-destructive" },
+  ];
+  const attention = stores
+    .map((s) => ({ store: s, health: healthMap.get(s.id) }))
+    .filter((x) => x.health && x.health.verdict !== "sehat")
+    .sort((a, b) => VERDICT_RANK[b.health!.verdict] - VERDICT_RANK[a.health!.verdict])
+    .slice(0, 6);
+  const topIssue = (h: NonNullable<(typeof attention)[number]["health"]>) =>
+    (h.checks.find((c) => c.status === "fail") ?? h.checks.find((c) => c.status === "warn"))?.detail ?? "";
 
   const KPIS: Kpi[] = [
     { label: "MRR", value: IDR(platform.mrr, { compact: true }), helper: "Pendapatan berulang bulanan", icon: Wallet, delta: deltas.mrr },
@@ -104,6 +129,61 @@ export default async function PlatformDashboard() {
           );
         })}
       </div>
+
+      {/* Platform health */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle>Kesehatan Platform</CardTitle>
+          <Link href="/toko" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+            Kelola toko <ArrowUpRight className="size-3.5" />
+          </Link>
+        </CardHeader>
+        <CardContent className="grid gap-5 lg:grid-cols-3">
+          <div className="grid grid-cols-3 gap-3 lg:grid-cols-1">
+            {HEALTH_TILES.map((t) => (
+              <div key={t.verdict} className="rounded-xl border p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">{t.label}</span>
+                  <span className={`flex size-8 items-center justify-center rounded-lg ${t.tint}`}>
+                    <t.icon className="size-4" />
+                  </span>
+                </div>
+                <div className="mt-2 text-2xl font-bold tabular-nums">{num(t.count)}</div>
+              </div>
+            ))}
+          </div>
+          <div className="lg:col-span-2">
+            <div className="mb-2 text-sm font-medium">Perlu perhatian</div>
+            {attention.length ? (
+              <ul className="divide-y">
+                {attention.map(({ store, health }) => (
+                  <li key={store.id}>
+                    <Link
+                      href={`/toko/${store.id}`}
+                      className="flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/60"
+                    >
+                      <Avatar className="size-8">
+                        <AvatarFallback className="bg-primary/12 text-xs font-semibold text-primary">
+                          {initials(store.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{store.name}</div>
+                        <div className="truncate text-xs text-muted-foreground">{topIssue(health!)}</div>
+                      </div>
+                      <HealthBadge verdict={health!.verdict} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="flex h-full min-h-24 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
+                Semua toko sehat 🎉
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* MRR trend + Plan distribution */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

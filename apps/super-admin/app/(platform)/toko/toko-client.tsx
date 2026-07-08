@@ -1,18 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Store as StoreIcon,
-  CircleCheck,
-  Clock,
-  Ban,
+  HeartPulse,
+  AlertTriangle,
+  CircleAlert,
   Search,
   ChevronDown,
   MoreHorizontal,
   Eye,
-  LogIn,
+  ExternalLink,
+  Ban,
+  Play,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,11 +40,14 @@ import {
 } from "@tokophi/ui/dropdown-menu";
 
 import { type Plan, type Store } from "@/lib/mock";
-import { initials, PlanBadge, StatusBadge } from "@/components/bits";
+import { type HealthVerdict } from "@/lib/health-types";
+import { initials, PlanBadge, StatusBadge, HealthBadge } from "@/components/bits";
+import { impersonateStore, setStoreStatus } from "@/lib/actions";
 import { IDR, num } from "@tokophi/lib/format";
 
 type PlanFilter = "semua" | Plan;
 type StatusFilter = "semua" | Store["status"];
+type HealthFilter = "semua" | HealthVerdict;
 
 const PLAN_OPTIONS: { key: PlanFilter; label: string }[] = [
   { key: "semua", label: "Semua paket" },
@@ -58,39 +63,46 @@ const STATUS_OPTIONS: { key: StatusFilter; label: string }[] = [
   { key: "ditangguhkan", label: "Ditangguhkan" },
 ];
 
-export function TokoClient({ stores }: { stores: Store[] }) {
+const HEALTH_OPTIONS: { key: HealthFilter; label: string }[] = [
+  { key: "semua", label: "Semua kesehatan" },
+  { key: "sehat", label: "Sehat" },
+  { key: "perhatian", label: "Perhatian" },
+  { key: "bermasalah", label: "Bermasalah" },
+];
+
+export function TokoClient({
+  stores,
+  healthById,
+}: {
+  stores: Store[];
+  healthById: Record<string, HealthVerdict>;
+}) {
   const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [planFilter, setPlanFilter] = useState<PlanFilter>("semua");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("semua");
+  const [healthFilter, setHealthFilter] = useState<HealthFilter>("semua");
 
-  const stats = useMemo(
-    () => [
-      { label: "Total toko", value: stores.length, icon: StoreIcon },
-      {
-        label: "Aktif",
-        value: stores.filter((s) => s.status === "aktif").length,
-        icon: CircleCheck,
-      },
-      {
-        label: "Trial",
-        value: stores.filter((s) => s.status === "trial").length,
-        icon: Clock,
-      },
-      {
-        label: "Ditangguhkan",
-        value: stores.filter((s) => s.status === "ditangguhkan").length,
-        icon: Ban,
-      },
-    ],
-    [stores],
-  );
+  const verdictOf = (id: string): HealthVerdict => healthById[id] ?? "sehat";
+
+  const stats = useMemo(() => {
+    const by = (v: HealthVerdict) => stores.filter((s) => verdictOf(s.id) === v).length;
+    return [
+      { label: "Total toko", value: stores.length, icon: StoreIcon, tint: "bg-muted text-muted-foreground" },
+      { label: "Sehat", value: by("sehat"), icon: HeartPulse, tint: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" },
+      { label: "Perhatian", value: by("perhatian"), icon: AlertTriangle, tint: "bg-amber-500/12 text-amber-600 dark:text-amber-400" },
+      { label: "Bermasalah", value: by("bermasalah"), icon: CircleAlert, tint: "bg-destructive/12 text-destructive" },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stores, healthById]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return stores.filter((s) => {
       if (planFilter !== "semua" && s.plan !== planFilter) return false;
       if (statusFilter !== "semua" && s.status !== statusFilter) return false;
+      if (healthFilter !== "semua" && verdictOf(s.id) !== healthFilter) return false;
       if (!q) return true;
       return (
         s.name.toLowerCase().includes(q) ||
@@ -98,17 +110,40 @@ export function TokoClient({ stores }: { stores: Store[] }) {
         s.email.toLowerCase().includes(q)
       );
     });
-  }, [stores, query, planFilter, statusFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stores, query, planFilter, statusFilter, healthFilter, healthById]);
 
   const planLabel = PLAN_OPTIONS.find((o) => o.key === planFilter)!.label;
   const statusLabel = STATUS_OPTIONS.find((o) => o.key === statusFilter)!.label;
+  const healthLabel = HEALTH_OPTIONS.find((o) => o.key === healthFilter)!.label;
+
+  function openAdmin(s: Store) {
+    startTransition(async () => {
+      const r = await impersonateStore(s.id);
+      if (r.ok && r.adminUrl) {
+        toast.success(`Membuka panel admin “${s.name}”…`);
+        window.open(r.adminUrl, "_blank", "noopener");
+      } else {
+        toast.error(r.error ?? "Gagal membuka panel admin.");
+      }
+    });
+  }
+
+  function toggleSuspend(s: Store) {
+    const next = s.status === "ditangguhkan" ? "active" : "suspended";
+    startTransition(async () => {
+      await setStoreStatus(s.id, next);
+      toast.success(next === "suspended" ? `Toko “${s.name}” ditangguhkan.` : `Toko “${s.name}” diaktifkan.`);
+      router.refresh();
+    });
+  }
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Toko</h1>
         <p className="text-sm text-muted-foreground">
-          Semua toko merchant di platform.
+          Semua toko merchant di platform — status langganan &amp; kesehatan operasional.
         </p>
       </div>
 
@@ -120,7 +155,7 @@ export function TokoClient({ stores }: { stores: Store[] }) {
               <span className="text-sm font-medium text-muted-foreground">
                 {s.label}
               </span>
-              <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <span className={`flex size-8 items-center justify-center rounded-lg ${s.tint}`}>
                 <s.icon className="size-4" />
               </span>
             </div>
@@ -143,7 +178,26 @@ export function TokoClient({ stores }: { stores: Store[] }) {
               className="pl-8"
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="outline" className="gap-1.5">
+                    {healthLabel}
+                    <ChevronDown className="size-4 text-muted-foreground" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Filter kesehatan</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {HEALTH_OPTIONS.map((o) => (
+                  <DropdownMenuItem key={o.key} onClick={() => setHealthFilter(o.key)}>
+                    {o.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -157,10 +211,7 @@ export function TokoClient({ stores }: { stores: Store[] }) {
                 <DropdownMenuLabel>Filter paket</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {PLAN_OPTIONS.map((o) => (
-                  <DropdownMenuItem
-                    key={o.key}
-                    onClick={() => setPlanFilter(o.key)}
-                  >
+                  <DropdownMenuItem key={o.key} onClick={() => setPlanFilter(o.key)}>
                     {o.label}
                   </DropdownMenuItem>
                 ))}
@@ -179,10 +230,7 @@ export function TokoClient({ stores }: { stores: Store[] }) {
                 <DropdownMenuLabel>Filter status</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {STATUS_OPTIONS.map((o) => (
-                  <DropdownMenuItem
-                    key={o.key}
-                    onClick={() => setStatusFilter(o.key)}
-                  >
+                  <DropdownMenuItem key={o.key} onClick={() => setStatusFilter(o.key)}>
                     {o.label}
                   </DropdownMenuItem>
                 ))}
@@ -199,6 +247,7 @@ export function TokoClient({ stores }: { stores: Store[] }) {
                 <TableHead>Owner</TableHead>
                 <TableHead>Paket</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Kesehatan</TableHead>
                 <TableHead className="text-right">GMV</TableHead>
                 <TableHead className="hidden text-right md:table-cell">
                   Pesanan
@@ -243,6 +292,9 @@ export function TokoClient({ stores }: { stores: Store[] }) {
                   <TableCell>
                     <StatusBadge status={s.status} />
                   </TableCell>
+                  <TableCell>
+                    <HealthBadge verdict={verdictOf(s.id)} />
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {IDR(s.gmv, { compact: true })}
                   </TableCell>
@@ -272,22 +324,19 @@ export function TokoClient({ stores }: { stores: Store[] }) {
                         <DropdownMenuItem render={<Link href={`/toko/${s.id}`} />}>
                           <Eye className="size-4" /> Lihat detail
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() =>
-                            toast.success("Masuk sebagai " + s.name)
-                          }
-                        >
-                          <LogIn className="size-4" /> Impersonasi
+                        <DropdownMenuItem disabled={pending} onClick={() => openAdmin(s)}>
+                          <ExternalLink className="size-4" /> Buka panel admin
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onClick={() =>
-                            toast(`Toko "${s.name}" ditangguhkan.`)
-                          }
-                        >
-                          <Ban className="size-4" /> Tangguhkan
-                        </DropdownMenuItem>
+                        {s.status === "ditangguhkan" ? (
+                          <DropdownMenuItem disabled={pending} onClick={() => toggleSuspend(s)}>
+                            <Play className="size-4" /> Aktifkan
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => toggleSuspend(s)}>
+                            <Ban className="size-4" /> Tangguhkan
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -296,7 +345,7 @@ export function TokoClient({ stores }: { stores: Store[] }) {
               {filtered.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     className="py-10 text-center text-muted-foreground"
                   >
                     Tidak ada toko yang cocok.
