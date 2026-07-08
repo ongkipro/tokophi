@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { alCreatePayment, autolarisConfigured, PAYMENT_CHANNELS } from "@/lib/autolaris";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
@@ -74,13 +74,32 @@ export async function POST(req: Request) {
     city: addr.kota ?? null, province: addr.provinsi ?? null,
   }).returning({ id: schema.orders.id, number: schema.orders.number });
 
-  await db.insert(schema.orderLineItems).values(items.map((i) => ({
-    orderId: order.id,
-    title: i.variant ? `${i.name} — ${i.variant}` : i.name!,
-    qty: i.qty ?? 1,
-    priceIdr: i.price ?? 0,
-    totalIdr: (i.price ?? 0) * (i.qty ?? 1),
-  })));
+  // resolve each item → its product + variant (by combo title, else default position-0), then
+  // insert line items with variantId and decrement that variant's inventory (prevents oversell).
+  for (const i of items) {
+    let variantId: string | null = null;
+    if (i.handle) {
+      const [prod] = await db.select({ id: schema.products.id }).from(schema.products)
+        .where(and(eq(schema.products.storeId, store.id), eq(schema.products.handle, i.handle))).limit(1);
+      if (prod) {
+        const vars = await db.select({ id: schema.productVariants.id, title: schema.productVariants.title, position: schema.productVariants.position })
+          .from(schema.productVariants).where(eq(schema.productVariants.productId, prod.id));
+        const match = (i.variant && vars.find((v) => v.title === i.variant)) || vars.slice().sort((a, b) => a.position - b.position)[0];
+        variantId = match?.id ?? null;
+      }
+    }
+    const qty = i.qty ?? 1;
+    await db.insert(schema.orderLineItems).values({
+      orderId: order.id, variantId,
+      title: i.variant ? `${i.name} — ${i.variant}` : i.name!,
+      qty, priceIdr: i.price ?? 0, totalIdr: (i.price ?? 0) * qty,
+    });
+    if (variantId) {
+      await db.update(schema.inventoryLevels)
+        .set({ available: sql`GREATEST(${schema.inventoryLevels.available} - ${qty}, 0)` })
+        .where(eq(schema.inventoryLevels.variantId, variantId));
+    }
+  }
 
   // COD → order created, no bill
   if (isCod) {
