@@ -658,6 +658,16 @@ export const platformActivity = pgTable("platform_activity", {
   ts: createdAt(),
 });
 
+// Platform operators (US) — the super-admin's own login, separate from store `users`.
+export const platformAdmins = pgTable("platform_admins", {
+  id: pk(),
+  email: text().notNull().unique(),
+  name: text(),
+  passwordHash: text(), // scrypt "salt:hash" (local auth)
+  role: text().notNull().default("owner"),
+  createdAt: createdAt(),
+});
+
 // ---------- inferred types (Row = select, New* = insert) ----------
 export type Account = typeof accounts.$inferSelect;
 export type Store = typeof stores.$inferSelect;
@@ -695,3 +705,4 @@ export type StoreSettings = typeof storeSettings.$inferSelect;
 export type Plan = typeof plans.$inferSelect;
 export type Invoice = typeof invoices.$inferSelect;
 export type PlatformActivity = typeof platformActivity.$inferSelect;
+export type PlatformAdmin = typeof platformAdmins.$inferSelect;

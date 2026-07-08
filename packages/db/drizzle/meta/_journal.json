@@ -92,6 +92,13 @@
       "when": 1783100000000,
       "tag": "0012_tenant_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1783495247439,
+      "tag": "0013_skinny_karma",
+      "breakpoints": true
     }
   ]
 }

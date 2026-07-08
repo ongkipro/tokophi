@@ -701,6 +701,9 @@ async function main() {
   // platform activity
   await db.insert(schema.platformActivity).values(ACTIVITY.map((a) => ({ kind: a.kind, text: a.text, ts: minutesAgo(a.minutesAgo) })));
 
+  // platform operator (super-admin login) — admin@tokophi.id / tokophi123
+  await db.insert(schema.platformAdmins).values({ email: "admin@tokophi.id", name: "Admin Platform", passwordHash: hashPassword(DEV_OWNER_PASSWORD), role: "owner" });
+
   // additional demo stores (platform view + healthcheck variety)
   let invSeq = 9100;
   let ordSeq = 8000;

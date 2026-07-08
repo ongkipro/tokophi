@@ -4,16 +4,17 @@ import { and, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { SESSION_COOKIE, signSession } from "./session";
+import { requirePlatformAdmin } from "./platform-auth";
 
-// NOTE: the super-admin currently has no auth of its own (local control plane). These actions
-// therefore run unguarded — before any real deployment, gate them behind a platform-admin
-// session. Tracked as a follow-up.
+// Every super-admin mutation is gated by `requirePlatformAdmin()` (the security boundary):
+// impersonation + store lifecycle require a valid platform-admin session.
 
 const ADMIN_URL = process.env.ADMIN_URL ?? "http://localhost:3000";
 
 // Impersonate a store's owner: mint the admin session cookie (host-scoped to localhost, so it
 // reaches :3000) and hand back the admin URL for the client to open.
 export async function impersonateStore(storeId: string): Promise<{ ok: boolean; adminUrl?: string; error?: string }> {
+  await requirePlatformAdmin();
   const [owner] = await db
     .select({
       userId: schema.users.id,
@@ -46,6 +47,7 @@ export async function impersonateStore(storeId: string): Promise<{ ok: boolean; 
 }
 
 export async function setStoreStatus(storeId: string, status: "active" | "trial" | "suspended"): Promise<void> {
+  await requirePlatformAdmin();
   await db.update(schema.stores).set({ status }).where(eq(schema.stores.id, storeId));
   revalidatePath("/toko");
   revalidatePath(`/toko/${storeId}`);
@@ -53,6 +55,7 @@ export async function setStoreStatus(storeId: string, status: "active" | "trial"
 }
 
 export async function setStorePlan(storeId: string, plan: "pemula" | "bisnis" | "skala"): Promise<void> {
+  await requirePlatformAdmin();
   await db.update(schema.stores).set({ plan }).where(eq(schema.stores.id, storeId));
   // keep the account tier in sync (billing is per-account)
   const [s] = await db.select({ accountId: schema.stores.accountId }).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
