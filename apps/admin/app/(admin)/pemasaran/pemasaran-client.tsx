@@ -19,6 +19,7 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { IDR, num } from "@/lib/format";
 import { type AdChannel, type ProvinceStat, PROVINCES } from "@/lib/mock/store";
+import { exportCsv } from "@/lib/csv";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -650,7 +651,10 @@ export function PemasaranClient({ channels, provinces }: { channels: AdChannel[]
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="outline">
+        <Button
+          variant="outline"
+          onClick={() => exportCsv("pemasaran", channels.map((c) => ({ Channel: c.name, Belanja: c.spend, Impresi: c.impressions, Klik: c.clicks, Konversi: c.conversions, Pendapatan: c.revenue, ROAS: c.spend ? (c.revenue / c.spend).toFixed(2) : "0" })))}
+        >
           <Download /> Ekspor laporan
         </Button>
       </PageHeader>

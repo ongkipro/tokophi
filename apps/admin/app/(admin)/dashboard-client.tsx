@@ -19,6 +19,7 @@ import {
 } from "@/lib/data/dashboard";
 import type { DayPoint, Product, Order, Activity } from "@/lib/mock/store";
 import { IDR, num, pct } from "@/lib/format";
+import { exportCsv } from "@/lib/csv";
 
 export function DashboardClient({
   days,
@@ -66,7 +67,13 @@ export function DashboardClient({
         </div>
         <div className="flex items-center gap-2">
           <DateRangeSwitcher value={range} onChange={setRange} />
-          <Button variant="outline" className="gap-2"><Download className="size-4" /> Ekspor</Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => exportCsv("produk-terlaris", [...products].sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 20).map((p) => ({ Produk: p.name, Kategori: p.category, Terjual: p.unitsSold, Harga: p.price, Stok: p.stock })))}
+          >
+            <Download className="size-4" /> Ekspor
+          </Button>
         </div>
       </div>
 

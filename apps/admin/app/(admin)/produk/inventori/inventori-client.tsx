@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num } from "@/lib/format";
 import { type Product } from "@/lib/mock/store";
+import { exportCsv } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -135,7 +136,12 @@ export function InventoriClient({ products }: { products: Product[] }) {
   return (
     <div>
       <PageHeader title="Inventori" desc="Pantau dan sesuaikan stok produk Anda.">
-        <Button variant="outline"><Download /> Ekspor</Button>
+        <Button
+          variant="outline"
+          onClick={() => exportCsv("inventori", products.map((p) => ({ Produk: p.name, Kategori: p.category, Stok: qty[p.id] ?? p.stock })))}
+        >
+          <Download /> Ekspor
+        </Button>
         {canWrite && (
           <Button onClick={save} disabled={pending || changed.length === 0}>
             {pending ? "Menyimpan…" : changed.length ? `Simpan ${changed.length} perubahan` : "Simpan"}

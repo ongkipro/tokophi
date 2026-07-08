@@ -18,6 +18,7 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { OrderStatusBadge } from "@/components/admin/order-status";
 import { IDR, timeAgo } from "@/lib/format";
+import { exportCsv } from "@/lib/csv";
 import { type Order, type OrderStatus } from "@/lib/mock/store";
 
 import { Card } from "@/components/ui/card";
@@ -134,7 +135,11 @@ export function PesananClient({ orders }: { orders: Order[] }) {
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
       <PageHeader title="Pesanan" desc="Kelola pesanan yang masuk dan status pengirimannya.">
-        <Button variant="outline" className="gap-2">
+        <Button
+          variant="outline"
+          className="gap-2"
+          onClick={() => exportCsv("pesanan", filtered.map((o) => ({ No: o.id, Pelanggan: o.customer, Kota: o.city, Item: o.items, Status: o.status, Channel: o.channel, Total: o.total })))}
+        >
           <Download className="size-4" /> Ekspor
         </Button>
         <Button className="gap-2">

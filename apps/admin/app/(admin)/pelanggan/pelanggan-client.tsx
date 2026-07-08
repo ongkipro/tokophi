@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { type Customer, type Segment } from "@/lib/mock/store";
 import { IDR, num } from "@/lib/format";
+import { exportCsv } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 import { SegmentBadge } from "@/components/admin/pelanggan/segment-badge";
 
@@ -171,7 +172,11 @@ export function PelangganClient({ customers }: { customers: Customer[] }) {
         title="Pelanggan"
         desc="Kelola data pelanggan dan segmen mereka."
       >
-        <Button variant="outline" className="gap-2">
+        <Button
+          variant="outline"
+          className="gap-2"
+          onClick={() => exportCsv("pelanggan", rows.map((c) => ({ Nama: c.name, Email: c.email, Telepon: c.phone, Kota: c.city, Pesanan: c.orders, "Total Belanja": c.spent, Segmen: c.segment })))}
+        >
           <Download className="size-4" /> Ekspor
         </Button>
         <Button className="gap-2">

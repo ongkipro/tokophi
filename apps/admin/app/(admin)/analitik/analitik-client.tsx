@@ -17,6 +17,7 @@ import {
   type RangeKey, getSummary, getSeries, getTopProducts, getChannels, rangeLabel,
 } from "@/lib/data/dashboard";
 import { IDR, num, pct } from "@/lib/format";
+import { exportCsv } from "@/lib/csv";
 
 export function AnalitikClient({ days, products }: { days: DayPoint[]; products: Product[] }) {
   const [range, setRange] = useState<RangeKey>("30d");
@@ -46,7 +47,13 @@ export function AnalitikClient({ days, products }: { days: DayPoint[]; products:
     <div className="mx-auto max-w-[1400px] space-y-5">
       <PageHeader title="Analitik" desc="Laporan mendalam performa toko.">
         <DateRangeSwitcher value={range} onChange={setRange} />
-        <Button variant="outline" className="gap-2"><Download className="size-4" /> Ekspor</Button>
+        <Button
+          variant="outline"
+          className="gap-2"
+          onClick={() => exportCsv("analitik-produk", [...products].sort((a, b) => b.unitsSold - a.unitsSold).map((p) => ({ Produk: p.name, Kategori: p.category, Terjual: p.unitsSold, Harga: p.price, Stok: p.stock })))}
+        >
+          <Download className="size-4" /> Ekspor
+        </Button>
       </PageHeader>
 
       {/* KPIs */}

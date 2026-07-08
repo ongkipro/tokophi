@@ -4,6 +4,9 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-08
 
+### Admin — CSV export (dead "Ekspor" buttons now work)
+- New `lib/csv.ts exportCsv()` (client-side, UTF-8 BOM for Excel). Wired all 6 previously-inert **Ekspor** buttons to download the current data: **Pesanan** (filtered orders), **Pelanggan** (filtered customers), **Inventori** (products + live stock), **Analitik** + **Dashboard** (product performance), **Pemasaran** (ad-channel report incl. ROAS). Verified: `pesanan.csv` downloads with 60 rows + correct headers.
+
 ### Storefront — variant picker + fashion variant seed (end-to-end variants)
 - **Seed**: all 14 Batik Nusantara (fashion niche) products now carry **real Warna × Ukuran variants** (`WARNA_BY_SLUG` × `STOREFRONT_META.sizes` → `product_options` + per-combo `product_variants` + inventory; position-0 = default so list/catalog/orders still read correctly).
 - **Catalog** (`data/catalog.ts`) now reads each product's real `options` + `variants` (price/stock per combo), not just the default variant / legacy `products.sizes`.
