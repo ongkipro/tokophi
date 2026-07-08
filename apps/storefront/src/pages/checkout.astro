@@ -4,8 +4,9 @@ import { STORE } from "../data/catalog";
 
 // Platform shipping proxy (admin) + this store's origin city — env-driven for per-client prod.
 const ONGKIR_API = import.meta.env.PUBLIC_ONGKIR_API || "http://localhost:3000/api/public/ongkir";
-const PAY_API = import.meta.env.PUBLIC_PAY_API || "http://localhost:3000/api/public/pay";
+const ORDER_API = import.meta.env.PUBLIC_ORDER_API || "http://localhost:3000/api/public/order";
 const ORIGIN_CITY = STORE.city || "Yogyakarta";
+const STORE_SLUG = STORE.slug || "batik-nusantara";
 
 const PROVINCES = [
   "DKI Jakarta",
@@ -203,7 +204,7 @@ const PAYMENTS = [
   }
 </style>
 
-<script is:inline define:vars={{ ONGKIR_API, PAY_API, ORIGIN_CITY }}>
+<script is:inline define:vars={{ ONGKIR_API, ORDER_API, ORIGIN_CITY, STORE_SLUG }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -387,40 +388,33 @@ const PAYMENTS = [
         try { localStorage.setItem("lastOrder", JSON.stringify(order)); } catch (e2) {}
         window.location.href = "/checkout/sukses";
       }
+      function fail(msg) {
+        if (err) { err.textContent = msg; err.classList.remove("hidden"); }
+        if (btn) { btn.disabled = false; btn.textContent = "Bayar Sekarang"; }
+      }
 
       var btn = form.querySelector('button[type="submit"]');
-      if (payEl && payEl.value !== "cod") {
-        if (btn) { btn.disabled = true; btn.textContent = "Membuat pembayaran…"; }
-        fetch(PAY_API, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            orderRef: "TP-" + Date.now(),
-            channelCode: payEl.value,
-            amount: order.total,
-            name: order.shippingAddress.nama,
-            phone: order.shippingAddress.whatsapp,
-            email: order.contact.email || "order@tokophi.id",
-          }),
+      if (btn) { btn.disabled = true; btn.textContent = "Memproses pesanan…"; }
+      fetch(ORDER_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeSlug: STORE_SLUG,
+          items: cart.map(function (i) { return { handle: i.handle, name: i.name, price: i.price, variant: i.variant || i.size || "", qty: i.qty }; }),
+          customer: { name: order.shippingAddress.nama, phone: order.shippingAddress.whatsapp, email: order.contact.email },
+          address: { alamat: order.shippingAddress.alamat, kota: order.shippingAddress.kota, provinsi: order.shippingAddress.provinsi, kodepos: order.shippingAddress.kodepos },
+          shipping: { label: order.shipping.label, cost: ship },
+          channelCode: payEl ? payEl.value : "cod",
+        }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (!res.ok) { fail(res.error || "Gagal memproses pesanan."); return; }
+          order.number = res.orderNumber;
+          if (res.payment) order.payment.instruction = res.payment;
+          finish();
         })
-          .then(function (r) { return r.json(); })
-          .then(function (res) {
-            if (!res.ok) {
-              if (err) { err.textContent = res.error || "Gagal membuat pembayaran."; err.classList.remove("hidden"); }
-              if (btn) { btn.disabled = false; btn.textContent = "Bayar Sekarang"; }
-              return;
-            }
-            order.payment.instruction = res;
-            order.total = res.total || order.total;
-            finish();
-          })
-          .catch(function () {
-            if (err) { err.textContent = "Gagal terhubung ke pembayaran."; err.classList.remove("hidden"); }
-            if (btn) { btn.disabled = false; btn.textContent = "Bayar Sekarang"; }
-          });
-      } else {
-        finish();
-      }
+        .catch(function () { fail("Gagal terhubung ke server."); });
     });
   })();
 </script>

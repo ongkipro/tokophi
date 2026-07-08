@@ -12,6 +12,7 @@ const STORE_ID = storeRow!.id;
 
 export const STORE = {
   name: storeRow?.name ?? "Batik Nusantara",
+  slug: storeRow?.slug ?? "batik-nusantara",
   tagline: "Busana wanita modern — batik & ready-to-wear",
   whatsapp: "6281234567890",
   city: storeRow?.city ?? "Yogyakarta",

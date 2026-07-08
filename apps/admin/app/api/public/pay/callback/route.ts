@@ -21,10 +21,18 @@ export async function POST(req: Request) {
   if (trx || reff) {
     const mapped = status === "PAID" ? "berhasil" : status === "EXPIRED" ? "gagal" : null;
     if (mapped) {
-      await db
+      const rows = await db
         .update(schema.payments)
         .set({ status: mapped, paidAt: mapped === "berhasil" ? new Date() : null })
-        .where(or(trx ? eq(schema.payments.trxId, trx) : undefined, reff ? eq(schema.payments.reffId, reff) : undefined));
+        .where(or(trx ? eq(schema.payments.trxId, trx) : undefined, reff ? eq(schema.payments.reffId, reff) : undefined))
+        .returning({ orderId: schema.payments.orderId });
+      // sync the linked order's financial status when paid
+      if (mapped === "berhasil") {
+        const orderIds = rows.map((r) => r.orderId).filter((id): id is string => !!id);
+        for (const oid of orderIds) {
+          await db.update(schema.orders).set({ financialStatus: "dibayar" }).where(eq(schema.orders.id, oid));
+        }
+      }
     }
   }
   return NextResponse.json({ ok: true });

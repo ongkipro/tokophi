@@ -75,6 +75,9 @@ import { STORE } from "../../data/catalog";
       order = null;
     }
 
+    // Prefer the real DB order number (WEB-…) over the client-side placeholder.
+    if (order && order.number && numEl) numEl.textContent = order.number;
+
     var summary = document.getElementById("order-summary");
     if (!order || !order.items || !order.items.length) {
       if (summary) {
