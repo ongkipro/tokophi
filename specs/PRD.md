@@ -25,7 +25,7 @@ A **Shopify-style commerce platform for the Indonesian market**: one shared, mod
 
 Super-admin & merchant-admin **share the design system** (`@tokophi/ui`) + formatters (`@tokophi/lib`); admin & storefront **share the canonical nav** (`@tokophi/data`). Backend later = one self-hosted Postgres; super-admin = platform role (cross-tenant), admin = `store_id`-scoped (RLS).
 
-**Payments & shipping are platform-managed (merchant "terima matang")** — ADR 0004. We (platform) set up payment gateways (Midtrans/Xendit/Duitku) + **COD** and connect ONE **shipping aggregator** (KiriminAja → all couriers). The merchant only **enables which payment methods to accept** and **picks which couriers + services (ekspedisi)** to offer; credentials, resi & tariffs are automatic. Money flow: platform collects → settles/payouts to merchant (fee/margin).
+**Payments & shipping are platform-managed (merchant "terima matang")** — ADR 0004. We (platform) set up payment the **AutoLaris** payment gateway (VA/QRIS/DANA) + **COD** and connect ONE **shipping aggregator** (KiriminAja → all couriers). The merchant only **enables which payment methods to accept** and **picks which couriers + services (ekspedisi)** to offer; credentials, resi & tariffs are automatic. Money flow: platform collects → settles/payouts to merchant (fee/margin).
 
 📐 Diagrams: **[docs/UML.md](docs/UML.md)** · 🗂️ Task breakdown: **[docs/TASKS.md](docs/TASKS.md)** · 🧱 Backend schema: **[docs/SCHEMA.md](docs/SCHEMA.md)** · ✅ Priorities: **[docs/BACKLOG.md](docs/BACKLOG.md)** · 🏛️ Architecture: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
@@ -57,7 +57,7 @@ Super-admin & merchant-admin **share the design system** (`@tokophi/ui`) + forma
 - **Toko** — all stores list + **detail** (`/toko/[id]`, real uuid route).
 - **Paket** — plans/packages + invoices.
 - **Analitik** — cross-tenant GMV per plan / per city + status.
-- **Pengaturan** — payment gateways (**Midtrans / Xendit / Duitku + COD**), shipping aggregator (**KiriminAja**), courier catalog — read from `platform_*` tables; the platform-managed config merchants consume "matang".
+- **Pengaturan** — payment gateways (**AutoLaris** — VA/QRIS/DANA + COD), shipping aggregator (**KiriminAja**), courier catalog — read from `platform_*` tables; the platform-managed config merchants consume "matang".
 
 ### Storefront — shopper site (`apps/storefront`, :4327) — DONE (was "next", now built)
 Demo brand **"Batik Nusantara"** — a women's-fashion store.
@@ -181,7 +181,7 @@ Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palet
   - 🟡 **Mutations persist** (`lib/actions/*` server actions): ✅ Produk / Diskon / Halaman / Blog / Kategori (create/edit/delete) + order-status + Inventori-stock; ⏳ Pelanggan / Navigasi / CRM / Segmen / Pembelian.
   - **Current focus = local Linux** — finish the local stack (all mutations + local auth/media) before deploying.
   - ⏳ **VPS (prod, later)**: self-hosted PostgreSQL + PostgREST + JWT Auth + Storage (MinIO/S3) + enable RLS (`store_id`); parameterize storefront by `STORE_SLUG` (ADR 0008); same migrations carry up.
-- **M4:** Payments/couriers integration (Midtrans/Xendit/Duitku + KiriminAja), per-client storefront deploy pipeline, billing/plans.
+- **M4:** Payments/couriers integration (AutoLaris + KiriminAja), per-client storefront deploy pipeline, billing/plans.
 
 > Detailed, prioritized tasks live in **`docs/BACKLOG.md`**.
 

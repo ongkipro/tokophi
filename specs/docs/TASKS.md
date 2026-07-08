@@ -55,7 +55,7 @@
 - [x] **Super-admin cross-tenant** · **M** · reads across `store_id`; MRR/GMV/etc. from DB (single-tenant now).
 
 ## Epic 6 — Platform integrations (M4)
-- [ ] **Payment gateway** · **L** · Midtrans/Xendit behind platform config; COD rules; webhook → order status.
+- [~] **Payment gateway** · **L** · ✅ **AutoLaris** integrated (super-admin config + Test koneksi; admin "Buat Tagihan" → VA/QRIS/DANA persisted+linked; storefront checkout create payment → VA/QRIS). ⏳ still: callback signature verify + payment→order-status webhook sync.
 - [~] **Shipping aggregator (KiriminAja)** · **L** · ✅ **live ongkir DONE** (2026-07-08): real KiriminAja Mitra API client (`apps/admin/lib/kiriminaja.ts`) + `getShippingRates()` → **"Cek Ongkir"** in the order detail shows live rates (resolves store/dest city → district IDs → `shipping_price`). ⏳ still: super-admin config + Test koneksi; create shipment (`request_pickup` → resi/AWB, needs store sender address); print label PDF; tracking webhook.
 - [ ] **Settlement / payout** · **L** · platform collects → payout to merchant, minus fee/margin; ledger.
 - [ ] **Subscriptions/billing** · **M** · recurring plan billing (Pemula/Bisnis/Skala); invoices; dunning.

@@ -35,7 +35,7 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ### Admin — functional global search (⌘K) + docs de-stale
 - **Global search** (`lib/data/search.ts getSearchIndex()`, RLS-scoped: products/orders/customers) — the topbar search was cosmetic; now a real filter with a grouped dropdown (Produk/Pesanan/Pelanggan) linking to entity routes; ⌘K focuses, Esc/click-outside closes. Verified: "dress" → 3 product results.
-- **Docs**: de-staled README/PRD/ARCHITECTURE/SCHEMA/BACKLOG/TASKS/AGENTS — 53→54 tables, migrations 0000–0013, `platform_admins` (0013); removed "writes pending/mock" (writes are done); BACKLOG marks variants / CSV / global search / super-admin control plane / storefront as done.
+- **Docs**: de-staled README/PRD/ARCHITECTURE/SCHEMA/BACKLOG/TASKS/AGENTS — 53→54 tables, migrations 0000–0016, `platform_admins` (0013); removed "writes pending/mock" (writes are done); BACKLOG marks variants / CSV / global search / super-admin control plane / storefront as done.
 
 ### Admin — CSV export (dead "Ekspor" buttons now work)
 - New `lib/csv.ts exportCsv()` (client-side, UTF-8 BOM for Excel). Wired all 6 previously-inert **Ekspor** buttons to download the current data: **Pesanan** (filtered orders), **Pelanggan** (filtered customers), **Inventori** (products + live stock), **Analitik** + **Dashboard** (product performance), **Pemasaran** (ad-channel report incl. ROAS). Verified: `pesanan.csv` downloads with 60 rows + correct headers.

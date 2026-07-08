@@ -47,7 +47,7 @@ Build: `npm run build:admin` · `npm run build:super` · (storefront) `cd apps/s
 
 ## Database (local Postgres — `@tokophi/db`)
 
-Local backend is live end-to-end: **plain PostgreSQL 16 in Docker + Drizzle** (54 tables, migrations 0000–0013; prod target = self-hosted Postgres + PostgREST (VPS) — ADR 0007). **All 3 surfaces read + all 12 admin editors write** the DB; local auth + RBAC + RLS enforcing + local media upload done. Multi-store: 7 stores (super-admin control plane) + real product variants end-to-end (admin → storefront → cart).
+Local backend is live end-to-end: **plain PostgreSQL 16 in Docker + Drizzle** (54 tables, migrations 0000–0016; prod target = self-hosted Postgres + PostgREST (VPS) — ADR 0007). **All 3 surfaces read + all 12 admin editors write** the DB; local auth + RBAC + RLS enforcing + local media upload done. Multi-store: 7 stores (super-admin control plane) + real product variants end-to-end (admin → storefront → cart).
 
 ```bash
 docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted)
@@ -67,7 +67,7 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - **UI = shadcn on Base UI** (`@base-ui/react`), **not Radix**: use the **`render` prop, not `asChild`**; there is **no `Select`** primitive; `Button`-as-link needs `nativeButton={false}`. See [`apps/admin/AGENTS.md`](apps/admin/AGENTS.md).
 - **Determinism:** all mock data is seeded (mulberry32) and anchored to `TODAY = 2026-06-30` — SSR===client, stable across reloads.
 - **Money** in IDR via `@tokophi/lib`; **nav** via `@tokophi/data`.
-- **Payments & shipping are platform-managed** (ADR 0004): the platform configures gateways (Midtrans/Xendit/Duitku) + COD + KiriminAja aggregator; merchants only enable methods and pick couriers/services.
+- **Payments & shipping are platform-managed** (ADR 0004): the platform configures the **AutoLaris** payment gateway (VA/QRIS/DANA) + COD + KiriminAja aggregator; merchants only enable methods and pick couriers/services.
 - Sales channel = **Toko Online only**; analytics attribution = Meta / TikTok / Google Ads + Organic / Other.
 - Keep it **console-clean** (no Base UI warnings) and responsive; `npm run build` must pass.
 
@@ -75,7 +75,7 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 
 > **Current focus = local Linux.** Everything runs locally: PostgreSQL 16 in Docker (:5433) + the two Next dev servers + the Astro storefront. Prod (self-hosted Postgres + PostgREST on a VPS) is deferred (user hasn't provisioned a VPS yet) — local is feature-complete.
 >
-> **Since 2026-07-04 (all local, verified E2E):** rebranded indostore → **TokoΦ**; **super-admin = functional control plane** (7 stores, healthcheck, impersonation into admin, platform-admin auth, provisioning "Tambah toko", settings persistence, team invite, billing actions); **admin multi-store polish** (store identity data-driven, real per-store activity feed); **real product variants end-to-end** (adaptive TikTok-Shop/Shopee-style editor with chip values + bulk apply → storefront variant picker → variant-aware cart; all 14 fashion products seeded Warna×Ukuran); **CSV export** on all Ekspor buttons; **functional global search** (⌘K). See `CHANGELOG.md` / `specs/docs/WORKLOG.md`.
+> **Since 2026-07-04 (all local, verified E2E):** rebranded indostore → **TokoΦ**; **super-admin = functional control plane** (7 stores, healthcheck, impersonation into admin, platform-admin auth, provisioning "Tambah toko", settings persistence, team invite, billing actions); **admin multi-store polish** (store identity data-driven, real per-store activity feed); **real product variants end-to-end** (adaptive TikTok-Shop/Shopee-style editor with chip values + bulk apply → storefront variant picker → variant-aware cart; all 14 fashion products seeded Warna×Ukuran); **CSV export** on all Ekspor buttons; **functional global search** (⌘K); **KiriminAja shipping** complete (super-admin config + Test koneksi · admin Cek Ongkir/Alamat Pengirim/Buat Pengiriman→AWB/Lacak/Cetak label · storefront checkout live ongkir); **AutoLaris payment gateway** complete (super-admin config + Test koneksi · admin Buat Tagihan → VA/QRIS · storefront checkout create payment → VA/QRIS on sukses); **provider brands hidden from the client** (white-label; only super-admin sees KiriminAja/AutoLaris). See `CHANGELOG.md` / `specs/docs/SYSTEM_GUIDE.md` / `specs/docs/WORKLOG.md`.
 
 - **Admin:** Dashboard (KPIs, FB-style date range, charts) · Pesanan (+detail) · Produk (+editor, Kategori/Inventori/Pembelian) · Pelanggan (+detail/Segmen/Ulasan) · CRM (Follow-up WA/Pipeline/Template) · Diskon (+editor) · Analitik · Pemasaran (per-provinsi) · Halaman & Blog (create+edit) · **Navigasi** (drag-and-drop menu builder + up/down + sub-menu) · Pengaturan.
 - **Super Admin:** Dashboard (MRR/GMV) · Toko (+detail) · Paket · Analitik · Pengaturan (gateways + KiriminAja + couriers). **← all 5 pages live on PostgreSQL** via `lib/data.ts`.

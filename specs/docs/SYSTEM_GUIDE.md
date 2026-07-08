@@ -64,7 +64,7 @@ tokophi/
 
 **Payments and shipping are owned by the platform, not the merchant** — "terima matang":
 - **Super-admin → Pengaturan = source of truth.** The platform configures payment gateways
-  (**Midtrans / Xendit / Duitku**) + **COD** + one shipping **aggregator (KiriminAja)** — once,
+  (**AutoLaris** — VA/QRIS/DANA) + **COD** + one shipping **aggregator (KiriminAja)** — once,
   centrally, applying to ALL stores. Credentials live at platform/account level (`platform_*` tables).
 - **Merchant admin → Pengaturan = enable/disable only.** No credential fields; the merchant just
   toggles which payment methods to accept and picks which couriers/services (ekspedisi) to offer.
@@ -79,7 +79,7 @@ This is why shipping rates, resi, and label printing are a **KiriminAja** integr
 ## 5. Data & multi-tenancy
 
 **Local PostgreSQL 16 (Docker, port 5433) + Drizzle** (`@tokophi/db`) — **54 tables**, snake_case,
-money = `bigint` IDR, versioned migrations `0000–0013`. Source of truth = `packages/db/src/schema.ts`;
+money = `bigint` IDR, versioned migrations `0000–0016`. Source of truth = `packages/db/src/schema.ts`;
 annotated reference = [`SCHEMA.md`](SCHEMA.md).
 
 **Row-Level Security (RLS) — enforced at runtime locally** (migration `0012_tenant_rls`):
@@ -199,7 +199,7 @@ Base `https://api-h2h.autolaris.com`, Bearer key in gitignored `.env.local`. Cli
 ```bash
 npm install                                   # all workspaces
 docker compose up -d db                        # PostgreSQL 16 @ localhost:5433
-npm run migrate -w @tokophi/db               # apply migrations 0000–0013
+npm run migrate -w @tokophi/db               # apply migrations 0000–0016
 npm run seed    -w @tokophi/db               # demo data (7 stores, fashion variants) — idempotent
 
 npm run dev:admin                              # merchant admin → http://localhost:3000

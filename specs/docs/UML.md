@@ -34,7 +34,7 @@ graph TB
   end
 
   subgraph Integrations["Platform integrations (set up by us — ADR 0004)"]
-    PG["Payment gateways<br/>Midtrans / Xendit / Duitku + COD"]
+    PG["Payment gateway<br/>AutoLaris (VA/QRIS/DANA) + COD"]
     AGG["Shipping aggregator<br/>KiriminAja (all couriers)"]
   end
 

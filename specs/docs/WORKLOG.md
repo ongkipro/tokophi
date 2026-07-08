@@ -3,7 +3,7 @@
 > Newest first. What we did + what's next, so any session can resume instantly.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-07-08) · REBRANDED indostore→TokoΦ · RBAC + RLS enforcing · Super-Admin control plane · Real variants end-to-end · **KiriminAja shipping COMPLETE** (Test koneksi · Cek Ongkir · Alamat Pengirim · Buat Pengiriman→real AWB · Lacak · Cetak label PDF · storefront checkout live ongkir) · next = VPS infra (+ shipping webhook/payment are prod-only)
+## ▶ CURRENT STATE (2026-07-08) · REBRANDED indostore→TokoΦ · RBAC + RLS enforcing · Super-Admin control plane · Real variants · **KiriminAja shipping COMPLETE** (config·ongkir·sender·buat pengiriman→AWB·lacak·label PDF·storefront ongkir) · **AutoLaris payment COMPLETE** (super-admin config+test · admin Buat Tagihan → VA/QRIS · storefront checkout pay) · provider brands hidden from client (white-label) · seed data coherence (fashion) · all routes clean · next = VPS infra (+ webhooks/payment-flow prod-only)
 
 ## 2026-07-08 — Session: Storefront variant picker + fashion variant seed ✅
 - Seed: all 14 fashion products now have real **Warna × Ukuran** variants (`WARNA_BY_SLUG` × `STOREFRONT_META.sizes`; pos-0 = default). `data/catalog.ts` reads real options+variants. `produk/[handle].astro` = real variant picker (per-option button groups) → resolves variant → live price + stock indicator (disables add on 0 stock); legacy sizes fallback. Cart variant-aware (keranjang/checkout show "Varian: {combo}"). Verified E2E: Dress Midi pick Sage/L → stock 32, cart "Varian: Sage / L", console-clean; storefront builds 29 pages; verify-rls green. **Variants now end-to-end: admin → storefront → cart.**
@@ -12,7 +12,7 @@
 - Admin variant editor is now real: up to 3 options (add/remove) → cartesian matrix with per-variant SKU/harga/stok; hydrates on edit. `lib/data/products.ts getProduct` returns options+variants; `lib/actions/products.ts` create/update **reconcile by option-combo key** (matched update-in-place keeping stock/history, new insert, removed delete only if not in `order_line_items`). Verified E2E→DB: 6 variants (Ukuran×Warna) + stock override persist; edit→9 variants, 6 originals matched (stock kept), zero dupes. Build+console clean.
 
 
-**Everything runs locally on Linux** (Docker PostgreSQL 16 :5433 + Drizzle `@tokophi/db`, 54 tables, migrations 0000–0013). Done + verified end-to-end:
+**Everything runs locally on Linux** (Docker PostgreSQL 16 :5433 + Drizzle `@tokophi/db`, 54 tables, migrations 0000–0016; payments+gateway+shipping cols). Done + verified end-to-end:
 - **Reads:** all 3 surfaces (super-admin 5 pages + admin 16 modules + storefront) read Postgres.
 - **Writes:** all **12 admin editors** persist via `lib/actions/*` server actions (Produk/Diskon/Halaman/Blog/Kategori CRUD · order-status · Inventori-stock · Navigasi · Pelanggan · CRM follow-up · Segmen · Pembelian PO create/receive→stock/cancel).
 - **Auth (local):** email/password login → jose JWT httpOnly cookie, `middleware.ts` protects the admin (owner `ongki@batiknusantara.id / tokophi123`).
