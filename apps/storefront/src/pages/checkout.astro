@@ -255,7 +255,7 @@ const PAYMENTS = [
           "</div>" +
           '<div class="min-w-0 flex-1">' +
           '<p class="truncate text-sm font-medium text-ink">' + esc(item.name) + "</p>" +
-          (item.size ? '<p class="text-xs text-muted">Ukuran: ' + esc(item.size) + "</p>" : "") +
+          ((item.variant || item.size) ? '<p class="text-xs text-muted">Varian: ' + esc(item.variant || item.size) + "</p>" : "") +
           "</div>" +
           '<span class="text-sm font-medium text-ink tabular-nums">' + idr.format(sub) + "</span>" +
           "</div>"

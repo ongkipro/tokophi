@@ -65,7 +65,7 @@ import { STORE } from "../data/catalog";
             '<img src="' + esc(item.image) + '" alt="' + esc(item.name) + '" class="h-24 w-20 shrink-0 rounded-lg object-cover bg-brand-50" loading="lazy" />' +
             '<div class="min-w-0 flex-1">' +
             '<p class="truncate font-medium text-ink">' + esc(item.name) + "</p>" +
-            (item.size ? '<p class="mt-0.5 text-sm text-muted">Ukuran: ' + esc(item.size) + "</p>" : "") +
+            ((item.variant || item.size) ? '<p class="mt-0.5 text-sm text-muted">Varian: ' + esc(item.variant || item.size) + "</p>" : "") +
             '<div class="mt-2 inline-flex items-center rounded-lg border border-line">' +
             '<button type="button" data-dec="' + idx + '" class="px-3 py-1 text-muted hover:text-ink" aria-label="Kurangi">−</button>' +
             '<span class="w-8 text-center text-sm tabular-nums">' + item.qty + "</span>" +

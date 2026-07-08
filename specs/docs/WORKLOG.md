@@ -3,7 +3,10 @@
 > Newest first. What we did + what's next, so any session can resume instantly.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-07-08) · REBRANDED indostore→TokoΦ · RBAC + RLS enforcing · Super-Admin = functional control plane · admin multi-store polish done · **Real variants done** (options+matrix+reconcile) · next = VPS infra
+## ▶ CURRENT STATE (2026-07-08) · REBRANDED indostore→TokoΦ · RBAC + RLS enforcing · Super-Admin = functional control plane · admin multi-store polish done · **Real variants end-to-end** (admin matrix/reconcile + storefront picker + fashion variant seed) · next = VPS infra
+
+## 2026-07-08 — Session: Storefront variant picker + fashion variant seed ✅
+- Seed: all 14 fashion products now have real **Warna × Ukuran** variants (`WARNA_BY_SLUG` × `STOREFRONT_META.sizes`; pos-0 = default). `data/catalog.ts` reads real options+variants. `produk/[handle].astro` = real variant picker (per-option button groups) → resolves variant → live price + stock indicator (disables add on 0 stock); legacy sizes fallback. Cart variant-aware (keranjang/checkout show "Varian: {combo}"). Verified E2E: Dress Midi pick Sage/L → stock 32, cart "Varian: Sage / L", console-clean; storefront builds 29 pages; verify-rls green. **Variants now end-to-end: admin → storefront → cart.**
 
 ## 2026-07-08 — Session: Real product variants ✅
 - Admin variant editor is now real: up to 3 options (add/remove) → cartesian matrix with per-variant SKU/harga/stok; hydrates on edit. `lib/data/products.ts getProduct` returns options+variants; `lib/actions/products.ts` create/update **reconcile by option-combo key** (matched update-in-place keeping stock/history, new insert, removed delete only if not in `order_line_items`). Verified E2E→DB: 6 variants (Ukuran×Warna) + stock override persist; edit→9 variants, 6 originals matched (stock kept), zero dupes. Build+console clean.

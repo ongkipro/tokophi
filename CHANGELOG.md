@@ -4,6 +4,12 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-08
 
+### Storefront — variant picker + fashion variant seed (end-to-end variants)
+- **Seed**: all 14 Batik Nusantara (fashion niche) products now carry **real Warna × Ukuran variants** (`WARNA_BY_SLUG` × `STOREFRONT_META.sizes` → `product_options` + per-combo `product_variants` + inventory; position-0 = default so list/catalog/orders still read correctly).
+- **Catalog** (`data/catalog.ts`) now reads each product's real `options` + `variants` (price/stock per combo), not just the default variant / legacy `products.sizes`.
+- **Product page** (`produk/[handle].astro`) — legacy size buttons replaced with a **real variant picker**: one button group per option (Warna, Ukuran); selecting a combo resolves the variant and **live-updates price + a stock indicator** (Stok tersedia / Sisa N / Stok habis → disables add-to-cart). Falls back to legacy sizes for option-less products.
+- **Cart is variant-aware**: add-to-cart stores the chosen combo; keranjang + checkout show "Varian: {combo}". Verified E2E: pick Sage/L on Dress Midi → stock "tersedia (32)", cart shows "Varian: Sage / L", console-clean. Storefront builds (29 pages).
+
 ### Admin — Real product variants (the deferred core commerce feature)
 Schema already supported it (`product_options`, `product_variants` option1/2/3+sku+price, `inventory_levels`); the admin was the gap. Now fully wired:
 - **Editor** (`produk/[id]/product-editor.tsx`) — the "Varian" section is a real, **adaptive TikTok-Shop/Shopee-style builder**: **locked to 2 option types** (e.g. Warna + Ukuran, "+" add hidden at 2), custom names, **chip values** (type + Enter to add, ✕ to remove, Backspace pops last), an auto-regenerating **cartesian variant matrix** with per-variant **SKU / harga / stok**, and a **"Terapkan ke semua"** bulk price/stock apply. Edits **hydrate** from saved variants. (`MAX_OPTIONS = 2`; data/actions still support 3 via option1/2/3.)

@@ -27,6 +27,7 @@ export const COLLECTIONS: Collection[] = CATEGORY_ORDER
   .filter((c): c is (typeof colRows)[number] => Boolean(c))
   .map((c) => ({ handle: c.handle, name: c.title, emoji: c.emoji ?? "", blurb: c.description ?? "" }));
 
+export type VariantRow = { option1: string | null; option2: string | null; price: number; stock: number };
 export type Product = {
   handle: string;
   name: string;
@@ -39,11 +40,14 @@ export type Product = {
   sizes: string[];
   badge?: string;
   bestseller?: boolean;
+  options?: { name: string; values: string[] }[]; // real variant option types (e.g. Warna, Ukuran)
+  variants?: VariantRow[]; // one row per option combo (price + stock)
 };
 
 // products ⋈ default variant (price/compareAt) ⋈ primary media (image); non-archived, oldest→newest.
 const rows = await db
   .select({
+    id: schema.products.id,
     handle: schema.products.handle,
     name: schema.products.title,
     description: schema.products.description,
@@ -69,19 +73,62 @@ const rows = await db
   .where(and(eq(schema.products.storeId, STORE_ID), ne(schema.products.status, "archived")))
   .orderBy(asc(schema.products.createdAt));
 
-export const PRODUCTS: Product[] = rows.map((r) => ({
-  handle: r.handle,
-  name: r.name,
-  price: r.price,
-  compareAt: r.compareAt ?? undefined,
-  category: r.category ?? "",
-  categoryHandle: slugify(r.category ?? ""),
-  image: r.image ?? `/products/${r.handle}.webp`,
-  description: r.description ?? "",
-  sizes: (r.sizes as string[] | null) ?? [],
-  badge: r.badge ?? undefined,
-  bestseller: r.bestseller,
-}));
+// real variants: option types + a row per combo (price/stock), keyed by product id
+const optRows = await db
+  .select({ productId: schema.productOptions.productId, name: schema.productOptions.name })
+  .from(schema.productOptions)
+  .innerJoin(schema.products, eq(schema.products.id, schema.productOptions.productId))
+  .where(eq(schema.products.storeId, STORE_ID))
+  .orderBy(asc(schema.productOptions.position));
+const varRows = await db
+  .select({
+    productId: schema.productVariants.productId,
+    option1: schema.productVariants.option1,
+    option2: schema.productVariants.option2,
+    price: schema.productVariants.priceIdr,
+    stock: schema.inventoryLevels.available,
+  })
+  .from(schema.productVariants)
+  .innerJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
+  .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.productVariants.id))
+  .where(eq(schema.products.storeId, STORE_ID))
+  .orderBy(asc(schema.productVariants.position));
+
+const optNamesById = new Map<string, string[]>();
+for (const o of optRows) { const l = optNamesById.get(o.productId) ?? []; l.push(o.name); optNamesById.set(o.productId, l); }
+const variantsById = new Map<string, VariantRow[]>();
+for (const v of varRows) { const l = variantsById.get(v.productId) ?? []; l.push({ option1: v.option1, option2: v.option2, price: v.price, stock: v.stock ?? 0 }); variantsById.set(v.productId, l); }
+
+function optionsFor(id: string): { name: string; values: string[] }[] {
+  const names = optNamesById.get(id) ?? [];
+  const vlist = variantsById.get(id) ?? [];
+  return names.map((name, i) => {
+    const key = i === 0 ? "option1" : "option2";
+    const seen = new Set<string>(); const values: string[] = [];
+    for (const v of vlist) { const val = v[key as "option1" | "option2"]; if (val && !seen.has(val)) { seen.add(val); values.push(val); } }
+    return { name, values };
+  });
+}
+
+export const PRODUCTS: Product[] = rows.map((r) => {
+  const options = optionsFor(r.id);
+  const variants = variantsById.get(r.id) ?? [];
+  return {
+    handle: r.handle,
+    name: r.name,
+    price: r.price,
+    compareAt: r.compareAt ?? undefined,
+    category: r.category ?? "",
+    categoryHandle: slugify(r.category ?? ""),
+    image: r.image ?? `/products/${r.handle}.webp`,
+    description: r.description ?? "",
+    sizes: (r.sizes as string[] | null) ?? [],
+    badge: r.badge ?? undefined,
+    bestseller: r.bestseller,
+    options: options.length ? options : undefined,
+    variants: variants.length ? variants : undefined,
+  };
+});
 
 // ---- ratings (aggregate score + count, denormalized on products) ----
 export type Rating = { value: number; count: number };

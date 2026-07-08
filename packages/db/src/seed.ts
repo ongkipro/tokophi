@@ -144,6 +144,24 @@ const STOREFRONT_META: Record<string, { description: string; sizes: string[]; ba
   "jumpsuit-kulot": { description: "Jumpsuit kulot warna terracotta, satu set praktis yang tetap stylish. Nyaman untuk jalan seharian.", sizes: ["M", "L"], rating: [4.6, 66] },
 };
 
+// Warna per produk (fashion) — combined with STOREFRONT_META.sizes to make real Warna × Ukuran variants.
+const WARNA_BY_SLUG: Record<string, string[]> = {
+  "dress-midi-bunga": ["Rose", "Sage", "Dusty Blue"],
+  "blouse-katun": ["Putih", "Hitam", "Krem"],
+  "kemeja-oversized": ["Putih", "Biru Muda", "Mocca"],
+  "rok-plisket": ["Hitam", "Mocca"],
+  "celana-kulot": ["Hitam", "Navy", "Khaki"],
+  "hijab-voal": ["Dusty Pink", "Sage", "Mauve", "Navy"],
+  "khimar-instan": ["Hitam", "Abu", "Navy"],
+  "gamis-syari": ["Hitam", "Maroon", "Sage"],
+  "tunik-rayon": ["Mustard", "Olive"],
+  "cardigan-rajut": ["Oatmeal", "Abu", "Sage"],
+  "piyama-satin": ["Sage", "Dusty Pink"],
+  "blazer-wanita": ["Hitam", "Beige"],
+  "dress-batik": ["Coklat", "Biru"],
+  "jumpsuit-kulot": ["Terracotta", "Olive"],
+};
+
 // ---- customers (mirror admin mock: mulberry32(4242)) ----
 const CUST_POOL = [
   "Budi Santoso", "Siti Nurhaliza", "Dewi Lestari", "Agus Salim", "Rina Wijaya",
@@ -482,11 +500,31 @@ async function main() {
       bestseller: meta?.bestseller ?? false,
       ratingValue: meta?.rating[0] ?? null,
       ratingCount: meta?.rating[1] ?? 0,
-      hasVariants: false,
+      hasVariants: true,
       createdAt: new Date(c.addedTs),
     }).returning();
-    const [v] = await db.insert(schema.productVariants).values({ productId: p.id, storeId: store.id, title: "Default", priceIdr: c.price, compareAtIdr: meta?.compareAt ?? null, position: 0 }).returning();
-    await db.insert(schema.inventoryLevels).values({ variantId: v.id, locationId: loc.id, available: c.stock });
+    // real variants: Warna × Ukuran (Ukuran from STOREFRONT_META.sizes). Position 0 = default (list/catalog/orders use it).
+    const warna = WARNA_BY_SLUG[c.slug] ?? ["Default"];
+    const ukuran = meta?.sizes?.length ? meta.sizes : ["All Size"];
+    await db.insert(schema.productOptions).values([
+      { productId: p.id, name: "Warna", position: 0 },
+      { productId: p.id, name: "Ukuran", position: 1 },
+    ]);
+    const rndV = mulberry32(5000 + CATALOG.indexOf(c) * 13);
+    let vPos = 0;
+    let v: { id: string } | undefined;
+    for (const w of warna) {
+      for (const u of ukuran) {
+        const [nv] = await db.insert(schema.productVariants).values({
+          productId: p.id, storeId: store.id, title: `${w} / ${u}`, position: vPos,
+          option1: w, option2: u, priceIdr: c.price, compareAtIdr: meta?.compareAt ?? null,
+        }).returning();
+        if (vPos === 0) v = nv;
+        await db.insert(schema.inventoryLevels).values({ variantId: nv.id, locationId: loc.id, available: Math.round(3 + rndV() * 40) });
+        vPos++;
+      }
+    }
+    if (!v) throw new Error(`no variant seeded for ${c.slug}`);
     // 5-image gallery: base + -2..-5 (files exist in public/products/)
     await db.insert(schema.productMedia).values(
       [0, 1, 2, 3, 4].map((n) => ({
