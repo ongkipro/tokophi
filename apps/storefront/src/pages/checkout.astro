@@ -2,6 +2,10 @@
 import Layout from "../layouts/Layout.astro";
 import { STORE } from "../data/catalog";
 
+// Platform shipping proxy (admin) + this store's origin city — env-driven for per-client prod.
+const ONGKIR_API = import.meta.env.PUBLIC_ONGKIR_API || "http://localhost:3000/api/public/ongkir";
+const ORIGIN_CITY = STORE.city || "Yogyakarta";
+
 const PROVINCES = [
   "DKI Jakarta",
   "Jawa Barat",
@@ -14,12 +18,6 @@ const PROVINCES = [
   "Sumatera Barat",
   "Sulawesi Selatan",
   "Kalimantan Timur",
-];
-
-const SHIPPING = [
-  { id: "jne-reg", label: "JNE Reguler", eta: "2–3 hari", price: 15000 },
-  { id: "sicepat-best", label: "SiCepat BEST", eta: "1–2 hari", price: 22000 },
-  { id: "gosend-instant", label: "GoSend Instant", eta: "Hari ini", price: 30000 },
 ];
 
 const PAYMENTS = [
@@ -199,7 +197,7 @@ const PAYMENTS = [
   }
 </style>
 
-<script is:inline>
+<script is:inline define:vars={{ ONGKIR_API, ORIGIN_CITY }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -275,8 +273,7 @@ const PAYMENTS = [
     bindShipping();
 
     // ---- Live KiriminAja ongkir (via platform proxy on the admin) ----
-    var ONGKIR_API = "http://localhost:3000/api/public/ongkir"; // platform shipping endpoint (local admin)
-    var ORIGIN_CITY = "Yogyakarta"; // store origin (Batik Nusantara)
+    // ONGKIR_API + ORIGIN_CITY injected via define:vars (env-driven, per-store origin)
     var totalQty = cart.reduce(function (a, i) { return a + i.qty; }, 0) || 1;
     var destSearch = document.getElementById("dest-search");
     var destResults = document.getElementById("dest-results");
