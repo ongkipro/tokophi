@@ -56,9 +56,11 @@ export type KaSender = {
 export type KaPackage = {
   orderRef: string; // becomes `${KA_ORDER_PREFIX}-${orderRef}`
   destName: string; destPhone: string; destAddress: string;
-  destKecamatanId: number; destKelurahanId?: number | null;
+  destKecamatanId: number; destKelurahanId?: number | null; destZipcode?: string;
   weight: number; itemValue: number; itemName: string;
-  service: string; serviceType: string; shippingCost: number; cod?: number;
+  service: string; serviceType: string; shippingCost: number;
+  cod?: number; // COD amount to collect (0 = non-COD)
+  insuranceAmount?: number; // 0/undefined = no insurance
   qty?: number; width?: number; length?: number; height?: number; packageTypeId?: number;
 };
 export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: string): Promise<{
@@ -84,6 +86,8 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
       qty: pkg.qty ?? 1, item_value: pkg.itemValue, item_name: pkg.itemName,
       service: pkg.service, service_type: pkg.serviceType, shipping_cost: pkg.shippingCost,
       cod: pkg.cod ?? 0, package_type_id: pkg.packageTypeId ?? 7,
+      ...(pkg.insuranceAmount ? { insurance_amount: pkg.insuranceAmount } : {}),
+      ...(pkg.destZipcode ? { destination_zipcode: pkg.destZipcode } : {}),
     }],
   });
   const d = r.details?.[0];
@@ -94,6 +98,12 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
     pickupNumber: r.pickup_number,
     error: r.status ? undefined : r.text,
   };
+}
+
+// cancel/void an express shipment by AWB (= kj_order_id / resi we stored)
+export async function kaCancelShipment(awb: string, reason: string): Promise<{ ok: boolean; error?: string }> {
+  const r = await ka<{ status: boolean; text?: string }>("/api/mitra/v3/cancel_shipment", { awb, reason });
+  return { ok: !!r.status, error: r.status ? undefined : r.text };
 }
 
 // instant (same-day / on-demand) pricing — uses lat/long, not district ids. gosend/grab/borzo.

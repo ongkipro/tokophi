@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant } from "@/lib/tenant";
-import { kaShippingPrice, kaCreateOrder, kaTrack, kiriminajaConfigured } from "@/lib/kiriminaja";
+import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kiriminajaConfigured } from "@/lib/kiriminaja";
 import { resolveArea } from "@/lib/data/areas";
 
 export type Rate = { service: string; code: string; type: string; cost: number; etd: string; cod: boolean; group: string };
@@ -95,6 +95,7 @@ export async function saveSenderAddress(input: {
 // ---- Create a KiriminAja shipment for an order → saves AWB / resi on the order ----
 export async function createShipment(input: {
   orderNumber: string; service: string; serviceType: string; serviceName: string; cost: number;
+  insurance?: boolean; cod?: boolean;
 }): Promise<{ ok: boolean; awb?: string; error?: string }> {
   const { storeId } = await requireCapability("orders:write");
   if (!kiriminajaConfigured()) return { ok: false, error: "KiriminAja belum dikonfigurasi oleh platform." };
@@ -140,7 +141,9 @@ export async function createShipment(input: {
       destName: o.custName || "Penerima", destPhone: o.custPhone || "081200000000", destAddress: o.city || "-",
       destKecamatanId: dest[0].id,
       weight, itemValue: o.subtotal || o.total || 0, itemName: `Pesanan ${o.number}`,
-      service: input.service, serviceType: input.serviceType, shippingCost: input.cost, cod: 0,
+      service: input.service, serviceType: input.serviceType, shippingCost: input.cost,
+      cod: input.cod ? (o.total || o.subtotal || 0) : 0,
+      insuranceAmount: input.insurance ? (o.subtotal || o.total || 0) : 0,
     },
     schedule,
   );
@@ -158,6 +161,23 @@ export async function createShipment(input: {
   );
   revalidatePath(`/pesanan/${input.orderNumber}`);
   return { ok: true, awb: resi };
+}
+
+// ---- Cancel / void a shipment (AWB) → clears the shipment from the order ----
+export async function cancelShipment(orderNumber: string, reason = "Dibatalkan oleh penjual"): Promise<{ ok: boolean; error?: string }> {
+  const { storeId } = await requireCapability("orders:write");
+  const awb = await withTenant(storeId, async (db) => {
+    const [o] = await db.select({ awb: schema.orders.awb }).from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1);
+    return o?.awb ?? null;
+  });
+  if (!awb) return { ok: false, error: "Pesanan ini belum punya pengiriman." };
+  const r = await kaCancelShipment(awb, reason);
+  if (!r.ok) return { ok: false, error: r.error ?? "Gagal membatalkan pengiriman." };
+  await withTenant(storeId, (db) =>
+    db.update(schema.orders).set({ awb: null, courier: null, kaOrderId: null }).where(eq(schema.orders.number, orderNumber)),
+  );
+  revalidatePath(`/pesanan/${orderNumber}`);
+  return { ok: true };
 }
 
 // ---- Track a shipment (polling) → returns status/history; syncs the real courier AWB when it appears ----

@@ -20,7 +20,7 @@ import {
 
 import { toast } from "sonner";
 import { setOrderStatus } from "@/lib/actions/orders";
-import { getShippingRates, createShipment, trackShipment, type Rate } from "@/lib/actions/shipping";
+import { getShippingRates, createShipment, trackShipment, cancelShipment, type Rate } from "@/lib/actions/shipping";
 import { createOrderPayment } from "@/lib/actions/payments";
 import type { OrderPayment } from "@/lib/data/payments";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -179,12 +179,15 @@ export function OrderDetail({ order, payment }: { order: Order; payment: OrderPa
 
   // Create a real KiriminAja shipment from a chosen rate → saves AWB on the order.
   const [makingRate, setMakingRate] = React.useState<string | null>(null);
+  const [insureShipment, setInsureShipment] = React.useState(false);
+  const [codShipment, setCodShipment] = React.useState(false);
   const makeShipment = (rate: Rate) => {
     setMakingRate(rate.code + rate.type);
     startRate(async () => {
       const r = await createShipment({
         orderNumber: order.id.replace("#", ""),
         service: rate.code, serviceType: rate.type, serviceName: rate.service, cost: rate.cost,
+        insurance: insureShipment, cod: codShipment,
       });
       setMakingRate(null);
       if (r.ok) {
@@ -194,6 +197,19 @@ export function OrderDetail({ order, payment }: { order: Order; payment: OrderPa
       } else {
         toast.error(r.error ?? "Gagal membuat pengiriman");
       }
+    });
+  };
+
+  // cancel / void the shipment
+  const [cancelling, setCancelling] = React.useState(false);
+  const cancelNow = () => {
+    if (!confirm("Batalkan pengiriman (void resi) untuk pesanan ini?")) return;
+    setCancelling(true);
+    startRate(async () => {
+      const r = await cancelShipment(order.id.replace("#", ""));
+      setCancelling(false);
+      if (r.ok) { toast.success("Pengiriman dibatalkan."); router.refresh(); }
+      else toast.error(r.error ?? "Gagal membatalkan pengiriman");
     });
   };
 
@@ -489,9 +505,14 @@ export function OrderDetail({ order, payment }: { order: Order; payment: OrderPa
                     <Truck className="size-4" /> Pengiriman terdaftar
                   </span>
                   {canWrite && (
-                    <Button size="sm" variant="outline" disabled={tracking} onClick={trackNow}>
-                      {tracking ? "Melacak…" : "Lacak"}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" disabled={tracking} onClick={trackNow}>
+                        {tracking ? "Melacak…" : "Lacak"}
+                      </Button>
+                      <Button size="sm" variant="outline" disabled={cancelling} onClick={cancelNow} className="text-red-600 hover:text-red-600">
+                        {cancelling ? "…" : "Batalkan"}
+                      </Button>
+                    </div>
                   )}
                 </div>
               )}
@@ -574,6 +595,16 @@ export function OrderDetail({ order, payment }: { order: Order; payment: OrderPa
           <p className="text-xs text-muted-foreground">
             {rateMeta.origin?.split(",")[0]} → {rateMeta.destination?.split(",")[0]} · ongkir real-time
           </p>
+          {canWrite && !shipped && (
+            <div className="mt-1 flex items-center gap-4 text-sm">
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" checked={insureShipment} onChange={(e) => setInsureShipment(e.target.checked)} className="size-4 accent-primary" /> Asuransi
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" checked={codShipment} onChange={(e) => setCodShipment(e.target.checked)} className="size-4 accent-primary" /> COD (tagih {IDR(total)})
+              </label>
+            </div>
+          )}
           <div className="mt-2 max-h-[60vh] overflow-y-auto rounded-lg border">
             <table className="w-full text-sm">
               <thead>
@@ -592,7 +623,7 @@ export function OrderDetail({ order, payment }: { order: Order; payment: OrderPa
                     <td className="px-3 py-2 text-right tabular-nums font-medium">{IDR(r.cost)}</td>
                     {canWrite && !shipped && (
                       <td className="px-2 py-2 text-right">
-                        <Button size="sm" variant="outline" disabled={ratePending} onClick={() => makeShipment(r)}>
+                        <Button size="sm" variant="outline" disabled={ratePending || (codShipment && !r.cod)} title={codShipment && !r.cod ? "Layanan ini tidak mendukung COD" : ""} onClick={() => makeShipment(r)}>
                           {makingRate === r.code + r.type ? "Membuat…" : "Buat"}
                         </Button>
                       </td>
