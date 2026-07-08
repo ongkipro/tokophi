@@ -26,12 +26,16 @@ export function DashboardClient({
   orders,
   activities,
   onlineNow,
+  storeName,
+  ownerName,
 }: {
   days: DayPoint[];
   products: Product[];
   orders: Order[];
   activities: Activity[];
   onlineNow: number;
+  storeName?: string;
+  ownerName?: string;
 }) {
   const [range, setRange] = useState<RangeKey>("30d");
   const s = getSummary(days, range);
@@ -57,7 +61,7 @@ export function DashboardClient({
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Halo Ongki 👋 — ringkasan performa <span className="font-medium text-foreground">Batik Nusantara</span>, {rangeLabel(range).toLowerCase()}.
+            Halo {ownerName?.split(" ")[0] ?? "Ongki"} 👋 — ringkasan performa <span className="font-medium text-foreground">{storeName ?? "toko Anda"}</span>, {rangeLabel(range).toLowerCase()}.
           </p>
         </div>
         <div className="flex items-center gap-2">

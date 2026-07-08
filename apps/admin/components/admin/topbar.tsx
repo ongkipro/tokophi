@@ -34,8 +34,9 @@ function ThemeToggle() {
   );
 }
 
-export function Topbar({ user }: { user?: { name: string; email: string; role?: string } }) {
-  const [store, setStore] = useState(STORES[0]);
+export function Topbar({ user, storeName }: { user?: { name: string; email: string; role?: string }; storeName?: string }) {
+  // Current store reflects the session (so an impersonated store shows its own name, not a hardcode).
+  const [store, setStore] = useState(storeName ? { id: "current", name: storeName, plan: STORES[0]?.plan ?? "Bisnis" } : STORES[0]);
   const name = user?.name || "Ongki Pratama";
   const email = user?.email || "owner@tokophi.id";
   const roleLabel = user?.role ? ROLE_LABEL[user.role as Role] ?? user.role : null;
