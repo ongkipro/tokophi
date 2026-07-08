@@ -20,6 +20,8 @@ import {
 
 import { toast } from "sonner";
 import { setOrderStatus } from "@/lib/actions/orders";
+import { getShippingRates, type Rate } from "@/lib/actions/shipping";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCan } from "@/components/admin/permissions";
 import { OrderStatusBadge } from "@/components/admin/order-status";
 import { ProductThumb } from "@/components/admin/product-thumb";
@@ -150,6 +152,25 @@ export function OrderDetail({ order }: { order: Order }) {
     });
   };
 
+  // live shipping rates from KiriminAja (platform-managed aggregator)
+  const [rateOpen, setRateOpen] = React.useState(false);
+  const [ratePending, startRate] = React.useTransition();
+  const [rates, setRates] = React.useState<Rate[]>([]);
+  const [rateMeta, setRateMeta] = React.useState<{ origin?: string; destination?: string }>({});
+  const checkOngkir = () => {
+    startRate(async () => {
+      const weightGrams = (lines.reduce((a, l) => a + l.qty, 0) || 2) * 500;
+      const r = await getShippingRates({ destinationCity: order.city, weightGrams, itemValue: subtotal });
+      if (r.ok) {
+        setRates(r.rates);
+        setRateMeta({ origin: r.origin, destination: r.destination });
+        setRateOpen(true);
+      } else {
+        toast.error(r.error ?? "Gagal cek ongkir");
+      }
+    });
+  };
+
   return (
     <div className="mx-auto max-w-[1100px]">
       {/* Top bar */}
@@ -178,6 +199,9 @@ export function OrderDetail({ order }: { order: Order }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={checkOngkir} disabled={ratePending}>
+            <Truck className="size-4" /> {ratePending ? "Cek ongkir…" : "Cek Ongkir"}
+          </Button>
           <Button variant="ghost" onClick={() => toast.success("Menyiapkan dokumen cetak…")}>
             <Printer /> Cetak
           </Button>
@@ -407,6 +431,42 @@ export function OrderDetail({ order }: { order: Order }) {
           </Card>
         </div>
       </div>
+
+      {/* Cek Ongkir (KiriminAja live rates) */}
+      <Dialog open={rateOpen} onOpenChange={setRateOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Ongkir — {rateMeta.destination?.split(",")[0] ?? order.city}</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            {rateMeta.origin?.split(",")[0]} → {rateMeta.destination?.split(",")[0]} · via KiriminAja
+          </p>
+          <div className="mt-2 max-h-[60vh] overflow-y-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs text-muted-foreground">
+                  <th className="px-3 py-2 font-medium">Layanan</th>
+                  <th className="px-3 py-2 font-medium">Estimasi</th>
+                  <th className="px-3 py-2 text-right font-medium">Ongkir</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rates.map((r, i) => (
+                  <tr key={r.service + i} className="border-b last:border-0">
+                    <td className="px-3 py-2 font-medium">{r.service}{r.cod && <span className="ml-1.5 rounded bg-emerald-500/12 px-1 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">COD</span>}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{r.etd} hari</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-medium">{IDR(r.cost)}</td>
+                  </tr>
+                ))}
+                {rates.length === 0 && (
+                  <tr><td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">Tidak ada layanan untuk rute ini.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">{rates.length} layanan · tarif real-time dari KiriminAja (sandbox).</p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

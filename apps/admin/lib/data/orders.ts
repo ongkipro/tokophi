@@ -1,7 +1,7 @@
 import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 import type { Order } from "@/lib/mock/store";
 
 const TODAY = new Date("2026-07-02T00:00:00Z");
@@ -20,13 +20,14 @@ const sel = {
   items: sql<number>`count(${schema.orderLineItems.id})`.mapWith(Number),
 };
 
-function q(db: Tx) {
-  return db
+// `where` is applied BEFORE groupBy (chaining .where() after .groupBy() lands as HAVING → 0 rows).
+function q(db: Tx, where?: SQL) {
+  const base = db
     .select(sel)
     .from(schema.orders)
     .leftJoin(schema.customers, eq(schema.customers.id, schema.orders.customerId))
-    .leftJoin(schema.orderLineItems, eq(schema.orderLineItems.orderId, schema.orders.id))
-    .groupBy(schema.orders.id, schema.customers.name);
+    .leftJoin(schema.orderLineItems, eq(schema.orderLineItems.orderId, schema.orders.id));
+  return (where ? base.where(where) : base).groupBy(schema.orders.id, schema.customers.name);
 }
 
 function toOrder(r: {
@@ -54,7 +55,7 @@ export async function getOrders(): Promise<Order[]> {
 
 export async function getOrder(number: string): Promise<Order | null> {
   return withCurrentTenant(async (db) => {
-    const rows = await q(db).where(eq(schema.orders.number, number)).limit(1);
+    const rows = await q(db, eq(schema.orders.number, number)).limit(1);
     return rows[0] ? toOrder(rows[0]) : null;
   });
 }
