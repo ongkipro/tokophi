@@ -4,6 +4,9 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-08
 
+### Shipping — real AWB creation working (Buat Pengiriman end-to-end)
+- With a registered `KIRIMINAJA_ORDER_PREFIX` (gitignored), **Buat Pengiriman now creates a real KiriminAja pickup**. `request_pickup` package required a few more fields (found by iterating the sandbox validation): `item_name`, `shipping_cost` (= chosen rate cost), `cod`, `package_type_id`. The returned `kj_order_id`/resi is saved to `orders.awb`/`courier`; the order detail + printed label show the real resi/courier. Verified E2E: INV-4821 → "resi 5758-INV4821" persisted.
+
 ### Storefront — checkout with live KiriminAja ongkir
 - New **public no-auth endpoint** `apps/admin/app/api/public/ongkir` (CORS) — `op=search` (area autocomplete) + `op=rates` (live `shipping_price`); the platform key stays server-side (never in the storefront bundle). `middleware.ts` excludes `/api/public/`.
 - **Checkout** (`checkout.astro`): a **"Kecamatan Tujuan"** autocomplete → live courier list from KiriminAja → selecting a service updates **ongkir + total**; replaces the old static shipping radios. Verified E2E: Semarang Barat → 18 live services → Rp27rb ongkir, total recomputed.
