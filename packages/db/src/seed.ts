@@ -499,6 +499,10 @@ async function main() {
       sizes: meta?.sizes ?? null,
       badge: meta?.badge ?? null,
       bestseller: meta?.bestseller ?? false,
+      // shipping dims (cm) — folded apparel; hijab/accessory flatter
+      lengthCm: 30,
+      widthCm: 25,
+      heightCm: c.category === "Busana Muslim" ? 3 : 5,
       ratingValue: meta?.rating[0] ?? null,
       ratingCount: meta?.rating[1] ?? 0,
       hasVariants: true,

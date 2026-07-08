@@ -80,6 +80,7 @@ export function hourlyFor(day: DayPoint) {
 export type Product = {
   id: string;
   name: string;
+  handle?: string;
   emoji: string;
   image: string; // /products/<slug>.webp
   price: number;
@@ -92,6 +93,10 @@ export type Product = {
   hasVariants?: boolean;
   options?: { name: string; values: string[] }[]; // option definitions in order (editor)
   variants?: { option1: string | null; option2: string | null; option3: string | null; sku: string | null; price: number; stock: number }[];
+  weightGrams?: number | null; // shipping weight (default variant)
+  lengthCm?: number | null;
+  widthCm?: number | null;
+  heightCm?: number | null;
 };
 // Fashion niche (women's clothing). image = /products/<slug>.webp (AI-generated catalog photos).
 const PRODUCT_SEED: Array<[string, string, number, string, string]> = [

@@ -27,6 +27,9 @@ export type ProductInput = {
   cost?: number | null;
   sku?: string;
   weightGrams?: number | null;
+  lengthCm?: number | null;
+  widthCm?: number | null;
+  heightCm?: number | null;
   stock: number;
   // real variants: option definitions (names + values) + one row per option-combo.
   // When empty/absent, the product has a single implicit "Default" variant (base price/stock).
@@ -46,6 +49,9 @@ const productFields = (i: ProductInput) => ({
   category: i.category || null,
   productType: i.productType || null,
   vendor: i.vendor || null,
+  lengthCm: i.lengthCm ?? null,
+  widthCm: i.widthCm ?? null,
+  heightCm: i.heightCm ?? null,
 });
 // The rows to persist: either the real variant matrix, or a single implicit "Default".
 const variantRowsOf = (input: ProductInput): VariantInput[] =>

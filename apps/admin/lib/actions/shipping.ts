@@ -104,17 +104,28 @@ export async function createShipment(input: {
     const [s] = await db.select().from(schema.storeSettings).where(eq(schema.storeSettings.storeId, storeId)).limit(1);
     const [o] = await db
       .select({
+        id: schema.orders.id,
         number: schema.orders.number, city: schema.orders.city, awb: schema.orders.awb,
         subtotal: schema.orders.subtotalIdr, total: schema.orders.totalIdr,
         custName: schema.customers.name, custPhone: schema.customers.phone,
-        items: schema.orderLineItems.id,
       })
       .from(schema.orders)
       .leftJoin(schema.customers, eq(schema.customers.id, schema.orders.customerId))
-      .leftJoin(schema.orderLineItems, eq(schema.orderLineItems.orderId, schema.orders.id))
       .where(eq(schema.orders.number, input.orderNumber))
       .limit(1);
-    return { s, o };
+    // real package weight (sum of variant weight × qty) + dimensions (max per axis across items)
+    const pkgRows = o
+      ? await db
+          .select({
+            weight: schema.productVariants.weightGrams, qty: schema.orderLineItems.qty,
+            l: schema.products.lengthCm, w: schema.products.widthCm, h: schema.products.heightCm,
+          })
+          .from(schema.orderLineItems)
+          .leftJoin(schema.productVariants, eq(schema.productVariants.id, schema.orderLineItems.variantId))
+          .leftJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
+          .where(eq(schema.orderLineItems.orderId, o.id))
+      : [];
+    return { s, o, pkgRows };
   });
 
   const s = data.s;
@@ -129,7 +140,13 @@ export async function createShipment(input: {
   const now = new Date(Date.now() + 24 * 60 * 60 * 1000); // pickup ~tomorrow
   const pad = (n: number) => String(n).padStart(2, "0");
   const schedule = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} 15:00:00`;
-  const weight = Math.max(1000, 1000); // ≥1kg (line qty unknown here; default 1kg)
+  // real package weight (Σ variant weight × qty, ≥1kg) + dimensions (max per axis across items)
+  const pkgRows = data.pkgRows;
+  const actualWeight = pkgRows.reduce((a, r) => a + (r.weight ?? 0) * (r.qty ?? 1), 0);
+  const weight = Math.max(1000, actualWeight);
+  const length = Math.max(0, ...pkgRows.map((r) => r.l ?? 0)) || undefined;
+  const width = Math.max(0, ...pkgRows.map((r) => r.w ?? 0)) || undefined;
+  const height = Math.max(0, ...pkgRows.map((r) => r.h ?? 0)) || undefined;
 
   const r = await kaCreateOrder(
     {
@@ -140,7 +157,7 @@ export async function createShipment(input: {
       orderRef: input.orderNumber.replace(/[^A-Za-z0-9]/g, ""),
       destName: o.custName || "Penerima", destPhone: o.custPhone || "081200000000", destAddress: o.city || "-",
       destKecamatanId: dest[0].id,
-      weight, itemValue: o.subtotal || o.total || 0, itemName: `Pesanan ${o.number}`,
+      weight, width, length, height, itemValue: o.subtotal || o.total || 0, itemName: `Pesanan ${o.number}`,
       service: input.service, serviceType: input.serviceType, shippingCost: input.cost,
       cod: input.cod ? (o.total || o.subtotal || 0) : 0,
       insuranceAmount: input.insurance ? (o.subtotal || o.total || 0) : 0,

@@ -148,7 +148,10 @@ export function ProductEditor({ product }: { product?: Product }) {
   });
 
   const [physical, setPhysical] = React.useState(true);
-  const [weight, setWeight] = React.useState("500");
+  const [weight, setWeight] = React.useState(product?.weightGrams ? String(product.weightGrams) : "500");
+  const [lengthCm, setLengthCm] = React.useState(product?.lengthCm ? String(product.lengthCm) : "");
+  const [widthCm, setWidthCm] = React.useState(product?.widthCm ? String(product.widthCm) : "");
+  const [heightCm, setHeightCm] = React.useState(product?.heightCm ? String(product.heightCm) : "");
 
   const [status, setStatus] = React.useState<Product["status"]>(
     product?.status ?? "draft"
@@ -164,7 +167,7 @@ export function ProductEditor({ product }: { product?: Product }) {
   const [seoTitle, setSeoTitle] = React.useState("");
   const [metaDesc, setMetaDesc] = React.useState("");
   const [handle, setHandle] = React.useState(
-    product ? slugify(product.name) : ""
+    product ? (product.handle ?? slugify(product.name)) : ""
   );
   const [handleEdited, setHandleEdited] = React.useState(false);
 
@@ -210,6 +213,9 @@ export function ProductEditor({ product }: { product?: Product }) {
       cost: cost ? Number(cost) : null,
       sku: sku || undefined,
       weightGrams: physical && weight ? Number(weight) : null,
+      lengthCm: physical && lengthCm ? Number(lengthCm) : null,
+      widthCm: physical && widthCm ? Number(widthCm) : null,
+      heightCm: physical && heightCm ? Number(heightCm) : null,
       stock: Number(qty) || 0,
       options: useVar ? parsedOptions.map((o) => ({ name: o.name, values: o.values })) : undefined,
       variants: useVar
@@ -846,16 +852,41 @@ export function ProductEditor({ product }: { product?: Product }) {
                 />
               </div>
               {physical && (
-                <div className="grid gap-2 sm:max-w-[50%]">
-                  <Label htmlFor="p-berat">Berat (gram)</Label>
-                  <Input
-                    id="p-berat"
-                    inputMode="numeric"
-                    value={weight}
-                    onChange={(e) => setWeight(e.target.value)}
-                    placeholder="0"
-                    className="tabular-nums"
-                  />
+                <div className="space-y-4">
+                  {/* Berat — prioritas untuk ongkir */}
+                  <div className="grid gap-2 sm:max-w-[50%]">
+                    <Label htmlFor="p-berat">Berat (gram) <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="p-berat"
+                      inputMode="numeric"
+                      value={weight}
+                      onChange={(e) => setWeight(e.target.value)}
+                      placeholder="mis. 250"
+                      className="tabular-nums"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Berat aktual barang, dipakai menghitung ongkir. Contoh: kaos ±250 g · dress ±400 g · jaket ±700 g · sepatu ±800 g.
+                    </p>
+                  </div>
+
+                  {/* Dimensi — untuk berat volumetrik */}
+                  <div className="grid gap-2">
+                    <Label>Dimensi paket (cm)</Label>
+                    <div className="grid grid-cols-3 gap-2 sm:max-w-md">
+                      <div className="relative">
+                        <Input id="p-panjang" inputMode="numeric" value={lengthCm} onChange={(e) => setLengthCm(e.target.value)} placeholder="Panjang" className="tabular-nums" />
+                      </div>
+                      <div className="relative">
+                        <Input id="p-lebar" inputMode="numeric" value={widthCm} onChange={(e) => setWidthCm(e.target.value)} placeholder="Lebar" className="tabular-nums" />
+                      </div>
+                      <div className="relative">
+                        <Input id="p-tinggi" inputMode="numeric" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} placeholder="Tinggi" className="tabular-nums" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Panjang × Lebar × Tinggi. Dipakai untuk <b>berat volumetrik</b> (P×L×T ÷ 6.000 = kg). Kurir memakai yang <b>lebih besar</b> antara berat aktual & volumetrik. Contoh: dress terlipat 30 × 25 × 5 cm · sepatu 33 × 22 × 12 cm.
+                    </p>
+                  </div>
                 </div>
               )}
             </CardContent>

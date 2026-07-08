@@ -127,6 +127,13 @@
       "when": 1783528566486,
       "tag": "0017_charming_korg",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783530299913,
+      "tag": "0018_worthless_korath",
+      "breakpoints": true
     }
   ]
 }

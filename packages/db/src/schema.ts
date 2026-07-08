@@ -140,6 +140,10 @@ export const products = pgTable(
     ratingValue: real(), // aggregate review score (storefront)
     ratingCount: integer().notNull().default(0),
     hasVariants: boolean().notNull().default(false),
+    // shipping dimensions (cm) for volumetric weight (w×l×h÷6); weight (g) lives on the variant
+    lengthCm: integer(),
+    widthCm: integer(),
+    heightCm: integer(),
     archivedAt: ts(),
     createdAt: createdAt(),
   },

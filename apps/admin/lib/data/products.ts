@@ -9,6 +9,7 @@ import type { Product } from "@/lib/mock/store";
 const selectProduct = {
   id: schema.products.id,
   name: schema.products.title,
+  handle: schema.products.handle,
   emoji: schema.products.emoji,
   status: schema.products.status,
   category: schema.products.category,
@@ -29,12 +30,13 @@ function base(db: Tx) {
 }
 
 function toProduct(r: {
-  id: string; name: string; emoji: string | null; status: "active" | "draft" | "archived";
+  id: string; name: string; handle: string; emoji: string | null; status: "active" | "draft" | "archived";
   category: string | null; unitsSold: number; createdAt: Date; price: number | null; stock: number | null; image: string | null;
 }): Product {
   return {
     id: r.id,
     name: r.name,
+    handle: r.handle,
     emoji: r.emoji ?? "📦",
     image: r.image ?? `/products/${r.name}.webp`,
     price: r.price ?? 0,
@@ -53,6 +55,7 @@ export async function getProducts(): Promise<Product[]> {
       .select({
         id: schema.products.id,
         name: schema.products.title,
+        handle: schema.products.handle,
         emoji: schema.products.emoji,
         status: schema.products.status,
         category: schema.products.category,
@@ -84,7 +87,12 @@ export async function getProduct(id: string): Promise<Product | null> {
       .orderBy(schema.productMedia.position);
 
     const [prod] = await db
-      .select({ hasVariants: schema.products.hasVariants })
+      .select({
+        hasVariants: schema.products.hasVariants,
+        lengthCm: schema.products.lengthCm,
+        widthCm: schema.products.widthCm,
+        heightCm: schema.products.heightCm,
+      })
       .from(schema.products)
       .where(eq(schema.products.id, id))
       .limit(1);
@@ -103,6 +111,7 @@ export async function getProduct(id: string): Promise<Product | null> {
         sku: schema.productVariants.sku,
         price: schema.productVariants.priceIdr,
         position: schema.productVariants.position,
+        weightGrams: schema.productVariants.weightGrams,
         stock: schema.inventoryLevels.available,
       })
       .from(schema.productVariants)
@@ -123,6 +132,13 @@ export async function getProduct(id: string): Promise<Product | null> {
       return { name: o.name, values };
     });
 
-    return { ...toProduct(rows[0]), media, hasVariants: prod?.hasVariants ?? false, options, variants };
+    const defaultVariant = variantRows.slice().sort((a, b) => a.position - b.position)[0];
+    return {
+      ...toProduct(rows[0]), media, hasVariants: prod?.hasVariants ?? false, options, variants,
+      weightGrams: defaultVariant?.weightGrams ?? null,
+      lengthCm: prod?.lengthCm ?? null,
+      widthCm: prod?.widthCm ?? null,
+      heightCm: prod?.heightCm ?? null,
+    };
   });
 }
