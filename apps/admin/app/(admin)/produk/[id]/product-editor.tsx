@@ -93,7 +93,7 @@ const DESC_TEMPLATE = (name: string) =>
 
 // ---- variants ----
 type OptionDef = { name: string; values: string }; // values = comma-separated string (editable)
-const MAX_OPTIONS = 3;
+const MAX_OPTIONS = 2; // locked to 2 variant types (e.g. Warna + Ukuran) — Shopify-style, curated
 // Cartesian product of each option's parsed values → every variant combo.
 function cartesian(valueLists: string[][]): string[][] {
   return valueLists.reduce<string[][]>((acc, vals) => acc.flatMap((combo) => vals.map((v) => [...combo, v])), [[]]);

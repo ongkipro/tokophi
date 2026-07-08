@@ -6,7 +6,7 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ### Admin — Real product variants (the deferred core commerce feature)
 Schema already supported it (`product_options`, `product_variants` option1/2/3+sku+price, `inventory_levels`); the admin was the gap. Now fully wired:
-- **Editor** (`produk/[id]/product-editor.tsx`) — the "Varian" section is a real builder: up to **3 options** (name + comma-values, add/remove) → a generated **cartesian variant matrix** with per-variant **SKU / harga / stok** bound to state; edits **hydrate** from the saved variants.
+- **Editor** (`produk/[id]/product-editor.tsx`) — the "Varian" section is a real builder: **locked to 2 option types** (Shopify-style, e.g. Warna + Ukuran) with a "+" add (hidden at 2), custom names + comma-values → a generated **cartesian variant matrix** with per-variant **SKU / harga / stok** bound to state; edits **hydrate** from the saved variants. (`MAX_OPTIONS = 2`; data/actions still support up to 3 via option1/2/3.)
 - **Data** (`lib/data/products.ts`) — `getProduct` returns `options[]` + `variants[]` (+ `hasVariants`); `Product` type extended.
 - **Actions** (`lib/actions/products.ts`) — `ProductInput` gains `options`/`variants`; create inserts options + one variant per combo (+ inventory); **update reconciles by option-combo key** — matched variants update in place (keep stock/history), new combos insert, removed combos delete **only if not referenced by `order_line_items`** (else preserved).
 - Verified E2E (Playwright → DB): create Ukuran×Warna → 6 variants + per-variant stock override persists; edit hydrates 6 rows; adding "Hijau" → 9 variants with the 6 originals matched (stock kept), **zero duplicates**. Build + console clean.
