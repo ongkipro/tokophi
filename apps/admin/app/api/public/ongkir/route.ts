@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { kaAddressByName, kaShippingPrice, kiriminajaConfigured } from "@/lib/kiriminaja";
+import { kaShippingPrice, kiriminajaConfigured } from "@/lib/kiriminaja";
+import { resolveArea } from "@/lib/data/areas";
 
 // Public (no-auth) storefront-facing shipping endpoint. The storefront checkout calls this to
 // (a) search a destination area and (b) get live KiriminAja rates. Shipping is platform-managed
@@ -30,14 +31,14 @@ export async function POST(req: Request) {
 
   // area autocomplete
   if (body.op === "search") {
-    const results = body.q ? await kaAddressByName(body.q) : [];
+    const results = body.q ? await resolveArea(body.q) : [];
     return NextResponse.json({ ok: true, results }, { headers: CORS });
   }
 
   // rates
   if (body.op === "rates") {
     if (!body.destinationId) return NextResponse.json({ ok: false, error: "Tujuan belum dipilih." }, { headers: CORS });
-    const originOpts = await kaAddressByName(body.originCity || "Yogyakarta");
+    const originOpts = await resolveArea(body.originCity || "Yogyakarta", 1);
     const origin = originOpts[0]?.id;
     if (!origin) return NextResponse.json({ ok: false, error: "Area asal tidak ditemukan." }, { headers: CORS });
     const r = await kaShippingPrice({

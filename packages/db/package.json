@@ -15,6 +15,7 @@
     "studio": "dotenv -e ../../.env -- drizzle-kit studio",
     "reset": "dotenv -e ../../.env -- tsx src/reset.ts",
     "seed": "dotenv -e ../../.env -- tsx src/seed.ts",
+    "seed:areas": "dotenv -e ../../.env -- tsx src/seed-areas.ts",
     "verify-rls": "dotenv -e ../../.env -- tsx src/verify-rls.ts",
     "verify-rls-app": "dotenv -e ../../.env -- tsx src/verify-rls-app.ts"
   },

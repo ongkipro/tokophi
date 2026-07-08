@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant } from "@/lib/tenant";
-import { kaAddressByName, kaShippingPrice, kaCreateOrder, kaTrack, kiriminajaConfigured } from "@/lib/kiriminaja";
+import { kaShippingPrice, kaCreateOrder, kaTrack, kiriminajaConfigured } from "@/lib/kiriminaja";
+import { resolveArea } from "@/lib/data/areas";
 
 export type Rate = { service: string; code: string; type: string; cost: number; etd: string; cod: boolean; group: string };
 
@@ -26,8 +27,8 @@ export async function getShippingRates(input: {
   });
 
   const [originOpts, destOpts] = await Promise.all([
-    kaAddressByName(storeCity),
-    kaAddressByName(input.destinationCity || storeCity),
+    resolveArea(storeCity),
+    resolveArea(input.destinationCity || storeCity),
   ]);
   const origin = originOpts[0]?.id;
   const destination = destOpts[0]?.id;
@@ -48,7 +49,7 @@ export async function getShippingRates(input: {
 export async function searchArea(q: string): Promise<{ id: number; text: string }[]> {
   if (!(await getSession())) return [];
   if (!q.trim()) return [];
-  return kaAddressByName(q.trim());
+  return resolveArea(q.trim());
 }
 
 export type SenderAddress = {
@@ -121,7 +122,7 @@ export async function createShipment(input: {
   if (o.awb) return { ok: false, error: `Pesanan sudah punya resi (${o.awb}).` };
   if (!s?.senderKecamatanId) return { ok: false, error: "Alamat pengirim belum diatur — Pengaturan → Pengiriman." };
 
-  const dest = await kaAddressByName(o.city ?? "");
+  const dest = await resolveArea(o.city ?? "");
   if (!dest[0]) return { ok: false, error: `Area tujuan "${o.city}" tidak ditemukan di KiriminAja.` };
 
   const now = new Date(Date.now() + 24 * 60 * 60 * 1000); // pickup ~tomorrow

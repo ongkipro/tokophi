@@ -595,6 +595,18 @@ export const platformPaymentGateways = pgTable("platform_payment_gateways", {
   isCod: boolean().notNull().default(false),
 });
 
+// Platform reference: KiriminAja district (kecamatan) map — `id` = KiriminAja area id used by
+// shipping_price / request_pickup. Lets us resolve area names → id locally (no API rate limit).
+export const kiriminajaAreas = pgTable("kiriminaja_areas", {
+  id: integer().primaryKey(),
+  districtName: text().notNull(),
+  cityId: integer(),
+  cityType: text(),
+  cityName: text().notNull(),
+  provinceId: integer(),
+  provinceName: text().notNull(),
+});
+
 export const shippingAggregator = pgTable("shipping_aggregator", {
   id: pk(),
   provider: aggregatorProvider().notNull(),

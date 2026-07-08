@@ -451,9 +451,10 @@ const AD_PROVINCES: Array<{ province: string; spend: number; impressions: number
 ];
 
 async function truncateAll() {
+  // kiriminaja_areas is static reference data (7k districts) — never wiped by demo reseeds.
   const rows = await client<{ table_name: string }[]>`
     select table_name from information_schema.tables
-    where table_schema = 'public' and table_name <> '__drizzle_migrations'`;
+    where table_schema = 'public' and table_name not in ('__drizzle_migrations', 'kiriminaja_areas')`;
   const list = rows.map((r) => `"${r.table_name}"`).join(", ");
   if (list) await client.unsafe(`truncate ${list} restart identity cascade`);
 }
