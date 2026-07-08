@@ -1,6 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Menu, Search, Bell, Sun, Moon, ChevronDown, Check, ExternalLink, LogOut, User, CreditCard } from "lucide-react";
+import type { SearchItem } from "@/lib/data/search";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -34,7 +36,72 @@ function ThemeToggle() {
   );
 }
 
-export function Topbar({ user, storeName }: { user?: { name: string; email: string; role?: string }; storeName?: string }) {
+const TYPE_LABEL: Record<SearchItem["type"], string> = { produk: "Produk", pesanan: "Pesanan", pelanggan: "Pelanggan" };
+
+function GlobalSearch({ index }: { index: SearchItem[] }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  const results = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return [] as SearchItem[];
+    return index.filter((i) => i.label.toLowerCase().includes(s) || i.sub.toLowerCase().includes(s)).slice(0, 8);
+  }, [q, index]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); inputRef.current?.focus(); setOpen(true); }
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onClick = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onClick);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("mousedown", onClick); };
+  }, []);
+
+  return (
+    <div ref={boxRef} className="relative ml-1 hidden max-w-sm flex-1 md:block">
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        ref={inputRef}
+        value={q}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder="Cari pesanan, produk, pelanggan…  ⌘K"
+        className="pl-9"
+      />
+      {open && q.trim() && (
+        <div className="absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-lg border bg-popover shadow-lg">
+          {results.length ? (
+            <ul className="max-h-80 overflow-y-auto py-1">
+              {results.map((r) => (
+                <li key={r.type + r.id}>
+                  <Link
+                    href={r.href}
+                    onClick={() => { setOpen(false); setQ(""); }}
+                    className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-muted"
+                  >
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{TYPE_LABEL[r.type]}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{r.label}</span>
+                      {r.sub && <span className="block truncate text-xs text-muted-foreground">{r.sub}</span>}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="px-3 py-4 text-sm text-muted-foreground">Tidak ada hasil untuk “{q}”.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Topbar({ user, storeName, searchIndex = [] }: { user?: { name: string; email: string; role?: string }; storeName?: string; searchIndex?: SearchItem[] }) {
   // Current store reflects the session (so an impersonated store shows its own name, not a hardcode).
   const [store, setStore] = useState(storeName ? { id: "current", name: storeName, plan: STORES[0]?.plan ?? "Bisnis" } : STORES[0]);
   const name = user?.name || "Ongki Pratama";
@@ -88,11 +155,8 @@ export function Topbar({ user, storeName }: { user?: { name: string; email: stri
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* search */}
-      <div className="relative ml-1 hidden max-w-sm flex-1 md:block">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Cari pesanan, produk, pelanggan…  ⌘K" className="pl-9" />
-      </div>
+      {/* global search */}
+      <GlobalSearch index={searchIndex} />
 
       <div className="ml-auto flex items-center gap-1">
         <ThemeToggle />
