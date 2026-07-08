@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant } from "@/lib/tenant";
-import { kaAddressByName, kaShippingPrice, kaCreateOrder, kiriminajaConfigured } from "@/lib/kiriminaja";
+import { kaAddressByName, kaShippingPrice, kaCreateOrder, kaTrack, kiriminajaConfigured } from "@/lib/kiriminaja";
 
 export type Rate = { service: string; code: string; type: string; cost: number; etd: string; cod: boolean; group: string };
 
@@ -151,8 +151,38 @@ export async function createShipment(input: {
   }
   const resi = r.awb ?? r.kaOrderId;
   await withTenant(storeId, (db) =>
-    db.update(schema.orders).set({ awb: resi, courier: input.serviceName, kaOrderId: r.kaOrderId }).where(eq(schema.orders.number, input.orderNumber)),
+    db.update(schema.orders)
+      .set({ awb: resi, courier: input.serviceName, kaOrderId: r.kaOrderId, status: "dikirim" })
+      .where(eq(schema.orders.number, input.orderNumber)),
   );
   revalidatePath(`/pesanan/${input.orderNumber}`);
   return { ok: true, awb: resi };
+}
+
+// ---- Track a shipment (polling) → returns status/history; syncs the real courier AWB when it appears ----
+export async function trackShipment(orderNumber: string): Promise<{
+  ok: boolean; message: string; awb?: string; history?: { date: string; desc: string }[];
+}> {
+  const { storeId } = await requireCapability("orders:write");
+  const ref = await withTenant(storeId, async (db) => {
+    const [o] = await db.select({ kaOrderId: schema.orders.kaOrderId }).from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1);
+    return o?.kaOrderId ?? null;
+  });
+  if (!ref) return { ok: false, message: "Pesanan ini belum punya pengiriman." };
+
+  const r = await kaTrack(ref);
+  if (!r.ok) {
+    const unavailable = /tidak tersedia|not available|belum/i.test(r.error ?? "");
+    return { ok: false, message: unavailable ? "Tracking belum tersedia — menunggu paket dijemput/diproses kurir." : (r.error ?? "Tracking belum tersedia.") };
+  }
+
+  // shape is courier-dependent; pull an AWB + history best-effort
+  const data = (r.data ?? {}) as { awb?: string; waybill?: string; history?: { date?: string; desc?: string; description?: string }[]; manifest?: unknown[] };
+  const realAwb = data.awb || data.waybill;
+  if (realAwb && realAwb !== ref) {
+    await withTenant(storeId, (db) => db.update(schema.orders).set({ awb: realAwb }).where(eq(schema.orders.number, orderNumber)));
+    revalidatePath(`/pesanan/${orderNumber}`);
+  }
+  const history = (data.history ?? []).map((h) => ({ date: h.date ?? "", desc: h.desc ?? h.description ?? "" }));
+  return { ok: true, message: realAwb ? `Resi kurir: ${realAwb}` : "Pengiriman terdaftar — menunggu update kurir.", awb: realAwb, history };
 }

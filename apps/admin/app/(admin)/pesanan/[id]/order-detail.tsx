@@ -20,7 +20,7 @@ import {
 
 import { toast } from "sonner";
 import { setOrderStatus } from "@/lib/actions/orders";
-import { getShippingRates, createShipment, type Rate } from "@/lib/actions/shipping";
+import { getShippingRates, createShipment, trackShipment, type Rate } from "@/lib/actions/shipping";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useStoreName } from "@/components/admin/store-context";
 import { useCan } from "@/components/admin/permissions";
@@ -191,6 +191,22 @@ export function OrderDetail({ order }: { order: Order }) {
         router.refresh();
       } else {
         toast.error(r.error ?? "Gagal membuat pengiriman");
+      }
+    });
+  };
+
+  // Poll KiriminAja tracking → sync the real courier AWB / show status.
+  const [tracking, setTracking] = React.useState(false);
+  const trackNow = () => {
+    setTracking(true);
+    startRate(async () => {
+      const r = await trackShipment(order.id.replace("#", ""));
+      setTracking(false);
+      if (r.ok) {
+        toast.success(r.message);
+        router.refresh();
+      } else {
+        toast.message(r.message);
       }
     });
   };
@@ -446,6 +462,18 @@ export function OrderDetail({ order }: { order: Order }) {
                 </span>
                 <span className="font-mono text-xs font-medium">{resi}</span>
               </div>
+              {shipped && (
+                <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-500/10 px-3 py-2">
+                  <span className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                    <Truck className="size-4" /> Terdaftar di KiriminAja
+                  </span>
+                  {canWrite && (
+                    <Button size="sm" variant="outline" disabled={tracking} onClick={trackNow}>
+                      {tracking ? "Melacak…" : "Lacak"}
+                    </Button>
+                  )}
+                </div>
+              )}
               <Separator />
               <div className="flex gap-2 text-muted-foreground">
                 <MapPin className="mt-0.5 size-4 shrink-0" />
