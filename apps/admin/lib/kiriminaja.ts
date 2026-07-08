@@ -100,6 +100,31 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
   };
 }
 
+// create an instant (same-day) pickup order — verified: shipping_price MUST be `shipping_costs`
+// (not total_price, which adds admin_fee), plus a top-level `order_prefix` + `service_type`.
+export async function kaCreateInstantOrder(p: {
+  orderRef: string; service: string; serviceType: string; shippingCosts: number;
+  origin: { name: string; phone: string; lat: number; long: number; address: string; note?: string };
+  dest: { name: string; phone: string; lat: number; long: number; address: string; note?: string };
+  item: { name: string; description: string; price: number; weight: number };
+}): Promise<{ ok: boolean; orderId?: string; paymentId?: string; error?: string }> {
+  const r = await ka<{
+    status: boolean; text?: string;
+    result?: { payment?: { payment_id?: string }; packages?: { order_id?: string; awb?: string }[] };
+  }>("/api/mitra/v4/instant/pickup/request", {
+    service: p.service, service_type: p.serviceType, order_prefix: KA_ORDER_PREFIX,
+    packages: [{
+      order_id: `${KA_ORDER_PREFIX}-${p.orderRef}`,
+      origin_name: p.origin.name, origin_phone: p.origin.phone, origin_lat: p.origin.lat, origin_long: p.origin.long,
+      origin_address: p.origin.address, origin_address_note: p.origin.note || "Toko",
+      destination_name: p.dest.name, destination_phone: p.dest.phone, destination_lat: p.dest.lat, destination_long: p.dest.long,
+      destination_address: p.dest.address, destination_address_note: p.dest.note || "Rumah",
+      shipping_price: p.shippingCosts, item: p.item,
+    }],
+  });
+  return { ok: !!r.status, orderId: r.result?.packages?.[0]?.order_id, paymentId: r.result?.payment?.payment_id, error: r.status ? undefined : r.text };
+}
+
 // cancel/void an express shipment by AWB (= kj_order_id / resi we stored)
 export async function kaCancelShipment(awb: string, reason: string): Promise<{ ok: boolean; error?: string }> {
   const r = await ka<{ status: boolean; text?: string }>("/api/mitra/v3/cancel_shipment", { awb, reason });
