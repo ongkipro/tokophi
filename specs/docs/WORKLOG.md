@@ -3,7 +3,7 @@
 > Newest first. What we did + what's next, so any session can resume instantly.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-07-08) · REBRANDED indostore→TokoΦ · RBAC + RLS enforcing · Super-Admin healthcheck + impersonation done (multi-store) · next = admin-client depth (Real variants) &/or super-admin auth
+## ▶ CURRENT STATE (2026-07-08) · REBRANDED indostore→TokoΦ · RBAC + RLS enforcing · Super-Admin = functional control plane (healthcheck·impersonation·auth·provisioning·settings·billing) · admin multi-store polish done · next = Real variants (admin) &/or VPS infra
 
 **Everything runs locally on Linux** (Docker PostgreSQL 16 :5433 + Drizzle `@tokophi/db`, 53 tables, migrations 0000–0012). Done + verified end-to-end:
 - **Reads:** all 3 surfaces (super-admin 5 pages + admin 16 modules + storefront) read Postgres.
@@ -16,6 +16,14 @@
 **RBAC UI (ALL editors done):** `lib/rbac-policy.ts` (client-safe matrix) + `PermissionsProvider`/`useCan`/`<Can>` + topbar role badge; every admin editor gates its write/delete/create controls by role (verified via Playwright across owner/staff/gudang). Server actions stay the security boundary.
 
 **▶ RESUME HERE (next session):** **admin-client feature depth** (user's focus; VPS deferred). Next pick = **Real variants** — schema already supports it (`product_options`, `product_variants` option1/2/3 + sku/price/cost, `inventory_levels` per variant/location); the gap is admin-only: the variant table in `apps/admin/app/(admin)/produk/[id]/product-editor.tsx` is UI-only (not wired/persisted), `lib/data/products.ts` reads only the default variant (position 0), and `lib/actions/products.ts` writes a single `Default` variant. Other admin backlog: `/pesanan/[id]` + `/diskon/[id]` detail routes, Tiptap rich-text, CSV export, de-dup admin → `@tokophi/ui`. (VPS + PostgREST + MinIO/S3 remains the later infra milestone.) Detail per-entry below (newest first).
+
+## 2026-07-08 — Session: Super-Admin functional control plane ✅
+- Audit: super-admin had read-only/fake-save surfaces. Added real, gated writes (`lib/actions.ts`, all `requirePlatformAdmin()`):
+  - **Provisioning** `createStore()` (+ "Tambah toko" dialog on Toko page) — one-txn tenant onboard (account+owner+store+membership+location+settings+stats, Trial), redirects to new store. Was missing.
+  - **Settings persist** `saveGateways()`/`saveCouriers()` — Pengaturan toggles+Simpan now write `platform_payment_gateways`/`platform_couriers`/`platform_cod` (were fake toasts).
+  - **Team** = real `platform_admins` (`getPlatformAdmins()`) + `invitePlatformAdmin()` (Undang dialog). Hardcoded TEAM removed.
+  - **Billing** `setInvoiceStatus()` — Paket invoice rows → mark dibayar/menunggu/gagal.
+- Verified E2E (Playwright→DB): create store persists (trial + owner); Duitku enabled=true; operator opsqa in platform_admins; INV-9006→dibayar. Console-clean; reseeded pristine (7 stores).
 
 ## 2026-07-08 — Session: Super-Admin auth + admin multi-store polish ✅
 - **Platform-admin auth** (gap from prior session closed): `platform_admins` table (migration 0013, seed admin@tokophi.id/tokophi123); `lib/platform-auth.ts` (distinct `platform_session` cookie) + login + `middleware.ts` + `requirePlatformAdmin()` gating impersonation/lifecycle; layout split (server `layout.tsx` → client `platform-shell.tsx` w/ account menu + logout). Verified: 307 gate, login E2E, gated impersonation click-through.

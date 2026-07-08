@@ -15,12 +15,23 @@ import {
   ExternalLink,
   Ban,
   Play,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Card } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@tokophi/ui/dialog";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import {
   Table,
@@ -42,7 +53,7 @@ import {
 import { type Plan, type Store } from "@/lib/mock";
 import { type HealthVerdict } from "@/lib/health-types";
 import { initials, PlanBadge, StatusBadge, HealthBadge } from "@/components/bits";
-import { impersonateStore, setStoreStatus } from "@/lib/actions";
+import { impersonateStore, setStoreStatus, createStore } from "@/lib/actions";
 import { IDR, num } from "@tokophi/lib/format";
 
 type PlanFilter = "semua" | Plan;
@@ -83,6 +94,14 @@ export function TokoClient({
   const [planFilter, setPlanFilter] = useState<PlanFilter>("semua");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("semua");
   const [healthFilter, setHealthFilter] = useState<HealthFilter>("semua");
+
+  // create-store (provisioning) dialog
+  const [createOpen, setCreateOpen] = useState(false);
+  const [nsName, setNsName] = useState("");
+  const [nsOwner, setNsOwner] = useState("");
+  const [nsEmail, setNsEmail] = useState("");
+  const [nsCity, setNsCity] = useState("");
+  const [nsPlan, setNsPlan] = useState<Plan>("pemula");
 
   const verdictOf = (id: string): HealthVerdict => healthById[id] ?? "sehat";
 
@@ -138,13 +157,73 @@ export function TokoClient({
     });
   }
 
+  function submitCreate() {
+    startTransition(async () => {
+      const r = await createStore({ name: nsName, ownerName: nsOwner, email: nsEmail, city: nsCity, plan: nsPlan });
+      if (r.ok && r.storeId) {
+        toast.success(`Toko “${nsName}” dibuat.`);
+        setCreateOpen(false);
+        setNsName(""); setNsOwner(""); setNsEmail(""); setNsCity(""); setNsPlan("pemula");
+        router.push(`/toko/${r.storeId}`);
+      } else {
+        toast.error(r.error ?? "Gagal membuat toko.");
+      }
+    });
+  }
+
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Toko</h1>
-        <p className="text-sm text-muted-foreground">
-          Semua toko merchant di platform — status langganan &amp; kesehatan operasional.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Toko</h1>
+          <p className="text-sm text-muted-foreground">
+            Semua toko merchant di platform — status langganan &amp; kesehatan operasional.
+          </p>
+        </div>
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogTrigger render={<Button className="gap-1.5"><Plus className="size-4" /> Tambah toko</Button>} />
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Tambah toko baru</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-4 py-2">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="ns-name">Nama toko</Label>
+                <Input id="ns-name" value={nsName} onChange={(e) => setNsName(e.target.value)} placeholder="mis. Kopi Senja" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="ns-owner">Nama pemilik</Label>
+                  <Input id="ns-owner" value={nsOwner} onChange={(e) => setNsOwner(e.target.value)} placeholder="Nama owner" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="ns-city">Kota</Label>
+                  <Input id="ns-city" value={nsCity} onChange={(e) => setNsCity(e.target.value)} placeholder="mis. Bandung" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="ns-email">Email pemilik</Label>
+                <Input id="ns-email" type="email" value={nsEmail} onChange={(e) => setNsEmail(e.target.value)} placeholder="owner@toko.id" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Paket awal</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger render={<Button variant="outline" className="justify-between gap-2 font-normal capitalize">{nsPlan}<ChevronDown className="size-4 text-muted-foreground" /></Button>} />
+                  <DropdownMenuContent align="start" className="w-[--anchor-width]">
+                    {(["pemula", "bisnis", "skala"] as Plan[]).map((p) => (
+                      <DropdownMenuItem key={p} className="capitalize" onClick={() => setNsPlan(p)}>{p}</DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <p className="text-xs text-muted-foreground">Toko baru dibuat berstatus <span className="font-medium">Trial</span>. Password pemilik awal: <span className="font-mono">tokophi123</span>.</p>
+            </div>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline">Batal</Button>} />
+              <Button disabled={pending || !nsName || !nsEmail} onClick={submitCreate}>{pending ? "Membuat…" : "Buat toko"}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* stat cards */}

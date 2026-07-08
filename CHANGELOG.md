@@ -11,6 +11,14 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 - **Impersonation ("Buka panel admin")** — super-admin mints the admin session cookie for a store's owner (`lib/session.ts` + `lib/actions.ts`, shared `AUTH_SECRET`, localhost host-scoped cookie) and opens the admin (:3000) scoped to that store via RLS. Verified end-to-end (admin serves the impersonated owner, not Batik Nusantara). Admin app untouched.
 - **Store lifecycle actions** — suspend/activate + change plan (super-admin's first mutations, owner connection cross-tenant). `verify-rls` still green; super-admin + admin builds clean; console-clean.
 
+### Super Admin — functional control plane (provisioning, settings persistence, team, billing)
+Audit found several read-only / fake-save surfaces; all now real writes (each gated by `requirePlatformAdmin()`), in `lib/actions.ts`:
+- **Provisioning `createStore()`** — "Tambah toko" on the Toko page onboards a full tenant in one transaction (account + owner user + store + membership + location + settings + zeroed stats), status **Trial**, slug auto, owner password `tokophi123`; redirects to the new store. Was entirely missing.
+- **Settings persistence `saveGateways()`/`saveCouriers()`** — the Pengaturan payment-gateway & courier toggles + Simpan now write `platform_payment_gateways`/`platform_couriers`/`platform_cod` (were `toast`-only fakes).
+- **Platform team = real operators** — Tim Platform now reads `platform_admins` (`getPlatformAdmins()`) instead of a hardcoded array; "Undang" (`invitePlatformAdmin()`) inserts a real operator row.
+- **Billing actions `setInvoiceStatus()`** — Paket invoice rows get a Tandai dibayar/menunggu/gagal menu (was display-only).
+- Verified E2E (Playwright + DB): create store → trial store + owner persisted; toggle Duitku → `enabled=true`; invite → `platform_admins` row; mark INV-9006 → `dibayar`. Console-clean; reseeded to a pristine 7-store state.
+
 ### Super Admin — platform-admin auth (gaps closed) + impersonation-correct admin
 - **Platform-admin auth**: `platform_admins` table (migration 0013) + seeded **admin@tokophi.id / tokophi123**; `lib/platform-auth.ts` uses a **distinct `platform_session` cookie** (separate from the admin `session` it mints for impersonation); login page + `signIn`/`signOut` + `middleware.ts` route protection. `requirePlatformAdmin()` now **gates** `impersonateStore`/`setStoreStatus`/`setStorePlan` (the earlier "unguarded" follow-up is resolved). Layout split into a server layout (reads session) + client `PlatformShell` (account menu + logout).
 - **Admin reflects the session store**: `apps/admin/lib/data/store.ts getStoreName()` → the admin topbar store-switcher + dashboard greeting now show the *actual* store (so impersonating "Kopi Senja" shows Kopi Senja + owner Rangga + RLS-scoped data, not the hardcoded "Batik Nusantara"). Verified E2E via Playwright.

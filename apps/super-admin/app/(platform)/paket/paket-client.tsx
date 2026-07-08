@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, Wallet, Users, Receipt } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Check, Wallet, Users, Receipt, MoreHorizontal, CircleCheck, CircleX, Clock } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   Card,
@@ -10,6 +12,7 @@ import {
   CardTitle,
 } from "@tokophi/ui/card";
 import { Badge } from "@tokophi/ui/badge";
+import { Button } from "@tokophi/ui/button";
 import {
   Table,
   TableHeader,
@@ -18,11 +21,20 @@ import {
   TableHead,
   TableCell,
 } from "@tokophi/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@tokophi/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
 import { cn } from "@tokophi/ui/lib/utils";
 
 import { PLANS, type Plan, type Invoice } from "@/lib/mock";
 import { PlanBadge, InvoiceBadge } from "@/components/bits";
+import { setInvoiceStatus } from "@/lib/actions";
 import { IDR, num } from "@tokophi/lib/format";
 
 const INV_TABS: { key: "semua" | Invoice["status"]; label: string }[] = [
@@ -45,8 +57,19 @@ export function PaketClient({
   allInvoices: Invoice[];
   planDist: PlanDist[];
 }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const [tab, setTab] = useState<"semua" | Invoice["status"]>("semua");
   const subscriberCount = (plan: Plan) => planDist.find((d) => d.plan === plan)?.count ?? 0;
+
+  function mark(inv: Invoice, status: Invoice["status"]) {
+    if (status === inv.status) return;
+    startTransition(async () => {
+      await setInvoiceStatus(inv.id, status);
+      toast.success(`Invoice ${inv.id} → ${status}.`);
+      router.refresh();
+    });
+  }
 
   const summary = useMemo(
     () => [
@@ -177,6 +200,7 @@ export function PaketClient({
                 <TableHead className="text-right">Jumlah</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Tanggal</TableHead>
+                <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -196,12 +220,32 @@ export function PaketClient({
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {inv.daysAgo} hari lalu
                   </TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Aksi ${inv.id}`} disabled={pending} />}>
+                        <MoreHorizontal className="size-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Ubah status</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem disabled={inv.status === "dibayar"} onClick={() => mark(inv, "dibayar")}>
+                          <CircleCheck className="size-4 text-emerald-600" /> Tandai dibayar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem disabled={inv.status === "menunggu"} onClick={() => mark(inv, "menunggu")}>
+                          <Clock className="size-4 text-amber-600" /> Tandai menunggu
+                        </DropdownMenuItem>
+                        <DropdownMenuItem disabled={inv.status === "gagal"} onClick={() => mark(inv, "gagal")}>
+                          <CircleX className="size-4 text-destructive" /> Tandai gagal
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
                 </TableRow>
               ))}
               {invoices.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="py-10 text-center text-muted-foreground"
                   >
                     Tidak ada tagihan.

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type Dispatch, type SetStateAction } from "react";
-import { CreditCard, Truck, Users, UserPlus, Save } from "lucide-react";
+import { useState, useTransition, type Dispatch, type SetStateAction } from "react";
+import { useRouter } from "next/navigation";
+import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -14,42 +15,90 @@ import { Button } from "@tokophi/ui/button";
 import { Badge } from "@tokophi/ui/badge";
 import { Switch } from "@tokophi/ui/switch";
 import { Label } from "@tokophi/ui/label";
+import { Input } from "@tokophi/ui/input";
 import { Separator } from "@tokophi/ui/separator";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@tokophi/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@tokophi/ui/dropdown-menu";
 import { cn } from "@tokophi/ui/lib/utils";
 import { initials } from "@/components/bits";
+import { saveGateways, saveCouriers, invitePlatformAdmin } from "@/lib/actions";
 
 type Toggle = { key: string; name: string; desc: string; on: boolean };
-
-const TEAM = [
-  { name: "Ongki Pratama", email: "ongki@tokophi.id", role: "Owner" },
-  { name: "Rani Kusuma", email: "rani@tokophi.id", role: "Admin" },
-  { name: "Andi Wijaya", email: "andi@tokophi.id", role: "Support" },
-];
+type TeamMember = { id: string; name: string; email: string; role: string };
 
 const ROLE_CLASS: Record<string, string> = {
-  Owner: "bg-primary/12 text-primary",
-  Admin: "bg-chart-3/15 text-chart-3",
-  Support: "bg-muted text-foreground",
+  owner: "bg-primary/12 text-primary",
+  admin: "bg-chart-3/15 text-chart-3",
+  support: "bg-muted text-foreground",
 };
+const roleLabel = (r: string) => r.charAt(0).toUpperCase() + r.slice(1);
+const ROLE_OPTIONS = ["admin", "support", "owner"];
 
 export function PengaturanClient({
   gateways: initGateways,
   couriers: initCouriers,
   aggregator,
+  team,
 }: {
   gateways: Toggle[];
   couriers: Toggle[];
   aggregator: { provider: string; enabled: boolean };
+  team: TeamMember[];
 }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const [gateways, setGateways] = useState(initGateways);
   const [couriers, setCouriers] = useState(initCouriers);
 
-  const toggle = (
-    setter: Dispatch<SetStateAction<Toggle[]>>,
-    key: string,
-    on: boolean,
-  ) => setter((prev) => prev.map((t) => (t.key === key ? { ...t, on } : t)));
+  // invite dialog
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [invName, setInvName] = useState("");
+  const [invEmail, setInvEmail] = useState("");
+  const [invRole, setInvRole] = useState("admin");
+
+  const toggle = (setter: Dispatch<SetStateAction<Toggle[]>>, key: string, on: boolean) =>
+    setter((prev) => prev.map((t) => (t.key === key ? { ...t, on } : t)));
+
+  function save(kind: "gateways" | "couriers") {
+    startTransition(async () => {
+      const rows = kind === "gateways" ? gateways : couriers;
+      const updates = rows.map((t) => ({ key: t.key, on: t.on }));
+      if (kind === "gateways") await saveGateways(updates);
+      else await saveCouriers(updates);
+      toast.success(kind === "gateways" ? "Pengaturan pembayaran disimpan." : "Pengaturan kurir disimpan.");
+      router.refresh();
+    });
+  }
+
+  function submitInvite() {
+    startTransition(async () => {
+      const r = await invitePlatformAdmin({ name: invName, email: invEmail, role: invRole });
+      if (r.ok) {
+        toast.success(`Operator ${invEmail} ditambahkan.`);
+        setInviteOpen(false);
+        setInvName("");
+        setInvEmail("");
+        setInvRole("admin");
+        router.refresh();
+      } else {
+        toast.error(r.error ?? "Gagal mengundang operator.");
+      }
+    });
+  }
 
   return (
     <div className="mx-auto max-w-[1000px] space-y-5">
@@ -65,8 +114,7 @@ export function PengaturanClient({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CreditCard className="size-4 text-muted-foreground" /> Gateway
-            Pembayaran
+            <CreditCard className="size-4 text-muted-foreground" /> Gateway Pembayaran
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-0">
@@ -76,30 +124,19 @@ export function PengaturanClient({
               <div className="flex items-center justify-between py-3">
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-2">
-                    <Label htmlFor={`gw-${g.key}`} className="font-medium">
-                      {g.name}
-                    </Label>
+                    <Label htmlFor={`gw-${g.key}`} className="font-medium">{g.name}</Label>
                     {g.on && (
-                      <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
-                        Terhubung
-                      </Badge>
+                      <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Terhubung</Badge>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">{g.desc}</p>
                 </div>
-                <Switch
-                  id={`gw-${g.key}`}
-                  checked={g.on}
-                  onCheckedChange={(v) => toggle(setGateways, g.key, v)}
-                />
+                <Switch id={`gw-${g.key}`} checked={g.on} onCheckedChange={(v) => toggle(setGateways, g.key, v)} />
               </div>
             </div>
           ))}
           <div className="flex justify-end pt-3">
-            <Button
-              className="gap-1.5"
-              onClick={() => toast.success("Pengaturan pembayaran disimpan.")}
-            >
+            <Button className="gap-1.5" disabled={pending} onClick={() => save("gateways")}>
               <Save className="size-4" /> Simpan
             </Button>
           </div>
@@ -117,9 +154,7 @@ export function PengaturanClient({
           <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
             <div className="flex items-center gap-2 text-sm">
               <Truck className="size-4 text-emerald-600 dark:text-emerald-400" />
-              <span>
-                Agregator pengiriman: <span className="font-medium">{aggregator.provider}</span> · API kurir dikelola platform
-              </span>
+              <span>Agregator pengiriman: <span className="font-medium">{aggregator.provider}</span> · API kurir dikelola platform</span>
             </div>
             {aggregator.enabled && (
               <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Terhubung</Badge>
@@ -134,73 +169,85 @@ export function PengaturanClient({
               <div className="flex items-center justify-between py-3">
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-2">
-                    <Label htmlFor={`ku-${c.key}`} className="font-medium">
-                      {c.name}
-                    </Label>
+                    <Label htmlFor={`ku-${c.key}`} className="font-medium">{c.name}</Label>
                     {c.on && (
-                      <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
-                        Aktif
-                      </Badge>
+                      <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">{c.desc}</p>
                 </div>
-                <Switch
-                  id={`ku-${c.key}`}
-                  checked={c.on}
-                  onCheckedChange={(v) => toggle(setCouriers, c.key, v)}
-                />
+                <Switch id={`ku-${c.key}`} checked={c.on} onCheckedChange={(v) => toggle(setCouriers, c.key, v)} />
               </div>
             </div>
           ))}
           <div className="flex justify-end pt-3">
-            <Button
-              className="gap-1.5"
-              onClick={() => toast.success("Pengaturan kurir disimpan.")}
-            >
+            <Button className="gap-1.5" disabled={pending} onClick={() => save("couriers")}>
               <Save className="size-4" /> Simpan
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* platform team */}
+      {/* platform team (real operators) */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Users className="size-4 text-muted-foreground" /> Tim Platform
           </CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => toast.success("Undangan terkirim.")}
-          >
-            <UserPlus className="size-4" /> Undang
-          </Button>
+          <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+            <DialogTrigger render={<Button variant="outline" size="sm" className="gap-1.5"><UserPlus className="size-4" /> Undang</Button>} />
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Undang operator platform</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 py-2">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="inv-name">Nama</Label>
+                  <Input id="inv-name" value={invName} onChange={(e) => setInvName(e.target.value)} placeholder="Nama operator" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="inv-email">Email</Label>
+                  <Input id="inv-email" type="email" value={invEmail} onChange={(e) => setInvEmail(e.target.value)} placeholder="nama@tokophi.id" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Peran</Label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={<Button variant="outline" className="justify-between gap-2 font-normal">{roleLabel(invRole)}<ChevronDown className="size-4 text-muted-foreground" /></Button>} />
+                    <DropdownMenuContent align="start" className="w-[--anchor-width]">
+                      {ROLE_OPTIONS.map((r) => (
+                        <DropdownMenuItem key={r} onClick={() => setInvRole(r)}>{roleLabel(r)}</DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <p className="text-xs text-muted-foreground">Password awal: <span className="font-mono">tokophi123</span> (operator ganti setelah masuk).</p>
+              </div>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline">Batal</Button>} />
+                <Button disabled={pending || !invEmail} onClick={submitInvite}>{pending ? "Menyimpan…" : "Undang"}</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </CardHeader>
         <CardContent className="space-y-0">
-          {TEAM.map((m, i) => (
-            <div key={m.email}>
+          {team.map((m, i) => (
+            <div key={m.id}>
               {i > 0 && <Separator />}
               <div className="flex items-center justify-between py-3">
                 <div className="flex items-center gap-3">
                   <Avatar className="size-9">
-                    <AvatarFallback className="bg-primary/12 text-xs font-semibold text-primary">
-                      {initials(m.name)}
-                    </AvatarFallback>
+                    <AvatarFallback className="bg-primary/12 text-xs font-semibold text-primary">{initials(m.name)}</AvatarFallback>
                   </Avatar>
                   <div>
                     <div className="font-medium">{m.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {m.email}
-                    </div>
+                    <div className="text-xs text-muted-foreground">{m.email}</div>
                   </div>
                 </div>
-                <Badge className={cn(ROLE_CLASS[m.role])}>{m.role}</Badge>
+                <Badge className={cn(ROLE_CLASS[m.role] ?? "bg-muted text-foreground")}>{roleLabel(m.role)}</Badge>
               </div>
             </div>
           ))}
+          {team.length === 0 && <p className="py-4 text-sm text-muted-foreground">Belum ada operator.</p>}
         </CardContent>
       </Card>
     </div>

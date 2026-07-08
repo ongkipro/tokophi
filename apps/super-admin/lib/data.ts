@@ -203,6 +203,16 @@ export async function getCouriers(): Promise<Toggle[]> {
     .sort((a, b) => COURIER_ORDER.indexOf(a.name) - COURIER_ORDER.indexOf(b.name));
 }
 
+// ---- platform team (real operators) ----
+export type PlatformAdminRow = { id: string; name: string; email: string; role: string };
+export async function getPlatformAdmins(): Promise<PlatformAdminRow[]> {
+  const rows = await db
+    .select({ id: schema.platformAdmins.id, name: schema.platformAdmins.name, email: schema.platformAdmins.email, role: schema.platformAdmins.role })
+    .from(schema.platformAdmins)
+    .orderBy(asc(schema.platformAdmins.createdAt));
+  return rows.map((r) => ({ id: r.id, name: r.name ?? r.email, email: r.email, role: r.role }));
+}
+
 export async function getAggregator(): Promise<{ provider: string; enabled: boolean }> {
   const agg = (await db.select().from(schema.shippingAggregator))[0];
   const PROVIDER_NAME: Record<string, string> = { biteship: "Biteship", rajaongkir: "RajaOngkir", shipper: "Shipper" };
