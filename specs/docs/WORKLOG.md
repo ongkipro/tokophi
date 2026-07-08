@@ -17,6 +17,11 @@
 
 **▶ RESUME HERE (next session):** **admin-client feature depth** (user's focus; VPS deferred). Next pick = **Real variants** — schema already supports it (`product_options`, `product_variants` option1/2/3 + sku/price/cost, `inventory_levels` per variant/location); the gap is admin-only: the variant table in `apps/admin/app/(admin)/produk/[id]/product-editor.tsx` is UI-only (not wired/persisted), `lib/data/products.ts` reads only the default variant (position 0), and `lib/actions/products.ts` writes a single `Default` variant. Other admin backlog: `/pesanan/[id]` + `/diskon/[id]` detail routes, Tiptap rich-text, CSV export, de-dup admin → `@tokophi/ui`. (VPS + PostgREST + MinIO/S3 remains the later infra milestone.) Detail per-entry below (newest first).
 
+## 2026-07-08 — Session: Super-Admin auth + admin multi-store polish ✅
+- **Platform-admin auth** (gap from prior session closed): `platform_admins` table (migration 0013, seed admin@tokophi.id/tokophi123); `lib/platform-auth.ts` (distinct `platform_session` cookie) + login + `middleware.ts` + `requirePlatformAdmin()` gating impersonation/lifecycle; layout split (server `layout.tsx` → client `platform-shell.tsx` w/ account menu + logout). Verified: 307 gate, login E2E, gated impersonation click-through.
+- **Admin store identity data-driven**: `lib/data/store.ts getStoreName()` + `components/admin/store-context.tsx` (`StoreProvider`/`useStoreName`, set in layout). Replaced every "Batik Nusantara" hardcode (topbar switcher, dashboard greeting, Pengaturan profile, product-editor vendor, CRM WA fills — `crm/page` server-fetched). NaN% donut fixed (`channel-chart.tsx`). Verified impersonating Kopi Senja → Pengaturan/CRM show "Kopi Senja", 0 Batik leak; both apps build clean.
+- **Remaining (decorative)**: dashboard live-activity feed still static mock.
+
 ## 2026-07-08 — Session: Super Admin healthcheck + impersonation ✅
 - **Multi-store seed** (`packages/db/src/seed.ts` `DEMO_STORES`): +6 stores w/ engineered health spread (2 sehat / 2 perhatian / 3 bermasalah). Platform pages now show real cross-store data.
 - **Healthcheck** (`apps/super-admin/lib/health.ts` + `health-types.ts`): composite verdict + score from billing/activity/stock/status signals (owner connection, cross-tenant). Wired into Toko list (column+filter+cards), store detail (panel), dashboard (rollup + perlu-perhatian).

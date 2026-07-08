@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useCan } from "@/components/admin/permissions"
+import { useStoreName } from "@/components/admin/store-context"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -126,6 +127,7 @@ export default function Page() {
   // Navigasi
   const [section, setSection] = React.useState<Section>("profil")
   const canSettings = useCan("settings:write")
+  const storeName = useStoreName()
 
   // Pembayaran
   const [pay, setPay] = React.useState({
@@ -271,7 +273,7 @@ export default function Page() {
                 </Avatar>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">
-                    Batik Nusantara
+                    {storeName}
                   </p>
                   <Badge variant="secondary" className="mt-1">
                     Paket Bisnis
@@ -349,7 +351,7 @@ export default function Page() {
                 <Separator />
 
                 <Field label="Nama toko" htmlFor="nama-toko">
-                  <Input id="nama-toko" defaultValue="Batik Nusantara" />
+                  <Input id="nama-toko" defaultValue={storeName} />
                 </Field>
 
                 <Field

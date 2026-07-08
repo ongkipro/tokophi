@@ -55,8 +55,9 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+// Fallback only — the topbar shows the real session store; STORES[0].plan is a default tier.
 export const STORES = [
-  { id: "s1", name: "Batik Nusantara", plan: "Bisnis" },
+  { id: "s1", name: "Toko", plan: "Bisnis" },
   { id: "s2", name: "Kopi Senja", plan: "Pemula" },
   { id: "s3", name: "GadgetKu Store", plan: "Bisnis" },
 ];

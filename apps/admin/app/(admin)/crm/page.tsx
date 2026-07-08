@@ -21,9 +21,10 @@ import { Separator } from "@/components/ui/separator";
 import { IDR, num, waLink, fillTemplate } from "@/lib/format";
 import { type FollowupType, type LeadStage } from "@/lib/mock/store";
 import { getLeads, getFollowups, getWaTemplates } from "@/lib/data/crm";
+import { getStoreName } from "@/lib/data/store";
+import { getSession } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
-const TOKO = "Batik Nusantara";
 
 // ---- follow-up type presentation ----
 const FU_META: Record<
@@ -89,7 +90,13 @@ function dueLabel(dueDays: number) {
 export const dynamic = "force-dynamic";
 
 export default async function CrmPage() {
-  const [LEADS, FOLLOWUPS, WA_TEMPLATES] = await Promise.all([getLeads(), getFollowups(), getWaTemplates()]);
+  const session = await getSession();
+  const [LEADS, FOLLOWUPS, WA_TEMPLATES, storeName] = await Promise.all([
+    getLeads(),
+    getFollowups(),
+    getWaTemplates(),
+    session ? getStoreName(session.storeId) : Promise.resolve("Toko"),
+  ]);
   // ---- derived data ----
   const dueToday = FOLLOWUPS.filter(
     (f) => f.dueDays <= 0 && f.status === "menunggu",
@@ -225,7 +232,7 @@ export default async function CrmPage() {
                   nama: f.customer,
                   produk: f.context,
                   no_pesanan: f.context,
-                  toko: TOKO,
+                  toko: storeName ?? "Toko",
                 });
                 return (
                   <li

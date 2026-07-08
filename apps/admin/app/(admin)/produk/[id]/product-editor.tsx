@@ -30,6 +30,7 @@ import { type Product } from "@/lib/mock/store";
 import { toast } from "sonner";
 import { IDR, num } from "@/lib/format";
 import { useCan } from "@/components/admin/permissions";
+import { useStoreName } from "@/components/admin/store-context";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -98,6 +99,7 @@ export function ProductEditor({ product }: { product?: Product }) {
   const canWrite = useCan("products:write");
   const canDelete = useCan("products:delete");
   const canMedia = useCan("media:write");
+  const storeName = useStoreName();
 
   // Fabricated demo fields (do NOT change the mock Product type).
   const seedCost = product ? Math.round(product.price * 0.6) : 0;
@@ -132,7 +134,7 @@ export function ProductEditor({ product }: { product?: Product }) {
 
   const [category, setCategory] = React.useState(product?.category ?? "Fashion");
   const [productType, setProductType] = React.useState("");
-  const [vendor, setVendor] = React.useState("Batik Nusantara");
+  const [vendor, setVendor] = React.useState(storeName);
   const [tags, setTags] = React.useState("");
 
   const [seoTitle, setSeoTitle] = React.useState("");

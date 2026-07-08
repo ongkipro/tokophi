@@ -46,8 +46,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const STORE_NAME = "Batik Nusantara";
+import { useStoreName } from "@/components/admin/store-context";
 
 // Board columns (kalah is intentionally excluded — still counted for closing rate).
 const COLUMNS: { stage: LeadStage; title: string; accent: string }[] = [
@@ -82,13 +81,14 @@ function lastContactLabel(daysAgo: number): string {
 }
 
 export function PipelineClient({ leads: LEADS, templates }: { leads: Lead[]; templates: WaTemplate[] }) {
+  const storeName = useStoreName();
   const leadWaHref = (lead: Lead): string => {
     const msg = fillTemplate(templates[0]?.body ?? "", {
       nama: lead.name,
       produk: "",
       no_pesanan: "",
       total: "",
-      toko: STORE_NAME,
+      toko: storeName,
     });
     return waLink(lead.phone, msg);
   };

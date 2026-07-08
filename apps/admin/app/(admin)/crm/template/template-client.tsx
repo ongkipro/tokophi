@@ -87,7 +87,7 @@ const PREVIEW_VARS = {
   produk: "Kopi Arabika Gayo",
   no_pesanan: "#INV-4821",
   total: "Rp275.000",
-  toko: "Batik Nusantara",
+  toko: "Toko Anda",
 };
 
 const JENIS: TemplType[] = ["keranjang", "pembayaran", "konfirmasi", "pascabeli", "ulasan", "repeat", "broadcast"];

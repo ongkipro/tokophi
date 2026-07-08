@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { getSession } from "@/lib/auth";
 import { getStoreName } from "@/lib/data/store";
 import { PermissionsProvider } from "@/components/admin/permissions";
+import { StoreProvider } from "@/components/admin/store-context";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -11,6 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const storeName = session ? await getStoreName(session.storeId) : null;
   return (
     <PermissionsProvider role={session?.role}>
+      <StoreProvider name={storeName ?? "Toko"}>
       <div className="flex min-h-screen w-full">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -19,6 +21,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
         <Toaster position="top-center" richColors closeButton />
       </div>
+      </StoreProvider>
     </PermissionsProvider>
   );
 }

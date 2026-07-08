@@ -24,7 +24,7 @@ export function ChannelChart({ data }: { data: ChannelSlice[] }) {
           <li key={d.channel} className="flex items-center gap-2 text-sm">
             <span className="size-2.5 shrink-0 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
             <span className="flex-1 text-muted-foreground">{d.channel}</span>
-            <span className="font-medium tabular-nums">{Math.round((d.value / total) * 100)}%</span>
+            <span className="font-medium tabular-nums">{total > 0 ? Math.round((d.value / total) * 100) : 0}%</span>
           </li>
         ))}
       </ul>

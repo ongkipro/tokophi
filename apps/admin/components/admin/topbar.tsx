@@ -73,8 +73,8 @@ export function Topbar({ user, storeName }: { user?: { name: string; email: stri
           }
         />
         <DropdownMenuContent align="start" className="w-60">
-          <DropdownMenuLabel>Pilih Toko</DropdownMenuLabel>
-          {STORES.map((s) => (
+          <DropdownMenuLabel>Toko aktif</DropdownMenuLabel>
+          {[store].map((s) => (
             <DropdownMenuItem key={s.id} onClick={() => setStore(s)} className="gap-2">
               <span className="flex size-6 items-center justify-center rounded bg-muted text-[10px] font-bold">
                 {s.name.slice(0, 2).toUpperCase()}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { setFollowupStatus } from "@/lib/actions/crm";
 import { useCan } from "@/components/admin/permissions";
+import { useStoreName } from "@/components/admin/store-context";
 import {
   Send,
   MoreHorizontal,
@@ -55,7 +56,6 @@ import {
 import { num, waLink, fillTemplate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-const TOKO = "Batik Nusantara";
 
 // ---- helpers ----
 function initials(name: string) {
@@ -147,13 +147,13 @@ const ALL_TYPES: FollowupType[] = [
 ];
 
 // Build the prefilled WhatsApp message for a follow-up using a given template body.
-function buildMessage(f: Followup, body: string) {
+function buildMessage(f: Followup, body: string, toko: string) {
   return fillTemplate(body, {
     nama: f.customer,
     produk: f.context,
     no_pesanan: f.context,
     total: f.context,
-    toko: TOKO,
+    toko,
   });
 }
 
@@ -172,6 +172,7 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
   const [done, setDone] = useState<Set<string>>(new Set());
   const router = useRouter();
   const canWrite = useCan("crm:write");
+  const storeName = useStoreName();
   const [, startTransition] = useTransition();
 
   function markDone(id: string) {
@@ -396,7 +397,7 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
               const isDone = status === "selesai";
               const tpl =
                 templates.find((t) => t.type === f.type) ?? templates[0];
-              const primaryLink = waLink(f.phone, buildMessage(f, tpl.body));
+              const primaryLink = waLink(f.phone, buildMessage(f, tpl.body, storeName));
 
               return (
                 <TableRow key={f.id} className="hover:bg-muted/40">
@@ -498,7 +499,7 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
                               key={t.id}
                               render={
                                 <a
-                                  href={waLink(f.phone, buildMessage(f, t.body))}
+                                  href={waLink(f.phone, buildMessage(f, t.body, storeName))}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 />
