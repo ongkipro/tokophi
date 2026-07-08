@@ -20,7 +20,7 @@
 ## 2026-07-08 — Session: Super-Admin auth + admin multi-store polish ✅
 - **Platform-admin auth** (gap from prior session closed): `platform_admins` table (migration 0013, seed admin@tokophi.id/tokophi123); `lib/platform-auth.ts` (distinct `platform_session` cookie) + login + `middleware.ts` + `requirePlatformAdmin()` gating impersonation/lifecycle; layout split (server `layout.tsx` → client `platform-shell.tsx` w/ account menu + logout). Verified: 307 gate, login E2E, gated impersonation click-through.
 - **Admin store identity data-driven**: `lib/data/store.ts getStoreName()` + `components/admin/store-context.tsx` (`StoreProvider`/`useStoreName`, set in layout). Replaced every "Batik Nusantara" hardcode (topbar switcher, dashboard greeting, Pengaturan profile, product-editor vendor, CRM WA fills — `crm/page` server-fetched). NaN% donut fixed (`channel-chart.tsx`). Verified impersonating Kopi Senja → Pengaturan/CRM show "Kopi Senja", 0 Batik leak; both apps build clean.
-- **Remaining (decorative)**: dashboard live-activity feed still static mock.
+- **Live activity feed now real** (`lib/data/activity.ts getActivityFeed()`, RLS-scoped: orders/signups/reviews/low-stock per store) — last static-mock leak removed. Verified impersonating Kopi Senja → feed = its 3 orders, no Batik product leak. Admin multi-store polish complete.
 
 ## 2026-07-08 — Session: Super Admin healthcheck + impersonation ✅
 - **Multi-store seed** (`packages/db/src/seed.ts` `DEMO_STORES`): +6 stores w/ engineered health spread (2 sehat / 2 perhatian / 3 bermasalah). Platform pages now show real cross-store data.

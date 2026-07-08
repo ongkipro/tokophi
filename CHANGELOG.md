@@ -17,7 +17,7 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 ### Admin — full multi-store polish (store identity data-driven)
 - **All "Batik Nusantara" identity hardcodes wired to the session store** via a `StoreProvider`/`useStoreName()` context (set once in the admin layout from `getStoreName()`): topbar store-switcher (now lists the active store only), dashboard greeting, **Pengaturan** (profile name + input), **product editor** vendor default, and **CRM** WhatsApp message fills (`crm/page` server-fetched; pipeline/followup via context/param). Verified impersonating Kopi Senja → Pengaturan + CRM show "Kopi Senja", zero "Batik Nusantara" leak.
 - **NaN% fixed**: empty-store channel donut now shows `0%` instead of `NaN%` (guarded divide-by-zero in `channel-chart.tsx`).
-- **Remaining (decorative only)**: the dashboard "live activity" feed is still static mock (references demo product names); making it real needs per-store activity data. Non-functional.
+- **Live activity feed is now real & per-store** (`lib/data/activity.ts getActivityFeed()`, RLS-scoped): derived from the store's own recent orders, signups, reviews, and low-stock — replacing the static mock. Verified impersonating Kopi Senja → feed shows its 3 orders ("Pelanggan dari Bandung…"), zero Batik product leak. (The "N pengunjung online" ticker stays a decorative realtime widget.)
 
 ### Rebrand: indostore → TokoΦ
 - Full rename across the monorepo: display brand **TokoΦ** (φ symbol); identifiers `tokophi` (folder, npm scope `@indostore/*` → `@tokophi/*`, root pkg).
