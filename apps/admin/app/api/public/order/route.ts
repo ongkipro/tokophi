@@ -67,16 +67,11 @@ export async function POST(req: Request) {
     customerId = ins.id;
   }
 
-  const number = "WEB-" + Date.now().toString().slice(-9);
-  const [order] = await db.insert(schema.orders).values({
-    storeId: store.id, number, customerId, status: "baru", financialStatus: "pending", channel: "organic",
-    subtotalIdr: subtotal, shippingIdr: shippingCost, totalIdr: total,
-    city: addr.kota ?? null, province: addr.provinsi ?? null,
-  }).returning({ id: schema.orders.id, number: schema.orders.number });
-
-  // resolve each item → its product + variant (by combo title, else default position-0), then
-  // insert line items with variantId and decrement that variant's inventory (prevents oversell).
+  // resolve each item → product + variant (by combo title, else default position-0) + check stock
+  // BEFORE creating anything, so an out-of-stock cart is rejected cleanly (real oversell prevention).
+  const resolved: { i: Item; variantId: string | null; qty: number }[] = [];
   for (const i of items) {
+    const qty = i.qty ?? 1;
     let variantId: string | null = null;
     if (i.handle) {
       const [prod] = await db.select({ id: schema.products.id }).from(schema.products)
@@ -88,7 +83,25 @@ export async function POST(req: Request) {
         variantId = match?.id ?? null;
       }
     }
-    const qty = i.qty ?? 1;
+    if (variantId) {
+      const [inv] = await db.select({ available: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)` })
+        .from(schema.inventoryLevels).where(eq(schema.inventoryLevels.variantId, variantId));
+      const available = Number(inv?.available ?? 0);
+      if (available < qty) {
+        return NextResponse.json({ ok: false, error: `Stok "${i.name}" tidak mencukupi (sisa ${available}).` }, { headers: CORS });
+      }
+    }
+    resolved.push({ i, variantId, qty });
+  }
+
+  const number = "WEB-" + Date.now().toString().slice(-9);
+  const [order] = await db.insert(schema.orders).values({
+    storeId: store.id, number, customerId, status: "baru", financialStatus: "pending", channel: "organic",
+    subtotalIdr: subtotal, shippingIdr: shippingCost, totalIdr: total,
+    city: addr.kota ?? null, province: addr.provinsi ?? null,
+  }).returning({ id: schema.orders.id, number: schema.orders.number });
+
+  for (const { i, variantId, qty } of resolved) {
     await db.insert(schema.orderLineItems).values({
       orderId: order.id, variantId,
       title: i.variant ? `${i.name} — ${i.variant}` : i.name!,
