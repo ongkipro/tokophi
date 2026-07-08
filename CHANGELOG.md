@@ -4,6 +4,10 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-08
 
+### Shipping — local KiriminAja area database (7k districts)
+- Imported the KiriminAja district map (`districts-mapped.xlsx` → `packages/db/data/kiriminaja-areas.csv`, **7030 kecamatan / 37 provinces**) into a **`kiriminaja_areas`** reference table (migration 0017; `npm run seed:areas`; excluded from demo-reseed truncation). Its `id` = the KiriminAja area id (verified 5507=Semarang Barat, 6981=Danurejan/Yogya).
+- `lib/data/areas.ts resolveArea()` — **local table first** (instant, no rate limit, offline) → live `get_address_by_name` fallback; wired into shipping rates/search/create-shipment + the public ongkir endpoint. Pricing + order creation still hit the live API.
+
 ### Commerce loop closed — storefront checkout creates a real DB order + linked payment
 - New public endpoint `apps/admin/app/api/public/order` — the storefront checkout now **creates a real order** (upsert customer + `orders` + `order_line_items`) and, for non-COD, an **AutoLaris payment linked by `orderId`**. Runs as owner with an explicit `store_id`.
 - **Checkout** posts the whole order → real order number **`WEB-…`**; the **sukses page** shows the real number + payment instruction. Storefront orders now **appear in the merchant admin** (Pesanan list + detail) with the linked payment.
