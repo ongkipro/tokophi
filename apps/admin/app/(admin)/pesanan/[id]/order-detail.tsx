@@ -21,6 +21,8 @@ import {
 import { toast } from "sonner";
 import { setOrderStatus } from "@/lib/actions/orders";
 import { getShippingRates, createShipment, trackShipment, type Rate } from "@/lib/actions/shipping";
+import { createOrderPayment } from "@/lib/actions/payments";
+import type { OrderPayment } from "@/lib/data/payments";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useStoreName } from "@/components/admin/store-context";
 import { useCan } from "@/components/admin/permissions";
@@ -125,7 +127,7 @@ function primaryAction(status: OrderStatus): { label: string; icon: typeof Packa
 
 // ------- component -------
 
-export function OrderDetail({ order }: { order: Order }) {
+export function OrderDetail({ order, payment }: { order: Order; payment: OrderPayment | null }) {
   const { lines, subtotal, ongkir, penyesuaian, total } = breakdownFor(order);
   const step = currentStep(order.status);
   const cancelled = order.status === "batal";
@@ -209,6 +211,25 @@ export function OrderDetail({ order }: { order: Order }) {
         toast.message(r.message);
       }
     });
+  };
+
+  // Create a real payment bill (VA/QRIS/DANA) for this order via the platform PSP.
+  const PAY_CHANNELS = [
+    { code: "QRIS", label: "QRIS" }, { code: "VABCA", label: "VA BCA" }, { code: "VAMANDIRI", label: "VA Mandiri" },
+    { code: "VABNI", label: "VA BNI" }, { code: "VABRI", label: "VA BRI" }, { code: "DANA", label: "DANA" },
+  ];
+  const [billOpen, setBillOpen] = React.useState(false);
+  const createBill = (channelCode: string) => {
+    startRate(async () => {
+      const r = await createOrderPayment(order.id.replace("#", ""), channelCode);
+      if (r.ok) { toast.success("Tagihan pembayaran dibuat."); setBillOpen(false); router.refresh(); }
+      else toast.error(r.error ?? "Gagal membuat tagihan");
+    });
+  };
+  const PAY_STATUS: Record<string, { label: string; cls: string }> = {
+    berhasil: { label: "Dibayar", cls: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" },
+    menunggu: { label: "Menunggu pembayaran", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+    gagal: { label: "Gagal / kedaluwarsa", cls: "bg-red-500/12 text-red-600 dark:text-red-400" },
   };
 
   // Print a shipping label (resi) → browser print dialog (Save as PDF). Uses the order's
@@ -495,20 +516,35 @@ export function OrderDetail({ order }: { order: Order }) {
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <CreditCard className="size-4" /> Metode
                 </span>
-                <span className="font-medium">{payMethod}</span>
+                <span className="font-medium">{payment ? (PAY_CHANNELS.find((c) => c.code === payment.channelCode)?.label ?? payment.channelCode) : payMethod}</span>
               </div>
+              {payment?.virtualAccount && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Virtual Account</span>
+                  <span className="font-mono text-xs font-medium">{payment.virtualAccount}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Status</span>
-                {paid ? (
-                  <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                    Dibayar
-                  </span>
+                {payment ? (
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAY_STATUS[payment.status].cls}`}>{PAY_STATUS[payment.status].label}</span>
+                ) : paid ? (
+                  <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">Dibayar</span>
                 ) : (
-                  <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
-                    Menunggu
-                  </span>
+                  <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">Menunggu</span>
                 )}
               </div>
+              {payment && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Total (+admin)</span>
+                  <span className="font-medium tabular-nums">{IDR(payment.total)}</span>
+                </div>
+              )}
+              {!payment && canWrite && (
+                <Button variant="outline" size="sm" className="w-full" disabled={ratePending} onClick={() => setBillOpen(true)}>
+                  <CreditCard className="size-4" /> Buat Tagihan
+                </Button>
+              )}
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <Store className="size-4" /> Sumber
@@ -570,6 +606,23 @@ export function OrderDetail({ order }: { order: Order }) {
             </table>
           </div>
           <p className="mt-1 text-[11px] text-muted-foreground">{rates.length} layanan · tarif real-time · dikelola TokoΦ.</p>
+        </DialogContent>
+      </Dialog>
+
+      {/* Buat Tagihan (create a payment bill) */}
+      <Dialog open={billOpen} onOpenChange={setBillOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Buat Tagihan — {order.id}</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">Pilih metode pembayaran. Nomor VA / QRIS terbit otomatis untuk {IDR(total)}.</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {PAY_CHANNELS.map((c) => (
+              <Button key={c.code} variant="outline" disabled={ratePending} onClick={() => createBill(c.code)}>
+                {c.label}
+              </Button>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

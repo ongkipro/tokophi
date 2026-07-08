@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getOrder } from "@/lib/data/orders";
+import { getOrderPayment } from "@/lib/data/payments";
 import { OrderDetail } from "./order-detail";
 
 export const dynamic = "force-dynamic";
@@ -8,5 +9,6 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const order = await getOrder(id);
   if (!order) notFound();
-  return <OrderDetail order={order} />;
+  const payment = await getOrderPayment(id);
+  return <OrderDetail order={order} payment={payment} />;
 }
