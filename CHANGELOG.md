@@ -4,6 +4,13 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-08
 
+### Shipping — KiriminAja config + create shipment + print label (roadmap #1–3)
+- **Super-admin config + Test koneksi** — aggregator is now **KiriminAja** (enum `aggregator_provider` += `kiriminaja`, migration 0014); Pengaturan → Integrasi Kurir has a live **"Test koneksi"** (`kaTestConnection()` → `/api/mitra/province`, gated by `requirePlatformAdmin`). Verified: "Terhubung (sandbox) — 37 provinsi".
+- **Store sender address** (migration 0015: `store_settings.sender_*`) — admin Pengaturan → Pengiriman has an **"Alamat Pengirim (KiriminAja)"** card: kecamatan autocomplete (`get_address_by_name`) + phone/address/lat-lng, persisted per store.
+- **Buat Pengiriman** — the Cek Ongkir dialog gets a **"Buat"** per rate → `createShipment()` builds `request_pickup` (sender from settings + recipient resolved from the order) → saves **AWB/courier** on the order (`orders.awb/courier/ka_order_id`). `order_id` uses `KIRIMINAJA_ORDER_PREFIX` (default `TOKOPHI`) — **must be registered in the KA dashboard** (sandbox rejects unregistered prefixes with a clear hint).
+- **Cetak label PDF** — the "Cetak" stub is now a real **100×150mm shipping label** (courier, barcode+resi/AWB, penerima/pengirim, isi, COD/total) → browser print → Save as PDF; uses the real AWB once a shipment exists.
+- Verified E2E: sender saved (Yogyakarta), Buat reaches KiriminAja (blocked only on the registered prefix), label renders, Test koneksi green — all console-clean.
+
 ### Shipping — KiriminAja live rates (real courier API integration)
 - **Real KiriminAja Mitra API integration** (platform-managed aggregator, ADR 0004). `apps/admin/lib/kiriminaja.ts` client — sandbox base `https://tdev.kiriminaja.com` + Bearer key (in gitignored `.env.local`, **not committed**; `.env.example` placeholder). Endpoints verified against the Postman collection (version prefix varies per endpoint: `shipping_price`=v6.1, `get_address_by_name`=v2, `province`/`tracking`=unversioned).
 - **Client admin (order detail): "Cek Ongkir"** — `lib/actions/shipping.ts getShippingRates()` resolves the store city + order destination → KiriminAja district IDs (`get_address_by_name`) → live rates (`shipping_price`), shown in a dialog (courier, ETD, cost, COD badges). Verified E2E: order INV-4821 → **18 live services** (Yogyakarta→Semarang), console-clean.
