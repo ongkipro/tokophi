@@ -96,6 +96,36 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
   };
 }
 
+// instant (same-day / on-demand) pricing — uses lat/long, not district ids. gosend/grab/borzo.
+export type KaInstantRate = { name: string; code: string; serviceType: string; cost: number; etd: string };
+export async function kaInstantPricing(p: {
+  originLat: number; originLng: number; destLat: number; destLng: number;
+  weight: number; itemPrice: number; originAddress?: string; destAddress?: string; services?: string[];
+}): Promise<{ ok: boolean; results: KaInstantRate[]; distanceKm?: number; error?: string }> {
+  const r = await ka<{
+    status: boolean; text?: string; meta?: { distance?: number };
+    result?: { name: string; costs?: { service_type: string; estimation: string; price?: { total_price?: number } }[] }[];
+  }>("/api/mitra/v4/instant/pricing", {
+    service: p.services ?? ["gosend", "grab_express", "borzo"],
+    item_price: p.itemPrice,
+    origin: { lat: p.originLat, long: p.originLng, address: p.originAddress || "Lokasi toko" },
+    destination: { lat: p.destLat, long: p.destLng, address: p.destAddress || "Lokasi pelanggan" },
+    weight: Math.max(1, p.weight), vehicle: "motor", timezone: "WIB",
+  });
+  if (!r.status) return { ok: false, results: [], error: r.text };
+  const results: KaInstantRate[] = [];
+  for (const courier of r.result ?? []) {
+    for (const c of courier.costs ?? []) {
+      results.push({
+        name: `${courier.name.toUpperCase()} ${c.service_type}`,
+        code: courier.name, serviceType: c.service_type,
+        cost: c.price?.total_price ?? 0, etd: c.estimation,
+      });
+    }
+  }
+  return { ok: true, results, distanceKm: r.meta?.distance };
+}
+
 // express tracking by order id / AWB
 export async function kaTrack(orderId: string): Promise<{ ok: boolean; data?: unknown; error?: string }> {
   const r = await ka<{ status: boolean; text?: string; data?: unknown }>("/api/mitra/tracking", { order_id: orderId });

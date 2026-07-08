@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { kaShippingPrice, kiriminajaConfigured } from "@/lib/kiriminaja";
+import { db, schema } from "@tokophi/db";
+import { eq } from "drizzle-orm";
+import { kaShippingPrice, kaInstantPricing, kiriminajaConfigured } from "@/lib/kiriminaja";
 import { resolveArea } from "@/lib/data/areas";
 
 // Public (no-auth) storefront-facing shipping endpoint. The storefront checkout calls this to
@@ -22,7 +24,7 @@ export async function POST(req: Request) {
   if (!kiriminajaConfigured()) {
     return NextResponse.json({ ok: false, error: "Shipping belum dikonfigurasi." }, { status: 200, headers: CORS });
   }
-  let body: { op?: string; q?: string; originCity?: string; destinationId?: number; weight?: number; itemValue?: number };
+  let body: { op?: string; q?: string; originCity?: string; destinationId?: number; weight?: number; itemValue?: number; storeSlug?: string; destLat?: number; destLng?: number };
   try {
     body = await req.json();
   } catch {
@@ -33,6 +35,20 @@ export async function POST(req: Request) {
   if (body.op === "search") {
     const results = body.q ? await resolveArea(body.q) : [];
     return NextResponse.json({ ok: true, results }, { headers: CORS });
+  }
+
+  // instant (same-day) pricing — needs shopper coordinates; origin = store sender lat/lng (or default)
+  if (body.op === "instant") {
+    if (!body.destLat || !body.destLng) return NextResponse.json({ ok: false, error: "Lokasi tujuan belum ada." }, { headers: CORS });
+    let originLat = -7.8014, originLng = 110.3644; // default: Yogyakarta (Batik Nusantara)
+    const [store] = await db.select({ id: schema.stores.id }).from(schema.stores).where(eq(schema.stores.slug, body.storeSlug || "batik-nusantara")).limit(1);
+    if (store) {
+      const [ss] = await db.select({ lat: schema.storeSettings.senderLat, lng: schema.storeSettings.senderLng }).from(schema.storeSettings).where(eq(schema.storeSettings.storeId, store.id)).limit(1);
+      if (ss?.lat && ss?.lng) { originLat = Number(ss.lat); originLng = Number(ss.lng); }
+    }
+    const r = await kaInstantPricing({ originLat, originLng, destLat: body.destLat, destLng: body.destLng, weight: Math.max(1000, body.weight || 1000), itemPrice: body.itemValue || 0 });
+    if (!r.ok) return NextResponse.json({ ok: false, error: r.error ?? "Gagal ambil tarif instan." }, { headers: CORS });
+    return NextResponse.json({ ok: true, instant: r.results, distanceKm: r.distanceKm }, { headers: CORS });
   }
 
   // rates

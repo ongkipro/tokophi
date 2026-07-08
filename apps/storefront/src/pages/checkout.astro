@@ -112,11 +112,30 @@ const PAYMENTS = [
         <!-- Pengiriman -->
         <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
           <legend class="px-2 font-display text-lg font-semibold text-ink">Pengiriman</legend>
-          <div id="ship-options" class="space-y-3">
-            <p id="ship-hint" class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
-              Pilih <b>kecamatan tujuan</b> di atas untuk melihat ongkir real-time.
-            </p>
+          <p id="ship-hint" class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
+            Pilih <b>kecamatan tujuan</b> di atas untuk melihat ongkir real-time.
+          </p>
+
+          <!-- Group: Ekspedisi (reguler / express) -->
+          <div id="ship-express-group" class="hidden">
+            <div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              <span>📦 Ekspedisi</span><span class="h-px flex-1 bg-line"></span>
+            </div>
+            <div id="ship-express" class="space-y-2"></div>
           </div>
+
+          <!-- Group: Kirim Instan (same-day) -->
+          <div id="ship-instant-group" class="mt-4 hidden">
+            <div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              <span>⚡ Kirim Instan (hari ini)</span><span class="h-px flex-1 bg-line"></span>
+            </div>
+            <div id="ship-instant" class="space-y-2"></div>
+          </div>
+
+          <button type="button" id="instant-btn" class="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-brand-600 px-4 py-2 text-sm font-medium text-brand-600 transition-colors hover:bg-brand-50">
+            ⚡ Cek kirim instan (pakai lokasiku)
+          </button>
+          <p id="instant-note" class="mt-1 hidden text-xs text-muted"></p>
         </fieldset>
 
         <!-- Pembayaran -->
@@ -286,7 +305,11 @@ const PAYMENTS = [
     var destResults = document.getElementById("dest-results");
     var destId = document.getElementById("dest-id");
     var destText = document.getElementById("dest-text");
-    var shipBox = document.getElementById("ship-options");
+    var shipHint = document.getElementById("ship-hint");
+    var expressGroup = document.getElementById("ship-express-group");
+    var expressBox = document.getElementById("ship-express");
+    var instantGroup = document.getElementById("ship-instant-group");
+    var instantBox = document.getElementById("ship-instant");
 
     function api(payload) {
       return fetch(ONGKIR_API, {
@@ -324,23 +347,57 @@ const PAYMENTS = [
 
     function loadRates() {
       if (!destId.value) return;
-      shipBox.innerHTML = '<p class="px-4 py-3 text-sm text-muted">Menghitung ongkir…</p>';
+      if (shipHint) shipHint.classList.add("hidden");
+      expressGroup.classList.remove("hidden");
+      expressBox.innerHTML = '<p class="px-4 py-3 text-sm text-muted">Menghitung ongkir…</p>';
       api({ op: "rates", originCity: ORIGIN_CITY, destinationId: Number(destId.value), weight: totalQty * 500, itemValue: subtotal }).then(function (res) {
         if (!res.ok || !res.rates.length) {
-          shipBox.innerHTML = '<p class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">' + esc(res.error || "Tidak ada layanan untuk rute ini.") + "</p>";
+          expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">' + esc(res.error || "Tidak ada layanan untuk rute ini.") + "</p>";
           recompute();
           return;
         }
-        shipBox.innerHTML = res.rates.map(function (s, i) {
+        var anyChecked = !!form.querySelector('input[name="shipping"]:checked');
+        expressBox.innerHTML = res.rates.map(function (s, i) {
           var cod = s.cod ? ' <span class="ml-1 rounded bg-emerald-100 px-1 text-[10px] font-semibold text-emerald-700">COD</span>' : "";
           return '<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">' +
-            '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '"' + (i === 0 ? " checked" : "") + ' required class="h-4 w-4 accent-brand-600" />' +
+            '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '"' + (i === 0 && !anyChecked ? " checked" : "") + ' required class="h-4 w-4 accent-brand-600" />' +
             '<span class="flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + cod + '</span><span class="block text-xs text-muted">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
             '<span class="text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
         }).join("");
         bindShipping();
       }).catch(function () {
-        shipBox.innerHTML = '<p class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">Gagal memuat ongkir. Coba lagi.</p>';
+        expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">Gagal memuat ongkir. Coba lagi.</p>';
+      });
+    }
+
+    // ---- Kirim Instan (same-day) — uses the shopper's geolocation ----
+    var instantBtn = document.getElementById("instant-btn");
+    var instantNote = document.getElementById("instant-note");
+    function showInstantNote(msg) { instantNote.textContent = msg; instantNote.classList.remove("hidden"); }
+    if (instantBtn) {
+      instantBtn.addEventListener("click", function () {
+        if (!navigator.geolocation) { showInstantNote("Browser tidak mendukung lokasi."); return; }
+        instantBtn.disabled = true; instantBtn.textContent = "⚡ Mengambil lokasi…";
+        instantNote.classList.add("hidden");
+        navigator.geolocation.getCurrentPosition(function (pos) {
+          instantBtn.textContent = "⚡ Menghitung ongkir instan…";
+          api({ op: "instant", storeSlug: STORE_SLUG, destLat: pos.coords.latitude, destLng: pos.coords.longitude, weight: totalQty * 500, itemValue: subtotal }).then(function (res) {
+            instantBtn.disabled = false; instantBtn.textContent = "⚡ Perbarui kirim instan";
+            if (!res.ok || !res.instant || !res.instant.length) { showInstantNote(res.error || "Tidak ada layanan instan untuk lokasimu."); return; }
+            if (shipHint) shipHint.classList.add("hidden");
+            instantGroup.classList.remove("hidden");
+            instantBox.innerHTML = res.instant.map(function (s) {
+              return '<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-brand-600/40 bg-brand-50/30 px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">' +
+                '<input type="radio" name="shipping" value="instant-' + esc(s.code) + '-' + esc(s.serviceType) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" required class="h-4 w-4 accent-brand-600" />' +
+                '<span class="flex-1"><span class="block text-sm font-medium text-ink">⚡ ' + esc(s.name) + '</span><span class="block text-xs text-muted">' + esc(s.etd) + (res.distanceKm ? " · " + res.distanceKm + " km" : "") + '</span></span>' +
+                '<span class="text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
+            }).join("");
+            bindShipping();
+          }).catch(function () { instantBtn.disabled = false; instantBtn.textContent = "⚡ Cek kirim instan (pakai lokasiku)"; showInstantNote("Gagal memuat ongkir instan."); });
+        }, function () {
+          instantBtn.disabled = false; instantBtn.textContent = "⚡ Cek kirim instan (pakai lokasiku)";
+          showInstantNote("Izin lokasi ditolak — kirim instan butuh lokasimu.");
+        });
       });
     }
 
