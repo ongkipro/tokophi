@@ -1,6 +1,6 @@
 # TokoΦ — Architecture
 
-> Authoritative architecture doc. Companion to [`../PRD.md`](../PRD.md) (product), [`GUIDE.md`](GUIDE.md) (how to build/contribute), [`UML.md`](UML.md) (detailed diagrams), [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md) (DB). Describes how the three surfaces are built, the shared **local-Postgres backend now being wired behind the data layer** (super-admin is already live on it — ADR 0007), and the **per-client topology** (ADR 0008).
+> Authoritative architecture doc. Companion to [`../PRD.md`](../PRD.md) (product), [`GUIDE.md`](GUIDE.md) (how to build/contribute), [`UML.md`](UML.md) (detailed diagrams), [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md) (DB). Describes how the three surfaces are built, the shared **local-Postgres backend fully wired behind the data layer** (all three surfaces live on it — ADR 0007), and the **per-client topology** (ADR 0008).
 
 ---
 
@@ -34,7 +34,7 @@ flowchart LR
 
 - **One admin app, many stores.** A store switcher in the topbar scopes the UI; every query is scoped by `store_id` (app-layer now, Postgres RLS at self-hosted Postgres). super-admin is the only surface that reads across tenants.
 - **One storefront per client**, deployed from one templated Astro codebase (a `STORE_SLUG` per deploy), sharing design tokens + the shared nav source. Not a self-serve theme editor.
-- **Backend status:** **super-admin + all 16 admin modules + storefront** are **live on local Postgres** via `@tokophi/db` (reads end-to-end); only writes (mutations) pending. See §9–10 + ADR 0007/0008.
+- **Backend status:** **super-admin + all 16 admin modules + storefront** are **live on local Postgres** via `@tokophi/db` — reads **and** writes end-to-end (all 12 admin editors persist via `lib/actions/*`; super-admin provisioning/lifecycle/settings/billing; real variants). See §9–10 + ADR 0007/0008.
 
 ---
 
@@ -64,7 +64,7 @@ Plus a root **`docker-compose.yml`** (local PostgreSQL 16, port `5433`) — see 
 | **`@tokophi/ui`** | `./styles.css` (Tailwind v4 tokens), `./lib/utils` (`cn`), `./*` (each component, e.g. `@tokophi/ui/button`) | shadcn/ui primitives built on **Base UI** (`@base-ui/react`), Recharts, lucide, cva | **super-admin** (Tailwind picks the components up via `@source` in its `globals.css`). |
 | **`@tokophi/lib`** | `.` (index), `./format` | Money/number formatters: `IDR()`, `num()`, `pct()`, `timeAgo()` | **super-admin** (`@tokophi/lib/format`), **storefront** (`IDR` in Astro pages). |
 | **`@tokophi/data`** | `.` (re-exports menu), `./menu` | `MAIN_MENU`, `FOOTER_MENU`, `MenuItem`/`MenuItemType` — the **single source of truth for navigation** | **admin** (menu builder), **storefront** (header/footer nav). |
-| **`@tokophi/db`** | `.`, `./schema`, `./client` | Drizzle **schema** (53 tables, snake_case, money=`bigint` IDR), `db` client singleton, inferred types, versioned migrations, seed/reset. **Server-only** (`postgres` in `serverExternalPackages`). | **super-admin** + **admin** (13 modules via `lib/data/*` — live). **storefront** next. |
+| **`@tokophi/db`** | `.`, `./schema`, `./client` | Drizzle **schema** (54 tables, snake_case, money=`bigint` IDR), `db` client singleton, inferred types, versioned migrations, seed/reset. **Server-only** (`postgres` in `serverExternalPackages`). | **super-admin** + **admin** (13 modules via `lib/data/*` — live). **storefront** next. |
 
 > **admin is a partial migrant.** admin still keeps its **own** local `components/ui` + `lib` (formatters, utils) — de-duping against `@tokophi/ui`/`@tokophi/lib` is a tracked backlog task. It has, however, already adopted the shared **data** package (`@tokophi/data` is in admin's `transpilePackages`). So today: super-admin + storefront consume ui/lib/data; admin consumes only data (plus its local copies of the rest).
 
@@ -166,7 +166,7 @@ flowchart TD
 
 ## 9. Backend (in progress) — local Postgres + Drizzle → self-hosted Postgres (VPS)
 
-The backend is being wired **behind the data-layer seam** (§4). Dev stack = **plain PostgreSQL 16 in Docker + Drizzle** in `@tokophi/db` (ADR 0007); prod target = **self-hosted Postgres** (managed Postgres + Auth + Storage). Payments & shipping stay **platform-managed** (ADR 0004).
+The backend is fully wired **behind the data-layer seam** (§4). Dev stack = **plain PostgreSQL 16 in Docker + Drizzle** in `@tokophi/db` (ADR 0007); prod target = **self-hosted Postgres** (managed Postgres + Auth + Storage). Payments & shipping stay **platform-managed** (ADR 0004).
 
 **Local dev:**
 ```bash
@@ -181,7 +181,7 @@ npm run studio  -w @tokophi/db     # Drizzle Studio
 | Surface | Data source today | Notes |
 |---|---|---|
 | **super-admin** | ✅ **PostgreSQL** (`lib/data.ts`, `dynamic="force-dynamic"`) | all 5 pages live; `getStores/getPlatform/getInvoices/…` |
-| **admin** | ✅ **all reads on PostgreSQL** | ✅ **all 16 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan / Navigasi / Dashboard / Analitik / Pemasaran — the WHOLE admin reads `lib/data/*`; only the storefront + admin writes still mock |
+| **admin** | ✅ **all reads on PostgreSQL** | ✅ **all 16 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan / Navigasi / Dashboard / Analitik / Pemasaran — the WHOLE admin reads `lib/data/*` + all 12 editors write via `lib/actions/*` |
 | **storefront** | mock (`data/catalog.ts`) | after admin: read by `store_id`/`STORE_SLUG` |
 
 **Path to the VPS (no schema rework):** stand up the VPS Postgres → point `DATABASE_URL` at it → apply the same Drizzle migrations → enable **RLS keyed on `store_id`** (policies written, dormant locally) → wire self-hosted (JWT) Auth (owner/staff via `store_users`) + Storage (media). See [`SCHEMA.md`](SCHEMA.md) for tables, [`UML.md`](UML.md) for diagrams.

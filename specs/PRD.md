@@ -77,7 +77,7 @@ Demo brand **"Batik Nusantara"** — a women's-fashion store.
 - **`@tokophi/ui`** — shadcn components on **Base UI** (`@base-ui/react`) + design tokens; consumed by both Next apps.
 - **`@tokophi/lib`** — formatters (IDR / number, `id-ID`).
 - **`@tokophi/data`** — canonical `MAIN_MENU` / `FOOTER_MENU`: the **single source of truth for navigation**, consumed by BOTH the admin menu builder (`apps/admin/lib/mock/store.ts`) and the storefront header (`apps/storefront/src/data/nav.ts`). Edit once → both surfaces stay in sync on rebuild.
-- **`@tokophi/db`** (NEW) — **Drizzle** schema (53 tables, snake_case, money=`bigint` IDR) + `db` client + versioned migrations + seed/reset. Server-only. Backs super-admin today (see ADR 0007). `docker compose up -d db` → `npm run migrate` → `npm run seed`.
+- **`@tokophi/db`** (NEW) — **Drizzle** schema (54 tables, snake_case, money=`bigint` IDR) + `db` client + versioned migrations + seed/reset. Server-only. Backs super-admin today (see ADR 0007). `docker compose up -d db` → `npm run migrate` → `npm run seed`.
 
 **Non-goals (still):** auth backend, payment/courier integrations, live "edit-in-admin → storefront" persistence — mocked/deferred. **No longer a non-goal:** the DB is real (local Postgres) and multi-tenant provisioning is decided (ADR 0008). See `docs/BACKLOG.md`.
 
@@ -174,7 +174,7 @@ Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palet
 - **M1.5 (DONE 2026-07-02):** Produk sub-modules (Kategori/Inventori/Pembelian) + CRM + customer & collection editors + Halaman/Blog edit routes + order detail page + Pemasaran province filter + Pengaturan redesign + fashion demo with AI product photos + Shopify-style product list.
 - **M2 — storefront + monorepo (DONE 2026-07-02):** repo restructured to `apps/*` + `packages/*`; **super-admin** control plane; **`@tokophi/data`** canonical nav shared by admin + storefront; **Navigasi drag-and-drop** menu builder; **Astro storefront built** — "Batik Nusantara" with beranda, kategori, produk (5-image gallery), keranjang, **checkout (+sukses)**, akun, blog, kontak; localStorage cart; 70 AI product images.
 - **M3 — backend (IN PROGRESS):**
-  - ✅ **Local PostgreSQL 16 + Drizzle** (`@tokophi/db`, ADR 0007): 53 tables, versioned migrations, seed.
+  - ✅ **Local PostgreSQL 16 + Drizzle** (`@tokophi/db`, ADR 0007): 54 tables, versioned migrations, seed.
   - ✅ **super-admin wired to DB** (`lib/data.ts`) — live, verified parity.
   - 🟡 **admin → DB**: ✅ **all 16 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan / Navigasi / Dashboard / Analitik / Pemasaran (seeded full demo: products/collections/customers/orders/discounts/pages/articles/leads/followups/templates/suppliers+POs/segments/reviews/menus/daily-stats/ad-channels; via `lib/data/*`, `force-dynamic`). Admin fully wired.
   - ✅ **storefront → DB**: `src/data/catalog.ts` reads `@tokophi/db` (top-level await, build/SSR). **All three surfaces now read Postgres.**

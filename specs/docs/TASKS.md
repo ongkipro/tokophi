@@ -46,7 +46,7 @@
 - [ ] **Deploy to Cloudflare** · **S** · wire CF Pages/Workers deploy.
 
 ## Epic 5 — Backend (M3 — local Postgres/Drizzle → self-hosted VPS)
-- [x] **Schema (`@tokophi/db`)** · **L** · 53 tables/enums from `SCHEMA.md` as Drizzle + versioned migrations on **local PostgreSQL 16** (Docker). Seeded single-tenant "Batik Nusantara" = parity with mock.
+- [x] **Schema (`@tokophi/db`)** · **L** · 54 tables/enums from `SCHEMA.md` as Drizzle + versioned migrations on **local PostgreSQL 16** (Docker). Seeded single-tenant "Batik Nusantara" = parity with mock.
 - [x] **RLS (tenant isolation, enforcing at runtime)** · **L** · migration `0012` = RLS + `tenant_isolation` (`USING`/`WITH CHECK` on `store_id`) on all 32 store-scoped tables + non-owner `tokophi_app` role + `withTenant()`/`withCurrentTenant()`. The admin runs every read + write through the restricted role, so RLS enforces live (auth/super-admin/storefront stay owner). `verify-rls` + `verify-rls-app` + Playwright E2E green.
 - [~] **Swap `lib/data` bodies → queries** · **L** · ✅ super-admin (all 5) + admin 16 modules read the DB (`force-dynamic`). ⏳ storefront.
 - [x] **Auth + RBAC** · **M** · ✅ **local auth** (email/password → jose JWT httpOnly cookie, `middleware.ts` protects admin, owner `ongki@batiknusantara.id`) + ✅ **RBAC** (`lib/rbac.ts` `requireCapability` gates all 13 mutating action files by `store_users.role`; store_id from the session) + ✅ **RBAC UI** (`lib/rbac-policy.ts` + `useCan`/`<Can>` + role badge; **all admin editors** gate controls per role, Playwright-verified across owner/staff/gudang).

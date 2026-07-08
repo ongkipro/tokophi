@@ -2,7 +2,7 @@
 
 > Practical "how do I…" guide. For the *why* and the big picture read [`ARCHITECTURE.md`](ARCHITECTURE.md); for the product spec see [`../PRD.md`](../PRD.md); for the future DB see [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md); for diagrams [`UML.md`](UML.md).
 
-TokoΦ is a Shopify-style commerce SaaS for Indonesia: **Bahasa Indonesia UI, IDR.** UI/UX-first, and the **backend is now being wired** on local PostgreSQL (Drizzle, `@tokophi/db`) — super-admin + 16 admin modules read the DB; the rest is still mock. No Themes menu, no Apps/Plugins.
+TokoΦ is a Shopify-style commerce SaaS for Indonesia: **Bahasa Indonesia UI, IDR.** the **local backend is fully wired** on PostgreSQL (Drizzle, `@tokophi/db`) — all 3 surfaces read + all 12 admin editors write + auth/RBAC/RLS + real product variants. No Themes menu, no Apps/Plugins.
 
 ---
 

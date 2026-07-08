@@ -2,7 +2,7 @@
 
 **Shopify-style commerce SaaS for the Indonesian market.** A shared, modern-SaaS **admin panel** runs many merchant stores; a **super-admin** control plane is what we (the platform) use to manage all stores/plans/billing; each client gets a bespoke **Astro storefront** (hand-built per brand — no theme editor).
 
-> Deliberately **no Themes menu** and **no Apps/Plugins marketplace**. Curated, lightweight, **Bahasa Indonesia** UI tuned for local sellers (WhatsApp, COD, QRIS/e-wallets, local couriers) with modern-SaaS polish. UI/UX-first; the **backend is now being wired** on local PostgreSQL (Drizzle) — super-admin + 16 admin modules read the DB.
+> Deliberately **no Themes menu** and **no Apps/Plugins marketplace**. Curated, lightweight, **Bahasa Indonesia** UI tuned for local sellers (WhatsApp, COD, QRIS/e-wallets, local couriers) with modern-SaaS polish. The **local backend is fully wired** on PostgreSQL (Drizzle) — all 3 surfaces read + all admin editors write + auth/RBAC/RLS + real product variants; VPS deploy is the only remaining milestone.
 
 Full spec & docs: [`specs/`](specs/) (mirrors `~/Documents/Development/tokophi/`) — start with [`specs/PRD.md`](specs/PRD.md), [`specs/docs/ARCHITECTURE.md`](specs/docs/ARCHITECTURE.md), [`specs/docs/GUIDE.md`](specs/docs/GUIDE.md).
 
@@ -47,7 +47,7 @@ Build: `npm run build:admin` · `npm run build:super` · (storefront) `cd apps/s
 
 ## Database (local Postgres — `@tokophi/db`)
 
-Backend is being wired behind the data layer: **plain PostgreSQL 16 in Docker + Drizzle** (53 tables, single-tenant "Batik Nusantara"; prod target = self-hosted Postgres + PostgREST (VPS) — ADR 0007). **super-admin (all 5) + 16 admin modules + storefront read it live**; only writes (mutations) still mock.
+Local backend is live end-to-end: **plain PostgreSQL 16 in Docker + Drizzle** (54 tables, migrations 0000–0013; prod target = self-hosted Postgres + PostgREST (VPS) — ADR 0007). **All 3 surfaces read + all 12 admin editors write** the DB; local auth + RBAC + RLS enforcing + local media upload done. Multi-store: 7 stores (super-admin control plane) + real product variants end-to-end (admin → storefront → cart).
 
 ```bash
 docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted)
@@ -71,9 +71,11 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - Sales channel = **Toko Online only**; analytics attribution = Meta / TikTok / Google Ads + Organic / Other.
 - Keep it **console-clean** (no Base UI warnings) and responsive; `npm run build` must pass.
 
-## Status (2026-07-04) — full local stack: 3 surfaces READ + all admin editors WRITE Postgres, local auth + RBAC + RLS + media upload (local Linux dev)
+## Status (2026-07-08) — full local stack, rebranded to TokoΦ, multi-store + variants end-to-end
 
-> **Current focus = local Linux.** Everything runs locally: PostgreSQL 16 in Docker (:5433) + the two Next dev servers + the Astro storefront. Prod (self-hosted Postgres + PostgREST on a VPS) is deferred until the local stack is feature-complete.
+> **Current focus = local Linux.** Everything runs locally: PostgreSQL 16 in Docker (:5433) + the two Next dev servers + the Astro storefront. Prod (self-hosted Postgres + PostgREST on a VPS) is deferred (user hasn't provisioned a VPS yet) — local is feature-complete.
+>
+> **Since 2026-07-04 (all local, verified E2E):** rebranded indostore → **TokoΦ**; **super-admin = functional control plane** (7 stores, healthcheck, impersonation into admin, platform-admin auth, provisioning "Tambah toko", settings persistence, team invite, billing actions); **admin multi-store polish** (store identity data-driven, real per-store activity feed); **real product variants end-to-end** (adaptive TikTok-Shop/Shopee-style editor with chip values + bulk apply → storefront variant picker → variant-aware cart; all 14 fashion products seeded Warna×Ukuran); **CSV export** on all Ekspor buttons; **functional global search** (⌘K). See `CHANGELOG.md` / `specs/docs/WORKLOG.md`.
 
 - **Admin:** Dashboard (KPIs, FB-style date range, charts) · Pesanan (+detail) · Produk (+editor, Kategori/Inventori/Pembelian) · Pelanggan (+detail/Segmen/Ulasan) · CRM (Follow-up WA/Pipeline/Template) · Diskon (+editor) · Analitik · Pemasaran (per-provinsi) · Halaman & Blog (create+edit) · **Navigasi** (drag-and-drop menu builder + up/down + sub-menu) · Pengaturan.
 - **Super Admin:** Dashboard (MRR/GMV) · Toko (+detail) · Paket · Analitik · Pengaturan (gateways + Biteship + couriers). **← all 5 pages live on PostgreSQL** via `lib/data.ts`.
@@ -96,5 +98,5 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - **2026-07-03** — **Local admin auth**: email/password login, jose JWT httpOnly session, `middleware.ts` route protection, topbar user + logout (`users.password_hash` scrypt).
 - **2026-07-03** — **All 12 admin editors now WRITE Postgres** (added Navigasi, Pelanggan, CRM, Segmen, Pembelian incl. a real line-item PO builder with receive→stock) via `lib/actions/*`.
 - **2026-07-03** — Decision: **prod backend = self-hosted Postgres + PostgREST on a VPS (not Supabase)**; all docs reframed. Focus stays **local Linux**.
-- **2026-07-03** — **All three surfaces READ Postgres** (storefront `catalog.ts` reads `@tokophi/db`); **admin 100% DB-backed** (16 modules); 53 tables.
+- **2026-07-03** — **All three surfaces READ Postgres** (storefront `catalog.ts` reads `@tokophi/db`); **admin 100% DB-backed** (16 modules); 54 tables.
 - **Next up** — admin-client feature depth (Real variants first; VPS infra deferred) (see [`specs/docs/WORKLOG.md`](specs/docs/WORKLOG.md) CURRENT STATE). Full history: [`CHANGELOG.md`](CHANGELOG.md).
