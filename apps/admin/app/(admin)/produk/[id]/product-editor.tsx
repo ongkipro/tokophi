@@ -17,6 +17,7 @@ import {
   Play,
   Trash2,
   ChevronDown,
+  X,
   MoreHorizontal,
   Tags,
   Boxes,
@@ -92,7 +93,7 @@ const DESC_TEMPLATE = (name: string) =>
   `${name} adalah produk pilihan dengan kualitas terbaik. Dibuat dari bahan premium, cocok untuk pemakaian sehari-hari maupun sebagai hadiah. Tersedia stok terbatas — pesan sekarang selagi ada.`;
 
 // ---- variants ----
-type OptionDef = { name: string; values: string }; // values = comma-separated string (editable)
+type OptionDef = { name: string; values: string[] }; // chip values (e.g. ["Merah","Biru"])
 const MAX_OPTIONS = 2; // locked to 2 variant types (e.g. Warna + Ukuran) — Shopify-style, curated
 // Cartesian product of each option's parsed values → every variant combo.
 function cartesian(valueLists: string[][]): string[][] {
@@ -130,9 +131,12 @@ export function ProductEditor({ product }: { product?: Product }) {
   const [hasVariants, setHasVariants] = React.useState<boolean>(!!(product?.variants?.length && product?.options?.length));
   const [options, setOptions] = React.useState<OptionDef[]>(
     product?.options?.length
-      ? product.options.map((o) => ({ name: o.name, values: o.values.join(", ") }))
-      : [{ name: "Ukuran", values: "S, M, L" }],
+      ? product.options.map((o) => ({ name: o.name, values: [...o.values] }))
+      : [{ name: "Ukuran", values: ["S", "M", "L"] }],
   );
+  const [valueDrafts, setValueDrafts] = React.useState<string[]>([]); // per-option "type new value" input
+  const [bulkPrice, setBulkPrice] = React.useState("");
+  const [bulkStock, setBulkStock] = React.useState("");
   // per-combo overrides keyed by "val1 / val2" → { price, stock, sku }
   const [variantMap, setVariantMap] = React.useState<Record<string, { price: string; stock: string; sku: string }>>(() => {
     const m: Record<string, { price: string; stock: string; sku: string }> = {};
@@ -305,16 +309,40 @@ export function ProductEditor({ product }: { product?: Product }) {
   const margin = priceN > 0 ? (profit / priceN) * 100 : 0;
 
   const parsedOptions = options
-    .map((o) => ({ name: o.name.trim(), values: o.values.split(",").map((v) => v.trim()).filter(Boolean) }))
+    .map((o) => ({ name: o.name.trim(), values: o.values.filter(Boolean) }))
     .filter((o) => o.name && o.values.length);
   const combos = hasVariants && parsedOptions.length ? cartesian(parsedOptions.map((o) => o.values)) : [];
   const variantAt = (key: string) => variantMap[key] ?? { price, stock: "0", sku: "" };
   const setVariantField = (key: string, field: "price" | "stock" | "sku", val: string) =>
     setVariantMap((prev) => ({ ...prev, [key]: { ...(prev[key] ?? { price, stock: "0", sku: "" }), [field]: val } }));
-  const setOption = (idx: number, patch: Partial<OptionDef>) =>
-    setOptions((prev) => prev.map((o, i) => (i === idx ? { ...o, ...patch } : o)));
-  const addOption = () => setOptions((prev) => (prev.length < MAX_OPTIONS ? [...prev, { name: "", values: "" }] : prev));
+
+  const setOptionName = (idx: number, name: string) => setOptions((prev) => prev.map((o, i) => (i === idx ? { ...o, name } : o)));
+  const addOption = () => setOptions((prev) => (prev.length < MAX_OPTIONS ? [...prev, { name: "", values: [] }] : prev));
   const removeOption = (idx: number) => setOptions((prev) => prev.filter((_, i) => i !== idx));
+  // chip values: type + Enter/comma adds one (or several if pasted comma-list); dedupes.
+  const addValue = (idx: number, raw: string) => {
+    const vals = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!vals.length) return;
+    setOptions((prev) => prev.map((o, i) => (i === idx ? { ...o, values: [...o.values, ...vals.filter((v) => !o.values.includes(v))] } : o)));
+  };
+  const removeValue = (idx: number, val: string) =>
+    setOptions((prev) => prev.map((o, i) => (i === idx ? { ...o, values: o.values.filter((v) => v !== val) } : o)));
+  const setValueDraft = (idx: number, val: string) => setValueDrafts((prev) => { const n = [...prev]; n[idx] = val; return n; });
+
+  // bulk-apply price/stock to every generated variant (TikTok Shop / Shopee-style "atur sekaligus")
+  const applyBulk = () => {
+    if (!combos.length) return;
+    setVariantMap((prev) => {
+      const next = { ...prev };
+      for (const c of combos) {
+        const key = comboKeyOf(c);
+        const cur = prev[key] ?? { price, stock: "0", sku: "" };
+        next[key] = { price: bulkPrice !== "" ? bulkPrice : cur.price, stock: bulkStock !== "" ? bulkStock : cur.stock, sku: cur.sku };
+      }
+      return next;
+    });
+    toast.success("Harga & stok diterapkan ke semua varian.");
+  };
 
   const seoTitleText = seoTitle || name || "Judul produk";
   const seoDescText =
@@ -691,29 +719,69 @@ export function ProductEditor({ product }: { product?: Product }) {
 
               {hasVariants && (
                 <div className="flex flex-col gap-4">
-                  {/* option definitions (up to 3) */}
+                  {/* option types (locked to 2) — chip values, TikTok Shop / Shopee-style */}
                   <div className="flex flex-col gap-3">
                     {options.map((opt, i) => (
-                      <div key={i} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_1.4fr_auto] sm:items-end">
-                        <div className="grid gap-1.5">
-                          <Label className="text-xs text-muted-foreground">Nama opsi {i + 1}</Label>
-                          <Input value={opt.name} onChange={(e) => setOption(i, { name: e.target.value })} placeholder="mis. Ukuran" />
+                      <div key={i} className="flex flex-col gap-3 rounded-lg border p-3">
+                        <div className="flex items-end gap-3">
+                          <div className="grid flex-1 gap-1.5">
+                            <Label className="text-xs text-muted-foreground">Jenis varian {i + 1}</Label>
+                            <Input value={opt.name} onChange={(e) => setOptionName(i, e.target.value)} placeholder={i === 0 ? "mis. Warna" : "mis. Ukuran"} />
+                          </div>
+                          <Button type="button" variant="ghost" size="icon" aria-label="Hapus jenis varian" disabled={options.length <= 1} onClick={() => removeOption(i)}>
+                            <Trash2 className="size-4" />
+                          </Button>
                         </div>
                         <div className="grid gap-1.5">
-                          <Label className="text-xs text-muted-foreground">Nilai (pisah koma)</Label>
-                          <Input value={opt.values} onChange={(e) => setOption(i, { values: e.target.value })} placeholder="S, M, L" />
+                          <Label className="text-xs text-muted-foreground">Nilai</Label>
+                          <div className="flex flex-wrap items-center gap-1.5 rounded-md border bg-background px-2 py-1.5">
+                            {opt.values.map((v) => (
+                              <Badge key={v} variant="secondary" className="gap-1 pr-1">
+                                {v}
+                                <button type="button" aria-label={`Hapus ${v}`} onClick={() => removeValue(i, v)} className="rounded-full p-0.5 opacity-60 hover:bg-foreground/10 hover:opacity-100">
+                                  <X className="size-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                            <input
+                              className="min-w-28 flex-1 bg-transparent py-0.5 text-sm outline-none placeholder:text-muted-foreground"
+                              value={valueDrafts[i] ?? ""}
+                              onChange={(e) => setValueDraft(i, e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addValue(i, valueDrafts[i] ?? ""); setValueDraft(i, ""); }
+                                else if (e.key === "Backspace" && !(valueDrafts[i] ?? "") && opt.values.length) { removeValue(i, opt.values[opt.values.length - 1]); }
+                              }}
+                              onBlur={() => { if ((valueDrafts[i] ?? "").trim()) { addValue(i, valueDrafts[i] ?? ""); setValueDraft(i, ""); } }}
+                              placeholder={opt.values.length ? "Tambah nilai…" : "Ketik nilai lalu Enter (mis. Merah)"}
+                            />
+                          </div>
                         </div>
-                        <Button type="button" variant="ghost" size="icon" aria-label="Hapus opsi" disabled={options.length <= 1} onClick={() => removeOption(i)}>
-                          <Trash2 className="size-4" />
-                        </Button>
                       </div>
                     ))}
                     {options.length < MAX_OPTIONS && (
                       <Button type="button" variant="outline" size="sm" className="w-fit gap-1.5" onClick={addOption}>
-                        <Plus className="size-4" /> Tambah opsi
+                        <Plus className="size-4" /> Tambah jenis varian
                       </Button>
                     )}
                   </div>
+
+                  {/* bulk apply price + stock to every variant (atur sekaligus) */}
+                  {combos.length > 0 && (
+                    <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs text-muted-foreground">Harga semua</Label>
+                        <div className="relative max-w-32">
+                          <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
+                          <Input id="p-bulk-harga" inputMode="numeric" value={bulkPrice} onChange={(e) => setBulkPrice(e.target.value.replace(/[^\d]/g, ""))} placeholder="0" className="pl-8 tabular-nums" />
+                        </div>
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs text-muted-foreground">Stok semua</Label>
+                        <Input id="p-bulk-stok" inputMode="numeric" value={bulkStock} onChange={(e) => setBulkStock(e.target.value.replace(/[^\d]/g, ""))} placeholder="0" className="max-w-24 tabular-nums" />
+                      </div>
+                      <Button type="button" variant="outline" onClick={applyBulk}>Terapkan ke semua</Button>
+                    </div>
+                  )}
 
                   {/* generated variant matrix — price/stock/sku per combo */}
                   {combos.length > 0 ? (

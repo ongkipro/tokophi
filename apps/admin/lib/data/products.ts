@@ -1,7 +1,7 @@
 import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import type { Product } from "@/lib/mock/store";
 
 // Flatten the normalized catalog (products ⋈ default variant ⋈ inventory ⋈ primary media)
@@ -48,7 +48,27 @@ function toProduct(r: {
 
 export async function getProducts(): Promise<Product[]> {
   return withCurrentTenant(async (db) => {
-    const rows = await base(db).where(ne(schema.products.status, "archived")).orderBy(desc(schema.products.createdAt));
+    // list shows the "from" price (min variant) + TOTAL stock across all variants
+    const rows = await db
+      .select({
+        id: schema.products.id,
+        name: schema.products.title,
+        emoji: schema.products.emoji,
+        status: schema.products.status,
+        category: schema.products.category,
+        unitsSold: schema.products.unitsSold,
+        createdAt: schema.products.createdAt,
+        price: sql<number>`coalesce(min(${schema.productVariants.priceIdr}), 0)`,
+        stock: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)`,
+        image: schema.productMedia.url,
+      })
+      .from(schema.products)
+      .leftJoin(schema.productVariants, eq(schema.productVariants.productId, schema.products.id))
+      .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.productVariants.id))
+      .leftJoin(schema.productMedia, and(eq(schema.productMedia.productId, schema.products.id), eq(schema.productMedia.position, 0)))
+      .where(ne(schema.products.status, "archived"))
+      .groupBy(schema.products.id, schema.productMedia.url)
+      .orderBy(desc(schema.products.createdAt));
     return rows.map(toProduct);
   });
 }
