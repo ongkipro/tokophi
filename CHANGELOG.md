@@ -10,7 +10,11 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 - **UI**: Toko list gets a Kesehatan column + health filter + Sehat/Perhatian/Bermasalah stat cards; store detail gets a Healthcheck panel (per-check breakdown + score bar); dashboard gets a "Kesehatan Platform" rollup + "Perlu perhatian" list.
 - **Impersonation ("Buka panel admin")** — super-admin mints the admin session cookie for a store's owner (`lib/session.ts` + `lib/actions.ts`, shared `AUTH_SECRET`, localhost host-scoped cookie) and opens the admin (:3000) scoped to that store via RLS. Verified end-to-end (admin serves the impersonated owner, not Batik Nusantara). Admin app untouched.
 - **Store lifecycle actions** — suspend/activate + change plan (super-admin's first mutations, owner connection cross-tenant). `verify-rls` still green; super-admin + admin builds clean; console-clean.
-- **Follow-up**: super-admin has no auth of its own yet — impersonation/lifecycle actions are unguarded and must be gated behind a platform-admin session before any deploy.
+
+### Super Admin — platform-admin auth (gaps closed) + impersonation-correct admin
+- **Platform-admin auth**: `platform_admins` table (migration 0013) + seeded **admin@tokophi.id / tokophi123**; `lib/platform-auth.ts` uses a **distinct `platform_session` cookie** (separate from the admin `session` it mints for impersonation); login page + `signIn`/`signOut` + `middleware.ts` route protection. `requirePlatformAdmin()` now **gates** `impersonateStore`/`setStoreStatus`/`setStorePlan` (the earlier "unguarded" follow-up is resolved). Layout split into a server layout (reads session) + client `PlatformShell` (account menu + logout).
+- **Admin reflects the session store**: `apps/admin/lib/data/store.ts getStoreName()` → the admin topbar store-switcher + dashboard greeting now show the *actual* store (so impersonating "Kopi Senja" shows Kopi Senja + owner Rangga + RLS-scoped data, not the hardcoded "Batik Nusantara"). Verified E2E via Playwright.
+- **Remaining cosmetic**: some admin decorative widgets (live activity feed, a few CRM/pengaturan consts) still reference "Batik Nusantara" mock copy; empty-store donuts show NaN%. Non-functional.
 
 ### Rebrand: indostore → TokoΦ
 - Full rename across the monorepo: display brand **TokoΦ** (φ symbol); identifiers `tokophi` (folder, npm scope `@indostore/*` → `@tokophi/*`, root pkg).
