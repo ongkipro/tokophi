@@ -2,7 +2,7 @@
 
 > The product concept, fleshed out so the backend (self-hosted Postgres) is later "just implementation."
 > Companion to `../PRD.md`, `SCHEMA.md` (backend-ready tables), `UI_INVENTORY.md` (screen status).
-> Phase: **concept + UI/UX first**; the **backend is now being wired** on local PostgreSQL (Drizzle) — super-admin + 16 admin modules read the DB; the rest still mock. (§8 covers why deferring the full backend early was safe.)
+> Phase: **concept + UI/UX first**; the **local backend is wired** on PostgreSQL (Drizzle) — all 3 surfaces read + all 12 admin editors write + local auth/RBAC/RLS enforcing. (§8 covers why deferring the full backend early was safe.)
 
 ---
 

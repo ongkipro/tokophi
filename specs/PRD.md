@@ -1,7 +1,7 @@
 # TokoΦ — Product Requirements Document (PRD v0.4)
 
-> **Working name:** TokoΦ (rename trivial) · **Owner:** Paduka Ongki / ongkipro
-> **Phase:** UI/UX-first → **backend M3, local Linux** — all 3 surfaces READ + all 12 admin editors WRITE local PostgreSQL/Drizzle; local auth + **RBAC** (capability matrix + role-aware UI on all editors) + **RLS ENFORCING at runtime** (admin routes every read/write through the non-owner `tokophi_app` role via `withTenant`; `verify-rls`+`verify-rls-app`+E2E green) + local media upload done. **Next: the VPS server itself** (app side done). · **Updated:** 2026-07-04
+> **Name:** TokoΦ (rebranded from "indostore" 2026-07-08) · **Owner:** Paduka Ongki / ongkipro
+> **Phase:** UI/UX-first → **backend M3, local Linux** — all 3 surfaces READ + all 12 admin editors WRITE local PostgreSQL/Drizzle; local auth + **RBAC** (capability matrix + role-aware UI on all editors) + **RLS ENFORCING at runtime** (admin routes every read/write through the non-owner `tokophi_app` role via `withTenant`; `verify-rls`+`verify-rls-app`+E2E green) + local media upload done. **Next: admin-client feature depth** (Real variants) — VPS/PostgREST infra deferred. · **Updated:** 2026-07-08
 > **Code:** `~/projects/tokophi` (monorepo) · **Docs:** `~/Documents/Development/tokophi`
 > **Run:** `npm i` at root, then `npm run dev:admin` (→ :3000) · `npm run dev:super` (→ :3001) · `cd apps/storefront && npm run dev` (→ :4327)
 

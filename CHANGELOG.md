@@ -1,6 +1,6 @@
 # Changelog — TokoΦ
 
-All notable changes. Dates are absolute. Phase: UI/UX-first → **backend M3 started** (super-admin on local Postgres).
+All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
 ## 2026-07-08
 

@@ -14,7 +14,7 @@ TokoΦ is a Shopify-style commerce SaaS for Indonesia (Bahasa Indonesia UI, IDR)
 | **super-admin** | `@tokophi/super-admin` | Next.js 16 | `:3001` | **We (the platform)** — cross-tenant control plane: all stores, plans, billing. |
 | **storefront** | `@tokophi/storefront` | Astro 5 + Tailwind v4 | `:4327` | A **shopper** — one hand-built static storefront per client (browse, cart, checkout, blog, account, contact). |
 
-Started as **UI/UX with mock data**; the **backend is now being wired** on local PostgreSQL (see §9) — super-admin + 16 admin modules read the DB, the rest still mock.
+Started as **UI/UX with mock data**; the **local backend is wired** on PostgreSQL (see §9) — all 3 surfaces read + all 12 admin editors write + local auth/RBAC/RLS enforcing. (`lib/mock/store.ts` now only serves as the deterministic seed-parity source.)
 
 ```mermaid
 flowchart LR

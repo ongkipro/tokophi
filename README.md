@@ -97,4 +97,4 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - **2026-07-03** — **All 12 admin editors now WRITE Postgres** (added Navigasi, Pelanggan, CRM, Segmen, Pembelian incl. a real line-item PO builder with receive→stock) via `lib/actions/*`.
 - **2026-07-03** — Decision: **prod backend = self-hosted Postgres + PostgREST on a VPS (not Supabase)**; all docs reframed. Focus stays **local Linux**.
 - **2026-07-03** — **All three surfaces READ Postgres** (storefront `catalog.ts` reads `@tokophi/db`); **admin 100% DB-backed** (16 modules); 53 tables.
-- **Next up** — RBAC UI polish, then VPS activation (see [`specs/docs/WORKLOG.md`](specs/docs/WORKLOG.md) CURRENT STATE). Full history: [`CHANGELOG.md`](CHANGELOG.md).
+- **Next up** — admin-client feature depth (Real variants first; VPS infra deferred) (see [`specs/docs/WORKLOG.md`](specs/docs/WORKLOG.md) CURRENT STATE). Full history: [`CHANGELOG.md`](CHANGELOG.md).
