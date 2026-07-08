@@ -1,10 +1,10 @@
-# Indostore — Specs & Docs
+# TokoΦ — Specs & Docs
 
 **Shopify-style commerce SaaS for Indonesia.** A shared, modern-SaaS Next.js **admin** runs many merchant stores; a Next.js **super-admin** is the platform control plane; each client gets a bespoke **Astro storefront** (hand-built, no theme editor). Bahasa Indonesia UI tuned for local sellers (WhatsApp, COD, QRIS/e-wallets, local couriers). UI/UX-first; the **backend is now being wired** on local PostgreSQL (Drizzle) — super-admin + 16 admin modules read the DB.
 
-- **Code:** `~/projects/indostore` — **monorepo (npm workspaces)**: `apps/*` + `packages/*`
-- **Conventions/gotchas for coding:** `~/projects/indostore/AGENTS.md`
-- **Changelog:** `~/projects/indostore/CHANGELOG.md`
+- **Code:** `~/projects/tokophi` — **monorepo (npm workspaces)**: `apps/*` + `packages/*`
+- **Conventions/gotchas for coding:** `~/projects/tokophi/AGENTS.md`
+- **Changelog:** `~/projects/tokophi/CHANGELOG.md`
 
 ## The three surfaces
 
@@ -19,23 +19,23 @@ Demo storefront = **"Batik Nusantara"** (women's fashion, 14 products × 5 AI im
 ## Monorepo layout
 
 ```
-indostore/
+tokophi/
   apps/
     admin/         # merchant store admin (:3000)
     super-admin/   # platform control plane (:3001)
     storefront/    # per-client Astro shopper site (:4327)
   packages/
-    ui/            # @indostore/ui  — shadcn on Base UI + design tokens
-    lib/           # @indostore/lib — IDR / number formatters
-    data/          # @indostore/data — canonical nav (single source of truth)
+    ui/            # @tokophi/ui  — shadcn on Base UI + design tokens
+    lib/           # @tokophi/lib — IDR / number formatters
+    data/          # @tokophi/data — canonical nav (single source of truth)
 ```
 
-`@indostore/data` holds `MAIN_MENU` / `FOOTER_MENU` consumed by **both** the admin menu builder and the storefront header — edit once, both stay in sync on rebuild.
+`@tokophi/data` holds `MAIN_MENU` / `FOOTER_MENU` consumed by **both** the admin menu builder and the storefront header — edit once, both stay in sync on rebuild.
 
 ## Quickstart
 
 ```bash
-cd ~/projects/indostore
+cd ~/projects/tokophi
 npm install                     # installs all workspaces
 
 npm run dev:admin               # merchant admin  → http://localhost:3000
@@ -67,7 +67,7 @@ Build: `npm run build:admin` / `npm run build:super`; storefront `cd apps/storef
 
 - **UI = shadcn on Base UI** (`@base-ui/react`): use the **`render` prop, not `asChild`**; there is **no `Select`** primitive.
 - **Determinism:** all mock data is seeded (mulberry32) and anchored to `TODAY = 2026-06-30` — no hydration mismatch, stable across reloads.
-- **Money:** IDR formatting via `@indostore/lib` (`id-ID`); nav via `@indostore/data`.
+- **Money:** IDR formatting via `@tokophi/lib` (`id-ID`); nav via `@tokophi/data`.
 - **Payments & shipping are platform-managed** (ADR 0004): the platform configures gateways (Midtrans/Xendit/Duitku) + COD + Biteship aggregator; merchants only enable methods and pick couriers.
 - Sales channel = **Toko Online only**; analytics attribution = Meta/TikTok/Google Ads + Organic/Other.
 
@@ -75,6 +75,6 @@ Build: `npm run build:admin` / `npm run build:super`; storefront `cd apps/storef
 
 **All three surfaces built as clickable products; backend M3 in progress.** Admin (M0+M1+M1.5): Dashboard, Pesanan (+detail), Produk (+editor, Kategori/Inventori/Pembelian), Pelanggan (+detail/Segmen/Ulasan), CRM, Diskon (+editor), Analitik, Pemasaran, Toko Online (Halaman/Blog with create+edit, Navigasi drag-and-drop menu builder), Pengaturan. Super-admin: Dashboard/Toko/Paket/Analitik/Pengaturan. Storefront: beranda, kategori, produk (5-image gallery), keranjang, checkout (+sukses), akun, blog, kontak — localStorage cart, 70 AI product images.
 
-**Backend (M3):** **local PostgreSQL 16 + Drizzle** (`@indostore/db`, 53 tables, migrations 0000–0012, single-tenant "Batik Nusantara") is live end-to-end: **super-admin (all 5) + 16 admin modules + storefront read** the DB; **all 12 admin editors write** via `lib/actions/*`; **local auth** (jose JWT) + **RBAC** (capability matrix gates every mutation; UI hides controls per role via `useCan`/`<Can>` across all admin editors) + **RLS enforcing at runtime** (migration 0012 — `tenant_isolation` on 32 tables + `indostore_app` role; admin routes every read/write through it via `withTenant`/`withCurrentTenant`; `verify-rls` + `verify-rls-app` green) + **local media upload**. See ADR **0007** (stack) / **0008** (per-client topology).
+**Backend (M3):** **local PostgreSQL 16 + Drizzle** (`@tokophi/db`, 53 tables, migrations 0000–0012, single-tenant "Batik Nusantara") is live end-to-end: **super-admin (all 5) + 16 admin modules + storefront read** the DB; **all 12 admin editors write** via `lib/actions/*`; **local auth** (jose JWT) + **RBAC** (capability matrix gates every mutation; UI hides controls per role via `useCan`/`<Can>` across all admin editors) + **RLS enforcing at runtime** (migration 0012 — `tenant_isolation` on 32 tables + `tokophi_app` role; admin routes every read/write through it via `withTenant`/`withCurrentTenant`; `verify-rls` + `verify-rls-app` green) + **local media upload**. See ADR **0007** (stack) / **0008** (per-client topology).
 
-**Next:** RBAC UI polish (hide/disable per role) → **VPS activation** (connect as `indostore_app` + route through `withTenant()` so RLS enforces; self-hosted Postgres + PostgREST + Storage) → payment/courier integrations + provisioning (M4). See **[docs/BACKLOG.md](docs/BACKLOG.md)**.
+**Next:** RBAC UI polish (hide/disable per role) → **VPS activation** (connect as `tokophi_app` + route through `withTenant()` so RLS enforces; self-hosted Postgres + PostgREST + Storage) → payment/courier integrations + provisioning (M4). See **[docs/BACKLOG.md](docs/BACKLOG.md)**.

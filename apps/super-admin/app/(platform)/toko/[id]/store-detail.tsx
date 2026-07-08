@@ -25,14 +25,14 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-} from "@indostore/ui/card";
-import { Button } from "@indostore/ui/button";
-import { Separator } from "@indostore/ui/separator";
-import { cn } from "@indostore/ui/lib/utils";
+} from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Separator } from "@tokophi/ui/separator";
+import { cn } from "@tokophi/ui/lib/utils";
 
 import { planName, planPrice, type Store } from "@/lib/mock";
 import { PlanBadge, StatusBadge } from "@/components/bits";
-import { IDR, num } from "@indostore/lib/format";
+import { IDR, num } from "@tokophi/lib/format";
 
 export function StoreDetail({ store }: { store: Store }) {
   const suspended = store.status === "ditangguhkan";

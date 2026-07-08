@@ -16,10 +16,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Card } from "@indostore/ui/card";
-import { Button } from "@indostore/ui/button";
-import { Input } from "@indostore/ui/input";
-import { Avatar, AvatarFallback } from "@indostore/ui/avatar";
+import { Card } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import {
   Table,
   TableHeader,
@@ -27,7 +27,7 @@ import {
   TableRow,
   TableHead,
   TableCell,
-} from "@indostore/ui/table";
+} from "@tokophi/ui/table";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -35,11 +35,11 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-} from "@indostore/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 
 import { type Plan, type Store } from "@/lib/mock";
 import { initials, PlanBadge, StatusBadge } from "@/components/bits";
-import { IDR, num } from "@indostore/lib/format";
+import { IDR, num } from "@tokophi/lib/format";
 
 type PlanFilter = "semua" | Plan;
 type StatusFilter = "semua" | Store["status"];

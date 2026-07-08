@@ -1,8 +1,8 @@
-// Deterministic mock dataset for Indostore admin.
+// Deterministic mock dataset for TokoΦ admin.
 // Everything is anchored to a fixed TODAY so server & client render identically
 // (no hydration mismatch) and the demo is stable. Swap this file for a real API later.
 
-import { MAIN_MENU, FOOTER_MENU, type MenuItem } from "@indostore/data/menu";
+import { MAIN_MENU, FOOTER_MENU, type MenuItem } from "@tokophi/data/menu";
 
 export const TODAY = new Date("2026-06-30T00:00:00");
 
@@ -284,7 +284,7 @@ export const BLOG_POSTS: BlogPost[] = [
 export type NavItemType = "beranda" | "koleksi" | "produk" | "halaman" | "blog" | "url";
 export type NavItem = { id: string; title: string; type: NavItemType; target: string; children?: NavItem[] };
 export type NavMenu = { handle: string; title: string; isDefault: boolean; items: NavItem[] };
-// Derived from the shared @indostore/data source so the admin menu builder and
+// Derived from the shared @tokophi/data source so the admin menu builder and
 // the storefront nav never drift (single source of truth). label→title, href→target.
 function toNavItems(items: MenuItem[]): NavItem[] {
   return items.map((it) => ({

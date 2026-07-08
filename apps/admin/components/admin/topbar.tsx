@@ -37,7 +37,7 @@ function ThemeToggle() {
 export function Topbar({ user }: { user?: { name: string; email: string; role?: string } }) {
   const [store, setStore] = useState(STORES[0]);
   const name = user?.name || "Ongki Pratama";
-  const email = user?.email || "owner@indostore.id";
+  const email = user?.email || "owner@tokophi.id";
   const roleLabel = user?.role ? ROLE_LABEL[user.role as Role] ?? user.role : null;
   const initials = name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "OP";
   return (

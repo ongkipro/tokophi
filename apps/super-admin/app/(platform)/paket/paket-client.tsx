@@ -8,8 +8,8 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-} from "@indostore/ui/card";
-import { Badge } from "@indostore/ui/badge";
+} from "@tokophi/ui/card";
+import { Badge } from "@tokophi/ui/badge";
 import {
   Table,
   TableHeader,
@@ -17,13 +17,13 @@ import {
   TableRow,
   TableHead,
   TableCell,
-} from "@indostore/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@indostore/ui/tabs";
-import { cn } from "@indostore/ui/lib/utils";
+} from "@tokophi/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
+import { cn } from "@tokophi/ui/lib/utils";
 
 import { PLANS, type Plan, type Invoice } from "@/lib/mock";
 import { PlanBadge, InvoiceBadge } from "@/components/bits";
-import { IDR, num } from "@indostore/lib/format";
+import { IDR, num } from "@tokophi/lib/format";
 
 const INV_TABS: { key: "semua" | Invoice["status"]; label: string }[] = [
   { key: "semua", label: "Semua" },

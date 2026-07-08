@@ -8,7 +8,7 @@ export function Brand({ className }: { className?: string }) {
         <Store className="size-[18px]" />
       </div>
       <div className="leading-none">
-        <div className="font-semibold tracking-tight">Indostore</div>
+        <div className="font-semibold tracking-tight">TokoΦ</div>
         <div className="text-[11px] text-muted-foreground">Panel Admin</div>
       </div>
     </div>

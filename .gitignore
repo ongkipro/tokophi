@@ -11,3 +11,6 @@ dist/
 
 # Local uploaded media (dev)
 apps/admin/public/uploads/
+
+# Local dev process logs (pi)
+.pi-dev-logs/

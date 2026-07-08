@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ShieldCheck, Store } from "lucide-react";
-import { cn } from "@indostore/ui/lib/utils";
-import { Avatar, AvatarFallback } from "@indostore/ui/avatar";
-import { Badge } from "@indostore/ui/badge";
+import { cn } from "@tokophi/ui/lib/utils";
+import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
+import { Badge } from "@tokophi/ui/badge";
 import { NAV } from "@/lib/nav";
 
 export default function PlatformLayout({ children }: { children: React.ReactNode }) {
@@ -27,7 +27,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
             <Store className="size-4" />
           </span>
           <div className="min-w-0">
-            <div className="truncate text-sm font-bold leading-none">Indostore</div>
+            <div className="truncate text-sm font-bold leading-none">TokoΦ</div>
             <div className="mt-1 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
               <ShieldCheck className="size-3 text-primary" /> Super Admin
             </div>
@@ -63,7 +63,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
             <div className="flex items-center gap-2 text-xs font-semibold">
               <ShieldCheck className="size-4 text-primary" /> Platform
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">Indostore · control plane</p>
+            <p className="mt-1 text-xs text-muted-foreground">TokoΦ · control plane</p>
           </div>
         </div>
       </aside>

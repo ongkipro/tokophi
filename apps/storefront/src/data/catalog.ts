@@ -1,7 +1,7 @@
-// Storefront catalog — reads the shared Postgres (@indostore/db) at build/SSR time.
+// Storefront catalog — reads the shared Postgres (@tokophi/db) at build/SSR time.
 // Same exports/shape as before; consumers (.astro pages) are unchanged. Single-tenant
 // MVP: the one store. Later: scope by a STORE_SLUG env for per-client deploys (ADR 0008).
-import { db, schema } from "@indostore/db";
+import { db, schema } from "@tokophi/db";
 import { and, asc, eq, ne } from "drizzle-orm";
 
 const slugify = (s: string) =>

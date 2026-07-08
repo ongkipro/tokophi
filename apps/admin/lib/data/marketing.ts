@@ -1,5 +1,5 @@
 import "server-only";
-import { schema } from "@indostore/db";
+import { schema } from "@tokophi/db";
 import { withCurrentTenant } from "@/lib/tenant";
 import { isNull } from "drizzle-orm";
 import type { AdChannel, AdCampaign, ProvinceStat } from "@/lib/mock/store";

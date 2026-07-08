@@ -1,11 +1,11 @@
-# Indostore — Data Model
+# TokoΦ — Data Model
 
-> The entities the UI works with, and how they map to the **PostgreSQL** tables (now live via `@indostore/db` — see `SCHEMA.md`). Super-admin + 16 admin modules already read the DB; the rest still read the mock shapes below.
+> The entities the UI works with, and how they map to the **PostgreSQL** tables (now live via `@tokophi/db` — see `SCHEMA.md`). Super-admin + 16 admin modules already read the DB; the rest still read the mock shapes below.
 > Mock shapes live in three places:
 > - **admin-mock** → `apps/admin/lib/mock/store.ts`
 > - **super-admin-mock** → `apps/super-admin/lib/mock.ts`
 > - **storefront-mock** → `apps/storefront/src/data/catalog.ts`
-> - **shared** → `packages/data/src/menu.ts` (`@indostore/data`) — canonical nav, imported by admin mock **and** the storefront.
+> - **shared** → `packages/data/src/menu.ts` (`@tokophi/data`) — canonical nav, imported by admin mock **and** the storefront.
 >
 > Content entities mirror **Shopify Admin API** shapes so the eventual API feels familiar. Aligned with `SCHEMA.md`.
 
@@ -88,7 +88,7 @@ The editor exposes a conditions builder (all/any + field/op/value) that maps to 
 
 ---
 
-## Content entities (Shopify-modeled) — admin-mock, `@indostore/data` for menus
+## Content entities (Shopify-modeled) — admin-mock, `@tokophi/data` for menus
 
 ### Page  *(mock: `CmsPage`, `PAGES`)* — Shopify `Page`
 `id, title, handle, published, updatedDaysAgo, template(templateSuffix), views` + body(HTML) + SEO → `pages`. Storefront URL `/halaman/<handle>` (route TBD).
@@ -96,7 +96,7 @@ The editor exposes a conditions builder (all/any + field/op/value) that maps to 
 ### Blog + Article  *(mock: `BlogPost`, `BLOG_POSTS`, `BLOG_CATEGORIES`)* — Shopify `Blog` + `Article`
 `BlogPost = id, title, handle, blog(category), author, published, publishedDaysAgo, excerpt, comments` + body + tags + featured image + SEO → `blogs` (1) ⟶ `articles` (N). Storefront `/blog` list exists; article detail `/blog/<handle>` TBD.
 
-### Menu + MenuItem  *(shared: `@indostore/data` → `MAIN_MENU`/`FOOTER_MENU`; admin re-wraps as `NavMenu`/`NavItem` in `MENUS`)* — Shopify `Menu` + `MenuItem`
+### Menu + MenuItem  *(shared: `@tokophi/data` → `MAIN_MENU`/`FOOTER_MENU`; admin re-wraps as `NavMenu`/`NavItem` in `MENUS`)* — Shopify `Menu` + `MenuItem`
 - **Canonical source:** `packages/data/src/menu.ts`. `MenuItem = { id, label, type, href, children? }`; `MenuItemType = beranda | koleksi | produk | halaman | blog | url`.
 - Admin `store.ts` maps it to `NavItem = { id, title, type, target, children? }` (label→title, href→target) so the **menu builder and storefront nav never drift** (single source of truth). Default menus: `main-menu` ("Menu Utama", header) and `footer`.
 - → `menus` ⟶ `menu_items` (self-referential `parent_id`). Item types map to Shopify `MenuItemType` (`FRONTPAGE, COLLECTION, PRODUCT, PAGE, BLOG, ARTICLE, HTTP`).
@@ -110,7 +110,7 @@ Self-contained mock for the demo store, kept 1:1 with the admin fashion demo (sa
 - **Store**  *(`STORE`)* — `name, tagline, whatsapp, city` (demo: "Batik Nusantara").
 - **Collection**  *(`COLLECTIONS`)* — `handle, name, emoji, blurb`. Plus **virtual collections** defined in `kategori/[handle].astro` `getStaticPaths`: `semua` (all products) and `promo-gajian` (compareAt||bestseller).
 - **Product**  *(`PRODUCTS`)* — `handle, name, price, compareAt?, category, categoryHandle, image, description, sizes[], badge?, bestseller?`. Helpers: `productImages` (5-image gallery), `bestsellers`, `byCollection`, `findProduct`, `findCollection`.
-- Nav header/footer consume `@indostore/data`. Cart is client-side (localStorage); checkout province/shipping/payment options are page-local mock arrays.
+- Nav header/footer consume `@tokophi/data`. Cart is client-side (localStorage); checkout province/shipping/payment options are page-local mock arrays.
 
 ---
 

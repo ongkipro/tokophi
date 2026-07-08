@@ -438,7 +438,7 @@ export default function Page() {
                   <Info className="mt-0.5 size-4 shrink-0 text-primary" />
                   <span>
                     Gateway pembayaran &amp; COD disediakan dan dikelola oleh{" "}
-                    <span className="font-medium text-foreground">Indostore</span>. Anda cukup mengaktifkan metode yang ingin diterima — tanpa daftar akun atau isi API sendiri.
+                    <span className="font-medium text-foreground">TokoΦ</span>. Anda cukup mengaktifkan metode yang ingin diterima — tanpa daftar akun atau isi API sendiri.
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -502,7 +502,7 @@ export default function Page() {
                 <CardTitle>Kurir Pengiriman</CardTitle>
                 <CardDescription>
                   Pilih kurir dan layanan (ekspedisi) yang ingin ditawarkan ke
-                  pelanggan. Integrasi &amp; tarif dikelola Indostore.
+                  pelanggan. Integrasi &amp; tarif dikelola TokoΦ.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3">
@@ -510,7 +510,7 @@ export default function Page() {
                   <Info className="mt-0.5 size-4 shrink-0 text-primary" />
                   <span>
                     Integrasi kurir &amp; tarif ongkir dikelola oleh{" "}
-                    <span className="font-medium text-foreground">Indostore</span>. Anda cukup memilih kurir yang ingin ditawarkan — resi &amp; tarif otomatis.
+                    <span className="font-medium text-foreground">TokoΦ</span>. Anda cukup memilih kurir yang ingin ditawarkan — resi &amp; tarif otomatis.
                   </span>
                 </div>
                 {COURIERS.map((c) => {

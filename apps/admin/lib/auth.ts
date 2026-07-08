@@ -2,7 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { scryptSync, timingSafeEqual } from "node:crypto";
-import { db, schema } from "@indostore/db";
+import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 
 const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me");

@@ -245,7 +245,7 @@ export function PageEditor({ page }: { page?: CmsPage }) {
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Globe className="size-3" />
                   <span className="truncate text-emerald-700 dark:text-emerald-500">
-                    indostore.id › pages › {previewHandle}
+                    tokophi.id › pages › {previewHandle}
                   </span>
                 </div>
                 <p className="mt-1 truncate text-base font-medium text-blue-700 dark:text-blue-400">

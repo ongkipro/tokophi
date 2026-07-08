@@ -1,5 +1,5 @@
 {
-  "name": "indostore",
+  "name": "tokophi",
   "private": true,
   "version": "0.0.0",
   "workspaces": [
@@ -7,9 +7,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:admin": "npm run dev -w @indostore/admin",
-    "dev:super": "npm run dev -w @indostore/super-admin",
-    "build:admin": "npm run build -w @indostore/admin",
-    "build:super": "npm run build -w @indostore/super-admin"
+    "dev:admin": "npm run dev -w @tokophi/admin",
+    "dev:super": "npm run dev -w @tokophi/super-admin",
+    "build:admin": "npm run build -w @tokophi/admin",
+    "build:super": "npm run build -w @tokophi/super-admin"
   }
 }

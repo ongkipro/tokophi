@@ -1,6 +1,6 @@
-// Storefront header nav — derived from the SHARED @indostore/data menu so it
+// Storefront header nav — derived from the SHARED @tokophi/data menu so it
 // stays in sync with the admin menu builder automatically (single source of truth).
-import { MAIN_MENU, type MenuItem } from "@indostore/data/menu";
+import { MAIN_MENU, type MenuItem } from "@tokophi/data/menu";
 
 export type NavChild = { label: string; href: string };
 export type NavItem = { label: string; href?: string; children?: NavChild[] };

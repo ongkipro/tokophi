@@ -2,8 +2,8 @@ import { client } from "./client";
 
 // Proves that the RLS policies from migration 0012 actually isolate tenants.
 // The app currently connects as the table OWNER (which bypasses RLS), so to see
-// enforcement we `SET LOCAL ROLE indostore_app` (the non-owner app role) inside a
-// transaction and toggle the `app.store_id` GUC. Run: npm run verify-rls -w @indostore/db
+// enforcement we `SET LOCAL ROLE tokophi_app` (the non-owner app role) inside a
+// transaction and toggle the `app.store_id` GUC. Run: npm run verify-rls -w @tokophi/db
 const RANDOM_UUID = "00000000-0000-4000-8000-000000000000";
 
 function assert(label: string, cond: boolean) {
@@ -20,7 +20,7 @@ async function main() {
   // 1. Correct tenant → sees all its rows.
   const seen = await client.begin(async (tx) => {
     await tx`SELECT set_config('app.store_id', ${store.id}, true)`;
-    await tx`SET LOCAL ROLE indostore_app`;
+    await tx`SET LOCAL ROLE tokophi_app`;
     const [{ count }] = await tx<{ count: number }[]>`SELECT count(*)::int AS count FROM products`;
     return count;
   });
@@ -29,7 +29,7 @@ async function main() {
   // 2. Wrong tenant → sees nothing.
   const other = await client.begin(async (tx) => {
     await tx`SELECT set_config('app.store_id', ${RANDOM_UUID}, true)`;
-    await tx`SET LOCAL ROLE indostore_app`;
+    await tx`SET LOCAL ROLE tokophi_app`;
     const [{ count }] = await tx<{ count: number }[]>`SELECT count(*)::int AS count FROM products`;
     return count;
   });
@@ -37,7 +37,7 @@ async function main() {
 
   // 3. No GUC set → sees nothing (fail-closed).
   const noguc = await client.begin(async (tx) => {
-    await tx`SET LOCAL ROLE indostore_app`;
+    await tx`SET LOCAL ROLE tokophi_app`;
     const [{ count }] = await tx<{ count: number }[]>`SELECT count(*)::int AS count FROM customers`;
     return count;
   });
@@ -48,7 +48,7 @@ async function main() {
   try {
     await client.begin(async (tx) => {
       await tx`SELECT set_config('app.store_id', ${store.id}, true)`;
-      await tx`SET LOCAL ROLE indostore_app`;
+      await tx`SET LOCAL ROLE tokophi_app`;
       // Insert a discount for a DIFFERENT store than the GUC → must violate WITH CHECK.
       await tx`INSERT INTO discounts (store_id, code, kind, value) VALUES (${RANDOM_UUID}, 'RLSHACK', 'nominal', 1)`;
     });

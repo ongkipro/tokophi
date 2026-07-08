@@ -3,7 +3,7 @@ import { db, schema, client } from "./client";
 import { eq } from "drizzle-orm";
 
 // Verifies the ACTUAL runtime path the admin now uses: every read/write goes through
-// withTenant() (sets app.store_id + SET LOCAL ROLE indostore_app), so RLS enforces.
+// withTenant() (sets app.store_id + SET LOCAL ROLE tokophi_app), so RLS enforces.
 // This proves reads work, writes work (happy path), and tenant isolation holds — all
 // through the non-owner role, exactly as the app will on the VPS.
 const NIL = "00000000-0000-0000-0000-000000000000";
@@ -35,7 +35,7 @@ async function main() {
   const foreign = await count(NIL, "products");
   assert(`read: foreign tenant sees 0 products (${foreign})`, foreign === 0);
 
-  // WRITE happy path: indostore_app inserts a row for its OWN store (WITH CHECK passes).
+  // WRITE happy path: tokophi_app inserts a row for its OWN store (WITH CHECK passes).
   await withTenant(store.id, (tx) =>
     tx.insert(schema.discounts).values({ storeId: store.id, code: TAG, kind: "nominal", value: 1 }),
   );

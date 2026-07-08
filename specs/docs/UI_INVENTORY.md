@@ -1,21 +1,21 @@
-# Indostore — UI Inventory (screen map)
+# TokoΦ — UI Inventory (screen map)
 
-> The go-to map of Indostore's surface area across **all three apps**. Routes enumerated
+> The go-to map of TokoΦ's surface area across **all three apps**. Routes enumerated
 > from the actual filesystem (`apps/*/app` and `apps/storefront/src/pages`) on 2026-07-02.
-> Data is moving from mock → **local PostgreSQL** (Drizzle, `@indostore/db`): super-admin + 16 admin modules read the DB (via `lib/data/*`, `dynamic="force-dynamic"`); the rest is still deterministic seeded mock. Mutations don't persist yet (M3).
+> Data is moving from mock → **local PostgreSQL** (Drizzle, `@tokophi/db`): super-admin + 16 admin modules read the DB (via `lib/data/*`, `dynamic="force-dynamic"`); the rest is still deterministic seeded mock. Mutations don't persist yet (M3).
 
 ## Three surfaces
 | App | Package | Port | Stack | Who uses it |
 |---|---|---|---|---|
-| **admin** | `@indostore/admin` | `:3000` | Next.js (App Router) | The merchant / shop owner |
-| **super-admin** | `@indostore/super-admin` | `:3001` | Next.js (App Router) | Us — platform control plane (all stores/plans/billing) |
-| **storefront** | `@indostore/storefront` | `:4327` | Astro (static) | The shopper (demo store "Batik Nusantara") |
+| **admin** | `@tokophi/admin` | `:3000` | Next.js (App Router) | The merchant / shop owner |
+| **super-admin** | `@tokophi/super-admin` | `:3001` | Next.js (App Router) | Us — platform control plane (all stores/plans/billing) |
+| **storefront** | `@tokophi/storefront` | `:4327` | Astro (static) | The shopper (demo store "Batik Nusantara") |
 
-Shared code: `@indostore/ui` (shadcn on **Base UI**), `@indostore/lib` (formatters), `@indostore/data` (canonical nav menu).
+Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters), `@tokophi/data` (canonical nav menu).
 
 ## Legend
 - **UI:** ✅ done · 🟡 partial/stub
-- **Data:** all **mock** today (admin → `apps/admin/lib/mock/store.ts`; super-admin → `apps/super-admin/lib/mock.ts`; storefront → `apps/storefront/src/data/catalog.ts` + `@indostore/data`)
+- **Data:** all **mock** today (admin → `apps/admin/lib/mock/store.ts`; super-admin → `apps/super-admin/lib/mock.ts`; storefront → `apps/storefront/src/data/catalog.ts` + `@tokophi/data`)
 - **Save:** ❌ none yet (persistence lands in M3)
 - Dynamic segments shown as `[id]` / `[handle]`. Editor/detail screens are split into a server `page.tsx` + a `"use client"` component (e.g. `product-editor.tsx`, `order-detail.tsx`).
 
@@ -84,7 +84,7 @@ Shared code: `@indostore/ui` (shadcn on **Base UI**), `@indostore/lib` (formatte
 | `/blog` | Blog/article list | rows → edit | ✅ mock |
 | `/blog/baru` | New article | reuses article editor | ✅ mock |
 | `/blog/[id]` | Article editor (`article-editor.tsx`) | title/handle/body/excerpt, blog/author, tags, featured image, SEO (content-width), prefilled | ✅ mock |
-| `/navigasi` | Menu builder | **drag-drop** menus (Menu Utama/Footer), nested typed items (beranda/koleksi/produk/halaman/blog/url), add/edit/delete; sourced from `@indostore/data`; content uses Indonesian storefront slugs | ✅ mock |
+| `/navigasi` | Menu builder | **drag-drop** menus (Menu Utama/Footer), nested typed items (beranda/koleksi/produk/halaman/blog/url), add/edit/delete; sourced from `@tokophi/data`; content uses Indonesian storefront slugs | ✅ mock |
 
 ### System
 | Route | Purpose | Key components / interactions | Status |
@@ -106,7 +106,7 @@ Shared code: `@indostore/ui` (shadcn on **Base UI**), `@indostore/lib` (formatte
 | `/analitik` | Platform analytics | GMV per plan, GMV per city (top 8), store-status breakdown | ✅ mock |
 | `/pengaturan` | Platform settings | **platform-managed** payment gateways + shipping aggregator toggles, users/roles, COD config | ✅ mock |
 
-**Super-admin cross-cutting:** own shell/layout; shares `@indostore/ui` + `@indostore/lib`; plans = Pemula/Bisnis/Skala; store status = aktif/trial/ditangguhkan; deterministic mock anchored `TODAY=2026-07-02`.
+**Super-admin cross-cutting:** own shell/layout; shares `@tokophi/ui` + `@tokophi/lib`; plans = Pemula/Bisnis/Skala; store status = aktif/trial/ditangguhkan; deterministic mock anchored `TODAY=2026-07-02`.
 
 ---
 
@@ -126,7 +126,7 @@ Shared code: `@indostore/ui` (shadcn on **Base UI**), `@indostore/lib` (formatte
 | `/blog` (`blog/index.astro`) | Blog index | article cards (hardcoded in-page list); **no article detail route yet** | 🟡 partial |
 | `/kontak` | Contact | WhatsApp + email links, contact info/hero | ✅ mock |
 
-**Storefront gaps:** no `/halaman/[handle]` route yet (footer menu links to `/halaman/tentang-kami`, `/cara-pemesanan`, etc. — currently dead), no `/blog/[handle]` article detail. Nav header/footer sourced from `@indostore/data` (`MAIN_MENU`/`FOOTER_MENU`).
+**Storefront gaps:** no `/halaman/[handle]` route yet (footer menu links to `/halaman/tentang-kami`, `/cara-pemesanan`, etc. — currently dead), no `/blog/[handle]` article detail. Nav header/footer sourced from `@tokophi/data` (`MAIN_MENU`/`FOOTER_MENU`).
 
 ---
 

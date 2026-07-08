@@ -12,7 +12,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl tracking-tight">Indostore</CardTitle>
+          <CardTitle className="text-2xl tracking-tight">TokoΦ</CardTitle>
           <CardDescription>Masuk ke panel admin toko Anda</CardDescription>
         </CardHeader>
         <CardContent>
@@ -27,7 +27,7 @@ export default function LoginPage() {
             </div>
             {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
             <Button type="submit" disabled={pending}>{pending ? "Masuk…" : "Masuk"}</Button>
-            <p className="text-center text-xs text-muted-foreground">Dev: ongki@batiknusantara.id / indostore123</p>
+            <p className="text-center text-xs text-muted-foreground">Dev: ongki@batiknusantara.id / tokophi123</p>
           </form>
         </CardContent>
       </Card>

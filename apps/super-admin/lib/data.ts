@@ -1,5 +1,5 @@
 import "server-only";
-import { db, schema } from "@indostore/db";
+import { db, schema } from "@tokophi/db";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { PLANS, planPrice, type Plan, type Store, type StoreStatus, type Invoice, type PActivity } from "./mock";
 

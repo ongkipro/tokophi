@@ -3,21 +3,21 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: indostore-db
+    container_name: tokophi-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: indostore
-      POSTGRES_PASSWORD: indostore
-      POSTGRES_DB: indostore
+      POSTGRES_USER: tokophi
+      POSTGRES_PASSWORD: tokophi
+      POSTGRES_DB: tokophi
     ports:
       - "5433:5432" # host 5433 → avoids clashing with any local 5432
     volumes:
-      - indostore-pgdata:/var/lib/postgresql/data
+      - tokophi-pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U indostore -d indostore"]
+      test: ["CMD-SHELL", "pg_isready -U tokophi -d tokophi"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  indostore-pgdata:
+  tokophi-pgdata:

@@ -128,7 +128,7 @@
     @apply font-sans;
   }
 }
-/* --- Indostore brand accent (indigo) --- */
+/* --- TokoΦ brand accent (indigo) --- */
 :root {
   --primary: oklch(0.515 0.23 277);
   --primary-foreground: oklch(0.985 0 0);

@@ -9,22 +9,22 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-} from "@indostore/ui/card";
-import { Button } from "@indostore/ui/button";
-import { Badge } from "@indostore/ui/badge";
-import { Switch } from "@indostore/ui/switch";
-import { Label } from "@indostore/ui/label";
-import { Separator } from "@indostore/ui/separator";
-import { Avatar, AvatarFallback } from "@indostore/ui/avatar";
-import { cn } from "@indostore/ui/lib/utils";
+} from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Badge } from "@tokophi/ui/badge";
+import { Switch } from "@tokophi/ui/switch";
+import { Label } from "@tokophi/ui/label";
+import { Separator } from "@tokophi/ui/separator";
+import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
+import { cn } from "@tokophi/ui/lib/utils";
 import { initials } from "@/components/bits";
 
 type Toggle = { key: string; name: string; desc: string; on: boolean };
 
 const TEAM = [
-  { name: "Ongki Pratama", email: "ongki@indostore.id", role: "Owner" },
-  { name: "Rani Kusuma", email: "rani@indostore.id", role: "Admin" },
-  { name: "Andi Wijaya", email: "andi@indostore.id", role: "Support" },
+  { name: "Ongki Pratama", email: "ongki@tokophi.id", role: "Owner" },
+  { name: "Rani Kusuma", email: "rani@tokophi.id", role: "Admin" },
+  { name: "Andi Wijaya", email: "andi@tokophi.id", role: "Support" },
 ];
 
 const ROLE_CLASS: Record<string, string> = {

@@ -1,5 +1,5 @@
 {
-  "name": "@indostore/admin",
+  "name": "@tokophi/admin",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,8 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@indostore/data": "*",
-    "@indostore/db": "*",
+    "@tokophi/data": "*",
+    "@tokophi/db": "*",
     "@base-ui/react": "^1.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

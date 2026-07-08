@@ -1,7 +1,7 @@
 // Small, server-safe display helpers shared across platform pages.
 import { UserPlus, ArrowUpRight, CreditCard, TrendingDown, LifeBuoy, ArrowUp, ArrowDown, type LucideIcon } from "lucide-react";
-import { Badge } from "@indostore/ui/badge";
-import { cn } from "@indostore/ui/lib/utils";
+import { Badge } from "@tokophi/ui/badge";
+import { cn } from "@tokophi/ui/lib/utils";
 import type { Plan, StoreStatus, PActivity, InvoiceStatus } from "@/lib/mock";
 
 // Initials from a person or store name, e.g. "Batik Nusantara" -> "BN".

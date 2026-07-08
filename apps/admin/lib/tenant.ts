@@ -1,10 +1,10 @@
 import "server-only";
-import { db, withTenant } from "@indostore/db";
+import { db, withTenant } from "@tokophi/db";
 import { getSession } from "@/lib/auth";
 
 // Runtime RLS enforcement for the merchant admin. Every read/write runs inside
 // `withTenant`, which (per transaction) sets the `app.store_id` GUC and drops to the
-// non-owner `indostore_app` role so the Postgres RLS policies (migration 0012)
+// non-owner `tokophi_app` role so the Postgres RLS policies (migration 0012)
 // actually enforce. The app process still connects as the owner, but each tenant
 // query executes under the restricted role — mirroring the VPS/PostgREST model.
 //

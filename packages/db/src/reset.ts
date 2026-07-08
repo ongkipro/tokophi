@@ -1,5 +1,5 @@
 // Full local reset: drop schema (data) AND the drizzle migration journal, then recreate.
-// Run: npm run reset -w @indostore/db   (follow with `npm run migrate` + `npm run seed`)
+// Run: npm run reset -w @tokophi/db   (follow with `npm run migrate` + `npm run seed`)
 import { client } from "./client";
 
 async function main() {

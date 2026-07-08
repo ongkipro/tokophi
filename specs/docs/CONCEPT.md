@@ -1,4 +1,4 @@
-# Indostore — Concept (mature spec)
+# TokoΦ — Concept (mature spec)
 
 > The product concept, fleshed out so the backend (self-hosted Postgres) is later "just implementation."
 > Companion to `../PRD.md`, `SCHEMA.md` (backend-ready tables), `UI_INVENTORY.md` (screen status).
@@ -90,6 +90,6 @@ Billing & entitlement = kerjaan backend nanti; disimpan per `store`/`account`.
 - Tanpa Themes, tanpa Apps marketplace.
 - Semua entitas ber-`store_id` + RLS.
 - Uang selalu IDR; Bahasa Indonesia; aksesibel; console-clean.
-- Base UI gotchas dipatuhi (lihat `~/projects/indostore/AGENTS.md`).
+- Base UI gotchas dipatuhi (lihat `~/projects/tokophi/AGENTS.md`).
 
 *Living doc — perbarui saat konsep bergerak. Skema teknis di `SCHEMA.md`, status layar di `UI_INVENTORY.md`.*

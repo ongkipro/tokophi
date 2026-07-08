@@ -4,23 +4,23 @@
 --   * On the VPS: PostgREST sets it from the JWT "store_id" claim per request.
 -- Policies below restrict every store-scoped table to rows of that store. The table
 -- OWNER bypasses RLS, so tooling (migrate/seed) is unaffected; the app connects as the
--- non-owner role "indostore_app" (created here) for which the policies ARE enforced.
+-- non-owner role "tokophi_app" (created here) for which the policies ARE enforced.
 --> statement-breakpoint
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'indostore_app') THEN
-    CREATE ROLE indostore_app NOLOGIN;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'tokophi_app') THEN
+    CREATE ROLE tokophi_app NOLOGIN;
   END IF;
 END $$;
 --> statement-breakpoint
-GRANT USAGE ON SCHEMA public TO indostore_app;
+GRANT USAGE ON SCHEMA public TO tokophi_app;
 --> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO indostore_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO tokophi_app;
 --> statement-breakpoint
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO indostore_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO tokophi_app;
 --> statement-breakpoint
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO indostore_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO tokophi_app;
 --> statement-breakpoint
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO indostore_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO tokophi_app;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION app_current_store_id() RETURNS uuid
   LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('app.store_id', true), '')::uuid $$;

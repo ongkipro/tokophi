@@ -9,9 +9,9 @@ import {
   ArrowUpRight,
   type LucideIcon,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@indostore/ui/card";
-import { Avatar, AvatarFallback } from "@indostore/ui/avatar";
-import { IDR, num, pct, timeAgo } from "@indostore/lib/format";
+import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
+import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
+import { IDR, num, pct, timeAgo } from "@tokophi/lib/format";
 import { type StoreStatus } from "@/lib/mock";
 import { initials, PlanBadge, ActivityIcon, InvoiceBadge, Delta } from "@/components/bits";
 import { MrrChart } from "./mrr-chart";

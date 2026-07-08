@@ -1,5 +1,5 @@
 "use server";
-import { schema } from "@indostore/db";
+import { schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";

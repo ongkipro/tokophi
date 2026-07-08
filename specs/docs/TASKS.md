@@ -1,4 +1,4 @@
-# Indostore — Prototype task breakdown
+# TokoΦ — Prototype task breakdown
 
 > Granular, executable work items to take the prototype from **UI-mock** → **working product**.
 > Higher-level priorities live in `BACKLOG.md`; this is the detailed plan. Updated 2026-07-03.
@@ -9,7 +9,7 @@
 
 ## Epic 0 — Monorepo hygiene (foundation)
 - [x] Monorepo (npm workspaces): `apps/admin`, `apps/super-admin`, `packages/ui`, `packages/lib`. Both build.
-- [ ] **De-dup admin → shared packages** · **M** · migrate `apps/admin` to import `@indostore/ui` + `@indostore/lib`; delete its local `components/ui` + `lib/format`/`utils`. AC: admin builds using the packages, zero duplicate UI, console clean.
+- [ ] **De-dup admin → shared packages** · **M** · migrate `apps/admin` to import `@tokophi/ui` + `@tokophi/lib`; delete its local `components/ui` + `lib/format`/`utils`. AC: admin builds using the packages, zero duplicate UI, console clean.
 - [ ] **Turborepo pipeline** · **S** · add `turbo.json` (build/lint/dev). AC: `turbo run build` builds both apps with caching.
 - [ ] **Shared config** · **S** · `packages/config` (tsconfig + eslint + tailwind preset) consumed by all apps/packages.
 
@@ -32,13 +32,13 @@
 - [ ] **Platform config detail** · **S** · gateway/aggregator credential forms (mock) + COD rules (limit/area/fee).
 
 ## Epic 3 — Data-layer seam (PRE-BACKEND — do before M3)
-- [ ] **Shared domain types** · **M** · move entity types (Product/Order/Customer/Store/…) to `@indostore/lib`; both apps import them. AC: no type drift between apps.
+- [ ] **Shared domain types** · **M** · move entity types (Product/Order/Customer/Store/…) to `@tokophi/lib`; both apps import them. AC: no type drift between apps.
 - [~] **Wrap admin reads in `lib/data/*`** · **L** · ✅ done (as DB queries) for products/orders/customers/collections/inventory/crm/discounts/pages/articles/purchases/segments/reviews — 12 modules.
 - [x] **Wrap super-admin reads in `lib/data/*`** · **M** · done — `apps/super-admin/lib/data.ts` (stores/plans/invoices/metrics), all pages DB-backed.
 - [ ] *(Why: makes M3 a "fill query bodies" job, not a UI rewrite.)*
 
 ## Epic 4 — Storefront (M2)
-- [x] **Scaffold `apps/storefront`** · Astro 5 + Tailwind v4, workspace-linked, uses `@indostore/lib`. Builds clean (22 pages).
+- [x] **Scaffold `apps/storefront`** · Astro 5 + Tailwind v4, workspace-linked, uses `@tokophi/lib`. Builds clean (22 pages).
 - [x] **Pages** · beranda (hero/unggulan/koleksi/values), `/kategori/[handle]`, `/produk/[handle]` (size + add-to-cart + Beli via WA), `keranjang` (cart + WA checkout).
 - [~] **Data source** · self-contained catalog mirroring the admin fashion demo. **TODO:** share via `packages/data` so admin+storefront read one source.
 - [~] **SEO** · per-page title/description done. **TODO:** sitemap + feed.
@@ -46,8 +46,8 @@
 - [ ] **Deploy to Cloudflare** · **S** · wire CF Pages/Workers deploy.
 
 ## Epic 5 — Backend (M3 — local Postgres/Drizzle → self-hosted VPS)
-- [x] **Schema (`@indostore/db`)** · **L** · 53 tables/enums from `SCHEMA.md` as Drizzle + versioned migrations on **local PostgreSQL 16** (Docker). Seeded single-tenant "Batik Nusantara" = parity with mock.
-- [x] **RLS (tenant isolation, enforcing at runtime)** · **L** · migration `0012` = RLS + `tenant_isolation` (`USING`/`WITH CHECK` on `store_id`) on all 32 store-scoped tables + non-owner `indostore_app` role + `withTenant()`/`withCurrentTenant()`. The admin runs every read + write through the restricted role, so RLS enforces live (auth/super-admin/storefront stay owner). `verify-rls` + `verify-rls-app` + Playwright E2E green.
+- [x] **Schema (`@tokophi/db`)** · **L** · 53 tables/enums from `SCHEMA.md` as Drizzle + versioned migrations on **local PostgreSQL 16** (Docker). Seeded single-tenant "Batik Nusantara" = parity with mock.
+- [x] **RLS (tenant isolation, enforcing at runtime)** · **L** · migration `0012` = RLS + `tenant_isolation` (`USING`/`WITH CHECK` on `store_id`) on all 32 store-scoped tables + non-owner `tokophi_app` role + `withTenant()`/`withCurrentTenant()`. The admin runs every read + write through the restricted role, so RLS enforces live (auth/super-admin/storefront stay owner). `verify-rls` + `verify-rls-app` + Playwright E2E green.
 - [~] **Swap `lib/data` bodies → queries** · **L** · ✅ super-admin (all 5) + admin 16 modules read the DB (`force-dynamic`). ⏳ storefront.
 - [x] **Auth + RBAC** · **M** · ✅ **local auth** (email/password → jose JWT httpOnly cookie, `middleware.ts` protects admin, owner `ongki@batiknusantara.id`) + ✅ **RBAC** (`lib/rbac.ts` `requireCapability` gates all 13 mutating action files by `store_users.role`; store_id from the session) + ✅ **RBAC UI** (`lib/rbac-policy.ts` + `useCan`/`<Can>` + role badge; **all admin editors** gate controls per role, Playwright-verified across owner/staff/gudang).
 - [x] **Mutations persist** · **L** · ✅ all 12 admin editors save/edit/delete → Drizzle `insert/update` (`lib/actions/*`); refresh keeps changes. Incl. PO create/receive→stock, order-status, stock adjust, CRM follow-up.

@@ -1,5 +1,5 @@
 // Static config + shared types for the SUPER ADMIN (platform control plane).
-// Live data now comes from the database via lib/data.ts (@indostore/db); this file only
+// Live data now comes from the database via lib/data.ts (@tokophi/db); this file only
 // holds the plan catalog + the UI-facing types the components share.
 
 export type Plan = "pemula" | "bisnis" | "skala";

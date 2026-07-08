@@ -1,7 +1,7 @@
 "use server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { schema } from "@indostore/db";
+import { schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";

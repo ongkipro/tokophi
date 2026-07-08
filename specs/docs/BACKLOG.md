@@ -1,17 +1,17 @@
-# Indostore — Backlog & task board
+# TokoΦ — Backlog & task board
 
 > Prioritized work list derived from a full screening of the codebase. Living doc — update as items ship.
 > Companion to `CONCEPT.md` (what/why), `SCHEMA.md` (backend target), `UI_INVENTORY.md` (screen status), `../PRD.md`.
 > Legend: `[ ]` todo · `[~]` partial · `[x]` done. Updated 2026-07-03.
 
 ## P0 — Foundation (do before/for backend)
-- [~] **Backend** — ✅ **local PostgreSQL 16 + Drizzle** (`@indostore/db`, 53 tables, migrations 0000–0012) live: all 3 surfaces read + all 12 admin editors write + local auth (jose JWT) + **RBAC** (capability matrix gates all mutations) + **RLS ENFORCING at runtime** (migration 0012 + admin routes every read/write through the non-owner `indostore_app` role via `withTenant`/`withCurrentTenant`; `verify-rls` + `verify-rls-app` + E2E green) + local media upload. ⏳ then the VPS server itself (self-hosted Postgres + PostgREST + Storage). See `SCHEMA.md` + ADR 0007/0008.
-- [x] **Extend the data-layer seam to ALL screens.** ✅ Reads via `lib/data/*` (super-admin + 16 admin modules + storefront `@indostore/db`). ✅ Writes via `lib/actions/*` (all 12 editors). `lib/mock` kept only for decorative bits (live ticker, analitik breakdowns).
-- [x] **Auth + real multi-tenant.** ✅ local login/session + **RBAC** (capability matrix, `store_id` from the session) + **RLS enforcing at runtime** (admin routes every read/write through `indostore_app` via `withTenant`/`withCurrentTenant`). Store switcher is still cosmetic (single-tenant demo), but the tenancy boundary is real. VPS just points PostgREST at the same setup.
+- [~] **Backend** — ✅ **local PostgreSQL 16 + Drizzle** (`@tokophi/db`, 53 tables, migrations 0000–0012) live: all 3 surfaces read + all 12 admin editors write + local auth (jose JWT) + **RBAC** (capability matrix gates all mutations) + **RLS ENFORCING at runtime** (migration 0012 + admin routes every read/write through the non-owner `tokophi_app` role via `withTenant`/`withCurrentTenant`; `verify-rls` + `verify-rls-app` + E2E green) + local media upload. ⏳ then the VPS server itself (self-hosted Postgres + PostgREST + Storage). See `SCHEMA.md` + ADR 0007/0008.
+- [x] **Extend the data-layer seam to ALL screens.** ✅ Reads via `lib/data/*` (super-admin + 16 admin modules + storefront `@tokophi/db`). ✅ Writes via `lib/actions/*` (all 12 editors). `lib/mock` kept only for decorative bits (live ticker, analitik breakdowns).
+- [x] **Auth + real multi-tenant.** ✅ local login/session + **RBAC** (capability matrix, `store_id` from the session) + **RLS enforcing at runtime** (admin routes every read/write through `tokophi_app` via `withTenant`/`withCurrentTenant`). Store switcher is still cosmetic (single-tenant demo), but the tenancy boundary is real. VPS just points PostgREST at the same setup.
 
 ## P1 — Functional completeness (mostly wireable now, no backend)
 - [x] **RBAC UI rollout.** ✅ infra (`lib/rbac-policy.ts` + `useCan`/`<Can>` + role badge) + **all admin editors** gate their write/delete/create controls per role (Produk, Diskon, Halaman, Blog, Kategori, Pelanggan, CRM, Segmen, Pembelian, Inventori, Navigasi, Pesanan, Pengaturan). Playwright-verified across owner/staff/gudang. (Server actions still enforce — UI is UX.)
-- [ ] **De-dup: migrate `apps/admin` to consume `@indostore/ui` + `@indostore/lib`** and delete its local `components/ui` + `lib/format`/`utils`. (Monorepo is set up; super-admin already uses the shared packages; admin still has its own copies — see AGENTS.md. Do this carefully so the mature admin keeps building.)
+- [ ] **De-dup: migrate `apps/admin` to consume `@tokophi/ui` + `@tokophi/lib`** and delete its local `components/ui` + `lib/format`/`utils`. (Monorepo is set up; super-admin already uses the shared packages; admin still has its own copies — see AGENTS.md. Do this carefully so the mature admin keeps building.)
 - [ ] **Super-admin: deepen** — provisioning (create store) flow, real impersonation stub, support/tickets, platform-wide settings persistence, saved reports. (Dashboard/Toko/Paket/Analitik/Pengaturan shells done.)
 - [x] Edit routes for content: `/halaman/[id]`, `/blog/[id]` (prefilled) — done.
 - [x] Fix no-op "Edit" menu items (Produk, Kategori) — now open editors.

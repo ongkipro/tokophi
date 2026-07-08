@@ -1,9 +1,9 @@
-# Indostore — Diagrams (UML / Mermaid)
+# TokoΦ — Diagrams (UML / Mermaid)
 
 > Renders on GitHub / any Mermaid viewer. Kept text-based so it lives with the code.
 > Companion to `../PRD.md`, `SCHEMA.md`, `CONCEPT.md`. Updated 2026-07-03.
 >
-> **Current state:** monorepo (npm workspaces) with 3 apps — `apps/admin` (Next 16, :3000, merchant admin), `apps/super-admin` (Next 16, :3001, platform control plane), `apps/storefront` (Astro 5, :4327, shopper shop "Batik Nusantara") — and **4 shared packages**: `@indostore/ui`, `@indostore/lib`, `@indostore/data`, **`@indostore/db`** (Drizzle schema/client + migrations). **Backend is being wired** on **local PostgreSQL 16** (Docker, port 5433) via `@indostore/db`: **super-admin (all 5 pages) + 16 admin modules** + storefront all read the DB (reads done end-to-end); only writes (mutations) still pending. Seeds are deterministic (mulberry32, `TODAY=2026-06-30`). Single-tenant "Batik Nusantara" MVP. Prod target = self-hosted Postgres (ADR 0007); per-client topology = ADR 0008.
+> **Current state:** monorepo (npm workspaces) with 3 apps — `apps/admin` (Next 16, :3000, merchant admin), `apps/super-admin` (Next 16, :3001, platform control plane), `apps/storefront` (Astro 5, :4327, shopper shop "Batik Nusantara") — and **4 shared packages**: `@tokophi/ui`, `@tokophi/lib`, `@tokophi/data`, **`@tokophi/db`** (Drizzle schema/client + migrations). **Backend is being wired** on **local PostgreSQL 16** (Docker, port 5433) via `@tokophi/db`: **super-admin (all 5 pages) + 16 admin modules** + storefront all read the DB (reads done end-to-end); only writes (mutations) still pending. Seeds are deterministic (mulberry32, `TODAY=2026-06-30`). Single-tenant "Batik Nusantara" MVP. Prod target = self-hosted Postgres (ADR 0007); per-client topology = ADR 0008.
 
 ## 1. System context / container (C4-ish)
 > Who talks to what: shoppers→storefront, merchants→admin, platform→super-admin; the 3 apps sit on shared packages; self-hosted Postgres + payment/shipping integrations are platform-managed and land at M3.
@@ -18,10 +18,10 @@ graph TB
     SuperAdmin["apps/super-admin :3001<br/>platform control plane (Next 16)"]
     Storefront["apps/storefront :4327<br/>per-client shop (Astro 5)"]
     subgraph Packages["packages/*"]
-      UI["@indostore/ui<br/>shadcn/Base UI + tokens"]
-      Lib["@indostore/lib<br/>formatters/types"]
-      Data["@indostore/data<br/>canonical MAIN_MENU / FOOTER_MENU"]
-      Db["@indostore/db<br/>Drizzle schema + client"]
+      UI["@tokophi/ui<br/>shadcn/Base UI + tokens"]
+      Lib["@tokophi/lib<br/>formatters/types"]
+      Data["@tokophi/data<br/>canonical MAIN_MENU / FOOTER_MENU"]
+      Db["@tokophi/db<br/>Drizzle schema + client"]
     end
   end
 
@@ -63,7 +63,7 @@ graph TB
 ```
 
 ## 2. Monorepo components — who imports what
-> The 3 apps and 3 packages, with **actual** import edges verified in the repo. `@indostore/data` is the only package shared by *both* admin and storefront (single nav source). Admin still ships its **own local `components/ui/*`** (Base UI) rather than `@indostore/ui` — de-dup is backlog (ADR 0005).
+> The 3 apps and 3 packages, with **actual** import edges verified in the repo. `@tokophi/data` is the only package shared by *both* admin and storefront (single nav source). Admin still ships its **own local `components/ui/*`** (Base UI) rather than `@tokophi/ui` — de-dup is backlog (ADR 0005).
 ```mermaid
 graph LR
   subgraph apps
@@ -72,9 +72,9 @@ graph LR
     SF["apps/storefront<br/>Astro 5"]
   end
   subgraph packages
-    UI["@indostore/ui"]
-    LIB["@indostore/lib"]
-    DATA["@indostore/data<br/>menu (MAIN_MENU / FOOTER_MENU)"]
+    UI["@tokophi/ui"]
+    LIB["@tokophi/lib"]
+    DATA["@tokophi/data<br/>menu (MAIN_MENU / FOOTER_MENU)"]
   end
 
   SA --> UI
@@ -232,7 +232,7 @@ erDiagram
     int position
   }
 ```
-> Payments/shipping/COD config is **platform-level** (see `SCHEMA.md`): `shipping_aggregator`, `platform_couriers`, `platform_payment_gateways`, `platform_cod`; per-store rows keep only `enabled` flags. `menus`/`menu_items` mirror the canonical shapes in `@indostore/data` (see §6).
+> Payments/shipping/COD config is **platform-level** (see `SCHEMA.md`): `shipping_aggregator`, `platform_couriers`, `platform_payment_gateways`, `platform_cod`; per-store rows keep only `enabled` flags. `menus`/`menu_items` mirror the canonical shapes in `@tokophi/data` (see §6).
 
 ## 4. Storefront purchase flow (current — mock, no backend)
 > Real shopper journey as built today: everything renders from mock catalog and the **cart lives in `localStorage`** (no server). Checkout collects address/shipping/payment then routes to a static success page. The payment/shipping calls are stubs until M3 (§5).
@@ -281,11 +281,11 @@ sequenceDiagram
   Note over PG,DB: Platform settle → payout ke merchant (potong fee)
 ```
 
-## 6. Shared nav — single source of truth (`@indostore/data`)
-> `@indostore/data/menu` exports canonical `MAIN_MENU` + `FOOTER_MENU`. Both the admin menu builder and the storefront header **derive** from it, so they stay in sync. **Today** this is a build-time sync (edit the file → rebuild both). **M3** persists menus in self-hosted Postgres so runtime edits in the admin UI go live on the storefront (ADR 0006).
+## 6. Shared nav — single source of truth (`@tokophi/data`)
+> `@tokophi/data/menu` exports canonical `MAIN_MENU` + `FOOTER_MENU`. Both the admin menu builder and the storefront header **derive** from it, so they stay in sync. **Today** this is a build-time sync (edit the file → rebuild both). **M3** persists menus in self-hosted Postgres so runtime edits in the admin UI go live on the storefront (ADR 0006).
 ```mermaid
 flowchart TB
-  subgraph SRC["@indostore/data/menu (canonical)"]
+  subgraph SRC["@tokophi/data/menu (canonical)"]
     MM["MAIN_MENU: MenuItem[]"]
     FM["FOOTER_MENU: MenuItem[]"]
   end
@@ -314,7 +314,7 @@ flowchart TB
 > Sync direction now is **file → both surfaces (build-time)**. The dotted edges are the M3 upgrade: admin UI edits persist to `menus`/`menu_items` and the storefront reads them live.
 
 ## 7. Data-layer seam (mock today → self-hosted Postgres (VPS) later)
-> The core of the mock-first bet (ADR 0001): screens never touch storage directly. They read through a thin data layer — `apps/admin/lib/mock/*`, `apps/storefront/src/data/*`, `@indostore/data` — that returns seeded fixtures today and becomes self-hosted Postgres queries at M3 with the same shapes.
+> The core of the mock-first bet (ADR 0001): screens never touch storage directly. They read through a thin data layer — `apps/admin/lib/mock/*`, `apps/storefront/src/data/*`, `@tokophi/data` — that returns seeded fixtures today and becomes self-hosted Postgres queries at M3 with the same shapes.
 ```mermaid
 graph TB
   subgraph Screens
@@ -326,7 +326,7 @@ graph TB
     AM["admin/lib/mock/store.ts"]
     SM["super-admin mock fixtures"]
     SC["storefront/src/data/catalog.ts + nav.ts"]
-    DP["@indostore/data (menu)"]
+    DP["@tokophi/data (menu)"]
   end
   subgraph Sources
     MOCK["Seeded mock (mulberry32, TODAY=2026-06-30)"]

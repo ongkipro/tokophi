@@ -1,21 +1,21 @@
-# Indostore — Worklog (session log)
+# TokoΦ — Worklog (session log)
 
 > Newest first. What we did + what's next, so any session can resume instantly.
-> Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/indostore` (private) — commit + push each increment.
+> Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
 ## ▶ CURRENT STATE (2026-07-04) · RBAC + RLS (ENFORCING at runtime) + RBAC-UI done · next = VPS server itself
 
-**Everything runs locally on Linux** (Docker PostgreSQL 16 :5433 + Drizzle `@indostore/db`, 53 tables, migrations 0000–0012). Done + verified end-to-end:
+**Everything runs locally on Linux** (Docker PostgreSQL 16 :5433 + Drizzle `@tokophi/db`, 53 tables, migrations 0000–0012). Done + verified end-to-end:
 - **Reads:** all 3 surfaces (super-admin 5 pages + admin 16 modules + storefront) read Postgres.
 - **Writes:** all **12 admin editors** persist via `lib/actions/*` server actions (Produk/Diskon/Halaman/Blog/Kategori CRUD · order-status · Inventori-stock · Navigasi · Pelanggan · CRM follow-up · Segmen · Pembelian PO create/receive→stock/cancel).
-- **Auth (local):** email/password login → jose JWT httpOnly cookie, `middleware.ts` protects the admin (owner `ongki@batiknusantara.id / indostore123`).
+- **Auth (local):** email/password login → jose JWT httpOnly cookie, `middleware.ts` protects the admin (owner `ongki@batiknusantara.id / tokophi123`).
 - **RBAC (local):** every mutating server action gates on a capability via `lib/rbac.ts` `requireCapability()` — role→capability matrix (client-safe in `lib/rbac-policy.ts`) for owner/admin/staff/gudang (role comes from the session JWT). Actions also derive `store_id` from the session. **UI:** `PermissionsProvider`/`useCan`/`<Can>` + topbar role badge; **ALL admin editors** hide their write/delete/create controls per role (Produk, Pengaturan, Diskon, Halaman, Blog, Kategori, Pelanggan, CRM, Segmen, Pembelian, Inventori, Navigasi, Pesanan).
-- **RLS (local, ENFORCING at runtime):** migration `0012_tenant_rls` = `tenant_isolation` policy (`USING`/`WITH CHECK` on `store_id = app_current_store_id()`) on all **32 store-scoped tables** + non-owner `indostore_app` role. **The admin now runs every query through `withTenant`** (`lib/tenant.ts`): all 14 `lib/data` reads via `withCurrentTenant` (session→GUC), all 13 `lib/actions` writes via `withTenant(session.storeId)` — each txn sets `app.store_id` + `SET LOCAL ROLE indostore_app`, so RLS enforces live (the process connects as owner, but tenant queries drop to the restricted role). Auth (pre-session `store_users` read) + super-admin (cross-tenant) + storefront (per-client build) stay owner. **Verified**: `verify-rls` + `verify-rls-app` (the real withTenant path — read/write/isolation/WITH-CHECK) + Playwright E2E (all pages render, in-app write persists, 0 errors).
+- **RLS (local, ENFORCING at runtime):** migration `0012_tenant_rls` = `tenant_isolation` policy (`USING`/`WITH CHECK` on `store_id = app_current_store_id()`) on all **32 store-scoped tables** + non-owner `tokophi_app` role. **The admin now runs every query through `withTenant`** (`lib/tenant.ts`): all 14 `lib/data` reads via `withCurrentTenant` (session→GUC), all 13 `lib/actions` writes via `withTenant(session.storeId)` — each txn sets `app.store_id` + `SET LOCAL ROLE tokophi_app`, so RLS enforces live (the process connects as owner, but tenant queries drop to the restricted role). Auth (pre-session `store_users` read) + super-admin (cross-tenant) + storefront (per-client build) stay owner. **Verified**: `verify-rls` + `verify-rls-app` (the real withTenant path — read/write/isolation/WITH-CHECK) + Playwright E2E (all pages render, in-app write persists, 0 errors).
 - **Media (local):** product image upload → `apps/admin/public/uploads/` + `product_media`.
 
 **RBAC UI (ALL editors done):** `lib/rbac-policy.ts` (client-safe matrix) + `PermissionsProvider`/`useCan`/`<Can>` + topbar role badge; every admin editor gates its write/delete/create controls by role (verified via Playwright across owner/staff/gudang). Server actions stay the security boundary.
 
-**▶ RESUME HERE (next session):** **the VPS server itself** — the app-side is done (RLS enforces at runtime via `withTenant`, `indostore_app` role ready). Remaining is infra: provision the VPS, run the same migrations on its Postgres, front it with PostgREST (JWT `store_id` claim → `app.store_id` GUC, connect as `indostore_app`), swap local `public/uploads` for MinIO/S3 storage, wire the deploy pipeline. Needs an actual server (was deferred pending that). Detail per-entry below (newest first).
+**▶ RESUME HERE (next session):** **the VPS server itself** — the app-side is done (RLS enforces at runtime via `withTenant`, `tokophi_app` role ready). Remaining is infra: provision the VPS, run the same migrations on its Postgres, front it with PostgREST (JWT `store_id` claim → `app.store_id` GUC, connect as `tokophi_app`), swap local `public/uploads` for MinIO/S3 storage, wire the deploy pipeline. Needs an actual server (was deferred pending that). Detail per-entry below (newest first).
 
 ## 2026-07-04 — Session: RBAC + local Postgres RLS ✅
 **State before:** all reads + writes + local auth + local media done on local Postgres; paused at RBAC+RLS (single owner user).
@@ -23,29 +23,29 @@
 **Done this session:**
 - [x] **RBAC (`apps/admin/lib/rbac.ts`)** — capability model + role→capability matrix (owner=all · admin=all−settings · staff=shop ops, no product-delete/warehouse/settings · gudang=inventori+pembelian only). `can(role, cap)`, `requireCapability(cap)` (returns the session or throws `ForbiddenError`).
 - [x] **Gated all 13 mutating action files** (`lib/actions/*`, auth.ts excluded): products (write/delete split), discounts, pages, articles, collections, menus (content), orders, inventory, purchases, customers, crm+segments. Each mutation calls `await requireCapability(...)`; store-scoped creates now take `store_id` from the session (removed the per-file "first store" helper).
-- [x] **RLS migration `0012_tenant_rls`** — hand-authored (drizzle-kit doesn't model RLS): non-owner `indostore_app` role + grants, `app_current_store_id()` GUC reader, and `ENABLE ROW LEVEL SECURITY` + `tenant_isolation` policy (`USING` + `WITH CHECK`) on all **32 `store_id` tables**. Registered in the drizzle journal (+ 0012 snapshot) so `npm run migrate` applies it. Applied clean.
-- [x] **`withTenant(storeId, fn)`** (`packages/db/src/rls.ts`, exported) — per-txn `set_config('app.store_id', …, true)` + `SET LOCAL ROLE indostore_app`. Ready for the VPS switch.
+- [x] **RLS migration `0012_tenant_rls`** — hand-authored (drizzle-kit doesn't model RLS): non-owner `tokophi_app` role + grants, `app_current_store_id()` GUC reader, and `ENABLE ROW LEVEL SECURITY` + `tenant_isolation` policy (`USING` + `WITH CHECK`) on all **32 `store_id` tables**. Registered in the drizzle journal (+ 0012 snapshot) so `npm run migrate` applies it. Applied clean.
+- [x] **`withTenant(storeId, fn)`** (`packages/db/src/rls.ts`, exported) — per-txn `set_config('app.store_id', …, true)` + `SET LOCAL ROLE tokophi_app`. Ready for the VPS switch.
 - [x] **`npm run verify-rls`** (`src/verify-rls.ts`) proves isolation: right tenant → 14 products, wrong tenant → 0, no-GUC → 0 (fail-closed), cross-tenant INSERT blocked by `WITH CHECK`. **All ✓.**
 - **Verified:** `build:admin` clean (middleware + all routes intact), `verify-rls` all green.
-- **Note:** locally the app connects as the table owner, which *bypasses* RLS by design — enforcement flips on when the VPS points `DATABASE_URL` at `indostore_app` and queries run via `withTenant`. RBAC (app-layer) is enforced now regardless.
+- **Note:** locally the app connects as the table owner, which *bypasses* RLS by design — enforcement flips on when the VPS points `DATABASE_URL` at `tokophi_app` and queries run via `withTenant`. RBAC (app-layer) is enforced now regardless.
 
 **Next:** RBAC UI polish (hide/disable per role + graceful ForbiddenError toast), then VPS activation. See CURRENT STATE banner.
 
 ## 2026-07-04 — Session: RLS runtime enforcement (local) ✅
 **Done this session:**
-- [x] **`apps/admin/lib/tenant.ts`** — `withCurrentTenant(fn)` (session→`withTenant`) + re-export `withTenant`. Makes every admin query run in a txn that sets `app.store_id` + `SET LOCAL ROLE indostore_app`, so RLS enforces at runtime (process connects as owner; tenant queries drop to the non-owner role — the VPS/PostgREST model).
+- [x] **`apps/admin/lib/tenant.ts`** — `withCurrentTenant(fn)` (session→`withTenant`) + re-export `withTenant`. Makes every admin query run in a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`, so RLS enforces at runtime (process connects as owner; tenant queries drop to the non-owner role — the VPS/PostgREST model).
 - [x] **All 14 `lib/data/*` reads** wrapped in `withCurrentTenant` (helpers threaded as `base(db: Tx)` where needed) — done via subagent, build-verified.
 - [x] **All 13 `lib/actions/*` writes** wrapped in `withTenant(session.storeId, …)` (store_id from the RBAC session; single-statement → arrow, multi-statement → one atomic txn). `media.ts` keeps fs outside the txn.
 - [x] **Kept owner (correctly):** `lib/auth.ts` (reads `store_users` before a session exists — else login locks out), super-admin (cross-tenant), storefront (per-client build, no session).
 - [x] **`npm run verify-rls-app`** (new) exercises the REAL `withTenant` path: own-tenant read + write-and-read-back its own discount; foreign tenant sees 0 of both; WITH CHECK blocks cross-store write; cleanup. All ✓.
-- [x] **Playwright E2E**: logged in as owner, every admin page renders its data (pelanggan 24, inventori 14, diskon 6, kategori 8, halaman 7, blog 6, segmen 17, crm 10, dashboard) with 0 runtime errors / 0 permission-denials; an in-app customer-note write persisted across reload — all through `indostore_app`. `build:admin` + `build:super` + storefront all clean.
+- [x] **Playwright E2E**: logged in as owner, every admin page renders its data (pelanggan 24, inventori 14, diskon 6, kategori 8, halaman 7, blog 6, segmen 17, crm 10, dashboard) with 0 runtime errors / 0 permission-denials; an in-app customer-note write persisted across reload — all through `tokophi_app`. `build:admin` + `build:super` + storefront all clean.
 - **Next:** the VPS server itself (infra) — app side is done.
 
 ## 2026-07-04 — Session: RBAC UI rollout to ALL editors ✅
 **Done this session:**
 - [x] Applied the `useCan()`/`<Can>` gating (same pattern as Produk) to **every remaining admin editor**: Diskon, Halaman, Blog, Kategori (editors: Simpan/Hapus; lists: Buat/Tambah CTA + row Hapus), Pelanggan (tag/catatan save), CRM follow-up (Tandai selesai), Segmen (Buat/Edit/Hapus), Pembelian (Buat PO dialog + terima/batalkan row actions), Inventori (Simpan stok), Navigasi (Simpan menu), Pesanan (advance-status button). Each guards its handler + hides the control per capability; server actions still enforce.
 - [x] **Verified via Playwright** (fresh login per role): Diskon Buat = staff✓/gudang✗ (discounts:write); Inventori Simpan + Pembelian Buat = staff✗/gudang✓ (inventory/purchases:write); owner all✓ — orthogonal cross-check of the matrix. `build:admin` compiled clean.
-- **Next:** VPS activation (connect as `indostore_app` + route through `withTenant()` so RLS enforces).
+- **Next:** VPS activation (connect as `tokophi_app` + route through `withTenant()` so RLS enforces).
 
 ## 2026-07-04 — Session: RBAC UI (role-aware controls) ✅
 **Done this session:**
@@ -80,13 +80,13 @@
 
 **Navigasi + nav presisi (2026-07-02):** admin Navigasi = menu builder parent/child dengan **drag-and-drop reorder** (HTML5, tree-ops.ts) + aksi "Jadikan sub-menu"/"Naikkan jadi induk" (2 level). Storefront header kini **cermin presisi Menu Utama admin**: Beranda · Semua Produk · Kategori▾(6) · Promo Gajian · Blog · Kontak (dropdown desktop + accordion mobile via nav.ts). Halaman baru: /blog, /kontak, /kategori/semua, /kategori/promo-gajian (koleksi virtual). Data admin: hijab→Busana Muslim, +Loungewear. self-hosted Postgres: belum (M3). Build+console clean.
 
-**Docs pass + auto-connect (2026-07-02):** new **@indostore/data** package = single source of truth for nav; admin menu builder + storefront header both derive from it (auto-sync on rebuild). Declared @indostore/data dep in admin+storefront package.json. Full docs refresh: PRD→v0.4, README, ARCHITECTURE, **new GUIDE.md**, UML (9 Mermaid diagrams), ADR 0005 (monorepo) + 0006 (shared nav), UI_INVENTORY/DATA_MODEL/SCHEMA. Known gaps flagged: storefront /halaman/[handle] + /blog/[handle] not built; /akun is a no-auth stub.
+**Docs pass + auto-connect (2026-07-02):** new **@tokophi/data** package = single source of truth for nav; admin menu builder + storefront header both derive from it (auto-sync on rebuild). Declared @tokophi/data dep in admin+storefront package.json. Full docs refresh: PRD→v0.4, README, ARCHITECTURE, **new GUIDE.md**, UML (9 Mermaid diagrams), ADR 0005 (monorepo) + 0006 (shared nav), UI_INVENTORY/DATA_MODEL/SCHEMA. Known gaps flagged: storefront /halaman/[handle] + /blog/[handle] not built; /akun is a no-auth stub.
 
 **Backend M3 — local Postgres + Drizzle + super-admin live (2026-07-03):**
-- [x] **`@indostore/db`** package (Drizzle): `src/schema.ts` = **53 tables + 32 enums** from SCHEMA.md (snake_case casing, money=`bigint` IDR), `client.ts` singleton, **versioned migrations** (`drizzle/0000..0002`), `seed.ts`, `reset.ts`. Root **`docker-compose.yml`** = PostgreSQL 16 @ :5433. ADR 0007.
+- [x] **`@tokophi/db`** package (Drizzle): `src/schema.ts` = **53 tables + 32 enums** from SCHEMA.md (snake_case casing, money=`bigint` IDR), `client.ts` singleton, **versioned migrations** (`drizzle/0000..0002`), `seed.ts`, `reset.ts`. Root **`docker-compose.yml`** = PostgreSQL 16 @ :5433. ADR 0007.
 - [x] **Seed** — **single-tenant MVP**: 3 plans + **one store "Batik Nusantara"** (account/owner/`store_users`/settings/`store_stats`), 6 invoices (`number`), 4 activity, platform gateways/couriers(Biteship)/COD. Idempotent (truncate). *(Decision: focus everything on 1 real store; multi-tenant topology = ADR 0008, target.)* super-admin metrics made honest for 1 store (cross-store deltas → 0, `newSignups30d` derived, trial note hidden when 0).
 - [x] **Wire super-admin → DB**: new **server-only `lib/data.ts`** (getStores/getPlatform/getDeltas/getPlanDistribution/getStatusDistribution/getInvoices/getActivity/getMrrSeries/getPaymentGateways/getCouriers/getAggregator). `lib/mock.ts` slimmed to config (types + PLANS). Client pages split into `*-client.tsx` + server wrapper; `mrr-chart` takes `data` prop; all DB pages `dynamic="force-dynamic"`. **Verified**: `tsc` clean, `build:super` (6 ƒ dynamic), 6 screenshots from DB with 0 console errors + **perfect parity**; live-mutation test proved runtime reads.
-- [x] **Screening/perfection**: `menu_items.parent_id` self-FK; 37 inferred type exports; `stores.city` + `store_stats` + `invoices.number` added so the platform view is faithful from DB; `reset` script (drops `public` **and** `drizzle` journal); apps wired (`@indostore/db` dep + `transpilePackages` + `serverExternalPackages:["postgres"]` + `.env.local`).
+- [x] **Screening/perfection**: `menu_items.parent_id` self-FK; 37 inferred type exports; `stores.city` + `store_stats` + `invoices.number` added so the platform view is faithful from DB; `reset` script (drops `public` **and** `drizzle` journal); apps wired (`@tokophi/db` dep + `transpilePackages` + `serverExternalPackages:["postgres"]` + `.env.local`).
 - **Impl notes:** toko list now ordered by GMV desc; store-detail "ID toko" shows real uuid (was STR-2005). RLS not enabled locally (plain Postgres) — app-layer `store_id` scoping for now.
 - **Docs:** ADR **0007** (Postgres+Drizzle stack) + **0008** (per-client topology); ARCHITECTURE §9–10, UML §1/§10 (+provisioning sequence), SCHEMA (implemented + deltas), PRD status/roadmap.
 
@@ -119,7 +119,7 @@
 - [x] **`lib/data/{purchases,segments,reviews}.ts`**: `getPurchaseOrders` (supplier via join, items via `count(po_items)`, etaDays from `eta_date`), `getSegments`, `getReviews` (customer via join, product/emoji denormalized). Wired 3 pages (server-wrapper + `*-client.tsx`, `force-dynamic`). **Verified**: `tsc` + `build:admin` clean, screenshots — Pembelian (6 PO, tab counts/supplier/item/total/ETA), Segmen, Ulasan (8, rating avg, customer join) — 0 console errors, parity. **12 admin modules now DB-backed.**
 
 **admin → DB — Navigasi live (2026-07-03):**
-- [x] **Seed** menus/menu_items (recursive, parent_id + position; type NavItemType→DB enum): 2 menus (main-menu 12 items incl. Kategori→6 children, footer 5). Inlined `MAIN_MENU`/`FOOTER_MENU` from `@indostore/data` for seed parity.
+- [x] **Seed** menus/menu_items (recursive, parent_id + position; type NavItemType→DB enum): 2 menus (main-menu 12 items incl. Kategori→6 children, footer 5). Inlined `MAIN_MENU`/`FOOTER_MENU` from `@tokophi/data` for seed parity.
 - [x] **`lib/data/menus.ts`** `getMenus()` reconstructs the `NavMenu[]` tree from flat menu_items (parent→children map, type mapped back). Wired Navigasi (server-wrapper + `navigasi-client.tsx`, `force-dynamic`; `seedMenus()`→prop clone). **Verified**: `tsc` + `build:admin` clean, screenshot — 2 menus, hierarchical 12-item builder (Kategori sub-menu + children) — 0 console errors, parity. **16 admin modules now DB-backed.**
 
 **admin → DB — Dashboard + Analitik live (2026-07-03):**
@@ -133,7 +133,7 @@
 
 **storefront → DB · ALL THREE SURFACES NOW READ POSTGRESQL (2026-07-03):**
 - [x] **Enriched `products`** (migration `0009`): `sizes` (jsonb), `badge`, `bestseller`, `rating_value`, `rating_count`; seeded `description` + `variant.compare_at_idr` + `collections.description` (category blurbs) — from the storefront catalog values. (Admin catalog already matched storefront: same 14 handles/prices.)
-- [x] **Rewrote `apps/storefront/src/data/catalog.ts`** to read `@indostore/db` via **top-level await** (build/SSR time) — **same exports** (`STORE`/`COLLECTIONS`/`PRODUCTS`/`productRating`/`bestsellers`/`byCollection`/`findProduct`/…), so all ~12 `.astro` consumers are unchanged. `astro.config.mjs` surfaces `DATABASE_URL` onto `process.env` (`loadEnv`) + `ssr.external:["postgres"]`; `apps/storefront/.env`(+example). `@indostore/db` added to deps.
+- [x] **Rewrote `apps/storefront/src/data/catalog.ts`** to read `@tokophi/db` via **top-level await** (build/SSR time) — **same exports** (`STORE`/`COLLECTIONS`/`PRODUCTS`/`productRating`/`bestsellers`/`byCollection`/`findProduct`/…), so all ~12 `.astro` consumers are unchanged. `astro.config.mjs` surfaces `DATABASE_URL` onto `process.env` (`loadEnv`) + `ssr.external:["postgres"]`; `apps/storefront/.env`(+example). `@tokophi/db` added to deps.
 - [x] **Verified**: `astro build` clean (29 pages, all 14 products + 6 category collections generated from DB), screenshots — home (hero/6-collection grid w/ live counts 3·3·2·3·2·1/bestsellers) + product (rating 4.8·214, price+compareAt −24%, Promo badge, sizes, gallery, review breakdown, related) — **0 console errors, parity**.
 - ✅ **super-admin + all 16 admin modules + storefront all read PostgreSQL.** Reads are done end-to-end.
 
@@ -172,7 +172,7 @@
 - [x] **Verified end-to-end via UI**: created PO-xxxxxx (celana-kulot ×7, total 462k, po_items row); received it → status diterima + celana-kulot stock 22→29; cancelled another PO → row+items gone. `tsc` + `build:admin` clean. Reseeded. **✅ All 12 admin editors persist writes (12 write areas).**
 
 **Local admin auth — login + session + route protection (2026-07-03):**
-- [x] **Schema** `users.password_hash` (migration `0011`); seed hashes the owner password (scrypt `salt:hash`) — **ongki@batiknusantara.id / indostore123**, role owner.
+- [x] **Schema** `users.password_hash` (migration `0011`); seed hashes the owner password (scrypt `salt:hash`) — **ongki@batiknusantara.id / tokophi123**, role owner.
 - [x] **`lib/auth.ts`** (server-only): `verifyPassword` (scrypt), `findLogin` (users ⋈ store_users), `signSession`/`getSession` (**jose JWT** in httpOnly `session` cookie, `AUTH_SECRET`). **`lib/actions/auth.ts`** `signIn`/`signOut`. **`app/login/page.tsx`** (email+password, `useActionState`). **`middleware.ts`** (edge-safe JWT verify → redirect to `/login`; matcher excludes `_next`/static/`products/`). `(admin)/layout.tsx` is now async → reads session → Topbar shows the user + "Keluar".
 - [x] **Verified end-to-end**: unauthenticated `/` + `/produk` → 307 `/login`; wrong password → inline error; correct → dashboard (user shown in topbar); logout → `/login`. `tsc` + `build:admin` clean (Middleware compiled; postgres stays out of the edge bundle). Added `AUTH_SECRET` to `.env`/`.env.local`/`.env.example`.
 

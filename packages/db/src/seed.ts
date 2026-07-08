@@ -1,11 +1,11 @@
 // Seed the local Postgres — SINGLE-TENANT MVP: one real store, "Batik Nusantara"
 // (the same store the admin manages and the storefront sells). Run:
-//   npm run seed -w @indostore/db   (idempotent — truncates public tables first)
+//   npm run seed -w @tokophi/db   (idempotent — truncates public tables first)
 import { db, client, schema } from "./client";
 import { scryptSync, randomBytes } from "node:crypto";
 
 // Local auth: scrypt "salt:hash". Dev owner password below (change for real deploys).
-const DEV_OWNER_PASSWORD = "indostore123";
+const DEV_OWNER_PASSWORD = "tokophi123";
 function hashPassword(pw: string): string {
   const salt = randomBytes(16).toString("hex");
   return `${salt}:${scryptSync(pw, salt, 64).toString("hex")}`;

@@ -1,8 +1,8 @@
-# Indostore — Developer / Contributor Guide
+# TokoΦ — Developer / Contributor Guide
 
 > Practical "how do I…" guide. For the *why* and the big picture read [`ARCHITECTURE.md`](ARCHITECTURE.md); for the product spec see [`../PRD.md`](../PRD.md); for the future DB see [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md); for diagrams [`UML.md`](UML.md).
 
-Indostore is a Shopify-style commerce SaaS for Indonesia: **Bahasa Indonesia UI, IDR.** UI/UX-first, and the **backend is now being wired** on local PostgreSQL (Drizzle, `@indostore/db`) — super-admin + 16 admin modules read the DB; the rest is still mock. No Themes menu, no Apps/Plugins.
+TokoΦ is a Shopify-style commerce SaaS for Indonesia: **Bahasa Indonesia UI, IDR.** UI/UX-first, and the **backend is now being wired** on local PostgreSQL (Drizzle, `@tokophi/db`) — super-admin + 16 admin modules read the DB; the rest is still mock. No Themes menu, no Apps/Plugins.
 
 ---
 
@@ -14,8 +14,8 @@ Indostore is a Shopify-style commerce SaaS for Indonesia: **Bahasa Indonesia UI,
 
 ### Install (once, from the repo root)
 ```bash
-cd ~/projects/indostore
-npm install          # installs all workspaces + symlinks @indostore/* packages
+cd ~/projects/tokophi
+npm install          # installs all workspaces + symlinks @tokophi/* packages
 ```
 
 ### Run each app
@@ -42,39 +42,39 @@ A change is not "done" until the relevant `build` passes **and** the dev overlay
 ## 2. Repo tour
 
 ```
-indostore/
+tokophi/
 ├─ apps/
 │  ├─ admin/         merchant admin (Next 16, :3000)
 │  ├─ super-admin/   platform control plane (Next 16, :3001)
 │  └─ storefront/    shopper site (Astro 5, :4327)
 └─ packages/
-   ├─ ui/    @indostore/ui   shared shadcn-on-Base-UI components + cn + Tailwind tokens
-   ├─ lib/   @indostore/lib  IDR/num/pct/timeAgo formatters
-   └─ data/  @indostore/data canonical MAIN_MENU / FOOTER_MENU (shared nav source)
+   ├─ ui/    @tokophi/ui   shared shadcn-on-Base-UI components + cn + Tailwind tokens
+   ├─ lib/   @tokophi/lib  IDR/num/pct/timeAgo formatters
+   └─ data/  @tokophi/data canonical MAIN_MENU / FOOTER_MENU (shared nav source)
 ```
 
 ### `apps/admin/`
 - `app/(admin)/` — route group. `page.tsx` = Dashboard (`/`). Sections: pesanan, produk(+kategori/inventori/pembelian), pelanggan(+segmen/ulasan), crm, diskon, analitik, pemasaran, halaman(+baru), blog(+baru), navigasi, pengaturan.
 - `components/admin/` — shell (`sidebar`, `topbar`, `nav-links`, `brand`) + shared bits (`page-header`, `order-status`, `kpi-card`, `*-chart`, …) + per-screen subfolders.
-- `components/ui/` — **local** shadcn primitives (on Base UI). *(De-dup vs `@indostore/ui` is backlog.)*
+- `components/ui/` — **local** shadcn primitives (on Base UI). *(De-dup vs `@tokophi/ui` is backlog.)*
 - `lib/mock/store.ts` — deterministic seeded fixtures, anchored `TODAY=2026-06-30`. **Single source of demo data.**
 - `lib/data/` — thin selectors over the mock (`getSummary/getSeries/…`). **Swap bodies for API later; keep signatures.**
 - `lib/format.ts` — local `IDR()/num()/pct()/timeAgo()`. `lib/nav.ts` — admin sidebar `NAV_GROUPS` + `STORES`.
 - `CLAUDE.md` / `AGENTS.md` — working agreement + the "this Next 16 has breaking changes, read `node_modules/next/dist/docs/`" note.
 
 ### `apps/super-admin/`
-- Same Next 16 shape, but consumes shared code: `@indostore/ui/<component>`, `@indostore/lib/format`; Tailwind picks up shared components via `@source` in `globals.css`.
+- Same Next 16 shape, but consumes shared code: `@tokophi/ui/<component>`, `@tokophi/lib/format`; Tailwind picks up shared components via `@source` in `globals.css`.
 
 ### `apps/storefront/`
 - `src/pages/` — `index.astro`, `produk/[handle].astro`, `kategori/[handle].astro`, `blog/`, `keranjang.astro`, `checkout.astro`, `checkout/sukses.astro`, `akun.astro`, `kontak.astro`.
 - `src/components/` — `Header.astro`, `Footer.astro`, `ProductCard.astro`.
 - `src/layouts/Layout.astro`, `src/styles/global.css`.
-- `src/data/catalog.ts` — the shopper mock (STORE, COLLECTIONS, 14 PRODUCTS, helpers). `src/data/nav.ts` — `MAIN_NAV` derived from the shared `@indostore/data` menu.
+- `src/data/catalog.ts` — the shopper mock (STORE, COLLECTIONS, 14 PRODUCTS, helpers). `src/data/nav.ts` — `MAIN_NAV` derived from the shared `@tokophi/data` menu.
 
 ### `packages/`
-- `ui/src/components/ui/*.tsx` (exported as `@indostore/ui/<name>`), `ui/src/lib/utils.ts` (`cn`), `ui/src/styles/globals.css` (`@indostore/ui/styles.css`).
-- `lib/src/format.ts` (`@indostore/lib/format`).
-- `data/src/menu.ts` (`@indostore/data/menu`) + `data/src/index.ts` (re-export).
+- `ui/src/components/ui/*.tsx` (exported as `@tokophi/ui/<name>`), `ui/src/lib/utils.ts` (`cn`), `ui/src/styles/globals.css` (`@tokophi/ui/styles.css`).
+- `lib/src/format.ts` (`@tokophi/lib/format`).
+- `data/src/menu.ts` (`@tokophi/data/menu`) + `data/src/index.ts` (re-export).
 
 ---
 
@@ -94,7 +94,7 @@ indostore/
 
 ### Money & locale
 - Money is **always IDR** via `IDR()`; plain numbers via `num()`; percentages via `pct()`; relative time via `timeAgo()` — all `id-ID`. Tabular figures use the `tabular-nums` class.
-- Admin uses its local `lib/format.ts`; super-admin/storefront use `@indostore/lib/format`.
+- Admin uses its local `lib/format.ts`; super-admin/storefront use `@tokophi/lib/format`.
 
 ### Storefront slugs (Indonesian)
 `/produk/<handle>`, `/kategori/<handle>`, `/blog/<slug>`, `/halaman/<slug>` — **not** `/products//collections/…`.
@@ -136,12 +136,12 @@ Edit **one file**: `packages/data/src/menu.ts` (`MAIN_MENU` for header, `FOOTER_
 
 | Edit… | …and who picks it up |
 |---|---|
-| `packages/ui/src/**` | **super-admin** (via `@indostore/ui/<component>`). admin has its own copy — mirror the change into `apps/admin/components/ui/` if it must apply there too. |
-| `packages/lib/src/format.ts` | **super-admin** + **storefront** (`@indostore/lib/format`). admin uses its own `lib/format.ts`. |
+| `packages/ui/src/**` | **super-admin** (via `@tokophi/ui/<component>`). admin has its own copy — mirror the change into `apps/admin/components/ui/` if it must apply there too. |
+| `packages/lib/src/format.ts` | **super-admin** + **storefront** (`@tokophi/lib/format`). admin uses its own `lib/format.ts`. |
 | `packages/data/src/menu.ts` | **admin** (menu builder) + **storefront** (header/footer). |
 
-- Next apps import package **source** directly, so packages must stay in each app's `transpilePackages` (admin → `@indostore/data`; super-admin → `@indostore/ui`, `@indostore/lib`). Astro resolves the workspace symlink with no config.
-- Adding a new export to a package: update the package's `package.json` `exports` map, then import as `@indostore/<pkg>/<subpath>`.
+- Next apps import package **source** directly, so packages must stay in each app's `transpilePackages` (admin → `@tokophi/data`; super-admin → `@tokophi/ui`, `@tokophi/lib`). Astro resolves the workspace symlink with no config.
+- Adding a new export to a package: update the package's `package.json` `exports` map, then import as `@tokophi/<pkg>/<subpath>`.
 
 ---
 
@@ -162,7 +162,7 @@ Edit **one file**: `packages/data/src/menu.ts` (`MAIN_MENU` for header, `FOOTER_
 `productImages(product)` returns `[base, base-2, …, base-5]` (5 AI-generated shots). The PDP (`produk/[handle].astro`) renders the main image + thumbnails from it.
 
 ### Nav
-`Header.astro` + `Footer.astro` consume `MAIN_NAV` (from `src/data/nav.ts`, itself derived from `@indostore/data`). Edit menus in `packages/data/src/menu.ts`, not here.
+`Header.astro` + `Footer.astro` consume `MAIN_NAV` (from `src/data/nav.ts`, itself derived from `@tokophi/data`). Edit menus in `packages/data/src/menu.ts`, not here.
 
 ---
 
@@ -180,7 +180,7 @@ Edit **one file**: `packages/data/src/menu.ts` (`MAIN_MENU` for header, `FOOTER_
 - **`next dev` wrapper exits immediately:** prefer the stable root scripts (`npm run dev:admin` / `dev:super`) rather than a hand-rolled wrapper; re-run if a watcher dies.
 - **Base UI "MenuGroupContext is missing":** a `Menu.GroupLabel` was used without a `<Menu.Group>` parent — wrap it, or use the plain-`<div>` `DropdownMenuLabel`.
 - **Hydration mismatch:** something used `Date.now()`/`Math.random()` in a render path — route it through the seeded mock and anchor to `TODAY`.
-- **Shared component change not showing in admin:** admin uses its **local** `components/ui` copy, not `@indostore/ui` — edit both until the de-dup backlog task lands.
+- **Shared component change not showing in admin:** admin uses its **local** `components/ui` copy, not `@tokophi/ui` — edit both until the de-dup backlog task lands.
 
 ---
 

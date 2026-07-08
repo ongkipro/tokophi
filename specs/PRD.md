@@ -1,8 +1,8 @@
-# Indostore — Product Requirements Document (PRD v0.4)
+# TokoΦ — Product Requirements Document (PRD v0.4)
 
-> **Working name:** Indostore (rename trivial) · **Owner:** Paduka Ongki / ongkipro
-> **Phase:** UI/UX-first → **backend M3, local Linux** — all 3 surfaces READ + all 12 admin editors WRITE local PostgreSQL/Drizzle; local auth + **RBAC** (capability matrix + role-aware UI on all editors) + **RLS ENFORCING at runtime** (admin routes every read/write through the non-owner `indostore_app` role via `withTenant`; `verify-rls`+`verify-rls-app`+E2E green) + local media upload done. **Next: the VPS server itself** (app side done). · **Updated:** 2026-07-04
-> **Code:** `~/projects/indostore` (monorepo) · **Docs:** `~/Documents/Development/indostore`
+> **Working name:** TokoΦ (rename trivial) · **Owner:** Paduka Ongki / ongkipro
+> **Phase:** UI/UX-first → **backend M3, local Linux** — all 3 surfaces READ + all 12 admin editors WRITE local PostgreSQL/Drizzle; local auth + **RBAC** (capability matrix + role-aware UI on all editors) + **RLS ENFORCING at runtime** (admin routes every read/write through the non-owner `tokophi_app` role via `withTenant`; `verify-rls`+`verify-rls-app`+E2E green) + local media upload done. **Next: the VPS server itself** (app side done). · **Updated:** 2026-07-04
+> **Code:** `~/projects/tokophi` (monorepo) · **Docs:** `~/Documents/Development/tokophi`
 > **Run:** `npm i` at root, then `npm run dev:admin` (→ :3000) · `npm run dev:super` (→ :3001) · `cd apps/storefront && npm run dev` (→ :4327)
 
 ---
@@ -23,7 +23,7 @@ A **Shopify-style commerce platform for the Indonesian market**: one shared, mod
 | **Admin** (`apps/admin`) | merchant operators | Next 16 + shadcn/Base UI | :3000 | **1 shared app**, multi-store |
 | **Storefront** (`apps/storefront`) ✅ | end shoppers | Astro 5 + Tailwind v4 | :4327 | **1 per client** ("Batik Nusantara" demo built) |
 
-Super-admin & merchant-admin **share the design system** (`@indostore/ui`) + formatters (`@indostore/lib`); admin & storefront **share the canonical nav** (`@indostore/data`). Backend later = one self-hosted Postgres; super-admin = platform role (cross-tenant), admin = `store_id`-scoped (RLS).
+Super-admin & merchant-admin **share the design system** (`@tokophi/ui`) + formatters (`@tokophi/lib`); admin & storefront **share the canonical nav** (`@tokophi/data`). Backend later = one self-hosted Postgres; super-admin = platform role (cross-tenant), admin = `store_id`-scoped (RLS).
 
 **Payments & shipping are platform-managed (merchant "terima matang")** — ADR 0004. We (platform) set up payment gateways (Midtrans/Xendit/Duitku) + **COD** and connect ONE **shipping aggregator** (Biteship → all couriers). The merchant only **enables which payment methods to accept** and **picks which couriers + services (ekspedisi)** to offer; credentials, resi & tariffs are automatic. Money flow: platform collects → settles/payouts to merchant (fee/margin).
 
@@ -33,7 +33,7 @@ Super-admin & merchant-admin **share the design system** (`@indostore/ui`) + for
 
 ## 2. Current status (what's built)
 
-**All three surfaces are clickable, coherent products; backend M3 in progress.** Every screen reads typed fixtures through a thin data layer so backend is "just wiring." **On local PostgreSQL** (Drizzle via `@indostore/db`, Docker :5433 — ADR 0007): **super-admin (all 5) + 16 admin modules** read the DB via `lib/data/*` (`force-dynamic`); all three surfaces (super-admin + admin + storefront) read it. **All 12 admin editors now WRITE** (`lib/actions/*` server actions) — Produk/Diskon/Halaman/Blog/Kategori CRUD, order-status, Inventori-stock, Navigasi, Pelanggan, CRM (follow-up), Segmen, Pembelian (PO create/receive→stock/cancel). **Local auth** (email/password login, jose JWT cookie, route-protecting middleware) + **local media upload** (product images → `public/uploads/` + `product_media`) are done. **RBAC** (`lib/rbac.ts` gates all 13 mutating action files by role; UI hides controls per role across all editors) + **RLS ENFORCING at runtime** (migration 0012 — `tenant_isolation` on all 32 store-scoped tables + non-owner `indostore_app` role; the admin routes every read via `withCurrentTenant` + write via `withTenant` through that role, so RLS applies live; auth/super-admin/storefront stay owner; `verify-rls`+`verify-rls-app`+Playwright E2E green) are done. **Dev runs entirely on local Linux** (Docker Postgres :5433). Single-tenant "Batik Nusantara" MVP; per-client topology = ADR 0008.
+**All three surfaces are clickable, coherent products; backend M3 in progress.** Every screen reads typed fixtures through a thin data layer so backend is "just wiring." **On local PostgreSQL** (Drizzle via `@tokophi/db`, Docker :5433 — ADR 0007): **super-admin (all 5) + 16 admin modules** read the DB via `lib/data/*` (`force-dynamic`); all three surfaces (super-admin + admin + storefront) read it. **All 12 admin editors now WRITE** (`lib/actions/*` server actions) — Produk/Diskon/Halaman/Blog/Kategori CRUD, order-status, Inventori-stock, Navigasi, Pelanggan, CRM (follow-up), Segmen, Pembelian (PO create/receive→stock/cancel). **Local auth** (email/password login, jose JWT cookie, route-protecting middleware) + **local media upload** (product images → `public/uploads/` + `product_media`) are done. **RBAC** (`lib/rbac.ts` gates all 13 mutating action files by role; UI hides controls per role across all editors) + **RLS ENFORCING at runtime** (migration 0012 — `tenant_isolation` on all 32 store-scoped tables + non-owner `tokophi_app` role; the admin routes every read via `withCurrentTenant` + write via `withTenant` through that role, so RLS applies live; auth/super-admin/storefront stay owner; `verify-rls`+`verify-rls-app`+Playwright E2E green) are done. **Dev runs entirely on local Linux** (Docker Postgres :5433). Single-tenant "Batik Nusantara" MVP; per-client topology = ADR 0008.
 
 ### Admin — merchant store admin (`apps/admin`, :3000) — DONE
 - **Shell** — grouped sidebar (Utama / Toko Online / Sistem), topbar (store switcher, search ⌘K, notifications, account, **dark-mode toggle**), fully responsive (mobile drawer).
@@ -48,7 +48,7 @@ Super-admin & merchant-admin **share the design system** (`@indostore/ui`) + for
 - **Toko Online** — modeled on Shopify's real content entities (screened live via Shopify CLI):
   - **Halaman** — pages list + Shopify-style two-column editor with create **and** edit (`/halaman/baru`, `/halaman/[id]`): content, visibility, template, SEO Google-preview + auto-slug.
   - **Blog** — posts list (blog tabs, authors, comments) + article editor create/edit (`/blog/baru`, `/blog/[id]`): content, excerpt, featured image, tags, SEO.
-  - **Navigasi** — **menu builder** for Menu Utama / Footer: parent/child (2 levels), typed link picker, **drag-and-drop reorder + ↑/↓ buttons**, "Tambah sub-menu" / "Jadikan sub-menu" / "Naikkan jadi induk", add/edit/delete. Reads/writes against the shared `@indostore/data` menu shape.
+  - **Navigasi** — **menu builder** for Menu Utama / Footer: parent/child (2 levels), typed link picker, **drag-and-drop reorder + ↑/↓ buttons**, "Tambah sub-menu" / "Jadikan sub-menu" / "Naikkan jadi induk", add/edit/delete. Reads/writes against the shared `@tokophi/data` menu shape.
 - **Pengaturan** — redesigned settings-nav + store summary; Profil / **Pembayaran** / **Pengiriman** / Pajak / Pengguna / Notifikasi. Payments & shipping shown as **platform-managed** (merchant only toggles methods + picks couriers).
 
 ### Super Admin — platform control plane (`apps/super-admin`, :3001) — DONE · **LIVE ON POSTGRESQL**
@@ -74,10 +74,10 @@ Demo brand **"Batik Nusantara"** — a women's-fashion store.
 - **Media:** 14 women's-fashion products × **5 AI-generated images each = 70 webp** in `public/products/`.
 
 ### Shared packages
-- **`@indostore/ui`** — shadcn components on **Base UI** (`@base-ui/react`) + design tokens; consumed by both Next apps.
-- **`@indostore/lib`** — formatters (IDR / number, `id-ID`).
-- **`@indostore/data`** — canonical `MAIN_MENU` / `FOOTER_MENU`: the **single source of truth for navigation**, consumed by BOTH the admin menu builder (`apps/admin/lib/mock/store.ts`) and the storefront header (`apps/storefront/src/data/nav.ts`). Edit once → both surfaces stay in sync on rebuild.
-- **`@indostore/db`** (NEW) — **Drizzle** schema (53 tables, snake_case, money=`bigint` IDR) + `db` client + versioned migrations + seed/reset. Server-only. Backs super-admin today (see ADR 0007). `docker compose up -d db` → `npm run migrate` → `npm run seed`.
+- **`@tokophi/ui`** — shadcn components on **Base UI** (`@base-ui/react`) + design tokens; consumed by both Next apps.
+- **`@tokophi/lib`** — formatters (IDR / number, `id-ID`).
+- **`@tokophi/data`** — canonical `MAIN_MENU` / `FOOTER_MENU`: the **single source of truth for navigation**, consumed by BOTH the admin menu builder (`apps/admin/lib/mock/store.ts`) and the storefront header (`apps/storefront/src/data/nav.ts`). Edit once → both surfaces stay in sync on rebuild.
+- **`@tokophi/db`** (NEW) — **Drizzle** schema (53 tables, snake_case, money=`bigint` IDR) + `db` client + versioned migrations + seed/reset. Server-only. Backs super-admin today (see ADR 0007). `docker compose up -d db` → `npm run migrate` → `npm run seed`.
 
 **Non-goals (still):** auth backend, payment/courier integrations, live "edit-in-admin → storefront" persistence — mocked/deferred. **No longer a non-goal:** the DB is real (local Postgres) and multi-tenant provisioning is decided (ADR 0008). See `docs/BACKLOG.md`.
 
@@ -94,14 +94,14 @@ Platform ─▶ Next.js super-admin (cross-tenant) ─────────�
 
 - **Now:** every screen reads typed mock fixtures (`apps/admin/lib/mock/store.ts`) through a thin data layer (`apps/admin/lib/data/*`). Swapping mock → API is a per-function change; component contracts stay identical.
 - **Determinism:** all mock data is seeded (mulberry32) and anchored to a fixed `TODAY = 2026-06-30`, so SSR and client render identically (no hydration mismatch) and the demo is stable across reloads.
-- **Nav auto-connect:** admin menu builder + storefront header both derive from `@indostore/data/menu` — one edit propagates to both on rebuild (live edit-in-UI persistence needs M3 backend). Admin↔storefront product data is aligned 1:1 today via separate catalog mocks; full catalog-share is a backlog item.
+- **Nav auto-connect:** admin menu builder + storefront header both derive from `@tokophi/data/menu` — one edit propagates to both on rebuild (live edit-in-UI persistence needs M3 backend). Admin↔storefront product data is aligned 1:1 today via separate catalog mocks; full catalog-share is a backlog item.
 - **Later:** self-hosted Postgres (Postgres + Auth + Storage) as the shared backend; each store = a `store_id` scope with Row-Level Security. Storefronts consume published data via a read API or a static build per deploy.
 
-**Stack:** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 · **shadcn/ui on Base UI (`@base-ui/react`)** — `render` prop (not `asChild`), no `Select` · Astro 5 · Recharts · lucide-react · date-fns. Brand accent = indigo. Private GitHub repo `ongkipro/indostore`.
+**Stack:** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 · **shadcn/ui on Base UI (`@base-ui/react`)** — `render` prop (not `asChild`), no `Select` · Astro 5 · Recharts · lucide-react · date-fns. Brand accent = indigo. Private GitHub repo `ongkipro/tokophi`.
 
 **Repo layout:**
 ```
-indostore/
+tokophi/
   apps/
     admin/                 # Next 16 — shared merchant admin (:3000)
       app/(admin)/         # route group: dashboard (/) + module routes + detail/editor subroutes
@@ -112,12 +112,12 @@ indostore/
       app/(platform)/      # dashboard + toko/paket/analitik/pengaturan
     storefront/            # Astro 5 — per-client shopper site (:4327)
       src/pages/           # beranda, kategori, produk, keranjang, checkout(+sukses), akun, blog, kontak
-      src/data/nav.ts      # storefront nav derived from @indostore/data
+      src/data/nav.ts      # storefront nav derived from @tokophi/data
       public/products/     # 70 AI-generated webp (14 products × 5)
   packages/
-    ui/                    # @indostore/ui — shadcn on Base UI + tokens
-    lib/                   # @indostore/lib — IDR / number formatters
-    data/                  # @indostore/data — canonical MAIN_MENU / FOOTER_MENU
+    ui/                    # @tokophi/ui — shadcn on Base UI + tokens
+    lib/                   # @tokophi/lib — IDR / number formatters
+    data/                  # @tokophi/data — canonical MAIN_MENU / FOOTER_MENU
 ```
 
 See `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`, and `decisions/` for detail.
@@ -145,7 +145,7 @@ Sales channel = **Toko Online only**; analytics attribution = **Meta Ads / TikTo
 
 ## 5. Storefront (per client) — BUILT
 
-Astro 5 + Tailwind v4, sharing the `@indostore/data` nav and `@indostore/lib` formatters. Demo = **"Batik Nusantara"** women's fashion, 14 products × 5 AI images. Visually distinct per brand, hand-built (no theme editor). SEO-first (petcue/pixsgo pattern).
+Astro 5 + Tailwind v4, sharing the `@tokophi/data` nav and `@tokophi/lib` formatters. Demo = **"Batik Nusantara"** women's fashion, 14 products × 5 AI images. Visually distinct per brand, hand-built (no theme editor). SEO-first (petcue/pixsgo pattern).
 
 **Pages:** beranda · kategori/[handle] (+ virtual "semua"/"promo-gajian", sort) · produk/[handle] (5-image gallery, size, add-to-cart, Beli Sekarang) · keranjang · checkout (kontak/alamat/pengiriman/pembayaran) · checkout/sukses · akun (mock login) · blog · kontak.
 
@@ -157,7 +157,7 @@ Astro 5 + Tailwind v4, sharing the `@indostore/data` nav and `@indostore/lib` fo
 
 ## 6. Data model
 
-Mock entities today → tables later. See `docs/DATA_MODEL.md` / `docs/SCHEMA.md`. Core: `Store, Product, Order(+LineItem/Fulfillment/Payment), Customer, Discount, User` + content: `Page, Blog/Article, Menu(+MenuItem)` + analytics day/hour series. Content types mirror Shopify's Admin API shapes (title/handle/body/isPublished/SEO; Menu handle/title/items[]/MenuItemType). The `Menu` shape is already the canonical `@indostore/data` type shared across surfaces.
+Mock entities today → tables later. See `docs/DATA_MODEL.md` / `docs/SCHEMA.md`. Core: `Store, Product, Order(+LineItem/Fulfillment/Payment), Customer, Discount, User` + content: `Page, Blog/Article, Menu(+MenuItem)` + analytics day/hour series. Content types mirror Shopify's Admin API shapes (title/handle/body/isPublished/SEO; Menu handle/title/items[]/MenuItemType). The `Menu` shape is already the canonical `@tokophi/data` type shared across surfaces.
 
 ---
 
@@ -172,12 +172,12 @@ Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palet
 - **M0 (DONE 2026-07-01):** repo + PRD + admin shell + Dashboard.
 - **M1 (DONE 2026-07-01):** Pesanan, Produk, Pelanggan, Diskon, Analitik, Pengaturan + Toko Online (Halaman, Blog, Navigasi).
 - **M1.5 (DONE 2026-07-02):** Produk sub-modules (Kategori/Inventori/Pembelian) + CRM + customer & collection editors + Halaman/Blog edit routes + order detail page + Pemasaran province filter + Pengaturan redesign + fashion demo with AI product photos + Shopify-style product list.
-- **M2 — storefront + monorepo (DONE 2026-07-02):** repo restructured to `apps/*` + `packages/*`; **super-admin** control plane; **`@indostore/data`** canonical nav shared by admin + storefront; **Navigasi drag-and-drop** menu builder; **Astro storefront built** — "Batik Nusantara" with beranda, kategori, produk (5-image gallery), keranjang, **checkout (+sukses)**, akun, blog, kontak; localStorage cart; 70 AI product images.
+- **M2 — storefront + monorepo (DONE 2026-07-02):** repo restructured to `apps/*` + `packages/*`; **super-admin** control plane; **`@tokophi/data`** canonical nav shared by admin + storefront; **Navigasi drag-and-drop** menu builder; **Astro storefront built** — "Batik Nusantara" with beranda, kategori, produk (5-image gallery), keranjang, **checkout (+sukses)**, akun, blog, kontak; localStorage cart; 70 AI product images.
 - **M3 — backend (IN PROGRESS):**
-  - ✅ **Local PostgreSQL 16 + Drizzle** (`@indostore/db`, ADR 0007): 53 tables, versioned migrations, seed.
+  - ✅ **Local PostgreSQL 16 + Drizzle** (`@tokophi/db`, ADR 0007): 53 tables, versioned migrations, seed.
   - ✅ **super-admin wired to DB** (`lib/data.ts`) — live, verified parity.
   - 🟡 **admin → DB**: ✅ **all 16 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan / Navigasi / Dashboard / Analitik / Pemasaran (seeded full demo: products/collections/customers/orders/discounts/pages/articles/leads/followups/templates/suppliers+POs/segments/reviews/menus/daily-stats/ad-channels; via `lib/data/*`, `force-dynamic`). Admin fully wired.
-  - ✅ **storefront → DB**: `src/data/catalog.ts` reads `@indostore/db` (top-level await, build/SSR). **All three surfaces now read Postgres.**
+  - ✅ **storefront → DB**: `src/data/catalog.ts` reads `@tokophi/db` (top-level await, build/SSR). **All three surfaces now read Postgres.**
   - 🟡 **Mutations persist** (`lib/actions/*` server actions): ✅ Produk / Diskon / Halaman / Blog / Kategori (create/edit/delete) + order-status + Inventori-stock; ⏳ Pelanggan / Navigasi / CRM / Segmen / Pembelian.
   - **Current focus = local Linux** — finish the local stack (all mutations + local auth/media) before deploying.
   - ⏳ **VPS (prod, later)**: self-hosted PostgreSQL + PostgREST + JWT Auth + Storage (MinIO/S3) + enable RLS (`store_id`); parameterize storefront by `STORE_SLUG` (ADR 0008); same migrations carry up.
@@ -196,4 +196,4 @@ Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palet
 - Rich-text editor choice for Halaman/Blog content (currently mock textarea).
 - Catalog-share mechanism: single shared catalog source vs published snapshot per storefront build.
 
-*Living doc. Screens verified visually in `wireframes/`. Change history in `~/projects/indostore` git + `CHANGELOG.md`.*
+*Living doc. Screens verified visually in `wireframes/`. Change history in `~/projects/tokophi` git + `CHANGELOG.md`.*

@@ -1,4 +1,4 @@
-// Indostore DB schema (Drizzle) — mirrors docs/SCHEMA.md.
+// TokoΦ DB schema (Drizzle) — mirrors docs/SCHEMA.md.
 // casing: "snake_case" is set on the client + drizzle-kit, so camelCase props map to snake_case columns.
 // Money: all *_idr columns are integer rupiah (no decimals), bigint to survive aggregates.
 import {

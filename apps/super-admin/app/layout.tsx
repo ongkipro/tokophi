@@ -7,8 +7,8 @@ const geistSans = Geist({ variable: "--font-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Indostore — Super Admin",
-  description: "Panel platform Indostore: kelola toko, paket, dan penagihan.",
+  title: "TokoΦ — Super Admin",
+  description: "Panel platform TokoΦ: kelola toko, paket, dan penagihan.",
 };
 
 // Apply saved theme before paint (no flash).

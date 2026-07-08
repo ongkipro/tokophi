@@ -1,6 +1,6 @@
 import { Store, CheckCircle2, Clock, Ban } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@indostore/ui/card";
-import { IDR, num, pct } from "@indostore/lib/format";
+import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
+import { IDR, num, pct } from "@tokophi/lib/format";
 import { PLANS, type StoreStatus } from "@/lib/mock";
 import { getStores, getPlatform } from "@/lib/data";
 

@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@indostore/data", "@indostore/db"],
+  transpilePackages: ["@tokophi/data", "@tokophi/db"],
   serverExternalPackages: ["postgres"],
 };
 

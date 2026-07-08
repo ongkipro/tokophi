@@ -1,7 +1,7 @@
 "use client";
 
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { IDR } from "@indostore/lib/format";
+import { IDR } from "@tokophi/lib/format";
 
 export function MrrChart({ data }: { data: { month: string; mrr: number }[] }) {
   return (

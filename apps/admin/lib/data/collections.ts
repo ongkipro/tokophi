@@ -1,5 +1,5 @@
 import "server-only";
-import { schema } from "@indostore/db";
+import { schema } from "@tokophi/db";
 import { withCurrentTenant } from "@/lib/tenant";
 import { asc, eq, sql } from "drizzle-orm";
 import type { Collection } from "@/lib/mock/store";

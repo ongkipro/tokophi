@@ -1,4 +1,4 @@
-# Indostore — Architecture
+# TokoΦ — Architecture
 
 > Authoritative architecture doc. Companion to [`../PRD.md`](../PRD.md) (product), [`GUIDE.md`](GUIDE.md) (how to build/contribute), [`UML.md`](UML.md) (detailed diagrams), [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md) (DB). Describes how the three surfaces are built, the shared **local-Postgres backend now being wired behind the data layer** (super-admin is already live on it — ADR 0007), and the **per-client topology** (ADR 0008).
 
@@ -6,13 +6,13 @@
 
 ## 1. System overview — three surfaces
 
-Indostore is a Shopify-style commerce SaaS for Indonesia (Bahasa Indonesia UI, IDR). It is **not** a theme editor and has **no** Apps/Plugins marketplace. Three separate front-ends serve three audiences:
+TokoΦ is a Shopify-style commerce SaaS for Indonesia (Bahasa Indonesia UI, IDR). It is **not** a theme editor and has **no** Apps/Plugins marketplace. Three separate front-ends serve three audiences:
 
 | Surface | Package | Stack | Port (dev) | Who uses it |
 |---|---|---|---|---|
-| **admin** | `@indostore/admin` | Next.js 16 (App Router, Turbopack), React 19 | `:3000` | A **merchant / shop owner** — manages their own store (orders, products, customers, discounts, CRM, pages, blog, nav, settings). |
-| **super-admin** | `@indostore/super-admin` | Next.js 16 | `:3001` | **We (the platform)** — cross-tenant control plane: all stores, plans, billing. |
-| **storefront** | `@indostore/storefront` | Astro 5 + Tailwind v4 | `:4327` | A **shopper** — one hand-built static storefront per client (browse, cart, checkout, blog, account, contact). |
+| **admin** | `@tokophi/admin` | Next.js 16 (App Router, Turbopack), React 19 | `:3000` | A **merchant / shop owner** — manages their own store (orders, products, customers, discounts, CRM, pages, blog, nav, settings). |
+| **super-admin** | `@tokophi/super-admin` | Next.js 16 | `:3001` | **We (the platform)** — cross-tenant control plane: all stores, plans, billing. |
+| **storefront** | `@tokophi/storefront` | Astro 5 + Tailwind v4 | `:4327` | A **shopper** — one hand-built static storefront per client (browse, cart, checkout, blog, account, contact). |
 
 Started as **UI/UX with mock data**; the **backend is now being wired** on local PostgreSQL (see §9) — super-admin + 16 admin modules read the DB, the rest still mock.
 
@@ -26,7 +26,7 @@ flowchart LR
   Super --> Shared
   Store --> Shared
 
-  Super ==>|live now| PG[(local PostgreSQL 16<br/>@indostore/db · Drizzle · store_id)]
+  Super ==>|live now| PG[(local PostgreSQL 16<br/>@tokophi/db · Drizzle · store_id)]
   Admin ==>|live now| PG
   Store ==>|live now| PG
   PG -. prod target .-> VPS[(self-hosted Postgres<br/>+ PostgREST + Auth + Storage · RLS)]
@@ -34,7 +34,7 @@ flowchart LR
 
 - **One admin app, many stores.** A store switcher in the topbar scopes the UI; every query is scoped by `store_id` (app-layer now, Postgres RLS at self-hosted Postgres). super-admin is the only surface that reads across tenants.
 - **One storefront per client**, deployed from one templated Astro codebase (a `STORE_SLUG` per deploy), sharing design tokens + the shared nav source. Not a self-serve theme editor.
-- **Backend status:** **super-admin + all 16 admin modules + storefront** are **live on local Postgres** via `@indostore/db` (reads end-to-end); only writes (mutations) pending. See §9–10 + ADR 0007/0008.
+- **Backend status:** **super-admin + all 16 admin modules + storefront** are **live on local Postgres** via `@tokophi/db` (reads end-to-end); only writes (mutations) pending. See §9–10 + ADR 0007/0008.
 
 ---
 
@@ -43,16 +43,16 @@ flowchart LR
 Workspaces are declared in the root `package.json` as `apps/*` + `packages/*`.
 
 ```
-indostore/
+tokophi/
 ├─ apps/
-│  ├─ admin/         @indostore/admin        Next 16, :3000  — merchant admin
-│  ├─ super-admin/   @indostore/super-admin  Next 16, :3001  — platform control plane
-│  └─ storefront/    @indostore/storefront   Astro 5, :4327  — shopper site
+│  ├─ admin/         @tokophi/admin        Next 16, :3000  — merchant admin
+│  ├─ super-admin/   @tokophi/super-admin  Next 16, :3001  — platform control plane
+│  └─ storefront/    @tokophi/storefront   Astro 5, :4327  — shopper site
 └─ packages/
-   ├─ ui/            @indostore/ui    shadcn-on-Base-UI components + cn + Tailwind tokens
-   ├─ lib/           @indostore/lib   IDR/num/pct/timeAgo formatters (id-ID)
-   ├─ data/          @indostore/data  canonical MAIN_MENU / FOOTER_MENU (shared source of truth)
-   └─ db/            @indostore/db    Drizzle schema + client + versioned migrations (local Postgres; VPS-target)
+   ├─ ui/            @tokophi/ui    shadcn-on-Base-UI components + cn + Tailwind tokens
+   ├─ lib/           @tokophi/lib   IDR/num/pct/timeAgo formatters (id-ID)
+   ├─ data/          @tokophi/data  canonical MAIN_MENU / FOOTER_MENU (shared source of truth)
+   └─ db/            @tokophi/db    Drizzle schema + client + versioned migrations (local Postgres; VPS-target)
 ```
 
 Plus a root **`docker-compose.yml`** (local PostgreSQL 16, port `5433`) — see §9 + ADR 0007.
@@ -61,12 +61,12 @@ Plus a root **`docker-compose.yml`** (local PostgreSQL 16, port `5433`) — see 
 
 | Package | Exports | Provides | Consumed by |
 |---|---|---|---|
-| **`@indostore/ui`** | `./styles.css` (Tailwind v4 tokens), `./lib/utils` (`cn`), `./*` (each component, e.g. `@indostore/ui/button`) | shadcn/ui primitives built on **Base UI** (`@base-ui/react`), Recharts, lucide, cva | **super-admin** (Tailwind picks the components up via `@source` in its `globals.css`). |
-| **`@indostore/lib`** | `.` (index), `./format` | Money/number formatters: `IDR()`, `num()`, `pct()`, `timeAgo()` | **super-admin** (`@indostore/lib/format`), **storefront** (`IDR` in Astro pages). |
-| **`@indostore/data`** | `.` (re-exports menu), `./menu` | `MAIN_MENU`, `FOOTER_MENU`, `MenuItem`/`MenuItemType` — the **single source of truth for navigation** | **admin** (menu builder), **storefront** (header/footer nav). |
-| **`@indostore/db`** | `.`, `./schema`, `./client` | Drizzle **schema** (53 tables, snake_case, money=`bigint` IDR), `db` client singleton, inferred types, versioned migrations, seed/reset. **Server-only** (`postgres` in `serverExternalPackages`). | **super-admin** + **admin** (13 modules via `lib/data/*` — live). **storefront** next. |
+| **`@tokophi/ui`** | `./styles.css` (Tailwind v4 tokens), `./lib/utils` (`cn`), `./*` (each component, e.g. `@tokophi/ui/button`) | shadcn/ui primitives built on **Base UI** (`@base-ui/react`), Recharts, lucide, cva | **super-admin** (Tailwind picks the components up via `@source` in its `globals.css`). |
+| **`@tokophi/lib`** | `.` (index), `./format` | Money/number formatters: `IDR()`, `num()`, `pct()`, `timeAgo()` | **super-admin** (`@tokophi/lib/format`), **storefront** (`IDR` in Astro pages). |
+| **`@tokophi/data`** | `.` (re-exports menu), `./menu` | `MAIN_MENU`, `FOOTER_MENU`, `MenuItem`/`MenuItemType` — the **single source of truth for navigation** | **admin** (menu builder), **storefront** (header/footer nav). |
+| **`@tokophi/db`** | `.`, `./schema`, `./client` | Drizzle **schema** (53 tables, snake_case, money=`bigint` IDR), `db` client singleton, inferred types, versioned migrations, seed/reset. **Server-only** (`postgres` in `serverExternalPackages`). | **super-admin** + **admin** (13 modules via `lib/data/*` — live). **storefront** next. |
 
-> **admin is a partial migrant.** admin still keeps its **own** local `components/ui` + `lib` (formatters, utils) — de-duping against `@indostore/ui`/`@indostore/lib` is a tracked backlog task. It has, however, already adopted the shared **data** package (`@indostore/data` is in admin's `transpilePackages`). So today: super-admin + storefront consume ui/lib/data; admin consumes only data (plus its local copies of the rest).
+> **admin is a partial migrant.** admin still keeps its **own** local `components/ui` + `lib` (formatters, utils) — de-duping against `@tokophi/ui`/`@tokophi/lib` is a tracked backlog task. It has, however, already adopted the shared **data** package (`@tokophi/data` is in admin's `transpilePackages`). So today: super-admin + storefront consume ui/lib/data; admin consumes only data (plus its local copies of the rest).
 
 ---
 
@@ -75,11 +75,11 @@ Plus a root **`docker-compose.yml`** (local PostgreSQL 16, port `5433`) — see 
 Two different mechanisms, because Next and Astro handle workspace TypeScript sources differently:
 
 - **Next.js apps (admin, super-admin)** import raw `.ts`/`.tsx` from the workspace packages, so those packages must be listed in `transpilePackages` (Next won't transpile `node_modules` by default):
-  - `apps/admin/next.config.ts` → `transpilePackages: ["@indostore/data"]`
-  - `apps/super-admin/next.config.ts` → `transpilePackages: ["@indostore/ui", "@indostore/lib"]`
-- **Astro storefront** resolves the workspace symlink directly — Astro/Vite compiles the package's TypeScript source with no extra config. `apps/storefront/src/data/nav.ts` simply `import`s from `@indostore/data/menu`.
-  - Note: storefront's `package.json` currently declares only `@indostore/lib` as a dep but still imports `@indostore/data`; it works because npm workspaces symlink all packages under `node_modules/@indostore/*`. Add the explicit dep if you ever publish/prune.
-- **Tailwind v4** is config-less; each consumer's `globals.css` uses `@source` / `@import` to pull the shared component classes and token layer from `@indostore/ui`.
+  - `apps/admin/next.config.ts` → `transpilePackages: ["@tokophi/data"]`
+  - `apps/super-admin/next.config.ts` → `transpilePackages: ["@tokophi/ui", "@tokophi/lib"]`
+- **Astro storefront** resolves the workspace symlink directly — Astro/Vite compiles the package's TypeScript source with no extra config. `apps/storefront/src/data/nav.ts` simply `import`s from `@tokophi/data/menu`.
+  - Note: storefront's `package.json` currently declares only `@tokophi/lib` as a dep but still imports `@tokophi/data`; it works because npm workspaces symlink all packages under `node_modules/@tokophi/*`. Add the explicit dep if you ever publish/prune.
+- **Tailwind v4** is config-less; each consumer's `globals.css` uses `@source` / `@import` to pull the shared component classes and token layer from `@tokophi/ui`.
 
 ---
 
@@ -107,13 +107,13 @@ component ─▶ apps/admin/lib/data/dashboard.ts (getSummary, getSeries, getTop
 
 ## 5. Shared-source pattern (single source of truth)
 
-Beyond the seam, some data must stay **identical across surfaces**. The pattern: put the canonical definition in `@indostore/data`; each surface derives its own shape from it, so they can never drift.
+Beyond the seam, some data must stay **identical across surfaces**. The pattern: put the canonical definition in `@tokophi/data`; each surface derives its own shape from it, so they can never drift.
 
 **Nav is the first shared source.** `packages/data/src/menu.ts` defines `MAIN_MENU` + `FOOTER_MENU` (typed `MenuItem[]`). Both surfaces derive from it:
 
 ```mermaid
 flowchart TD
-  Src["@indostore/data/menu<br/>MAIN_MENU + FOOTER_MENU"]
+  Src["@tokophi/data/menu<br/>MAIN_MENU + FOOTER_MENU"]
   Src -->|toNavItems label to title, href to target| AdminMENUS["admin lib/mock/store.ts<br/>MENUS (menu builder screen)"]
   Src -->|map to NavItem| StoreNav["storefront src/data/nav.ts<br/>MAIN_NAV (Header + Footer)"]
   AdminMENUS --> Navigasi["/navigasi admin screen"]
@@ -123,7 +123,7 @@ flowchart TD
 - admin's `MENUS` are built via `toNavItems(MAIN_MENU)` (maps `label→title`, `href→target`, recursing children) in `lib/mock/store.ts`.
 - storefront's `MAIN_NAV` maps `MAIN_MENU` into `{label, href, children}` (parents with children become dropdown triggers, `href` undefined).
 - Edit `packages/data/src/menu.ts` once → both the admin menu builder and the storefront header/footer update on rebuild. (Live "edit in admin UI → storefront" still needs the backend to persist changes; that's M3.)
-- **Expandable:** the catalog is the next candidate to promote into `@indostore/data` (currently duplicated in `apps/storefront/src/data/catalog.ts` vs admin's mock) — tracked in [`TASKS.md`](TASKS.md).
+- **Expandable:** the catalog is the next candidate to promote into `@tokophi/data` (currently duplicated in `apps/storefront/src/data/catalog.ts` vs admin's mock) — tracked in [`TASKS.md`](TASKS.md).
 
 ---
 
@@ -166,15 +166,15 @@ flowchart TD
 
 ## 9. Backend (in progress) — local Postgres + Drizzle → self-hosted Postgres (VPS)
 
-The backend is being wired **behind the data-layer seam** (§4). Dev stack = **plain PostgreSQL 16 in Docker + Drizzle** in `@indostore/db` (ADR 0007); prod target = **self-hosted Postgres** (managed Postgres + Auth + Storage). Payments & shipping stay **platform-managed** (ADR 0004).
+The backend is being wired **behind the data-layer seam** (§4). Dev stack = **plain PostgreSQL 16 in Docker + Drizzle** in `@tokophi/db` (ADR 0007); prod target = **self-hosted Postgres** (managed Postgres + Auth + Storage). Payments & shipping stay **platform-managed** (ADR 0004).
 
 **Local dev:**
 ```bash
 docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted)
-npm run migrate -w @indostore/db     # apply versioned migrations
-npm run seed    -w @indostore/db     # (re)load demo data (idempotent)
-npm run reset   -w @indostore/db     # drop public + drizzle schemas (then migrate + seed)
-npm run studio  -w @indostore/db     # Drizzle Studio
+npm run migrate -w @tokophi/db     # apply versioned migrations
+npm run seed    -w @tokophi/db     # (re)load demo data (idempotent)
+npm run reset   -w @tokophi/db     # drop public + drizzle schemas (then migrate + seed)
+npm run studio  -w @tokophi/db     # Drizzle Studio
 ```
 
 **Wiring status (per surface):**
