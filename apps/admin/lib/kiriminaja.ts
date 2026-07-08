@@ -132,14 +132,14 @@ export async function kaCancelShipment(awb: string, reason: string): Promise<{ o
 }
 
 // instant (same-day / on-demand) pricing — uses lat/long, not district ids. gosend/grab/borzo.
-export type KaInstantRate = { name: string; code: string; serviceType: string; cost: number; etd: string };
+export type KaInstantRate = { name: string; code: string; serviceType: string; cost: number; shippingCosts: number; etd: string };
 export async function kaInstantPricing(p: {
   originLat: number; originLng: number; destLat: number; destLng: number;
   weight: number; itemPrice: number; originAddress?: string; destAddress?: string; services?: string[];
 }): Promise<{ ok: boolean; results: KaInstantRate[]; distanceKm?: number; error?: string }> {
   const r = await ka<{
     status: boolean; text?: string; meta?: { distance?: number };
-    result?: { name: string; costs?: { service_type: string; estimation: string; price?: { total_price?: number } }[] }[];
+    result?: { name: string; costs?: { service_type: string; estimation: string; price?: { total_price?: number; shipping_costs?: number } }[] }[];
   }>("/api/mitra/v4/instant/pricing", {
     service: p.services ?? ["gosend", "grab_express", "borzo"],
     item_price: p.itemPrice,
@@ -154,7 +154,7 @@ export async function kaInstantPricing(p: {
       results.push({
         name: `${courier.name.toUpperCase()} ${c.service_type}`,
         code: courier.name, serviceType: c.service_type,
-        cost: c.price?.total_price ?? 0, etd: c.estimation,
+        cost: c.price?.total_price ?? 0, shippingCosts: c.price?.shipping_costs ?? c.price?.total_price ?? 0, etd: c.estimation,
       });
     }
   }

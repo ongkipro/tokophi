@@ -380,6 +380,7 @@ const PAYMENTS = [
         instantBtn.disabled = true; instantBtn.textContent = "⚡ Mengambil lokasi…";
         instantNote.classList.add("hidden");
         navigator.geolocation.getCurrentPosition(function (pos) {
+          window.__instantLat = pos.coords.latitude; window.__instantLng = pos.coords.longitude;
           instantBtn.textContent = "⚡ Menghitung ongkir instan…";
           api({ op: "instant", storeSlug: STORE_SLUG, destLat: pos.coords.latitude, destLng: pos.coords.longitude, weight: totalQty * 500, itemValue: subtotal }).then(function (res) {
             instantBtn.disabled = false; instantBtn.textContent = "⚡ Perbarui kirim instan";
@@ -388,7 +389,7 @@ const PAYMENTS = [
             instantGroup.classList.remove("hidden");
             instantBox.innerHTML = res.instant.map(function (s) {
               return '<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-brand-600/40 bg-brand-50/30 px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">' +
-                '<input type="radio" name="shipping" value="instant-' + esc(s.code) + '-' + esc(s.serviceType) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" required class="h-4 w-4 accent-brand-600" />' +
+                '<input type="radio" name="shipping" value="instant-' + esc(s.code) + '-' + esc(s.serviceType) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-inst-service="' + esc(s.code) + '" data-inst-type="' + esc(s.serviceType) + '" data-inst-cost="' + s.shippingCosts + '" required class="h-4 w-4 accent-brand-600" />' +
                 '<span class="flex-1"><span class="block text-sm font-medium text-ink">⚡ ' + esc(s.name) + '</span><span class="block text-xs text-muted">' + esc(s.etd) + (res.distanceKm ? " · " + res.distanceKm + " km" : "") + '</span></span>' +
                 '<span class="text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
             }).join("");
@@ -462,6 +463,12 @@ const PAYMENTS = [
           address: { alamat: order.shippingAddress.alamat, kota: order.shippingAddress.kota, provinsi: order.shippingAddress.provinsi, kodepos: order.shippingAddress.kodepos },
           shipping: { label: order.shipping.label, cost: ship },
           channelCode: payEl ? payEl.value : "cod",
+          instant: (shipEl && shipEl.getAttribute("data-inst-service")) ? {
+            service: shipEl.getAttribute("data-inst-service"),
+            serviceType: shipEl.getAttribute("data-inst-type"),
+            shippingCosts: Number(shipEl.getAttribute("data-inst-cost")),
+            destLat: window.__instantLat, destLng: window.__instantLng,
+          } : undefined,
         }),
       })
         .then(function (r) { return r.json(); })

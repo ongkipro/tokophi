@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { alCreatePayment, autolarisConfigured, PAYMENT_CHANNELS } from "@/lib/autolaris";
+import { kaCreateInstantOrder } from "@/lib/kiriminaja";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the
@@ -28,6 +29,7 @@ export async function POST(req: Request) {
     address?: { alamat?: string; kota?: string; provinsi?: string; kodepos?: string };
     shipping?: { label?: string; cost?: number };
     channelCode?: string;
+    instant?: { service?: string; serviceType?: string; shippingCosts?: number; destLat?: number; destLng?: number };
   };
   try {
     body = await req.json();
@@ -111,6 +113,31 @@ export async function POST(req: Request) {
       await db.update(schema.inventoryLevels)
         .set({ available: sql`GREATEST(${schema.inventoryLevels.available} - ${qty}, 0)` })
         .where(eq(schema.inventoryLevels.variantId, variantId));
+    }
+  }
+
+  // Instant (same-day) → dispatch a driver now from the store's coordinates → save the reference
+  const inst = body.instant;
+  if (inst?.service && inst.serviceType && inst.shippingCosts && inst.destLat && inst.destLng) {
+    const [ss] = await db.select({
+      name: schema.storeSettings.senderName, phone: schema.storeSettings.senderPhone,
+      address: schema.storeSettings.senderAddress, lat: schema.storeSettings.senderLat, lng: schema.storeSettings.senderLng,
+    }).from(schema.storeSettings).where(eq(schema.storeSettings.storeId, store.id)).limit(1);
+    const r = await kaCreateInstantOrder({
+      orderRef: order.number.replace(/[^A-Za-z0-9]/g, ""),
+      service: inst.service, serviceType: inst.serviceType, shippingCosts: inst.shippingCosts,
+      origin: {
+        name: ss?.name || "Toko", phone: ss?.phone || "081200000000",
+        lat: Number(ss?.lat) || -7.8014, long: Number(ss?.lng) || 110.3644, address: ss?.address || "Toko",
+      },
+      dest: {
+        name: cust.name || "Pelanggan", phone: cust.phone || "081200000000",
+        lat: inst.destLat, long: inst.destLng, address: addr.alamat || addr.kota || "Rumah",
+      },
+      item: { name: `Pesanan ${order.number}`, description: items.map((i) => i.name).join(", ").slice(0, 100) || "Barang", price: subtotal, weight: 1000 },
+    });
+    if (r.ok && r.orderId) {
+      await db.update(schema.orders).set({ awb: r.orderId, courier: `${inst.service.toUpperCase()} Instant`, kaOrderId: r.orderId, status: "dikirim" }).where(eq(schema.orders.id, order.id));
     }
   }
 
