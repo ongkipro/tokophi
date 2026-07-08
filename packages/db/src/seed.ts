@@ -767,10 +767,9 @@ async function main() {
   }
 
   // platform-managed payments / shipping / COD (ADR 0004) — platform-level, not per-store
+  // Single platform-managed PSP = AutoLaris (VA/QRIS/DANA). Merchants never see the brand.
   await db.insert(schema.platformPaymentGateways).values([
-    { provider: "midtrans", enabled: true, isCod: false },
-    { provider: "xendit", enabled: true, isCod: false },
-    { provider: "duitku", enabled: false, isCod: false },
+    { provider: "autolaris", enabled: true, isCod: false },
   ]);
   await db.insert(schema.shippingAggregator).values({ provider: "kiriminaja", enabled: true });
   await db.insert(schema.platformCouriers).values(

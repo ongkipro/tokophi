@@ -179,9 +179,7 @@ export async function getActivity(): Promise<PActivity[]> {
 export type Toggle = { key: string; name: string; desc: string; on: boolean };
 
 const GATEWAY_META: Record<string, { name: string; desc: string; order: number }> = {
-  midtrans: { name: "Midtrans", desc: "QRIS, VA, kartu kredit", order: 0 },
-  xendit: { name: "Xendit", desc: "VA, e-wallet, retail", order: 1 },
-  duitku: { name: "Duitku", desc: "VA & e-wallet", order: 2 },
+  autolaris: { name: "AutoLaris", desc: "PSP platform — VA (6 bank), QRIS, DANA", order: 0 },
 };
 const COURIER_ORDER = ["JNE", "J&T Express", "SiCepat", "AnterAja", "Pos Indonesia", "GoSend", "GrabExpress"];
 

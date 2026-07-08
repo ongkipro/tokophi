@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { SESSION_COOKIE, signSession } from "./session";
 import { requirePlatformAdmin } from "./platform-auth";
 import { kaTestConnection } from "./kiriminaja";
+import { alTestConnection } from "./autolaris";
 
 // Every super-admin mutation is gated by `requirePlatformAdmin()` (the security boundary):
 // impersonation + store lifecycle + provisioning + settings all require a platform-admin session.
@@ -136,6 +137,12 @@ export async function saveCouriers(updates: { key: string; on: boolean }[]): Pro
 export async function testKiriminajaConnection(): Promise<{ ok: boolean; env: string; provinces?: number; message: string }> {
   await requirePlatformAdmin();
   return kaTestConnection();
+}
+
+// ---- AutoLaris payment gateway: live connectivity test ----
+export async function testAutolarisConnection(): Promise<{ ok: boolean; message: string }> {
+  await requirePlatformAdmin();
+  return alTestConnection();
 }
 
 // ---- platform team: invite another operator (real platform_admins row) ----

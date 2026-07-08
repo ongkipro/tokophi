@@ -20,6 +20,9 @@ import { STORE } from "../../data/catalog";
       </p>
     </div>
 
+    <!-- Payment instruction (VA / QRIS / e-wallet) -->
+    <div id="pay-instruction" class="mt-6 hidden"></div>
+
     <!-- Order summary -->
     <div id="order-summary" class="mt-6"></div>
 
@@ -115,6 +118,24 @@ import { STORE } from "../../data/catalog";
       '<span class="font-display text-2xl font-semibold text-ink tabular-nums">' + idr.format(order.total || 0) + "</span>" +
       "</div>" +
       "</div>";
+
+    var pay = order.payment && order.payment.instruction ? order.payment.instruction : null;
+    var payBox = document.getElementById("pay-instruction");
+    if (pay && payBox) {
+      var lines = "";
+      if (pay.virtualAccount) lines += '<div class="flex items-center justify-between gap-3"><span class="text-muted">Nomor Virtual Account</span><span class="font-mono text-lg font-bold tracking-wide text-ink">' + esc(pay.virtualAccount) + "</span></div>";
+      if (pay.qr) lines += '<div><p class="mb-1 text-muted">Kode QRIS</p><p class="break-all rounded-lg bg-brand-50 p-2 font-mono text-xs text-ink">' + esc(pay.qr) + "</p></div>";
+      if (pay.paymentCode) lines += '<div class="flex items-center justify-between gap-3"><span class="text-muted">Kode Pembayaran</span><span class="font-mono font-bold text-ink">' + esc(pay.paymentCode) + "</span></div>";
+      if (pay.url) lines += '<a href="' + esc(pay.url) + '" class="inline-block rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white">Buka aplikasi pembayaran</a>';
+      payBox.classList.remove("hidden");
+      payBox.innerHTML =
+        '<div class="rounded-2xl border-2 border-brand-600 bg-white p-5 sm:p-6">' +
+        '<h2 class="font-display text-lg font-semibold text-ink">Selesaikan Pembayaran' + (pay.channel ? " — " + esc(pay.channel.label) : "") + "</h2>" +
+        '<p class="mt-1 text-xs text-muted">Bayar sebelum kedaluwarsa. Pesanan otomatis terkonfirmasi setelah pembayaran diterima.</p>' +
+        '<div class="mt-4 space-y-3 text-sm">' + lines +
+        '<div class="flex items-center justify-between border-t border-line pt-3"><span class="text-muted">Total bayar</span><span class="font-display text-xl font-bold text-ink tabular-nums">' + idr.format(pay.total || order.total || 0) + "</span></div>" +
+        "</div></div>";
+    }
 
     var noteEl = document.getElementById("order-note");
     if (noteEl) {

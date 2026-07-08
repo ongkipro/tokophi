@@ -465,7 +465,7 @@ export function OrderDetail({ order }: { order: Order }) {
               {shipped && (
                 <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-500/10 px-3 py-2">
                   <span className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                    <Truck className="size-4" /> Terdaftar di KiriminAja
+                    <Truck className="size-4" /> Pengiriman terdaftar
                   </span>
                   {canWrite && (
                     <Button size="sm" variant="outline" disabled={tracking} onClick={trackNow}>
@@ -536,7 +536,7 @@ export function OrderDetail({ order }: { order: Order }) {
             <DialogTitle>Ongkir — {rateMeta.destination?.split(",")[0] ?? order.city}</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground">
-            {rateMeta.origin?.split(",")[0]} → {rateMeta.destination?.split(",")[0]} · via KiriminAja
+            {rateMeta.origin?.split(",")[0]} → {rateMeta.destination?.split(",")[0]} · ongkir real-time
           </p>
           <div className="mt-2 max-h-[60vh] overflow-y-auto rounded-lg border">
             <table className="w-full text-sm">
@@ -569,7 +569,7 @@ export function OrderDetail({ order }: { order: Order }) {
               </tbody>
             </table>
           </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">{rates.length} layanan · tarif real-time dari KiriminAja (sandbox).</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">{rates.length} layanan · tarif real-time · dikelola TokoΦ.</p>
         </DialogContent>
       </Dialog>
     </div>

@@ -35,7 +35,7 @@ import {
 } from "@tokophi/ui/dropdown-menu";
 import { cn } from "@tokophi/ui/lib/utils";
 import { initials } from "@/components/bits";
-import { saveGateways, saveCouriers, invitePlatformAdmin, testKiriminajaConnection } from "@/lib/actions";
+import { saveGateways, saveCouriers, invitePlatformAdmin, testKiriminajaConnection, testAutolarisConnection } from "@/lib/actions";
 
 type Toggle = { key: string; name: string; desc: string; on: boolean };
 type TeamMember = { id: string; name: string; email: string; role: string };
@@ -71,6 +71,17 @@ export function PengaturanClient({
     startPing(async () => {
       const r = await testKiriminajaConnection();
       setPing({ ok: r.ok, message: r.message });
+      if (r.ok) toast.success(r.message);
+      else toast.error(r.message);
+    });
+
+  // AutoLaris payment-gateway connectivity test
+  const [payPing, setPayPing] = useState<{ ok: boolean; message: string } | null>(null);
+  const [payTesting, startPayPing] = useTransition();
+  const testPay = () =>
+    startPayPing(async () => {
+      const r = await testAutolarisConnection();
+      setPayPing({ ok: r.ok, message: r.message });
       if (r.ok) toast.success(r.message);
       else toast.error(r.message);
     });
@@ -146,7 +157,15 @@ export function PengaturanClient({
               </div>
             </div>
           ))}
-          <div className="flex justify-end pt-3">
+          {payPing && (
+            <p className={`pt-2 text-xs ${payPing.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+              {payPing.ok ? "✓ " : "✕ "}{payPing.message}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 pt-3">
+            <Button variant="outline" className="gap-1.5" disabled={payTesting} onClick={testPay}>
+              <Plug className="size-4" /> {payTesting ? "Menguji…" : "Test koneksi"}
+            </Button>
             <Button className="gap-1.5" disabled={pending} onClick={() => save("gateways")}>
               <Save className="size-4" /> Simpan
             </Button>

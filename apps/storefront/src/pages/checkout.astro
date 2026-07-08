@@ -4,6 +4,7 @@ import { STORE } from "../data/catalog";
 
 // Platform shipping proxy (admin) + this store's origin city — env-driven for per-client prod.
 const ONGKIR_API = import.meta.env.PUBLIC_ONGKIR_API || "http://localhost:3000/api/public/ongkir";
+const PAY_API = import.meta.env.PUBLIC_PAY_API || "http://localhost:3000/api/public/pay";
 const ORIGIN_CITY = STORE.city || "Yogyakarta";
 
 const PROVINCES = [
@@ -20,9 +21,14 @@ const PROVINCES = [
   "Kalimantan Timur",
 ];
 
+// Payment channels (platform-managed PSP; brand hidden — generic bank/method labels only).
 const PAYMENTS = [
-  { id: "transfer", label: "Transfer Bank", desc: "BCA / Mandiri / BNI" },
-  { id: "qris", label: "QRIS", desc: "Scan dari semua e-wallet & m-banking" },
+  { id: "QRIS", label: "QRIS", desc: "Scan dari semua e-wallet & m-banking" },
+  { id: "VABCA", label: "Virtual Account BCA", desc: "Bayar via ATM / m-banking BCA" },
+  { id: "VAMANDIRI", label: "Virtual Account Mandiri", desc: "Bayar via ATM / Livin'" },
+  { id: "VABNI", label: "Virtual Account BNI", desc: "Bayar via ATM / m-banking BNI" },
+  { id: "VABRI", label: "Virtual Account BRI", desc: "Bayar via ATM / BRImo" },
+  { id: "DANA", label: "DANA", desc: "Bayar pakai saldo DANA" },
   { id: "cod", label: "COD (Bayar di Tempat)", desc: "Bayar tunai saat paket tiba" },
 ];
 ---
@@ -107,7 +113,7 @@ const PAYMENTS = [
           <legend class="px-2 font-display text-lg font-semibold text-ink">Pengiriman</legend>
           <div id="ship-options" class="space-y-3">
             <p id="ship-hint" class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
-              Pilih <b>kecamatan tujuan</b> di atas untuk melihat ongkir real-time (KiriminAja).
+              Pilih <b>kecamatan tujuan</b> di atas untuk melihat ongkir real-time.
             </p>
           </div>
         </fieldset>
@@ -197,7 +203,7 @@ const PAYMENTS = [
   }
 </style>
 
-<script is:inline define:vars={{ ONGKIR_API, ORIGIN_CITY }}>
+<script is:inline define:vars={{ ONGKIR_API, PAY_API, ORIGIN_CITY }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -377,11 +383,44 @@ const PAYMENTS = [
         total: subtotal + ship,
       };
 
-      try {
-        localStorage.setItem("lastOrder", JSON.stringify(order));
-      } catch (e2) {}
+      function finish() {
+        try { localStorage.setItem("lastOrder", JSON.stringify(order)); } catch (e2) {}
+        window.location.href = "/checkout/sukses";
+      }
 
-      window.location.href = "/checkout/sukses";
+      var btn = form.querySelector('button[type="submit"]');
+      if (payEl && payEl.value !== "cod") {
+        if (btn) { btn.disabled = true; btn.textContent = "Membuat pembayaran…"; }
+        fetch(PAY_API, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderRef: "TP-" + Date.now(),
+            channelCode: payEl.value,
+            amount: order.total,
+            name: order.shippingAddress.nama,
+            phone: order.shippingAddress.whatsapp,
+            email: order.contact.email || "order@tokophi.id",
+          }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (res) {
+            if (!res.ok) {
+              if (err) { err.textContent = res.error || "Gagal membuat pembayaran."; err.classList.remove("hidden"); }
+              if (btn) { btn.disabled = false; btn.textContent = "Bayar Sekarang"; }
+              return;
+            }
+            order.payment.instruction = res;
+            order.total = res.total || order.total;
+            finish();
+          })
+          .catch(function () {
+            if (err) { err.textContent = "Gagal terhubung ke pembayaran."; err.classList.remove("hidden"); }
+            if (btn) { btn.disabled = false; btn.textContent = "Bayar Sekarang"; }
+          });
+      } else {
+        finish();
+      }
     });
   })();
 </script>

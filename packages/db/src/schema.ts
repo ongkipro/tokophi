@@ -52,7 +52,7 @@ export const discountStatus = pgEnum("discount_status", ["aktif", "terjadwal", "
 export const contentStatus = pgEnum("content_status", ["terbit", "draft"]);
 export const menuItemType = pgEnum("menu_item_type", ["home", "collection", "product", "page", "blog", "url", "catalog"]);
 export const adChannelKey = pgEnum("ad_channel_key", ["meta", "google", "tiktok"]);
-export const gatewayProvider = pgEnum("gateway_provider", ["midtrans", "xendit", "duitku"]);
+export const gatewayProvider = pgEnum("gateway_provider", ["midtrans", "xendit", "duitku", "autolaris"]);
 export const aggregatorProvider = pgEnum("aggregator_provider", ["biteship", "rajaongkir", "shipper", "kiriminaja"]);
 export const invoiceStatus = pgEnum("invoice_status", ["dibayar", "menunggu", "gagal"]);
 export const platformActivityKind = pgEnum("platform_activity_kind", ["signup", "upgrade", "payment", "churn", "support"]);
@@ -327,6 +327,18 @@ export const payments = pgTable("payments", {
   amountIdr: money().notNull().default(0),
   status: paymentStatus().notNull().default("menunggu"),
   paidAt: ts(),
+  // AutoLaris payment-gateway (VA/QRIS/DANA) — platform-managed PSP
+  storeId: uuid().references(() => stores.id),
+  provider: text(),
+  reffId: text(),
+  trxId: text(),
+  channelCode: text(),
+  adminFee: money().default(0),
+  total: money().default(0),
+  virtualAccount: text(),
+  qr: text(),
+  url: text(),
+  paymentCode: text(),
 });
 
 export const fulfillments = pgTable("fulfillments", {
