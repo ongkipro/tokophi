@@ -4,6 +4,9 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-08
 
+### Shipping — tracking (Lacak) + order auto-status
+- Buat Pengiriman advances the order to **"dikirim"**; the order-detail Pengiriman card shows a **"Terdaftar di KiriminAja"** badge + a **"Lacak"** button → `trackShipment()` polls `/api/mitra/tracking`, syncs the real courier AWB when assigned (sandbox returns not-yet-available for a freshly-created shipment — shown as a friendly "menunggu penjemputan"). Webhook-based status push is a prod item (needs a public URL).
+
 ### Shipping — real AWB creation working (Buat Pengiriman end-to-end)
 - With a registered `KIRIMINAJA_ORDER_PREFIX` (gitignored), **Buat Pengiriman now creates a real KiriminAja pickup**. `request_pickup` package required a few more fields (found by iterating the sandbox validation): `item_name`, `shipping_cost` (= chosen rate cost), `cod`, `package_type_id`. The returned `kj_order_id`/resi is saved to `orders.awb`/`courier`; the order detail + printed label show the real resi/courier. Verified E2E: INV-4821 → "resi 5758-INV4821" persisted.
 
