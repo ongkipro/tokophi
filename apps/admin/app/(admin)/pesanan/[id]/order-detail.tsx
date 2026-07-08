@@ -537,7 +537,7 @@ export function OrderDetail({ order, payment }: { order: Order; payment: OrderPa
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <CreditCard className="size-4" /> Metode
                 </span>
-                <span className="font-medium">{payment ? (PAY_CHANNELS.find((c) => c.code === payment.channelCode)?.label ?? payment.channelCode) : payMethod}</span>
+                <span className="font-medium">{payment ? (payment.channelCode === "COD" ? "COD (Bayar di Tempat)" : PAY_CHANNELS.find((c) => c.code === payment.channelCode)?.label ?? payment.channelCode) : payMethod}</span>
               </div>
               {payment?.virtualAccount && (
                 <div className="flex items-center justify-between gap-2">

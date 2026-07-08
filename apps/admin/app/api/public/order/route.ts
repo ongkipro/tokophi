@@ -114,8 +114,12 @@ export async function POST(req: Request) {
     }
   }
 
-  // COD → order created, no bill
+  // COD → order created; record a COD payment (collected on delivery), no gateway bill
   if (isCod) {
+    await db.insert(schema.payments).values({
+      orderId: order.id, storeId: store.id, method: "cod", amountIdr: total, status: "menunggu",
+      provider: "cod", reffId: order.number, channelCode: "COD", total,
+    });
     return NextResponse.json({ ok: true, orderNumber: order.number, cod: true }, { headers: CORS });
   }
 

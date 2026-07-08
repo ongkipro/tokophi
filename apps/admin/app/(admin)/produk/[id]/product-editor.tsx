@@ -169,7 +169,8 @@ export function ProductEditor({ product }: { product?: Product }) {
   const [handle, setHandle] = React.useState(
     product ? (product.handle ?? slugify(product.name)) : ""
   );
-  const [handleEdited, setHandleEdited] = React.useState(false);
+  // existing products keep their handle (don't auto-slug from name); new products auto-slug.
+  const [handleEdited, setHandleEdited] = React.useState(!!product);
 
   // Quick-action dialogs (Tindakan lainnya)
   const [catOpen, setCatOpen] = React.useState(false);
