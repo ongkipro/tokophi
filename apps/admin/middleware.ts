@@ -28,6 +28,7 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Protect everything except Next internals, static files, and public product images.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|products/).*)"],
+  // Protect everything except Next internals, static files, public product images,
+  // and the public storefront-facing API (e.g. /api/public/ongkir).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|products/|api/public/).*)"],
 };

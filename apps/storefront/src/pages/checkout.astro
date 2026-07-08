@@ -94,34 +94,23 @@ const PAYMENTS = [
               <span class="text-sm font-medium text-ink">Kode Pos</span>
               <input type="text" name="kodepos" required inputmode="numeric" autocomplete="postal-code" class="input-field" />
             </label>
+            <label class="block sm:col-span-2">
+              <span class="text-sm font-medium text-ink">Kecamatan Tujuan <span class="font-normal text-muted">(untuk hitung ongkir)</span></span>
+              <input type="text" id="dest-search" autocomplete="off" placeholder="Ketik kecamatan / kota, mis. Semarang" class="input-field" />
+              <input type="hidden" name="dest_id" id="dest-id" />
+              <input type="hidden" name="dest_text" id="dest-text" />
+              <div id="dest-results" class="mt-1 hidden max-h-48 overflow-y-auto rounded-xl border border-line bg-white shadow-sm"></div>
+            </label>
           </div>
         </fieldset>
 
         <!-- Pengiriman -->
         <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
           <legend class="px-2 font-display text-lg font-semibold text-ink">Pengiriman</legend>
-          <div class="space-y-3">
-            {
-              SHIPPING.map((s, i) => (
-                <label class="ship-option flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
-                  <input
-                    type="radio"
-                    name="shipping"
-                    value={s.id}
-                    data-price={s.price}
-                    data-label={s.label}
-                    checked={i === 0}
-                    required
-                    class="h-4 w-4 accent-brand-600"
-                  />
-                  <span class="flex-1">
-                    <span class="block text-sm font-medium text-ink">{s.label}</span>
-                    <span class="block text-xs text-muted">Estimasi {s.eta}</span>
-                  </span>
-                  <span class="text-sm font-semibold text-ink tabular-nums" data-money={s.price}>Rp{s.price.toLocaleString("id-ID")}</span>
-                </label>
-              ))
-            }
+          <div id="ship-options" class="space-y-3">
+            <p id="ship-hint" class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
+              Pilih <b>kecamatan tujuan</b> di atas untuk melihat ongkir real-time (KiriminAja).
+            </p>
           </div>
         </fieldset>
 
@@ -277,10 +266,79 @@ const PAYMENTS = [
       document.getElementById("summary-total").textContent = idr.format(subtotal + ship);
     }
 
-    form.querySelectorAll('input[name="shipping"]').forEach(function (el) {
-      el.addEventListener("change", recompute);
-    });
-    recompute();
+    function bindShipping() {
+      form.querySelectorAll('input[name="shipping"]').forEach(function (el) {
+        el.addEventListener("change", recompute);
+      });
+      recompute();
+    }
+    bindShipping();
+
+    // ---- Live KiriminAja ongkir (via platform proxy on the admin) ----
+    var ONGKIR_API = "http://localhost:3000/api/public/ongkir"; // platform shipping endpoint (local admin)
+    var ORIGIN_CITY = "Yogyakarta"; // store origin (Batik Nusantara)
+    var totalQty = cart.reduce(function (a, i) { return a + i.qty; }, 0) || 1;
+    var destSearch = document.getElementById("dest-search");
+    var destResults = document.getElementById("dest-results");
+    var destId = document.getElementById("dest-id");
+    var destText = document.getElementById("dest-text");
+    var shipBox = document.getElementById("ship-options");
+
+    function api(payload) {
+      return fetch(ONGKIR_API, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      }).then(function (r) { return r.json(); });
+    }
+
+    var searchTimer;
+    if (destSearch) {
+      destSearch.addEventListener("input", function () {
+        destId.value = "";
+        clearTimeout(searchTimer);
+        var q = destSearch.value.trim();
+        if (q.length < 3) { destResults.classList.add("hidden"); return; }
+        searchTimer = setTimeout(function () {
+          api({ op: "search", q: q }).then(function (res) {
+            if (!res.ok || !res.results.length) { destResults.classList.add("hidden"); return; }
+            destResults.innerHTML = res.results.slice(0, 8).map(function (a) {
+              return '<button type="button" data-id="' + a.id + '" data-text="' + esc(a.text) + '" class="block w-full border-b border-line px-4 py-2 text-left text-sm last:border-0 hover:bg-brand-50">' + esc(a.text) + "</button>";
+            }).join("");
+            destResults.classList.remove("hidden");
+          });
+        }, 300);
+      });
+      destResults.addEventListener("click", function (e) {
+        var btn = e.target.closest("button[data-id]");
+        if (!btn) return;
+        destId.value = btn.getAttribute("data-id");
+        destText.value = btn.getAttribute("data-text");
+        destSearch.value = btn.getAttribute("data-text");
+        destResults.classList.add("hidden");
+        loadRates();
+      });
+    }
+
+    function loadRates() {
+      if (!destId.value) return;
+      shipBox.innerHTML = '<p class="px-4 py-3 text-sm text-muted">Menghitung ongkir…</p>';
+      api({ op: "rates", originCity: ORIGIN_CITY, destinationId: Number(destId.value), weight: totalQty * 500, itemValue: subtotal }).then(function (res) {
+        if (!res.ok || !res.rates.length) {
+          shipBox.innerHTML = '<p class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">' + esc(res.error || "Tidak ada layanan untuk rute ini.") + "</p>";
+          recompute();
+          return;
+        }
+        shipBox.innerHTML = res.rates.map(function (s, i) {
+          var cod = s.cod ? ' <span class="ml-1 rounded bg-emerald-100 px-1 text-[10px] font-semibold text-emerald-700">COD</span>' : "";
+          return '<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">' +
+            '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '"' + (i === 0 ? " checked" : "") + ' required class="h-4 w-4 accent-brand-600" />' +
+            '<span class="flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + cod + '</span><span class="block text-xs text-muted">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
+            '<span class="text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
+        }).join("");
+        bindShipping();
+      }).catch(function () {
+        shipBox.innerHTML = '<p class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">Gagal memuat ongkir. Coba lagi.</p>';
+      });
+    }
 
     form.addEventListener("submit", function (e) {
       e.preventDefault();
