@@ -4,6 +4,12 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-08
 
+### Shipping — KiriminAja live rates (real courier API integration)
+- **Real KiriminAja Mitra API integration** (platform-managed aggregator, ADR 0004). `apps/admin/lib/kiriminaja.ts` client — sandbox base `https://tdev.kiriminaja.com` + Bearer key (in gitignored `.env.local`, **not committed**; `.env.example` placeholder). Endpoints verified against the Postman collection (version prefix varies per endpoint: `shipping_price`=v6.1, `get_address_by_name`=v2, `province`/`tracking`=unversioned).
+- **Client admin (order detail): "Cek Ongkir"** — `lib/actions/shipping.ts getShippingRates()` resolves the store city + order destination → KiriminAja district IDs (`get_address_by_name`) → live rates (`shipping_price`), shown in a dialog (courier, ETD, cost, COD badges). Verified E2E: order INV-4821 → **18 live services** (Yogyakarta→Semarang), console-clean.
+- **Fix: `/pesanan/[id]` 404** — `getOrder` chained `.where()` after `.groupBy()` (landed as HAVING → 0 rows → every order detail 404'd). Now applies the filter before groupBy.
+- **Next**: super-admin KiriminAja config + live "Test koneksi"; create-order (→ AWB/resi) + print shipping label PDF.
+
 ### Admin — functional global search (⌘K) + docs de-stale
 - **Global search** (`lib/data/search.ts getSearchIndex()`, RLS-scoped: products/orders/customers) — the topbar search was cosmetic; now a real filter with a grouped dropdown (Produk/Pesanan/Pelanggan) linking to entity routes; ⌘K focuses, Esc/click-outside closes. Verified: "dress" → 3 product results.
 - **Docs**: de-staled README/PRD/ARCHITECTURE/SCHEMA/BACKLOG/TASKS/AGENTS — 53→54 tables, migrations 0000–0013, `platform_admins` (0013); removed "writes pending/mock" (writes are done); BACKLOG marks variants / CSV / global search / super-admin control plane / storefront as done.
