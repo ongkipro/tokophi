@@ -1,0 +1,1 @@
+ALTER TYPE "public"."aggregator_provider" ADD VALUE 'kiriminaja';

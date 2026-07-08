@@ -215,6 +215,6 @@ export async function getPlatformAdmins(): Promise<PlatformAdminRow[]> {
 
 export async function getAggregator(): Promise<{ provider: string; enabled: boolean }> {
   const agg = (await db.select().from(schema.shippingAggregator))[0];
-  const PROVIDER_NAME: Record<string, string> = { biteship: "Biteship", rajaongkir: "RajaOngkir", shipper: "Shipper" };
+  const PROVIDER_NAME: Record<string, string> = { biteship: "Biteship", rajaongkir: "RajaOngkir", shipper: "Shipper", kiriminaja: "KiriminAja" };
   return { provider: agg ? PROVIDER_NAME[agg.provider] ?? agg.provider : "—", enabled: agg?.enabled ?? false };
 }

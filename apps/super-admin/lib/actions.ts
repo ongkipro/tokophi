@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { SESSION_COOKIE, signSession } from "./session";
 import { requirePlatformAdmin } from "./platform-auth";
+import { kaTestConnection } from "./kiriminaja";
 
 // Every super-admin mutation is gated by `requirePlatformAdmin()` (the security boundary):
 // impersonation + store lifecycle + provisioning + settings all require a platform-admin session.
@@ -129,6 +130,12 @@ export async function saveCouriers(updates: { key: string; on: boolean }[]): Pro
   await requirePlatformAdmin();
   for (const u of updates) await db.update(schema.platformCouriers).set({ enabled: u.on }).where(eq(schema.platformCouriers.courier, u.key));
   revalidatePath("/pengaturan");
+}
+
+// ---- KiriminAja aggregator: live connectivity test (platform key) ----
+export async function testKiriminajaConnection(): Promise<{ ok: boolean; env: string; provinces?: number; message: string }> {
+  await requirePlatformAdmin();
+  return kaTestConnection();
 }
 
 // ---- platform team: invite another operator (real platform_admins row) ----

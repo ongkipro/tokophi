@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type Dispatch, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown } from "lucide-react";
+import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -35,7 +35,7 @@ import {
 } from "@tokophi/ui/dropdown-menu";
 import { cn } from "@tokophi/ui/lib/utils";
 import { initials } from "@/components/bits";
-import { saveGateways, saveCouriers, invitePlatformAdmin } from "@/lib/actions";
+import { saveGateways, saveCouriers, invitePlatformAdmin, testKiriminajaConnection } from "@/lib/actions";
 
 type Toggle = { key: string; name: string; desc: string; on: boolean };
 type TeamMember = { id: string; name: string; email: string; role: string };
@@ -63,6 +63,17 @@ export function PengaturanClient({
   const [pending, startTransition] = useTransition();
   const [gateways, setGateways] = useState(initGateways);
   const [couriers, setCouriers] = useState(initCouriers);
+
+  // KiriminAja live connectivity test
+  const [ping, setPing] = useState<{ ok: boolean; message: string } | null>(null);
+  const [pinging, startPing] = useTransition();
+  const testConn = () =>
+    startPing(async () => {
+      const r = await testKiriminajaConnection();
+      setPing({ ok: r.ok, message: r.message });
+      if (r.ok) toast.success(r.message);
+      else toast.error(r.message);
+    });
 
   // invite dialog
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -151,13 +162,25 @@ export function PengaturanClient({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-0">
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-            <div className="flex items-center gap-2 text-sm">
-              <Truck className="size-4 text-emerald-600 dark:text-emerald-400" />
-              <span>Agregator pengiriman: <span className="font-medium">{aggregator.provider}</span> · API kurir dikelola platform</span>
+          <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm">
+                <Truck className="size-4 text-emerald-600 dark:text-emerald-400" />
+                <span>Agregator pengiriman: <span className="font-medium">{aggregator.provider}</span> · API kurir dikelola platform</span>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {aggregator.enabled && (
+                  <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
+                )}
+                <Button variant="outline" size="sm" className="gap-1.5" disabled={pinging} onClick={testConn}>
+                  <Plug className="size-3.5" /> {pinging ? "Menguji…" : "Test koneksi"}
+                </Button>
+              </div>
             </div>
-            {aggregator.enabled && (
-              <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Terhubung</Badge>
+            {ping && (
+              <p className={`mt-2 text-xs ${ping.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                {ping.ok ? "✓ " : "✕ "}{ping.message}
+              </p>
             )}
           </div>
           <p className="mb-2 text-xs text-muted-foreground">

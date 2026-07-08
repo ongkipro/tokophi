@@ -772,7 +772,7 @@ async function main() {
     { provider: "xendit", enabled: true, isCod: false },
     { provider: "duitku", enabled: false, isCod: false },
   ]);
-  await db.insert(schema.shippingAggregator).values({ provider: "biteship", enabled: true });
+  await db.insert(schema.shippingAggregator).values({ provider: "kiriminaja", enabled: true });
   await db.insert(schema.platformCouriers).values(
     [
       ["JNE", ["Reguler", "YES", "OKE"], true],
