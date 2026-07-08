@@ -133,8 +133,10 @@ COD + KiriminAja courier config + "Tim Platform" operators). Composite **healthc
 
 ### Storefront (shopper)
 beranda · kategori (real collections + virtual "semua"/"promo") · **produk** (5-image gallery +
-**real variant picker** → live price/stock) · **keranjang** → **checkout → sukses** (variant-aware
-localStorage cart) · akun · blog · kontak. Reads the same Postgres catalog.
+**real variant picker** → live price/stock) · **keranjang** → **checkout → sukses** — checkout now
+**creates a real DB order** (customer + order + line items) with **live ongkir** + a **real payment**
+(VA/QRIS/DANA) via the platform proxies; the order appears in the merchant admin and the pay callback
+marks it paid. · akun · blog · kontak. Reads the same Postgres catalog.
 
 ---
 

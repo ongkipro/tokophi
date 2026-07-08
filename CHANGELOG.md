@@ -4,6 +4,12 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-08
 
+### Commerce loop closed — storefront checkout creates a real DB order + linked payment
+- New public endpoint `apps/admin/app/api/public/order` — the storefront checkout now **creates a real order** (upsert customer + `orders` + `order_line_items`) and, for non-COD, an **AutoLaris payment linked by `orderId`**. Runs as owner with an explicit `store_id`.
+- **Checkout** posts the whole order → real order number **`WEB-…`**; the **sukses page** shows the real number + payment instruction. Storefront orders now **appear in the merchant admin** (Pesanan list + detail) with the linked payment.
+- **Pay callback** syncs the linked order → `financialStatus = dibayar` when paid. Verified E2E: VA BCA checkout → `WEB-527789622` (order + line item + payment) → shown in admin → callback → payment berhasil + order dibayar.
+- **Payment integrated in the merchant admin**: order detail "Buat Tagihan" (VA/QRIS/DANA, persisted+linked) + real payment status (`getOrderPayment`/`createOrderPayment`).
+
 ### Payments — AutoLaris payment gateway (platform-managed) + brand hidden from client
 - **Single platform PSP = AutoLaris** (VA 6 banks / QRIS / DANA). `gateway_provider` enum += `autolaris` (migration 0016); seed drops Midtrans/Xendit/Duitku; `payments` table extended (trx_id/channel/va/qr/url/total/admin). Key in gitignored `.env.local` (`AUTOLARIS_API_KEY`/`AUTOLARIS_BASE`), never committed.
 - **Super-admin** Pengaturan → Gateway Pembayaran: AutoLaris + live **"Test koneksi"** (`alTestConnection` creates a nominal QRIS bill, checks `rc=00`).
