@@ -2,6 +2,15 @@
 
 All notable changes. Dates are absolute. Phase: UI/UX-first → **backend M3 started** (super-admin on local Postgres).
 
+## 2026-07-08
+
+### Rebrand: indostore → TokoΦ
+- Full rename across the monorepo: display brand **TokoΦ** (φ symbol); identifiers `tokophi` (folder, npm scope `@indostore/*` → `@tokophi/*`, root pkg).
+- **DB:** role `indostore_app` → `tokophi_app`; docker container/volume + Postgres user·pass·db → `tokophi`; `DATABASE_URL` updated. Owner login is now **ongki@batiknusantara.id / tokophi123**.
+- Folder `~/projects/indostore` → `~/projects/tokophi` (git history kept); docs `~/Documents/Development/tokophi`. New **private** repo `ongkipro/tokophi` (old `ongkipro/indostore` abandoned).
+- Added a **TokoΦ (Φ) favicon** (`app/icon.svg`, indigo) for admin + super-admin, replacing the create-next-app defaults.
+- Verified: `migrate` + `seed` + `verify-rls` pass under `tokophi_app`; admin·super-admin·storefront build clean. Zero residual "indostore" across repo **and** external docs.
+
 ## 2026-07-04
 
 ### RLS runtime enforcement (local) — admin runs as the non-owner role

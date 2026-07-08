@@ -3,7 +3,7 @@
 > Newest first. What we did + what's next, so any session can resume instantly.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-07-04) · RBAC + RLS (ENFORCING at runtime) + RBAC-UI done · next = VPS server itself
+## ▶ CURRENT STATE (2026-07-08) · REBRANDED indostore→TokoΦ · RBAC + RLS (ENFORCING at runtime) + RBAC-UI done · next = admin-client feature depth (Real variants)
 
 **Everything runs locally on Linux** (Docker PostgreSQL 16 :5433 + Drizzle `@tokophi/db`, 53 tables, migrations 0000–0012). Done + verified end-to-end:
 - **Reads:** all 3 surfaces (super-admin 5 pages + admin 16 modules + storefront) read Postgres.
@@ -15,7 +15,11 @@
 
 **RBAC UI (ALL editors done):** `lib/rbac-policy.ts` (client-safe matrix) + `PermissionsProvider`/`useCan`/`<Can>` + topbar role badge; every admin editor gates its write/delete/create controls by role (verified via Playwright across owner/staff/gudang). Server actions stay the security boundary.
 
-**▶ RESUME HERE (next session):** **the VPS server itself** — the app-side is done (RLS enforces at runtime via `withTenant`, `tokophi_app` role ready). Remaining is infra: provision the VPS, run the same migrations on its Postgres, front it with PostgREST (JWT `store_id` claim → `app.store_id` GUC, connect as `tokophi_app`), swap local `public/uploads` for MinIO/S3 storage, wire the deploy pipeline. Needs an actual server (was deferred pending that). Detail per-entry below (newest first).
+**▶ RESUME HERE (next session):** **admin-client feature depth** (user's focus; VPS deferred). Next pick = **Real variants** — schema already supports it (`product_options`, `product_variants` option1/2/3 + sku/price/cost, `inventory_levels` per variant/location); the gap is admin-only: the variant table in `apps/admin/app/(admin)/produk/[id]/product-editor.tsx` is UI-only (not wired/persisted), `lib/data/products.ts` reads only the default variant (position 0), and `lib/actions/products.ts` writes a single `Default` variant. Other admin backlog: `/pesanan/[id]` + `/diskon/[id]` detail routes, Tiptap rich-text, CSV export, de-dup admin → `@tokophi/ui`. (VPS + PostgREST + MinIO/S3 remains the later infra milestone.) Detail per-entry below (newest first).
+
+## 2026-07-08 — Session: rebrand indostore → TokoΦ ✅
+- Full rebrand (see CHANGELOG 2026-07-08): scope `@tokophi/*`, DB role `tokophi_app`, folder/repo `tokophi`, display brand **TokoΦ**, Φ favicon. Verified migrate/seed/verify-rls + 3-surface builds clean; zero residual "indostore" in repo + external docs.
+- Decision: **focus shifts to the admin client** (merchant admin depth) before the VPS infra milestone.
 
 ## 2026-07-04 — Session: RBAC + local Postgres RLS ✅
 **State before:** all reads + writes + local auth + local media done on local Postgres; paused at RBAC+RLS (single owner user).
