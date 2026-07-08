@@ -265,10 +265,10 @@ const BLOGS = ["Berita Toko", "Tips & Panduan"];
 const ARTICLES: Array<{ title: string; handle: string; blog: string; author: string; published: boolean; publishedDaysAgo: number; excerpt: string; comments: number }> = [
   { title: "Promo Gajian: Diskon s/d 40% Sepanjang Bulan Ini", handle: "promo-gajian-diskon", blog: "Berita Toko", author: "Ongki Pratama", published: true, publishedDaysAgo: 2, excerpt: "Nikmati potongan harga untuk ratusan produk pilihan selama periode gajian.", comments: 8 },
   { title: "5 Tips Memilih Ukuran Baju yang Pas saat Belanja Online", handle: "tips-memilih-ukuran-baju", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 5, excerpt: "Panduan singkat agar tidak salah ukuran ketika belanja fashion secara online.", comments: 3 },
-  { title: "Cara Merawat Sepatu Sneakers Agar Awet", handle: "cara-merawat-sneakers", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 9, excerpt: "Langkah mudah membersihkan dan menyimpan sneakers kesayangan.", comments: 12 },
+  { title: "Cara Merawat Baju Rajut Agar Awet", handle: "cara-merawat-rajut", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 9, excerpt: "Langkah mudah mencuci dan menyimpan baju rajut agar tidak melar.", comments: 12 },
   { title: "Kami Kini Melayani Pengiriman Instan Se-Jabodetabek", handle: "pengiriman-instan-jabodetabek", blog: "Berita Toko", author: "Ongki Pratama", published: true, publishedDaysAgo: 14, excerpt: "Pesanan sampai di hari yang sama dengan GoSend & GrabExpress.", comments: 5 },
   { title: "Rekomendasi Hadiah untuk Anak Sesuai Usia", handle: "rekomendasi-hadiah-anak", blog: "Tips & Panduan", author: "Dewi Anggraini", published: false, publishedDaysAgo: 1, excerpt: "Bingung memilih mainan edukatif? Simak rekomendasi berdasarkan usia anak.", comments: 0 },
-  { title: "Panduan Klaim Garansi Produk Elektronik", handle: "panduan-klaim-garansi", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 25, excerpt: "Ketahui prosedur dan syarat klaim garansi agar prosesnya cepat.", comments: 2 },
+  { title: "Panduan Menentukan Ukuran Baju yang Pas", handle: "panduan-ukuran-baju", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 25, excerpt: "Cara mengukur badan dan memilih size chart agar tidak salah beli.", comments: 2 },
 ];
 
 // ---- CRM: leads, followups, wa templates ----
@@ -292,12 +292,12 @@ const LEADS: Array<{ name: string; phone: string; source: string; stage: "baru" 
 type FType = "keranjang" | "pembayaran" | "konfirmasi" | "pascabeli" | "repeat" | "ulasan";
 type FStatus = "menunggu" | "terkirim" | "dibalas" | "selesai";
 const FOLLOWUPS: Array<{ customer: string; phone: string; type: FType; context: string; dueDays: number; status: FStatus; lastMessage: string }> = [
-  { customer: "Siti Nurhaliza", phone: "6281234511001", type: "keranjang", context: "Kopi Arabika Gayo 250g", dueDays: 0, status: "menunggu", lastMessage: "" },
+  { customer: "Siti Nurhaliza", phone: "6281234511001", type: "keranjang", context: "Dress Midi Motif Bunga", dueDays: 0, status: "menunggu", lastMessage: "" },
   { customer: "Agus Salim", phone: "6281234511002", type: "pembayaran", context: "#INV-4821 · Rp275.000", dueDays: 0, status: "menunggu", lastMessage: "" },
-  { customer: "Rina Wijaya", phone: "6281234511003", type: "keranjang", context: "Skincare Serum Vitamin C", dueDays: -1, status: "menunggu", lastMessage: "" },
+  { customer: "Rina Wijaya", phone: "6281234511003", type: "keranjang", context: "Gamis Syari Polos", dueDays: -1, status: "menunggu", lastMessage: "" },
   { customer: "Budi Santoso", phone: "6281234511004", type: "pembayaran", context: "#INV-4818 · Rp189.000", dueDays: -2, status: "menunggu", lastMessage: "" },
-  { customer: "Maya Sari", phone: "6281234511005", type: "pascabeli", context: "#INV-4815 · Tas Ransel Anti Air", dueDays: 0, status: "terkirim", lastMessage: "Terima kasih sudah belanja! 🙏" },
-  { customer: "Andi Pratama", phone: "6281234511006", type: "ulasan", context: "Earphone Bluetooth TWS", dueDays: 1, status: "menunggu", lastMessage: "" },
+  { customer: "Maya Sari", phone: "6281234511005", type: "pascabeli", context: "#INV-4815 · Rok Plisket Panjang", dueDays: 0, status: "terkirim", lastMessage: "Terima kasih sudah belanja! 🙏" },
+  { customer: "Andi Pratama", phone: "6281234511006", type: "ulasan", context: "Cardigan Rajut Wanita", dueDays: 1, status: "menunggu", lastMessage: "" },
   { customer: "Dewi Lestari", phone: "6281234511007", type: "repeat", context: "Terakhir beli 32 hari lalu", dueDays: 0, status: "menunggu", lastMessage: "" },
   { customer: "Putri Ayu", phone: "6281234511008", type: "konfirmasi", context: "#INV-4820 · siap dikirim", dueDays: 0, status: "dibalas", lastMessage: "Oke kak, ditunggu ya" },
   { customer: "Hendra Gunawan", phone: "6281234511009", type: "pascabeli", context: "#INV-4809 · Madu Hutan Asli", dueDays: -1, status: "selesai", lastMessage: "Barang sudah diterima 👍" },
@@ -313,13 +313,13 @@ const WA_TEMPLATES: Array<{ name: string; type: string; body: string }> = [
 ];
 
 // ---- purchasing, segments, reviews ----
-const SUPPLIERS = ["CV Sumber Rejeki", "PT Grosir Nusantara", "Toko Elektronik Jaya", "Kopi Gayo Supplier"];
+const SUPPLIERS = ["CV Sumber Rejeki", "PT Grosir Nusantara", "Konveksi Busana Rapi", "Grosir Kain Katun"];
 const PURCHASE_ORDERS: Array<{ code: string; supplier: string; status: "draft" | "dipesan" | "sebagian" | "diterima"; items: number; total: number; etaDays: number; createdDaysAgo: number }> = [
   { code: "PO-1042", supplier: "CV Sumber Rejeki", status: "dipesan", items: 4, total: 12_400_000, etaDays: 5, createdDaysAgo: 2 },
   { code: "PO-1041", supplier: "PT Grosir Nusantara", status: "sebagian", items: 6, total: 8_950_000, etaDays: 2, createdDaysAgo: 6 },
-  { code: "PO-1040", supplier: "Toko Elektronik Jaya", status: "diterima", items: 3, total: 15_600_000, etaDays: -1, createdDaysAgo: 12 },
+  { code: "PO-1040", supplier: "Konveksi Busana Rapi", status: "diterima", items: 3, total: 15_600_000, etaDays: -1, createdDaysAgo: 12 },
   { code: "PO-1039", supplier: "CV Sumber Rejeki", status: "diterima", items: 2, total: 4_200_000, etaDays: -4, createdDaysAgo: 18 },
-  { code: "PO-1038", supplier: "Kopi Gayo Supplier", status: "draft", items: 1, total: 2_340_000, etaDays: 10, createdDaysAgo: 1 },
+  { code: "PO-1038", supplier: "Grosir Kain Katun", status: "draft", items: 1, total: 2_340_000, etaDays: 10, createdDaysAgo: 1 },
   { code: "PO-1037", supplier: "PT Grosir Nusantara", status: "dipesan", items: 5, total: 9_800_000, etaDays: 7, createdDaysAgo: 3 },
 ];
 const SEGMENTS: Array<{ name: string; count: number; growth: number; description: string }> = [
@@ -331,14 +331,14 @@ const SEGMENTS: Array<{ name: string; count: number; growth: number; description
   { name: "Pelanggan Kota Besar", count: 1204, growth: 6.9, description: "Jakarta, Bandung, Surabaya" },
 ];
 const REVIEWS: Array<{ customer: string; product: string; emoji: string; rating: number; text: string; status: "terbit" | "menunggu"; daysAgo: number }> = [
-  { customer: "Siti Nurhaliza", product: "Kopi Arabika Gayo 250g", emoji: "☕", rating: 5, text: "Kopinya wangi dan segar, pengiriman cepat. Recommended!", status: "terbit", daysAgo: 1 },
-  { customer: "Budi Santoso", product: "Sepatu Sneakers Lokal", emoji: "👟", rating: 4, text: "Bahan bagus, ukuran pas. Cuma warnanya sedikit beda dari foto.", status: "terbit", daysAgo: 2 },
-  { customer: "Rina Wijaya", product: "Skincare Serum Vitamin C", emoji: "🧴", rating: 5, text: "Cocok di kulit saya, hasilnya cerah dalam 2 minggu.", status: "menunggu", daysAgo: 1 },
-  { customer: "Andi Pratama", product: "Earphone Bluetooth TWS", emoji: "🎧", rating: 3, text: "Suara oke, tapi baterai agak boros. Lumayan untuk harganya.", status: "terbit", daysAgo: 4 },
-  { customer: "Maya Sari", product: "Tas Ransel Anti Air", emoji: "🎒", rating: 5, text: "Kuat dan benar-benar anti air. Muat banyak juga.", status: "menunggu", daysAgo: 2 },
-  { customer: "Doni Kusuma", product: "Power Bank 10.000mAh", emoji: "🔋", rating: 4, text: "Ngecas cepat, ringkas dibawa. Puas.", status: "terbit", daysAgo: 6 },
-  { customer: "Putri Ayu", product: "Lip Cream Matte", emoji: "💄", rating: 2, text: "Warnanya bagus tapi bikin bibir kering.", status: "menunggu", daysAgo: 3 },
-  { customer: "Hendra Gunawan", product: "Madu Hutan Asli 500ml", emoji: "🍯", rating: 5, text: "Madunya asli, rasa mantap. Langganan terus.", status: "terbit", daysAgo: 8 },
+  { customer: "Siti Nurhaliza", product: "Dress Midi Motif Bunga", emoji: "👗", rating: 5, text: "Bahannya adem dan motifnya cantik, jatuhnya bagus di badan. Recommended!", status: "terbit", daysAgo: 1 },
+  { customer: "Budi Santoso", product: "Kemeja Oversized Wanita", emoji: "👔", rating: 4, text: "Potongan effortless, nyaman dipakai. Cuma warnanya sedikit beda dari foto.", status: "terbit", daysAgo: 2 },
+  { customer: "Rina Wijaya", product: "Gamis Syari Polos", emoji: "🧕", rating: 5, text: "Bahan wollycrepe jatuh dan tidak kaku, elegan. Suka banget.", status: "menunggu", daysAgo: 1 },
+  { customer: "Andi Pratama", product: "Cardigan Rajut Wanita", emoji: "🧥", rating: 3, text: "Rajutannya rapi, tapi agak tipis. Lumayan untuk harganya.", status: "terbit", daysAgo: 4 },
+  { customer: "Maya Sari", product: "Rok Plisket Panjang", emoji: "🩱", rating: 5, text: "Plisketnya jatuh cantik saat bergerak, pinggang karet nyaman.", status: "menunggu", daysAgo: 2 },
+  { customer: "Doni Kusuma", product: "Celana Kulot Wide Leg", emoji: "👖", rating: 4, text: "Adem dan longgar, cocok buat sehari-hari. Puas.", status: "terbit", daysAgo: 6 },
+  { customer: "Putri Ayu", product: "Set Piyama Satin Wanita", emoji: "🩱", rating: 2, text: "Satinnya halus tapi jahitan bagian lengan kurang rapi.", status: "menunggu", daysAgo: 3 },
+  { customer: "Hendra Gunawan", product: "Blazer Formal Wanita", emoji: "🧥", rating: 5, text: "Blazernya rapi dan berkelas, pas buat kerja. Langganan terus.", status: "terbit", daysAgo: 8 },
 ];
 
 // ---- navigation menus (canonical MAIN_MENU / FOOTER_MENU, inlined for seed parity) ----
