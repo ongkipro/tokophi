@@ -4,6 +4,12 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-08
 
+### Payments — AutoLaris payment gateway (platform-managed) + brand hidden from client
+- **Single platform PSP = AutoLaris** (VA 6 banks / QRIS / DANA). `gateway_provider` enum += `autolaris` (migration 0016); seed drops Midtrans/Xendit/Duitku; `payments` table extended (trx_id/channel/va/qr/url/total/admin). Key in gitignored `.env.local` (`AUTOLARIS_API_KEY`/`AUTOLARIS_BASE`), never committed.
+- **Super-admin** Pengaturan → Gateway Pembayaran: AutoLaris + live **"Test koneksi"** (`alTestConnection` creates a nominal QRIS bill, checks `rc=00`).
+- **Client "tinggal pakai"**: storefront checkout payment channels (QRIS/VA/DANA — generic labels) → public no-auth endpoint `apps/admin/app/api/public/pay` (`create_payment`) → **sukses page shows the real VA number / QRIS / e-wallet instruction**; callback endpoint marks paid; `PUBLIC_PAY_API` env-driven. Verified E2E: VA BCA → real VA `1551410210002419`, total Rp188.500.
+- **Brand hidden from client** (per request): removed **"KiriminAja"** (shipping) + **"AutoLaris"** (payment) from the merchant admin + storefront UI — merchants/shoppers see generic labels ("ongkir real-time", "Virtual Account BCA", "dikelola TokoΦ"). Super-admin (platform) still shows the provider brands.
+
 ### Shipping — tracking (Lacak) + order auto-status
 - Buat Pengiriman advances the order to **"dikirim"**; the order-detail Pengiriman card shows a **"Terdaftar di KiriminAja"** badge + a **"Lacak"** button → `trackShipment()` polls `/api/mitra/tracking`, syncs the real courier AWB when assigned (sandbox returns not-yet-available for a freshly-created shipment — shown as a friendly "menunggu penjemputan"). Webhook-based status push is a prod item (needs a public URL).
 

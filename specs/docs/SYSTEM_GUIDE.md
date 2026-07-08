@@ -168,9 +168,19 @@ varies per endpoint** (`shipping_price`=v6.1, `get_address_by_name`=v2, `provinc
 - **Storefront** checkout → **live ongkir** via the public proxy `apps/admin/app/api/public/ongkir` (`op=search`/`op=rates`; key stays server-side; `PUBLIC_ONGKIR_API` env-driven).
 - **Prod-only remaining:** tracking **webhook** (needs a public URL); shipment **payment** flow (KA returns `unpaid` + `qr_url`; platform pays via KA Credit/gateway).
 
-### Payments (platform-managed config)
-`platform_payment_gateways` (Midtrans/Xendit/Duitku) + `platform_cod` — configured/toggled in the
-super-admin, consumed "matang" by merchants. Live PSP calls are a later milestone.
+### Payments — AutoLaris (real payment gateway) — COMPLETE (checkout)
+Single platform-managed PSP = **AutoLaris** (`gateway_provider` enum; VA 6 banks / QRIS / DANA).
+Base `https://api-h2h.autolaris.com`, Bearer key in gitignored `.env.local`. Client
+`apps/admin/lib/autolaris.ts` (`create_payment`). Flow:
+- **Super-admin** → Pengaturan → Gateway Pembayaran: AutoLaris + live **"Test koneksi"**.
+- **Storefront checkout** → shopper picks a channel (QRIS/VA/DANA) → **"Bayar"** hits the public proxy
+  `apps/admin/app/api/public/pay` → real VA/QRIS/e-wallet bill → the **sukses page shows the payment
+  instruction** (VA number, QRIS payload, or e-wallet link). Callback endpoint `.../pay/callback`
+  marks the payment paid (public URL → prod). `payments` table records transactions.
+
+> **Brand policy:** provider brands (**KiriminAja** shipping, **AutoLaris** payment) are **hidden from
+> the client** (merchant admin + storefront) — they see generic labels ("ongkir real-time",
+> "Virtual Account BCA", "dikelola TokoΦ"). Only the **super-admin** (platform) sees the brands.
 
 ---
 
