@@ -89,6 +89,9 @@ export type Product = {
   unitsSold: number;
   addedTs: number; // when the product was added (ms since epoch, deterministic)
   media?: { id: string; url: string }[]; // real product_media rows (editor)
+  hasVariants?: boolean;
+  options?: { name: string; values: string[] }[]; // option definitions in order (editor)
+  variants?: { option1: string | null; option2: string | null; option3: string | null; sku: string | null; price: number; stock: number }[];
 };
 // Fashion niche (women's clothing). image = /products/<slug>.webp (AI-generated catalog photos).
 const PRODUCT_SEED: Array<[string, string, number, string, string]> = [

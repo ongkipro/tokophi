@@ -62,6 +62,47 @@ export async function getProduct(id: string): Promise<Product | null> {
       .from(schema.productMedia)
       .where(eq(schema.productMedia.productId, id))
       .orderBy(schema.productMedia.position);
-    return { ...toProduct(rows[0]), media };
+
+    const [prod] = await db
+      .select({ hasVariants: schema.products.hasVariants })
+      .from(schema.products)
+      .where(eq(schema.products.id, id))
+      .limit(1);
+
+    // option definitions (names, in order) + every variant with its option values + stock
+    const optionRows = await db
+      .select({ name: schema.productOptions.name, position: schema.productOptions.position })
+      .from(schema.productOptions)
+      .where(eq(schema.productOptions.productId, id))
+      .orderBy(schema.productOptions.position);
+    const variantRows = await db
+      .select({
+        option1: schema.productVariants.option1,
+        option2: schema.productVariants.option2,
+        option3: schema.productVariants.option3,
+        sku: schema.productVariants.sku,
+        price: schema.productVariants.priceIdr,
+        position: schema.productVariants.position,
+        stock: schema.inventoryLevels.available,
+      })
+      .from(schema.productVariants)
+      .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.productVariants.id))
+      .where(eq(schema.productVariants.productId, id))
+      .orderBy(schema.productVariants.position);
+
+    const variants = variantRows.map((v) => ({ option1: v.option1, option2: v.option2, option3: v.option3, sku: v.sku, price: v.price, stock: v.stock ?? 0 }));
+    // per-option distinct values, derived from the variants (preserve first-seen order)
+    const options = optionRows.map((o, i) => {
+      const key = (`option${i + 1}`) as "option1" | "option2" | "option3";
+      const seen = new Set<string>();
+      const values: string[] = [];
+      for (const v of variants) {
+        const val = v[key];
+        if (val && !seen.has(val)) { seen.add(val); values.push(val); }
+      }
+      return { name: o.name, values };
+    });
+
+    return { ...toProduct(rows[0]), media, hasVariants: prod?.hasVariants ?? false, options, variants };
   });
 }

@@ -3,7 +3,11 @@
 > Newest first. What we did + what's next, so any session can resume instantly.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-07-08) · REBRANDED indostore→TokoΦ · RBAC + RLS enforcing · Super-Admin = functional control plane (healthcheck·impersonation·auth·provisioning·settings·billing) · admin multi-store polish done · next = Real variants (admin) &/or VPS infra
+## ▶ CURRENT STATE (2026-07-08) · REBRANDED indostore→TokoΦ · RBAC + RLS enforcing · Super-Admin = functional control plane · admin multi-store polish done · **Real variants done** (options+matrix+reconcile) · next = VPS infra
+
+## 2026-07-08 — Session: Real product variants ✅
+- Admin variant editor is now real: up to 3 options (add/remove) → cartesian matrix with per-variant SKU/harga/stok; hydrates on edit. `lib/data/products.ts getProduct` returns options+variants; `lib/actions/products.ts` create/update **reconcile by option-combo key** (matched update-in-place keeping stock/history, new insert, removed delete only if not in `order_line_items`). Verified E2E→DB: 6 variants (Ukuran×Warna) + stock override persist; edit→9 variants, 6 originals matched (stock kept), zero dupes. Build+console clean.
+
 
 **Everything runs locally on Linux** (Docker PostgreSQL 16 :5433 + Drizzle `@tokophi/db`, 53 tables, migrations 0000–0012). Done + verified end-to-end:
 - **Reads:** all 3 surfaces (super-admin 5 pages + admin 16 modules + storefront) read Postgres.

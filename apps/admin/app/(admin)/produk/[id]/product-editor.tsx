@@ -17,7 +17,6 @@ import {
   Play,
   Trash2,
   ChevronDown,
-  X,
   MoreHorizontal,
   Tags,
   Boxes,
@@ -92,6 +91,15 @@ const slugify = (s: string) =>
 const DESC_TEMPLATE = (name: string) =>
   `${name} adalah produk pilihan dengan kualitas terbaik. Dibuat dari bahan premium, cocok untuk pemakaian sehari-hari maupun sebagai hadiah. Tersedia stok terbatas — pesan sekarang selagi ada.`;
 
+// ---- variants ----
+type OptionDef = { name: string; values: string }; // values = comma-separated string (editable)
+const MAX_OPTIONS = 3;
+// Cartesian product of each option's parsed values → every variant combo.
+function cartesian(valueLists: string[][]): string[][] {
+  return valueLists.reduce<string[][]>((acc, vals) => acc.flatMap((combo) => vals.map((v) => [...combo, v])), [[]]);
+}
+const comboKeyOf = (combo: string[]) => combo.join(" / ");
+
 export function ProductEditor({ product }: { product?: Product }) {
   const isEdit = Boolean(product);
 
@@ -119,9 +127,21 @@ export function ProductEditor({ product }: { product?: Product }) {
   const [barcode, setBarcode] = React.useState("");
   const [qty, setQty] = React.useState(String(product?.stock ?? ""));
 
-  const [hasVariants, setHasVariants] = React.useState(false);
-  const [optionName, setOptionName] = React.useState("Ukuran");
-  const [optionValues, setOptionValues] = React.useState("S, M, L");
+  const [hasVariants, setHasVariants] = React.useState<boolean>(!!(product?.variants?.length && product?.options?.length));
+  const [options, setOptions] = React.useState<OptionDef[]>(
+    product?.options?.length
+      ? product.options.map((o) => ({ name: o.name, values: o.values.join(", ") }))
+      : [{ name: "Ukuran", values: "S, M, L" }],
+  );
+  // per-combo overrides keyed by "val1 / val2" → { price, stock, sku }
+  const [variantMap, setVariantMap] = React.useState<Record<string, { price: string; stock: string; sku: string }>>(() => {
+    const m: Record<string, { price: string; stock: string; sku: string }> = {};
+    product?.variants?.forEach((v) => {
+      const key = [v.option1, v.option2, v.option3].filter(Boolean).join(" / ");
+      if (key) m[key] = { price: String(v.price ?? ""), stock: String(v.stock ?? ""), sku: v.sku ?? "" };
+    });
+    return m;
+  });
 
   const [physical, setPhysical] = React.useState(true);
   const [weight, setWeight] = React.useState("500");
@@ -171,21 +191,36 @@ export function ProductEditor({ product }: { product?: Product }) {
   // ---- persist to Postgres via server actions ----
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
-  const buildInput = (): ProductInput => ({
-    name: name.trim(),
-    description,
-    status: status === "draft" ? "draft" : "active",
-    category,
-    productType,
-    vendor,
-    handle: handle || slugify(name),
-    price: Number(price) || 0,
-    compareAt: compareAt ? Number(compareAt) : null,
-    cost: cost ? Number(cost) : null,
-    sku: sku || undefined,
-    weightGrams: physical && weight ? Number(weight) : null,
-    stock: Number(qty) || 0,
-  });
+  const buildInput = (): ProductInput => {
+    const useVar = hasVariants && parsedOptions.length > 0 && combos.length > 0;
+    return {
+      name: name.trim(),
+      description,
+      status: status === "draft" ? "draft" : "active",
+      category,
+      productType,
+      vendor,
+      handle: handle || slugify(name),
+      price: Number(price) || 0,
+      compareAt: compareAt ? Number(compareAt) : null,
+      cost: cost ? Number(cost) : null,
+      sku: sku || undefined,
+      weightGrams: physical && weight ? Number(weight) : null,
+      stock: Number(qty) || 0,
+      options: useVar ? parsedOptions.map((o) => ({ name: o.name, values: o.values })) : undefined,
+      variants: useVar
+        ? combos.map((c) => {
+            const ov = variantMap[comboKeyOf(c)];
+            return {
+              option1: c[0] ?? null, option2: c[1] ?? null, option3: c[2] ?? null,
+              price: Number(ov?.price ?? price) || 0,
+              stock: Number(ov?.stock ?? 0) || 0,
+              sku: ov?.sku || null,
+            };
+          })
+        : undefined,
+    };
+  };
   const handleSave = () => {
     if (!canWrite) {
       toast.error("Akses ditolak — peran Anda tidak bisa menyimpan produk");
@@ -269,10 +304,17 @@ export function ProductEditor({ product }: { product?: Product }) {
   const profit = priceN - costN;
   const margin = priceN > 0 ? (profit / priceN) * 100 : 0;
 
-  const variantValues = optionValues
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean);
+  const parsedOptions = options
+    .map((o) => ({ name: o.name.trim(), values: o.values.split(",").map((v) => v.trim()).filter(Boolean) }))
+    .filter((o) => o.name && o.values.length);
+  const combos = hasVariants && parsedOptions.length ? cartesian(parsedOptions.map((o) => o.values)) : [];
+  const variantAt = (key: string) => variantMap[key] ?? { price, stock: "0", sku: "" };
+  const setVariantField = (key: string, field: "price" | "stock" | "sku", val: string) =>
+    setVariantMap((prev) => ({ ...prev, [key]: { ...(prev[key] ?? { price, stock: "0", sku: "" }), [field]: val } }));
+  const setOption = (idx: number, patch: Partial<OptionDef>) =>
+    setOptions((prev) => prev.map((o, i) => (i === idx ? { ...o, ...patch } : o)));
+  const addOption = () => setOptions((prev) => (prev.length < MAX_OPTIONS ? [...prev, { name: "", values: "" }] : prev));
+  const removeOption = (idx: number) => setOptions((prev) => prev.filter((_, i) => i !== idx));
 
   const seoTitleText = seoTitle || name || "Judul produk";
   const seoDescText =
@@ -644,84 +686,77 @@ export function ProductEditor({ product }: { product?: Product }) {
             <CardContent className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="p-hasvar">Produk ini memiliki varian</Label>
-                <Switch
-                  id="p-hasvar"
-                  checked={hasVariants}
-                  onCheckedChange={setHasVariants}
-                />
+                <Switch id="p-hasvar" checked={hasVariants} onCheckedChange={setHasVariants} />
               </div>
 
               {hasVariants && (
                 <div className="flex flex-col gap-4">
-                  <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="p-optname">Nama opsi</Label>
-                      <Input
-                        id="p-optname"
-                        value={optionName}
-                        onChange={(e) => setOptionName(e.target.value)}
-                        placeholder="Ukuran"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="p-optval">Nilai opsi</Label>
-                      <Input
-                        id="p-optval"
-                        value={optionValues}
-                        onChange={(e) => setOptionValues(e.target.value)}
-                        placeholder="S, M, L"
-                      />
-                      <div className="flex flex-wrap gap-1.5">
-                        {variantValues.map((v) => (
-                          <Badge key={v} variant="secondary" className="gap-1">
-                            {v}
-                            <X className="size-3 opacity-60" />
-                          </Badge>
-                        ))}
+                  {/* option definitions (up to 3) */}
+                  <div className="flex flex-col gap-3">
+                    {options.map((opt, i) => (
+                      <div key={i} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_1.4fr_auto] sm:items-end">
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs text-muted-foreground">Nama opsi {i + 1}</Label>
+                          <Input value={opt.name} onChange={(e) => setOption(i, { name: e.target.value })} placeholder="mis. Ukuran" />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs text-muted-foreground">Nilai (pisah koma)</Label>
+                          <Input value={opt.values} onChange={(e) => setOption(i, { values: e.target.value })} placeholder="S, M, L" />
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" aria-label="Hapus opsi" disabled={options.length <= 1} onClick={() => removeOption(i)}>
+                          <Trash2 className="size-4" />
+                        </Button>
                       </div>
-                    </div>
+                    ))}
+                    {options.length < MAX_OPTIONS && (
+                      <Button type="button" variant="outline" size="sm" className="w-fit gap-1.5" onClick={addOption}>
+                        <Plus className="size-4" /> Tambah opsi
+                      </Button>
+                    )}
                   </div>
 
-                  {variantValues.length > 0 && (
-                    <div className="overflow-hidden rounded-lg border">
+                  {/* generated variant matrix — price/stock/sku per combo */}
+                  {combos.length > 0 ? (
+                    <div className="overflow-x-auto rounded-lg border">
                       <Table>
                         <TableHeader>
                           <TableRow>
                             <TableHead>Varian</TableHead>
+                            <TableHead>SKU</TableHead>
                             <TableHead>Harga</TableHead>
                             <TableHead>Stok</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {variantValues.map((v) => (
-                            <TableRow key={v}>
-                              <TableCell className="font-medium">
-                                {optionName} {v}
-                              </TableCell>
-                              <TableCell>
-                                <div className="relative max-w-36">
-                                  <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground">
-                                    Rp
-                                  </span>
-                                  <Input
-                                    inputMode="numeric"
-                                    defaultValue={price}
-                                    className="pl-8 tabular-nums"
-                                  />
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  inputMode="numeric"
-                                  defaultValue="0"
-                                  className="max-w-24 tabular-nums"
-                                />
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                          {combos.map((c) => {
+                            const key = comboKeyOf(c);
+                            const row = variantAt(key);
+                            return (
+                              <TableRow key={key}>
+                                <TableCell className="font-medium whitespace-nowrap">{key}</TableCell>
+                                <TableCell>
+                                  <Input value={row.sku} onChange={(e) => setVariantField(key, "sku", e.target.value)} placeholder="SKU" className="max-w-32" />
+                                </TableCell>
+                                <TableCell>
+                                  <div className="relative max-w-36">
+                                    <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
+                                    <Input inputMode="numeric" value={row.price} onChange={(e) => setVariantField(key, "price", e.target.value.replace(/[^\d]/g, ""))} className="pl-8 tabular-nums" />
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Input inputMode="numeric" value={row.stock} onChange={(e) => setVariantField(key, "stock", e.target.value.replace(/[^\d]/g, ""))} className="max-w-24 tabular-nums" />
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
                       </Table>
+                      <div className="border-t px-3 py-2 text-xs text-muted-foreground">
+                        {combos.length} varian dari {parsedOptions.length} opsi
+                      </div>
                     </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Isi nama &amp; nilai opsi untuk menghasilkan varian.</p>
                   )}
                 </div>
               )}

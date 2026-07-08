@@ -4,6 +4,13 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-08
 
+### Admin — Real product variants (the deferred core commerce feature)
+Schema already supported it (`product_options`, `product_variants` option1/2/3+sku+price, `inventory_levels`); the admin was the gap. Now fully wired:
+- **Editor** (`produk/[id]/product-editor.tsx`) — the "Varian" section is a real builder: up to **3 options** (name + comma-values, add/remove) → a generated **cartesian variant matrix** with per-variant **SKU / harga / stok** bound to state; edits **hydrate** from the saved variants.
+- **Data** (`lib/data/products.ts`) — `getProduct` returns `options[]` + `variants[]` (+ `hasVariants`); `Product` type extended.
+- **Actions** (`lib/actions/products.ts`) — `ProductInput` gains `options`/`variants`; create inserts options + one variant per combo (+ inventory); **update reconciles by option-combo key** — matched variants update in place (keep stock/history), new combos insert, removed combos delete **only if not referenced by `order_line_items`** (else preserved).
+- Verified E2E (Playwright → DB): create Ukuran×Warna → 6 variants + per-variant stock override persists; edit hydrates 6 rows; adding "Hijau" → 9 variants with the 6 originals matched (stock kept), **zero duplicates**. Build + console clean.
+
 ### Super Admin — store healthcheck + impersonation (connected to admin)
 - **Multi-store seed**: 6 demo stores added alongside Batik Nusantara (accounts + owners + stats + invoices + orders), engineered for a realistic health spread (2 sehat / 2 perhatian / 3 bermasalah). The whole platform view (dashboard, plan/status distribution, invoices) is now real cross-store data.
 - **Composite healthcheck** (`apps/super-admin/lib/health.ts`) — per-store verdict (Sehat/Perhatian/Bermasalah) + 0–100 score derived from DB signals: billing (overdue/failed invoices), activity (order recency), stock (out-of-stock products), subscription status. No live pings (single-machine local).
