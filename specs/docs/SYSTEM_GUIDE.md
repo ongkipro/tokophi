@@ -154,17 +154,19 @@ per variant/location.
 
 ## 9. Integrations
 
-### Shipping — KiriminAja (real courier API)
+### Shipping — KiriminAja (real courier API) — COMPLETE end-to-end
 Platform-managed aggregator (§4). Sandbox base `https://tdev.kiriminaja.com`, `Authorization: Bearer`;
-key in **gitignored** `.env.local` (`KIRIMINAJA_API_KEY` / `KIRIMINAJA_ENV`), never committed.
-- **Client** `apps/admin/lib/kiriminaja.ts` — endpoints verified against the Postman collection;
-  **version prefix varies per endpoint** (`shipping_price`=v6.1, `get_address_by_name`=v2,
-  `province`/`tracking`=unversioned, `request_pickup`=v6.1).
-- **DONE — "Cek Ongkir"** (order detail): `getShippingRates()` resolves the store city + order
-  destination → KiriminAja district IDs → live rates, shown in a dialog (courier, ETD, cost, COD).
-- **NEXT:** super-admin config + "Test koneksi" (`kaTestConnection()` ready) · **Buat Pengiriman**
-  (`request_pickup` → resi/AWB — needs a store sender address: kecamatan_id/kelurahan_id/lat/lng) ·
-  **cetak label PDF** (the "Cetak" button is still a stub) · tracking webhook.
+key + `KIRIMINAJA_ORDER_PREFIX` in **gitignored** `.env.local`, never committed. Client
+`apps/admin/lib/kiriminaja.ts` — endpoints verified against the Postman collection; **version prefix
+varies per endpoint** (`shipping_price`=v6.1, `get_address_by_name`=v2, `province`/`tracking`=unversioned,
+`request_pickup`=v6.1). The whole flow is wired + verified E2E:
+- **Super-admin** → Pengaturan: aggregator = KiriminAja + live **"Test koneksi"**.
+- **Admin** order detail → **"Cek Ongkir"**: live rates (store city + order dest → district IDs → `shipping_price`).
+- **Admin** Pengaturan → Pengiriman → **"Alamat Pengirim"** (kecamatan autocomplete, persisted per store).
+- **Admin** → **"Buat Pengiriman"** (per rate): `request_pickup` (sender + recipient + item_name/shipping_cost/cod/package_type_id) → saves **AWB/courier** to the order, advances it to **dikirim**.
+- **Admin** → **"Lacak"** (polls `/api/mitra/tracking`, syncs the real courier AWB) + **"Cetak resi"** (100×150mm label → print→PDF).
+- **Storefront** checkout → **live ongkir** via the public proxy `apps/admin/app/api/public/ongkir` (`op=search`/`op=rates`; key stays server-side; `PUBLIC_ONGKIR_API` env-driven).
+- **Prod-only remaining:** tracking **webhook** (needs a public URL); shipment **payment** flow (KA returns `unpaid` + `qr_url`; platform pays via KA Credit/gateway).
 
 ### Payments (platform-managed config)
 `platform_payment_gateways` (Midtrans/Xendit/Duitku) + `platform_cod` — configured/toggled in the
@@ -215,10 +217,12 @@ Build: `npm run build:admin` · `npm run build:super` · (storefront) `npm run b
 
 **Done (local, verified E2E):** rebrand indostore→TokoΦ · all 3 surfaces read + all 12 admin editors
 write · auth + RBAC + RLS enforcing + media upload · super-admin functional control plane · real
-product variants end-to-end · CSV export · global search · **KiriminAja live shipping rates**.
+product variants end-to-end · CSV export · global search · **KiriminAja shipping complete** (config +
+Test koneksi · Cek Ongkir · Alamat Pengirim · Buat Pengiriman → real AWB · Lacak/tracking · Cetak
+label PDF · storefront checkout live ongkir).
 
-**Next:** super-admin KiriminAja config + Test koneksi → create-order (resi/AWB) + label PDF →
-front-end checkout polish → then **VPS activation** (self-hosted Postgres + PostgREST + Storage).
+**Next:** **VPS activation** (self-hosted Postgres + PostgREST + Storage) — carries the shipping
+prod-only bits (tracking webhook, shipment payment flow) + making per-client storefront config env-driven.
 
 ---
 

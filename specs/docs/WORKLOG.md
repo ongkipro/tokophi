@@ -3,7 +3,7 @@
 > Newest first. What we did + what's next, so any session can resume instantly.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-07-08) · REBRANDED indostore→TokoΦ · RBAC + RLS enforcing · Super-Admin = functional control plane · admin multi-store polish done · **Real variants end-to-end** (admin matrix/reconcile + storefront picker + fashion variant seed) · next = VPS infra
+## ▶ CURRENT STATE (2026-07-08) · REBRANDED indostore→TokoΦ · RBAC + RLS enforcing · Super-Admin control plane · Real variants end-to-end · **KiriminAja shipping COMPLETE** (Test koneksi · Cek Ongkir · Alamat Pengirim · Buat Pengiriman→real AWB · Lacak · Cetak label PDF · storefront checkout live ongkir) · next = VPS infra (+ shipping webhook/payment are prod-only)
 
 ## 2026-07-08 — Session: Storefront variant picker + fashion variant seed ✅
 - Seed: all 14 fashion products now have real **Warna × Ukuran** variants (`WARNA_BY_SLUG` × `STOREFRONT_META.sizes`; pos-0 = default). `data/catalog.ts` reads real options+variants. `produk/[handle].astro` = real variant picker (per-option button groups) → resolves variant → live price + stock indicator (disables add on 0 stock); legacy sizes fallback. Cart variant-aware (keranjang/checkout show "Varian: {combo}"). Verified E2E: Dress Midi pick Sage/L → stock 32, cart "Varian: Sage / L", console-clean; storefront builds 29 pages; verify-rls green. **Variants now end-to-end: admin → storefront → cart.**
