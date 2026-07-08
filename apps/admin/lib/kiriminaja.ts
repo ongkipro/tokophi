@@ -57,8 +57,9 @@ export type KaPackage = {
   orderRef: string; // becomes `${KA_ORDER_PREFIX}-${orderRef}`
   destName: string; destPhone: string; destAddress: string;
   destKecamatanId: number; destKelurahanId?: number | null;
-  weight: number; itemValue: number; service: string; serviceType: string;
-  qty?: number; width?: number; length?: number; height?: number;
+  weight: number; itemValue: number; itemName: string;
+  service: string; serviceType: string; shippingCost: number; cod?: number;
+  qty?: number; width?: number; length?: number; height?: number; packageTypeId?: number;
 };
 export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: string): Promise<{
   ok: boolean; awb?: string; kaOrderId?: string; pickupNumber?: string; error?: string;
@@ -80,7 +81,9 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
       destination_kecamatan_id: pkg.destKecamatanId,
       ...(pkg.destKelurahanId ? { destination_kelurahan_id: pkg.destKelurahanId } : {}),
       weight: pkg.weight, width: pkg.width ?? 10, length: pkg.length ?? 10, height: pkg.height ?? 10,
-      qty: pkg.qty ?? 1, item_value: pkg.itemValue, service: pkg.service, service_type: pkg.serviceType,
+      qty: pkg.qty ?? 1, item_value: pkg.itemValue, item_name: pkg.itemName,
+      service: pkg.service, service_type: pkg.serviceType, shipping_cost: pkg.shippingCost,
+      cod: pkg.cod ?? 0, package_type_id: pkg.packageTypeId ?? 7,
     }],
   });
   const d = r.details?.[0];

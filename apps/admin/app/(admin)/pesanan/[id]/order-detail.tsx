@@ -182,7 +182,7 @@ export function OrderDetail({ order }: { order: Order }) {
     startRate(async () => {
       const r = await createShipment({
         orderNumber: order.id.replace("#", ""),
-        service: rate.code, serviceType: rate.type, serviceName: rate.service,
+        service: rate.code, serviceType: rate.type, serviceName: rate.service, cost: rate.cost,
       });
       setMakingRate(null);
       if (r.ok) {

@@ -93,7 +93,7 @@ export async function saveSenderAddress(input: {
 
 // ---- Create a KiriminAja shipment for an order → saves AWB / resi on the order ----
 export async function createShipment(input: {
-  orderNumber: string; service: string; serviceType: string; serviceName: string;
+  orderNumber: string; service: string; serviceType: string; serviceName: string; cost: number;
 }): Promise<{ ok: boolean; awb?: string; error?: string }> {
   const { storeId } = await requireCapability("orders:write");
   if (!kiriminajaConfigured()) return { ok: false, error: "KiriminAja belum dikonfigurasi oleh platform." };
@@ -138,7 +138,8 @@ export async function createShipment(input: {
       orderRef: input.orderNumber.replace(/[^A-Za-z0-9]/g, ""),
       destName: o.custName || "Penerima", destPhone: o.custPhone || "081200000000", destAddress: o.city || "-",
       destKecamatanId: dest[0].id,
-      weight, itemValue: o.subtotal || o.total || 0, service: input.service, serviceType: input.serviceType,
+      weight, itemValue: o.subtotal || o.total || 0, itemName: `Pesanan ${o.number}`,
+      service: input.service, serviceType: input.serviceType, shippingCost: input.cost, cod: 0,
     },
     schedule,
   );
