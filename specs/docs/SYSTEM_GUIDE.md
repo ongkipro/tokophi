@@ -1,0 +1,238 @@
+# TokoΦ — System Guide
+
+> **The one doc to understand the whole system.** What TokoΦ is, how the three surfaces fit
+> together, the data/security model, the features, the integrations, and where it runs.
+> For hands-on contributor setup see [`GUIDE.md`](GUIDE.md); for the DB see [`SCHEMA.md`](SCHEMA.md);
+> for rationale see [`../decisions/`](../decisions/) (ADRs). Status is tracked in
+> [`WORKLOG.md`](WORKLOG.md) + [`BACKLOG.md`](BACKLOG.md); changes in [`../../CHANGELOG.md`](../../CHANGELOG.md).
+
+---
+
+## 1. What TokoΦ is
+
+**A Shopify-style commerce SaaS built for the Indonesian market.** A shared, modern-SaaS
+**admin panel** runs many merchant stores; a **super-admin** control plane is what the platform
+(us) uses to manage every store, plan, and integration; each client gets a bespoke **Astro
+storefront**, hand-built per brand (no theme editor).
+
+**Deliberately opinionated — what it is NOT:**
+- **No Themes menu.** Storefronts are hand-built per client, not editable by merchants.
+- **No Apps/Plugins marketplace.** Curated, lightweight feature set instead of an ecosystem.
+- **Merchants never touch payment/courier credentials** — the platform owns them (see §4).
+
+Tuned end-to-end for local sellers: **Bahasa Indonesia UI, IDR (no cents), WhatsApp/COD/QRIS,
+local couriers, province-level reach** — with the polish of a modern SaaS (Linear/Vercel/Shopify-admin
+quality, not a heavy ERP).
+
+---
+
+## 2. The three surfaces
+
+| Surface | App | Who uses it | Tech | Port |
+|---|---|---|---|---|
+| **Admin** | `apps/admin` | merchant operators (owner/admin/staff/gudang) | Next 16 (App Router, Turbopack) + shadcn on Base UI | :3000 |
+| **Super Admin** | `apps/super-admin` | the platform (us) | Next 16 + shared `@tokophi/ui` | :3001 |
+| **Storefront** | `apps/storefront` | end shoppers | Astro 5 + Tailwind v4 (SSG) | :4327 |
+
+Demo storefront = **"Batik Nusantara"** (women's fashion, 14 products with real Warna×Ukuran variants).
+The platform seed has **7 stores** total (Batik + 6 demo stores) for the super-admin view.
+
+---
+
+## 3. Architecture at a glance
+
+**Monorepo (npm workspaces):**
+```
+tokophi/
+  apps/       admin/  super-admin/  storefront/
+  packages/   ui/ (shadcn on Base UI + tokens)   lib/ (IDR/number formatters)
+              data/ (canonical nav — one source for admin builder + storefront header)
+              db/ (@tokophi/db — Drizzle schema/client + migrations + seed)
+  specs/      PRD, ARCHITECTURE, GUIDE, SCHEMA, ADRs, this guide
+```
+
+**Data flow (all three surfaces talk to ONE local Postgres):**
+- **Reads** go through server-only `lib/data/*` selectors; admin pages are `dynamic="force-dynamic"`.
+- **Writes** go through `"use server"` actions in `lib/actions/*` (admin) / `lib/actions.ts` (super-admin).
+- The storefront reads the same catalog at build/SSR via `@tokophi/db`.
+- Shared nav lives in `@tokophi/data` (`MAIN_MENU`/`FOOTER_MENU`) — the admin menu builder and the
+  storefront header consume the same source, so they stay in sync on rebuild.
+
+---
+
+## 4. The platform-managed model (ADR 0004)
+
+**Payments and shipping are owned by the platform, not the merchant** — "terima matang":
+- **Super-admin → Pengaturan = source of truth.** The platform configures payment gateways
+  (**Midtrans / Xendit / Duitku**) + **COD** + one shipping **aggregator (KiriminAja)** — once,
+  centrally, applying to ALL stores. Credentials live at platform/account level (`platform_*` tables).
+- **Merchant admin → Pengaturan = enable/disable only.** No credential fields; the merchant just
+  toggles which payment methods to accept and picks which couriers/services (ekspedisi) to offer.
+  Resi & tariffs are automatic. UI notes these are *"disediakan & dikelola oleh TokoΦ"*.
+- **Money flow:** platform collects → settles/payouts to the merchant (fee/margin).
+
+This is why shipping rates, resi, and label printing are a **KiriminAja** integration wired once
+(super-admin config) and consumed by every merchant admin (see §8).
+
+---
+
+## 5. Data & multi-tenancy
+
+**Local PostgreSQL 16 (Docker, port 5433) + Drizzle** (`@tokophi/db`) — **54 tables**, snake_case,
+money = `bigint` IDR, versioned migrations `0000–0013`. Source of truth = `packages/db/src/schema.ts`;
+annotated reference = [`SCHEMA.md`](SCHEMA.md).
+
+**Row-Level Security (RLS) — enforced at runtime locally** (migration `0012_tenant_rls`):
+- `tenant_isolation` policy on all **32 store-scoped tables**: a row is visible when
+  `store_id = app_current_store_id()` (a `STABLE` helper reading the `app.store_id` GUC).
+- A non-owner Postgres role **`tokophi_app`** carries the policies.
+- **The admin routes every query through the restricted role:** reads wrap in
+  `withCurrentTenant(db => …)` (reads the session, sets the GUC, `SET LOCAL ROLE tokophi_app`);
+  writes wrap in `withTenant(session.storeId, db => …)`. So tenant queries run as `tokophi_app`
+  with RLS applied, even though the process connects as owner.
+- **Deliberate owner exceptions:** auth (pre-session `store_users` read), super-admin (cross-tenant),
+  and the storefront (per-client build). `verify-rls` + `verify-rls-app` prove isolation.
+- **On the VPS** this becomes PostgREST connecting as `tokophi_app`, with the JWT `store_id` claim
+  feeding the GUC (see §10).
+
+> ⚠️ Any new admin DB code MUST use `withCurrentTenant`/`withTenant` — a bare module-level `db`
+> runs as owner and bypasses RLS.
+
+---
+
+## 6. Auth & RBAC
+
+- **Auth (local):** email/password → **jose JWT in an httpOnly `session` cookie** (`AUTH_SECRET`).
+  `lib/auth.ts` (verify/findLogin/signSession/getSession), `middleware.ts` protects the admin.
+  Passwords hashed with scrypt (`salt:hash`). Owner login: **ongki@batiknusantara.id / tokophi123**.
+- **Super-admin auth is separate:** a distinct **`platform_session`** cookie + `platform_admins`
+  table (migration 0013), login **admin@tokophi.id / tokophi123**. `requirePlatformAdmin()` gates
+  every super-admin mutation.
+- **RBAC (app-layer):** role→capability matrix in `lib/rbac-policy.ts` (client-safe). Every mutating
+  server action calls `await requireCapability("<cap>")` (the security boundary; throws `ForbiddenError`).
+  UI gates controls with `useCan("<cap>")` / `<Can>`; roles = **owner / admin / staff / gudang**.
+
+---
+
+## 7. Feature map
+
+### Admin (merchant) — 16 modules, all DB-backed
+Dashboard (KPIs, FB-style date range, charts) · **Pesanan** (list + detail with status pipeline +
+**Cek Ongkir** live rates) · **Produk** (editor with real variants, + Kategori / Inventori / Pembelian
+PO) · **Pelanggan** (+ detail / Segmen / Ulasan) · **CRM** (follow-up WA / pipeline / templates) ·
+**Diskon** · **Analitik** · **Pemasaran** (per-provinsi, channel ROAS) · **Halaman** & **Blog**
+(create+edit) · **Navigasi** (drag-and-drop menu builder) · **Pengaturan**. All 12 editors persist
+via server actions; **CSV export** on every Ekspor button; **global search (⌘K)** returns real results.
+
+### Super Admin (platform) — functional control plane
+Dashboard (MRR/GMV + platform healthcheck rollup) · **Toko** (list + detail, health column/filter,
+provisioning "Tambah toko", **impersonation** "Buka panel admin", suspend/activate, change plan) ·
+**Paket** (invoices + mark paid/pending/failed) · **Analitik** · **Pengaturan** (payment gateways +
+COD + KiriminAja courier config + "Tim Platform" operators). Composite **healthcheck** per store
+(Sehat/Perhatian/Bermasalah + 0–100 score from billing/activity/stock/subscription signals).
+
+### Storefront (shopper)
+beranda · kategori (real collections + virtual "semua"/"promo") · **produk** (5-image gallery +
+**real variant picker** → live price/stock) · **keranjang** → **checkout → sukses** (variant-aware
+localStorage cart) · akun · blog · kontak. Reads the same Postgres catalog.
+
+---
+
+## 8. Product variants (end-to-end)
+
+Schema: `product_options` + `product_variants` (option1/2/3 + sku + priceIdr) + `inventory_levels`
+per variant/location.
+- **Admin editor** — adaptive **TikTok-Shop/Shopee-style** builder: up to 2 option types (e.g.
+  Warna + Ukuran), **chip values** (type+Enter to add), an auto-regenerating **cartesian matrix**
+  with per-variant SKU/harga/stok, and a **"Terapkan ke semua"** bulk apply. On save it
+  **reconciles by option-combo key** (matched update-in-place keeping stock/history, new insert,
+  removed delete only if not referenced by `order_line_items`).
+- **Storefront** — one button group per option → resolves the variant → live price + stock indicator.
+- **Cart** — variant-aware; keranjang/checkout show "Varian: {combo}".
+
+---
+
+## 9. Integrations
+
+### Shipping — KiriminAja (real courier API)
+Platform-managed aggregator (§4). Sandbox base `https://tdev.kiriminaja.com`, `Authorization: Bearer`;
+key in **gitignored** `.env.local` (`KIRIMINAJA_API_KEY` / `KIRIMINAJA_ENV`), never committed.
+- **Client** `apps/admin/lib/kiriminaja.ts` — endpoints verified against the Postman collection;
+  **version prefix varies per endpoint** (`shipping_price`=v6.1, `get_address_by_name`=v2,
+  `province`/`tracking`=unversioned, `request_pickup`=v6.1).
+- **DONE — "Cek Ongkir"** (order detail): `getShippingRates()` resolves the store city + order
+  destination → KiriminAja district IDs → live rates, shown in a dialog (courier, ETD, cost, COD).
+- **NEXT:** super-admin config + "Test koneksi" (`kaTestConnection()` ready) · **Buat Pengiriman**
+  (`request_pickup` → resi/AWB — needs a store sender address: kecamatan_id/kelurahan_id/lat/lng) ·
+  **cetak label PDF** (the "Cetak" button is still a stub) · tracking webhook.
+
+### Payments (platform-managed config)
+`platform_payment_gateways` (Midtrans/Xendit/Duitku) + `platform_cod` — configured/toggled in the
+super-admin, consumed "matang" by merchants. Live PSP calls are a later milestone.
+
+---
+
+## 10. Deployment topology
+
+- **Now = local Linux.** Docker Postgres 16 (:5433) + the two Next dev servers + the Astro storefront.
+- **Prod target (deferred, ADR 0007/0008):** **self-hosted Postgres + PostgREST + Storage (MinIO/S3)
+  on a VPS — NOT Supabase.** PostgREST connects as `tokophi_app` with the JWT `store_id` claim feeding
+  the `app.store_id` GUC, so the same RLS policies enforce in prod. **Per-client storefront** deploys
+  are built individually (ADR 0008: one deploy per client).
+
+---
+
+## 11. Local dev quickstart
+
+```bash
+npm install                                   # all workspaces
+docker compose up -d db                        # PostgreSQL 16 @ localhost:5433
+npm run migrate -w @tokophi/db               # apply migrations 0000–0013
+npm run seed    -w @tokophi/db               # demo data (7 stores, fashion variants) — idempotent
+
+npm run dev:admin                              # merchant admin → http://localhost:3000
+npm run dev:super                              # super-admin    → http://localhost:3001
+cd apps/storefront && npm run dev              # storefront      → http://localhost:4327
+```
+`DATABASE_URL` + `AUTH_SECRET` + `KIRIMINAJA_*` live in each app's `.env.local` (copy from `.env.example`).
+Build: `npm run build:admin` · `npm run build:super` · (storefront) `npm run build`.
+
+---
+
+## 12. Conventions (must-follow)
+
+- **UI = shadcn on Base UI (`@base-ui/react`), NOT Radix:** use the **`render` prop, not `asChild`**;
+  there is **no `Select`** primitive; `Button`-as-link needs `nativeButton={false}`. (#1 source of bugs.)
+- **Determinism:** all seed/mock data is anchored to a fixed `TODAY`; no `Date.now()`/`Math.random()`
+  in render paths (SSR===client).
+- **Money** always IDR via `@tokophi/lib`; **nav** via `@tokophi/data`.
+- **Indonesian slugs** on the storefront: `/produk/`, `/kategori/`, `/blog/`.
+- Keep it **console-clean**; `npm run build` must pass; page `<title>` uses `" - "` not `"|"`.
+
+---
+
+## 13. Current status & what's next
+
+**Done (local, verified E2E):** rebrand indostore→TokoΦ · all 3 surfaces read + all 12 admin editors
+write · auth + RBAC + RLS enforcing + media upload · super-admin functional control plane · real
+product variants end-to-end · CSV export · global search · **KiriminAja live shipping rates**.
+
+**Next:** super-admin KiriminAja config + Test koneksi → create-order (resi/AWB) + label PDF →
+front-end checkout polish → then **VPS activation** (self-hosted Postgres + PostgREST + Storage).
+
+---
+
+## 14. Doc map
+
+| Doc | What it covers |
+|---|---|
+| **SYSTEM_GUIDE.md** (this) | whole-system overview |
+| [`../PRD.md`](../PRD.md) | product requirements, scope, milestones |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | how the surfaces are built, data-layer seam, topology |
+| [`GUIDE.md`](GUIDE.md) | contributor setup + how-to recipes |
+| [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md) | database |
+| [`UML.md`](UML.md) | detailed diagrams |
+| [`UI_INVENTORY.md`](UI_INVENTORY.md) | screen/component inventory |
+| [`CONCEPT.md`](CONCEPT.md) | positioning / vision |
+| [`../decisions/`](../decisions/) | ADRs (0001–0008) |
+| [`WORKLOG.md`](WORKLOG.md) / [`BACKLOG.md`](BACKLOG.md) | session log / priorities |

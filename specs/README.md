@@ -68,7 +68,7 @@ Build: `npm run build:admin` / `npm run build:super`; storefront `cd apps/storef
 - **UI = shadcn on Base UI** (`@base-ui/react`): use the **`render` prop, not `asChild`**; there is **no `Select`** primitive.
 - **Determinism:** all mock data is seeded (mulberry32) and anchored to `TODAY = 2026-06-30` — no hydration mismatch, stable across reloads.
 - **Money:** IDR formatting via `@tokophi/lib` (`id-ID`); nav via `@tokophi/data`.
-- **Payments & shipping are platform-managed** (ADR 0004): the platform configures gateways (Midtrans/Xendit/Duitku) + COD + Biteship aggregator; merchants only enable methods and pick couriers.
+- **Payments & shipping are platform-managed** (ADR 0004): the platform configures gateways (Midtrans/Xendit/Duitku) + COD + KiriminAja aggregator; merchants only enable methods and pick couriers.
 - Sales channel = **Toko Online only**; analytics attribution = Meta/TikTok/Google Ads + Organic/Other.
 
 ## Status (2026-07-04)

@@ -4,7 +4,7 @@
 
 > Deliberately **no Themes menu** and **no Apps/Plugins marketplace**. Curated, lightweight, **Bahasa Indonesia** UI tuned for local sellers (WhatsApp, COD, QRIS/e-wallets, local couriers) with modern-SaaS polish. The **local backend is fully wired** on PostgreSQL (Drizzle) — all 3 surfaces read + all admin editors write + auth/RBAC/RLS + real product variants; VPS deploy is the only remaining milestone.
 
-Full spec & docs: [`specs/`](specs/) (mirrors `~/Documents/Development/tokophi/`) — start with [`specs/PRD.md`](specs/PRD.md), [`specs/docs/ARCHITECTURE.md`](specs/docs/ARCHITECTURE.md), [`specs/docs/GUIDE.md`](specs/docs/GUIDE.md).
+Full spec & docs: [`specs/`](specs/) (mirrors `~/Documents/Development/tokophi/`) — **new here? start with [`specs/docs/SYSTEM_GUIDE.md`](specs/docs/SYSTEM_GUIDE.md)** (whole-system overview), then [`specs/PRD.md`](specs/PRD.md), [`specs/docs/ARCHITECTURE.md`](specs/docs/ARCHITECTURE.md), [`specs/docs/GUIDE.md`](specs/docs/GUIDE.md).
 
 ## The three surfaces
 
@@ -67,7 +67,7 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - **UI = shadcn on Base UI** (`@base-ui/react`), **not Radix**: use the **`render` prop, not `asChild`**; there is **no `Select`** primitive; `Button`-as-link needs `nativeButton={false}`. See [`apps/admin/AGENTS.md`](apps/admin/AGENTS.md).
 - **Determinism:** all mock data is seeded (mulberry32) and anchored to `TODAY = 2026-06-30` — SSR===client, stable across reloads.
 - **Money** in IDR via `@tokophi/lib`; **nav** via `@tokophi/data`.
-- **Payments & shipping are platform-managed** (ADR 0004): the platform configures gateways (Midtrans/Xendit/Duitku) + COD + Biteship aggregator; merchants only enable methods and pick couriers/services.
+- **Payments & shipping are platform-managed** (ADR 0004): the platform configures gateways (Midtrans/Xendit/Duitku) + COD + KiriminAja aggregator; merchants only enable methods and pick couriers/services.
 - Sales channel = **Toko Online only**; analytics attribution = Meta / TikTok / Google Ads + Organic / Other.
 - Keep it **console-clean** (no Base UI warnings) and responsive; `npm run build` must pass.
 
@@ -78,7 +78,7 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 > **Since 2026-07-04 (all local, verified E2E):** rebranded indostore → **TokoΦ**; **super-admin = functional control plane** (7 stores, healthcheck, impersonation into admin, platform-admin auth, provisioning "Tambah toko", settings persistence, team invite, billing actions); **admin multi-store polish** (store identity data-driven, real per-store activity feed); **real product variants end-to-end** (adaptive TikTok-Shop/Shopee-style editor with chip values + bulk apply → storefront variant picker → variant-aware cart; all 14 fashion products seeded Warna×Ukuran); **CSV export** on all Ekspor buttons; **functional global search** (⌘K). See `CHANGELOG.md` / `specs/docs/WORKLOG.md`.
 
 - **Admin:** Dashboard (KPIs, FB-style date range, charts) · Pesanan (+detail) · Produk (+editor, Kategori/Inventori/Pembelian) · Pelanggan (+detail/Segmen/Ulasan) · CRM (Follow-up WA/Pipeline/Template) · Diskon (+editor) · Analitik · Pemasaran (per-provinsi) · Halaman & Blog (create+edit) · **Navigasi** (drag-and-drop menu builder + up/down + sub-menu) · Pengaturan.
-- **Super Admin:** Dashboard (MRR/GMV) · Toko (+detail) · Paket · Analitik · Pengaturan (gateways + Biteship + couriers). **← all 5 pages live on PostgreSQL** via `lib/data.ts`.
+- **Super Admin:** Dashboard (MRR/GMV) · Toko (+detail) · Paket · Analitik · Pengaturan (gateways + KiriminAja + couriers). **← all 5 pages live on PostgreSQL** via `lib/data.ts`.
 - **DB-backed (admin, 16):** Produk · Diskon · Pelanggan · Kategori · Pesanan · Halaman · Blog · Inventori · CRM · Pembelian · Segmen · Ulasan · Navigasi · Dashboard · Analitik · Pemasaran read from PostgreSQL via `lib/data/*` (`force-dynamic`). all admin modules now read PostgreSQL.
 - **Storefront:** beranda · kategori (+ virtual "semua"/"promo-gajian") · produk (**5-image gallery**) · keranjang · **checkout → sukses** · akun (mock login) · blog · kontak — reads the **same Postgres catalog** (`src/data/catalog.ts` → `@tokophi/db` at build/SSR), localStorage cart, 70 AI product images.
 - **Writes — all 12 admin editors persist to Postgres via server actions (`lib/actions/*`):** Produk · Diskon · Halaman · Blog · Kategori (create/edit/delete) · order-status · Inventori-stock · Navigasi · Pelanggan · CRM (follow-up) · Segmen · Pembelian (PO create/receive→stock/cancel).

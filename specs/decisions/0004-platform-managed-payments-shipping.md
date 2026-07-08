@@ -15,6 +15,6 @@ The **merchant admin** only **toggles which methods to accept**; everything arri
 ## Implications
 - **super-admin → Pengaturan = source of truth:** gateway credentials, COD (limit/area), courier accounts & tariffs — **applies to ALL stores**. (COD is a platform payment method there.)
 - **merchant admin → Pengaturan = enable/disable only** (no credential fields); UI explicitly notes payments/COD/couriers are *"disediakan & dikelola oleh TokoΦ"*.
-- **Shipping via aggregator:** the platform connects ONE shipping **aggregator** (e.g. Biteship / RajaOngkir) that exposes all couriers + services + live rates. Merchant just **picks couriers and which services (ekspedisi)** to offer (JNE Reguler/YES/OKE, SiCepat REG/BEST/GOKIL, …); resi & tarif are automatic.
+- **Shipping via aggregator:** the platform connects ONE shipping **aggregator** (KiriminAja (Mitra API)) that exposes all couriers + services + live rates. Merchant just **picks couriers and which services (ekspedisi)** to offer (JNE Reguler/YES/OKE, SiCepat REG/BEST/GOKIL, …); resi & tarif are automatic.
 - **Backend (see SCHEMA):** gateway/courier/COD config + the aggregator connection live at **platform/account level**; per-store rows carry only an `enabled` flag (per courier **and per service**). Money flow: platform collects → settles/payouts to merchant.
 - Consequence: platform bears integration + settlement responsibility (and can charge fees/margin).

@@ -56,7 +56,7 @@
 
 ## Epic 6 — Platform integrations (M4)
 - [ ] **Payment gateway** · **L** · Midtrans/Xendit behind platform config; COD rules; webhook → order status.
-- [ ] **Shipping aggregator (Biteship)** · **L** · live ongkir by enabled courier/service; create shipment; resi + tracking webhook.
+- [~] **Shipping aggregator (KiriminAja)** · **L** · ✅ **live ongkir DONE** (2026-07-08): real KiriminAja Mitra API client (`apps/admin/lib/kiriminaja.ts`) + `getShippingRates()` → **"Cek Ongkir"** in the order detail shows live rates (resolves store/dest city → district IDs → `shipping_price`). ⏳ still: super-admin config + Test koneksi; create shipment (`request_pickup` → resi/AWB, needs store sender address); print label PDF; tracking webhook.
 - [ ] **Settlement / payout** · **L** · platform collects → payout to merchant, minus fee/margin; ledger.
 - [ ] **Subscriptions/billing** · **M** · recurring plan billing (Pemula/Bisnis/Skala); invoices; dunning.
 - [ ] **Domains + deploy pipeline** · **M** · custom domain per store; automated per-client storefront deploy.

@@ -35,7 +35,7 @@ graph TB
 
   subgraph Integrations["Platform integrations (set up by us — ADR 0004)"]
     PG["Payment gateways<br/>Midtrans / Xendit / Duitku + COD"]
-    AGG["Shipping aggregator<br/>Biteship (all couriers)"]
+    AGG["Shipping aggregator<br/>KiriminAja (all couriers)"]
   end
 
   Shopper --> Storefront
@@ -264,7 +264,7 @@ sequenceDiagram
 sequenceDiagram
   actor Pembeli
   participant SF as Storefront
-  participant AGG as Aggregator (Biteship)
+  participant AGG as Aggregator (KiriminAja)
   participant PG as Gateway (platform acct)
   participant DB as VPS Postgres
   participant AD as Merchant admin
