@@ -41,6 +41,7 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { SenderAddressCard } from "@/components/admin/pengaturan/sender-address-card"
 
 type Section =
   | "profil"
@@ -499,7 +500,8 @@ export default function Page() {
 
           {/* PENGIRIMAN */}
           {section === "pengiriman" && (
-            <Card className="max-w-3xl">
+            <div className="max-w-3xl space-y-6">
+            <Card>
               <CardHeader>
                 <CardTitle>Kurir Pengiriman</CardTitle>
                 <CardDescription>
@@ -619,6 +621,8 @@ export default function Page() {
               </CardContent>
               <SaveFooter />
             </Card>
+            <SenderAddressCard />
+            </div>
           )}
 
           {/* PAJAK */}

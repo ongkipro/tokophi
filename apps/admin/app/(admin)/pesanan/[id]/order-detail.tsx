@@ -20,7 +20,7 @@ import {
 
 import { toast } from "sonner";
 import { setOrderStatus } from "@/lib/actions/orders";
-import { getShippingRates, type Rate } from "@/lib/actions/shipping";
+import { getShippingRates, createShipment, type Rate } from "@/lib/actions/shipping";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useStoreName } from "@/components/admin/store-context";
 import { useCan } from "@/components/admin/permissions";
@@ -131,8 +131,11 @@ export function OrderDetail({ order }: { order: Order }) {
   const cancelled = order.status === "batal";
   const seed = hash(order.id);
 
-  const courier = COURIERS[seed % COURIERS.length];
-  const resi = `${courier.split(" ")[0].toUpperCase().replace(/[^A-Z]/g, "")}${(seed % 900000000) + 100000000}`;
+  const seededCourier = COURIERS[seed % COURIERS.length];
+  const seededResi = `${seededCourier.split(" ")[0].toUpperCase().replace(/[^A-Z]/g, "")}${(seed % 900000000) + 100000000}`;
+  const courier = order.courierName ?? seededCourier;
+  const resi = order.awb ?? seededResi;
+  const shipped = !!order.awb;
   const payMethod = PAY_METHODS[(seed >> 3) % PAY_METHODS.length];
   const paid = order.status !== "baru" && order.status !== "batal";
 
@@ -168,6 +171,26 @@ export function OrderDetail({ order }: { order: Order }) {
         setRateOpen(true);
       } else {
         toast.error(r.error ?? "Gagal cek ongkir");
+      }
+    });
+  };
+
+  // Create a real KiriminAja shipment from a chosen rate → saves AWB on the order.
+  const [makingRate, setMakingRate] = React.useState<string | null>(null);
+  const makeShipment = (rate: Rate) => {
+    setMakingRate(rate.code + rate.type);
+    startRate(async () => {
+      const r = await createShipment({
+        orderNumber: order.id.replace("#", ""),
+        service: rate.code, serviceType: rate.type, serviceName: rate.service,
+      });
+      setMakingRate(null);
+      if (r.ok) {
+        toast.success(`Pengiriman dibuat — resi ${r.awb}`);
+        setRateOpen(false);
+        router.refresh();
+      } else {
+        toast.error(r.error ?? "Gagal membuat pengiriman");
       }
     });
   };
@@ -494,6 +517,7 @@ export function OrderDetail({ order }: { order: Order }) {
                   <th className="px-3 py-2 font-medium">Layanan</th>
                   <th className="px-3 py-2 font-medium">Estimasi</th>
                   <th className="px-3 py-2 text-right font-medium">Ongkir</th>
+                  {canWrite && !shipped && <th className="px-2 py-2" />}
                 </tr>
               </thead>
               <tbody>
@@ -502,10 +526,17 @@ export function OrderDetail({ order }: { order: Order }) {
                     <td className="px-3 py-2 font-medium">{r.service}{r.cod && <span className="ml-1.5 rounded bg-emerald-500/12 px-1 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">COD</span>}</td>
                     <td className="px-3 py-2 text-muted-foreground">{r.etd} hari</td>
                     <td className="px-3 py-2 text-right tabular-nums font-medium">{IDR(r.cost)}</td>
+                    {canWrite && !shipped && (
+                      <td className="px-2 py-2 text-right">
+                        <Button size="sm" variant="outline" disabled={ratePending} onClick={() => makeShipment(r)}>
+                          {makingRate === r.code + r.type ? "Membuat…" : "Buat"}
+                        </Button>
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {rates.length === 0 && (
-                  <tr><td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">Tidak ada layanan untuk rute ini.</td></tr>
+                  <tr><td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">Tidak ada layanan untuk rute ini.</td></tr>
                 )}
               </tbody>
             </table>

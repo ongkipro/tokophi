@@ -153,6 +153,8 @@ export type Order = {
   status: OrderStatus;
   channel: string;
   minutesAgo: number;
+  awb?: string | null;
+  courierName?: string | null;
 };
 const NAMES = [
   "Budi Santoso", "Siti Nurhaliza", "Dewi Lestari", "Agus Salim", "Rina Wijaya",

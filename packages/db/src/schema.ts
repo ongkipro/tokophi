@@ -303,6 +303,10 @@ export const orders = pgTable("orders", {
   totalIdr: money().notNull().default(0),
   city: text(),
   province: text(),
+  // KiriminAja shipment (set when "Buat Pengiriman" succeeds)
+  awb: text(),
+  courier: text(),
+  kaOrderId: text(),
   placedAt: createdAt(),
 });
 
@@ -559,6 +563,16 @@ export const storeSettings = pgTable("store_settings", {
   storeId: uuid().primaryKey().references(() => stores.id),
   taxRatePct: integer().notNull().default(11),
   taxInclusive: boolean().notNull().default(false),
+  // KiriminAja sender/pickup address (origin for creating shipments)
+  senderName: text(),
+  senderPhone: text(),
+  senderAddress: text(),
+  senderKecamatanId: integer(),
+  senderKecamatanName: text(),
+  senderKelurahanId: integer(),
+  senderKelurahanName: text(),
+  senderLat: text(),
+  senderLng: text(),
 });
 
 export const platformPaymentGateways = pgTable("platform_payment_gateways", {

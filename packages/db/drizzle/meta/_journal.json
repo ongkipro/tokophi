@@ -106,6 +106,13 @@
       "when": 1783511553347,
       "tag": "0014_silky_warpath",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1783520955469,
+      "tag": "0015_bent_talos",
+      "breakpoints": true
     }
   ]
 }

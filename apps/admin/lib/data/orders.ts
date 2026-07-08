@@ -17,6 +17,8 @@ const sel = {
   status: schema.orders.status,
   channel: schema.orders.channel,
   placedAt: schema.orders.placedAt,
+  awb: schema.orders.awb,
+  courier: schema.orders.courier,
   items: sql<number>`count(${schema.orderLineItems.id})`.mapWith(Number),
 };
 
@@ -33,6 +35,7 @@ function q(db: Tx, where?: SQL) {
 function toOrder(r: {
   number: string; customer: string | null; city: string | null; total: number;
   status: "baru" | "diproses" | "dikirim" | "selesai" | "batal"; channel: string; placedAt: Date; items: number;
+  awb?: string | null; courier?: string | null;
 }): Order {
   return {
     id: "#" + r.number,
@@ -43,6 +46,8 @@ function toOrder(r: {
     status: r.status,
     channel: CHANNEL_DISPLAY[r.channel] ?? r.channel,
     minutesAgo: Math.round((TODAY.getTime() - r.placedAt.getTime()) / 60_000),
+    awb: r.awb ?? null,
+    courierName: r.courier ?? null,
   };
 }
 

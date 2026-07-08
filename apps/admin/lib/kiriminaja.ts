@@ -5,6 +5,8 @@ import "server-only";
 const ENV = process.env.KIRIMINAJA_ENV ?? "sandbox";
 const BASE = ENV === "production" ? "https://client.kiriminaja.com" : "https://tdev.kiriminaja.com";
 const KEY = process.env.KIRIMINAJA_API_KEY ?? "";
+// order_id prefix must be REGISTERED in the KiriminAja dashboard, else request_pickup 400s.
+export const KA_ORDER_PREFIX = process.env.KIRIMINAJA_ORDER_PREFIX ?? "TOKOPHI";
 
 export const kiriminajaConfigured = () => !!KEY;
 
@@ -44,6 +46,51 @@ export async function kaShippingPrice(p: {
     ...(p.couriers?.length ? { courier: p.couriers } : {}),
   });
   return { ok: !!r.status, results: Array.isArray(r.results) ? r.results : [], error: r.status ? undefined : r.text };
+}
+
+// create an express shipment (pickup request) → returns AWB / KiriminAja order id
+export type KaSender = {
+  name: string; phone: string; address: string;
+  kecamatanId: number; kelurahanId?: number | null; lat?: string | null; lng?: string | null;
+};
+export type KaPackage = {
+  orderRef: string; // becomes `${KA_ORDER_PREFIX}-${orderRef}`
+  destName: string; destPhone: string; destAddress: string;
+  destKecamatanId: number; destKelurahanId?: number | null;
+  weight: number; itemValue: number; service: string; serviceType: string;
+  qty?: number; width?: number; length?: number; height?: number;
+};
+export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: string): Promise<{
+  ok: boolean; awb?: string; kaOrderId?: string; pickupNumber?: string; error?: string;
+}> {
+  const r = await ka<{
+    status: boolean; text?: string; pickup_number?: string;
+    details?: { order_id: string; kj_order_id: string; awb: string | null; service: string; service_type: string }[];
+  }>("/api/mitra/v6.1/request_pickup", {
+    name: sender.name, phone: sender.phone, address: sender.address,
+    kecamatan_id: sender.kecamatanId,
+    ...(sender.kelurahanId ? { kelurahan_id: sender.kelurahanId } : {}),
+    ...(sender.lat ? { latitude: Number(sender.lat) } : {}),
+    ...(sender.lng ? { longitude: Number(sender.lng) } : {}),
+    platform_name: "mitra",
+    schedule,
+    packages: [{
+      order_id: `${KA_ORDER_PREFIX}-${pkg.orderRef}`,
+      destination_name: pkg.destName, destination_phone: pkg.destPhone, destination_address: pkg.destAddress,
+      destination_kecamatan_id: pkg.destKecamatanId,
+      ...(pkg.destKelurahanId ? { destination_kelurahan_id: pkg.destKelurahanId } : {}),
+      weight: pkg.weight, width: pkg.width ?? 10, length: pkg.length ?? 10, height: pkg.height ?? 10,
+      qty: pkg.qty ?? 1, item_value: pkg.itemValue, service: pkg.service, service_type: pkg.serviceType,
+    }],
+  });
+  const d = r.details?.[0];
+  return {
+    ok: !!r.status,
+    awb: d?.awb ?? undefined,
+    kaOrderId: d?.kj_order_id,
+    pickupNumber: r.pickup_number,
+    error: r.status ? undefined : r.text,
+  };
 }
 
 // express tracking by order id / AWB
