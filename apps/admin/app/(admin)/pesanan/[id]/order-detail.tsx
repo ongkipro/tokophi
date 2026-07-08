@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { setOrderStatus } from "@/lib/actions/orders";
 import { getShippingRates, type Rate } from "@/lib/actions/shipping";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useStoreName } from "@/components/admin/store-context";
 import { useCan } from "@/components/admin/permissions";
 import { OrderStatusBadge } from "@/components/admin/order-status";
 import { ProductThumb } from "@/components/admin/product-thumb";
@@ -171,6 +172,51 @@ export function OrderDetail({ order }: { order: Order }) {
     });
   };
 
+  // Print a shipping label (resi) → browser print dialog (Save as PDF). Uses the order's
+  // courier + resi/AWB; store = sender. Self-contained HTML so it prints clean.
+  const storeName = useStoreName();
+  const printLabel = () => {
+    const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
+    const bars = Array.from({ length: 48 }, (_, i) => `<span style="width:${(hash(resi + i) % 3) + 1}px"></span>`).join("");
+    const isCod = payMethod.toLowerCase().includes("cod");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Resi ${esc(order.id)}</title>
+<style>
+  @page { size: 100mm 150mm; margin: 0 }
+  * { box-sizing: border-box; font-family: system-ui, sans-serif }
+  body { margin: 0 }
+  .label { width: 100mm; height: 150mm; padding: 5mm; border: 1px solid #000; display: flex; flex-direction: column; gap: 2mm }
+  .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 3mm }
+  .courier { font-size: 18pt; font-weight: 800; letter-spacing: -.02em }
+  .svc { font-size: 8pt; color: #333 }
+  .cod { border: 2px solid #000; padding: 1mm 2mm; font-weight: 800; font-size: 11pt }
+  .barcode { display: flex; align-items: flex-end; gap: 1px; height: 14mm; margin-top: 1mm }
+  .barcode span { display: inline-block; height: 100%; background: #000 }
+  .resi { font-family: ui-monospace, monospace; font-size: 12pt; font-weight: 700; letter-spacing: .05em; text-align: center }
+  .box { border-top: 1px solid #000; padding-top: 2mm }
+  .lbl { font-size: 7pt; text-transform: uppercase; letter-spacing: .08em; color: #555 }
+  .val { font-size: 9.5pt; font-weight: 600; line-height: 1.35 }
+  .foot { margin-top: auto; border-top: 1px dashed #000; padding-top: 2mm; display: flex; justify-content: space-between; font-size: 8pt }
+</style></head><body>
+  <div class="label">
+    <div class="row">
+      <div><div class="courier">${esc(courier)}</div><div class="svc">${esc(storeName)} · ${esc(order.id)}</div></div>
+      ${isCod ? `<div class="cod">COD<br><span style="font-size:9pt">${IDR(total)}</span></div>` : `<div class="svc" style="text-align:right">NON-COD<br><b>${esc(payMethod)}</b></div>`}
+    </div>
+    <div class="barcode">${bars}</div>
+    <div class="resi">${esc(resi)}</div>
+    <div class="box"><div class="lbl">Penerima</div><div class="val">${esc(order.customer)}<br>${esc(order.city)}</div></div>
+    <div class="box"><div class="lbl">Pengirim</div><div class="val">${esc(storeName)}</div></div>
+    <div class="box"><div class="lbl">Isi (${order.items} item)</div><div class="val">${lines.map((l) => `${l.qty}× ${esc(l.name)}`).join(" · ")}</div></div>
+    <div class="foot"><span>Berat ± ${((lines.reduce((a, l) => a + l.qty, 0) || 2) * 0.5).toFixed(1)} kg</span><span>Total ${IDR(total)}</span></div>
+  </div>
+  <script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)}</script>
+</body></html>`;
+    const w = window.open("", "_blank", "width=420,height=640");
+    if (!w) { toast.error("Popup diblokir — izinkan popup untuk mencetak resi."); return; }
+    w.document.write(html);
+    w.document.close();
+  };
+
   return (
     <div className="mx-auto max-w-[1100px]">
       {/* Top bar */}
@@ -202,8 +248,8 @@ export function OrderDetail({ order }: { order: Order }) {
           <Button variant="outline" onClick={checkOngkir} disabled={ratePending}>
             <Truck className="size-4" /> {ratePending ? "Cek ongkir…" : "Cek Ongkir"}
           </Button>
-          <Button variant="ghost" onClick={() => toast.success("Menyiapkan dokumen cetak…")}>
-            <Printer /> Cetak
+          <Button variant="ghost" onClick={printLabel}>
+            <Printer /> Cetak resi
           </Button>
           {action && canWrite && (
             <Button onClick={advance} disabled={pending}>
