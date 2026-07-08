@@ -4,6 +4,10 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-08
 
+### Storefront — checkout with live KiriminAja ongkir
+- New **public no-auth endpoint** `apps/admin/app/api/public/ongkir` (CORS) — `op=search` (area autocomplete) + `op=rates` (live `shipping_price`); the platform key stays server-side (never in the storefront bundle). `middleware.ts` excludes `/api/public/`.
+- **Checkout** (`checkout.astro`): a **"Kecamatan Tujuan"** autocomplete → live courier list from KiriminAja → selecting a service updates **ongkir + total**; replaces the old static shipping radios. Verified E2E: Semarang Barat → 18 live services → Rp27rb ongkir, total recomputed.
+
 ### Shipping — KiriminAja config + create shipment + print label (roadmap #1–3)
 - **Super-admin config + Test koneksi** — aggregator is now **KiriminAja** (enum `aggregator_provider` += `kiriminaja`, migration 0014); Pengaturan → Integrasi Kurir has a live **"Test koneksi"** (`kaTestConnection()` → `/api/mitra/province`, gated by `requirePlatformAdmin`). Verified: "Terhubung (sandbox) — 37 provinsi".
 - **Store sender address** (migration 0015: `store_settings.sender_*`) — admin Pengaturan → Pengiriman has an **"Alamat Pengirim (KiriminAja)"** card: kecamatan autocomplete (`get_address_by_name`) + phone/address/lat-lng, persisted per store.
