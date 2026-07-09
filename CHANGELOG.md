@@ -14,6 +14,13 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 - **Annual plan** (Shopify-style): monthly Rp275rb OR **annual Rp2.700.000 (Rp225rb/mo, save Rp50rb/mo)**; paying annually straight from the trial → **13 months** (bonus). `quote(cycle, firstPaid)` + `addMonths()`; invoices `cycle`/`period_months` (migr 0024); langganan page has Bulanan + Tahunan buttons.
 - **Billing cron** `/api/cron/billing` (CRON_SECRET-guarded, schedule daily): syncs stored status to the real-time lifecycle + auto-generates a monthly VA invoice for past-due/suspended stores with no pending subscription invoice. Verified: `{stores:7, statusSynced:1, invoicesCreated:2}`.
 
+### Super-admin Pengaturan redesign (2-column + grouped channels + courier services)
+- **2-column layout** like the client-admin Pengaturan: sticky left rail (Pembayaran / Kurir / Tim Platform), content switches per section instead of one long scroll.
+- **Payment channels grouped into collapsible sections** by kind — QRIS + COD standalone, then **Virtual Account** / **E-Wallet** / **Minimarket** accordions, each with an `N/M aktif` count + chevron (auto-open when something's enabled). Built on the existing kit (no new dep).
+- **Non-active channels locked**: the green "Aktif di AutoLaris" badge comes only from **Sync** (probe `rc=00`), not the toggle; inactive channels show a muted "Belum aktif · Sync" badge with a disabled toggle so a channel AutoLaris rejects can't be offered (would break checkout). Banner shows `N/M channel aktif`.
+- **Courier services as chips**: each KiriminAja courier lists its service levels (Reguler highlighted as primary; ekspres/kargo muted) + an `N/M kurir aktif` banner count.
+- **Sync now upserts** probed channels (inserts roster codes missing from the DB, e.g. VA Danamon) so the list can't silently drop a channel.
+
 ### Super-admin Pengaturan + Analitik polish + integration tests
 - **Pengaturan payment unified**: the separate "Gateway Pembayaran" + "Metode Pembayaran AutoLaris" cards are now **one "Pembayaran" section** styled exactly like the courier card — AutoLaris appears **once** as the PSP aggregator banner (Aktif badge + **Test koneksi** + **Sync**), followed by a single flat toggle list of COD + channels (each with an "Aktif di AutoLaris" badge), and one **Simpan** for the whole section. Removes the duplicate AutoLaris naming; precise parity with the ekspedisi list.
 - **Analitik → "Server (VPS) · realtime"** card: CPU / RAM / uptime via `node:os` (`getServerMetrics()`; host-level inside the container), color-graded bars, beside the finance + integration status.
