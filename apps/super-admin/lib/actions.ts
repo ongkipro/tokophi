@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { SESSION_COOKIE, signSession } from "./session";
 import { requirePlatformAdmin } from "./platform-auth";
 import { kaTestConnection } from "@tokophi/lib/kiriminaja";
-import { alTestConnection } from "@tokophi/lib/autolaris";
+import { alTestConnection, alProbeChannels, type AlChannelProbe } from "@tokophi/lib/autolaris";
 
 // Every super-admin mutation is gated by `requirePlatformAdmin()` (the security boundary):
 // impersonation + store lifecycle + provisioning + settings all require a platform-admin session.
@@ -121,6 +121,13 @@ export async function setInvoiceStatus(number: string, status: "dibayar" | "menu
 }
 
 // ---- platform settings: persist gateway / courier toggles (were fake-saved before) ----
+// Live-probe AutoLaris to discover which payment channels the platform account has active.
+// EXPENSIVE (one create_payment per channel) — super-admin on-demand only.
+export async function fetchAutolarisChannels(): Promise<AlChannelProbe[]> {
+  await requirePlatformAdmin();
+  return alProbeChannels();
+}
+
 export async function saveGateways(updates: { key: string; on: boolean }[]): Promise<void> {
   await requirePlatformAdmin();
   for (const u of updates) {

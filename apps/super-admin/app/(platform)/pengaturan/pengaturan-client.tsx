@@ -35,7 +35,8 @@ import {
 } from "@tokophi/ui/dropdown-menu";
 import { cn } from "@tokophi/ui/lib/utils";
 import { initials } from "@/components/bits";
-import { saveGateways, saveCouriers, invitePlatformAdmin, testKiriminajaConnection, testAutolarisConnection } from "@/lib/actions";
+import { saveGateways, saveCouriers, invitePlatformAdmin, testKiriminajaConnection, testAutolarisConnection, fetchAutolarisChannels } from "@/lib/actions";
+import type { AlChannelProbe } from "@tokophi/lib/autolaris";
 
 type Toggle = { key: string; name: string; desc: string; on: boolean };
 type TeamMember = { id: string; name: string; email: string; role: string };
@@ -78,6 +79,15 @@ export function PengaturanClient({
   // AutoLaris payment-gateway connectivity test
   const [payPing, setPayPing] = useState<{ ok: boolean; message: string } | null>(null);
   const [payTesting, startPayPing] = useTransition();
+  const [channels, setChannels] = useState<AlChannelProbe[] | null>(null);
+  const [chanFetching, startChanFetch] = useTransition();
+  const fetchChannels = () =>
+    startChanFetch(async () => {
+      const rows = await fetchAutolarisChannels();
+      setChannels(rows);
+      const active = rows.filter((r) => r.active).length;
+      toast.success(rows.length ? `${active} channel aktif dari ${rows.length} dicek.` : "Payment belum dikonfigurasi.");
+    });
   const testPay = () =>
     startPayPing(async () => {
       const r = await testAutolarisConnection();
@@ -168,6 +178,42 @@ export function PengaturanClient({
             </Button>
             <Button className="gap-1.5" disabled={pending} onClick={() => save("gateways")}>
               <Save className="size-4" /> Simpan
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* AutoLaris payment channels — live fetch */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="size-4 text-muted-foreground" /> Metode Pembayaran AutoLaris
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Channel yang tersedia di akun AutoLaris platform. AutoLaris tak punya endpoint daftar — di-fetch dengan mengecek tiap channel langsung.
+          </p>
+          {channels && (
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {channels.map((c) => (
+                <div key={c.code} className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{c.label}</p>
+                    <p className="text-[11px] uppercase text-muted-foreground">{c.kind} · {c.code}</p>
+                  </div>
+                  {c.active ? (
+                    <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
+                  ) : (
+                    <Badge variant="secondary" className="border-transparent bg-muted text-muted-foreground">Nonaktif</Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button variant="outline" className="gap-1.5" disabled={chanFetching} onClick={fetchChannels}>
+              <Plug className="size-4" /> {chanFetching ? "Mengecek…" : channels ? "Cek ulang" : "Fetch channel"}
             </Button>
           </div>
         </CardContent>

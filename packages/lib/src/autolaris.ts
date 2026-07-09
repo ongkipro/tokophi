@@ -21,6 +21,55 @@ export const PAYMENT_CHANNELS: { code: string; label: string; kind: "va" | "qris
 ];
 export const channelLabel = (code: string) => PAYMENT_CHANNELS.find((c) => c.code === code)?.label ?? code;
 
+// Full roster we probe to discover which channels the platform's AutoLaris account has active
+// (AutoLaris H2H has no list-channels endpoint — create_payment rc=00 = active, rc=07 = not active).
+export const AUTOLARIS_KNOWN_CHANNELS: { code: string; label: string; kind: "va" | "qris" | "ewallet" | "retail" }[] = [
+  { code: "QRIS", label: "QRIS", kind: "qris" },
+  { code: "VABCA", label: "Virtual Account BCA", kind: "va" },
+  { code: "VAMANDIRI", label: "Virtual Account Mandiri", kind: "va" },
+  { code: "VABNI", label: "Virtual Account BNI", kind: "va" },
+  { code: "VABRI", label: "Virtual Account BRI", kind: "va" },
+  { code: "VABSI", label: "Virtual Account BSI", kind: "va" },
+  { code: "VAPERMATA", label: "Virtual Account Permata", kind: "va" },
+  { code: "VACIMB", label: "Virtual Account CIMB", kind: "va" },
+  { code: "VADANAMON", label: "Virtual Account Danamon", kind: "va" },
+  { code: "DANA", label: "DANA", kind: "ewallet" },
+  { code: "OVO", label: "OVO", kind: "ewallet" },
+  { code: "SHOPEEPAY", label: "ShopeePay", kind: "ewallet" },
+  { code: "LINKAJA", label: "LinkAja", kind: "ewallet" },
+  { code: "GOPAY", label: "GoPay", kind: "ewallet" },
+  { code: "ALFAMART", label: "Alfamart", kind: "retail" },
+  { code: "INDOMARET", label: "Indomaret", kind: "retail" },
+];
+
+export type AlChannelProbe = { code: string; label: string; kind: string; active: boolean };
+
+// Probe every known channel live. EXPENSIVE — one create_payment per channel (creates sandbox
+// bills). Call on-demand from super-admin only, never on render.
+export async function alProbeChannels(): Promise<AlChannelProbe[]> {
+  if (!KEY) return [];
+  const out: AlChannelProbe[] = [];
+  for (const c of AUTOLARIS_KNOWN_CHANNELS) {
+    try {
+      const r = await al<{ rc: string }>("/api/h2h/create_payment", {
+        reff_id: `PROBE-${c.code}-${expiryStamp(0)}`,
+        channel_code: c.code,
+        customer_id: "0",
+        customer_name: "Probe",
+        customer_phone: "081200000000",
+        customer_email: "probe@tokophi.id",
+        expired: expiryStamp(24 * 60 * 60 * 1000),
+        amount: "15000",
+        callback_url: `${BASE}/noop`,
+      });
+      out.push({ code: c.code, label: c.label, kind: c.kind, active: r.rc === "00" });
+    } catch {
+      out.push({ code: c.code, label: c.label, kind: c.kind, active: false });
+    }
+  }
+  return out;
+}
+
 async function al<T = Record<string, unknown>>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
