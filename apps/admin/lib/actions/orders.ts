@@ -1,6 +1,6 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
@@ -33,6 +33,12 @@ export async function setOrderStatus(orderId: string, status: OrderStatus): Prom
           .set({ available: sql`${schema.inventoryLevels.available} + ${l.qty}` })
           .where(eq(schema.inventoryLevels.variantId, l.variantId));
       }
+
+      // fail any still-pending payment so a cancelled order can't be marked paid later
+      await db
+        .update(schema.payments)
+        .set({ status: "gagal" })
+        .where(and(eq(schema.payments.orderId, order.id), eq(schema.payments.status, "menunggu")));
     }
 
     await db.update(schema.orders).set({ status }).where(eq(schema.orders.id, order.id));
