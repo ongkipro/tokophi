@@ -3,6 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { and, eq, ne, or } from "drizzle-orm";
 import { timingSafeEqual } from "node:crypto";
 import { rateLimit } from "@tokophi/lib/cache";
+import { addMonths } from "@tokophi/lib/billing";
 import { clientIp } from "@/lib/public-guard";
 
 // AutoLaris payment callback — POSTed when a bill is paid/expired. Matches by trx_id / reff_id
@@ -83,15 +84,18 @@ export async function POST(req: Request) {
         .update(schema.invoices)
         .set({ status: invStatus, paidAt: mapped === "berhasil" ? new Date() : null })
         .where(and(invMatch, eq(schema.invoices.kind, "subscription"), ne(schema.invoices.status, invStatus)))
-        .returning({ storeId: schema.invoices.storeId });
+        .returning({ storeId: schema.invoices.storeId, periodMonths: schema.invoices.periodMonths });
       if (mapped === "berhasil") {
         for (const r of invRows) {
-          if (r.storeId) {
-            await db
-              .update(schema.stores)
-              .set({ currentPeriodEnd: new Date(Date.now() + 30 * 86_400_000), firstInvoicePaid: true, status: "active" })
-              .where(eq(schema.stores.id, r.storeId));
-          }
+          if (!r.storeId) continue;
+          // extend from the later of "now" or the remaining period, by the invoice's months
+          const [s] = await db.select({ cpe: schema.stores.currentPeriodEnd }).from(schema.stores).where(eq(schema.stores.id, r.storeId)).limit(1);
+          const now = new Date();
+          const base = s?.cpe && s.cpe > now ? s.cpe : now;
+          await db
+            .update(schema.stores)
+            .set({ currentPeriodEnd: addMonths(base, r.periodMonths ?? 1), firstInvoicePaid: true, status: "active" })
+            .where(eq(schema.stores.id, r.storeId));
         }
       }
     }

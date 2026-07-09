@@ -169,6 +169,13 @@
       "when": 1783608764469,
       "tag": "0023_closed_hawkeye",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1783609966391,
+      "tag": "0024_sharp_centennial",
+      "breakpoints": true
     }
   ]
 }

@@ -714,6 +714,8 @@ export const invoices = pgTable("invoices", {
   status: invoiceStatus().notNull().default("menunggu"),
   // subscription payment (AutoLaris VA) matching + kind
   kind: text(), // "subscription" for merchant subscription invoices
+  cycle: text(), // "monthly" | "annual"
+  periodMonths: integer(), // how many months this invoice extends the subscription (1/12/13)
   reffId: text(),
   trxId: text(),
   virtualAccount: text(),

@@ -5,7 +5,7 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 ## 2026-07-09
 
 ### Billing — single-plan subscription lifecycle (full, operational)
-- **Model**: one plan "TokoΦ", **all features** (no tier-gating) — 3-day free trial → **Rp50rb** first month (promo) → **Rp275rb/month**. `store` subscription fields (`trial_ends_at`/`current_period_end`/`first_invoice_paid`; migr 0022), `store_status += past_due`. `@tokophi/lib/billing` = pricing + `computeBilling()` (trial → active → past_due → 3-day grace → suspended).
+- **Model**: one plan "TokoΦ", **all features** (no tier-gating). Monthly: 3-day free trial → **Rp50rb** first month (promo) → **Rp275rb/month**. **Annual: Rp225rb/mo = Rp2.700.000/yr** (save Rp50rb/mo); paying annually straight from the trial grants a **bonus month → 13 months** (migr 0024 adds invoice `cycle`/`period_months`; callback extends by `addMonths`). `store` subscription fields (`trial_ends_at`/`current_period_end`/`first_invoice_paid`; migr 0022), `store_status += past_due`. `@tokophi/lib/billing` = pricing + `computeBilling()` (trial → active → past_due → 3-day grace → suspended).
 - **Client admin**: real subscription in sidebar + `/pengaturan/langganan` (status, countdown, next amount incl promo) + **Bayar/Perpanjang/Aktifkan** → creates a real AutoLaris VA. New store → 3-day trial.
 - **Pay + activation**: `paySubscription()` → AutoLaris VA + subscription invoice (`kind/reff/trx/va` cols, migr 0023); pay callback matches the subscription invoice → marks paid + extends `current_period_end` +1mo + `active`.
 - **Enforcement**: `requireCapability` throws `SuspendedError` when past grace → all writes blocked (storefront + paying stay up); admin banner for past-due/suspended.

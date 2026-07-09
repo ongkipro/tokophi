@@ -89,7 +89,8 @@ export function PaketClient({ sub, allInvoices }: { sub: SubStats; allInvoices: 
               <span className="text-sm text-muted-foreground">/bln</span>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              {BILLING.TRIAL_DAYS} hari uji coba gratis → <span className="font-medium text-emerald-600 dark:text-emerald-400">{IDR(BILLING.FIRST_MONTH_IDR)}</span> bulan pertama → {IDR(BILLING.MONTHLY_IDR)}/bulan seterusnya.
+              {BILLING.TRIAL_DAYS} hari uji coba gratis → <span className="font-medium text-emerald-600 dark:text-emerald-400">{IDR(BILLING.FIRST_MONTH_IDR)}</span> bulan pertama → {IDR(BILLING.MONTHLY_IDR)}/bulan.
+              <br />Tahunan: <span className="font-medium text-emerald-600 dark:text-emerald-400">{IDR(BILLING.ANNUAL_MONTHLY_IDR)}/bln</span> ({IDR(BILLING.ANNUAL_IDR)}/thn) · langsung dari trial dapat 13 bulan.
             </p>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {["Semua fitur terbuka (tanpa tingkat)", "Produk, order, diskon, CRM, analitik", "Kurir & pembayaran terintegrasi", "Storefront + custom domain", "Tagihan VA bulanan otomatis", "Tenggat 3 hari sebelum ditangguhkan"].map((f) => (

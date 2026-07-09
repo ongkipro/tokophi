@@ -55,12 +55,7 @@ export default async function LanggananPage() {
               {bill?.status === "past_due" && `Jatuh tempo ${fmtDue}. Bayar sebelum masa tenggang ${BILLING.GRACE_DAYS} hari habis agar toko tidak ditangguhkan.`}
               {bill?.status === "suspended" && `Toko ditangguhkan (mode baca-saja). Bayar ${IDR(bill.nextAmount)} untuk mengaktifkan kembali. Storefront tetap online.`}
             </p>
-            {bill && (
-              <PaySubscription
-                amount={bill.nextAmount}
-                cta={bill.status === "suspended" ? "Aktifkan kembali" : bill.status === "past_due" ? "Bayar sekarang" : bill.status === "active" ? "Perpanjang" : "Lanjutkan langganan"}
-              />
-            )}
+            {bill && <PaySubscription firstInvoicePaid={bill.firstInvoicePaid} />}
           </CardContent>
         </Card>
 
@@ -69,7 +64,9 @@ export default async function LanggananPage() {
           <CardContent className="space-y-3 text-sm">
             <Row label="Uji coba gratis" value={`${BILLING.TRIAL_DAYS} hari`} />
             <Row label="Bulan pertama (promo)" value={IDR(BILLING.FIRST_MONTH_IDR)} accent />
-            <Row label="Bulan berikutnya" value={`${IDR(BILLING.MONTHLY_IDR)}/bln`} />
+            <Row label="Bulanan" value={`${IDR(BILLING.MONTHLY_IDR)}/bln`} />
+            <Row label="Tahunan (hemat)" value={`${IDR(BILLING.ANNUAL_MONTHLY_IDR)}/bln`} accent />
+            <p className="text-[11px] text-muted-foreground">Bayar tahunan {IDR(BILLING.ANNUAL_IDR)} · langsung dari trial dapat 13 bulan (1 gratis).</p>
             <div className="border-t pt-3 space-y-1.5 text-xs text-muted-foreground">
               {["Semua fitur (produk, order, diskon, CRM, analitik, dll)", "Kurir & pembayaran terintegrasi", "Storefront + custom domain"].map((f) => (
                 <p key={f} className="flex items-start gap-1.5"><CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600" />{f}</p>
