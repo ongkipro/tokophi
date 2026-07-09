@@ -3,7 +3,7 @@
 // holds the plan catalog + the UI-facing types the components share.
 
 export type Plan = "pemula" | "bisnis" | "skala";
-export type StoreStatus = "aktif" | "trial" | "ditangguhkan";
+export type StoreStatus = "aktif" | "trial" | "ditangguhkan" | "menunggak";
 
 export type Store = {
   id: string;

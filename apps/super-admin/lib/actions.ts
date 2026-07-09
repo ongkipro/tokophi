@@ -96,7 +96,9 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
   const storeId = await db.transaction(async (tx) => {
     const [acc] = await tx.insert(schema.accounts).values({ name, plan: input.plan, createdAt: ANCHOR }).returning();
     const [u] = await tx.insert(schema.users).values({ email, name: ownerName, passwordHash: hashPassword(DEV_PASSWORD) }).returning();
-    const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, plan: input.plan, status: "trial", createdAt: ANCHOR }).returning();
+    // new store → 3-day free trial (real clock)
+    const trialEndsAt = new Date(Date.now() + 3 * 86_400_000);
+    const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, plan: input.plan, status: "trial", trialEndsAt, firstInvoicePaid: false, createdAt: ANCHOR }).returning();
     await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: ANCHOR });
     await tx.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
     await tx.insert(schema.storeSettings).values({ storeId: st.id });

@@ -34,12 +34,14 @@ export function PlanBadge({ plan, className }: { plan: Plan; className?: string 
 const STATUS_STYLES: Record<StoreStatus, string> = {
   aktif: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400",
   trial: "bg-amber-500/12 text-amber-600 dark:text-amber-400",
+  menunggak: "bg-orange-500/12 text-orange-600 dark:text-orange-400",
   ditangguhkan: "bg-destructive/12 text-destructive",
 };
 
 const STATUS_LABEL: Record<StoreStatus, string> = {
   aktif: "Aktif",
   trial: "Trial",
+  menunggak: "Menunggak",
   ditangguhkan: "Ditangguhkan",
 };
 

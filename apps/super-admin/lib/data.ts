@@ -8,7 +8,7 @@ import { PLANS, planPrice, type Plan, type Store, type StoreStatus, type Invoice
 const TODAY = new Date("2026-07-02T00:00:00Z");
 const daysBetween = (d: Date) => Math.round((TODAY.getTime() - d.getTime()) / 86_400_000);
 const minutesBetween = (d: Date) => Math.round((TODAY.getTime() - d.getTime()) / 60_000);
-const TO_UI: Record<"active" | "trial" | "suspended", StoreStatus> = { active: "aktif", trial: "trial", suspended: "ditangguhkan" };
+const TO_UI: Record<"active" | "trial" | "past_due" | "suspended", StoreStatus> = { active: "aktif", trial: "trial", past_due: "menunggak", suspended: "ditangguhkan" };
 
 function mulberry32(seed: number) {
   return function () {
@@ -22,7 +22,7 @@ function mulberry32(seed: number) {
 
 // ---- stores ----
 function rowToStore(r: {
-  id: string; name: string; city: string | null; plan: Plan; status: "active" | "trial" | "suspended";
+  id: string; name: string; city: string | null; plan: Plan; status: "active" | "trial" | "past_due" | "suspended";
   createdAt: Date; gmv: number | null; orders: number | null; products: number | null; owner: string | null; email: string | null;
 }): Store {
   return {

@@ -46,6 +46,7 @@ type Kpi = {
 const STATUS_BAR: Record<StoreStatus, string> = {
   aktif: "bg-emerald-500",
   trial: "bg-amber-500",
+  menunggak: "bg-orange-500",
   ditangguhkan: "bg-destructive",
 };
 

@@ -477,6 +477,10 @@ async function main() {
     city: STORE.city,
     plan: STORE.plan,
     status: STORE.status,
+    // billing: active, first month paid → recurring Rp275rb, 20 days into the current period
+    trialEndsAt: daysAgo(STORE.createdDaysAgo - 3),
+    currentPeriodEnd: daysAgo(-20),
+    firstInvoicePaid: true,
     createdAt: daysAgo(STORE.createdDaysAgo),
   }).returning();
   await db.insert(schema.storeUsers).values({ storeId: store.id, userId: user.id, role: "owner", acceptedAt: daysAgo(STORE.createdDaysAgo) });
@@ -754,7 +758,14 @@ async function main() {
   for (const d of DEMO_STORES) {
     const [acc] = await db.insert(schema.accounts).values({ name: d.name, plan: d.plan, createdAt: daysAgo(d.createdDaysAgo) }).returning();
     const [u] = await db.insert(schema.users).values({ email: d.email, name: d.owner, passwordHash: hashPassword(DEV_OWNER_PASSWORD) }).returning();
-    const [st] = await db.insert(schema.stores).values({ accountId: acc.id, name: d.name, slug: slugify(d.name), city: d.city, plan: d.plan, status: d.status, createdAt: daysAgo(d.createdDaysAgo) }).returning();
+    // demo billing lifecycle from the store's status
+    const bill =
+      d.status === "trial"
+        ? { trialEndsAt: daysAgo(-1), currentPeriodEnd: null, firstInvoicePaid: false } // ~1 day left of trial
+        : d.status === "suspended"
+          ? { trialEndsAt: daysAgo(d.createdDaysAgo - 3), currentPeriodEnd: daysAgo(20), firstInvoicePaid: true } // overdue past grace
+          : { trialEndsAt: daysAgo(d.createdDaysAgo - 3), currentPeriodEnd: daysAgo(-12), firstInvoicePaid: true }; // active
+    const [st] = await db.insert(schema.stores).values({ accountId: acc.id, name: d.name, slug: slugify(d.name), city: d.city, plan: d.plan, status: d.status, ...bill, createdAt: daysAgo(d.createdDaysAgo) }).returning();
     await db.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: daysAgo(d.createdDaysAgo) });
     await db.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
     await db.insert(schema.storeSettings).values({ storeId: st.id });

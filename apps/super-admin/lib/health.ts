@@ -24,7 +24,7 @@ function verdictOf(checks: HealthCheck[]): { verdict: HealthVerdict; score: numb
 }
 
 type Signals = {
-  status: "active" | "trial" | "suspended";
+  status: "active" | "trial" | "past_due" | "suspended";
   invoices: { status: "dibayar" | "menunggu" | "gagal"; issuedAt: Date }[];
   lastOrderAt: Date | null;
   outOfStock: number;

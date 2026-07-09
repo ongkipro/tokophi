@@ -26,7 +26,7 @@ const ts = () => timestamp({ withTimezone: true });
 
 // ---------- enums ----------
 export const planKey = pgEnum("plan_key", ["pemula", "bisnis", "skala"]);
-export const storeStatus = pgEnum("store_status", ["trial", "active", "suspended"]);
+export const storeStatus = pgEnum("store_status", ["trial", "active", "past_due", "suspended"]);
 export const storeUserRole = pgEnum("store_user_role", ["owner", "admin", "staff", "gudang"]);
 export const productStatus = pgEnum("product_status", ["active", "draft", "archived"]);
 export const collectionType = pgEnum("collection_type", ["manual", "otomatis"]);
@@ -76,6 +76,12 @@ export const stores = pgTable("stores", {
   timezone: text().notNull().default("Asia/Jakarta"),
   plan: planKey().notNull().default("pemula"),
   status: storeStatus().notNull().default("trial"),
+  // Subscription lifecycle (single plan, all features): 3-day free trial → 50rb first month →
+  // 275rb/month. trialEndsAt = end of free trial; currentPeriodEnd = end of the paid period;
+  // firstInvoicePaid flips the recurring price from the 50rb promo to 275rb.
+  trialEndsAt: ts(),
+  currentPeriodEnd: ts(),
+  firstInvoicePaid: boolean().notNull().default(false),
   createdAt: createdAt(),
 });
 
