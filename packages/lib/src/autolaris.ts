@@ -1,11 +1,12 @@
 import "server-only";
+import { AUTOLARIS_RC_OK, channelActiveFromRc, isConfigured } from "./integration-status";
 
 // AutoLaris payment-gateway client (platform-managed PSP). Create Payment → VA / QRIS / DANA.
 // Base + Bearer key from env (gitignored). Verified against ongkipro/autolaris-payment-gateway docs.
 const BASE = process.env.AUTOLARIS_BASE ?? "https://api-h2h.autolaris.com";
 const KEY = process.env.AUTOLARIS_API_KEY ?? "";
 
-export const autolarisConfigured = () => !!KEY;
+export const autolarisConfigured = () => isConfigured(KEY);
 
 // channel_code → client-facing label (NO provider brand shown to merchants/shoppers).
 // Only channels ACTIVE on the platform account are listed — verified live against the gateway
@@ -62,7 +63,7 @@ export async function alProbeChannels(): Promise<AlChannelProbe[]> {
         amount: "15000",
         callback_url: `${BASE}/noop`,
       });
-      out.push({ code: c.code, label: c.label, kind: c.kind, active: r.rc === "00" });
+      out.push({ code: c.code, label: c.label, kind: c.kind, active: channelActiveFromRc(r.rc) });
     } catch {
       out.push({ code: c.code, label: c.label, kind: c.kind, active: false });
     }
@@ -112,7 +113,7 @@ export async function alCreatePayment(input: {
     amount: String(input.amount),
     callback_url: input.callbackUrl,
   });
-  if (r.rc !== "00" || !r.data) return { ok: false, error: r.ket ?? `Gagal (rc=${r.rc})` };
+  if (r.rc !== AUTOLARIS_RC_OK || !r.data) return { ok: false, error: r.ket ?? `Gagal (rc=${r.rc})` };
   const d = r.data;
   return {
     ok: true, trxId: d.trx_id, virtualAccount: d.virtual_account || undefined, qr: d.qr || undefined,

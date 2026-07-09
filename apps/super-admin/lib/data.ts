@@ -145,6 +145,26 @@ export async function getSystemStatus(): Promise<SystemStatus> {
   };
 }
 
+// Real-time server metrics. In a container, node:os reads the HOST kernel → these reflect the VPS
+// (load/RAM/cores/uptime). CPU% is a load-per-core estimate.
+export type ServerMetrics = { cpuPct: number; cpuLoad1: number; cpuCores: number; memUsed: number; memTotal: number; memPct: number; uptimeSec: number };
+export async function getServerMetrics(): Promise<ServerMetrics> {
+  const os = await import("node:os");
+  const cores = os.cpus().length || 1;
+  const load1 = os.loadavg()[0];
+  const total = os.totalmem();
+  const used = total - os.freemem();
+  return {
+    cpuPct: Math.min(100, Math.round((load1 / cores) * 100)),
+    cpuLoad1: Math.round(load1 * 100) / 100,
+    cpuCores: cores,
+    memUsed: used,
+    memTotal: total,
+    memPct: Math.round((used / total) * 100),
+    uptimeSec: Math.round(os.uptime()),
+  };
+}
+
 // Real subscription state for a store (single-plan lifecycle).
 export async function getStoreBilling(id: string): Promise<BillingState | null> {
   const [s] = await db

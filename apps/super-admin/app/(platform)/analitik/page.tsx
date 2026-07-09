@@ -1,14 +1,20 @@
-import { Wallet, TrendingUp, Receipt, ShoppingBag, Truck, CreditCard, Database, Server, CircleCheck, CircleAlert, MapPin } from "lucide-react";
+import { Wallet, TrendingUp, Receipt, ShoppingBag, Truck, CreditCard, Database, Server, Cpu, MemoryStick, CircleCheck, CircleAlert, MapPin } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Badge } from "@tokophi/ui/badge";
 import { IDR, num } from "@tokophi/lib/format";
 import { BILLING } from "@tokophi/lib/billing";
-import { getStores, getFinanceStats, getSubscriptionStats, getSystemStatus } from "@/lib/data";
+import { getStores, getFinanceStats, getSubscriptionStats, getSystemStatus, getServerMetrics } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
+const gb = (b: number) => `${(b / 1_073_741_824).toFixed(1)} GB`;
+const uptime = (s: number) => {
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return d > 0 ? `${d}h ${h}j` : h > 0 ? `${h}j ${m}m` : `${m}m`;
+};
+
 export default async function AnalitikPage() {
-  const [stores, fin, sub, sys] = await Promise.all([getStores(), getFinanceStats(), getSubscriptionStats(), getSystemStatus()]);
+  const [stores, fin, sub, sys, srv] = await Promise.all([getStores(), getFinanceStats(), getSubscriptionStats(), getSystemStatus(), getServerMetrics()]);
 
   // GMV per city (top 8)
   const gmvPerCity = Object.values(
@@ -135,6 +141,16 @@ export default async function AnalitikPage() {
         </Card>
       </div>
 
+      {/* server metrics (real-time) */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Server className="size-4 text-muted-foreground" /> Server (VPS) · realtime</CardTitle></CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-3">
+          <Metric icon={<Cpu className="size-4" />} label="CPU" value={`${srv.cpuPct}%`} sub={`load ${srv.cpuLoad1} · ${srv.cpuCores} core`} pct={srv.cpuPct} />
+          <Metric icon={<MemoryStick className="size-4" />} label="RAM" value={`${srv.memPct}%`} sub={`${gb(srv.memUsed)} / ${gb(srv.memTotal)}`} pct={srv.memPct} />
+          <Metric icon={<Server className="size-4" />} label="Uptime" value={uptime(srv.uptimeSec)} sub={`${sys.region} · Coolify`} />
+        </CardContent>
+      </Card>
+
       {/* top stores */}
       <Card>
         <CardHeader><CardTitle>Toko Teratas (GMV)</CardTitle></CardHeader>
@@ -149,6 +165,20 @@ export default async function AnalitikPage() {
           ))}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function Metric({ icon, label, value, sub, pct }: { icon: import("react").ReactNode; label: string; value: string; sub: string; pct?: number }) {
+  const tone = pct === undefined ? "bg-primary/70" : pct >= 85 ? "bg-destructive" : pct >= 60 ? "bg-amber-500" : "bg-emerald-500";
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">{icon}{label}</div>
+      <div className="mt-1 text-xl font-bold tabular-nums">{value}</div>
+      <div className="text-xs text-muted-foreground">{sub}</div>
+      {pct !== undefined && (
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${tone}`} style={{ width: `${Math.min(100, pct)}%` }} /></div>
+      )}
     </div>
   );
 }

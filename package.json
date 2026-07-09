@@ -10,6 +10,11 @@
     "dev:admin": "npm run dev -w @tokophi/admin",
     "dev:super": "npm run dev -w @tokophi/super-admin",
     "build:admin": "npm run build -w @tokophi/admin",
-    "build:super": "npm run build -w @tokophi/super-admin"
+    "build:super": "npm run build -w @tokophi/super-admin",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.7"
   }
 }

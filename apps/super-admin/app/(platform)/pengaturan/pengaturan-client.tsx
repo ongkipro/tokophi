@@ -67,6 +67,8 @@ export function PengaturanClient({
   const [gateways, setGateways] = useState(initGateways);
   const [couriers, setCouriers] = useState(initCouriers);
   const [channels, setChannels] = useState(initChannels);
+  const autoGateway = gateways.find((g) => g.key === "autolaris");
+  const codGateway = gateways.find((g) => g.key === "cod");
 
   // KiriminAja live connectivity test
   const [ping, setPing] = useState<{ ok: boolean; message: string } | null>(null);
@@ -91,10 +93,12 @@ export function PengaturanClient({
     });
   const toggleChannel = (key: string, on: boolean) =>
     setChannels((prev) => prev.map((c) => (c.key === key ? { ...c, enabled: on } : c)));
-  const saveChannels = () =>
+  // One "Simpan" for the whole payment section: PSP gateways (AutoLaris + COD) AND channels.
+  const savePayment = () =>
     startTransition(async () => {
+      await saveGateways(gateways.map((g) => ({ key: g.key, on: g.on })));
       await savePaymentChannels(channels.map((c) => ({ key: c.key, on: c.enabled })));
-      toast.success("Metode pembayaran disimpan.");
+      toast.success("Pengaturan pembayaran disimpan.");
       router.refresh();
     });
   const testPay = () =>
@@ -114,16 +118,12 @@ export function PengaturanClient({
   const toggle = (setter: Dispatch<SetStateAction<Toggle[]>>, key: string, on: boolean) =>
     setter((prev) => prev.map((t) => (t.key === key ? { ...t, on } : t)));
 
-  function save(kind: "gateways" | "couriers") {
+  const saveCouriersFn = () =>
     startTransition(async () => {
-      const rows = kind === "gateways" ? gateways : couriers;
-      const updates = rows.map((t) => ({ key: t.key, on: t.on }));
-      if (kind === "gateways") await saveGateways(updates);
-      else await saveCouriers(updates);
-      toast.success(kind === "gateways" ? "Pengaturan pembayaran disimpan." : "Pengaturan kurir disimpan.");
+      await saveCouriers(couriers.map((t) => ({ key: t.key, on: t.on })));
+      toast.success("Pengaturan kurir disimpan.");
       router.refresh();
     });
-  }
 
   function submitInvite() {
     startTransition(async () => {
@@ -151,77 +151,79 @@ export function PengaturanClient({
         </p>
       </div>
 
-      {/* payment gateways */}
+      {/* payment — unified PSP (AutoLaris) + COD + channels, mirrors the courier card */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CreditCard className="size-4 text-muted-foreground" /> Gateway Pembayaran
+            <CreditCard className="size-4 text-muted-foreground" /> Pembayaran
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-0">
-          {gateways.map((g, i) => (
-            <div key={g.key}>
-              {i > 0 && <Separator />}
+          {/* aggregator banner (same treatment as the courier aggregator) */}
+          <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm">
+                <CreditCard className="size-4 text-emerald-600 dark:text-emerald-400" />
+                <span>Agregator pembayaran: <span className="font-medium">{autoGateway?.name ?? "AutoLaris"}</span> · API pembayaran dikelola platform</span>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {autoGateway?.on && (
+                  <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
+                )}
+                <Button variant="outline" size="sm" className="gap-1.5" disabled={chanSyncing} onClick={syncChannels}>
+                  <Plug className="size-3.5" /> {chanSyncing ? "Menyinkron…" : "Sync"}
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5" disabled={payTesting} onClick={testPay}>
+                  <Plug className="size-3.5" /> {payTesting ? "Menguji…" : "Test koneksi"}
+                </Button>
+              </div>
+            </div>
+            {payPing && (
+              <p className={`mt-2 text-xs ${payPing.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                {payPing.ok ? "✓ " : "✕ "}{payPing.message}
+              </p>
+            )}
+          </div>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Aktifkan metode untuk semua toko — merchant lalu memilih yang ia pakai di checkout. <b>Sync</b> mengecek langsung channel mana yang aktif di akun AutoLaris (tak ada endpoint daftar) lalu menandainya.
+          </p>
+
+          {/* row list: COD (platform) + AutoLaris channels, one flat list like couriers */}
+          {codGateway && (
+            <div>
               <div className="flex items-center justify-between py-3">
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-2">
-                    <Label htmlFor={`gw-${g.key}`} className="font-medium">{g.name}</Label>
-                    {g.on && (
-                      <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Terhubung</Badge>
+                    <Label htmlFor="gw-cod" className="font-medium">{codGateway.name}</Label>
+                    {codGateway.on && (
+                      <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">{g.desc}</p>
+                  <p className="text-xs text-muted-foreground">{codGateway.desc}</p>
                 </div>
-                <Switch id={`gw-${g.key}`} checked={g.on} onCheckedChange={(v) => toggle(setGateways, g.key, v)} />
+                <Switch id="gw-cod" checked={codGateway.on} onCheckedChange={(v) => toggle(setGateways, "cod", v)} />
               </div>
             </div>
-          ))}
-          {payPing && (
-            <p className={`pt-2 text-xs ${payPing.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-              {payPing.ok ? "✓ " : "✕ "}{payPing.message}
-            </p>
           )}
-          <div className="flex justify-end gap-2 pt-3">
-            <Button variant="outline" className="gap-1.5" disabled={payTesting} onClick={testPay}>
-              <Plug className="size-4" /> {payTesting ? "Menguji…" : "Test koneksi"}
-            </Button>
-            <Button className="gap-1.5" disabled={pending} onClick={() => save("gateways")}>
-              <Save className="size-4" /> Simpan
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* AutoLaris payment channels — live fetch */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="size-4 text-muted-foreground" /> Metode Pembayaran AutoLaris
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Channel yang ditawarkan di checkout. <b>Sync dari AutoLaris</b> mengecek langsung mana yang aktif di akun (tak ada endpoint daftar) lalu mengaktifkannya otomatis; kamu tetap bisa on/off manual.
-          </p>
-          <div className="grid gap-1.5 sm:grid-cols-2">
-            {channels.map((c) => (
-              <div key={c.key} className="flex items-center justify-between rounded-md border px-3 py-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="truncate text-sm font-medium">{c.label}</p>
-                    {c.active && <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif di AutoLaris</Badge>}
+          {channels.map((c) => (
+            <div key={c.key}>
+              <Separator />
+              <div className="flex items-center justify-between py-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor={`ch-${c.key}`} className="font-medium">{c.label}</Label>
+                    {c.active && (
+                      <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif di AutoLaris</Badge>
+                    )}
                   </div>
                   <p className="text-[11px] uppercase text-muted-foreground">{c.kind} · {c.key}</p>
                 </div>
-                <Switch checked={c.enabled} onCheckedChange={(v) => toggleChannel(c.key, v)} />
+                <Switch id={`ch-${c.key}`} checked={c.enabled} onCheckedChange={(v) => toggleChannel(c.key, v)} />
               </div>
-            ))}
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" className="gap-1.5" disabled={chanSyncing} onClick={syncChannels}>
-              <Plug className="size-4" /> {chanSyncing ? "Menyinkron…" : "Sync dari AutoLaris"}
-            </Button>
-            <Button className="gap-1.5" disabled={pending} onClick={saveChannels}>
+            </div>
+          ))}
+          <div className="flex justify-end pt-3">
+            <Button className="gap-1.5" disabled={pending} onClick={savePayment}>
               <Save className="size-4" /> Simpan
             </Button>
           </div>
@@ -278,7 +280,7 @@ export function PengaturanClient({
             </div>
           ))}
           <div className="flex justify-end pt-3">
-            <Button className="gap-1.5" disabled={pending} onClick={() => save("couriers")}>
+            <Button className="gap-1.5" disabled={pending} onClick={saveCouriersFn}>
               <Save className="size-4" /> Simpan
             </Button>
           </div>

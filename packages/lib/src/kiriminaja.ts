@@ -1,5 +1,6 @@
 import "server-only";
 import { cacheGet, cacheSet } from "./cache";
+import { isConfigured } from "./integration-status";
 
 // KiriminAja Mitra API client (platform-managed courier aggregator). Endpoints + version
 // prefixes verified against the sandbox Postman collection — versions vary PER endpoint.
@@ -10,7 +11,7 @@ const KEY = process.env.KIRIMINAJA_API_KEY ?? "";
 // order_id prefix must be REGISTERED in the KiriminAja dashboard, else request_pickup 400s.
 export const KA_ORDER_PREFIX = process.env.KIRIMINAJA_ORDER_PREFIX ?? "TOKOPHI";
 
-export const kiriminajaConfigured = () => !!KEY;
+export const kiriminajaConfigured = () => isConfigured(KEY);
 
 async function ka<T = Record<string, unknown>>(path: string, body: unknown = {}, method: "POST" | "GET" = "POST"): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
