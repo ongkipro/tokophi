@@ -11,7 +11,6 @@ import { alTestConnection, alProbeChannels } from "@tokophi/lib/autolaris";
 // Every super-admin mutation is gated by `requirePlatformAdmin()` (the security boundary):
 // impersonation + store lifecycle + provisioning + settings all require a platform-admin session.
 
-const ADMIN_URL = process.env.ADMIN_URL ?? "http://localhost:3000";
 const DEV_PASSWORD = "tokophi123"; // default local password for provisioned owners/admins
 const ANCHOR = new Date("2026-07-02T00:00:00Z"); // matches the seed's TODAY so createdDaysAgo reads "0 hari lalu"
 
@@ -51,7 +50,9 @@ export async function impersonateStore(storeId: string): Promise<{ ok: boolean; 
     email: owner.email,
     name: owner.name ?? owner.email,
   });
-  const url = `${ADMIN_URL}/impersonate?token=${encodeURIComponent(token)}&slug=${encodeURIComponent(owner.slug)}`;
+  // read at runtime (module-scope reads get baked at build time when the env is unset)
+  const adminBase = process.env.ADMIN_URL ?? "http://localhost:3000";
+  const url = `${adminBase}/impersonate?token=${encodeURIComponent(token)}&slug=${encodeURIComponent(owner.slug)}`;
   return { ok: true, adminUrl: url };
 }
 
