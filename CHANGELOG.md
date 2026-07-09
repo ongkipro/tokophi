@@ -2,6 +2,15 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-07-09
+
+### Shipping — instant courier (same-day) E2E + UAT (insurance/COD/cancel) + product weight/dims
+- **Instant courier** (GoSend/Grab/Borzo): grouped checkout (**📦 Ekspedisi** vs **⚡ Kirim Instan**, geolocation) + **create wired end-to-end** — checkout → pick instant → `kaCreateInstantOrder` dispatches a driver (verified: order + real instant order_id, status `dikirim`). Gotchas: `shipping_price` = `shipping_costs` (not total), top-level `order_prefix`, `service_type`, fresh price. Store coords via Pengaturan → **"Gunakan lokasi saat ini"** (geolocation).
+- **UAT (Everpeaks) coverage** (per official `kiriminaja/node` SDK): `request_pickup` supports `insurance_amount`, `cod` (amount; only on `cod:true` services), `width/length/height` (volumetric). **Cancel/void** = `/api/mitra/v3/cancel_shipment {awb, reason≥5}`. Admin Buat Pengiriman: Asuransi + COD toggles + Batalkan.
+- **Product weight & dimensions** (migration 0018): editor Berat (gram, prioritized + examples) + Dimensi P×L×T (cm, volumetric explainer); shipment sends real Σweight + max dims. Fix: editing a product no longer changes its handle/URL.
+- **COD** recorded — storefront COD checkout writes a `method=cod` payment row; admin shows "COD (Bayar di Tempat)".
+- QA: 6 key admin routes crawled → 0 console errors; 3 surfaces build clean; RLS verified.
+
 ## 2026-07-08
 
 ### Shipping — local KiriminAja area database (7k districts)
