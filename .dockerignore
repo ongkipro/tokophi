@@ -1,0 +1,15 @@
+# Build context = repo root. Keep it lean + never ship secrets/build artifacts.
+**/node_modules
+**/.next
+**/dist
+.git
+.gitignore
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+apps/*/public/uploads
+.vercel
+.turbo
+scratchpad
+*.md

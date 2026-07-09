@@ -1,0 +1,94 @@
+# TokoΦ — full stack for Coolify (Docker Compose build pack).
+# Postgres + one-off migrate/seed + 3 apps. Secrets/URLs come from Coolify env (UI) with dev
+# defaults here. Ports are `expose` only — Coolify's proxy assigns a domain per service.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tokophi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tokophi}
+      POSTGRES_DB: tokophi
+    volumes:
+      - tokophi-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tokophi -d tokophi"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # one-off: apply Drizzle migrations + seed, then exit (reuses the admin image, which has
+  # drizzle-kit + tsx + packages/db source). Apps wait for this to finish successfully.
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:-tokophi}@postgres:5432/tokophi
+    command: >
+      sh -c "cd packages/db &&
+      npx drizzle-kit migrate &&
+      npx tsx src/seed.ts &&
+      (npx tsx src/seed-areas.ts || echo 'areas seed skipped')"
+
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    environment:
+      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:-tokophi}@postgres:5432/tokophi
+      AUTH_SECRET: ${AUTH_SECRET:-dev-insecure-change-me}
+      KIRIMINAJA_ENV: ${KIRIMINAJA_ENV:-sandbox}
+      KIRIMINAJA_API_KEY: ${KIRIMINAJA_API_KEY:-}
+      KIRIMINAJA_ORDER_PREFIX: ${KIRIMINAJA_ORDER_PREFIX:-}
+      AUTOLARIS_BASE: ${AUTOLARIS_BASE:-https://api-h2h.autolaris.com}
+      AUTOLARIS_API_KEY: ${AUTOLARIS_API_KEY:-}
+      AUTOLARIS_CALLBACK_SECRET: ${AUTOLARIS_CALLBACK_SECRET:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+    expose:
+      - "3000"
+
+  super-admin:
+    build:
+      context: .
+      dockerfile: apps/super-admin/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    environment:
+      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:-tokophi}@postgres:5432/tokophi
+      AUTH_SECRET: ${AUTH_SECRET:-dev-insecure-change-me}
+      ADMIN_URL: ${ADMIN_URL:-}
+      KIRIMINAJA_ENV: ${KIRIMINAJA_ENV:-sandbox}
+      KIRIMINAJA_API_KEY: ${KIRIMINAJA_API_KEY:-}
+      AUTOLARIS_BASE: ${AUTOLARIS_BASE:-https://api-h2h.autolaris.com}
+      AUTOLARIS_API_KEY: ${AUTOLARIS_API_KEY:-}
+    expose:
+      - "3001"
+
+  storefront:
+    build:
+      context: .
+      dockerfile: apps/storefront/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    environment:
+      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:-tokophi}@postgres:5432/tokophi
+      PUBLIC_ONGKIR_API: ${PUBLIC_ONGKIR_API:-}
+      PUBLIC_ORDER_API: ${PUBLIC_ORDER_API:-}
+    expose:
+      - "4327"
+
+volumes:
+  tokophi-pgdata:
