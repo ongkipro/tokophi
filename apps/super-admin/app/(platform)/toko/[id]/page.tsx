@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { getStoreById } from "@/lib/data";
+import { getStoreById, getStoreBilling } from "@/lib/data";
 import { getStoreHealth } from "@/lib/health";
 import { StoreDetail } from "./store-detail";
 
@@ -12,7 +12,7 @@ export default async function StoreDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [store, health] = await Promise.all([getStoreById(id), getStoreHealth(id)]);
+  const [store, health, billing] = await Promise.all([getStoreById(id), getStoreHealth(id), getStoreBilling(id)]);
   if (!store) notFound();
-  return <StoreDetail store={store} health={health} />;
+  return <StoreDetail store={store} health={health} billing={billing} />;
 }

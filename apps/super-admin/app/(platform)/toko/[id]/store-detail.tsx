@@ -45,6 +45,7 @@ import {
 import { cn } from "@tokophi/ui/lib/utils";
 
 import { planName, planPrice, type Plan, type Store } from "@/lib/mock";
+import { BILLING, type BillingState } from "@tokophi/lib/billing";
 import { type StoreHealth, type CheckStatus, checkToneClass } from "@/lib/health-types";
 import { PlanBadge, StatusBadge, HealthBadge } from "@/components/bits";
 import { impersonateStore, setStoreStatus, setStorePlan } from "@/lib/actions";
@@ -62,7 +63,7 @@ function CheckIcon({ status }: { status: CheckStatus }) {
   return <Icon className={cn("size-4 shrink-0", checkToneClass[status])} />;
 }
 
-export function StoreDetail({ store, health }: { store: Store; health: StoreHealth | null }) {
+export function StoreDetail({ store, health, billing }: { store: Store; health: StoreHealth | null; billing: BillingState | null }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const suspended = store.status === "ditangguhkan";
@@ -106,7 +107,7 @@ export function StoreDetail({ store, health }: { store: Store; health: StoreHeal
 
   const timeline = [
     { icon: UserPlus, title: "Toko bergabung", desc: `Mendaftar ${store.createdDaysAgo} hari lalu` },
-    { icon: CreditCard, title: `Berlangganan ${planName(store.plan)}`, desc: `${IDR(planPrice(store.plan))} / bln` },
+    { icon: CreditCard, title: `Berlangganan ${BILLING.PLAN_NAME}`, desc: `${IDR(BILLING.MONTHLY_IDR)} / bln` },
     { icon: Receipt, title: "Transaksi terakhir", desc: `Total ${num(store.orders)} pesanan sepanjang waktu` },
   ];
 
@@ -218,8 +219,8 @@ export function StoreDetail({ store, health }: { store: Store; health: StoreHeal
             </CardHeader>
             <CardContent className="space-y-0">
               <div className="grid grid-cols-2 gap-y-4 sm:grid-cols-3">
-                <SummaryItem label="Paket" value={planName(store.plan)} />
-                <SummaryItem label="Kontribusi MRR" value={IDR(planPrice(store.plan))} />
+                <SummaryItem label="Paket" value={BILLING.PLAN_NAME} />
+                <SummaryItem label="Kontribusi MRR" value={IDR(BILLING.MONTHLY_IDR)} />
                 <SummaryItem label="Total pesanan" value={num(store.orders)} />
                 <SummaryItem label="Produk aktif" value={num(store.products)} />
                 <SummaryItem label="Kota" value={store.city} />
@@ -227,7 +228,7 @@ export function StoreDetail({ store, health }: { store: Store; health: StoreHeal
               </div>
               <Separator className="my-4" />
               <p className="text-sm text-muted-foreground">
-                Toko ini menyumbang {IDR(planPrice(store.plan))} per bulan ke MRR platform dan telah
+                Toko ini menyumbang {IDR(BILLING.MONTHLY_IDR)} per bulan ke MRR platform dan telah
                 memproses {num(store.orders)} pesanan dengan total GMV {IDR(store.gmv)}.
               </p>
             </CardContent>
@@ -282,15 +283,22 @@ export function StoreDetail({ store, health }: { store: Store; health: StoreHeal
             <CardContent>
               <div className="rounded-lg border p-4">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold">{planName(store.plan)}</span>
+                  <span className="font-semibold">Paket {BILLING.PLAN_NAME}</span>
                   <StatusBadge status={store.status} />
                 </div>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-2xl font-bold tracking-tight tabular-nums">
-                    {IDR(planPrice(store.plan))}
-                  </span>
+                  <span className="text-2xl font-bold tracking-tight tabular-nums">{IDR(BILLING.MONTHLY_IDR)}</span>
                   <span className="text-sm text-muted-foreground">/bln</span>
                 </div>
+                {billing && (
+                  <div className="mt-3 space-y-1.5 border-t pt-3 text-xs text-muted-foreground">
+                    <div className="flex justify-between"><span>Status</span><span className="font-medium text-foreground">{billing.label}</span></div>
+                    {billing.status !== "suspended" && (
+                      <div className="flex justify-between"><span>{billing.status === "trial" ? "Sisa uji coba" : "Perpanjang dalam"}</span><span className="font-medium text-foreground">{billing.daysLeft} hari</span></div>
+                    )}
+                    <div className="flex justify-between"><span>Tagihan berikutnya</span><span className="font-medium text-foreground tabular-nums">{IDR(billing.nextAmount)}{billing.isPromo && " (promo)"}</span></div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

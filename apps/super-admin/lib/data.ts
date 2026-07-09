@@ -2,7 +2,8 @@ import "server-only";
 import { db, schema } from "@tokophi/db";
 import { courierName, COURIER_CODES } from "@tokophi/lib/couriers";
 import { and, asc, desc, eq } from "drizzle-orm";
-import { PLANS, planPrice, type Plan, type Store, type StoreStatus, type Invoice, type PActivity } from "./mock";
+import { PLANS, type Plan, type Store, type StoreStatus, type Invoice, type PActivity } from "./mock";
+import { BILLING, computeBilling, type BillingState } from "@tokophi/lib/billing";
 
 // Anchor matches the seed so relative "N hari/menit lalu" figures stay deterministic.
 const TODAY = new Date("2026-07-02T00:00:00Z");
@@ -73,6 +74,16 @@ export async function getStoreById(id: string): Promise<Store | null> {
   return rows[0] ? rowToStore(rows[0]) : null;
 }
 
+// Real subscription state for a store (single-plan lifecycle).
+export async function getStoreBilling(id: string): Promise<BillingState | null> {
+  const [s] = await db
+    .select({ trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid })
+    .from(schema.stores)
+    .where(eq(schema.stores.id, id))
+    .limit(1);
+  return s ? computeBilling(s) : null;
+}
+
 // ---- platform metrics ----
 export type Platform = {
   mrr: number; gmv: number; totalStores: number; activeStores: number;
@@ -82,7 +93,7 @@ export type Platform = {
 export async function getPlatform(): Promise<Platform> {
   const stores = await getStores();
   const active = stores.filter((s) => s.status === "aktif");
-  const mrr = active.reduce((a, s) => a + planPrice(s.plan), 0);
+  const mrr = active.length * BILLING.MONTHLY_IDR; // single plan, recurring rate
   return {
     mrr,
     gmv: stores.reduce((a, s) => a + s.gmv, 0),
