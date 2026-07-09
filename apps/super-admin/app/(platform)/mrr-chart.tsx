@@ -9,8 +9,8 @@ export function MrrChart({ data }: { data: { month: string; mrr: number }[] }) {
       <AreaChart data={data} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
         <defs>
           <linearGradient id="fillMrr" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.35} />
-            <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0.02} />
+            <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.7} />
+            <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0.08} />
           </linearGradient>
         </defs>
         <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" opacity={0.6} />
