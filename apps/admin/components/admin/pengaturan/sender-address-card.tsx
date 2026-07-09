@@ -62,8 +62,8 @@ export function SenderAddressCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><MapPin className="size-4 text-muted-foreground" /> Alamat Pengirim (KiriminAja)</CardTitle>
-        <CardDescription>Titik jemput toko — dipakai KiriminAja saat membuat pengiriman (resi/AWB).</CardDescription>
+        <CardTitle className="flex items-center gap-2"><MapPin className="size-4 text-muted-foreground" /> Alamat Pengirim</CardTitle>
+        <CardDescription>Titik jemput toko — dipakai saat membuat pengiriman (resi/AWB).</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -81,7 +81,7 @@ export function SenderAddressCard() {
           <Input id="s-addr" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Jl. …" disabled={!loaded} />
         </div>
         <div className="space-y-1.5">
-          <Label>Kecamatan (area KiriminAja)</Label>
+          <Label>Kecamatan (area pengiriman)</Label>
           {kecName && (
             <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm dark:border-emerald-900/50 dark:bg-emerald-950/30">
               <Check className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
