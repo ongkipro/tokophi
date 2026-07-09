@@ -113,9 +113,10 @@ VPS (Coolify/Docker): app + rich + storefront-SSR + PgBouncer + Postgres 16 (+op
 - Cache = **Workers KV** (bukan Redis) kecuali BullMQ.
 - Security engine = **hybrid** (edge + `guard()` custom + RLS), bukan crypto from scratch.
 
+**✅ Store-context admin = path `/store/{slug}/`** (Shopify-style, dikonfirmasi). **Step 1 DONE** (commit 3692bb4): middleware rewrite `/store/{slug}/{rest}` → route internal + header `x-tokophi-store`; **non-breaking** (URL lama tetap jalan); store tetap di-scope session (RLS). ⏳ Lanjutan bertahap: post-login redirect ke `/store/{slug}`, nav prefix, super-admin impersonation deep-link, validasi slug↔membership.
+
 **⏳ Terbuka (perlu diputuskan):**
-1. Store-context di admin: **path `/store/{slug}/`** (Shopify) atau tetap session-only?
-2. Queue: **CF Queues** vs **Inngest** vs **BullMQ+Redis**?
+1. Queue: **CF Queues** vs **Inngest** vs **BullMQ+Redis**?
 3. RBAC: tetap **matrix** atau pindah **Casbin**?
 4. App-layer security: **`guard()` custom** vs **Arcjet**?
 5. Nama target CNAME: `cname.tokophi.com`?

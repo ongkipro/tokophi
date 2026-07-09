@@ -11,3 +11,11 @@ export async function getStoreName(storeId: string): Promise<string | null> {
     return s?.name ?? null;
   });
 }
+
+// the store's URL slug — for Shopify-style /store/{slug}/… links + deep-links.
+export async function getStoreSlug(storeId: string): Promise<string | null> {
+  return withTenant(storeId, async (db: Tx) => {
+    const [s] = await db.select({ slug: schema.stores.slug }).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
+    return s?.slug ?? null;
+  });
+}

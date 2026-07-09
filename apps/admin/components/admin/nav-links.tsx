@@ -6,21 +6,28 @@ import { ChevronRight } from "lucide-react";
 import { NAV_GROUPS, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { useStoreHref } from "@/components/admin/store-context";
 
 function isSectionActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(href + "/");
 }
 
+// strip the Shopify-style /store/{slug} prefix so active-state compares against the internal route
+function stripStore(pathname: string): string {
+  return pathname.replace(/^\/store\/[^/]+/, "") || "/";
+}
+
 function Item({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
-  const pathname = usePathname();
+  const storeHref = useStoreHref();
+  const pathname = stripStore(usePathname());
   const active = isSectionActive(pathname, item.href);
   const [open, setOpen] = React.useState<boolean | null>(null);
   const expanded = item.children ? (open ?? active) : false;
 
   const rowLink = (
     <Link
-      href={item.href}
+      href={storeHref(item.href)}
       onClick={onNavigate}
       className={cn(
         "group flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
@@ -56,7 +63,7 @@ function Item({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) 
             return (
               <Link
                 key={c.href}
-                href={c.href}
+                href={storeHref(c.href)}
                 onClick={onNavigate}
                 className={cn(
                   "rounded-lg px-3 py-1.5 text-sm transition-colors",
