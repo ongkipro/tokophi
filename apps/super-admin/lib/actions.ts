@@ -33,9 +33,11 @@ export async function impersonateStore(storeId: string): Promise<{ ok: boolean; 
       name: schema.users.name,
       storeId: schema.storeUsers.storeId,
       role: schema.storeUsers.role,
+      slug: schema.stores.slug,
     })
     .from(schema.storeUsers)
     .innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
+    .innerJoin(schema.stores, eq(schema.stores.id, schema.storeUsers.storeId))
     .where(and(eq(schema.storeUsers.storeId, storeId), eq(schema.storeUsers.role, "owner")))
     .limit(1);
 
@@ -54,7 +56,8 @@ export async function impersonateStore(storeId: string): Promise<{ ok: boolean; 
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
   });
-  return { ok: true, adminUrl: ADMIN_URL };
+  // deep-link straight into the impersonated store's admin (Shopify-style /store/{slug}/)
+  return { ok: true, adminUrl: `${ADMIN_URL}/store/${owner.slug}` };
 }
 
 export async function setStoreStatus(storeId: string, status: "active" | "trial" | "suspended"): Promise<void> {

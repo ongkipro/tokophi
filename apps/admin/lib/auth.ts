@@ -29,9 +29,11 @@ export async function findLogin(email: string) {
       passwordHash: schema.users.passwordHash,
       storeId: schema.storeUsers.storeId,
       role: schema.storeUsers.role,
+      slug: schema.stores.slug,
     })
     .from(schema.users)
     .innerJoin(schema.storeUsers, eq(schema.storeUsers.userId, schema.users.id))
+    .innerJoin(schema.stores, eq(schema.stores.id, schema.storeUsers.storeId))
     .where(eq(schema.users.email, email.toLowerCase().trim()))
     .limit(1);
   return row ?? null;

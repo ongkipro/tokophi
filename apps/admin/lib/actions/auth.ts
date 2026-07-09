@@ -25,7 +25,7 @@ export async function signIn(_prev: SignInState, formData: FormData): Promise<Si
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
   });
-  redirect("/");
+  redirect(row.slug ? `/store/${row.slug}` : "/");
 }
 
 export async function signOut(): Promise<void> {
