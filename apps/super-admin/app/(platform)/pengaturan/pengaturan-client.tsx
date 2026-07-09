@@ -69,6 +69,7 @@ export function PengaturanClient({
   const [channels, setChannels] = useState(initChannels);
   const autoGateway = gateways.find((g) => g.key === "autolaris");
   const codGateway = gateways.find((g) => g.key === "cod");
+  const activeChannels = channels.filter((c) => c.active).length;
 
   // KiriminAja live connectivity test
   const [ping, setPing] = useState<{ ok: boolean; message: string } | null>(null);
@@ -164,7 +165,7 @@ export function PengaturanClient({
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-sm">
                 <CreditCard className="size-4 text-emerald-600 dark:text-emerald-400" />
-                <span>Agregator pembayaran: <span className="font-medium">{autoGateway?.name ?? "AutoLaris"}</span> · API pembayaran dikelola platform</span>
+                <span>Agregator pembayaran: <span className="font-medium">{autoGateway?.name ?? "AutoLaris"}</span> · <span className="font-medium">{activeChannels}</span>/{channels.length} channel aktif</span>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {autoGateway?.on && (
@@ -185,7 +186,7 @@ export function PengaturanClient({
             )}
           </div>
           <p className="mb-2 text-xs text-muted-foreground">
-            Aktifkan metode untuk semua toko — merchant lalu memilih yang ia pakai di checkout. <b>Sync</b> mengecek langsung channel mana yang aktif di akun AutoLaris (tak ada endpoint daftar) lalu menandainya.
+            Hanya channel <b>Aktif di AutoLaris</b> yang bisa di-on-kan — sisanya terkunci sampai diaktifkan di akun AutoLaris. Klik <b>Sync</b> untuk mengecek ulang status langsung ke AutoLaris (tak ada endpoint daftar). Toggle = ditawarkan ke merchant untuk checkout.
           </p>
 
           {/* row list: COD (platform) + AutoLaris channels, one flat list like couriers */}
@@ -208,17 +209,20 @@ export function PengaturanClient({
           {channels.map((c) => (
             <div key={c.key}>
               <Separator />
-              <div className="flex items-center justify-between py-3">
+              <div className={`flex items-center justify-between py-3 ${c.active ? "" : "opacity-60"}`}>
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-2">
                     <Label htmlFor={`ch-${c.key}`} className="font-medium">{c.label}</Label>
-                    {c.active && (
+                    {c.active ? (
                       <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif di AutoLaris</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="border-transparent bg-muted text-muted-foreground">Belum aktif · Sync</Badge>
                     )}
                   </div>
                   <p className="text-[11px] uppercase text-muted-foreground">{c.kind} · {c.key}</p>
                 </div>
-                <Switch id={`ch-${c.key}`} checked={c.enabled} onCheckedChange={(v) => toggleChannel(c.key, v)} />
+                {/* can't offer a channel AutoLaris rejects (rc≠00) — toggle stays locked until Sync marks it active */}
+                <Switch id={`ch-${c.key}`} checked={c.active && c.enabled} disabled={!c.active} onCheckedChange={(v) => toggleChannel(c.key, v)} />
               </div>
             </div>
           ))}
