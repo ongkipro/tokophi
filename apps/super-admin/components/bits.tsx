@@ -4,6 +4,7 @@ import { Badge } from "@tokophi/ui/badge";
 import { cn } from "@tokophi/ui/lib/utils";
 import type { Plan, StoreStatus, PActivity, InvoiceStatus } from "@/lib/mock";
 import { type HealthVerdict, verdictMeta } from "@/lib/health-types";
+import { SEGMENT_META, type StoreSegment } from "@tokophi/lib/billing";
 
 // Initials from a person or store name, e.g. "Batik Nusantara" -> "BN".
 export function initials(name: string): string {
@@ -49,6 +50,21 @@ export function StatusBadge({ status, className }: { status: StoreStatus; classN
   return (
     <Badge variant="secondary" className={cn("border-transparent", STATUS_STYLES[status], className)}>
       {STATUS_LABEL[status]}
+    </Badge>
+  );
+}
+
+// Billing lifecycle segment (the 4 sessions): trial → first_month → regular → vip.
+const SEGMENT_STYLES: Record<StoreSegment, string> = {
+  trial: "bg-amber-500/12 text-amber-600 dark:text-amber-400",
+  first_month: "bg-sky-500/12 text-sky-600 dark:text-sky-400",
+  regular: "bg-primary/10 text-primary",
+  vip: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
+};
+export function SegmentBadge({ segment, className }: { segment: StoreSegment; className?: string }) {
+  return (
+    <Badge variant="secondary" className={cn("border-transparent", SEGMENT_STYLES[segment], className)}>
+      {SEGMENT_META[segment].short}
     </Badge>
   );
 }

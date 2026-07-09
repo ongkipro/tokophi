@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
       trialEndsAt: schema.stores.trialEndsAt,
       currentPeriodEnd: schema.stores.currentPeriodEnd,
       firstInvoicePaid: schema.stores.firstInvoicePaid,
+      comped: schema.stores.comped,
     })
     .from(schema.stores);
 

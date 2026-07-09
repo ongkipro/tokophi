@@ -17,7 +17,7 @@ import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import { IDR, num, pct, timeAgo } from "@tokophi/lib/format";
 import { type StoreStatus } from "@/lib/mock";
 import { VERDICT_RANK, type HealthVerdict } from "@/lib/health-types";
-import { initials, PlanBadge, ActivityIcon, InvoiceBadge, Delta, HealthBadge } from "@/components/bits";
+import { initials, SegmentBadge, ActivityIcon, InvoiceBadge, Delta, HealthBadge } from "@/components/bits";
 import { MrrChart } from "./mrr-chart";
 import {
   getPlatform,
@@ -255,9 +255,7 @@ export default async function PlatformDashboard() {
                     <tr key={inv.id} className="border-b last:border-0 hover:bg-muted/40">
                       <td className="px-6 py-2.5 font-mono text-xs">{inv.id}</td>
                       <td className="max-w-[10rem] truncate px-2 py-2.5 font-medium">{inv.store}</td>
-                      <td className="px-2 py-2.5">
-                        <PlanBadge plan={inv.plan} />
-                      </td>
+                      <td className="px-2 py-2.5 text-xs text-muted-foreground">TokoΦ</td>
                       <td className="px-2 py-2.5 text-right tabular-nums">{IDR(inv.amount)}</td>
                       <td className="px-2 py-2.5">
                         <InvoiceBadge status={inv.status} />
@@ -340,7 +338,7 @@ export default async function PlatformDashboard() {
                     {s.city} · {num(s.orders)} pesanan
                   </div>
                 </div>
-                <PlanBadge plan={s.plan} />
+                <SegmentBadge segment={s.segment} />
                 <div className="w-24 text-right text-sm font-semibold tabular-nums">
                   {IDR(s.gmv, { compact: true })}
                 </div>

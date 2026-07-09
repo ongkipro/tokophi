@@ -16,6 +16,8 @@ import {
   Ban,
   Play,
   Plus,
+  Crown,
+  Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,6 +25,7 @@ import { Card } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
+import { cn } from "@tokophi/ui/lib/utils";
 import {
   Dialog,
   DialogTrigger,
@@ -33,6 +36,7 @@ import {
   DialogClose,
 } from "@tokophi/ui/dialog";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
+import { Badge } from "@tokophi/ui/badge";
 import {
   Table,
   TableHeader,
@@ -52,25 +56,29 @@ import {
 
 import { type Plan, type Store } from "@/lib/mock";
 import { type HealthVerdict } from "@/lib/health-types";
-import { initials, PlanBadge, StatusBadge, HealthBadge } from "@/components/bits";
-import { impersonateStore, setStoreStatus, createStore } from "@/lib/actions";
+import { initials, StatusBadge, HealthBadge, SegmentBadge } from "@/components/bits";
+import { SEGMENT_META, type StoreSegment } from "@tokophi/lib/billing";
+import { impersonateStore, setStoreStatus, createStore, setStoreComped } from "@/lib/actions";
 import { IDR, num } from "@tokophi/lib/format";
 
-type PlanFilter = "semua" | Plan;
 type StatusFilter = "semua" | Store["status"];
 type HealthFilter = "semua" | HealthVerdict;
+type SegmentTab = "semua" | StoreSegment;
 
-const PLAN_OPTIONS: { key: PlanFilter; label: string }[] = [
-  { key: "semua", label: "Semua paket" },
-  { key: "pemula", label: "Pemula" },
-  { key: "bisnis", label: "Bisnis" },
-  { key: "skala", label: "Skala" },
+// The 4 lifecycle "sessions" the store list is split into (+ an "all" tab).
+const SEGMENT_TABS: { key: SegmentTab; label: string }[] = [
+  { key: "semua", label: "Semua" },
+  { key: "trial", label: "Trial" },
+  { key: "first_month", label: SEGMENT_META.first_month.short },
+  { key: "regular", label: SEGMENT_META.regular.short },
+  { key: "vip", label: "VIP" },
 ];
 
 const STATUS_OPTIONS: { key: StatusFilter; label: string }[] = [
   { key: "semua", label: "Semua status" },
   { key: "aktif", label: "Aktif" },
   { key: "trial", label: "Trial" },
+  { key: "menunggak", label: "Menunggak" },
   { key: "ditangguhkan", label: "Ditangguhkan" },
 ];
 
@@ -91,7 +99,7 @@ export function TokoClient({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
-  const [planFilter, setPlanFilter] = useState<PlanFilter>("semua");
+  const [segment, setSegment] = useState<SegmentTab>("semua");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("semua");
   const [healthFilter, setHealthFilter] = useState<HealthFilter>("semua");
 
@@ -101,7 +109,6 @@ export function TokoClient({
   const [nsOwner, setNsOwner] = useState("");
   const [nsEmail, setNsEmail] = useState("");
   const [nsCity, setNsCity] = useState("");
-  const [nsPlan, setNsPlan] = useState<Plan>("pemula");
 
   const verdictOf = (id: string): HealthVerdict => healthById[id] ?? "sehat";
 
@@ -116,10 +123,12 @@ export function TokoClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stores, healthById]);
 
+  const segmentCount = (seg: SegmentTab) => (seg === "semua" ? stores.length : stores.filter((s) => s.segment === seg).length);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return stores.filter((s) => {
-      if (planFilter !== "semua" && s.plan !== planFilter) return false;
+      if (segment !== "semua" && s.segment !== segment) return false;
       if (statusFilter !== "semua" && s.status !== statusFilter) return false;
       if (healthFilter !== "semua" && verdictOf(s.id) !== healthFilter) return false;
       if (!q) return true;
@@ -130,9 +139,8 @@ export function TokoClient({
       );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stores, query, planFilter, statusFilter, healthFilter, healthById]);
+  }, [stores, query, segment, statusFilter, healthFilter, healthById]);
 
-  const planLabel = PLAN_OPTIONS.find((o) => o.key === planFilter)!.label;
   const statusLabel = STATUS_OPTIONS.find((o) => o.key === statusFilter)!.label;
   const healthLabel = HEALTH_OPTIONS.find((o) => o.key === healthFilter)!.label;
 
@@ -157,13 +165,21 @@ export function TokoClient({
     });
   }
 
+  function toggleVip(s: Store) {
+    startTransition(async () => {
+      await setStoreComped(s.id, !s.comped, s.comped ? undefined : `Volume ${s.ship7d}/hari — dibebaskan platform`);
+      toast.success(s.comped ? `“${s.name}” kembali berbayar.` : `“${s.name}” dijadikan VIP (gratis).`);
+      router.refresh();
+    });
+  }
+
   function submitCreate() {
     startTransition(async () => {
-      const r = await createStore({ name: nsName, ownerName: nsOwner, email: nsEmail, city: nsCity, plan: nsPlan });
+      const r = await createStore({ name: nsName, ownerName: nsOwner, email: nsEmail, city: nsCity, plan: "bisnis" });
       if (r.ok && r.storeId) {
         toast.success(`Toko “${nsName}” dibuat.`);
         setCreateOpen(false);
-        setNsName(""); setNsOwner(""); setNsEmail(""); setNsCity(""); setNsPlan("pemula");
+        setNsName(""); setNsOwner(""); setNsEmail(""); setNsCity("");
         router.push(`/toko/${r.storeId}`);
       } else {
         toast.error(r.error ?? "Gagal membuat toko.");
@@ -177,7 +193,7 @@ export function TokoClient({
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Toko</h1>
           <p className="text-sm text-muted-foreground">
-            Semua toko merchant di platform — status langganan &amp; kesehatan operasional.
+            Katalog toko merchant — dikelompokkan per tahap langganan. Klik toko untuk kontrol penuh.
           </p>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -205,18 +221,7 @@ export function TokoClient({
                 <Label htmlFor="ns-email">Email pemilik</Label>
                 <Input id="ns-email" type="email" value={nsEmail} onChange={(e) => setNsEmail(e.target.value)} placeholder="owner@toko.id" />
               </div>
-              <div className="flex flex-col gap-2">
-                <Label>Paket awal</Label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger render={<Button variant="outline" className="justify-between gap-2 font-normal capitalize">{nsPlan}<ChevronDown className="size-4 text-muted-foreground" /></Button>} />
-                  <DropdownMenuContent align="start" className="w-[--anchor-width]">
-                    {(["pemula", "bisnis", "skala"] as Plan[]).map((p) => (
-                      <DropdownMenuItem key={p} className="capitalize" onClick={() => setNsPlan(p)}>{p}</DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              <p className="text-xs text-muted-foreground">Toko baru dibuat berstatus <span className="font-medium">Trial</span>. Password pemilik awal: <span className="font-mono">tokophi123</span>.</p>
+              <p className="text-xs text-muted-foreground">Toko baru mulai <span className="font-medium">Trial 3 hari</span> paket TokoΦ. Password pemilik awal: <span className="font-mono">tokophi123</span>.</p>
             </div>
             <DialogFooter>
               <DialogClose render={<Button variant="outline">Batal</Button>} />
@@ -231,87 +236,63 @@ export function TokoClient({
         {stats.map((s) => (
           <Card key={s.label} className="gap-0 p-5">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-muted-foreground">
-                {s.label}
-              </span>
+              <span className="text-sm font-medium text-muted-foreground">{s.label}</span>
               <span className={`flex size-8 items-center justify-center rounded-lg ${s.tint}`}>
                 <s.icon className="size-4" />
               </span>
             </div>
-            <div className="mt-3 text-2xl font-bold tracking-tight tabular-nums">
-              {num(s.value)}
-            </div>
+            <div className="mt-3 text-2xl font-bold tracking-tight tabular-nums">{num(s.value)}</div>
           </Card>
         ))}
       </div>
 
       <Card className="gap-0 py-0">
+        {/* segment tabs (the 4 sessions) */}
+        <div className="flex flex-wrap gap-1 border-b p-2">
+          {SEGMENT_TABS.map((t) => {
+            const active = segment === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setSegment(t.key)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                  active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted",
+                )}
+              >
+                {t.key === "vip" && <Crown className="size-3.5" />}
+                {t.label}
+                <span className={cn("rounded-full px-1.5 text-xs tabular-nums", active ? "bg-primary/15" : "bg-muted")}>{segmentCount(t.key)}</span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* toolbar */}
         <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full lg:max-w-xs">
             <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Cari nama, owner, atau email…"
-              className="pl-8"
-            />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari nama, owner, atau email…" className="pl-8" />
           </div>
           <div className="flex flex-wrap gap-2">
             <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button variant="outline" className="gap-1.5">
-                    {healthLabel}
-                    <ChevronDown className="size-4 text-muted-foreground" />
-                  </Button>
-                }
-              />
+              <DropdownMenuTrigger render={<Button variant="outline" className="gap-1.5">{healthLabel}<ChevronDown className="size-4 text-muted-foreground" /></Button>} />
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Filter kesehatan</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {HEALTH_OPTIONS.map((o) => (
-                  <DropdownMenuItem key={o.key} onClick={() => setHealthFilter(o.key)}>
-                    {o.label}
-                  </DropdownMenuItem>
+                  <DropdownMenuItem key={o.key} onClick={() => setHealthFilter(o.key)}>{o.label}</DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
             <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button variant="outline" className="gap-1.5">
-                    {planLabel}
-                    <ChevronDown className="size-4 text-muted-foreground" />
-                  </Button>
-                }
-              />
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Filter paket</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {PLAN_OPTIONS.map((o) => (
-                  <DropdownMenuItem key={o.key} onClick={() => setPlanFilter(o.key)}>
-                    {o.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button variant="outline" className="gap-1.5">
-                    {statusLabel}
-                    <ChevronDown className="size-4 text-muted-foreground" />
-                  </Button>
-                }
-              />
+              <DropdownMenuTrigger render={<Button variant="outline" className="gap-1.5">{statusLabel}<ChevronDown className="size-4 text-muted-foreground" /></Button>} />
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Filter status</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {STATUS_OPTIONS.map((o) => (
-                  <DropdownMenuItem key={o.key} onClick={() => setStatusFilter(o.key)}>
-                    {o.label}
-                  </DropdownMenuItem>
+                  <DropdownMenuItem key={o.key} onClick={() => setStatusFilter(o.key)}>{o.label}</DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -323,90 +304,55 @@ export function TokoClient({
             <TableHeader>
               <TableRow>
                 <TableHead>Toko</TableHead>
-                <TableHead>Owner</TableHead>
-                <TableHead>Paket</TableHead>
+                <TableHead>Tahap</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Kesehatan</TableHead>
                 <TableHead className="text-right">GMV</TableHead>
-                <TableHead className="hidden text-right md:table-cell">
-                  Pesanan
-                </TableHead>
-                <TableHead>Dibuat</TableHead>
+                <TableHead className="text-right">Kiriman/hari</TableHead>
+                <TableHead className="hidden text-right md:table-cell">Pesanan</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((s) => (
-                <TableRow
-                  key={s.id}
-                  onClick={() => router.push(`/toko/${s.id}`)}
-                  className="cursor-pointer"
-                >
+                <TableRow key={s.id} onClick={() => router.push(`/toko/${s.id}`)} className="cursor-pointer">
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="size-9">
-                        <AvatarFallback className="bg-primary/12 text-xs font-semibold text-primary">
-                          {initials(s.name)}
-                        </AvatarFallback>
+                        <AvatarFallback className="bg-primary/12 text-xs font-semibold text-primary">{initials(s.name)}</AvatarFallback>
                       </Avatar>
                       <div className="min-w-0">
                         <div className="truncate font-medium">{s.name}</div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {s.city}
-                        </div>
+                        <div className="truncate text-xs text-muted-foreground">{s.owner} · {s.city}</div>
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="min-w-0">
-                      <div className="truncate">{s.owner}</div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {s.email}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <PlanBadge plan={s.plan} />
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={s.status} />
-                  </TableCell>
-                  <TableCell>
-                    <HealthBadge verdict={verdictOf(s.id)} />
-                  </TableCell>
+                  <TableCell><SegmentBadge segment={s.segment} /></TableCell>
+                  <TableCell><StatusBadge status={s.status} /></TableCell>
+                  <TableCell><HealthBadge verdict={verdictOf(s.id)} /></TableCell>
+                  <TableCell className="text-right tabular-nums">{IDR(s.gmv, { compact: true })}</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {IDR(s.gmv, { compact: true })}
+                    <span className={cn("inline-flex items-center gap-1", s.ship7d >= 20 && "font-semibold text-primary")}>
+                      <Truck className="size-3.5 text-muted-foreground" />{num(s.ship7d)}
+                    </span>
                   </TableCell>
-                  <TableCell className="hidden text-right tabular-nums md:table-cell">
-                    {num(s.orders)}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {s.createdDaysAgo} hari lalu
-                  </TableCell>
-                  <TableCell
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-right"
-                  >
+                  <TableCell className="hidden text-right tabular-nums md:table-cell">{num(s.orders)}</TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()} className="text-right">
                     <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Aksi ${s.name}`}
-                          />
-                        }
-                      >
+                      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Aksi ${s.name}`} />}>
                         <MoreHorizontal className="size-4" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem render={<Link href={`/toko/${s.id}`} />}>
-                          <Eye className="size-4" /> Lihat detail
+                          <Eye className="size-4" /> Lihat & kontrol
                         </DropdownMenuItem>
                         <DropdownMenuItem disabled={pending} onClick={() => openAdmin(s)}>
                           <ExternalLink className="size-4" /> Buka panel admin
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
+                        <DropdownMenuItem disabled={pending} onClick={() => toggleVip(s)}>
+                          <Crown className="size-4" /> {s.comped ? "Cabut VIP" : "Jadikan VIP (gratis)"}
+                        </DropdownMenuItem>
                         {s.status === "ditangguhkan" ? (
                           <DropdownMenuItem disabled={pending} onClick={() => toggleSuspend(s)}>
                             <Play className="size-4" /> Aktifkan
@@ -423,21 +369,14 @@ export function TokoClient({
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell
-                    colSpan={9}
-                    className="py-10 text-center text-muted-foreground"
-                  >
-                    Tidak ada toko yang cocok.
-                  </TableCell>
+                  <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">Tidak ada toko yang cocok.</TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
         </div>
 
-        <div className="border-t px-4 py-3 text-xs text-muted-foreground">
-          {num(filtered.length)} toko
-        </div>
+        <div className="border-t px-4 py-3 text-xs text-muted-foreground">{num(filtered.length)} toko</div>
       </Card>
     </div>
   );

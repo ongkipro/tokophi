@@ -11,6 +11,7 @@ export async function getBilling(): Promise<BillingState | null> {
         trialEndsAt: schema.stores.trialEndsAt,
         currentPeriodEnd: schema.stores.currentPeriodEnd,
         firstInvoicePaid: schema.stores.firstInvoicePaid,
+        comped: schema.stores.comped,
       })
       .from(schema.stores)
       .limit(1);
