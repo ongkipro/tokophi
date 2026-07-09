@@ -7,16 +7,17 @@ const KEY = process.env.AUTOLARIS_API_KEY ?? "";
 
 export const autolarisConfigured = () => !!KEY;
 
-// channel_code → client-facing label (NO provider brand shown to merchants/shoppers)
+// channel_code → client-facing label (NO provider brand shown to merchants/shoppers).
+// Only channels ACTIVE on the platform account are listed — verified live against the gateway
+// (create_payment rc=00). All active channels return inline instructions (VA no. / QRIS payload),
+// url="" → shopper NEVER leaves our success page. Re-add BSI/DANA here once enabled on the account.
 export const PAYMENT_CHANNELS: { code: string; label: string; kind: "va" | "qris" | "ewallet" }[] = [
   { code: "QRIS", label: "QRIS", kind: "qris" },
   { code: "VABCA", label: "Virtual Account BCA", kind: "va" },
   { code: "VAMANDIRI", label: "Virtual Account Mandiri", kind: "va" },
   { code: "VABNI", label: "Virtual Account BNI", kind: "va" },
   { code: "VABRI", label: "Virtual Account BRI", kind: "va" },
-  { code: "VABSI", label: "Virtual Account BSI", kind: "va" },
   { code: "VAPERMATA", label: "Virtual Account Permata", kind: "va" },
-  { code: "DANA", label: "DANA", kind: "ewallet" },
 ];
 export const channelLabel = (code: string) => PAYMENT_CHANNELS.find((c) => c.code === code)?.label ?? code;
 

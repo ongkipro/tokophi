@@ -23,13 +23,15 @@ const PROVINCES = [
 ];
 
 // Payment channels (platform-managed PSP; brand hidden — generic bank/method labels only).
+// Must mirror the ACTIVE channels in @tokophi/lib PAYMENT_CHANNELS (verified live rc=00).
+// BSI + DANA are NOT active on the platform account → excluded so checkout never fails.
 const PAYMENTS = [
   { id: "QRIS", label: "QRIS", desc: "Scan dari semua e-wallet & m-banking" },
   { id: "VABCA", label: "Virtual Account BCA", desc: "Bayar via ATM / m-banking BCA" },
   { id: "VAMANDIRI", label: "Virtual Account Mandiri", desc: "Bayar via ATM / Livin'" },
   { id: "VABNI", label: "Virtual Account BNI", desc: "Bayar via ATM / m-banking BNI" },
   { id: "VABRI", label: "Virtual Account BRI", desc: "Bayar via ATM / BRImo" },
-  { id: "DANA", label: "DANA", desc: "Bayar pakai saldo DANA" },
+  { id: "VAPERMATA", label: "Virtual Account Permata", desc: "Bayar via ATM / PermataMobile" },
   { id: "cod", label: "COD (Bayar di Tempat)", desc: "Bayar tunai saat paket tiba" },
 ];
 ---
