@@ -42,6 +42,8 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { SenderAddressCard } from "@/components/admin/pengaturan/sender-address-card"
+import { getCouriers, saveCouriers } from "@/lib/actions/shipping"
+import { toast } from "sonner"
 
 type Section =
   | "profil"
@@ -75,14 +77,20 @@ const SECTIONS: {
   },
 ]
 
+// Keys = KiriminAja courier codes (must match the live `code` from ongkir so the filter works).
 const COURIERS = [
-  { key: "jne", name: "JNE", services: [{ key: "reg", name: "Reguler" }, { key: "yes", name: "YES" }, { key: "oke", name: "OKE" }] },
-  { key: "jnt", name: "J&T Express", services: [{ key: "ez", name: "EZ" }, { key: "eco", name: "Ekonomi" }] },
-  { key: "sicepat", name: "SiCepat", services: [{ key: "reg", name: "REG" }, { key: "best", name: "BEST" }, { key: "gokil", name: "GOKIL" }] },
+  { key: "sicepat", name: "SiCepat", services: [{ key: "reg", name: "REG" }, { key: "best", name: "BEST" }] },
+  { key: "jne", name: "JNE", services: [{ key: "reg", name: "Reguler" }, { key: "yes", name: "YES" }] },
+  { key: "jnt", name: "J&T Express", services: [{ key: "ez", name: "EZ" }] },
+  { key: "spx", name: "Shopee Express (SPX)", services: [{ key: "std", name: "Standard" }, { key: "hemat", name: "Hemat" }] },
   { key: "anteraja", name: "AnterAja", services: [{ key: "reg", name: "Reguler" }, { key: "sameday", name: "Same Day" }] },
-  { key: "pos", name: "Pos Indonesia", services: [{ key: "kilat", name: "Kilat Khusus" }, { key: "reg", name: "Reguler" }] },
-  { key: "gosend", name: "GoSend", services: [{ key: "instant", name: "Instant" }, { key: "sameday", name: "Same Day" }] },
-  { key: "grab", name: "GrabExpress", services: [{ key: "instant", name: "Instant" }, { key: "sameday", name: "Same Day" }] },
+  { key: "sap", name: "SAP Express", services: [{ key: "reg", name: "Reguler" }] },
+  { key: "lion", name: "Lion Parcel", services: [{ key: "reg", name: "Regpack" }, { key: "big", name: "Bigpack" }] },
+  { key: "ninja", name: "Ninja Xpress", services: [{ key: "std", name: "Standard" }] },
+  { key: "idx", name: "ID Express", services: [{ key: "reg", name: "Reguler" }] },
+  { key: "tiki", name: "TIKI", services: [{ key: "reg", name: "Reguler" }, { key: "ons", name: "ONS" }] },
+  { key: "jtcargo", name: "J&T Cargo", services: [{ key: "cargo", name: "Cargo" }] },
+  { key: "pos", name: "Pos Indonesia", services: [{ key: "kilat", name: "Kilat Khusus" }] },
 ] as const
 
 function Field({
@@ -140,16 +148,19 @@ export default function Page() {
     va: false,
   })
 
-  // Pengiriman
-  const [courierOn, setCourierOn] = React.useState<Record<string, boolean>>({
-    jne: true,
-    jnt: true,
-    sicepat: true,
-    anteraja: false,
-    pos: false,
-    gosend: true,
-    grab: false,
-  })
+  // Pengiriman — default all on; NULL in DB = all. Loaded + persisted to store_settings.couriers.
+  const [courierOn, setCourierOn] = React.useState<Record<string, boolean>>(() =>
+    Object.fromEntries(COURIERS.map((c) => [c.key, true])),
+  )
+  React.useEffect(() => {
+    getCouriers().then((saved) => {
+      if (saved) setCourierOn(Object.fromEntries(COURIERS.map((c) => [c.key, saved.includes(c.key)])))
+    })
+  }, [])
+  const persistCouriers = (next: Record<string, boolean>) => {
+    const keys = COURIERS.filter((c) => next[c.key]).map((c) => c.key)
+    saveCouriers(keys).then((r) => r.ok && toast.success("Kurir diperbarui"))
+  }
   const [serviceOn, setServiceOn] = React.useState<Record<string, boolean>>(
     () => {
       const s: Record<string, boolean> = {}
@@ -544,9 +555,12 @@ export default function Page() {
                         </div>
                         <Switch
                           checked={on}
-                          onCheckedChange={(v) =>
-                            setCourierOn((s) => ({ ...s, [c.key]: v }))
-                          }
+                          disabled={!canSettings}
+                          onCheckedChange={(v) => {
+                            const next = { ...courierOn, [c.key]: v }
+                            setCourierOn(next)
+                            persistCouriers(next)
+                          }}
                         />
                       </div>
 

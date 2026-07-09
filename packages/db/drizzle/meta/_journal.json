@@ -134,6 +134,13 @@
       "when": 1783530299913,
       "tag": "0018_worthless_korath",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783601712651,
+      "tag": "0019_known_genesis",
+      "breakpoints": true
     }
   ]
 }

@@ -589,6 +589,9 @@ export const storeSettings = pgTable("store_settings", {
   senderKelurahanName: text(),
   senderLat: text(),
   senderLng: text(),
+  // Enabled courier codes offered to shoppers (KiriminAja codes: sicepat/jne/jnt/spx/lion/…).
+  // NULL = all couriers KiriminAja returns for the route (backward-compatible default).
+  couriers: text().array(),
 });
 
 export const platformPaymentGateways = pgTable("platform_payment_gateways", {

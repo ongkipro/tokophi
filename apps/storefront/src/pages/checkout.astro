@@ -352,7 +352,7 @@ const PAYMENTS = [
       if (shipHint) shipHint.classList.add("hidden");
       expressGroup.classList.remove("hidden");
       expressBox.innerHTML = '<p class="px-4 py-3 text-sm text-muted">Menghitung ongkir…</p>';
-      api({ op: "rates", originCity: ORIGIN_CITY, destinationId: Number(destId.value), weight: totalQty * 500, itemValue: subtotal }).then(function (res) {
+      api({ op: "rates", storeSlug: STORE_SLUG, originCity: ORIGIN_CITY, destinationId: Number(destId.value), weight: totalQty * 500, itemValue: subtotal }).then(function (res) {
         if (!res.ok || !res.rates.length) {
           expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">' + esc(res.error || "Tidak ada layanan untuk rute ini.") + "</p>";
           recompute();

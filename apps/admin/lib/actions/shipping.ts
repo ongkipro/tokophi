@@ -92,6 +92,27 @@ export async function saveSenderAddress(input: {
   return { ok: true };
 }
 
+// ---- Enabled couriers offered to shoppers (KiriminAja codes). null = all. ----
+export async function getCouriers(): Promise<string[] | null> {
+  if (!(await getSession())) return null;
+  return withCurrentTenant(async (db) => {
+    const [s] = await db.select({ couriers: schema.storeSettings.couriers }).from(schema.storeSettings).limit(1);
+    return s?.couriers ?? null;
+  });
+}
+
+export async function saveCouriers(couriers: string[]): Promise<{ ok: boolean; error?: string }> {
+  const { storeId } = await requireCapability("settings:write");
+  await withTenant(storeId, (db) =>
+    db
+      .insert(schema.storeSettings)
+      .values({ storeId, couriers })
+      .onConflictDoUpdate({ target: schema.storeSettings.storeId, set: { couriers } }),
+  );
+  revalidatePath("/pengaturan");
+  return { ok: true };
+}
+
 // ---- Create a KiriminAja shipment for an order → saves AWB / resi on the order ----
 export async function createShipment(input: {
   orderNumber: string; service: string; serviceType: string; serviceName: string; cost: number;
