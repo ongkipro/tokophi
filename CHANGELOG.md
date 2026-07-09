@@ -4,6 +4,15 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-09
 
+### Deploy infra (Docker + Coolify) + hosting decisions
+- **Dev server live**: Vultr Singapore (8 vCPU/16GB AMD, `45.76.146.40`) provisioned via `vultr-cli` + **Coolify v4.1.2**. Hosting = 2-phase **DEV Vultr SG (credit) → PROD Hetzner SG** (migration trivial: Coolify+git+`pg_dump`+Cloudflare). Domain `tokophi.com` in Cloudflare (DNS not pointed). Edge=Cloudflare, origin=Traefik/Coolify (skip HAProxy).
+- **Dockerized** for Coolify **Docker Compose** build pack: `apps/*/Dockerfile` (context=repo root; admin/super-admin `next start`, storefront SSG **builds at container start** then `serve`), `.dockerignore`, `docker-compose.coolify.yml` (postgres + one-off migrate/seed + 3 apps + healthchecks), `.env.coolify.example`. **Validated locally** (migrate+seed 7030 areas, all 3 apps serving).
+- **Full gotchas/fixes runbook** → `specs/docs/DEPLOY.md` (Nixpacks fails on workspaces → Docker Compose; dummy `DATABASE_URL` at build; storefront build-at-start; migrate bypasses dotenv; RLS role needs superuser; Vultr no-Jakarta/IPv4-included vs Hetzner IPv4-fee; migration steps). New dotfiles skill `vultr`.
+
+### Order-cancel consistency + WYSIWYG editor
+- **Restore stock on cancel** + **fail pending payment on cancel** (`setOrderStatus`): cancelling a live order returns reserved stock (mirrors checkout decrement, guarded vs double-restore) and marks still-`menunggu` payments `gagal` so a cancelled order can't be paid later.
+- **Rich-text editor (Tiptap, free/MIT)**: `RichTextEditor` (bold/italic/strike, H2/H3, lists, quote, link, undo/redo) replaces the plain textarea + fake toolbars in Halaman + Blog editors; stores HTML in `body`, SSR-safe.
+
 ### Packages + scaling prep + docs
 - **De-dup**: KiriminAja + AutoLaris clients consolidated into `@tokophi/lib` (server-only `./kiriminaja` + `./autolaris` subpaths) — admin + super-admin now share one canonical client (deleted 4 duplicate files).
 - **Pricing cache** (`@tokophi/lib/cache`): in-proc TTL cache wraps `kaShippingPrice` (10 min per route) — cuts KiriminAja rate-limit risk + latency under ad traffic (1st call 5.8s → cached 0.03s). KV/Redis-ready swap for prod.

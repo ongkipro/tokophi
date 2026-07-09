@@ -1,7 +1,7 @@
 # TokoΦ — Production, Scaling & Security Plan (discussion summary)
 
 > Ringkasan keputusan arsitektur untuk go-live. Skala awal: **50–100 client (toko) · 10–30rb visitor
-> ad-driven**. Companion: `SYSTEM_GUIDE.md` (sistem), `UML.md` §8 (diagram deploy/scaling), ADR 0007/0008.
+> ad-driven**. Companion: `DEPLOY.md` (runbook Docker/Coolify + semua gotcha/error + migrasi), `SYSTEM_GUIDE.md` (sistem), `UML.md` §8 (diagram deploy/scaling), ADR 0007/0008.
 > Status: **DISKUSI — belum diimplementasi**. Yang dev-lokal (cache) sudah jalan.
 
 ---
