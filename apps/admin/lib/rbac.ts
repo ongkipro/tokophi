@@ -1,6 +1,7 @@
 import "server-only";
 import { getSession, type Session } from "@/lib/auth";
 import { can, type Capability } from "@/lib/rbac-policy";
+import { getBilling } from "@/lib/data/billing";
 
 // Server-side RBAC guard. The role→capability matrix lives in the client-safe
 // lib/rbac-policy.ts (shared with the UI). This module adds the enforcement that
@@ -18,9 +19,20 @@ export class ForbiddenError extends Error {
 
 // Gate a server action. Returns the session (so callers get storeId/role/userId)
 // or throws ForbiddenError when the current role lacks the capability.
+export class SuspendedError extends Error {
+  constructor() {
+    super("Langganan ditangguhkan — aktifkan kembali (bayar tagihan) untuk menyimpan perubahan.");
+    this.name = "SuspendedError";
+  }
+}
+
 export async function requireCapability(cap: Capability): Promise<Session> {
   const session = await getSession();
   if (!session) throw new ForbiddenError(cap);
   if (!can(session.role, cap)) throw new ForbiddenError(cap);
+  // subscription enforcement: past the grace period → read-only, block all writes.
+  // (Paying re-activates via the langganan flow, which does not go through requireCapability.)
+  const bill = await getBilling();
+  if (bill?.readOnly) throw new SuspendedError();
   return session;
 }

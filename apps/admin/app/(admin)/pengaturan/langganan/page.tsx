@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/admin/page-header";
 import { CheckCircle2, Sparkles } from "lucide-react";
+import { PaySubscription } from "@/components/admin/pengaturan/pay-subscription";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,12 @@ export default async function LanggananPage() {
               {bill?.status === "past_due" && `Jatuh tempo ${fmtDue}. Bayar sebelum masa tenggang ${BILLING.GRACE_DAYS} hari habis agar toko tidak ditangguhkan.`}
               {bill?.status === "suspended" && `Toko ditangguhkan (mode baca-saja). Bayar ${IDR(bill.nextAmount)} untuk mengaktifkan kembali. Storefront tetap online.`}
             </p>
+            {bill && (
+              <PaySubscription
+                amount={bill.nextAmount}
+                cta={bill.status === "suspended" ? "Aktifkan kembali" : bill.status === "past_due" ? "Bayar sekarang" : bill.status === "active" ? "Perpanjang" : "Lanjutkan langganan"}
+              />
+            )}
           </CardContent>
         </Card>
 

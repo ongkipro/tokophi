@@ -72,6 +72,28 @@ export async function POST(req: Request) {
           await db.update(schema.orders).set({ financialStatus: "dibayar" }).where(eq(schema.orders.id, oid));
         }
       }
+
+      // subscription invoice? → mark paid + extend the store's subscription one month.
+      const invStatus = mapped === "berhasil" ? ("dibayar" as const) : ("gagal" as const);
+      const invMatch = or(
+        trx ? eq(schema.invoices.trxId, trx) : undefined,
+        reff ? eq(schema.invoices.reffId, reff) : undefined,
+      );
+      const invRows = await db
+        .update(schema.invoices)
+        .set({ status: invStatus, paidAt: mapped === "berhasil" ? new Date() : null })
+        .where(and(invMatch, eq(schema.invoices.kind, "subscription"), ne(schema.invoices.status, invStatus)))
+        .returning({ storeId: schema.invoices.storeId });
+      if (mapped === "berhasil") {
+        for (const r of invRows) {
+          if (r.storeId) {
+            await db
+              .update(schema.stores)
+              .set({ currentPeriodEnd: new Date(Date.now() + 30 * 86_400_000), firstInvoicePaid: true, status: "active" })
+              .where(eq(schema.stores.id, r.storeId));
+          }
+        }
+      }
     }
   }
   return NextResponse.json({ ok: true });

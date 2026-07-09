@@ -712,6 +712,12 @@ export const invoices = pgTable("invoices", {
   planKey: planKey().notNull(),
   amountIdr: money().notNull().default(0),
   status: invoiceStatus().notNull().default("menunggu"),
+  // subscription payment (AutoLaris VA) matching + kind
+  kind: text(), // "subscription" for merchant subscription invoices
+  reffId: text(),
+  trxId: text(),
+  virtualAccount: text(),
+  paidAt: ts(),
   issuedAt: createdAt(),
 });
 
