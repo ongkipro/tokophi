@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getBilling, getMyInvoices } from "@/lib/data/billing";
 import { IDR } from "@tokophi/lib/format";
-import { BILLING } from "@tokophi/lib/billing";
+import { BILLING, withPpn } from "@tokophi/lib/billing";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ export default async function LanggananPage() {
     menunggu: { label: "Menunggu", cls: "bg-amber-500/12 text-amber-600 dark:text-amber-400" },
     gagal: { label: "Gagal", cls: "bg-destructive/12 text-destructive" },
   };
-  const jenis = (a: number) => (a >= 2_000_000 ? "Tahunan" : a <= 50_000 ? "Bln pertama" : "Bulanan");
+  const jenis = (a: number) => (a >= 2_000_000 ? "Tahunan" : a <= 100_000 ? "Bln pertama" : "Bulanan");
   const fmtDue = bill?.dueDate ? new Date(bill.dueDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "—";
 
   return (
@@ -51,7 +51,8 @@ export default async function LanggananPage() {
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground">Tagihan berikutnya</p>
-                  <p className="mt-0.5 font-medium tabular-nums">{IDR(bill.nextAmount)}{bill.isPromo && <span className="ml-1 text-xs font-normal text-emerald-600">promo</span>}</p>
+                  <p className="mt-0.5 font-medium tabular-nums">{IDR(withPpn(bill.nextAmount).total)}{bill.isPromo && <span className="ml-1 text-xs font-normal text-emerald-600">promo</span>}</p>
+                  <p className="text-[11px] text-muted-foreground">{IDR(bill.nextAmount)} + PPN 11% ({IDR(withPpn(bill.nextAmount).ppn)})</p>
                 </div>
               </div>
             )}
@@ -72,7 +73,11 @@ export default async function LanggananPage() {
             <Row label="Bulan pertama (promo)" value={IDR(BILLING.FIRST_MONTH_IDR)} accent />
             <Row label="Bulanan" value={`${IDR(BILLING.MONTHLY_IDR)}/bln`} />
             <Row label="Tahunan (hemat)" value={`${IDR(BILLING.ANNUAL_MONTHLY_IDR)}/bln`} accent />
-            <p className="text-[11px] text-muted-foreground">Bayar tahunan {IDR(BILLING.ANNUAL_IDR)} · langsung dari trial dapat 13 bulan (1 gratis).</p>
+            <div className="border-t pt-3">
+              <Row label="PPN" value="11%" />
+              <Row label="Total bulanan (termasuk PPN)" value={IDR(withPpn(BILLING.MONTHLY_IDR).total)} />
+            </div>
+            <p className="text-[11px] text-muted-foreground">Harga di atas belum termasuk PPN 11% — ditambahkan saat pembayaran. Bayar tahunan {IDR(withPpn(BILLING.ANNUAL_IDR).total)} (termasuk PPN) · langsung dari trial dapat 13 bulan (1 gratis).</p>
             <div className="border-t pt-3 space-y-1.5 text-xs text-muted-foreground">
               {["Semua fitur (produk, order, diskon, CRM, analitik, dll)", "Kurir & pembayaran terintegrasi", "Storefront + custom domain"].map((f) => (
                 <p key={f} className="flex items-start gap-1.5"><CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600" />{f}</p>
@@ -86,7 +91,7 @@ export default async function LanggananPage() {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2"><Receipt className="size-4 text-muted-foreground" /> Riwayat pembayaran</CardTitle>
-          <span className="text-sm text-muted-foreground">Total dibayar: <span className="font-semibold tabular-nums text-foreground">{IDR(paidTotal)}</span></span>
+          <span className="text-sm text-muted-foreground">Total dibayar: <span className="font-semibold tabular-nums text-foreground">{IDR(paidTotal)}</span> <span className="text-xs">(termasuk PPN 11%)</span></span>
         </CardHeader>
         <CardContent className="p-0">
           {invoices.length === 0 ? (

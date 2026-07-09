@@ -11,7 +11,20 @@ export const BILLING = {
   ANNUAL_MONTHLY_IDR: 225_000, // effective per-month when paying yearly
   ANNUAL_IDR: 2_700_000, // 225k × 12
   GRACE_DAYS: 3,
+  PPN_RATE: 0.11, // 11% VAT — plan prices above are the DPP (ex-tax); merchant pays base + PPN
 } as const;
+
+export type PpnBreakdown = { base: number; ppn: number; total: number };
+// Add 11% PPN on top of a tax-exclusive base price → what the merchant actually pays.
+export function withPpn(base: number): PpnBreakdown {
+  const total = Math.round(base * (1 + BILLING.PPN_RATE));
+  return { base, ppn: total - base, total };
+}
+// Recover the breakdown from a PPN-inclusive total (for invoices/faktur that store the total).
+export function baseFromTotal(total: number): PpnBreakdown {
+  const base = Math.round(total / (1 + BILLING.PPN_RATE));
+  return { base, ppn: total - base, total };
+}
 
 export type Cycle = "monthly" | "annual";
 export type Quote = { cycle: Cycle; amount: number; months: number; perMonth: number; bonusMonth: boolean; label: string };

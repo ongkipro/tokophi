@@ -37,9 +37,10 @@ const PLANS: Array<{ key: "pemula" | "bisnis" | "skala"; name: string; price: nu
   { key: "skala", name: "Skala", price: 799_000, blurb: "Untuk volume tinggi", features: ["Semua fitur Bisnis", "API akses", "Multi-lokasi", "Peran lanjutan", "Account manager"] },
 ];
 
-// Single-plan TokoΦ subscription amounts (mirror @tokophi/lib/billing; kept local to avoid a build dep).
-const SUB_MONTHLY = 275_000; // recurring monthly
-const SUB_FIRST_MONTH = 50_000; // promo first month
+// Single-plan TokoΦ subscription amounts, PPN 11% inclusive (base 275k/50k + PPN → what's charged).
+// Faktur/history recover the DPP + PPN via baseFromTotal(). Mirrors @tokophi/lib/billing.
+const SUB_MONTHLY = 305_250; // Rp275.000 + PPN 11%
+const SUB_FIRST_MONTH = 55_500; // Rp50.000 + PPN 11%
 
 // Recent monthly billing history for the store.
 const INVOICES: Array<{ number: string; status: "dibayar" | "menunggu" | "gagal"; daysAgo: number }> = [

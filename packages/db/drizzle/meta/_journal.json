@@ -197,6 +197,13 @@
       "when": 1783617166379,
       "tag": "0027_flaky_sabretooth",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1783620984287,
+      "tag": "0028_known_revanche",
+      "breakpoints": true
     }
   ]
 }

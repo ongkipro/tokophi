@@ -608,6 +608,8 @@ export const storeSettings = pgTable("store_settings", {
   couriers: text().array(),
   // Payment channel codes the merchant offers (AutoLaris codes). NULL = all platform-enabled.
   paymentChannels: text().array(),
+  // Who bears the payment-gateway fee on storefront transactions: seller | buyer | split.
+  paymentFeeBearer: text().notNull().default("seller"),
 });
 
 export const platformPaymentGateways = pgTable("platform_payment_gateways", {

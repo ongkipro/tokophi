@@ -3,7 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
-import { quote, type Cycle } from "@tokophi/lib/billing";
+import { quote, withPpn, type Cycle } from "@tokophi/lib/billing";
 import { alCreatePayment, autolarisConfigured, channelLabel } from "@tokophi/lib/autolaris";
 
 // Create a subscription invoice (monthly or annual) + an AutoLaris VA to pay it. On payment the
@@ -27,7 +27,7 @@ export async function paySubscription(cycle: Cycle = "monthly", channelCode = "V
   if (!store) return { ok: false, error: "Toko tidak ditemukan." };
 
   const q = quote(cycle, store.firstInvoicePaid);
-  const amount = q.amount;
+  const amount = withPpn(q.amount).total; // charge base + 11% PPN
   const reffId = `SUB-${store.slug}-${Date.now().toString().slice(-8)}`;
   const callbackUrl = (process.env.PUBLIC_APP_URL ?? "http://localhost:3000") + "/api/public/pay/callback";
   const r = await alCreatePayment({

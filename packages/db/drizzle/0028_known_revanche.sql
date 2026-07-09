@@ -1,0 +1,1 @@
+ALTER TABLE "store_settings" ADD COLUMN "payment_fee_bearer" text DEFAULT 'seller' NOT NULL;

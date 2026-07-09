@@ -41,6 +41,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { SenderAddressCard } from "@/components/admin/pengaturan/sender-address-card"
+import { PaymentFeesCard } from "@/components/admin/pengaturan/payment-fees-card"
 import { getCouriers, saveCouriers, getPlatformCouriers } from "@/lib/actions/shipping"
 import { COURIERS } from "@tokophi/lib/couriers"
 import { toast } from "sonner"
@@ -487,6 +488,7 @@ export default function Page() {
               <SaveFooter />
             </Card>
           )}
+          {section === "pembayaran" && <PaymentFeesCard />}
 
           {/* PENGIRIMAN */}
           {section === "pengiriman" && (

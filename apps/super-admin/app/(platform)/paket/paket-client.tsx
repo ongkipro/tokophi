@@ -145,7 +145,7 @@ export function PaketClient({ sub, allInvoices }: { sub: SubStats; allInvoices: 
                 <TableRow key={inv.id}>
                   <TableCell className="font-mono text-xs">{inv.id}</TableCell>
                   <TableCell className="font-medium">{inv.store}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{inv.amount >= 2_000_000 ? "Tahunan" : inv.amount <= 50_000 ? "Bln pertama" : "Bulanan"}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{inv.amount >= 2_000_000 ? "Tahunan" : inv.amount <= 100_000 ? "Bln pertama" : "Bulanan"}</TableCell>
                   <TableCell className="text-right tabular-nums">{IDR(inv.amount)}</TableCell>
                   <TableCell><InvoiceBadge status={inv.status} /></TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">{inv.daysAgo} hari lalu</TableCell>

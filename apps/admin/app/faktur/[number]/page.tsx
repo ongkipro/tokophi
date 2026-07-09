@@ -4,12 +4,12 @@ import { ArrowLeft } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { getFaktur } from "@/lib/data/billing";
 import { IDR } from "@tokophi/lib/format";
-import { BILLING } from "@tokophi/lib/billing";
+import { BILLING, baseFromTotal } from "@tokophi/lib/billing";
 import { PrintButton } from "./print-button";
 
 export const dynamic = "force-dynamic";
 
-const jenis = (a: number) => (a >= 2_000_000 ? "Langganan Tahunan" : a <= 50_000 ? "Langganan Bulan Pertama (promo)" : "Langganan Bulanan");
+const jenis = (a: number) => (a >= 2_000_000 ? "Langganan Tahunan" : a <= 100_000 ? "Langganan Bulan Pertama (promo)" : "Langganan Bulanan");
 const fmt = (d: Date | string) => new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
 
 export default async function FakturPage({ params }: { params: Promise<{ number: string }> }) {
@@ -20,6 +20,7 @@ export default async function FakturPage({ params }: { params: Promise<{ number:
   if (!data) notFound();
   const { invoice: inv, store, owner } = data;
   const paid = inv.status === "dibayar";
+  const { base, ppn, total } = baseFromTotal(inv.amount); // inv.amount is PPN-inclusive
 
   return (
     <div className="min-h-screen bg-muted/30 p-4 sm:p-8 print:bg-white print:p-0">
@@ -78,18 +79,19 @@ export default async function FakturPage({ params }: { params: Promise<{ number:
               <tr className="border-b">
                 <td className="py-3">
                   <div className="font-medium">Paket {BILLING.PLAN_NAME}</div>
-                  <div className="text-xs text-muted-foreground">{jenis(inv.amount)} — semua fitur</div>
+                  <div className="text-xs text-muted-foreground">{jenis(total)} — semua fitur</div>
                 </td>
-                <td className="py-3 text-right tabular-nums">{IDR(inv.amount)}</td>
+                <td className="py-3 text-right tabular-nums">{IDR(base)}</td>
               </tr>
             </tbody>
           </table>
 
           {/* total */}
           <div className="flex justify-end pt-4">
-            <div className="w-full max-w-[240px] space-y-2 text-sm">
-              <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span className="tabular-nums">{IDR(inv.amount)}</span></div>
-              <div className="flex justify-between border-t pt-2 text-base font-bold"><span>Total</span><span className="tabular-nums">{IDR(inv.amount)}</span></div>
+            <div className="w-full max-w-[260px] space-y-2 text-sm">
+              <div className="flex justify-between text-muted-foreground"><span>Subtotal (DPP)</span><span className="tabular-nums">{IDR(base)}</span></div>
+              <div className="flex justify-between text-muted-foreground"><span>PPN 11%</span><span className="tabular-nums">{IDR(ppn)}</span></div>
+              <div className="flex justify-between border-t pt-2 text-base font-bold"><span>Total</span><span className="tabular-nums">{IDR(total)}</span></div>
             </div>
           </div>
 
