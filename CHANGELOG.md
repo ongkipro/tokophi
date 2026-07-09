@@ -4,6 +4,22 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-09
 
+### Billing — single-plan subscription lifecycle (full, operational)
+- **Model**: one plan "TokoΦ", **all features** (no tier-gating) — 3-day free trial → **Rp50rb** first month (promo) → **Rp275rb/month**. `store` subscription fields (`trial_ends_at`/`current_period_end`/`first_invoice_paid`; migr 0022), `store_status += past_due`. `@tokophi/lib/billing` = pricing + `computeBilling()` (trial → active → past_due → 3-day grace → suspended).
+- **Client admin**: real subscription in sidebar + `/pengaturan/langganan` (status, countdown, next amount incl promo) + **Bayar/Perpanjang/Aktifkan** → creates a real AutoLaris VA. New store → 3-day trial.
+- **Pay + activation**: `paySubscription()` → AutoLaris VA + subscription invoice (`kind/reff/trx/va` cols, migr 0023); pay callback matches the subscription invoice → marks paid + extends `current_period_end` +1mo + `active`.
+- **Enforcement**: `requireCapability` throws `SuspendedError` when past grace → all writes blocked (storefront + paying stay up); admin banner for past-due/suspended.
+- **Super-admin**: MRR = Rp275rb × active; dashboard "Ringkasan Langganan" + "Status Toko" (aktif/trial/menunggak/ditangguhkan); `/paket` rebuilt = single-plan card + subscription-status breakdown + invoices; store detail shows real subscription state. `getSubscriptionStats()` computes status counts from every store's lifecycle.
+
+### Two-level courier + payment control (super-admin → merchant → shopper)
+- **Couriers**: shared roster `@tokophi/lib/couriers` (12 codes incl **SPX**); `platform_couriers` by code (super-admin enable) → client admin picks a subset (`store_settings.couriers`) → ongkir = (merchant ?? all) ∩ platform-enabled. Fixed hard-coded/mock courier list.
+- **Payment channels**: `platform_payment_channels` (migr 0020) — super-admin toggle list + **Sync dari AutoLaris** (live-probe → auto-enable active); checkout offers only platform-enabled (`AUTOLARIS_KNOWN_CHANNELS` roster; validation loosened).
+
+### Fixes
+- **Impersonation** (super-admin "Buka panel admin" → client admin loaded empty): 3 layered prod-only bugs — cross-subdomain cookie (→ `/impersonate` token exchange), `ADMIN_URL` baked at build (→ runtime read), Node-runtime `req.url` leaking internal `localhost:3000` behind Traefik (→ relative-Location redirect). Verified E2E.
+- **MRR chart** near-invisible (fill opacity 0.35 → 0.7).
+- Order cancel now restores stock + fails pending payment; white-label courier labels; dropped inactive payment channels (BSI/DANA).
+
 ### Deploy infra (Docker + Coolify) + hosting decisions
 - **Dev server live**: Vultr Singapore (8 vCPU/16GB AMD, `45.76.146.40`) provisioned via `vultr-cli` + **Coolify v4.1.2**. Hosting = 2-phase **DEV Vultr SG (credit) → PROD Hetzner SG** (migration trivial: Coolify+git+`pg_dump`+Cloudflare). Domain `tokophi.com` in Cloudflare (DNS not pointed). Edge=Cloudflare, origin=Traefik/Coolify (skip HAProxy).
 - **Dockerized** for Coolify **Docker Compose** build pack: `apps/*/Dockerfile` (context=repo root; admin/super-admin `next start`, storefront SSG **builds at container start** then `serve`), `.dockerignore`, `docker-compose.coolify.yml` (postgres + one-off migrate/seed + 3 apps + healthchecks), `.env.coolify.example`. **Validated locally** (migrate+seed 7030 areas, all 3 apps serving).

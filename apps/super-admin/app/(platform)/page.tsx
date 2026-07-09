@@ -23,7 +23,7 @@ import {
   getPlatform,
   getDeltas,
   getStores,
-  getPlanDistribution,
+  getSubscriptionStats,
   getStatusDistribution,
   getInvoices,
   getActivity,
@@ -51,12 +51,12 @@ const STATUS_BAR: Record<StoreStatus, string> = {
 };
 
 export default async function PlatformDashboard() {
-  const [platform, deltas, stores, planDistribution, statusDistribution, invoices, activity, mrrSeries, healthMap] =
+  const [platform, deltas, stores, subStats, statusDistribution, invoices, activity, mrrSeries, healthMap] =
     await Promise.all([
       getPlatform(),
       getDeltas(),
       getStores(),
-      getPlanDistribution(),
+      getSubscriptionStats(),
       getStatusDistribution(),
       getInvoices(),
       getActivity(),
@@ -92,7 +92,7 @@ export default async function PlatformDashboard() {
     { label: "ARPU", value: IDR(platform.arpu), helper: "Rata-rata pendapatan / toko", icon: Coins, delta: deltas.arpu },
   ];
 
-  const maxCount = Math.max(...planDistribution.map((p) => p.count), 1);
+
   const topStores = [...stores].sort((a, b) => b.gmv - a.gmv).slice(0, 5);
   const totalStatus = statusDistribution.reduce((a, s) => a + s.count, 0) || 1;
   const recentInvoices = [...invoices].sort((a, b) => a.daysAgo - b.daysAgo).slice(0, 6);
@@ -205,23 +205,23 @@ export default async function PlatformDashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Distribusi Paket</CardTitle>
+            <CardTitle>Ringkasan Langganan</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {planDistribution.map((p) => (
-              <div key={p.plan} className="space-y-1.5">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{p.name}</span>
-                  <span className="tabular-nums text-muted-foreground">
-                    {num(p.count)} toko · {IDR(p.mrr, { compact: true })}
-                  </span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary/70"
-                    style={{ width: `${(p.count / maxCount) * 100}%` }}
-                  />
-                </div>
+          <CardContent className="space-y-3">
+            <div className="rounded-lg border bg-primary/5 p-3">
+              <p className="text-xs text-muted-foreground">Paket TokoΦ · satu paket, semua fitur</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">{IDR(275_000)}<span className="text-sm font-normal text-muted-foreground">/bln</span></p>
+              <p className="text-[11px] text-muted-foreground">3 hari trial → Rp50rb bln-1 → Rp275rb seterusnya</p>
+            </div>
+            {[
+              { label: "Pelanggan aktif", value: `${num(subStats.active)} · ${IDR(subStats.mrr, { compact: true })} MRR`, cls: "text-emerald-600 dark:text-emerald-400" },
+              { label: "Uji coba", value: `${num(subStats.trial)}${subStats.trialEndingSoon ? ` · ${num(subStats.trialEndingSoon)} berakhir ≤1h` : ""}`, cls: "text-amber-600 dark:text-amber-400" },
+              { label: "Menunggak", value: num(subStats.pastDue), cls: "text-orange-600 dark:text-orange-400" },
+              { label: "Ditangguhkan", value: num(subStats.suspended), cls: "text-destructive" },
+            ].map((r) => (
+              <div key={r.label} className="flex items-center justify-between border-b pb-2 text-sm last:border-0 last:pb-0">
+                <span className="text-muted-foreground">{r.label}</span>
+                <span className={`font-medium tabular-nums ${r.cls}`}>{r.value}</span>
               </div>
             ))}
           </CardContent>

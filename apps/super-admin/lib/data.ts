@@ -74,6 +74,27 @@ export async function getStoreById(id: string): Promise<Store | null> {
   return rows[0] ? rowToStore(rows[0]) : null;
 }
 
+// Platform-wide subscription breakdown (computed from every store's real lifecycle state).
+export type SubStats = { trial: number; active: number; pastDue: number; suspended: number; mrr: number; trialEndingSoon: number; total: number };
+export async function getSubscriptionStats(): Promise<SubStats> {
+  const rows = await db
+    .select({ trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid })
+    .from(schema.stores);
+  const s: SubStats = { trial: 0, active: 0, pastDue: 0, suspended: 0, mrr: 0, trialEndingSoon: 0, total: rows.length };
+  for (const r of rows) {
+    const b = computeBilling(r);
+    if (b.status === "trial") {
+      s.trial++;
+      if (b.daysLeft <= 1) s.trialEndingSoon++;
+    } else if (b.status === "active") {
+      s.active++;
+      s.mrr += BILLING.MONTHLY_IDR;
+    } else if (b.status === "past_due") s.pastDue++;
+    else s.suspended++;
+  }
+  return s;
+}
+
 // Real subscription state for a store (single-plan lifecycle).
 export async function getStoreBilling(id: string): Promise<BillingState | null> {
   const [s] = await db
@@ -154,11 +175,12 @@ export async function getPlanDistribution(): Promise<{ plan: Plan; name: string;
 }
 
 export async function getStatusDistribution(): Promise<{ status: StoreStatus; label: string; count: number }[]> {
-  const p = await getPlatform();
+  const s = await getSubscriptionStats();
   return [
-    { status: "aktif", label: "Aktif", count: p.activeStores },
-    { status: "trial", label: "Trial", count: p.trialStores },
-    { status: "ditangguhkan", label: "Ditangguhkan", count: p.suspendedStores },
+    { status: "aktif", label: "Aktif", count: s.active },
+    { status: "trial", label: "Trial", count: s.trial },
+    { status: "menunggak", label: "Menunggak", count: s.pastDue },
+    { status: "ditangguhkan", label: "Ditangguhkan", count: s.suspended },
   ];
 }
 
