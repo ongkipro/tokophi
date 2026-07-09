@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
-import { alCreatePayment, autolarisConfigured, PAYMENT_CHANNELS } from "@tokophi/lib/autolaris";
+import { alCreatePayment, autolarisConfigured, AUTOLARIS_KNOWN_CHANNELS } from "@tokophi/lib/autolaris";
 import { kaCreateInstantOrder } from "@tokophi/lib/kiriminaja";
 import { rateLimited } from "@/lib/public-guard";
 
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
   if (!items.length) return NextResponse.json({ ok: false, error: "Keranjang kosong." }, { headers: CORS });
   const channelCode = body.channelCode ?? "cod";
   const isCod = channelCode === "cod";
-  if (!isCod && !PAYMENT_CHANNELS.some((c) => c.code === channelCode)) {
+  if (!isCod && !AUTOLARIS_KNOWN_CHANNELS.some((c) => c.code === channelCode)) {
     return NextResponse.json({ ok: false, error: "Metode pembayaran tidak dikenal." }, { headers: CORS });
   }
 
@@ -173,7 +173,7 @@ export async function POST(req: Request) {
     adminFee: pay.admin ?? 0, total: pay.total ?? total,
     virtualAccount: pay.virtualAccount, qr: pay.qr, url: pay.url, paymentCode: pay.paymentCode,
   });
-  const channel = PAYMENT_CHANNELS.find((c) => c.code === channelCode)!;
+  const channel = AUTOLARIS_KNOWN_CHANNELS.find((c) => c.code === channelCode)!;
   return NextResponse.json({
     ok: true, orderNumber: order.number,
     payment: {

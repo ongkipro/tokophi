@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { SESSION_COOKIE, signSession } from "./session";
 import { requirePlatformAdmin } from "./platform-auth";
 import { kaTestConnection } from "@tokophi/lib/kiriminaja";
-import { alTestConnection, alProbeChannels, type AlChannelProbe } from "@tokophi/lib/autolaris";
+import { alTestConnection, alProbeChannels } from "@tokophi/lib/autolaris";
 
 // Every super-admin mutation is gated by `requirePlatformAdmin()` (the security boundary):
 // impersonation + store lifecycle + provisioning + settings all require a platform-admin session.
@@ -121,11 +121,30 @@ export async function setInvoiceStatus(number: string, status: "dibayar" | "menu
 }
 
 // ---- platform settings: persist gateway / courier toggles (were fake-saved before) ----
-// Live-probe AutoLaris to discover which payment channels the platform account has active.
+// Live-probe AutoLaris, persist `active` per channel, and auto-enable the active ones.
 // EXPENSIVE (one create_payment per channel) — super-admin on-demand only.
-export async function fetchAutolarisChannels(): Promise<AlChannelProbe[]> {
+export async function syncPaymentChannels(): Promise<void> {
   await requirePlatformAdmin();
-  return alProbeChannels();
+  const probed = await alProbeChannels();
+  for (const p of probed) {
+    await db
+      .update(schema.platformPaymentChannels)
+      .set({ active: p.active, enabled: p.active })
+      .where(eq(schema.platformPaymentChannels.channel, p.code));
+  }
+  revalidatePath("/pengaturan");
+}
+
+// Persist the enable/disable toggles (what's offered at checkout).
+export async function savePaymentChannels(updates: { key: string; on: boolean }[]): Promise<void> {
+  await requirePlatformAdmin();
+  for (const u of updates) {
+    await db
+      .update(schema.platformPaymentChannels)
+      .set({ enabled: u.on })
+      .where(eq(schema.platformPaymentChannels.channel, u.key));
+  }
+  revalidatePath("/pengaturan");
 }
 
 export async function saveGateways(updates: { key: string; on: boolean }[]): Promise<void> {

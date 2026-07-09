@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { alCreatePayment, autolarisConfigured, PAYMENT_CHANNELS } from "@tokophi/lib/autolaris";
+import { alCreatePayment, autolarisConfigured, AUTOLARIS_KNOWN_CHANNELS } from "@tokophi/lib/autolaris";
 import { rateLimited } from "@/lib/public-guard";
 
 // Public (no-auth) storefront-facing payment endpoint. The checkout calls this to create a
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ ok: false, error: "Body tidak valid." }, { status: 400, headers: CORS });
   }
-  if (!body.channelCode || !PAYMENT_CHANNELS.some((c) => c.code === body.channelCode)) {
+  if (!body.channelCode || !AUTOLARIS_KNOWN_CHANNELS.some((c) => c.code === body.channelCode)) {
     return NextResponse.json({ ok: false, error: "Metode pembayaran tidak dikenal." }, { headers: CORS });
   }
   if (!body.amount || body.amount < 1) {
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     callbackUrl,
   });
   if (!r.ok) return NextResponse.json({ ok: false, error: r.error ?? "Gagal membuat pembayaran." }, { headers: CORS });
-  const channel = PAYMENT_CHANNELS.find((c) => c.code === body.channelCode)!;
+  const channel = AUTOLARIS_KNOWN_CHANNELS.find((c) => c.code === body.channelCode)!;
   return NextResponse.json({
     ok: true,
     channel: { code: channel.code, label: channel.label, kind: channel.kind },

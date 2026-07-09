@@ -787,6 +787,29 @@ async function main() {
     })),
   );
   await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
+  // AutoLaris payment channels. enabled+active = the 6 confirmed active on sandbox (QRIS + 5 VA);
+  // rest listed but off (super-admin can Sync/toggle). Mirrors platform_couriers.
+  await db.insert(schema.platformPaymentChannels).values(
+    (
+      [
+        ["QRIS", "QRIS", "qris", true],
+        ["VABCA", "Virtual Account BCA", "va", true],
+        ["VAMANDIRI", "Virtual Account Mandiri", "va", true],
+        ["VABNI", "Virtual Account BNI", "va", true],
+        ["VABRI", "Virtual Account BRI", "va", true],
+        ["VAPERMATA", "Virtual Account Permata", "va", true],
+        ["VABSI", "Virtual Account BSI", "va", false],
+        ["VACIMB", "Virtual Account CIMB", "va", false],
+        ["DANA", "DANA", "ewallet", false],
+        ["OVO", "OVO", "ewallet", false],
+        ["SHOPEEPAY", "ShopeePay", "ewallet", false],
+        ["LINKAJA", "LinkAja", "ewallet", false],
+        ["GOPAY", "GoPay", "ewallet", false],
+        ["ALFAMART", "Alfamart", "retail", false],
+        ["INDOMARET", "Indomaret", "retail", false],
+      ] as const
+    ).map(([channel, label, kind, on]) => ({ channel, label, kind, enabled: on, active: on })),
+  );
 
   console.log(`Seeded: ${PLANS.length} plans, ${1 + DEMO_STORES.length} stores (${STORE.name} + ${DEMO_STORES.length} demo), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${SUPPLIERS.length} suppliers/${PURCHASE_ORDERS.length} POs, ${SEGMENTS.length} segments, ${REVIEWS.length} reviews, ${MENU_DEFS.length} menus, ${DAILY.length} daily-stats, ${AD_CHANNELS.length} ad-channels/${AD_PROVINCES.length} provinces, ${INVOICES.length} invoices, platform settings.`);
   await client.end();

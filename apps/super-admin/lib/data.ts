@@ -178,6 +178,12 @@ export async function getActivity(): Promise<PActivity[]> {
 
 // ---- platform settings (pengaturan) ----
 export type Toggle = { key: string; name: string; desc: string; on: boolean };
+export type PaymentChannelRow = { key: string; label: string; kind: string; enabled: boolean; active: boolean };
+
+export async function getPaymentChannels(): Promise<PaymentChannelRow[]> {
+  const rows = await db.select().from(schema.platformPaymentChannels).orderBy(schema.platformPaymentChannels.id);
+  return rows.map((c) => ({ key: c.channel, label: c.label, kind: c.kind, enabled: c.enabled, active: c.active }));
+}
 
 const GATEWAY_META: Record<string, { name: string; desc: string; order: number }> = {
   autolaris: { name: "AutoLaris", desc: "PSP platform — VA (6 bank), QRIS, DANA", order: 0 },

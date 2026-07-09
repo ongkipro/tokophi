@@ -628,6 +628,17 @@ export const platformCouriers = pgTable("platform_couriers", {
   enabled: boolean().notNull().default(true),
 });
 
+// AutoLaris payment channels the platform offers (like platform_couriers). enabled = shown at
+// checkout. `active` = last live-probe result (whether AutoLaris actually accepts the channel).
+export const platformPaymentChannels = pgTable("platform_payment_channels", {
+  id: pk(),
+  channel: text().notNull(),
+  label: text().notNull(),
+  kind: text().notNull(),
+  enabled: boolean().notNull().default(false),
+  active: boolean().notNull().default(false),
+});
+
 export const platformCod = pgTable("platform_cod", {
   id: pk(),
   enabled: boolean().notNull().default(false),

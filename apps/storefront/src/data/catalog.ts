@@ -162,3 +162,13 @@ export const bestsellers = () => PRODUCTS.filter((p) => p.bestseller);
 export const byCollection = (handle: string) => PRODUCTS.filter((p) => p.categoryHandle === handle);
 export const findProduct = (handle: string) => PRODUCTS.find((p) => p.handle === handle);
 export const findCollection = (handle: string) => COLLECTIONS.find((c) => c.handle === handle);
+
+// Payment channels the platform (super-admin) has enabled — offered at checkout (+ COD).
+export async function enabledPaymentChannels(): Promise<{ code: string; label: string; kind: string }[]> {
+  const rows = await db
+    .select()
+    .from(schema.platformPaymentChannels)
+    .where(eq(schema.platformPaymentChannels.enabled, true))
+    .orderBy(asc(schema.platformPaymentChannels.id));
+  return rows.map((r) => ({ code: r.channel, label: r.label, kind: r.kind }));
+}

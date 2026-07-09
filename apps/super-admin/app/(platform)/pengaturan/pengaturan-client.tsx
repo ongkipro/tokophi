@@ -35,8 +35,8 @@ import {
 } from "@tokophi/ui/dropdown-menu";
 import { cn } from "@tokophi/ui/lib/utils";
 import { initials } from "@/components/bits";
-import { saveGateways, saveCouriers, invitePlatformAdmin, testKiriminajaConnection, testAutolarisConnection, fetchAutolarisChannels } from "@/lib/actions";
-import type { AlChannelProbe } from "@tokophi/lib/autolaris";
+import { saveGateways, saveCouriers, savePaymentChannels, syncPaymentChannels, invitePlatformAdmin, testKiriminajaConnection, testAutolarisConnection } from "@/lib/actions";
+import type { PaymentChannelRow } from "@/lib/data";
 
 type Toggle = { key: string; name: string; desc: string; on: boolean };
 type TeamMember = { id: string; name: string; email: string; role: string };
@@ -52,11 +52,13 @@ const ROLE_OPTIONS = ["admin", "support", "owner"];
 export function PengaturanClient({
   gateways: initGateways,
   couriers: initCouriers,
+  channels: initChannels,
   aggregator,
   team,
 }: {
   gateways: Toggle[];
   couriers: Toggle[];
+  channels: PaymentChannelRow[];
   aggregator: { provider: string; enabled: boolean };
   team: TeamMember[];
 }) {
@@ -64,6 +66,7 @@ export function PengaturanClient({
   const [pending, startTransition] = useTransition();
   const [gateways, setGateways] = useState(initGateways);
   const [couriers, setCouriers] = useState(initCouriers);
+  const [channels, setChannels] = useState(initChannels);
 
   // KiriminAja live connectivity test
   const [ping, setPing] = useState<{ ok: boolean; message: string } | null>(null);
@@ -79,14 +82,20 @@ export function PengaturanClient({
   // AutoLaris payment-gateway connectivity test
   const [payPing, setPayPing] = useState<{ ok: boolean; message: string } | null>(null);
   const [payTesting, startPayPing] = useTransition();
-  const [channels, setChannels] = useState<AlChannelProbe[] | null>(null);
-  const [chanFetching, startChanFetch] = useTransition();
-  const fetchChannels = () =>
-    startChanFetch(async () => {
-      const rows = await fetchAutolarisChannels();
-      setChannels(rows);
-      const active = rows.filter((r) => r.active).length;
-      toast.success(rows.length ? `${active} channel aktif dari ${rows.length} dicek.` : "Payment belum dikonfigurasi.");
+  const [chanSyncing, startChanSync] = useTransition();
+  const syncChannels = () =>
+    startChanSync(async () => {
+      await syncPaymentChannels();
+      router.refresh(); // reloads channels with fresh active/enabled from AutoLaris probe
+      toast.success("Channel disinkron dari AutoLaris.");
+    });
+  const toggleChannel = (key: string, on: boolean) =>
+    setChannels((prev) => prev.map((c) => (c.key === key ? { ...c, enabled: on } : c)));
+  const saveChannels = () =>
+    startTransition(async () => {
+      await savePaymentChannels(channels.map((c) => ({ key: c.key, on: c.enabled })));
+      toast.success("Metode pembayaran disimpan.");
+      router.refresh();
     });
   const testPay = () =>
     startPayPing(async () => {
@@ -192,28 +201,28 @@ export function PengaturanClient({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Channel yang tersedia di akun AutoLaris platform. AutoLaris tak punya endpoint daftar — di-fetch dengan mengecek tiap channel langsung.
+            Channel yang ditawarkan di checkout. <b>Sync dari AutoLaris</b> mengecek langsung mana yang aktif di akun (tak ada endpoint daftar) lalu mengaktifkannya otomatis; kamu tetap bisa on/off manual.
           </p>
-          {channels && (
-            <div className="grid gap-1.5 sm:grid-cols-2">
-              {channels.map((c) => (
-                <div key={c.code} className="flex items-center justify-between rounded-md border px-3 py-2">
-                  <div className="min-w-0">
+          <div className="grid gap-1.5 sm:grid-cols-2">
+            {channels.map((c) => (
+              <div key={c.key} className="flex items-center justify-between rounded-md border px-3 py-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
                     <p className="truncate text-sm font-medium">{c.label}</p>
-                    <p className="text-[11px] uppercase text-muted-foreground">{c.kind} · {c.code}</p>
+                    {c.active && <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif di AutoLaris</Badge>}
                   </div>
-                  {c.active ? (
-                    <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
-                  ) : (
-                    <Badge variant="secondary" className="border-transparent bg-muted text-muted-foreground">Nonaktif</Badge>
-                  )}
+                  <p className="text-[11px] uppercase text-muted-foreground">{c.kind} · {c.key}</p>
                 </div>
-              ))}
-            </div>
-          )}
-          <div className="flex justify-end">
-            <Button variant="outline" className="gap-1.5" disabled={chanFetching} onClick={fetchChannels}>
-              <Plug className="size-4" /> {chanFetching ? "Mengecek…" : channels ? "Cek ulang" : "Fetch channel"}
+                <Switch checked={c.enabled} onCheckedChange={(v) => toggleChannel(c.key, v)} />
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" className="gap-1.5" disabled={chanSyncing} onClick={syncChannels}>
+              <Plug className="size-4" /> {chanSyncing ? "Menyinkron…" : "Sync dari AutoLaris"}
+            </Button>
+            <Button className="gap-1.5" disabled={pending} onClick={saveChannels}>
+              <Save className="size-4" /> Simpan
             </Button>
           </div>
         </CardContent>

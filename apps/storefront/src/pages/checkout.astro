@@ -1,6 +1,6 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import { STORE } from "../data/catalog";
+import { STORE, enabledPaymentChannels } from "../data/catalog";
 
 // Platform shipping proxy (admin) + this store's origin city — env-driven for per-client prod.
 const ONGKIR_API = import.meta.env.PUBLIC_ONGKIR_API || "http://localhost:3000/api/public/ongkir";
@@ -22,16 +22,16 @@ const PROVINCES = [
   "Kalimantan Timur",
 ];
 
-// Payment channels (platform-managed PSP; brand hidden — generic bank/method labels only).
-// Must mirror the ACTIVE channels in @tokophi/lib PAYMENT_CHANNELS (verified live rc=00).
-// BSI + DANA are NOT active on the platform account → excluded so checkout never fails.
+// Payment channels = whatever the platform (super-admin) enabled (platform_payment_channels),
+// read at build. Brand hidden — generic method labels only. + COD.
+const payDesc = (kind: string, label: string) =>
+  kind === "qris" ? "Scan dari semua e-wallet & m-banking"
+  : kind === "va" ? "Bayar via ATM / m-banking"
+  : kind === "ewallet" ? `Bayar pakai saldo ${label}`
+  : kind === "retail" ? `Bayar tunai di gerai ${label}`
+  : "Bayar online";
 const PAYMENTS = [
-  { id: "QRIS", label: "QRIS", desc: "Scan dari semua e-wallet & m-banking" },
-  { id: "VABCA", label: "Virtual Account BCA", desc: "Bayar via ATM / m-banking BCA" },
-  { id: "VAMANDIRI", label: "Virtual Account Mandiri", desc: "Bayar via ATM / Livin'" },
-  { id: "VABNI", label: "Virtual Account BNI", desc: "Bayar via ATM / m-banking BNI" },
-  { id: "VABRI", label: "Virtual Account BRI", desc: "Bayar via ATM / BRImo" },
-  { id: "VAPERMATA", label: "Virtual Account Permata", desc: "Bayar via ATM / PermataMobile" },
+  ...(await enabledPaymentChannels()).map((c) => ({ id: c.code, label: c.label, desc: payDesc(c.kind, c.label) })),
   { id: "cod", label: "COD (Bayar di Tempat)", desc: "Bayar tunai saat paket tiba" },
 ];
 ---
