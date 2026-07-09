@@ -28,7 +28,7 @@ export async function Sidebar() {
         <NavLinks />
       </div>
       <div className="p-3">
-        <Link href="/pengaturan/langganan" className={`block rounded-xl border bg-gradient-to-br ${accent} p-4 transition-opacity hover:opacity-90`}>
+        <Link href="/akun/langganan" className={`block rounded-xl border bg-gradient-to-br ${accent} p-4 transition-opacity hover:opacity-90`}>
           <div className="mb-1 flex items-center gap-2 text-sm font-semibold">
             <Sparkles className="size-4 text-primary" /> Langganan {BILLING.PLAN_NAME}
           </div>

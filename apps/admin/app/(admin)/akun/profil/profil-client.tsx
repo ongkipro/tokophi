@@ -71,7 +71,7 @@ export function ProfilClient({ profile }: { profile: Profile }) {
 
         {/* quick link to security */}
         <Card>
-          <Link href="/pengaturan/keamanan" className="flex items-center gap-3 p-4 transition-colors hover:bg-muted/50">
+          <Link href="/akun/keamanan" className="flex items-center gap-3 p-4 transition-colors hover:bg-muted/50">
             <span className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground"><ShieldCheck className="size-4" /></span>
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium">Keamanan</span>

@@ -56,6 +56,6 @@ export async function paySubscription(cycle: Cycle = "monthly", channelCode = "V
     trxId: r.trxId,
     virtualAccount: r.virtualAccount,
   });
-  revalidatePath("/pengaturan/langganan");
+  revalidatePath("/akun/langganan");
   return { ok: true, virtualAccount: r.virtualAccount, channel: channelLabel(channelCode), amount, months: q.months };
 }

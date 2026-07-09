@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import {
   Banknote,
   Bell,
@@ -17,9 +16,6 @@ import {
   Info,
   UserPlus,
   Save,
-  ShieldCheck,
-  Sparkles,
-  UserRound,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -254,24 +250,6 @@ export default function Page() {
                   </button>
                 )
               })}
-              {/* separate routes */}
-              {[
-                { href: "/pengaturan/profil", label: "Profil", desc: "Info akun Anda", icon: <UserRound /> },
-                { href: "/pengaturan/keamanan", label: "Keamanan", desc: "Kata sandi & 2FA", icon: <ShieldCheck /> },
-                { href: "/pengaturan/langganan", label: "Langganan", desc: "Paket & tagihan", icon: <Sparkles /> },
-              ].map((r) => (
-                <Link
-                  key={r.href}
-                  href={r.href}
-                  className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-foreground transition-colors hover:bg-muted"
-                >
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-4">{r.icon}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{r.label}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{r.desc}</span>
-                  </span>
-                </Link>
-              ))}
             </nav>
           </Card>
 

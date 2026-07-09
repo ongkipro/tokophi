@@ -25,7 +25,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Topbar user={user} storeName={storeName ?? undefined} searchIndex={searchIndex} />
           {bill && (bill.status === "past_due" || bill.status === "suspended") && (
             <Link
-              href="/pengaturan/langganan"
+              href="/akun/langganan"
               className={`block px-4 py-2 text-center text-sm font-medium ${bill.status === "suspended" ? "bg-destructive text-white" : "bg-orange-500 text-white"}`}
             >
               {bill.status === "suspended"

@@ -30,6 +30,6 @@ export async function updateProfile(input: { name: string; email: string }): Pro
   const [dup] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email)).limit(1);
   if (dup && dup.id !== session.userId) return { ok: false, error: "Email sudah dipakai pengguna lain." };
   await db.update(schema.users).set({ name, email }).where(eq(schema.users.id, session.userId));
-  revalidatePath("/pengaturan/profil");
+  revalidatePath("/akun/profil");
   return { ok: true };
 }

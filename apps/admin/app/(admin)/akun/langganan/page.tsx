@@ -3,7 +3,6 @@ import { IDR } from "@tokophi/lib/format";
 import { BILLING } from "@tokophi/lib/billing";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/components/admin/page-header";
 import { CheckCircle2, Sparkles } from "lucide-react";
 import { PaySubscription } from "@/components/admin/pengaturan/pay-subscription";
 
@@ -23,8 +22,6 @@ export default async function LanggananPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Langganan" desc="Paket, tagihan, dan status langganan toko Anda." />
-
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between">

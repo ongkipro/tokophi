@@ -201,9 +201,9 @@ export function Topbar({ user, storeName, searchIndex = [] }: { user?: { name: s
               <div className="text-xs text-muted-foreground">{email}</div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2" render={<Link href="/pengaturan/profil" />}><User className="size-4" /> Profil</DropdownMenuItem>
-            <DropdownMenuItem className="gap-2" render={<Link href="/pengaturan/keamanan" />}><ShieldCheck className="size-4" /> Keamanan</DropdownMenuItem>
-            <DropdownMenuItem className="gap-2" render={<Link href="/pengaturan/langganan" />}><CreditCard className="size-4" /> Langganan</DropdownMenuItem>
+            <DropdownMenuItem className="gap-2" render={<Link href="/akun/profil" />}><User className="size-4" /> Profil</DropdownMenuItem>
+            <DropdownMenuItem className="gap-2" render={<Link href="/akun/keamanan" />}><ShieldCheck className="size-4" /> Keamanan</DropdownMenuItem>
+            <DropdownMenuItem className="gap-2" render={<Link href="/akun/langganan" />}><CreditCard className="size-4" /> Langganan</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="gap-2 text-destructive" onClick={() => signOut()}><LogOut className="size-4" /> Keluar</DropdownMenuItem>
           </DropdownMenuContent>
