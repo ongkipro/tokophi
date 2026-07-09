@@ -1,7 +1,9 @@
 import "server-only";
+import { cacheGet, cacheSet } from "./cache";
 
 // KiriminAja Mitra API client (platform-managed courier aggregator). Endpoints + version
 // prefixes verified against the sandbox Postman collection — versions vary PER endpoint.
+const PRICE_TTL = 10 * 60 * 1000; // 10 min — cuts repeated ongkir calls under ad-driven traffic
 const ENV = process.env.KIRIMINAJA_ENV ?? "sandbox";
 const BASE = ENV === "production" ? "https://client.kiriminaja.com" : "https://tdev.kiriminaja.com";
 const KEY = process.env.KIRIMINAJA_API_KEY ?? "";
@@ -37,6 +39,10 @@ export async function kaShippingPrice(p: {
   insurance?: 0 | 1;
   couriers?: string[];
 }): Promise<{ ok: boolean; results: KaRate[]; error?: string }> {
+  // cache successful rates per route (origin+dest+weight+value+insurance+couriers) — 10 min
+  const key = `ka:price:${p.origin}:${p.destination}:${p.weight}:${p.itemValue ?? 0}:${p.insurance ?? 0}:${(p.couriers ?? []).join(",")}`;
+  const hit = cacheGet<{ ok: boolean; results: KaRate[] }>(key);
+  if (hit) return hit;
   const r = await ka<{ status: boolean; text?: string; results?: KaRate[] }>("/api/mitra/v6.1/shipping_price", {
     origin: p.origin,
     destination: p.destination,
@@ -45,7 +51,10 @@ export async function kaShippingPrice(p: {
     insurance: p.insurance ?? 0,
     ...(p.couriers?.length ? { courier: p.couriers } : {}),
   });
-  return { ok: !!r.status, results: Array.isArray(r.results) ? r.results : [], error: r.status ? undefined : r.text };
+  if (!r.status) return { ok: false, results: [], error: r.text };
+  const out = { ok: true, results: Array.isArray(r.results) ? r.results : [] };
+  cacheSet(key, out, PRICE_TTL);
+  return out;
 }
 
 // create an express shipment (pickup request) → returns AWB / KiriminAja order id
