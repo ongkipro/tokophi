@@ -113,7 +113,10 @@ VPS (Coolify/Docker): app + rich + storefront-SSR + PgBouncer + Postgres 16 (+op
 - Cache = **Workers KV** (bukan Redis) kecuali BullMQ.
 - Security engine = **hybrid** (edge + `guard()` custom + RLS), bukan crypto from scratch.
 
-**✅ Store-context admin = path `/store/{slug}/`** (Shopify-style, dikonfirmasi). **Step 1 DONE** (commit 3692bb4): middleware rewrite `/store/{slug}/{rest}` → route internal + header `x-tokophi-store`; **non-breaking** (URL lama tetap jalan); store tetap di-scope session (RLS). ⏳ Lanjutan bertahap: post-login redirect ke `/store/{slug}`, nav prefix, super-admin impersonation deep-link, validasi slug↔membership.
+**✅ Store-context admin = path `/store/{slug}/`** (Shopify-style, dikonfirmasi & jalan):
+- **Step 1** (3692bb4): middleware rewrite `/store/{slug}/{rest}` → route internal + header; non-breaking (URL lama tetap jalan); scope tetap dari session (RLS).
+- **Step 2** (74f7e01): `getStoreSlug` + `useStoreHref`/StoreProvider slug; nav link prefixed + active-state strip-prefix. Verified nol crash.
+- ⏳ Lanjutan opsional: post-login redirect ke `/store/{slug}`, super-admin impersonation deep-link, validasi slug↔membership (untuk multi-toko/akun).
 
 **⏳ Terbuka (perlu diputuskan):**
 1. Queue: **CF Queues** vs **Inngest** vs **BullMQ+Redis**?
