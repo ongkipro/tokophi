@@ -2,16 +2,11 @@
 
 import * as React from "react"
 import {
-  Banknote,
   Bell,
   CreditCard,
-  Landmark,
-  QrCode,
   Receipt,
   Truck,
   Users,
-  Wallet,
-  HandCoins,
   Store,
   Info,
   UserPlus,
@@ -42,6 +37,7 @@ import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { SenderAddressCard } from "@/components/admin/pengaturan/sender-address-card"
 import { PaymentFeesCard } from "@/components/admin/pengaturan/payment-fees-card"
+import { PaymentMethodsCard } from "@/components/admin/pengaturan/payment-methods-card"
 import { getCouriers, saveCouriers, getPlatformCouriers } from "@/lib/actions/shipping"
 import { COURIERS } from "@tokophi/lib/couriers"
 import { toast } from "sonner"
@@ -124,16 +120,6 @@ export default function Page() {
   const canSettings = useCan("settings:write")
   const storeName = useStoreName()
 
-  // Pembayaran
-  const [pay, setPay] = React.useState({
-    transfer: true,
-    qris: true,
-    ewallet: true,
-    kartu: false,
-    cod: true,
-    va: false,
-  })
-
   // Pengiriman — the AVAILABLE list = couriers the platform (super-admin) enabled; the merchant
   // picks a subset (store_settings.couriers; NULL = all available). Loaded + auto-saved.
   const [platformCouriers, setPlatformCouriers] = React.useState<string[] | null>(null)
@@ -168,13 +154,9 @@ export default function Page() {
     emailPelanggan: false,
   })
 
-  const setPayKey = (k: keyof typeof pay) => (v: boolean) =>
-    setPay((s) => ({ ...s, [k]: v }))
   const setNotifKey = (k: keyof typeof notif) => (v: boolean) =>
     setNotif((s) => ({ ...s, [k]: v }))
 
-  const payTotal = Object.keys(pay).length
-  const payActive = Object.values(pay).filter(Boolean).length
   const kurirActive = availableCouriers.filter((c) => courierOn[c.code]).length
 
   const team = [
@@ -268,7 +250,7 @@ export default function Page() {
                     {storeName}
                   </p>
                   <Badge variant="secondary" className="mt-1">
-                    Paket Bisnis
+                    Paket TokoΦ
                   </Badge>
                 </div>
               </div>
@@ -276,15 +258,6 @@ export default function Page() {
               <Separator />
 
               <ul className="grid gap-2 text-sm">
-                <li className="flex items-center gap-2 text-muted-foreground">
-                  <CreditCard className="size-4 shrink-0" />
-                  <span>
-                    <span className="font-medium tabular-nums text-foreground">
-                      {payActive}
-                    </span>{" "}
-                    metode bayar
-                  </span>
-                </li>
                 <li className="flex items-center gap-2 text-muted-foreground">
                   <Truck className="size-4 shrink-0" />
                   <span>
@@ -419,75 +392,7 @@ export default function Page() {
           )}
 
           {/* PEMBAYARAN */}
-          {section === "pembayaran" && (
-            <Card className="max-w-3xl">
-              <CardHeader>
-                <CardTitle>Metode Pembayaran</CardTitle>
-                <CardDescription>
-                  Aktifkan metode pembayaran yang tersedia untuk pelanggan Anda.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
-                  <Info className="mt-0.5 size-4 shrink-0 text-primary" />
-                  <span>
-                    Gateway pembayaran &amp; COD disediakan dan dikelola oleh{" "}
-                    <span className="font-medium text-foreground">TokoΦ</span>. Anda cukup mengaktifkan metode yang ingin diterima — tanpa daftar akun atau isi API sendiri.
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-medium tabular-nums text-foreground">
-                    {payActive}
-                  </span>{" "}
-                  dari{" "}
-                  <span className="tabular-nums">{payTotal}</span> metode aktif
-                </p>
-                <ToggleRow
-                  icon={<Landmark />}
-                  title="Transfer Bank"
-                  description="BCA, Mandiri, BRI"
-                  checked={pay.transfer}
-                  onCheckedChange={setPayKey("transfer")}
-                />
-                <ToggleRow
-                  icon={<QrCode />}
-                  title="QRIS"
-                  description="Pembayaran instan lewat semua aplikasi QRIS"
-                  checked={pay.qris}
-                  onCheckedChange={setPayKey("qris")}
-                />
-                <ToggleRow
-                  icon={<Wallet />}
-                  title="E-wallet"
-                  description="OVO, GoPay, DANA, ShopeePay"
-                  checked={pay.ewallet}
-                  onCheckedChange={setPayKey("ewallet")}
-                />
-                <ToggleRow
-                  icon={<CreditCard />}
-                  title="Kartu Kredit/Debit"
-                  description="Visa, Mastercard, JCB"
-                  checked={pay.kartu}
-                  onCheckedChange={setPayKey("kartu")}
-                />
-                <ToggleRow
-                  icon={<HandCoins />}
-                  title="COD (Bayar di Tempat)"
-                  description="Pembayaran tunai saat pesanan tiba"
-                  checked={pay.cod}
-                  onCheckedChange={setPayKey("cod")}
-                />
-                <ToggleRow
-                  icon={<Banknote />}
-                  title="Virtual Account"
-                  description="Nomor VA otomatis per bank"
-                  checked={pay.va}
-                  onCheckedChange={setPayKey("va")}
-                />
-              </CardContent>
-              <SaveFooter />
-            </Card>
-          )}
+          {section === "pembayaran" && <PaymentMethodsCard />}
           {section === "pembayaran" && <PaymentFeesCard />}
 
           {/* PENGIRIMAN */}
