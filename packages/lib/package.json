@@ -10,6 +10,7 @@
     "./autolaris": "./src/autolaris.ts",
     "./cache": "./src/cache.ts",
     "./couriers": "./src/couriers.ts",
-    "./billing": "./src/billing.ts"
+    "./billing": "./src/billing.ts",
+    "./totp": "./src/totp.ts"
   }
 }

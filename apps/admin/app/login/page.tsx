@@ -25,8 +25,15 @@ export default function LoginPage() {
               <Label htmlFor="password">Kata sandi</Label>
               <Input id="password" name="password" type="password" required autoComplete="current-password" />
             </div>
+            {state?.need2fa && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="code">Kode autentikasi (2FA)</Label>
+                <Input id="code" name="code" inputMode="numeric" maxLength={6} placeholder="000000" autoFocus autoComplete="one-time-code" className="font-mono tracking-widest" />
+                <p className="text-xs text-muted-foreground">Masukkan 6 digit dari aplikasi authenticator Anda.</p>
+              </div>
+            )}
             {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
-            <Button type="submit" disabled={pending}>{pending ? "Masuk…" : "Masuk"}</Button>
+            <Button type="submit" disabled={pending}>{pending ? "Masuk…" : state?.need2fa ? "Verifikasi" : "Masuk"}</Button>
             <p className="text-center text-xs text-muted-foreground">Dev: ongki@batiknusantara.id / tokophi123</p>
           </form>
         </CardContent>

@@ -27,6 +27,8 @@ export async function findLogin(email: string) {
       email: schema.users.email,
       name: schema.users.name,
       passwordHash: schema.users.passwordHash,
+      totpEnabled: schema.users.totpEnabled,
+      totpSecret: schema.users.totpSecret,
       storeId: schema.storeUsers.storeId,
       role: schema.storeUsers.role,
       slug: schema.stores.slug,

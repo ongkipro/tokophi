@@ -101,6 +101,8 @@ export const users = pgTable("users", {
   email: text().notNull().unique(),
   name: text(),
   passwordHash: text(), // scrypt "salt:hash" (local auth)
+  totpSecret: text(), // base32 TOTP secret (2FA); set once enabled
+  totpEnabled: boolean().notNull().default(false),
   createdAt: createdAt(),
 });
 
