@@ -1,7 +1,9 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
 import { courierName, COURIER_CODES } from "@tokophi/lib/couriers";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
+import { autolarisConfigured } from "@tokophi/lib/autolaris";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { PLANS, type Plan, type Store, type StoreStatus, type Invoice, type PActivity } from "./mock";
 import { BILLING, computeBilling, type BillingState } from "@tokophi/lib/billing";
 
@@ -93,6 +95,49 @@ export async function getSubscriptionStats(): Promise<SubStats> {
     else s.suspended++;
   }
   return s;
+}
+
+// Finance rollup for the platform (single-plan model).
+export type FinanceStats = { mrr: number; arr: number; revenuePaid: number; revenuePending: number; invoicesPaid: number; invoicesPending: number; annualPaid: number; gmvTotal: number };
+export async function getFinanceStats(): Promise<FinanceStats> {
+  const [sub, stores, invs] = await Promise.all([
+    getSubscriptionStats(),
+    getStores(),
+    db.select({ status: schema.invoices.status, amount: schema.invoices.amountIdr, cycle: schema.invoices.cycle }).from(schema.invoices),
+  ]);
+  const paid = invs.filter((i) => i.status === "dibayar");
+  const pending = invs.filter((i) => i.status === "menunggu");
+  return {
+    mrr: sub.mrr,
+    arr: sub.mrr * 12,
+    revenuePaid: paid.reduce((a, i) => a + i.amount, 0),
+    revenuePending: pending.reduce((a, i) => a + i.amount, 0),
+    invoicesPaid: paid.length,
+    invoicesPending: pending.length,
+    annualPaid: paid.filter((i) => i.cycle === "annual").length,
+    gmvTotal: stores.reduce((a, s) => a + s.gmv, 0),
+  };
+}
+
+// Platform system + integration status.
+export type SystemStatus = { kiriminaja: boolean; autolaris: boolean; kaEnv: string; stores: number; dbOk: boolean; region: string };
+export async function getSystemStatus(): Promise<SystemStatus> {
+  let stores = 0;
+  let dbOk = true;
+  try {
+    const [row] = await db.select({ c: sql<number>`count(*)` }).from(schema.stores);
+    stores = Number(row?.c ?? 0);
+  } catch {
+    dbOk = false;
+  }
+  return {
+    kiriminaja: kiriminajaConfigured(),
+    autolaris: autolarisConfigured(),
+    kaEnv: process.env.KIRIMINAJA_ENV ?? "sandbox",
+    stores,
+    dbOk,
+    region: "Singapore",
+  };
 }
 
 // Real subscription state for a store (single-plan lifecycle).
