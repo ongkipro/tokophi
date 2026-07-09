@@ -2,9 +2,8 @@
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { scryptSync, randomBytes } from "node:crypto";
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { SESSION_COOKIE, signSession } from "./session";
+import { signImpersonation } from "./session";
 import { requirePlatformAdmin } from "./platform-auth";
 import { kaTestConnection } from "@tokophi/lib/kiriminaja";
 import { alTestConnection, alProbeChannels } from "@tokophi/lib/autolaris";
@@ -43,21 +42,17 @@ export async function impersonateStore(storeId: string): Promise<{ ok: boolean; 
 
   if (!owner) return { ok: false, error: "Toko tidak punya pemilik (owner) untuk dibukakan panelnya." };
 
-  const token = await signSession({
+  // Short-lived token → admin's /impersonate exchanges it for a session cookie on the ADMIN
+  // domain (cross-subdomain cookies aren't shared, so we can't set it from here).
+  const token = await signImpersonation({
     userId: owner.userId,
     storeId: owner.storeId,
     role: owner.role,
     email: owner.email,
     name: owner.name ?? owner.email,
   });
-  (await cookies()).set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-  // deep-link straight into the impersonated store's admin (Shopify-style /store/{slug}/)
-  return { ok: true, adminUrl: `${ADMIN_URL}/store/${owner.slug}` };
+  const url = `${ADMIN_URL}/impersonate?token=${encodeURIComponent(token)}&slug=${encodeURIComponent(owner.slug)}`;
+  return { ok: true, adminUrl: url };
 }
 
 export async function setStoreStatus(storeId: string, status: "active" | "trial" | "suspended"): Promise<void> {

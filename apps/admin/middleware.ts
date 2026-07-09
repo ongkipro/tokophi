@@ -19,7 +19,10 @@ export async function middleware(req: NextRequest) {
   }
   const { pathname } = req.nextUrl;
   const isLogin = pathname === "/login";
-  if (!valid && !isLogin) {
+  // /impersonate exchanges a signed one-time token (from the super-admin) for a session cookie
+  // on THIS domain — must run unauthenticated (cross-subdomain cookies aren't shared).
+  const isImpersonate = pathname === "/impersonate";
+  if (!valid && !isLogin && !isImpersonate) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
   if (valid && isLogin) {

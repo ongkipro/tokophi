@@ -14,3 +14,11 @@ export type Session = { userId: string; storeId: string; role: string; email: st
 export async function signSession(s: Session): Promise<string> {
   return new SignJWT({ ...s }).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("7d").sign(secret);
 }
+
+// Short-lived token for cross-subdomain impersonation: passed in the URL to the admin's
+// /impersonate route, which verifies it and mints the real session cookie on the admin domain.
+// Prod admin/super-admin live on different subdomains → cookies aren't shared, so we can't set
+// the cookie here directly.
+export async function signImpersonation(s: Session): Promise<string> {
+  return new SignJWT({ ...s }).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("2m").sign(secret);
+}
