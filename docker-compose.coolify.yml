@@ -55,6 +55,12 @@ services:
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
     expose:
       - "3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/login >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
   super-admin:
     build:
@@ -74,6 +80,12 @@ services:
       AUTOLARIS_API_KEY: ${AUTOLARIS_API_KEY:-}
     expose:
       - "3001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
   storefront:
     build:
@@ -89,6 +101,13 @@ services:
       PUBLIC_ORDER_API: ${PUBLIC_ORDER_API:-}
     expose:
       - "4327"
+    healthcheck:
+      # storefront builds at container start (~60s) before serving → longer start_period
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4327/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
 
 volumes:
   tokophi-pgdata:
