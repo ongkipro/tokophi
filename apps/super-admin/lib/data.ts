@@ -11,7 +11,6 @@ import { BILLING, computeBilling, type BillingState } from "@tokophi/lib/billing
 const TODAY = new Date("2026-07-02T00:00:00Z");
 const daysBetween = (d: Date) => Math.round((TODAY.getTime() - d.getTime()) / 86_400_000);
 const minutesBetween = (d: Date) => Math.round((TODAY.getTime() - d.getTime()) / 60_000);
-const TO_UI: Record<"active" | "trial" | "past_due" | "suspended", StoreStatus> = { active: "aktif", trial: "trial", past_due: "menunggak", suspended: "ditangguhkan" };
 
 function mulberry32(seed: number) {
   return function () {
@@ -24,8 +23,12 @@ function mulberry32(seed: number) {
 }
 
 // ---- stores ----
+// UI status is the REAL-TIME lifecycle (computeBilling), not the possibly-stale stored column,
+// so the Toko list stays consistent with the store detail + enforcement.
+const BILL_TO_UI: Record<"trial" | "active" | "past_due" | "suspended", StoreStatus> = { active: "aktif", trial: "trial", past_due: "menunggak", suspended: "ditangguhkan" };
 function rowToStore(r: {
-  id: string; name: string; city: string | null; plan: Plan; status: "active" | "trial" | "past_due" | "suspended";
+  id: string; name: string; city: string | null; plan: Plan;
+  trialEndsAt: Date | null; currentPeriodEnd: Date | null; firstInvoicePaid: boolean;
   createdAt: Date; gmv: number | null; orders: number | null; products: number | null; owner: string | null; email: string | null;
 }): Store {
   return {
@@ -35,7 +38,7 @@ function rowToStore(r: {
     email: r.email ?? "",
     city: r.city ?? "",
     plan: r.plan,
-    status: TO_UI[r.status],
+    status: BILL_TO_UI[computeBilling(r).status],
     gmv: r.gmv ?? 0,
     orders: r.orders ?? 0,
     products: r.products ?? 0,
@@ -48,7 +51,9 @@ const storeSelect = {
   name: schema.stores.name,
   city: schema.stores.city,
   plan: schema.stores.plan,
-  status: schema.stores.status,
+  trialEndsAt: schema.stores.trialEndsAt,
+  currentPeriodEnd: schema.stores.currentPeriodEnd,
+  firstInvoicePaid: schema.stores.firstInvoicePaid,
   createdAt: schema.stores.createdAt,
   gmv: schema.storeStats.gmvIdr,
   orders: schema.storeStats.ordersCount,
