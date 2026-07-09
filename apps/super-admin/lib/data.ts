@@ -5,7 +5,7 @@ import { kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { autolarisConfigured } from "@tokophi/lib/autolaris";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { PLANS, type Plan, type Store, type StoreStatus, type Invoice, type PActivity } from "./mock";
-import { BILLING, computeBilling, type BillingState } from "@tokophi/lib/billing";
+import { BILLING, computeBilling, storeSegment, type BillingState } from "@tokophi/lib/billing";
 
 // Anchor matches the seed so relative "N hari/menit lalu" figures stay deterministic.
 const TODAY = new Date("2026-07-02T00:00:00Z");
@@ -28,8 +28,8 @@ function mulberry32(seed: number) {
 const BILL_TO_UI: Record<"trial" | "active" | "past_due" | "suspended", StoreStatus> = { active: "aktif", trial: "trial", past_due: "menunggak", suspended: "ditangguhkan" };
 function rowToStore(r: {
   id: string; name: string; city: string | null; plan: Plan;
-  trialEndsAt: Date | null; currentPeriodEnd: Date | null; firstInvoicePaid: boolean;
-  createdAt: Date; gmv: number | null; orders: number | null; products: number | null; owner: string | null; email: string | null;
+  trialEndsAt: Date | null; currentPeriodEnd: Date | null; firstInvoicePaid: boolean; comped: boolean;
+  createdAt: Date; gmv: number | null; orders: number | null; products: number | null; ship7d: number | null; owner: string | null; email: string | null;
 }): Store {
   return {
     id: r.id,
@@ -39,9 +39,12 @@ function rowToStore(r: {
     city: r.city ?? "",
     plan: r.plan,
     status: BILL_TO_UI[computeBilling(r).status],
+    segment: storeSegment(r),
+    comped: r.comped,
     gmv: r.gmv ?? 0,
     orders: r.orders ?? 0,
     products: r.products ?? 0,
+    ship7d: r.ship7d ?? 0,
     createdDaysAgo: daysBetween(r.createdAt),
   };
 }
@@ -54,10 +57,12 @@ const storeSelect = {
   trialEndsAt: schema.stores.trialEndsAt,
   currentPeriodEnd: schema.stores.currentPeriodEnd,
   firstInvoicePaid: schema.stores.firstInvoicePaid,
+  comped: schema.stores.comped,
   createdAt: schema.stores.createdAt,
   gmv: schema.storeStats.gmvIdr,
   orders: schema.storeStats.ordersCount,
   products: schema.storeStats.productsCount,
+  ship7d: schema.storeStats.ship7dAvg,
   owner: schema.users.name,
   email: schema.users.email,
 };
@@ -82,20 +87,21 @@ export async function getStoreById(id: string): Promise<Store | null> {
 }
 
 // Platform-wide subscription breakdown (computed from every store's real lifecycle state).
-export type SubStats = { trial: number; active: number; pastDue: number; suspended: number; mrr: number; trialEndingSoon: number; total: number };
+export type SubStats = { trial: number; active: number; pastDue: number; suspended: number; vip: number; mrr: number; trialEndingSoon: number; total: number };
 export async function getSubscriptionStats(): Promise<SubStats> {
   const rows = await db
-    .select({ trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid })
+    .select({ trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid, comped: schema.stores.comped })
     .from(schema.stores);
-  const s: SubStats = { trial: 0, active: 0, pastDue: 0, suspended: 0, mrr: 0, trialEndingSoon: 0, total: rows.length };
+  const s: SubStats = { trial: 0, active: 0, pastDue: 0, suspended: 0, vip: 0, mrr: 0, trialEndingSoon: 0, total: rows.length };
   for (const r of rows) {
+    if (r.comped) { s.vip++; continue; } // VIP: active but no MRR, tracked separately
     const b = computeBilling(r);
     if (b.status === "trial") {
       s.trial++;
       if (b.daysLeft <= 1) s.trialEndingSoon++;
     } else if (b.status === "active") {
       s.active++;
-      s.mrr += BILLING.MONTHLY_IDR;
+      s.mrr += r.firstInvoicePaid ? BILLING.MONTHLY_IDR : BILLING.FIRST_MONTH_IDR; // first month contributes the promo rate
     } else if (b.status === "past_due") s.pastDue++;
     else s.suspended++;
   }
@@ -168,7 +174,7 @@ export async function getServerMetrics(): Promise<ServerMetrics> {
 // Real subscription state for a store (single-plan lifecycle).
 export async function getStoreBilling(id: string): Promise<BillingState | null> {
   const [s] = await db
-    .select({ trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid })
+    .select({ trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid, comped: schema.stores.comped })
     .from(schema.stores)
     .where(eq(schema.stores.id, id))
     .limit(1);
@@ -184,7 +190,7 @@ export type Platform = {
 export async function getPlatform(): Promise<Platform> {
   const stores = await getStores();
   const active = stores.filter((s) => s.status === "aktif");
-  const mrr = active.length * BILLING.MONTHLY_IDR; // single plan, recurring rate
+  const mrr = active.filter((s) => !s.comped).length * BILLING.MONTHLY_IDR; // single plan; VIP/comped excluded
   return {
     mrr,
     gmv: stores.reduce((a, s) => a + s.gmv, 0),
@@ -325,4 +331,48 @@ export async function getAggregator(): Promise<{ provider: string; enabled: bool
   const agg = (await db.select().from(schema.shippingAggregator))[0];
   const PROVIDER_NAME: Record<string, string> = { biteship: "Biteship", rajaongkir: "RajaOngkir", shipper: "Shipper", kiriminaja: "KiriminAja" };
   return { provider: agg ? PROVIDER_NAME[agg.provider] ?? agg.provider : "—", enabled: agg?.enabled ?? false };
+}
+
+// ---- per-store control-plane detail (invoices, users, audit) ----
+export type StoreInvoiceRow = { number: string; amount: number; status: "dibayar" | "menunggu" | "gagal"; kind: string | null; cycle: string | null; daysAgo: number };
+export async function getStoreInvoices(storeId: string): Promise<StoreInvoiceRow[]> {
+  const rows = await db
+    .select({ number: schema.invoices.number, amount: schema.invoices.amountIdr, status: schema.invoices.status, kind: schema.invoices.kind, cycle: schema.invoices.cycle, issuedAt: schema.invoices.issuedAt })
+    .from(schema.invoices)
+    .where(eq(schema.invoices.storeId, storeId))
+    .orderBy(desc(schema.invoices.issuedAt));
+  return rows.map((r) => ({ number: r.number, amount: r.amount, status: r.status, kind: r.kind, cycle: r.cycle, daysAgo: daysBetween(r.issuedAt) }));
+}
+
+export type StoreUserRow = { id: string; userId: string; name: string; email: string; role: string; acceptedDaysAgo: number | null };
+export async function getStoreUsers(storeId: string): Promise<StoreUserRow[]> {
+  const rows = await db
+    .select({ id: schema.storeUsers.id, userId: schema.users.id, name: schema.users.name, email: schema.users.email, role: schema.storeUsers.role, acceptedAt: schema.storeUsers.acceptedAt })
+    .from(schema.storeUsers)
+    .innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
+    .where(eq(schema.storeUsers.storeId, storeId))
+    .orderBy(asc(schema.storeUsers.invitedAt));
+  return rows.map((r) => ({ id: r.id, userId: r.userId, name: r.name ?? r.email, email: r.email, role: r.role, acceptedDaysAgo: r.acceptedAt ? daysBetween(r.acceptedAt) : null }));
+}
+
+// Per-store audit/activity: rows explicitly tagged with this store_id (operator actions + store events).
+export async function getStoreActivity(storeId: string): Promise<PActivity[]> {
+  const rows = await db
+    .select()
+    .from(schema.platformActivity)
+    .where(eq(schema.platformActivity.storeId, storeId))
+    .orderBy(desc(schema.platformActivity.ts))
+    .limit(20);
+  return rows.map((r) => ({ id: r.id, kind: r.kind, text: r.text, minutesAgo: minutesBetween(r.ts) }));
+}
+
+// The store's comped/VIP state + reason (for the detail control card).
+export async function getStoreComp(storeId: string): Promise<{ comped: boolean; reason: string | null; ship7d: number }> {
+  const [s] = await db
+    .select({ comped: schema.stores.comped, reason: schema.stores.compedReason, ship7d: schema.storeStats.ship7dAvg })
+    .from(schema.stores)
+    .leftJoin(schema.storeStats, eq(schema.storeStats.storeId, schema.stores.id))
+    .where(eq(schema.stores.id, storeId))
+    .limit(1);
+  return { comped: s?.comped ?? false, reason: s?.reason ?? null, ship7d: s?.ship7d ?? 0 };
 }

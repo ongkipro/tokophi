@@ -1,5 +1,5 @@
 // Small, server-safe display helpers shared across platform pages.
-import { UserPlus, ArrowUpRight, CreditCard, TrendingDown, LifeBuoy, ArrowUp, ArrowDown, type LucideIcon } from "lucide-react";
+import { UserPlus, ArrowUpRight, CreditCard, TrendingDown, LifeBuoy, ArrowUp, ArrowDown, ShieldCheck, type LucideIcon } from "lucide-react";
 import { Badge } from "@tokophi/ui/badge";
 import { cn } from "@tokophi/ui/lib/utils";
 import type { Plan, StoreStatus, PActivity, InvoiceStatus } from "@/lib/mock";
@@ -127,6 +127,7 @@ const ACTIVITY_META: Record<PActivity["kind"], { icon: LucideIcon; tint: string 
   payment: { icon: CreditCard, tint: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" },
   churn: { icon: TrendingDown, tint: "bg-destructive/12 text-destructive" },
   support: { icon: LifeBuoy, tint: "bg-amber-500/12 text-amber-600 dark:text-amber-400" },
+  admin: { icon: ShieldCheck, tint: "bg-chart-3/15 text-chart-3" },
 };
 
 export function ActivityIcon({ kind }: { kind: PActivity["kind"] }) {

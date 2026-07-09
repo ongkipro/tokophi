@@ -2,6 +2,8 @@
 // Live data now comes from the database via lib/data.ts (@tokophi/db); this file only
 // holds the plan catalog + the UI-facing types the components share.
 
+import type { StoreSegment } from "@tokophi/lib/billing";
+
 export type Plan = "pemula" | "bisnis" | "skala";
 export type StoreStatus = "aktif" | "trial" | "ditangguhkan" | "menunggak";
 
@@ -13,9 +15,12 @@ export type Store = {
   city: string;
   plan: Plan;
   status: StoreStatus;
+  segment: StoreSegment; // billing lifecycle: trial | first_month | regular | vip
+  comped: boolean; // VIP: billing bypassed
   gmv: number; // total transaction value (IDR)
   orders: number;
   products: number;
+  ship7d: number; // avg shipments/day, last 7 days
   createdDaysAgo: number;
 };
 
@@ -34,4 +39,4 @@ export const planPrice = (k: Plan) => PLANS.find((p) => p.key === k)?.price ?? 0
 export type InvoiceStatus = "dibayar" | "menunggu" | "gagal";
 export type Invoice = { id: string; store: string; plan: Plan; amount: number; status: InvoiceStatus; daysAgo: number };
 
-export type PActivity = { id: string; kind: "signup" | "upgrade" | "payment" | "churn" | "support"; text: string; minutesAgo: number };
+export type PActivity = { id: string; kind: "signup" | "upgrade" | "payment" | "churn" | "support" | "admin"; text: string; minutesAgo: number };

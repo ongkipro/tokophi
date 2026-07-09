@@ -55,7 +55,7 @@ export const adChannelKey = pgEnum("ad_channel_key", ["meta", "google", "tiktok"
 export const gatewayProvider = pgEnum("gateway_provider", ["midtrans", "xendit", "duitku", "autolaris"]);
 export const aggregatorProvider = pgEnum("aggregator_provider", ["biteship", "rajaongkir", "shipper", "kiriminaja"]);
 export const invoiceStatus = pgEnum("invoice_status", ["dibayar", "menunggu", "gagal"]);
-export const platformActivityKind = pgEnum("platform_activity_kind", ["signup", "upgrade", "payment", "churn", "support"]);
+export const platformActivityKind = pgEnum("platform_activity_kind", ["signup", "upgrade", "payment", "churn", "support", "admin"]);
 export const notificationChannel = pgEnum("notification_channel", ["email", "wa"]);
 
 // ---------- identity & tenancy ----------
@@ -82,6 +82,11 @@ export const stores = pgTable("stores", {
   trialEndsAt: ts(),
   currentPeriodEnd: ts(),
   firstInvoicePaid: boolean().notNull().default(false),
+  // Comped / VIP: super-admin bypasses billing for this store (no monthly charge). Used for
+  // high-volume merchants we choose to host free. `comped=true` → always active, MRR 0, cron skips.
+  comped: boolean().notNull().default(false),
+  compedReason: text(),
+  compedAt: ts(),
   createdAt: createdAt(),
 });
 
@@ -93,6 +98,7 @@ export const storeStats = pgTable("store_stats", {
   gmvIdr: money().notNull().default(0),
   ordersCount: integer().notNull().default(0),
   productsCount: integer().notNull().default(0),
+  ship7dAvg: integer().notNull().default(0), // avg shipments/day over the last 7 days (VIP threshold signal)
   updatedAt: createdAt(),
 });
 
@@ -729,6 +735,7 @@ export const platformActivity = pgTable("platform_activity", {
   id: pk(),
   kind: platformActivityKind().notNull(),
   text: text().notNull(),
+  storeId: uuid().references(() => stores.id), // nullable: null = platform-wide, set = per-store audit
   ts: createdAt(),
 });
 

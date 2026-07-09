@@ -1,0 +1,1 @@
+ALTER TABLE "store_stats" ADD COLUMN "ship7d_avg" integer DEFAULT 0 NOT NULL;

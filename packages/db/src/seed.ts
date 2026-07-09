@@ -36,7 +36,10 @@ const PLANS: Array<{ key: "pemula" | "bisnis" | "skala"; name: string; price: nu
   { key: "bisnis", name: "Bisnis", price: 299_000, blurb: "Untuk toko berkembang", features: ["Multi-toko", "Analitik lanjutan", "Pemasaran & iklan", "CRM WhatsApp", "Support prioritas"] },
   { key: "skala", name: "Skala", price: 799_000, blurb: "Untuk volume tinggi", features: ["Semua fitur Bisnis", "API akses", "Multi-lokasi", "Peran lanjutan", "Account manager"] },
 ];
-const planPrice = (k: "pemula" | "bisnis" | "skala") => PLANS.find((p) => p.key === k)!.price;
+
+// Single-plan TokoΦ subscription amounts (mirror @tokophi/lib/billing; kept local to avoid a build dep).
+const SUB_MONTHLY = 275_000; // recurring monthly
+const SUB_FIRST_MONTH = 50_000; // promo first month
 
 // Recent monthly billing history for the store.
 const INVOICES: Array<{ number: string; status: "dibayar" | "menunggu" | "gagal"; daysAgo: number }> = [
@@ -48,10 +51,10 @@ const INVOICES: Array<{ number: string; status: "dibayar" | "menunggu" | "gagal"
   { number: "INV-9001", status: "dibayar", daysAgo: 152 },
 ];
 
-const ACTIVITY: Array<{ kind: "signup" | "upgrade" | "payment" | "churn" | "support"; text: string; minutesAgo: number }> = [
-  { kind: "payment", text: "Pembayaran Rp299.000 dari “Batik Nusantara” (Bisnis)", minutesAgo: 52 },
+const ACTIVITY: Array<{ kind: "signup" | "upgrade" | "payment" | "churn" | "support" | "admin"; text: string; minutesAgo: number }> = [
+  { kind: "payment", text: "Pembayaran Rp275.000 dari “Batik Nusantara”", minutesAgo: 52 },
   { kind: "support", text: "Tiket support baru dari “Batik Nusantara”", minutesAgo: 4 * 60 },
-  { kind: "upgrade", text: "“Batik Nusantara” upgrade Pemula → Bisnis", minutesAgo: 40 * 24 * 60 },
+  { kind: "payment", text: "“Batik Nusantara” mulai langganan TokoΦ (setelah trial)", minutesAgo: 40 * 24 * 60 },
   { kind: "signup", text: "Toko “Batik Nusantara” mendaftar", minutesAgo: STORE.createdDaysAgo * 24 * 60 },
 ];
 
@@ -66,20 +69,23 @@ type DemoStore = {
   gmv: number; orders: number; products: number; createdDaysAgo: number;
   lastOrderDaysAgo: number | null; // null = no orders yet
   invoices: Array<{ status: "dibayar" | "menunggu" | "gagal"; daysAgo: number }>;
+  comped?: boolean; // VIP (billing bypassed by platform)
+  firstPaid?: boolean; // false → still on the Rp50rb first-month (segment "bulan pertama")
+  ship7d?: number; // avg shipments/day over the last 7 days (demo signal for VIP thresholds)
 };
 const DEMO_STORES: DemoStore[] = [
   // healthy: recent orders, invoices paid
-  { name: "Kopi Senja", owner: "Rangga Saputra", email: "rangga@kopisenja.id", city: "Bandung", plan: "bisnis", status: "active", gmv: 42_600_000, orders: 210, products: 22, createdDaysAgo: 95, lastOrderDaysAgo: 1, invoices: [{ status: "dibayar", daysAgo: 2 }, { status: "dibayar", daysAgo: 32 }] },
-  // BILLING problem: an overdue "menunggu" (>14d) + a failed charge → Bermasalah
-  { name: "Hijab Amara", owner: "Amara Zahwa", email: "amara@hijabamara.id", city: "Bekasi", plan: "pemula", status: "active", gmv: 8_500_000, orders: 64, products: 18, createdDaysAgo: 70, lastOrderDaysAgo: 5, invoices: [{ status: "menunggu", daysAgo: 22 }, { status: "gagal", daysAgo: 22 }, { status: "dibayar", daysAgo: 52 }] },
+  { name: "Kopi Senja", owner: "Rangga Saputra", email: "rangga@kopisenja.id", city: "Bandung", plan: "bisnis", status: "active", gmv: 42_600_000, orders: 210, products: 22, createdDaysAgo: 95, lastOrderDaysAgo: 1, invoices: [{ status: "dibayar", daysAgo: 2 }, { status: "dibayar", daysAgo: 32 }], ship7d: 8 },
+  // BILLING problem: an overdue "menunggu" (>14d) + a failed charge → Bermasalah. On the Rp50rb first month.
+  { name: "Hijab Amara", owner: "Amara Zahwa", email: "amara@hijabamara.id", city: "Bekasi", plan: "pemula", status: "active", gmv: 8_500_000, orders: 64, products: 18, createdDaysAgo: 70, lastOrderDaysAgo: 5, invoices: [{ status: "menunggu", daysAgo: 22 }, { status: "gagal", daysAgo: 22 }, { status: "dibayar", daysAgo: 52 }], firstPaid: false, ship7d: 3 },
   // ACTIVITY problem: last order 46d ago on an active paid store → Bermasalah
-  { name: "Sepatu Lokal Project", owner: "Dimas Prakoso", email: "dimas@sepatulokal.id", city: "Surabaya", plan: "bisnis", status: "active", gmv: 31_200_000, orders: 140, products: 30, createdDaysAgo: 140, lastOrderDaysAgo: 46, invoices: [{ status: "dibayar", daysAgo: 3 }, { status: "dibayar", daysAgo: 33 }] },
+  { name: "Sepatu Lokal Project", owner: "Dimas Prakoso", email: "dimas@sepatulokal.id", city: "Surabaya", plan: "bisnis", status: "active", gmv: 31_200_000, orders: 140, products: 30, createdDaysAgo: 140, lastOrderDaysAgo: 46, invoices: [{ status: "dibayar", daysAgo: 3 }, { status: "dibayar", daysAgo: 33 }], ship7d: 1 },
   // TRIAL, no orders yet → Perhatian
-  { name: "Snack Rumahan Bu Tati", owner: "Tati Suryani", email: "tati@snackrumahan.id", city: "Malang", plan: "pemula", status: "trial", gmv: 0, orders: 0, products: 7, createdDaysAgo: 6, lastOrderDaysAgo: null, invoices: [] },
+  { name: "Snack Rumahan Bu Tati", owner: "Tati Suryani", email: "tati@snackrumahan.id", city: "Malang", plan: "pemula", status: "trial", gmv: 0, orders: 0, products: 7, createdDaysAgo: 6, lastOrderDaysAgo: null, invoices: [], ship7d: 0 },
   // SUSPENDED → Bermasalah
-  { name: "Gadget Murah ID", owner: "Bayu Anggara", email: "bayu@gadgetmurah.id", city: "Jakarta", plan: "bisnis", status: "suspended", gmv: 19_400_000, orders: 88, products: 40, createdDaysAgo: 210, lastOrderDaysAgo: 30, invoices: [{ status: "gagal", daysAgo: 15 }, { status: "menunggu", daysAgo: 15 }] },
-  // ACTIVITY warning: last order 18d ago (14–30d window) → Perhatian
-  { name: "Tas Rajut Handmade", owner: "Sinta Melati", email: "sinta@tasrajut.id", city: "Yogyakarta", plan: "skala", status: "active", gmv: 55_100_000, orders: 260, products: 12, createdDaysAgo: 160, lastOrderDaysAgo: 18, invoices: [{ status: "menunggu", daysAgo: 3 }, { status: "dibayar", daysAgo: 33 }] },
+  { name: "Gadget Murah ID", owner: "Bayu Anggara", email: "bayu@gadgetmurah.id", city: "Jakarta", plan: "bisnis", status: "suspended", gmv: 19_400_000, orders: 88, products: 40, createdDaysAgo: 210, lastOrderDaysAgo: 30, invoices: [{ status: "gagal", daysAgo: 15 }, { status: "menunggu", daysAgo: 15 }], ship7d: 0 },
+  // VIP: high-volume merchant hosted free by the platform (billing bypassed).
+  { name: "Tas Rajut Handmade", owner: "Sinta Melati", email: "sinta@tasrajut.id", city: "Yogyakarta", plan: "skala", status: "active", gmv: 55_100_000, orders: 260, products: 12, createdDaysAgo: 160, lastOrderDaysAgo: 18, invoices: [{ status: "dibayar", daysAgo: 33 }], comped: true, ship7d: 42 },
 ];
 
 // ---- catalog (mirrors apps/admin/lib/mock/store.ts, deterministic) ----
@@ -486,7 +492,7 @@ async function main() {
   await db.insert(schema.storeUsers).values({ storeId: store.id, userId: user.id, role: "owner", acceptedAt: daysAgo(STORE.createdDaysAgo) });
   const [loc] = await db.insert(schema.locations).values({ storeId: store.id, name: "Gudang Utama", isDefault: true }).returning();
   await db.insert(schema.storeSettings).values({ storeId: store.id });
-  await db.insert(schema.storeStats).values({ storeId: store.id, gmvIdr: STORE.gmv, ordersCount: STORE.orders, productsCount: CATALOG.length, updatedAt: TODAY });
+  await db.insert(schema.storeStats).values({ storeId: store.id, gmvIdr: STORE.gmv, ordersCount: STORE.orders, productsCount: CATALOG.length, ship7dAvg: 15, updatedAt: TODAY });
 
   // catalog: product → 1 default variant (price) + inventory (stock) + base media (image)
   const seededProducts: Array<{ id: string; variantId: string; category: string; unitsSold: number }> = [];
@@ -741,9 +747,9 @@ async function main() {
     })),
   );
 
-  // invoices for this account
+  // invoices for this account — single plan TokoΦ (Rp275rb/bln recurring)
   await db.insert(schema.invoices).values(
-    INVOICES.map((inv) => ({ number: inv.number, accountId: account.id, storeId: store.id, planKey: STORE.plan, amountIdr: planPrice(STORE.plan), status: inv.status, issuedAt: daysAgo(inv.daysAgo) })),
+    INVOICES.map((inv) => ({ number: inv.number, accountId: account.id, storeId: store.id, planKey: STORE.plan, amountIdr: SUB_MONTHLY, status: inv.status, issuedAt: daysAgo(inv.daysAgo) })),
   );
 
   // platform activity
@@ -758,20 +764,24 @@ async function main() {
   for (const d of DEMO_STORES) {
     const [acc] = await db.insert(schema.accounts).values({ name: d.name, plan: d.plan, createdAt: daysAgo(d.createdDaysAgo) }).returning();
     const [u] = await db.insert(schema.users).values({ email: d.email, name: d.owner, passwordHash: hashPassword(DEV_OWNER_PASSWORD) }).returning();
-    // demo billing lifecycle from the store's status
+    // demo billing lifecycle from the store's status. firstPaid=false → still on the Rp50rb first month.
+    const firstPaid = d.firstPaid ?? true;
     const bill =
       d.status === "trial"
         ? { trialEndsAt: daysAgo(-1), currentPeriodEnd: null, firstInvoicePaid: false } // ~1 day left of trial
         : d.status === "suspended"
-          ? { trialEndsAt: daysAgo(d.createdDaysAgo - 3), currentPeriodEnd: daysAgo(20), firstInvoicePaid: true } // overdue past grace
-          : { trialEndsAt: daysAgo(d.createdDaysAgo - 3), currentPeriodEnd: daysAgo(-12), firstInvoicePaid: true }; // active
-    const [st] = await db.insert(schema.stores).values({ accountId: acc.id, name: d.name, slug: slugify(d.name), city: d.city, plan: d.plan, status: d.status, ...bill, createdAt: daysAgo(d.createdDaysAgo) }).returning();
+          ? { trialEndsAt: daysAgo(d.createdDaysAgo - 3), currentPeriodEnd: daysAgo(20), firstInvoicePaid: firstPaid } // overdue past grace
+          : { trialEndsAt: daysAgo(d.createdDaysAgo - 3), currentPeriodEnd: daysAgo(-12), firstInvoicePaid: firstPaid }; // active
+    const comp = d.comped ? { comped: true, compedReason: "Volume pengiriman tinggi — dibebaskan platform", compedAt: daysAgo(20) } : {};
+    const [st] = await db.insert(schema.stores).values({ accountId: acc.id, name: d.name, slug: slugify(d.name), city: d.city, plan: d.plan, status: d.status, ...bill, ...comp, createdAt: daysAgo(d.createdDaysAgo) }).returning();
     await db.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: daysAgo(d.createdDaysAgo) });
     await db.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
     await db.insert(schema.storeSettings).values({ storeId: st.id });
-    await db.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: d.gmv, ordersCount: d.orders, productsCount: d.products, updatedAt: TODAY });
+    await db.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: d.gmv, ordersCount: d.orders, productsCount: d.products, ship7dAvg: d.ship7d ?? 0, updatedAt: TODAY });
     if (d.invoices.length) {
-      await db.insert(schema.invoices).values(d.invoices.map((inv) => ({ number: `INV-${invSeq++}`, accountId: acc.id, storeId: st.id, planKey: d.plan, amountIdr: planPrice(d.plan), status: inv.status, issuedAt: daysAgo(inv.daysAgo) })));
+      // single plan: Rp50rb first-month promo (firstPaid=false) else Rp275rb recurring
+      const amount = firstPaid ? SUB_MONTHLY : SUB_FIRST_MONTH;
+      await db.insert(schema.invoices).values(d.invoices.map((inv) => ({ number: `INV-${invSeq++}`, accountId: acc.id, storeId: st.id, planKey: d.plan, amountIdr: amount, status: inv.status, issuedAt: daysAgo(inv.daysAgo) })));
     }
     if (d.lastOrderDaysAgo !== null) {
       // a few orders; the most-recent placedAt drives the "activity" health signal

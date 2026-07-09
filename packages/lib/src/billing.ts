@@ -43,34 +43,57 @@ export type BillingState = {
   dueDate: Date | null; // when the next payment is due
   readOnly: boolean; // grace exceeded → block writes (storefront stays up)
   firstInvoicePaid: boolean; // false = still on promo / annual-bonus eligible
+  comped: boolean; // VIP: billing bypassed by the platform
 };
 
 export type StoreBillingRow = {
   trialEndsAt: Date | null;
   currentPeriodEnd: Date | null;
   firstInvoicePaid: boolean;
+  comped?: boolean; // VIP: platform bypasses billing → always active, no charge
 };
+
+// The 4 lifecycle "sessions" the store list is split into (Trial → Bulan pertama → Reguler → VIP).
+export type StoreSegment = "trial" | "first_month" | "regular" | "vip";
+export const SEGMENT_META: Record<StoreSegment, { label: string; short: string; price: number; hint: string }> = {
+  trial: { label: "Uji coba (3 hari)", short: "Trial", price: 0, hint: "Masa coba gratis" },
+  first_month: { label: `Bulan pertama (${BILLING.FIRST_MONTH_IDR.toLocaleString("id-ID")})`, short: "Bulan 1", price: BILLING.FIRST_MONTH_IDR, hint: "Promo bulan pertama" },
+  regular: { label: `Reguler (${BILLING.MONTHLY_IDR.toLocaleString("id-ID")}/bln)`, short: "Reguler", price: BILLING.MONTHLY_IDR, hint: "Langganan berjalan" },
+  vip: { label: "VIP (gratis)", short: "VIP", price: 0, hint: "Dibebaskan biaya oleh platform" },
+};
+
+// Which of the 4 lifecycle sessions a store belongs to (independent of active/past_due/suspended).
+export function storeSegment(s: StoreBillingRow, now: Date = new Date()): StoreSegment {
+  if (s.comped) return "vip";
+  const b = computeBilling(s, now);
+  if (b.status === "trial") return "trial";
+  return s.firstInvoicePaid ? "regular" : "first_month";
+}
 
 const dayMs = 86_400_000;
 const ceilDays = (ms: number) => Math.max(0, Math.ceil(ms / dayMs));
 
 export function computeBilling(s: StoreBillingRow, now: Date = new Date()): BillingState {
+  // 0) comped/VIP → billing bypassed: always active, nothing due, full access
+  if (s.comped) {
+    return { status: "active", label: "VIP (gratis)", daysLeft: 0, nextAmount: 0, isPromo: false, dueDate: null, readOnly: false, firstInvoicePaid: s.firstInvoicePaid, comped: true };
+  }
   const isPromo = !s.firstInvoicePaid;
   const nextAmount = isPromo ? BILLING.FIRST_MONTH_IDR : BILLING.MONTHLY_IDR;
 
   // 1) inside a paid period → active
   if (s.currentPeriodEnd && now < s.currentPeriodEnd) {
-    return { status: "active", label: "Aktif", daysLeft: ceilDays(s.currentPeriodEnd.getTime() - now.getTime()), nextAmount, isPromo, dueDate: s.currentPeriodEnd, readOnly: false, firstInvoicePaid: s.firstInvoicePaid };
+    return { status: "active", label: "Aktif", daysLeft: ceilDays(s.currentPeriodEnd.getTime() - now.getTime()), nextAmount, isPromo, dueDate: s.currentPeriodEnd, readOnly: false, firstInvoicePaid: s.firstInvoicePaid, comped: false };
   }
   // 2) inside the free trial (never paid) → trial
   if (!s.currentPeriodEnd && s.trialEndsAt && now < s.trialEndsAt) {
-    return { status: "trial", label: "Masa uji coba", daysLeft: ceilDays(s.trialEndsAt.getTime() - now.getTime()), nextAmount: BILLING.FIRST_MONTH_IDR, isPromo: true, dueDate: s.trialEndsAt, readOnly: false, firstInvoicePaid: s.firstInvoicePaid };
+    return { status: "trial", label: "Masa uji coba", daysLeft: ceilDays(s.trialEndsAt.getTime() - now.getTime()), nextAmount: BILLING.FIRST_MONTH_IDR, isPromo: true, dueDate: s.trialEndsAt, readOnly: false, firstInvoicePaid: s.firstInvoicePaid, comped: false };
   }
   // 3) overdue — 3-day grace (still full access), then suspended (read-only)
   const dueBase = s.currentPeriodEnd ?? s.trialEndsAt ?? now;
   const graceEnd = new Date(dueBase.getTime() + BILLING.GRACE_DAYS * dayMs);
   if (now < graceEnd) {
-    return { status: "past_due", label: "Menunggu pembayaran", daysLeft: ceilDays(graceEnd.getTime() - now.getTime()), nextAmount, isPromo, dueDate: dueBase, readOnly: false, firstInvoicePaid: s.firstInvoicePaid };
+    return { status: "past_due", label: "Menunggu pembayaran", daysLeft: ceilDays(graceEnd.getTime() - now.getTime()), nextAmount, isPromo, dueDate: dueBase, readOnly: false, firstInvoicePaid: s.firstInvoicePaid, comped: false };
   }
-  return { status: "suspended", label: "Ditangguhkan", daysLeft: 0, nextAmount, isPromo, dueDate: dueBase, readOnly: true, firstInvoicePaid: s.firstInvoicePaid };
+  return { status: "suspended", label: "Ditangguhkan", daysLeft: 0, nextAmount, isPromo, dueDate: dueBase, readOnly: true, firstInvoicePaid: s.firstInvoicePaid, comped: false };
 }

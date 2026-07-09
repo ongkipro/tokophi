@@ -7,6 +7,13 @@ import { signImpersonation } from "./session";
 import { requirePlatformAdmin } from "./platform-auth";
 import { kaTestConnection } from "@tokophi/lib/kiriminaja";
 import { alTestConnection, alProbeChannels } from "@tokophi/lib/autolaris";
+import { addMonths } from "@tokophi/lib/billing";
+
+// Audit helper — record an operator action against a specific store (shown on the store detail).
+async function logStore(storeId: string, text: string): Promise<void> {
+  await db.insert(schema.platformActivity).values({ kind: "admin", text, storeId });
+}
+const tempPassword = () => "tokophi-" + randomBytes(3).toString("hex"); // scrypt-hashed before storing
 
 // Every super-admin mutation is gated by `requirePlatformAdmin()` (the security boundary):
 // impersonation + store lifecycle + provisioning + settings all require a platform-admin session.
@@ -59,6 +66,8 @@ export async function impersonateStore(storeId: string): Promise<{ ok: boolean; 
 export async function setStoreStatus(storeId: string, status: "active" | "trial" | "suspended"): Promise<void> {
   await requirePlatformAdmin();
   await db.update(schema.stores).set({ status }).where(eq(schema.stores.id, storeId));
+  const label = status === "suspended" ? "ditangguhkan" : status === "active" ? "diaktifkan" : "dikembalikan ke trial";
+  await logStore(storeId, `Toko ${label} oleh platform`);
   revalidatePath("/toko");
   revalidatePath(`/toko/${storeId}`);
   revalidatePath("/");
@@ -192,4 +201,106 @@ export async function invitePlatformAdmin(input: { name: string; email: string; 
   await db.insert(schema.platformAdmins).values({ email, name: input.name?.trim() || null, role: input.role || "admin", passwordHash: hashPassword(DEV_PASSWORD) });
   revalidatePath("/pengaturan");
   return { ok: true };
+}
+
+// ============================================================================
+// Per-store control (super-admin runs a merchant's account)
+// ============================================================================
+
+// Gratiskan N bulan (comp): extend the paid period at no charge (goodwill / compensation).
+export async function compStore(storeId: string, months = 1): Promise<{ ok: boolean; until?: string }> {
+  await requirePlatformAdmin();
+  const [s] = await db.select({ currentPeriodEnd: schema.stores.currentPeriodEnd }).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
+  if (!s) return { ok: false };
+  const now = new Date();
+  const base = s.currentPeriodEnd && s.currentPeriodEnd > now ? s.currentPeriodEnd : now;
+  const until = addMonths(base, months);
+  await db.update(schema.stores).set({ currentPeriodEnd: until, status: "active", firstInvoicePaid: true }).where(eq(schema.stores.id, storeId));
+  await logStore(storeId, `Gratis ${months} bulan diberikan (aktif s/d ${until.toLocaleDateString("id-ID")})`);
+  revalidatePath(`/toko/${storeId}`); revalidatePath("/toko"); revalidatePath("/");
+  return { ok: true, until: until.toISOString() };
+}
+
+// Extend / reset the free trial by N days from now.
+export async function extendTrial(storeId: string, days = 7): Promise<{ ok: boolean }> {
+  await requirePlatformAdmin();
+  const until = new Date(Date.now() + days * 86_400_000);
+  await db.update(schema.stores).set({ trialEndsAt: until, currentPeriodEnd: null, status: "trial", firstInvoicePaid: false }).where(eq(schema.stores.id, storeId));
+  await logStore(storeId, `Trial diperpanjang ${days} hari (s/d ${until.toLocaleDateString("id-ID")})`);
+  revalidatePath(`/toko/${storeId}`); revalidatePath("/toko"); revalidatePath("/");
+  return { ok: true };
+}
+
+// VIP bypass: comped=true → no monthly charge (the "hapus langganan" one-door control).
+export async function setStoreComped(storeId: string, comped: boolean, reason?: string): Promise<{ ok: boolean }> {
+  await requirePlatformAdmin();
+  const patch: Record<string, unknown> = { comped, compedReason: comped ? (reason?.trim() || "Dibebaskan platform") : null, compedAt: comped ? new Date() : null };
+  if (comped) patch.status = "active"; // VIP is always active
+  await db.update(schema.stores).set(patch).where(eq(schema.stores.id, storeId));
+  await logStore(storeId, comped ? `Langganan dibebaskan (VIP) — ${reason?.trim() || "tanpa biaya bulanan"}` : "Status VIP dicabut — kembali ke langganan berbayar");
+  revalidatePath(`/toko/${storeId}`); revalidatePath("/toko"); revalidatePath("/");
+  return { ok: true };
+}
+
+// Reset the OWNER's password → returns a one-time temp password to hand over (scrypt-hashed at rest).
+export async function resetOwnerPassword(storeId: string): Promise<{ ok: boolean; password?: string; email?: string }> {
+  await requirePlatformAdmin();
+  const [row] = await db
+    .select({ userId: schema.storeUsers.userId, email: schema.users.email })
+    .from(schema.storeUsers)
+    .innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
+    .where(and(eq(schema.storeUsers.storeId, storeId), eq(schema.storeUsers.role, "owner")))
+    .limit(1);
+  if (!row) return { ok: false };
+  const pw = tempPassword();
+  await db.update(schema.users).set({ passwordHash: hashPassword(pw) }).where(eq(schema.users.id, row.userId));
+  await logStore(storeId, `Password owner (${row.email}) direset oleh platform`);
+  return { ok: true, password: pw, email: row.email };
+}
+
+// Reset ANY store user's password.
+export async function resetStoreUserPassword(storeId: string, userId: string): Promise<{ ok: boolean; password?: string; email?: string }> {
+  await requirePlatformAdmin();
+  const [u] = await db.select({ email: schema.users.email }).from(schema.users).where(eq(schema.users.id, userId)).limit(1);
+  if (!u) return { ok: false };
+  const pw = tempPassword();
+  await db.update(schema.users).set({ passwordHash: hashPassword(pw) }).where(eq(schema.users.id, userId));
+  await logStore(storeId, `Password ${u.email} direset oleh platform`);
+  return { ok: true, password: pw, email: u.email };
+}
+
+export async function setStoreUserRole(storeId: string, storeUserId: string, role: "owner" | "admin" | "staff" | "gudang"): Promise<{ ok: boolean }> {
+  await requirePlatformAdmin();
+  await db.update(schema.storeUsers).set({ role }).where(and(eq(schema.storeUsers.id, storeUserId), eq(schema.storeUsers.storeId, storeId)));
+  revalidatePath(`/toko/${storeId}`);
+  return { ok: true };
+}
+
+export async function removeStoreUser(storeId: string, storeUserId: string): Promise<{ ok: boolean; error?: string }> {
+  await requirePlatformAdmin();
+  const [su] = await db.select({ role: schema.storeUsers.role, email: schema.users.email })
+    .from(schema.storeUsers).innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
+    .where(eq(schema.storeUsers.id, storeUserId)).limit(1);
+  if (su?.role === "owner") return { ok: false, error: "Owner tidak bisa dihapus." };
+  await db.delete(schema.storeUsers).where(and(eq(schema.storeUsers.id, storeUserId), eq(schema.storeUsers.storeId, storeId)));
+  await logStore(storeId, `User ${su?.email ?? ""} dihapus dari toko oleh platform`);
+  revalidatePath(`/toko/${storeId}`);
+  return { ok: true };
+}
+
+export async function addStoreUser(storeId: string, input: { name: string; email: string; role: "admin" | "staff" | "gudang" }): Promise<{ ok: boolean; password?: string; error?: string }> {
+  await requirePlatformAdmin();
+  const email = input.email?.trim().toLowerCase();
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, error: "Email tidak valid." };
+  let [u] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email)).limit(1);
+  const pw = tempPassword();
+  if (!u) {
+    [u] = await db.insert(schema.users).values({ email, name: input.name?.trim() || email, passwordHash: hashPassword(pw) }).returning({ id: schema.users.id });
+  }
+  const [dup] = await db.select({ id: schema.storeUsers.id }).from(schema.storeUsers).where(and(eq(schema.storeUsers.storeId, storeId), eq(schema.storeUsers.userId, u.id))).limit(1);
+  if (dup) return { ok: false, error: "User sudah ada di toko ini." };
+  await db.insert(schema.storeUsers).values({ storeId, userId: u.id, role: input.role, acceptedAt: new Date() });
+  await logStore(storeId, `User ${email} (${input.role}) ditambahkan oleh platform`);
+  revalidatePath(`/toko/${storeId}`);
+  return { ok: true, password: pw };
 }
