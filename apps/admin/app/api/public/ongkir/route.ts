@@ -3,6 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { kaShippingPrice, kaInstantPricing, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { resolveArea } from "@/lib/data/areas";
+import { rateLimited } from "@/lib/public-guard";
 
 // Public (no-auth) storefront-facing shipping endpoint. The storefront checkout calls this to
 // (a) search a destination area and (b) get live KiriminAja rates. Shipping is platform-managed
@@ -21,6 +22,8 @@ export function OPTIONS() {
 }
 
 export async function POST(req: Request) {
+  const limited = rateLimited(req, "ongkir", 60, 60_000, CORS);
+  if (limited) return limited;
   if (!kiriminajaConfigured()) {
     return NextResponse.json({ ok: false, error: "Shipping belum dikonfigurasi." }, { status: 200, headers: CORS });
   }

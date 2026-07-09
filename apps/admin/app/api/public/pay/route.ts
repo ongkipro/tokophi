@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { alCreatePayment, autolarisConfigured, PAYMENT_CHANNELS } from "@tokophi/lib/autolaris";
+import { rateLimited } from "@/lib/public-guard";
 
 // Public (no-auth) storefront-facing payment endpoint. The checkout calls this to create a
 // real VA/QRIS/DANA bill via the platform PSP (AutoLaris). The brand is NEVER exposed to the
@@ -18,6 +19,8 @@ export function OPTIONS() {
 }
 
 export async function POST(req: Request) {
+  const limited = rateLimited(req, "pay", 20, 60_000, CORS);
+  if (limited) return limited;
   if (!autolarisConfigured()) {
     return NextResponse.json({ ok: false, error: "Pembayaran belum dikonfigurasi." }, { status: 200, headers: CORS });
   }

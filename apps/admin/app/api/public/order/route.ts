@@ -3,6 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { alCreatePayment, autolarisConfigured, PAYMENT_CHANNELS } from "@tokophi/lib/autolaris";
 import { kaCreateInstantOrder } from "@tokophi/lib/kiriminaja";
+import { rateLimited } from "@/lib/public-guard";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the
@@ -22,6 +23,8 @@ export function OPTIONS() {
 type Item = { handle?: string; name?: string; price?: number; variant?: string; qty?: number };
 
 export async function POST(req: Request) {
+  const limited = rateLimited(req, "order", 10, 60_000, CORS);
+  if (limited) return limited;
   let body: {
     storeSlug?: string;
     items?: Item[];
