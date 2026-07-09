@@ -124,11 +124,21 @@ export async function setInvoiceStatus(number: string, status: "dibayar" | "menu
 export async function syncPaymentChannels(): Promise<void> {
   await requirePlatformAdmin();
   const probed = await alProbeChannels();
+  const existing = await db.select({ channel: schema.platformPaymentChannels.channel }).from(schema.platformPaymentChannels);
+  const have = new Set(existing.map((e) => e.channel));
   for (const p of probed) {
-    await db
-      .update(schema.platformPaymentChannels)
-      .set({ active: p.active, enabled: p.active })
-      .where(eq(schema.platformPaymentChannels.channel, p.code));
+    if (have.has(p.code)) {
+      // reality → active; auto-enable active ones (platform can still toggle off after)
+      await db
+        .update(schema.platformPaymentChannels)
+        .set({ active: p.active, enabled: p.active })
+        .where(eq(schema.platformPaymentChannels.channel, p.code));
+    } else {
+      // roster channel not yet in the DB (e.g. added to AUTOLARIS_KNOWN_CHANNELS later) → insert it
+      await db
+        .insert(schema.platformPaymentChannels)
+        .values({ channel: p.code, label: p.label, kind: p.kind, active: p.active, enabled: p.active });
+    }
   }
   revalidatePath("/pengaturan");
 }

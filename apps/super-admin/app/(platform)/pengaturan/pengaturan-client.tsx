@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition, type Dispatch, type SetStateAction } from "react";
+import { useState, useTransition, type Dispatch, type SetStateAction, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug } from "lucide-react";
+import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug, QrCode, Landmark, Smartphone, Store } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -49,6 +49,22 @@ const ROLE_CLASS: Record<string, string> = {
 const roleLabel = (r: string) => r.charAt(0).toUpperCase() + r.slice(1);
 const ROLE_OPTIONS = ["admin", "support", "owner"];
 
+type SectionId = "pembayaran" | "kurir" | "tim";
+const SECTIONS: { id: SectionId; label: string; desc: string; icon: ReactNode }[] = [
+  { id: "pembayaran", label: "Pembayaran", desc: "AutoLaris & COD", icon: <CreditCard /> },
+  { id: "kurir", label: "Kurir", desc: "Agregator KiriminAja", icon: <Truck /> },
+  { id: "tim", label: "Tim Platform", desc: "Operator", icon: <Users /> },
+];
+
+// Payment channels are grouped by `kind` — QRIS on its own, then Virtual Account / E-Wallet /
+// Minimarket as collapsible groups so the long list stays tidy (matches how AutoLaris organizes them).
+const CHANNEL_GROUPS: { kind: string; label: string; desc: string; icon: ReactNode }[] = [
+  { kind: "qris", label: "QRIS", desc: "Satu QR untuk semua bank & e-wallet", icon: <QrCode className="size-4" /> },
+  { kind: "va", label: "Virtual Account", desc: "Transfer bank (VA)", icon: <Landmark className="size-4" /> },
+  { kind: "ewallet", label: "E-Wallet", desc: "Dompet digital", icon: <Smartphone className="size-4" /> },
+  { kind: "retail", label: "Minimarket", desc: "Bayar tunai di gerai retail", icon: <Store className="size-4" /> },
+];
+
 export function PengaturanClient({
   gateways: initGateways,
   couriers: initCouriers,
@@ -63,6 +79,7 @@ export function PengaturanClient({
   team: TeamMember[];
 }) {
   const router = useRouter();
+  const [section, setSection] = useState<SectionId>("pembayaran");
   const [pending, startTransition] = useTransition();
   const [gateways, setGateways] = useState(initGateways);
   const [couriers, setCouriers] = useState(initCouriers);
@@ -82,7 +99,7 @@ export function PengaturanClient({
       else toast.error(r.message);
     });
 
-  // AutoLaris payment-gateway connectivity test
+  // AutoLaris payment-gateway connectivity test + channel sync
   const [payPing, setPayPing] = useState<{ ok: boolean; message: string } | null>(null);
   const [payTesting, startPayPing] = useTransition();
   const [chanSyncing, startChanSync] = useTransition();
@@ -143,216 +160,313 @@ export function PengaturanClient({
   }
 
   return (
-    <div className="mx-auto max-w-[1000px] space-y-5">
+    <div className="mx-auto max-w-[1100px] space-y-5">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Pengaturan</h1>
         <p className="text-sm text-muted-foreground">
-          Gateway pembayaran, COD, dan kurir diatur di sini oleh platform — berlaku untuk{" "}
-          <span className="font-medium text-foreground">semua toko</span>. Merchant hanya mengaktifkan metode di tokonya.
+          Pembayaran, COD, dan kurir diatur di sini oleh platform — berlaku untuk{" "}
+          <span className="font-medium text-foreground">semua toko</span>. Merchant hanya mengaktifkan yang tersedia.
         </p>
       </div>
 
-      {/* payment — unified PSP (AutoLaris) + COD + channels, mirrors the courier card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="size-4 text-muted-foreground" /> Pembayaran
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-0">
-          {/* aggregator banner (same treatment as the courier aggregator) */}
-          <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm">
-                <CreditCard className="size-4 text-emerald-600 dark:text-emerald-400" />
-                <span>Agregator pembayaran: <span className="font-medium">{autoGateway?.name ?? "AutoLaris"}</span> · <span className="font-medium">{activeChannels}</span>/{channels.length} channel aktif</span>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {autoGateway?.on && (
-                  <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
-                )}
-                <Button variant="outline" size="sm" className="gap-1.5" disabled={chanSyncing} onClick={syncChannels}>
-                  <Plug className="size-3.5" /> {chanSyncing ? "Menyinkron…" : "Sync"}
-                </Button>
-                <Button variant="outline" size="sm" className="gap-1.5" disabled={payTesting} onClick={testPay}>
-                  <Plug className="size-3.5" /> {payTesting ? "Menguji…" : "Test koneksi"}
-                </Button>
-              </div>
-            </div>
-            {payPing && (
-              <p className={`mt-2 text-xs ${payPing.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                {payPing.ok ? "✓ " : "✕ "}{payPing.message}
-              </p>
-            )}
-          </div>
-          <p className="mb-2 text-xs text-muted-foreground">
-            Hanya channel <b>Aktif di AutoLaris</b> yang bisa di-on-kan — sisanya terkunci sampai diaktifkan di akun AutoLaris. Klik <b>Sync</b> untuk mengecek ulang status langsung ke AutoLaris (tak ada endpoint daftar). Toggle = ditawarkan ke merchant untuk checkout.
-          </p>
-
-          {/* row list: COD (platform) + AutoLaris channels, one flat list like couriers */}
-          {codGateway && (
-            <div>
-              <div className="flex items-center justify-between py-3">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="gw-cod" className="font-medium">{codGateway.name}</Label>
-                    {codGateway.on && (
-                      <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
+      <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        {/* LEFT RAIL */}
+        <div className="h-fit lg:sticky lg:top-6">
+          <Card className="p-1.5">
+            <nav className="flex flex-col gap-0.5">
+              {SECTIONS.map((s) => {
+                const active = section === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSection(s.id)}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors",
+                      active ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted",
                     )}
+                  >
+                    <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-md [&_svg]:size-4", active ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground")}>
+                      {s.icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{s.label}</span>
+                      <span className={cn("block truncate text-xs", active ? "text-primary/70" : "text-muted-foreground")}>{s.desc}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+          </Card>
+        </div>
+
+        {/* RIGHT CONTENT */}
+        <div className="space-y-5">
+          {section === "pembayaran" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="size-4 text-muted-foreground" /> Pembayaran
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-0">
+                {/* aggregator banner */}
+                <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <CreditCard className="size-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>Agregator pembayaran: <span className="font-medium">{autoGateway?.name ?? "AutoLaris"}</span> · <span className="font-medium">{activeChannels}</span>/{channels.length} channel aktif</span>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {autoGateway?.on && (
+                        <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
+                      )}
+                      <Button variant="outline" size="sm" className="gap-1.5" disabled={chanSyncing} onClick={syncChannels}>
+                        <Plug className="size-3.5" /> {chanSyncing ? "Menyinkron…" : "Sync"}
+                      </Button>
+                      <Button variant="outline" size="sm" className="gap-1.5" disabled={payTesting} onClick={testPay}>
+                        <Plug className="size-3.5" /> {payTesting ? "Menguji…" : "Test koneksi"}
+                      </Button>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">{codGateway.desc}</p>
+                  {payPing && (
+                    <p className={`mt-2 text-xs ${payPing.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                      {payPing.ok ? "✓ " : "✕ "}{payPing.message}
+                    </p>
+                  )}
                 </div>
-                <Switch id="gw-cod" checked={codGateway.on} onCheckedChange={(v) => toggle(setGateways, "cod", v)} />
-              </div>
-            </div>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Hanya channel <b>Aktif di AutoLaris</b> yang bisa di-on-kan — sisanya terkunci sampai diaktifkan di akun AutoLaris. Klik <b>Sync</b> untuk cek ulang status langsung ke AutoLaris. Toggle = ditawarkan ke merchant untuk checkout.
+                </p>
+
+                {/* COD — platform-managed, standalone */}
+                {codGateway && (
+                  <div className="mb-3 flex items-center justify-between rounded-lg border p-3">
+                    <div className="flex items-center gap-3">
+                      <span className="flex size-8 items-center justify-center rounded-md bg-muted text-muted-foreground"><Store className="size-4" /></span>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="gw-cod" className="font-medium">{codGateway.name}</Label>
+                          {codGateway.on && (
+                            <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{codGateway.desc}</p>
+                      </div>
+                    </div>
+                    <Switch id="gw-cod" checked={codGateway.on} onCheckedChange={(v) => toggle(setGateways, "cod", v)} />
+                  </div>
+                )}
+
+                {/* AutoLaris channels — grouped, collapsible */}
+                <div className="space-y-2">
+                  {CHANNEL_GROUPS.map((g) => {
+                    const rows = channels.filter((c) => c.kind === g.kind);
+                    if (rows.length === 0) return null;
+                    return <ChannelGroup key={g.kind} group={g} rows={rows} onToggle={toggleChannel} />;
+                  })}
+                </div>
+
+                <div className="flex justify-end pt-4">
+                  <Button className="gap-1.5" disabled={pending} onClick={savePayment}>
+                    <Save className="size-4" /> Simpan
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
-          {channels.map((c) => (
+
+          {section === "kurir" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Truck className="size-4 text-muted-foreground" /> Integrasi Kurir
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-0">
+                <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Truck className="size-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>Agregator pengiriman: <span className="font-medium">{aggregator.provider}</span> · <span className="font-medium">{couriers.filter((c) => c.on).length}</span>/{couriers.length} kurir aktif</span>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {aggregator.enabled && (
+                        <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
+                      )}
+                      <Button variant="outline" size="sm" className="gap-1.5" disabled={pinging} onClick={testConn}>
+                        <Plug className="size-3.5" /> {pinging ? "Menguji…" : "Test koneksi"}
+                      </Button>
+                    </div>
+                  </div>
+                  {ping && (
+                    <p className={`mt-2 text-xs ${ping.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                      {ping.ok ? "✓ " : "✕ "}{ping.message}
+                    </p>
+                  )}
+                </div>
+                <p className="mb-2 text-xs text-muted-foreground">
+                  Kurir + layanannya (Reguler / ekspres / kargo) datang dari KiriminAja. Aktifkan yang tersedia untuk semua toko — merchant lalu memilih kurir &amp; layanannya. <b>Reguler</b> adalah layanan yang paling umum dipakai.
+                </p>
+                {couriers.map((c, i) => {
+                  const services = c.desc.split(",").map((s) => s.trim()).filter(Boolean);
+                  return (
+                    <div key={c.key}>
+                      {i > 0 && <Separator />}
+                      <div className="flex items-center justify-between gap-3 py-3">
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor={`ku-${c.key}`} className="font-medium">{c.name}</Label>
+                            {c.on && (
+                              <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {services.length > 0 ? services.map((svc) => (
+                              <Badge key={svc} variant="secondary" className={cn("border-transparent text-[11px]", /reg/i.test(svc) ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>{svc}</Badge>
+                            )) : <span className="text-xs text-muted-foreground">—</span>}
+                          </div>
+                        </div>
+                        <Switch id={`ku-${c.key}`} checked={c.on} onCheckedChange={(v) => toggle(setCouriers, c.key, v)} />
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-end pt-3">
+                  <Button className="gap-1.5" disabled={pending} onClick={saveCouriersFn}>
+                    <Save className="size-4" /> Simpan
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {section === "tim" && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="size-4 text-muted-foreground" /> Tim Platform
+                </CardTitle>
+                <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+                  <DialogTrigger render={<Button variant="outline" size="sm" className="gap-1.5"><UserPlus className="size-4" /> Undang</Button>} />
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Undang operator platform</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-4 py-2">
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="inv-name">Nama</Label>
+                        <Input id="inv-name" value={invName} onChange={(e) => setInvName(e.target.value)} placeholder="Nama operator" />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="inv-email">Email</Label>
+                        <Input id="inv-email" type="email" value={invEmail} onChange={(e) => setInvEmail(e.target.value)} placeholder="nama@tokophi.id" />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>Peran</Label>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger render={<Button variant="outline" className="justify-between gap-2 font-normal">{roleLabel(invRole)}<ChevronDown className="size-4 text-muted-foreground" /></Button>} />
+                          <DropdownMenuContent align="start" className="w-[--anchor-width]">
+                            {ROLE_OPTIONS.map((r) => (
+                              <DropdownMenuItem key={r} onClick={() => setInvRole(r)}>{roleLabel(r)}</DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Password awal: <span className="font-mono">tokophi123</span> (operator ganti setelah masuk).</p>
+                    </div>
+                    <DialogFooter>
+                      <DialogClose render={<Button variant="outline">Batal</Button>} />
+                      <Button disabled={pending || !invEmail} onClick={submitInvite}>{pending ? "Menyimpan…" : "Undang"}</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent className="space-y-0">
+                {team.map((m, i) => (
+                  <div key={m.id}>
+                    {i > 0 && <Separator />}
+                    <div className="flex items-center justify-between py-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="size-9">
+                          <AvatarFallback className="bg-primary/12 text-xs font-semibold text-primary">{initials(m.name)}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="font-medium">{m.name}</div>
+                          <div className="text-xs text-muted-foreground">{m.email}</div>
+                        </div>
+                      </div>
+                      <Badge className={cn(ROLE_CLASS[m.role] ?? "bg-muted text-foreground")}>{roleLabel(m.role)}</Badge>
+                    </div>
+                  </div>
+                ))}
+                {team.length === 0 && <p className="py-4 text-sm text-muted-foreground">Belum ada operator.</p>}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Collapsible group of payment channels (e.g. all Virtual Accounts). Header shows the group + how
+// many are active; body lists each channel with its live "Aktif di AutoLaris" status + locked toggle.
+function ChannelGroup({
+  group,
+  rows,
+  onToggle,
+}: {
+  group: { kind: string; label: string; desc: string; icon: ReactNode };
+  rows: PaymentChannelRow[];
+  onToggle: (key: string, on: boolean) => void;
+}) {
+  const activeCount = rows.filter((r) => r.active).length;
+  const enabledCount = rows.filter((r) => r.active && r.enabled).length;
+  // open by default when something is on (or when there's only QRIS) so active groups aren't hidden
+  const [open, setOpen] = useState(enabledCount > 0 || rows.length <= 1);
+  return (
+    <div className="overflow-hidden rounded-lg border">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
+      >
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">{group.icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2">
+            <span className="text-sm font-medium">{group.label}</span>
+            <Badge variant="secondary" className="border-transparent bg-muted text-[11px] text-muted-foreground">{activeCount}/{rows.length} aktif</Badge>
+          </span>
+          <span className="block truncate text-xs text-muted-foreground">{group.desc}</span>
+        </span>
+        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="border-t px-3">
+          {rows.map((c, i) => (
             <div key={c.key}>
-              <Separator />
-              <div className={`flex items-center justify-between py-3 ${c.active ? "" : "opacity-60"}`}>
-                <div className="space-y-0.5">
+              {i > 0 && <Separator />}
+              <div className={cn("flex items-center justify-between py-2.5", c.active ? "" : "opacity-60")}>
+                <div className="min-w-0 space-y-0.5">
                   <div className="flex items-center gap-2">
-                    <Label htmlFor={`ch-${c.key}`} className="font-medium">{c.label}</Label>
+                    <Label htmlFor={`ch-${c.key}`} className="text-sm font-medium">{c.label}</Label>
                     {c.active ? (
                       <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif di AutoLaris</Badge>
                     ) : (
                       <Badge variant="secondary" className="border-transparent bg-muted text-muted-foreground">Belum aktif · Sync</Badge>
                     )}
                   </div>
-                  <p className="text-[11px] uppercase text-muted-foreground">{c.kind} · {c.key}</p>
+                  <p className="text-[11px] uppercase text-muted-foreground">{c.key}</p>
                 </div>
-                {/* can't offer a channel AutoLaris rejects (rc≠00) — toggle stays locked until Sync marks it active */}
-                <Switch id={`ch-${c.key}`} checked={c.active && c.enabled} disabled={!c.active} onCheckedChange={(v) => toggleChannel(c.key, v)} />
+                {/* can't offer a channel AutoLaris rejects (rc≠00) — locked until Sync marks it active */}
+                <Switch id={`ch-${c.key}`} checked={c.active && c.enabled} disabled={!c.active} onCheckedChange={(v) => onToggle(c.key, v)} />
               </div>
             </div>
           ))}
-          <div className="flex justify-end pt-3">
-            <Button className="gap-1.5" disabled={pending} onClick={savePayment}>
-              <Save className="size-4" /> Simpan
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* couriers */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Truck className="size-4 text-muted-foreground" /> Integrasi Kurir
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-0">
-          <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm">
-                <Truck className="size-4 text-emerald-600 dark:text-emerald-400" />
-                <span>Agregator pengiriman: <span className="font-medium">{aggregator.provider}</span> · API kurir dikelola platform</span>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {aggregator.enabled && (
-                  <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
-                )}
-                <Button variant="outline" size="sm" className="gap-1.5" disabled={pinging} onClick={testConn}>
-                  <Plug className="size-3.5" /> {pinging ? "Menguji…" : "Test koneksi"}
-                </Button>
-              </div>
-            </div>
-            {ping && (
-              <p className={`mt-2 text-xs ${ping.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                {ping.ok ? "✓ " : "✕ "}{ping.message}
-              </p>
-            )}
-          </div>
-          <p className="mb-2 text-xs text-muted-foreground">
-            Kurir disediakan lewat agregator. Aktifkan yang tersedia untuk semua toko — merchant lalu memilih kurir &amp; layanannya.
-          </p>
-          {couriers.map((c, i) => (
-            <div key={c.key}>
-              {i > 0 && <Separator />}
-              <div className="flex items-center justify-between py-3">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor={`ku-${c.key}`} className="font-medium">{c.name}</Label>
-                    {c.on && (
-                      <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">{c.desc}</p>
-                </div>
-                <Switch id={`ku-${c.key}`} checked={c.on} onCheckedChange={(v) => toggle(setCouriers, c.key, v)} />
-              </div>
-            </div>
-          ))}
-          <div className="flex justify-end pt-3">
-            <Button className="gap-1.5" disabled={pending} onClick={saveCouriersFn}>
-              <Save className="size-4" /> Simpan
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* platform team (real operators) */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Users className="size-4 text-muted-foreground" /> Tim Platform
-          </CardTitle>
-          <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-            <DialogTrigger render={<Button variant="outline" size="sm" className="gap-1.5"><UserPlus className="size-4" /> Undang</Button>} />
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Undang operator platform</DialogTitle>
-              </DialogHeader>
-              <div className="flex flex-col gap-4 py-2">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="inv-name">Nama</Label>
-                  <Input id="inv-name" value={invName} onChange={(e) => setInvName(e.target.value)} placeholder="Nama operator" />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="inv-email">Email</Label>
-                  <Input id="inv-email" type="email" value={invEmail} onChange={(e) => setInvEmail(e.target.value)} placeholder="nama@tokophi.id" />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label>Peran</Label>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger render={<Button variant="outline" className="justify-between gap-2 font-normal">{roleLabel(invRole)}<ChevronDown className="size-4 text-muted-foreground" /></Button>} />
-                    <DropdownMenuContent align="start" className="w-[--anchor-width]">
-                      {ROLE_OPTIONS.map((r) => (
-                        <DropdownMenuItem key={r} onClick={() => setInvRole(r)}>{roleLabel(r)}</DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <p className="text-xs text-muted-foreground">Password awal: <span className="font-mono">tokophi123</span> (operator ganti setelah masuk).</p>
-              </div>
-              <DialogFooter>
-                <DialogClose render={<Button variant="outline">Batal</Button>} />
-                <Button disabled={pending || !invEmail} onClick={submitInvite}>{pending ? "Menyimpan…" : "Undang"}</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </CardHeader>
-        <CardContent className="space-y-0">
-          {team.map((m, i) => (
-            <div key={m.id}>
-              {i > 0 && <Separator />}
-              <div className="flex items-center justify-between py-3">
-                <div className="flex items-center gap-3">
-                  <Avatar className="size-9">
-                    <AvatarFallback className="bg-primary/12 text-xs font-semibold text-primary">{initials(m.name)}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <div className="font-medium">{m.name}</div>
-                    <div className="text-xs text-muted-foreground">{m.email}</div>
-                  </div>
-                </div>
-                <Badge className={cn(ROLE_CLASS[m.role] ?? "bg-muted text-foreground")}>{roleLabel(m.role)}</Badge>
-              </div>
-            </div>
-          ))}
-          {team.length === 0 && <p className="py-4 text-sm text-muted-foreground">Belum ada operator.</p>}
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   );
 }
