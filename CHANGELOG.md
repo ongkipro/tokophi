@@ -2,6 +2,26 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-07-10
+
+### Client-admin "Akun" section (split from Pengaturan)
+- **New `/akun/*` route group** with a shared layout + tab nav (Profil · Keamanan · Langganan) — cohesive account UI, own header, active-tab highlight. Moved the 3 pages out of `/pengaturan/*`; Pengaturan is now store-settings only.
+- **Profil page** (`/akun/profil`): identity card (avatar, name, email, role, store, joined) + editable name/email (`updateProfile`, email-uniqueness) + quick-link to Keamanan.
+- **Top-right avatar menu** made functional: Profil / Keamanan / Langganan are real links (were dead) + Keluar.
+- **Subscription badge moved under the logo** (sidebar): stable position (own bordered block above the nav) — no longer shifts on nav clicks; status dot + label + days; VIP → violet pill.
+
+### Subscription billing: PPN 11% + payment history + printable faktur
+- **PPN 11%**: plan prices are the DPP (ex-tax); merchant pays base + 11% PPN. `@tokophi/lib/billing` `PPN_RATE`/`withPpn()`/`baseFromTotal()`; `paySubscription` charges the PPN-inclusive total; seed invoices store totals (305.250 / 55.500). Langganan page + pay buttons show the breakdown + note; faktur itemizes Subtotal (DPP) + PPN 11% + Total. MRR stays at the DPP (VIP excluded).
+- **Riwayat pembayaran** on the Langganan page: the store's own invoices (no. faktur, jenis, jumlah, status, tanggal) + total dibayar; `getMyInvoices` (owner conn, scoped to session store).
+- **Printable faktur** `/faktur/[number]`: standalone print-ready invoice sheet (issuer TokoΦ, bill-to store/owner, line item, Subtotal/PPN/Total, LUNAS/menunggu, VA) + Cetak/Simpan-PDF (`window.print`, `print:hidden` chrome); ownership-scoped via `getFaktur`.
+
+### Payment-gateway fees + grouped client-admin payment menu
+- **Fee schedule** `@tokophi/lib/payment-fees` (white-label, per successful storefront txn): VA Rp4.000, e-wallet 2,4%, QRIS 1%, retail (Indomaret/Alfamart) Rp4.000; `paymentFee()` + `splitFee()`; `FeeBearer` (seller | buyer | split).
+- **Client admin → Pengaturan → Pembayaran**: new **Biaya Pembayaran** card (fee table + who-bears picker Penjual/Pembeli/50:50, persisted to `store_settings.payment_fee_bearer`, migr 0028) **+** the payment methods menu rebuilt from mock flat toggles into a **grouped, functional** list (COD standalone, then QRIS / Virtual Account / E-Wallet / Minimarket collapsible with counts) that loads platform-enabled channels and persists the store's subset to `store_settings.payment_channels`. Tidied keterangan; dropped legacy tier badge.
+
+### Super-admin store-control overhaul (billing segments + full per-store control)
+> _(also 2026-07-09 below — kept together)_
+
 ## 2026-07-09
 
 ### Billing — single-plan subscription lifecycle (full, operational)

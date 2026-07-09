@@ -135,7 +135,8 @@ Province filter + "Performa per Provinsi" = `ad_metrics` grouped by `province`. 
 ## Settings
 > **Payments/COD/couriers are platform-managed** (ADR 0004): credentials & tariffs live at the **platform/account** level and apply to all stores; per-store rows only carry an `enabled` flag (merchant just toggles).
 ```
-store_settings(store_id pk, tax_rate_pct=11, tax_inclusive bool, ...)   -- PPN
+store_settings(store_id pk, tax_rate_pct=11, tax_inclusive bool, couriers text[], payment_channels text[],
+               payment_fee_bearer[seller|buyer|split]=seller, sender_* …)   -- PPN + merchant courier/channel subset + who bears the gateway fee (migr 0028)
 -- platform-level (super-admin) = source of truth:
 platform_payment_gateways(id, provider[midtrans|xendit|duitku], credentials jsonb, enabled, is_cod bool)
 shipping_aggregator(id, provider[biteship|rajaongkir|shipper], api_key, enabled)  -- ONE connection, all couriers
@@ -151,15 +152,19 @@ notification_templates(id, store_id, event, channel[email|wa], subject, body)  -
 ## Platform & billing (super-admin control plane)
 > Source: `apps/super-admin/lib/mock.ts`. Not store-scoped — these live at the **platform/account** level (no `store_id`); only platform-admins read them.
 ```
-plans(id, key enum[pemula|bisnis|skala], name, price_idr, blurb, features jsonb)   -- subscription tiers
-invoices(id, number unique, account_id→accounts, store_id→stores null, plan_key, amount_idr,
-         status enum[dibayar|menunggu|gagal], issued_at)                            -- subscription billing ("INV-9001")
-platform_activity(id, kind enum[signup|upgrade|payment|churn|support], text, ts)   -- platform feed
--- Derived (computed in queries/views, never stored):
---   MRR = sum(plan price of active accounts); GMV = sum(store gmv);
---   ARPU = MRR/active; churn_rate; plan_distribution; MRR_SERIES (monthly trend)
+plans(id, key enum[pemula|bisnis|skala], name, price_idr, blurb, features jsonb)   -- LEGACY tiers, unused (single plan now)
+-- SINGLE-PLAN billing (@tokophi/lib/billing): 3-day trial → Rp50rb first month → Rp275rb/mo (DPP, ex-tax).
+-- Merchant pays base + PPN 11% (invoices store the PPN-inclusive total; faktur itemizes DPP+PPN). Annual Rp2.7jt.
+stores(… trial_ends_at, current_period_end, first_invoice_paid,                    -- lifecycle (migr 0022)
+       comped bool, comped_reason, comped_at)                                       -- VIP: billing bypassed, free (migr 0026)
+store_stats(… ship7d_avg int)                                                       -- 7-day avg shipments/day (VIP signal, migr 0027)
+invoices(id, number unique, account_id→accounts, store_id→stores null, plan_key, amount_idr[PPN-incl],
+         kind, cycle[monthly|annual], period_months, reff_id, trx_id, virtual_account, paid_at, status, issued_at)
+platform_activity(id, kind enum[signup|upgrade|payment|churn|support|admin], text, store_id→stores null, ts)  -- feed + per-store audit (migr 0026)
+-- Store SEGMENT (derived, storeSegment()): trial | first_month(50rb) | regular(275rb) | vip(comped).
+-- Derived: MRR = Rp275rb × active (VIP excluded); GMV = sum(store gmv); ARPU; status_distribution.
 ```
-`accounts.plan` (see Identity & tenancy) references `plans.key`; `stores.status` = trial|active|suspended (UI: aktif|trial|ditangguhkan).
+`stores.status` = trial|active|past_due|suspended (UI: aktif|trial|menunggak|ditangguhkan); `comped=true` ⇒ VIP (always active, no charge, never billed/suspended — admin `getBilling` + cron honor it).
 
 ## Mock → table map (keep in sync)
 | Mock (`lib/mock/store.ts`) | Target table(s) |
