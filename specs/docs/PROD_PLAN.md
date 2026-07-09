@@ -115,8 +115,9 @@ VPS (Coolify/Docker): app + rich + storefront-SSR + PgBouncer + Postgres 16 (+op
 
 **✅ Store-context admin = path `/store/{slug}/`** (Shopify-style, dikonfirmasi & jalan):
 - **Step 1** (3692bb4): middleware rewrite `/store/{slug}/{rest}` → route internal + header; non-breaking (URL lama tetap jalan); scope tetap dari session (RLS).
-- **Step 2** (74f7e01): `getStoreSlug` + `useStoreHref`/StoreProvider slug; nav link prefixed + active-state strip-prefix. Verified nol crash.
-- ⏳ Lanjutan opsional: post-login redirect ke `/store/{slug}`, super-admin impersonation deep-link, validasi slug↔membership (untuk multi-toko/akun).
+- **Step 2** (74f7e01): `getStoreSlug` + `useStoreHref`/StoreProvider slug; nav link prefixed + active-state strip-prefix.
+- **Step 3** (db978f3): post-login redirect ke `/store/{slug}` + super-admin impersonation **deep-link** ke `ADMIN_URL/store/{slug}`. **Store-path COMPLETE + verified (nol crash).**
+- ⏳ Sisa (untuk 1-akun-banyak-toko): validasi `slug↔membership` + store-switcher UI.
 
 **⏳ Terbuka (perlu diputuskan):**
 1. Queue: **CF Queues** vs **Inngest** vs **BullMQ+Redis**?
