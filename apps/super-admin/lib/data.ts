@@ -1,5 +1,6 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
+import { courierName, COURIER_CODES } from "@tokophi/lib/couriers";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { PLANS, planPrice, type Plan, type Store, type StoreStatus, type Invoice, type PActivity } from "./mock";
 
@@ -181,7 +182,6 @@ export type Toggle = { key: string; name: string; desc: string; on: boolean };
 const GATEWAY_META: Record<string, { name: string; desc: string; order: number }> = {
   autolaris: { name: "AutoLaris", desc: "PSP platform — VA (6 bank), QRIS, DANA", order: 0 },
 };
-const COURIER_ORDER = ["JNE", "J&T Express", "SiCepat", "AnterAja", "Pos Indonesia", "GoSend", "GrabExpress"];
 
 export async function getPaymentGateways(): Promise<Toggle[]> {
   const gws = await db.select().from(schema.platformPaymentGateways);
@@ -196,9 +196,10 @@ export async function getPaymentGateways(): Promise<Toggle[]> {
 
 export async function getCouriers(): Promise<Toggle[]> {
   const rows = await db.select().from(schema.platformCouriers);
+  const order = COURIER_CODES;
   return rows
-    .map((c) => ({ key: c.courier, name: c.courier, desc: Array.isArray(c.services) ? (c.services as string[]).join(", ") : "", on: c.enabled }))
-    .sort((a, b) => COURIER_ORDER.indexOf(a.name) - COURIER_ORDER.indexOf(b.name));
+    .map((c) => ({ key: c.courier, name: courierName(c.courier), desc: Array.isArray(c.services) ? (c.services as string[]).join(", ") : "", on: c.enabled }))
+    .sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
 }
 
 // ---- platform team (real operators) ----

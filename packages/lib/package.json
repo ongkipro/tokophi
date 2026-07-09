@@ -8,6 +8,7 @@
     "./format": "./src/format.ts",
     "./kiriminaja": "./src/kiriminaja.ts",
     "./autolaris": "./src/autolaris.ts",
-    "./cache": "./src/cache.ts"
+    "./cache": "./src/cache.ts",
+    "./couriers": "./src/couriers.ts"
   }
 }

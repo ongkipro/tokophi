@@ -1,5 +1,5 @@
 "use server";
-import { schema } from "@tokophi/db";
+import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
@@ -99,6 +99,16 @@ export async function getCouriers(): Promise<string[] | null> {
     const [s] = await db.select({ couriers: schema.storeSettings.couriers }).from(schema.storeSettings).limit(1);
     return s?.couriers ?? null;
   });
+}
+
+// Courier codes the PLATFORM (super-admin) has enabled — the pool a merchant may pick from.
+// platform_couriers is a global table (not tenant-scoped), so it's read on the owner connection.
+export async function getPlatformCouriers(): Promise<string[]> {
+  if (!(await getSession())) return [];
+  const rows = await db
+    .select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled })
+    .from(schema.platformCouriers);
+  return rows.filter((r) => r.enabled).map((r) => r.courier);
 }
 
 export async function saveCouriers(couriers: string[]): Promise<{ ok: boolean; error?: string }> {

@@ -16,7 +16,6 @@ import {
   Info,
   UserPlus,
   Save,
-  Check,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -42,7 +41,8 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { SenderAddressCard } from "@/components/admin/pengaturan/sender-address-card"
-import { getCouriers, saveCouriers } from "@/lib/actions/shipping"
+import { getCouriers, saveCouriers, getPlatformCouriers } from "@/lib/actions/shipping"
+import { COURIERS } from "@tokophi/lib/couriers"
 import { toast } from "sonner"
 
 type Section =
@@ -77,21 +77,6 @@ const SECTIONS: {
   },
 ]
 
-// Keys = KiriminAja courier codes (must match the live `code` from ongkir so the filter works).
-const COURIERS = [
-  { key: "sicepat", name: "SiCepat", services: [{ key: "reg", name: "REG" }, { key: "best", name: "BEST" }] },
-  { key: "jne", name: "JNE", services: [{ key: "reg", name: "Reguler" }, { key: "yes", name: "YES" }] },
-  { key: "jnt", name: "J&T Express", services: [{ key: "ez", name: "EZ" }] },
-  { key: "spx", name: "Shopee Express (SPX)", services: [{ key: "std", name: "Standard" }, { key: "hemat", name: "Hemat" }] },
-  { key: "anteraja", name: "AnterAja", services: [{ key: "reg", name: "Reguler" }, { key: "sameday", name: "Same Day" }] },
-  { key: "sap", name: "SAP Express", services: [{ key: "reg", name: "Reguler" }] },
-  { key: "lion", name: "Lion Parcel", services: [{ key: "reg", name: "Regpack" }, { key: "big", name: "Bigpack" }] },
-  { key: "ninja", name: "Ninja Xpress", services: [{ key: "std", name: "Standard" }] },
-  { key: "idx", name: "ID Express", services: [{ key: "reg", name: "Reguler" }] },
-  { key: "tiki", name: "TIKI", services: [{ key: "reg", name: "Reguler" }, { key: "ons", name: "ONS" }] },
-  { key: "jtcargo", name: "J&T Cargo", services: [{ key: "cargo", name: "Cargo" }] },
-  { key: "pos", name: "Pos Indonesia", services: [{ key: "kilat", name: "Kilat Khusus" }] },
-] as const
 
 function Field({
   label,
@@ -148,30 +133,24 @@ export default function Page() {
     va: false,
   })
 
-  // Pengiriman — default all on; NULL in DB = all. Loaded + persisted to store_settings.couriers.
+  // Pengiriman — the AVAILABLE list = couriers the platform (super-admin) enabled; the merchant
+  // picks a subset (store_settings.couriers; NULL = all available). Loaded + auto-saved.
+  const [platformCouriers, setPlatformCouriers] = React.useState<string[] | null>(null)
+  const availableCouriers = COURIERS.filter((c) => !platformCouriers || platformCouriers.includes(c.code))
   const [courierOn, setCourierOn] = React.useState<Record<string, boolean>>(() =>
-    Object.fromEntries(COURIERS.map((c) => [c.key, true])),
+    Object.fromEntries(COURIERS.map((c) => [c.code, true])),
   )
   React.useEffect(() => {
+    getPlatformCouriers().then(setPlatformCouriers)
     getCouriers().then((saved) => {
-      if (saved) setCourierOn(Object.fromEntries(COURIERS.map((c) => [c.key, saved.includes(c.key)])))
+      if (saved) setCourierOn(Object.fromEntries(COURIERS.map((c) => [c.code, saved.includes(c.code)])))
     })
   }, [])
   const persistCouriers = (next: Record<string, boolean>) => {
-    const keys = COURIERS.filter((c) => next[c.key]).map((c) => c.key)
+    // only persist couriers that are actually available on the platform
+    const keys = availableCouriers.filter((c) => next[c.code]).map((c) => c.code)
     saveCouriers(keys).then((r) => r.ok && toast.success("Kurir diperbarui"))
   }
-  const [serviceOn, setServiceOn] = React.useState<Record<string, boolean>>(
-    () => {
-      const s: Record<string, boolean> = {}
-      COURIERS.forEach((c) =>
-        c.services.forEach((sv) => {
-          s[c.key + "." + sv.key] = true
-        }),
-      )
-      return s
-    },
-  )
   const [gratisOngkir, setGratisOngkir] = React.useState(true)
   const [pickup, setPickup] = React.useState(false)
 
@@ -195,7 +174,7 @@ export default function Page() {
 
   const payTotal = Object.keys(pay).length
   const payActive = Object.values(pay).filter(Boolean).length
-  const kurirActive = Object.values(courierOn).filter(Boolean).length
+  const kurirActive = availableCouriers.filter((c) => courierOn[c.code]).length
 
   const team = [
     {
@@ -528,14 +507,16 @@ export default function Page() {
                     <span className="font-medium text-foreground">TokoΦ</span>. Anda cukup memilih kurir yang ingin ditawarkan — resi &amp; tarif otomatis.
                   </span>
                 </div>
-                {COURIERS.map((c) => {
-                  const on = courierOn[c.key]
-                  const activeServices = c.services.filter(
-                    (sv) => serviceOn[c.key + "." + sv.key],
-                  ).length
+                {platformCouriers?.length === 0 && (
+                  <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+                    Belum ada kurir yang diaktifkan platform. Hubungi TokoΦ.
+                  </p>
+                )}
+                {availableCouriers.map((c) => {
+                  const on = courierOn[c.code]
                   return (
                     <div
-                      key={c.key}
+                      key={c.code}
                       className={cn(
                         "rounded-lg border p-3 transition-opacity",
                         !on && "opacity-60",
@@ -548,48 +529,19 @@ export default function Page() {
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium">{c.name}</p>
                           <p className="mt-0.5 text-xs text-muted-foreground">
-                            {on
-                              ? `${activeServices} layanan aktif`
-                              : "Nonaktif"}
+                            {on ? c.services.join(" · ") : "Nonaktif"}
                           </p>
                         </div>
                         <Switch
                           checked={on}
                           disabled={!canSettings}
                           onCheckedChange={(v) => {
-                            const next = { ...courierOn, [c.key]: v }
+                            const next = { ...courierOn, [c.code]: v }
                             setCourierOn(next)
                             persistCouriers(next)
                           }}
                         />
                       </div>
-
-                      {on && (
-                        <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
-                          {c.services.map((sv) => {
-                            const id = c.key + "." + sv.key
-                            const svOn = serviceOn[id]
-                            return (
-                              <button
-                                key={sv.key}
-                                type="button"
-                                onClick={() =>
-                                  setServiceOn((s) => ({ ...s, [id]: !s[id] }))
-                                }
-                                className={cn(
-                                  "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition-colors",
-                                  svOn
-                                    ? "border-primary bg-primary/10 text-primary font-medium"
-                                    : "border-border text-muted-foreground hover:bg-muted",
-                                )}
-                              >
-                                {svOn && <Check className="size-3" />}
-                                {sv.name}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )}
                     </div>
                   )
                 })}

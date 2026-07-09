@@ -3,6 +3,7 @@
 //   npm run seed -w @tokophi/db   (idempotent — truncates public tables first)
 import { db, client, schema } from "./client";
 import { scryptSync, randomBytes } from "node:crypto";
+import { COURIERS } from "@tokophi/lib/couriers";
 
 // Local auth: scrypt "salt:hash". Dev owner password below (change for real deploys).
 const DEV_OWNER_PASSWORD = "tokophi123";
@@ -778,15 +779,12 @@ async function main() {
   ]);
   await db.insert(schema.shippingAggregator).values({ provider: "kiriminaja", enabled: true });
   await db.insert(schema.platformCouriers).values(
-    [
-      ["JNE", ["Reguler", "YES", "OKE"], true],
-      ["J&T Express", ["EZ", "Ekonomi"], true],
-      ["SiCepat", ["REG", "BEST", "GOKIL"], true],
-      ["AnterAja", ["Reguler", "Same Day"], true],
-      ["Pos Indonesia", ["Kilat Khusus", "Reguler"], false],
-      ["GoSend", ["Instant", "Same Day"], true],
-      ["GrabExpress", ["Instant", "Same Day"], true],
-    ].map(([courier, services, enabled]) => ({ courier: courier as string, services, enabled: enabled as boolean })),
+    // KiriminAja codes from the shared roster; niche ones off by default (super-admin toggles).
+    COURIERS.map((c) => ({
+      courier: c.code,
+      services: c.services,
+      enabled: !["idx", "tiki", "jtcargo", "pos"].includes(c.code),
+    })),
   );
   await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
 
