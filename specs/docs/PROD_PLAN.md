@@ -120,6 +120,11 @@ VPS (Coolify/Docker): app + rich + storefront-SSR + PgBouncer + Postgres 16 (+op
 - **Step 3** (db978f3): post-login redirect ke `/store/{slug}` + super-admin impersonation **deep-link** ke `ADMIN_URL/store/{slug}`. **Store-path COMPLETE + verified (nol crash).**
 - ⏳ Sisa (untuk 1-akun-banyak-toko): validasi `slug↔membership` + store-switcher UI.
 
+**📝 Catatan arah (BUKAN development sekarang):**
+- **Prioritas market SEKARANG = Indonesia saja** (ready-to-ID). Malaysia + Singapore = arah **masa depan**, bukan backlog aktif. Implikasi yang ditunda sampai ekspansi: **multi-currency** (IDR → +MYR/SGD) + **i18n**. Jangan dikerjakan dulu — dicatat saja.
+- **Edge vs origin-LB (CF vs HAProxy):** beda layer, bukan "vs". **Edge = Cloudflare** (PoP Jakarta/SG/KL — pas untuk ID/MY/SG; TLS/cache/WAF/DDoS/R2/Images dekat user). **Origin proxy = Traefik/Caddy bawaan Coolify** (sudah route ke container + TLS Let's Encrypt). **SKIP HAProxy** sampai benar-benar multi-origin atau perlu LB di depan Postgres/PgBouncer (fase lanjut).
+- **Lokasi VPS = Singapura** (hub regional ID+MY+SG; peering bagus). Jakarta opsi kalau mau ID absolut-terendah. **Hindari Hetzner** untuk origin utama — **tak punya DC Asia** (Jerman/Finlandia/US) → ~150-200ms RTT ke Jakarta pada request dinamis (admin/checkout/DB). Provider yang punya SG/Jakarta: **Vultr (SG + Jakarta), DigitalOcean (SG), OVHcloud (SG, value ala-Hetzner), Linode/Akamai (SG), Alibaba (Jakarta+SG)**.
+
 **⏳ Terbuka (perlu diputuskan):**
 1. Queue: **CF Queues** vs **Inngest** vs **BullMQ+Redis**?
 3. RBAC: tetap **matrix** atau pindah **Casbin**?
