@@ -91,10 +91,10 @@ VPS (Coolify/Docker): app + rich + storefront-SSR + PgBouncer + Postgres 16 (+op
 **✅ Sudah kuat:** RLS (isolasi tenant), RBAC (`requireCapability`), JWT (jose) + scrypt, secrets gitignored (keys tak di git), Drizzle parameterized, React escaping.
 
 **🔴 KRITIS — sebelum prod:**
-- **Payment callback tanpa verifikasi** (`/api/public/pay/callback`) → siapa pun bisa `{reff_id,status:PAID}` = tandai lunas tanpa bayar. **Fix: HMAC signature (konfirmasi spec AutoLaris) + IP whitelist + idempotency.**
+- ~~Payment callback tanpa verifikasi~~ → **✅ DIPERBAIKI (db4f3af):** guard **shared-secret** (`AUTOLARIS_CALLBACK_SECRET`, konstan-waktu, via header `X-Callback-Token`/`?token=`) + rate-limit per-IP + **idempotent** (skip yang sudah `berhasil`). **Sisa (prod):** ganti shared-secret → **HMAC signature asli** begitu spec AutoLaris dikonfirmasi + IP whitelist.
 
 **🟠 PENTING — sebelum ads:**
-- Endpoint publik **tanpa rate-limit** + CORS `*` → spam/DoS/kuras rate-limit vendor. **Fix: rate-limit per-IP (KV) + Turnstile + CORS ketat.**
+- ~~Endpoint publik tanpa rate-limit~~ → **✅ DIPERBAIKI (db4f3af):** rate-limit per-IP (`@tokophi/lib` `rateLimit`, cf-connecting-ip) — ongkir 60/mnt, pay 20/mnt, order 10/mnt, callback 60/mnt → 429. **Sisa (prod):** swap in-proc → **Workers KV** (biar lintas-instance), + **Turnstile** + **CORS ketat** (kini masih `*`).
 
 **🟡 Checklist deploy:** ganti `AUTH_SECRET` (fallback `dev-insecure-…`) + password `tokophi123`; cookie `Secure`; HTTPS; CF WAF/DDoS; rotasi key prod (bukan sandbox).
 
@@ -127,4 +127,4 @@ VPS (Coolify/Docker): app + rich + storefront-SSR + PgBouncer + Postgres 16 (+op
 6. Spec **signature callback AutoLaris** — konfirmasi ke vendor.
 
 **Urutan implementasi disarankan (saat mulai prod):**
-① Callback signature + rate-limit (security kritis) → ② R2 + CF Images (gambar) → ③ Storefront SSR + hostname resolve + domain mapping → ④ DB pooling → ⑤ Queue → ⑥ Coolify deploy (Dockerfile per app).
+① ~~Callback signature + rate-limit~~ **✅ interim done (db4f3af)** — sisa: HMAC asli + KV + Turnstile → ② R2 + CF Images (gambar) → ③ Storefront SSR + hostname resolve + domain mapping → ④ DB pooling → ⑤ Queue → ⑥ Coolify deploy (Dockerfile per app).
