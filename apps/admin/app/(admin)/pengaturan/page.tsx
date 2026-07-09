@@ -19,6 +19,7 @@ import {
   Save,
   ShieldCheck,
   Sparkles,
+  UserRound,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -255,6 +256,7 @@ export default function Page() {
               })}
               {/* separate routes */}
               {[
+                { href: "/pengaturan/profil", label: "Profil", desc: "Info akun Anda", icon: <UserRound /> },
                 { href: "/pengaturan/keamanan", label: "Keamanan", desc: "Kata sandi & 2FA", icon: <ShieldCheck /> },
                 { href: "/pengaturan/langganan", label: "Langganan", desc: "Paket & tagihan", icon: <Sparkles /> },
               ].map((r) => (

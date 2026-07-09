@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Menu, Search, Bell, Sun, Moon, ChevronDown, Check, ExternalLink, LogOut, User, CreditCard } from "lucide-react";
+import { Menu, Search, Bell, Sun, Moon, ChevronDown, Check, ExternalLink, LogOut, User, CreditCard, ShieldCheck } from "lucide-react";
 import type { SearchItem } from "@/lib/data/search";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -201,8 +201,9 @@ export function Topbar({ user, storeName, searchIndex = [] }: { user?: { name: s
               <div className="text-xs text-muted-foreground">{email}</div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2"><User className="size-4" /> Profil</DropdownMenuItem>
-            <DropdownMenuItem className="gap-2"><CreditCard className="size-4" /> Langganan</DropdownMenuItem>
+            <DropdownMenuItem className="gap-2" render={<Link href="/pengaturan/profil" />}><User className="size-4" /> Profil</DropdownMenuItem>
+            <DropdownMenuItem className="gap-2" render={<Link href="/pengaturan/keamanan" />}><ShieldCheck className="size-4" /> Keamanan</DropdownMenuItem>
+            <DropdownMenuItem className="gap-2" render={<Link href="/pengaturan/langganan" />}><CreditCard className="size-4" /> Langganan</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="gap-2 text-destructive" onClick={() => signOut()}><LogOut className="size-4" /> Keluar</DropdownMenuItem>
           </DropdownMenuContent>
