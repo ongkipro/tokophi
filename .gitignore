@@ -14,3 +14,4 @@ apps/admin/public/uploads/
 
 # Local dev process logs (pi)
 .pi-dev-logs/
+!.env.coolify.example
