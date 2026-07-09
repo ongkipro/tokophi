@@ -186,13 +186,24 @@ Base `https://api-h2h.autolaris.com`, Bearer key in gitignored `.env.local`. Cli
 
 ---
 
-## 10. Deployment topology
+## 10. Deployment topology & scaling
 
 - **Now = local Linux.** Docker Postgres 16 (:5433) + the two Next dev servers + the Astro storefront.
-- **Prod target (deferred, ADR 0007/0008):** **self-hosted Postgres + PostgREST + Storage (MinIO/S3)
-  on a VPS — NOT Supabase.** PostgREST connects as `tokophi_app` with the JWT `store_id` claim feeding
-  the `app.store_id` GUC, so the same RLS policies enforce in prod. **Per-client storefront** deploys
-  are built individually (ADR 0008: one deploy per client).
+- **Prod target (deferred, ADR 0007/0008):** **self-hosted Postgres on a VPS — NOT Supabase**, behind a
+  pooler; the same RLS policies enforce (`tokophi_app` role + `app.store_id` GUC). **Per-client storefront**
+  deploys are built individually (ADR 0008). Diagram + full topology: `UML.md` §8.
+- **Scaling target = 50–100 clients / 10–30k ad-driven visitors.** Static storefront + edge CDN absorbs
+  page views cheaply; the **load-bearing paths are images + live ongkir**. Cloudflare-native plan, in
+  priority order **before ads**:
+  1. **Images → R2 + Cloudflare Images** (product media; local `public/` would choke at 100k+ img req/day).
+  2. **Cache `shipping_price` → Workers KV** (avoid KiriminAja rate-limit under burst). *Local dev of this
+     pattern is already in place:* `@tokophi/lib/cache` (in-proc TTL, 10 min) wraps `kaShippingPrice` —
+     swap the module for KV/Redis in prod.
+  3. **DB connection pooling** (PgBouncer / Hyperdrive) for campaign bursts.
+  4. **Queue** (Cloudflare Queues / Inngest) for async: payment callbacks, shipment dispatch, tracking,
+     WA/email notifications, abandoned-cart.
+- A dedicated backend (Hono/NestJS) + full Redis are **optional** at this scale (the Next full-stack +
+  `/api/public/*` proxies cover it). **Open decision:** storefront SSG-rebuild-per-store vs SSR + edge-cache.
 
 ---
 

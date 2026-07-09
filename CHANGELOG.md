@@ -4,6 +4,11 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-09
 
+### Packages + scaling prep + docs
+- **De-dup**: KiriminAja + AutoLaris clients consolidated into `@tokophi/lib` (server-only `./kiriminaja` + `./autolaris` subpaths) — admin + super-admin now share one canonical client (deleted 4 duplicate files).
+- **Pricing cache** (`@tokophi/lib/cache`): in-proc TTL cache wraps `kaShippingPrice` (10 min per route) — cuts KiriminAja rate-limit risk + latency under ad traffic (1st call 5.8s → cached 0.03s). KV/Redis-ready swap for prod.
+- **Docs**: `UML.md` refreshed to the implemented state (commerce loop, express+instant shipping, data-layer, Cloudflare-native scaling topology sized for 50–100 clients / 10–30k traffic); `SYSTEM_GUIDE.md` §10 adds the scaling plan.
+
 ### Shipping — instant courier (same-day) E2E + UAT (insurance/COD/cancel) + product weight/dims
 - **Instant courier** (GoSend/Grab/Borzo): grouped checkout (**📦 Ekspedisi** vs **⚡ Kirim Instan**, geolocation) + **create wired end-to-end** — checkout → pick instant → `kaCreateInstantOrder` dispatches a driver (verified: order + real instant order_id, status `dikirim`). Gotchas: `shipping_price` = `shipping_costs` (not total), top-level `order_prefix`, `service_type`, fresh price. Store coords via Pengaturan → **"Gunakan lokasi saat ini"** (geolocation).
 - **UAT (Everpeaks) coverage** (per official `kiriminaja/node` SDK): `request_pickup` supports `insurance_amount`, `cod` (amount; only on `cod:true` services), `width/length/height` (volumetric). **Cancel/void** = `/api/mitra/v3/cancel_shipment {awb, reason≥5}`. Admin Buat Pengiriman: Asuransi + COD toggles + Batalkan.

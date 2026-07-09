@@ -1,9 +1,9 @@
 # TokoΦ — Diagrams (UML / Mermaid)
 
 > Renders on GitHub / any Mermaid viewer. Kept text-based so it lives with the code.
-> Companion to `../PRD.md`, `SCHEMA.md`, `CONCEPT.md`. Updated 2026-07-03.
+> Companion to `SYSTEM_GUIDE.md` (overview), `../PRD.md`, `SCHEMA.md`. Updated 2026-07-09.
 >
-> **Current state:** monorepo (npm workspaces) with 3 apps — `apps/admin` (Next 16, :3000, merchant admin), `apps/super-admin` (Next 16, :3001, platform control plane), `apps/storefront` (Astro 5, :4327, shopper shop "Batik Nusantara") — and **4 shared packages**: `@tokophi/ui`, `@tokophi/lib`, `@tokophi/data`, **`@tokophi/db`** (Drizzle schema/client + migrations). **Local backend fully wired** on **local PostgreSQL 16** (Docker, port 5433) via `@tokophi/db`: **super-admin (all 5 pages) + 16 admin modules** + storefront all read the DB (reads done end-to-end); all 12 admin editors write via `lib/actions/*`; super-admin writes too (provisioning/lifecycle/settings/billing). Seeds are deterministic (mulberry32, `TODAY=2026-06-30`). Single-tenant "Batik Nusantara" MVP. Prod target = self-hosted Postgres (ADR 0007); per-client topology = ADR 0008.
+> **Current state:** monorepo (npm workspaces) — 3 apps (`apps/admin` Next 16 :3000, `apps/super-admin` Next 16 :3001, `apps/storefront` Astro 5 :4327) + **4 shared packages** (`@tokophi/db`, `@tokophi/lib` [+ server-only `kiriminaja`/`autolaris`/`cache` subpaths], `@tokophi/ui`, `@tokophi/data`). **Backend fully wired** on local PostgreSQL 16 (Docker :5433) via `@tokophi/db` (55 tables, migrations 0000–0018, RLS enforcing). **Commerce loop is COMPLETE**: storefront checkout → real DB order + inventory + payment + shipping; merchant admin runs it; callbacks close it. **Real integrations**: KiriminAja (shipping — express + instant, area DB, pricing cache) + AutoLaris (payment — VA/QRIS/DANA + COD), both platform-managed + brand-hidden from clients. Prod target = self-hosted Postgres on a VPS (ADR 0007, NOT Supabase) + Cloudflare-native edge (CDN/R2/Images/KV); per-client topology = ADR 0008.
 
 ## 1. System context / container (C4-ish)
 > Who talks to what: shoppers→storefront, merchants→admin, platform→super-admin; the 3 apps sit on shared packages; self-hosted Postgres + payment/shipping integrations are platform-managed and land at M3.
@@ -234,51 +234,55 @@ erDiagram
 ```
 > Payments/shipping/COD config is **platform-level** (see `SCHEMA.md`): `shipping_aggregator`, `platform_couriers`, `platform_payment_gateways`, `platform_cod`; per-store rows keep only `enabled` flags. `menus`/`menu_items` mirror the canonical shapes in `@tokophi/data` (see §6).
 
-## 4. Storefront purchase flow (current — mock, no backend)
-> Real shopper journey as built today: everything renders from mock catalog and the **cart lives in `localStorage`** (no server). Checkout collects address/shipping/payment then routes to a static success page. The payment/shipping calls are stubs until M3 (§5).
+## 4. Commerce loop — storefront checkout → order → payment → shipping (IMPLEMENTED)
+> The real, working end-to-end loop. Cart lives in `localStorage`; checkout calls the platform proxy endpoints (in `apps/admin/app/api/public/*`, no-auth, CORS) which own the KiriminAja/AutoLaris keys. `/api/public/order` creates the order + inventory + payment; callbacks close it. Provider brands are hidden from the shopper (white-label).
 ```mermaid
 sequenceDiagram
   actor Pembeli
   participant SF as Storefront (Astro)
-  participant Cat as src/data/catalog.ts (mock)
-  participant LS as localStorage (cart)
-
-  Pembeli->>SF: Buka beranda / kategori/[handle]
-  SF->>Cat: Ambil produk (seeded mock)
-  Cat-->>SF: Daftar produk + gambar
-  Pembeli->>SF: Buka produk/[handle] (galeri 5 gambar)
-  Pembeli->>SF: "Tambah ke keranjang"
-  SF->>LS: Simpan item (write)
-  Pembeli->>SF: Buka /keranjang
-  SF->>LS: Baca item (read) → subtotal
-  Pembeli->>SF: Lanjut /checkout (alamat + kurir + pembayaran)
-  Note over SF: Ongkir/pembayaran = stub (real di M3, lihat §5)
-  Pembeli->>SF: "Buat pesanan"
-  SF->>LS: Kosongkan cart
-  SF-->>Pembeli: /checkout/sukses
-```
-
-## 5. Checkout + payment + shipping — target (platform-managed, M3)
-> Backend flow once self-hosted Postgres + integrations land: storefront quotes ongkir via the aggregator, charges through the platform PSP account, writes the order (scoped by `store_id`), and it surfaces in the merchant admin in realtime. Platform settles and pays out (ADR 0004).
-```mermaid
-sequenceDiagram
-  actor Pembeli
-  participant SF as Storefront
-  participant AGG as Aggregator (KiriminAja)
-  participant PG as Gateway (platform acct)
-  participant DB as VPS Postgres
+  participant OG as /api/public/ongkir (proxy)
+  participant OR as /api/public/order (proxy)
+  participant KA as KiriminAja
+  participant AL as AutoLaris (PSP)
+  participant DB as Postgres (RLS)
   participant AD as Merchant admin
 
-  Pembeli->>SF: Checkout (pilih kurir/layanan yang diaktifkan toko)
-  SF->>AGG: Cek ongkir (kurir + service enabled)
-  AGG-->>SF: Tarif & ETA
-  Pembeli->>SF: Bayar
-  SF->>PG: Buat transaksi (akun platform)
-  PG-->>SF: Status (dibayar/pending)
-  SF->>DB: Insert order (store_id, channel=attribution)
-  DB-->>AD: Order muncul di admin toko (realtime)
-  AD->>AGG: Buat pengiriman → resi otomatis
-  Note over PG,DB: Platform settle → payout ke merchant (potong fee)
+  Pembeli->>SF: produk → keranjang (localStorage)
+  Pembeli->>SF: checkout — cari kecamatan tujuan
+  SF->>OG: op=search (resolveArea: DB lokal → KA fallback)
+  SF->>OG: op=rates (KA shipping_price, cache 10m)
+  OG-->>SF: tarif Ekspedisi + (⚡) Instan (geolokasi)
+  Pembeli->>SF: pilih kurir + metode bayar → Bayar
+  SF->>OR: {items, customer, address, shipping, channelCode, instant?}
+  OR->>DB: cek stok → upsert customer → insert order + line items (variantId) → kurangi stok
+  alt instant
+    OR->>KA: v4/instant/pickup/request (dispatch driver)
+    KA-->>OR: instant order_id → order.awb, status dikirim
+  end
+  alt non-COD
+    OR->>AL: create_payment (VA/QRIS/DANA)
+    AL-->>OR: trx_id + VA/QRIS → payments row (linked)
+  else COD
+    OR->>DB: payments row (method=cod)
+  end
+  OR-->>SF: orderNumber (WEB-…) + instruksi bayar
+  SF-->>Pembeli: /sukses (No. pesanan + VA/QRIS)
+  DB-->>AD: order muncul di Pesanan + payment linked
+  AL->>OR: callback (PAID) → payment berhasil + order dibayar
+```
+
+## 5. Shipping — express (resi/AWB) + instant (same-day) (IMPLEMENTED)
+> Merchant admin creates shipments from an order. Express = district-id based (pickup → AWB); Instant = coordinate based (dispatch a driver now). Insurance/COD/dimensions supported (volumetric). Area names resolve from the local `kiriminaja_areas` table first (no rate limit).
+```mermaid
+flowchart TD
+  A[Order detail — Cek Ongkir] --> B{Jenis}
+  B -->|Ekspedisi| C[shipping_price v6.1<br/>district IDs + weight+dims+insurance]
+  B -->|Instan| D[v4/instant/pricing<br/>lat/long + gosend/grab/borzo]
+  C --> E["Buat Pengiriman (request_pickup v6.1)<br/>+insurance_amount +cod +package dims"]
+  E --> F["orders.awb / courier / kaOrderId · status dikirim"]
+  F --> G["Lacak (tracking) · Cetak label PDF (100×150) · Batalkan (cancel_shipment)"]
+  D --> H["request_pickup instant (shipping_costs, order_prefix)"]
+  H --> F
 ```
 
 ## 6. Shared nav — single source of truth (`@tokophi/data`)
@@ -313,64 +317,58 @@ flowchart TB
 ```
 > Sync direction now is **file → both surfaces (build-time)**. The dotted edges are the M3 upgrade: admin UI edits persist to `menus`/`menu_items` and the storefront reads them live.
 
-## 7. Data-layer seam (mock today → self-hosted Postgres (VPS) later)
-> The core of the mock-first bet (ADR 0001): screens never touch storage directly. They read through a thin data layer — `apps/admin/lib/mock/*`, `apps/storefront/src/data/*`, `@tokophi/data` — that returns seeded fixtures today and becomes self-hosted Postgres queries at M3 with the same shapes.
+## 7. Data-layer seam (IMPLEMENTED — server-only → Postgres via RLS)
+> Screens never touch storage directly. Admin/super-admin read through server-only `lib/data/*` selectors + write via `lib/actions/*` server actions; the storefront reads `src/data/catalog.ts` (via `@tokophi/db`). Admin tenant queries run inside `withTenant`/`withCurrentTenant` (sets `app.store_id` GUC + `SET LOCAL ROLE tokophi_app`) so RLS enforces. `lib/mock/*` remains only as deterministic seed-parity shape.
 ```mermaid
 graph TB
   subgraph Screens
-    A1["admin app/(admin)/* screens"]
-    S1["super-admin app/(platform)/* screens"]
+    A1["admin (admin)/* + api/public/*"]
+    S1["super-admin (platform)/*"]
     F1["storefront pages/*.astro"]
   end
-  subgraph Seam["Data layer (stable interface)"]
-    AM["admin/lib/mock/store.ts"]
-    SM["super-admin mock fixtures"]
-    SC["storefront/src/data/catalog.ts + nav.ts"]
-    DP["@tokophi/data (menu)"]
+  subgraph Seam["Server-only data/actions"]
+    AD["admin lib/data/* (withCurrentTenant) + lib/actions/* (withTenant)"]
+    SD["super-admin lib/data.ts + actions.ts (owner, cross-tenant)"]
+    SC["storefront src/data/catalog.ts (build/SSR)"]
+    INT["@tokophi/lib/{kiriminaja,autolaris,cache}"]
   end
-  subgraph Sources
-    MOCK["Seeded mock (mulberry32, TODAY=2026-06-30)"]
-    SB[("Self-hosted Postgres — M3<br/>+ PostgREST + RLS by store_id")]
-  end
+  DB[("PostgreSQL 16 + RLS (tokophi_app role)")]
+  EXT["KiriminAja · AutoLaris (live APIs)"]
 
-  A1 --> AM
-  S1 --> SM
-  F1 --> SC
-  F1 --> DP
-  AM --> DP
-
-  AM --> MOCK
-  SM --> MOCK
-  SC --> MOCK
-  DP --> MOCK
-  AM -. M3 .-> SB
-  SM -. M3 .-> SB
-  SC -. M3 .-> SB
-  DP -. M3 .-> SB
+  A1 --> AD --> DB
+  A1 --> INT --> EXT
+  S1 --> SD --> DB
+  F1 --> SC --> DB
 ```
 
-## 8. Deployment (target)
-> Where each app runs at M3: the two Next admins on Vercel, the per-client Astro storefront on Cloudflare, all backed by self-hosted Postgres (VPS).
+## 8. Deployment & scaling (target — Cloudflare-native, sized for 50–100 clients / 10–30k ad traffic)
+> Storefront static+edge absorbs ad traffic cheaply; the load-bearing paths are **images** and **live ongkir** — solved by R2+Cloudflare Images and KV/in-proc pricing cache. DB is self-hosted Postgres on a VPS (ADR 0007, NOT Supabase) behind a pooler.
 ```mermaid
 graph LR
-  subgraph Vercel
-    A[apps/admin :3000]
-    S[apps/super-admin :3001]
+  Ads[Ad traffic 10–30k] --> CDN
+  subgraph Cloudflare[Cloudflare edge]
+    CDN[CDN / Pages — Astro storefronts]
+    IMG[Cloudflare Images + R2 — product media]
+    KV[Workers KV / Cache API — ongkir & KPI cache]
+    Q[Cloudflare Queues / Inngest — callbacks · notif · shipment]
+    W["Workers (opsi) — /api/public/*"]
   end
-  subgraph Cloudflare
-    F[apps/storefront — per client]
+  subgraph VPS[VPS — Coolify/Docker]
+    ADMIN[admin + super-admin Next]
+    POOL[PgBouncer / Hyperdrive]
+    PG[(Postgres 16 + RLS)]
   end
-  subgraph "Self-hosted Postgres (VPS)"
-    DB[(Postgres + RLS)]
-    AU[Auth]
-    ST[Storage]
-  end
-  A --> DB
-  S --> DB
-  F --> DB
-  DB --- AU
-  A --- ST
+  EXT[KiriminAja · AutoLaris]
+
+  CDN --> W --> POOL --> PG
+  CDN --> IMG
+  W --> KV
+  W --> EXT
+  ADMIN --> POOL
+  Q --> EXT
+  Q --> PG
 ```
+> **Priority before ads:** ① R2 + Cloudflare Images (media) · ② KV cache for `shipping_price` (avoid KiriminAja rate-limit) · ③ DB pooling · ④ Queue for async (callbacks/notif/shipment). Backend extraction (Hono/Workers) + full Redis are optional at this scale. Open decision: storefront **SSG-rebuild-per-store** vs **SSR + edge-cache** (better for 50–100 stores with frequent updates).
 
 ## 9. User roles (who touches what)
 > Access map across the three surfaces; RLS by `store_id` enforces tenant isolation at M3 (ADR 0003), super-admin is the cross-tenant platform plane.
