@@ -10,11 +10,18 @@ export const runtime = "nodejs";
 
 const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me");
 
+// Relative-Location redirect: behind Traefik the Node runtime sees req.url as the internal
+// http://localhost:3000, so `new URL(path, req.url)` leaks the internal host. A relative
+// Location resolves against the browser's origin (the real sslip.io/app domain) instead.
+function redirectTo(path: string): NextResponse {
+  return new NextResponse(null, { status: 307, headers: { Location: path } });
+}
+
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   const slug = req.nextUrl.searchParams.get("slug");
   const dest = slug ? `/store/${slug}` : "/";
-  if (!token) return NextResponse.redirect(new URL("/login", req.url));
+  if (!token) return redirectTo("/login");
   try {
     const { payload } = await jwtVerify(token, secret);
     const s = payload as unknown as Session;
@@ -27,7 +34,7 @@ export async function GET(req: NextRequest) {
       email: s.email,
       name: s.name,
     });
-    const res = NextResponse.redirect(new URL(dest, req.url));
+    const res = redirectTo(dest);
     res.cookies.set(SESSION_COOKIE, full, {
       httpOnly: true,
       sameSite: "lax",
@@ -36,6 +43,6 @@ export async function GET(req: NextRequest) {
     });
     return res;
   } catch {
-    return NextResponse.redirect(new URL("/login", req.url));
+    return redirectTo("/login");
   }
 }
