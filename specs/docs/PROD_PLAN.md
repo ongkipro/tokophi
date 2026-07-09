@@ -105,6 +105,7 @@ VPS (Coolify/Docker): app + rich + storefront-SSR + PgBouncer + Postgres 16 (+op
 ## 8. Decision log
 
 **✅ Diputuskan:**
+- **Domain `tokophi.com` SUDAH dibeli + zona aktif di Cloudflare** (2026-07-09). Namespace dikuasai. **Belum point DNS** (`app.`/`rich.` menunggu VPS) — deploy ditunda, **dev lokal dulu**. Kode sudah **env-driven** (`PUBLIC_APP_URL`/`ADMIN_URL`/`PUBLIC_ONGKIR_API`/`PUBLIC_ORDER_API`, fallback localhost) → switch domain = set env, tanpa ubah kode. Point record = langkah ⑥.
 - Hosting serius = **VPS + Coolify + Docker**, self-hosted Postgres (bukan Supabase).
 - Cloudflare-native untuk edge/cache/storage/domain.
 - `tokophi.com` = zona hub; **`app.tokophi.com`** (admin) + **`rich.tokophi.com`** (super-admin).
