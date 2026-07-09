@@ -1,7 +1,7 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
 import { or, ilike } from "drizzle-orm";
-import { kaAddressByName } from "@/lib/kiriminaja";
+import { kaAddressByName } from "@tokophi/lib/kiriminaja";
 
 export type Area = { id: number; text: string };
 

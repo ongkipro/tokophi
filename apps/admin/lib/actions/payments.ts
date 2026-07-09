@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
-import { alCreatePayment, autolarisConfigured } from "@/lib/autolaris";
+import { alCreatePayment, autolarisConfigured } from "@tokophi/lib/autolaris";
 
 const channelToMethod = (code: string): "va" | "qris" | "dana" =>
   code === "QRIS" ? "qris" : code === "DANA" ? "dana" : "va";

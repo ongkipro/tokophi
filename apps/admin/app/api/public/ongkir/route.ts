@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
-import { kaShippingPrice, kaInstantPricing, kiriminajaConfigured } from "@/lib/kiriminaja";
+import { kaShippingPrice, kaInstantPricing, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { resolveArea } from "@/lib/data/areas";
 
 // Public (no-auth) storefront-facing shipping endpoint. The storefront checkout calls this to

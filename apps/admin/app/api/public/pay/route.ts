@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { alCreatePayment, autolarisConfigured, PAYMENT_CHANNELS } from "@/lib/autolaris";
+import { alCreatePayment, autolarisConfigured, PAYMENT_CHANNELS } from "@tokophi/lib/autolaris";
 
 // Public (no-auth) storefront-facing payment endpoint. The checkout calls this to create a
 // real VA/QRIS/DANA bill via the platform PSP (AutoLaris). The brand is NEVER exposed to the

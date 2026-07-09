@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
-import { alCreatePayment, autolarisConfigured, PAYMENT_CHANNELS } from "@/lib/autolaris";
-import { kaCreateInstantOrder } from "@/lib/kiriminaja";
+import { alCreatePayment, autolarisConfigured, PAYMENT_CHANNELS } from "@tokophi/lib/autolaris";
+import { kaCreateInstantOrder } from "@tokophi/lib/kiriminaja";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the

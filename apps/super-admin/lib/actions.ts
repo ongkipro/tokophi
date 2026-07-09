@@ -6,8 +6,8 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { SESSION_COOKIE, signSession } from "./session";
 import { requirePlatformAdmin } from "./platform-auth";
-import { kaTestConnection } from "./kiriminaja";
-import { alTestConnection } from "./autolaris";
+import { kaTestConnection } from "@tokophi/lib/kiriminaja";
+import { alTestConnection } from "@tokophi/lib/autolaris";
 
 // Every super-admin mutation is gated by `requirePlatformAdmin()` (the security boundary):
 // impersonation + store lifecycle + provisioning + settings all require a platform-admin session.

@@ -168,14 +168,15 @@ export async function kaTrack(orderId: string): Promise<{ ok: boolean; data?: un
 }
 
 // connection check (used by super-admin) — hits the province endpoint
-export async function kaTestConnection(): Promise<{ ok: boolean; message: string }> {
-  if (!KEY) return { ok: false, message: "API key belum diisi (KIRIMINAJA_API_KEY)." };
+export async function kaTestConnection(): Promise<{ ok: boolean; env: string; provinces?: number; message: string }> {
+  if (!KEY) return { ok: false, env: ENV, message: "API key belum diisi (KIRIMINAJA_API_KEY)." };
   try {
     const r = await ka<{ status: boolean; datas?: unknown[] }>("/api/mitra/province", {});
+    const n = (r.datas ?? []).length;
     return r.status
-      ? { ok: true, message: `Terhubung ke KiriminAja (${ENV}) — ${(r.datas ?? []).length} provinsi.` }
-      : { ok: false, message: "Auth ditolak / respons tidak valid." };
+      ? { ok: true, env: ENV, provinces: n, message: `Terhubung ke KiriminAja (${ENV}) — ${n} provinsi.` }
+      : { ok: false, env: ENV, message: "Auth ditolak / respons tidak valid." };
   } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : "Gagal terhubung." };
+    return { ok: false, env: ENV, message: e instanceof Error ? e.message : "Gagal terhubung." };
   }
 }

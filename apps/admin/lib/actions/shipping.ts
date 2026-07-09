@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant } from "@/lib/tenant";
-import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kiriminajaConfigured } from "@/lib/kiriminaja";
+import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { resolveArea } from "@/lib/data/areas";
 
 export type Rate = { service: string; code: string; type: string; cost: number; etd: string; cod: boolean; group: string };

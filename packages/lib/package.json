@@ -5,6 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./format": "./src/format.ts"
+    "./format": "./src/format.ts",
+    "./kiriminaja": "./src/kiriminaja.ts",
+    "./autolaris": "./src/autolaris.ts"
   }
 }
