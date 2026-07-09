@@ -6,18 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createArticle, updateArticle, deleteArticle, type ArticleInput } from "@/lib/actions/articles";
 import { useCan } from "@/components/admin/permissions";
-import {
-  ArrowLeft,
-  Bold,
-  Italic,
-  List,
-  Link2,
-  ImageIcon,
-  ImageUp,
-  ChevronDown,
-  Newspaper,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, ImageUp, ChevronDown, Newspaper, Trash2 } from "lucide-react";
 
 import { BLOG_CATEGORIES, type BlogPost } from "@/lib/mock/store";
 
@@ -33,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -43,35 +32,6 @@ import {
 
 const META_LIMIT = 160;
 
-function EditorToolbar() {
-  const tools = [
-    { icon: Bold, label: "Tebal" },
-    { icon: Italic, label: "Miring" },
-    { icon: List, label: "Daftar" },
-    { icon: Link2, label: "Tautan" },
-    { icon: ImageIcon, label: "Gambar" },
-  ];
-  return (
-    <div className="flex flex-wrap items-center gap-0.5 rounded-t-lg border border-b-0 bg-muted/40 p-1">
-      {tools.map((t, i) => (
-        <React.Fragment key={t.label}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t.label}
-            className="text-muted-foreground"
-          >
-            <t.icon />
-          </Button>
-          {(i === 1 || i === 3) && (
-            <Separator orientation="vertical" className="mx-0.5 h-5" />
-          )}
-        </React.Fragment>
-      ))}
-    </div>
-  );
-}
 
 export function ArticleEditor({ post }: { post?: BlogPost }) {
   const isEdit = Boolean(post);
@@ -191,16 +151,12 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
 
               <div className="grid gap-2">
                 <Label htmlFor="konten">Konten</Label>
-                <div>
-                  <EditorToolbar />
-                  <Textarea
-                    id="konten"
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    placeholder="Tulis isi artikel Anda di sini…"
-                    className="min-h-64 rounded-t-none"
-                  />
-                </div>
+                <RichTextEditor
+                  value={body}
+                  onChange={setBody}
+                  placeholder="Tulis isi artikel Anda di sini…"
+                  disabled={!canWrite}
+                />
               </div>
 
               <div className="grid gap-2">

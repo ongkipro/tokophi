@@ -6,19 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createPage, updatePage, deletePage, type PageInput } from "@/lib/actions/pages";
 import { useCan } from "@/components/admin/permissions";
-import {
-  ArrowLeft,
-  Bold,
-  Italic,
-  Underline,
-  List,
-  Link2,
-  Image as ImageIcon,
-  ChevronDown,
-  Check,
-  Globe,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, ChevronDown, Check, Globe, Trash2 } from "lucide-react";
 
 import {
   Card,
@@ -30,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,15 +41,6 @@ const TEMPLATE_OPTIONS: { value: string; label: string }[] = [
   { value: "page", label: "page" },
   { value: "page.contact", label: "page.contact" },
   { value: "page.full-width", label: "page.full-width" },
-];
-
-const TOOLBAR = [
-  { icon: Bold, label: "Tebal" },
-  { icon: Italic, label: "Miring" },
-  { icon: Underline, label: "Garis bawah" },
-  { icon: List, label: "Daftar" },
-  { icon: Link2, label: "Tautan" },
-  { icon: ImageIcon, label: "Gambar" },
 ];
 
 // Seed a plausible body from the page title for the edit view (demo mock).
@@ -200,36 +179,12 @@ export function PageEditor({ page }: { page?: CmsPage }) {
 
               <div className="flex flex-col gap-2">
                 <Label htmlFor="konten">Konten</Label>
-                <div className="overflow-hidden rounded-md border border-input">
-                  <div className="flex items-center gap-0.5 border-b border-input bg-muted/40 px-1.5 py-1">
-                    {TOOLBAR.map(({ icon: Icon, label }, i) => (
-                      <React.Fragment key={label}>
-                        {(i === 3 || i === 4) && (
-                          <Separator
-                            orientation="vertical"
-                            className="mx-1 h-4"
-                          />
-                        )}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={label}
-                          className="text-muted-foreground"
-                        >
-                          <Icon />
-                        </Button>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                  <Textarea
-                    id="konten"
-                    placeholder="Tulis isi halaman di sini…"
-                    className="min-h-64 rounded-none border-0 focus-visible:ring-0"
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                  />
-                </div>
+                <RichTextEditor
+                  value={body}
+                  onChange={setBody}
+                  placeholder="Tulis isi halaman di sini…"
+                  disabled={!canWrite}
+                />
               </div>
             </CardContent>
           </Card>
