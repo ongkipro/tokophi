@@ -52,6 +52,7 @@ services:
       AUTOLARIS_BASE: ${AUTOLARIS_BASE:-https://api-h2h.autolaris.com}
       AUTOLARIS_API_KEY: ${AUTOLARIS_API_KEY:-}
       AUTOLARIS_CALLBACK_SECRET: ${AUTOLARIS_CALLBACK_SECRET:-}
+      CRON_SECRET: ${CRON_SECRET:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
     expose:
       - "3000"
