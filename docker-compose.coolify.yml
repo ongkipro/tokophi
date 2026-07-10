@@ -106,12 +106,12 @@ services:
     expose:
       - "4327"
     healthcheck:
-      # storefront builds at container start (~60s) before serving → longer start_period
+      # SSR: starts in seconds (reads catalog from Postgres at boot, no build-at-start)
       test: ["CMD-SHELL", "wget -qO- http://localhost:4327/ >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 120s
+      start_period: 30s
 
   # daily billing job — hits the admin cron endpoint (syncs statuses + auto-invoices past-due).
   cron:

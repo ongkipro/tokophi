@@ -10,47 +10,37 @@ import {
 
 type ResolvedCollection = { name: string; emoji: string; blurb: string };
 
-export function getStaticPaths() {
-  // Virtual (non-catalog) collections used by the nav. Defined inside
-  // getStaticPaths because Astro hoists this function into its own scope.
-  const VIRTUAL: Record<string, ResolvedCollection & { products: Product[] }> = {
-    semua: {
-      name: "Semua Produk",
-      emoji: "🛍️",
-      blurb: "Semua koleksi Batik Nusantara",
-      products: PRODUCTS,
-    },
-    "promo-gajian": {
-      name: "Promo Gajian",
-      emoji: "🏷️",
-      blurb: "Diskon spesial periode gajian",
-      products: PRODUCTS.filter((p) => p.compareAt || p.bestseller),
-    },
-  };
+// SSR: resolve the collection (real or virtual) per-request from the handle param.
+const { handle } = Astro.params;
 
-  const real = COLLECTIONS.map((collection) => ({
-    params: { handle: collection.handle },
-    props: {
-      collection: { name: collection.name, emoji: collection.emoji, blurb: collection.blurb },
-      products: byCollection(collection.handle),
-    },
-  }));
-  const virtual = Object.entries(VIRTUAL).map(([handle, def]) => ({
-    params: { handle },
-    props: {
-      collection: { name: def.name, emoji: def.emoji, blurb: def.blurb },
-      products: def.products,
-    },
-  }));
-  return [...real, ...virtual];
+// Virtual (non-catalog) collections used by the nav.
+const VIRTUAL: Record<string, ResolvedCollection & { products: Product[] }> = {
+  semua: {
+    name: "Semua Produk",
+    emoji: "🛍️",
+    blurb: "Semua koleksi Batik Nusantara",
+    products: PRODUCTS,
+  },
+  "promo-gajian": {
+    name: "Promo Gajian",
+    emoji: "🏷️",
+    blurb: "Diskon spesial periode gajian",
+    products: PRODUCTS.filter((p) => p.compareAt || p.bestseller),
+  },
+};
+
+let collection: ResolvedCollection;
+let products: Product[];
+const virtual = handle ? VIRTUAL[handle] : undefined;
+if (virtual) {
+  collection = { name: virtual.name, emoji: virtual.emoji, blurb: virtual.blurb };
+  products = virtual.products;
+} else {
+  const real = COLLECTIONS.find((c) => c.handle === handle);
+  if (!real) return new Response(null, { status: 404, statusText: "Not Found" });
+  collection = { name: real.name, emoji: real.emoji, blurb: real.blurb };
+  products = byCollection(real.handle);
 }
-
-interface Props {
-  collection: ResolvedCollection;
-  products: Product[];
-}
-
-const { collection, products } = Astro.props;
 ---
 
 <Layout

@@ -3,20 +3,12 @@ import Layout from "../../layouts/Layout.astro";
 import ProductCard from "../../components/ProductCard.astro";
 import Stars from "../../components/Stars.astro";
 import { IDR } from "@tokophi/lib/format";
-import { PRODUCTS, STORE, byCollection, productImages, productRating, ratingBreakdown, type Product } from "../../data/catalog";
+import { PRODUCTS, STORE, byCollection, productImages, productRating, ratingBreakdown } from "../../data/catalog";
 
-export function getStaticPaths() {
-  return PRODUCTS.map((product) => ({
-    params: { handle: product.handle },
-    props: { product },
-  }));
-}
-
-interface Props {
-  product: Product;
-}
-
-const { product } = Astro.props;
+// SSR: resolve the product per-request from the handle param.
+const { handle } = Astro.params;
+const product = PRODUCTS.find((p) => p.handle === handle);
+if (!product) return new Response(null, { status: 404, statusText: "Not Found" });
 
 const related = byCollection(product.categoryHandle)
   .filter((p) => p.handle !== product.handle)

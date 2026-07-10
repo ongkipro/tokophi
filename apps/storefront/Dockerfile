@@ -1,12 +1,17 @@
-# TokoΦ storefront (Astro SSG). BUILD CONTEXT = repo root (npm workspaces monorepo).
-# The catalog is read from Postgres at BUILD time (astro.config surfaces DATABASE_URL onto
-# process.env), so the static build runs at CONTAINER START — after Postgres is up + seeded —
-# then the generated `dist/` is served statically. Keeps the storefront SSG (no SSR refactor).
+# TokoΦ storefront (Astro SSR, @astrojs/node standalone). BUILD CONTEXT = repo root (monorepo).
+# The catalog is read from Postgres at SERVER BOOT (module-level in src/data/catalog.ts), NOT during
+# `astro build` — so the image builds WITHOUT a database, and the container starts in seconds instead
+# of running a full static build first. This removes the deploy downtime the old SSG build-at-start had.
 FROM node:24-alpine AS build
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY . .
-RUN npm ci && npm i -g serve
+RUN npm ci
+# SSR build needs no DB (page code + catalog queries run at runtime, not build) — bundling only.
+RUN npm run build -w @tokophi/storefront
 ENV NODE_ENV=production
+# @astrojs/node standalone reads HOST/PORT from the env.
+ENV HOST=0.0.0.0
+ENV PORT=4327
 EXPOSE 4327
-CMD ["sh", "-c", "npm run build -w @tokophi/storefront && serve -l 4327 apps/storefront/dist"]
+CMD ["node", "apps/storefront/dist/server/entry.mjs"]
