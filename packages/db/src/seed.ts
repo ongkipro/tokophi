@@ -762,6 +762,15 @@ async function main() {
   // platform operator (super-admin login) — admin@tokophi.id / tokophi123
   await db.insert(schema.platformAdmins).values({ email: "admin@tokophi.id", name: "Admin Platform", passwordHash: hashPassword(DEV_OWNER_PASSWORD), role: "owner" });
 
+  // support tickets (2-sided demo) — for Batik Nusantara
+  const [tkt1] = await db.insert(schema.supportTickets).values({ storeId: store.id, subject: "Cara menghubungkan domain kustom?", status: "answered", createdAt: minutesAgo(4 * 60), lastMessageAt: minutesAgo(90) }).returning();
+  await db.insert(schema.supportMessages).values([
+    { ticketId: tkt1.id, sender: "merchant", body: "Halo, saya mau pakai domain sendiri (batiknusantara.id). Bagaimana caranya?", createdAt: minutesAgo(4 * 60) },
+    { ticketId: tkt1.id, sender: "platform", body: "Halo! Tambahkan domain di Pengaturan lalu arahkan CNAME ke cname.tokophi.com — kami bantu verifikasi setelahnya.", createdAt: minutesAgo(90) },
+  ]);
+  const [tkt2] = await db.insert(schema.supportTickets).values({ storeId: store.id, subject: "Tagihan bulan ini belum masuk", status: "open", createdAt: minutesAgo(30), lastMessageAt: minutesAgo(30) }).returning();
+  await db.insert(schema.supportMessages).values({ ticketId: tkt2.id, sender: "merchant", body: "Saya sudah bayar VA tapi status masih menunggu. Mohon dicek ya.", createdAt: minutesAgo(30) });
+
   // additional demo stores (platform view + healthcheck variety)
   let invSeq = 9100;
   let ordSeq = 8000;

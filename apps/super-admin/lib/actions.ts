@@ -6,8 +6,8 @@ import { revalidatePath } from "next/cache";
 import { signImpersonation } from "./session";
 import { requirePlatformAdmin } from "./platform-auth";
 import { kaTestConnection } from "@tokophi/lib/kiriminaja";
-import { alTestConnection, alProbeChannels } from "@tokophi/lib/autolaris";
-import { addMonths } from "@tokophi/lib/billing";
+import { alTestConnection, alProbeChannels, alCreatePayment } from "@tokophi/lib/autolaris";
+import { addMonths, quote, withPpn } from "@tokophi/lib/billing";
 
 // Audit helper — record an operator action against a specific store (shown on the store detail).
 async function logStore(storeId: string, text: string): Promise<void> {
@@ -200,6 +200,74 @@ export async function invitePlatformAdmin(input: { name: string; email: string; 
   if (dup) return { ok: false, error: "Email sudah terdaftar sebagai operator." };
   await db.insert(schema.platformAdmins).values({ email, name: input.name?.trim() || null, role: input.role || "admin", passwordHash: hashPassword(DEV_PASSWORD) });
   revalidatePath("/pengaturan");
+  return { ok: true };
+}
+
+// ---- manual billing: create a VA invoice for a store + payment reminder ----
+export async function createManualInvoice(storeId: string, cycle: "monthly" | "annual" = "monthly"): Promise<{ ok: boolean; number?: string; virtualAccount?: string; reused?: boolean; error?: string }> {
+  await requirePlatformAdmin();
+  // reuse an existing unpaid subscription invoice — never duplicate
+  const [pending] = await db
+    .select({ number: schema.invoices.number, virtualAccount: schema.invoices.virtualAccount })
+    .from(schema.invoices)
+    .where(and(eq(schema.invoices.storeId, storeId), eq(schema.invoices.kind, "subscription"), eq(schema.invoices.status, "menunggu")))
+    .limit(1);
+  if (pending) return { ok: true, number: pending.number, virtualAccount: pending.virtualAccount ?? undefined, reused: true };
+
+  const [store] = await db
+    .select({ accountId: schema.stores.accountId, slug: schema.stores.slug, firstInvoicePaid: schema.stores.firstInvoicePaid, name: schema.stores.name })
+    .from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
+  if (!store) return { ok: false, error: "Toko tidak ditemukan." };
+  const [owner] = await db
+    .select({ email: schema.users.email }).from(schema.storeUsers)
+    .innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
+    .where(and(eq(schema.storeUsers.storeId, storeId), eq(schema.storeUsers.role, "owner"))).limit(1);
+
+  const q = quote(cycle, store.firstInvoicePaid);
+  const amount = withPpn(q.amount).total;
+  const reffId = `SUB-${store.slug}-${Date.now().toString().slice(-8)}`;
+  const callbackUrl = (process.env.PUBLIC_APP_URL ?? "http://localhost:3000") + "/api/public/pay/callback";
+  const r = await alCreatePayment({ reffId, channelCode: "VABCA", amount, customerId: storeId, customerName: store.name, customerPhone: "081200000000", customerEmail: owner?.email ?? "merchant@tokophi.id", callbackUrl });
+  if (!r.ok) return { ok: false, error: r.error ?? "Gagal membuat tagihan." };
+
+  const number = "SUB-" + Date.now().toString().slice(-9);
+  await db.insert(schema.invoices).values({
+    number, accountId: store.accountId, storeId, planKey: "bisnis", amountIdr: amount, status: "menunggu",
+    kind: "subscription", cycle: q.cycle, periodMonths: q.months, reffId, trxId: r.trxId, channel: "VABCA",
+    virtualAccount: r.virtualAccount ?? null, qr: r.qr ?? null, paymentUrl: r.url ?? null,
+  });
+  await logStore(storeId, `Tagihan manual Rp${amount.toLocaleString("id-ID")} (${q.cycle === "annual" ? "tahunan" : "bulanan"}) dibuat oleh platform`);
+  revalidatePath(`/toko/${storeId}`); revalidatePath("/paket");
+  return { ok: true, number, virtualAccount: r.virtualAccount ?? undefined };
+}
+
+export async function sendPaymentReminder(storeId: string): Promise<{ ok: boolean; error?: string }> {
+  await requirePlatformAdmin();
+  const [pending] = await db
+    .select({ number: schema.invoices.number })
+    .from(schema.invoices)
+    .where(and(eq(schema.invoices.storeId, storeId), eq(schema.invoices.status, "menunggu")))
+    .limit(1);
+  // (comms — email/WA — integrated later; recorded to the store audit for now)
+  await logStore(storeId, pending ? `Pengingat pembayaran dikirim (tagihan ${pending.number})` : "Pengingat pembayaran dikirim ke merchant");
+  revalidatePath(`/toko/${storeId}`);
+  return { ok: true };
+}
+
+// ---- support tickets (platform side) ----
+export async function replyTicketAdmin(ticketId: string, body: string): Promise<{ ok: boolean; error?: string }> {
+  await requirePlatformAdmin();
+  const b = body?.trim();
+  if (!b) return { ok: false, error: "Pesan kosong." };
+  await db.insert(schema.supportMessages).values({ ticketId, sender: "platform", body: b });
+  await db.update(schema.supportTickets).set({ status: "answered", lastMessageAt: new Date() }).where(eq(schema.supportTickets.id, ticketId));
+  revalidatePath("/tiket"); revalidatePath(`/tiket/${ticketId}`);
+  return { ok: true };
+}
+export async function setTicketStatus(ticketId: string, status: "open" | "answered" | "closed"): Promise<{ ok: boolean }> {
+  await requirePlatformAdmin();
+  await db.update(schema.supportTickets).set({ status }).where(eq(schema.supportTickets.id, ticketId));
+  revalidatePath("/tiket"); revalidatePath(`/tiket/${ticketId}`);
   return { ok: true };
 }
 

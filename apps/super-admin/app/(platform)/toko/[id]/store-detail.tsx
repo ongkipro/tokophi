@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ChevronLeft, ExternalLink, Ban, Play, ShoppingBag, Package, CalendarDays, Wallet, Truck,
   User, Mail, MapPin, UserPlus, Gift, Crown, KeyRound, Clock, Copy, Trash2, Users,
-  CircleCheck, AlertTriangle, CircleAlert, Receipt,
+  CircleCheck, AlertTriangle, CircleAlert, Receipt, Send,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,6 +29,7 @@ import type { PActivity } from "@/lib/mock";
 import {
   impersonateStore, setStoreStatus, compStore, extendTrial, setStoreComped,
   resetOwnerPassword, resetStoreUserPassword, setStoreUserRole, removeStoreUser, addStoreUser,
+  createManualInvoice, sendPaymentReminder,
 } from "@/lib/actions";
 import { IDR, num } from "@tokophi/lib/format";
 
@@ -52,6 +53,8 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
 
   // credential reveal dialog (after a password reset)
   const [cred, setCred] = useState<{ email: string; password: string } | null>(null);
+  // manual-invoice VA reveal
+  const [invoiceInfo, setInvoiceInfo] = useState<{ number: string; va?: string; reused?: boolean } | null>(null);
   // VIP reason dialog
   const [vipOpen, setVipOpen] = useState(false);
   const [vipReason, setVipReason] = useState(`Volume ${comp.ship7d}/hari — dibebaskan platform`);
@@ -73,6 +76,12 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
   }
   const toggleSuspend = () => run(() => setStoreStatus(store.id, suspended ? "active" : "suspended"), suspended ? "Toko diaktifkan." : "Toko ditangguhkan.");
   const giveComp = () => run(() => compStore(store.id, 1), "Diberi gratis 1 bulan.");
+  const makeInvoice = () => startTransition(async () => {
+    const r = await createManualInvoice(store.id, "monthly");
+    if (r.ok) { setInvoiceInfo({ number: r.number!, va: r.virtualAccount, reused: r.reused }); toast.success(r.reused ? "Sudah ada tagihan menunggu." : "Tagihan VA dibuat."); router.refresh(); }
+    else toast.error(r.error ?? "Gagal membuat tagihan.");
+  });
+  const remind = () => run(() => sendPaymentReminder(store.id), "Pengingat pembayaran dikirim.");
   const giveTrial = () => run(() => extendTrial(store.id, 7), "Trial diperpanjang 7 hari.");
   const revertVip = () => run(() => setStoreComped(store.id, false), "VIP dicabut — kembali berbayar.");
   function confirmVip() {
@@ -365,6 +374,12 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
               <Button variant="outline" className="w-full justify-start gap-2" disabled={pending} onClick={openAdmin}><ExternalLink className="size-4" /> Buka panel admin</Button>
               <Button variant="outline" className="w-full justify-start gap-2" disabled={pending} onClick={giveComp}><Gift className="size-4" /> Gratiskan 1 bulan</Button>
               <Button variant="outline" className="w-full justify-start gap-2" disabled={pending} onClick={giveTrial}><Clock className="size-4" /> Perpanjang trial 7 hari</Button>
+              {!comp.comped && (
+                <>
+                  <Button variant="outline" className="w-full justify-start gap-2" disabled={pending} onClick={makeInvoice}><Receipt className="size-4" /> Buat tagihan (VA)</Button>
+                  <Button variant="outline" className="w-full justify-start gap-2" disabled={pending} onClick={remind}><Send className="size-4" /> Kirim pengingat bayar</Button>
+                </>
+              )}
               {comp.comped ? (
                 <Button variant="outline" className="w-full justify-start gap-2" disabled={pending} onClick={revertVip}><Crown className="size-4" /> Cabut VIP (kembali berbayar)</Button>
               ) : (
@@ -392,6 +407,26 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
             <DialogClose render={<Button variant="outline">Batal</Button>} />
             <Button disabled={pending} onClick={confirmVip}>{pending ? "Menyimpan…" : "Jadikan VIP"}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* manual invoice VA reveal */}
+      <Dialog open={!!invoiceInfo} onOpenChange={(o) => !o && setInvoiceInfo(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>{invoiceInfo?.reused ? "Tagihan menunggu" : "Tagihan VA dibuat"}</DialogTitle></DialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <p className="text-sm text-muted-foreground">Tagihan <span className="font-mono">{invoiceInfo?.number}</span> untuk {store.name}. Merchant bisa membayarnya dari halaman Langganan; langganan aktif otomatis setelah dibayar.</p>
+            {invoiceInfo?.va && (
+              <div className="rounded-lg border bg-muted/40 p-3">
+                <div className="text-xs text-muted-foreground">Virtual Account BCA</div>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <span className="font-mono text-lg font-bold tracking-wide">{invoiceInfo.va}</span>
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { navigator.clipboard?.writeText(invoiceInfo.va!); toast.success("Disalin."); }}><Copy className="size-3.5" /> Salin</Button>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter><DialogClose render={<Button>Selesai</Button>} /></DialogFooter>
         </DialogContent>
       </Dialog>
 

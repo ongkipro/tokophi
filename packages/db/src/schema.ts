@@ -754,6 +754,24 @@ export const platformAdmins = pgTable("platform_admins", {
   createdAt: createdAt(),
 });
 
+// ---------- support tickets (2-sided: merchant ↔ platform) ----------
+export const ticketStatus = pgEnum("ticket_status", ["open", "answered", "closed"]);
+export const supportTickets = pgTable("support_tickets", {
+  id: pk(),
+  storeId: uuid().notNull().references(() => stores.id),
+  subject: text().notNull(),
+  status: ticketStatus().notNull().default("open"), // open = awaiting platform · answered = platform replied · closed
+  lastMessageAt: createdAt(),
+  createdAt: createdAt(),
+});
+export const supportMessages = pgTable("support_messages", {
+  id: pk(),
+  ticketId: uuid().notNull().references(() => supportTickets.id),
+  sender: text().notNull(), // "merchant" | "platform"
+  body: text().notNull(),
+  createdAt: createdAt(),
+});
+
 // ---------- inferred types (Row = select, New* = insert) ----------
 export type Account = typeof accounts.$inferSelect;
 export type Store = typeof stores.$inferSelect;

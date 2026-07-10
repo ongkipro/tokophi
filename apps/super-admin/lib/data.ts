@@ -366,6 +366,36 @@ export async function getStoreActivity(storeId: string): Promise<PActivity[]> {
   return rows.map((r) => ({ id: r.id, kind: r.kind, text: r.text, minutesAgo: minutesBetween(r.ts) }));
 }
 
+// ---- support tickets (platform view: all stores) ----
+export type PTicket = { id: string; subject: string; status: string; storeName: string; lastMessageAt: Date; minutesAgo: number };
+export async function getAllTickets(): Promise<PTicket[]> {
+  const rows = await db
+    .select({ id: schema.supportTickets.id, subject: schema.supportTickets.subject, status: schema.supportTickets.status, storeName: schema.stores.name, lastMessageAt: schema.supportTickets.lastMessageAt })
+    .from(schema.supportTickets)
+    .innerJoin(schema.stores, eq(schema.stores.id, schema.supportTickets.storeId))
+    .orderBy(desc(schema.supportTickets.lastMessageAt));
+  return rows.map((r) => ({ ...r, minutesAgo: minutesBetween(r.lastMessageAt) }));
+}
+
+export type PTicketDetail = { id: string; subject: string; status: string; storeName: string; storeId: string; messages: { id: string; sender: string; body: string; createdAt: Date }[] };
+export async function getTicketAdmin(id: string): Promise<PTicketDetail | null> {
+  const [t] = await db
+    .select({ id: schema.supportTickets.id, subject: schema.supportTickets.subject, status: schema.supportTickets.status, storeId: schema.supportTickets.storeId, storeName: schema.stores.name })
+    .from(schema.supportTickets)
+    .innerJoin(schema.stores, eq(schema.stores.id, schema.supportTickets.storeId))
+    .where(eq(schema.supportTickets.id, id))
+    .limit(1);
+  if (!t) return null;
+  const messages = await db
+    .select({ id: schema.supportMessages.id, sender: schema.supportMessages.sender, body: schema.supportMessages.body, createdAt: schema.supportMessages.createdAt })
+    .from(schema.supportMessages).where(eq(schema.supportMessages.ticketId, id)).orderBy(asc(schema.supportMessages.createdAt));
+  return { id: t.id, subject: t.subject, status: t.status, storeName: t.storeName, storeId: t.storeId, messages };
+}
+export async function getOpenTicketCount(): Promise<number> {
+  const [row] = await db.select({ c: sql<number>`count(*)` }).from(schema.supportTickets).where(eq(schema.supportTickets.status, "open"));
+  return Number(row?.c ?? 0);
+}
+
 // The store's comped/VIP state + reason (for the detail control card).
 export async function getStoreComp(storeId: string): Promise<{ comped: boolean; reason: string | null; ship7d: number }> {
   const [s] = await db

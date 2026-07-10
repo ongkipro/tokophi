@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, ShoppingBag, Package, Users, TicketPercent,
   BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree,
-  MessagesSquare, type LucideIcon,
+  MessagesSquare, LifeBuoy, type LucideIcon,
 } from "lucide-react";
 
 export type NavChild = { label: string; href: string };
@@ -51,7 +51,10 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    items: [{ label: "Pengaturan", href: "/pengaturan", icon: Settings }],
+    items: [
+      { label: "Bantuan", href: "/bantuan", icon: LifeBuoy },
+      { label: "Pengaturan", href: "/pengaturan", icon: Settings },
+    ],
   },
 ];
 
