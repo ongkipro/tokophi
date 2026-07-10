@@ -53,6 +53,12 @@ export type Product = {
   createdAt: number; // epoch ms — for the "terbaru" Grid Produk mode (ADR 0009)
 };
 
+// Merchant-uploaded media is stored as a relative /api/uploads/<name> path served by the ADMIN app.
+// The storefront runs on a different origin, so rewrite those to absolute (admin base derived from
+// PUBLIC_ONGKIR_API — no extra env). Seeded /products/*.webp stay relative (served from public/).
+const ADMIN_BASE = (() => { try { return new URL(import.meta.env.PUBLIC_ONGKIR_API || "http://localhost:3000").origin; } catch { return ""; } })();
+const mediaUrl = (u: string) => (u.startsWith("/api/uploads/") ? ADMIN_BASE + u : u);
+
 // products ⋈ default variant (price/compareAt) ⋈ primary media (image); non-archived, oldest→newest.
 const rows = await db
   .select({
@@ -130,7 +136,7 @@ export const PRODUCTS: Product[] = rows.map((r) => {
     compareAt: r.compareAt ?? undefined,
     category: r.category ?? "",
     categoryHandle: slugify(r.category ?? ""),
-    image: r.image ?? `/products/${r.handle}.webp`,
+    image: mediaUrl(r.image ?? `/products/${r.handle}.webp`),
     description: r.description ?? "",
     sizes: (r.sizes as string[] | null) ?? [],
     badge: r.badge ?? undefined,
@@ -162,11 +168,12 @@ export const ratingBreakdown = (r: Rating): number[] => {
   return raw;
 };
 
-// Each product has a 5-image gallery: base + -2..-5 (AI-generated catalog shots).
-export const productImages = (p: Product): string[] => [
-  p.image,
-  ...[2, 3, 4, 5].map((n) => p.image.replace(/\.webp$/, `-${n}.webp`)),
-];
+// Seeded products have a 5-image gallery by convention (base + -2..-5). Merchant-uploaded images
+// (absolute /api/uploads/) have no such siblings, so show just the primary.
+export const productImages = (p: Product): string[] =>
+  p.image.includes("/products/")
+    ? [p.image, ...[2, 3, 4, 5].map((n) => p.image.replace(/\.webp$/, `-${n}.webp`))]
+    : [p.image];
 
 export const bestsellers = (list: Product[] = PRODUCTS) => list.filter((p) => p.bestseller);
 // Newest first — for the Grid Produk "terbaru" mode. Takes any pool (e.g. one collection)
