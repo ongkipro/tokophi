@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 const humanize = (name: string) =>
   name.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
 
-function FieldWrapper({ label, name, children }: { label?: string; name: string; children: React.ReactNode }) {
+export function FieldWrapper({ label, name, children }: { label?: string; name: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
       <Label className="text-muted-foreground">{label ?? humanize(name)}</Label>

@@ -7,16 +7,27 @@ import { Puck, type Data } from "@measured/puck";
 import "@measured/puck/puck.css";
 import "@/lib/theme/puck-theme.css";
 import { toast } from "sonner";
-import { puckConfig } from "@/lib/theme/puck-config";
+import type { ColorPalette } from "@tokophi/sections";
+import { buildPuckConfig } from "@/lib/theme/puck-config";
 import { puckFieldOverrides } from "@/lib/theme/puck-field-overrides";
 import { saveHomepage } from "@/lib/actions/theme";
 import { useCan } from "@/components/admin/permissions";
 import { Button } from "@/components/ui/button";
 import { BrandColorDialog } from "@/components/theme/brand-color-dialog";
+import { PaletteManagerDialog } from "@/components/theme/palette-manager-dialog";
 
-export function TemaClient({ initialData, initialBrandColor }: { initialData: Data; initialBrandColor: string }) {
+export function TemaClient({
+  initialData,
+  initialBrandColor,
+  initialPalettes,
+}: {
+  initialData: Data;
+  initialBrandColor: string;
+  initialPalettes: ColorPalette[];
+}) {
   const canWrite = useCan("theme:write");
   const [, startTransition] = React.useTransition();
+  const config = React.useMemo(() => buildPuckConfig(initialPalettes), [initialPalettes]);
 
   const handlePublish = (data: Data) => {
     if (!canWrite) {
@@ -36,7 +47,7 @@ export function TemaClient({ initialData, initialBrandColor }: { initialData: Da
   return (
     <div className="h-screen w-full">
       <Puck
-        config={puckConfig}
+        config={config}
         data={initialData}
         onPublish={handlePublish}
         headerTitle="Tema Toko — Beranda"
@@ -48,6 +59,7 @@ export function TemaClient({ initialData, initialBrandColor }: { initialData: Da
                 Kembali ke Admin
               </Button>
               <BrandColorDialog initialColor={initialBrandColor} />
+              <PaletteManagerDialog palettes={initialPalettes} />
               {children}
             </>
           ),

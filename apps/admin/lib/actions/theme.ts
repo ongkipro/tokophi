@@ -47,3 +47,51 @@ export async function saveBrandColor(hex: string): Promise<void> {
   });
   revalidatePath("/tema");
 }
+
+export type PaletteInput = {
+  id?: string;
+  name: string;
+  background: string;
+  text: string;
+  button: string;
+  buttonText: string;
+  accent: string;
+};
+
+function assertPaletteColors(p: PaletteInput) {
+  for (const hex of [p.background, p.text, p.button, p.buttonText, p.accent]) {
+    if (!HEX_COLOR.test(hex)) throw new Error("Format warna tidak valid — gunakan hex 6 digit, mis. #a85572");
+  }
+}
+
+// "Palet Warna" (ADR 0009 amendment 2) — create (no `id`) or update (with `id`) one named palette.
+export async function savePalette(input: PaletteInput): Promise<void> {
+  assertPaletteColors(input);
+  const { storeId } = await requireCapability("theme:write");
+  await withTenant(storeId, async (db) => {
+    if (input.id) {
+      await db
+        .update(schema.colorPalettes)
+        .set({
+          name: input.name,
+          background: input.background,
+          text: input.text,
+          button: input.button,
+          buttonText: input.buttonText,
+          accent: input.accent,
+        })
+        .where(eq(schema.colorPalettes.id, input.id));
+    } else {
+      await db.insert(schema.colorPalettes).values({ storeId, ...input });
+    }
+  });
+  revalidatePath("/tema");
+}
+
+export async function deletePalette(id: string): Promise<void> {
+  const { storeId } = await requireCapability("theme:write");
+  await withTenant(storeId, async (db) => {
+    await db.delete(schema.colorPalettes).where(eq(schema.colorPalettes.id, id));
+  });
+  revalidatePath("/tema");
+}

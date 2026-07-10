@@ -7,6 +7,7 @@
 // component's specific config through a map indexed by the discriminant, so a map+spread would
 // require unsafe casts. The switch narrows `item` per-branch instead — fully type-checked.
 import type { StoredTemplateData } from "@tokophi/sections";
+import { PALETTES } from "../../data/theme";
 import Hero from "./Hero.astro";
 import ProductGrid from "./ProductGrid.astro";
 import BannerPromo from "./BannerPromo.astro";
@@ -27,21 +28,21 @@ const { data } = Astro.props;
   data.content.map((item) => {
     switch (item.type) {
       case "hero":
-        return <Hero {...item.props} />;
+        return <Hero {...item.props} palettes={PALETTES} />;
       case "product-grid":
-        return <ProductGrid {...item.props} />;
+        return <ProductGrid {...item.props} palettes={PALETTES} />;
       case "banner-promo":
-        return <BannerPromo {...item.props} />;
+        return <BannerPromo {...item.props} palettes={PALETTES} />;
       case "testimoni":
-        return <Testimoni {...item.props} />;
+        return <Testimoni {...item.props} palettes={PALETTES} />;
       case "image-text":
-        return <ImageText {...item.props} />;
+        return <ImageText {...item.props} palettes={PALETTES} />;
       case "marquee":
-        return <Marquee {...item.props} />;
+        return <Marquee {...item.props} palettes={PALETTES} />;
       case "rich-text":
-        return <RichText {...item.props} />;
+        return <RichText {...item.props} palettes={PALETTES} />;
       case "category-nav":
-        return <CategoryNav {...item.props} />;
+        return <CategoryNav {...item.props} palettes={PALETTES} />;
     }
   })
 }

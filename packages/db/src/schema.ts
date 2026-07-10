@@ -281,6 +281,22 @@ export const pageTemplates = pgTable("page_templates", {
   updatedAt: createdAt(),
 });
 
+// Named "Palet Warna" (ADR 0009 amendment 2) — a fixed 5-role colour set (background/text/
+// button/buttonText/accent), adapted from Shopify's color_scheme_group pattern. A section
+// instance picks one by id (stored inside its own `page_templates.sections[].config.paletteId`,
+// not a column here) — unset falls back to the store's first/default palette.
+export const colorPalettes = pgTable("color_palettes", {
+  id: pk(),
+  storeId: uuid().notNull().references(() => stores.id),
+  name: text().notNull(),
+  background: text().notNull(),
+  text: text().notNull(),
+  button: text().notNull(),
+  buttonText: text().notNull(),
+  accent: text().notNull(),
+  createdAt: createdAt(),
+});
+
 // ---------- suppliers & purchasing ----------
 export const suppliers = pgTable("suppliers", {
   id: pk(),
@@ -833,6 +849,8 @@ export type InventoryLevel = typeof inventoryLevels.$inferSelect;
 export type Collection = typeof collections.$inferSelect;
 export type PageTemplate = typeof pageTemplates.$inferSelect;
 export type NewPageTemplate = typeof pageTemplates.$inferInsert;
+export type ColorPalette = typeof colorPalettes.$inferSelect;
+export type NewColorPalette = typeof colorPalettes.$inferInsert;
 export type Supplier = typeof suppliers.$inferSelect;
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
 export type Customer = typeof customers.$inferSelect;

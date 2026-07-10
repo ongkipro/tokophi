@@ -233,8 +233,19 @@
 - [x] **Product editor Media section** rewritten to show the real `media[]` (was the derived `productImages()`), with a hidden file input + "Unggah" button (`useTransition`) and a hover **delete** per image.
 - [x] **Verified end-to-end via UI** (behind login): uploaded a PNG → tile 5→6 + `product_media` row + file on disk; deleted it → 6→5 + row + file gone. `tsc` + `build:admin` clean.
 
+**"Palet Warna" — multi-palette colour system, worktree `color-palettes` (2026-07-10):**
+- [x] **Schema**: `color_palettes` (5 roles: background/text/button/buttonText/accent), migration `0033` + RLS `0034` (same pattern as `page_templates`'s `0032`).
+- [x] **`getOrSeedPalettes(storeId)`** (`lib/data/theme.ts`) — auto-seeds "Terang"/"Gelap" from `stores.brand_color`'s shade scale on first open; `savePalette`/`deletePalette` (`lib/actions/theme.ts`, hex-validated, `theme:write`-gated).
+- [x] **`palette-manager-dialog.tsx`** — "Kelola Palet" list/add/edit/delete dialog wired into the `/tema` header actions alongside the brand-colour dialog.
+- [x] **Registry**: all 8 `@tokophi/sections` configs gain `paletteId: string` (`WithPalette`, stored in the section's own `props`, not a DB column); `resolvePalette()`/`FALLBACK_PALETTE`/`paletteStyleString()` shared helpers. `puck-config.tsx` rebuilt from a static export into a `buildPuckConfig(palettes)` factory — the palette field is a `custom` Puck field type (dynamic option list from the store's palettes, not a static `select`).
+- [x] **Rendering — both halves of all 8 sections**: admin preview components (`apps/admin/components/theme/sections/*.tsx`, via `palette-style.ts`'s `paletteStyle()` → `React.CSSProperties`) and storefront Astro components (`apps/storefront/src/components/sections/*.astro`, via the registry's `paletteStyleString()` → CSS string, since Astro's `style` attr takes a string not an object) both resolve `paletteId` → 5 `--scheme-*` CSS vars, referenced via Tailwind arbitrary-value classes. `RichText` keeps its old light/dark `theme` toggle only when `paletteId` is empty (palette wins once set).
+- [x] **Verified**: `tsc --noEmit` clean (admin + `@tokophi/sections`), `astro check` clean (storefront, 0 errors), `verify-rls` green. **End-to-end**: inserted 2 real palettes + a homepage template (Hero on one, Rich Text on the other, different `paletteId` each) directly into the shared dev DB, ran `astro build`, grepped the generated `index.html` — confirmed two distinct `--scheme-*` value sets rendered on the same page, one per section. Test rows removed after.
+- Docs: ADR 0009 amendment 2 (naming rationale: "Palet Warna" over "Skema Warna"), CHANGELOG entry.
+- **Not yet done**: commit/rebase/push/merge this worktree into `main` (still uncommitted, same as the rest of the `store-builder`/Epic 7 work — see `TASKS.md` Epic 7's "Merge to main" item).
+
 **Next up (resume here):**
-1. **RBAC + RLS (local)**: gate actions/routes by `store_users.role` (owner/admin/staff/gudang); then enable Postgres RLS (`store_id` from the JWT) once a request-scoped DB role/GUC is wired.
-2. **(later) VPS**: self-hosted Postgres + PostgREST + Storage (MinIO/S3 for the uploads); multi-tenant + per-client storefront `STORE_SLUG`.
-2. **Deploy to VPS**: stand up self-hosted Postgres + PostgREST; wire JWT Auth (login/RBAC via `store_users`) + Storage (media uploads) + enable RLS; then multi-tenant (beyond single-store seed) + per-client storefront via `STORE_SLUG`.
-3. **E1 sisa / E0 de-dup / Turborepo** (unchanged).
+1. **Commit + merge Epic 7 work to `main`** — both the `store-builder` worktree (Puck v1, brand colour) and this `color-palettes` worktree are uncommitted; rebase onto main's since-landed commits (check `lib/rbac-policy.ts`, `lib/nav.ts`, `app/(admin)/layout.tsx` for conflicts), watch for migration-number collisions (recurring pattern — see git history for the resolution steps used last time).
+2. **RBAC + RLS (local)**: gate actions/routes by `store_users.role` (owner/admin/staff/gudang); then enable Postgres RLS (`store_id` from the JWT) once a request-scoped DB role/GUC is wired.
+3. **(later) VPS**: self-hosted Postgres + PostgREST + Storage (MinIO/S3 for the uploads); multi-tenant + per-client storefront `STORE_SLUG`.
+4. **Deploy to VPS**: stand up self-hosted Postgres + PostgREST; wire JWT Auth (login/RBAC via `store_users`) + Storage (media uploads) + enable RLS; then multi-tenant (beyond single-store seed) + per-client storefront via `STORE_SLUG`.
+5. **E1 sisa / E0 de-dup / Turborepo** (unchanged).

@@ -1,14 +1,16 @@
 ---
-import type { TestimoniConfig } from "@tokophi/sections";
+import type { ColorPalette, TestimoniConfig } from "@tokophi/sections";
+import { paletteStyleString, resolvePalette } from "@tokophi/sections";
 
-type Props = TestimoniConfig;
-const { heading, items } = Astro.props;
+type Props = TestimoniConfig & { palettes: ColorPalette[] };
+const { heading, items, paletteId, palettes } = Astro.props;
+const p = resolvePalette(paletteId, palettes);
 ---
 
-<section class="bg-brand-50">
+<section class="bg-[var(--scheme-background)]" style={paletteStyleString(p)}>
   <div class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
     <div class="flex items-center justify-between gap-4">
-      <h2 class="font-display text-3xl font-semibold text-ink sm:text-4xl">{heading}</h2>
+      <h2 class="font-display text-3xl font-semibold text-[var(--scheme-text)] sm:text-4xl">{heading}</h2>
       <div class="flex shrink-0 gap-2" data-testimoni-nav>
         <button
           type="button"

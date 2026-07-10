@@ -1,31 +1,53 @@
 ---
-import type { RichTextConfig } from "@tokophi/sections";
+import type { ColorPalette, RichTextConfig } from "@tokophi/sections";
+import { paletteStyleString, resolvePalette } from "@tokophi/sections";
 
-type Props = RichTextConfig;
-const { heading, body, ctaLabel, ctaHref, theme } = Astro.props;
+// When a real "Palet Warna" is picked, it wins over the light/dark `theme` toggle — `theme`
+// only still applies while paletteId is left on "Default toko" (see puck-config.tsx's field
+// hint text for this section).
+type Props = RichTextConfig & { palettes: ColorPalette[] };
+const { heading, body, ctaLabel, ctaHref, theme, paletteId, palettes } = Astro.props;
 const dark = theme === "gelap";
+const p = paletteId ? resolvePalette(paletteId, palettes) : null;
 ---
 
-<section class:list={dark ? "bg-ink" : "bg-cream"}>
-  <div class="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6 sm:py-24">
-    <h2 class:list={["font-display text-3xl font-semibold sm:text-4xl", dark ? "text-cream" : "text-ink"]}>
-      {heading}
-    </h2>
-    <p class:list={["mx-auto mt-4 max-w-lg", dark ? "text-white/70" : "text-muted"]}>{body}</p>
-    {
-      ctaLabel && (
-        <a
-          href={ctaHref}
-          class:list={[
-            "mt-8 inline-block rounded-full px-8 py-3 text-sm font-semibold shadow-lg transition-all hover:-translate-y-0.5",
-            dark
-              ? "bg-white text-ink shadow-black/20 hover:bg-white/90"
-              : "bg-brand-600 text-white shadow-brand-200/60 hover:bg-brand-700",
-          ]}
-        >
-          {ctaLabel}
-        </a>
-      )
-    }
-  </div>
-</section>
+{
+  p ? (
+    <section class="bg-[var(--scheme-background)]" style={paletteStyleString(p)}>
+      <div class="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6 sm:py-24">
+        <h2 class="font-display text-3xl font-semibold text-[var(--scheme-text)] sm:text-4xl">{heading}</h2>
+        <p class="mx-auto mt-4 max-w-lg text-[var(--scheme-text)] opacity-70">{body}</p>
+        {ctaLabel && (
+          <a
+            href={ctaHref}
+            class="mt-8 inline-block rounded-full bg-[var(--scheme-button)] px-8 py-3 text-sm font-semibold text-[var(--scheme-button-text)] shadow-lg transition-all hover:-translate-y-0.5 hover:opacity-90"
+          >
+            {ctaLabel}
+          </a>
+        )}
+      </div>
+    </section>
+  ) : (
+    <section class:list={dark ? "bg-ink" : "bg-cream"}>
+      <div class="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6 sm:py-24">
+        <h2 class:list={["font-display text-3xl font-semibold sm:text-4xl", dark ? "text-cream" : "text-ink"]}>
+          {heading}
+        </h2>
+        <p class:list={["mx-auto mt-4 max-w-lg", dark ? "text-white/70" : "text-muted"]}>{body}</p>
+        {ctaLabel && (
+          <a
+            href={ctaHref}
+            class:list={[
+              "mt-8 inline-block rounded-full px-8 py-3 text-sm font-semibold shadow-lg transition-all hover:-translate-y-0.5",
+              dark
+                ? "bg-white text-ink shadow-black/20 hover:bg-white/90"
+                : "bg-brand-600 text-white shadow-brand-200/60 hover:bg-brand-700",
+            ]}
+          >
+            {ctaLabel}
+          </a>
+        )}
+      </div>
+    </section>
+  )
+}

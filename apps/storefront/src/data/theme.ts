@@ -3,7 +3,7 @@
 // catalog.ts — later parameterized by store_id/STORE_SLUG alongside it (ADR 0008/0009).
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
-import type { StoredTemplateData } from "@tokophi/sections";
+import type { ColorPalette, StoredTemplateData } from "@tokophi/sections";
 import { generateBrandShades, DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
 import { STORE_ID, STORE } from "./catalog";
 
@@ -11,6 +11,14 @@ import { STORE_ID, STORE } from "./catalog";
 // injects these as CSS custom-property overrides so every `bg-brand-*`/`text-brand-*` utility
 // (already used throughout the storefront's hand-styled markup) picks up the merchant's colour.
 export const BRAND_SHADES = generateBrandShades(STORE.brandColor ?? DEFAULT_BRAND_COLOR);
+
+// "Palet Warna" (ADR 0009 amendment 2) — read-only here; the admin's getOrSeedPalettes()
+// is what creates the store's first two palettes, so by the time the storefront reads them
+// there's always at least the seeded "Terang"/"Gelap" pair.
+export const PALETTES: ColorPalette[] = await db
+  .select()
+  .from(schema.colorPalettes)
+  .where(eq(schema.colorPalettes.storeId, STORE_ID));
 
 const [homepageRow] = await db
   .select()

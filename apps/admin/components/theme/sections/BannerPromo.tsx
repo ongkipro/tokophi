@@ -1,10 +1,22 @@
-import type { BannerPromoConfig } from "@tokophi/sections";
+import type { BannerPromoConfig, ColorPalette } from "@tokophi/sections";
+import { resolvePalette } from "@tokophi/sections";
+import { paletteStyle } from "@/lib/theme/palette-style";
 
-export function BannerPromo({ heading, subheading, imageUrl, href, badge }: BannerPromoConfig) {
+export function BannerPromo({
+  heading,
+  subheading,
+  imageUrl,
+  href,
+  badge,
+  paletteId,
+  palettes,
+}: BannerPromoConfig & { palettes: ColorPalette[] }) {
+  const p = resolvePalette(paletteId, palettes);
   return (
     <a
       href={href}
-      className="group relative flex min-h-[200px] items-center overflow-hidden rounded-2xl bg-gradient-to-br from-rose-200 to-rose-50 p-8"
+      style={paletteStyle(p)}
+      className="group relative flex min-h-[200px] items-center overflow-hidden rounded-2xl bg-[var(--scheme-background)] p-8"
     >
       {imageUrl && (
         <img
@@ -16,7 +28,7 @@ export function BannerPromo({ heading, subheading, imageUrl, href, badge }: Bann
       <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent" />
       <div className="relative space-y-2 text-white">
         {badge && (
-          <span className="inline-block rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+          <span className="inline-block rounded-full bg-[var(--scheme-accent)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
             {badge}
           </span>
         )}

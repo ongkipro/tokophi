@@ -1,14 +1,16 @@
 ---
-import type { BannerPromoConfig } from "@tokophi/sections";
+import type { BannerPromoConfig, ColorPalette } from "@tokophi/sections";
+import { paletteStyleString, resolvePalette } from "@tokophi/sections";
 
-type Props = BannerPromoConfig;
-const { heading, subheading, imageUrl, href, badge } = Astro.props;
+type Props = BannerPromoConfig & { palettes: ColorPalette[] };
+const { heading, subheading, imageUrl, href, badge, paletteId, palettes } = Astro.props;
+const p = resolvePalette(paletteId, palettes);
 ---
 
-<section class="mx-auto max-w-7xl px-4 sm:px-6">
+<section class="mx-auto max-w-7xl px-4 sm:px-6" style={paletteStyleString(p)}>
   <a
     href={href}
-    class="group relative flex min-h-[220px] items-center overflow-hidden rounded-2xl bg-brand-100 p-8 sm:p-12"
+    class="group relative flex min-h-[220px] items-center overflow-hidden rounded-2xl bg-[var(--scheme-background)] p-8 sm:p-12"
   >
     {
       imageUrl && (
@@ -23,7 +25,7 @@ const { heading, subheading, imageUrl, href, badge } = Astro.props;
     <div class="relative space-y-2">
       {
         badge && (
-          <span class="inline-block rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+          <span class="inline-block rounded-full bg-[var(--scheme-accent)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
             {badge}
           </span>
         )

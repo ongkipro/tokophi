@@ -1,6 +1,7 @@
 import "server-only";
-import { schema, type PageTemplate } from "@tokophi/db";
+import { schema, type PageTemplate, type ColorPalette } from "@tokophi/db";
 import { withCurrentTenant, withTenant } from "@/lib/tenant";
+import { generateBrandShades, DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
 import { and, eq } from "drizzle-orm";
 
 export type TemplateType = "homepage" | "category" | "product";
@@ -49,5 +50,41 @@ export async function getBrandColor(storeId: string): Promise<string | null> {
       .where(eq(schema.stores.id, storeId))
       .limit(1);
     return row?.brandColor ?? null;
+  });
+}
+
+// "Palet Warna" (ADR 0009 amendment 2). Auto-seeds two defaults ("Terang"/"Gelap") derived
+// from the store's brand hex the first time this is called for a store with none yet — so the
+// picker never opens to a dead end, and existing single-colour stores keep working unchanged.
+export async function getOrSeedPalettes(storeId: string): Promise<ColorPalette[]> {
+  return withTenant(storeId, async (db) => {
+    const existing = await db.select().from(schema.colorPalettes).where(eq(schema.colorPalettes.storeId, storeId));
+    if (existing.length > 0) return existing;
+
+    const [{ brandColor }] = await db.select({ brandColor: schema.stores.brandColor }).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
+    const shades = generateBrandShades(brandColor ?? DEFAULT_BRAND_COLOR);
+    return db
+      .insert(schema.colorPalettes)
+      .values([
+        {
+          storeId,
+          name: "Terang",
+          background: "#FFFFFF",
+          text: "#18181B",
+          button: shades[600],
+          buttonText: "#FFFFFF",
+          accent: shades[600],
+        },
+        {
+          storeId,
+          name: "Gelap",
+          background: "#18181B",
+          text: "#FFFFFF",
+          button: shades[400],
+          buttonText: "#18181B",
+          accent: shades[400],
+        },
+      ])
+      .returning();
   });
 }

@@ -7,7 +7,16 @@
 // apps/admin/components/theme/sections/<Type>.tsx (Puck-editor render) +
 // apps/storefront/src/components/sections/<Type>.astro (storefront render).
 
-export interface HeroConfig {
+// ADR 0009 amendment 2 ("Palet Warna"): every section config carries an optional `paletteId`,
+// resolved to a store's named colour palette (@tokophi/db `color_palettes`) at render time.
+// Empty string = no override, falls back to the store's first/default palette. Declared once
+// and spread into each interface so every section gets it without repeating the field.
+export interface WithPalette {
+  /** color_palettes.id, or "" to use the store's default palette. */
+  paletteId: string;
+}
+
+export interface HeroConfig extends WithPalette {
   heading: string;
   subheading: string;
   imageUrl: string;
@@ -20,7 +29,7 @@ export interface HeroConfig {
   ratingText: string;
 }
 
-export interface ProductGridConfig {
+export interface ProductGridConfig extends WithPalette {
   heading: string;
   /** Which products fill the grid. Max 2 Grid Produk sections per page (enforced in the builder). */
   mode: "terlaris" | "terbaru" | "acak";
@@ -30,7 +39,7 @@ export interface ProductGridConfig {
   columns: 2 | 3 | 4;
 }
 
-export interface BannerPromoConfig {
+export interface BannerPromoConfig extends WithPalette {
   heading: string;
   subheading: string;
   imageUrl: string;
@@ -44,12 +53,12 @@ export interface TestimoniItem {
   rating: 1 | 2 | 3 | 4 | 5;
 }
 
-export interface TestimoniConfig {
+export interface TestimoniConfig extends WithPalette {
   heading: string;
   items: TestimoniItem[];
 }
 
-export interface ImageTextConfig {
+export interface ImageTextConfig extends WithPalette {
   heading: string;
   body: string;
   imageUrl: string;
@@ -58,16 +67,18 @@ export interface ImageTextConfig {
   eyebrow: string;
 }
 
-export interface MarqueeConfig {
+export interface MarqueeConfig extends WithPalette {
   text: string;
   speed: "lambat" | "sedang" | "cepat";
 }
 
-export interface RichTextConfig {
+export interface RichTextConfig extends WithPalette {
   heading: string;
   body: string;
   ctaLabel: string;
   ctaHref: string;
+  /** Pre-Palet Warna light/dark toggle — kept for backward compatibility with templates saved
+   * before this amendment. Ignored when `paletteId` is set. */
   theme: "terang" | "gelap";
 }
 
@@ -77,7 +88,7 @@ export interface CategoryNavItem {
   href: string;
 }
 
-export interface CategoryNavConfig {
+export interface CategoryNavConfig extends WithPalette {
   items: CategoryNavItem[];
 }
 
@@ -93,6 +104,43 @@ export type SectionConfigMap = {
 };
 
 export type SectionType = keyof SectionConfigMap;
+
+// A resolved "Palet Warna" (ADR 0009 amendment 2) — same 5 roles as @tokophi/db's
+// `color_palettes` row, declared here (not imported from @tokophi/db) so the storefront/admin
+// preview components stay DB-agnostic. `id`/`name` are for the picker UI; components only use
+// the 5 colour roles.
+export interface ColorPalette {
+  id: string;
+  name: string;
+  background: string;
+  text: string;
+  button: string;
+  buttonText: string;
+  accent: string;
+}
+
+// Neutral fallback used only if a store somehow has zero palettes (shouldn't happen once
+// getOrSeedPalettes has run at least once) — keeps rendering safe rather than crashing.
+export const FALLBACK_PALETTE: ColorPalette = {
+  id: "",
+  name: "Default",
+  background: "#FFFFFF",
+  text: "#18181B",
+  button: "#18181B",
+  buttonText: "#FFFFFF",
+  accent: "#18181B",
+};
+
+export function resolvePalette(paletteId: string | undefined, palettes: ColorPalette[]): ColorPalette {
+  return palettes.find((p) => p.id === paletteId) ?? palettes[0] ?? FALLBACK_PALETTE;
+}
+
+// Framework-agnostic CSS custom-property string (Astro's `style` attribute takes a string, not
+// a React.CSSProperties object — apps/admin has its own object-returning equivalent at
+// apps/admin/lib/theme/palette-style.ts for the same 5 vars).
+export function paletteStyleString(p: ColorPalette): string {
+  return `--scheme-background:${p.background};--scheme-text:${p.text};--scheme-button:${p.button};--scheme-button-text:${p.buttonText};--scheme-accent:${p.accent}`;
+}
 
 // Shape of `page_templates.sections` as saved by the admin's Puck editor — a minimal subset
 // of Puck's native `Data` type (content items carry `props`, which includes an injected `id`
@@ -142,6 +190,7 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
     align: "left",
     badge: "",
     ratingText: "",
+    paletteId: "",
   },
   "product-grid": {
     heading: "Terlaris Minggu Ini",
@@ -149,6 +198,7 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
     collectionHandle: "",
     limit: 8,
     columns: 4,
+    paletteId: "",
   },
   "banner-promo": {
     heading: "Promo Gajian",
@@ -156,6 +206,7 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
     imageUrl: "",
     href: "/kategori/promo-gajian",
     badge: "Terbatas",
+    paletteId: "",
   },
   testimoni: {
     heading: "Kata Mereka",
@@ -163,6 +214,7 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
       { name: "Sari", quote: "Bahannya adem, jahitan rapi. Repeat order terus!", rating: 5 },
       { name: "Dewi", quote: "Pengiriman cepat, sesuai foto.", rating: 5 },
     ],
+    paletteId: "",
   },
   "image-text": {
     eyebrow: "Kenapa Kami",
@@ -170,10 +222,12 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
     body: "Setiap helai kami rancang untuk perempuan Indonesia — memadukan warisan budaya dengan siluet masa kini, agar kamu tampil anggun tanpa kehilangan kenyamanan.",
     imageUrl: "",
     imageSide: "left",
+    paletteId: "",
   },
   marquee: {
     text: "Gratis Ongkir Se-Indonesia · Kualitas Premium · COD Tersedia",
     speed: "sedang",
+    paletteId: "",
   },
   "rich-text": {
     heading: "Siap tampil anggun setiap hari?",
@@ -181,6 +235,7 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
     ctaLabel: "Mulai Belanja",
     ctaHref: "/kategori/semua",
     theme: "terang",
+    paletteId: "",
   },
   "category-nav": {
     items: [
@@ -188,5 +243,6 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
       { label: "Atasan", imageUrl: "", href: "/kategori/atasan" },
       { label: "Bawahan", imageUrl: "", href: "/kategori/bawahan" },
     ],
+    paletteId: "",
   },
 };

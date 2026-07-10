@@ -1,11 +1,13 @@
 ---
-import type { CategoryNavConfig } from "@tokophi/sections";
+import type { CategoryNavConfig, ColorPalette } from "@tokophi/sections";
+import { paletteStyleString, resolvePalette } from "@tokophi/sections";
 
-type Props = CategoryNavConfig;
-const { items } = Astro.props;
+type Props = CategoryNavConfig & { palettes: ColorPalette[] };
+const { items, paletteId, palettes } = Astro.props;
+const p = resolvePalette(paletteId, palettes);
 ---
 
-<section class="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+<section class="mx-auto max-w-7xl bg-[var(--scheme-background)] px-4 py-10 sm:px-6" style={paletteStyleString(p)}>
   <div class="flex flex-wrap justify-center gap-6 sm:gap-10">
     {
       items.map((item) => (
@@ -13,7 +15,7 @@ const { items } = Astro.props;
           <div class="h-20 w-20 overflow-hidden rounded-full bg-brand-100 ring-1 ring-line transition-transform group-hover:scale-105 sm:h-24 sm:w-24">
             {item.imageUrl && <img src={item.imageUrl} alt="" class="h-full w-full object-cover" />}
           </div>
-          <span class="text-sm font-medium text-ink group-hover:text-brand-600">{item.label}</span>
+          <span class="text-sm font-medium text-[var(--scheme-text)] group-hover:opacity-75">{item.label}</span>
         </a>
       ))
     }
