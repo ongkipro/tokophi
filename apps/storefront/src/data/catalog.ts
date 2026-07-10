@@ -7,8 +7,13 @@ import { and, asc, eq, ne } from "drizzle-orm";
 const slugify = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-const storeRow = (await db.select().from(schema.stores).limit(1))[0];
-const STORE_ID = storeRow!.id;
+// Single-tenant MVP: the demo store, by slug — not a bare `.limit(1)`, which silently picks an
+// arbitrary row (Postgres gives no ordering guarantee) once more than one `stores` row exists,
+// e.g. from other seeded/test stores in the shared local DB. Later: STORE_SLUG env per deploy (ADR 0008).
+const storeRow = (
+  await db.select().from(schema.stores).where(eq(schema.stores.slug, "batik-nusantara")).limit(1)
+)[0];
+export const STORE_ID = storeRow!.id;
 
 export const STORE = {
   name: storeRow?.name ?? "Batik Nusantara",
@@ -16,6 +21,8 @@ export const STORE = {
   tagline: "Busana wanita modern — batik & ready-to-wear",
   whatsapp: "6281234567890",
   city: storeRow?.city ?? "Yogyakarta",
+  logoUrl: storeRow?.logoUrl ?? null,
+  brandColor: storeRow?.brandColor ?? null,
 };
 
 export type Collection = { handle: string; name: string; emoji: string; blurb: string };
@@ -43,6 +50,7 @@ export type Product = {
   bestseller?: boolean;
   options?: { name: string; values: string[] }[]; // real variant option types (e.g. Warna, Ukuran)
   variants?: VariantRow[]; // one row per option combo (price + stock)
+  createdAt: number; // epoch ms — for the "terbaru" Grid Produk mode (ADR 0009)
 };
 
 // products ⋈ default variant (price/compareAt) ⋈ primary media (image); non-archived, oldest→newest.
@@ -58,6 +66,7 @@ const rows = await db
     bestseller: schema.products.bestseller,
     ratingValue: schema.products.ratingValue,
     ratingCount: schema.products.ratingCount,
+    createdAt: schema.products.createdAt,
     price: schema.productVariants.priceIdr,
     compareAt: schema.productVariants.compareAtIdr,
     image: schema.productMedia.url,
@@ -128,6 +137,7 @@ export const PRODUCTS: Product[] = rows.map((r) => {
     bestseller: r.bestseller,
     options: options.length ? options : undefined,
     variants: variants.length ? variants : undefined,
+    createdAt: r.createdAt.getTime(),
   };
 });
 
@@ -158,7 +168,21 @@ export const productImages = (p: Product): string[] => [
   ...[2, 3, 4, 5].map((n) => p.image.replace(/\.webp$/, `-${n}.webp`)),
 ];
 
-export const bestsellers = () => PRODUCTS.filter((p) => p.bestseller);
+export const bestsellers = (list: Product[] = PRODUCTS) => list.filter((p) => p.bestseller);
+// Newest first — for the Grid Produk "terbaru" mode. Takes any pool (e.g. one collection)
+// so it composes with an optional collection filter.
+export const recentProducts = (list: Product[] = PRODUCTS) => [...list].sort((a, b) => b.createdAt - a.createdAt);
+// Shuffled — for the Grid Produk "acak" mode. Static build = re-shuffles per deploy, not per
+// visitor; fine here since Astro renders this list server-side only, no client hydration to
+// mismatch (the admin's mock-data determinism rule is about a different, React SSR+CSR concern).
+export const randomProducts = (list: Product[] = PRODUCTS) => {
+  const arr = [...list];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+};
 export const byCollection = (handle: string) => PRODUCTS.filter((p) => p.categoryHandle === handle);
 export const findProduct = (handle: string) => PRODUCTS.find((p) => p.handle === handle);
 export const findCollection = (handle: string) => COLLECTIONS.find((c) => c.handle === handle);

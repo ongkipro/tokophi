@@ -57,6 +57,7 @@ export const aggregatorProvider = pgEnum("aggregator_provider", ["biteship", "ra
 export const invoiceStatus = pgEnum("invoice_status", ["dibayar", "menunggu", "gagal"]);
 export const platformActivityKind = pgEnum("platform_activity_kind", ["signup", "upgrade", "payment", "churn", "support", "admin"]);
 export const notificationChannel = pgEnum("notification_channel", ["email", "wa"]);
+export const pageTemplateType = pgEnum("page_template_type", ["homepage", "category", "product"]); // ADR 0009 — Store Builder
 
 // ---------- identity & tenancy ----------
 export const accounts = pgTable("accounts", {
@@ -87,6 +88,13 @@ export const stores = pgTable("stores", {
   comped: boolean().notNull().default(false),
   compedReason: text(),
   compedAt: ts(),
+  // Branding read-only by the storefront/checkout (ADR 0009 — checkout is locked/uniform,
+  // only pulls these tokens; NOT part of the drag-drop Store Builder).
+  logoUrl: text(),
+  // Brand hex (e.g. "#a85572") the merchant picks in the Store Builder's colour panel; the
+  // storefront derives a full 11-shade scale from it (@tokophi/lib/colors). Null = fall back
+  // to the default brand hex baked into apps/storefront/src/styles/global.css.
+  brandColor: text(),
   createdAt: createdAt(),
 });
 
@@ -158,6 +166,9 @@ export const products = pgTable(
     lengthCm: integer(),
     widthCm: integer(),
     heightCm: integer(),
+    // Which `product`-type page_templates row renders this product's storefront page
+    // (ADR 0009 — Store Builder). NULL = the store's default product template.
+    templateId: uuid().references((): AnyPgColumn => pageTemplates.id),
     archivedAt: ts(),
     createdAt: createdAt(),
   },
@@ -224,6 +235,9 @@ export const collections = pgTable(
     match: collectionMatch().notNull().default("all"),
     published: boolean().notNull().default(true),
     template: text(),
+    // Which `category`-type page_templates row renders this collection's storefront page
+    // (ADR 0009 — Store Builder). NULL = the store's default category template.
+    templateId: uuid().references((): AnyPgColumn => pageTemplates.id),
     seoTitle: text(),
     seoDesc: text(),
     archivedAt: ts(),
@@ -247,6 +261,24 @@ export const collectionConditions = pgTable("collection_conditions", {
   field: conditionField().notNull(),
   operator: conditionOperator().notNull(),
   value: text().notNull(),
+});
+
+// ---------- store builder (ADR 0009) ----------
+// One row = one drag-drop template a merchant assembled in the admin's Store Builder (Puck).
+// `sections` is an ordered array of { type, config } — `type` keys into the shared section
+// registry (both the Puck-editor React component and the storefront's Astro render component
+// read the same `config` shape). Rendered live by the storefront's SSR (no rebuild on save).
+export const pageTemplates = pgTable("page_templates", {
+  id: pk(),
+  storeId: uuid().notNull().references(() => stores.id),
+  type: pageTemplateType().notNull(),
+  name: text().notNull(),
+  sections: jsonb().notNull().default([]),
+  // Exactly one `homepage`-type row per store should be the active one (enforced app-side,
+  // like the single-active-menu pattern — not a DB constraint, mirrors the rest of this schema).
+  isDefault: boolean().notNull().default(false),
+  createdAt: createdAt(),
+  updatedAt: createdAt(),
 });
 
 // ---------- suppliers & purchasing ----------
@@ -786,6 +818,8 @@ export type ProductVariant = typeof productVariants.$inferSelect;
 export type ProductMedia = typeof productMedia.$inferSelect;
 export type InventoryLevel = typeof inventoryLevels.$inferSelect;
 export type Collection = typeof collections.$inferSelect;
+export type PageTemplate = typeof pageTemplates.$inferSelect;
+export type NewPageTemplate = typeof pageTemplates.$inferInsert;
 export type Supplier = typeof suppliers.$inferSelect;
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
 export type Customer = typeof customers.$inferSelect;

@@ -27,6 +27,14 @@
 - [x] **Ekspor CSV** — DONE (2026-07-08): all 6 Ekspor buttons (Pesanan/Pelanggan/Inventori/Analitik/Dashboard/Pemasaran) download real CSV via `lib/csv.ts`.
 - [x] **Global search (⌘K)** — DONE (2026-07-08): topbar returns real results (products/orders/customers, RLS-scoped) linking to entity routes; ⌘K focus.
 
+## P1.5 — Self-serve Store Builder (ADR 0009, worktree `store-builder`, uncommitted — 2026-07-10)
+- [x] **Homepage drag-drop builder** — DONE: `@measured/puck` at `/tema` (`theme:write` gated), 8 sections (Hero/Grid Produk/Banner Promo/Testimoni/Image+Teks/Marquee/Rich Text/Navigasi Kategori), `@tokophi/sections` shared registry, `page_templates` schema (migrations 0026–0027). Verified E2E repeatedly (real drag-drop → publish → `astro build` → rendered HTML).
+- [x] **Brand colour panel** — DONE: one merchant hex → full shade scale (`@tokophi/lib/colors`) → storefront-wide CSS-var override, no markup changes needed. `stores.brand_color` (migration 0028).
+- [ ] **Category/product template variants** — schema ready (`page_templates.type`), admin UI to manage multiple named templates + assign per collection/product doesn't exist yet.
+- [ ] **SSR multi-tenant storefront** — still SSG; a deployed storefront needs a rebuild to show a builder save (local dev already reflects immediately). Larger, separate infra item, already called for in `PROD_PLAN.md` §5.
+- [ ] **Checkout branding** — `stores.logo_url` exists, `checkout.astro` doesn't read it yet.
+- [ ] **Merge** — worktree branch is uncommitted + based on a commit 13 behind current `main` (billing/Akun/payment-fees landed since); needs a conflict-checked rebase before it ships.
+
 ## P2 — Missing modules (from the concept feature map)
 - [x] **Storefront (Astro)** — DONE: Batik Nusantara reads the shared catalog live; real variant picker (Warna/Ukuran → live price+stock) + variant-aware cart (keranjang/checkout).
 - [ ] Produk: **transfer stok** antar-lokasi, **pemasok (supplier) CRUD** (PO references suppliers).

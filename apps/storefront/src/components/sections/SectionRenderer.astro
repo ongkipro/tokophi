@@ -1,0 +1,47 @@
+---
+// ADR 0009 — storefront half of the section registry. Maps each `page_templates.sections`
+// entry's `type` to its Astro component; the admin's Puck config (apps/admin/lib/theme/puck-config.tsx)
+// is the other half, sharing the same @tokophi/sections config shapes.
+//
+// A switch (not a type→component lookup map) on purpose: TS can't narrow `item.props` to the
+// component's specific config through a map indexed by the discriminant, so a map+spread would
+// require unsafe casts. The switch narrows `item` per-branch instead — fully type-checked.
+import type { StoredTemplateData } from "@tokophi/sections";
+import Hero from "./Hero.astro";
+import ProductGrid from "./ProductGrid.astro";
+import BannerPromo from "./BannerPromo.astro";
+import Testimoni from "./Testimoni.astro";
+import ImageText from "./ImageText.astro";
+import Marquee from "./Marquee.astro";
+import RichText from "./RichText.astro";
+import CategoryNav from "./CategoryNav.astro";
+
+interface Props {
+  data: StoredTemplateData;
+}
+
+const { data } = Astro.props;
+---
+
+{
+  data.content.map((item) => {
+    switch (item.type) {
+      case "hero":
+        return <Hero {...item.props} />;
+      case "product-grid":
+        return <ProductGrid {...item.props} />;
+      case "banner-promo":
+        return <BannerPromo {...item.props} />;
+      case "testimoni":
+        return <Testimoni {...item.props} />;
+      case "image-text":
+        return <ImageText {...item.props} />;
+      case "marquee":
+        return <Marquee {...item.props} />;
+      case "rich-text":
+        return <RichText {...item.props} />;
+      case "category-nav":
+        return <CategoryNav {...item.props} />;
+    }
+  })
+}

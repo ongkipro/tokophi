@@ -1,0 +1,35 @@
+---
+import type { BannerPromoConfig } from "@tokophi/sections";
+
+type Props = BannerPromoConfig;
+const { heading, subheading, imageUrl, href, badge } = Astro.props;
+---
+
+<section class="mx-auto max-w-7xl px-4 sm:px-6">
+  <a
+    href={href}
+    class="group relative flex min-h-[220px] items-center overflow-hidden rounded-2xl bg-brand-100 p-8 sm:p-12"
+  >
+    {
+      imageUrl && (
+        <img
+          src={imageUrl}
+          alt=""
+          class="absolute inset-0 h-full w-full object-cover opacity-90 transition duration-700 group-hover:scale-105"
+        />
+      )
+    }
+    <div class="absolute inset-0 bg-gradient-to-r from-ink/70 via-ink/25 to-transparent" />
+    <div class="relative space-y-2">
+      {
+        badge && (
+          <span class="inline-block rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+            {badge}
+          </span>
+        )
+      }
+      <h3 class="font-display text-2xl font-semibold text-white sm:text-3xl">{heading}</h3>
+      <p class="max-w-sm text-white/85">{subheading}</p>
+    </div>
+  </a>
+</section>

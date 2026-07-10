@@ -1,7 +1,9 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import ProductCard from "../components/ProductCard.astro";
+import SectionRenderer from "../components/sections/SectionRenderer.astro";
 import { STORE, COLLECTIONS, PRODUCTS, bestsellers, byCollection } from "../data/catalog";
+import { HOMEPAGE_TEMPLATE } from "../data/theme";
 
 const best = bestsellers();
 const heroProducts = [
@@ -20,6 +22,12 @@ const collections = COLLECTIONS.map((c) => {
   title="Beranda"
   description={`${STORE.name} — ${STORE.tagline}. Belanja dress, atasan, bawahan, busana muslim & outerwear wanita. Kirim se-Indonesia.`}
 >
+  {
+    HOMEPAGE_TEMPLATE ? (
+      <!-- ADR 0009: merchant-built homepage (Store Builder) -->
+      <SectionRenderer data={HOMEPAGE_TEMPLATE} />
+    ) : (
+      <Fragment>
   <!-- Hero -->
   <section class="relative overflow-hidden bg-gradient-to-b from-brand-50 to-cream">
     <div class="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 md:grid-cols-2 md:py-24 lg:gap-16">
@@ -186,4 +194,7 @@ const collections = COLLECTIONS.map((c) => {
       Mulai Belanja
     </a>
   </section>
+      </Fragment>
+    )
+  }
 </Layout>

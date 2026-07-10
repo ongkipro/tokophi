@@ -48,9 +48,12 @@ tokophi/
 │  ├─ super-admin/   platform control plane (Next 16, :3001)
 │  └─ storefront/    shopper site (Astro 5, :4327)
 └─ packages/
-   ├─ ui/    @tokophi/ui   shared shadcn-on-Base-UI components + cn + Tailwind tokens
-   ├─ lib/   @tokophi/lib  IDR/num/pct/timeAgo formatters
-   └─ data/  @tokophi/data canonical MAIN_MENU / FOOTER_MENU (shared nav source)
+   ├─ ui/       @tokophi/ui       shared shadcn-on-Base-UI components + cn + Tailwind tokens
+   ├─ lib/      @tokophi/lib      IDR/num/pct/timeAgo formatters + colours (colors.ts, ADR 0009)
+   ├─ data/     @tokophi/data     canonical MAIN_MENU / FOOTER_MENU (shared nav source)
+   ├─ db/       @tokophi/db       Drizzle schema + client + migrations (server-only)
+   └─ sections/ @tokophi/sections Store Builder section registry (ADR 0009) — shared by the
+                                  admin Puck config and the Astro SectionRenderer
 ```
 
 ### `apps/admin/`
@@ -96,6 +99,13 @@ tokophi/
 - Money is **always IDR** via `IDR()`; plain numbers via `num()`; percentages via `pct()`; relative time via `timeAgo()` — all `id-ID`. Tabular figures use the `tabular-nums` class.
 - Admin uses its local `lib/format.ts`; super-admin/storefront use `@tokophi/lib/format`.
 
+### Store Builder / Puck gotchas (ADR 0009, worktree `store-builder`)
+- The visual-editor library is **`@measured/puck`** — the *unscoped* npm package `puck` is a completely unrelated networking library; installing it silently gives you the wrong thing (no type errors, just a bad import target).
+- Overriding `overrides.headerActions` **replaces** Puck's default header actions (including the built-in Publish button) — it's a full render override, not an "append" slot. To add a custom button *alongside* Publish, use the `{ children }` prop: `headerActions: ({ children }) => <>{myButton}{children}</>`. Same trap with the deprecated `renderHeaderActions` prop.
+- Overriding `overrides.fieldTypes.<type>` replaces the **entire** field render, including the label Puck would otherwise draw from `field.label`. Render your own label inside the override (see `apps/admin/lib/theme/puck-field-overrides.tsx`) or fields go unlabeled.
+- Puck's palette/font are CSS custom properties (`--puck-color-azure-*`, `--puck-font-family`, …), not hashed classes — safe to override in your own stylesheet imported *after* `@measured/puck/puck.css` (see `apps/admin/lib/theme/puck-theme.css`). Everything else in Puck's DOM is CSS Modules with hashed class names — don't target those directly, they can change on any version bump.
+- `resolvePermissions` on a component config can return `{ insert: false }` to cap how many instances of a section type a page can hold (e.g. Grid Produk's max-2-per-page rule) — the official extension point, not a save-time validation.
+
 ### Storefront slugs (Indonesian)
 `/produk/<handle>`, `/kategori/<handle>`, `/blog/<slug>`, `/halaman/<slug>` — **not** `/products//collections/…`.
 
@@ -129,6 +139,17 @@ Edit **one file**: `packages/data/src/menu.ts` (`MAIN_MENU` for header, `FOOTER_
 ### Add a storefront page or collection
 - **Static page:** add `src/pages/<name>.astro` (Indonesian slug). Content-only pages live under `/halaman/`.
 - **Collection:** add an entry to `COLLECTIONS` in `catalog.ts` and tag products with its `categoryHandle`; `kategori/[handle].astro` renders it. "Virtual" (non-catalog) collections used only by the nav (e.g. `semua`, `promo-gajian`) are defined **inside** `getStaticPaths` in `kategori/[handle].astro`.
+
+### Add a Store Builder section type (ADR 0009)
+1. Add the config interface + a `SECTION_DEFAULTS` entry to `packages/sections/src/registry.ts` (the single shape both sides read).
+2. Admin preview: `apps/admin/components/theme/sections/<Type>.tsx` (plain React, Tailwind) + register it in `apps/admin/lib/theme/puck-config.tsx` (`fields` + `defaultProps` + `render`).
+3. Storefront render: `apps/storefront/src/components/sections/<Type>.astro` (storefront's own tokens — `brand-*`/`ink`/`muted`/`line`, not the admin's) + add its case to the `switch` in `SectionRenderer.astro`.
+4. Both sides must destructure the *same* config shape from `@tokophi/sections` — that's what keeps them from drifting.
+
+### Change the storefront's brand colour scheme
+- Merchant-facing: the colour dialog in `/tema`'s header (`apps/admin/components/theme/brand-color-dialog.tsx`) — saves one hex to `stores.brand_color`.
+- Under the hood: `@tokophi/lib/colors` `generateBrandShades(hex)` derives the 7-step scale (same HSL-ramp method as the `color-palette` skill); `apps/storefront/src/layouts/Layout.astro` injects it as a `:root` override *after* `global.css`, so it wins the cascade with zero markup changes to any existing `bg-brand-*`/`text-brand-*` usage.
+- To add a new shade step (e.g. `brand-800`), add it to `STEPS` in `colors.ts` **and** to `global.css`'s `@theme` block (only steps present in both places actually render differently from the default).
 
 ---
 
@@ -181,6 +202,9 @@ Edit **one file**: `packages/data/src/menu.ts` (`MAIN_MENU` for header, `FOOTER_
 - **Base UI "MenuGroupContext is missing":** a `Menu.GroupLabel` was used without a `<Menu.Group>` parent — wrap it, or use the plain-`<div>` `DropdownMenuLabel`.
 - **Hydration mismatch:** something used `Date.now()`/`Math.random()` in a render path — route it through the seeded mock and anchor to `TODAY`.
 - **Shared component change not showing in admin:** admin uses its **local** `components/ui` copy, not `@tokophi/ui` — edit both until the de-dup backlog task lands.
+- **Storefront shows the wrong store's name/products/branding:** any `db.select().from(schema.stores).limit(1)` with no `where` is fragile once the shared local DB has more than one `stores` row (it does — 7 seeded demo stores as of 2026-07-10). Filter explicitly, e.g. `.where(eq(schema.stores.slug, "batik-nusantara"))` (see `apps/storefront/src/data/catalog.ts`).
+- **`stores` reads/writes in `apps/admin/lib/data|actions` returning/affecting the wrong store:** `stores` carries no `store_id` column (it *is* the tenant), so RLS's `tenant_isolation` policy doesn't cover it — `withCurrentTenant`/`withTenant` alone won't scope a `schema.stores` query. Always add an explicit `.where(eq(schema.stores.id, storeId))` (see `lib/data/store.ts`, `lib/data/theme.ts` `getBrandColor`).
+- **A `page_templates` (or other) row you just saved disappears:** the shared local Postgres gets reseeded during normal multi-session work on this project; nothing wrong with your code, just re-save. Not a substitute for `verify-rls`-style regression testing, just an FYI for local demo state.
 
 ---
 

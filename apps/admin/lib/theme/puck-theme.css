@@ -1,0 +1,20 @@
+/* Re-skin Puck's default blue/Inter look to match TokoΦ's indigo/Geist admin brand.
+   Puck ships its palette as CSS custom properties (see @measured/puck/puck.css) —
+   this overrides them, not a fork/patch, so it survives Puck version bumps. */
+:root {
+  --puck-font-family: var(--font-sans, "Geist", ui-sans-serif, system-ui, sans-serif);
+
+  /* azure = Puck's accent scale (selection outlines, links, active states) → indigo */
+  --puck-color-azure-01: #1e1b4b;
+  --puck-color-azure-02: #312e81;
+  --puck-color-azure-03: #3730a3;
+  --puck-color-azure-04: #4338ca;
+  --puck-color-azure-05: #4f46e5;
+  --puck-color-azure-06: #6366f1;
+  --puck-color-azure-07: #818cf8;
+  --puck-color-azure-08: #a5b4fc;
+  --puck-color-azure-09: #c7d2fe;
+  --puck-color-azure-10: #e0e7ff;
+  --puck-color-azure-11: #eef2ff;
+  --puck-color-azure-12: #f5f3ff;
+}

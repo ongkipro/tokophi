@@ -1,18 +1,18 @@
 # TokoΦ — Architecture
 
-> Authoritative architecture doc. Companion to [`../PRD.md`](../PRD.md) (product), [`GUIDE.md`](GUIDE.md) (how to build/contribute), [`UML.md`](UML.md) (detailed diagrams), [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md) (DB). Describes how the three surfaces are built, the shared **local-Postgres backend fully wired behind the data layer** (all three surfaces live on it — ADR 0007), and the **per-client topology** (ADR 0008).
+> Authoritative architecture doc. Companion to [`../PRD.md`](../PRD.md) (product), [`GUIDE.md`](GUIDE.md) (how to build/contribute), [`UML.md`](UML.md) (detailed diagrams), [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md) (DB). Describes how the three surfaces are built, the shared **local-Postgres backend fully wired behind the data layer** (all three surfaces live on it — ADR 0007), and the **per-client topology** (ADR 0008, **amended by [ADR 0009](../decisions/0009-self-serve-store-builder.md)**: storefront is SSR multi-tenant + self-serve store builder, not per-client hand-built static).
 
 ---
 
 ## 1. System overview — three surfaces
 
-TokoΦ is a Shopify-style commerce SaaS for Indonesia (Bahasa Indonesia UI, IDR). It is **not** a theme editor and has **no** Apps/Plugins marketplace. Three separate front-ends serve three audiences:
+TokoΦ is a Shopify-style commerce SaaS for Indonesia (Bahasa Indonesia UI, IDR). It has **no** Apps/Plugins marketplace, but **does** have a self-serve, section-based store builder (ADR 0009 — curated sections, not free-form theme code). Three separate front-ends serve three audiences:
 
 | Surface | Package | Stack | Port (dev) | Who uses it |
 |---|---|---|---|---|
-| **admin** | `@tokophi/admin` | Next.js 16 (App Router, Turbopack), React 19 | `:3000` | A **merchant / shop owner** — manages their own store (orders, products, customers, discounts, CRM, pages, blog, nav, settings). |
+| **admin** | `@tokophi/admin` | Next.js 16 (App Router, Turbopack), React 19 | `:3000` | A **merchant / shop owner** — manages their own store (orders, products, customers, discounts, CRM, pages, blog, nav, settings, **store builder/theme**). |
 | **super-admin** | `@tokophi/super-admin` | Next.js 16 | `:3001` | **We (the platform)** — cross-tenant control plane: all stores, plans, billing. |
-| **storefront** | `@tokophi/storefront` | Astro 5 + Tailwind v4 | `:4327` | A **shopper** — one hand-built static storefront per client (browse, cart, checkout, blog, account, contact). |
+| **storefront** | `@tokophi/storefront` | Astro 5 + Tailwind v4 | `:4327` | A **shopper** — one **SSR multi-tenant** storefront (resolves store by `Host`), rendering each store's chosen section templates (browse, cart, checkout, blog, account, contact). |
 
 Started as **UI/UX with mock data**; the **local backend is wired** on PostgreSQL (see §9) — all 3 surfaces read + all 12 admin editors write + local auth/RBAC/RLS enforcing. (`lib/mock/store.ts` now only serves as the deterministic seed-parity source.)
 
@@ -146,7 +146,7 @@ flowchart TD
 - Charts use shadcn's `ChartContainer` (wraps Recharts `ResponsiveContainer`); render correctly in real browsers (Playwright) but `chrome --headless --virtual-time-budget` mis-measures them.
 
 **Storefront (Astro 5):**
-- Static build (SSG). Dynamic routes (`produk/[handle]`, `kategori/[handle]`) use `getStaticPaths`. Cart is client-side in `localStorage`.
+- ~~Static build (SSG)~~ → **moving to SSR multi-tenant** (ADR 0009 amends this): store resolved from the `Host` header per-request (needed so Store Builder saves show up without a redeploy); `page_templates` fetched live and rendered through the section registry. Cart stays client-side in `localStorage`.
 - Tailwind v4 via `@tailwindcss/vite`. Indonesian slugs: `/produk/`, `/kategori/`, `/blog/`, `/halaman/`.
 
 ---
@@ -160,7 +160,7 @@ flowchart TD
 
 **Deploy (planned):**
 - **admin** + **super-admin** → **Vercel** (Next.js).
-- **storefront** → **Cloudflare** Pages/Workers, **one deploy per client** (matches the existing petcue/pixsgo pattern).
+- **storefront** → ~~Cloudflare Pages/Workers, one deploy per client~~ → per `PROD_PLAN.md` §6: **SSR on the VPS** (direct Postgres access, no per-client deploy), Cloudflare in front for CDN/cache/custom-domain only (ADR 0009).
 
 ---
 
@@ -188,15 +188,15 @@ npm run studio  -w @tokophi/db     # Drizzle Studio
 
 ---
 
-## 10. Tenancy & per-client provisioning (ADR 0008)
+## 10. Tenancy & provisioning (ADR 0008, amended by ADR 0009)
 
-The topology that keeps many clients **easy to manage**: one control plane, one multi-tenant admin, a storefront per client, **one shared database**.
+The topology that keeps many clients **easy to manage**: one control plane, one multi-tenant admin, one multi-tenant storefront, **one shared database**.
 
 | Layer | Instances | Tenancy |
 |---|---|---|
 | **Super Admin** (`apps/super-admin`) | 1 app, 1 deploy | cross-tenant — create/suspend stores, plans, billing |
-| **Client Admin** (`apps/admin`) | **1 app, 1 deploy — multi-tenant** | merchant signs into the *same* admin; session → `store_id`; RLS scopes to their store |
-| **Storefront** (`apps/storefront`) | 1 codebase, **1 deploy per client** | `STORE_SLUG` per deploy; own domain; reads that store from the shared DB |
+| **Client Admin** (`apps/admin`) | **1 app, 1 deploy — multi-tenant** | merchant signs into the *same* admin; session → `store_id`; RLS scopes to their store; includes the **Store Builder** (ADR 0009) |
+| **Storefront** (`apps/storefront`) | ~~1 codebase, 1 deploy per client~~ → **1 codebase, 1 deploy — SSR multi-tenant** | resolves `store_id` from `Host`/custom domain per-request; renders that store's `page_templates` live from the shared DB |
 | **Database** | **1 shared PostgreSQL** | `store_id` on every tenant row + RLS; super-admin bypasses |
 
 > **"Client Admin A / B" is the same admin app, scoped by `store_id` — not a separate deploy per client.**

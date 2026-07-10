@@ -25,7 +25,7 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 
 ### Sidebar IA
 `Utama:` Dashboard · Pesanan · Produk▸ · Pelanggan▸ · CRM▸ · Diskon · Analitik · Pemasaran
-`Toko Online:` Halaman · Blog · Navigasi
+`Toko Online:` Tema · Halaman · Blog · Navigasi
 `Sistem:` Pengaturan
 (▸ = expandable submenu — Produk: Kategori/Inventori/Pembelian · Pelanggan: Segmen/Ulasan · CRM: Follow-up WA/Pipeline/Template)
 
@@ -85,6 +85,7 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 | `/blog/baru` | New article | reuses article editor | ✅ mock |
 | `/blog/[id]` | Article editor (`article-editor.tsx`) | title/handle/body/excerpt, blog/author, tags, featured image, SEO (content-width), prefilled | ✅ mock |
 | `/navigasi` | Menu builder | **drag-drop** menus (Menu Utama/Footer), nested typed items (beranda/koleksi/produk/halaman/blog/url), add/edit/delete; sourced from `@tokophi/data`; content uses Indonesian storefront slugs | ✅ mock |
+| `/tema` | **Store Builder** (ADR 0009, worktree `store-builder`) | `@measured/puck` drag-drop homepage editor, full-bleed (sidebar/topbar hidden), 8 sections (Hero/Grid Produk/Banner Promo/Testimoni/Image+Teks/Marquee/Rich Text/Navigasi Kategori) + brand-colour dialog (one hex → full storefront palette); gated `theme:write` (owner/admin only) | ✅ real DB, uncommitted |
 
 ### System
 | Route | Purpose | Key components / interactions | Status |

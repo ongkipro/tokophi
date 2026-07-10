@@ -1,0 +1,44 @@
+---
+import type { MarqueeConfig } from "@tokophi/sections";
+
+type Props = MarqueeConfig;
+const { text, speed } = Astro.props;
+const duration = { lambat: "40s", sedang: "25s", cepat: "12s" }[speed] ?? "25s";
+---
+
+<section class="overflow-hidden bg-ink py-4" style={`--marquee-duration: ${duration}`}>
+  <div class="marquee-track flex w-max gap-8 whitespace-nowrap">
+    {
+      Array(2)
+        .fill(null)
+        .map(() => (
+          <span class="flex shrink-0 gap-8">
+            {Array(6)
+              .fill(text)
+              .map((t) => (
+                <span class="font-display text-lg font-medium text-cream/90">{t}</span>
+              ))}
+          </span>
+        ))
+    }
+  </div>
+</section>
+
+<style>
+  .marquee-track {
+    animation: marquee var(--marquee-duration, 25s) linear infinite;
+  }
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track {
+      animation: none;
+    }
+  }
+</style>

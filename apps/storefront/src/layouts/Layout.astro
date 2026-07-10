@@ -3,6 +3,7 @@ import "../styles/global.css";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import { STORE } from "../data/catalog";
+import { BRAND_SHADES } from "../data/theme";
 
 interface Props {
   title: string;
@@ -26,6 +27,10 @@ const { title, description = STORE.tagline } = Astro.props;
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
+    <!-- ADR 0009 — merchant's brand colour override (Store Builder colour panel). Declared
+         after global.css so these custom properties win the cascade; every bg-brand-*/text-brand-*
+         utility already in the storefront reads them via var(), so this alone re-themes the site. -->
+    <style set:html={`:root { ${Object.entries(BRAND_SHADES).map(([shade, hex]) => `--color-brand-${shade}: ${hex};`).join(" ")} }`} />
   </head>
   <body class="min-h-screen bg-cream text-ink antialiased">
     <Header />

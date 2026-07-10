@@ -9,10 +9,13 @@
     "preview": "astro preview"
   },
   "dependencies": {
+    "@astrojs/check": "^0.9.9",
     "@tokophi/data": "*",
+    "@tokophi/db": "*",
     "@tokophi/lib": "*",
+    "@tokophi/sections": "*",
     "astro": "^5.14.1",
-    "@tokophi/db": "*"
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",
