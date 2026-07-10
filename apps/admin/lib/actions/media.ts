@@ -41,7 +41,7 @@ export async function uploadProductImage(productId: string, formData: FormData):
       .select({ max: sql<number>`coalesce(max(${schema.productMedia.position}), -1)`.mapWith(Number) })
       .from(schema.productMedia)
       .where(eq(schema.productMedia.productId, productId));
-    await db.insert(schema.productMedia).values({ productId, url: `/uploads/${name}`, position: max + 1 });
+    await db.insert(schema.productMedia).values({ productId, url: `/api/uploads/${name}`, position: max + 1 });
   });
 
   revalidatePath("/produk");
@@ -57,8 +57,9 @@ export async function deleteProductImage(mediaId: string, productId: string): Pr
     await db.delete(schema.productMedia).where(eq(schema.productMedia.id, mediaId));
     return row.url;
   });
-  if (url && url.startsWith("/uploads/")) {
-    await fs.unlink(path.join(process.cwd(), "public", url)).catch(() => {});
+  if (url && url.startsWith("/api/uploads/")) {
+    const fname = path.basename(url); // strip the route prefix → the file in UPLOAD_DIR
+    await fs.unlink(path.join(UPLOAD_DIR, fname)).catch(() => {});
   }
   revalidatePath("/produk");
   revalidatePath(`/produk/${productId}`);
