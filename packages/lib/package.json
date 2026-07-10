@@ -13,6 +13,7 @@
     "./billing": "./src/billing.ts",
     "./totp": "./src/totp.ts",
     "./integration-status": "./src/integration-status.ts",
-    "./payment-fees": "./src/payment-fees.ts"
+    "./payment-fees": "./src/payment-fees.ts",
+    "./colors": "./src/colors.ts"
   }
 }

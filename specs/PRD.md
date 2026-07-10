@@ -1,5 +1,7 @@
 # TokoΦ — Product Requirements Document (PRD v0.4)
 
+> ⚠️ **Amended 2026-07-09 by [ADR 0009](decisions/0009-self-serve-store-builder.md):** the storefront is **no longer** "hand-built per client, not a self-serve theme editor." Merchants now get a **self-serve, section-based drag-and-drop store builder** (homepage/category/product templates); storefront topology moves to **SSR multi-tenant** (1 deploy for all stores, resolved by `Host` header) instead of 1 static build per client. Checkout stays locked/uniform (branding tokens only). Passages below still saying "hand-built" / "per-client deploy" / "no theme editor" are pre-ADR-0009 history — ADR 0009 is authoritative.
+
 > **Name:** TokoΦ (rebranded from "indostore" 2026-07-08) · **Owner:** Paduka Ongki / ongkipro
 > **Phase:** UI/UX-first → **backend M3, local Linux** — all 3 surfaces READ + all 12 admin editors WRITE local PostgreSQL/Drizzle; local auth + **RBAC** (capability matrix + role-aware UI on all editors) + **RLS ENFORCING at runtime** (admin routes every read/write through the non-owner `tokophi_app` role via `withTenant`; `verify-rls`+`verify-rls-app`+E2E green) + local media upload done. **Next: admin-client feature depth** (Real variants) — VPS/PostgREST infra deferred. · **Updated:** 2026-07-08
 > **Code:** `~/projects/tokophi` (monorepo) · **Docs:** `~/Documents/Development/tokophi`
@@ -9,11 +11,11 @@
 
 ## 1. Vision & Positioning
 
-A **Shopify-style commerce platform for the Indonesian market**: one shared, modern-SaaS **admin panel** that runs many merchant stores, and a **per-client Astro storefront** (each client's theme hand-built by AI in the terminal — not a self-serve theme editor).
+A **Shopify-style commerce platform for the Indonesian market**: one shared, modern-SaaS **admin panel** that runs many merchant stores, and an **Astro storefront** merchants customize themselves via a **self-serve, section-based drag-and-drop store builder** (ADR 0009) — one SSR multi-tenant deploy, not a hand-built site per client.
 
 **Deliberately NOT Shopify:**
-- ❌ **No Themes menu** (no in-app theme store/editor). Storefronts are bespoke Astro sites per client.
-- ❌ **No Apps / Plugins marketplace.** Feature set is curated in-core.
+- ✅ **Self-serve store builder** (ADR 0009), but **section-based, not free-form** — a curated section registry (Hero, Product Grid, …), not arbitrary HTML/CSS/Liquid. Checkout is locked/uniform across every store (branding tokens only).
+- ❌ **No Apps / Plugins marketplace.** Feature set is curated in-core (the section registry itself is curated by us, not an open plugin surface).
 - ✅ Lightweight, fast, **Bahasa Indonesia** UI tuned to Indonesian sellers (WhatsApp, COD, local couriers, e-wallets/QRIS, payday cycles) — with the polish of a modern SaaS (Linear/Vercel/Shopify-admin quality, not a heavy ERP).
 
 **Three surfaces** (monorepo, npm workspaces — `apps/*` + shared `packages/*`):
@@ -21,7 +23,7 @@ A **Shopify-style commerce platform for the Indonesian market**: one shared, mod
 |---|---|---|---|---|
 | **Super Admin** (`apps/super-admin`) | **platform = us** | Next 16 + shared UI | :3001 | **1**, manages all stores/plans/billing |
 | **Admin** (`apps/admin`) | merchant operators | Next 16 + shadcn/Base UI | :3000 | **1 shared app**, multi-store |
-| **Storefront** (`apps/storefront`) ✅ | end shoppers | Astro 5 + Tailwind v4 | :4327 | **1 per client** ("Batik Nusantara" demo built) |
+| **Storefront** (`apps/storefront`) ✅ | end shoppers | Astro 5 + Tailwind v4 | :4327 | ~~1 per client~~ → **1 SSR multi-tenant deploy** (ADR 0009); "Batik Nusantara" demo built |
 
 Super-admin & merchant-admin **share the design system** (`@tokophi/ui`) + formatters (`@tokophi/lib`); admin & storefront **share the canonical nav** (`@tokophi/data`). Backend later = one self-hosted Postgres; super-admin = platform role (cross-tenant), admin = `store_id`-scoped (RLS).
 
@@ -143,9 +145,9 @@ Sales channel = **Toko Online only**; analytics attribution = **Meta Ads / TikTo
 
 ---
 
-## 5. Storefront (per client) — BUILT
+## 5. Storefront (self-serve builder, ADR 0009) — BUILT (base), builder IN PROGRESS
 
-Astro 5 + Tailwind v4, sharing the `@tokophi/data` nav and `@tokophi/lib` formatters. Demo = **"Batik Nusantara"** women's fashion, 14 products × 5 AI images. Visually distinct per brand, hand-built (no theme editor). SEO-first (petcue/pixsgo pattern).
+Astro 5 + Tailwind v4, sharing the `@tokophi/data` nav and `@tokophi/lib` formatters. Demo = **"Batik Nusantara"** women's fashion, 14 products × 5 AI images. Layout/appearance now driven by each store's chosen `page_templates` (homepage/category/product), assembled by the merchant in the admin's drag-drop **Store Builder** from a curated section registry — not hand-built HTML per brand. SEO-first (petcue/pixsgo pattern).
 
 **Pages:** beranda · kategori/[handle] (+ virtual "semua"/"promo-gajian", sort) · produk/[handle] (5-image gallery, size, add-to-cart, Beli Sekarang) · keranjang · checkout (kontak/alamat/pengiriman/pembayaran) · checkout/sukses · akun (mock login) · blog · kontak.
 
@@ -180,8 +182,9 @@ Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palet
   - ✅ **storefront → DB**: `src/data/catalog.ts` reads `@tokophi/db` (top-level await, build/SSR). **All three surfaces now read Postgres.**
   - 🟡 **Mutations persist** (`lib/actions/*` server actions): ✅ Produk / Diskon / Halaman / Blog / Kategori (create/edit/delete) + order-status + Inventori-stock; ⏳ Pelanggan / Navigasi / CRM / Segmen / Pembelian.
   - **Current focus = local Linux** — finish the local stack (all mutations + local auth/media) before deploying.
-  - ⏳ **VPS (prod, later)**: self-hosted PostgreSQL + PostgREST + JWT Auth + Storage (MinIO/S3) + enable RLS (`store_id`); parameterize storefront by `STORE_SLUG` (ADR 0008); same migrations carry up.
-- **M4:** Payments/couriers integration (AutoLaris + KiriminAja), per-client storefront deploy pipeline, billing/plans.
+  - ⏳ **VPS (prod, later)**: self-hosted PostgreSQL + PostgREST + JWT Auth + Storage (MinIO/S3) + enable RLS (`store_id`); storefront resolves store by **`Host` header** (SSR multi-tenant, ADR 0009 amends ADR 0008 — `STORE_SLUG`-per-deploy dropped); same migrations carry up.
+  - ⏳ **Store Builder (ADR 0009):** `page_templates` schema + Puck-based admin editor + Astro section renderer — see `decisions/0009-self-serve-store-builder.md`.
+- **M4:** Payments/couriers integration (AutoLaris + KiriminAja), storefront SSR multi-tenant deploy, billing/plans.
 
 > Detailed, prioritized tasks live in **`docs/BACKLOG.md`**.
 
@@ -191,8 +194,8 @@ Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palet
 
 - Final product name & brand accent.
 - Auth model (email+password vs Google; roles owner/staff/gudang).
-- ~~Multi-store: shared DB + `store_id` RLS vs DB-per-client.~~ **Decided:** shared DB + `store_id` (+ RLS at self-hosted Postgres); one multi-tenant admin; storefront per client — **ADR 0008**.
-- Storefront data delivery: static build per deploy vs live read API (leaning per-deploy static with `STORE_SLUG`).
+- ~~Multi-store: shared DB + `store_id` RLS vs DB-per-client.~~ **Decided:** shared DB + `store_id` (+ RLS at self-hosted Postgres); one multi-tenant admin; storefront **SSR multi-tenant** (1 deploy, resolved by `Host`) — **ADR 0008, amended by ADR 0009**.
+- ~~Storefront data delivery: static build per deploy vs live read API.~~ **Decided:** live SSR read per request (required for the self-serve builder to reflect saves immediately) — **ADR 0009**.
 - Rich-text editor choice for Halaman/Blog content (currently mock textarea).
 - Catalog-share mechanism: single shared catalog source vs published snapshot per storefront build.
 

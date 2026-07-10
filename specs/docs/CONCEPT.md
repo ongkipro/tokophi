@@ -3,15 +3,16 @@
 > The product concept, fleshed out so the backend (self-hosted Postgres) is later "just implementation."
 > Companion to `../PRD.md`, `SCHEMA.md` (backend-ready tables), `UI_INVENTORY.md` (screen status).
 > Phase: **concept + UI/UX first**; the **local backend is wired** on PostgreSQL (Drizzle) — all 3 surfaces read + all 12 admin editors write + local auth/RBAC/RLS enforcing. (§8 covers why deferring the full backend early was safe.)
+> ⚠️ **Amended 2026-07-09:** [ADR 0009](../decisions/0009-self-serve-store-builder.md) reverses "no Themes/self-serve editor" — see §6 below and §1.
 
 ---
 
 ## 1. Vision
-A **Shopify-style commerce platform for the Indonesian market**: one shared, modern-SaaS **admin** running many merchant stores, plus a **per-client Astro storefront** built bespoke per brand. Lightweight, Bahasa Indonesia, opinionated — the polish of Shopify-admin without its bloat.
+A **Shopify-style commerce platform for the Indonesian market**: one shared, modern-SaaS **admin** running many merchant stores, plus an **Astro storefront** merchants build themselves via a self-serve, section-based drag-drop builder (ADR 0009) — one SSR multi-tenant deploy, not bespoke-per-brand hand-built code. Lightweight, Bahasa Indonesia, opinionated — the polish of Shopify-admin without its bloat.
 
 **Deliberately NOT:**
-- ❌ No **Themes** store/editor — storefronts are hand-built Astro sites per client.
-- ❌ No **Apps/Plugins** marketplace — the feature set is curated in-core.
+- ✅ **Self-serve store builder** (ADR 0009) — but section-based (curated registry: Hero, Product Grid, …), not free-form HTML/Liquid. Checkout stays locked/uniform.
+- ❌ No **Apps/Plugins** marketplace — the feature set (incl. the section registry) is curated in-core.
 - ✅ Tuned to Indonesian sellers: WhatsApp/IG/TikTok-first, COD, QRIS/e-wallets, local couriers, payday cycles, province-level reach.
 
 ## 2. Target market & personas
@@ -63,8 +64,8 @@ Legend: ✅ built (UI, mock) · 🟡 partial · ⬜ planned
 - **Sumber/atribusi** (dipakai di **Dashboard/Analitik "Sumber Penjualan"**, kolom **Pesanan "Sumber"**, dan **Pemasaran**) = **Meta Ads** (conversion) · **TikTok Ads** · **Google Ads** · **Organic** · **Other** — menjawab "dari mana konversinya".
 - WhatsApp/IG/TikTok = kanal **akuisisi/percakapan** (lewat CRM & iklan), **bukan** sales channel.
 
-## 6. Storefront concept (per klien)
-Astro + Tailwind, berbagi design tokens. Section: beranda (hero, unggulan, kategori), koleksi, detail produk, keranjang, checkout (mock → real). SEO-first (pola petcue/pixsgo). Baca data toko via read-API/static build. Dibangun manual per brand — **bukan** theme editor.
+## 6. Storefront concept — self-serve Store Builder (ADR 0009)
+Astro + Tailwind, berbagi design tokens, **1 deploy SSR multi-tenant** (resolve toko dari `Host` header — bukan 1 build per klien). Merchant menyusun **3 jenis halaman** sendiri lewat drag-drop builder (Puck) di admin, dari **section registry** yang kami desain (Hero, Product Grid, Banner, dst — bukan HTML bebas): **beranda** (1 template aktif/toko), **kategori** (banyak varian, dipilih per kategori), **produk** (banyak varian, dipilih per produk). **Checkout tetap terkunci/seragam** untuk semua toko — hanya logo/nama toko yang ikut profil. Baca data toko (termasuk `page_templates`) live per-request (SSR), jadi simpan di builder langsung tampil tanpa rebuild. SEO-first (pola petcue/pixsgo).
 
 ## 7. Monetization / plans (konsep)
 Tier langganan (UI sudah menyiratkan "Paket Bisnis"):
@@ -83,7 +84,7 @@ Billing & entitlement = kerjaan backend nanti; disimpan per `store`/`account`.
 - **M0–M1 (selesai):** shell + Dashboard + 12 modul + editor produk/koleksi + submenu + pemasaran/analitik + konten. UI matang, mock.
 - **M2 (konsep sekarang):** matangkan konsep + skema (dokumen ini), lengkapi 🟡/⬜ prioritas (varian penuh, media riil, draft order), + **1 sample storefront Astro**.
 - **M3:** self-hosted Postgres (Auth + Postgres + Storage + RLS `store_id`) → ganti seam mock→query; form benar-benar menyimpan; upload gambar; rich-text asli.
-- **M4:** integrasi pembayaran & kurir riil, provisioning multi-toko, pipeline deploy storefront per klien, billing/plans.
+- **M4:** integrasi pembayaran & kurir riil, provisioning multi-toko, storefront SSR multi-tenant + Store Builder (ADR 0009), billing/plans.
 
 ## 10. Guardrails (jangan menyimpang)
 - **Pembayaran, COD, & kurir = dikelola PLATFORM (super-admin), bukan merchant.** Merchant "terima matang" — hanya mengaktifkan metode di tokonya, tanpa daftar akun / isi API. Config & kredensial ada di super-admin, berlaku semua toko. (ADR 0004)

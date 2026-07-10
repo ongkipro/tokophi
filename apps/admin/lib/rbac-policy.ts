@@ -16,7 +16,8 @@ export type Capability =
   | "customers:write"
   | "crm:write" // follow-ups, segments
   | "media:write"
-  | "settings:write";
+  | "settings:write"
+  | "theme:write"; // Store Builder (ADR 0009) — homepage/category/product section templates
 
 export const ALL_CAPABILITIES: Capability[] = [
   "products:write",
@@ -30,6 +31,7 @@ export const ALL_CAPABILITIES: Capability[] = [
   "crm:write",
   "media:write",
   "settings:write",
+  "theme:write",
 ];
 
 // Who can do what.

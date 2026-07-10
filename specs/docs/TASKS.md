@@ -54,6 +54,17 @@
 - [~] **Storage + rich-text** · **M** · ✅ **local media upload done** (product images → `public/uploads/` + `product_media`). ⏳ Tiptap rich-text for bodies; VPS storage (MinIO/S3) later.
 - [x] **Super-admin cross-tenant** · **M** · reads across `store_id`; MRR/GMV/etc. from DB (single-tenant now).
 
+## Epic 7 — Self-serve Store Builder (ADR 0009, worktree `store-builder`, uncommitted)
+- [x] **Schema** · `page_templates` + `template_id` FKs + `stores.brand_color`/`logo_url` (migrations 0026–0028, RLS extended).
+- [x] **Puck mechanism** · `@measured/puck` embedded at `/tema`, gated `theme:write`; `@tokophi/sections` shared registry (admin Puck config ↔ Astro renderer, one config shape).
+- [x] **8 sections v1** · Hero, Grid Produk (mode terlaris/terbaru/acak, max 2/page), Banner Promo, Testimoni (carousel), Image+Teks, Marquee, Rich Text, Navigasi Kategori.
+- [x] **Brand colour system** · `@tokophi/lib/colors` generates a 7-shade scale from one merchant hex; storefront `Layout.astro` overrides `--color-brand-*` — every existing utility re-themes for free.
+- [x] **Builder UI/UX polish** · full-bleed (`AdminChrome` hides sidebar/topbar on `/tema`), Puck re-themed indigo via its CSS vars, fields swapped to admin's own Input/Textarea/Label.
+- [ ] **Category/product template variants** · **L** · many-per-store named templates + assignment UI per collection/product (schema ready, `page_templates.type` already supports it — only the admin management screen is missing).
+- [ ] **SSR multi-tenant storefront** · **L** · resolve `store_id` from `Host` header, 1 deploy for all stores (already decided in `PROD_PLAN.md` §5 independent of this epic; Store Builder saves need it to reflect on a *deployed* storefront without a rebuild).
+- [ ] **Checkout branding** · **S** · wire `stores.logo_url` into `checkout.astro`'s header (column exists, unread).
+- [ ] **Merge to main** · **M** · rebase the `store-builder` worktree branch (still uncommitted as of 2026-07-10, branched before 13 since-landed main commits) — check `lib/rbac-policy.ts`, `lib/nav.ts`, `app/(admin)/layout.tsx` for conflicts with the concurrent billing/Akun work.
+
 ## Epic 6 — Platform integrations (M4)
 - [~] **Payment gateway** · **L** · ✅ **AutoLaris** integrated (super-admin config + Test koneksi; admin "Buat Tagihan" → VA/QRIS/DANA persisted+linked; storefront checkout create payment → VA/QRIS). ⏳ still: callback signature verify + payment→order-status webhook sync.
 - [~] **Shipping aggregator (KiriminAja)** · **L** · ✅ **live ongkir DONE** (2026-07-08): real KiriminAja Mitra API client (`apps/admin/lib/kiriminaja.ts`) + `getShippingRates()` → **"Cek Ongkir"** in the order detail shows live rates (resolves store/dest city → district IDs → `shipping_price`). ⏳ still: super-admin config + Test koneksi; create shipment (`request_pickup` → resi/AWB, needs store sender address); print label PDF; tracking webhook.

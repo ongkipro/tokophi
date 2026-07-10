@@ -1,0 +1,47 @@
+---
+import type { HeroConfig } from "@tokophi/sections";
+
+type Props = HeroConfig;
+const { heading, subheading, imageUrl, ctaLabel, ctaHref, align, badge, ratingText } = Astro.props;
+---
+
+<section class="relative overflow-hidden bg-gradient-to-b from-brand-50 to-cream">
+  <div
+    class:list={[
+      "mx-auto max-w-3xl px-4 py-16 sm:px-6 md:py-24",
+      align === "center" ? "text-center" : "text-left",
+    ]}
+  >
+    <div class="fadeup">
+      {
+        badge && (
+          <span class="mb-4 inline-flex rounded-full bg-brand-600 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-white">
+            {badge}
+          </span>
+        )
+      }
+      <h1 class="font-display text-4xl font-semibold leading-[1.08] text-ink sm:text-5xl md:text-6xl">
+        {heading}
+      </h1>
+      <p class:list={["mt-6 max-w-md text-lg leading-relaxed text-muted", align === "center" && "mx-auto"]}>
+        {subheading}
+      </p>
+      <div class:list={["mt-9 flex flex-wrap items-center gap-3", align === "center" && "justify-center"]}>
+        <a
+          href={ctaHref}
+          class="rounded-full bg-brand-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-200/60 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+        >
+          {ctaLabel}
+        </a>
+      </div>
+      {ratingText && <p class="mt-4 text-sm text-muted">{ratingText}</p>}
+    </div>
+  </div>
+  {
+    imageUrl && (
+      <div class="mx-auto max-w-7xl px-4 pb-16 sm:px-6">
+        <img src={imageUrl} alt="" class="aspect-[21/9] w-full rounded-2xl object-cover shadow-md ring-1 ring-line" />
+      </div>
+    )
+  }
+</section>

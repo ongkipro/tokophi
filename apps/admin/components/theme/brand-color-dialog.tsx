@@ -1,0 +1,113 @@
+"use client";
+
+import * as React from "react";
+import { generateBrandShades, DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
+import { toast } from "sonner";
+import { saveBrandColor } from "@/lib/actions/theme";
+import { useCan } from "@/components/admin/permissions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+export function BrandColorDialog({ initialColor }: { initialColor: string }) {
+  const canWrite = useCan("theme:write");
+  const [hex, setHex] = React.useState(initialColor || DEFAULT_BRAND_COLOR);
+  const [pending, startTransition] = React.useTransition();
+
+  const valid = HEX_RE.test(hex);
+  const shades = valid ? generateBrandShades(hex) : null;
+
+  const handleSave = () => {
+    if (!canWrite) {
+      toast.error("Akses ditolak — peran Anda tidak bisa mengubah tema toko");
+      return;
+    }
+    if (!valid) {
+      toast.error("Format warna tidak valid");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await saveBrandColor(hex);
+        toast.success("Warna brand tersimpan");
+      } catch {
+        toast.error("Gagal menyimpan warna brand");
+      }
+    });
+  };
+
+  return (
+    <Dialog>
+      <DialogTrigger
+        render={
+          <Button variant="ghost" size="sm">
+            <span
+              className="mr-1.5 size-4 rounded-full ring-1 ring-black/10"
+              style={{ backgroundColor: valid ? hex : DEFAULT_BRAND_COLOR }}
+              aria-hidden="true"
+            />
+            Warna Brand
+          </Button>
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Warna Brand Toko</DialogTitle>
+          <DialogDescription>
+            Satu warna dasar — otomatis diturunkan jadi seluruh gradasi warna di storefront (tombol, badge, latar).
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="flex items-end gap-3">
+            <div className="space-y-1.5">
+              <Label>Pilih Warna</Label>
+              <input
+                type="color"
+                value={valid ? hex : DEFAULT_BRAND_COLOR}
+                onChange={(e) => setHex(e.target.value)}
+                className="h-9 w-14 cursor-pointer rounded-lg border border-input bg-transparent p-1"
+              />
+            </div>
+            <div className="flex-1 space-y-1.5">
+              <Label>Kode Hex</Label>
+              <Input value={hex} onChange={(e) => setHex(e.target.value)} placeholder="#a85572" />
+            </div>
+          </div>
+
+          {!valid && <p className="text-sm text-destructive">Format hex tidak valid, contoh: #a85572</p>}
+
+          {shades && (
+            <div className="space-y-1.5">
+              <Label>Pratinjau Gradasi</Label>
+              <div className="flex overflow-hidden rounded-lg ring-1 ring-border">
+                {Object.entries(shades).map(([shade, value]) => (
+                  <div key={shade} className="h-10 flex-1" style={{ backgroundColor: value }} title={`brand-${shade}`} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline">Batal</Button>} />
+          <Button onClick={handleSave} disabled={!valid || pending}>
+            {pending ? "Menyimpan…" : "Simpan Warna"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

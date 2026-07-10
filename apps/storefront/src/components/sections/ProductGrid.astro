@@ -1,0 +1,22 @@
+---
+import type { ProductGridConfig } from "@tokophi/sections";
+import ProductCard from "../ProductCard.astro";
+import { bestsellers, recentProducts, randomProducts, byCollection } from "../../data/catalog";
+
+type Props = ProductGridConfig;
+const { heading, mode, collectionHandle, limit, columns } = Astro.props;
+
+const MODE_FN = { terlaris: bestsellers, terbaru: recentProducts, acak: randomProducts };
+const pool = collectionHandle ? byCollection(collectionHandle) : undefined;
+const products = MODE_FN[mode](pool).slice(0, limit);
+const colsClass = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-3 lg:grid-cols-4" }[columns];
+---
+
+<section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
+  <div class="mx-auto max-w-2xl text-center">
+    <h2 class="font-display text-3xl font-semibold text-ink sm:text-4xl">{heading}</h2>
+  </div>
+  <div class:list={["mt-10 grid grid-cols-2 gap-4", colsClass]}>
+    {products.map((p) => <ProductCard product={p} />)}
+  </div>
+</section>

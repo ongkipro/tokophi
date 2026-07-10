@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, ShoppingBag, Package, Users, TicketPercent,
   BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree,
-  MessagesSquare, LifeBuoy, type LucideIcon,
+  MessagesSquare, LifeBuoy, Palette, type LucideIcon,
 } from "lucide-react";
 
 export type NavChild = { label: string; href: string };
@@ -45,6 +45,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Toko Online",
     items: [
+      { label: "Tema", href: "/tema", icon: Palette },
       { label: "Halaman", href: "/halaman", icon: FileText },
       { label: "Blog", href: "/blog", icon: Newspaper },
       { label: "Navigasi", href: "/navigasi", icon: ListTree },

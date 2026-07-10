@@ -8,6 +8,7 @@
 > - **shared** → `packages/data/src/menu.ts` (`@tokophi/data`) — canonical nav, imported by admin mock **and** the storefront.
 >
 > Content entities mirror **Shopify Admin API** shapes so the eventual API feels familiar. Aligned with `SCHEMA.md`.
+> **ADR 0009 (Store Builder):** `page_templates` entity (store-scoped, `type` = homepage/category/product, `sections` jsonb) plus `template_id` FKs on `collections`/`products` and `stores.logo_url` — migrated (`0026`/`0027`). See [`decisions/0009-self-serve-store-builder.md`](../decisions/0009-self-serve-store-builder.md).
 
 ## Conventions (future DB)
 - Every business table carries **`store_id`** (multi-tenant) with **Row-Level Security** scoping to the current store.
@@ -30,6 +31,11 @@
 → `collections` (+ `collection_products` for manual, `collection_conditions` for automated rules).
 The editor exposes a conditions builder (all/any + field/op/value) that maps to `collection_conditions`.
 > Storefront mirrors this as its own `Collection` (see below); admin `category` string on Product is the join key today.
+> **Store Builder (ADR 0009):** `collections.template_id` picks which `category`-type `page_templates` row renders this collection's storefront page (null = store default). `products.template_id` is the equivalent for product pages.
+
+### Page Template  *(new — ADR 0009, no mock; admin-authored via the Store Builder)*
+`id, store_id, type(homepage|category|product), name, sections(jsonb — ordered [{type,config}]), is_default`
+→ `page_templates`. One row per template a merchant assembles by drag-and-drop (Puck) from the curated section registry (Hero, Product Grid, Banner, Testimoni, …). `sections[].type` maps to the same-named component on both the admin editor (React) and the storefront renderer (Astro) — one config schema drives both. Checkout is **not** a `page_templates` type — it's locked/uniform, reading only `stores.logo_url`/`stores.name`.
 
 ### Order  *(mock: `Order`, `ORDERS`)*
 `id, customer, city, total, items, status(baru|diproses|dikirim|selesai|batal), channel, minutesAgo→created_at`
