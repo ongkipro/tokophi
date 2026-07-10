@@ -37,10 +37,14 @@ export default async function FakturPage({ params }: { params: Promise<{ number:
         </div>
 
         {/* unpaid → continue payment (VA / QRIS) */}
-        {payment && (
+        {inv.status === "menunggu" && (
           <div className="rounded-xl border bg-background p-4 shadow-sm print:hidden">
             <p className="mb-2 text-sm font-semibold">Lanjutkan pembayaran</p>
-            <PaymentView detail={payment} />
+            {payment && (payment.virtualAccount || payment.qrImage || payment.paymentUrl) ? (
+              <PaymentView detail={payment} />
+            ) : (
+              <p className="text-sm text-muted-foreground">Tagihan ini menunggu pembayaran. Buat instruksi pembayaran dari <a href="/akun/langganan" className="font-medium text-primary underline">halaman Langganan</a>.</p>
+            )}
             <p className="mt-2 text-xs text-muted-foreground">Langganan aktif otomatis setelah pembayaran diterima. Halaman ini akan menampilkan status <b>Lunas</b> setelahnya.</p>
           </div>
         )}
