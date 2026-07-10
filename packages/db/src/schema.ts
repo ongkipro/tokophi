@@ -786,6 +786,19 @@ export const platformAdmins = pgTable("platform_admins", {
   createdAt: createdAt(),
 });
 
+// ---------- media library (Shopify-style Files) — all uploaded images for a store ----------
+export const media = pgTable("media", {
+  id: pk(),
+  storeId: uuid().notNull().references(() => stores.id),
+  url: text().notNull(), // /api/uploads/<name>
+  filename: text().notNull(), // original filename (display)
+  mime: text().notNull(),
+  sizeBytes: integer().notNull().default(0),
+  width: integer(),
+  height: integer(),
+  createdAt: createdAt(),
+});
+
 // ---------- support tickets (2-sided: merchant ↔ platform) ----------
 export const ticketStatus = pgEnum("ticket_status", ["open", "answered", "closed"]);
 export const supportTickets = pgTable("support_tickets", {

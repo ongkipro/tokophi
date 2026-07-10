@@ -232,6 +232,13 @@
       "when": 1783654332101,
       "tag": "0032_page_templates_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1783654921407,
+      "tag": "0033_spicy_thunderbolt",
+      "breakpoints": true
     }
   ]
 }

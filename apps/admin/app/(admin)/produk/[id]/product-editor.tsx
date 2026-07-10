@@ -497,6 +497,7 @@ export function ProductEditor({ product }: { product?: Product }) {
               <CardTitle>Media</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
+              <p className="text-xs text-muted-foreground">Maks <span className="font-medium text-foreground">2MB</span> per gambar · otomatis dikonversi ke WebP.</p>
               {/* Image grid */}
               {isEdit ? (
                 <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
