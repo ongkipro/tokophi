@@ -1,6 +1,7 @@
 "use server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import sharp from "sharp";
 import { schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -8,9 +9,10 @@ import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
-const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_BYTES = 2 * 1024 * 1024; // 2MB (client also enforces)
 
-// Upload one image to local storage (public/uploads/) and add a product_media row.
+// Upload one image → convert to WebP (capped at 2000px) → store in public/uploads/ + a product_media row.
+// Every image entering our server becomes WebP; SVG passes through unchanged (not raster).
 export async function uploadProductImage(productId: string, formData: FormData): Promise<void> {
   const { storeId: sid } = await requireCapability("media:write");
   const file = formData.get("file");
@@ -18,10 +20,21 @@ export async function uploadProductImage(productId: string, formData: FormData):
   if (!file.type.startsWith("image/")) throw new Error("not an image");
   if (file.size > MAX_BYTES) throw new Error("file too large");
 
-  const ext = (file.name.split(".").pop() || file.type.split("/")[1] || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const name = `${productId}-${Date.now()}.${ext}`;
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  await fs.writeFile(path.join(UPLOAD_DIR, name), Buffer.from(await file.arrayBuffer()));
+  const input = Buffer.from(await file.arrayBuffer());
+  let name: string;
+  if (file.type === "image/svg+xml") {
+    name = `${productId}-${Date.now()}.svg`; // vector — keep as-is
+    await fs.writeFile(path.join(UPLOAD_DIR, name), input);
+  } else {
+    const webp = await sharp(input)
+      .rotate() // honor EXIF orientation
+      .resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer();
+    name = `${productId}-${Date.now()}.webp`;
+    await fs.writeFile(path.join(UPLOAD_DIR, name), webp);
+  }
 
   await withTenant(sid, async (db) => {
     const [{ max }] = await db

@@ -274,19 +274,22 @@ export function ProductEditor({ product }: { product?: Product }) {
   // ---- media upload/delete (local storage → product_media) ----
   const fileRef = React.useRef<HTMLInputElement>(null);
   const [uploading, startUpload] = React.useTransition();
+  const MAX_UPLOAD = 2 * 1024 * 1024; // 2MB — converted to WebP on the server
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-picking the same file
     if (!file || !product) return;
+    if (!file.type.startsWith("image/")) return toast.error("File harus berupa gambar.");
+    if (file.size > MAX_UPLOAD) return toast.error(`Ukuran maksimal 2MB (file ini ${(file.size / 1048576).toFixed(1)}MB).`);
     const fd = new FormData();
     fd.append("file", file);
     startUpload(async () => {
       try {
         await uploadProductImage(product.id, fd);
-        toast.success("Gambar diunggah");
+        toast.success("Gambar diunggah (dikonversi ke WebP).");
         router.refresh();
       } catch {
-        toast.error("Gagal mengunggah gambar (maks 5MB, format gambar)");
+        toast.error("Gagal mengunggah gambar (maks 2MB, format gambar).");
       }
     });
   };
