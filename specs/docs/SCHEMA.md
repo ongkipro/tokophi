@@ -1,7 +1,7 @@
 # TokoΦ — Backend schema (PostgreSQL, Drizzle)
 
 > **Implemented** as `@tokophi/db` (Drizzle) — **57 tables** on local **PostgreSQL 16** (Docker, port 5433). Prod target = self-hosted Postgres (ADR 0007). Source of truth = `packages/db/src/schema.ts`; this doc is the annotated reference.
-> **ADR 0009 (Store Builder, migrations `0026`/`0027`):** `page_templates` table + `template_id` FKs on `collections`/`products` + `stores.logo_url` — see [`decisions/0009-self-serve-store-builder.md`](../decisions/0009-self-serve-store-builder.md).
+> **ADR 0009 (Store Builder, migrations `0029`/`0030`):** `page_templates` table + `template_id` FKs on `collections`/`products` + `stores.logo_url`/`brand_color` — see [`decisions/0009-self-serve-store-builder.md`](../decisions/0009-self-serve-store-builder.md).
 > **Status:** live end-to-end — all three surfaces (super-admin 5 pages + admin 16 modules + storefront) **read**, all **12 admin editors write** (`lib/actions/*`), super-admin writes (provisioning/lifecycle/settings/billing/invite) via `requirePlatformAdmin()`. Real product variants (`product_options`/`product_variants`/`inventory_levels`) are wired end-to-end. `admin/lib/mock/store.ts` remains only as deterministic seed-parity shape.
 > **Impl deltas vs the design below:** `stores.city`; **`store_stats`** rollup table (platform metrics cache); `invoices.number` ("INV-9001"); `products.emoji` + `products.units_sold` + storefront fields (`sizes`/`badge`/`bestseller`/`rating_value`/`rating_count`); `analytics_daily` rollup; `ad_channels` enriched (name/brand/pixel/aggregate/`campaigns` jsonb) + `ad_metrics.channel_key` nullable; `collections.emoji`; `pages.template` + `pages.views`; `articles.comments`; `followups.last_message`; `customer_segments.growth`; `reviews.product_name` + `reviews.emoji` (denorm — legacy demo products); **`platform_admins`** (platform operators / super-admin login, migration `0013` — email/password scrypt, distinct from store `users`). RLS is **written + enabled + ENFORCING at runtime locally** (migration `0012_tenant_rls`): `tenant_isolation` policies on all 32 store-scoped tables keyed on a GUC (`app.store_id`, set per-txn — no Supabase `auth.*` needed), enforced under the non-owner `tokophi_app` role. The admin runs every read (`withCurrentTenant`) + write (`withTenant`) through that role; auth/super-admin/storefront stay owner. `npm run verify-rls` + `verify-rls-app` prove isolation (incl. the real withTenant path).
 
@@ -61,8 +61,8 @@ page_templates(id, store_id, type enum[homepage|category|product], name,
                created_at, updated_at)
 ```
 - `products.template_id` / `collections.template_id` → `page_templates(id)`, nullable (falls back to the store's default template per type when null).
-- Store-scoped like every other tenant table: **RLS `tenant_isolation`** (migration `0027`, same pattern as `0012`).
-- `stores.logo_url` (migration `0026`) — the only per-store field the **locked/uniform checkout** reads; checkout itself is out of scope for the builder.
+- Store-scoped like every other tenant table: **RLS `tenant_isolation`** (migration `0030`, same pattern as `0012`).
+- `stores.logo_url` + `stores.brand_color` (migration `0029`) — the only per-store fields the **locked/uniform checkout** and the storefront's colour theming read; checkout itself is out of scope for the builder.
 Automated members = products matching conditions (query/view). Mirrors the collection editor exactly.
 
 ## Suppliers & purchasing

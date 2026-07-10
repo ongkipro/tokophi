@@ -55,7 +55,7 @@
 - [x] **Super-admin cross-tenant** · **M** · reads across `store_id`; MRR/GMV/etc. from DB (single-tenant now).
 
 ## Epic 7 — Self-serve Store Builder (ADR 0009, worktree `store-builder`, uncommitted)
-- [x] **Schema** · `page_templates` + `template_id` FKs + `stores.brand_color`/`logo_url` (migrations 0026–0028, RLS extended).
+- [x] **Schema** · `page_templates` + `template_id` FKs + `stores.brand_color`/`logo_url` (migrations 0029–0030, RLS extended).
 - [x] **Puck mechanism** · `@measured/puck` embedded at `/tema`, gated `theme:write`; `@tokophi/sections` shared registry (admin Puck config ↔ Astro renderer, one config shape).
 - [x] **8 sections v1** · Hero, Grid Produk (mode terlaris/terbaru/acak, max 2/page), Banner Promo, Testimoni (carousel), Image+Teks, Marquee, Rich Text, Navigasi Kategori.
 - [x] **Brand colour system** · `@tokophi/lib/colors` generates a 7-shade scale from one merchant hex; storefront `Layout.astro` overrides `--color-brand-*` — every existing utility re-themes for free.
