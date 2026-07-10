@@ -3,7 +3,7 @@
 > Newest first. What we did + what's next, so any session can resume instantly.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-07-10) · **LIVE on Vultr SG + Coolify** (admin/super/toko .sslip.io) · RBAC + RLS enforcing · single-plan billing (PPN 11%) · super-admin store-control overhaul · client Akun section · provider brands hidden (white-label) · next = **Support tiket (2-sisi)** + **tagihan manual & reminder** (super-admin) + seed trial-date drift (Trial bucket empty on live) + VPS prod infra
+## ▶ CURRENT STATE (2026-07-10) · **LIVE on Vultr SG + Coolify** (admin/super/toko .sslip.io) · RBAC + RLS enforcing · single-plan billing (PPN 11% · select→continue→channel pay flow) · super-admin store-control overhaul · client Akun section · **support tiket 2-sisi** (/bantuan ↔ /tiket) · **manual invoice + reminder** · **image→WebP (2MB, /api/uploads)** · provider brands hidden (white-label) · next = email/WA comms for tickets+reminders · uploads → MinIO/S3 (persist across redeploy) · VPS prod (Hetzner) infra
 
 ## 2026-07-10 — Session: super-admin store-control overhaul + Akun + PPN + fees (worktree `super-admin-overhaul`) ✅
 - **Deployed live** on the Vultr box each milestone (Coolify, `main`-tracked); worktree needs `npm install` + copied `.env*` to resolve `@tokophi/*` (nested-in-repo workspaces resolve up to the parent otherwise).

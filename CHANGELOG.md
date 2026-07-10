@@ -4,6 +4,13 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-10
 
+### Support tickets (2-sided) + super-admin manual billing + fixes
+- **Support tickets** (migr 0030 `support_tickets` + `support_messages`): **client admin `/bantuan`** (list, open new, thread + reply + close; nav "Bantuan") ↔ **super-admin `/tiket`** (all tickets, status tabs perlu-dibalas/dibalas/selesai, reply as platform + close/reopen; nav "Tiket"). Chat-style thread both sides; store-scoped for merchants, cross-tenant for platform. Seeded 2 demo tickets.
+- **Super-admin manual billing** (store detail → Kontrol langganan): **Buat tagihan (VA)** (`createManualInvoice` — reuse-or-create one AutoLaris VA subscription invoice, no duplicate, VA revealed in a dialog, audit-logged) + **Kirim pengingat bayar** (`sendPaymentReminder` — recorded to the store audit; email/WA comms deferred).
+- **Image uploads → WebP**: 2MB client cap; server converts every raster to WebP via `sharp` (EXIF-rotate, ≤2000px, q82), SVG passthrough; served via public `/api/uploads/[name]` route (`next start` doesn't serve runtime files in `public/uploads`).
+- **Subscription pay flow**: pick cycle → **Lanjutkan pembayaran** → pick platform channel (dialog) → VA/QRIS; no more instant-VA-on-click, no duplicate invoices (reuse pending, migr 0029 `invoices.channel/qr/payment_url`); invoice rows clickable → `/faktur/[number]` (unpaid resumes payment).
+- **Seed fix**: billing lifecycle dates now relative to the real clock (`fromNow`) so segments don't lapse on deploy-date drift — Trial tab populated.
+
 ### Client-admin "Akun" section (split from Pengaturan)
 - **New `/akun/*` route group** with a shared layout + tab nav (Profil · Keamanan · Langganan) — cohesive account UI, own header, active-tab highlight. Moved the 3 pages out of `/pengaturan/*`; Pengaturan is now store-settings only.
 - **Profil page** (`/akun/profil`): identity card (avatar, name, email, role, store, joined) + editable name/email (`updateProfile`, email-uniqueness) + quick-link to Keamanan.
