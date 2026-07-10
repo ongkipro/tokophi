@@ -472,6 +472,16 @@ async function truncateAll() {
 
 async function main() {
   console.log("Seeding local Postgres (single-tenant: Batik Nusantara)…");
+  // Idempotent for a persistent server: only seed an EMPTY database. On redeploys this preserves
+  // real data (orders, tickets, invoices, uploaded media, password changes). Force with SEED_FORCE=1.
+  if (!process.env.SEED_FORCE) {
+    const rows = await client`select count(*)::int as c from stores`.catch(() => [{ c: 0 }] as { c: number }[]);
+    if (Number(rows[0]?.c ?? 0) > 0) {
+      console.log("DB already has data — skipping seed (set SEED_FORCE=1 to re-seed).");
+      await client.end();
+      return;
+    }
+  }
   await truncateAll();
 
   // plans (config)

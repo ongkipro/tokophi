@@ -43,6 +43,9 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
+    volumes:
+      # persist uploaded media across redeploys (next start runs from /app/apps/admin)
+      - tokophi-uploads:/app/apps/admin/public/uploads
     environment:
       DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:-tokophi}@postgres:5432/tokophi
       AUTH_SECRET: ${AUTH_SECRET:-dev-insecure-change-me}
@@ -110,5 +113,16 @@ services:
       retries: 10
       start_period: 120s
 
+  # daily billing job — hits the admin cron endpoint (syncs statuses + auto-invoices past-due).
+  cron:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      admin: { condition: service_healthy }
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-}
+    command: ["sh", "-c", "while true; do wget -qO- \"http://admin:3000/api/cron/billing?secret=$$CRON_SECRET\" >/dev/null 2>&1 || echo 'cron billing failed'; sleep 86400; done"]
+
 volumes:
   tokophi-pgdata:
+  tokophi-uploads:
