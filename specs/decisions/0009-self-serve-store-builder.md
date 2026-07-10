@@ -56,7 +56,7 @@ products.template_id     → page_templates(id) null   -- which `product` templa
 
 ## Implementation status (2026-07-10)
 **Shipped (v1, homepage only), verified end-to-end (login → drag-drop → publish → Postgres → `astro build` → rendered HTML):**
-- `page_templates` + `template_id` FKs + `stores.logo_url`/`brand_color` — migrations `0030`/`0031` (renumbered after rebasing onto the concurrent `super-admin-overhaul` work, which took `0026`–`0028`), RLS enforcing.
+- `page_templates` + `template_id` FKs + `stores.logo_url`/`brand_color` — migrations `0031`/`0032` (renumbered after rebasing onto the concurrent `super-admin-overhaul` work, which took `0026`–`0028`), RLS enforcing.
 - `@tokophi/sections` — shared registry package (types + defaults), 4 sections: Hero, Product Grid, Banner Promo, Testimoni.
 - `apps/admin` — Puck (`@measured/puck`, MIT) wired at `/tema`, gated by RBAC `theme:write` (owner/admin only); `lib/actions/theme.ts` upserts the store's single default homepage row.
 - `apps/storefront` — matching Astro components per section + `SectionRenderer.astro`; `index.astro` renders the merchant's saved template when one exists, else falls back to the original hand-built homepage (safe default for stores that haven't used the builder yet).
