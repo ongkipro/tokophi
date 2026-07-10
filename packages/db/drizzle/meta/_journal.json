@@ -204,6 +204,13 @@
       "when": 1783620984287,
       "tag": "0028_known_revanche",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1783649543309,
+      "tag": "0029_slow_silk_fever",
+      "breakpoints": true
     }
   ]
 }

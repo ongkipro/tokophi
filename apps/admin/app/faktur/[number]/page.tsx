@@ -3,9 +3,11 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { getFaktur } from "@/lib/data/billing";
+import { getInvoicePayment } from "@/lib/actions/billing";
 import { IDR } from "@tokophi/lib/format";
 import { BILLING, baseFromTotal } from "@tokophi/lib/billing";
 import { PrintButton } from "./print-button";
+import { PaymentView } from "@/components/admin/pengaturan/pay-subscription";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,7 @@ export default async function FakturPage({ params }: { params: Promise<{ number:
   const { invoice: inv, store, owner } = data;
   const paid = inv.status === "dibayar";
   const { base, ppn, total } = baseFromTotal(inv.amount); // inv.amount is PPN-inclusive
+  const payment = inv.status === "menunggu" ? await getInvoicePayment(number) : null;
 
   return (
     <div className="min-h-screen bg-muted/30 p-4 sm:p-8 print:bg-white print:p-0">
@@ -32,6 +35,15 @@ export default async function FakturPage({ params }: { params: Promise<{ number:
           </Link>
           <PrintButton />
         </div>
+
+        {/* unpaid → continue payment (VA / QRIS) */}
+        {payment && (
+          <div className="rounded-xl border bg-background p-4 shadow-sm print:hidden">
+            <p className="mb-2 text-sm font-semibold">Lanjutkan pembayaran</p>
+            <PaymentView detail={payment} />
+            <p className="mt-2 text-xs text-muted-foreground">Langganan aktif otomatis setelah pembayaran diterima. Halaman ini akan menampilkan status <b>Lunas</b> setelahnya.</p>
+          </div>
+        )}
 
         {/* faktur sheet */}
         <div className="rounded-xl border bg-background p-8 shadow-sm print:border-0 print:shadow-none sm:p-10">

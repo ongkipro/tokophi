@@ -728,7 +728,10 @@ export const invoices = pgTable("invoices", {
   periodMonths: integer(), // how many months this invoice extends the subscription (1/12/13)
   reffId: text(),
   trxId: text(),
+  channel: text(), // chosen payment channel (VABCA/QRIS/…) — lets an unpaid invoice resume its payment
   virtualAccount: text(),
+  qr: text(), // QRIS payload (rendered to a QR image when resuming)
+  paymentUrl: text(),
   paidAt: ts(),
   issuedAt: createdAt(),
 });

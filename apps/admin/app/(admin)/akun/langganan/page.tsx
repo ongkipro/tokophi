@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { getBilling, getMyInvoices } from "@/lib/data/billing";
+import { getPendingSubscription } from "@/lib/actions/billing";
+import { getPlatformChannels } from "@/lib/actions/payment-settings";
 import { IDR } from "@tokophi/lib/format";
 import { BILLING, withPpn } from "@tokophi/lib/billing";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { CheckCircle2, Sparkles, Receipt, Printer } from "lucide-react";
 import { PaySubscription } from "@/components/admin/pengaturan/pay-subscription";
 
@@ -18,7 +19,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 };
 
 export default async function LanggananPage() {
-  const [bill, invoices] = await Promise.all([getBilling(), getMyInvoices()]);
+  const [bill, invoices, pending, channels] = await Promise.all([getBilling(), getMyInvoices(), getPendingSubscription(), getPlatformChannels()]);
   const paidTotal = invoices.filter((i) => i.status === "dibayar").reduce((a, i) => a + i.amount, 0);
   const st = bill ? STATUS[bill.status] : STATUS.active;
   const INV_STATUS: Record<string, { label: string; cls: string }> = {
@@ -62,7 +63,7 @@ export default async function LanggananPage() {
               {bill?.status === "past_due" && `Jatuh tempo ${fmtDue}. Bayar sebelum masa tenggang ${BILLING.GRACE_DAYS} hari habis agar toko tidak ditangguhkan.`}
               {bill?.status === "suspended" && `Toko ditangguhkan (mode baca-saja). Bayar ${IDR(bill.nextAmount)} untuk mengaktifkan kembali. Storefront tetap online.`}
             </p>
-            {bill && <PaySubscription firstInvoicePaid={bill.firstInvoicePaid} />}
+            {bill && !bill.comped && <PaySubscription firstInvoicePaid={bill.firstInvoicePaid} pending={pending} channels={channels} />}
           </CardContent>
         </Card>
 
@@ -97,37 +98,23 @@ export default async function LanggananPage() {
           {invoices.length === 0 ? (
             <p className="px-6 py-8 text-center text-sm text-muted-foreground">Belum ada tagihan.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs text-muted-foreground">
-                    <th className="px-6 py-2.5 font-medium">No. Faktur</th>
-                    <th className="px-2 py-2.5 font-medium">Jenis</th>
-                    <th className="px-2 py-2.5 text-right font-medium">Jumlah</th>
-                    <th className="px-2 py-2.5 font-medium">Status</th>
-                    <th className="px-2 py-2.5 font-medium">Tanggal</th>
-                    <th className="px-6 py-2.5 text-right font-medium">Faktur</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.map((inv) => (
-                    <tr key={inv.number} className="border-b last:border-0 hover:bg-muted/40">
-                      <td className="px-6 py-2.5 font-mono text-xs">{inv.number}</td>
-                      <td className="px-2 py-2.5 text-muted-foreground">{jenis(inv.amount)}</td>
-                      <td className="px-2 py-2.5 text-right tabular-nums">{IDR(inv.amount)}</td>
-                      <td className="px-2 py-2.5"><Badge variant="secondary" className={`border-transparent ${INV_STATUS[inv.status].cls}`}>{INV_STATUS[inv.status].label}</Badge></td>
-                      <td className="px-2 py-2.5 whitespace-nowrap text-muted-foreground">{new Date(inv.issuedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</td>
-                      <td className="px-6 py-2.5 text-right">
-                        {inv.status === "dibayar" ? (
-                          <Button variant="ghost" size="sm" className="gap-1.5" nativeButton={false} render={<Link href={`/faktur/${inv.number}`} target="_blank" />}>
-                            <Printer className="size-3.5" /> Cetak
-                          </Button>
-                        ) : <span className="text-xs text-muted-foreground">—</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div>
+              {/* each invoice row is a link → its full invoice page (pay if unpaid, print if paid) */}
+              <div className="hidden border-b px-6 py-2 text-xs text-muted-foreground sm:grid sm:grid-cols-[1.3fr_1fr_1fr_0.9fr_1fr_auto] sm:gap-2">
+                <span>No. Faktur</span><span>Jenis</span><span className="text-right">Jumlah</span><span>Status</span><span>Tanggal</span><span className="w-16 text-right">Aksi</span>
+              </div>
+              {invoices.map((inv) => (
+                <Link key={inv.number} href={`/faktur/${inv.number}`} className="grid grid-cols-2 gap-x-2 gap-y-1 border-b px-6 py-3 text-sm transition-colors last:border-0 hover:bg-muted/40 sm:grid-cols-[1.3fr_1fr_1fr_0.9fr_1fr_auto] sm:items-center">
+                  <span className="font-mono text-xs">{inv.number}</span>
+                  <span className="text-right text-muted-foreground sm:text-left">{jenis(inv.amount)}</span>
+                  <span className="text-right tabular-nums">{IDR(inv.amount)}</span>
+                  <span><Badge variant="secondary" className={`border-transparent ${INV_STATUS[inv.status].cls}`}>{INV_STATUS[inv.status].label}</Badge></span>
+                  <span className="whitespace-nowrap text-xs text-muted-foreground">{new Date(inv.issuedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
+                  <span className={`flex items-center justify-end gap-1 text-xs font-medium ${inv.status === "menunggu" ? "text-primary" : "text-muted-foreground"}`}>
+                    {inv.status === "menunggu" ? "Bayar" : inv.status === "dibayar" ? <><Printer className="size-3.5" /> Cetak</> : "Lihat"}
+                  </span>
+                </Link>
+              ))}
             </div>
           )}
         </CardContent>
