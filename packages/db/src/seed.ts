@@ -15,6 +15,9 @@ function hashPassword(pw: string): string {
 const TODAY = new Date("2026-07-02T00:00:00Z");
 const daysAgo = (n: number) => new Date(TODAY.getTime() - n * 86_400_000);
 const minutesAgo = (n: number) => new Date(TODAY.getTime() - n * 60_000);
+// Billing lifecycle dates must be relative to the REAL clock (not the TODAY anchor), else trials/
+// periods lapse whenever the deploy date drifts past the anchor — computeBilling uses `new Date()`.
+const fromNow = (days: number) => new Date(Date.now() + days * 86_400_000);
 const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 // ---- the one store ----
@@ -484,9 +487,9 @@ async function main() {
     city: STORE.city,
     plan: STORE.plan,
     status: STORE.status,
-    // billing: active, first month paid → recurring Rp275rb, 20 days into the current period
-    trialEndsAt: daysAgo(STORE.createdDaysAgo - 3),
-    currentPeriodEnd: daysAgo(-20),
+    // billing: active, first month paid → recurring Rp275rb; ~20 days left in the current period
+    trialEndsAt: fromNow(-(STORE.createdDaysAgo - 3)),
+    currentPeriodEnd: fromNow(20),
     firstInvoicePaid: true,
     createdAt: daysAgo(STORE.createdDaysAgo),
   }).returning();
@@ -769,10 +772,10 @@ async function main() {
     const firstPaid = d.firstPaid ?? true;
     const bill =
       d.status === "trial"
-        ? { trialEndsAt: daysAgo(-1), currentPeriodEnd: null, firstInvoicePaid: false } // ~1 day left of trial
+        ? { trialEndsAt: fromNow(1), currentPeriodEnd: null, firstInvoicePaid: false } // ~1 day left of trial
         : d.status === "suspended"
-          ? { trialEndsAt: daysAgo(d.createdDaysAgo - 3), currentPeriodEnd: daysAgo(20), firstInvoicePaid: firstPaid } // overdue past grace
-          : { trialEndsAt: daysAgo(d.createdDaysAgo - 3), currentPeriodEnd: daysAgo(-12), firstInvoicePaid: firstPaid }; // active
+          ? { trialEndsAt: fromNow(-(d.createdDaysAgo - 3)), currentPeriodEnd: fromNow(-20), firstInvoicePaid: firstPaid } // overdue past grace
+          : { trialEndsAt: fromNow(-(d.createdDaysAgo - 3)), currentPeriodEnd: fromNow(12), firstInvoicePaid: firstPaid }; // active
     const comp = d.comped ? { comped: true, compedReason: "Volume pengiriman tinggi — dibebaskan platform", compedAt: daysAgo(20) } : {};
     const [st] = await db.insert(schema.stores).values({ accountId: acc.id, name: d.name, slug: slugify(d.name), city: d.city, plan: d.plan, status: d.status, ...bill, ...comp, createdAt: daysAgo(d.createdDaysAgo) }).returning();
     await db.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: daysAgo(d.createdDaysAgo) });
