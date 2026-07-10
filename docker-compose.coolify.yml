@@ -122,6 +122,11 @@ services:
     environment:
       CRON_SECRET: ${CRON_SECRET:-}
     command: ["sh", "-c", "while true; do wget -qO- \"http://admin:3000/api/cron/billing?secret=$$CRON_SECRET\" >/dev/null 2>&1 || echo 'cron billing failed'; sleep 86400; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   # daily Postgres backup — custom-format dump to a volume, keeps the last 7.
   backup:
@@ -134,6 +139,13 @@ services:
     volumes:
       - tokophi-backups:/backups
     command: ["sh", "-c", "while true; do pg_dump -h postgres -U tokophi -d tokophi -Fc -f /backups/tokophi-$$(date +%Y%m%d-%H%M%S).dump && echo backup-ok; ls -1t /backups/*.dump 2>/dev/null | tail -n +8 | xargs -r rm -f; sleep 86400; done"]
+    healthcheck:
+      # healthy only once at least one dump exists → doubles as proof the backup ran
+      test: ["CMD-SHELL", "ls /backups/*.dump >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
 
 volumes:
   tokophi-pgdata:
