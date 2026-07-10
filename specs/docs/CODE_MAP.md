@@ -14,7 +14,7 @@ TokoΦ is a **Shopify-style commerce SaaS for Indonesia** — Bahasa Indonesia U
 |---|---|---|---|---|
 | **admin** | `@tokophi/admin` | Next.js 16 (App Router, Turbopack) | a merchant/shop owner | 3000 |
 | **super-admin** | `@tokophi/super-admin` | Next.js 16 | us (platform control plane) | 3001 |
-| **storefront** | (Astro app) | Astro 5 (SSG, builds at container start) | shoppers | 4327 |
+| **storefront** | (Astro app) | Astro 5 **SSR** (`@astrojs/node` standalone; catalog read at server boot) | shoppers | 4327 |
 
 ---
 
@@ -95,7 +95,7 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 
 ## 6. Code mapping — storefront (Astro)
 
-`/` · `/produk/[handle]` · `/kategori/[handle]` · `/keranjang` · `/checkout`(+`/sukses`) · `/blog` · `/akun` · `/kontak`. Reads the DB via `@tokophi/db` at build/SSR (`src/data/catalog.ts`). Ongkir + order + pay proxied to the admin's public APIs (`PUBLIC_ONGKIR_API`/`PUBLIC_ORDER_API`). Store Builder sections render from `page_templates.sections`.
+`/` · `/produk/[handle]` · `/kategori/[handle]` · `/keranjang` · `/checkout`(+`/sukses`) · `/blog` · `/akun` · `/kontak`. **SSR** (`@astrojs/node` standalone, `output: 'server'`): reads the DB via `@tokophi/db` at **server boot** (module-level in `src/data/catalog.ts`), so the container starts fast (no build-at-start). Dynamic routes resolve per-request from `Astro.params` (404 on unknown handle) — no `getStaticPaths`. Ongkir + order + pay proxied to the admin's public APIs (`PUBLIC_ONGKIR_API`/`PUBLIC_ORDER_API`). Store Builder sections render from `page_templates.sections`.
 
 ---
 

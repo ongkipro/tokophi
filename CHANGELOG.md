@@ -4,6 +4,13 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-10
 
+### Storefront → Astro SSR (zero-downtime deploys)
+- **Converted the storefront from SSG-built-at-container-start to SSR** (`@astrojs/node` standalone, `output: 'server'`). The old image ran a full `astro build` at container start (~1–2 min), so every deploy had a window where the new container returned nothing / "not found" until the static build finished — the origin-side cause of deploy downtime.
+- **Now:** the catalog is read from Postgres at **server boot** (module-level in `src/data/catalog.ts`), not during `astro build`. The image builds **without a DB** (bundling only) and the container starts in **seconds** (`node dist/server/entry.mjs`).
+- **Dynamic routes** (`produk/[handle]`, `kategori/[handle]`) drop `getStaticPaths` → resolve per-request from `Astro.params` (real + virtual `semua`/`promo-gajian` collections; `404` on unknown handle).
+- `apps/storefront/Dockerfile` builds at image time + runs the node server; `HOST=0.0.0.0`/`PORT=4327`. Compose storefront healthcheck `start_period` 120s → 30s.
+- **Verified:** builds with `DATABASE_URL` unset; server boots ~1s and serves `/`, `/produk/<h>`, `/kategori/<h>`, `/kategori/semua` (200), unknown handles (404), `/_astro/*` assets (200). Still single-tenant (store by slug at boot); ADR 0009 `Host`-header multi-tenant builds on this base (TODO).
+
 ### Support tickets (2-sided) + super-admin manual billing + fixes
 - **Support tickets** (migr 0030 `support_tickets` + `support_messages`): **client admin `/bantuan`** (list, open new, thread + reply + close; nav "Bantuan") ↔ **super-admin `/tiket`** (all tickets, status tabs perlu-dibalas/dibalas/selesai, reply as platform + close/reopen; nav "Tiket"). Chat-style thread both sides; store-scoped for merchants, cross-tenant for platform. Seeded 2 demo tickets.
 - **Super-admin manual billing** (store detail → Kontrol langganan): **Buat tagihan (VA)** (`createManualInvoice` — reuse-or-create one AutoLaris VA subscription invoice, no duplicate, VA revealed in a dialog, audit-logged) + **Kirim pengingat bayar** (`sendPaymentReminder` — recorded to the store audit; email/WA comms deferred).

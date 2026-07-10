@@ -146,7 +146,8 @@ flowchart TD
 - Charts use shadcn's `ChartContainer` (wraps Recharts `ResponsiveContainer`); render correctly in real browsers (Playwright) but `chrome --headless --virtual-time-budget` mis-measures them.
 
 **Storefront (Astro 5):**
-- ~~Static build (SSG)~~ → **moving to SSR multi-tenant** (ADR 0009 amends this): store resolved from the `Host` header per-request (needed so Store Builder saves show up without a redeploy); `page_templates` fetched live and rendered through the section registry. Cart stays client-side in `localStorage`.
+- ~~Static build (SSG)~~ → **now SSR** (`@astrojs/node` standalone, `output: 'server'`; converted 2026-07-10). The catalog is read from Postgres at **server boot** (module-level in `src/data/catalog.ts`); dynamic routes render per-request from `Astro.params`. Fast container start = no build-at-start deploy downtime. Cart stays client-side in `localStorage`.
+- **Still single-tenant** (store resolved by slug at boot). ADR 0009's **`Host`-header multi-tenant** (per-request store resolution so Store Builder saves appear without a redeploy; live `page_templates` through the section registry) builds on this SSR base — **still TODO**.
 - Tailwind v4 via `@tailwindcss/vite`. Indonesian slugs: `/produk/`, `/kategori/`, `/blog/`, `/halaman/`.
 
 ---
