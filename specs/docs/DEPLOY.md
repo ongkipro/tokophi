@@ -49,6 +49,31 @@ sync** run via `GET /api/cron/billing?secret=$CRON_SECRET` — schedule it **dai
 
 See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!), `KIRIMINAJA_API_KEY`, `AUTOLARIS_API_KEY`, `AUTOLARIS_CALLBACK_SECRET`. Cross-surface URLs (set AFTER domains assigned): `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API`.
 
+## 🚀 Going live on `tokophi.com` (when final)
+
+> Currently everything runs on `*.45.77.33.112.sslip.io` (no real domain). `tokophi.com` is bought + its zone is on Cloudflare (2026-07-09), DNS not yet pointed. **The code is env-driven** — going live is DNS + env + redeploy, no code changes. Topology: **Cloudflare edge → Coolify/Traefik (45.77.33.112) → containers**.
+
+**Subdomain plan** (3 surfaces → 3 hostnames):
+
+| Surface | Hostname | Notes |
+|---|---|---|
+| storefront (shoppers) | `tokophi.com` + `www.tokophi.com` | public store (later: per-store custom domains / `Host`-multi-tenant) |
+| admin (merchants) | `app.tokophi.com` | merchant login + editors |
+| super-admin (us) | `super.tokophi.com` | platform control plane (internal) |
+
+**Steps (in order):**
+
+1. **Cloudflare DNS** — add `A` records for `@`(root), `www`, `app`, `super` → **`45.77.33.112`**. Start **DNS-only (grey cloud)** so Coolify/Traefik can issue Let's Encrypt certs via HTTP-01; flip to **proxied (orange)** after certs are live.
+2. **Coolify domains** — set the app's `docker_compose_domains` DB field (or per-service Domains in the UI) to the **https** hostnames, e.g. `{"storefront":{"domain":"https://tokophi.com"},"admin":{"domain":"https://app.tokophi.com"},"super_admin":{"domain":"https://super.tokophi.com"}}` (⚠️ super-admin service → underscore key `super_admin`; storefront's Traefik router = the `storefront`/`toko` service). Redeploy → Traefik requests Let's Encrypt certs. (Add `www.tokophi.com` as a second router/redirect to the apex.)
+3. **Cross-surface env** (set AFTER domains, then redeploy): `PUBLIC_APP_URL=https://tokophi.com`, `ADMIN_URL=https://app.tokophi.com`, `PUBLIC_ONGKIR_API=https://app.tokophi.com` (storefront rewrites `/api/uploads/*` media + proxies ongkir/order/pay to admin), `PUBLIC_ORDER_API=https://app.tokophi.com`.
+4. **Harden secrets for prod**: rotate `AUTH_SECRET` (strong random — shared across admin+super-admin for cross-subdomain impersonation, gotcha #11), `POSTGRES_PASSWORD`, `CRON_SECRET`; set the **real** `KIRIMINAJA_API_KEY`/`AUTOLARIS_API_KEY` + `AUTOLARIS_CALLBACK_SECRET` (switch `KIRIMINAJA_ENV` sandbox→production when ready).
+5. **AutoLaris callback URL**: point the payment gateway's webhook to `https://app.tokophi.com/api/webhooks/autolaris` (or the configured callback route) so paid VAs settle.
+6. **Cloudflare after proxied**: SSL/TLS mode **Full (strict)**; **Always Use HTTPS** on; cache rule = **bypass** for `app.` + `super.` + any `/api/*` (dynamic, cookies), cache static `/_astro/*` + `/products/*` on the storefront; keep `www → apex` redirect.
+7. **Billing cron**: update the Coolify Scheduled Task URL to `https://app.tokophi.com/api/cron/billing?secret=$CRON_SECRET` (daily).
+8. **Verify**: `https://tokophi.com` (storefront 200 + a product page + a category), `https://app.tokophi.com/login` (merchant), `https://super.tokophi.com` (platform), a real login, and an impersonation round-trip (cross-subdomain cookie — gotcha #11).
+
+**Gotchas that will bite on real subdomains** (already fixed in code, but re-check): cross-subdomain cookies (impersonation via signed token, not a shared cookie); module-scope `process.env` reads baked at build (read env inside functions); Traefik `req.url` = internal host (use relative `Location` on redirects). See gotcha #11 above.
+
 ## Local validation before pushing (always)
 
 ```bash

@@ -106,8 +106,10 @@ services:
     expose:
       - "4327"
     healthcheck:
-      # SSR: starts in seconds (reads catalog from Postgres at boot, no build-at-start)
-      test: ["CMD-SHELL", "wget -qO- http://localhost:4327/ >/dev/null 2>&1 || exit 1"]
+      # SSR: starts in seconds (reads catalog from Postgres at boot, no build-at-start).
+      # Use 127.0.0.1 (NOT localhost): @astrojs/node binds IPv4 0.0.0.0 only, but busybox wget
+      # resolves `localhost` → ::1 (IPv6) first → connection refused → false "unhealthy" → Traefik 404.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4327/ >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
