@@ -5,7 +5,7 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 ## 2026-07-10
 
 ### "Palet Warna" — multi-palette colour system for the Store Builder (ADR 0009 amendment 2)
-- **Schema**: `color_palettes` table (5 roles — `background`/`text`/`button`/`buttonText`/`accent`, migr `0033` + RLS `0034`), store-scoped like every other tenant table.
+- **Schema**: `color_palettes` table (5 roles — `background`/`text`/`button`/`buttonText`/`accent`, migr `0034` + RLS `0035`), store-scoped like every other tenant table.
 - **`lib/data/theme.ts` `getOrSeedPalettes()`**: auto-seeds "Terang"/"Gelap" from the store's existing `brand_color` shade scale the first time a store opens the palette manager — zero-config, backward compatible with v1's single-hex behaviour.
 - **`lib/actions/theme.ts`**: `savePalette`/`deletePalette` (hex-validated, `theme:write`-gated) + a new **"Kelola Palet"** dialog (`palette-manager-dialog.tsx`) in the `/tema` builder header — list/add/edit/delete, native colour pickers + hex inputs.
 - **Per-section assignment**: every one of the 8 section configs gains an optional `paletteId`, stored in the section's own `props` (not a DB column) — a Puck `custom` field dynamically populated from the store's current palette list. `RichText` keeps its legacy light/dark toggle only when no palette is chosen.

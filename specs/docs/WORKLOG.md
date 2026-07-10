@@ -234,7 +234,7 @@
 - [x] **Verified end-to-end via UI** (behind login): uploaded a PNG → tile 5→6 + `product_media` row + file on disk; deleted it → 6→5 + row + file gone. `tsc` + `build:admin` clean.
 
 **"Palet Warna" — multi-palette colour system, worktree `color-palettes` (2026-07-10):**
-- [x] **Schema**: `color_palettes` (5 roles: background/text/button/buttonText/accent), migration `0033` + RLS `0034` (same pattern as `page_templates`'s `0032`).
+- [x] **Schema**: `color_palettes` (5 roles: background/text/button/buttonText/accent), migration `0034` + RLS `0035` (same pattern as `page_templates`'s `0031`/`0032`; renumbered from `0033`/`0034` after rebasing onto main's concurrent `media` table at `0033`).
 - [x] **`getOrSeedPalettes(storeId)`** (`lib/data/theme.ts`) — auto-seeds "Terang"/"Gelap" from `stores.brand_color`'s shade scale on first open; `savePalette`/`deletePalette` (`lib/actions/theme.ts`, hex-validated, `theme:write`-gated).
 - [x] **`palette-manager-dialog.tsx`** — "Kelola Palet" list/add/edit/delete dialog wired into the `/tema` header actions alongside the brand-colour dialog.
 - [x] **Registry**: all 8 `@tokophi/sections` configs gain `paletteId: string` (`WithPalette`, stored in the section's own `props`, not a DB column); `resolvePalette()`/`FALLBACK_PALETTE`/`paletteStyleString()` shared helpers. `puck-config.tsx` rebuilt from a static export into a `buildPuckConfig(palettes)` factory — the palette field is a `custom` Puck field type (dynamic option list from the store's palettes, not a static `select`).
