@@ -7,7 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChevronLeft, Send, CheckCheck } from "lucide-react";
-import { replyTicket, closeTicket, type TicketDetail } from "@/lib/actions/support";
+import { replyTicket, closeTicket } from "@/lib/actions/support";
+import type { TicketDetail } from "@/lib/data/support";
+import { useCan } from "@/components/admin/permissions";
 import { TicketStatus } from "../ticket-status";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +17,7 @@ const time = (d: Date) => new Date(d).toLocaleString("id-ID", { day: "numeric", 
 
 export function ThreadClient({ ticket }: { ticket: TicketDetail }) {
   const router = useRouter();
+  const canWrite = useCan("support:write");
   const [pending, start] = React.useTransition();
   const [body, setBody] = React.useState("");
   const closed = ticket.status === "closed";
@@ -30,7 +33,7 @@ export function ThreadClient({ ticket }: { ticket: TicketDetail }) {
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="flex items-center justify-between gap-2">
         <Link href="/bantuan" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ChevronLeft className="size-4" /> Bantuan</Link>
-        {!closed && <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" disabled={pending} onClick={close}><CheckCheck className="size-4" /> Tandai selesai</Button>}
+        {!closed && canWrite && <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" disabled={pending} onClick={close}><CheckCheck className="size-4" /> Tandai selesai</Button>}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -56,6 +59,8 @@ export function ThreadClient({ ticket }: { ticket: TicketDetail }) {
 
       {closed ? (
         <p className="text-center text-sm text-muted-foreground">Tiket ini sudah ditutup.</p>
+      ) : !canWrite ? (
+        <p className="text-center text-sm text-muted-foreground">Peran Anda tidak dapat membalas tiket.</p>
       ) : (
         <div className="flex items-end gap-2">
           <Textarea rows={2} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Tulis balasan…" className="min-h-11 flex-1" />

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getTicket } from "@/lib/actions/support";
+import { getTicket } from "@/lib/data/support";
 import { ThreadClient } from "./thread-client";
 
 export const dynamic = "force-dynamic";

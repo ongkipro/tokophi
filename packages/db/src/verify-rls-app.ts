@@ -51,6 +51,31 @@ async function main() {
   const after = await count(store.id, "discounts", TAG);
   assert(`cleanup: row removed (${after})`, after === 0);
 
+  // Support tickets (RLS retrofitted in 0035) — the admin's Bantuan path: createTicket
+  // inserts a ticket + its first message under withTenant, and a foreign tenant sees neither.
+  const ticketId = await withTenant(store.id, async (tx) => {
+    const [t] = await tx.insert(schema.supportTickets).values({ storeId: store.id, subject: TAG, status: "open" }).returning();
+    await tx.insert(schema.supportMessages).values({ ticketId: t.id, storeId: store.id, sender: "merchant", body: TAG });
+    return t.id;
+  });
+  const ownTicket = await withTenant(store.id, async (tx) =>
+    (await tx.select({ id: schema.supportTickets.id }).from(schema.supportTickets).where(eq(schema.supportTickets.id, ticketId))).length,
+  );
+  assert(`support: own tenant reads back its ticket (${ownTicket})`, ownTicket === 1);
+  const foreignTicket = await withTenant(NIL, async (tx) =>
+    (await tx.select({ id: schema.supportTickets.id }).from(schema.supportTickets).where(eq(schema.supportTickets.id, ticketId))).length +
+    (await tx.select({ id: schema.supportMessages.id }).from(schema.supportMessages).where(eq(schema.supportMessages.ticketId, ticketId))).length,
+  );
+  assert(`support: foreign tenant sees neither ticket nor messages (${foreignTicket})`, foreignTicket === 0);
+  await withTenant(store.id, async (tx) => {
+    await tx.delete(schema.supportMessages).where(eq(schema.supportMessages.ticketId, ticketId));
+    await tx.delete(schema.supportTickets).where(eq(schema.supportTickets.id, ticketId));
+  });
+  const afterTicket = await withTenant(store.id, async (tx) =>
+    (await tx.select({ id: schema.supportTickets.id }).from(schema.supportTickets).where(eq(schema.supportTickets.id, ticketId))).length,
+  );
+  assert(`support: cleanup (${afterTicket})`, afterTicket === 0);
+
   await client.end();
   console.log(`\n${process.exitCode ? "APP-PATH RLS FAILED" : "App-path RLS (withTenant) verified ✅"}`);
 }

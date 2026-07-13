@@ -57,6 +57,49 @@ async function main() {
   }
   assert("WITH CHECK blocks writing another store's row", blocked);
 
+  // 5. Coverage: EVERY store-scoped table (i.e. every table with a store_id column) must
+  //    have RLS enabled. This is the "table list", derived from the catalog so it can't
+  //    drift: adding a store-scoped table without RLS (as 0030 did for support_*) fails here.
+  const gaps = await client<{ relname: string }[]>`
+    SELECT c.relname FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'store_id' AND a.attnum > 0 AND NOT a.attisdropped
+    WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity
+    ORDER BY 1`;
+  const [{ count: scoped }] = await client<{ count: number }[]>`
+    SELECT count(*)::int AS count FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'store_id' AND a.attnum > 0 AND NOT a.attisdropped
+    WHERE n.nspname = 'public' AND c.relkind = 'r'`;
+  // Known, pre-existing exceptions (platform-owned tables the merchant admin never reads
+  // through the tenant role). Everything else with a store_id MUST have RLS.
+  const KNOWN_EXCEPTIONS = ["media", "payments", "platform_activity"];
+  const unexpected = gaps.map((g) => g.relname).filter((t) => !KNOWN_EXCEPTIONS.includes(t));
+  assert(
+    `store-scoped tables with RLS: ${scoped - gaps.length}/${scoped}` +
+      (unexpected.length ? ` — MISSING RLS: ${unexpected.join(", ")}` : ` (known exceptions: ${KNOWN_EXCEPTIONS.join(", ")})`),
+    unexpected.length === 0,
+  );
+
+  // 6. support_tickets / support_messages (RLS retrofitted in 0035) isolate like the rest.
+  const [{ count: ticketsOwner }] = await client<{ count: number }[]>`SELECT count(*)::int AS count FROM support_tickets WHERE store_id = ${store.id}`;
+  const support = await client.begin(async (tx) => {
+    await tx`SELECT set_config('app.store_id', ${store.id}, true)`;
+    await tx`SET LOCAL ROLE tokophi_app`;
+    const [{ count: own }] = await tx<{ count: number }[]>`SELECT count(*)::int AS count FROM support_tickets`;
+    const [{ count: msgs }] = await tx<{ count: number }[]>`SELECT count(*)::int AS count FROM support_messages`;
+    return { own, msgs };
+  });
+  assert(`tenant sees its own support_tickets (${support.own} == ${ticketsOwner})`, support.own === ticketsOwner && support.own > 0);
+  const supportOther = await client.begin(async (tx) => {
+    await tx`SELECT set_config('app.store_id', ${RANDOM_UUID}, true)`;
+    await tx`SET LOCAL ROLE tokophi_app`;
+    const [{ count: t }] = await tx<{ count: number }[]>`SELECT count(*)::int AS count FROM support_tickets`;
+    const [{ count: m }] = await tx<{ count: number }[]>`SELECT count(*)::int AS count FROM support_messages`;
+    return t + m;
+  });
+  assert(`other tenant sees 0 support tickets/messages (got ${supportOther})`, supportOther === 0);
+
   await client.end();
   console.log(`\n${process.exitCode ? "RLS VERIFY FAILED" : "RLS verified ✅"}`);
 }

@@ -1,58 +1,54 @@
 "use server";
-import { db, schema } from "@tokophi/db";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { schema } from "@tokophi/db";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { getSession } from "@/lib/auth";
+import { requireCapability } from "@/lib/rbac";
+import { withTenant } from "@/lib/tenant";
 
-// Merchant-side support: read/write scoped to the session's store (owner conn + explicit filter).
-export type TicketRow = { id: string; subject: string; status: string; lastMessageAt: Date; createdAt: Date };
-export async function getMyTickets(): Promise<TicketRow[]> {
-  const session = await getSession();
-  if (!session) return [];
-  return db.select({ id: schema.supportTickets.id, subject: schema.supportTickets.subject, status: schema.supportTickets.status, lastMessageAt: schema.supportTickets.lastMessageAt, createdAt: schema.supportTickets.createdAt })
-    .from(schema.supportTickets).where(eq(schema.supportTickets.storeId, session.storeId)).orderBy(desc(schema.supportTickets.lastMessageAt));
-}
-
-export type TicketMessage = { id: string; sender: string; body: string; createdAt: Date };
-export type TicketDetail = { id: string; subject: string; status: string; messages: TicketMessage[] };
-export async function getTicket(id: string): Promise<TicketDetail | null> {
-  const session = await getSession();
-  if (!session) return null;
-  const [t] = await db.select().from(schema.supportTickets).where(and(eq(schema.supportTickets.id, id), eq(schema.supportTickets.storeId, session.storeId))).limit(1);
-  if (!t) return null;
-  const messages = await db.select({ id: schema.supportMessages.id, sender: schema.supportMessages.sender, body: schema.supportMessages.body, createdAt: schema.supportMessages.createdAt })
-    .from(schema.supportMessages).where(eq(schema.supportMessages.ticketId, id)).orderBy(asc(schema.supportMessages.createdAt));
-  return { id: t.id, subject: t.subject, status: t.status, messages };
-}
+// Merchant-side support writes. Gated by RBAC (`support:write`) and executed under the
+// `tokophi_app` role via withTenant, so the RLS policies added in migration 0035 enforce
+// the tenant boundary at the DB — not a hand-written `where store_id = …`.
+// Reads live in lib/data/support.ts (withCurrentTenant).
+//
+// `allowSuspended`: a suspended (read-only) store must still be able to open a ticket —
+// that is usually how it asks us to fix the very billing problem that suspended it.
+const SUPPORT = { allowSuspended: true } as const;
 
 export async function createTicket(subject: string, body: string): Promise<{ ok: boolean; id?: string; error?: string }> {
-  const session = await getSession();
-  if (!session) return { ok: false, error: "Sesi berakhir." };
+  const { storeId } = await requireCapability("support:write", SUPPORT);
   const s = subject.trim(), b = body.trim();
   if (!s || !b) return { ok: false, error: "Subjek & pesan wajib diisi." };
-  const [t] = await db.insert(schema.supportTickets).values({ storeId: session.storeId, subject: s, status: "open" }).returning();
-  await db.insert(schema.supportMessages).values({ ticketId: t.id, sender: "merchant", body: b });
+  const id = await withTenant(storeId, async (db) => {
+    const [t] = await db.insert(schema.supportTickets).values({ storeId, subject: s, status: "open" }).returning();
+    await db.insert(schema.supportMessages).values({ ticketId: t.id, storeId, sender: "merchant", body: b });
+    return t.id;
+  });
   revalidatePath("/bantuan");
-  return { ok: true, id: t.id };
+  return { ok: true, id };
 }
 
 export async function replyTicket(ticketId: string, body: string): Promise<{ ok: boolean; error?: string }> {
-  const session = await getSession();
-  if (!session) return { ok: false, error: "Sesi berakhir." };
+  const { storeId } = await requireCapability("support:write", SUPPORT);
   const b = body.trim();
   if (!b) return { ok: false, error: "Pesan kosong." };
-  const [t] = await db.select({ storeId: schema.supportTickets.storeId }).from(schema.supportTickets).where(eq(schema.supportTickets.id, ticketId)).limit(1);
-  if (!t || t.storeId !== session.storeId) return { ok: false, error: "Tiket tidak ditemukan." };
-  await db.insert(schema.supportMessages).values({ ticketId, sender: "merchant", body: b });
-  await db.update(schema.supportTickets).set({ status: "open", lastMessageAt: new Date() }).where(eq(schema.supportTickets.id, ticketId));
+  const ok = await withTenant(storeId, async (db) => {
+    // RLS scopes this select to the session's store → a foreign ticket id yields no row.
+    const [t] = await db.select({ id: schema.supportTickets.id }).from(schema.supportTickets).where(eq(schema.supportTickets.id, ticketId)).limit(1);
+    if (!t) return false;
+    await db.insert(schema.supportMessages).values({ ticketId, storeId, sender: "merchant", body: b });
+    await db.update(schema.supportTickets).set({ status: "open", lastMessageAt: new Date() }).where(eq(schema.supportTickets.id, ticketId));
+    return true;
+  });
+  if (!ok) return { ok: false, error: "Tiket tidak ditemukan." };
   revalidatePath("/bantuan"); revalidatePath(`/bantuan/${ticketId}`);
   return { ok: true };
 }
 
 export async function closeTicket(ticketId: string): Promise<{ ok: boolean }> {
-  const session = await getSession();
-  if (!session) return { ok: false };
-  await db.update(schema.supportTickets).set({ status: "closed" }).where(and(eq(schema.supportTickets.id, ticketId), eq(schema.supportTickets.storeId, session.storeId)));
+  const { storeId } = await requireCapability("support:write", SUPPORT);
+  await withTenant(storeId, (db) =>
+    db.update(schema.supportTickets).set({ status: "closed" }).where(eq(schema.supportTickets.id, ticketId)),
+  );
   revalidatePath("/bantuan"); revalidatePath(`/bantuan/${ticketId}`);
   return { ok: true };
 }

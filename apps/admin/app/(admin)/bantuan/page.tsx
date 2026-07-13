@@ -1,4 +1,4 @@
-import { getMyTickets } from "@/lib/actions/support";
+import { getMyTickets } from "@/lib/data/support";
 import { PageHeader } from "@/components/admin/page-header";
 import { BantuanClient } from "./bantuan-client";
 

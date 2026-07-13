@@ -817,6 +817,8 @@ export const supportTickets = pgTable("support_tickets", {
 export const supportMessages = pgTable("support_messages", {
   id: pk(),
   ticketId: uuid().notNull().references(() => supportTickets.id),
+  // denormalized on purpose: every RLS policy (0012) keys on store_id (migration 0035).
+  storeId: uuid().notNull().references(() => stores.id),
   sender: text().notNull(), // "merchant" | "platform"
   body: text().notNull(),
   createdAt: createdAt(),

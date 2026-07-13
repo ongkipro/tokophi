@@ -26,13 +26,18 @@ export class SuspendedError extends Error {
   }
 }
 
-export async function requireCapability(cap: Capability): Promise<Session> {
+// `allowSuspended` opts a capability out of the read-only/suspension check — used only by
+// Bantuan (support tickets): a suspended store must still be able to contact us, since that
+// is how it asks for help with the billing problem that suspended it.
+export async function requireCapability(cap: Capability, opts?: { allowSuspended?: boolean }): Promise<Session> {
   const session = await getSession();
   if (!session) throw new ForbiddenError(cap);
   if (!can(session.role, cap)) throw new ForbiddenError(cap);
   // subscription enforcement: past the grace period → read-only, block all writes.
   // (Paying re-activates via the langganan flow, which does not go through requireCapability.)
-  const bill = await getBilling();
-  if (bill?.readOnly) throw new SuspendedError();
+  if (!opts?.allowSuspended) {
+    const bill = await getBilling();
+    if (bill?.readOnly) throw new SuspendedError();
+  }
   return session;
 }

@@ -1,7 +1,7 @@
-// ADR 0009 — Store Builder. The store's active homepage template + brand colour scale.
+// ADR 0009 — Store Builder. The store's page templates + brand colour scale.
 // Per-store + per-request (no module-level await): called from getCatalog(store), cached with it.
 import { db, schema } from "@tokophi/db";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { StoredTemplateData } from "@tokophi/sections";
 import { generateBrandShades, DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
 
@@ -13,21 +13,70 @@ import { generateBrandShades, DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
 export const brandShadesFor = (brandColor: string | null | undefined): Record<string, string> =>
   generateBrandShades(brandColor ?? DEFAULT_BRAND_COLOR);
 
-/** null = merchant hasn't built a homepage yet → the page falls back to the hand-built default. */
-export async function getHomepageTemplate(storeId: string): Promise<StoredTemplateData | null> {
-  const [row] = await db
-    .select()
-    .from(schema.pageTemplates)
-    .where(
-      and(
-        eq(schema.pageTemplates.storeId, storeId),
-        eq(schema.pageTemplates.type, "homepage"),
-        eq(schema.pageTemplates.isDefault, true),
-      ),
-    )
-    .limit(1);
+/**
+ * Every template the store has built, in ONE query (they're small, and the catalog is memoized
+ * per store — so a page view costs 0 extra round-trips, and certainly none per section rendered).
+ *
+ * `byId` only holds templates with content, so a collection/product pointing at an EMPTY named
+ * template still degrades to the type default (and then to the hand-built page) instead of
+ * rendering a blank page.
+ */
+export type StoreTemplates = {
+  /** `homepage` + is_default, or null → the hand-built default homepage. */
+  homepage: StoredTemplateData | null;
+  /** `category` + is_default, or null → the hand-built category page. */
+  categoryDefault: StoredTemplateData | null;
+  /** `product` + is_default, or null → the hand-built product tail (Rekomendasi). */
+  productDefault: StoredTemplateData | null;
+  /** Named variants (any type) keyed by id — the target of collections/products.template_id. */
+  byId: Record<string, StoredTemplateData>;
+};
 
-  return row && (row.sections as StoredTemplateData).content?.length
-    ? (row.sections as StoredTemplateData)
-    : null;
+const EMPTY_TEMPLATES: StoreTemplates = {
+  homepage: null,
+  categoryDefault: null,
+  productDefault: null,
+  byId: {},
+};
+
+/** A template only counts if the merchant actually put something in it. */
+const withContent = (sections: unknown): StoredTemplateData | null => {
+  const data = sections as StoredTemplateData | null;
+  return data && Array.isArray(data.content) && data.content.length > 0 ? data : null;
+};
+
+export async function getStoreTemplates(storeId: string): Promise<StoreTemplates> {
+  const rows = await db
+    .select({
+      id: schema.pageTemplates.id,
+      type: schema.pageTemplates.type,
+      isDefault: schema.pageTemplates.isDefault,
+      sections: schema.pageTemplates.sections,
+    })
+    .from(schema.pageTemplates)
+    .where(eq(schema.pageTemplates.storeId, storeId));
+
+  const templates: StoreTemplates = { ...EMPTY_TEMPLATES, byId: {} };
+
+  for (const row of rows) {
+    const data = withContent(row.sections);
+    if (!data) continue;
+    templates.byId[row.id] = data;
+    if (!row.isDefault) continue;
+    if (row.type === "homepage") templates.homepage ??= data;
+    else if (row.type === "category") templates.categoryDefault ??= data;
+    else if (row.type === "product") templates.productDefault ??= data;
+  }
+
+  return templates;
 }
+
+/**
+ * The template that renders a page: the row explicitly assigned to this collection/product
+ * (`template_id`) → else the store's default for that type → else null (hand-built fallback).
+ */
+export const resolveTemplate = (
+  templates: StoreTemplates,
+  templateId: string | null | undefined,
+  fallback: StoredTemplateData | null,
+): StoredTemplateData | null => (templateId ? (templates.byId[templateId] ?? fallback) : fallback);

@@ -17,6 +17,7 @@ export type Capability =
   | "crm:write" // follow-ups, segments
   | "media:write"
   | "settings:write"
+  | "support:write" // Bantuan — open/reply/close platform support tickets
   | "theme:write"; // Store Builder (ADR 0009) — homepage/category/product section templates
 
 export const ALL_CAPABILITIES: Capability[] = [
@@ -31,6 +32,7 @@ export const ALL_CAPABILITIES: Capability[] = [
   "crm:write",
   "media:write",
   "settings:write",
+  "support:write",
   "theme:write",
 ];
 
@@ -40,6 +42,8 @@ export const ALL_CAPABILITIES: Capability[] = [
 // - staff  : run the shop (produk/pesanan/pelanggan/konten/diskon/crm) — no destructive
 //            product delete, no warehouse (inventori/pembelian), no settings.
 // - gudang : warehouse only — stok + purchase orders.
+// `support:write` (Bantuan) is granted to EVERY role — anyone working in the store must be
+// able to ask the platform for help; the tenant boundary is RLS, not the role.
 export const ROLE_CAPS: Record<Role, readonly Capability[]> = {
   owner: ALL_CAPABILITIES,
   admin: ALL_CAPABILITIES.filter((c) => c !== "settings:write"),
@@ -51,8 +55,9 @@ export const ROLE_CAPS: Record<Role, readonly Capability[]> = {
     "customers:write",
     "crm:write",
     "media:write",
+    "support:write",
   ],
-  gudang: ["inventory:write", "purchases:write"],
+  gudang: ["inventory:write", "purchases:write", "support:write"],
 };
 
 export function can(role: Role | string | undefined, cap: Capability): boolean {

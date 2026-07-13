@@ -2,6 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import ProductCard from "../../components/ProductCard.astro";
 import Stars from "../../components/Stars.astro";
+import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import { IDR } from "@tokophi/lib/format";
 import { productImages, ratingBreakdown } from "../../data/catalog";
 
@@ -25,6 +26,17 @@ const gallery = productImages(product);
 const rating = catalog.productRating(product);
 const breakdown = ratingBreakdown(rating); // [5★, 4★, 3★, 2★, 1★]
 const maxBucket = Math.max(...breakdown, 1);
+
+// ADR 0009 — Store Builder: this product's own template → the store's default `product` template
+// → null = today's page, unchanged.
+//
+// A product template REPLACES THE TAIL of the page (the hand-built "Rekomendasi" strip), not the
+// whole page: the buy box (gallery, price, varian, Tambah ke Keranjang) and the real Ulasan block
+// are commerce-critical and NO section in the registry can render them — none of the 8 sections is
+// a product-detail section. So the merchant composes what comes AFTER the buy box (story, promo
+// banner, testimoni, a Grid Produk that is auto-scoped to this product's category — see
+// components/sections/context.ts), and the buy box always stays.
+const TEMPLATE = catalog.productTemplate(product);
 ---
 
 <Layout title={product.name} description={product.description}>
@@ -242,9 +254,9 @@ const maxBucket = Math.max(...breakdown, 1);
       </div>
     </div>
 
-    <!-- Related -->
+    <!-- Related — hand-built tail; a product template takes this slot instead (below). -->
     {
-      related.length > 0 && (
+      !TEMPLATE && related.length > 0 && (
         <div class="mt-20 border-t border-line pt-14">
           <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Rekomendasi</p>
           <h2 class="mt-2 font-display text-2xl font-semibold text-ink sm:text-3xl">Kamu mungkin suka</h2>
@@ -257,6 +269,12 @@ const maxBucket = Math.max(...breakdown, 1);
       )
     }
   </section>
+
+  {
+    TEMPLATE && (
+      <SectionRenderer data={TEMPLATE} context={{ kind: "product", product }} />
+    )
+  }
 </Layout>
 
 <script is:inline>

@@ -226,6 +226,13 @@ function TemplateCard({
               {tpl.sectionCount} seksi · diperbarui {dateFmt.format(new Date(tpl.updatedAt))}
               {tpl.type !== "homepage" ? ` · dipakai ${tpl.assignedCount} halaman` : ""}
             </p>
+            {tpl.type === "category" && tpl.sectionCount > 0 && !tpl.hasProductGrid && (
+              <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-500">
+                Template ini menggantikan halaman kategori sepenuhnya, tapi belum punya seksi{" "}
+                <strong>Grid Produk</strong> — kategori yang memakainya tidak akan menampilkan produk
+                apa pun.
+              </p>
+            )}
           </div>
           <Can capability="theme:write">
             <DropdownMenu>

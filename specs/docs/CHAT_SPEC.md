@@ -34,7 +34,7 @@ Non-goals for v1: group chat, typing indicators, presence, voice notes, WhatsApp
 
 ## 2. Schema
 
-New tables (migration **`0035`** — `0034` (Google auth columns) is the current head; SCHEMA.md count 57 → **60**). Conventions per `SCHEMA.md`: `snake_case`, `uuid` PKs, `timestamptz`, store-scoped + RLS. **No money columns here** — chat carries no monetary value; an order link is a FK and the admin renders totals via the existing `IDR()`.
+New tables (migration **`0036`** — `0035` (support RLS retrofit) is the current head; SCHEMA.md count 57 → **60**). Conventions per `SCHEMA.md`: `snake_case`, `uuid` PKs, `timestamptz`, store-scoped + RLS. **No money columns here** — chat carries no monetary value; an order link is a FK and the admin renders totals via the existing `IDR()`.
 
 ```
 chat_visitor_status : enum('active','blocked')
@@ -96,7 +96,7 @@ Notes for the implementer:
 
 ### DECISION 2 — retrofit RLS onto `support_*` in the same migration
 
-`support_tickets` / `support_messages` were added in `0030`, **after** the RLS migration `0012`, and **no RLS was ever enabled on them**. `apps/admin/lib/actions/support.ts` uses the bare owner `db` with a manual `eq(storeId, session.storeId)` filter — correct today, but it is the only merchant-facing data path in the app that is not behind `withCurrentTenant`/`withTenant`, i.e. one forgotten `where` from a cross-tenant leak. Migration `0035` therefore also:
+`support_tickets` / `support_messages` were added in `0030`, **after** the RLS migration `0012`, and **no RLS was ever enabled on them**. `apps/admin/lib/actions/support.ts` uses the bare owner `db` with a manual `eq(storeId, session.storeId)` filter — correct today, but it is the only merchant-facing data path in the app that is not behind `withCurrentTenant`/`withTenant`, i.e. one forgotten `where` from a cross-tenant leak. ~~Migration `0035` therefore also~~ **✅ ALREADY FIXED (2026-07-13, migration `0035`)** — the retrofit below shipped ahead of chat; kept for context. It also:
 1. adds `support_messages.store_id` (backfilled from its ticket) — `alter table … add column … ; update … from support_tickets ; set not null`,
 2. `enable row level security` + the standard `tenant_isolation` policy on both tables,
 3. and slice 6 rewrites `lib/actions/support.ts` onto `withCurrentTenant`/`withTenant`.
@@ -235,7 +235,7 @@ Ordered, each independently shippable and verifiable. Sizes are rough sessions (
 
 | # | Slice | Deliverable | Size |
 |---|---|---|---|
-| **1** | **Schema + RLS + seed** | migration `0035` (3 new tables + enums + indexes; `support_messages.store_id` backfill; RLS on all 5); `packages/db/src/schema.ts`; deterministic seed (3 visitors / 4 conversations); update `verify-rls`+`verify-rls-app` table lists; `SCHEMA.md`+`DATA_MODEL.md` (57→60 tables). **Green `npm run verify-rls-app`.** | **M** |
+| **1** | **Schema + RLS + seed** | migration `0036` (3 new tables + enums + indexes; `support_messages.store_id` backfill; RLS on all 5); `packages/db/src/schema.ts`; deterministic seed (3 visitors / 4 conversations); update `verify-rls`+`verify-rls-app` table lists; `SCHEMA.md`+`DATA_MODEL.md` (57→60 tables). **Green `npm run verify-rls-app`.** | **M** |
 | **2** | **Storefront widget + chat API** | `src/pages/api/chat/{send,poll,read}.ts` (owner conn + explicit `store_id`, visitor JWT cookie, rate limits); `src/components/Chat.astro` mounted in `Layout.astro`; product/order context; WA fallback. Verify: two browsers → messages land in the DB, thread isolation holds. | **L** |
 | **3** | **Admin `/obrolan` inbox (read + reply)** | `lib/data/chat.ts` (`withCurrentTenant`), `lib/actions/chat.ts` (`withTenant` + `requireCapability`), caps `chat:read`/`chat:write` in `rbac-policy.ts`, 3-pane screen, `/api/chat/poll` (session-guarded), nav entry + unread badge, shared `<Thread>` component. End-to-end: shopper sends → merchant replies → shopper sees it. | **L** |
 | **4** | **Triage: status, assignment, block, context** | `chat:manage`; status (Terbuka/Ditunda/Selesai) + assignee via `DropdownMenu`; block visitor; context sidebar (customer/order/product links); filter tabs + counts. | **M** |

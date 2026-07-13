@@ -19,9 +19,20 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 - **No migration needed** — `0031` already shipped `collections.template_id` + `products.template_id`. At most one default per `(store_id, type)`, enforced app-side; deleting a template NULLs any assignment pointing at it. All actions `requireCapability("theme:write")` + `withTenant`.
 - ⏳ The storefront still renders only the **homepage** template; category/product template rendering is the next slice.
 
+### 🔴 Security: RLS retrofit for support tickets (migration `0035`)
+- `support_tickets` / `support_messages` shipped in migration `0030` — **after** the `0012` RLS migration — and had **no RLS at all**. `lib/actions/support.ts` used the bare **owner** connection with a hand-written `storeId` filter and no `requireCapability`: tenant isolation for tickets rested entirely on application code.
+- **Fixed:** `support_messages.store_id` added + backfilled from the parent ticket (NOT NULL + FK); RLS + the standard `tenant_isolation` policy enabled on both tables. Admin reads moved to `lib/data/support.ts` under `withCurrentTenant`; writes go through `requireCapability("support:write")` + `withTenant`. **The database is the boundary now, not app code.**
+- New capability `support:write`, granted to **all four roles** — anyone in a store must be able to ask for help; the tenant boundary is RLS, not the role. `requireCapability(cap, { allowSuspended })` lets a **suspended** store still open a ticket (otherwise it could not contact us about the billing problem that suspended it).
+- **Verified in psql:** as `tokophi_app` with store A's `app.store_id`, store B's ticket returns 0 rows *even when fetched by primary key*, and inserting a row for store B raises `new row violates row-level security policy`. Super-admin (owner connection) still reads across stores.
+- `verify-rls` no longer hand-maintains a table list — it derives the store-scoped set from the catalog (every table with a `store_id`) and **fails** if one lacks RLS. **36/39 green.** ⚠️ Newly surfaced: `media`, `payments`, `platform_activity` have a `store_id` and **no RLS** (`media` is merchant data) — whitelisted and tracked in BACKLOG.
+
+### Storefront renders category/product templates
+- Category and product pages now resolve a template (`collections.template_id` / `products.template_id` → the type's default → the hand-built page). One query per store, memoized in the existing catalog cache; the build stays DB-free. An empty template degrades to the fallback instead of rendering a blank page. A Grid Produk with no explicit collection scopes itself to the category being viewed (or the product's category, minus the product itself).
+- **A product template replaces only the tail of the product page** — the buy box (galeri, harga, varian, Tambah ke Keranjang) and Ulasan always remain, because no section in the registry can render them and a full replace would ship product pages **with no way to buy**. A `product-detail` section is the proper fix (BACKLOG).
+- `/tema` warns when a category template has no **Grid Produk** section — such a template lists no products at all.
+
 ### Docs
-- **`specs/docs/CHAT_SPEC.md`** — shopper⇄merchant chat spec (separate tables from `support_*`, short-polling transport, anonymous-visitor JWT cookie, 7 slices). Nothing built yet.
-- **🔴 Found (pre-existing):** `support_tickets`/`support_messages` shipped in migration `0030`, after the `0012` RLS migration, and have **no RLS**; `lib/actions/support.ts` uses the owner connection with a manual `storeId` filter and no `requireCapability`. Tracked in BACKLOG P1.6.
+- **`specs/docs/CHAT_SPEC.md`** — shopper⇄merchant chat spec (separate tables from `support_*`, short-polling transport, anonymous-visitor JWT cookie, 7 slices). Nothing built yet; chat migration slot moved to `0036`.
 
 ## 2026-07-10
 

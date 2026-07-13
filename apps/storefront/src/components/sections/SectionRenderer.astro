@@ -6,7 +6,11 @@
 // A switch (not a type→component lookup map) on purpose: TS can't narrow `item.props` to the
 // component's specific config through a map indexed by the discriminant, so a map+spread would
 // require unsafe casts. The switch narrows `item` per-branch instead — fully type-checked.
+//
+// `context` = the page the template is rendering on (homepage / a category / a product). It is
+// forwarded to the sections that can use it — see ./context.ts.
 import type { StoredTemplateData } from "@tokophi/sections";
+import { HOMEPAGE_CONTEXT, type SectionContext } from "./context";
 import Hero from "./Hero.astro";
 import ProductGrid from "./ProductGrid.astro";
 import BannerPromo from "./BannerPromo.astro";
@@ -18,9 +22,10 @@ import CategoryNav from "./CategoryNav.astro";
 
 interface Props {
   data: StoredTemplateData;
+  context?: SectionContext;
 }
 
-const { data } = Astro.props;
+const { data, context = HOMEPAGE_CONTEXT } = Astro.props;
 ---
 
 {
@@ -29,7 +34,7 @@ const { data } = Astro.props;
       case "hero":
         return <Hero {...item.props} />;
       case "product-grid":
-        return <ProductGrid {...item.props} />;
+        return <ProductGrid {...item.props} ctx={context} />;
       case "banner-promo":
         return <BannerPromo {...item.props} />;
       case "testimoni":

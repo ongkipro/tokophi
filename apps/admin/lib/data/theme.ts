@@ -21,6 +21,10 @@ export type TemplateSummary = {
   isDefault: boolean;
   sectionCount: number;
   assignedCount: number; // collections (category) / products (product) pointing at it; 0 for homepage
+  // A `category` template with no Grid Produk section lists NOTHING on the storefront — the
+  // template replaces the hand-built category page wholesale, so the product list only exists if
+  // the merchant put one there. Surfaced in /tema as a warning instead of failing silently.
+  hasProductGrid: boolean;
   updatedAt: Date;
 };
 
@@ -61,9 +65,16 @@ export async function getDefaultHomepage(): Promise<PageTemplate | null> {
   });
 }
 
+type PuckContent = { content?: { type?: string }[] } | null;
+
 function sectionCount(sections: unknown): number {
-  const content = (sections as { content?: unknown[] } | null)?.content;
+  const content = (sections as PuckContent)?.content;
   return Array.isArray(content) ? content.length : 0;
+}
+
+function hasProductGrid(sections: unknown): boolean {
+  const content = (sections as PuckContent)?.content;
+  return Array.isArray(content) && content.some((s) => s?.type === "product-grid");
 }
 
 // All templates of the store (every type), with the number of collections/products assigned
@@ -93,6 +104,7 @@ export async function listTemplates(): Promise<TemplateSummary[]> {
       isDefault: t.isDefault,
       sectionCount: sectionCount(t.sections),
       assignedCount: used.get(t.id) ?? 0,
+      hasProductGrid: hasProductGrid(t.sections),
       updatedAt: t.updatedAt,
     }));
   });

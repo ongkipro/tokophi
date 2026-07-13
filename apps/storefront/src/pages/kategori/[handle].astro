@@ -1,6 +1,7 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import ProductCard from "../../components/ProductCard.astro";
+import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import type { Product } from "../../data/catalog";
 
 type ResolvedCollection = { name: string; emoji: string; blurb: string };
@@ -38,12 +39,25 @@ if (virtual) {
   collection = { name: real.name, emoji: real.emoji, blurb: real.blurb };
   products = catalog.byCollection(real.handle);
 }
+
+// ADR 0009 — Store Builder: this collection's own template → the store's default `category`
+// template → null = the hand-built layout below (unchanged). Virtual collections have no row,
+// so they pick up the store default.
+const TEMPLATE = handle ? catalog.categoryTemplate(handle) : null;
 ---
 
 <Layout
   title={collection.name}
   description={`${collection.name} — ${collection.blurb}. Koleksi busana wanita di ${store.name}.`}
 >
+  {
+    TEMPLATE ? (
+      <SectionRenderer
+        data={TEMPLATE}
+        context={{ kind: "category", collectionHandle: handle!, collectionName: collection.name }}
+      />
+    ) : (
+      <Fragment>
   <section class="bg-brand-50">
     <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-16">
       <nav class="text-sm text-muted">
@@ -103,6 +117,9 @@ if (virtual) {
       )
     }
   </section>
+      </Fragment>
+    )
+  }
 </Layout>
 
 <script is:inline>

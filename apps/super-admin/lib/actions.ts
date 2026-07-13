@@ -259,7 +259,11 @@ export async function replyTicketAdmin(ticketId: string, body: string): Promise<
   await requirePlatformAdmin();
   const b = body?.trim();
   if (!b) return { ok: false, error: "Pesan kosong." };
-  await db.insert(schema.supportMessages).values({ ticketId, sender: "platform", body: b });
+  // support_messages.store_id is denormalized (migration 0035) so RLS can key on it —
+  // the platform runs on the owner connection (RLS bypassed) but must still fill it.
+  const [t] = await db.select({ storeId: schema.supportTickets.storeId }).from(schema.supportTickets).where(eq(schema.supportTickets.id, ticketId)).limit(1);
+  if (!t) return { ok: false, error: "Tiket tidak ditemukan." };
+  await db.insert(schema.supportMessages).values({ ticketId, storeId: t.storeId, sender: "platform", body: b });
   await db.update(schema.supportTickets).set({ status: "answered", lastMessageAt: new Date() }).where(eq(schema.supportTickets.id, ticketId));
   revalidatePath("/tiket"); revalidatePath(`/tiket/${ticketId}`);
   return { ok: true };

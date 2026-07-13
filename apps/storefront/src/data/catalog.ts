@@ -12,12 +12,19 @@ import { and, asc, eq, ne } from "drizzle-orm";
 import type { StoredTemplateData } from "@tokophi/sections";
 import { cached } from "./cache";
 import type { StoreInfo } from "./store";
-import { brandShadesFor, getHomepageTemplate } from "./theme";
+import { brandShadesFor, getStoreTemplates, resolveTemplate, type StoreTemplates } from "./theme";
 
 const slugify = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-export type Collection = { handle: string; name: string; emoji: string; blurb: string };
+export type Collection = {
+  handle: string;
+  name: string;
+  emoji: string;
+  blurb: string;
+  /** ADR 0009 — the named `category` template this collection renders with (null = store default). */
+  templateId: string | null;
+};
 
 export type VariantRow = { option1: string | null; option2: string | null; price: number; stock: number };
 export type Product = {
@@ -35,6 +42,8 @@ export type Product = {
   options?: { name: string; values: string[] }[]; // real variant option types (e.g. Warna, Ukuran)
   variants?: VariantRow[]; // one row per option combo (price + stock)
   createdAt: number; // epoch ms — for the "terbaru" Grid Produk mode (ADR 0009)
+  /** ADR 0009 — the named `product` template this product renders with (null = store default). */
+  templateId: string | null;
 };
 export type Rating = { value: number; count: number };
 
@@ -45,6 +54,16 @@ export type Catalog = {
   products: Product[];
   /** Merchant's Store Builder homepage, or null → the hand-built default homepage. */
   homepageTemplate: StoredTemplateData | null;
+  /** All of the store's templates, loaded once with the catalog (see src/data/theme.ts). */
+  templates: StoreTemplates;
+  /**
+   * Template for /kategori/<handle>: the collection's own `template_id` → the store's default
+   * `category` template → null (= the hand-built category page). Virtual collections
+   * ("semua", "promo-gajian") have no row, so they get the store default.
+   */
+  categoryTemplate: (handle: string) => StoredTemplateData | null;
+  /** Template for /produk/<handle>: the product's `template_id` → store default `product` → null. */
+  productTemplate: (p: Product) => StoredTemplateData | null;
   /** 11-shade scale derived from the store's brand hex — injected as CSS vars by Layout.astro. */
   brandShades: Record<string, string>;
   productRating: (p: Product | string) => Rating;
@@ -76,7 +95,16 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
   const colRows = await db.select().from(schema.collections).where(eq(schema.collections.storeId, storeId));
   const collections: Collection[] = CATEGORY_ORDER.map((h) => colRows.find((c) => c.handle === h))
     .filter((c): c is (typeof colRows)[number] => Boolean(c))
-    .map((c) => ({ handle: c.handle, name: c.title, emoji: c.emoji ?? "", blurb: c.description ?? "" }));
+    .map((c) => ({
+      handle: c.handle,
+      name: c.title,
+      emoji: c.emoji ?? "",
+      blurb: c.description ?? "",
+      templateId: c.templateId,
+    }));
+
+  // handle → assigned category template, for EVERY collection row (not just the 6 in the nav).
+  const collectionTemplateId = new Map(colRows.map((c) => [c.handle, c.templateId]));
 
   // products ⋈ default variant (price/compareAt) ⋈ primary media (image); non-archived, oldest→newest.
   const rows = await db
@@ -92,6 +120,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       ratingValue: schema.products.ratingValue,
       ratingCount: schema.products.ratingCount,
       createdAt: schema.products.createdAt,
+      templateId: schema.products.templateId,
       price: schema.productVariants.priceIdr,
       compareAt: schema.productVariants.compareAtIdr,
       image: schema.productMedia.url,
@@ -178,6 +207,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       options: options.length ? options : undefined,
       variants: variants.length ? variants : undefined,
       createdAt: r.createdAt.getTime(),
+      templateId: r.templateId,
     };
   });
 
@@ -186,11 +216,19 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
     rows.map((r) => [r.handle, { value: r.ratingValue ?? 4.5, count: r.ratingCount }]),
   );
 
+  // ADR 0009 — all page templates in one query, cached with the catalog: rendering a template
+  // (any number of sections) costs ZERO extra DB round-trips at request time.
+  const templates = await getStoreTemplates(storeId);
+
   return {
     store,
     collections,
     products,
-    homepageTemplate: await getHomepageTemplate(storeId),
+    homepageTemplate: templates.homepage,
+    templates,
+    categoryTemplate: (handle) =>
+      resolveTemplate(templates, collectionTemplateId.get(handle) ?? null, templates.categoryDefault),
+    productTemplate: (p) => resolveTemplate(templates, p.templateId, templates.productDefault),
     brandShades: brandShadesFor(store.brandColor),
     productRating: (p) => ratings[typeof p === "string" ? p : p.handle] ?? { value: 4.5, count: 40 },
     bestsellers: (list = products) => list.filter((p) => p.bestseller),
