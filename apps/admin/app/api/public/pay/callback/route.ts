@@ -5,6 +5,7 @@ import { timingSafeEqual } from "node:crypto";
 import { rateLimit } from "@tokophi/lib/cache";
 import { addMonths } from "@tokophi/lib/billing";
 import { clientIp } from "@/lib/public-guard";
+import { creditSaleForPayment } from "@/lib/ledger-credit";
 
 // AutoLaris payment callback — POSTed when a bill is paid/expired. Matches by trx_id / reff_id
 // and updates the payment row. Idempotent; always 200 (for authorized callers) so AutoLaris
@@ -70,13 +71,18 @@ export async function POST(req: Request) {
         // + re-firing order sync on AutoLaris retries)
         .set({ status: mapped, paidAt: mapped === "berhasil" ? new Date() : null })
         .where(and(match, ne(schema.payments.status, mapped)))
-        .returning({ orderId: schema.payments.orderId });
+        .returning({ id: schema.payments.id, orderId: schema.payments.orderId });
       // sync the linked order's financial status when newly paid
       if (mapped === "berhasil") {
         const orderIds = rows.map((r) => r.orderId).filter((id): id is string => !!id);
         for (const oid of orderIds) {
           await db.update(schema.orders).set({ financialStatus: "dibayar" }).where(eq(schema.orders.id, oid));
         }
+        // The money is now actually in hand → book it in the merchant's ledger (migration 0041).
+        // Without this the balance stays Rp0 forever no matter how much comes in. AutoLaris retries
+        // its callbacks, so this is deliberately safe to run twice: a partial unique index
+        // (ledger_one_sale_per_payment) makes a second credit for the same payment impossible.
+        for (const r of rows) await creditSaleForPayment(db, r.id);
       }
 
       // subscription invoice? → mark paid + extend the store's subscription one month.

@@ -677,6 +677,12 @@ export const ledgerEntries = pgTable("ledger_entries", {
   id: pk(),
   storeId: uuid().notNull().references(() => stores.id),
   orderId: uuid().references(() => orders.id),
+  // The payment that actually collected the money (migration 0041). A `sale` entry exists because
+  // a shopper PAID — so the entry points at the payment, and a partial unique index
+  // (ledger_one_sale_per_payment) makes a second credit for the same payment physically
+  // impossible. Gateway callbacks retry; buttons get double-clicked. The guarantee lives in the
+  // DB, not in the hope that the caller fires exactly once.
+  paymentId: uuid().references(() => payments.id),
   payoutId: uuid(),
   kind: ledgerKind().notNull(),
   status: ledgerStatus().notNull().default("pending"),

@@ -2,7 +2,7 @@
 // (the same store the admin manages and the storefront sells). Run:
 //   npm run seed -w @tokophi/db   (idempotent — truncates public tables first)
 import { db, client, schema } from "./client";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { scryptSync, randomBytes } from "node:crypto";
 import { COURIERS } from "@tokophi/lib/couriers";
 
@@ -683,6 +683,24 @@ async function main() {
     // which left every seeded payment orphaned (store_id NULL = belongs to no tenant).
     await db.insert(schema.payments).values({ orderId: ord.id, storeId: store.id, method: "transfer", amountIdr: o.total, status: o.status === "batal" ? "gagal" : "berhasil", paidAt: o.status === "batal" ? null : minutesAgo(o.minutesAgo) });
   }
+
+  // Saldo ledger (migrations 0040 + 0041) — DERIVED from the payments above, not invented beside
+  // them. Every collected payment (`berhasil`) is booked as one `sale`: `available` once the order
+  // is finished (`selesai`), otherwise `pending` (money held until the order sticks). A `batal`
+  // order collected nothing, so it is booked nothing. This is the same rule the app writes at
+  // runtime and the same rule migration 0041 backfills with — one rule, one number, three screens
+  // (Dashboard revenue = Pesanan totals = Saldo book).
+  await db.execute(sql`
+    insert into ledger_entries (store_id, order_id, payment_id, kind, status, amount_idr, note, created_at, available_at)
+    select p.store_id, o.id, p.id, 'sale',
+           case when o.status in ('selesai', 'retur') then 'available' else 'pending' end::ledger_status,
+           p.amount_idr, 'Penjualan ' || o.number,
+           coalesce(p.paid_at, o.placed_at),
+           case when o.status in ('selesai', 'retur') then coalesce(p.paid_at, o.placed_at) end
+      from payments p join orders o on o.id = p.order_id
+     where p.status = 'berhasil' and o.status <> 'batal'
+    on conflict do nothing
+  `);
 
   // CMS: pages
   await db.insert(schema.pages).values(

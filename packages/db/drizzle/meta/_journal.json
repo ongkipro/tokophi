@@ -288,6 +288,13 @@
       "when": 1783957098370,
       "tag": "0040_ledger_payouts",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1783958142488,
+      "tag": "0041_ledger_credit_sale",
+      "breakpoints": true
     }
   ]
 }
