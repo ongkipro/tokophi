@@ -7,17 +7,76 @@
 // apps/admin/components/theme/sections/<Type>.tsx (Puck-editor render) +
 // apps/storefront/src/components/sections/<Type>.astro (storefront render).
 
-export interface HeroConfig {
+/**
+ * One slide of the Hero carousel. A hero with a single slide renders as a static hero
+ * (no dots, no autoplay) — the carousel chrome only appears from 2 slides up.
+ */
+export interface HeroSlide {
+  /** Public path or absolute URL. Empty = brand-tinted gradient panel (never a broken image). */
+  imageUrl: string;
   heading: string;
   subheading: string;
-  imageUrl: string;
   ctaLabel: string;
   ctaHref: string;
+  /**
+   * Which part of the image to keep when it is cropped into the (portrait) hero panel —
+   * i.e. `object-position`. Landscape shots usually have the subject off-centre; without this
+   * a merchant's photo gets its subject cropped out. Optional, defaults to `center`.
+   */
+  focal?: "left" | "center" | "right";
+}
+
+export interface HeroConfig {
+  /**
+   * The carousel's slides. OPTIONAL on purpose: hero sections saved before the carousel existed
+   * only have the flat `heading`/`subheading`/`imageUrl`/`ctaLabel`/`ctaHref` fields below, so
+   * both renderers go through `heroSlides()` which falls back to those. Never read `slides`
+   * directly — call `heroSlides(config)`.
+   */
+  slides?: HeroSlide[];
+  /** Autoplay interval in ms. Optional; defaults to `HERO_INTERVAL_MS`. 0 = no autoplay. */
+  intervalMs?: number;
+  /**
+   * @deprecated Legacy single-slide fields. Kept (and OPTIONAL) so hero sections saved before the
+   * carousel still render — `heroSlides()` falls back to them. New heroes only write `slides`.
+   */
+  heading?: string;
+  /** @deprecated see `heading` */
+  subheading?: string;
+  /** @deprecated see `heading` */
+  imageUrl?: string;
+  /** @deprecated see `heading` */
+  ctaLabel?: string;
+  /** @deprecated see `heading` */
+  ctaHref?: string;
   align: "left" | "center";
   /** Optional small pill above the heading, e.g. "Baru Kembali Tersedia". Empty = hidden. */
   badge: string;
   /** Optional social-proof line under the CTA, e.g. "4.9 ★ · Dipercaya 50rb+ pelanggan". Empty = hidden. */
   ratingText: string;
+}
+
+/** Default autoplay cadence — long enough to read a heading + subheading. */
+export const HERO_INTERVAL_MS = 6000;
+
+/**
+ * The slides a Hero should render: the `slides` array when the merchant has one, else a single
+ * slide synthesised from the legacy flat fields. Shared by the Astro storefront renderer and the
+ * Puck editor preview so the two can never disagree about what a saved hero means.
+ */
+export function heroSlides(config: HeroConfig): HeroSlide[] {
+  const slides = (config.slides ?? []).filter((s) => s.heading || s.imageUrl);
+  if (slides.length > 0) return slides;
+  return [
+    {
+      imageUrl: config.imageUrl ?? "",
+      heading: config.heading ?? "",
+      subheading: config.subheading ?? "",
+      ctaLabel: config.ctaLabel ?? "",
+      ctaHref: config.ctaHref ?? "",
+      focal: "center",
+    },
+  ];
 }
 
 export interface ProductGridConfig {
@@ -134,13 +193,45 @@ export const SECTION_LABELS: Record<SectionType, string> = {
 /** Seed config used when a merchant drags a fresh instance of this section onto the canvas. */
 export const SECTION_DEFAULTS: SectionConfigMap = {
   hero: {
-    heading: "Koleksi Terbaru 2026",
-    subheading: "Tampil percaya diri dengan gaya yang bicara untukmu.",
-    imageUrl: "", // empty = neutral gradient placeholder until a merchant picks an image
-    ctaLabel: "Belanja Sekarang",
-    ctaHref: "/kategori/semua",
+    slides: [
+      {
+        imageUrl: "/hero/hero-1.webp", // empty = brand-tinted gradient panel, never a broken image
+        heading: "Batik Modern untuk Hari-Harimu",
+        subheading:
+          "Siluet bersih, motif tulis, dan bahan yang tetap adem dipakai dari pagi sampai petang.",
+        ctaLabel: "Lihat Koleksi Dress",
+        ctaHref: "/kategori/dress",
+        focal: "right",
+      },
+      {
+        imageUrl: "/hero/hero-2.webp",
+        heading: "Bahan Pilihan, Jahitan Rapi",
+        subheading:
+          "Katun, linen, dan tenun yang kami pilih sendiri — nyaman dipakai, awet dicuci berkali-kali.",
+        ctaLabel: "Lihat Produk Terlaris",
+        ctaHref: "/kategori/produk-terlaris",
+        focal: "left",
+      },
+      {
+        imageUrl: "/hero/hero-3.webp",
+        heading: "Anggun di Setiap Momen",
+        subheading:
+          "Padu padan outerwear dan busana muslim untuk kerja, acara keluarga, sampai undangan.",
+        ctaLabel: "Lihat Busana Muslim",
+        ctaHref: "/kategori/busana-muslim",
+        focal: "right",
+      },
+    ],
+    intervalMs: HERO_INTERVAL_MS,
+    // Legacy flat fields mirror slide 1 — they are what a pre-carousel renderer would show.
+    heading: "Batik Modern untuk Hari-Harimu",
+    subheading:
+      "Siluet bersih, motif tulis, dan bahan yang tetap adem dipakai dari pagi sampai petang.",
+    imageUrl: "/hero/hero-1.webp",
+    ctaLabel: "Lihat Koleksi Dress",
+    ctaHref: "/kategori/dress",
     align: "left",
-    badge: "",
+    badge: "Koleksi 2026",
     ratingText: "",
   },
   "product-grid": {

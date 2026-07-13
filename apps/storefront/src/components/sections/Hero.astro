@@ -1,47 +1,229 @@
 ---
-import type { HeroConfig } from "@tokophi/sections";
+// ADR 0009 — Hero section (storefront half). Props-driven, placed + edited from the Tema builder;
+// nothing here is hardcoded to the homepage.
+//
+// Layout: a split hero — copy column on the left, one contained portrait image panel on the right.
+// The slides CROSS-FADE (opacity), they don't translate: no width math, no clones, and it is the
+// one transition that degrades to "nothing moves" under prefers-reduced-motion without breaking.
+//
+// Carousel chrome (dots, autoplay) only appears from 2 slides up — a 1-slide hero, which is what
+// every pre-carousel saved template resolves to via `heroSlides()`, stays a plain static hero.
+import { heroSlides, HERO_INTERVAL_MS, type HeroConfig } from "@tokophi/sections";
 
 type Props = HeroConfig;
-const { heading, subheading, imageUrl, ctaLabel, ctaHref, align, badge, ratingText } = Astro.props;
+const { align, badge, ratingText, intervalMs } = Astro.props;
+
+const slides = heroSlides(Astro.props);
+const isCarousel = slides.length > 1;
+// 0 (or a nonsense value) = autoplay off; the merchant can park the hero on slide 1.
+const interval = typeof intervalMs === "number" && intervalMs >= 0 ? intervalMs : HERO_INTERVAL_MS;
+
+// The panel is portrait, the source photos are landscape — so most of the frame's width is cropped.
+// `focal` is what keeps the subject in frame (see registry.ts).
+const FOCAL = { left: "object-left", center: "object-center", right: "object-right" } as const;
+const focalClass = (s: (typeof slides)[number]) => FOCAL[s.focal ?? "center"];
 ---
 
-<section class="relative overflow-hidden bg-gradient-to-b from-brand-50 to-cream">
+<section
+  class="relative overflow-hidden bg-gradient-to-b from-brand-50 to-cream"
+  data-hero
+  data-interval={interval}
+  aria-roledescription={isCarousel ? "carousel" : undefined}
+  aria-label={isCarousel ? "Sorotan koleksi" : undefined}
+>
   <div
-    class:list={[
-      "mx-auto max-w-3xl px-4 py-16 sm:px-6 md:py-24",
-      align === "center" ? "text-center" : "text-left",
-    ]}
+    class="mx-auto grid max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.15fr_1fr] md:gap-14 md:py-16 lg:gap-20"
   >
-    <div class="fadeup">
+    <!-- Copy column — slides stacked in a single grid cell so the tallest one sets the height. -->
+    <div class:list={[align === "center" && "text-center"]}>
       {
         badge && (
-          <span class="mb-4 inline-flex rounded-full bg-brand-600 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-white">
+          <span class="mb-6 inline-flex rounded-full bg-white px-3.5 py-1.5 text-xs font-medium tracking-wide text-brand-600 ring-1 ring-brand-200">
             {badge}
           </span>
         )
       }
-      <h1 class="font-display text-4xl font-semibold leading-[1.08] text-ink sm:text-5xl md:text-6xl">
-        {heading}
-      </h1>
-      <p class:list={["mt-6 max-w-md text-lg leading-relaxed text-muted", align === "center" && "mx-auto"]}>
-        {subheading}
-      </p>
-      <div class:list={["mt-9 flex flex-wrap items-center gap-3", align === "center" && "justify-center"]}>
-        <a
-          href={ctaHref}
-          class="rounded-full bg-brand-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-200/60 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
-        >
-          {ctaLabel}
-        </a>
+      <div class="grid grid-cols-1 grid-rows-1">
+        {
+          slides.map((slide, i) => (
+            <div
+              data-hero-copy
+              inert={i !== 0 ? true : undefined}
+              class:list={[
+                "col-start-1 row-start-1 transition-opacity duration-700 ease-out motion-reduce:transition-none",
+                i === 0 ? "opacity-100" : "pointer-events-none opacity-0",
+              ]}
+            >
+              <h1 class="font-display text-4xl font-semibold leading-[1.08] text-balance text-ink sm:text-5xl md:text-[3.25rem]">
+                {slide.heading}
+              </h1>
+              <p
+                class:list={[
+                  "mt-5 max-w-md text-base leading-relaxed text-muted sm:text-lg",
+                  align === "center" && "mx-auto",
+                ]}
+              >
+                {slide.subheading}
+              </p>
+              {slide.ctaLabel && (
+                <div class:list={["mt-8 flex flex-wrap gap-3", align === "center" && "justify-center"]}>
+                  <a
+                    href={slide.ctaHref}
+                    class="rounded-full bg-brand-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-200/60 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+                  >
+                    {slide.ctaLabel}
+                  </a>
+                </div>
+              )}
+            </div>
+          ))
+        }
       </div>
-      {ratingText && <p class="mt-4 text-sm text-muted">{ratingText}</p>}
+
+      <div
+        class:list={[
+          "mt-9 flex flex-wrap items-center gap-x-6 gap-y-3",
+          align === "center" && "justify-center",
+        ]}
+      >
+        {
+          isCarousel && (
+            <div
+              class="flex items-center gap-2"
+              role="tablist"
+              aria-label="Pilih sorotan"
+              data-hero-dots
+            >
+              {slides.map((slide, i) => (
+                <button
+                  type="button"
+                  role="tab"
+                  data-hero-dot
+                  data-index={i}
+                  aria-selected={i === 0 ? "true" : "false"}
+                  aria-label={`Sorotan ${i + 1}: ${slide.heading}`}
+                  tabindex={i === 0 ? 0 : -1}
+                  class="h-1.5 rounded-full bg-brand-200 transition-all duration-300 hover:bg-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none aria-selected:w-8 aria-selected:bg-brand-600 w-2.5"
+                />
+              ))}
+            </div>
+          )
+        }
+        {ratingText && <p class="text-sm text-muted">{ratingText}</p>}
+      </div>
+    </div>
+
+    <!-- Image panel. Its own gradient is the graceful-degradation layer: a missing/failed image
+         (or a hero with no image at all) simply leaves the brand tint showing — never a broken icon. -->
+    <div
+      class="relative aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-brand-100 via-brand-200 to-brand-50 shadow-xl shadow-brand-200/40 ring-1 ring-line sm:aspect-[16/10] md:aspect-[9/10]"
+    >
+      {
+        slides.map((slide, i) =>
+          slide.imageUrl ? (
+            <img
+              data-hero-img
+              src={slide.imageUrl}
+              alt=""
+              width="1920"
+              height="1080"
+              loading={i === 0 ? "eager" : "lazy"}
+              fetchpriority={i === 0 ? "high" : "auto"}
+              decoding={i === 0 ? "sync" : "async"}
+              onerror="this.style.display='none'"
+              class:list={[
+                "absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-out motion-reduce:transition-none",
+                focalClass(slide),
+                i === 0 ? "opacity-100" : "opacity-0",
+              ]}
+            />
+          ) : (
+            <div data-hero-img class:list={["absolute inset-0", i === 0 ? "opacity-100" : "opacity-0"]} />
+          ),
+        )
+      }
     </div>
   </div>
-  {
-    imageUrl && (
-      <div class="mx-auto max-w-7xl px-4 pb-16 sm:px-6">
-        <img src={imageUrl} alt="" class="aspect-[21/9] w-full rounded-2xl object-cover shadow-md ring-1 ring-line" />
-      </div>
-    )
-  }
 </section>
+
+<script>
+  // Vanilla + tiny on purpose (no carousel dependency): cross-fade, autoplay with pause-on-hover,
+  // pause-on-focus, pause-when-tab-hidden, dot tabs with roving arrow-key focus, and NO autoplay at
+  // all under prefers-reduced-motion (slide 1 just stays put — every slide still reachable by dot).
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  function initHero(root: HTMLElement) {
+    const copies = [...root.querySelectorAll<HTMLElement>("[data-hero-copy]")];
+    const images = [...root.querySelectorAll<HTMLElement>("[data-hero-img]")];
+    const dots = [...root.querySelectorAll<HTMLButtonElement>("[data-hero-dot]")];
+    if (copies.length < 2) return; // static hero — nothing to drive
+
+    const interval = Number(root.dataset.interval ?? 0);
+    let index = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let hovered = false;
+    let focused = false;
+
+    const canAutoplay = () => interval > 0 && !reduced.matches;
+
+    const schedule = () => {
+      clearTimeout(timer);
+      if (!canAutoplay() || hovered || focused || document.hidden) return;
+      timer = setTimeout(() => show(index + 1), interval);
+    };
+
+    const show = (next: number) => {
+      index = (next + copies.length) % copies.length;
+      copies.forEach((el, i) => {
+        const on = i === index;
+        el.classList.toggle("opacity-100", on);
+        el.classList.toggle("opacity-0", !on);
+        el.classList.toggle("pointer-events-none", !on);
+        el.inert = !on; // keeps the off-screen CTAs out of the tab order
+      });
+      images.forEach((el, i) => {
+        el.classList.toggle("opacity-100", i === index);
+        el.classList.toggle("opacity-0", i !== index);
+      });
+      dots.forEach((el, i) => {
+        el.setAttribute("aria-selected", i === index ? "true" : "false");
+        el.tabIndex = i === index ? 0 : -1;
+      });
+      schedule();
+    };
+
+    dots.forEach((dot, i) => {
+      dot.addEventListener("click", () => show(i));
+      dot.addEventListener("keydown", (e) => {
+        const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+        if (!step) return;
+        e.preventDefault();
+        show(index + step);
+        dots[index].focus();
+      });
+    });
+
+    root.addEventListener("pointerenter", () => {
+      hovered = true;
+      schedule();
+    });
+    root.addEventListener("pointerleave", () => {
+      hovered = false;
+      schedule();
+    });
+    root.addEventListener("focusin", () => {
+      focused = true;
+      schedule();
+    });
+    root.addEventListener("focusout", () => {
+      focused = false;
+      schedule();
+    });
+    document.addEventListener("visibilitychange", schedule);
+    reduced.addEventListener("change", schedule);
+
+    show(0);
+  }
+
+  document.querySelectorAll<HTMLElement>("[data-hero]").forEach(initHero);
+</script>

@@ -2,6 +2,8 @@
 import Layout from "../layouts/Layout.astro";
 import ProductCard from "../components/ProductCard.astro";
 import SectionRenderer from "../components/sections/SectionRenderer.astro";
+import Hero from "../components/sections/Hero.astro";
+import { SECTION_DEFAULTS } from "@tokophi/sections";
 import { storeCodEnabled } from "../data/catalog";
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
@@ -13,12 +15,11 @@ const COD_ENABLED = await storeCodEnabled(store.id);
 const HOMEPAGE_TEMPLATE = catalog.homepageTemplate;
 
 const best = catalog.bestsellers();
-// Fallback (non-Store-Builder) homepage hero. The seeded demo store has this trio; any other
-// store just gets its first 3 products — never an empty hero from hardcoded handles.
-const featured = ["dress-batik", "gamis-syari", "dress-midi-bunga"]
-  .map((h) => catalog.findProduct(h))
-  .filter((p): p is NonNullable<typeof p> => Boolean(p));
-const heroProducts = featured.length === 3 ? featured : catalog.products.slice(0, 3);
+
+// Fallback (non-Store-Builder) homepage: it renders the SAME registry `hero` section the builder
+// places, seeded with SECTION_DEFAULTS — so the hero has exactly one implementation and a store
+// that has not built a homepage yet still gets the carousel.
+const HERO = SECTION_DEFAULTS.hero;
 
 const collections = catalog.collections.map((c) => {
   const items = catalog.byCollection(c.handle);
@@ -36,59 +37,32 @@ const collections = catalog.collections.map((c) => {
       <SectionRenderer data={HOMEPAGE_TEMPLATE} />
     ) : (
       <Fragment>
-  <!-- Hero -->
-  <section class="relative overflow-hidden bg-gradient-to-b from-brand-50 to-cream">
-    <div class="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 md:grid-cols-2 md:py-24 lg:gap-16">
-      <div class="fadeup">
-        <span class="inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-xs font-medium tracking-wide text-brand-600 ring-1 ring-brand-200">
-          ✨ Koleksi {store.city}
-        </span>
-        <h1 class="mt-6 font-display text-4xl font-semibold leading-[1.08] text-ink sm:text-5xl md:text-6xl">
-          {store.tagline}
-        </h1>
-        <p class="mt-6 max-w-md text-lg leading-relaxed text-muted">
-          Busana wanita yang anggun dan nyaman — dari batik bernilai budaya hingga
-          ready-to-wear kekinian. Dibuat untuk keseharianmu.
-        </p>
-        <div class="mt-9 flex flex-wrap items-center gap-3">
-          <a
-            href="/kategori/dress"
-            class="rounded-full bg-brand-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-200/60 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
-          >
-            Belanja Sekarang
-          </a>
-          <a
-            href="#koleksi"
-            class="rounded-full border border-line bg-white px-7 py-3 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
-          >
-            Lihat Koleksi
-          </a>
-        </div>
-      </div>
+  <!-- Hero — the registry section (see components/sections/Hero.astro), seeded with its defaults -->
+  <Hero {...HERO} />
 
-      <div class="fadeup grid grid-cols-2 gap-4">
-        {
-          heroProducts.map((p, i) => (
-            <a
-              href={`/produk/${p!.handle}`}
-              class:list={[
-                "group relative block overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
-                i === 0 ? "col-span-2 aspect-[16/10]" : "aspect-[3/4]",
-              ]}
-            >
-              <img
-                src={p!.image}
-                alt={p!.name}
-                loading={i === 0 ? "eager" : "lazy"}
-                class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-              />
-              <span class="absolute bottom-3 left-3 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-ink shadow-sm backdrop-blur">
-                {p!.name}
-              </span>
-            </a>
-          ))
-        }
-      </div>
+  <!-- Trust strip: sits DIRECTLY under the hero (it answers the first objection a shopper has —
+       "will it reach me, can I pay how I want") instead of being buried near the footer. -->
+  <section class="border-y border-line bg-white/60">
+    <div class="mx-auto grid max-w-7xl gap-x-8 gap-y-5 px-4 py-7 sm:grid-cols-3 sm:px-6">
+      {
+        [
+          { icon: "🚚", title: "Kirim se-Indonesia", text: "Lewat kurir terpercaya." },
+          COD_ENABLED
+            ? { icon: "💵", title: "COD Tersedia", text: "Bayar di tempat, area terpilih." }
+            : { icon: "🔒", title: "Transaksi Aman", text: "Pembayaran lewat kanal resmi." },
+          { icon: "📱", title: "QRIS & E-Wallet", text: "Bayar praktis, tanpa ribet." },
+        ].map((v) => (
+          <div class="flex items-center gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-base ring-1 ring-brand-100">
+              {v.icon}
+            </span>
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-ink">{v.title}</p>
+              <p class="truncate text-xs text-muted">{v.text}</p>
+            </div>
+          </div>
+        ))
+      }
     </div>
   </section>
 
@@ -161,31 +135,6 @@ const collections = catalog.collections.map((c) => {
       <a href="/kategori/dress" class="text-sm font-medium text-brand-600 hover:text-brand-700">
         Lihat semua →
       </a>
-    </div>
-  </section>
-
-  <!-- Values band -->
-  <section class="bg-brand-50">
-    <div class="mx-auto grid max-w-7xl gap-4 px-4 py-16 sm:grid-cols-3 sm:px-6 sm:py-20">
-      {
-        [
-          { icon: "🚚", title: "Kirim se-Indonesia", text: "Pengiriman ke seluruh nusantara lewat kurir terpercaya." },
-          COD_ENABLED
-            ? { icon: "💵", title: "COD Tersedia", text: "Bayar di tempat untuk area terpilih. Belanja tanpa khawatir." }
-            : { icon: "🔒", title: "Transaksi Aman", text: "Pembayaran terenkripsi dan diproses lewat kanal resmi." },
-          { icon: "📱", title: "QRIS & E-Wallet", text: "Bayar praktis pakai QRIS, transfer, atau dompet digital." },
-        ].map((v) => (
-          <div class="flex items-start gap-4 rounded-2xl bg-white/70 p-6 ring-1 ring-brand-100">
-            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-2xl shadow-sm">
-              {v.icon}
-            </span>
-            <div>
-              <h3 class="font-display text-lg font-semibold text-ink">{v.title}</h3>
-              <p class="mt-1 text-sm leading-relaxed text-muted">{v.text}</p>
-            </div>
-          </div>
-        ))
-      }
     </div>
   </section>
 
