@@ -657,6 +657,11 @@ export const storeSettings = pgTable("store_settings", {
   paymentChannels: text().array(),
   // Who bears the payment-gateway fee on storefront transactions: seller | buyer | split.
   paymentFeeBearer: text().notNull().default("seller"),
+  // COD (bayar di tempat) — one switch for the whole store, surfaced on the Pengiriman page.
+  // OFF by default: COD ties up the merchant's cash until the courier settles, so it is an opt-in.
+  // Which SERVICES may carry it is not a merchant choice — KiriminAja reports a per-service `cod`
+  // flag (see kaServices()), and the platform narrows that further. See ADR/BACKLOG.
+  codEnabled: boolean().notNull().default(false),
 });
 
 export const platformPaymentGateways = pgTable("platform_payment_gateways", {

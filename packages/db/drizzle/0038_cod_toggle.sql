@@ -1,0 +1,20 @@
+-- COD (bayar di tempat).
+--
+-- Two separate decisions, deliberately kept in two different places:
+--
+--   1. store_settings.cod_enabled — the MERCHANT's switch. Off by default: COD ties up their cash
+--      until the courier settles, and some sellers simply do not want it.
+--
+--   2. platform_couriers.services[].cod_allowed — the PLATFORM's switch, per service (super-admin).
+--      Today only SPX is allowed, and the reason is NOT that other couriers lack COD — KiriminAja
+--      reports cod=true on 10 of them (AnterAja, J&T, Ninja, SAP, Lion, JNE, SiCepat, ID Express,
+--      J&T Cargo, SPX). The reason is RETURNS: when a COD buyer refuses the parcel, SPX ships it
+--      back free; on every other courier the merchant eats the return leg. That is a silent loss
+--      they only discover at month end.
+--
+--      So the rule is data, not code. `if (courier === "spx")` would lock us in; the moment another
+--      courier offers free returns, super-admin ticks a box instead of waiting for a deploy.
+--
+-- services is jsonb and already exists, so the per-service shape is widened by the roster sync
+-- (lib/actions/shipping) rather than by DDL — see kaServices() for the source of truth.
+ALTER TABLE "store_settings" ADD COLUMN IF NOT EXISTS "cod_enabled" boolean DEFAULT false NOT NULL;

@@ -177,6 +177,55 @@ export async function kaTrack(orderId: string): Promise<{ ok: boolean; data?: un
   return { ok: !!r.status, data: r.data, error: r.status ? undefined : r.text };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Live service roster.
+//
+// KiriminAja has no "list couriers" endpoint — the roster is whatever `shipping_price`
+// returns for a route. So we price ONE reference route and harvest the services from the
+// response. That is the only source of truth: it carries the real `service_type` codes,
+// the speed `group`, and — crucially — the per-service `cod` flag.
+//
+// This replaces the hand-written COURIERS list in ./couriers.ts, which had drifted badly:
+// it listed TIKI and Pos Indonesia (KiriminAja returns NEITHER) and gave SPX the services
+// "Standard"/"Hemat" when the live service_types are "1" and "3". A merchant could enable a
+// service that does not exist, and the storefront filter would silently never match it.
+//
+// Reference route = Menteng (Jakarta Pusat) → Coblong (Bandung), 1 kg. Cross-province and
+// well-served, so it exercises every group (cargo / regular / next_day / economy / one_day).
+// Cached for a day: the roster changes when KiriminAja onboards a courier, not per request.
+// ─────────────────────────────────────────────────────────────────────────────
+const ROSTER_TTL = 24 * 60 * 60 * 1000;
+const REF_ORIGIN = 2099; // Menteng, Jakarta Pusat
+const REF_DEST = 356; // Coblong, Bandung
+
+export type KaService = {
+  courier: string; // KiriminAja `service` — the courier code (spx, jne, sicepat…)
+  serviceType: string; // `service_type` — the code to send back when booking (REG23, "1", FLREG…)
+  name: string; // `service_name` — human label ("SPX Standard", "JNE Express Reguler")
+  group: string; // speed class: cargo | regular | next_day | economy | one_day
+  cod: boolean; // whether KiriminAja will collect cash for this service
+};
+
+export async function kaServices(): Promise<{ ok: boolean; services: KaService[]; error?: string }> {
+  const key = "ka:roster";
+  const hit = cacheGet<{ ok: boolean; services: KaService[] }>(key);
+  if (hit) return hit;
+
+  const r = await kaShippingPrice({ origin: REF_ORIGIN, destination: REF_DEST, weight: 1000, itemValue: 100_000 });
+  if (!r.ok) return { ok: false, services: [], error: r.error ?? "Gagal mengambil daftar layanan." };
+
+  const services: KaService[] = r.results.map((x) => ({
+    courier: x.service,
+    serviceType: x.service_type,
+    name: x.service_name,
+    group: x.group,
+    cod: !!x.cod,
+  }));
+  const out = { ok: true, services };
+  cacheSet(key, out, ROSTER_TTL);
+  return out;
+}
+
 // connection check (used by super-admin) — hits the province endpoint
 export async function kaTestConnection(): Promise<{ ok: boolean; env: string; provinces?: number; message: string }> {
   if (!KEY) return { ok: false, env: ENV, message: "API key belum diisi (KIRIMINAJA_API_KEY)." };
