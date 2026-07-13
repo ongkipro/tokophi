@@ -3,6 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { alCreatePayment, autolarisConfigured, AUTOLARIS_KNOWN_CHANNELS } from "@tokophi/lib/autolaris";
 import { kaCreateInstantOrder } from "@tokophi/lib/kiriminaja";
+import { provinceForDistrict } from "@/lib/data/areas";
 import { rateLimited } from "@/lib/public-guard";
 import { getCodPolicy } from "@/lib/cod";
 
@@ -31,7 +32,8 @@ export async function POST(req: Request) {
     items?: Item[];
     customer?: { name?: string; phone?: string; email?: string };
     address?: { alamat?: string; kota?: string; provinsi?: string; kodepos?: string };
-    shipping?: { label?: string; cost?: number; service?: string; serviceType?: string };
+    shipping?: { label?: string; cost?: number; service?: string; serviceType?: string; destId?: number };
+    destId?: number; // KiriminAja district id the ongkir quote was issued for (COD province check)
     channelCode?: string;
     instant?: { service?: string; serviceType?: string; shippingCosts?: number; destLat?: number; destLng?: number };
   };
@@ -65,18 +67,29 @@ export async function POST(req: Request) {
   // gets a 403 BEFORE any row is written, never a silently-downgraded order (which would hide a COD
   // request as a "transfer"). Runs after `total` is known, because the cap is checked against it.
   //
-  // ⚠️ HONEST LIMIT — the province is the one the buyer TYPED (body.address.provinsi); we normalise
-  // and match it, but we do not VERIFY it. The trustworthy signal would be the province of the
-  // KiriminAja destination district the ongkir quote was issued for, but the storefront only sends us
-  // the resulting label/cost, not `dest_id`. So a hostile client can claim an allowed province and
-  // ship elsewhere. Cap + merchant switch + service allowance ARE hard-enforced; province is
-  // enforced only as far as the data we receive permits. Closing it = pass dest_id here and resolve
-  // it server-side against the ongkir API.
   if (isCod) {
     const policy = await getCodPolicy(store.id);
     const svc = body.instant?.service ? null : body.shipping?.service; // instant is not in the roster → never COD
     const svcType = body.instant?.service ? null : body.shipping?.serviceType;
-    const reason = policy.reason({ courier: svc, serviceType: svcType, total, province: addr.provinsi });
+
+    // The province is taken from the KiriminAja DISTRICT the ongkir quote was issued for — never
+    // from `address.provinsi`, which the buyer types by hand and a hostile client can simply lie
+    // about ("DKI Jakarta", then ship to Papua). The district id is what the parcel is actually
+    // booked against, so it cannot disagree with where the package goes.
+    //
+    // FAIL CLOSED: if COD is asked for and the district cannot be verified, refuse. An
+    // unverifiable destination is exactly the case allowed_provinces exists to stop, and this is
+    // money — "probably fine" is not good enough. Non-COD orders are unaffected.
+    const destId = Number(body.shipping?.destId ?? body.destId);
+    const province = await provinceForDistrict(destId);
+    if (policy.allowedProvinces.length && !province) {
+      return NextResponse.json(
+        { ok: false, error: "Alamat tujuan belum lengkap — pilih kecamatan dari daftar agar COD bisa dipakai.", code: "cod_not_allowed" },
+        { status: 403, headers: CORS },
+      );
+    }
+
+    const reason = policy.reason({ courier: svc, serviceType: svcType, total, province: province ?? addr.provinsi });
     if (reason) {
       return NextResponse.json({ ok: false, error: reason, code: "cod_not_allowed" }, { status: 403, headers: CORS });
     }

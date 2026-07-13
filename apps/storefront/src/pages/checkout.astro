@@ -604,6 +604,14 @@ const COD_PROVINCES = COD.allowedProvinces; // [] = every province
             cost: ship,
             service: shipEl ? shipEl.getAttribute("data-svc-code") || undefined : undefined,
             serviceType: shipEl ? shipEl.getAttribute("data-svc-type") || undefined : undefined,
+            // The KiriminAja district this quote was issued for. The order API resolves the province
+            // from THIS, not from the province the buyer typed — that field is a claim (a client can
+            // put "DKI Jakarta" and ship to Papua, walking through allowed_provinces). The district
+            // is what the parcel is actually booked against, so it cannot lie about the destination.
+            destId: (function () {
+              var d = document.getElementById("dest-id");
+              return d && d.value ? Number(d.value) : undefined;
+            })(),
           },
           channelCode: payEl.value,
           instant: (shipEl && shipEl.getAttribute("data-inst-service")) ? {
