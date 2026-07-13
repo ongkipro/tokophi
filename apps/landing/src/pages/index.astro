@@ -14,6 +14,46 @@ const description =
   "TokoΦ menyatukan produk, pesanan, pelanggan, pembayaran, dan pengiriman untuk penjual di Indonesia dalam satu panel admin. Bahasa Indonesia, rupiah, kurir dan pembayaran lokal. Situsnya sedang disusun — tokonya sudah bisa dibuat.";
 const url = "https://tokophi.com/";
 const year = new Date().getFullYear();
+
+// Absolute URL — og:image is one of the few tags crawlers will NOT resolve relatively.
+// WhatsApp in particular drops the preview entirely on a relative path.
+const ogImage = new URL("/og.png", url).href;
+
+// Structured data. Deliberately NO `offers`/price: the plan is priced ex-PPN (the merchant pays
+// base + 11%), so quoting a single number here would be a claim we'd have to defend. Say what
+// TokoΦ is, not what it costs.
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${url}#organization`,
+      name: "TokoΦ",
+      url,
+      logo: ogImage,
+      description,
+      areaServed: { "@type": "Country", name: "Indonesia" },
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${url}#website`,
+      url,
+      name: "TokoΦ",
+      inLanguage: "id-ID",
+      publisher: { "@id": `${url}#organization` },
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: "TokoΦ",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      inLanguage: "id-ID",
+      url,
+      publisher: { "@id": `${url}#organization` },
+      description,
+    },
+  ],
+};
 ---
 
 <html lang="id">
@@ -34,9 +74,20 @@ const year = new Date().getFullYear();
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={url} />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:alt" content="TokoΦ — seluruh toko Anda, dalam satu panel." />
+
+    <!-- summary_large_image, not summary: with a 1200x630 card the small variant crops it to a square. -->
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content="TokoΦ — seluruh toko Anda, dalam satu panel." />
+
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} is:inline />
   </head>
 
   <body>
