@@ -1,8 +1,10 @@
 // Small, server-safe display helpers shared across platform pages.
-import { UserPlus, ArrowUpRight, CreditCard, TrendingDown, LifeBuoy, ArrowUp, ArrowDown, ShieldCheck, type LucideIcon } from "lucide-react";
+import { UserPlus, ArrowUpRight, CreditCard, TrendingDown, LifeBuoy, ShieldCheck, type LucideIcon } from "lucide-react";
 import { Badge } from "@tokophi/ui/badge";
 import { cn } from "@tokophi/ui/lib/utils";
-import type { Plan, StoreStatus, PActivity, InvoiceStatus } from "@/lib/mock";
+import { IDR } from "@tokophi/lib/format";
+import type { StoreStatus, PActivity, InvoiceStatus } from "@/lib/types";
+import type { RiskReason } from "@/lib/data";
 import { type HealthVerdict, verdictMeta } from "@/lib/health-types";
 import { SEGMENT_META, type StoreSegment } from "@tokophi/lib/billing";
 
@@ -15,21 +17,6 @@ export function initials(name: string): string {
     .map((w) => w[0])
     .join("")
     .toUpperCase();
-}
-
-const PLAN_STYLES: Record<Plan, string> = {
-  pemula: "bg-muted text-foreground",
-  bisnis: "bg-primary/12 text-primary",
-  skala: "bg-chart-3/15 text-chart-3",
-};
-
-export function PlanBadge({ plan, className }: { plan: Plan; className?: string }) {
-  const label = plan.charAt(0).toUpperCase() + plan.slice(1);
-  return (
-    <Badge variant="secondary" className={cn("border-transparent capitalize", PLAN_STYLES[plan], className)}>
-      {label}
-    </Badge>
-  );
 }
 
 const STATUS_STYLES: Record<StoreStatus, string> = {
@@ -104,39 +91,6 @@ export function HealthBadge({ verdict, className }: { verdict: HealthVerdict; cl
   );
 }
 
-// Delta chip: ▲/▼ with green(good)/red(bad) coloring. `invert` = down is good (e.g. churn).
-export function Delta({
-  value,
-  invert = false,
-  unit = "%",
-  className,
-}: {
-  value: number;
-  invert?: boolean;
-  unit?: string;
-  className?: string;
-}) {
-  const up = value >= 0;
-  const good = invert ? !up : up;
-  const Icon = up ? ArrowUp : ArrowDown;
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums",
-        good
-          ? "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400"
-          : "bg-destructive/12 text-destructive",
-        className,
-      )}
-    >
-      <Icon className="size-3" />
-      {up ? "+" : "−"}
-      {Math.abs(value)}
-      {unit}
-    </span>
-  );
-}
-
 const ACTIVITY_META: Record<PActivity["kind"], { icon: LucideIcon; tint: string }> = {
   signup: { icon: UserPlus, tint: "bg-primary/10 text-primary" },
   upgrade: { icon: ArrowUpRight, tint: "bg-chart-3/15 text-chart-3" },
@@ -152,5 +106,42 @@ export function ActivityIcon({ kind }: { kind: PActivity["kind"] }) {
     <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-full", tint)}>
       <Icon className="size-4" />
     </span>
+  );
+}
+
+// One reason a store is on the operator's worklist. Each chip states the FACT, not a verdict —
+// "ditangguhkan 2 hari lagi", not "berisiko". An operator can act on the first and not the second.
+const RISK_TONE = {
+  red: "bg-destructive/12 text-destructive",
+  orange: "bg-orange-500/12 text-orange-600 dark:text-orange-400",
+  amber: "bg-amber-500/12 text-amber-600 dark:text-amber-400",
+  slate: "bg-muted text-muted-foreground",
+} as const;
+
+function riskLabel(r: RiskReason): { text: string; tone: keyof typeof RISK_TONE } {
+  switch (r.kind) {
+    case "suspended":
+      return { text: "Ditangguhkan — toko read-only", tone: "red" };
+    case "grace":
+      return { text: `Ditangguhkan ${r.daysLeft} hari lagi`, tone: "red" };
+    case "failed_invoice":
+      return { text: `${r.count} tagihan GAGAL · ${IDR(r.amount)}`, tone: "red" };
+    case "unpaid_invoice":
+      return { text: `${r.count} tagihan belum dibayar · ${IDR(r.amount)}${r.oldestDays ? ` (${r.oldestDays}h)` : ""}`, tone: "orange" };
+    case "trial_ending":
+      return { text: `Trial berakhir ${r.daysLeft} hari lagi`, tone: "amber" };
+    case "never_ordered":
+      return { text: "Belum pernah ada pesanan", tone: "amber" };
+    case "dormant":
+      return { text: `Tidak ada pesanan ${r.days} hari`, tone: "slate" };
+  }
+}
+
+export function RiskReasonChip({ reason }: { reason: RiskReason }) {
+  const { text, tone } = riskLabel(reason);
+  return (
+    <Badge variant="secondary" className={cn("border-transparent text-[11px] font-medium", RISK_TONE[tone])}>
+      {text}
+    </Badge>
   );
 }

@@ -81,19 +81,9 @@ export async function setStoreStatus(storeId: string, status: "active" | "trial"
   revalidatePath("/");
 }
 
-export async function setStorePlan(storeId: string, plan: "pemula" | "bisnis" | "skala"): Promise<void> {
-  await requirePlatformAdmin();
-  await db.update(schema.stores).set({ plan }).where(eq(schema.stores.id, storeId));
-  // keep the account tier in sync (billing is per-account)
-  const [s] = await db.select({ accountId: schema.stores.accountId }).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
-  if (s) await db.update(schema.accounts).set({ plan }).where(eq(schema.accounts.id, s.accountId));
-  revalidatePath("/toko");
-  revalidatePath(`/toko/${storeId}`);
-  revalidatePath("/");
-}
-
 // ---- provisioning: onboard a new merchant store (account + owner + store + membership + stats) ----
-export type NewStoreInput = { name: string; ownerName: string; email: string; city: string; plan: "pemula" | "bisnis" | "skala" };
+// No `plan`: there is ONE plan (TokoΦ). The legacy `plan` column keeps its DB default.
+export type NewStoreInput = { name: string; ownerName: string; email: string; city: string };
 export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; storeId?: string; error?: string }> {
   await requirePlatformAdmin();
   const name = input.name?.trim();
@@ -111,11 +101,11 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
   if (dupSlug) return { ok: false, error: `Nama toko bentrok (slug "${slug}" sudah ada).` };
 
   const storeId = await db.transaction(async (tx) => {
-    const [acc] = await tx.insert(schema.accounts).values({ name, plan: input.plan, createdAt: ANCHOR }).returning();
+    const [acc] = await tx.insert(schema.accounts).values({ name, createdAt: ANCHOR }).returning();
     const [u] = await tx.insert(schema.users).values({ email, name: ownerName, passwordHash: hashPassword(DEV_PASSWORD) }).returning();
     // new store → 3-day free trial (real clock)
     const trialEndsAt = new Date(Date.now() + 3 * 86_400_000);
-    const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, plan: input.plan, status: "trial", trialEndsAt, firstInvoicePaid: false, createdAt: ANCHOR }).returning();
+    const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, status: "trial", trialEndsAt, firstInvoicePaid: false, createdAt: ANCHOR }).returning();
     await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: ANCHOR });
     await tx.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
     await tx.insert(schema.storeSettings).values({ storeId: st.id });

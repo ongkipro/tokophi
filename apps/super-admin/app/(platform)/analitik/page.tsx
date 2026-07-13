@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Badge } from "@tokophi/ui/badge";
 import { IDR, num } from "@tokophi/lib/format";
 import { BILLING } from "@tokophi/lib/billing";
-import { getStores, getFinanceStats, getSubscriptionStats, getSystemStatus, getServerMetrics } from "@/lib/data";
+import { getStores, getFinanceStats, getSubscriptionStats, getSystemStatus, getServerMetrics, getGmvByCity, getPlatformFloat, getConversion } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -14,41 +14,39 @@ const uptime = (s: number) => {
 };
 
 export default async function AnalitikPage() {
-  const [stores, fin, sub, sys, srv] = await Promise.all([getStores(), getFinanceStats(), getSubscriptionStats(), getSystemStatus(), getServerMetrics()]);
+  const [stores, fin, sub, sys, srv, geo, float, conv] = await Promise.all([
+    getStores(), getFinanceStats(), getSubscriptionStats(), getSystemStatus(), getServerMetrics(),
+    getGmvByCity(), getPlatformFloat(), getConversion(),
+  ]);
 
-  // GMV per city (top 8)
-  const gmvPerCity = Object.values(
-    stores.reduce<Record<string, { city: string; gmv: number; count: number }>>((acc, s) => {
-      const city = s.city || "—";
-      acc[city] ??= { city, gmv: 0, count: 0 };
-      acc[city].gmv += s.gmv;
-      acc[city].count += 1;
-      return acc;
-    }, {}),
-  ).sort((a, b) => b.gmv - a.gmv).slice(0, 8);
-  const maxCityGmv = Math.max(...gmvPerCity.map((c) => c.gmv), 1);
+  const maxGeoGmv = Math.max(...geo.map((c) => c.gmv), 1);
   const topStores = [...stores].sort((a, b) => b.gmv - a.gmv).slice(0, 5);
 
+  // MRR / ARR / revenue are OURS. GMV and saldo merchant are the MERCHANTS'. The cards say so.
   const kpis = [
-    { label: "MRR", value: IDR(fin.mrr, { compact: true }), icon: Wallet, hint: `${num(sub.active)} pelanggan aktif` },
+    { label: "MRR (pendapatan kami)", value: IDR(fin.mrr, { compact: true }), icon: Wallet, hint: `${num(sub.active)} pelanggan berbayar` },
     { label: "ARR (proyeksi)", value: IDR(fin.arr, { compact: true }), icon: TrendingUp, hint: "MRR × 12" },
-    { label: "Pendapatan diterima", value: IDR(fin.revenuePaid, { compact: true }), icon: Receipt, hint: `${num(fin.invoicesPaid)} tagihan lunas` },
-    { label: "GMV platform", value: IDR(fin.gmvTotal, { compact: true }), icon: ShoppingBag, hint: `${num(stores.length)} toko` },
+    { label: "Diterima (tagihan lunas)", value: IDR(fin.revenuePaid, { compact: true }), icon: Receipt, hint: `${num(fin.invoicesPaid)} tagihan · termasuk PPN` },
+    { label: "GMV merchant", value: IDR(fin.gmvTotal, { compact: true }), icon: ShoppingBag, hint: "nilai transaksi toko — bukan pendapatan kami" },
   ];
 
-  const funnel = [
+  // NOT a funnel — nothing here measures a stage-to-stage conversion. It is the live distribution of
+  // subscription states, and that is what it is now called. (The one real conversion the data
+  // supports — trial → bayar — is stated separately, from paid invoices.)
+  const lifecycle = [
     { label: "Uji coba", count: sub.trial, cls: "bg-amber-500" },
-    { label: "Aktif", count: sub.active, cls: "bg-emerald-500" },
+    { label: "Berbayar", count: sub.active, cls: "bg-emerald-500" },
+    { label: "VIP (gratis)", count: sub.vip, cls: "bg-violet-500" },
     { label: "Menunggak", count: sub.pastDue, cls: "bg-orange-500" },
     { label: "Ditangguhkan", count: sub.suspended, cls: "bg-destructive" },
   ];
-  const maxFunnel = Math.max(...funnel.map((f) => f.count), 1);
+  const maxLifecycle = Math.max(...lifecycle.map((f) => f.count), 1);
 
   const integrations = [
     { label: "KiriminAja (kurir)", ok: sys.kiriminaja, icon: Truck, note: sys.kiriminaja ? `Terhubung · ${sys.kaEnv}` : "Belum dikonfigurasi" },
     { label: "AutoLaris (pembayaran)", ok: sys.autolaris, icon: CreditCard, note: sys.autolaris ? "Terhubung" : "Belum dikonfigurasi" },
     { label: "Database (PostgreSQL)", ok: sys.dbOk, icon: Database, note: sys.dbOk ? `${num(sys.stores)} toko` : "Tidak terjangkau" },
-    { label: "Server", ok: true, icon: Server, note: `${sys.region} · Coolify` },
+    { label: "Server", ok: true, icon: Server, note: sys.region },
   ];
 
   return (
@@ -77,28 +75,38 @@ export default async function AnalitikPage() {
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle>Ringkasan Pendapatan</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <Row label="MRR (langganan aktif)" value={IDR(fin.mrr)} />
+            <Row label="MRR (langganan berbayar)" value={IDR(fin.mrr)} />
             <Row label="ARR (proyeksi tahunan)" value={IDR(fin.arr)} />
             <Row label="Diterima (tagihan lunas)" value={`${IDR(fin.revenuePaid)} · ${num(fin.invoicesPaid)}`} accent />
             <Row label="Menunggu pembayaran" value={`${IDR(fin.revenuePending)} · ${num(fin.invoicesPending)}`} warn />
-            <Row label="Langganan tahunan" value={`${num(fin.annualPaid)} tagihan`} />
+            <Row label="Gagal dibayar" value={`${IDR(fin.revenueFailed)} · ${num(fin.invoicesFailed)}`} warn />
+            <Row label="Konversi trial → bayar" value={conv.trialsEnded ? `${num(conv.converted)} dari ${num(conv.trialsEnded)}` : "—"} />
+            <div className="mt-1 rounded-lg border bg-sky-500/5 p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Saldo merchant yang kami pegang</span>
+                <span className="font-semibold tabular-nums text-sky-700 dark:text-sky-400">{IDR(float.available + float.pending)}</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {IDR(float.available)} siap ditarik · {IDR(float.pending)} belum settle · {IDR(float.payoutObligation)} wajib ditransfer. <b>Kewajiban, bukan pendapatan.</b>
+              </p>
+            </div>
             <div className="border-t pt-3 text-xs text-muted-foreground">
-              Paket {BILLING.PLAN_NAME}: {IDR(BILLING.MONTHLY_IDR)}/bln · tahunan {IDR(BILLING.ANNUAL_MONTHLY_IDR)}/bln ({IDR(BILLING.ANNUAL_IDR)}/thn).
+              Paket {BILLING.PLAN_NAME}: {IDR(BILLING.MONTHLY_IDR)}/bln · tahunan {IDR(BILLING.ANNUAL_MONTHLY_IDR)}/bln ({IDR(BILLING.ANNUAL_IDR)}/thn). Semua jumlah tagihan sudah termasuk PPN 11%.
             </div>
           </CardContent>
         </Card>
 
-        {/* subscription funnel */}
+        {/* subscription lifecycle distribution */}
         <Card>
-          <CardHeader><CardTitle>Corong Langganan</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Sebaran Langganan</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            {funnel.map((f) => (
+            {lifecycle.map((f) => (
               <div key={f.label}>
                 <div className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-2"><span className={`size-2.5 rounded-full ${f.cls}`} />{f.label}</span>
                   <span className="font-semibold tabular-nums">{num(f.count)}</span>
                 </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${f.cls}`} style={{ width: `${(f.count / maxFunnel) * 100}%` }} /></div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${f.cls}`} style={{ width: `${(f.count / maxLifecycle) * 100}%` }} /></div>
               </div>
             ))}
           </CardContent>
@@ -106,20 +114,23 @@ export default async function AnalitikPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* GMV per city */}
+        {/* GMV per delivery province — from orders.province (where the parcels actually go) */}
         <Card className="lg:col-span-2">
-          <CardHeader><CardTitle className="flex items-center gap-2"><MapPin className="size-4 text-muted-foreground" /> GMV per Kota</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><MapPin className="size-4 text-muted-foreground" /> GMV per Kota Tujuan</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">Dari alamat kirim pesanan, bukan domisili toko — ini yang menentukan cakupan kurir &amp; COD.</p>
+          </CardHeader>
           <CardContent className="space-y-4">
-            {gmvPerCity.map((c) => (
+            {geo.map((c) => (
               <div key={c.city} className="space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">{c.city}</span>
-                  <span className="tabular-nums text-muted-foreground">{num(c.count)} toko · {IDR(c.gmv, { compact: true })}</span>
+                  <span className="tabular-nums text-muted-foreground">{num(c.orders)} pesanan · {IDR(c.gmv, { compact: true })}</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary/70" style={{ width: `${(c.gmv / maxCityGmv) * 100}%` }} /></div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary/70" style={{ width: `${(c.gmv / maxGeoGmv) * 100}%` }} /></div>
               </div>
             ))}
-            {gmvPerCity.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">Belum ada data.</p>}
+            {geo.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">Belum ada data.</p>}
           </CardContent>
         </Card>
 
@@ -147,7 +158,7 @@ export default async function AnalitikPage() {
         <CardContent className="grid gap-4 sm:grid-cols-3">
           <Metric icon={<Cpu className="size-4" />} label="CPU" value={`${srv.cpuPct}%`} sub={`load ${srv.cpuLoad1} · ${srv.cpuCores} core`} pct={srv.cpuPct} />
           <Metric icon={<MemoryStick className="size-4" />} label="RAM" value={`${srv.memPct}%`} sub={`${gb(srv.memUsed)} / ${gb(srv.memTotal)}`} pct={srv.memPct} />
-          <Metric icon={<Server className="size-4" />} label="Uptime" value={uptime(srv.uptimeSec)} sub={`${sys.region} · Coolify`} />
+          <Metric icon={<Server className="size-4" />} label="Uptime" value={uptime(srv.uptimeSec)} sub={sys.region} />
         </CardContent>
       </Card>
 

@@ -11,12 +11,12 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@tokophi/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
 
-import { type Invoice } from "@/lib/mock";
+import { type Invoice } from "@/lib/types";
 import { InvoiceBadge } from "@/components/bits";
 import { setInvoiceStatus } from "@/lib/actions";
 import { IDR, num } from "@tokophi/lib/format";
 import { BILLING } from "@tokophi/lib/billing";
-import type { SubStats } from "@/lib/data";
+import type { SubStats, Conversion, FinanceStats } from "@/lib/data";
 
 const INV_TABS: { key: "semua" | Invoice["status"]; label: string }[] = [
   { key: "semua", label: "Semua" },
@@ -25,7 +25,7 @@ const INV_TABS: { key: "semua" | Invoice["status"]; label: string }[] = [
   { key: "gagal", label: "Gagal" },
 ];
 
-export function PaketClient({ sub, allInvoices }: { sub: SubStats; allInvoices: Invoice[] }) {
+export function PaketClient({ sub, allInvoices, conv, fin }: { sub: SubStats; allInvoices: Invoice[]; conv: Conversion; fin: FinanceStats }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [tab, setTab] = useState<"semua" | Invoice["status"]>("semua");
@@ -40,10 +40,12 @@ export function PaketClient({ sub, allInvoices }: { sub: SubStats; allInvoices: 
   }
 
   const summary = [
-    { label: "MRR", value: IDR(sub.mrr, { compact: true }), icon: Wallet, hint: `${num(sub.active)} pelanggan aktif` },
-    { label: "Pelanggan aktif", value: num(sub.active), icon: Users, hint: `dari ${num(sub.total)} toko` },
-    { label: "Uji coba", value: num(sub.trial), icon: Sparkles, hint: `${num(sub.trialEndingSoon)} berakhir ≤1 hari` },
-    { label: "Menunggak", value: num(sub.pastDue + sub.suspended), icon: TriangleAlert, hint: `${num(sub.suspended)} ditangguhkan` },
+    { label: "MRR", value: IDR(sub.mrr, { compact: true }), icon: Wallet, hint: `${num(sub.active)} pelanggan berbayar · ${num(sub.vip)} VIP gratis` },
+    // Konversi trial → bayar, dihitung dari tagihan yang BENAR-BENAR lunas (bukan dari flag
+    // stores.first_invoice_paid, yang sudah tidak konsisten dengan tagihannya).
+    { label: "Konversi trial", value: `${num(conv.converted)}/${num(conv.trialsEnded)}`, icon: Users, hint: conv.trialsEnded ? `${Math.round(conv.rate * 100)}% trial berakhir → bayar` : "belum ada trial berakhir" },
+    { label: "Uji coba berjalan", value: num(sub.trial), icon: Sparkles, hint: `${num(sub.trialEndingSoon)} berakhir ≤1 hari` },
+    { label: "Gagal bayar", value: IDR(fin.revenueFailed, { compact: true }), icon: TriangleAlert, hint: `${num(fin.invoicesFailed)} tagihan gagal · ${num(fin.invoicesPending)} menunggu` },
   ];
 
   const statusBreakdown = [
@@ -133,7 +135,6 @@ export function PaketClient({ sub, allInvoices }: { sub: SubStats; allInvoices: 
               <TableRow>
                 <TableHead>No.</TableHead>
                 <TableHead>Toko</TableHead>
-                <TableHead>Jenis</TableHead>
                 <TableHead className="text-right">Jumlah</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Tanggal</TableHead>
@@ -145,7 +146,6 @@ export function PaketClient({ sub, allInvoices }: { sub: SubStats; allInvoices: 
                 <TableRow key={inv.id}>
                   <TableCell className="font-mono text-xs">{inv.id}</TableCell>
                   <TableCell className="font-medium">{inv.store}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{inv.amount >= 2_000_000 ? "Tahunan" : inv.amount <= 100_000 ? "Bln pertama" : "Bulanan"}</TableCell>
                   <TableCell className="text-right tabular-nums">{IDR(inv.amount)}</TableCell>
                   <TableCell><InvoiceBadge status={inv.status} /></TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">{inv.daysAgo} hari lalu</TableCell>
@@ -166,7 +166,7 @@ export function PaketClient({ sub, allInvoices }: { sub: SubStats; allInvoices: 
                 </TableRow>
               ))}
               {invoices.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">Tidak ada tagihan.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Tidak ada tagihan.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>

@@ -3,86 +3,102 @@ import { db, schema } from "@tokophi/db";
 import { courierName, COURIER_CODES } from "@tokophi/lib/couriers";
 import { kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { autolarisConfigured } from "@tokophi/lib/autolaris";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { PLANS, type Plan, type Store, type StoreStatus, type Invoice, type PActivity } from "./mock";
+import { asc, desc, eq, sql } from "drizzle-orm";
+import { type Store, type StoreStatus, type Invoice, type PActivity } from "./types";
 import { BILLING, computeBilling, storeSegment, type BillingState } from "@tokophi/lib/billing";
 
-// Anchor matches the seed so relative "N hari/menit lalu" figures stay deterministic.
-const TODAY = new Date("2026-07-02T00:00:00Z");
-const daysBetween = (d: Date) => Math.round((TODAY.getTime() - d.getTime()) / 86_400_000);
-const minutesBetween = (d: Date) => Math.round((TODAY.getTime() - d.getTime()) / 60_000);
-
-function mulberry32(seed: number) {
-  return function () {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+// Every relative figure ("N hari lalu", 30-day windows) is measured from the REAL clock.
+//
+// This file used to anchor them to a fixed TODAY that matched the seed, which made a store silent
+// for a fortnight read as if it had ordered yesterday. Dormancy that lies is worse than no dormancy
+// figure at all, and `computeBilling()` was already on the real clock — so the page contradicted
+// itself. One clock, the real one.
+const daysBetween = (d: Date) => Math.round((Date.now() - d.getTime()) / 86_400_000);
+const minutesBetween = (d: Date) => Math.round((Date.now() - d.getTime()) / 60_000);
 
 // ---- stores ----
-// UI status is the REAL-TIME lifecycle (computeBilling), not the possibly-stale stored column,
-// so the Toko list stays consistent with the store detail + enforcement.
+//
+// ⚠️ `store_stats` (gmv_idr / orders_count / products_count / ship7d_avg) is NOT read here and must
+// not be. It is a rollup nobody maintains and it disagrees with the rows it claims to summarise —
+// e.g. it credited Batik Nusantara with Rp104,3jt over 502 orders when `orders` holds Rp241,3jt
+// over 685, and it gave five stores 88–260 orders apiece when each has 3. Every figure below is
+// derived from `orders` / `products` at read time. `ship7d_avg` has no source at all (`fulfillments`
+// is empty, there is no `shipments` table) and is therefore GONE from the UI, not re-derived.
+//
+// UI status is the REAL-TIME lifecycle (computeBilling), not the possibly-stale stored column.
 const BILL_TO_UI: Record<"trial" | "active" | "past_due" | "suspended", StoreStatus> = { active: "aktif", trial: "trial", past_due: "menunggak", suspended: "ditangguhkan" };
-function rowToStore(r: {
-  id: string; name: string; city: string | null; plan: Plan;
-  trialEndsAt: Date | null; currentPeriodEnd: Date | null; firstInvoicePaid: boolean; comped: boolean;
-  createdAt: Date; gmv: number | null; orders: number | null; products: number | null; ship7d: number | null; owner: string | null; email: string | null;
-}): Store {
+
+type StoreRow = {
+  id: string; name: string; city: string | null;
+  trialEndsAt: string | null; currentPeriodEnd: string | null; firstInvoicePaid: boolean; comped: boolean;
+  createdAt: string; owner: string | null; email: string | null;
+  gmv: string | number; orders: number; orders30d: number; products: number; lastOrderAt: string | null;
+};
+
+function rowToStore(r: StoreRow): Store {
+  const bill = {
+    trialEndsAt: r.trialEndsAt ? new Date(r.trialEndsAt) : null,
+    currentPeriodEnd: r.currentPeriodEnd ? new Date(r.currentPeriodEnd) : null,
+    firstInvoicePaid: r.firstInvoicePaid,
+    comped: r.comped,
+  };
   return {
     id: r.id,
     name: r.name,
     owner: r.owner ?? "",
     email: r.email ?? "",
     city: r.city ?? "",
-    plan: r.plan,
-    status: BILL_TO_UI[computeBilling(r).status],
-    segment: storeSegment(r),
+    status: BILL_TO_UI[computeBilling(bill).status],
+    segment: storeSegment(bill),
     comped: r.comped,
-    gmv: r.gmv ?? 0,
-    orders: r.orders ?? 0,
-    products: r.products ?? 0,
-    ship7d: r.ship7d ?? 0,
-    createdDaysAgo: daysBetween(r.createdAt),
+    gmv: Number(r.gmv ?? 0),
+    orders: Number(r.orders ?? 0),
+    orders30d: Number(r.orders30d ?? 0),
+    products: Number(r.products ?? 0),
+    lastOrderDays: r.lastOrderAt ? Math.max(0, daysBetween(new Date(r.lastOrderAt))) : null,
+    createdDaysAgo: Math.max(0, daysBetween(new Date(r.createdAt))),
   };
 }
 
-const storeSelect = {
-  id: schema.stores.id,
-  name: schema.stores.name,
-  city: schema.stores.city,
-  plan: schema.stores.plan,
-  trialEndsAt: schema.stores.trialEndsAt,
-  currentPeriodEnd: schema.stores.currentPeriodEnd,
-  firstInvoicePaid: schema.stores.firstInvoicePaid,
-  comped: schema.stores.comped,
-  createdAt: schema.stores.createdAt,
-  gmv: schema.storeStats.gmvIdr,
-  orders: schema.storeStats.ordersCount,
-  products: schema.storeStats.productsCount,
-  ship7d: schema.storeStats.ship7dAvg,
-  owner: schema.users.name,
-  email: schema.users.email,
-};
-
-function storesBase() {
-  return db
-    .select(storeSelect)
-    .from(schema.stores)
-    .leftJoin(schema.storeStats, eq(schema.storeStats.storeId, schema.stores.id))
-    .leftJoin(schema.storeUsers, and(eq(schema.storeUsers.storeId, schema.stores.id), eq(schema.storeUsers.role, "owner")))
-    .leftJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId));
-}
+// GMV excludes `batal` (cancelled) — a cancelled order is not transaction value; counting it
+// inflates every store on the list. Returns (`retur`) ARE counted: the sale happened.
+const STORES_SQL = sql`
+  select
+    s.id, s.name, s.city,
+    s.trial_ends_at        as "trialEndsAt",
+    s.current_period_end   as "currentPeriodEnd",
+    s.first_invoice_paid   as "firstInvoicePaid",
+    s.comped, s.created_at as "createdAt",
+    u.name  as "owner",
+    u.email as "email",
+    coalesce(o.gmv, 0)::bigint  as "gmv",
+    coalesce(o.orders, 0)::int  as "orders",
+    coalesce(o.orders30d, 0)::int as "orders30d",
+    o.last_order_at             as "lastOrderAt",
+    coalesce(p.products, 0)::int as "products"
+  from stores s
+  left join store_users su on su.store_id = s.id and su.role = 'owner'
+  left join users u on u.id = su.user_id
+  left join lateral (
+    select
+      sum(total_idr) filter (where status <> 'batal')                                 as gmv,
+      count(*)       filter (where status <> 'batal')                                 as orders,
+      count(*)       filter (where status <> 'batal' and placed_at >= now() - interval '30 days') as orders30d,
+      max(placed_at)                                                                  as last_order_at
+    from orders where store_id = s.id
+  ) o on true
+  left join lateral (
+    select count(*) as products from products where store_id = s.id and status = 'active'
+  ) p on true
+`;
 
 export async function getStores(): Promise<Store[]> {
-  const rows = await storesBase().orderBy(desc(schema.storeStats.gmvIdr));
+  const rows = (await db.execute(sql`${STORES_SQL} order by "gmv" desc nulls last`)) as unknown as StoreRow[];
   return rows.map(rowToStore);
 }
 
 export async function getStoreById(id: string): Promise<Store | null> {
-  const rows = await storesBase().where(eq(schema.stores.id, id)).limit(1);
+  const rows = (await db.execute(sql`${STORES_SQL} where s.id = ${id} limit 1`)) as unknown as StoreRow[];
   return rows[0] ? rowToStore(rows[0]) : null;
 }
 
@@ -109,24 +125,157 @@ export async function getSubscriptionStats(): Promise<SubStats> {
 }
 
 // Finance rollup for the platform (single-plan model).
-export type FinanceStats = { mrr: number; arr: number; revenuePaid: number; revenuePending: number; invoicesPaid: number; invoicesPending: number; annualPaid: number; gmvTotal: number };
+//
+// `revenueFailed` is new and it is the number that actually costs money: an invoice the merchant
+// TRIED to pay and could not. It was buried as one row among sixteen in the Tagihan table.
+//
+// What is NOT here: `annualPaid`. `invoices.cycle` is NULL on every seeded row, so the old count was
+// structurally always 0 — a card that could never say anything. Gone rather than dressed up.
+export type FinanceStats = {
+  mrr: number; arr: number;
+  revenuePaid: number; revenuePending: number; revenueFailed: number;
+  invoicesPaid: number; invoicesPending: number; invoicesFailed: number;
+  gmvTotal: number;
+};
 export async function getFinanceStats(): Promise<FinanceStats> {
-  const [sub, stores, invs] = await Promise.all([
+  const [sub, invs, gmvRow] = await Promise.all([
     getSubscriptionStats(),
-    getStores(),
-    db.select({ status: schema.invoices.status, amount: schema.invoices.amountIdr, cycle: schema.invoices.cycle }).from(schema.invoices),
+    db.select({ status: schema.invoices.status, amount: schema.invoices.amountIdr }).from(schema.invoices),
+    db.execute(sql`select coalesce(sum(total_idr) filter (where status <> 'batal'), 0)::bigint as "gmv" from orders`) as unknown as Promise<{ gmv: string }[]>,
   ]);
-  const paid = invs.filter((i) => i.status === "dibayar");
-  const pending = invs.filter((i) => i.status === "menunggu");
+  const sum = (st: string) => invs.filter((i) => i.status === st).reduce((a, i) => a + i.amount, 0);
+  const cnt = (st: string) => invs.filter((i) => i.status === st).length;
   return {
     mrr: sub.mrr,
     arr: sub.mrr * 12,
-    revenuePaid: paid.reduce((a, i) => a + i.amount, 0),
-    revenuePending: pending.reduce((a, i) => a + i.amount, 0),
-    invoicesPaid: paid.length,
-    invoicesPending: pending.length,
-    annualPaid: paid.filter((i) => i.cycle === "annual").length,
-    gmvTotal: stores.reduce((a, s) => a + s.gmv, 0),
+    revenuePaid: sum("dibayar"),
+    revenuePending: sum("menunggu"),
+    revenueFailed: sum("gagal"),
+    invoicesPaid: cnt("dibayar"),
+    invoicesPending: cnt("menunggu"),
+    invoicesFailed: cnt("gagal"),
+    gmvTotal: Number(gmvRow[0]?.gmv ?? 0),
+  };
+}
+
+/**
+ * MONEY WE ARE HOLDING ON MERCHANTS' BEHALF — the platform's largest liability, and until now
+ * invisible on every screen.
+ *
+ * Every rupiah in `ledger_entries` belongs to a merchant, not to us. `available` is withdrawable
+ * today (they can ask for it at any moment); `pending` becomes withdrawable when the order settles.
+ * `payoutObligation` is the slice already spoken for — a merchant clicked "Tarik saldo", the money
+ * left their available pool, and we owe the bank transfer.
+ *
+ * This is emphatically NOT platform revenue. Platform revenue is `invoices` (Rp275rb/mo + PPN).
+ * Conflating the two is the single most expensive mistake an operator of a marketplace can make.
+ */
+export type PlatformFloat = {
+  available: number; // withdrawable by merchants right now
+  pending: number; // not yet settled
+  payoutObligation: number; // payouts menunggu + diproses — transfers we still owe
+  payoutPendingCount: number;
+  storesWithBalance: number;
+};
+export async function getPlatformFloat(): Promise<PlatformFloat> {
+  const [led] = (await db.execute(sql`
+    select
+      coalesce(sum(amount_idr) filter (where status = 'available'), 0)::bigint as "available",
+      coalesce(sum(amount_idr) filter (where status = 'pending'), 0)::bigint   as "pending",
+      count(distinct store_id)::int                                            as "stores"
+    from ledger_entries
+  `)) as unknown as { available: string; pending: string; stores: number }[];
+  const [po] = (await db.execute(sql`
+    select
+      coalesce(sum(amount_idr) filter (where status in ('menunggu','diproses')), 0)::bigint as "owed",
+      count(*) filter (where status in ('menunggu','diproses'))::int                        as "cnt"
+    from payouts
+  `)) as unknown as { owed: string; cnt: number }[];
+  return {
+    available: Number(led?.available ?? 0),
+    pending: Number(led?.pending ?? 0),
+    payoutObligation: Number(po?.owed ?? 0),
+    payoutPendingCount: Number(po?.cnt ?? 0),
+    storesWithBalance: Number(led?.stores ?? 0),
+  };
+}
+
+/**
+ * Subscription revenue we actually COLLECTED, by month — real invoices, real payment dates.
+ *
+ * This replaces a 12-point "Pertumbuhan MRR" area chart whose every point was produced by
+ * `mulberry32(4242)` compounding a random 6–11% per month and then rescaled so the last point
+ * happened to land on today's MRR. The shape was invented; so was the "+x% MoM" printed beside it.
+ * A subscription business's history IS its paid invoices, and we have them.
+ *
+ * Amounts are PPN-inclusive (that is what the merchant paid and what the row stores).
+ */
+export type RevenuePoint = { month: string; label: string; collected: number; invoices: number };
+export async function getRevenueSeries(months = 12): Promise<RevenuePoint[]> {
+  const rows = (await db.execute(sql`
+    with span as (
+      select generate_series(
+        date_trunc('month', now()) - make_interval(months => ${months - 1}),
+        date_trunc('month', now()),
+        interval '1 month'
+      ) as m
+    )
+    select
+      to_char(span.m, 'YYYY-MM')                                   as "month",
+      coalesce(sum(i.amount_idr), 0)::bigint                       as "collected",
+      count(i.*)::int                                              as "invoices"
+    from span
+    left join invoices i
+      on i.status = 'dibayar' and date_trunc('month', i.issued_at) = span.m
+    group by span.m
+    order by span.m
+  `)) as unknown as { month: string; collected: string; invoices: number }[];
+  const MONTH_ID = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
+  return rows.map((r) => ({
+    month: r.month,
+    label: MONTH_ID[Number(r.month.slice(5, 7)) - 1] ?? r.month,
+    collected: Number(r.collected),
+    invoices: Number(r.invoices),
+  }));
+}
+
+/**
+ * Trial → paid conversion, stated as the two counts it is made of.
+ *
+ * Definition (the only one the data supports): of the stores whose trial has ALREADY ENDED, how many
+ * have at least one PAID invoice. Deliberately derived from `invoices`, not from the
+ * `stores.first_invoice_paid` flag — the flag is a denormalised boolean and it is already wrong in
+ * the seed (Gadget Murah ID carries first_invoice_paid = true with zero paid invoices; Hijab Amara
+ * carries false while its Rp55.500 first-month invoice is marked dibayar). A conversion rate built
+ * on a flag that disagrees with the money is not a conversion rate.
+ *
+ * With 7 stores this is a fragile percentage. It is shown as "5 dari 6" with the rate secondary,
+ * because that is what it honestly is.
+ */
+export type Conversion = { trialsEnded: number; converted: number; rate: number; stillTrialing: number };
+export async function getConversion(): Promise<Conversion> {
+  const [r] = (await db.execute(sql`
+    with s as (
+      select
+        st.id,
+        (st.trial_ends_at is not null and st.trial_ends_at < now()) or st.current_period_end is not null as trial_ended,
+        exists (select 1 from invoices i where i.store_id = st.id and i.status = 'dibayar')              as ever_paid
+      from stores st
+      where st.comped = false   -- VIP never had to convert; counting them flatters the rate
+    )
+    select
+      count(*) filter (where trial_ended)::int                as "trialsEnded",
+      count(*) filter (where trial_ended and ever_paid)::int  as "converted",
+      count(*) filter (where not trial_ended)::int            as "stillTrialing"
+    from s
+  `)) as unknown as { trialsEnded: number; converted: number; stillTrialing: number }[];
+  const trialsEnded = Number(r?.trialsEnded ?? 0);
+  const converted = Number(r?.converted ?? 0);
+  return {
+    trialsEnded,
+    converted,
+    rate: trialsEnded ? converted / trialsEnded : 0,
+    stillTrialing: Number(r?.stillTrialing ?? 0),
   };
 }
 
@@ -147,8 +296,34 @@ export async function getSystemStatus(): Promise<SystemStatus> {
     kaEnv: process.env.KIRIMINAJA_ENV ?? "sandbox",
     stores,
     dbOk,
-    region: "Singapore",
+    region: process.env.DEPLOY_REGION ?? "lokal", // was hardcoded "Singapore" on a laptop
   };
+}
+
+/**
+ * Where the platform's GMV physically goes — by the BUYER's delivery city, from `orders`.
+ *
+ * The old card was also called "GMV per Kota" but keyed on `stores.city` (where the MERCHANT is
+ * registered) and fed by the store_stats rollup: a fabricated amount attributed to the wrong
+ * geography. The delivery city is on the order row and is what courier coverage and COD policy are
+ * actually decided against.
+ *
+ * Grouped by city, not province, for one reason: `orders.province` is NULL on all 700 rows, so a
+ * province chart would be a single bar labelled "—". `orders.city` is populated on all 700.
+ */
+export type GeoRow = { city: string; gmv: number; orders: number };
+export async function getGmvByCity(limit = 8): Promise<GeoRow[]> {
+  const rows = (await db.execute(sql`
+    select coalesce(nullif(city, ''), '—') as "city",
+           sum(total_idr)::bigint          as "gmv",
+           count(*)::int                   as "orders"
+    from orders
+    where status <> 'batal'
+    group by 1
+    order by "gmv" desc
+    limit ${limit}
+  `)) as unknown as { city: string; gmv: string; orders: number }[];
+  return rows.map((r) => ({ city: r.city, gmv: Number(r.gmv), orders: Number(r.orders) }));
 }
 
 // Real-time server metrics. In a container, node:os reads the HOST kernel → these reflect the VPS
@@ -182,72 +357,39 @@ export async function getStoreBilling(id: string): Promise<BillingState | null> 
 }
 
 // ---- platform metrics ----
+//
+// MRR has exactly ONE definition now, and it lives in getSubscriptionStats(): the sum of what each
+// paying store is actually billed next month (Rp50rb while on the first-month promo, Rp275rb after,
+// VIP excluded). getPlatform() used to compute its own — active × Rp275rb — which ignored the promo
+// and produced Rp1.100.000 on the same dashboard where the subscription card said Rp875.000. Two
+// MRRs, one page. Now there is one.
+//
+// GONE, and not replaced:
+//  · `churnRate` — was hardcoded `0` and rendered as a real KPI ("Churn 0%"). Nothing in the schema
+//    records a cancellation: a store that leaves just stops paying and slides to suspended. Churn is
+//    not computable, so it is not shown.
+//  · `getDeltas()` — five of its six values were literal `0` rendered as "▲ 0%" delta chips under a
+//    header reading "Perbandingan vs bulan lalu", and the sixth was the slope of a random series.
+//  · `getPlanDistribution()` — Pemula/Bisnis/Skala tiers. Legacy, forbidden, and rendered nowhere.
 export type Platform = {
   mrr: number; gmv: number; totalStores: number; activeStores: number;
-  trialStores: number; suspendedStores: number; newSignups30d: number; churnRate: number; arpu: number;
+  trialStores: number; pastDueStores: number; suspendedStores: number; newSignups30d: number; arpu: number;
 };
 
 export async function getPlatform(): Promise<Platform> {
-  const stores = await getStores();
-  const active = stores.filter((s) => s.status === "aktif");
-  const mrr = active.filter((s) => !s.comped).length * BILLING.MONTHLY_IDR; // single plan; VIP/comped excluded
+  const [stores, sub] = await Promise.all([getStores(), getSubscriptionStats()]);
+  const paying = sub.active; // non-comped, inside a paid period
   return {
-    mrr,
-    gmv: stores.reduce((a, s) => a + s.gmv, 0),
+    mrr: sub.mrr,
+    gmv: stores.reduce((a, s) => a + s.gmv, 0), // merchants' transaction value — NOT our revenue
     totalStores: stores.length,
-    activeStores: active.length,
-    trialStores: stores.filter((s) => s.status === "trial").length,
-    suspendedStores: stores.filter((s) => s.status === "ditangguhkan").length,
-    newSignups30d: stores.filter((s) => s.createdDaysAgo <= 30).length, // derived (honest for single-tenant)
-    churnRate: 0, // no cancellations
-    arpu: active.length ? Math.round(mrr / active.length) : 0,
+    activeStores: sub.active + sub.vip,
+    trialStores: sub.trial,
+    pastDueStores: sub.pastDue,
+    suspendedStores: sub.suspended,
+    newSignups30d: stores.filter((s) => s.createdDaysAgo <= 30).length,
+    arpu: paying ? Math.round(sub.mrr / paying) : 0,
   };
-}
-
-// 12-month synthetic MRR uptrend, scaled so the final point equals current MRR.
-export function buildMrrSeries(currentMrr: number): { month: string; mrr: number }[] {
-  const MONTHS = ["Ags", "Sep", "Okt", "Nov", "Des", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul"];
-  const rnd = mulberry32(4242);
-  let v = currentMrr * 0.42;
-  const pts = MONTHS.map((m) => {
-    v = v * (1.06 + rnd() * 0.05);
-    return { month: m, mrr: Math.round(v) };
-  });
-  const last = pts[pts.length - 1]?.mrr || 1;
-  const k = currentMrr / last;
-  return pts.map((p) => ({ ...p, mrr: Math.round(p.mrr * k) }));
-}
-
-export async function getMrrSeries(): Promise<{ month: string; mrr: number }[]> {
-  const { mrr } = await getPlatform();
-  return buildMrrSeries(mrr);
-}
-
-export type Deltas = { mrr: number; gmv: number; activeStores: number; newSignups30d: number; churn: number; arpu: number };
-export async function getDeltas(): Promise<Deltas> {
-  const series = await getMrrSeries();
-  const prev = series.length >= 2 ? series[series.length - 2].mrr : series[0]?.mrr ?? 0;
-  const cur = series[series.length - 1]?.mrr ?? 0;
-  // Single-tenant MVP: only the MRR trend has a real month-over-month basis;
-  // cross-store comparison deltas are 0 until there's more than one store.
-  return {
-    mrr: prev ? Number((((cur - prev) / prev) * 100).toFixed(1)) : 0,
-    gmv: 0,
-    activeStores: 0,
-    newSignups30d: 0,
-    churn: 0,
-    arpu: 0,
-  };
-}
-
-export async function getPlanDistribution(): Promise<{ plan: Plan; name: string; count: number; mrr: number }[]> {
-  const stores = await getStores();
-  return PLANS.map((p) => ({
-    plan: p.key,
-    name: p.name,
-    count: stores.filter((s) => s.plan === p.key).length,
-    mrr: stores.filter((s) => s.plan === p.key && s.status === "aktif").length * p.price,
-  }));
 }
 
 export async function getStatusDistribution(): Promise<{ status: StoreStatus; label: string; count: number }[]> {
@@ -266,15 +408,100 @@ export async function getInvoices(): Promise<Invoice[]> {
     .select({
       number: schema.invoices.number,
       store: schema.accounts.name,
-      plan: schema.invoices.planKey,
       amount: schema.invoices.amountIdr,
       status: schema.invoices.status,
       issuedAt: schema.invoices.issuedAt,
     })
     .from(schema.invoices)
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.invoices.accountId))
-    .orderBy(asc(schema.invoices.number));
-  return rows.map((r) => ({ id: r.number, store: r.store, plan: r.plan, amount: r.amount, status: r.status, daysAgo: daysBetween(r.issuedAt) }));
+    .orderBy(desc(schema.invoices.issuedAt));
+  return rows.map((r) => ({ id: r.number, store: r.store, amount: r.amount, status: r.status, daysAgo: daysBetween(r.issuedAt) }));
+}
+
+/**
+ * THE OPERATOR'S WORKLIST — every store that needs a human today, and why, in one query.
+ *
+ * This is the screen that did not exist. The information was all in the database and all scattered:
+ * a store's grace clock lived in `computeBilling` (store detail), its failed invoice lived in a
+ * table row on /paket, its silence lived inside a health "verdict" that flattened four different
+ * problems into one amber dot. An operator could not answer "who do I call this morning?"
+ *
+ * Each reason is a fact with a query behind it, and reasons stack — a store can be past-due AND
+ * sitting on a failed payment AND dormant, which is exactly the store you call first.
+ */
+export type RiskReason =
+  | { kind: "grace"; daysLeft: number } // past due, inside the 3-day grace → suspends in N days
+  | { kind: "suspended" } // grace exhausted, storefront read-only
+  | { kind: "failed_invoice"; count: number; amount: number } // tried to pay, payment failed
+  | { kind: "unpaid_invoice"; count: number; amount: number; oldestDays: number }
+  | { kind: "trial_ending"; daysLeft: number } // trial ends within 2 days, never paid
+  | { kind: "dormant"; days: number } // paying, but no order in 30+ days → will not renew
+  | { kind: "never_ordered" }; // paying, zero orders ever
+
+export type RiskStore = { id: string; name: string; owner: string; email: string; comped: boolean; severity: number; reasons: RiskReason[] };
+
+const DORMANT_DAYS = 30;
+const TRIAL_ENDING_DAYS = 2;
+
+export async function getRiskQueue(): Promise<RiskStore[]> {
+  const [stores, invRows] = await Promise.all([
+    getStores(),
+    db.execute(sql`
+      select store_id as "storeId", status,
+             count(*)::int                  as "cnt",
+             coalesce(sum(amount_idr),0)::bigint as "amount",
+             max(now() - issued_at)         as "oldest"
+      from invoices
+      where store_id is not null and status in ('gagal','menunggu')
+      group by store_id, status
+    `) as unknown as Promise<{ storeId: string; status: "gagal" | "menunggu"; cnt: number; amount: string; oldest: { days?: number } | string }[]>,
+  ]);
+  const bill = await db
+    .select({ id: schema.stores.id, trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid, comped: schema.stores.comped })
+    .from(schema.stores);
+  const billById = new Map(bill.map((b) => [b.id, b]));
+
+  // Postgres returns an interval; the driver hands it back as an object ({days: n}) or a string.
+  const intervalDays = (v: { days?: number } | string | null): number => {
+    if (!v) return 0;
+    if (typeof v === "object") return Number(v.days ?? 0);
+    const m = /(\d+)\s*day/.exec(v);
+    return m ? Number(m[1]) : 0;
+  };
+
+  const out: RiskStore[] = [];
+  for (const s of stores) {
+    const b = billById.get(s.id);
+    if (!b) continue;
+    const state = computeBilling(b);
+    const reasons: RiskReason[] = [];
+
+    // 1) billing lifecycle — the clock that ends in a suspension
+    if (!s.comped) {
+      if (state.status === "past_due") reasons.push({ kind: "grace", daysLeft: state.daysLeft });
+      else if (state.status === "suspended") reasons.push({ kind: "suspended" });
+      else if (state.status === "trial" && state.daysLeft <= TRIAL_ENDING_DAYS) reasons.push({ kind: "trial_ending", daysLeft: state.daysLeft });
+    }
+
+    // 2) money that did not arrive
+    for (const r of invRows.filter((r) => r.storeId === s.id)) {
+      if (r.status === "gagal") reasons.push({ kind: "failed_invoice", count: Number(r.cnt), amount: Number(r.amount) });
+      else reasons.push({ kind: "unpaid_invoice", count: Number(r.cnt), amount: Number(r.amount), oldestDays: intervalDays(r.oldest) });
+    }
+
+    // 3) a paying store that has stopped trading is next month's churn — but a store still on trial
+    //    with no orders is just new, so it is not counted.
+    if (state.status !== "trial") {
+      if (s.lastOrderDays == null) reasons.push({ kind: "never_ordered" });
+      else if (s.lastOrderDays >= DORMANT_DAYS) reasons.push({ kind: "dormant", days: s.lastOrderDays });
+    }
+
+    if (!reasons.length) continue;
+    const weight = (r: RiskReason) =>
+      r.kind === "suspended" ? 100 : r.kind === "grace" ? 90 - r.daysLeft : r.kind === "failed_invoice" ? 70 : r.kind === "unpaid_invoice" ? 50 : r.kind === "trial_ending" ? 40 : r.kind === "never_ordered" ? 30 : 20;
+    out.push({ id: s.id, name: s.name, owner: s.owner, email: s.email, comped: s.comped, severity: Math.max(...reasons.map(weight)), reasons });
+  }
+  return out.sort((a, b) => b.severity - a.severity || a.name.localeCompare(b.name));
 }
 
 export async function getActivity(): Promise<PActivity[]> {
@@ -512,14 +739,20 @@ export async function getPayoutPolicy(): Promise<PayoutPolicy> {
 }
 
 // The store's comped/VIP state + reason (for the detail control card).
-export async function getStoreComp(storeId: string): Promise<{ comped: boolean; reason: string | null; ship7d: number }> {
+//
+// It used to also return `ship7d` (store_stats.ship7d_avg) — "kiriman/hari, 7 hari terakhir". There
+// is no source for that figure anywhere: `fulfillments` is empty and no `shipments` table exists. It
+// was a seeded integer, and it drove a banner that told the operator "Volume tinggi (24/hari) —
+// pertimbangkan jadikan VIP gratis?", i.e. it invited them to give away a Rp275rb/mo subscription on
+// the strength of a made-up number. Both are gone; the real volume figures (orders30d / GMV) are on
+// the same page and an operator can read them.
+export async function getStoreComp(storeId: string): Promise<{ comped: boolean; reason: string | null }> {
   const [s] = await db
-    .select({ comped: schema.stores.comped, reason: schema.stores.compedReason, ship7d: schema.storeStats.ship7dAvg })
+    .select({ comped: schema.stores.comped, reason: schema.stores.compedReason })
     .from(schema.stores)
-    .leftJoin(schema.storeStats, eq(schema.storeStats.storeId, schema.stores.id))
     .where(eq(schema.stores.id, storeId))
     .limit(1);
-  return { comped: s?.comped ?? false, reason: s?.reason ?? null, ship7d: s?.ship7d ?? 0 };
+  return { comped: s?.comped ?? false, reason: s?.reason ?? null };
 }
 
 // ---- saldo & transaksi (per store — the platform's window into ONE merchant's money) ----
@@ -676,11 +909,12 @@ export type StoreMoneySignals = {
 };
 
 export async function getStoreMoneySignals(storeId: string): Promise<StoreMoneySignals> {
-  // Windows are anchored to the seed's TODAY (like every other relative figure in this file), and
+  // Windows run back from the REAL clock (as does every other relative figure in this file), and are
   // passed as ISO text with an explicit cast — the raw-SQL driver binds parameters as text.
-  const since90 = new Date(TODAY.getTime() - 90 * 86_400_000).toISOString();
-  const since30 = new Date(TODAY.getTime() - 30 * 86_400_000).toISOString();
-  const since60 = new Date(TODAY.getTime() - 60 * 86_400_000).toISOString();
+  const now = Date.now();
+  const since90 = new Date(now - 90 * 86_400_000).toISOString();
+  const since30 = new Date(now - 30 * 86_400_000).toISOString();
+  const since60 = new Date(now - 60 * 86_400_000).toISOString();
 
   const [payoutRow] = (await db.execute(sql`
     select

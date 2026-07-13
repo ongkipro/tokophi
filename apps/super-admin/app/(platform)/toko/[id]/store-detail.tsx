@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ChevronLeft, ExternalLink, Ban, Play, ShoppingBag, Package, CalendarDays, Wallet, Truck,
+  ChevronLeft, ExternalLink, Ban, Play, ShoppingBag, Package, Wallet, Activity,
   User, Mail, MapPin, UserPlus, Gift, Crown, KeyRound, Clock, Copy, Trash2, Users,
   CircleCheck, AlertTriangle, CircleAlert, Receipt, Send,
 } from "lucide-react";
@@ -20,12 +20,12 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@tokophi/ui/dropdown-menu";
 import { cn } from "@tokophi/ui/lib/utils";
 
-import { type Store } from "@/lib/mock";
+import { type Store } from "@/lib/types";
 import { BILLING, SEGMENT_META, type BillingState } from "@tokophi/lib/billing";
 import { type StoreHealth, type CheckStatus, checkToneClass } from "@/lib/health-types";
 import { SegmentBadge, StatusBadge, HealthBadge, InvoiceBadge, ActivityIcon, initials } from "@/components/bits";
 import type { StoreInvoiceRow, StoreUserRow, StoreBalance, StoreMovement, StorePayout, StoreMoneySignals } from "@/lib/data";
-import type { PActivity } from "@/lib/mock";
+import type { PActivity } from "@/lib/types";
 import { SaldoSection } from "./saldo-section";
 import {
   impersonateStore, setStoreStatus, compStore, extendTrial, setStoreComped,
@@ -34,7 +34,6 @@ import {
 } from "@/lib/actions";
 import { IDR, num } from "@tokophi/lib/format";
 
-const VIP_THRESHOLD = 20; // shipments/day — above this, suggest VIP; a comped VIP below it, suggest revert
 const BAR_TONE: Record<StoreHealth["verdict"], string> = { sehat: "bg-emerald-500", perhatian: "bg-amber-500", bermasalah: "bg-destructive" };
 const ROLE_LABEL: Record<string, string> = { owner: "Owner", admin: "Admin", staff: "Staf", gudang: "Gudang" };
 
@@ -46,7 +45,7 @@ function CheckIcon({ status }: { status: CheckStatus }) {
 export function StoreDetail({ store, health, billing, invoices, users, activity, comp, balance, movements, payouts, signals }: {
   store: Store; health: StoreHealth | null; billing: BillingState | null;
   invoices: StoreInvoiceRow[]; users: StoreUserRow[]; activity: PActivity[];
-  comp: { comped: boolean; reason: string | null; ship7d: number };
+  comp: { comped: boolean; reason: string | null };
   balance: StoreBalance;
   movements: { rows: StoreMovement[]; total: number; page: number; pages: number };
   payouts: StorePayout[];
@@ -62,7 +61,7 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
   const [invoiceInfo, setInvoiceInfo] = useState<{ number: string; va?: string; reused?: boolean } | null>(null);
   // VIP reason dialog
   const [vipOpen, setVipOpen] = useState(false);
-  const [vipReason, setVipReason] = useState(`Volume ${comp.ship7d}/hari — dibebaskan platform`);
+  const [vipReason, setVipReason] = useState(`${store.orders30d} pesanan/30 hari — dibebaskan platform`);
   // add-user dialog
   const [addOpen, setAddOpen] = useState(false);
   const [auName, setAuName] = useState("");
@@ -120,16 +119,20 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
     });
   }
 
+  // Every figure here is derived from `orders` / `products` at read time (lib/data.ts STORES_SQL).
+  // GMV excludes cancelled orders. There is no "kiriman/hari" card any more — `fulfillments` is
+  // empty and no shipments table exists, so the number it showed had no source at all.
   const stats = [
-    { label: "GMV", value: IDR(store.gmv, { compact: true }), icon: Wallet },
-    { label: "Pesanan", value: num(store.orders), icon: ShoppingBag },
-    { label: "Kiriman/hari (7d)", value: num(comp.ship7d), icon: Truck, hot: comp.ship7d >= VIP_THRESHOLD },
-    { label: "Produk", value: num(store.products), icon: Package },
-    { label: "Bergabung", value: `${store.createdDaysAgo} hari`, icon: CalendarDays },
+    { label: "GMV (di luar batal)", value: IDR(store.gmv, { compact: true }), icon: Wallet },
+    { label: "Total pesanan", value: num(store.orders), icon: ShoppingBag },
+    { label: "Pesanan 30 hari", value: num(store.orders30d), icon: Activity, hot: store.orders30d > 0 },
+    { label: "Produk aktif", value: num(store.products), icon: Package },
+    {
+      label: "Order terakhir",
+      value: store.lastOrderDays == null ? "Belum pernah" : `${store.lastOrderDays} hari lalu`,
+      icon: Clock,
+    },
   ];
-
-  const suggestVip = !comp.comped && comp.ship7d >= VIP_THRESHOLD;
-  const suggestRevert = comp.comped && comp.ship7d < VIP_THRESHOLD;
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
@@ -162,18 +165,6 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm dark:border-violet-900/50 dark:bg-violet-950/30">
           <span className="flex items-center gap-2 text-violet-700 dark:text-violet-300"><Crown className="size-4" /> <b>VIP</b> — langganan dibebaskan{comp.reason ? ` · ${comp.reason}` : ""}. Tidak ada tagihan bulanan.</span>
           <Button size="sm" variant="outline" disabled={pending} onClick={revertVip}>Cabut VIP</Button>
-        </div>
-      )}
-      {suggestVip && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
-          <span className="flex items-center gap-2 text-amber-800 dark:text-amber-300"><Crown className="size-4" /> Volume tinggi (<b>{comp.ship7d}/hari</b>). Pertimbangkan jadikan <b>VIP gratis</b>?</span>
-          <Button size="sm" variant="outline" disabled={pending} onClick={() => setVipOpen(true)}>Jadikan VIP</Button>
-        </div>
-      )}
-      {suggestRevert && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm dark:border-sky-900/50 dark:bg-sky-950/30">
-          <span className="flex items-center gap-2 text-sky-800 dark:text-sky-300"><Clock className="size-4" /> Volume turun (<b>{comp.ship7d}/hari</b>) untuk toko VIP. Aktifkan kembali paket berbayar?</span>
-          <Button size="sm" variant="outline" disabled={pending} onClick={revertVip}>Kembalikan berbayar</Button>
         </div>
       )}
 

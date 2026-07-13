@@ -17,7 +17,7 @@ import {
   Play,
   Plus,
   Crown,
-  Truck,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,7 +36,6 @@ import {
   DialogClose,
 } from "@tokophi/ui/dialog";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
-import { Badge } from "@tokophi/ui/badge";
 import {
   Table,
   TableHeader,
@@ -54,7 +53,7 @@ import {
   DropdownMenuSeparator,
 } from "@tokophi/ui/dropdown-menu";
 
-import { type Plan, type Store } from "@/lib/mock";
+import { type Store } from "@/lib/types";
 import { type HealthVerdict } from "@/lib/health-types";
 import { initials, StatusBadge, HealthBadge, SegmentBadge } from "@/components/bits";
 import { SEGMENT_META, type StoreSegment } from "@tokophi/lib/billing";
@@ -167,7 +166,7 @@ export function TokoClient({
 
   function toggleVip(s: Store) {
     startTransition(async () => {
-      await setStoreComped(s.id, !s.comped, s.comped ? undefined : `Volume ${s.ship7d}/hari — dibebaskan platform`);
+      await setStoreComped(s.id, !s.comped, s.comped ? undefined : `${s.orders30d} pesanan/30 hari — dibebaskan platform`);
       toast.success(s.comped ? `“${s.name}” kembali berbayar.` : `“${s.name}” dijadikan VIP (gratis).`);
       router.refresh();
     });
@@ -175,7 +174,7 @@ export function TokoClient({
 
   function submitCreate() {
     startTransition(async () => {
-      const r = await createStore({ name: nsName, ownerName: nsOwner, email: nsEmail, city: nsCity, plan: "bisnis" });
+      const r = await createStore({ name: nsName, ownerName: nsOwner, email: nsEmail, city: nsCity });
       if (r.ok && r.storeId) {
         toast.success(`Toko “${nsName}” dibuat.`);
         setCreateOpen(false);
@@ -192,9 +191,7 @@ export function TokoClient({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Toko</h1>
-          <p className="text-sm text-muted-foreground">
-            Katalog toko merchant — dikelompokkan per tahap langganan. Klik toko untuk kontrol penuh.
-          </p>
+  
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger render={<Button className="gap-1.5"><Plus className="size-4" /> Tambah toko</Button>} />
@@ -308,8 +305,9 @@ export function TokoClient({
                 <TableHead>Status</TableHead>
                 <TableHead>Kesehatan</TableHead>
                 <TableHead className="text-right">GMV</TableHead>
-                <TableHead className="text-right">Kiriman/hari</TableHead>
-                <TableHead className="hidden text-right md:table-cell">Pesanan</TableHead>
+                <TableHead className="text-right">Pesanan (30h)</TableHead>
+                <TableHead className="hidden text-right md:table-cell">Total pesanan</TableHead>
+                <TableHead className="hidden md:table-cell">Order terakhir</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
@@ -332,11 +330,18 @@ export function TokoClient({
                   <TableCell><HealthBadge verdict={verdictOf(s.id)} /></TableCell>
                   <TableCell className="text-right tabular-nums">{IDR(s.gmv, { compact: true })}</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    <span className={cn("inline-flex items-center gap-1", s.ship7d >= 20 && "font-semibold text-primary")}>
-                      <Truck className="size-3.5 text-muted-foreground" />{num(s.ship7d)}
-                    </span>
+                    <span className={cn(s.orders30d === 0 && "text-muted-foreground")}>{num(s.orders30d)}</span>
                   </TableCell>
                   <TableCell className="hidden text-right tabular-nums md:table-cell">{num(s.orders)}</TableCell>
+                  <TableCell className="hidden whitespace-nowrap md:table-cell">
+                    {s.lastOrderDays == null ? (
+                      <span className="text-xs text-muted-foreground">Belum pernah</span>
+                    ) : (
+                      <span className={cn("inline-flex items-center gap-1 text-xs tabular-nums", s.lastOrderDays >= 30 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground")}>
+                        <Clock className="size-3.5" />{s.lastOrderDays} hari lalu
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()} className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Aksi ${s.name}`} />}>
@@ -369,7 +374,7 @@ export function TokoClient({
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">Tidak ada toko yang cocok.</TableCell>
+                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">Tidak ada toko yang cocok.</TableCell>
                 </TableRow>
               )}
             </TableBody>

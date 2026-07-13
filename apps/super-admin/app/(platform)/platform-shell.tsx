@@ -17,7 +17,7 @@ import { signOut } from "@/lib/actions/auth";
 
 type Admin = { name: string; email: string };
 
-export function PlatformShell({ admin, children }: { admin: Admin; children: React.ReactNode }) {
+export function PlatformShell({ admin, openTickets, children }: { admin: Admin; openTickets: number; children: React.ReactNode }) {
   const pathname = usePathname();
 
   const isActive = (href: string) =>
@@ -47,6 +47,8 @@ export function PlatformShell({ admin, children }: { admin: Admin; children: Rea
           {NAV.map((item) => {
             const active = isActive(item.href);
             const Icon = item.icon;
+            // Real count of support_tickets with status = 'open'.
+            const badge = item.href === "/tiket" && openTickets > 0 ? openTickets : 0;
             return (
               <Link
                 key={item.href}
@@ -59,7 +61,12 @@ export function PlatformShell({ admin, children }: { admin: Admin; children: Rea
                 )}
               >
                 <Icon className="size-4 shrink-0" />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {badge > 0 && (
+                  <span className="flex min-w-5 items-center justify-center rounded-full bg-amber-500/15 px-1.5 text-[11px] font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                    {badge}
+                  </span>
+                )}
               </Link>
             );
           })}
