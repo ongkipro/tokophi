@@ -1,9 +1,11 @@
 // Pure derivation utils for Dashboard/Analitik. The data (daily series, products, orders,
 // activities) is fetched from the DB in the server wrapper and passed in — no storage access
 // here, so these stay callable client-side (the range switcher re-derives on the client).
-import { hourlyFor, type DayPoint, type Product, type Order, type Activity } from "@/lib/mock/store";
+import { hourlyFor, type DayPoint, type Product, type Order, type Activity, type Review } from "@/lib/mock/store";
 import type { FunnelDay, DeviceDay } from "@/lib/data/funnel";
 import type { ChannelDay, ProductSaleDay } from "@/lib/data/analytics";
+import type { CourierReturns } from "@/lib/data/returns";
+import type { TicketRow } from "@/lib/data/support";
 
 export type RangeKey = "today" | "yesterday" | "7d" | "30d" | "month" | "lastmonth";
 
@@ -127,7 +129,9 @@ export function getRecentOrders(orders: Order[], limit = 6) {
   return orders.slice(0, limit);
 }
 export function getStatusCounts(orders: Order[]) {
-  const order: ("baru" | "diproses" | "dikirim" | "selesai" | "batal")[] = ["baru", "diproses", "dikirim", "selesai", "batal"];
+  // `retur` included (migration 0039) — a returned order shipped and came back; it must not hide
+  // inside "batal", which never left the warehouse.
+  const order: Order["status"][] = ["baru", "diproses", "dikirim", "selesai", "retur", "batal"];
   return order.map((s) => ({ status: s, count: orders.filter((o) => o.status === s).length }));
 }
 export function getActivities(activities: Activity[], limit = 8) {
@@ -186,6 +190,188 @@ export function getFunnel(rows: FunnelDay[], all: DayPoint[], key: RangeKey, ste
 
 export type DeviceSlice = { device: string; count: number; pct: number };
 const DEVICE_LABEL: Record<string, string> = { ponsel: "Ponsel", desktop: "Desktop", tablet: "Tablet", lainnya: "Lainnya" };
+
+// ---------------------------------------------------------------------------
+// Seller-centre layer: the action queue, the money strip, the return rate.
+//
+// An Indonesian seller opens the dashboard to answer ONE question — "what do I have to do right
+// now, and is money stuck anywhere?" — so these three blocks lead the page and the vanity KPIs
+// follow. Everything below is a PURE derivation over rows the server already fetched (orders /
+// products / reviews / support_tickets / getReturnsByCourier), so every number on the dashboard
+// traces back to an existing RLS-scoped query. Nothing here invents a figure, and a count of ZERO
+// renders as a calm "beres" state rather than a made-up number.
+// ---------------------------------------------------------------------------
+
+/** Same threshold as /produk/inventori's "Menipis" tab, so the two screens can never disagree. */
+export const LOW_STOCK = 20;
+
+export type QueueTone = "urgent" | "warn" | "info";
+export type QueueItem = {
+  key: string;
+  label: string;
+  count: number;
+  href: string;
+  /** Extra context, shown only when count > 0. */
+  hint?: string;
+  /** Shown when count === 0. */
+  done: string;
+  tone: QueueTone;
+};
+
+/**
+ * "Antrian Kerja" — every row is a thing the seller can clear, with the screen that clears it.
+ *
+ * NOTE on reviews: the queue says "Ulasan perlu ditinjau" (reviews.status = 'menunggu'), NOT
+ * "ulasan belum dibalas". There is no reply column on `reviews` and no replies table, so a
+ * "belum dibalas" count would be fiction. Moderation is the real, gated action today.
+ */
+export function getActionQueue(
+  orders: Order[],
+  products: Product[],
+  reviews: Review[],
+  tickets: TicketRow[],
+): QueueItem[] {
+  const count = (s: Order["status"]) => orders.filter((o) => o.status === s).length;
+  const active = products.filter((p) => p.status === "active");
+  const out = active.filter((p) => p.stock === 0).length;
+  const low = active.filter((p) => p.stock > 0 && p.stock < LOW_STOCK).length;
+  const pendingReviews = reviews.filter((r) => r.status === "menunggu").length;
+  const openTickets = tickets.filter((t) => t.status === "open").length;
+
+  return [
+    {
+      key: "dikirim",
+      label: "Perlu dikirim",
+      count: count("diproses"),
+      href: "/pesanan",
+      hint: "pesanan siap diproses",
+      done: "Tidak ada yang menunggu dikirim",
+      tone: "urgent",
+    },
+    {
+      key: "baru",
+      label: "Pesanan baru",
+      count: count("baru"),
+      href: "/pesanan",
+      hint: "belum dikonfirmasi",
+      done: "Semua pesanan sudah dikonfirmasi",
+      tone: "urgent",
+    },
+    {
+      key: "stok",
+      label: "Stok menipis",
+      count: low + out,
+      href: "/produk/inventori",
+      hint: out ? `${out} produk habis` : `sisa < ${LOW_STOCK} unit`,
+      done: "Stok semua produk aman",
+      tone: out ? "urgent" : "warn",
+    },
+    {
+      key: "ulasan",
+      label: "Ulasan perlu ditinjau",
+      count: pendingReviews,
+      href: "/pelanggan/ulasan",
+      hint: "menunggu moderasi",
+      done: "Semua ulasan sudah ditinjau",
+      tone: "warn",
+    },
+    {
+      key: "tiket",
+      label: "Tiket bantuan",
+      count: openTickets,
+      href: "/bantuan",
+      hint: "masih terbuka",
+      done: "Tidak ada tiket terbuka",
+      tone: "info",
+    },
+  ];
+}
+
+export type StuckMoney = { orders: number; value: number };
+
+/** "Uang tertahan": the rupiah sitting in orders the seller has not shipped yet (baru + diproses). */
+export function getStuckMoney(orders: Order[]): StuckMoney {
+  const open = orders.filter((o) => o.status === "baru" || o.status === "diproses");
+  return { orders: open.length, value: open.reduce((a, o) => a + o.total, 0) };
+}
+
+export type MoneyTile = { key: RangeKey; label: string; value: number; delta: number; compareLabel: string; spark: number[] };
+
+/**
+ * "Uang masuk" — penjualan hari ini / 7 hari / 30 hari, each vs the SAME-LENGTH previous period.
+ * Fixed ranges on purpose (a seller centre always shows all three at once); they do NOT follow the
+ * range switcher, which drives the chart below. Built on `resolve()`/`getSummary()` — no new maths.
+ *
+ * ⚠️ SOURCE = `analytics_daily`, the same table the chart and /analitik read, so the page can never
+ * contradict itself. But `analytics_daily` DOES NOT reconcile with the `orders` table: for June the
+ * rollup says Rp117.9jt / 646 orders while `orders` holds Rp8.4jt / 23 rows for the same window.
+ * The rollup is seeded independently of the order rows — it is real data from a real table, but it
+ * is NOT a projection of the orders a merchant can open. Fixing that belongs in packages/db (make
+ * the seed derive analytics_daily FROM orders, or make the rollup a view). Until then, every money
+ * figure on this page reads from the rollup and "Uang tertahan" (below) reads from `orders` — the
+ * two answer different questions, so they do not visibly clash, but do not add them together.
+ */
+export function getMoneyTiles(all: DayPoint[]): MoneyTile[] {
+  const tiles: { key: RangeKey; label: string }[] = [
+    { key: "today", label: "Penjualan hari ini" },
+    { key: "7d", label: "Penjualan 7 hari" },
+    { key: "30d", label: "Penjualan 30 hari" },
+  ];
+  return tiles.map(({ key, label }) => {
+    const s = getSummary(all, key);
+    const { days } = resolve(all, key);
+    return {
+      key,
+      label,
+      value: s.sales.value,
+      delta: s.sales.delta,
+      compareLabel: s.compareLabel,
+      // "today" is a single day → give the sparkline the last 14 days for shape.
+      spark: (days.length > 1 ? days : all.slice(-14)).map((d) => d.sales),
+    };
+  });
+}
+
+export type ReturnSummary = {
+  shipped: number;
+  returned: number;
+  rate: number; // 0..1
+  codShipped: number;
+  codReturned: number;
+  codRate: number;
+  nonCodShipped: number;
+  nonCodReturned: number;
+  nonCodRate: number;
+  byCourier: CourierReturns[];
+};
+
+/**
+ * Tingkat retur — the single most expensive thing that can happen to an Indonesian seller running
+ * COD. Rolls up `getReturnsByCourier()` (orders.status = 'retur', migration 0039). Denominator =
+ * orders that actually SHIPPED (dikirim | selesai | retur); an order still in `baru`/`diproses`
+ * never had the chance to be refused and counting it would flatter the rate.
+ */
+export function getReturnSummary(rows: CourierReturns[]): ReturnSummary {
+  const add = (k: keyof CourierReturns) => rows.reduce((a, r) => a + (r[k] as number), 0);
+  const shipped = add("shipped");
+  const returned = add("returned");
+  const codShipped = add("codShipped");
+  const codReturned = add("codReturned");
+  const nonCodShipped = shipped - codShipped;
+  const nonCodReturned = returned - codReturned;
+  return {
+    shipped,
+    returned,
+    rate: shipped ? returned / shipped : 0,
+    codShipped,
+    codReturned,
+    codRate: codShipped ? codReturned / codShipped : 0,
+    nonCodShipped,
+    nonCodReturned,
+    nonCodRate: nonCodShipped ? nonCodReturned / nonCodShipped : 0,
+    byCourier: [...rows].sort((a, b) => b.returned - a.returned || b.shipped - a.shipped),
+  };
+}
 
 /** Device split (share of SESSIONS in the range). `null` when the store has no visit events. */
 export function getDeviceSplit(rows: DeviceDay[], all: DayPoint[], key: RangeKey): DeviceSlice[] | null {

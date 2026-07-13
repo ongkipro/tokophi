@@ -1,26 +1,30 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Wallet, ShoppingBag, Users, Target, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { DateRangeSwitcher } from "@/components/admin/date-range-switcher";
-import { KpiCard } from "@/components/admin/kpi-card";
 import { SalesChart } from "@/components/admin/sales-chart";
 import { ChannelChart } from "@/components/admin/channel-chart";
 import { TopProducts } from "@/components/admin/top-products";
 import { RecentOrders } from "@/components/admin/recent-orders";
 import { LiveActivity } from "@/components/admin/live-activity";
 import { OrderStatusBadge } from "@/components/admin/order-status";
+import { ActionQueue } from "@/components/admin/dashboard/action-queue";
+import { MoneyStrip } from "@/components/admin/dashboard/money-strip";
+import { ReturnByCourier } from "@/components/admin/dashboard/return-by-courier";
 import {
   type RangeKey, getSummary, getSeries, getTopProducts, getChannels,
   getRecentOrders, getActivities, getStatusCounts, rangeLabel,
   getVisitsKpi, getConversionKpi,
+  getActionQueue, getStuckMoney, getMoneyTiles, getReturnSummary,
 } from "@/lib/data/dashboard";
 import type { ChannelDay, ProductSaleDay } from "@/lib/data/analytics";
 import type { FunnelDay } from "@/lib/data/funnel";
-import type { DayPoint, Product, Order, Activity } from "@/lib/mock/store";
+import type { CourierReturns } from "@/lib/data/returns";
+import type { TicketRow } from "@/lib/data/support";
+import type { DayPoint, Product, Order, Activity, Review } from "@/lib/mock/store";
 import { IDR, num, pct } from "@/lib/format";
 import { exportCsv } from "@/lib/csv";
 
@@ -28,6 +32,9 @@ export function DashboardClient({
   days,
   products,
   orders,
+  reviews,
+  tickets,
+  returns,
   activities,
   channels,
   productSales,
@@ -38,6 +45,9 @@ export function DashboardClient({
   days: DayPoint[];
   products: Product[];
   orders: Order[];
+  reviews: Review[];
+  tickets: TicketRow[];
+  returns: CourierReturns[];
   activities: Activity[];
   channels: ChannelDay[];
   productSales: ProductSaleDay[];
@@ -48,25 +58,19 @@ export function DashboardClient({
   const [range, setRange] = useState<RangeKey>("30d");
   const s = getSummary(days, range);
   const { points } = getSeries(days, range);
-  const salesSpark = points.map((p) => p.sales);
-  const orderSpark = points.map((p) => p.orders);
+
+  // What has to be done RIGHT NOW + where the money is stuck. Counts only — every one of them is a
+  // filter over rows the server already fetched, so each traces back to an existing query.
+  const queue = getActionQueue(orders, products, reviews, tickets);
+  const stuck = getStuckMoney(orders);
+  const moneyTiles = getMoneyTiles(days);
+  const returnSummary = getReturnSummary(returns);
 
   // Pengunjung + Konversi are COUNTED from analytics_events; "—" when the store has no events.
   const visits = getVisitsKpi(funnel, days, range);
   const conversion = getConversionKpi(funnel, days, range);
   const topProducts = getTopProducts(productSales, range, days);
   const channelSlices = getChannels(channels, range, days);
-
-  const kpis = [
-    { label: "Penjualan", value: IDR(s.sales.value, { compact: true }), delta: s.sales.delta, icon: Wallet, spark: salesSpark },
-    { label: "Pesanan", value: num(s.orders.value), delta: s.orders.delta, icon: ShoppingBag, spark: orderSpark },
-    { label: "Pengunjung", value: visits ? num(visits.value) : "—", delta: visits?.delta ?? 0, icon: Users, spark: salesSpark },
-    { label: "Konversi", value: conversion ? `${conversion.value.toFixed(1)}%` : "—", delta: conversion?.delta ?? 0, icon: Target, spark: orderSpark },
-  ];
-
-  const target = 120_000_000;
-  const monthSales = getSummary(days, "month").sales.value;
-  const targetPct = Math.min(100, Math.round((monthSales / target) * 100));
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
@@ -75,7 +79,7 @@ export function DashboardClient({
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Halo {ownerName?.split(" ")[0] ?? "Ongki"} 👋 — ringkasan performa <span className="font-medium text-foreground">{storeName ?? "toko Anda"}</span>, {rangeLabel(range).toLowerCase()}.
+            Halo {ownerName?.split(" ")[0] ?? "Ongki"} 👋 — ini yang perlu Anda kerjakan di <span className="font-medium text-foreground">{storeName ?? "toko Anda"}</span> hari ini.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -90,18 +94,23 @@ export function DashboardClient({
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((k) => <KpiCard key={k.label} {...k} compareLabel={s.compareLabel} />)}
-      </div>
+      {/* 1 — what do I have to do right now? */}
+      <ActionQueue items={queue} stuck={stuck} />
 
-      {/* chart + live */}
+      {/* 2 — money at a glance (fixed ranges) + return rate */}
+      <MoneyStrip tiles={moneyTiles} returns={returnSummary} />
+
+      {/* chart + live activity — these follow the range switcher */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <div>
-              <CardTitle>Grafik Penjualan</CardTitle>
-              <CardDescription>Total {IDR(s.sales.value)} · {pct(s.sales.delta)} vs {s.compareLabel}</CardDescription>
+              <CardTitle>Grafik Penjualan · {rangeLabel(range)}</CardTitle>
+              <CardDescription>
+                {IDR(s.sales.value)} · {pct(s.sales.delta)} vs {s.compareLabel} · {num(s.orders.value)} pesanan
+                {visits ? ` · ${num(visits.value)} pengunjung` : ""}
+                {conversion ? ` · konversi ${conversion.value.toFixed(1)}%` : ""}
+              </CardDescription>
             </div>
             <div className="hidden items-center gap-4 text-xs text-muted-foreground sm:flex">
               <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded bg-[var(--chart-1)]" /> Periode ini</span>
@@ -137,7 +146,7 @@ export function DashboardClient({
         </Card>
       </div>
 
-      {/* channels + status + target */}
+      {/* channels + status + returns */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader><CardTitle>Sumber Penjualan</CardTitle><CardDescription>Channel yang tercatat di tiap pesanan</CardDescription></CardHeader>
@@ -163,22 +172,7 @@ export function DashboardClient({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader><CardTitle>Target Bulan Ini</CardTitle><CardDescription>Progres menuju target</CardDescription></CardHeader>
-          <CardContent>
-            <div className="flex items-end justify-between">
-              <div className="text-2xl font-bold tabular-nums">{IDR(monthSales, { compact: true })}</div>
-              <Badge variant="secondary" className="bg-primary/12 text-primary">{targetPct}%</Badge>
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">dari target {IDR(target, { compact: true })}</div>
-            <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-gradient-to-r from-primary to-primary/70" style={{ width: `${targetPct}%` }} />
-            </div>
-            <p className="mt-4 text-sm text-muted-foreground">
-              {targetPct >= 100 ? "🎉 Target tercapai!" : `Perlu ${IDR(target - monthSales, { compact: true })} lagi untuk capai target.`}
-            </p>
-          </CardContent>
-        </Card>
+        <ReturnByCourier returns={returnSummary} />
       </div>
     </div>
   );
