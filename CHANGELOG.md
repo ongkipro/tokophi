@@ -4,6 +4,17 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-13
 
+### 🚀 `tokophi.com` is live — domain cutover + per-merchant storefronts
+- **`<slug>.tokophi.com` serves that merchant's storefront**, from a single storefront container, with the tenant resolved from the `Host` header. Verified in production: `batik-nusantara.tokophi.com` → "Batik Nusantara", `kopi-senja.tokophi.com` → "Kopi Senja", an unknown slug → a clean 404.
+- **The self-serve loop is closed:** a store signed up through the real `/daftar` form on production immediately had a working HTTPS storefront at its own subdomain — **no deploy, no DNS change, no manual configuration**. (Test tenant purged afterwards.)
+- Surfaces: `tokophi.com` + `www` → the new **landing** app · `app.` → client admin · `rich.` → super-admin · `toko.` → demo store. Old `.sslip.io` hosts still routed as a fallback.
+- **TLS:** Let's Encrypt cannot issue a wildcard over HTTP-01, so the per-merchant hosts are served with a **Cloudflare Origin CA certificate** (valid to 2041) installed as Traefik's default certificate. It is trusted **only by Cloudflare**, so every `tokophi.com` DNS record must stay **proxied** — which also means the origin IP is never exposed. Scheme `<slug>.tokophi.com` (one label deep) was chosen because Cloudflare's free Universal SSL covers only a single wildcard level.
+- **Traefik router priority is load-bearing:** the wildcard rule also matches `app.`/`rich.`, and Traefik ranks routers by rule *length* by default — the regexp is longer, so without an explicit `priority=1` the storefront would have taken over the admin domain.
+
+### Landing page (`apps/landing`)
+- New static Astro app for the apex — "Segera hadir", with working **Masuk** / **Daftar toko** links. Deliberately has **no database and no dependency on Postgres**: the front door must be servable even when everything behind it is down.
+- **Fixed a bug it shipped with:** the CTAs rendered `href=""` in production. A bare `ARG` with no `--build-arg` sets the env var to the *empty string*, not `undefined`, so the page's `??` fallback never fired — invisible in local dev, where the variable was simply absent.
+
 ### Self-serve signup + Google OAuth (P1.6)
 - **`/daftar`** — public signup: one transaction creates account + owner user (scrypt) + store (`trial`, +3 days) + `store_users(owner)` + location + settings + stats + a `platform_activity(signup)` row (`apps/admin/lib/provision.ts`). Slug auto-dedupes; duplicate email rejected. Verified end-to-end against the real DB.
 - **Google OAuth** — migration `0034` (`users.auth_provider`, `users.google_sub`), `/api/auth/google/{start,callback}` (jose + Google JWKS). Google on `/daftar` provisions a store; Google on `/login` with an unknown email is rejected (no silent store creation). Existing password users keep their `password_hash` when linking. **Feature-flagged** — with the env unset the button is hidden and the routes redirect. ⚠️ Not yet exercised against real Google credentials.

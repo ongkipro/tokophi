@@ -51,15 +51,18 @@
 - [ ] **Landing page for the apex** (`tokophi.com`) — still not built; the domain cutover points apex/`www` at a placeholder or a redirect to `app.` until it exists.
 - [ ] **etc.** — capture more of the "own app / unified" vision as it firms up (notifications, presence, mobile).
 
-## P1.7 — Domain cutover to `tokophi.com` (decided 2026-07-13 — "biar presisi")
-> Triggered by `Host`-multi-tenant landing: multi-tenancy cannot be proven in prod on `.sslip.io`. `tokophi.com` is bought, zone is on Cloudflare, DNS not yet pointed. Box = `45.77.33.112` (Vultr SG, Coolify/Traefik). **Runbook: `DEPLOY.md` → "Going live on tokophi.com".**
+## P1.7 — Domain cutover to `tokophi.com` — ✅ **DONE 2026-07-13, LIVE**
+> Scheme: **`<slug>.tokophi.com`** (one label deep → free Cloudflare Universal SSL, stays proxied). TLS for the wildcard = **Cloudflare Origin CA cert** as Traefik's default cert (LE cannot issue a wildcard over HTTP-01) → **every record must stay PROXIED**. Full detail + gotchas in WORKLOG 2026-07-13 and `DEPLOY.md`.
 
-- **Hostname scheme DECIDED: `<slug>.tokophi.com`** (one label deep) — covered by Cloudflare **Universal SSL** (`*.tokophi.com`) → **free** and can stay **proxied** (origin IP hidden). Rejected `<slug>.toko.tokophi.com`: two levels deep, NOT covered by Universal SSL → would need paid ACM (~$10/mo) or an origin LE DNS-01 wildcard with grey-cloud DNS (exposes the origin IP). **No code change** — set `STOREFRONT_BASE_DOMAIN=tokophi.com`; RESERVED labels (`www/app/rich/admin/api/cname/toko/…`) already never resolve as a store slug.
-- Surfaces: `tokophi.com`+`www` = landing (not built → placeholder/redirect), `app.` = client admin, `rich.` = super-admin, `toko.` = demo store, `<slug>.` = per-merchant storefront.
-- [ ] DNS records in Cloudflare (needs an API token — Zone:DNS:Edit + Zone:Zone:Read on `tokophi.com`).
-- [ ] Coolify per-service domains + Traefik wildcard router for the storefront (`Host` must be preserved).
-- [ ] Cross-surface env (`PUBLIC_APP_URL`/`ADMIN_URL`/`PUBLIC_ONGKIR_API`/`PUBLIC_ORDER_API` → `https://app.tokophi.com`) + `STOREFRONT_BASE_DOMAIN` + billing-cron URL + AutoLaris callback.
-- [ ] Cloudflare hardening after certs: Full (strict), Always Use HTTPS, cache bypass for `app.`/`rich.`/`/api/*`.
+- [x] DNS in Cloudflare — `@`, `www`, `app`, `rich`, `toko`, `*` → `45.77.33.112`, all **proxied**. (Proxied wildcard turned out to be allowed on the **Free** plan.)
+- [x] Coolify per-service domains (old `.sslip.io` hosts kept alongside as a fallback) + **Traefik wildcard router** with **`priority=1`** — load-bearing: the regexp also matches `app.`/`rich.` and Traefik's default priority is rule LENGTH, so without it the storefront would have hijacked the admin host.
+- [x] Cross-surface env → `https://app.tokophi.com`, plus `STOREFRONT_BASE_DOMAIN=tokophi.com` + `STORE_SLUG` fallback.
+- [x] **Landing app** (`apps/landing`, static Astro, "Segera hadir", no DB) on the apex + `www`.
+- [x] **Verified in production:** a store signed up through the real `/daftar` form got a working HTTPS storefront at `<its-slug>.tokophi.com` with **zero deploys and zero DNS work**.
+- [ ] **⏳ YOU: set the zone's SSL mode to `Full (strict)`** in the Cloudflare dashboard — our API token lacks *Zone Settings: Edit*, so it could not be set programmatically.
+- [ ] Cloudflare cache rules: bypass for `app.`/`rich.`/`/api/*`; cache `/_astro/*` + `/products/*` on storefront hosts.
+- [ ] Billing-cron URL + AutoLaris callback still point at the old host — move to `https://app.tokophi.com` (`PUBLIC_APP_URL` is already correct, verify the AutoLaris dashboard).
+- [ ] A Coolify API token **`claude-domain-cutover`** was created for this cutover — revoke it when you want.
 
 ## P2 — Missing modules (from the concept feature map)
 - [x] **Storefront (Astro)** — DONE: Batik Nusantara reads the shared catalog live; real variant picker (Warna/Ukuran → live price+stock) + variant-aware cart (keranjang/checkout).

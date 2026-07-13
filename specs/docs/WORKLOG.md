@@ -3,7 +3,7 @@
 > Newest first. What we did + what's next, so any session can resume instantly.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-07-13) · **LIVE + healthy on Vultr SG + Coolify** (admin/super/toko .sslip.io — **domain cutover to `tokophi.com` in progress**) · RBAC + RLS enforcing · single-plan billing (PPN 11%) · super-admin store-control · client Akun section · support tiket 2-sisi · manual invoice + reminder · image→WebP · **self-serve signup `/daftar` + Google OAuth (flagged)** · **storefront SSR + `Host`-header MULTI-TENANT (one deploy serves every store)** · **Tema: named template variants + per-kategori/produk assignment** · chat spec written (not built) · provider brands hidden (white-label)
+## ▶ CURRENT STATE (2026-07-13) · **LIVE ON `tokophi.com`** (landing · `app.` admin · `rich.` super-admin · `toko.` demo · **`<slug>.tokophi.com` = per-merchant storefront**, Cloudflare-proxied HTTPS, Vultr SG + Coolify) · RBAC + RLS enforcing · single-plan billing (PPN 11%) · super-admin store-control · client Akun section · support tiket 2-sisi · manual invoice + reminder · image→WebP · **self-serve signup `/daftar` + Google OAuth (flagged)** · **storefront SSR + `Host`-header MULTI-TENANT (one deploy serves every store)** · **Tema: named template variants + per-kategori/produk assignment** · chat spec written (not built) · provider brands hidden (white-label)
 
 ## 2026-07-13 — Session: P1.6 in parallel (signup+OAuth · Host-multi-tenant · Tema variants · chat spec) 🚧 uncommitted
 > 4 disjoint tracks run in parallel in worktree `super-admin-overhaul`. All 3 builds pass (`build:admin`, `build:super`, storefront `astro build` with `DATABASE_URL` UNSET = still DB-free). **Not yet committed/deployed** — domain cutover decided mid-session, so code lands together with it.
@@ -27,7 +27,29 @@
 - Also pre-existing, unfixed: `/bantuan`'s `bantuan-client.tsx` calls `Date.now()` during render → hydration mismatch (violates the determinism rule in CLAUDE.md/AGENTS.md).
 - All 3 builds green (storefront `astro build` still DB-free). **Chat migration slot moved `0035` → `0036`** (CHAT_SPEC updated).
 
-## ⏭ NEXT — domain cutover `tokophi.com` (decided 2026-07-13) + remaining P1.6
+## 2026-07-13 — Session (cont.): 🚀 **DOMAIN CUTOVER DONE — `tokophi.com` IS LIVE** (+ Astro landing) ✅
+> The whole point: with `Host`-multi-tenant landed, multi-tenancy could not be *proven* on `.sslip.io`. It is proven in production now.
+
+**Live hosts (all HTTPS, all Cloudflare-proxied):**
+| Host | Serves | Verified |
+|---|---|---|
+| `tokophi.com` + `www.` | **landing** (new Astro app, "Segera hadir") | 200 |
+| `app.tokophi.com` | client admin | 200 (`/login`, `/daftar`) |
+| `rich.tokophi.com` | super-admin | 200 |
+| `toko.tokophi.com` | demo store (fallback `STORE_SLUG`) | 200 |
+| **`<slug>.tokophi.com`** | **that merchant's storefront** | `batik-nusantara.` → "Batik Nusantara", `kopi-senja.` → "Kopi Senja", unknown slug → **404** |
+
+- **🏆 END-TO-END PROOF:** signed up a brand-new store through the real `/daftar` form on production → immediately redirected into the admin, and **`uji-cutover.tokophi.com` served its storefront over HTTPS with ZERO deploys, ZERO DNS work, ZERO manual config**. Self-serve loop closed: *daftar → toko hidup*. (Test tenant purged afterwards; 7 stores before = 7 after; its host 404s again.)
+- **TLS — the crux.** Let's Encrypt **cannot** issue a wildcard over HTTP-01, so `<slug>.tokophi.com` can never have an origin LE cert. Solution: a **Cloudflare Origin CA certificate** (`*.tokophi.com` + apex, valid to **2041**) installed as Traefik's **default certificate** (`/data/coolify/proxy/dynamic/tokophi-origin-tls.yaml`, cert in `proxy/certs/`). It is trusted **only by Cloudflare** → **every record MUST stay PROXIED (orange)**; a grey-cloud record would hand browsers a cert they reject. Upside vs. the old runbook plan (grey → LE → orange): the origin IP is **never** exposed, not even briefly.
+- **⚠️ Traefik priority is load-bearing.** The wildcard router `HostRegexp(^[a-z0-9-]+\.tokophi\.com$)` also matches `app.`/`rich.`/`toko.`/`www.`, and **Traefik's default priority is the rule's LENGTH** — the regexp is longer than `Host(\`app.tokophi.com\`)`, so it would have **outranked the admin router and served the storefront on app.tokophi.com**. Fixed with `priority=1` (lowest): explicit Host routers always win, the catch-all only sees what nothing else claimed. `RESERVED` in `store.ts` is the second line of defence.
+- **Hostname scheme `<slug>.tokophi.com`** (one label deep) — Cloudflare **Universal SSL covers only one wildcard level**, so this is free + proxied. `<slug>.toko.tokophi.com` would have needed paid ACM (~$10/mo) or a grey-cloud DNS-01 wildcard. **Proxied wildcard DNS turned out to be allowed on the FREE plan** (contrary to the old Enterprise-only assumption — verified by creating it).
+- **Landing app (`apps/landing`)** — static Astro, port 4328, **no DB and no `depends_on: postgres`** (the front door must be servable even when everything behind it is down). "Segera hadir" + working **Masuk** / **Daftar toko** CTAs.
+  - **🐛 Shipped broken once, caught by the link audit:** the CTAs rendered `href=""` in production. Cause: a bare `ARG PUBLIC_LOGIN_URL` with no `--build-arg` sets the env var to the **empty string**, not `undefined`, so the page's `?? default` fallback never fired. Local dev never hit it (the var was simply absent). Fixed in both layers (ARG defaults + `||` instead of `??`) and reproduced the exact failure before redeploying.
+- **Coolify wiring (all via SSH/API, no UI):** per-service domains keep the old `.sslip.io` hosts **alongside** the new ones as a fallback; env `PUBLIC_APP_URL`/`ADMIN_URL`/`PUBLIC_ONGKIR_API`/`PUBLIC_ORDER_API` → `https://app.tokophi.com`, plus `STOREFRONT_BASE_DOMAIN=tokophi.com` + `STORE_SLUG=batik-nusantara`. Coolify stores env **Laravel-encrypted AND PHP-serialized** (`s:34:"…";`) — `scratchpad/cf_env.py` replicates the exact envelope (AES-256-CBC + HMAC over base64(iv)+base64(value)) and verifies by decrypting back.
+- **Prod DB after deploy:** 36 migrations applied, `users.auth_provider`+`google_sub` present, RLS **on** for `support_tickets`+`support_messages`, **7 stores intact** — the seed's "only seed an EMPTY database" guard held, so no merchant data was wiped.
+- **⏳ Left for you:** the zone's **SSL mode must be `Full (strict)`** — our API token has *SSL and Certificates: Edit* (enough to issue the Origin CA cert) but **not** *Zone Settings: Edit*, so the setting could not be read or changed programmatically. Set it in the dashboard. Also: a Coolify API token named **`claude-domain-cutover`** was created (revoke it in Coolify → Keys & Tokens whenever you like).
+
+## ⏭ NEXT — remaining P1.6
 > User: "perlu kita setup domain sekarang biar presisi" — the `Host`-multi-tenant storefront cannot be proven in prod without a real domain. **Scheme decided: `<slug>.tokophi.com` (one label deep)** — covered by Cloudflare **Universal SSL** (`*.tokophi.com`) so it is FREE and can stay **proxied** (origin IP hidden). The alternative `<slug>.toko.tokophi.com` is two levels deep, which Universal SSL does NOT cover (needs paid ACM ~$10/mo, or an origin LE DNS-01 wildcard with grey-cloud DNS that exposes the origin IP). Set `STOREFRONT_BASE_DOMAIN=tokophi.com` — **no code change needed**. See `DEPLOY.md` → "Going live on tokophi.com".
 - Remaining P1.6: **custom domain per merchant** (`stores.custom_domain`/`store_domains` + the `slugFromCustomDomain()` seam + Cloudflare-for-SaaS CNAME `cname.tokophi.com`) · **chat** (CHAT_SPEC slice 1+) · **landing page** for the apex (not built) · Google OAuth needs real credentials · storefront must consume category/product templates · `stores` lacks `tagline`/`whatsapp` columns (still platform constants → wrong for non-demo tenants).
 

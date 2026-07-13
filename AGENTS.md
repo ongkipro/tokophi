@@ -2,13 +2,15 @@
 
 Shopify-style commerce SaaS for Indonesia. **No Themes menu, no Apps/Plugins.** **Backend live on local PostgreSQL** (Docker :5433, Drizzle): all 3 surfaces READ + all 12 admin editors WRITE the DB, plus local auth (login/session) + local media upload (see Database below). Bahasa Indonesia UI, IDR. **Prod target = self-hosted Postgres + PostgREST on a VPS (NOT Supabase), deferred.** Full spec: `~/Documents/Development/tokophi/PRD.md`.
 
-## Monorepo (npm workspaces) — 3 surfaces
+## Monorepo (npm workspaces) — 4 surfaces
+**LIVE on `tokophi.com`** (2026-07-13): `tokophi.com`/`www` = landing · `app.` = admin · `rich.` = super-admin · `toko.` = demo store · **`<slug>.tokophi.com` = that merchant's storefront** (ONE storefront container serves every store — the tenant is resolved from the `Host` header, ADR 0009). ⚠️ Every `tokophi.com` DNS record must stay **Cloudflare-proxied**: the wildcard's TLS is a Cloudflare **Origin CA** cert (LE can't issue a wildcard over HTTP-01) which browsers do NOT trust directly. See `DEPLOY.md`.
 ```
 tokophi/
   apps/
     admin/        # merchant/store admin (@tokophi/admin) — what a shop owner uses
     super-admin/  # platform control plane (@tokophi/super-admin) — what WE use (manage all stores/plans/billing)
-    storefront/   # Astro shopper site (planned, M2)
+    storefront/   # Astro SSR shopper site — multi-tenant by Host header
+    landing/      # @tokophi/landing — static Astro front door for the apex (no DB on purpose)
   packages/
     ui/           # @tokophi/ui — shared shadcn/Base UI components + cn + Tailwind v4 tokens (styles.css)
     lib/          # @tokophi/lib — shared formatters (IDR/num/…)

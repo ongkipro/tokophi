@@ -49,7 +49,16 @@ sync** run via `GET /api/cron/billing?secret=$CRON_SECRET` — schedule it **dai
 
 See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!), `KIRIMINAJA_API_KEY`, `AUTOLARIS_API_KEY`, `AUTOLARIS_CALLBACK_SECRET`. Cross-surface URLs (set AFTER domains assigned): `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API`.
 
-## 🚀 Going live on `tokophi.com` (when final)
+## ✅ `tokophi.com` is LIVE (cutover done 2026-07-13)
+> The runbook below is kept as the record of HOW it was done. Current live state:
+> `tokophi.com`/`www` → **landing** (`apps/landing`, static Astro) · `app.` → admin · `rich.` → super-admin · `toko.` → demo store · **`<slug>.tokophi.com` → that merchant's storefront** (one storefront container serves every store; tenant read from the `Host` header). All records **proxied**; old `.sslip.io` hosts still routed as a fallback.
+>
+> **Three things that will bite whoever touches this next:**
+> 1. **TLS for `<slug>.tokophi.com` comes from a Cloudflare Origin CA cert** (`/data/coolify/proxy/dynamic/tokophi-origin-tls.yaml`, cert in `proxy/certs/`, valid to 2041) served as Traefik's **default certificate**. Let's Encrypt **cannot** issue a wildcard over HTTP-01. That cert is trusted **only by Cloudflare** → **never set a `tokophi.com` record to DNS-only (grey)**; browsers would hit it directly and reject it. Zone SSL mode must be **Full (strict)**.
+> 2. **The wildcard Traefik router carries `priority=1` on purpose.** `HostRegexp(^[a-z0-9-]+\.tokophi\.com$)` also matches `app.`/`rich.`/`toko.`/`www.`, and Traefik's **default priority is the rule's LENGTH** — the regexp is longer than `Host(\`app.tokophi.com\`)`, so without the explicit low priority the **storefront hijacks the admin domain**. Do not remove it.
+> 3. **Coolify env vars are Laravel-encrypted AND PHP-serialized** (`s:34:"…";`). Editing them by raw SQL without replicating that envelope corrupts them. `cf_env.py` (session scratchpad, in the WORKLOG entry) does it correctly and verifies by decrypting back.
+
+## 🚀 Going live on `tokophi.com` — the runbook that was executed
 
 > Currently everything runs on `*.45.77.33.112.sslip.io` (no real domain). `tokophi.com` is bought + its zone is on Cloudflare (2026-07-09), DNS not yet pointed. **The code is env-driven** — going live is DNS + env + redeploy, no code changes. Topology: **Cloudflare edge → Coolify/Traefik (45.77.33.112) → containers**.
 

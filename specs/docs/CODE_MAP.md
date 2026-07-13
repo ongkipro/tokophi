@@ -25,7 +25,11 @@ tokophi/
   apps/
     admin/          # merchant admin — 39 routes, 22 action files, 22 data files
     super-admin/    # platform control plane — 8 routes
-    storefront/     # Astro shopper site
+    storefront/     # Astro SSR shopper site — ONE deploy serves every store (tenant from the Host header):
+                    #   src/middleware.ts → getStoreByHost() → {store, catalog} on Astro.locals
+                    #   src/data/store.ts (host→store, RESERVED labels, custom-domain SEAM) · cache.ts (per-store TTL)
+    landing/        # @tokophi/landing — static Astro front door for tokophi.com ("Segera hadir").
+                    #   NO database, NO depends_on: postgres — must serve even when the rest is down.
   packages/
     db/             # @tokophi/db — Drizzle schema + migrations + seed + client (server-only)
     lib/            # @tokophi/lib — shared pure logic (billing, formatters, courier/PSP clients, …)
