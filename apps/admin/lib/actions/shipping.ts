@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant } from "@/lib/tenant";
+import { getCodPolicy } from "@/lib/cod";
 import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { resolveArea } from "@/lib/data/areas";
 
@@ -16,7 +17,7 @@ export async function getShippingRates(input: {
   destinationCity: string;
   weightGrams: number;
   itemValue: number;
-}): Promise<{ ok: boolean; rates: Rate[]; origin?: string; destination?: string; error?: string }> {
+}): Promise<{ ok: boolean; rates: Rate[]; origin?: string; destination?: string; codEnabled?: boolean; error?: string }> {
   const session = await getSession();
   if (!session) return { ok: false, rates: [], error: "Sesi tidak valid." };
   if (!kiriminajaConfigured()) return { ok: false, rates: [], error: "KiriminAja belum dikonfigurasi oleh platform (super-admin → Pengaturan)." };
@@ -37,11 +38,16 @@ export async function getShippingRates(input: {
 
   const r = await kaShippingPrice({ origin, destination, weight: Math.max(1000, input.weightGrams || 0), itemValue: input.itemValue, insurance: 0 });
   if (!r.ok) return { ok: false, rates: [], error: r.error ?? "Gagal mengambil tarif dari KiriminAja." };
+  // Same EFFECTIVE COD flag the storefront sees (lib/cod.ts): the merchant's own switch + the
+  // platform's per-service allowance. Booking a COD shipment on a service the platform disallowed
+  // is exactly the return-cost trap cod_enabled exists to prevent — so it isn't offered here either.
+  const cod = await getCodPolicy(session.storeId);
   return {
     ok: true,
     origin: originOpts[0]?.text,
     destination: destOpts[0]?.text,
-    rates: r.results.map((x) => ({ service: x.service_name, code: x.service, type: x.service_type, cost: Number(x.cost), etd: x.etd, cod: x.cod, group: x.group })),
+    codEnabled: cod.enabled,
+    rates: r.results.map((x) => ({ service: x.service_name, code: x.service, type: x.service_type, cost: Number(x.cost), etd: x.etd, cod: x.cod && cod.allows(x.service, x.service_type), group: x.group })),
   };
 }
 
@@ -242,6 +248,12 @@ export async function createShipment(input: {
 }): Promise<{ ok: boolean; awb?: string; error?: string }> {
   const { storeId } = await requireCapability("orders:write");
   if (!kiriminajaConfigured()) return { ok: false, error: "KiriminAja belum dikonfigurasi oleh platform." };
+  // Booking a COD shipment tells the courier to collect cash — same money path as a COD checkout,
+  // so the same policy gate (store switch × platform per-service allowance).
+  if (input.cod) {
+    const reason = (await getCodPolicy(storeId)).reason(input.service, input.serviceType);
+    if (reason) return { ok: false, error: reason };
+  }
 
   const data = await withTenant(storeId, async (db) => {
     const [s] = await db.select().from(schema.storeSettings).where(eq(schema.storeSettings.storeId, storeId)).limit(1);

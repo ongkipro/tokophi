@@ -163,6 +163,9 @@ export function OrderDetail({ order, payment }: { order: Order; payment: OrderPa
   const [ratePending, startRate] = React.useTransition();
   const [rates, setRates] = React.useState<Rate[]>([]);
   const [rateMeta, setRateMeta] = React.useState<{ origin?: string; destination?: string }>({});
+  // COD is offered here only when the store's own switch (Pengaturan → Jasa Kirim) + the platform
+  // allow it; the rates response carries the effective flag per service (lib/cod.ts).
+  const [codAvailable, setCodAvailable] = React.useState(false);
   const checkOngkir = () => {
     startRate(async () => {
       const weightGrams = (lines.reduce((a, l) => a + l.qty, 0) || 2) * 500;
@@ -170,6 +173,8 @@ export function OrderDetail({ order, payment }: { order: Order; payment: OrderPa
       if (r.ok) {
         setRates(r.rates);
         setRateMeta({ origin: r.origin, destination: r.destination });
+        setCodAvailable(!!r.codEnabled);
+        if (!r.codEnabled) setCodShipment(false);
         setRateOpen(true);
       } else {
         toast.error(r.error ?? "Gagal cek ongkir");
@@ -600,9 +605,11 @@ export function OrderDetail({ order, payment }: { order: Order; payment: OrderPa
               <label className="flex items-center gap-1.5 cursor-pointer">
                 <input type="checkbox" checked={insureShipment} onChange={(e) => setInsureShipment(e.target.checked)} className="size-4 accent-primary" /> Asuransi
               </label>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={codShipment} onChange={(e) => setCodShipment(e.target.checked)} className="size-4 accent-primary" /> COD (tagih {IDR(total)})
-              </label>
+              {codAvailable && (
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={codShipment} onChange={(e) => setCodShipment(e.target.checked)} className="size-4 accent-primary" /> COD (tagih {IDR(total)})
+                </label>
+              )}
             </div>
           )}
           <div className="mt-2 max-h-[60vh] overflow-y-auto rounded-lg border">

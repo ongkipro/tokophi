@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { kaShippingPrice, kaInstantPricing, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { resolveArea } from "@/lib/data/areas";
 import { rateLimited } from "@/lib/public-guard";
+import { getCodPolicy } from "@/lib/cod";
 
 // Public (no-auth) storefront-facing shipping endpoint. The storefront checkout calls this to
 // (a) search a destination area and (b) get live KiriminAja rates. Shipping is platform-managed
@@ -89,10 +90,21 @@ export async function POST(req: Request) {
       insurance: 0,
     });
     if (!r.ok) return NextResponse.json({ ok: false, error: r.error ?? "Gagal mengambil tarif." }, { headers: CORS });
-    let rates = r.results.map((x) => ({ name: x.service_name, code: x.service, type: x.service_type, cost: Number(x.cost), etd: x.etd, cod: x.cod }));
+    // `cod` on a rate is the EFFECTIVE flag, not KiriminAja's raw capability: the merchant's switch
+    // (store_settings.cod_enabled) AND the platform's per-service allowance must both agree, or the
+    // storefront would keep advertising COD on a store that turned it off (lib/cod.ts).
+    const cod = store ? await getCodPolicy(store.id) : null;
+    let rates = r.results.map((x) => ({
+      name: x.service_name,
+      code: x.service,
+      type: x.service_type,
+      cost: Number(x.cost),
+      etd: x.etd,
+      cod: !!x.cod && !!cod?.allows(x.service, x.service_type),
+    }));
     // filter by effective couriers (platform is the hard cap; empty platform = show all as fallback)
     if (platformOn.length) rates = rates.filter((x) => effective.includes(x.code));
-    return NextResponse.json({ ok: true, rates }, { headers: CORS });
+    return NextResponse.json({ ok: true, rates, codEnabled: !!cod?.enabled }, { headers: CORS });
   }
 
   return NextResponse.json({ ok: false, error: "op tidak dikenal." }, { status: 400, headers: CORS });

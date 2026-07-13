@@ -1,6 +1,6 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import { enabledPaymentChannels, mediaUrl } from "../data/catalog";
+import { enabledPaymentChannels, mediaUrl, storeCodEnabled } from "../data/catalog";
 
 // ADR 0009 §4 — checkout is LOCKED (not part of the Store Builder); its only per-store variance is
 // branding read from the store profile: the logo (stores.logo_url) + the brand colour (already
@@ -29,17 +29,23 @@ const PROVINCES = [
 ];
 
 // Payment channels = whatever the platform (super-admin) enabled (platform_payment_channels),
-// read at build. Brand hidden — generic method labels only. + COD.
+// read per request. Brand hidden — generic method labels only.
 const payDesc = (kind: string, label: string) =>
   kind === "qris" ? "Scan dari semua e-wallet & m-banking"
   : kind === "va" ? "Bayar via ATM / m-banking"
   : kind === "ewallet" ? `Bayar pakai saldo ${label}`
   : kind === "retail" ? `Bayar tunai di gerai ${label}`
   : "Bayar online";
-const PAYMENTS = [
-  ...(await enabledPaymentChannels()).map((c) => ({ id: c.code, label: c.label, desc: payDesc(c.kind, c.label) })),
-  { id: "cod", label: "COD (Bayar di Tempat)", desc: "Bayar tunai saat paket tiba" },
-];
+const PAYMENTS = (await enabledPaymentChannels()).map((c) => ({ id: c.code, label: c.label, desc: payDesc(c.kind, c.label) }));
+
+// COD is NOT a payment channel like the others — it is a merchant switch (store_settings.cod_enabled,
+// migration 0038, default OFF) narrowed further by a per-service platform allowance. So:
+//   · store switched COD off → the option is not rendered at all (below)
+//   · store switched it on   → the option is rendered but stays hidden until the shopper picks a
+//     shipping service whose rate came back with cod:true (the ongkir API returns the EFFECTIVE
+//     flag). No disabled-but-visible row implying "ask us nicely".
+// Either way /api/public/order re-checks and rejects a COD order it should not accept.
+const COD_ENABLED = await storeCodEnabled(store.id);
 ---
 
 <Layout title="Checkout" description={`Selesaikan pesananmu di ${store.name}.`}>
@@ -196,6 +202,21 @@ const PAYMENTS = [
                 </label>
               ))
             }
+            {
+              COD_ENABLED && (
+                <label
+                  id="cod-option"
+                  hidden
+                  class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50"
+                >
+                  <input type="radio" name="payment" value="cod" data-label="COD (Bayar di Tempat)" disabled class="h-4 w-4 accent-brand-600" />
+                  <span class="flex-1">
+                    <span class="block text-sm font-medium text-ink">COD (Bayar di Tempat)</span>
+                    <span class="block text-xs text-muted">Bayar tunai saat paket tiba</span>
+                  </span>
+                </label>
+              )
+            }
           </div>
           <p class="mt-4 text-xs text-muted">Pembayaran diproses aman — disediakan TokoΦ.</p>
         </fieldset>
@@ -258,7 +279,7 @@ const PAYMENTS = [
   }
 </style>
 
-<script is:inline define:vars={{ ONGKIR_API, ORDER_API, ORIGIN_CITY, STORE_SLUG }}>
+<script is:inline define:vars={{ ONGKIR_API, ORDER_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -319,10 +340,38 @@ const PAYMENTS = [
       return el ? Number(el.getAttribute("data-price")) : 0;
     }
 
+    // ---- COD availability (store_settings.cod_enabled × per-service platform allowance) ----
+    // The store-level switch decided whether #cod-option exists at all (server-side). Whether it may
+    // be USED depends on the shipping service the shopper picked: the ongkir API returns an already
+    // effective `cod` flag per rate, which we stamp on each shipping radio as data-cod. No COD-capable
+    // service selected → the option is hidden AND disabled (a disabled-but-visible row would just be
+    // the same lie in a nicer font). /api/public/order re-checks this server-side regardless.
+    var codOption = document.getElementById("cod-option");
+    var codRadio = codOption ? codOption.querySelector('input[name="payment"]') : null;
+
+    function syncCod() {
+      if (!codOption || !codRadio) return;
+      var shipEl = form.querySelector('input[name="shipping"]:checked');
+      var allowed = !!COD_ENABLED && !!shipEl && shipEl.getAttribute("data-cod") === "1";
+      if (allowed) {
+        codOption.hidden = false;
+        codRadio.disabled = false;
+        return;
+      }
+      if (codRadio.checked) {
+        codRadio.checked = false;
+        var first = form.querySelector('input[name="payment"]:not([disabled])');
+        if (first) first.checked = true;
+      }
+      codRadio.disabled = true;
+      codOption.hidden = true;
+    }
+
     function recompute() {
       var ship = selectedShipping();
       document.getElementById("summary-shipping").textContent = idr.format(ship);
       document.getElementById("summary-total").textContent = idr.format(subtotal + ship);
+      syncCod();
     }
 
     function bindShipping() {
@@ -393,9 +442,11 @@ const PAYMENTS = [
         }
         var anyChecked = !!form.querySelector('input[name="shipping"]:checked');
         expressBox.innerHTML = res.rates.map(function (s, i) {
+          // s.cod is the EFFECTIVE flag from the API (KiriminAja capability × platform per-service
+          // allowance × this store's cod_enabled) — never the raw courier capability.
           var cod = s.cod ? ' <span class="ml-1 rounded bg-emerald-100 px-1 text-[10px] font-semibold text-emerald-700">COD</span>' : "";
           return '<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">' +
-            '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '"' + (i === 0 && !anyChecked ? " checked" : "") + ' required class="h-4 w-4 accent-brand-600" />' +
+            '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (i === 0 && !anyChecked ? " checked" : "") + ' required class="h-4 w-4 accent-brand-600" />' +
             '<span class="flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + cod + '</span><span class="block text-xs text-muted">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
             '<span class="text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
         }).join("");
@@ -424,7 +475,9 @@ const PAYMENTS = [
             instantGroup.classList.remove("hidden");
             instantBox.innerHTML = res.instant.map(function (s) {
               return '<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-brand-600/40 bg-brand-50/30 px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">' +
-                '<input type="radio" name="shipping" value="instant-' + esc(s.code) + '-' + esc(s.serviceType) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-inst-service="' + esc(s.code) + '" data-inst-type="' + esc(s.serviceType) + '" data-inst-cost="' + s.shippingCosts + '" required class="h-4 w-4 accent-brand-600" />' +
+                // instant (same-day courier) is dispatched immediately and is not part of the
+                // platform_couriers roster → no COD (data-cod="0"); the order API agrees.
+                '<input type="radio" name="shipping" value="instant-' + esc(s.code) + '-' + esc(s.serviceType) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="0" data-inst-service="' + esc(s.code) + '" data-inst-type="' + esc(s.serviceType) + '" data-inst-cost="' + s.shippingCosts + '" required class="h-4 w-4 accent-brand-600" />' +
                 '<span class="flex-1"><span class="block text-sm font-medium text-ink">⚡ ' + esc(s.name) + '</span><span class="block text-xs text-muted">' + esc(s.etd) + (res.distanceKm ? " · " + res.distanceKm + " km" : "") + '</span></span>' +
                 '<span class="text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
             }).join("");
@@ -451,6 +504,10 @@ const PAYMENTS = [
       var shipEl = form.querySelector('input[name="shipping"]:checked');
       var payEl = form.querySelector('input[name="payment"]:checked');
       var ship = shipEl ? Number(shipEl.getAttribute("data-price")) : 0;
+      if (!payEl) {
+        if (err) { err.textContent = "Pilih metode pembayaran."; err.classList.remove("hidden"); }
+        return;
+      }
 
       var order = {
         createdAt: new Date().toISOString(),
@@ -496,8 +553,15 @@ const PAYMENTS = [
           items: cart.map(function (i) { return { handle: i.handle, name: i.name, price: i.price, variant: i.variant || i.size || "", qty: i.qty }; }),
           customer: { name: order.shippingAddress.nama, phone: order.shippingAddress.whatsapp, email: order.contact.email },
           address: { alamat: order.shippingAddress.alamat, kota: order.shippingAddress.kota, provinsi: order.shippingAddress.provinsi, kodepos: order.shippingAddress.kodepos },
-          shipping: { label: order.shipping.label, cost: ship },
-          channelCode: payEl ? payEl.value : "cod",
+          // service/serviceType let the order API verify the COD allowance of the SERVICE the
+          // shopper actually picked (platform_couriers.services[].codAllowed) — a label + cost can't.
+          shipping: {
+            label: order.shipping.label,
+            cost: ship,
+            service: shipEl ? shipEl.getAttribute("data-svc-code") || undefined : undefined,
+            serviceType: shipEl ? shipEl.getAttribute("data-svc-type") || undefined : undefined,
+          },
+          channelCode: payEl.value,
           instant: (shipEl && shipEl.getAttribute("data-inst-service")) ? {
             service: shipEl.getAttribute("data-inst-service"),
             serviceType: shipEl.getAttribute("data-inst-type"),

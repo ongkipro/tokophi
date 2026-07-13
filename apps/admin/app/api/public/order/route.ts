@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { alCreatePayment, autolarisConfigured, AUTOLARIS_KNOWN_CHANNELS } from "@tokophi/lib/autolaris";
 import { kaCreateInstantOrder } from "@tokophi/lib/kiriminaja";
 import { rateLimited } from "@/lib/public-guard";
+import { getCodPolicy } from "@/lib/cod";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
     items?: Item[];
     customer?: { name?: string; phone?: string; email?: string };
     address?: { alamat?: string; kota?: string; provinsi?: string; kodepos?: string };
-    shipping?: { label?: string; cost?: number };
+    shipping?: { label?: string; cost?: number; service?: string; serviceType?: string };
     channelCode?: string;
     instant?: { service?: string; serviceType?: string; shippingCosts?: number; destLat?: number; destLng?: number };
   };
@@ -50,6 +51,21 @@ export async function POST(req: Request) {
   // resolve store (per-client storefront → one store)
   const [store] = await db.select({ id: schema.stores.id }).from(schema.stores).where(eq(schema.stores.slug, body.storeSlug || "batik-nusantara")).limit(1);
   if (!store) return NextResponse.json({ ok: false, error: "Toko tidak ditemukan." }, { headers: CORS });
+
+  // ── COD is a MONEY decision, so it is enforced here, not in the storefront UI ──────────────
+  // The merchant's switch (store_settings.cod_enabled, 0038) + the platform's per-service
+  // allowance (platform_couriers.services[].codAllowed) must both permit it. Hiding the option at
+  // checkout is UX; this is the boundary — a script posting channelCode:"cod" straight at the API
+  // gets a 403, never a silently-downgraded order (which would hide a COD request as a "transfer").
+  if (isCod) {
+    const policy = await getCodPolicy(store.id);
+    const svc = body.instant?.service ? null : body.shipping?.service; // instant is not in the roster → never COD
+    const svcType = body.instant?.service ? null : body.shipping?.serviceType;
+    const reason = policy.reason(svc, svcType);
+    if (reason) {
+      return NextResponse.json({ ok: false, error: reason, code: "cod_not_allowed" }, { status: 403, headers: CORS });
+    }
+  }
 
   const cust = body.customer ?? {};
   const addr = body.address ?? {};

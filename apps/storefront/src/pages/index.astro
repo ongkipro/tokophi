@@ -2,9 +2,14 @@
 import Layout from "../layouts/Layout.astro";
 import ProductCard from "../components/ProductCard.astro";
 import SectionRenderer from "../components/sections/SectionRenderer.astro";
+import { storeCodEnabled } from "../data/catalog";
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
 const { store, catalog } = Astro.locals;
+
+// Don't promise COD on a store that has it switched off (store_settings.cod_enabled) — the
+// checkout won't offer it and the order API rejects it, so the badge would be a lie.
+const COD_ENABLED = await storeCodEnabled(store.id);
 const HOMEPAGE_TEMPLATE = catalog.homepageTemplate;
 
 const best = catalog.bestsellers();
@@ -165,7 +170,9 @@ const collections = catalog.collections.map((c) => {
       {
         [
           { icon: "🚚", title: "Kirim se-Indonesia", text: "Pengiriman ke seluruh nusantara lewat kurir terpercaya." },
-          { icon: "💵", title: "COD Tersedia", text: "Bayar di tempat untuk area terpilih. Belanja tanpa khawatir." },
+          COD_ENABLED
+            ? { icon: "💵", title: "COD Tersedia", text: "Bayar di tempat untuk area terpilih. Belanja tanpa khawatir." }
+            : { icon: "🔒", title: "Transaksi Aman", text: "Pembayaran terenkripsi dan diproses lewat kanal resmi." },
           { icon: "📱", title: "QRIS & E-Wallet", text: "Bayar praktis pakai QRIS, transfer, atau dompet digital." },
         ].map((v) => (
           <div class="flex items-start gap-4 rounded-2xl bg-white/70 p-6 ring-1 ring-brand-100">

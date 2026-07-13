@@ -288,3 +288,22 @@ export async function enabledPaymentChannels(): Promise<{ code: string; label: s
     return rows.map((r) => ({ code: r.channel, label: r.label, kind: r.kind }));
   });
 }
+
+// COD (bayar di tempat) — offered at checkout only when the MERCHANT switched it on
+// (store_settings.cod_enabled, migration 0038, default false) AND the platform allows COD at all
+// (platform_cod.enabled). Whether the courier SERVICE the shopper picks may carry COD is decided
+// per rate by /api/public/ongkir (which returns the effective `cod` flag), and re-checked by
+// /api/public/order — the API is the boundary, this only decides whether to render the option.
+export async function storeCodEnabled(storeId: string): Promise<boolean> {
+  return cached(`store:cod:${storeId}`, async () => {
+    const [[ss], [pc]] = await Promise.all([
+      db
+        .select({ cod: schema.storeSettings.codEnabled })
+        .from(schema.storeSettings)
+        .where(eq(schema.storeSettings.storeId, storeId))
+        .limit(1),
+      db.select({ enabled: schema.platformCod.enabled }).from(schema.platformCod).limit(1),
+    ]);
+    return !!ss?.cod && !!pc?.enabled;
+  });
+}
