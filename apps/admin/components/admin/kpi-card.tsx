@@ -26,6 +26,13 @@ function Sparkline({ data, up }: { data: number[]; up: boolean }) {
   );
 }
 
+/**
+ * KPI tile: value + signed delta vs the previous period.
+ *
+ * The delta is printed SIGNED (`pct(delta)` → "−6,4%"), never `pct(Math.abs(delta))`: colour alone
+ * is not a number, and a merchant skimming the dashboard read a 6,4% DROP as "+6,4%". The arrow +
+ * colour still encode direction; the sign now agrees with them.
+ */
 export function KpiCard({
   label, value, delta, icon: Icon, spark, compareLabel,
 }: {
@@ -40,12 +47,12 @@ export function KpiCard({
         </span>
         <span
           className={cn(
-            "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-semibold",
+            "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums",
             up ? "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" : "bg-red-500/12 text-red-600 dark:text-red-400",
           )}
         >
           {up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-          {pct(Math.abs(delta))}
+          {pct(delta)}
         </span>
       </div>
       <div className="mt-3 flex items-end justify-between gap-3">

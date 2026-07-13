@@ -15,8 +15,16 @@ export const IDR = (n: number, opts: { compact?: boolean } = {}) => {
 
 export const num = (n: number) => new Intl.NumberFormat("id-ID").format(n);
 
-export const pct = (n: number, digits = 1) =>
-  `${n > 0 ? "+" : ""}${n.toFixed(digits)}%`;
+// DELTA formatter: always carries its own sign, so a fall reads as a fall even without the arrow.
+// "+16,9%" / "−6,4%" / "0,0%" — id-ID decimal comma, typographic minus (U+2212, matches the
+// money tiles). It is NOT a rate formatter: for a plain share/rate (e.g. tingkat retur) format
+// locally instead of borrowing the "+".
+// Negative input used to come out as "-6.4%" (ASCII hyphen, dot) and callers that passed
+// Math.abs(delta) got a bare "+6,4%" for a DECLINE — hence the explicit sign here.
+export const pct = (n: number, digits = 1) => {
+  const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+  return `${sign}${Math.abs(n).toFixed(digits).replace(".", ",")}%`;
+};
 
 export const timeAgo = (minutes: number) => {
   if (minutes < 1) return "baru saja";
