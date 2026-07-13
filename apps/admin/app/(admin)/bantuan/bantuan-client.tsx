@@ -13,12 +13,8 @@ import { Plus, LifeBuoy, ChevronRight } from "lucide-react";
 import { createTicket } from "@/lib/actions/support";
 import type { TicketRow } from "@/lib/data/support";
 import { useCan } from "@/components/admin/permissions";
+import { timeAgo } from "@/lib/format";
 import { TicketStatus } from "./ticket-status";
-
-const ago = (d: Date) => {
-  const m = Math.round((Date.now() - new Date(d).getTime()) / 60000);
-  return m < 60 ? `${m} mnt lalu` : m < 1440 ? `${Math.round(m / 60)} jam lalu` : `${Math.round(m / 1440)} hari lalu`;
-};
 
 export function BantuanClient({ tickets }: { tickets: TicketRow[] }) {
   const router = useRouter();
@@ -68,7 +64,7 @@ export function BantuanClient({ tickets }: { tickets: TicketRow[] }) {
               <Link key={t.id} href={`/bantuan/${t.id}`} className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40 ${i > 0 ? "border-t" : ""}`}>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{t.subject}</div>
-                  <div className="text-xs text-muted-foreground">Diperbarui {ago(t.lastMessageAt)}</div>
+                  <div className="text-xs text-muted-foreground">Diperbarui {timeAgo(t.minutesAgo)}</div>
                 </div>
                 <TicketStatus status={t.status} />
                 <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
