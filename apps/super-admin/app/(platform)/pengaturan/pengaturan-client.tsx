@@ -2,8 +2,9 @@
 
 import { useState, useTransition, type Dispatch, type SetStateAction, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug, QrCode, Landmark, Smartphone, Store } from "lucide-react";
+import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug, QrCode, Landmark, Smartphone, Store, RefreshCw, Info } from "lucide-react";
 import { toast } from "sonner";
+import type { CourierRow } from "@/lib/data";
 
 import {
   Card,
@@ -14,6 +15,7 @@ import {
 import { Button } from "@tokophi/ui/button";
 import { Badge } from "@tokophi/ui/badge";
 import { Switch } from "@tokophi/ui/switch";
+import { Checkbox } from "@tokophi/ui/checkbox";
 import { Label } from "@tokophi/ui/label";
 import { Input } from "@tokophi/ui/input";
 import { Separator } from "@tokophi/ui/separator";
@@ -35,10 +37,15 @@ import {
 } from "@tokophi/ui/dropdown-menu";
 import { cn } from "@tokophi/ui/lib/utils";
 import { initials } from "@/components/bits";
-import { saveGateways, saveCouriers, savePaymentChannels, syncPaymentChannels, invitePlatformAdmin, testKiriminajaConnection, testAutolarisConnection } from "@/lib/actions";
+import { saveGateways, saveCouriers, savePaymentChannels, syncPaymentChannels, invitePlatformAdmin, testKiriminajaConnection, testAutolarisConnection, saveCodAllowed, syncCouriersFromKiriminaja } from "@/lib/actions";
 import type { PaymentChannelRow } from "@/lib/data";
 
 type Toggle = { key: string; name: string; desc: string; on: boolean };
+
+// KiriminAja's own speed classes, in the words a merchant uses.
+const GROUP_LABEL: Record<string, string> = {
+  regular: "Reguler", one_day: "Same Day", next_day: "Next Day", economy: "Hemat", cargo: "Kargo",
+};
 type TeamMember = { id: string; name: string; email: string; role: string };
 
 const ROLE_CLASS: Record<string, string> = {
@@ -73,7 +80,7 @@ export function PengaturanClient({
   team,
 }: {
   gateways: Toggle[];
-  couriers: Toggle[];
+  couriers: CourierRow[];
   channels: PaymentChannelRow[];
   aggregator: { provider: string; enabled: boolean };
   team: TeamMember[];
@@ -136,10 +143,43 @@ export function PengaturanClient({
   const toggle = (setter: Dispatch<SetStateAction<Toggle[]>>, key: string, on: boolean) =>
     setter((prev) => prev.map((t) => (t.key === key ? { ...t, on } : t)));
 
+  // couriers has its own setter: it is CourierRow[], not Toggle[]
+  const toggleCourier = (key: string, on: boolean) =>
+    setCouriers((prev) => prev.map((c) => (c.key === key ? { ...c, on } : c)));
+
+  // per-service COD overrides, keyed `${courier}:${service_type}`. Unset = keep what the DB says.
+  const [codOn, setCodOn] = useState<Record<string, boolean>>({});
+  const [syncing, setSyncing] = useState(false);
+
+  const syncRoster = async () => {
+    setSyncing(true);
+    const r = await syncCouriersFromKiriminaja();
+    setSyncing(false);
+    if (r.ok) {
+      toast.success(r.message);
+      setCodOn({}); // the roster changed — drop stale overrides and re-read from the DB
+      router.refresh();
+    } else {
+      toast.error(r.message);
+    }
+  };
+
   const saveCouriersFn = () =>
     startTransition(async () => {
-      await saveCouriers(couriers.map((t) => ({ key: t.key, on: t.on })));
-      toast.success("Pengaturan kurir disimpan.");
+      const codUpdates = couriers.flatMap((c) =>
+        c.services
+          .filter((s) => s.cod) // KiriminAja's flag is the ceiling — never send a service it won't COD
+          .map((s) => ({
+            courier: c.key,
+            type: s.type,
+            allowed: codOn[`${c.key}:${s.type}`] ?? s.codAllowed,
+          })),
+      );
+      await Promise.all([
+        saveCouriers(couriers.map((c) => ({ key: c.key, on: c.on }))),
+        saveCodAllowed(codUpdates),
+      ]);
+      toast.success("Pengaturan kurir & COD disimpan.");
       router.refresh();
     });
 
@@ -306,33 +346,71 @@ export function PengaturanClient({
                     </p>
                   )}
                 </div>
-                <p className="mb-2 text-xs text-muted-foreground">
-                  Kurir + layanannya (Reguler / ekspres / kargo) datang dari KiriminAja. Aktifkan yang tersedia untuk semua toko — merchant lalu memilih kurir &amp; layanannya. <b>Reguler</b> adalah layanan yang paling umum dipakai.
-                </p>
-                {couriers.map((c, i) => {
-                  const services = c.desc.split(",").map((s) => s.trim()).filter(Boolean);
-                  return (
-                    <div key={c.key}>
-                      {i > 0 && <Separator />}
-                      <div className="flex items-center justify-between gap-3 py-3">
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Label htmlFor={`ku-${c.key}`} className="font-medium">{c.name}</Label>
-                            {c.on && (
-                              <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {services.length > 0 ? services.map((svc) => (
-                              <Badge key={svc} variant="secondary" className={cn("border-transparent text-[11px]", /reg/i.test(svc) ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>{svc}</Badge>
-                            )) : <span className="text-xs text-muted-foreground">—</span>}
-                          </div>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="max-w-xl text-xs text-muted-foreground">
+                    Kurir &amp; layanan datang langsung dari <b>KiriminAja</b> — bukan daftar yang kita tulis sendiri.
+                    Aktifkan yang ditawarkan ke semua toko; merchant lalu memilih layanan mana yang ia pakai.
+                    Centang <b>COD</b> untuk layanan yang boleh menerima bayar-di-tempat.
+                  </p>
+                  <Button variant="outline" size="sm" className="gap-1.5 shrink-0" disabled={syncing} onClick={syncRoster}>
+                    <RefreshCw className={cn("size-3.5", syncing && "animate-spin")} /> {syncing ? "Menyinkronkan…" : "Sync dari KiriminAja"}
+                  </Button>
+                </div>
+
+                {/* Retur, bukan ketersediaan, yang membuat COD mahal: paket COD yang ditolak
+                    dikirim balik gratis oleh SPX, tapi ditagihkan ke merchant oleh kurir lain.
+                    Karena itu ini keputusan platform per-layanan, bukan aturan yang dilas di kode. */}
+                <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
+                  <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <span>
+                    KiriminAja mendukung COD di hampir semua layanan <b>Reguler</b>. Yang membedakan adalah <b>ongkos retur</b> bila
+                    pembeli menolak paket — gratis di SPX, ditagihkan ke merchant di kurir lain. Buka COD hanya pada layanan
+                    yang risikonya Anda terima.
+                  </span>
+                </div>
+
+                {couriers.map((c, i) => (
+                  <div key={c.key}>
+                    {i > 0 && <Separator />}
+                    <div className="py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`ku-${c.key}`} className="font-medium">{c.name}</Label>
+                          {c.on && (
+                            <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
+                          )}
+                          <span className="text-xs text-muted-foreground">{c.services.length} layanan</span>
                         </div>
-                        <Switch id={`ku-${c.key}`} checked={c.on} onCheckedChange={(v) => toggle(setCouriers, c.key, v)} />
+                        <Switch id={`ku-${c.key}`} checked={c.on} onCheckedChange={(v) => toggleCourier(c.key, v)} />
                       </div>
+
+                      {c.on && c.services.length > 0 && (
+                        <div className="mt-2 grid gap-1.5 pl-1">
+                          {c.services.map((s) => (
+                            <div key={s.type} className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-2.5 py-1.5">
+                              <div className="min-w-0">
+                                <span className="text-xs font-medium">{s.name}</span>
+                                <span className="ml-2 text-[11px] text-muted-foreground">{GROUP_LABEL[s.group] ?? s.group}</span>
+                              </div>
+                              {s.cod ? (
+                                <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px]">
+                                  <Checkbox
+                                    checked={codOn[`${c.key}:${s.type}`] ?? s.codAllowed}
+                                    onCheckedChange={(v) => setCodOn((m) => ({ ...m, [`${c.key}:${s.type}`]: !!v }))}
+                                  />
+                                  COD
+                                </label>
+                              ) : (
+                                // KiriminAja tidak melayani COD di layanan ini — tak ada yang bisa kita nyalakan.
+                                <span className="shrink-0 text-[11px] text-muted-foreground">COD tak tersedia</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
                 <div className="flex justify-end pt-3">
                   <Button className="gap-1.5" disabled={pending} onClick={saveCouriersFn}>
                     <Save className="size-4" /> Simpan

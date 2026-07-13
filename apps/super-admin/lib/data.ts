@@ -309,12 +309,38 @@ export async function getPaymentGateways(): Promise<Toggle[]> {
   return rows;
 }
 
-export async function getCouriers(): Promise<Toggle[]> {
+// A courier + every service KiriminAja actually offers for it. `services` used to be a jsonb array
+// of plain strings ("REG", "BEST") copied from a hand-written roster; syncCouriersFromKiriminaja()
+// now writes OBJECTS carrying the live service_type, the speed group, KiriminAja's own `cod` flag,
+// and the platform's `codAllowed` decision on top of it.
+export type CourierService = {
+  type: string; // KiriminAja service_type — the booking code ("REG23", "1", "FLREG")
+  name: string;
+  group: string; // cargo | regular | next_day | economy | one_day
+  cod: boolean; // KiriminAja will collect cash for this service
+  codAllowed: boolean; // …and we permit it (super-admin's call)
+};
+export type CourierRow = { key: string; name: string; on: boolean; services: CourierService[] };
+
+export async function getCouriers(): Promise<CourierRow[]> {
   const rows = await db.select().from(schema.platformCouriers);
   const order = COURIER_CODES;
   return rows
-    .map((c) => ({ key: c.courier, name: courierName(c.courier), desc: Array.isArray(c.services) ? (c.services as string[]).join(", ") : "", on: c.enabled }))
-    .sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+    .map((c) => {
+      const raw = Array.isArray(c.services) ? (c.services as unknown[]) : [];
+      // Tolerate the legacy string[] shape: those rows predate the sync and carry no group/cod.
+      // They render as a bare name and are replaced the next time the roster is pulled.
+      const services: CourierService[] = raw
+        .filter((s): s is CourierService => typeof s === "object" && s !== null && "type" in s)
+        .map((s) => ({ ...s, codAllowed: !!s.cod && s.codAllowed !== false }));
+      return { key: c.courier, name: courierName(c.courier), on: c.enabled, services };
+    })
+    .sort((a, b) => {
+      // couriers KiriminAja returned but the old hand-written list never knew about (sap, idx,
+      // lion, ninja, jtcargo…) sort after the known ones instead of jumping to the front on -1.
+      const ai = order.indexOf(a.key), bi = order.indexOf(b.key);
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi) || a.key.localeCompare(b.key);
+    });
 }
 
 // ---- platform team (real operators) ----

@@ -179,6 +179,43 @@ export async function saveCouriers(updates: { key: string; on: boolean }[]): Pro
   revalidatePath("/pengaturan");
 }
 
+/**
+ * Which SERVICES may carry COD. This is the platform's call, not the merchant's.
+ *
+ * COD is not SPX-only in the data — KiriminAja reports cod=true on 9 of 9 `regular` services. The
+ * asymmetry that actually costs money is RETURNS: a refused COD parcel ships back free on SPX and
+ * is billed to the merchant on the others. So the narrowing is a per-service boolean the platform
+ * can flip, rather than `if (courier === "spx")` welded into the code — the day another courier
+ * offers free returns, this becomes a tick box instead of a deploy.
+ *
+ * A service KiriminAja does not support COD on can never be switched on: `cod` is the ceiling.
+ */
+export async function saveCodAllowed(updates: { courier: string; type: string; allowed: boolean }[]): Promise<void> {
+  await requirePlatformAdmin();
+  const byCourier = new Map<string, Map<string, boolean>>();
+  for (const u of updates) {
+    const m = byCourier.get(u.courier) ?? new Map<string, boolean>();
+    m.set(u.type, u.allowed);
+    byCourier.set(u.courier, m);
+  }
+
+  const rows = await db.select().from(schema.platformCouriers);
+  for (const row of rows) {
+    const wanted = byCourier.get(row.courier);
+    if (!wanted) continue;
+    const services = (Array.isArray(row.services) ? row.services : []) as {
+      type: string; name: string; group: string; cod: boolean; codAllowed?: boolean;
+    }[];
+    const next = services.map((s) =>
+      typeof s === "object" && wanted.has(s.type)
+        ? { ...s, codAllowed: s.cod && wanted.get(s.type)! } // KiriminAja's flag is the ceiling
+        : s,
+    );
+    await db.update(schema.platformCouriers).set({ services: next }).where(eq(schema.platformCouriers.courier, row.courier));
+  }
+  revalidatePath("/pengaturan");
+}
+
 // ---- KiriminAja aggregator: live connectivity test (platform key) ----
 export async function testKiriminajaConnection(): Promise<{ ok: boolean; env: string; provinces?: number; message: string }> {
   await requirePlatformAdmin();
