@@ -1,8 +1,7 @@
 import {
   LayoutDashboard, ShoppingBag, Package, Users, TicketPercent,
   BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree,
-  MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon,
-} from "lucide-react";
+  MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon, Wallet } from "lucide-react";
 
 export type NavChild = { label: string; href: string };
 export type NavItem = { label: string; href: string; icon: LucideIcon; badge?: string; children?: NavChild[] };
@@ -14,6 +13,9 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Dashboard", href: "/", icon: LayoutDashboard },
       { label: "Pesanan", href: "/pesanan", icon: ShoppingBag, badge: "7" },
+      // Saldo sits right under Pesanan on purpose: an Indonesian seller checks their money in
+      // the same breath as their orders, and the two are the same story told twice.
+      { label: "Saldo", href: "/saldo", icon: Wallet },
       {
         label: "Produk", href: "/produk", icon: Package,
         children: [

@@ -645,10 +645,85 @@ export const analyticsDaily = pgTable(
 );
 
 // ---------- settings (store + platform-managed) ----------
+// ─────────────────────────────────────────────────────────────────────────────
+// Saldo — the merchant's money, and the book that tracks it (migration 0040).
+//
+// Until now TokoΦ collected payments on the merchant's behalf and kept NO RECORD of what it
+// owed them. The Saldo chip in the topbar was `sum(payments)` — a number, not a ledger. You
+// cannot answer "which of my money has settled, which is still in transit, which came back as
+// a return?" from a sum.
+//
+// One signed entry per movement; the balance is derived, never stored:
+//   sale     +amount  status 'pending'   → money owed once the order sticks
+//   sale     +amount  status 'available' → released (see RELEASE RULE below)
+//   retur    -amount  status 'available' → the parcel came back; claw the credit back
+//   payout   -amount  status 'available' → paid out to the merchant's bank
+//
+//   saldo tersedia = Σ amount WHERE status = 'available'
+//   dana dalam proses = Σ amount WHERE status = 'pending'
+//
+// RELEASE RULE — the decision that matters most. Funds are released when the order reaches
+// `selesai`, NOT when it is `dikirim`. Releasing on despatch looks generous and is a trap:
+//   · `retur` can only happen to an order that already SHIPPED. Release on despatch and the
+//     merchant can withdraw money for a parcel that later comes back — the platform eats it.
+//   · For COD it is worse: at "dikirim" the cash does not EXIST yet. The courier collects at
+//     the door and settles days later. Crediting there is crediting money nobody has.
+// It is a platform setting (`platform_payout.release_on`) rather than a constant, so it can be
+// loosened without a deploy — but it defaults to the safe end on purpose.
+export const ledgerKind = pgEnum("ledger_kind", ["sale", "retur", "payout", "adjustment"]);
+export const ledgerStatus = pgEnum("ledger_status", ["pending", "available"]);
+
+export const ledgerEntries = pgTable("ledger_entries", {
+  id: pk(),
+  storeId: uuid().notNull().references(() => stores.id),
+  orderId: uuid().references(() => orders.id),
+  payoutId: uuid(),
+  kind: ledgerKind().notNull(),
+  status: ledgerStatus().notNull().default("pending"),
+  // SIGNED, in IDR. Positive = owed to the merchant, negative = taken back or paid out. Money is
+  // never edited in place — a mistake is corrected with a new opposing entry, so the book stays
+  // append-only and auditable.
+  amountIdr: money().notNull().default(0),
+  note: text(),
+  createdAt: createdAt(),
+  availableAt: ts(),
+});
+
+export const payoutStatus = pgEnum("payout_status", ["menunggu", "diproses", "selesai", "gagal"]);
+
+export const payouts = pgTable("payouts", {
+  id: pk(),
+  storeId: uuid().notNull().references(() => stores.id),
+  amountIdr: money().notNull().default(0),
+  status: payoutStatus().notNull().default("menunggu"),
+  // Snapshotted from store_settings at request time: if the merchant later edits their bank
+  // details, a historical payout must still show where the money actually went.
+  bankName: text(),
+  bankAccount: text(),
+  bankHolder: text(),
+  note: text(),
+  requestedAt: createdAt(),
+  paidAt: ts(),
+});
+
+// Platform-side payout policy (single row).
+export const platformPayout = pgTable("platform_payout", {
+  id: pk(),
+  // 'selesai' (safe, default) | 'dikirim' (loose — see the warning above)
+  releaseOn: text().notNull().default("selesai"),
+  minPayoutIdr: money().notNull().default(50_000),
+  // Withdrawals are reviewed, not automatic: a payout is the one irreversible thing here.
+  autoApprove: boolean().notNull().default(false),
+});
+
 export const storeSettings = pgTable("store_settings", {
   storeId: uuid().primaryKey().references(() => stores.id),
   taxRatePct: integer().notNull().default(11),
   taxInclusive: boolean().notNull().default(false),
+  // Where a payout is sent. Nothing can be withdrawn until these are filled in.
+  bankName: text(),
+  bankAccount: text(),
+  bankHolder: text(),
   // KiriminAja sender/pickup address (origin for creating shipments)
   senderName: text(),
   senderPhone: text(),

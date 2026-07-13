@@ -29,13 +29,18 @@ const LOW_STOCK_THRESHOLD = 20;
 export async function getTopbarData(): Promise<TopbarData> {
   return withCurrentTenant(async (db: Tx) => {
     // ── balance ───────────────────────────────────────────────────────────────
-    // `total` is the PPN/fee-inclusive figure the shopper actually paid; older rows only carry
-    // amount_idr, hence the coalesce.
+    // Read from the LEDGER (migration 0040), not from sum(payments).
+    //
+    // This chip used to show every successful payment as "Saldo" — Rp18,9jt — as if all of it were
+    // the merchant's to take. Two thirds of it was still held against orders that had not been
+    // completed, and some of it had already been clawed back by a return. A sum cannot tell those
+    // apart; a ledger can, and showing a seller money they cannot actually withdraw is the kind of
+    // number that gets a platform shouted at.
     const bal = (await db.execute(sql`
       select
-        coalesce(sum(coalesce(nullif(total, 0), amount_idr)) filter (where status = 'berhasil'), 0)::bigint as "available",
-        coalesce(sum(coalesce(nullif(total, 0), amount_idr)) filter (where status = 'menunggu'), 0)::bigint as "pending"
-      from payments
+        coalesce(sum(amount_idr) filter (where status = 'available'), 0)::bigint as "available",
+        coalesce(sum(amount_idr) filter (where status = 'pending'), 0)::bigint   as "pending"
+      from ledger_entries
     `)) as unknown as { available: string | number; pending: string | number }[];
 
     // ── notifications ─────────────────────────────────────────────────────────

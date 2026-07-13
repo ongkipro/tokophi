@@ -142,15 +142,15 @@ function SaldoChip({ balance }: { balance: TopbarData["balance"] }) {
         <DropdownMenuSeparator />
         <div className="space-y-2.5 px-2 py-1.5">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="text-xs text-muted-foreground">Terkumpul</span>
+            <span className="text-xs text-muted-foreground">Tersedia</span>
             <span className="text-sm font-semibold tabular-nums">{IDR(balance.available)}</span>
           </div>
           <div className="flex items-baseline justify-between gap-3">
-            <span className="text-xs text-muted-foreground">Menunggu pembayaran</span>
+            <span className="text-xs text-muted-foreground">Dalam proses</span>
             <span className="text-sm tabular-nums text-muted-foreground">{IDR(balance.pending)}</span>
           </div>
           <p className="border-t pt-2 text-xs leading-relaxed text-muted-foreground">
-            Dari pesanan yang sudah dibayar. Pencairan ke rekening belum tersedia.
+            Dari pesanan yang sudah selesai. Buka Saldo untuk menarik ke rekening.
           </p>
         </div>
       </DropdownMenuContent>

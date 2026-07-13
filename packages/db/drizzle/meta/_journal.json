@@ -281,6 +281,13 @@
       "when": 1783956237353,
       "tag": "0039_order_retur",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1783957098370,
+      "tag": "0040_ledger_payouts",
+      "breakpoints": true
     }
   ]
 }
