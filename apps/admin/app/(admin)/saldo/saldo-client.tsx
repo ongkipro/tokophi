@@ -3,27 +3,56 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Wallet, Clock, ArrowDownToLine, Undo2, Landmark, Loader2, Info } from "lucide-react";
+import { ArrowDownToLine, Clock, Info, Landmark, Loader2, Undo2, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { IDR } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/admin/order-status";
 import { useCan } from "@/components/admin/permissions";
-import { requestPayout, saveBankAccount } from "@/lib/actions/ledger";
-import type { Balance, PendingFund, Movement, PayoutRow, PayoutContext } from "@/lib/data/ledger";
+import { InvoiceDialog } from "@/components/admin/saldo/invoice-dialog";
+import { SaldoFilters } from "@/components/admin/saldo/saldo-filters";
+import { SaldoPager } from "@/components/admin/saldo/saldo-pager";
+import { useSaldoUrl } from "@/components/admin/saldo/use-saldo-url";
+import { fetchInvoiceDetail, requestPayout, saveBankAccount } from "@/lib/actions/ledger";
+import type {
+  Balance,
+  InvoiceDetail,
+  LedgerCounts,
+  LedgerFilters,
+  Movement,
+  Paged,
+  PayoutContext,
+  PayoutRow,
+  PendingFund,
+  SaldoTab,
+} from "@/lib/data/ledger";
 import type { OrderStatus } from "@/lib/mock/store";
 
+// Pinned to WIB: this string is rendered on the server AND on the client, so leaving the timezone
+// to the host would let the two disagree by a day and hydrate a mismatch. It also has to agree with
+// the date filter, which cuts the day at Asia/Jakarta midnight (lib/data/ledger.ts).
 const dt = (d: Date) =>
-  new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(d);
+  new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(d);
 
 const KIND_LABEL: Record<string, string> = {
   sale: "Penjualan",
@@ -39,12 +68,38 @@ const PAYOUT_LABEL: Record<string, { label: string; cls: string }> = {
   gagal: { label: "Gagal", cls: "bg-red-500/12 text-red-600 dark:text-red-400" },
 };
 
+/** A ledger row's status in the merchant's words — `payout` rows are stored as `available`. */
+function movementStatus(m: Movement): { label: string; cls: string } {
+  if (m.kind === "payout") return { label: "Sudah ditarik", cls: "bg-blue-500/12 text-blue-600 dark:text-blue-400" };
+  if (m.status === "pending") return { label: "Dalam proses", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400" };
+  return { label: "Belum ditarik", cls: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" };
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="p-10 text-center text-sm text-muted-foreground">{children}</p>;
+}
+
 export function SaldoClient({
-  balance, pending, movements, payouts, ctx,
+  balance,
+  counts,
+  ctx,
+  tab,
+  filters,
+  movements,
+  pending,
+  payouts,
 }: {
-  balance: Balance; pending: PendingFund[]; movements: Movement[]; payouts: PayoutRow[]; ctx: PayoutContext;
+  balance: Balance;
+  counts: LedgerCounts;
+  ctx: PayoutContext;
+  tab: SaldoTab | "rekening";
+  filters: LedgerFilters;
+  movements: Paged<Movement> | null;
+  pending: Paged<PendingFund> | null;
+  payouts: Paged<PayoutRow> | null;
 }) {
   const router = useRouter();
+  const { filter } = useSaldoUrl();
   const canWrite = useCan("settings:write");
   const [busy, start] = React.useTransition();
 
@@ -53,6 +108,25 @@ export function SaldoClient({
   const [bankAccount, setBankAccount] = React.useState(ctx.bankAccount ?? "");
   const [bankHolder, setBankHolder] = React.useState(ctx.bankHolder ?? "");
   const hasBank = !!(ctx.bankName && ctx.bankAccount);
+
+  // Which held invoice the merchant opened. The dialog opens immediately (spinner) and the row's
+  // detail is fetched in the same click — an effect would just re-render the tree to say "now go".
+  const [invoice, setInvoice] = React.useState<string | null>(null);
+  const [detail, setDetail] = React.useState<InvoiceDetail | null>(null);
+  const [loadingInvoice, setLoadingInvoice] = React.useState(false);
+
+  const openInvoice = async (orderId: string, number: string) => {
+    setInvoice(number);
+    setDetail(null);
+    setLoadingInvoice(true);
+    try {
+      setDetail(await fetchInvoiceDetail(orderId));
+    } catch {
+      toast.error("Gagal memuat rincian invoice.");
+    } finally {
+      setLoadingInvoice(false);
+    }
+  };
 
   const withdraw = () =>
     start(async () => {
@@ -95,7 +169,16 @@ export function SaldoClient({
               <Clock className="size-4" /> Dana dalam proses
             </div>
             <div className="text-2xl font-semibold tabular-nums text-muted-foreground">{IDR(balance.pending)}</div>
-            <p className="text-xs text-muted-foreground">Menunggu pesanan selesai.</p>
+            <p className="text-xs text-muted-foreground">
+              Menunggu {counts.pending} pesanan selesai.{" "}
+              <button
+                type="button"
+                className="font-medium text-primary hover:underline"
+                onClick={() => filter({ tab: "proses" })}
+              >
+                Lihat rincian
+              </button>
+            </p>
           </CardContent>
         </Card>
 
@@ -126,19 +209,26 @@ export function SaldoClient({
           <CardTitle className="flex items-center gap-2">
             <Landmark className="size-4 text-muted-foreground" /> Tarik saldo
           </CardTitle>
-          <CardDescription>
-            Minimum {IDR(ctx.minPayout)}. Dana dikirim ke rekening yang terdaftar.
-          </CardDescription>
+          <CardDescription>Minimum {IDR(ctx.minPayout)}. Dana dikirim ke rekening yang terdaftar.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {!hasBank ? (
             <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
               <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span>Lengkapi rekening bank di bawah sebelum menarik saldo.</span>
+              <span>
+                Lengkapi rekening bank di tab{" "}
+                <button type="button" className="font-medium text-primary hover:underline" onClick={() => filter({ tab: "rekening" })}>
+                  Rekening
+                </button>{" "}
+                sebelum menarik saldo.
+              </span>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Rekening: <span className="font-medium text-foreground">{ctx.bankName} · {ctx.bankAccount}</span>{" "}
+              Rekening:{" "}
+              <span className="font-medium text-foreground">
+                {ctx.bankName} · {ctx.bankAccount}
+              </span>{" "}
               a.n. {ctx.bankHolder}
             </p>
           )}
@@ -170,7 +260,9 @@ export function SaldoClient({
                   }
                 />
                 <DialogContent className="sm:max-w-md">
-                  <DialogHeader><DialogTitle>Tarik saldo?</DialogTitle></DialogHeader>
+                  <DialogHeader>
+                    <DialogTitle>Tarik saldo?</DialogTitle>
+                  </DialogHeader>
                   <p className="text-sm text-muted-foreground">
                     <span className="font-semibold text-foreground">{IDR(Number(amount || 0))}</span> akan dikirim ke{" "}
                     {ctx.bankName} · {ctx.bankAccount} a.n. {ctx.bankHolder}. Penarikan tidak bisa dibatalkan.
@@ -188,135 +280,207 @@ export function SaldoClient({
         </CardContent>
       </Card>
 
-      {/* ── Rincian ───────────────────────────────────────────────────────── */}
-      <Tabs defaultValue="proses">
+      {/* ── Rincian ───────────────────────────────────────────────────────────
+          Tab / periode / status / halaman all live in the URL, so every list below is paged and
+          filtered IN SQL. The tab counts are deliberately unfiltered totals — they are landmarks,
+          and a landmark that moves when you filter is not a landmark. */}
+      <Tabs value={tab} onValueChange={(v) => filter({ tab: String(v) })}>
         <TabsList>
-          <TabsTrigger value="proses">Dana dalam proses ({pending.length})</TabsTrigger>
-          <TabsTrigger value="mutasi">Mutasi</TabsTrigger>
-          <TabsTrigger value="penarikan">Penarikan ({payouts.length})</TabsTrigger>
+          <TabsTrigger value="mutasi">Mutasi ({counts.movements})</TabsTrigger>
+          <TabsTrigger value="proses">Dana dalam proses ({counts.pending})</TabsTrigger>
+          <TabsTrigger value="penarikan">Penarikan ({counts.payouts})</TabsTrigger>
           <TabsTrigger value="rekening">Rekening</TabsTrigger>
         </TabsList>
 
-        {/* Dana tertahan, PER INVOICE — a lump sum reads as the platform sitting on the seller's
-            cash. Showing which order holds which rupiah, and what has to happen to release it, is
-            the difference between a ledger and an excuse. */}
-        <TabsContent value="proses">
-          <Card>
-            <CardContent className="p-0">
-              {pending.length === 0 ? (
-                <p className="p-8 text-center text-sm text-muted-foreground">
-                  Tidak ada dana tertahan. Semua pesanan yang dibayar sudah selesai.
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Invoice</TableHead>
-                      <TableHead>Tanggal</TableHead>
-                      <TableHead>Status pesanan</TableHead>
-                      <TableHead className="text-right">Jumlah</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pending.map((p) => (
-                      <TableRow key={p.orderId}>
-                        <TableCell>
-                          <Link href={`/pesanan/${p.number}`} className="font-medium hover:underline">
-                            {p.number}
-                          </Link>
-                          {p.isCod && <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px]">COD</Badge>}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{dt(p.placedAt)}</TableCell>
-                        <TableCell><OrderStatusBadge status={p.status as OrderStatus} /></TableCell>
-                        <TableCell className="text-right tabular-nums">{IDR(p.amount)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+        {/* Mutasi — the full book. */}
+        <TabsContent value="mutasi">
+          {movements && (
+            <Card>
+              <CardContent className="space-y-3 p-0">
+                <div className="px-4 pt-4">
+                  <SaldoFilters tab="mutasi" filters={filters} total={movements.total} />
+                </div>
+                {movements.total === 0 ? (
+                  <Empty>Tidak ada mutasi pada filter ini.</Empty>
+                ) : (
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Tanggal</TableHead>
+                          <TableHead>Keterangan</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Jumlah</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {movements.rows.map((m) => {
+                          const s = movementStatus(m);
+                          return (
+                            <TableRow key={m.id}>
+                              <TableCell className="whitespace-nowrap text-muted-foreground">{dt(m.createdAt)}</TableCell>
+                              <TableCell>
+                                <span className="font-medium">{KIND_LABEL[m.kind] ?? m.kind}</span>
+                                {m.orderNumber && (
+                                  <Link
+                                    href={`/pesanan/${m.orderNumber}`}
+                                    className="ml-2 font-mono text-xs text-muted-foreground hover:underline"
+                                  >
+                                    {m.orderNumber}
+                                  </Link>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className={`h-5 border-transparent px-1.5 text-[10px] ${s.cls}`}>
+                                  {s.label}
+                                </Badge>
+                              </TableCell>
+                              <TableCell
+                                className={`text-right tabular-nums ${m.amount < 0 ? "text-red-600 dark:text-red-400" : ""}`}
+                              >
+                                {m.amount < 0 ? "−" : "+"}
+                                {IDR(Math.abs(m.amount))}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                    <SaldoPager
+                      page={movements.page}
+                      pageCount={movements.pageCount}
+                      total={movements.total}
+                      unit="mutasi"
+                    />
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
-        <TabsContent value="mutasi">
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tanggal</TableHead>
-                    <TableHead>Keterangan</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Jumlah</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {movements.map((m) => (
-                    <TableRow key={m.id}>
-                      <TableCell className="text-muted-foreground">{dt(m.createdAt)}</TableCell>
-                      <TableCell>
-                        <span className="font-medium">{KIND_LABEL[m.kind] ?? m.kind}</span>
-                        {m.orderNumber && (
-                          <Link href={`/pesanan/${m.orderNumber}`} className="ml-2 text-xs text-muted-foreground hover:underline">
-                            {m.orderNumber}
-                          </Link>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-                          {m.status === "available" ? "Tersedia" : "Dalam proses"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell
-                        className={`text-right tabular-nums ${m.amount < 0 ? "text-red-600 dark:text-red-400" : ""}`}
-                      >
-                        {m.amount < 0 ? "−" : "+"}
-                        {IDR(Math.abs(m.amount))}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+        {/* Dana tertahan, PER INVOICE — a lump sum reads as the platform sitting on the seller's
+            cash. Showing which order holds which rupiah, who is waiting for it, and what has to
+            happen to release it, is the difference between a ledger and an excuse. */}
+        <TabsContent value="proses">
+          {pending && (
+            <Card>
+              <CardContent className="space-y-3 p-0">
+                <div className="px-4 pt-4">
+                  <SaldoFilters tab="proses" filters={filters} total={pending.total} />
+                </div>
+                {pending.total === 0 ? (
+                  <Empty>Tidak ada dana tertahan pada filter ini.</Empty>
+                ) : (
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Invoice</TableHead>
+                          <TableHead>Pembeli</TableHead>
+                          <TableHead>Tanggal</TableHead>
+                          <TableHead>Status pesanan</TableHead>
+                          <TableHead className="text-right">Jumlah</TableHead>
+                          <TableHead className="w-0" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pending.rows.map((p) => (
+                          <TableRow key={p.orderId}>
+                            <TableCell>
+                              <span className="font-mono font-medium">{p.number}</span>
+                              {p.isCod && (
+                                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px]">
+                                  COD
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{p.customer ?? "—"}</div>
+                              <div className="text-xs text-muted-foreground">{p.city ?? "—"}</div>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-muted-foreground">{dt(p.placedAt)}</TableCell>
+                            <TableCell>
+                              <OrderStatusBadge status={p.status as OrderStatus} />
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">{IDR(p.amount)}</TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="ghost" size="sm" onClick={() => openInvoice(p.orderId, p.number)}>
+                                Rincian
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <SaldoPager page={pending.page} pageCount={pending.pageCount} total={pending.total} unit="invoice" />
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="penarikan">
-          <Card>
-            <CardContent className="p-0">
-              {payouts.length === 0 ? (
-                <p className="p-8 text-center text-sm text-muted-foreground">Belum ada penarikan.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Diajukan</TableHead>
-                      <TableHead>Rekening</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Jumlah</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {payouts.map((p) => {
-                      const s = PAYOUT_LABEL[p.status] ?? { label: p.status, cls: "" };
-                      return (
-                        <TableRow key={p.id}>
-                          <TableCell className="text-muted-foreground">{dt(p.requestedAt)}</TableCell>
-                          <TableCell>{p.bankName} · {p.bankAccount}</TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className={`h-5 border-transparent px-1.5 text-[10px] ${s.cls}`}>
-                              {s.label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">{IDR(p.amount)}</TableCell>
+          {payouts && (
+            <Card>
+              <CardContent className="space-y-3 p-0">
+                <div className="px-4 pt-4">
+                  <SaldoFilters tab="penarikan" filters={filters} total={payouts.total} />
+                </div>
+                {payouts.total === 0 ? (
+                  <Empty>Belum ada penarikan pada filter ini.</Empty>
+                ) : (
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Diajukan</TableHead>
+                          <TableHead>Cair</TableHead>
+                          <TableHead>Rekening</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Jumlah</TableHead>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                      </TableHeader>
+                      <TableBody>
+                        {payouts.rows.map((p) => {
+                          const s = PAYOUT_LABEL[p.status] ?? { label: p.status, cls: "" };
+                          return (
+                            <TableRow key={p.id}>
+                              <TableCell className="whitespace-nowrap text-muted-foreground">
+                                {dt(p.requestedAt)}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-muted-foreground">
+                                {p.paidAt ? dt(p.paidAt) : "—"}
+                              </TableCell>
+                              <TableCell>
+                                <div className="font-medium">
+                                  {p.bankName} · <span className="tabular-nums">{p.bankAccount}</span>
+                                </div>
+                                {p.bankHolder && <div className="text-xs text-muted-foreground">a.n. {p.bankHolder}</div>}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className={`h-5 border-transparent px-1.5 text-[10px] ${s.cls}`}>
+                                  {s.label}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">{IDR(p.amount)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                    <SaldoPager
+                      page={payouts.page}
+                      pageCount={payouts.pageCount}
+                      total={payouts.total}
+                      unit="penarikan"
+                    />
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="rekening">
@@ -328,11 +492,24 @@ export function SaldoClient({
             <CardContent className="grid max-w-xl gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="bank">Nama bank</Label>
-                <Input id="bank" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="BCA" disabled={!canWrite} />
+                <Input
+                  id="bank"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  placeholder="BCA"
+                  disabled={!canWrite}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="rek">Nomor rekening</Label>
-                <Input id="rek" inputMode="numeric" value={bankAccount} onChange={(e) => setBankAccount(e.target.value.replace(/\D/g, ""))} className="tabular-nums" disabled={!canWrite} />
+                <Input
+                  id="rek"
+                  inputMode="numeric"
+                  value={bankAccount}
+                  onChange={(e) => setBankAccount(e.target.value.replace(/\D/g, ""))}
+                  className="tabular-nums"
+                  disabled={!canWrite}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="an">Nama pemilik rekening</Label>
@@ -349,6 +526,14 @@ export function SaldoClient({
           </Card>
         </TabsContent>
       </Tabs>
+
+      <InvoiceDialog
+        number={invoice}
+        data={detail}
+        loading={loadingInvoice}
+        open={!!invoice}
+        onOpenChange={(v) => !v && setInvoice(null)}
+      />
     </div>
   );
 }

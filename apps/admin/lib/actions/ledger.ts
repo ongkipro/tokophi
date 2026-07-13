@@ -2,8 +2,17 @@
 import { schema } from "@tokophi/db";
 import { sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { getSession } from "@/lib/auth";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
+import {
+  getExportRows,
+  getInvoiceDetail,
+  type CsvRow,
+  type InvoiceDetail,
+  type LedgerFilters,
+  type SaldoTab,
+} from "@/lib/data/ledger";
 
 /**
  * Tarik saldo (request a payout).
@@ -11,11 +20,8 @@ import { withTenant } from "@/lib/tenant";
  * This is the one irreversible action in the product: money leaves. Everything here is written
  * defensively.
  *
- * THE RACE THAT MATTERS: two withdrawal requests fired at once could each read the same balance
- * and each pass the "do you have enough?" check, and the merchant walks away with twice their
- * balance. Checking and then writing is not enough — the check must HOLD until the write lands.
- * So the balance is computed inside the same transaction under `FOR UPDATE` on the store's rows,
- * which serialises concurrent requests instead of letting them interleave.
+ * Concurrent withdrawals are serialised per store — see the note at the lock below, which explains
+ * both the race and the `FOR UPDATE … sum()` bug that used to make every withdrawal throw.
  *
  * The payout is recorded as a NEGATIVE ledger entry, not by mutating a stored balance. The book
  * stays append-only: replay the entries and you get the balance, always.
@@ -41,13 +47,31 @@ export async function requestPayout(
     `)) as unknown as { minPayout: string | number }[];
     const minPayout = Number(policy?.minPayout ?? 50_000);
 
-    // Lock this store's ledger rows for the duration of the transaction, THEN compute the balance.
-    // Any concurrent withdrawal blocks here rather than reading a balance that is about to change.
+    // ── Serialise concurrent withdrawals for THIS store ──────────────────────
+    //
+    // The race is real: two "Tarik" clicks landing together could each read the same balance, each
+    // pass the "do you have enough?" test, and the merchant walks away with twice their money.
+    // Checking and then writing is not enough — the check has to HOLD until the write lands.
+    //
+    // A transaction-scoped ADVISORY lock keyed on the store does exactly that: the second request
+    // blocks here until this transaction commits, and only then reads a balance that already
+    // includes this payout's negative entry. It is released automatically on commit or rollback.
+    //
+    // NOT `FOR UPDATE`, for two reasons:
+    //   1. `select sum(amount_idr) … for update` is what this originally said, and Postgres rejects
+    //      it outright — "FOR UPDATE is not allowed with aggregate functions". EVERY withdrawal
+    //      threw. The guard against losing money was itself the thing that broke the feature.
+    //   2. Even written legally, row-locking the ledger locks a table that grows forever, so each
+    //      withdrawal would be slower than the last. The advisory lock is one key, regardless of size.
+    //
+    // `tsc` cannot see inside a SQL string, so nothing caught this until a payout was actually
+    // attempted. Money paths must be EXERCISED, not typechecked.
+    await db.execute(sql`select pg_advisory_xact_lock(hashtext(${storeId})::bigint)`);
+
     const [bal] = (await db.execute(sql`
       select coalesce(sum(amount_idr), 0)::bigint as "available"
       from ledger_entries
       where store_id = ${storeId} and status = 'available'
-      for update
     `)) as unknown as { available: string | number }[];
     const available = Number(bal?.available ?? 0);
 
@@ -114,4 +138,34 @@ export async function saveBankAccount(input: {
   );
   revalidatePath("/saldo");
   return { ok: true };
+}
+
+/* ── Read actions ────────────────────────────────────────────────────────────
+   Two things on this page cannot be prefetched with the server component: the invoice a merchant
+   *chooses* to open, and the export they *choose* to download. Both are on-demand, so they go
+   through a server action rather than bloating every page load.
+
+   They are still reads: they must NOT go through `requireCapability`, which additionally blocks a
+   suspended store from *writing*. A suspended merchant is entitled to look at their own money and
+   export their own history — that is precisely when they need it. The session check below is the
+   real boundary; the data layer's `withCurrentTenant` re-derives the store from the same session
+   and RLS clamps the rows to it, so a forged orderId from another tenant returns nothing.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+async function requireSession() {
+  const session = await getSession();
+  if (!session) throw new Error("Sesi berakhir — silakan masuk kembali.");
+  return session;
+}
+
+/** The order behind a "dana dalam proses" row: buyer, address, phone, and the variants in the box. */
+export async function fetchInvoiceDetail(orderId: string): Promise<InvoiceDetail | null> {
+  await requireSession();
+  return getInvoiceDetail(orderId);
+}
+
+/** Every row matching the CURRENT filters — not just the page on screen. */
+export async function fetchExportRows(tab: SaldoTab, filters: LedgerFilters): Promise<CsvRow[]> {
+  await requireSession();
+  return getExportRows(tab, filters);
 }
