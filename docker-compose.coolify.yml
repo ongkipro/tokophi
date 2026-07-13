@@ -148,6 +148,21 @@ services:
     restart: unless-stopped
     expose:
       - "4328"
+    labels:
+      # www.tokophi.com → 301 → tokophi.com (path + query preserved). Done here, at the origin,
+      # because our Cloudflare token has no ruleset permission (edge Redirect Rules would be the
+      # cheaper place). priority 100 > the Coolify-generated routers, so it wins for this host.
+      - traefik.enable=true
+      - traefik.http.middlewares.www-to-apex.redirectregex.regex=^https?://www\.tokophi\.com/(.*)
+      - traefik.http.middlewares.www-to-apex.redirectregex.replacement=https://tokophi.com/$${1}
+      - traefik.http.middlewares.www-to-apex.redirectregex.permanent=true
+      - traefik.http.routers.www-apex.rule=Host(`www.tokophi.com`)
+      - traefik.http.routers.www-apex.entryPoints=https
+      - traefik.http.routers.www-apex.tls=true
+      - traefik.http.routers.www-apex.priority=100
+      - traefik.http.routers.www-apex.middlewares=www-to-apex
+      - traefik.http.routers.www-apex.service=landing-svc
+      - traefik.http.services.landing-svc.loadbalancer.server.port=4328
     healthcheck:
       # 127.0.0.1, not localhost — @astrojs/node binds IPv4 only while busybox wget tries ::1 first
       # (this exact mistake made the storefront report a false "unhealthy" on 2026-07-10).
