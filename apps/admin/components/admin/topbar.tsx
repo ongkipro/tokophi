@@ -1,8 +1,10 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { Menu, Search, Bell, Sun, Moon, ChevronDown, Check, ExternalLink, LogOut, User, CreditCard, ShieldCheck } from "lucide-react";
+import { Menu, Search, Bell, Sun, Moon, ChevronDown, Check, ExternalLink, LogOut, User, CreditCard, ShieldCheck, Wallet } from "lucide-react";
 import type { SearchItem } from "@/lib/data/search";
+import type { TopbarData } from "@/lib/data/topbar";
+import { IDR } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -18,14 +20,28 @@ import { signOut } from "@/lib/actions/auth";
 import { STORES } from "@/lib/nav";
 import { ROLE_LABEL, type Role } from "@/lib/rbac-policy";
 
+/**
+ * The <html class="dark"> flag IS the state — the inline script in the root layout sets it before
+ * paint. Mirroring it into React state via useEffect (what this used to do) meant a setState on
+ * every mount, which the react-hooks lint rightly flags as a cascading render. Subscribe to the DOM
+ * instead: no duplicate source of truth, and the SSR snapshot is `false` so hydration stays quiet.
+ */
+function useIsDark() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mo = new MutationObserver(onChange);
+      mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+      return () => mo.disconnect();
+    },
+    () => document.documentElement.classList.contains("dark"),
+    () => false,
+  );
+}
+
 function ThemeToggle() {
-  const [dark, setDark] = useState(false);
-  useEffect(() => {
-    setDark(document.documentElement.classList.contains("dark"));
-  }, []);
+  const dark = useIsDark();
   const toggle = () => {
     const next = !dark;
-    setDark(next);
     document.documentElement.classList.toggle("dark", next);
     try { localStorage.setItem("theme", next ? "dark" : "light"); } catch {}
   };
@@ -101,7 +117,60 @@ function GlobalSearch({ index }: { index: SearchItem[] }) {
   );
 }
 
-export function Topbar({ user, storeName, searchIndex = [] }: { user?: { name: string; email: string; role?: string }; storeName?: string; searchIndex?: SearchItem[] }) {
+/**
+ * Saldo — money collected from shoppers that the platform still owes the merchant.
+ * Modelled on how Indonesian seller tools (Shopee, mengantar, …) surface it: always visible in the
+ * header, not buried in a settings page, because it is the number a merchant checks most.
+ *
+ * It is a REAL sum over successful payments (lib/data/topbar.ts), not a placeholder. But note the
+ * honest caveat in the dropdown: there is no payout/ledger yet (BACKLOG P1.8), so this figure only
+ * ever grows. Saying so out loud is better than implying the merchant can withdraw it.
+ */
+function SaldoChip({ balance }: { balance: TopbarData["balance"] }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="ghost" className="hidden gap-2 px-2 font-medium tabular-nums sm:flex" aria-label="Saldo">
+            <Wallet className="size-[18px] text-muted-foreground" />
+            <span className="text-sm">{IDR(balance.available, { compact: true })}</span>
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuLabel>Saldo</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <div className="space-y-2.5 px-2 py-1.5">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-xs text-muted-foreground">Terkumpul</span>
+            <span className="text-sm font-semibold tabular-nums">{IDR(balance.available)}</span>
+          </div>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-xs text-muted-foreground">Menunggu pembayaran</span>
+            <span className="text-sm tabular-nums text-muted-foreground">{IDR(balance.pending)}</span>
+          </div>
+          <p className="border-t pt-2 text-xs leading-relaxed text-muted-foreground">
+            Dari pesanan yang sudah dibayar. Pencairan ke rekening belum tersedia.
+          </p>
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function Topbar({
+  user,
+  storeName,
+  searchIndex = [],
+  balance,
+  notifs = [],
+}: {
+  user?: { name: string; email: string; role?: string };
+  storeName?: string;
+  searchIndex?: SearchItem[];
+  balance?: TopbarData["balance"];
+  notifs?: TopbarData["notifs"];
+}) {
   // Current store reflects the session (so an impersonated store shows its own name, not a hardcode).
   const [store, setStore] = useState(storeName ? { id: "current", name: storeName, plan: STORES[0]?.plan ?? "Bisnis" } : STORES[0]);
   const name = user?.name || "Ongki Pratama";
@@ -155,31 +224,41 @@ export function Topbar({ user, storeName, searchIndex = [] }: { user?: { name: s
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* global search */}
+      {/* site-wide search. NB: never begin a comment here with the word "global" — ESLint reads
+          that as its global-variable declaration directive and warns about an unused global. */}
       <GlobalSearch index={searchIndex} />
 
       <div className="ml-auto flex items-center gap-1">
+        {balance && <SaldoChip balance={balance} />}
+        <div className="mx-1 hidden h-6 w-px bg-border sm:block" />
         <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <Button variant="ghost" size="icon" className="relative" aria-label="Notifikasi">
                 <Bell className="size-[18px]" />
-                <span className="absolute right-2 top-2 size-2 rounded-full bg-primary ring-2 ring-background" />
+                {/* dot only when there is actually something to see */}
+                {notifs.length > 0 && (
+                  <span className="absolute right-2 top-2 size-2 rounded-full bg-primary ring-2 ring-background" />
+                )}
               </Button>
             }
           />
           <DropdownMenuContent align="end" className="w-72">
             <DropdownMenuLabel>Notifikasi</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex-col items-start gap-0.5">
-              <span className="text-sm font-medium">3 pesanan baru menunggu</span>
-              <span className="text-xs text-muted-foreground">Perlu diproses hari ini</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex-col items-start gap-0.5">
-              <span className="text-sm font-medium">Stok "Earphone TWS" menipis</span>
-              <span className="text-xs text-muted-foreground">Sisa 4 unit</span>
-            </DropdownMenuItem>
+            {notifs.length === 0 ? (
+              <p className="px-2 py-4 text-center text-sm text-muted-foreground">
+                Tidak ada yang perlu ditindak.
+              </p>
+            ) : (
+              notifs.map((n) => (
+                <DropdownMenuItem key={n.id} className="flex-col items-start gap-0.5" render={<Link href={n.href} />}>
+                  <span className="text-sm font-medium">{n.title}</span>
+                  <span className="text-xs text-muted-foreground">{n.sub}</span>
+                </DropdownMenuItem>
+              ))
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 

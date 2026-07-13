@@ -7,15 +7,22 @@ import { getSearchIndex } from "@/lib/data/search";
 import { PermissionsProvider } from "@/components/admin/permissions";
 import { StoreProvider } from "@/components/admin/store-context";
 import { getBilling } from "@/lib/data/billing";
+import { getTopbarData } from "@/lib/data/topbar";
 import { IDR } from "@tokophi/lib/format";
 import Link from "next/link";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   const user = session ? { name: session.name, email: session.email, role: session.role } : undefined;
-  const [storeName, storeSlug, searchIndex, bill] = session
-    ? await Promise.all([getStoreName(session.storeId), getStoreSlug(session.storeId), getSearchIndex(), getBilling()])
-    : [null, null, [], null];
+  const [storeName, storeSlug, searchIndex, bill, topbar] = session
+    ? await Promise.all([
+        getStoreName(session.storeId),
+        getStoreSlug(session.storeId),
+        getSearchIndex(),
+        getBilling(),
+        getTopbarData(),
+      ])
+    : [null, null, [], null, null];
   const billingBanner = bill && (bill.status === "past_due" || bill.status === "suspended") && (
     <Link
       href="/akun/langganan"
@@ -31,7 +38,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <StoreProvider name={storeName ?? "Toko"} slug={storeSlug ?? ""}>
         <AdminChrome
           sidebar={<Sidebar />}
-          topbar={<Topbar user={user} storeName={storeName ?? undefined} searchIndex={searchIndex} />}
+          topbar={
+            <Topbar
+              user={user}
+              storeName={storeName ?? undefined}
+              searchIndex={searchIndex}
+              balance={topbar?.balance}
+              notifs={topbar?.notifs}
+            />
+          }
           billingBanner={billingBanner}
         >
           {children}
