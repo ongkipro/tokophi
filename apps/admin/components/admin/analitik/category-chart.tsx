@@ -1,26 +1,16 @@
 "use client";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
-import { PRODUCTS } from "@/lib/mock/store";
+import type { CategorySale } from "@/lib/data/analytics";
 import { IDR } from "@/lib/format";
-
-// Aggregate revenue (unitsSold * price) per category, sorted high → low.
-function byCategory() {
-  const map = new Map<string, number>();
-  for (const p of PRODUCTS) {
-    map.set(p.category, (map.get(p.category) ?? 0) + p.unitsSold * p.price);
-  }
-  return [...map.entries()]
-    .map(([category, revenue]) => ({ category, revenue }))
-    .sort((a, b) => b.revenue - a.revenue);
-}
 
 const config = {
   revenue: { label: "Penjualan", color: "var(--chart-1)" },
 } satisfies ChartConfig;
 
-export function CategoryChart() {
-  const data = byCategory();
+// `data` = real revenue per product category, aggregated server-side from
+// order_line_items → product_variants → products (lib/data/analytics.ts).
+export function CategoryChart({ data }: { data: CategorySale[] }) {
   return (
     <ChartContainer config={config} className="h-[300px] w-full">
       <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>

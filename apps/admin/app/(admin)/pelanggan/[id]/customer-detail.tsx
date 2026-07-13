@@ -19,7 +19,8 @@ import {
   X,
 } from "lucide-react";
 
-import { type Customer, ORDERS } from "@/lib/mock/store";
+import { type Customer } from "@/lib/mock/store";
+import type { CustomerOrder } from "@/lib/data/customers";
 import { IDR, num, timeAgo, waLink } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -77,41 +78,18 @@ function SegmentBadge({ segment }: { segment: Customer["segment"] }) {
   );
 }
 
-// Fabricate a deterministic street + postal code from the customer id (no randomness in render).
-const STREETS = [
-  "Jl. Merdeka",
-  "Jl. Sudirman",
-  "Jl. Diponegoro",
-  "Jl. Gatot Subroto",
-  "Jl. Ahmad Yani",
-  "Jl. Melati",
-  "Jl. Kenanga",
-  "Jl. Cendrawasih",
-];
-function fakeAddress(c: Customer) {
-  const seed = c.id.split("").reduce((a, ch) => a + ch.charCodeAt(0), 0);
-  const street = STREETS[seed % STREETS.length];
-  const houseNo = 1 + (seed % 120);
-  const rt = 1 + (seed % 12);
-  const rw = 1 + ((seed >> 2) % 8);
-  const postal = 10000 + (seed % 89999);
-  return {
-    line: `${street} No. ${houseNo}, RT ${String(rt).padStart(2, "0")}/RW ${String(rw).padStart(2, "0")}`,
-    postal: String(postal),
-  };
-}
-
-export function CustomerDetail({ customer }: { customer: Customer }) {
-  // This customer's orders, most recent first, capped.
-  const myOrders = React.useMemo(
-    () =>
-      ORDERS.filter((o) => o.customer === customer.name).sort(
-        (a, b) => a.minutesAgo - b.minutesAgo,
-      ),
-    [customer.name],
-  );
-  const recentOrders = myOrders.slice(0, 6);
-  const lastOrder = myOrders[0];
+export function CustomerDetail({
+  customer,
+  orders,
+}: {
+  customer: Customer;
+  // Real order history for THIS customer (matched on orders.customer_id, from the DB).
+  orders: CustomerOrder[];
+}) {
+  // Already sorted newest-first by the data layer; show the 6 most recent.
+  const recentOrders = orders.slice(0, 6);
+  const lastOrder = orders[0];
+  const firstOrder = orders[orders.length - 1];
 
   const avgOrder =
     customer.orders > 0
@@ -157,7 +135,6 @@ export function CustomerDetail({ customer }: { customer: Customer }) {
     });
   };
 
-  const addr = fakeAddress(customer);
   const waHref = waLink(customer.phone, `Halo kak ${customer.name} 👋`);
 
   const stats = [
@@ -179,7 +156,7 @@ export function CustomerDetail({ customer }: { customer: Customer }) {
     {
       icon: ShoppingBag,
       title: "Pesanan pertama",
-      desc: lastOrder ? "Transaksi tercatat" : "Belum ada pesanan",
+      desc: firstOrder ? timeAgo(firstOrder.minutesAgo) : "Belum ada pesanan",
     },
     {
       icon: Award,
@@ -374,7 +351,7 @@ export function CustomerDetail({ customer }: { customer: Customer }) {
             </CardContent>
           </Card>
 
-          {/* shipping address */}
+          {/* shipping address — only what we actually store (no street/postal column yet) */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Alamat pengiriman</CardTitle>
@@ -384,11 +361,16 @@ export function CustomerDetail({ customer }: { customer: Customer }) {
               <div className="text-muted-foreground tabular-nums">
                 +{customer.phone}
               </div>
-              <div className="text-muted-foreground">{addr.line}</div>
-              <div className="text-muted-foreground">
-                {customer.city} {addr.postal}
-              </div>
-              <div className="text-muted-foreground">Indonesia</div>
+              {customer.city ? (
+                <>
+                  <div className="text-muted-foreground">{customer.city}</div>
+                  <div className="text-muted-foreground">Indonesia</div>
+                </>
+              ) : (
+                <div className="text-muted-foreground">
+                  Belum ada alamat tersimpan
+                </div>
+              )}
             </CardContent>
           </Card>
 

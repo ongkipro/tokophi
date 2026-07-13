@@ -1,31 +1,37 @@
-import { getDailyStats } from "@/lib/data/analytics";
+import { getDailyStats, getChannelSalesDaily, getProductSalesDaily } from "@/lib/data/analytics";
+import { getFunnelDaily } from "@/lib/data/funnel";
 import { getProducts } from "@/lib/data/products";
 import { getOrders } from "@/lib/data/orders";
 import { getStoreName } from "@/lib/data/store";
 import { getActivityFeed } from "@/lib/data/activity";
 import { getSession } from "@/lib/auth";
-import { ONLINE_NOW } from "@/lib/mock/store";
 import { DashboardClient } from "./dashboard-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const session = await getSession();
-  const [days, products, orders, storeName, activities] = await Promise.all([
+  const [days, products, orders, storeName, activities, channels, productSales, funnel] = await Promise.all([
     getDailyStats(),
-    getProducts(),
+    getProducts(), // CSV export only
     getOrders(),
     session ? getStoreName(session.storeId) : Promise.resolve(null),
     getActivityFeed(),
+    getChannelSalesDaily(),
+    getProductSalesDaily(),
+    getFunnelDaily(),
   ]);
-  // ONLINE_NOW is the decorative realtime visitor ticker; the activity feed is now real (per store).
+  // No "pengunjung online" ticker: nothing tracks concurrent sessions. Pengunjung/Konversi are
+  // COUNTED from analytics_events (funnel rows) and fall back to "—" for a store with no events.
   return (
     <DashboardClient
       days={days}
       products={products}
       orders={orders}
       activities={activities}
-      onlineNow={ONLINE_NOW}
+      channels={channels}
+      productSales={productSales}
+      funnel={funnel}
       storeName={storeName ?? undefined}
       ownerName={session?.name}
     />

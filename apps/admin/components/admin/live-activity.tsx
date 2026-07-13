@@ -1,5 +1,3 @@
-"use client";
-import { useEffect, useState } from "react";
 import { ShoppingBag, Eye, Star, PackageMinus, UserPlus } from "lucide-react";
 import type { Activity } from "@/lib/mock/store";
 import { timeAgo } from "@/lib/format";
@@ -15,26 +13,12 @@ const TONE: Record<Activity["kind"], string> = {
   signup: "text-violet-600 bg-violet-500/12",
 };
 
-export function LiveActivity({ items, online }: { items: Activity[]; online: number }) {
-  // client-only ticker so the "online" count feels realtime (starts from SSR value → no mismatch)
-  const [count, setCount] = useState(online);
-  useEffect(() => {
-    const id = setInterval(() => {
-      setCount((c) => Math.max(28, Math.min(72, c + Math.round((Math.random() - 0.5) * 6))));
-    }, 3000);
-    return () => clearInterval(id);
-  }, []);
-
+// No "pengunjung online" counter here: the storefront has no session tracking
+// (`analytics_events` exists in the schema but is empty and has no writer), so any
+// number shown would be invented. The items below are real store events.
+export function LiveActivity({ items }: { items: Activity[] }) {
   return (
     <div>
-      <div className="mb-4 flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
-        <span className="relative flex size-2.5">
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-70" />
-          <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500" />
-        </span>
-        <span className="text-sm font-medium tabular-nums">{count} pengunjung online</span>
-        <span className="ml-auto text-xs text-muted-foreground">realtime</span>
-      </div>
       <ul className="space-y-3.5">
         {items.map((a) => {
           const Icon = ICON[a.kind];

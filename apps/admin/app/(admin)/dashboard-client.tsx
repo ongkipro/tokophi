@@ -16,7 +16,10 @@ import { OrderStatusBadge } from "@/components/admin/order-status";
 import {
   type RangeKey, getSummary, getSeries, getTopProducts, getChannels,
   getRecentOrders, getActivities, getStatusCounts, rangeLabel,
+  getVisitsKpi, getConversionKpi,
 } from "@/lib/data/dashboard";
+import type { ChannelDay, ProductSaleDay } from "@/lib/data/analytics";
+import type { FunnelDay } from "@/lib/data/funnel";
 import type { DayPoint, Product, Order, Activity } from "@/lib/mock/store";
 import { IDR, num, pct } from "@/lib/format";
 import { exportCsv } from "@/lib/csv";
@@ -26,7 +29,9 @@ export function DashboardClient({
   products,
   orders,
   activities,
-  onlineNow,
+  channels,
+  productSales,
+  funnel,
   storeName,
   ownerName,
 }: {
@@ -34,7 +39,9 @@ export function DashboardClient({
   products: Product[];
   orders: Order[];
   activities: Activity[];
-  onlineNow: number;
+  channels: ChannelDay[];
+  productSales: ProductSaleDay[];
+  funnel: FunnelDay[];
   storeName?: string;
   ownerName?: string;
 }) {
@@ -44,11 +51,17 @@ export function DashboardClient({
   const salesSpark = points.map((p) => p.sales);
   const orderSpark = points.map((p) => p.orders);
 
+  // Pengunjung + Konversi are COUNTED from analytics_events; "—" when the store has no events.
+  const visits = getVisitsKpi(funnel, days, range);
+  const conversion = getConversionKpi(funnel, days, range);
+  const topProducts = getTopProducts(productSales, range, days);
+  const channelSlices = getChannels(channels, range, days);
+
   const kpis = [
     { label: "Penjualan", value: IDR(s.sales.value, { compact: true }), delta: s.sales.delta, icon: Wallet, spark: salesSpark },
     { label: "Pesanan", value: num(s.orders.value), delta: s.orders.delta, icon: ShoppingBag, spark: orderSpark },
-    { label: "Pengunjung", value: num(s.visitors.value), delta: s.visitors.delta, icon: Users, spark: salesSpark },
-    { label: "Konversi", value: `${s.conversion.value.toFixed(1)}%`, delta: s.conversion.delta, icon: Target, spark: orderSpark },
+    { label: "Pengunjung", value: visits ? num(visits.value) : "—", delta: visits?.delta ?? 0, icon: Users, spark: salesSpark },
+    { label: "Konversi", value: conversion ? `${conversion.value.toFixed(1)}%` : "—", delta: conversion?.delta ?? 0, icon: Target, spark: orderSpark },
   ];
 
   const target = 120_000_000;
@@ -100,7 +113,7 @@ export function DashboardClient({
 
         <Card className="lg:col-span-1">
           <CardHeader><CardTitle>Aktivitas Langsung</CardTitle></CardHeader>
-          <CardContent><LiveActivity items={getActivities(activities)} online={onlineNow} /></CardContent>
+          <CardContent><LiveActivity items={getActivities(activities)} /></CardContent>
         </Card>
       </div>
 
@@ -116,15 +129,23 @@ export function DashboardClient({
 
         <Card className="lg:col-span-1">
           <CardHeader><CardTitle>Produk Terlaris</CardTitle><CardDescription>{rangeLabel(range)}</CardDescription></CardHeader>
-          <CardContent><TopProducts items={getTopProducts(days, products, range)} /></CardContent>
+          <CardContent>
+            {topProducts.length
+              ? <TopProducts items={topProducts} />
+              : <p className="py-8 text-center text-sm text-muted-foreground">Belum ada penjualan pada periode ini.</p>}
+          </CardContent>
         </Card>
       </div>
 
       {/* channels + status + target */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card>
-          <CardHeader><CardTitle>Sumber Penjualan</CardTitle><CardDescription>Channel akuisisi</CardDescription></CardHeader>
-          <CardContent><ChannelChart data={getChannels(days, range)} /></CardContent>
+          <CardHeader><CardTitle>Sumber Penjualan</CardTitle><CardDescription>Channel yang tercatat di tiap pesanan</CardDescription></CardHeader>
+          <CardContent>
+            {channelSlices.length
+              ? <ChannelChart data={channelSlices} />
+              : <p className="py-8 text-center text-sm text-muted-foreground">Belum ada pesanan pada periode ini.</p>}
+          </CardContent>
         </Card>
 
         <Card>

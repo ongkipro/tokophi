@@ -2,6 +2,8 @@
 // activities) is fetched from the DB in the server wrapper and passed in — no storage access
 // here, so these stay callable client-side (the range switcher re-derives on the client).
 import { hourlyFor, type DayPoint, type Product, type Order, type Activity } from "@/lib/mock/store";
+import type { FunnelDay, DeviceDay } from "@/lib/data/funnel";
+import type { ChannelDay, ProductSaleDay } from "@/lib/data/analytics";
 
 export type RangeKey = "today" | "yesterday" | "7d" | "30d" | "month" | "lastmonth";
 
@@ -91,24 +93,34 @@ export function getSeries(all: DayPoint[], key: RangeKey): { points: SeriesPoint
 
 export type TopProduct = { id: string; name: string; emoji: string; image: string; revenue: number; units: number };
 
-export function getTopProducts(all: DayPoint[], products: Product[], key: RangeKey, limit = 5): TopProduct[] {
-  const total = sum(resolve(all, key).days, "sales");
-  const ranked = [...products].sort((a, b) => b.unitsSold - a.unitsSold);
-  const weightSum = ranked.reduce((a, p) => a + p.unitsSold, 0) || 1;
-  return ranked.slice(0, limit).map((p) => {
-    const revenue = Math.round(total * (p.unitsSold / weightSum) * 1.9);
-    return { id: p.id, name: p.name, emoji: p.emoji, image: p.image, revenue, units: Math.max(1, Math.round(revenue / p.price)) };
-  });
+// Real revenue per product: order_line_items rows (day-bucketed server-side) summed over the
+// selected range. The previous version synthesized this (period total x unitsSold x 1.9).
+export function getTopProducts(rows: ProductSaleDay[], key: RangeKey, all: DayPoint[], limit = 5): TopProduct[] {
+  const { cur } = rangeDates(all, key);
+  const agg = new Map<string, TopProduct>();
+  for (const r of rows) {
+    if (!cur.has(r.date)) continue;
+    const hit = agg.get(r.productId) ?? { id: r.productId, name: r.name, emoji: r.emoji, image: r.image, revenue: 0, units: 0 };
+    hit.revenue += r.revenue;
+    hit.units += r.units;
+    agg.set(r.productId, hit);
+  }
+  return [...agg.values()].sort((a, b) => b.revenue - a.revenue).slice(0, limit);
 }
 
 export type ChannelSlice = { channel: string; value: number };
-// Attribution source (where the conversion came from), not a sales channel.
-const CHANNEL_WEIGHTS: [string, number][] = [
-  ["Meta Ads", 0.34], ["Organic", 0.24], ["Google Ads", 0.18], ["TikTok Ads", 0.16], ["Other", 0.08],
-];
-export function getChannels(all: DayPoint[], key: RangeKey): ChannelSlice[] {
-  const total = sum(resolve(all, key).days, "sales");
-  return CHANNEL_WEIGHTS.map(([channel, w]) => ({ channel, value: Math.round(total * w) }));
+
+// Attribution source, COUNTED from the `orders.channel` column (day-bucketed server-side).
+// The previous version multiplied the period total by an invented weight vector
+// (Meta Ads 34% / Organic 24% / ...), identical for every store.
+export function getChannels(rows: ChannelDay[], key: RangeKey, all: DayPoint[]): ChannelSlice[] {
+  const { cur } = rangeDates(all, key);
+  const agg = new Map<string, number>();
+  for (const r of rows) {
+    if (!cur.has(r.date)) continue;
+    agg.set(r.channel, (agg.get(r.channel) ?? 0) + r.value);
+  }
+  return [...agg.entries()].map(([channel, value]) => ({ channel, value })).sort((a, b) => b.value - a.value);
 }
 
 export function getRecentOrders(orders: Order[], limit = 6) {
@@ -120,4 +132,73 @@ export function getStatusCounts(orders: Order[]) {
 }
 export function getActivities(activities: Activity[], limit = 8) {
   return activities.slice(0, limit);
+}
+
+// ---------------------------------------------------------------------------
+// Event-derived cards (analytics_events, via lib/data/funnel.ts). Everything below is a
+// COUNT of rows for the days inside the selected range — so the range switcher actually
+// moves the numbers, and the funnel's top/bottom equal the Pengunjung/Pesanan KPIs
+// (the seed writes one `visit` event per counted visitor and one `purchase` per counted
+// order, so `visit events == analytics_daily.visitors` and `purchase == analytics_daily.orders`).
+//
+// A store with NO events (every store created via /daftar — the seed only runs on an empty DB)
+// gets `null` back, and the UI must render an honest "belum ada data" state.
+// ---------------------------------------------------------------------------
+
+/** The set of YYYY-MM-DD dates in the selected range (and the comparison range). */
+export function rangeDates(all: DayPoint[], key: RangeKey): { cur: Set<string>; prev: Set<string> } {
+  const r = resolve(all, key);
+  return { cur: new Set(r.days.map((d) => d.date)), prev: new Set(r.prev.map((d) => d.date)) };
+}
+
+const countEvents = (rows: FunnelDay[], dates: Set<string>, type: string) =>
+  rows.reduce((a, r) => (r.type === type && dates.has(r.date) ? a + r.count : a), 0);
+
+/** "Pengunjung" KPI — counted `visit` events. `null` when the store has no events at all. */
+export function getVisitsKpi(rows: FunnelDay[], all: DayPoint[], key: RangeKey): Kpi | null {
+  if (!rows.length) return null;
+  const { cur, prev } = rangeDates(all, key);
+  const v = countEvents(rows, cur, "visit");
+  return { value: v, delta: delta(v, countEvents(rows, prev, "visit")) };
+}
+
+/** "Konversi" KPI — counted purchases / counted visits. `null` when there are no events. */
+export function getConversionKpi(rows: FunnelDay[], all: DayPoint[], key: RangeKey): Kpi | null {
+  if (!rows.length) return null;
+  const { cur, prev } = rangeDates(all, key);
+  const rate = (d: Set<string>) => {
+    const v = countEvents(rows, d, "visit");
+    return v ? (countEvents(rows, d, "purchase") / v) * 100 : 0;
+  };
+  const c = rate(cur);
+  return { value: c, delta: delta(c, rate(prev)) };
+}
+
+export type FunnelStep = { step: string; count: number };
+
+/** Funnel steps for the range. `null` when the store has no events. */
+export function getFunnel(rows: FunnelDay[], all: DayPoint[], key: RangeKey, steps: readonly { type: string; label: string }[]): FunnelStep[] | null {
+  if (!rows.length) return null;
+  const { cur } = rangeDates(all, key);
+  const out = steps.map((s) => ({ step: s.label, count: countEvents(rows, cur, s.type) }));
+  return out[0].count === 0 ? null : out;
+}
+
+export type DeviceSlice = { device: string; count: number; pct: number };
+const DEVICE_LABEL: Record<string, string> = { ponsel: "Ponsel", desktop: "Desktop", tablet: "Tablet", lainnya: "Lainnya" };
+
+/** Device split (share of SESSIONS in the range). `null` when the store has no visit events. */
+export function getDeviceSplit(rows: DeviceDay[], all: DayPoint[], key: RangeKey): DeviceSlice[] | null {
+  if (!rows.length) return null;
+  const { cur } = rangeDates(all, key);
+  const agg = new Map<string, number>();
+  for (const r of rows) {
+    if (!cur.has(r.date)) continue;
+    agg.set(r.device, (agg.get(r.device) ?? 0) + r.count);
+  }
+  const total = [...agg.values()].reduce((a, n) => a + n, 0);
+  if (!total) return null;
+  return [...agg.entries()]
+    .map(([device, count]) => ({ device: DEVICE_LABEL[device] ?? device, count, pct: (count / total) * 100 }))
+    .sort((a, b) => b.count - a.count);
 }
