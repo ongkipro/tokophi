@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+/* TokoΦ platform brand — modern SaaS, indigo accent (mirrors the admin's --primary). */
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --color-ink: #14152a;
+  --color-muted: #5b5f7b;
+  --color-line: #e5e7f2;
+  --color-canvas: #fbfbfe;
+
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-soft: #eef2ff;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  /* calm, deliberate backdrop: soft indigo glow + hairline grid */
+  background-image:
+    radial-gradient(60rem 40rem at 50% -12rem, rgba(79, 70, 229, 0.1), transparent 70%),
+    linear-gradient(to right, rgba(20, 21, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(20, 21, 42, 0.035) 1px, transparent 1px);
+  background-size: 100% 100%, 3rem 3rem, 3rem 3rem;
+  background-attachment: fixed;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise { animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+.pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rise, .pulse-dot { animation: none; }
+}

@@ -103,8 +103,31 @@ services:
       DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:-tokophi}@postgres:5432/tokophi
       PUBLIC_ONGKIR_API: ${PUBLIC_ONGKIR_API:-}
       PUBLIC_ORDER_API: ${PUBLIC_ORDER_API:-}
+      # Host-header multi-tenant (ADR 0009): `<slug>.tokophi.com` → that store. RESERVED labels
+      # (www/app/rich/admin/api/cname/toko/…) never resolve as a slug. STORE_SLUG stays the
+      # fallback for hosts that name no store (bare IP, toko.tokophi.com, localhost).
+      STOREFRONT_BASE_DOMAIN: ${STOREFRONT_BASE_DOMAIN:-}
+      STORE_SLUG: ${STORE_SLUG:-batik-nusantara}
     expose:
       - "4327"
+    labels:
+      # Coolify generates a router per configured domain; a WILDCARD host needs its own rule.
+      # The original Host header must reach the app untouched — the tenant is read from it.
+      # TLS = the Cloudflare Origin CA default cert (proxy/dynamic/tokophi-origin-tls.yaml):
+      # Let's Encrypt cannot issue a wildcard over HTTP-01, so no certresolver here.
+      - traefik.enable=true
+      - traefik.http.routers.tokophi-stores.rule=HostRegexp(`^[a-z0-9-]+\.tokophi\.com$`)
+      # ⚠️ PRIORITY IS LOAD-BEARING. This regexp also matches app./rich./toko./www.tokophi.com,
+      # and Traefik's DEFAULT priority is the rule's LENGTH — the regexp is longer than
+      # Host(`app.tokophi.com`), so without this it would OUTRANK the admin router and serve the
+      # storefront on app.tokophi.com. priority=1 = lowest: every explicit Host router wins first,
+      # and this catch-all only sees hostnames nothing else claimed.
+      - traefik.http.routers.tokophi-stores.priority=1
+      - traefik.http.routers.tokophi-stores.entryPoints=https
+      - traefik.http.routers.tokophi-stores.tls=true
+      - traefik.http.routers.tokophi-stores.middlewares=gzip
+      - traefik.http.routers.tokophi-stores.service=tokophi-stores
+      - traefik.http.services.tokophi-stores.loadbalancer.server.port=4327
     healthcheck:
       # SSR: starts in seconds (reads catalog from Postgres at boot, no build-at-start).
       # Use 127.0.0.1 (NOT localhost): @astrojs/node binds IPv4 0.0.0.0 only, but busybox wget
@@ -114,6 +137,25 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+
+  # landing / front door for the apex (tokophi.com + www) — static Astro, currently "segera hadir".
+  # Deliberately has NO database and NO depends_on: postgres — the front door must be servable even
+  # when everything behind it is down.
+  landing:
+    build:
+      context: .
+      dockerfile: apps/landing/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "4328"
+    healthcheck:
+      # 127.0.0.1, not localhost — @astrojs/node binds IPv4 only while busybox wget tries ::1 first
+      # (this exact mistake made the storefront report a false "unhealthy" on 2026-07-10).
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4328/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   # daily billing job — hits the admin cron endpoint (syncs statuses + auto-invoices past-due).
   cron:
