@@ -15,11 +15,16 @@ export const dynamic = "force-dynamic";
 // constant-time compare for the shared secret (avoids length/timing leaks).
 function secretOk(provided: string | null): boolean {
   const expected = process.env.AUTOLARIS_CALLBACK_SECRET;
-  // No secret configured (dev/local) → allow, but warn: prod MUST set this. In prod this endpoint
-  // marks orders PAID, so an unauthenticated caller could forge payment without the guard.
+
+  // FAIL CLOSED in production. This endpoint marks orders PAID and extends store subscriptions —
+  // if the secret is ever missing (fresh env, cleared var, typo on redeploy) an unauthenticated
+  // caller could forge payment for free goods. This used to `return true` and merely log a
+  // warning, which is a landmine: the failure is silent and nobody reads warnings.
+  // Dev/local still runs without a secret so the flow can be exercised offline.
   if (!expected) {
     if (process.env.NODE_ENV === "production") {
-      console.warn("[pay/callback] AUTOLARIS_CALLBACK_SECRET unset in production — callback is UNVERIFIED.");
+      console.error("[pay/callback] AUTOLARIS_CALLBACK_SECRET unset in production — REJECTING callback.");
+      return false;
     }
     return true;
   }
