@@ -4,6 +4,18 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-13
 
+### 🔴 Security: RLS on `payments` + `media` (migration `0036`) — live and proven in production
+- `payments` is **money**, written from the merchant admin, and had **no RLS**: tenant isolation rested entirely on application code. One forgotten `where` and store A could read or mutate store B's payments. Every other store-scoped table was already held by the database.
+- The subtle part: `payments.store_id` was **nullable and NULL on every seeded row** (only production code ever set it). A nullable tenant key matches no policy — enabling RLS naively would have made every payment vanish from the app. The migration backfills `store_id` from the parent order, sets NOT NULL + FK, and only then enables RLS.
+- **Proven on production data** as the non-owner `tokophi_app` role: the owning store sees its 60 payments, another store sees **0**, a query with no tenant context sees **0**, and a forged cross-tenant insert is rejected — `new row violates row-level security policy`. `verify-rls` is now 38/39 (`platform_activity` is a deliberate owner-only platform log).
+
+### 🔴 Security: the payment callback now fails CLOSED
+- `secretOk()` returned `true` when `AUTOLARIS_CALLBACK_SECRET` was missing, so a lost or mistyped env var would have silently opened the endpoint that marks orders **paid** and extends store subscriptions — with nothing but a `console.warn`. It now returns 401 in production (dev still runs without a secret). Verified live.
+
+### Removed the client-admin "Pembayaran" tab
+- It let a merchant choose payment channels and who bears the gateway fee — but **nothing read either value**. The storefront checkout reads the *platform's* channel list (ADR 0004: channels are a platform decision), and no pricing code has ever consulted `payment_fee_bearer`. The tab saved, toasted "berhasil", and changed nothing a shopper would see.
+- The columns are kept (dropping them is a destructive migration). **A merchant-facing fee-bearer feature does not exist** — if it is wanted, it has to be built into checkout pricing, not merely stored. `AGENTS.md`/`CLAUDE.md` corrected: it described the feature as if it shipped.
+
 ### SEO hygiene — admin panels are noindex; `www` redirects to the apex
 - **Both admin panels were crawlable after the cutover** (`app.tokophi.com/login` and `rich.tokophi.com/login` served 200 with no robots header, and `/robots.txt` redirected to `/login`). Now `noindex, nofollow` in **three layers** per app: `X-Robots-Tag` from `next.config.ts headers()` (covers `/api/*`, static assets, non-HTML), the same header stamped in `middleware.ts` (a redirect short-circuits before `headers()` runs), plus `metadata.robots` and `app/robots.ts`.
 - **Merchant product photos stay indexable** — `/api/uploads/*` is carved out (`X-Robots-Tag: all` + `Allow:`). Those photos are served from the admin origin but embedded in public storefronts, so a blanket noindex would have removed every merchant's product photography from Google Images.
