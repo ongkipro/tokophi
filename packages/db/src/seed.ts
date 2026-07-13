@@ -631,6 +631,55 @@ async function main() {
   ).returning({ id: schema.customers.id, name: schema.customers.name });
   const custByName = new Map(custRows.map((c) => [c.name, c.id]));
 
+  // ---- customer_addresses ----
+  // The table and its schema existed, and the seed NEVER wrote a single row (0 of them). So every
+  // screen that wanted a shipping address had nothing to read — and the order detail page filled the
+  // hole by INVENTING one (`Jl. Merdeka No. {hash % 90}`). A missing row does not stay missing; it
+  // gets fabricated somewhere downstream. Seed it, and the fabrication has nothing left to justify it.
+  //
+  // Street names are per-city so an address in Surabaya does not read like one in Medan.
+  const STREETS: Record<string, string[]> = {
+    Jakarta: ["Jl. Kemang Raya", "Jl. Tebet Barat", "Jl. Cipete Utara"],
+    Bandung: ["Jl. Dago", "Jl. Riau", "Jl. Cihampelas"],
+    Surabaya: ["Jl. Darmo", "Jl. Kertajaya", "Jl. Rungkut"],
+    Medan: ["Jl. Gatot Subroto", "Jl. Setia Budi", "Jl. Iskandar Muda"],
+    Makassar: ["Jl. Pettarani", "Jl. Boulevard", "Jl. Hertasning"],
+    Semarang: ["Jl. Pandanaran", "Jl. Gajahmada", "Jl. Pemuda"],
+    Yogyakarta: ["Jl. Malioboro", "Jl. Kaliurang", "Jl. Palagan"],
+    Denpasar: ["Jl. Sunset Road", "Jl. Teuku Umar", "Jl. Gatot Subroto Timur"],
+    Bekasi: ["Jl. Ahmad Yani", "Jl. Cut Meutia", "Jl. Kalimalang"],
+    Depok: ["Jl. Margonda Raya", "Jl. Juanda", "Jl. Sawangan"],
+  };
+  // Real postcode prefixes. A random 5-digit number would LOOK like a postcode and be wrong —
+  // "31501" is not Medan — and a plausible-looking wrong value is the exact species of fake this
+  // codebase keeps having to hunt down. Prefix is real, the last two digits vary.
+  const POST_OF: Record<string, string> = {
+    Jakarta: "12", Bandung: "40", Surabaya: "60", Medan: "20", Makassar: "90",
+    Semarang: "50", Yogyakarta: "55", Denpasar: "80", Bekasi: "17", Depok: "16",
+  };
+  const PROV_OF: Record<string, string> = {
+    Jakarta: "DKI Jakarta", Bandung: "Jawa Barat", Surabaya: "Jawa Timur", Medan: "Sumatera Utara",
+    Makassar: "Sulawesi Selatan", Semarang: "Jawa Tengah", Yogyakarta: "DI Yogyakarta",
+    Denpasar: "Bali", Bekasi: "Jawa Barat", Depok: "Jawa Barat",
+  };
+  const addrRnd = mulberry32(9090);
+  await db.insert(schema.customerAddresses).values(
+    CUSTOMERS.map((c) => {
+      const streets = STREETS[c.city] ?? ["Jl. Merdeka"];
+      const street = streets[Math.floor(addrRnd() * streets.length)];
+      return {
+        customerId: custByName.get(c.name)!,
+        label: "Rumah",
+        recipient: c.name,
+        phone: c.phone,
+        address: `${street} No. ${1 + Math.floor(addrRnd() * 120)}, RT 0${1 + Math.floor(addrRnd() * 8)}/RW 0${1 + Math.floor(addrRnd() * 9)}`,
+        city: c.city,
+        province: PROV_OF[c.city] ?? "Jawa Barat",
+        postcode: `${POST_OF[c.city] ?? "40"}${String(100 + Math.floor(addrRnd() * 899))}`,
+      };
+    }),
+  );
+
   // discounts (startsAt/endsAt anchored to the admin TODAY → real terjadwal/aktif/kadaluarsa)
   await db.insert(schema.discounts).values(
     DISCOUNTS.map((d) => ({
