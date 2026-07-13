@@ -4,6 +4,16 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-13
 
+### SEO hygiene — admin panels are noindex; `www` redirects to the apex
+- **Both admin panels were crawlable after the cutover** (`app.tokophi.com/login` and `rich.tokophi.com/login` served 200 with no robots header, and `/robots.txt` redirected to `/login`). Now `noindex, nofollow` in **three layers** per app: `X-Robots-Tag` from `next.config.ts headers()` (covers `/api/*`, static assets, non-HTML), the same header stamped in `middleware.ts` (a redirect short-circuits before `headers()` runs), plus `metadata.robots` and `app/robots.ts`.
+- **Merchant product photos stay indexable** — `/api/uploads/*` is carved out (`X-Robots-Tag: all` + `Allow:`). Those photos are served from the admin origin but embedded in public storefronts, so a blanket noindex would have removed every merchant's product photography from Google Images.
+- **Storefronts and the landing page remain fully indexable** — verified live.
+- **`www.tokophi.com` → 301 → `tokophi.com`**, path and query preserved (Traefik redirect router). Note: Coolify passes compose labels to Docker without docker-compose's `$$` → `$` unescaping, so the Traefik regex replacement must be written `${1}`, not `$${1}` — the escaped form shipped a literal `https://tokophi.com/${1}` in the `Location` header.
+
+### Landing page — one screen, adaptive
+- The front door now fits **a single viewport with no scrolling** at mobile, tablet, and desktop sizes (`100dvh`, not `100vh`). Where the content cannot fit — landscape phones — it is **cut rather than allowed to scroll**. Verified in production at six viewports in both light and dark: `scrollHeight == innerHeight`, `scrollWidth == innerWidth`, zero console errors.
+- Copy rewritten around "Seluruh toko Anda, dalam satu panel."; every claim checked against the concept doc and the billing code. Added `robots.txt` and an auto-generated `sitemap.xml`.
+
 ### 🚀 `tokophi.com` is live — domain cutover + per-merchant storefronts
 - **`<slug>.tokophi.com` serves that merchant's storefront**, from a single storefront container, with the tenant resolved from the `Host` header. Verified in production: `batik-nusantara.tokophi.com` → "Batik Nusantara", `kopi-senja.tokophi.com` → "Kopi Senja", an unknown slug → a clean 404.
 - **The self-serve loop is closed:** a store signed up through the real `/daftar` form on production immediately had a working HTTPS storefront at its own subdomain — **no deploy, no DNS change, no manual configuration**. (Test tenant purged afterwards.)

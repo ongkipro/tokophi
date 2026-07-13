@@ -59,7 +59,12 @@
 - [x] Cross-surface env → `https://app.tokophi.com`, plus `STOREFRONT_BASE_DOMAIN=tokophi.com` + `STORE_SLUG` fallback.
 - [x] **Landing app** (`apps/landing`, static Astro, "Segera hadir", no DB) on the apex + `www`.
 - [x] **Verified in production:** a store signed up through the real `/daftar` form got a working HTTPS storefront at `<its-slug>.tokophi.com` with **zero deploys and zero DNS work**.
+- [x] **SEO hygiene** — admin + super-admin are `noindex, nofollow` in 3 layers (config header + middleware header + `metadata`/`robots.txt`), with `/api/uploads/*` carved out so merchant product photos stay in Google Images. Storefronts + landing stay indexable. Landing has `robots.txt` + `sitemap.xml`.
+- [x] **`www` → apex 301** (Traefik `redirectregex`, path+query preserved).
 - [ ] **⏳ YOU: set the zone's SSL mode to `Full (strict)`** in the Cloudflare dashboard — our API token lacks *Zone Settings: Edit*, so it could not be set programmatically.
+- [ ] **⏳ YOU (if any panel URL is already indexed):** check `site:app.tokophi.com` / `site:rich.tokophi.com` and purge via Search Console → Removals. The `noindex` header handles everything not yet indexed.
+- [ ] Move the `www` redirect to the **Cloudflare edge** (cheaper than hitting the origin) — needs *Zone → Config Rules → Edit* on the API token, which it currently lacks.
+- [ ] De-dup: `noRobots()` is copy-pasted in both apps' `middleware.ts` — belongs in `@tokophi/lib`.
 - [ ] Cloudflare cache rules: bypass for `app.`/`rich.`/`/api/*`; cache `/_astro/*` + `/products/*` on storefront hosts.
 - [ ] Billing-cron URL + AutoLaris callback still point at the old host — move to `https://app.tokophi.com` (`PUBLIC_APP_URL` is already correct, verify the AutoLaris dashboard).
 - [ ] A Coolify API token **`claude-domain-cutover`** was created for this cutover — revoke it when you want.
