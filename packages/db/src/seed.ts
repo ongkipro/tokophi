@@ -747,6 +747,67 @@ async function main() {
     DAILY.map((d) => ({ storeId: store.id, date: d.date, salesIdr: d.sales, orders: d.orders, visitors: d.visitors })),
   );
 
+  // ---- storefront funnel events (analytics_events) ----
+  // /analitik used to render the funnel + device split from HARDCODED constants. These rows exist
+  // so the dashboard COUNTS instead. The data is synthetic, but the maths on screen is real — and
+  // the two endpoints are pinned to numbers the same page already shows:
+  //     visit    == DAILY.visitors  (the "Pengunjung" KPI)
+  //     purchase == DAILY.orders    (the "Pesanan" KPI)
+  // so the funnel reconciles with the KPIs instead of contradicting them. The middle steps are
+  // interpolated monotonically and floored at `purchases` (a funnel can never widen).
+  //
+  // sessionId is `s-<date>-<k>`: session k takes part in every step whose count is > k. Because the
+  // steps decrease, sessions 0..purchases-1 walk the whole funnel — exactly how a real session
+  // behaves. The device is fixed PER SESSION (not per event), so the Perangkat split counts
+  // sessions, not clicks.
+  const DEVICE_MIX: Array<[string, number]> = [["ponsel", 0.78], ["desktop", 0.18], ["tablet", 0.04]];
+  const pickDevice = (r: number) => {
+    let acc = 0;
+    for (const [d, w] of DEVICE_MIX) {
+      acc += w;
+      if (r < acc) return d;
+    }
+    return "ponsel";
+  };
+
+  const evRnd = mulberry32(777);
+  const events: Array<{ storeId: string; ts: Date; type: string; sessionId: string; device: string }> = [];
+
+  for (const day of DAILY) {
+    const midnight = new Date(`${day.date}T00:00:00.000Z`).getTime();
+    const visits = day.visitors;
+    const purchases = day.orders;
+    const productViews = Math.max(purchases, Math.round(visits * (0.58 + evRnd() * 0.1)));
+    const addToCart = Math.max(purchases, Math.round(productViews * (0.32 + evRnd() * 0.08)));
+    const checkout = Math.max(purchases, Math.round(addToCart * (0.34 + evRnd() * 0.08)));
+
+    // one device per session, reused across that session's events
+    const devices = Array.from({ length: visits }, () => pickDevice(evRnd()));
+
+    const steps: Array<[string, number]> = [
+      ["visit", visits],
+      ["product_view", productViews],
+      ["add_to_cart", addToCart],
+      ["checkout_start", checkout],
+      ["purchase", purchases],
+    ];
+    for (const [type, n] of steps) {
+      for (let k = 0; k < n; k++) {
+        events.push({
+          storeId: store.id,
+          ts: new Date(midnight + Math.floor(evRnd() * 86_400_000)),
+          type,
+          sessionId: `s-${day.date}-${k}`,
+          device: devices[k] ?? "ponsel",
+        });
+      }
+    }
+  }
+  // batched: postgres caps bind parameters per statement
+  for (let i = 0; i < events.length; i += 2000) {
+    await db.insert(schema.analyticsEvents).values(events.slice(i, i + 2000));
+  }
+
   // marketing: ad channels (denormalized config + aggregate + campaigns) + per-province rollup
   await db.insert(schema.adChannels).values(
     AD_CHANNELS.map((c) => ({

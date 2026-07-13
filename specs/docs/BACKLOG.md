@@ -53,6 +53,57 @@
 - [ ] **Landing page for the apex** (`tokophi.com`) — still not built; the domain cutover points apex/`www` at a placeholder or a redirect to `app.` until it exists.
 - [ ] **etc.** — capture more of the "own app / unified" vision as it firms up (notifications, presence, mobile).
 
+## P1.8 — 🔴 Finance & analytics integrity (screening 2026-07-13)
+> A full screening of every number the merchant admin renders. Verdict: the **lists** (pesanan,
+> produk, pelanggan, diskon…) and the **daily revenue/orders series** are real DB reads. But several
+> headline numbers are **hardcoded constants from `lib/mock/store.ts`, identical for every store**,
+> presented as if they were the merchant's own. Distinguish carefully: most `lib/mock` imports in
+> `apps/admin` are `import type` (harmless); the list below is the subset that renders VALUES.
+
+- [ ] **🔴 Ad channels are pure fiction — the most dangerous screen.** `AD_CHANNELS` (analitik +
+  pemasaran) hardcodes Meta Ads spend `Rp18,5jt` → revenue `Rp78,2jt` (ROAS ~4,2×), a Pixel ID, and
+  `connected: true`. **There is no Meta/Google integration at all.** A merchant can raise ad budget
+  on a return that never existed. **Hide the card until a real ad-platform integration exists** — a
+  fabricated number is worse than no number.
+- [ ] **🔴 Customer order history is faked.** `pelanggan/[id]/customer-detail.tsx` reads mock `ORDERS`
+  and filters **by customer NAME**. A real customer's purchase history is invented. This is a bug,
+  not a stub — real orders exist in the DB and are already joined elsewhere.
+- [x] **Funnel + device split are now COUNTED, not typed** — ✅ (2026-07-13, migration `0037`).
+  `analytics_events` was an empty shell (0 rows, no writer) and had no `device` column, so a device
+  split was impossible even in principle. `0037` adds `device` + a `(store_id, ts)` index; the seed
+  now populates the table, and `lib/data/funnel.ts` aggregates it (day-bucketed, so the range
+  switcher actually moves the numbers).
+  **The data is synthetic but the maths on screen is real, and it RECONCILES with the KPIs beside
+  it — by construction, not luck:** `visit` events == `analytics_daily.visitors` (the Pengunjung
+  KPI) and `purchase` events == `analytics_daily.orders` (the Pesanan KPI). Verified in psql:
+  63.150 == 63.150 and 2.122 == 2.122 → conversion **3,36%**, device **77,9/18,2/3,9** (emergent,
+  not the old round 78/18/4). One device is pinned per SESSION, so the split is a share of sessions,
+  not of clicks. ⏳ **Still open:** the storefront tracking script that writes REAL events. The query
+  shape is already the real one — point the tracker at `analytics_events` and the cards go live with
+  no query changes.
+- [ ] **Cheap wins — the data is already in the DB:**
+  - Penjualan per kota (`REGION_SALES` hardcoded) → `orders.city` / `orders.province` exist.
+  - Pelanggan baru vs kembali (`NEW_VS_RETURNING` hardcoded) → derive from `customers` + `orders`.
+  - Grafik kategori (`category-chart.tsx` imports mock `PRODUCTS`) → `order_line_items` → produk → kategori.
+  - Dashboard "47 pengunjung online" (`ONLINE_NOW = 47`) → decorative; label it or drop it.
+
+- [ ] **Order processing should mirror an Indonesian marketplace (Shopee/Tokopedia)** — idea raised
+  2026-07-13. Today `/pesanan` is a generic status pipeline. Sellers here already have Shopee muscle
+  memory: a **"Perlu Dikirim" queue** as the default landing tab, bulk-print thermal labels, one-tap
+  "Atur Pengiriman" → pickup/drop-off, an SLA countdown ("kirim sebelum …") that visibly ages, and
+  buyer-facing statuses in the same words they know (Belum Bayar / Perlu Dikirim / Dikirim / Selesai
+  / Dibatalkan). Pairs with the open KiriminAja work (`request_pickup` → AWB, label PDF) — the
+  pipeline is the UI half of that. Design before building: pick the status vocabulary FIRST, because
+  it leaks into the storefront, the DB enum, and the buyer's notifications.
+- [ ] **🔴 No merchant balance / payout ledger — a hole in the business model, not a missing feature.**
+  The finance schema is `invoices`, `payments`, `platform_payment_channels`,
+  `platform_payment_gateways`, `store_payment_methods`. There is **no `saldo` / payout / ledger /
+  settlement concept anywhere** (grepped schema + both apps: zero hits). A shopper pays via QRIS/VA →
+  the money lands in the **platform's** gateway account → and TokoΦ has **no record of what it owes
+  the merchant**. Needed: a ledger (credit on payment success, debit on payout), a **Saldo** page in
+  client-admin (available vs held + history), and payout control in super-admin. Design first —
+  when do funds become "available", who triggers a payout, how is it reconciled against the gateway.
+
 ## P1.7 — Domain cutover to `tokophi.com` — ✅ **DONE 2026-07-13, LIVE**
 > Scheme: **`<slug>.tokophi.com`** (one label deep → free Cloudflare Universal SSL, stays proxied). TLS for the wildcard = **Cloudflare Origin CA cert** as Traefik's default cert (LE cannot issue a wildcard over HTTP-01) → **every record must stay PROXIED**. Full detail + gotchas in WORKLOG 2026-07-13 and `DEPLOY.md`.
 
