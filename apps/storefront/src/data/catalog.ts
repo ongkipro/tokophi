@@ -289,12 +289,19 @@ export async function enabledPaymentChannels(): Promise<{ code: string; label: s
   });
 }
 
-// COD (bayar di tempat) — offered at checkout only when the MERCHANT switched it on
-// (store_settings.cod_enabled, migration 0038, default false) AND the platform allows COD at all
-// (platform_cod.enabled). Whether the courier SERVICE the shopper picks may carry COD is decided
-// per rate by /api/public/ongkir (which returns the effective `cod` flag), and re-checked by
-// /api/public/order — the API is the boundary, this only decides whether to render the option.
-export async function storeCodEnabled(storeId: string): Promise<boolean> {
+// COD (bayar di tempat) — what checkout needs to decide whether to OFFER the option.
+//
+// `enabled` = the MERCHANT switched it on (store_settings.cod_enabled, migration 0038, default
+// false) AND the platform allows COD at all (platform_cod.enabled). The remaining limits are
+// per-ORDER, so they are handed to the page and evaluated live as the shopper fills the form:
+//   · maxAmountIdr    — platform_cod.max_amount_idr (0 = no cap), checked against subtotal + ongkir
+//   · allowedProvinces — platform_cod.allowed_provinces ([] = anywhere), checked against the province
+//   · per-service      — /api/public/ongkir stamps each rate with the EFFECTIVE `cod` flag
+// Every one of these is re-checked by /api/public/order (apps/admin/lib/cod.ts) — THAT is the
+// boundary; this only decides what to render, so a shopper is never offered a COD we would reject.
+export type StoreCodPolicy = { enabled: boolean; maxAmountIdr: number; allowedProvinces: string[] };
+
+export async function storeCodPolicy(storeId: string): Promise<StoreCodPolicy> {
   return cached(`store:cod:${storeId}`, async () => {
     const [[ss], [pc]] = await Promise.all([
       db
@@ -302,8 +309,25 @@ export async function storeCodEnabled(storeId: string): Promise<boolean> {
         .from(schema.storeSettings)
         .where(eq(schema.storeSettings.storeId, storeId))
         .limit(1),
-      db.select({ enabled: schema.platformCod.enabled }).from(schema.platformCod).limit(1),
+      db
+        .select({
+          enabled: schema.platformCod.enabled,
+          maxAmountIdr: schema.platformCod.maxAmountIdr,
+          allowedProvinces: schema.platformCod.allowedProvinces,
+        })
+        .from(schema.platformCod)
+        .limit(1),
     ]);
-    return !!ss?.cod && !!pc?.enabled;
+    const list = Array.isArray(pc?.allowedProvinces) ? (pc.allowedProvinces as unknown[]) : [];
+    return {
+      enabled: !!ss?.cod && !!pc?.enabled,
+      maxAmountIdr: Number(pc?.maxAmountIdr ?? 0),
+      allowedProvinces: list.filter((p): p is string => typeof p === "string" && !!p.trim()),
+    };
   });
+}
+
+/** Just the on/off bit (homepage values band — no order in scope there). */
+export async function storeCodEnabled(storeId: string): Promise<boolean> {
+  return (await storeCodPolicy(storeId)).enabled;
 }

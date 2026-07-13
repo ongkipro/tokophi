@@ -1,6 +1,6 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import { enabledPaymentChannels, mediaUrl, storeCodEnabled } from "../data/catalog";
+import { enabledPaymentChannels, mediaUrl, storeCodPolicy } from "../data/catalog";
 
 // ADR 0009 §4 — checkout is LOCKED (not part of the Store Builder); its only per-store variance is
 // branding read from the store profile: the logo (stores.logo_url) + the brand colour (already
@@ -39,13 +39,22 @@ const payDesc = (kind: string, label: string) =>
 const PAYMENTS = (await enabledPaymentChannels()).map((c) => ({ id: c.code, label: c.label, desc: payDesc(c.kind, c.label) }));
 
 // COD is NOT a payment channel like the others — it is a merchant switch (store_settings.cod_enabled,
-// migration 0038, default OFF) narrowed further by a per-service platform allowance. So:
-//   · store switched COD off → the option is not rendered at all (below)
-//   · store switched it on   → the option is rendered but stays hidden until the shopper picks a
-//     shipping service whose rate came back with cod:true (the ongkir API returns the EFFECTIVE
-//     flag). No disabled-but-visible row implying "ask us nicely".
-// Either way /api/public/order re-checks and rejects a COD order it should not accept.
-const COD_ENABLED = await storeCodEnabled(store.id);
+// migration 0038, default OFF) narrowed further by the PLATFORM's risk limits (platform_cod: a max
+// order amount + a province allow-list) and a per-service allowance. So:
+//   · store (or platform) switched COD off → the option is not rendered at all (below)
+//   · switched on → the option is rendered but stays hidden until ALL of these hold live:
+//       – the shopper picked a shipping service whose rate came back cod:true (the ongkir API
+//         returns the EFFECTIVE flag: courier capability × platform codAllowed × store switch)
+//       – subtotal + ongkir ≤ platform_cod.max_amount_idr
+//       – the typed province is on platform_cod.allowed_provinces (when that list is non-empty)
+//     Any of them failing → the row disappears. NOT a greyed-out row with an excuse: a COD we would
+//     reject has no business being on screen at all.
+// Either way /api/public/order re-checks all of it and rejects a COD order it should not accept —
+// this is UX, that is the boundary (apps/admin/lib/cod.ts).
+const COD = await storeCodPolicy(store.id);
+const COD_ENABLED = COD.enabled;
+const COD_MAX = COD.maxAmountIdr; // 0 = no cap
+const COD_PROVINCES = COD.allowedProvinces; // [] = every province
 ---
 
 <Layout title="Checkout" description={`Selesaikan pesananmu di ${store.name}.`}>
@@ -279,7 +288,7 @@ const COD_ENABLED = await storeCodEnabled(store.id);
   }
 </style>
 
-<script is:inline define:vars={{ ONGKIR_API, ORDER_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED }}>
+<script is:inline define:vars={{ ONGKIR_API, ORDER_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -340,19 +349,48 @@ const COD_ENABLED = await storeCodEnabled(store.id);
       return el ? Number(el.getAttribute("data-price")) : 0;
     }
 
-    // ---- COD availability (store_settings.cod_enabled × per-service platform allowance) ----
-    // The store-level switch decided whether #cod-option exists at all (server-side). Whether it may
-    // be USED depends on the shipping service the shopper picked: the ongkir API returns an already
-    // effective `cod` flag per rate, which we stamp on each shipping radio as data-cod. No COD-capable
-    // service selected → the option is hidden AND disabled (a disabled-but-visible row would just be
-    // the same lie in a nicer font). /api/public/order re-checks this server-side regardless.
+    // ---- COD availability — the same five conditions the order API enforces ----
+    // The two global switches (platform_cod.enabled × store_settings.cod_enabled) already decided
+    // server-side whether #cod-option exists in the DOM at all. The other three are per-ORDER, so
+    // they are re-evaluated on every change:
+    //   · service — the ongkir API stamps each rate with the EFFECTIVE cod flag → data-cod on the radio
+    //   · amount  — subtotal + ongkir must be ≤ COD_MAX (platform_cod.max_amount_idr; 0 = no cap)
+    //   · region  — the typed province must be on COD_PROVINCES (empty list = anywhere)
+    // Any of them failing → the row is hidden AND the radio disabled (a disabled-but-visible row is
+    // the same lie in a nicer font). /api/public/order re-checks all of it regardless — this is UX.
     var codOption = document.getElementById("cod-option");
     var codRadio = codOption ? codOption.querySelector('input[name="payment"]') : null;
+    var provinsiEl = form.querySelector('input[name="provinsi"]');
+
+    // Must match normProvince() in apps/admin/lib/cod.ts — the buyer TYPES their province (the
+    // datalist only suggests), so "DI Yogyakarta" / "Daerah Istimewa Yogyakarta" / "prov. jawa barat"
+    // all have to land on the same key. Duplicated because the storefront (Astro, inline script)
+    // cannot import from the admin app; the API's copy is the one that decides.
+    function normProvince(s) {
+      return String(s || "")
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/\b(provinsi|prov\.?|daerah istimewa|daerah khusus ibukota|d\.?k\.?i\.?|d\.?i\.?y?\.?)\b/g, " ")
+        .replace(/[^a-z0-9]+/g, "");
+    }
+
+    function codProvinceOk() {
+      if (!COD_PROVINCES || !COD_PROVINCES.length) return true; // no allow-list = anywhere
+      var p = normProvince(provinsiEl ? provinsiEl.value : "");
+      if (!p) return false;
+      return COD_PROVINCES.some(function (x) { return normProvince(x) === p; });
+    }
 
     function syncCod() {
       if (!codOption || !codRadio) return;
       var shipEl = form.querySelector('input[name="shipping"]:checked');
-      var allowed = !!COD_ENABLED && !!shipEl && shipEl.getAttribute("data-cod") === "1";
+      var total = subtotal + selectedShipping();
+      var allowed =
+        !!COD_ENABLED &&
+        !!shipEl &&
+        shipEl.getAttribute("data-cod") === "1" &&
+        (!COD_MAX || total <= COD_MAX) &&
+        codProvinceOk();
       if (allowed) {
         codOption.hidden = false;
         codRadio.disabled = false;
@@ -372,6 +410,12 @@ const COD_ENABLED = await storeCodEnabled(store.id);
       document.getElementById("summary-shipping").textContent = idr.format(ship);
       document.getElementById("summary-total").textContent = idr.format(subtotal + ship);
       syncCod();
+    }
+
+    // the province is free text → re-evaluate COD as it is typed/picked
+    if (provinsiEl) {
+      provinsiEl.addEventListener("input", syncCod);
+      provinsiEl.addEventListener("change", syncCod);
     }
 
     function bindShipping() {

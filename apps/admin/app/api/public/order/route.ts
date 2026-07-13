@@ -52,26 +52,35 @@ export async function POST(req: Request) {
   const [store] = await db.select({ id: schema.stores.id }).from(schema.stores).where(eq(schema.stores.slug, body.storeSlug || "batik-nusantara")).limit(1);
   if (!store) return NextResponse.json({ ok: false, error: "Toko tidak ditemukan." }, { headers: CORS });
 
-  // ── COD is a MONEY decision, so it is enforced here, not in the storefront UI ──────────────
-  // The merchant's switch (store_settings.cod_enabled, 0038) + the platform's per-service
-  // allowance (platform_couriers.services[].codAllowed) must both permit it. Hiding the option at
-  // checkout is UX; this is the boundary — a script posting channelCode:"cod" straight at the API
-  // gets a 403, never a silently-downgraded order (which would hide a COD request as a "transfer").
-  if (isCod) {
-    const policy = await getCodPolicy(store.id);
-    const svc = body.instant?.service ? null : body.shipping?.service; // instant is not in the roster → never COD
-    const svcType = body.instant?.service ? null : body.shipping?.serviceType;
-    const reason = policy.reason(svc, svcType);
-    if (reason) {
-      return NextResponse.json({ ok: false, error: reason, code: "cod_not_allowed" }, { status: 403, headers: CORS });
-    }
-  }
-
   const cust = body.customer ?? {};
   const addr = body.address ?? {};
   const subtotal = items.reduce((a, i) => a + (i.price ?? 0) * (i.qty ?? 1), 0);
   const shippingCost = Math.round(body.shipping?.cost ?? 0);
   const total = subtotal + shippingCost;
+
+  // ── COD is a MONEY decision, so it is enforced here, not in the storefront UI ──────────────
+  // All five switches must agree (lib/cod.ts): platform on, merchant on, total <= the platform cap,
+  // province on the allow-list, and the SERVICE the shopper picked is COD-allowed. Hiding the option
+  // at checkout is UX; this is the boundary — a script posting channelCode:"cod" straight at the API
+  // gets a 403 BEFORE any row is written, never a silently-downgraded order (which would hide a COD
+  // request as a "transfer"). Runs after `total` is known, because the cap is checked against it.
+  //
+  // ⚠️ HONEST LIMIT — the province is the one the buyer TYPED (body.address.provinsi); we normalise
+  // and match it, but we do not VERIFY it. The trustworthy signal would be the province of the
+  // KiriminAja destination district the ongkir quote was issued for, but the storefront only sends us
+  // the resulting label/cost, not `dest_id`. So a hostile client can claim an allowed province and
+  // ship elsewhere. Cap + merchant switch + service allowance ARE hard-enforced; province is
+  // enforced only as far as the data we receive permits. Closing it = pass dest_id here and resolve
+  // it server-side against the ongkir API.
+  if (isCod) {
+    const policy = await getCodPolicy(store.id);
+    const svc = body.instant?.service ? null : body.shipping?.service; // instant is not in the roster → never COD
+    const svcType = body.instant?.service ? null : body.shipping?.serviceType;
+    const reason = policy.reason({ courier: svc, serviceType: svcType, total, province: addr.provinsi });
+    if (reason) {
+      return NextResponse.json({ ok: false, error: reason, code: "cod_not_allowed" }, { status: 403, headers: CORS });
+    }
+  }
 
   // upsert customer (by email within store)
   let customerId: string | null = null;

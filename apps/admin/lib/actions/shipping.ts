@@ -248,19 +248,13 @@ export async function createShipment(input: {
 }): Promise<{ ok: boolean; awb?: string; error?: string }> {
   const { storeId } = await requireCapability("orders:write");
   if (!kiriminajaConfigured()) return { ok: false, error: "KiriminAja belum dikonfigurasi oleh platform." };
-  // Booking a COD shipment tells the courier to collect cash — same money path as a COD checkout,
-  // so the same policy gate (store switch × platform per-service allowance).
-  if (input.cod) {
-    const reason = (await getCodPolicy(storeId)).reason(input.service, input.serviceType);
-    if (reason) return { ok: false, error: reason };
-  }
 
   const data = await withTenant(storeId, async (db) => {
     const [s] = await db.select().from(schema.storeSettings).where(eq(schema.storeSettings.storeId, storeId)).limit(1);
     const [o] = await db
       .select({
         id: schema.orders.id,
-        number: schema.orders.number, city: schema.orders.city, awb: schema.orders.awb,
+        number: schema.orders.number, city: schema.orders.city, province: schema.orders.province, awb: schema.orders.awb,
         subtotal: schema.orders.subtotalIdr, total: schema.orders.totalIdr,
         custName: schema.customers.name, custPhone: schema.customers.phone,
       })
@@ -288,6 +282,21 @@ export async function createShipment(input: {
   if (!o) return { ok: false, error: "Pesanan tidak ditemukan." };
   if (o.awb) return { ok: false, error: `Pesanan sudah punya resi (${o.awb}).` };
   if (!s?.senderKecamatanId) return { ok: false, error: "Alamat pengirim belum diatur — Pengaturan → Pengiriman." };
+
+  // Booking a COD shipment tells the courier to collect cash — the same money path as a COD checkout,
+  // so it goes through the same gate (lib/cod.ts): platform switch × store switch × the platform's
+  // amount cap × the province allow-list × the per-service allowance. Checked here, after the order
+  // is loaded, because the cap and the province are properties of the ORDER (a Rp5jt COD parcel to a
+  // province we have no return leg for is the risk platform_cod exists to bound — booking it from the
+  // admin must not be a way around that).
+  if (input.cod) {
+    const policy = await getCodPolicy(storeId);
+    const reason = policy.reason({
+      courier: input.service, serviceType: input.serviceType,
+      total: Number(o.total), province: o.province,
+    });
+    if (reason) return { ok: false, error: reason };
+  }
 
   const dest = await resolveArea(o.city ?? "");
   if (!dest[0]) return { ok: false, error: `Area tujuan "${o.city}" tidak ditemukan di KiriminAja.` };
