@@ -113,6 +113,29 @@
   client-admin (available vs held + history), and payout control in super-admin. Design first —
   when do funds become "available", who triggers a payout, how is it reconciled against the gateway.
 
+## P1.9 — Next up (planned 2026-07-13, in flight)
+> Three slices that are unblocked TODAY. The ledger (P1.8) is deliberately NOT here: it needs a
+> business decision first (when do funds become "available", who triggers a payout, how is it
+> reconciled against the gateway) and coding it before that decision means migrating money later.
+
+- [ ] **🔴 Record returns/refusals — COD is live and we cannot measure its cost.** `order_status` is
+  `baru | diproses | dikirim | selesai | batal`. **There is no "retur".** A refused COD parcel — the
+  single biggest cost in COD, and the whole reason the SPX-only policy exists — has nowhere to be
+  recorded. So the question "what is our COD return rate, per courier?" is unanswerable, and every
+  decision about widening COD stays a guess. Add the status + a way for the merchant to set it, and
+  the return-rate report becomes a `group by`.
+- [ ] **Storefront event tracking → `analytics_events`.** The funnel + device split are currently
+  COUNTED (good) but from SEEDED rows (migration 0037). The table shape is already the real one, so
+  the tracker is a drop-in: post `visit / product_view / add_to_cart / checkout_start / purchase`
+  with a session id + device. Then the funnel reflects live traffic and the seed can go.
+- [ ] **🔴 The Iklan card still lies — it just lies from the DB now.** The hardcoded `AD_CHANNELS`
+  mock is gone and `/pemasaran` reads `ad_channels`, but the ROWS are seeded fiction: Meta Ads spend
+  `Rp18,5jt` → revenue `Rp78,2jt` (ROAS ~4,2×), a Pixel ID, and **`connected: true`**. There is no
+  Meta/Google integration anywhere in the codebase. A merchant can raise ad budget on a return that
+  never existed. Unlike the funnel, this CANNOT be made "dummy but computed" — there is no source of
+  truth to compute from. Show the channels as **not connected**, hide the performance numbers until
+  a real ad-platform integration exists. A fabricated ROAS is worse than an empty state.
+
 ## P1.7 — Domain cutover to `tokophi.com` — ✅ **DONE 2026-07-13, LIVE**
 > Scheme: **`<slug>.tokophi.com`** (one label deep → free Cloudflare Universal SSL, stays proxied). TLS for the wildcard = **Cloudflare Origin CA cert** as Traefik's default cert (LE cannot issue a wildcard over HTTP-01) → **every record must stay PROXIED**. Full detail + gotchas in WORKLOG 2026-07-13 and `DEPLOY.md`.
 
