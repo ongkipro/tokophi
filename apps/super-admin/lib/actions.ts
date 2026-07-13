@@ -605,7 +605,7 @@ export async function rejectPayout(payoutId: string, reason: string): Promise<{ 
     return { ok: true as const, storeId: p.storeId, amount: p.amountIdr, restored };
   });
   if (!r.ok) return r;
-  await logStore(r.storeId, `Pencairan ${rupiah(r.amount)} DITOLAK — ${why}. Saldo ${rupiah(r.restored)} dikembalikan ke merchant.`);
+  await logStore(r.storeId, `Pencairan ${rupiah(r.amount)} DITOLAK — “${why}” · saldo ${rupiah(r.restored)} dikembalikan ke merchant`);
   revalidatePath("/pencairan");
   revalidatePath(`/toko/${r.storeId}`);
   return { ok: true, restored: r.restored };

@@ -24,8 +24,9 @@ import { type Store } from "@/lib/mock";
 import { BILLING, SEGMENT_META, type BillingState } from "@tokophi/lib/billing";
 import { type StoreHealth, type CheckStatus, checkToneClass } from "@/lib/health-types";
 import { SegmentBadge, StatusBadge, HealthBadge, InvoiceBadge, ActivityIcon, initials } from "@/components/bits";
-import type { StoreInvoiceRow, StoreUserRow } from "@/lib/data";
+import type { StoreInvoiceRow, StoreUserRow, StoreBalance, StoreMovement, StorePayout, StoreMoneySignals } from "@/lib/data";
 import type { PActivity } from "@/lib/mock";
+import { SaldoSection } from "./saldo-section";
 import {
   impersonateStore, setStoreStatus, compStore, extendTrial, setStoreComped,
   resetOwnerPassword, resetStoreUserPassword, setStoreUserRole, removeStoreUser, addStoreUser,
@@ -42,10 +43,14 @@ function CheckIcon({ status }: { status: CheckStatus }) {
   return <Icon className={cn("size-4 shrink-0", checkToneClass[status])} />;
 }
 
-export function StoreDetail({ store, health, billing, invoices, users, activity, comp }: {
+export function StoreDetail({ store, health, billing, invoices, users, activity, comp, balance, movements, payouts, signals }: {
   store: Store; health: StoreHealth | null; billing: BillingState | null;
   invoices: StoreInvoiceRow[]; users: StoreUserRow[]; activity: PActivity[];
   comp: { comped: boolean; reason: string | null; ship7d: number };
+  balance: StoreBalance;
+  movements: { rows: StoreMovement[]; total: number; page: number; pages: number };
+  payouts: StorePayout[];
+  signals: StoreMoneySignals;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -186,6 +191,10 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
           </Card>
         ))}
       </div>
+
+      {/* SALDO & TRANSAKSI — the platform's window into this merchant's money (read-only; the
+          withdrawal queue itself lives in /pencairan). */}
+      <SaldoSection storeId={store.id} balance={balance} movements={movements} payouts={payouts} signals={signals} />
 
       <div className="grid gap-5 lg:grid-cols-3">
         {/* main column */}

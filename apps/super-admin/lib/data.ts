@@ -521,3 +521,233 @@ export async function getStoreComp(storeId: string): Promise<{ comped: boolean; 
     .limit(1);
   return { comped: s?.comped ?? false, reason: s?.reason ?? null, ship7d: s?.ship7d ?? 0 };
 }
+
+// ---- saldo & transaksi (per store — the platform's window into ONE merchant's money) ----
+//
+// The merchant reads the same book from /saldo (apps/admin/lib/data/ledger.ts) through RLS; we read
+// it cross-tenant on the owner connection with an explicit `store_id = $id`. The FORMULAS are
+// deliberately identical, character for character — the platform and the merchant must never
+// disagree about the merchant's money, and the only way to guarantee that is to derive both sides
+// from the same ledger with the same arithmetic instead of storing a balance anywhere.
+//
+//   tersedia (available) = Σ amount WHERE status = 'available'
+//   dalam proses (pending) = Σ amount WHERE status = 'pending'
+//   sudah dicairkan       = −Σ amount WHERE kind = 'payout'
+//   ditarik oleh retur    = −Σ amount WHERE kind = 'retur'
+export type StoreBalance = {
+  available: number;
+  pending: number;
+  withdrawn: number;
+  returned: number;
+};
+
+export async function getStoreBalance(storeId: string): Promise<StoreBalance> {
+  const rows = (await db.execute(sql`
+    select
+      coalesce(sum(amount_idr) filter (where status = 'available'), 0)::bigint as "available",
+      coalesce(sum(amount_idr) filter (where status = 'pending'), 0)::bigint   as "pending",
+      coalesce(-sum(amount_idr) filter (where kind = 'payout'), 0)::bigint     as "withdrawn",
+      coalesce(-sum(amount_idr) filter (where kind = 'retur'), 0)::bigint      as "returned"
+    from ledger_entries
+    where store_id = ${storeId}
+  `)) as unknown as Record<keyof StoreBalance, string | number>[];
+  const r = rows[0];
+  return {
+    available: Number(r?.available ?? 0),
+    pending: Number(r?.pending ?? 0),
+    withdrawn: Number(r?.withdrawn ?? 0),
+    returned: Number(r?.returned ?? 0),
+  };
+}
+
+// Ledger movements for one store, newest first. A busy store has thousands of rows, so this is
+// paginated in SQL (limit/offset) — never "fetch all and slice in the browser".
+export type StoreMovement = {
+  id: string;
+  kind: string; // sale | retur | payout | adjustment
+  status: string; // pending | available
+  amount: number; // SIGNED
+  note: string | null;
+  createdAt: Date;
+  orderId: string | null;
+  orderNumber: string | null;
+};
+export const MOVEMENTS_PER_PAGE = 25;
+
+export async function getStoreMovements(
+  storeId: string,
+  page = 1,
+  perPage = MOVEMENTS_PER_PAGE,
+): Promise<{ rows: StoreMovement[]; total: number; page: number; pages: number }> {
+  const [countRow] = (await db.execute(sql`
+    select count(*)::int as "total" from ledger_entries where store_id = ${storeId}
+  `)) as unknown as { total: number }[];
+  const total = Number(countRow?.total ?? 0);
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  const p = Math.min(Math.max(1, Math.trunc(page) || 1), pages);
+  const rows = (await db.execute(sql`
+    select l.id, l.kind::text as "kind", l.status::text as "status", l.amount_idr as "amount",
+           l.note, l.created_at as "createdAt", l.order_id as "orderId", o.number as "orderNumber"
+    from ledger_entries l
+    left join orders o on o.id = l.order_id
+    where l.store_id = ${storeId}
+    order by l.created_at desc, l.id desc
+    limit ${perPage} offset ${(p - 1) * perPage}
+  `)) as unknown as StoreMovement[];
+  return {
+    rows: rows.map((r) => ({ ...r, amount: Number(r.amount), createdAt: new Date(r.createdAt) })),
+    total,
+    page: p,
+    pages,
+  };
+}
+
+// This store's withdrawal history. (The cross-store queue lives in /pencairan — this is the
+// per-store slice, so an operator looking at one merchant does not have to go filter that list.)
+export type StorePayout = {
+  id: string;
+  amount: number;
+  status: PayoutStatus;
+  bankName: string | null;
+  bankAccount: string | null;
+  bankHolder: string | null;
+  note: string | null;
+  requestedAt: Date;
+  paidAt: Date | null;
+};
+
+export async function getStorePayouts(storeId: string): Promise<StorePayout[]> {
+  return db
+    .select({
+      id: schema.payouts.id,
+      amount: schema.payouts.amountIdr,
+      status: schema.payouts.status,
+      bankName: schema.payouts.bankName,
+      bankAccount: schema.payouts.bankAccount,
+      bankHolder: schema.payouts.bankHolder,
+      note: schema.payouts.note,
+      requestedAt: schema.payouts.requestedAt,
+      paidAt: schema.payouts.paidAt,
+    })
+    .from(schema.payouts)
+    .where(eq(schema.payouts.storeId, storeId))
+    .orderBy(desc(schema.payouts.requestedAt));
+}
+
+/**
+ * Monitoring signals — the point of showing a merchant's money to the PLATFORM.
+ *
+ * Every field below is computed from real rows. There is no "risk score": a weighted number nobody
+ * can trace back to a fact is worse than no number, because an operator will act on it. What an
+ * operator gets instead is four things they can check, each with the query behind it:
+ *
+ *  1. `neverWithdrawn` + `idleDays` — a store sitting on a withdrawable balance it has never taken.
+ *     Either the merchant is stuck (bank details, min-payout, they cannot find the button) or the
+ *     account is dormant and the platform is holding money it will eventually be asked for. Both
+ *     are worth a call. Derived from payouts(status='selesai') = 0 while available ≥ min payout.
+ *  2. `returRate` vs `platformReturRate` — retur ÷ (dikirim + selesai + retur) over the last 90
+ *     days, next to the SAME ratio across all stores. A rate is meaningless alone; a rate against
+ *     the platform baseline is a comparison an operator can act on.
+ *  3. `returLast30` vs `returPrev30` — money clawed back by returns in the last 30 days against the
+ *     30 before it. This is the spike detector, and it is stated as two amounts, not a verdict.
+ *  4. `failedPayouts` — rejected withdrawals. Each one was refused by a human for a reason (wrong
+ *     account holder, failed verification); a store collecting them deserves a look.
+ *
+ * Also carried: `cancelRate` (batal ÷ all orders, 90d) — the seed has no returns yet, and a
+ * merchant cancelling a tenth of their own orders is the same class of problem.
+ */
+export type StoreMoneySignals = {
+  neverWithdrawn: boolean;
+  idleDays: number | null; // age of the OLDEST available (unwithdrawn) sale entry
+  lastPaidAt: Date | null;
+  openPayouts: number; // menunggu + diproses — money already deducted, awaiting us
+  failedPayouts: number;
+  returOrders: number;
+  shippedOrders: number; // dikirim + selesai + retur — the denominator that can actually be returned
+  cancelledOrders: number;
+  totalOrders: number;
+  returRate: number; // 0..1, last 90d
+  cancelRate: number; // 0..1, last 90d
+  platformReturRate: number; // same window, all stores — the baseline
+  returLast30: number; // IDR clawed back (positive)
+  returPrev30: number;
+  returCountLast30: number;
+  minPayout: number;
+};
+
+export async function getStoreMoneySignals(storeId: string): Promise<StoreMoneySignals> {
+  // Windows are anchored to the seed's TODAY (like every other relative figure in this file), and
+  // passed as ISO text with an explicit cast — the raw-SQL driver binds parameters as text.
+  const since90 = new Date(TODAY.getTime() - 90 * 86_400_000).toISOString();
+  const since30 = new Date(TODAY.getTime() - 30 * 86_400_000).toISOString();
+  const since60 = new Date(TODAY.getTime() - 60 * 86_400_000).toISOString();
+
+  const [payoutRow] = (await db.execute(sql`
+    select
+      count(*) filter (where status = 'selesai')::int                as "done",
+      count(*) filter (where status = 'gagal')::int                  as "failed",
+      count(*) filter (where status in ('menunggu','diproses'))::int as "open",
+      max(paid_at) filter (where status = 'selesai')                 as "lastPaidAt"
+    from payouts where store_id = ${storeId}
+  `)) as unknown as { done: number; failed: number; open: number; lastPaidAt: string | null }[];
+
+  // The oldest still-available sale entry: how long this store's money has been sitting withdrawable.
+  const [idleRow] = (await db.execute(sql`
+    select min(created_at) as "oldest"
+    from ledger_entries
+    where store_id = ${storeId} and status = 'available' and kind = 'sale'
+  `)) as unknown as { oldest: string | null }[];
+
+  const [orderRow] = (await db.execute(sql`
+    select
+      count(*) filter (where status = 'retur')::int                            as "retur",
+      count(*) filter (where status = 'batal')::int                            as "batal",
+      count(*) filter (where status in ('dikirim','selesai','retur'))::int     as "shipped",
+      count(*)::int                                                            as "total"
+    from orders
+    where store_id = ${storeId} and placed_at >= ${since90}::timestamptz
+  `)) as unknown as { retur: number; batal: number; shipped: number; total: number }[];
+
+  const [baselineRow] = (await db.execute(sql`
+    select
+      count(*) filter (where status = 'retur')::int                        as "retur",
+      count(*) filter (where status in ('dikirim','selesai','retur'))::int as "shipped"
+    from orders
+    where placed_at >= ${since90}::timestamptz
+  `)) as unknown as { retur: number; shipped: number }[];
+
+  const [returRow] = (await db.execute(sql`
+    select
+      coalesce(-sum(amount_idr) filter (where created_at >= ${since30}::timestamptz), 0)::bigint                              as "last30",
+      coalesce(-sum(amount_idr) filter (where created_at >= ${since60}::timestamptz and created_at < ${since30}::timestamptz), 0)::bigint  as "prev30",
+      count(*) filter (where created_at >= ${since30}::timestamptz)::int                                                      as "countLast30"
+    from ledger_entries
+    where store_id = ${storeId} and kind = 'retur'
+  `)) as unknown as { last30: string; prev30: string; countLast30: number }[];
+
+  const policy = await getPayoutPolicy();
+  const balance = await getStoreBalance(storeId);
+  const done = Number(payoutRow?.done ?? 0);
+  const oldest = idleRow?.oldest ? new Date(idleRow.oldest) : null;
+  const shipped = Number(orderRow?.shipped ?? 0);
+  const baseShipped = Number(baselineRow?.shipped ?? 0);
+
+  return {
+    neverWithdrawn: done === 0 && balance.available >= policy.minPayoutIdr,
+    idleDays: oldest ? Math.max(0, daysBetween(oldest)) : null,
+    lastPaidAt: payoutRow?.lastPaidAt ? new Date(payoutRow.lastPaidAt) : null,
+    openPayouts: Number(payoutRow?.open ?? 0),
+    failedPayouts: Number(payoutRow?.failed ?? 0),
+    returOrders: Number(orderRow?.retur ?? 0),
+    shippedOrders: shipped,
+    cancelledOrders: Number(orderRow?.batal ?? 0),
+    totalOrders: Number(orderRow?.total ?? 0),
+    returRate: shipped > 0 ? Number(orderRow?.retur ?? 0) / shipped : 0,
+    cancelRate: Number(orderRow?.total ?? 0) > 0 ? Number(orderRow?.batal ?? 0) / Number(orderRow.total) : 0,
+    platformReturRate: baseShipped > 0 ? Number(baselineRow?.retur ?? 0) / baseShipped : 0,
+    returLast30: Number(returRow?.last30 ?? 0),
+    returPrev30: Number(returRow?.prev30 ?? 0),
+    returCountLast30: Number(returRow?.countLast30 ?? 0),
+    minPayout: policy.minPayoutIdr,
+  };
+}
