@@ -1,0 +1,120 @@
+---
+// Storefront tracker — writes the 5 funnel events that /analitik counts (apps/admin/lib/data/funnel.ts).
+//
+// Rendered in <head> (Layout.astro) so window.tokophiTrack exists BEFORE any page script runs and
+// so `visit` is recorded even if the shopper leaves immediately. It never touches store_id: the
+// tenant is resolved server-side from the Host header in /api/track.
+//
+// Contract (POST /api/track, JSON):
+//   { type: "visit"|"product_view"|"add_to_cart"|"checkout_start"|"purchase",
+//     sessionId: string,           // generated once, kept in sessionStorage
+//     device:    "ponsel"|"desktop"|"tablet" }   // decided ONCE per session, reused
+//
+// De-dupe (the device split + funnel count sessions, not refreshes):
+//   visit    — once per sessionStorage session (a nav to another page does NOT re-fire it)
+//   purchase — once per ORDER (key = order number, kept in localStorage), so refreshing
+//              /checkout/sukses cannot inflate conversions
+---
+
+<script is:inline>
+  (function () {
+    var SID = "tphi:sid";
+    var DEV = "tphi:device";
+    var VISIT = "tphi:visited";
+    var ORDERS = "tphi:purchased"; // localStorage — survives the session, so a refresh can't re-count
+
+    function ss(key) { try { return sessionStorage.getItem(key); } catch (e) { return null; } }
+    function ssSet(key, val) { try { sessionStorage.setItem(key, val); } catch (e) {} }
+
+    function uid() {
+      try {
+        if (crypto && crypto.randomUUID) return crypto.randomUUID();
+      } catch (e) {}
+      return "s-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+    }
+
+    // ponsel | desktop | tablet — decided ONCE per session and reused, because the device split is
+    // a share of SESSIONS. Re-sniffing per event would let a resize flip a session's bucket.
+    function sniffDevice() {
+      var ua = (navigator.userAgent || "").toLowerCase();
+      var w = window.innerWidth || screen.width || 1024;
+      var isTablet = /ipad|tablet|playbook|silk/.test(ua) || (/android/.test(ua) && !/mobile/.test(ua));
+      if (isTablet) return "tablet";
+      if (/mobi|iphone|ipod|android|blackberry|iemobile|opera mini/.test(ua)) return "ponsel";
+      if (w < 768) return "ponsel";
+      if (w < 1024) return "tablet";
+      return "desktop";
+    }
+
+    var sid = ss(SID);
+    if (!sid) { sid = uid(); ssSet(SID, sid); }
+    var device = ss(DEV);
+    if (!device) { device = sniffDevice(); ssSet(DEV, device); }
+
+    // Fire-and-forget. sendBeacon survives the unload that "Beli Sekarang" / checkout submit cause;
+    // fetch(keepalive) is the fallback. NOTHING here may throw into the page — a tracking failure
+    // must never break add-to-cart or checkout.
+    function track(type) {
+      try {
+        var body = JSON.stringify({ type: type, sessionId: sid, device: device });
+        if (navigator.sendBeacon) {
+          var ok = navigator.sendBeacon("/api/track", new Blob([body], { type: "application/json" }));
+          if (ok) return;
+        }
+        fetch("/api/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: body,
+          keepalive: true,
+        }).catch(function () {});
+      } catch (e) {}
+    }
+    window.tokophiTrack = track;
+
+    // ---- visit: once per session, NOT per page navigation ----
+    if (!ss(VISIT)) {
+      ssSet(VISIT, "1");
+      track("visit");
+    }
+
+    var path = location.pathname.replace(/\/+$/, "") || "/";
+
+    // ---- product_view ----
+    if (path.indexOf("/produk/") === 0 && path.length > "/produk/".length) track("product_view");
+
+    // ---- checkout_start: the checkout page was opened ----
+    if (path === "/checkout") track("checkout_start");
+
+    // ---- purchase: once per order ----
+    if (path === "/checkout/sukses") {
+      var key = null;
+      try {
+        var last = JSON.parse(localStorage.getItem("lastOrder") || "null");
+        if (last) key = String(last.number || last.createdAt || "");
+      } catch (e) {}
+      if (key) {
+        var seen = [];
+        try { seen = JSON.parse(localStorage.getItem(ORDERS) || "[]"); } catch (e) { seen = []; }
+        if (!Array.isArray(seen)) seen = [];
+        if (seen.indexOf(key) === -1) {
+          seen.push(key);
+          try { localStorage.setItem(ORDERS, JSON.stringify(seen.slice(-20))); } catch (e) {}
+          track("purchase");
+        }
+      }
+    }
+
+    // ---- add_to_cart: delegated, so the product page's own script stays untouched ----
+    document.addEventListener(
+      "click",
+      function (e) {
+        var t = e.target;
+        if (!t || !t.closest) return;
+        var btn = t.closest("#add-to-cart, #buy-now, [data-track='add_to_cart']");
+        if (!btn || btn.disabled) return;
+        track("add_to_cart");
+      },
+      true,
+    );
+  })();
+</script>
