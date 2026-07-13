@@ -892,8 +892,22 @@ async function main() {
       };
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);
-  for (let i = 0; i < ledgerRows.length; i += 2000) {
-    await db.insert(schema.ledgerEntries).values(ledgerRows.slice(i, i + 2000));
+  // ONE entry per ORDER, not per payment: `ledger_one_sale_per_order` is a partial unique index, and
+  // an order with two successful payments (a partial, a retry) would violate it. Dedupe here rather
+  // than discover it as a crash — which is exactly how this was found: the seed died on the
+  // constraint and every insert AFTER it (platform_payout) silently never ran, so a "successful"
+  // reseed left the payout policy table empty.
+  const byOrder = new Map<string, (typeof ledgerRows)[number]>();
+  for (const r of ledgerRows) {
+    const prev = byOrder.get(r.orderId);
+    if (prev) prev.amountIdr += r.amountIdr; // partial payments sum into one sale
+    else byOrder.set(r.orderId, { ...r });
+  }
+  const uniqueLedger = [...byOrder.values()];
+  for (let i = 0; i < uniqueLedger.length; i += 2000) {
+    // onConflictDoNothing: the dev server may be live and writing its own entries while the seed
+    // runs. The book must survive that, not race it.
+    await db.insert(schema.ledgerEntries).values(uniqueLedger.slice(i, i + 2000)).onConflictDoNothing();
   }
 
   // daily sales rollup (Dashboard/Analitik series)
