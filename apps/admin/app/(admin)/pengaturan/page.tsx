@@ -4,6 +4,7 @@ import * as React from "react"
 import {
   Bell,
   MapPin,
+  Landmark,
   Receipt,
   Truck,
   Users,
@@ -35,6 +36,7 @@ import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { SenderAddressCard } from "@/components/admin/pengaturan/sender-address-card"
 import { JasaKirimCard } from "@/components/admin/pengaturan/jasa-kirim-card"
+import { RekeningCard } from "@/components/admin/pengaturan/rekening-card"
 
 // NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
 // (super-admin → platform_payment_channels) and flow straight to the shopper's checkout.
@@ -45,6 +47,7 @@ type Section =
   | "profil"
   | "pengiriman"
   | "alamat"
+  | "rekening"
   | "pajak"
   | "pengguna"
   | "notifikasi"
@@ -58,6 +61,7 @@ const SECTIONS: {
   { id: "profil", label: "Profil Toko", desc: "Nama, logo, kontak", icon: <Store /> },
   { id: "pengiriman", label: "Pengiriman", desc: "Jasa kirim & COD", icon: <Truck /> },
   { id: "alamat", label: "Alamat", desc: "Alamat pengambilan", icon: <MapPin /> },
+  { id: "rekening", label: "Rekening", desc: "Tujuan penarikan saldo", icon: <Landmark /> },
   { id: "pajak", label: "Pajak", desc: "PPN & NPWP", icon: <Receipt /> },
   { id: "pengguna", label: "Pengguna", desc: "Anggota & peran", icon: <Users /> },
   {
@@ -366,6 +370,15 @@ export default function Page() {
           {section === "pengiriman" && (
             <div className="max-w-3xl">
               <JasaKirimCard />
+            </div>
+          )}
+
+          {/* REKENING — where a payout is SENT. Same single writer as Saldo → Rekening
+              (lib/actions/ledger saveBankAccount), so the two screens cannot drift apart about
+              where a merchant's money goes. */}
+          {section === "rekening" && (
+            <div className="max-w-3xl">
+              <RekeningCard />
             </div>
           )}
 
