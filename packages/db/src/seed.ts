@@ -2,6 +2,7 @@
 // (the same store the admin manages and the storefront sells). Run:
 //   npm run seed -w @tokophi/db   (idempotent — truncates public tables first)
 import { db, client, schema } from "./client";
+import { and, eq } from "drizzle-orm";
 import { scryptSync, randomBytes } from "node:crypto";
 import { COURIERS } from "@tokophi/lib/couriers";
 
@@ -234,30 +235,62 @@ const CHANNEL_MAP: Record<string, "meta_ads" | "tiktok_ads" | "google_ads" | "or
   "Meta Ads": "meta_ads", "TikTok Ads": "tiktok_ads", "Google Ads": "google_ads", Organic: "organic", Other: "other",
 };
 type OrderStatus = "baru" | "diproses" | "dikirim" | "selesai" | "batal";
+const N_DAYS = 120;
+// Orders are the SINGLE SOURCE OF TRUTH for money. They used to be 60 rows crammed into the last
+// ~3 days, while `analytics_daily` invented its own 120-day series with no relationship to them —
+// two universes. June: the rollup claimed Rp117.932.299 / 646 orders while `orders` held
+// Rp9.741.000 / 32. So the Dashboard showed Rp117jt, Saldo showed Rp18jt, and Pesanan listed 32
+// rows: three screens, three answers, all "real". Now the orders are spread across the full 120
+// days and analytics_daily is DERIVED from them (see DAILY below), so every screen reconciles.
 const ORDERS_SEED = (() => {
   const rnd = mulberry32(555);
   const out: Array<{ number: string; customer: string; city: string; total: number; picks: number[]; status: OrderStatus; channel: string; minutesAgo: number }> = [];
-  for (let i = 0; i < 60; i++) {
-    const items = 1 + Math.floor(rnd() * 4);
-    let total = 0;
-    const picks: number[] = [];
-    for (let k = 0; k < items; k++) {
-      const idx = Math.floor(rnd() * CATALOG.length);
-      total += CATALOG[idx].price;
-      picks.push(idx);
+  let n = 0;
+  for (let d = N_DAYS - 1; d >= 0; d--) {
+    const day = new Date(ADMIN_TODAY);
+    day.setUTCDate(day.getUTCDate() - d);
+    const dow = day.getUTCDay();
+    // the seasonality the old hand-made chart had, now expressed as ORDERS rather than as a
+    // revenue curve nobody could trace back to a transaction
+    const weekend = dow === 0 || dow === 6 ? 0.82 : 1;
+    const payday = day.getUTCDate() === 25 || day.getUTCDate() === 1 ? 1.35 : 1;
+    const trend = 1 + ((N_DAYS - d) / N_DAYS) * 0.55; // the shop grows over the window
+    const count = Math.max(1, Math.round(4.6 * weekend * payday * trend * (0.75 + rnd() * 0.5)));
+
+    for (let k = 0; k < count; k++) {
+      const items = 1 + Math.floor(rnd() * 4);
+      let total = 0;
+      const picks: number[] = [];
+      for (let j = 0; j < items; j++) {
+        const idx = Math.floor(rnd() * CATALOG.length);
+        total += CATALOG[idx].price;
+        picks.push(idx);
+      }
+      // Status follows AGE, which is what actually happens: a 3-month-old order is finished; a
+      // yesterday one is still being packed. The old seed rolled status at random, so the shop had
+      // orders "baru" from four months ago.
+      const sr = rnd();
+      const status: OrderStatus =
+        d > 14
+          ? sr < 0.93 ? "selesai" : "batal"
+          : d > 5
+            ? sr < 0.14 ? "batal" : sr < 0.75 ? "selesai" : "dikirim"
+            : d > 2
+              ? sr < 0.5 ? "dikirim" : sr < 0.85 ? "diproses" : "selesai"
+              : sr < 0.45 ? "baru" : sr < 0.85 ? "diproses" : "dikirim";
+
+      out.push({
+        number: `INV-${5200 - n}`,
+        customer: NAMES15[Math.floor(rnd() * NAMES15.length)],
+        city: CITIES[Math.floor(rnd() * CITIES.length)],
+        total,
+        picks,
+        status,
+        channel: CHANNELS[Math.floor(rnd() * CHANNELS.length)],
+        minutesAgo: d * 1440 + Math.floor(rnd() * 1440),
+      });
+      n++;
     }
-    const sr = rnd();
-    const status: OrderStatus = sr < 0.12 ? "baru" : sr < 0.32 ? "diproses" : sr < 0.6 ? "dikirim" : sr < 0.93 ? "selesai" : "batal";
-    out.push({
-      number: `INV-${4821 - i}`,
-      customer: NAMES15[Math.floor(rnd() * NAMES15.length)],
-      city: CITIES[Math.floor(rnd() * CITIES.length)],
-      total,
-      picks,
-      status,
-      channel: CHANNELS[Math.floor(rnd() * CHANNELS.length)],
-      minutesAgo: Math.round(i * (12 + rnd() * 60) + rnd() * 8),
-    });
   }
   return out.sort((a, b) => a.minutesAgo - b.minutesAgo);
 })();
@@ -389,25 +422,40 @@ const MENU_DEFS = [
 ];
 
 // ---- daily sales rollup (mirror admin mock buildDays: mulberry32(20260701), 120 days) ----
+// DERIVED from ORDERS_SEED — not invented alongside it. This is the whole point: the revenue on
+// the Dashboard is the sum of the orders in the Pesanan list, which is the money in the Saldo
+// ledger. Three screens, one number.
+//
+// `visitors` is the one figure with no transaction behind it (nobody logged the browsing), so it is
+// back-computed from orders at a plausible Indonesian fashion conversion rate (~2–3.5%) instead of
+// being picked out of the air. The funnel events (analytics_events) are pinned to visitors and
+// orders, so the conversion rate the dashboard shows is arithmetic over these same rows.
 const DAILY = (() => {
   const rnd = mulberry32(20260701);
-  const out: Array<{ date: string; sales: number; orders: number; visitors: number }> = [];
-  const N = 120;
-  for (let i = N - 1; i >= 0; i--) {
-    const d = new Date(ADMIN_TODAY);
+  const byDate = new Map<string, { sales: number; orders: number }>();
+  // ⚠️ Anchor on TODAY, the same clock `placed_at` is written from (minutesAgo()). The seed carries
+  // TWO anchors — TODAY (2026-07-02) and ADMIN_TODAY (2026-06-30) — and bucketing the rollup on one
+  // while the orders are stamped from the other silently drops the rows that fall off the edge:
+  // that cost Rp894.000 across 4 orders before it was caught. Derive both sides from one clock.
+  for (let i = N_DAYS + 1; i >= 0; i--) {
+    const d = new Date(TODAY);
     d.setUTCDate(d.getUTCDate() - i);
-    const dow = d.getUTCDay();
-    const weekend = dow === 0 || dow === 6 ? 0.82 : 1;
-    const payday = d.getUTCDate() === 25 || d.getUTCDate() === 1 ? 1.35 : 1;
-    const trend = 1 + ((N - i) / N) * 0.55;
-    const noise = 0.8 + rnd() * 0.45;
-    const sales = Math.round(2_600_000 * weekend * payday * trend * noise);
-    const aov = 145_000 + Math.round(rnd() * 90_000);
-    const orders = Math.max(1, Math.round(sales / aov));
-    const visitors = Math.round(orders * (22 + rnd() * 16));
-    out.push({ date: d.toISOString().slice(0, 10), sales, orders, visitors });
+    byDate.set(d.toISOString().slice(0, 10), { sales: 0, orders: 0 });
   }
-  return out;
+  for (const o of ORDERS_SEED) {
+    if (o.status === "batal") continue; // a cancelled order is not revenue
+    const d = new Date(TODAY.getTime() - o.minutesAgo * 60_000).toISOString().slice(0, 10);
+    const cur = byDate.get(d);
+    if (!cur) continue;
+    cur.sales += o.total;
+    cur.orders += 1;
+  }
+  return [...byDate.entries()].map(([date, v]) => ({
+    date,
+    sales: v.sales,
+    orders: v.orders,
+    visitors: Math.max(v.orders, Math.round(v.orders / (0.02 + rnd() * 0.015))),
+  }));
 })();
 
 // ---- marketing: ad channels + per-province rollup ----
@@ -740,6 +788,45 @@ async function main() {
   for (const md of MENU_DEFS) {
     const [menu] = await db.insert(schema.menus).values({ storeId: store.id, name: md.name, handle: md.handle }).returning();
     await insertMenuItems(menu.id, md.items, null);
+  }
+
+  // ---- saldo: the ledger (migration 0040) ----
+  // Seeded from the orders themselves, so the money in Saldo is the money in Pesanan is the money
+  // on the Dashboard. One `sale` entry per paid order; it is `available` (withdrawable) once the
+  // order is `selesai`, `pending` while the order is still in flight — the release rule.
+  // A returned order gets an OPPOSING entry rather than an edit, keeping the book append-only.
+  const paidOrders = await db
+    .select({ id: schema.orders.id, status: schema.orders.status, number: schema.orders.number, placedAt: schema.orders.placedAt })
+    .from(schema.orders)
+    .where(eq(schema.orders.storeId, store.id));
+  const paidMap = new Map(paidOrders.map((o) => [o.id, o]));
+  // ONLY successful payments become money. A `gagal` payment (the seed writes one for every
+  // cancelled order) is not revenue — crediting it would put cash in the ledger that nobody ever
+  // paid. Caught because the ledger had 685 entries against 642 non-cancelled orders.
+  const pays = await db
+    .select({ orderId: schema.payments.orderId, total: schema.payments.total, amountIdr: schema.payments.amountIdr })
+    .from(schema.payments)
+    .where(and(eq(schema.payments.storeId, store.id), eq(schema.payments.status, "berhasil")));
+  const ledgerRows = pays
+    .map((p) => {
+      const o = p.orderId ? paidMap.get(p.orderId) : undefined;
+      if (!o) return null;
+      const amount = (p.total ?? 0) || p.amountIdr;
+      const done = o.status === "selesai";
+      return {
+        storeId: store.id,
+        orderId: o.id,
+        kind: "sale" as const,
+        status: (done ? "available" : "pending") as "available" | "pending",
+        amountIdr: amount,
+        note: `Penjualan ${o.number}`,
+        createdAt: o.placedAt,
+        availableAt: done ? o.placedAt : null,
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+  for (let i = 0; i < ledgerRows.length; i += 2000) {
+    await db.insert(schema.ledgerEntries).values(ledgerRows.slice(i, i + 2000));
   }
 
   // daily sales rollup (Dashboard/Analitik series)
