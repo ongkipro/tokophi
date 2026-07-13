@@ -3,7 +3,6 @@
 import * as React from "react"
 import {
   Bell,
-  CreditCard,
   Receipt,
   Truck,
   Users,
@@ -36,15 +35,17 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { SenderAddressCard } from "@/components/admin/pengaturan/sender-address-card"
-import { PaymentFeesCard } from "@/components/admin/pengaturan/payment-fees-card"
-import { PaymentMethodsCard } from "@/components/admin/pengaturan/payment-methods-card"
 import { getCouriers, saveCouriers, getPlatformCouriers } from "@/lib/actions/shipping"
 import { COURIERS } from "@tokophi/lib/couriers"
 import { toast } from "sonner"
 
+// NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
+// (super-admin → platform_payment_channels) and flow straight to the shopper's checkout.
+// The merchant does not pick them — the old tab wrote store_settings.payment_channels /
+// payment_fee_bearer, which NOTHING read: the storefront reads the platform table and the
+// order API validates against AUTOLARIS_KNOWN_CHANNELS. It was an illusion of control.
 type Section =
   | "profil"
-  | "pembayaran"
   | "pengiriman"
   | "pajak"
   | "pengguna"
@@ -57,12 +58,6 @@ const SECTIONS: {
   icon: React.ReactNode
 }[] = [
   { id: "profil", label: "Profil Toko", desc: "Nama, logo, kontak", icon: <Store /> },
-  {
-    id: "pembayaran",
-    label: "Pembayaran",
-    desc: "Metode pembayaran",
-    icon: <CreditCard />,
-  },
   { id: "pengiriman", label: "Pengiriman", desc: "Kurir & ongkir", icon: <Truck /> },
   { id: "pajak", label: "Pajak", desc: "PPN & NPWP", icon: <Receipt /> },
   { id: "pengguna", label: "Pengguna", desc: "Anggota & peran", icon: <Users /> },
@@ -390,10 +385,6 @@ export default function Page() {
               <SaveFooter />
             </Card>
           )}
-
-          {/* PEMBAYARAN */}
-          {section === "pembayaran" && <PaymentMethodsCard />}
-          {section === "pembayaran" && <PaymentFeesCard />}
 
           {/* PENGIRIMAN */}
           {section === "pengiriman" && (
