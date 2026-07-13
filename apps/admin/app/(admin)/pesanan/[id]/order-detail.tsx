@@ -16,10 +16,12 @@ import {
   MapPin,
   Store,
   Copy,
+  Undo2,
 } from "lucide-react";
 
 import { toast } from "sonner";
 import { setOrderStatus } from "@/lib/actions/orders";
+import type { OrderReturn } from "./return-info";
 import { getShippingRates, createShipment, trackShipment, cancelShipment, type Rate } from "@/lib/actions/shipping";
 import { createOrderPayment } from "@/lib/actions/payments";
 import type { OrderPayment } from "@/lib/data/payments";
@@ -34,6 +36,7 @@ import { PRODUCTS, type Order, type OrderStatus } from "@/lib/mock/store";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Table,
@@ -131,10 +134,21 @@ function primaryAction(status: OrderStatus): { label: string; icon: typeof Packa
 
 // ------- component -------
 
-export function OrderDetail({ order, payment }: { order: Order; payment: OrderPayment | null }) {
+const DEFAULT_RETURN_REASON = "Pembeli menolak paket";
+
+export function OrderDetail({
+  order,
+  payment,
+  orderReturn,
+}: {
+  order: Order;
+  payment: OrderPayment | null;
+  orderReturn: OrderReturn | null;
+}) {
   const { lines, subtotal, ongkir, penyesuaian, total } = breakdownFor(order);
   const step = currentStep(order.status);
   const cancelled = order.status === "batal";
+  const returned = order.status === "retur";
   const seed = hash(order.id);
 
   const seededCourier = COURIERS[seed % COURIERS.length];
@@ -158,6 +172,27 @@ export function OrderDetail({ order, payment }: { order: Order; payment: OrderPa
         router.refresh();
       } catch {
         toast.error("Gagal memperbarui status pesanan");
+      }
+    });
+  };
+
+  // ---- Retur (paket kembali) ----
+  // Only a parcel that actually left the gudang can come back, so this is offered on `dikirim`
+  // only. It is NOT cosmetic: setOrderStatus(…, "retur") puts the stock back on the shelf and
+  // fails any still-pending payment (a refused COD parcel = cash never collected) — hence the
+  // explicit confirm dialog rather than a one-click status flip.
+  const canReturn = order.status === "dikirim";
+  const [returnOpen, setReturnOpen] = React.useState(false);
+  const [returnReason, setReturnReason] = React.useState(DEFAULT_RETURN_REASON);
+  const markReturned = () => {
+    startTransition(async () => {
+      try {
+        await setOrderStatus(order.id, "retur", returnReason.trim() || DEFAULT_RETURN_REASON);
+        setReturnOpen(false);
+        toast.success("Pesanan ditandai retur — stok dikembalikan.");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menandai retur");
       }
     });
   };
@@ -336,6 +371,19 @@ export function OrderDetail({ order, payment }: { order: Order; payment: OrderPa
           <Button variant="ghost" onClick={printLabel}>
             <Printer /> Cetak resi
           </Button>
+          {canReturn && canWrite && (
+            <Button
+              variant="outline"
+              className="text-orange-600 hover:text-orange-600"
+              disabled={pending}
+              onClick={() => {
+                setReturnReason(DEFAULT_RETURN_REASON);
+                setReturnOpen(true);
+              }}
+            >
+              <Undo2 /> Tandai retur
+            </Button>
+          )}
           {action && canWrite && (
             <Button onClick={advance} disabled={pending}>
               <action.icon /> {action.label}
@@ -415,7 +463,24 @@ export function OrderDetail({ order, payment }: { order: Order; payment: OrderPa
               <CardTitle>Linimasa</CardTitle>
             </CardHeader>
             <CardContent>
-              {cancelled ? (
+              {returned ? (
+                <div className="flex items-start gap-3 rounded-lg border border-orange-500/25 bg-orange-500/5 p-3">
+                  <Undo2 className="mt-0.5 size-5 shrink-0 text-orange-500" />
+                  <div className="space-y-1 text-sm">
+                    <div className="font-medium text-orange-700 dark:text-orange-400">Paket kembali (retur)</div>
+                    <div className="text-muted-foreground">
+                      Alasan: <span className="text-foreground">{orderReturn?.reason ?? DEFAULT_RETURN_REASON}</span>
+                    </div>
+                    <div className="text-muted-foreground">
+                      Kembali pada:{" "}
+                      <span className="text-foreground">{orderReturn?.returnedAtLabel ?? "Waktu tidak tercatat"}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Stok sudah dikembalikan dan tagihan yang belum dibayar ditandai gagal.
+                    </div>
+                  </div>
+                </div>
+              ) : cancelled ? (
                 <div className="flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/5 p-3">
                   <XCircle className="size-5 text-red-500" />
                   <div className="text-sm">
@@ -648,6 +713,43 @@ export function OrderDetail({ order, payment }: { order: Order; payment: OrderPa
             </table>
           </div>
           <p className="mt-1 text-[11px] text-muted-foreground">{rates.length} layanan · tarif real-time · dikelola TokoΦ.</p>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tandai retur (parcel came back) */}
+      <Dialog open={returnOpen} onOpenChange={setReturnOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Tandai retur — {order.id}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg border border-orange-500/25 bg-orange-500/5 p-3 text-sm text-muted-foreground">
+              Paket dianggap kembali ke gudang. Stok {lines.reduce((a, l) => a + l.qty, 0)} item akan{" "}
+              <span className="font-medium text-foreground">ditambahkan kembali</span> dan tagihan yang masih menunggu
+              akan <span className="font-medium text-foreground">ditandai gagal</span>. Tindakan ini tidak bisa
+              dibatalkan dari sini.
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="return-reason" className="text-sm font-medium">
+                Alasan retur
+              </label>
+              <Textarea
+                id="return-reason"
+                rows={3}
+                value={returnReason}
+                onChange={(e) => setReturnReason(e.target.value)}
+                placeholder={DEFAULT_RETURN_REASON}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" disabled={pending} onClick={() => setReturnOpen(false)}>
+                Batal
+              </Button>
+              <Button disabled={pending} onClick={markReturned}>
+                <Undo2 /> {pending ? "Menyimpan…" : "Tandai retur"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

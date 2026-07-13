@@ -17,6 +17,7 @@ import {
 
 import { PageHeader } from "@/components/admin/page-header";
 import { OrderStatusBadge } from "@/components/admin/order-status";
+import { ReturnSummary, type CourierReturnRow } from "@/components/admin/pesanan/return-summary";
 import { IDR, timeAgo } from "@/lib/format";
 import { exportCsv } from "@/lib/csv";
 import { type Order, type OrderStatus } from "@/lib/mock/store";
@@ -61,6 +62,9 @@ const STATUS_TABS: { value: OrderStatus | "semua"; label: string }[] = [
   { value: "dikirim", label: "Dikirim" },
   { value: "selesai", label: "Selesai" },
   { value: "batal", label: "Batal" },
+  // A returned parcel is its own bucket — it shipped and came back (unlike `batal`, which never
+  // left). Merchants need to pull the whole list up in one click.
+  { value: "retur", label: "Retur" },
 ];
 
 
@@ -77,7 +81,7 @@ function initials(name: string) {
 
 // ------- page -------
 
-export function PesananClient({ orders }: { orders: Order[] }) {
+export function PesananClient({ orders, returns }: { orders: Order[]; returns: CourierReturnRow[] }) {
   const CHANNELS = ["Semua", ...Array.from(new Set(orders.map((o) => o.channel)))];
   const router = useRouter();
   const [status, setStatus] = useState<OrderStatus | "semua">("semua");
@@ -337,6 +341,9 @@ export function PesananClient({ orders }: { orders: Order[] }) {
           </Pagination>
         </div>
       </Card>
+
+      {/* Retur — real numbers from the orders that actually shipped (lib/data/returns.ts). */}
+      <ReturnSummary rows={returns} />
     </div>
   );
 }
