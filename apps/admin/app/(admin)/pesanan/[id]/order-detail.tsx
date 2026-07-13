@@ -17,6 +17,9 @@ import {
   Store,
   Copy,
   Undo2,
+  AlertTriangle,
+  Mail,
+  Phone,
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -24,14 +27,14 @@ import { setOrderStatus } from "@/lib/actions/orders";
 import type { OrderReturn } from "./return-info";
 import { getShippingRates, createShipment, trackShipment, cancelShipment, type Rate } from "@/lib/actions/shipping";
 import { createOrderPayment } from "@/lib/actions/payments";
-import type { OrderPayment } from "@/lib/data/payments";
+import type { OrderDetail as OrderDetailData } from "@/lib/data/order-detail";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useStoreName } from "@/components/admin/store-context";
 import { useCan } from "@/components/admin/permissions";
 import { OrderStatusBadge } from "@/components/admin/order-status";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, timeAgo } from "@/lib/format";
-import { PRODUCTS, type Order, type OrderStatus } from "@/lib/mock/store";
+import type { Order, OrderStatus } from "@/lib/mock/store";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,17 +50,6 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
-// ------- deterministic helpers (seed from order id) -------
-
-function hash(str: string) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
 function initials(name: string) {
   return name
     .split(/\s+/)
@@ -66,28 +58,6 @@ function initials(name: string) {
     .join("")
     .toUpperCase();
 }
-
-type Line = { name: string; emoji: string; image: string; qty: number; price: number };
-
-// Fabricate a stable line-item breakdown; reconcile so the shown Total === order.total
-// by putting the remainder into ongkir + a "penyesuaian" line.
-function breakdownFor(order: Order) {
-  const seed = hash(order.id);
-  const lines: Line[] = [];
-  for (let i = 0; i < order.items; i++) {
-    const p = PRODUCTS[(seed + i * 7) % PRODUCTS.length];
-    const qty = ((seed >> (i + 2)) & 3) === 0 ? 2 : 1;
-    lines.push({ name: p.name, emoji: p.emoji, image: p.image, qty, price: p.price });
-  }
-  const subtotal = lines.reduce((s, l) => s + l.qty * l.price, 0);
-  const ongkir = [0, 15_000, 20_000, 25_000][seed % 4];
-  // Remainder makes the fabricated lines reconcile to the order's real total.
-  const penyesuaian = order.total - subtotal - ongkir;
-  return { lines, subtotal, ongkir, penyesuaian, total: order.total };
-}
-
-const COURIERS = ["JNE Reguler", "J&T Express", "SiCepat REG", "AnterAja", "Ninja Xpress"];
-const PAY_METHODS = ["Transfer Bank BCA", "QRIS", "Virtual Account BNI", "GoPay", "ShopeePay"];
 
 // ------- timeline -------
 
@@ -138,26 +108,31 @@ const DEFAULT_RETURN_REASON = "Pembeli menolak paket";
 
 export function OrderDetail({
   order,
-  payment,
+  detail,
   orderReturn,
 }: {
   order: Order;
-  payment: OrderPayment | null;
+  detail: OrderDetailData;
   orderReturn: OrderReturn | null;
 }) {
-  const { lines, subtotal, ongkir, penyesuaian, total } = breakdownFor(order);
+  // Everything below is REAL: `detail` comes from order_line_items / orders / customers /
+  // customer_addresses / payments.
+  const { lines, money, shipment, buyer, address, payment } = detail;
+  // The order's own destination (orders.city/province) — the only city this parcel is tied to.
+  const destination =
+    [shipment.city, shipment.province].filter(Boolean).join(", ") || "Kota tujuan tidak tercatat";
+  // A saved address only counts as this parcel's address when its city matches the order's.
+  const usableAddress = address?.street && address.cityMatchesOrder ? address : null;
   const step = currentStep(order.status);
   const cancelled = order.status === "batal";
   const returned = order.status === "retur";
-  const seed = hash(order.id);
 
-  const seededCourier = COURIERS[seed % COURIERS.length];
-  const seededResi = `${seededCourier.split(" ")[0].toUpperCase().replace(/[^A-Z]/g, "")}${(seed % 900000000) + 100000000}`;
-  const courier = order.courierName ?? seededCourier;
-  const resi = order.awb ?? seededResi;
-  const shipped = !!order.awb;
-  const payMethod = PAY_METHODS[(seed >> 3) % PAY_METHODS.length];
-  const paid = order.status !== "baru" && order.status !== "batal";
+  const shipped = !!shipment.awb;
+  const totalQty = lines.reduce((a, l) => a + l.qty, 0);
+  const isCod = payment?.method === "cod";
+  // A gateway bill (VA/QRIS/DANA) exists only when the payments row carries a channel code.
+  const hasBill = !!payment?.channelCode;
+  const canBill = !payment || (!hasBill && payment.status !== "berhasil");
 
   const action = primaryAction(order.status);
   const router = useRouter();
@@ -207,8 +182,8 @@ export function OrderDetail({
   const [codAvailable, setCodAvailable] = React.useState(false);
   const checkOngkir = () => {
     startRate(async () => {
-      const weightGrams = (lines.reduce((a, l) => a + l.qty, 0) || 2) * 500;
-      const r = await getShippingRates({ destinationCity: order.city, weightGrams, itemValue: subtotal });
+      const weightGrams = (totalQty || 2) * 500;
+      const r = await getShippingRates({ destinationCity: order.city, weightGrams, itemValue: money.subtotal });
       if (r.ok) {
         setRates(r.rates);
         setRateMeta({ origin: r.origin, destination: r.destination });
@@ -292,13 +267,23 @@ export function OrderDetail({
     gagal: { label: "Gagal / kedaluwarsa", cls: "bg-red-500/12 text-red-600 dark:text-red-400" },
   };
 
-  // Print a shipping label (resi) → browser print dialog (Save as PDF). Uses the order's
-  // courier + resi/AWB; store = sender. Self-contained HTML so it prints clean.
+  // Print a shipping label (resi) → browser print dialog (Save as PDF). Uses the order's REAL
+  // courier + AWB; without a booked shipment there is no resi to print, so we refuse instead of
+  // printing an invented one.
   const storeName = useStoreName();
   const printLabel = () => {
+    if (!shipment.awb || !shipment.courier) {
+      toast.error("Belum ada resi — buat pengiriman dulu lewat Cek Ongkir.");
+      return;
+    }
     const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
-    const bars = Array.from({ length: 48 }, (_, i) => `<span style="width:${(hash(resi + i) % 3) + 1}px"></span>`).join("");
-    const isCod = payMethod.toLowerCase().includes("cod");
+    // Street only when the saved address actually belongs to this order's city; otherwise the
+    // label carries the destination the order recorded and nothing more.
+    const dest = usableAddress
+      ? [usableAddress.street, usableAddress.city, usableAddress.province, usableAddress.postcode]
+          .filter(Boolean)
+          .join(", ")
+      : destination;
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Resi ${esc(order.id)}</title>
 <style>
   @page { size: 100mm 150mm; margin: 0 }
@@ -309,9 +294,7 @@ export function OrderDetail({
   .courier { font-size: 18pt; font-weight: 800; letter-spacing: -.02em }
   .svc { font-size: 8pt; color: #333 }
   .cod { border: 2px solid #000; padding: 1mm 2mm; font-weight: 800; font-size: 11pt }
-  .barcode { display: flex; align-items: flex-end; gap: 1px; height: 14mm; margin-top: 1mm }
-  .barcode span { display: inline-block; height: 100%; background: #000 }
-  .resi { font-family: ui-monospace, monospace; font-size: 12pt; font-weight: 700; letter-spacing: .05em; text-align: center }
+  .resi { font-family: ui-monospace, monospace; font-size: 14pt; font-weight: 700; letter-spacing: .08em; text-align: center; border: 1px solid #000; padding: 2mm }
   .box { border-top: 1px solid #000; padding-top: 2mm }
   .lbl { font-size: 7pt; text-transform: uppercase; letter-spacing: .08em; color: #555 }
   .val { font-size: 9.5pt; font-weight: 600; line-height: 1.35 }
@@ -319,15 +302,14 @@ export function OrderDetail({
 </style></head><body>
   <div class="label">
     <div class="row">
-      <div><div class="courier">${esc(courier)}</div><div class="svc">${esc(storeName)} · ${esc(order.id)}</div></div>
-      ${isCod ? `<div class="cod">COD<br><span style="font-size:9pt">${IDR(total)}</span></div>` : `<div class="svc" style="text-align:right">NON-COD<br><b>${esc(payMethod)}</b></div>`}
+      <div><div class="courier">${esc(shipment.courier)}</div><div class="svc">${esc(storeName)} · ${esc(order.id)}</div></div>
+      ${isCod ? `<div class="cod">COD<br><span style="font-size:9pt">${IDR(money.total)}</span></div>` : `<div class="svc" style="text-align:right">NON-COD<br><b>${esc(payment?.methodLabel ?? "Belum ada pembayaran")}</b></div>`}
     </div>
-    <div class="barcode">${bars}</div>
-    <div class="resi">${esc(resi)}</div>
-    <div class="box"><div class="lbl">Penerima</div><div class="val">${esc(order.customer)}<br>${esc(order.city)}</div></div>
+    <div class="resi">${esc(shipment.awb)}</div>
+    <div class="box"><div class="lbl">Penerima</div><div class="val">${esc(usableAddress?.recipient ?? buyer?.name ?? order.customer)}<br>${esc(dest)}${buyer?.phone ? `<br>${esc(buyer.phone)}` : ""}</div></div>
     <div class="box"><div class="lbl">Pengirim</div><div class="val">${esc(storeName)}</div></div>
-    <div class="box"><div class="lbl">Isi (${order.items} item)</div><div class="val">${lines.map((l) => `${l.qty}× ${esc(l.name)}`).join(" · ")}</div></div>
-    <div class="foot"><span>Berat ± ${((lines.reduce((a, l) => a + l.qty, 0) || 2) * 0.5).toFixed(1)} kg</span><span>Total ${IDR(total)}</span></div>
+    <div class="box"><div class="lbl">Isi (${lines.length} item)</div><div class="val">${lines.map((l) => `${l.qty}× ${esc(l.title)}${l.variant ? ` (${esc(l.variant)})` : ""}`).join(" · ")}</div></div>
+    <div class="foot"><span>${totalQty} pcs</span><span>Total ${IDR(money.total)}</span></div>
   </div>
   <script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)}</script>
 </body></html>`;
@@ -368,7 +350,12 @@ export function OrderDetail({
           <Button variant="outline" onClick={checkOngkir} disabled={ratePending}>
             <Truck className="size-4" /> {ratePending ? "Cek ongkir…" : "Cek Ongkir"}
           </Button>
-          <Button variant="ghost" onClick={printLabel}>
+          <Button
+            variant="ghost"
+            onClick={printLabel}
+            disabled={!shipped}
+            title={shipped ? undefined : "Belum ada resi — buat pengiriman dulu"}
+          >
             <Printer /> Cetak resi
           </Button>
           {canReturn && canWrite && (
@@ -416,44 +403,89 @@ export function OrderDetail({
                     <TableRow key={i} className="hover:bg-transparent">
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <ProductThumb src={l.image} emoji={l.emoji} alt={l.name} className="size-10" emojiClassName="text-lg" />
-                          <span className="font-medium">{l.name}</span>
+                          <ProductThumb
+                            src={l.image ?? undefined}
+                            emoji={l.emoji ?? "📦"}
+                            alt={l.title}
+                            className="size-10"
+                            emojiClassName="text-lg"
+                          />
+                          <div className="min-w-0 leading-tight">
+                            <div className="font-medium">{l.title}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {l.variant ?? "Tanpa varian"}
+                            </div>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="text-center tabular-nums text-muted-foreground">{l.qty}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">{IDR(l.price)}</TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">{IDR(l.qty * l.price)}</TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">{IDR(l.total)}</TableCell>
                     </TableRow>
                   ))}
+                  {lines.length === 0 && (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                        Pesanan ini tidak punya baris item.
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
 
               <Separator className="my-4" />
 
-              {/* summary */}
+              {/* summary — every figure below is a stored column, nothing is back-solved */}
               <div className="ml-auto max-w-xs space-y-1.5 text-sm">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal</span>
-                  <span className="tabular-nums">{IDR(subtotal)}</span>
+                  <span className="tabular-nums">{IDR(money.subtotal)}</span>
                 </div>
+                {money.discount > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Diskon</span>
+                    <span className="tabular-nums">- {IDR(money.discount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-muted-foreground">
                   <span>Ongkos kirim</span>
-                  <span className="tabular-nums">{ongkir === 0 ? "Gratis" : IDR(ongkir)}</span>
+                  <span className="tabular-nums">
+                    {money.shipping === 0 ? "Belum ada ongkir" : IDR(money.shipping)}
+                  </span>
                 </div>
-                {penyesuaian !== 0 && (
+                {money.tax > 0 && (
                   <div className="flex justify-between text-muted-foreground">
-                    <span>{penyesuaian < 0 ? "Diskon" : "Penyesuaian"}</span>
-                    <span className="tabular-nums">
-                      {penyesuaian < 0 ? `- ${IDR(-penyesuaian)}` : IDR(penyesuaian)}
-                    </span>
+                    <span>Pajak</span>
+                    <span className="tabular-nums">{IDR(money.tax)}</span>
                   </div>
                 )}
                 <Separator className="my-1.5" />
                 <div className="flex justify-between pt-0.5 text-base font-semibold">
                   <span>Total</span>
-                  <span className="tabular-nums">{IDR(total)}</span>
+                  <span className="tabular-nums">{IDR(money.total)}</span>
                 </div>
               </div>
+
+              {/* A discrepancy is information — surface it, do not paper over it. */}
+              {money.mismatch && (
+                <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
+                  <div className="space-y-0.5 text-muted-foreground">
+                    <div className="font-medium text-amber-700 dark:text-amber-400">
+                      Angka pesanan ini tidak cocok
+                    </div>
+                    <div>
+                      Jumlah baris item: <span className="tabular-nums text-foreground">{IDR(money.lineSum)}</span> ·
+                      subtotal tersimpan: <span className="tabular-nums text-foreground">{IDR(money.subtotal)}</span>
+                    </div>
+                    <div>
+                      Subtotal − diskon + ongkir + pajak ={" "}
+                      <span className="tabular-nums text-foreground">{IDR(money.computedTotal)}</span> · total tersimpan:{" "}
+                      <span className="tabular-nums text-foreground">{IDR(money.total)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -542,14 +574,26 @@ export function OrderDetail({
             <CardHeader>
               <CardTitle>Pelanggan</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <div className="flex items-center gap-3">
                 <Avatar>
-                  <AvatarFallback>{initials(order.customer)}</AvatarFallback>
+                  <AvatarFallback>{initials(buyer?.name ?? order.customer)}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 leading-tight">
-                  <div className="truncate font-medium">{order.customer}</div>
-                  <div className="text-sm text-muted-foreground">{order.city}</div>
+                  <div className="truncate font-medium">{buyer?.name ?? order.customer}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {[buyer?.city, buyer?.province].filter(Boolean).join(", ") || "Kota tidak tercatat"}
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Phone className="size-4 shrink-0" />
+                  <span className="truncate">{buyer?.phone ?? "Nomor HP belum ada"}</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Mail className="size-4 shrink-0" />
+                  <span className="truncate">{buyer?.email ?? "Email belum ada"}</span>
                 </div>
               </div>
             </CardContent>
@@ -565,13 +609,21 @@ export function OrderDetail({
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <Truck className="size-4" /> Kurir
                 </span>
-                <span className="font-medium">{courier}</span>
+                {shipment.courier ? (
+                  <span className="font-medium">{shipment.courier}</span>
+                ) : (
+                  <span className="text-muted-foreground">Kurir belum dipilih</span>
+                )}
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <Copy className="size-4" /> No. resi
                 </span>
-                <span className="font-mono text-xs font-medium">{resi}</span>
+                {shipment.awb ? (
+                  <span className="font-mono text-xs font-medium">{shipment.awb}</span>
+                ) : (
+                  <span className="text-muted-foreground">Belum ada resi</span>
+                )}
               </div>
               {shipped && (
                 <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-500/10 px-3 py-2">
@@ -591,13 +643,38 @@ export function OrderDetail({
                 </div>
               )}
               <Separator />
+              {/* Destination = orders.city/province. A street is shown ONLY when the customer's
+                  saved address is in that same city; otherwise we say the street is unknown. */}
               <div className="flex gap-2 text-muted-foreground">
                 <MapPin className="mt-0.5 size-4 shrink-0" />
                 <span className="leading-snug">
-                  Jl. Merdeka No. {(seed % 90) + 1}, RT {String((seed % 12) + 1).padStart(2, "0")}/RW{" "}
-                  {String((seed % 8) + 1).padStart(2, "0")}, {order.city}
+                  {usableAddress ? (
+                    [usableAddress.street, usableAddress.city, usableAddress.province, usableAddress.postcode]
+                      .filter(Boolean)
+                      .join(", ")
+                  ) : (
+                    <>
+                      {destination}
+                      <span className="block text-xs">Alamat lengkap belum tercatat untuk pesanan ini</span>
+                    </>
+                  )}
                 </span>
               </div>
+              {address?.street && !address.cityMatchesOrder && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 text-xs">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
+                  <div className="space-y-0.5 text-muted-foreground">
+                    <div className="font-medium text-amber-700 dark:text-amber-400">
+                      Alamat tersimpan pelanggan beda kota
+                    </div>
+                    <div>
+                      {[address.street, address.city, address.province].filter(Boolean).join(", ")} — pesanan ini
+                      tercatat dikirim ke <span className="text-foreground">{destination}</span>. Konfirmasi alamat ke
+                      pelanggan sebelum kirim.
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -611,7 +688,11 @@ export function OrderDetail({
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <CreditCard className="size-4" /> Metode
                 </span>
-                <span className="font-medium">{payment ? (payment.channelCode === "COD" ? "COD (Bayar di Tempat)" : PAY_CHANNELS.find((c) => c.code === payment.channelCode)?.label ?? payment.channelCode) : payMethod}</span>
+                {payment ? (
+                  <span className="font-medium">{payment.methodLabel}</span>
+                ) : (
+                  <span className="text-muted-foreground">Belum ada pembayaran</span>
+                )}
               </div>
               {payment?.virtualAccount && (
                 <div className="flex items-center justify-between gap-2">
@@ -619,23 +700,27 @@ export function OrderDetail({
                   <span className="font-mono text-xs font-medium">{payment.virtualAccount}</span>
                 </div>
               )}
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground">Status</span>
-                {payment ? (
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAY_STATUS[payment.status].cls}`}>{PAY_STATUS[payment.status].label}</span>
-                ) : paid ? (
-                  <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">Dibayar</span>
-                ) : (
-                  <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">Menunggu</span>
-                )}
-              </div>
               {payment && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Status</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAY_STATUS[payment.status].cls}`}>
+                    {PAY_STATUS[payment.status].label}
+                  </span>
+                </div>
+              )}
+              {payment?.paidAtLabel && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Dibayar pada</span>
+                  <span className="font-medium">{payment.paidAtLabel}</span>
+                </div>
+              )}
+              {payment && payment.adminFee > 0 && (
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground">Total (+admin)</span>
                   <span className="font-medium tabular-nums">{IDR(payment.total)}</span>
                 </div>
               )}
-              {!payment && canWrite && (
+              {canBill && canWrite && (
                 <Button variant="outline" size="sm" className="w-full" disabled={ratePending} onClick={() => setBillOpen(true)}>
                   <CreditCard className="size-4" /> Buat Tagihan
                 </Button>
@@ -653,7 +738,7 @@ export function OrderDetail({
               </div>
               <div className="flex items-center justify-between gap-2 pt-0.5 text-base font-semibold">
                 <span>Total</span>
-                <span className="tabular-nums">{IDR(total)}</span>
+                <span className="tabular-nums">{IDR(money.total)}</span>
               </div>
             </CardContent>
           </Card>
@@ -676,7 +761,7 @@ export function OrderDetail({
               </label>
               {codAvailable && (
                 <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={codShipment} onChange={(e) => setCodShipment(e.target.checked)} className="size-4 accent-primary" /> COD (tagih {IDR(total)})
+                  <input type="checkbox" checked={codShipment} onChange={(e) => setCodShipment(e.target.checked)} className="size-4 accent-primary" /> COD (tagih {IDR(money.total)})
                 </label>
               )}
             </div>
@@ -724,7 +809,7 @@ export function OrderDetail({
           </DialogHeader>
           <div className="space-y-3">
             <div className="rounded-lg border border-orange-500/25 bg-orange-500/5 p-3 text-sm text-muted-foreground">
-              Paket dianggap kembali ke gudang. Stok {lines.reduce((a, l) => a + l.qty, 0)} item akan{" "}
+              Paket dianggap kembali ke gudang. Stok {totalQty} item akan{" "}
               <span className="font-medium text-foreground">ditambahkan kembali</span> dan tagihan yang masih menunggu
               akan <span className="font-medium text-foreground">ditandai gagal</span>. Tindakan ini tidak bisa
               dibatalkan dari sini.
@@ -759,7 +844,7 @@ export function OrderDetail({
           <DialogHeader>
             <DialogTitle>Buat Tagihan — {order.id}</DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground">Pilih metode pembayaran. Nomor VA / QRIS terbit otomatis untuk {IDR(total)}.</p>
+          <p className="text-xs text-muted-foreground">Pilih metode pembayaran. Nomor VA / QRIS terbit otomatis untuk {IDR(money.total)}.</p>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {PAY_CHANNELS.map((c) => (
               <Button key={c.code} variant="outline" disabled={ratePending} onClick={() => createBill(c.code)}>
