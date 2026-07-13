@@ -3,7 +3,6 @@ import * as React from "react";
 import { Calendar, Check, ChevronDown, Download, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,6 +51,49 @@ const PRESETS: { label: string; range: () => { dari?: string; sampai?: string } 
 ];
 
 const STATUSES: LedgerStatus[] = ["semua", "proses", "belum", "ditarik"];
+
+/**
+ * A NATIVE <input type="date"> — deliberately not the shared <Input>, and deliberately
+ * `suppressHydrationWarning`. Both need justifying, because both look like shortcuts.
+ *
+ * Not <Input>: the house rule bans the Base UI `Select`, and a date range is exactly the kind of
+ * picker that tempts you into one. The native control needs no JS, is keyboard- and
+ * screen-reader-accessible for free, and gives Indonesian users their own locale's date UI. It just
+ * borrows the shared input's classes so it sits in the toolbar like everything else.
+ *
+ * suppressHydrationWarning: Chromium puts an inline `caret-color: transparent` on an EMPTY date
+ * input before React hydrates and removes it again afterwards — the server HTML provably never
+ * contains it (`curl` the page and grep) and the settled DOM has no `style` attribute at all, but
+ * React samples the DOM mid-flight and reports a mismatch it cannot patch. This is the browser
+ * touching the node outside React, which is precisely what the flag is for. It is scoped to this
+ * one element, so it cannot mask a real mismatch anywhere else on the page.
+ */
+function DateInput({
+  label,
+  value,
+  min,
+  max,
+  onPick,
+}: {
+  label: string;
+  value?: string;
+  min?: string;
+  max?: string;
+  onPick: (v: string | undefined) => void;
+}) {
+  return (
+    <input
+      type="date"
+      aria-label={label}
+      value={value ?? ""}
+      min={min}
+      max={max}
+      onChange={(e) => onPick(e.target.value || undefined)}
+      suppressHydrationWarning
+      className="h-8 w-[9.5rem] rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm tabular-nums outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+    />
+  );
+}
 
 const CSV_NAME: Record<SaldoTab, string> = {
   mutasi: "mutasi-saldo",
