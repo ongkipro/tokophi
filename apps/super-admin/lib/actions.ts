@@ -1,6 +1,6 @@
 "use server";
 import { db, schema } from "@tokophi/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { scryptSync, randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { signImpersonation } from "./session";
@@ -12,6 +12,10 @@ import { addMonths, quote, withPpn } from "@tokophi/lib/billing";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
 async function logStore(storeId: string, text: string): Promise<void> {
   await db.insert(schema.platformActivity).values({ kind: "admin", text, storeId });
+}
+// …and for platform-wide operator actions that belong to no single store (e.g. payout policy).
+async function logPlatform(text: string): Promise<void> {
+  await db.insert(schema.platformActivity).values({ kind: "admin", text });
 }
 const tempPassword = () => "tokophi-" + randomBytes(3).toString("hex"); // scrypt-hashed before storing
 
@@ -493,4 +497,149 @@ export async function addStoreUser(storeId: string, input: { name: string; email
   await logStore(storeId, `User ${email} (${input.role}) ditambahkan oleh platform`);
   revalidatePath(`/toko/${storeId}`);
   return { ok: true, password: pw };
+}
+
+// ============================================================================
+// Pencairan (payouts) — the platform side of the merchant's "Tarik saldo"
+// ============================================================================
+//
+// A merchant requests a payout from /saldo: that writes a `payouts` row (menunggu) AND a NEGATIVE
+// `payout` ledger entry, so the money leaves their available pool immediately — it is spoken for.
+// Nobody but an operator can move it from there. These four actions are that operator.
+//
+// THE RULE THAT GOVERNS ALL OF THIS: the book is append-only. Money is never edited in place. A
+// payout that must be undone is undone with a NEW opposing entry, never by deleting or mutating the
+// entry that took the money out — that entry is the record that we took it, and it stays.
+
+const rupiah = (n: number) => "Rp" + n.toLocaleString("id-ID");
+
+/** Menunggu → Diproses: the operator picked it up / initiated the bank transfer. */
+export async function processPayout(payoutId: string): Promise<{ ok: boolean; error?: string }> {
+  await requirePlatformAdmin();
+  const r = await db.transaction(async (tx) => {
+    const [p] = await tx.select().from(schema.payouts).where(eq(schema.payouts.id, payoutId)).for("update").limit(1);
+    if (!p) return { ok: false as const, error: "Pencairan tidak ditemukan." };
+    if (p.status !== "menunggu") return { ok: false as const, error: "Hanya pencairan berstatus Menunggu yang bisa diproses." };
+    await tx.update(schema.payouts).set({ status: "diproses" }).where(eq(schema.payouts.id, payoutId));
+    return { ok: true as const, storeId: p.storeId, amount: p.amountIdr };
+  });
+  if (!r.ok) return r;
+  await logStore(r.storeId, `Pencairan ${rupiah(r.amount)} diproses (transfer bank dimulai)`);
+  revalidatePath("/pencairan");
+  revalidatePath(`/toko/${r.storeId}`);
+  return { ok: true };
+}
+
+/**
+ * Diproses → Selesai: the money left the platform's bank account.
+ *
+ * Nothing is posted to the ledger here — and that is correct. The merchant's balance was already
+ * debited when they REQUESTED the payout; paying it out settles an obligation we had already
+ * recorded. Crediting or debiting again here would double-count.
+ */
+export async function markPayoutPaid(payoutId: string): Promise<{ ok: boolean; error?: string }> {
+  await requirePlatformAdmin();
+  const r = await db.transaction(async (tx) => {
+    const [p] = await tx.select().from(schema.payouts).where(eq(schema.payouts.id, payoutId)).for("update").limit(1);
+    if (!p) return { ok: false as const, error: "Pencairan tidak ditemukan." };
+    if (p.status === "selesai") return { ok: false as const, error: "Pencairan sudah lunas." };
+    if (p.status === "gagal") return { ok: false as const, error: "Pencairan sudah ditolak — dananya sudah dikembalikan." };
+    const paidAt = new Date();
+    await tx.update(schema.payouts).set({ status: "selesai", paidAt }).where(eq(schema.payouts.id, payoutId));
+    return { ok: true as const, storeId: p.storeId, amount: p.amountIdr };
+  });
+  if (!r.ok) return r;
+  await logStore(r.storeId, `Pencairan ${rupiah(r.amount)} ditandai LUNAS — dana sudah ditransfer`);
+  revalidatePath("/pencairan");
+  revalidatePath(`/toko/${r.storeId}`);
+  return { ok: true };
+}
+
+/**
+ * → Gagal (tolak): the request is refused and THE MONEY MUST COME BACK.
+ *
+ * The negative `payout` entry that removed it from the available pool is still there, and it stays
+ * there — it is a true record of what happened. The correction is a NEW, opposing `adjustment`
+ * entry (positive, immediately `available`, carrying the same payout_id) posted beside it. Replay
+ * the book and the two cancel out to zero: the merchant is exactly where they started.
+ *
+ * The reversal is computed from what the LEDGER actually holds for this payout — not from
+ * payouts.amount_idr — so it is exact by construction and cannot over- or under-refund if the two
+ * ever disagree. A payout already reversed nets to 0 and posts nothing.
+ *
+ * The payout row is SELECT … FOR UPDATE: two operators clicking Tolak at once would otherwise each
+ * post a reversal and hand the merchant their money twice.
+ */
+export async function rejectPayout(payoutId: string, reason: string): Promise<{ ok: boolean; error?: string; restored?: number }> {
+  await requirePlatformAdmin();
+  const why = reason?.trim();
+  if (!why) return { ok: false, error: "Alasan penolakan wajib diisi." };
+
+  const r = await db.transaction(async (tx) => {
+    const [p] = await tx.select().from(schema.payouts).where(eq(schema.payouts.id, payoutId)).for("update").limit(1);
+    if (!p) return { ok: false as const, error: "Pencairan tidak ditemukan." };
+    if (p.status === "selesai") return { ok: false as const, error: "Dana sudah ditransfer — pencairan lunas tidak bisa ditolak." };
+    if (p.status === "gagal") return { ok: false as const, error: "Pencairan sudah ditolak." };
+
+    // The net of every ledger entry tied to this payout (normally the single negative `payout` row).
+    const rows = (await tx.execute(sql`
+      select coalesce(sum(amount_idr), 0)::bigint as net from ledger_entries where payout_id = ${payoutId}
+    `)) as unknown as { net: string | number }[];
+    const net = Number(rows[0]?.net ?? 0);
+
+    let restored = 0;
+    if (net < 0) {
+      restored = -net; // exactly what was taken out
+      await tx.insert(schema.ledgerEntries).values({
+        storeId: p.storeId,
+        payoutId,
+        kind: "adjustment",
+        status: "available", // straight back into the available pool — the merchant can use it now
+        amountIdr: restored,
+        note: `Pembatalan penarikan: ${why}`,
+        availableAt: new Date(),
+      });
+    }
+
+    await tx.update(schema.payouts).set({ status: "gagal", note: why }).where(eq(schema.payouts.id, payoutId));
+    return { ok: true as const, storeId: p.storeId, amount: p.amountIdr, restored };
+  });
+  if (!r.ok) return r;
+  await logStore(r.storeId, `Pencairan ${rupiah(r.amount)} DITOLAK — ${why}. Saldo ${rupiah(r.restored)} dikembalikan ke merchant.`);
+  revalidatePath("/pencairan");
+  revalidatePath(`/toko/${r.storeId}`);
+  return { ok: true, restored: r.restored };
+}
+
+/**
+ * Payout policy (`platform_payout`, single row).
+ *
+ * `release_on` decides WHEN a sale's money becomes withdrawable:
+ *   - 'selesai'  — the order completed. Safe, and the default.
+ *   - 'dikirim'  — the parcel shipped. DANGEROUS: a parcel can only be RETURNED after it shipped,
+ *                  so the merchant can withdraw money for goods that come back. Worse, on COD the
+ *                  cash does not exist yet at despatch — the courier collects at the door and
+ *                  settles days later, so the platform would be paying out of its own pocket.
+ * Kept as a setting rather than a constant so it can be loosened without a deploy — but it defaults
+ * to the safe end on purpose, and the UI says so out loud.
+ */
+export async function savePayoutPolicy(input: { releaseOn: "selesai" | "dikirim"; minPayoutIdr: number }): Promise<{ ok: boolean; error?: string }> {
+  await requirePlatformAdmin();
+  if (input.releaseOn !== "selesai" && input.releaseOn !== "dikirim") return { ok: false, error: "Pilihan pelepasan dana tidak valid." };
+  const min = Math.floor(Number(input.minPayoutIdr));
+  if (!Number.isFinite(min) || min < 0) return { ok: false, error: "Minimum penarikan tidak valid." };
+
+  // Single-row table — and it may never have been seeded, so upsert rather than assume.
+  const [existing] = await db.select({ id: schema.platformPayout.id }).from(schema.platformPayout).limit(1);
+  if (existing) {
+    await db.update(schema.platformPayout).set({ releaseOn: input.releaseOn, minPayoutIdr: min }).where(eq(schema.platformPayout.id, existing.id));
+  } else {
+    await db.insert(schema.platformPayout).values({ releaseOn: input.releaseOn, minPayoutIdr: min });
+  }
+  await logPlatform(
+    `Kebijakan pencairan diubah — dana dilepas saat pesanan "${input.releaseOn}", minimum penarikan ${rupiah(min)}` +
+      (input.releaseOn === "dikirim" ? " ⚠️ (berisiko: retur & COD belum tentu tertagih)" : ""),
+  );
+  revalidatePath("/pencairan");
+  return { ok: true };
 }

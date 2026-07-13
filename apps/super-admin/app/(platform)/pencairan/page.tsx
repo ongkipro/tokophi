@@ -1,0 +1,20 @@
+import { getPayouts, getPayoutSummary, getPayoutPolicy } from "@/lib/data";
+import { PencairanClient } from "./pencairan-client";
+
+export const dynamic = "force-dynamic";
+
+export default async function PencairanPage() {
+  const [payouts, summary, policy] = await Promise.all([getPayouts(), getPayoutSummary(), getPayoutPolicy()]);
+  return (
+    <div className="mx-auto max-w-[1400px] space-y-5">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Pencairan</h1>
+        <p className="text-sm text-muted-foreground">
+          Permintaan tarik saldo dari semua toko. Saldo merchant sudah dipotong sejak permintaan dibuat —{" "}
+          <span className="font-medium text-foreground">menolak akan mengembalikannya</span>.
+        </p>
+      </div>
+      <PencairanClient payouts={payouts} summary={summary} policy={policy} />
+    </div>
+  );
+}

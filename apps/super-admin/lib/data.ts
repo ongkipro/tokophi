@@ -422,6 +422,95 @@ export async function getOpenTicketCount(): Promise<number> {
   return Number(row?.c ?? 0);
 }
 
+// ---- pencairan (payouts — platform side) ----
+//
+// A merchant requests a payout from /saldo; nobody but us can approve it. This is the operator's
+// queue. Cross-tenant on purpose: super-admin runs on the owner connection (the deliberate RLS
+// exception), so it sees every store's requests in one list.
+export type PayoutStatus = "menunggu" | "diproses" | "selesai" | "gagal";
+export type PayoutRow = {
+  id: string;
+  storeId: string;
+  storeName: string;
+  amount: number;
+  status: PayoutStatus;
+  bankName: string | null;
+  bankAccount: string | null;
+  bankHolder: string | null;
+  note: string | null;
+  requestedAt: Date;
+  paidAt: Date | null;
+  minutesAgo: number;
+};
+
+// Sorted the way an operator actually works the queue: everything still OPEN first (menunggu, then
+// diproses), newest first inside each bucket; settled rows (selesai/gagal) sink to the bottom.
+const PAYOUT_RANK = sql<number>`case ${schema.payouts.status}
+  when 'menunggu' then 0 when 'diproses' then 1 when 'selesai' then 2 else 3 end`;
+
+export async function getPayouts(): Promise<PayoutRow[]> {
+  const rows = await db
+    .select({
+      id: schema.payouts.id,
+      storeId: schema.payouts.storeId,
+      storeName: schema.stores.name,
+      amount: schema.payouts.amountIdr,
+      status: schema.payouts.status,
+      bankName: schema.payouts.bankName,
+      bankAccount: schema.payouts.bankAccount,
+      bankHolder: schema.payouts.bankHolder,
+      note: schema.payouts.note,
+      requestedAt: schema.payouts.requestedAt,
+      paidAt: schema.payouts.paidAt,
+    })
+    .from(schema.payouts)
+    .innerJoin(schema.stores, eq(schema.stores.id, schema.payouts.storeId))
+    .orderBy(asc(PAYOUT_RANK), desc(schema.payouts.requestedAt));
+  // requestedAt is real-clock (a merchant just clicked), so "N menit lalu" is measured from NOW —
+  // not from the seed's TODAY anchor, which would read as negative for anything requested today.
+  const now = Date.now();
+  return rows.map((r) => ({
+    ...r,
+    minutesAgo: Math.max(0, Math.round((now - r.requestedAt.getTime()) / 60_000)),
+  }));
+}
+
+export type PayoutSummary = {
+  pendingCount: number; // menunggu — waiting for an operator to pick it up
+  pendingAmount: number;
+  processingCount: number; // diproses — transfer initiated
+  processingAmount: number;
+  paidCount: number; // selesai — money left
+  paidAmount: number;
+};
+export async function getPayoutSummary(): Promise<PayoutSummary> {
+  const rows = await db
+    .select({ status: schema.payouts.status, amount: schema.payouts.amountIdr })
+    .from(schema.payouts);
+  const s: PayoutSummary = { pendingCount: 0, pendingAmount: 0, processingCount: 0, processingAmount: 0, paidCount: 0, paidAmount: 0 };
+  for (const r of rows) {
+    if (r.status === "menunggu") { s.pendingCount++; s.pendingAmount += r.amount; }
+    else if (r.status === "diproses") { s.processingCount++; s.processingAmount += r.amount; }
+    else if (r.status === "selesai") { s.paidCount++; s.paidAmount += r.amount; }
+  }
+  return s;
+}
+
+// platform_payout is a single-row table that may not have been seeded — fall back to the schema
+// defaults rather than showing the operator an empty policy card.
+export type PayoutPolicy = { releaseOn: "selesai" | "dikirim"; minPayoutIdr: number; autoApprove: boolean };
+export const PAYOUT_POLICY_DEFAULT: PayoutPolicy = { releaseOn: "selesai", minPayoutIdr: 50_000, autoApprove: false };
+
+export async function getPayoutPolicy(): Promise<PayoutPolicy> {
+  const [row] = await db.select().from(schema.platformPayout).limit(1);
+  if (!row) return PAYOUT_POLICY_DEFAULT;
+  return {
+    releaseOn: row.releaseOn === "dikirim" ? "dikirim" : "selesai",
+    minPayoutIdr: row.minPayoutIdr,
+    autoApprove: row.autoApprove,
+  };
+}
+
 // The store's comped/VIP state + reason (for the detail control card).
 export async function getStoreComp(storeId: string): Promise<{ comped: boolean; reason: string | null; ship7d: number }> {
   const [s] = await db
