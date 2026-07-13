@@ -631,7 +631,9 @@ async function main() {
     await db.insert(schema.orderLineItems).values(
       o.picks.map((idx) => ({ orderId: ord.id, variantId: seededProducts[idx].variantId, title: CATALOG[idx].name, qty: 1, priceIdr: CATALOG[idx].price, totalIdr: CATALOG[idx].price })),
     );
-    await db.insert(schema.payments).values({ orderId: ord.id, method: "transfer", amountIdr: o.total, status: o.status === "batal" ? "gagal" : "berhasil", paidAt: o.status === "batal" ? null : minutesAgo(o.minutesAgo) });
+    // storeId is the RLS key (0036) — the app write paths always set it; the seed used to omit it,
+    // which left every seeded payment orphaned (store_id NULL = belongs to no tenant).
+    await db.insert(schema.payments).values({ orderId: ord.id, storeId: store.id, method: "transfer", amountIdr: o.total, status: o.status === "batal" ? "gagal" : "berhasil", paidAt: o.status === "batal" ? null : minutesAgo(o.minutesAgo) });
   }
 
   // CMS: pages

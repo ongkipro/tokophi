@@ -382,8 +382,12 @@ export const payments = pgTable("payments", {
   amountIdr: money().notNull().default(0),
   status: paymentStatus().notNull().default("menunggu"),
   paidAt: ts(),
-  // AutoLaris payment-gateway (VA/QRIS/DANA) — platform-managed PSP
-  storeId: uuid().references(() => stores.id),
+  // AutoLaris payment-gateway (VA/QRIS/DANA) — platform-managed PSP.
+  // storeId is NOT NULL (0036): it is the RLS key. A nullable tenant key is a silent hole —
+  // a row with store_id = NULL matches no tenant policy and belongs to nobody.
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   provider: text(),
   reffId: text(),
   trxId: text(),

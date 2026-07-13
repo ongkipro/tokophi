@@ -253,6 +253,13 @@
       "when": 1783932784487,
       "tag": "0035_support_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1783944192576,
+      "tag": "0036_payments_media_rls",
+      "breakpoints": true
     }
   ]
 }

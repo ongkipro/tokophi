@@ -71,9 +71,12 @@ async function main() {
     JOIN pg_namespace n ON n.oid = c.relnamespace
     JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'store_id' AND a.attnum > 0 AND NOT a.attisdropped
     WHERE n.nspname = 'public' AND c.relkind = 'r'`;
-  // Known, pre-existing exceptions (platform-owned tables the merchant admin never reads
-  // through the tenant role). Everything else with a store_id MUST have RLS.
-  const KNOWN_EXCEPTIONS = ["media", "payments", "platform_activity"];
+  // `platform_activity` is the ONE deliberate exception: it is the platform's own audit log, read
+  // cross-tenant by the super-admin and written before a session exists (signup/provisioning), so
+  // it is owner-only by design — not merchant data.
+  // `media` + `payments` were retrofitted in 0036 and are now enforced like everything else.
+  // Everything else with a store_id MUST have RLS.
+  const KNOWN_EXCEPTIONS = ["platform_activity"];
   const unexpected = gaps.map((g) => g.relname).filter((t) => !KNOWN_EXCEPTIONS.includes(t));
   assert(
     `store-scoped tables with RLS: ${scoped - gaps.length}/${scoped}` +
