@@ -118,13 +118,17 @@ function GlobalSearch({ index }: { index: SearchItem[] }) {
 }
 
 /**
- * Saldo — money collected from shoppers that the platform still owes the merchant.
- * Modelled on how Indonesian seller tools (Shopee, mengantar, …) surface it: always visible in the
- * header, not buried in a settings page, because it is the number a merchant checks most.
+ * Saldo — the merchant's money, read from the ledger (migration 0040).
  *
- * It is a REAL sum over successful payments (lib/data/topbar.ts), not a placeholder. But note the
- * honest caveat in the dropdown: there is no payout/ledger yet (BACKLOG P1.8), so this figure only
- * ever grows. Saying so out loud is better than implying the merchant can withdraw it.
+ * This chip IS the entry point to Saldo: there is deliberately no sidebar row for it. Shopify's
+ * restraint — the nav is for the WORK, and money is not somewhere you navigate to, it is something
+ * you glance at. So it sits in the header, always visible next to the avatar (the way every
+ * Indonesian seller tool does it), and clicking through opens the full page.
+ *
+ * The two numbers must never be collapsed into one. "Tersedia" is money the merchant can take
+ * today; "Dalam proses" is money the platform is holding against orders that have not finished —
+ * and a parcel that comes back takes its credit with it. Showing only the total would promise cash
+ * that cannot be withdrawn, which is precisely the number that gets a platform shouted at.
  */
 function SaldoChip({ balance }: { balance: TopbarData["balance"] }) {
   return (
@@ -137,7 +141,7 @@ function SaldoChip({ balance }: { balance: TopbarData["balance"] }) {
           </Button>
         }
       />
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuLabel>Saldo</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <div className="space-y-2.5 px-2 py-1.5">
@@ -149,10 +153,20 @@ function SaldoChip({ balance }: { balance: TopbarData["balance"] }) {
             <span className="text-xs text-muted-foreground">Dalam proses</span>
             <span className="text-sm tabular-nums text-muted-foreground">{IDR(balance.pending)}</span>
           </div>
+          {balance.returned > 0 && (
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs text-muted-foreground">Ditarik kembali (retur)</span>
+              <span className="text-sm tabular-nums text-muted-foreground">{IDR(balance.returned)}</span>
+            </div>
+          )}
           <p className="border-t pt-2 text-xs leading-relaxed text-muted-foreground">
-            Dari pesanan yang sudah selesai. Buka Saldo untuk menarik ke rekening.
+            Dana masuk saat pesanan <span className="font-medium text-foreground">selesai</span>.
           </p>
         </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem className="gap-2 font-medium" render={<Link href="/saldo" />}>
+          <Wallet className="size-4" /> Lihat detail &amp; tarik saldo
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -13,10 +13,12 @@ import { sql } from "drizzle-orm";
 // it says nothing — an empty alert list is a real result, not a reason to invent one.
 
 export type Balance = {
-  /** Collected from shoppers via successful payments — what the platform owes the merchant. */
+  /** Withdrawable today — released once the order reached `selesai`. */
   available: number;
-  /** Bills created but not yet paid (VA/QRIS awaiting payment). Not yet the merchant's money. */
+  /** Held against orders still in flight. Not the merchant's money yet, and a return takes it back. */
   pending: number;
+  /** Clawed back by returned parcels (absolute). Shown so the chip never has to explain a drop. */
+  returned: number;
 };
 
 export type TopbarNotif = { id: string; title: string; sub: string; href: string };
@@ -39,9 +41,10 @@ export async function getTopbarData(): Promise<TopbarData> {
     const bal = (await db.execute(sql`
       select
         coalesce(sum(amount_idr) filter (where status = 'available'), 0)::bigint as "available",
-        coalesce(sum(amount_idr) filter (where status = 'pending'), 0)::bigint   as "pending"
+        coalesce(sum(amount_idr) filter (where status = 'pending'), 0)::bigint   as "pending",
+        coalesce(-sum(amount_idr) filter (where kind = 'retur'), 0)::bigint      as "returned"
       from ledger_entries
-    `)) as unknown as { available: string | number; pending: string | number }[];
+    `)) as unknown as { available: string | number; pending: string | number; returned: string | number }[];
 
     // ── notifications ─────────────────────────────────────────────────────────
     const newOrders = (await db.execute(sql`
@@ -83,6 +86,7 @@ export async function getTopbarData(): Promise<TopbarData> {
       balance: {
         available: Number(bal[0]?.available ?? 0),
         pending: Number(bal[0]?.pending ?? 0),
+        returned: Number(bal[0]?.returned ?? 0),
       },
       notifs,
     };

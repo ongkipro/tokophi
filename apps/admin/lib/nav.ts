@@ -1,7 +1,4 @@
-import {
-  LayoutDashboard, ShoppingBag, Package, Users, TicketPercent,
-  BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree,
-  MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon, Wallet } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon } from "lucide-react";
 
 export type NavChild = { label: string; href: string };
 export type NavItem = { label: string; href: string; icon: LucideIcon; badge?: string; children?: NavChild[] };
@@ -13,9 +10,11 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Dashboard", href: "/", icon: LayoutDashboard },
       { label: "Pesanan", href: "/pesanan", icon: ShoppingBag, badge: "7" },
-      // Saldo sits right under Pesanan on purpose: an Indonesian seller checks their money in
-      // the same breath as their orders, and the two are the same story told twice.
-      { label: "Saldo", href: "/saldo", icon: Wallet },
+      // Saldo is deliberately NOT in the sidebar. Shopify's restraint: the nav is for the WORK,
+      // and money is not a place you navigate to — it is a thing you glance at. It lives in the
+      // topbar chip (always visible, next to the avatar, the way every Indonesian seller tool does
+      // it), and the chip opens onto /saldo. Another sidebar row would just be one more thing to
+      // scan past.
       {
         label: "Produk", href: "/produk", icon: Package,
         children: [
