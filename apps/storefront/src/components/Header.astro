@@ -1,7 +1,11 @@
 ---
-import { STORE } from "../data/catalog";
+import { mediaUrl } from "../data/catalog";
 import { MAIN_NAV, type NavItem } from "../data/nav";
 
+// Tenant resolved per-request from the Host header (src/middleware.ts).
+const store = Astro.locals.store;
+// Merchant logo (stores.logo_url) when set, else the store name as a wordmark.
+const logo = store.logoUrl ? mediaUrl(store.logoUrl) : null;
 const pathname = Astro.url.pathname;
 const isActive = (href: string) =>
   href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
@@ -19,7 +23,13 @@ const isItemActive = (item: NavItem) => {
       href="/"
       class="shrink-0 rounded-md font-display text-xl font-semibold tracking-tight text-ink transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:text-2xl"
     >
-      {STORE.name}
+      {
+        logo ? (
+          <img src={logo} alt={store.name} class="h-9 w-auto max-w-[11rem] object-contain sm:h-10" />
+        ) : (
+          store.name
+        )
+      }
     </a>
 
     <nav class="mx-auto hidden items-center gap-7 text-sm text-muted lg:flex">
@@ -149,7 +159,9 @@ const isItemActive = (item: NavItem) => {
     class="fixed inset-y-0 right-0 z-50 flex w-[85%] max-w-sm translate-x-full flex-col bg-cream shadow-2xl transition-transform duration-300 ease-out"
   >
     <div class="flex items-center justify-between border-b border-line px-5 py-4">
-      <a href="/" class="font-display text-xl font-semibold tracking-tight text-ink">{STORE.name}</a>
+      <a href="/" class="font-display text-xl font-semibold tracking-tight text-ink">
+        {logo ? <img src={logo} alt={store.name} class="h-8 w-auto max-w-[9rem] object-contain" /> : store.name}
+      </a>
       <button
         type="button"
         id="menu-close"

@@ -2,6 +2,27 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-07-13
+
+### Self-serve signup + Google OAuth (P1.6)
+- **`/daftar`** — public signup: one transaction creates account + owner user (scrypt) + store (`trial`, +3 days) + `store_users(owner)` + location + settings + stats + a `platform_activity(signup)` row (`apps/admin/lib/provision.ts`). Slug auto-dedupes; duplicate email rejected. Verified end-to-end against the real DB.
+- **Google OAuth** — migration `0034` (`users.auth_provider`, `users.google_sub`), `/api/auth/google/{start,callback}` (jose + Google JWKS). Google on `/daftar` provisions a store; Google on `/login` with an unknown email is rejected (no silent store creation). Existing password users keep their `password_hash` when linking. **Feature-flagged** — with the env unset the button is hidden and the routes redirect. ⚠️ Not yet exercised against real Google credentials.
+
+### Storefront: `Host`-header multi-tenant (ADR 0009 complete)
+- **One storefront deploy now serves every store.** The module-level `STORE`/`STORE_ID` singletons are gone: an Astro middleware resolves the tenant from the request `Host` and puts `{store, catalog}` on `Astro.locals`; the catalog is memoized per store id (15s TTL, `STOREFRONT_CACHE_TTL_MS`).
+- **Resolution order:** custom domain (seam — no column yet) → `<slug>.$STOREFRONT_BASE_DOMAIN` → first host label (the sslip box) → fallback `STORE_SLUG`. The fallback fires **only when the host names no store at all**; a host naming an unknown slug returns a clean 404 ("Toko tidak ditemukan") rather than serving another merchant's storefront. `RESERVED` labels (`www/app/rich/admin/api/cname/toko/…`) never resolve as a store slug.
+- **Checkout branding** — `checkout.astro` renders the resolved store's `logo_url` (wordmark fallback when null).
+- `astro build` remains **DB-free** (verified with `DATABASE_URL` unset), so the fast-start/zero-downtime property from 2026-07-10 is intact.
+
+### Tema: named template variants
+- `/tema` is now a **template manager** — create/rename/set-default/delete named templates per type (Beranda/Kategori/Produk) and assign one per kategori and per produk (with bulk apply). The Puck builder moved to `/tema/[id]`.
+- **No migration needed** — `0031` already shipped `collections.template_id` + `products.template_id`. At most one default per `(store_id, type)`, enforced app-side; deleting a template NULLs any assignment pointing at it. All actions `requireCapability("theme:write")` + `withTenant`.
+- ⏳ The storefront still renders only the **homepage** template; category/product template rendering is the next slice.
+
+### Docs
+- **`specs/docs/CHAT_SPEC.md`** — shopper⇄merchant chat spec (separate tables from `support_*`, short-polling transport, anonymous-visitor JWT cookie, 7 slices). Nothing built yet.
+- **🔴 Found (pre-existing):** `support_tickets`/`support_messages` shipped in migration `0030`, after the `0012` RLS migration, and have **no RLS**; `lib/actions/support.ts` uses the owner connection with a manual `storeId` filter and no `requireCapability`. Tracked in BACKLOG P1.6.
+
 ## 2026-07-10
 
 ### Storefront → Astro SSR (zero-downtime deploys)

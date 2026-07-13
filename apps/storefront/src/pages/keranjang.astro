@@ -1,9 +1,9 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import { STORE } from "../data/catalog";
+const store = Astro.locals.store;
 ---
 
-<Layout title="Keranjang" description={`Keranjang belanja di ${STORE.name}. Checkout mudah via WhatsApp.`}>
+<Layout title="Keranjang" description={`Keranjang belanja di ${store.name}. Checkout mudah via WhatsApp.`}>
   <section class="mx-auto max-w-4xl px-4 py-12 sm:px-6">
     <h1 class="font-display text-3xl font-semibold text-ink">Keranjang Belanja</h1>
 
@@ -11,7 +11,7 @@ import { STORE } from "../data/catalog";
   </section>
 </Layout>
 
-<script define:vars={{ whatsapp: STORE.whatsapp, storeName: STORE.name }}>
+<script define:vars={{ whatsapp: store.whatsapp, storeName: store.name }}>
   (function () {
     var root = document.getElementById("cart-root");
     if (!root) return;

@@ -115,6 +115,11 @@ export const users = pgTable("users", {
   email: text().notNull().unique(),
   name: text(),
   passwordHash: text(), // scrypt "salt:hash" (local auth)
+  // How this user signs in: "password" (scrypt) or "google" (OAuth). Password users keep working
+  // untouched; a Google user may also have a passwordHash (linked account) — the provider column
+  // only records how the account was created / last linked.
+  authProvider: text().notNull().default("password"),
+  googleSub: text().unique(), // Google `sub` claim (stable id), set once the account is linked
   totpSecret: text(), // base32 TOTP secret (2FA); set once enabled
   totpEnabled: boolean().notNull().default(false),
   createdAt: createdAt(),

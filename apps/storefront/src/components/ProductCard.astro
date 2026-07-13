@@ -1,6 +1,6 @@
 ---
 import { IDR } from "@tokophi/lib/format";
-import { productRating, type Product } from "../data/catalog";
+import type { Product } from "../data/catalog";
 import Stars from "./Stars.astro";
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
 }
 
 const { product } = Astro.props;
-const rating = productRating(product);
+const rating = Astro.locals.catalog.productRating(product);
 ---
 
 <a

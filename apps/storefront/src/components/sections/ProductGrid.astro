@@ -1,13 +1,14 @@
 ---
 import type { ProductGridConfig } from "@tokophi/sections";
 import ProductCard from "../ProductCard.astro";
-import { bestsellers, recentProducts, randomProducts, byCollection } from "../../data/catalog";
+import { recentProducts, randomProducts, type Product } from "../../data/catalog";
 
 type Props = ProductGridConfig;
 const { heading, mode, collectionHandle, limit, columns } = Astro.props;
 
-const MODE_FN = { terlaris: bestsellers, terbaru: recentProducts, acak: randomProducts };
-const pool = collectionHandle ? byCollection(collectionHandle) : undefined;
+const catalog = Astro.locals.catalog;
+const pool: Product[] = collectionHandle ? catalog.byCollection(collectionHandle) : catalog.products;
+const MODE_FN = { terlaris: catalog.bestsellers, terbaru: recentProducts, acak: randomProducts };
 const products = MODE_FN[mode](pool).slice(0, limit);
 const colsClass = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-3 lg:grid-cols-4" }[columns];
 ---

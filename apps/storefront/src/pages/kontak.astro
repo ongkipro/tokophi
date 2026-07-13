@@ -1,14 +1,14 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import { STORE } from "../data/catalog";
+const store = Astro.locals.store;
 
-const waHref = `https://wa.me/${STORE.whatsapp}`;
+const waHref = `https://wa.me/${store.whatsapp}`;
 const email = "halo@batiknusantara.id";
 ---
 
 <Layout
   title="Kontak"
-  description={`Hubungi ${STORE.name} — pertanyaan seputar produk, pesanan, dan kerja sama.`}
+  description={`Hubungi ${store.name} — pertanyaan seputar produk, pesanan, dan kerja sama.`}
 >
   <section class="bg-brand-50">
     <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-16">
@@ -20,7 +20,7 @@ const email = "halo@batiknusantara.id";
       <p class="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Kontak</p>
       <h1 class="mt-2 font-display text-4xl font-semibold text-ink">Hubungi Kami</h1>
       <p class="mt-3 max-w-xl leading-relaxed text-muted">
-        Ada pertanyaan seputar produk, ukuran, atau pesanan? Tim {STORE.name} senang membantu.
+        Ada pertanyaan seputar produk, ukuran, atau pesanan? Tim {store.name} senang membantu.
       </p>
     </div>
   </section>
@@ -30,8 +30,8 @@ const email = "halo@batiknusantara.id";
       <!-- Store info -->
       <div class="flex flex-col gap-6">
         <div class="rounded-2xl border border-line bg-white/70 p-6 shadow-sm">
-          <h2 class="font-display text-2xl font-semibold text-ink">{STORE.name}</h2>
-          <p class="mt-1 text-sm text-muted">{STORE.tagline}</p>
+          <h2 class="font-display text-2xl font-semibold text-ink">{store.name}</h2>
+          <p class="mt-1 text-sm text-muted">{store.tagline}</p>
 
           <dl class="mt-6 flex flex-col gap-4 text-sm">
             <div class="flex items-start gap-3">
@@ -41,7 +41,7 @@ const email = "halo@batiknusantara.id";
               </svg>
               <div>
                 <dt class="font-medium text-ink">Lokasi</dt>
-                <dd class="text-muted">{STORE.city}, Indonesia</dd>
+                <dd class="text-muted">{store.city}, Indonesia</dd>
               </div>
             </div>
             <div class="flex items-start gap-3">

@@ -1,14 +1,21 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
-import { scryptSync, timingSafeEqual } from "node:crypto";
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 
 const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me");
 export const SESSION_COOKIE = "session";
+export const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7d — matches the JWT expiry
 
 export type Session = { userId: string; storeId: string; role: string; email: string; name: string };
+
+// scrypt "salt:hash" (same scheme as the seed + super-admin provisioning).
+export function hashPassword(pw: string): string {
+  const salt = randomBytes(16).toString("hex");
+  return `${salt}:${scryptSync(pw, salt, 64).toString("hex")}`;
+}
 
 // scrypt "salt:hash" (matches the seed's hashPassword).
 export function verifyPassword(pw: string, stored: string | null): boolean {

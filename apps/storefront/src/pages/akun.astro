@@ -1,9 +1,9 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import { STORE } from "../data/catalog";
+const store = Astro.locals.store;
 ---
 
-<Layout title="Akun" description={`Masuk atau daftar akun ${STORE.name}.`}>
+<Layout title="Akun" description={`Masuk atau daftar akun ${store.name}.`}>
   <section class="mx-auto max-w-md px-4 py-16 sm:py-24">
     <div class="text-center">
       <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Akun</p>

@@ -239,6 +239,13 @@
       "when": 1783654921407,
       "tag": "0033_spicy_thunderbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1783930869455,
+      "tag": "0034_crazy_deathstrike",
+      "breakpoints": true
     }
   ]
 }

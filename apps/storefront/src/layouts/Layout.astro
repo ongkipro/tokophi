@@ -2,15 +2,16 @@
 import "../styles/global.css";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
-import { STORE } from "../data/catalog";
-import { BRAND_SHADES } from "../data/theme";
 
 interface Props {
   title: string;
   description?: string;
 }
 
-const { title, description = STORE.tagline } = Astro.props;
+// Tenant resolved per-request from the Host header (src/middleware.ts).
+const { store, catalog } = Astro.locals;
+const BRAND_SHADES = catalog.brandShades;
+const { title, description = store.tagline } = Astro.props;
 ---
 
 <!doctype html>
@@ -19,7 +20,7 @@ const { title, description = STORE.tagline } = Astro.props;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>{title} — {STORE.name}</title>
+    <title>{title} — {store.name}</title>
     <meta name="description" content={description} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

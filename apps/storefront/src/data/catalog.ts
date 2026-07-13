@@ -1,39 +1,23 @@
-// Storefront catalog — reads the shared Postgres (@tokophi/db) at build/SSR time.
-// Same exports/shape as before; consumers (.astro pages) are unchanged. Single-tenant
-// MVP: the one store. Later: scope by a STORE_SLUG env for per-client deploys (ADR 0008).
+// Storefront catalog — PER-REQUEST, PER-STORE (ADR 0009 / PROD_PLAN §5).
+//
+// Was: module-level top-level `await db.select(...)` for a hardcoded "batik-nusantara" slug, i.e.
+// one store, loaded once at server boot. Now: `getCatalog(store)` for the store the middleware
+// resolved from the request's Host header (src/data/store.ts), memoized in-process with a short
+// TTL (src/data/cache.ts) so a page view is normally 0 queries.
+//
+// INVARIANT: nothing here runs at module scope / build time — `astro build` must stay DB-FREE
+// (the Docker image is built without DATABASE_URL). All DB access happens inside these functions.
 import { db, schema } from "@tokophi/db";
 import { and, asc, eq, ne } from "drizzle-orm";
+import type { StoredTemplateData } from "@tokophi/sections";
+import { cached } from "./cache";
+import type { StoreInfo } from "./store";
+import { brandShadesFor, getHomepageTemplate } from "./theme";
 
 const slugify = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-// Single-tenant MVP: the demo store, by slug — not a bare `.limit(1)`, which silently picks an
-// arbitrary row (Postgres gives no ordering guarantee) once more than one `stores` row exists,
-// e.g. from other seeded/test stores in the shared local DB. Later: STORE_SLUG env per deploy (ADR 0008).
-const storeRow = (
-  await db.select().from(schema.stores).where(eq(schema.stores.slug, "batik-nusantara")).limit(1)
-)[0];
-export const STORE_ID = storeRow!.id;
-
-export const STORE = {
-  name: storeRow?.name ?? "Batik Nusantara",
-  slug: storeRow?.slug ?? "batik-nusantara",
-  tagline: "Busana wanita modern — batik & ready-to-wear",
-  whatsapp: "6281234567890",
-  city: storeRow?.city ?? "Yogyakarta",
-  logoUrl: storeRow?.logoUrl ?? null,
-  brandColor: storeRow?.brandColor ?? null,
-};
-
 export type Collection = { handle: string; name: string; emoji: string; blurb: string };
-
-// The 6 shopper-facing category collections (in display order).
-const CATEGORY_ORDER = ["dress", "atasan", "bawahan", "busana-muslim", "outerwear", "loungewear"];
-const colRows = await db.select().from(schema.collections).where(eq(schema.collections.storeId, STORE_ID));
-export const COLLECTIONS: Collection[] = CATEGORY_ORDER
-  .map((h) => colRows.find((c) => c.handle === h))
-  .filter((c): c is (typeof colRows)[number] => Boolean(c))
-  .map((c) => ({ handle: c.handle, name: c.title, emoji: c.emoji ?? "", blurb: c.description ?? "" }));
 
 export type VariantRow = { option1: string | null; option2: string | null; price: number; stock: number };
 export type Product = {
@@ -52,111 +36,176 @@ export type Product = {
   variants?: VariantRow[]; // one row per option combo (price + stock)
   createdAt: number; // epoch ms — for the "terbaru" Grid Produk mode (ADR 0009)
 };
+export type Rating = { value: number; count: number };
+
+/** Everything one store's pages need. Built once per store per TTL, then reused across requests. */
+export type Catalog = {
+  store: StoreInfo;
+  collections: Collection[];
+  products: Product[];
+  /** Merchant's Store Builder homepage, or null → the hand-built default homepage. */
+  homepageTemplate: StoredTemplateData | null;
+  /** 11-shade scale derived from the store's brand hex — injected as CSS vars by Layout.astro. */
+  brandShades: Record<string, string>;
+  productRating: (p: Product | string) => Rating;
+  bestsellers: (list?: Product[]) => Product[];
+  byCollection: (handle: string) => Product[];
+  findProduct: (handle: string) => Product | undefined;
+  findCollection: (handle: string) => Collection | undefined;
+};
+
+// The 6 shopper-facing category collections (in display order).
+const CATEGORY_ORDER = ["dress", "atasan", "bawahan", "busana-muslim", "outerwear", "loungewear"];
 
 // Merchant-uploaded media is stored as a relative /api/uploads/<name> path served by the ADMIN app.
 // The storefront runs on a different origin, so rewrite those to absolute (admin base derived from
 // PUBLIC_ONGKIR_API — no extra env). Seeded /products/*.webp stay relative (served from public/).
-const ADMIN_BASE = (() => { try { return new URL(import.meta.env.PUBLIC_ONGKIR_API || "http://localhost:3000").origin; } catch { return ""; } })();
-const mediaUrl = (u: string) => (u.startsWith("/api/uploads/") ? ADMIN_BASE + u : u);
+const ADMIN_BASE = (() => {
+  try {
+    return new URL(import.meta.env.PUBLIC_ONGKIR_API || "http://localhost:3000").origin;
+  } catch {
+    return "";
+  }
+})();
+/** Absolute-ize an admin-served upload path (product media + the store logo). */
+export const mediaUrl = (u: string) => (u.startsWith("/api/uploads/") ? ADMIN_BASE + u : u);
 
-// products ⋈ default variant (price/compareAt) ⋈ primary media (image); non-archived, oldest→newest.
-const rows = await db
-  .select({
-    id: schema.products.id,
-    handle: schema.products.handle,
-    name: schema.products.title,
-    description: schema.products.description,
-    category: schema.products.category,
-    sizes: schema.products.sizes,
-    badge: schema.products.badge,
-    bestseller: schema.products.bestseller,
-    ratingValue: schema.products.ratingValue,
-    ratingCount: schema.products.ratingCount,
-    createdAt: schema.products.createdAt,
-    price: schema.productVariants.priceIdr,
-    compareAt: schema.productVariants.compareAtIdr,
-    image: schema.productMedia.url,
-  })
-  .from(schema.products)
-  .innerJoin(
-    schema.productVariants,
-    and(eq(schema.productVariants.productId, schema.products.id), eq(schema.productVariants.position, 0)),
-  )
-  .leftJoin(
-    schema.productMedia,
-    and(eq(schema.productMedia.productId, schema.products.id), eq(schema.productMedia.position, 0)),
-  )
-  .where(and(eq(schema.products.storeId, STORE_ID), ne(schema.products.status, "archived")))
-  .orderBy(asc(schema.products.createdAt));
+async function loadCatalog(store: StoreInfo): Promise<Catalog> {
+  const storeId = store.id;
 
-// real variants: option types + a row per combo (price/stock), keyed by product id
-const optRows = await db
-  .select({ productId: schema.productOptions.productId, name: schema.productOptions.name })
-  .from(schema.productOptions)
-  .innerJoin(schema.products, eq(schema.products.id, schema.productOptions.productId))
-  .where(eq(schema.products.storeId, STORE_ID))
-  .orderBy(asc(schema.productOptions.position));
-const varRows = await db
-  .select({
-    productId: schema.productVariants.productId,
-    option1: schema.productVariants.option1,
-    option2: schema.productVariants.option2,
-    price: schema.productVariants.priceIdr,
-    stock: schema.inventoryLevels.available,
-  })
-  .from(schema.productVariants)
-  .innerJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
-  .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.productVariants.id))
-  .where(eq(schema.products.storeId, STORE_ID))
-  .orderBy(asc(schema.productVariants.position));
+  const colRows = await db.select().from(schema.collections).where(eq(schema.collections.storeId, storeId));
+  const collections: Collection[] = CATEGORY_ORDER.map((h) => colRows.find((c) => c.handle === h))
+    .filter((c): c is (typeof colRows)[number] => Boolean(c))
+    .map((c) => ({ handle: c.handle, name: c.title, emoji: c.emoji ?? "", blurb: c.description ?? "" }));
 
-const optNamesById = new Map<string, string[]>();
-for (const o of optRows) { const l = optNamesById.get(o.productId) ?? []; l.push(o.name); optNamesById.set(o.productId, l); }
-const variantsById = new Map<string, VariantRow[]>();
-for (const v of varRows) { const l = variantsById.get(v.productId) ?? []; l.push({ option1: v.option1, option2: v.option2, price: v.price, stock: v.stock ?? 0 }); variantsById.set(v.productId, l); }
+  // products ⋈ default variant (price/compareAt) ⋈ primary media (image); non-archived, oldest→newest.
+  const rows = await db
+    .select({
+      id: schema.products.id,
+      handle: schema.products.handle,
+      name: schema.products.title,
+      description: schema.products.description,
+      category: schema.products.category,
+      sizes: schema.products.sizes,
+      badge: schema.products.badge,
+      bestseller: schema.products.bestseller,
+      ratingValue: schema.products.ratingValue,
+      ratingCount: schema.products.ratingCount,
+      createdAt: schema.products.createdAt,
+      price: schema.productVariants.priceIdr,
+      compareAt: schema.productVariants.compareAtIdr,
+      image: schema.productMedia.url,
+    })
+    .from(schema.products)
+    .innerJoin(
+      schema.productVariants,
+      and(eq(schema.productVariants.productId, schema.products.id), eq(schema.productVariants.position, 0)),
+    )
+    .leftJoin(
+      schema.productMedia,
+      and(eq(schema.productMedia.productId, schema.products.id), eq(schema.productMedia.position, 0)),
+    )
+    .where(and(eq(schema.products.storeId, storeId), ne(schema.products.status, "archived")))
+    .orderBy(asc(schema.products.createdAt));
 
-function optionsFor(id: string): { name: string; values: string[] }[] {
-  const names = optNamesById.get(id) ?? [];
-  const vlist = variantsById.get(id) ?? [];
-  return names.map((name, i) => {
-    const key = i === 0 ? "option1" : "option2";
-    const seen = new Set<string>(); const values: string[] = [];
-    for (const v of vlist) { const val = v[key as "option1" | "option2"]; if (val && !seen.has(val)) { seen.add(val); values.push(val); } }
-    return { name, values };
+  // real variants: option types + a row per combo (price/stock), keyed by product id
+  const optRows = await db
+    .select({ productId: schema.productOptions.productId, name: schema.productOptions.name })
+    .from(schema.productOptions)
+    .innerJoin(schema.products, eq(schema.products.id, schema.productOptions.productId))
+    .where(eq(schema.products.storeId, storeId))
+    .orderBy(asc(schema.productOptions.position));
+  const varRows = await db
+    .select({
+      productId: schema.productVariants.productId,
+      option1: schema.productVariants.option1,
+      option2: schema.productVariants.option2,
+      price: schema.productVariants.priceIdr,
+      stock: schema.inventoryLevels.available,
+    })
+    .from(schema.productVariants)
+    .innerJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
+    .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.productVariants.id))
+    .where(eq(schema.products.storeId, storeId))
+    .orderBy(asc(schema.productVariants.position));
+
+  const optNamesById = new Map<string, string[]>();
+  for (const o of optRows) {
+    const l = optNamesById.get(o.productId) ?? [];
+    l.push(o.name);
+    optNamesById.set(o.productId, l);
+  }
+  const variantsById = new Map<string, VariantRow[]>();
+  for (const v of varRows) {
+    const l = variantsById.get(v.productId) ?? [];
+    l.push({ option1: v.option1, option2: v.option2, price: v.price, stock: v.stock ?? 0 });
+    variantsById.set(v.productId, l);
+  }
+
+  const optionsFor = (id: string): { name: string; values: string[] }[] => {
+    const names = optNamesById.get(id) ?? [];
+    const vlist = variantsById.get(id) ?? [];
+    return names.map((name, i) => {
+      const key = (i === 0 ? "option1" : "option2") as "option1" | "option2";
+      const seen = new Set<string>();
+      const values: string[] = [];
+      for (const v of vlist) {
+        const val = v[key];
+        if (val && !seen.has(val)) {
+          seen.add(val);
+          values.push(val);
+        }
+      }
+      return { name, values };
+    });
+  };
+
+  const products: Product[] = rows.map((r) => {
+    const options = optionsFor(r.id);
+    const variants = variantsById.get(r.id) ?? [];
+    return {
+      handle: r.handle,
+      name: r.name,
+      price: r.price,
+      compareAt: r.compareAt ?? undefined,
+      category: r.category ?? "",
+      categoryHandle: slugify(r.category ?? ""),
+      image: mediaUrl(r.image ?? `/products/${r.handle}.webp`),
+      description: r.description ?? "",
+      sizes: (r.sizes as string[] | null) ?? [],
+      badge: r.badge ?? undefined,
+      bestseller: r.bestseller,
+      options: options.length ? options : undefined,
+      variants: variants.length ? variants : undefined,
+      createdAt: r.createdAt.getTime(),
+    };
   });
+
+  // ratings (aggregate score + count, denormalized on products)
+  const ratings: Record<string, Rating> = Object.fromEntries(
+    rows.map((r) => [r.handle, { value: r.ratingValue ?? 4.5, count: r.ratingCount }]),
+  );
+
+  return {
+    store,
+    collections,
+    products,
+    homepageTemplate: await getHomepageTemplate(storeId),
+    brandShades: brandShadesFor(store.brandColor),
+    productRating: (p) => ratings[typeof p === "string" ? p : p.handle] ?? { value: 4.5, count: 40 },
+    bestsellers: (list = products) => list.filter((p) => p.bestseller),
+    byCollection: (handle) => products.filter((p) => p.categoryHandle === handle),
+    findProduct: (handle) => products.find((p) => p.handle === handle),
+    findCollection: (handle) => collections.find((c) => c.handle === handle),
+  };
 }
 
-export const PRODUCTS: Product[] = rows.map((r) => {
-  const options = optionsFor(r.id);
-  const variants = variantsById.get(r.id) ?? [];
-  return {
-    handle: r.handle,
-    name: r.name,
-    price: r.price,
-    compareAt: r.compareAt ?? undefined,
-    category: r.category ?? "",
-    categoryHandle: slugify(r.category ?? ""),
-    image: mediaUrl(r.image ?? `/products/${r.handle}.webp`),
-    description: r.description ?? "",
-    sizes: (r.sizes as string[] | null) ?? [],
-    badge: r.badge ?? undefined,
-    bestseller: r.bestseller,
-    options: options.length ? options : undefined,
-    variants: variants.length ? variants : undefined,
-    createdAt: r.createdAt.getTime(),
-  };
-});
+/** The resolved store's catalog. Memoized per store id (short TTL) — see src/data/cache.ts. */
+export async function getCatalog(store: StoreInfo): Promise<Catalog> {
+  return cached(`catalog:${store.id}`, () => loadCatalog(store));
+}
 
-// ---- ratings (aggregate score + count, denormalized on products) ----
-export type Rating = { value: number; count: number };
-const RATINGS: Record<string, Rating> = Object.fromEntries(
-  rows.map((r) => [r.handle, { value: r.ratingValue ?? 4.5, count: r.ratingCount }]),
-);
-
-export const productRating = (p: Product | string): Rating => {
-  const handle = typeof p === "string" ? p : p.handle;
-  return RATINGS[handle] ?? { value: 4.5, count: 40 };
-};
+// ---- pure helpers (no store scope needed) ----
 
 // Deterministic 5→1 star distribution that sums to `count` (for the review summary).
 export const ratingBreakdown = (r: Rating): number[] => {
@@ -175,14 +224,12 @@ export const productImages = (p: Product): string[] =>
     ? [p.image, ...[2, 3, 4, 5].map((n) => p.image.replace(/\.webp$/, `-${n}.webp`))]
     : [p.image];
 
-export const bestsellers = (list: Product[] = PRODUCTS) => list.filter((p) => p.bestseller);
-// Newest first — for the Grid Produk "terbaru" mode. Takes any pool (e.g. one collection)
-// so it composes with an optional collection filter.
-export const recentProducts = (list: Product[] = PRODUCTS) => [...list].sort((a, b) => b.createdAt - a.createdAt);
-// Shuffled — for the Grid Produk "acak" mode. Static build = re-shuffles per deploy, not per
-// visitor; fine here since Astro renders this list server-side only, no client hydration to
+// Newest first — for the Grid Produk "terbaru" mode.
+export const recentProducts = (list: Product[]) => [...list].sort((a, b) => b.createdAt - a.createdAt);
+
+// Shuffled — for the Grid Produk "acak" mode. Server-rendered only, no client hydration to
 // mismatch (the admin's mock-data determinism rule is about a different, React SSR+CSR concern).
-export const randomProducts = (list: Product[] = PRODUCTS) => {
+export const randomProducts = (list: Product[]) => {
   const arr = [...list];
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -190,16 +237,16 @@ export const randomProducts = (list: Product[] = PRODUCTS) => {
   }
   return arr;
 };
-export const byCollection = (handle: string) => PRODUCTS.filter((p) => p.categoryHandle === handle);
-export const findProduct = (handle: string) => PRODUCTS.find((p) => p.handle === handle);
-export const findCollection = (handle: string) => COLLECTIONS.find((c) => c.handle === handle);
 
 // Payment channels the platform (super-admin) has enabled — offered at checkout (+ COD).
+// Platform-wide (not store-scoped), so it gets its own cache key.
 export async function enabledPaymentChannels(): Promise<{ code: string; label: string; kind: string }[]> {
-  const rows = await db
-    .select()
-    .from(schema.platformPaymentChannels)
-    .where(eq(schema.platformPaymentChannels.enabled, true))
-    .orderBy(asc(schema.platformPaymentChannels.id));
-  return rows.map((r) => ({ code: r.channel, label: r.label, kind: r.kind }));
+  return cached("platform:payment-channels", async () => {
+    const rows = await db
+      .select()
+      .from(schema.platformPaymentChannels)
+      .where(eq(schema.platformPaymentChannels.enabled, true))
+      .orderBy(asc(schema.platformPaymentChannels.id));
+    return rows.map((r) => ({ code: r.channel, label: r.label, kind: r.kind }));
+  });
 }

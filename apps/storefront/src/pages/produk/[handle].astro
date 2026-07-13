@@ -3,14 +3,15 @@ import Layout from "../../layouts/Layout.astro";
 import ProductCard from "../../components/ProductCard.astro";
 import Stars from "../../components/Stars.astro";
 import { IDR } from "@tokophi/lib/format";
-import { PRODUCTS, STORE, byCollection, productImages, productRating, ratingBreakdown } from "../../data/catalog";
+import { productImages, ratingBreakdown } from "../../data/catalog";
 
-// SSR: resolve the product per-request from the handle param.
+// SSR: tenant from the Host header (src/middleware.ts), product from the handle param.
+const { catalog } = Astro.locals;
 const { handle } = Astro.params;
-const product = PRODUCTS.find((p) => p.handle === handle);
+const product = handle ? catalog.findProduct(handle) : undefined;
 if (!product) return new Response(null, { status: 404, statusText: "Not Found" });
 
-const related = byCollection(product.categoryHandle)
+const related = catalog.byCollection(product.categoryHandle)
   .filter((p) => p.handle !== product.handle)
   .slice(0, 4);
 
@@ -21,7 +22,7 @@ const discount =
 
 const gallery = productImages(product);
 
-const rating = productRating(product);
+const rating = catalog.productRating(product);
 const breakdown = ratingBreakdown(rating); // [5★, 4★, 3★, 2★, 1★]
 const maxBucket = Math.max(...breakdown, 1);
 ---

@@ -1,16 +1,13 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import ProductCard from "../../components/ProductCard.astro";
-import {
-  COLLECTIONS,
-  PRODUCTS,
-  byCollection,
-  type Product,
-} from "../../data/catalog";
+import type { Product } from "../../data/catalog";
 
 type ResolvedCollection = { name: string; emoji: string; blurb: string };
 
-// SSR: resolve the collection (real or virtual) per-request from the handle param.
+// SSR: tenant from the Host header (src/middleware.ts), collection from the handle param.
+const { store, catalog } = Astro.locals;
+const PRODUCTS = catalog.products;
 const { handle } = Astro.params;
 
 // Virtual (non-catalog) collections used by the nav.
@@ -18,7 +15,7 @@ const VIRTUAL: Record<string, ResolvedCollection & { products: Product[] }> = {
   semua: {
     name: "Semua Produk",
     emoji: "🛍️",
-    blurb: "Semua koleksi Batik Nusantara",
+    blurb: `Semua koleksi ${store.name}`,
     products: PRODUCTS,
   },
   "promo-gajian": {
@@ -36,16 +33,16 @@ if (virtual) {
   collection = { name: virtual.name, emoji: virtual.emoji, blurb: virtual.blurb };
   products = virtual.products;
 } else {
-  const real = COLLECTIONS.find((c) => c.handle === handle);
+  const real = handle ? catalog.findCollection(handle) : undefined;
   if (!real) return new Response(null, { status: 404, statusText: "Not Found" });
   collection = { name: real.name, emoji: real.emoji, blurb: real.blurb };
-  products = byCollection(real.handle);
+  products = catalog.byCollection(real.handle);
 }
 ---
 
 <Layout
   title={collection.name}
-  description={`${collection.name} — ${collection.blurb}. Koleksi busana wanita di Batik Nusantara.`}
+  description={`${collection.name} — ${collection.blurb}. Koleksi busana wanita di ${store.name}.`}
 >
   <section class="bg-brand-50">
     <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-16">

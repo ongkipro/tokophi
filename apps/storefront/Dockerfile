@@ -1,7 +1,9 @@
 # TokoΦ storefront (Astro SSR, @astrojs/node standalone). BUILD CONTEXT = repo root (monorepo).
-# The catalog is read from Postgres at SERVER BOOT (module-level in src/data/catalog.ts), NOT during
-# `astro build` — so the image builds WITHOUT a database, and the container starts in seconds instead
-# of running a full static build first. This removes the deploy downtime the old SSG build-at-start had.
+# MULTI-TENANT: one image serves every store — the tenant is resolved from the request's `Host`
+# header at REQUEST time (src/middleware.ts → src/data/store.ts), so the image builds WITHOUT a
+# database (no DATABASE_URL) and the container starts in seconds.
+# Runtime env: DATABASE_URL (required), STORE_SLUG / DEFAULT_STORE_SLUG (fallback store when the
+# host names none), STOREFRONT_BASE_DOMAIN (optional, for <slug>.toko.tokophi.com routing).
 FROM node:24-alpine AS build
 RUN apk add --no-cache libc6-compat
 WORKDIR /app

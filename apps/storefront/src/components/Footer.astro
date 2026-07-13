@@ -1,7 +1,9 @@
 ---
-import { STORE, COLLECTIONS } from "../data/catalog";
+// Tenant resolved per-request from the Host header (src/middleware.ts).
+const { store, catalog } = Astro.locals;
+const COLLECTIONS = catalog.collections;
 
-const waHref = `https://wa.me/${STORE.whatsapp}`;
+const waHref = `https://wa.me/${store.whatsapp}`;
 ---
 
 <footer class="mt-24 bg-ink text-cream/85">
@@ -34,8 +36,8 @@ const waHref = `https://wa.me/${STORE.whatsapp}`;
 
   <div class="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 md:grid-cols-3">
     <div class="md:col-span-1">
-      <p class="font-display text-2xl font-semibold text-cream">{STORE.name}</p>
-      <p class="mt-3 max-w-xs text-sm leading-relaxed text-cream/60">{STORE.tagline}</p>
+      <p class="font-display text-2xl font-semibold text-cream">{store.name}</p>
+      <p class="mt-3 max-w-xs text-sm leading-relaxed text-cream/60">{store.tagline}</p>
       <a
         href={waHref}
         target="_blank"
@@ -81,14 +83,14 @@ const waHref = `https://wa.me/${STORE.whatsapp}`;
             Customer Service
           </a>
         </li>
-        <li class="pt-1 text-cream/50">📍 {STORE.city}, Indonesia</li>
+        <li class="pt-1 text-cream/50">📍 {store.city}, Indonesia</li>
       </ul>
     </div>
   </div>
 
   <div class="border-t border-white/10">
     <p class="mx-auto max-w-7xl px-4 py-6 text-xs text-cream/45 sm:px-6">
-      © 2026 {STORE.name}. Ditenagai TokoΦ.
+      © 2026 {store.name}. Ditenagai TokoΦ.
     </p>
   </div>
 </footer>

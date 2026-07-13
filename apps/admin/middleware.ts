@@ -19,13 +19,17 @@ export async function middleware(req: NextRequest) {
   }
   const { pathname } = req.nextUrl;
   const isLogin = pathname === "/login";
+  // Public self-serve signup + the Google OAuth code-flow routes (start/callback) — all must run
+  // unauthenticated: they are what *creates* the session.
+  const isDaftar = pathname === "/daftar";
+  const isGoogleAuth = pathname.startsWith("/api/auth/google/");
   // /impersonate exchanges a signed one-time token (from the super-admin) for a session cookie
   // on THIS domain — must run unauthenticated (cross-subdomain cookies aren't shared).
   const isImpersonate = pathname === "/impersonate";
-  if (!valid && !isLogin && !isImpersonate) {
+  if (!valid && !isLogin && !isDaftar && !isGoogleAuth && !isImpersonate) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
-  if (valid && isLogin) {
+  if (valid && (isLogin || isDaftar)) {
     return NextResponse.redirect(new URL("/", req.url));
   }
 

@@ -2,25 +2,28 @@
 import Layout from "../layouts/Layout.astro";
 import ProductCard from "../components/ProductCard.astro";
 import SectionRenderer from "../components/sections/SectionRenderer.astro";
-import { STORE, COLLECTIONS, PRODUCTS, bestsellers, byCollection } from "../data/catalog";
-import { HOMEPAGE_TEMPLATE } from "../data/theme";
 
-const best = bestsellers();
-const heroProducts = [
-  PRODUCTS.find((p) => p.handle === "dress-batik"),
-  PRODUCTS.find((p) => p.handle === "gamis-syari"),
-  PRODUCTS.find((p) => p.handle === "dress-midi-bunga"),
-].filter(Boolean);
+// Tenant resolved per-request from the Host header (src/middleware.ts).
+const { store, catalog } = Astro.locals;
+const HOMEPAGE_TEMPLATE = catalog.homepageTemplate;
 
-const collections = COLLECTIONS.map((c) => {
-  const items = byCollection(c.handle);
+const best = catalog.bestsellers();
+// Fallback (non-Store-Builder) homepage hero. The seeded demo store has this trio; any other
+// store just gets its first 3 products — never an empty hero from hardcoded handles.
+const featured = ["dress-batik", "gamis-syari", "dress-midi-bunga"]
+  .map((h) => catalog.findProduct(h))
+  .filter((p): p is NonNullable<typeof p> => Boolean(p));
+const heroProducts = featured.length === 3 ? featured : catalog.products.slice(0, 3);
+
+const collections = catalog.collections.map((c) => {
+  const items = catalog.byCollection(c.handle);
   return { ...c, image: items[0]?.image, count: items.length };
 });
 ---
 
 <Layout
   title="Beranda"
-  description={`${STORE.name} — ${STORE.tagline}. Belanja dress, atasan, bawahan, busana muslim & outerwear wanita. Kirim se-Indonesia.`}
+  description={`${store.name} — ${store.tagline}. Belanja dress, atasan, bawahan, busana muslim & outerwear wanita. Kirim se-Indonesia.`}
 >
   {
     HOMEPAGE_TEMPLATE ? (
@@ -33,10 +36,10 @@ const collections = COLLECTIONS.map((c) => {
     <div class="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 md:grid-cols-2 md:py-24 lg:gap-16">
       <div class="fadeup">
         <span class="inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-xs font-medium tracking-wide text-brand-600 ring-1 ring-brand-200">
-          ✨ Koleksi {STORE.city}
+          ✨ Koleksi {store.city}
         </span>
         <h1 class="mt-6 font-display text-4xl font-semibold leading-[1.08] text-ink sm:text-5xl md:text-6xl">
-          {STORE.tagline}
+          {store.tagline}
         </h1>
         <p class="mt-6 max-w-md text-lg leading-relaxed text-muted">
           Busana wanita yang anggun dan nyaman — dari batik bernilai budaya hingga
@@ -127,7 +130,7 @@ const collections = COLLECTIONS.map((c) => {
         “Setiap helai kami rancang untuk perempuan Indonesia — memadukan warisan batik
         dengan siluet masa kini, agar kamu tampil anggun tanpa kehilangan kenyamanan.”
       </blockquote>
-      <p class="mt-6 text-sm text-white/70">{STORE.name} — {STORE.city}</p>
+      <p class="mt-6 text-sm text-white/70">{store.name} — {store.city}</p>
     </div>
   </section>
 
@@ -185,7 +188,7 @@ const collections = COLLECTIONS.map((c) => {
       Siap tampil anggun setiap hari?
     </h2>
     <p class="mx-auto mt-4 max-w-lg text-muted">
-      Jelajahi koleksi {STORE.name} dan temukan busana yang membuatmu percaya diri.
+      Jelajahi koleksi {store.name} dan temukan busana yang membuatmu percaya diri.
     </p>
     <a
       href="/kategori/dress"
