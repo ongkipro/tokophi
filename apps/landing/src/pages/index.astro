@@ -9,10 +9,11 @@ import "../styles/global.css";
 const loginUrl = import.meta.env.PUBLIC_LOGIN_URL || "https://app.tokophi.com/login";
 const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
 
-const title = "TokoΦ — platform commerce untuk penjual Indonesia";
+const title = "TokoΦ — satu panel admin untuk toko online Anda";
 const description =
-  "TokoΦ adalah platform commerce SaaS untuk Indonesia: satu admin untuk mengelola toko online Anda — produk, pesanan, pelanggan, pembayaran, dan pengiriman lokal. Bahasa Indonesia, harga IDR. Segera hadir.";
+  "TokoΦ menyatukan produk, pesanan, pelanggan, pembayaran, dan pengiriman untuk penjual di Indonesia dalam satu panel admin. Bahasa Indonesia, rupiah, kurir dan pembayaran lokal. Situsnya sedang disusun — tokonya sudah bisa dibuat.";
 const url = "https://tokophi.com/";
+const year = new Date().getFullYear();
 ---
 
 <html lang="id">
@@ -24,6 +25,8 @@ const url = "https://tokophi.com/";
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="generator" content={Astro.generator} />
+    <meta name="theme-color" content="#fbfbfe" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#080913" media="(prefers-color-scheme: dark)" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="TokoΦ" />
@@ -36,94 +39,89 @@ const url = "https://tokophi.com/";
     <meta name="twitter:description" content={description} />
   </head>
 
-  <body class="min-h-dvh">
-    <div class="mx-auto flex min-h-dvh max-w-3xl flex-col px-6 py-10 sm:px-8 sm:py-14">
-      <!-- Wordmark -->
-      <header class="rise">
-        <a
-          href="/"
-          class="inline-flex items-center gap-2.5 rounded-xl text-ink"
-          aria-label="TokoΦ — beranda"
-        >
-          <span
-            class="grid size-9 place-items-center rounded-xl bg-primary font-serif text-lg font-bold text-white shadow-lg shadow-primary/25"
-            aria-hidden="true">Φ</span
-          >
-          <span class="text-lg font-semibold tracking-tight">TokoΦ</span>
+  <body>
+    <!-- One screen, always: the shell owns the viewport height and never scrolls. -->
+    <div class="shell">
+      <header class="rise shell-head">
+        <a href="/" class="wordmark" aria-label="TokoΦ — beranda">
+          <span class="wordmark-tile" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="32" height="32" fill="none">
+              <ellipse cx="16" cy="16" rx="7.4" ry="9" stroke="currentColor" stroke-width="2.4"></ellipse>
+              <rect x="14.8" y="3.6" width="2.4" height="24.8" rx="1.2" fill="currentColor"></rect>
+            </svg>
+          </span>
+          <span class="wordmark-text">TokoΦ</span>
         </a>
       </header>
 
-      <!-- Hero -->
-      <main class="flex flex-1 flex-col justify-center py-14 sm:py-20">
-        <p
-          class="rise inline-flex w-fit items-center gap-2 rounded-full border border-line bg-white px-3.5 py-1.5 text-xs font-medium text-muted shadow-sm"
-          style="animation-delay:60ms"
-        >
-          <span class="pulse-dot size-1.5 rounded-full bg-primary" aria-hidden="true"></span>
-          Sedang dalam pengembangan
-        </p>
+      <main class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow rise pill" style="animation-delay:60ms">
+            <span class="beacon dot" aria-hidden="true"></span>
+            Segera hadir
+          </p>
 
-        <h1
-          class="rise mt-6 text-4xl font-semibold tracking-tight text-balance sm:text-5xl"
-          style="animation-delay:120ms"
-        >
-          Segera hadir.
-        </h1>
+          <h1 class="display rise" style="animation-delay:120ms">
+            Seluruh toko Anda, dalam satu panel.
+          </h1>
 
-        <p
-          class="rise mt-5 max-w-xl text-lg leading-relaxed text-muted text-pretty"
-          style="animation-delay:180ms"
-        >
-          <strong class="font-semibold text-ink">TokoΦ</strong> adalah platform commerce SaaS untuk
-          Indonesia — satu admin untuk mengelola toko online Anda: produk, pesanan, pelanggan,
-          pembayaran, dan pengiriman.
-        </p>
+          <p class="lede rise" style="animation-delay:180ms">
+            <strong>TokoΦ</strong> menyatukan produk, pesanan, pelanggan, pembayaran, dan pengiriman
+            untuk penjual di Indonesia. Situsnya masih kami susun — panel adminnya kami kerjakan
+            lebih dulu, dan sudah bisa dipakai.
+          </p>
 
-        <!-- What it is (factual, no claims/metrics) -->
-        <ul
-          class="rise mt-9 grid gap-3 sm:grid-cols-3"
-          style="animation-delay:240ms"
-        >
-          <li class="rounded-xl border border-line bg-white p-4 shadow-sm">
-            <h2 class="text-sm font-semibold">Toko online + admin</h2>
-            <p class="mt-1 text-sm leading-relaxed text-muted">
-              Storefront dan panel pengelolaan dalam satu platform.
-            </p>
-          </li>
-          <li class="rounded-xl border border-line bg-white p-4 shadow-sm">
-            <h2 class="text-sm font-semibold">Bahasa Indonesia</h2>
-            <p class="mt-1 text-sm leading-relaxed text-muted">
-              Antarmuka Bahasa Indonesia, harga dalam Rupiah.
-            </p>
-          </li>
-          <li class="rounded-xl border border-line bg-white p-4 shadow-sm">
-            <h2 class="text-sm font-semibold">Pembayaran &amp; kurir lokal</h2>
-            <p class="mt-1 text-sm leading-relaxed text-muted">
-              QRIS, e-wallet, transfer, COD, dan kurir dalam negeri.
-            </p>
-          </li>
-        </ul>
+          <div class="cta rise" style="animation-delay:240ms">
+            <a href={signupUrl} class="btn btn-primary">Daftar toko</a>
+            <a href={loginUrl} class="btn btn-ghost">Masuk</a>
+          </div>
 
-        <!-- The two links that work today -->
-        <div class="rise mt-10 flex flex-col gap-3 sm:flex-row sm:items-center" style="animation-delay:300ms">
-          <a
-            href={signupUrl}
-            class="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-white shadow-lg shadow-primary/25 transition-colors hover:bg-primary-hover"
-          >
-            Daftar toko
-          </a>
-          <a
-            href={loginUrl}
-            class="inline-flex h-11 items-center justify-center rounded-xl border border-line bg-white px-5 text-sm font-semibold text-ink shadow-sm transition-colors hover:bg-primary-soft"
-          >
-            Masuk
-          </a>
-          <p class="text-sm text-muted sm:ml-2">Sudah punya toko di TokoΦ? Lanjut ke admin.</p>
+          <p class="micro rise" style="animation-delay:300ms">
+            Gratis tiga hari untuk mulai. Sudah punya toko di TokoΦ? Langsung masuk.
+          </p>
+        </div>
+
+        <!-- Signature: Φ is the golden ratio, so the mark sits inside a real Fibonacci
+             subdivision (233×144 → 144, 89, 55, 34, 21, 13, 8, 5). Order out of a busy shop. -->
+        <div class="plate-wrap" aria-hidden="true">
+          <svg class="plate" viewBox="0 0 233 144" role="presentation" focusable="false">
+            <g class="plate-grid">
+              <rect x="144" y="0" width="89" height="89" class="plate-fill"></rect>
+              <rect x="0" y="0" width="144" height="144"></rect>
+              <rect x="144" y="0" width="89" height="89"></rect>
+              <rect x="178" y="89" width="55" height="55"></rect>
+              <rect x="144" y="110" width="34" height="34"></rect>
+              <rect x="144" y="89" width="21" height="21"></rect>
+              <rect x="165" y="89" width="13" height="13"></rect>
+              <rect x="170" y="102" width="8" height="8"></rect>
+            </g>
+            <g class="plate-mark">
+              <ellipse cx="72" cy="72" rx="31" ry="39" fill="none" stroke="currentColor" stroke-width="7.5"
+              ></ellipse>
+              <rect x="68.25" y="19" width="7.5" height="106" rx="3.75" fill="currentColor"></rect>
+            </g>
+          </svg>
         </div>
       </main>
 
-      <footer class="rise border-t border-line pt-6 text-sm text-muted" style="animation-delay:360ms">
-        <p>&copy; {new Date().getFullYear()} TokoΦ &middot; tokophi.com</p>
+      <ul class="facts rise" style="animation-delay:360ms">
+        <li>
+          <h2 class="fact-label">Satu panel</h2>
+          <p>Produk, stok, pesanan, pelanggan, diskon, sampai laporan. Tanpa aplikasi tambahan.</p>
+        </li>
+        <li>
+          <h2 class="fact-label">Bayar &amp; kirim</h2>
+          <p>QRIS, e-wallet, transfer bank, COD, dan kurir dalam negeri. Tinggal diaktifkan.</p>
+        </li>
+        <li>
+          <h2 class="fact-label">Bahasa kita</h2>
+          <p>Antarmuka Bahasa Indonesia, rupiah tanpa sen, pajak sudah ikut dihitung.</p>
+        </li>
+      </ul>
+
+      <footer class="rise shell-foot" style="animation-delay:420ms">
+        <p>&copy; {year} TokoΦ</p>
+        <p>tokophi.com</p>
       </footer>
     </div>
   </body>
