@@ -4,8 +4,10 @@ import "../styles/global.css";
 // Link targets are configurable at BUILD time (static output) via PUBLIC_* env vars.
 // Production values are the defaults; a dev build can point them at localhost:
 //   PUBLIC_LOGIN_URL=http://localhost:3000/login PUBLIC_SIGNUP_URL=http://localhost:3000/daftar npm run build -w @tokophi/landing
-const loginUrl = import.meta.env.PUBLIC_LOGIN_URL ?? "https://app.tokophi.com/login";
-const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL ?? "https://app.tokophi.com/daftar";
+// `||`, not `??`: an unset Docker ARG becomes an EMPTY STRING env var, not undefined — `??` would
+// keep the "" and render href="" (this shipped once; the live buttons had no target).
+const loginUrl = import.meta.env.PUBLIC_LOGIN_URL || "https://app.tokophi.com/login";
+const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
 
 const title = "TokoΦ — platform commerce untuk penjual Indonesia";
 const description =

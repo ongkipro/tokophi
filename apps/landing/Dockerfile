@@ -11,8 +11,10 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY . .
 RUN npm ci
-ARG PUBLIC_LOGIN_URL
-ARG PUBLIC_SIGNUP_URL
+# Defaults MUST live here: a bare `ARG X` with no build-arg passed sets X to the empty string,
+# which is not `undefined` — the page's fallback would not fire and the CTAs would render href="".
+ARG PUBLIC_LOGIN_URL=https://app.tokophi.com/login
+ARG PUBLIC_SIGNUP_URL=https://app.tokophi.com/daftar
 ENV PUBLIC_LOGIN_URL=${PUBLIC_LOGIN_URL}
 ENV PUBLIC_SIGNUP_URL=${PUBLIC_SIGNUP_URL}
 RUN npm run build -w @tokophi/landing
