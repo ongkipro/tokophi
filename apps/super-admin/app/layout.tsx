@@ -9,6 +9,8 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "TokoΦ — Super Admin",
   description: "Panel platform TokoΦ: kelola toko, paket, dan penagihan.",
+  // Control plane: tidak boleh diindeks. Lapisan kedua di samping header X-Robots-Tag.
+  robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
 };
 
 // Apply saved theme before paint (no flash).

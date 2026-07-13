@@ -8,6 +8,9 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "TokoΦ — Panel Admin",
   description: "Panel admin toko online modern untuk pasar Indonesia.",
+  // Panel admin merchant: tidak boleh diindeks mesin pencari (login, daftar, akun, faktur, …).
+  // Lapisan kedua di samping header X-Robots-Tag (middleware.ts + next.config.ts).
+  robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
 };
 
 // Apply saved theme before paint (no flash).

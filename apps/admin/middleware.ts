@@ -6,6 +6,13 @@ import { jwtVerify } from "jose";
 // signIn server action (Node runtime).
 const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me");
 
+// Nothing in the merchant admin may be indexed. next.config.ts sets X-Robots-Tag for everything
+// the router serves, but a middleware redirect/rewrite short-circuits that — so stamp it here too.
+function noRobots(res: NextResponse) {
+  res.headers.set("X-Robots-Tag", "noindex, nofollow");
+  return res;
+}
+
 export async function middleware(req: NextRequest) {
   const token = req.cookies.get("session")?.value;
   let valid = false;
@@ -27,10 +34,10 @@ export async function middleware(req: NextRequest) {
   // on THIS domain — must run unauthenticated (cross-subdomain cookies aren't shared).
   const isImpersonate = pathname === "/impersonate";
   if (!valid && !isLogin && !isDaftar && !isGoogleAuth && !isImpersonate) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    return noRobots(NextResponse.redirect(new URL("/login", req.url)));
   }
   if (valid && (isLogin || isDaftar)) {
-    return NextResponse.redirect(new URL("/", req.url));
+    return noRobots(NextResponse.redirect(new URL("/", req.url)));
   }
 
   // Shopify-style store context in the URL: /store/{slug}/{rest} serves the internal route /{rest}.
@@ -43,13 +50,17 @@ export async function middleware(req: NextRequest) {
     url.pathname = m[2] || "/";
     const res = NextResponse.rewrite(url);
     res.headers.set("x-tokophi-store", m[1]);
-    return res;
+    return noRobots(res);
   }
-  return NextResponse.next();
+  return noRobots(NextResponse.next());
 }
 
 export const config = {
   // Protect everything except Next internals, static files, public product images,
-  // and the public storefront-facing API (e.g. /api/public/ongkir).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|products/|api/public/|api/cron/|api/uploads/).*)"],
+  // the public storefront-facing API (e.g. /api/public/ongkir), and robots.txt (which must be
+  // served to crawlers, not redirected to /login). Routes excluded here still get the
+  // X-Robots-Tag header from next.config.ts `headers()`.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|products/|api/public/|api/cron/|api/uploads/).*)",
+  ],
 };

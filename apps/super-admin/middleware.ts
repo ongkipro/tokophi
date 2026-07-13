@@ -7,6 +7,13 @@ import { jwtVerify } from "jose";
 // login never grants super-admin access.
 const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me");
 
+// The control plane is never indexable. next.config.ts sets X-Robots-Tag on everything the router
+// serves, but a middleware redirect short-circuits that — so stamp it here too.
+function noRobots(res: NextResponse) {
+  res.headers.set("X-Robots-Tag", "noindex, nofollow");
+  return res;
+}
+
 export async function middleware(req: NextRequest) {
   const token = req.cookies.get("platform_session")?.value;
   let valid = false;
@@ -20,14 +27,16 @@ export async function middleware(req: NextRequest) {
   }
   const isLogin = req.nextUrl.pathname === "/login";
   if (!valid && !isLogin) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    return noRobots(NextResponse.redirect(new URL("/login", req.url)));
   }
   if (valid && isLogin) {
-    return NextResponse.redirect(new URL("/", req.url));
+    return noRobots(NextResponse.redirect(new URL("/", req.url)));
   }
-  return NextResponse.next();
+  return noRobots(NextResponse.next());
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg).*)"],
+  // robots.txt is excluded from the auth gate so crawlers get the Disallow instead of a redirect;
+  // it (and every other excluded path) still gets X-Robots-Tag from next.config.ts `headers()`.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|robots.txt).*)"],
 };
