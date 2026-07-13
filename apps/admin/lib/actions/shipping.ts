@@ -123,6 +123,118 @@ export async function saveCouriers(couriers: string[]): Promise<{ ok: boolean; e
   return { ok: true };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Jasa Kirim — the merchant picks SERVICES, not couriers.
+//
+// "JNE" is not a shipping option; "JNE Express Reguler (REG23)" is. The old model stored a list of
+// courier CODES, which cannot express "I ship JNE Reguler but not JNE YES" — and the hand-written
+// roster it drew from had drifted from KiriminAja anyway (it listed TIKI and Pos, which the API
+// does not return). The real roster comes from kaServices(); the platform enables a subset; the
+// merchant enables a subset of THAT.
+//
+// COD is decided in three places on purpose:
+//   platform_cod.enabled            — the platform allows COD at all (+ max amount, provinces)
+//   platform_couriers.services[].codAllowed — which SERVICES may carry it (super-admin)
+//   store_settings.cod_enabled      — this merchant wants it (default off)
+// A service offers COD only when all three agree AND KiriminAja itself reports cod=true for it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type PlatformService = {
+  courier: string;
+  type: string; // KiriminAja service_type — the booking code
+  name: string;
+  group: string; // cargo | regular | next_day | economy | one_day
+  cod: boolean; // KiriminAja supports COD on this service
+  codAllowed: boolean; // …and the platform permits it
+};
+
+type StoredService = { type: string; name: string; group: string; cod: boolean; codAllowed?: boolean };
+
+/** Services the PLATFORM has enabled — the pool a merchant may offer. Global table → owner conn. */
+export async function getPlatformServices(): Promise<PlatformService[]> {
+  if (!(await getSession())) return [];
+  const rows = await db
+    .select({
+      courier: schema.platformCouriers.courier,
+      services: schema.platformCouriers.services,
+      enabled: schema.platformCouriers.enabled,
+    })
+    .from(schema.platformCouriers);
+
+  const out: PlatformService[] = [];
+  for (const r of rows) {
+    if (!r.enabled) continue;
+    const list = (r.services as StoredService[] | null) ?? [];
+    for (const s of list) {
+      // Legacy rows stored plain strings ("REG"). Skip them — they carry no group/cod and the
+      // sync will replace them on the next run.
+      if (typeof s !== "object" || !s.type) continue;
+      out.push({
+        courier: r.courier,
+        type: s.type,
+        name: s.name,
+        group: s.group,
+        cod: !!s.cod,
+        codAllowed: !!s.cod && s.codAllowed !== false,
+      });
+    }
+  }
+  return out;
+}
+
+/** The services THIS store offers. Empty = none picked yet (the UI then offers to enable all). */
+export async function getStoreServices(): Promise<{ courier: string; type: string }[]> {
+  if (!(await getSession())) return [];
+  return withCurrentTenant(async (db) => {
+    const rows = await db
+      .select({
+        courier: schema.storeShippingMethods.courier,
+        service: schema.storeShippingMethods.service,
+        enabled: schema.storeShippingMethods.enabled,
+      })
+      .from(schema.storeShippingMethods);
+    return rows.filter((r) => r.enabled).map((r) => ({ courier: r.courier, type: r.service }));
+  });
+}
+
+export async function saveStoreServices(
+  services: { courier: string; type: string }[],
+): Promise<{ ok: boolean; error?: string }> {
+  const { storeId } = await requireCapability("settings:write");
+  await withTenant(storeId, async (db) => {
+    // full replace — the UI always sends the complete set
+    await db.delete(schema.storeShippingMethods);
+    if (services.length) {
+      await db.insert(schema.storeShippingMethods).values(
+        services.map((s) => ({ storeId, courier: s.courier, service: s.type, enabled: true })),
+      );
+    }
+  });
+  revalidatePath("/pengaturan");
+  return { ok: true };
+}
+
+/** The merchant's COD switch (store_settings.cod_enabled, migration 0038). */
+export async function getCodEnabled(): Promise<boolean> {
+  if (!(await getSession())) return false;
+  return withCurrentTenant(async (db) => {
+    const [s] = await db.select({ cod: schema.storeSettings.codEnabled }).from(schema.storeSettings).limit(1);
+    return !!s?.cod;
+  });
+}
+
+export async function setCodEnabled(on: boolean): Promise<{ ok: boolean; error?: string }> {
+  const { storeId } = await requireCapability("settings:write");
+  await withTenant(storeId, (db) =>
+    db
+      .insert(schema.storeSettings)
+      .values({ storeId, codEnabled: on })
+      .onConflictDoUpdate({ target: schema.storeSettings.storeId, set: { codEnabled: on } }),
+  );
+  revalidatePath("/pengaturan");
+  return { ok: true };
+}
+
 // ---- Create a KiriminAja shipment for an order → saves AWB / resi on the order ----
 export async function createShipment(input: {
   orderNumber: string; service: string; serviceType: string; serviceName: string; cost: number;

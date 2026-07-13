@@ -3,16 +3,15 @@
 import * as React from "react"
 import {
   Bell,
+  MapPin,
   Receipt,
   Truck,
   Users,
   Store,
-  Info,
   UserPlus,
   Save,
 } from "lucide-react"
 
-import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/admin/page-header"
 import { ToggleRow } from "@/components/admin/pengaturan/toggle-row"
 import {
@@ -35,9 +34,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { SenderAddressCard } from "@/components/admin/pengaturan/sender-address-card"
-import { getCouriers, saveCouriers, getPlatformCouriers } from "@/lib/actions/shipping"
-import { COURIERS } from "@tokophi/lib/couriers"
-import { toast } from "sonner"
+import { JasaKirimCard } from "@/components/admin/pengaturan/jasa-kirim-card"
 
 // NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
 // (super-admin → platform_payment_channels) and flow straight to the shopper's checkout.
@@ -47,6 +44,7 @@ import { toast } from "sonner"
 type Section =
   | "profil"
   | "pengiriman"
+  | "alamat"
   | "pajak"
   | "pengguna"
   | "notifikasi"
@@ -58,7 +56,8 @@ const SECTIONS: {
   icon: React.ReactNode
 }[] = [
   { id: "profil", label: "Profil Toko", desc: "Nama, logo, kontak", icon: <Store /> },
-  { id: "pengiriman", label: "Pengiriman", desc: "Kurir & ongkir", icon: <Truck /> },
+  { id: "pengiriman", label: "Pengiriman", desc: "Jasa kirim & COD", icon: <Truck /> },
+  { id: "alamat", label: "Alamat", desc: "Alamat pengambilan", icon: <MapPin /> },
   { id: "pajak", label: "Pajak", desc: "PPN & NPWP", icon: <Receipt /> },
   { id: "pengguna", label: "Pengguna", desc: "Anggota & peran", icon: <Users /> },
   {
@@ -115,26 +114,6 @@ export default function Page() {
   const canSettings = useCan("settings:write")
   const storeName = useStoreName()
 
-  // Pengiriman — the AVAILABLE list = couriers the platform (super-admin) enabled; the merchant
-  // picks a subset (store_settings.couriers; NULL = all available). Loaded + auto-saved.
-  const [platformCouriers, setPlatformCouriers] = React.useState<string[] | null>(null)
-  const availableCouriers = COURIERS.filter((c) => !platformCouriers || platformCouriers.includes(c.code))
-  const [courierOn, setCourierOn] = React.useState<Record<string, boolean>>(() =>
-    Object.fromEntries(COURIERS.map((c) => [c.code, true])),
-  )
-  React.useEffect(() => {
-    getPlatformCouriers().then(setPlatformCouriers)
-    getCouriers().then((saved) => {
-      if (saved) setCourierOn(Object.fromEntries(COURIERS.map((c) => [c.code, saved.includes(c.code)])))
-    })
-  }, [])
-  const persistCouriers = (next: Record<string, boolean>) => {
-    // only persist couriers that are actually available on the platform
-    const keys = availableCouriers.filter((c) => next[c.code]).map((c) => c.code)
-    saveCouriers(keys).then((r) => r.ok && toast.success("Kurir diperbarui"))
-  }
-  const [gratisOngkir, setGratisOngkir] = React.useState(true)
-  const [pickup, setPickup] = React.useState(false)
 
   // Pajak
   const [ppnAktif, setPpnAktif] = React.useState(true)
@@ -152,7 +131,6 @@ export default function Page() {
   const setNotifKey = (k: keyof typeof notif) => (v: boolean) =>
     setNotif((s) => ({ ...s, [k]: v }))
 
-  const kurirActive = availableCouriers.filter((c) => courierOn[c.code]).length
 
   const team = [
     {
@@ -253,15 +231,8 @@ export default function Page() {
               <Separator />
 
               <ul className="grid gap-2 text-sm">
-                <li className="flex items-center gap-2 text-muted-foreground">
-                  <Truck className="size-4 shrink-0" />
-                  <span>
-                    <span className="font-medium tabular-nums text-foreground">
-                      {kurirActive}
-                    </span>{" "}
-                    kurir aktif
-                  </span>
-                </li>
+                {/* The active-service count now lives inside JasaKirimCard, which owns that state.
+                    Re-deriving it here would mean a second source of truth that can disagree. */}
                 <li className="flex items-center gap-2 text-muted-foreground">
                   <Receipt className="size-4 shrink-0" />
                   <span>
@@ -386,106 +357,23 @@ export default function Page() {
             </Card>
           )}
 
-          {/* PENGIRIMAN */}
+          {/* PENGIRIMAN — jasa kirim + COD. Grouped by KiriminAja's own speed classes.
+              The old block let the merchant tick COURIERS ("JNE"), which cannot express "JNE
+              Reguler yes, JNE YES no", and drew from a hand-written roster that had drifted from
+              the API. It also carried two toggles — "Ambil di tempat" and "Gratis ongkir
+              Rp250.000" — that were plain useState with NO column and NO action behind them: the
+              merchant set them and nothing whatsoever happened. Removed rather than left lying. */}
           {section === "pengiriman" && (
-            <div className="max-w-3xl space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Kurir Pengiriman</CardTitle>
-                <CardDescription>
-                  Pilih kurir dan layanan (ekspedisi) yang ingin ditawarkan ke
-                  pelanggan. Integrasi &amp; tarif dikelola TokoΦ.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
-                  <Info className="mt-0.5 size-4 shrink-0 text-primary" />
-                  <span>
-                    Integrasi kurir &amp; tarif ongkir dikelola oleh{" "}
-                    <span className="font-medium text-foreground">TokoΦ</span>. Anda cukup memilih kurir yang ingin ditawarkan — resi &amp; tarif otomatis.
-                  </span>
-                </div>
-                {platformCouriers?.length === 0 && (
-                  <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-                    Belum ada kurir yang diaktifkan platform. Hubungi TokoΦ.
-                  </p>
-                )}
-                {availableCouriers.map((c) => {
-                  const on = courierOn[c.code]
-                  return (
-                    <div
-                      key={c.code}
-                      className={cn(
-                        "rounded-lg border p-3 transition-opacity",
-                        !on && "opacity-60",
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-4">
-                          <Truck />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium">{c.name}</p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {on ? c.services.join(" · ") : "Nonaktif"}
-                          </p>
-                        </div>
-                        <Switch
-                          checked={on}
-                          disabled={!canSettings}
-                          onCheckedChange={(v) => {
-                            const next = { ...courierOn, [c.code]: v }
-                            setCourierOn(next)
-                            persistCouriers(next)
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
+            <div className="max-w-3xl">
+              <JasaKirimCard />
+            </div>
+          )}
 
-                <Separator className="my-1" />
-
-                <ToggleRow
-                  icon={<Store />}
-                  title="Ambil di toko (pickup)"
-                  description="Pelanggan dapat mengambil pesanan langsung di toko."
-                  checked={pickup}
-                  onCheckedChange={setPickup}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Aktifkan bila toko fisik Anda melayani pengambilan mandiri.
-                </p>
-
-                <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-background/40 p-3 sm:flex-row sm:items-center">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">Gratis ongkir</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Berikan gratis ongkir bila belanja melewati nilai minimum.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground">
-                        Rp
-                      </span>
-                      <Input
-                        className="w-40 pl-8 tabular-nums"
-                        inputMode="numeric"
-                        defaultValue="250.000"
-                        disabled={!gratisOngkir}
-                      />
-                    </div>
-                    <Switch
-                      checked={gratisOngkir}
-                      onCheckedChange={setGratisOngkir}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-              <SaveFooter />
-            </Card>
-            <SenderAddressCard />
+          {/* ALAMAT — the pickup origin. Its own section: it is an address, not a shipping
+              preference, and every courier rate depends on it. */}
+          {section === "alamat" && (
+            <div className="max-w-3xl">
+              <SenderAddressCard />
             </div>
           )}
 

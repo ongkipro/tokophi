@@ -5,7 +5,7 @@ import { scryptSync, randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { signImpersonation } from "./session";
 import { requirePlatformAdmin } from "./platform-auth";
-import { kaTestConnection } from "@tokophi/lib/kiriminaja";
+import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
 import { alTestConnection, alProbeChannels, alCreatePayment } from "@tokophi/lib/autolaris";
 import { addMonths, quote, withPpn } from "@tokophi/lib/billing";
 
@@ -183,6 +183,87 @@ export async function saveCouriers(updates: { key: string; on: boolean }[]): Pro
 export async function testKiriminajaConnection(): Promise<{ ok: boolean; env: string; provinces?: number; message: string }> {
   await requirePlatformAdmin();
   return kaTestConnection();
+}
+
+/**
+ * Pull the REAL courier roster from KiriminAja into platform_couriers.
+ *
+ * The roster used to be a hand-written list (packages/lib/couriers.ts) and had drifted: it named
+ * TIKI and Pos Indonesia, which KiriminAja does not return, and gave SPX the services
+ * "Standard"/"Hemat" when the live service_types are "1" and "3". Merchants could switch on
+ * services that do not exist, and the storefront filter would silently never match them.
+ *
+ * Now the API is the source of truth. Each service keeps KiriminAja's own `cod` flag plus a
+ * platform `codAllowed` decision on top.
+ *
+ * `codAllowed` defaults to KiriminAja's flag (i.e. COD wherever the courier supports it — that is
+ * 10 of them, not just SPX). The narrowing that matters in practice is about RETURNS, not COD
+ * support: when a COD buyer refuses the parcel, SPX ships it back free while other couriers bill
+ * the merchant for the return leg. Keeping that as a per-service BOOLEAN — rather than
+ * `if (courier === "spx")` buried in code — means the platform can widen or narrow it from the
+ * super-admin without a deploy.
+ *
+ * Re-syncing preserves the existing enabled/codAllowed decisions; only the service catalogue is
+ * refreshed. A courier that disappears from KiriminAja is disabled, never deleted (stores may
+ * still hold orders that reference it).
+ */
+export async function syncCouriersFromKiriminaja(): Promise<{ ok: boolean; couriers: number; services: number; message: string }> {
+  await requirePlatformAdmin();
+
+  const r = await kaServices();
+  if (!r.ok || !r.services.length) {
+    return { ok: false, couriers: 0, services: 0, message: r.error ?? "KiriminAja tidak mengembalikan layanan." };
+  }
+
+  const existing = await db.select().from(schema.platformCouriers);
+  const prev = new Map(existing.map((e) => [e.courier, e]));
+
+  // group the flat service list by courier
+  const byCourier = new Map<string, { type: string; name: string; group: string; cod: boolean; codAllowed: boolean }[]>();
+  for (const s of r.services) {
+    const old = (prev.get(s.courier)?.services as { type: string; codAllowed?: boolean }[] | null) ?? [];
+    const keptDecision = old.find((o) => typeof o === "object" && o.type === s.serviceType)?.codAllowed;
+    const list = byCourier.get(s.courier) ?? [];
+    list.push({
+      type: s.serviceType,
+      name: s.name,
+      group: s.group,
+      cod: s.cod,
+      // keep a previous super-admin decision; otherwise follow KiriminAja
+      codAllowed: keptDecision ?? s.cod,
+    });
+    byCourier.set(s.courier, list);
+  }
+
+  for (const [courier, services] of byCourier) {
+    const was = prev.get(courier);
+    if (was) {
+      await db
+        .update(schema.platformCouriers)
+        .set({ services, enabled: was.enabled })
+        .where(eq(schema.platformCouriers.courier, courier));
+    } else {
+      await db.insert(schema.platformCouriers).values({ courier, services, enabled: true });
+    }
+  }
+
+  // couriers KiriminAja no longer offers: disable, don't delete (old orders still reference them)
+  for (const e of existing) {
+    if (!byCourier.has(e.courier) && e.enabled) {
+      await db.update(schema.platformCouriers).set({ enabled: false }).where(eq(schema.platformCouriers.courier, e.courier));
+    }
+  }
+
+  revalidatePath("/pengaturan");
+  const stale = existing.filter((e) => !byCourier.has(e.courier)).map((e) => e.courier);
+  return {
+    ok: true,
+    couriers: byCourier.size,
+    services: r.services.length,
+    message:
+      `${byCourier.size} kurir · ${r.services.length} layanan disinkronkan dari KiriminAja.` +
+      (stale.length ? ` Dinonaktifkan (tidak lagi ditawarkan): ${stale.join(", ")}.` : ""),
+  };
 }
 
 // ---- AutoLaris payment gateway: live connectivity test ----
