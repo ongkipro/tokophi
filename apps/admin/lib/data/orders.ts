@@ -34,7 +34,7 @@ function q(db: Tx, where?: SQL) {
 
 function toOrder(r: {
   number: string; customer: string | null; city: string | null; total: number;
-  status: "baru" | "diproses" | "dikirim" | "selesai" | "batal"; channel: string; placedAt: Date; items: number;
+  status: "baru" | "diproses" | "dikirim" | "selesai" | "batal" | "retur"; channel: string; placedAt: Date; items: number;
   awb?: string | null; courier?: string | null;
 }): Order {
   return {

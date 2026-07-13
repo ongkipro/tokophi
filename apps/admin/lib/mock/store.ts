@@ -148,7 +148,7 @@ export const productImages = (p: Product): string[] => [
 ];
 
 // ---- orders ----
-export type OrderStatus = "baru" | "diproses" | "dikirim" | "selesai" | "batal";
+export type OrderStatus = "baru" | "diproses" | "dikirim" | "selesai" | "batal" | "retur";
 export type Order = {
   id: string;
   customer: string;
@@ -311,16 +311,12 @@ export const MENUS: NavMenu[] = [
 ];
 
 // ---- marketing: ad channels + tracking pixels (Meta / Google / TikTok) ----
-export type AdChannelKey = "meta" | "google" | "tiktok";
-export type AdCampaign = { name: string; spend: number; conversions: number; revenue: number };
-export type AdChannel = {
-  key: AdChannelKey; name: string; brand: string; connected: boolean;
-  pixelLabel: string; pixelId: string; pixelActive: boolean; capiActive: boolean;
-  spend: number; impressions: number; clicks: number; conversions: number; revenue: number;
-  campaigns: AdCampaign[];
-};
-// NOTE: the AD_CHANNELS fixture was deleted — no Meta/Google/TikTok integration exists.
-// /pemasaran still reads the (seeded) ad_channels table; the types stay for that read layer.
+// REMOVED (2026-07-13): the AdChannel/AdCampaign types and the AD_CHANNELS fixture.
+// There is NO Meta/Google/TikTok ad integration, so ad spend / impressions / clicks /
+// ROAS / Pixel IDs have no source of truth and must never be rendered. /pemasaran now
+// uses `AdChannelStatus` from lib/data/marketing.ts: channel labels + a not-connected
+// status + orders/revenue ATTRIBUTED from real `orders.channel` rows. Do not reintroduce
+// ad-performance fixtures here.
 
 // ---- product sub-modules: collections (Kategori), purchase orders (Pembelian) ----
 export type Collection = { id: string; name: string; emoji: string; products: number; type: "manual" | "otomatis"; published: boolean };
@@ -370,25 +366,12 @@ export const REVIEWS: Review[] = [
   { id: "RV-8", customer: "Hendra Gunawan", product: "Madu Hutan Asli 500ml", emoji: "🍯", rating: 5, text: "Madunya asli, rasa mantap. Langganan terus.", status: "terbit", daysAgo: 8 },
 ];
 
-// ---- marketing: performance by Indonesian province (for Pemasaran province filter) ----
-export const PROVINCES = [
-  "Semua Provinsi", "DKI Jakarta", "Jawa Barat", "Jawa Timur", "Jawa Tengah", "Banten",
-  "Sumatera Utara", "Bali", "DI Yogyakarta", "Sulawesi Selatan", "Kalimantan Timur", "Lainnya",
-];
-export type ProvinceStat = { province: string; spend: number; impressions: number; clicks: number; conversions: number; revenue: number; reach: number };
-export const AD_PROVINCES: ProvinceStat[] = [
-  { province: "DKI Jakarta",      spend: 11_200_000, impressions: 1_180_000, clicks: 34_800, conversions: 268, revenue: 52_400_000, reach: 640_000 },
-  { province: "Jawa Barat",       spend: 7_400_000,  impressions: 820_000,   clicks: 24_100, conversions: 172, revenue: 31_800_000, reach: 470_000 },
-  { province: "Jawa Timur",       spend: 6_100_000,  impressions: 690_000,   clicks: 19_600, conversions: 141, revenue: 26_500_000, reach: 390_000 },
-  { province: "Jawa Tengah",      spend: 4_300_000,  impressions: 512_000,   clicks: 13_800, conversions: 98,  revenue: 17_900_000, reach: 288_000 },
-  { province: "Banten",          spend: 3_050_000,  impressions: 356_000,   clicks: 10_200, conversions: 74,  revenue: 13_100_000, reach: 205_000 },
-  { province: "Sumatera Utara",   spend: 2_400_000,  impressions: 298_000,   clicks: 8_100,  conversions: 52,  revenue: 8_900_000,  reach: 168_000 },
-  { province: "Bali",            spend: 2_050_000,  impressions: 244_000,   clicks: 7_400,  conversions: 61,  revenue: 12_600_000, reach: 142_000 },
-  { province: "DI Yogyakarta",    spend: 1_500_000,  impressions: 190_000,   clicks: 6_100,  conversions: 44,  revenue: 7_200_000,  reach: 112_000 },
-  { province: "Sulawesi Selatan", spend: 1_350_000,  impressions: 176_000,   clicks: 5_200,  conversions: 33,  revenue: 5_400_000,  reach: 98_000 },
-  { province: "Kalimantan Timur", spend: 1_100_000,  impressions: 138_000,   clicks: 3_900,  conversions: 26,  revenue: 4_300_000,  reach: 74_000 },
-  { province: "Lainnya",         spend: 1_150_000,  impressions: 164_000,   clicks: 4_500,  conversions: 30,  revenue: 5_100_000,  reach: 86_000 },
-];
+// ---- marketing: performance by Indonesian province ----
+// REMOVED (2026-07-13): PROVINCES / ProvinceStat / AD_PROVINCES. The per-province ad
+// "performance" (spend, impressions, clicks, conversions, revenue, reach) was fabricated:
+// `orders.province` is NULL on 100% of rows and there is no ad integration, so nothing
+// could ever compute it. Real per-region sales (by city, from orders) live in
+// lib/data/analytics.ts → getRegionSales().
 
 // ---- CRM: sales pipeline (leads), WhatsApp follow-ups, message templates ----
 export type LeadSource = "WhatsApp" | "Instagram" | "TikTok" | "Referral" | "Marketplace";

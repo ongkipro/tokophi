@@ -5,9 +5,9 @@ import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 
-export type OrderStatus = "baru" | "diproses" | "dikirim" | "selesai" | "batal";
+export type OrderStatus = "baru" | "diproses" | "dikirim" | "selesai" | "batal" | "retur";
 
-export async function setOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
+export async function setOrderStatus(orderId: string, status: OrderStatus, returnReason?: string): Promise<void> {
   const { storeId: sid } = await requireCapability("orders:write");
   const number = orderId.replace(/^#/, ""); // order.id is "#INV-4819"
   await withTenant(sid, async (db) => {
@@ -18,10 +18,13 @@ export async function setOrderStatus(orderId: string, status: OrderStatus): Prom
       .limit(1);
     if (!order) return;
 
-    // Cancelling a live order → return its reserved stock (mirrors the checkout decrement in
-    // apps/admin/app/api/public/order/route.ts). Guarded on the previous status so a repeat
-    // "batal" doesn't double-restore.
-    if (status === "batal" && order.status !== "batal") {
+    // Cancelling OR returning a live order → put the stock back. `batal` never shipped; `retur`
+    // shipped and came back — but in BOTH cases the goods are on the merchant's shelf again, so
+    // both must restore inventory. Missing the `retur` case would quietly shrink real stock on
+    // every refused COD parcel. Guarded on the previous status so a repeat click can't
+    // double-restore.
+    const restores = status === "batal" || status === "retur";
+    if (restores && order.status !== status) {
       const lines = await db
         .select({ variantId: schema.orderLineItems.variantId, qty: schema.orderLineItems.qty })
         .from(schema.orderLineItems)
@@ -34,14 +37,22 @@ export async function setOrderStatus(orderId: string, status: OrderStatus): Prom
           .where(eq(schema.inventoryLevels.variantId, l.variantId));
       }
 
-      // fail any still-pending payment so a cancelled order can't be marked paid later
+      // fail any still-pending payment so a cancelled/returned order can't be marked paid later.
+      // For a refused COD parcel this is the whole point: the cash was never collected.
       await db
         .update(schema.payments)
         .set({ status: "gagal" })
         .where(and(eq(schema.payments.orderId, order.id), eq(schema.payments.status, "menunggu")));
     }
 
-    await db.update(schema.orders).set({ status }).where(eq(schema.orders.id, order.id));
+    await db
+      .update(schema.orders)
+      .set(
+        status === "retur"
+          ? { status, returnedAt: new Date(), returnReason: returnReason?.trim() || "Pembeli menolak paket" }
+          : { status },
+      )
+      .where(eq(schema.orders.id, order.id));
   });
   revalidatePath("/pesanan");
   revalidatePath(`/pesanan/${number}`);

@@ -108,6 +108,10 @@ function currentStep(status: OrderStatus): number {
       return 3;
     case "batal":
       return -1;
+    // The parcel shipped and came back — it is NOT a step on the happy path, and it is not `batal`
+    // either (that one never left). -1 drops it out of the pipeline, same as a cancellation.
+    case "retur":
+      return -1;
   }
 }
 

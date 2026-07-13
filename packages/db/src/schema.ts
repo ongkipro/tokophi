@@ -35,7 +35,11 @@ export const conditionField = pgEnum("condition_field", ["tag", "title", "type",
 export const conditionOperator = pgEnum("condition_operator", ["eq", "neq", "gt", "lt", "contains"]);
 export const poStatus = pgEnum("po_status", ["draft", "dipesan", "sebagian", "diterima"]);
 export const transferStatus = pgEnum("transfer_status", ["draft", "dikirim", "diterima", "batal"]);
-export const orderStatus = pgEnum("order_status", ["baru", "diproses", "dikirim", "selesai", "batal"]);
+// `retur` = the parcel came back: refused at the door (the classic COD failure), address dead, or
+// the buyer bounced it. It is NOT `batal` — a cancelled order never shipped, a returned one did,
+// and someone paid to move it twice. Keeping them apart is what makes the COD return rate
+// measurable at all (migration 0039).
+export const orderStatus = pgEnum("order_status", ["baru", "diproses", "dikirim", "selesai", "batal", "retur"]);
 export const financialStatus = pgEnum("financial_status", ["pending", "dibayar", "refund_sebagian", "refund"]);
 export const orderChannel = pgEnum("order_channel", ["meta_ads", "tiktok_ads", "google_ads", "organic", "other"]);
 export const paymentMethod = pgEnum("payment_method", ["transfer", "qris", "ovo", "gopay", "dana", "va", "cod"]);
@@ -349,6 +353,11 @@ export const orders = pgTable("orders", {
   number: text().notNull().unique(),
   customerId: uuid().references(() => customers.id),
   status: orderStatus().notNull().default("baru"),
+  // Set when status becomes `retur`. `returnReason` is why it came back — for a COD parcel that is
+  // almost always "pembeli menolak", and it is the number the SPX-only COD policy is betting on.
+  // With `courier` already on this row, the COD return rate per courier becomes a `group by`.
+  returnedAt: ts(),
+  returnReason: text(),
   financialStatus: financialStatus().notNull().default("pending"),
   channel: orderChannel().notNull().default("organic"),
   subtotalIdr: money().notNull().default(0),
