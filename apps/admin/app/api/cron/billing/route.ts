@@ -16,7 +16,24 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const provided = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
-  if (secret && provided !== secret) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+
+  // FAIL CLOSED in production. This used to read `if (secret && provided !== secret)` — so with
+  // CRON_SECRET unset there was NO check at all, on a route that is excluded from the auth
+  // middleware and walks EVERY store to suspend it or raise an invoice against it. Anyone who
+  // guessed the path could bill the whole platform.
+  //
+  // This is the same fail-open shape that was already found and closed on the AutoLaris pay
+  // callback. It survived here because the guard reads as if it works: a missing secret quietly
+  // means "no gate" instead of "no entry". If it can mutate money, an absent secret must mean NO.
+  // Dev/local still runs without one so the job can be exercised offline.
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[cron/billing] CRON_SECRET unset in production — REJECTING.");
+      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    }
+  } else if (provided !== secret) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
 
   const stores = await db
     .select({

@@ -53,9 +53,37 @@ export async function getPlatformSession(): Promise<PlatformSession | null> {
   }
 }
 
-// Security boundary for every super-admin mutation (impersonation + store lifecycle).
-export async function requirePlatformAdmin(): Promise<PlatformSession> {
+/**
+ * Platform roles, from least to most powerful. `platform_admins.role` already stores this; nothing
+ * was ever reading it.
+ *
+ *   support — reads, works the ticket queue. Cannot touch money, credentials, or a merchant's shop.
+ *   admin   — the day-to-day operator: payouts, store lifecycle, platform settings.
+ *   owner   — everything, including impersonating a merchant and resetting their password.
+ */
+export type PlatformRole = "support" | "admin" | "owner";
+const RANK: Record<string, number> = { support: 1, admin: 2, owner: 3 };
+
+/**
+ * Security boundary for every super-admin mutation.
+ *
+ * ⚠️ It used to check only that SOMEONE was logged in — the `role` on the session was carried
+ * around and never once read. So a `support` operator could reject a merchant's withdrawal, reset
+ * any merchant's password, and impersonate them into their own shop. The role column existed, the
+ * session carried it, and the gate ignored it: the most dangerous kind of security control, the one
+ * that looks present.
+ *
+ * Callers now state the minimum role they need. Default `admin` — a mutation is not a read, so
+ * "logged in" is not the bar.
+ */
+export async function requirePlatformAdmin(min: PlatformRole = "admin"): Promise<PlatformSession> {
   const s = await getPlatformSession();
   if (!s) throw new Error("Tidak diizinkan — perlu login platform admin.");
+
+  const have = RANK[s.role] ?? 0;
+  const need = RANK[min] ?? RANK.admin;
+  if (have < need) {
+    throw new Error(`Tidak diizinkan — perlu peran ${min}, akun ini ${s.role || "tanpa peran"}.`);
+  }
   return s;
 }

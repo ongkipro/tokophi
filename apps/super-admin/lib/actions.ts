@@ -33,8 +33,11 @@ const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").repla
 
 // Impersonate a store's owner: mint the admin session cookie (host-scoped to localhost, so it
 // reaches :3000) and hand back the admin URL for the client to open.
+// Impersonation is the single most invasive thing an operator can do: it mints a merchant session
+// and walks into their shop as them. It requires OWNER, and it is AUDITED — it previously required
+// only "logged in" and left NO trace at all, so nobody could answer "who went into my store?".
 export async function impersonateStore(storeId: string): Promise<{ ok: boolean; adminUrl?: string; error?: string }> {
-  await requirePlatformAdmin();
+  const admin = await requirePlatformAdmin("owner");
   const [owner] = await db
     .select({
       userId: schema.users.id,
@@ -64,6 +67,7 @@ export async function impersonateStore(storeId: string): Promise<{ ok: boolean; 
   // read at runtime (module-scope reads get baked at build time when the env is unset)
   const adminBase = process.env.ADMIN_URL ?? "http://localhost:3000";
   const url = `${adminBase}/impersonate?token=${encodeURIComponent(token)}&slug=${encodeURIComponent(owner.slug)}`;
+  await logStore(storeId, `Impersonate toko oleh ${admin.email}`);
   return { ok: true, adminUrl: url };
 }
 
@@ -437,8 +441,9 @@ export async function setStoreComped(storeId: string, comped: boolean, reason?: 
 }
 
 // Reset the OWNER's password → returns a one-time temp password to hand over (scrypt-hashed at rest).
+// Resetting a merchant's password hands over their account. Owner only.
 export async function resetOwnerPassword(storeId: string): Promise<{ ok: boolean; password?: string; email?: string }> {
-  await requirePlatformAdmin();
+  await requirePlatformAdmin("owner");
   const [row] = await db
     .select({ userId: schema.storeUsers.userId, email: schema.users.email })
     .from(schema.storeUsers)

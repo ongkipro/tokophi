@@ -112,6 +112,25 @@ export async function settleOrderLedger(
     // the unique indexes decide that, not this call site.
     await creditSalesForOrder(db, orderId);
 
+  }
+
+  // ── Release: WHEN does a sale become withdrawable? ─────────────────────────
+  //
+  // `platform_payout.release_on` is the platform's answer, and until now it was a setting that
+  // NOTHING READ — the release was hardcoded to `selesai` while migration 0040's own header (mine)
+  // claimed the rule was tunable without a deploy. A knob that moves nothing is worse than no knob:
+  // an operator flips it, believes the policy changed, and it did not. It is read here now.
+  //
+  // The default is `selesai`, and it should stay there. Releasing at `dikirim` looks generous and
+  // is a trap: a parcel can only be RETURNED after it shipped, so the merchant could withdraw money
+  // for goods that come back — and for COD the cash does not exist at despatch at all (the courier
+  // collects at the door and settles days later). The super-admin screen says so on the toggle.
+  const [pol] = (await db.execute(sql`
+    select release_on as "releaseOn" from platform_payout limit 1
+  `)) as unknown as { releaseOn: string }[];
+  const releaseOn = pol?.releaseOn === "dikirim" ? "dikirim" : "selesai";
+
+  if (status === releaseOn) {
     await db.execute(sql`
       update ledger_entries
          set status = 'available', available_at = now()

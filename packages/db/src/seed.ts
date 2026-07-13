@@ -999,6 +999,11 @@ async function main() {
     })),
   );
   await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
+  // Payout policy. The seed TRUNCATES every table, and this one was never re-inserted — so after any
+  // re-seed `platform_payout` was EMPTY and min_payout_idr silently fell back to a code default while
+  // the super-admin screen showed a policy that did not exist in the DB. Seed it explicitly.
+  // `release_on: "selesai"` is the safe default and is deliberate: see migration 0040.
+  await db.insert(schema.platformPayout).values({ releaseOn: "selesai", minPayoutIdr: 50_000, autoApprove: false });
   // AutoLaris payment channels. enabled+active = the 6 confirmed active on sandbox (QRIS + 5 VA);
   // rest listed but off (super-admin can Sync/toggle). Mirrors platform_couriers.
   await db.insert(schema.platformPaymentChannels).values(
