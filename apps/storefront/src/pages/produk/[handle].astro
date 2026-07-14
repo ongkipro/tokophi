@@ -42,7 +42,11 @@ const TEMPLATE = catalog.productTemplate(product);
 
 <Layout title={product.name} description={product.description}>
   <section class="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
-    <div class="grid gap-10 md:grid-cols-2 lg:gap-14">
+    <!-- `grid-cols-1` is not decoration. Without an explicit template below `md`, the single column
+         is an IMPLICIT `auto` track — and an auto track is sized from its CONTENT, so it may exceed
+         the container. The gallery's thumbnail strip made it do exactly that and the page scrolled
+         sideways on a 320-360px phone. `grid-cols-1` = `1fr`, bounded by the available space. -->
+    <div class="grid grid-cols-1 gap-10 md:grid-cols-2 lg:gap-14">
       <!-- Gallery -->
       <div class="flex flex-col gap-4 sm:flex-row-reverse">
         <!-- Main image -->
