@@ -11,7 +11,8 @@ const COLLECTIONS = catalog.collections;
 // every page of the shop. See getFooterNav().
 const PAGES = await getFooterNav(store.id);
 
-const waHref = `https://wa.me/${store.whatsapp}`;
+// null = no CS number on this store → no WhatsApp button anywhere in the footer.
+const waHref = store.whatsapp ? `https://wa.me/${store.whatsapp}` : null;
 ---
 
 <footer class="mt-24 bg-ink text-cream/85">
@@ -23,7 +24,8 @@ const waHref = `https://wa.me/${store.whatsapp}`;
   <div class="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 md:grid-cols-2 lg:grid-cols-4">
     <div class="md:col-span-1">
       <p class="font-display text-2xl font-semibold text-cream">{store.name}</p>
-      <p class="mt-3 max-w-xs text-sm leading-relaxed text-cream/60">{store.tagline}</p>
+      {store.tagline && <p class="mt-3 max-w-xs text-sm leading-relaxed text-cream/60">{store.tagline}</p>}
+      {waHref && (
       <a
         href={waHref}
         target="_blank"
@@ -35,6 +37,7 @@ const waHref = `https://wa.me/${store.whatsapp}`;
         </svg>
         Hubungi via WhatsApp
       </a>
+      )}
     </div>
 
     <div>
@@ -64,11 +67,13 @@ const waHref = `https://wa.me/${store.whatsapp}`;
         <li>
           <a href="/keranjang" class="rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">Keranjang</a>
         </li>
+        {waHref && (
         <li>
           <a href={waHref} target="_blank" rel="noopener" class="rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">
             Customer Service
           </a>
         </li>
+        )}
         <li class="flex items-center gap-2 pt-1 text-cream/50">
           <MapPin class="h-3.5 w-3.5 shrink-0" stroke-width={1.75} aria-hidden="true" />
           {store.city}, Indonesia

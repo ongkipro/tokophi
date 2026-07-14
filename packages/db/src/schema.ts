@@ -99,6 +99,17 @@ export const stores = pgTable("stores", {
   // storefront derives a full 11-shade scale from it (@tokophi/lib/colors). Null = fall back
   // to the default brand hex baked into apps/storefront/src/styles/global.css.
   brandColor: text(),
+  // The shop's OWN customer-service WhatsApp and one-line pitch.
+  //
+  // These did not exist, so `apps/storefront/src/data/store.ts` fell back to platform constants — and
+  // `wa.me/6281234567890` (the canonical Indonesian dummy number) shipped as the "Hubungi via
+  // WhatsApp" button on EVERY page of EVERY store, ~19 times per page. Every one of those buttons
+  // opened a chat with nobody. A dead CS channel costs the sale AND the trust.
+  //
+  // Both stay NULLABLE on purpose: a store that has not set them must render NO WhatsApp button and
+  // NO tagline, rather than a placeholder. A missing channel is honest; a dead one is not.
+  whatsapp: text(), // digits only, country code first: "628123456789"
+  tagline: text(),
   createdAt: createdAt(),
 });
 

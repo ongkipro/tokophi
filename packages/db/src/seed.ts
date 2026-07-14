@@ -672,6 +672,15 @@ async function main() {
     name: STORE.name,
     slug: slugify(STORE.name),
     city: STORE.city,
+    // The shop's OWN CS channel and pitch (migration 0049). These used to be platform CONSTANTS in
+    // apps/storefront/src/data/store.ts, so `wa.me/6281234567890` — the canonical Indonesian dummy
+    // number — shipped as a live "Hubungi via WhatsApp" button on every page of every store. Every
+    // one of them opened a chat with nobody.
+    //
+    // The 6 demo stores below deliberately leave these NULL: that is the case the storefront must
+    // handle, and it does — no number means no button, rather than a button that goes nowhere.
+    whatsapp: "6281234500999",
+    tagline: "Busana wanita modern — batik & ready-to-wear",
     plan: STORE.plan,
     status: STORE.status,
     // billing: active, first month paid → recurring Rp275rb; ~20 days left in the current period
@@ -709,6 +718,11 @@ async function main() {
 
   // catalog: product → 1 default variant (price) + inventory (stock) + base media (image)
   const seededProducts: Array<{ id: string; variantId: string; category: string; unitsSold: number }> = [];
+  // Reviews reference a product by NAME (REVIEWS[].product). Without this map the seed wrote
+  // `productName` and left `product_id` NULL on every row — so NO product could ever carry a rating,
+  // and the merchant's real, moderated reviews never reached a shopper. The storefront aggregates
+  // ratings from `reviews` (apps/storefront/src/data/catalog.ts), so an unlinked review is invisible.
+  const productIdByName = new Map<string, string>();
   for (const c of CATALOG) {
     const meta = STOREFRONT_META[c.slug];
     const [p] = await db.insert(schema.products).values({
@@ -734,6 +748,7 @@ async function main() {
       hasVariants: true,
       createdAt: new Date(c.addedTs),
     }).returning();
+    productIdByName.set(c.name, p.id);
     // real variants: Warna × Ukuran (Ukuran from STOREFRONT_META.sizes). Position 0 = default (list/catalog/orders use it).
     const warna = WARNA_BY_SLUG[c.slug] ?? ["Default"];
     const ukuran = meta?.sizes?.length ? meta.sizes : ["All Size"];
@@ -1237,6 +1252,12 @@ async function main() {
     REVIEWS.map((r) => ({
       storeId: store.id,
       customerId: custByName.get(r.customer) ?? null,
+      // THE FK, not just the display name. Every seeded review used to land with product_id = NULL,
+      // which meant no product could show a rating at all — while the PDP separately advertised a
+      // FAKE "4.8 · 187 ulasan" from the denormalised `products.rating_value` columns that nothing
+      // recomputes. Those columns are now ignored by the storefront; this link is what makes a real
+      // rating appear.
+      productId: productIdByName.get(r.product) ?? null,
       productName: r.product,
       emoji: r.emoji,
       rating: r.rating,

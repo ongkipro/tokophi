@@ -10,7 +10,11 @@
 // server-rendered relative time is exactly the SSR/CSR hydration mismatch the determinism rule in
 // CLAUDE.md forbids.
 const { store } = Astro.locals;
-const waHref = `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(`Halo ${store.name}, saya mau tanya.`)}`;
+// null = this store set no CS number → render no WhatsApp fallback at all. A button that opens a
+// chat with nobody is worse than no button: the shopper waits for a reply that cannot come.
+const waHref = store.whatsapp
+  ? `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(`Halo ${store.name}, saya mau tanya.`)}`
+  : null;
 ---
 
 <div
@@ -59,9 +63,11 @@ const waHref = `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(`Halo 
     </form>
 
     <!-- Never remove the WA path: Indonesian shoppers expect it (spec §5a). -->
-    <a href={waHref} target="_blank" rel="noopener" class="block border-t border-line px-4 py-2 text-center text-xs text-muted hover:text-ink">
-      Atau balas via WhatsApp
-    </a>
+    {waHref && (
+      <a href={waHref} target="_blank" rel="noopener" class="block border-t border-line px-4 py-2 text-center text-xs text-muted hover:text-ink">
+        Atau balas via WhatsApp
+      </a>
+    )}
   </div>
 
   <!-- Bubble -->

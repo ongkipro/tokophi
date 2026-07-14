@@ -16,17 +16,24 @@ export type StoreInfo = {
   id: string;
   name: string;
   slug: string;
-  tagline: string;
-  whatsapp: string;
+  /** `null` = the merchant has not written one. Render NOTHING — never a platform default. */
+  tagline: string | null;
+  /** `null` = no CS WhatsApp set. Render NO WhatsApp button at all. */
+  whatsapp: string | null;
   city: string;
   logoUrl: string | null;
   brandColor: string | null;
 };
 
-// `stores` has no tagline/whatsapp column yet (SCHEMA.md) — these stay platform defaults until it
-// does. Seam: add the columns → read them here; every surface already goes through StoreInfo.
-const DEFAULT_TAGLINE = "Busana wanita modern — batik & ready-to-wear";
-const DEFAULT_WHATSAPP = "6281234567890";
+// REMOVED: `DEFAULT_TAGLINE` / `DEFAULT_WHATSAPP`.
+//
+// `stores` had no whatsapp/tagline column, so these platform constants were rendered for EVERY tenant
+// — and `6281234567890` (the canonical Indonesian dummy number) shipped as a live "Hubungi via
+// WhatsApp" button on every page of every store, ~19 times per page. Every one of them opened a chat
+// with nobody. A merchant whose CS number is dead loses the sale AND the trust, and never finds out.
+//
+// The columns exist now (migration 0049) and they are NULLABLE on purpose: a store that has not set
+// one renders NOTHING. A missing channel is honest; a dead one is a lie.
 
 // Subdomains that are never a store slug (platform surfaces / conventional hostnames).
 const RESERVED = new Set(["www", "app", "rich", "admin", "api", "cname", "toko", "storefront", "localhost"]);
@@ -84,8 +91,8 @@ const toStoreInfo = (r: typeof schema.stores.$inferSelect): StoreInfo => ({
   id: r.id,
   name: r.name,
   slug: r.slug,
-  tagline: DEFAULT_TAGLINE,
-  whatsapp: DEFAULT_WHATSAPP,
+  tagline: r.tagline,
+  whatsapp: r.whatsapp,
   city: r.city ?? "",
   logoUrl: r.logoUrl,
   brandColor: r.brandColor,
