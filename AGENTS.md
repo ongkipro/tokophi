@@ -1,5 +1,35 @@
 # TokoΦ — working agreement (read before coding)
 
+## 🤝 MULTIPLE AGENTS SHARE THIS WORKTREE — read this first
+
+More than one Claude runs against this repo, this database and this machine **at the same time**. We
+are building one product together, not racing. Everything below was learned by breaking it.
+
+**The shared things you can destroy for someone else in one command:**
+- **The database.** `SEED_FORCE=1 npm run seed` / `npm run reset` **TRUNCATE everything** and hand out
+  new `store_id`s. Anyone mid-verification loses their data and their logged-in session, silently, with
+  no error to tell them why. **Announce before you re-seed. Prefer a targeted SQL write.** If you flip
+  a row to test something (e.g. `enabled=true` on a channel), **flip it back** — leave the DB honest.
+- **Dev servers.** **Never `pkill -f "astro dev"` / `pkill next`** — that kills *their* server, not just
+  yours. Record the PID of what you start (`echo $! > …`) and kill only that PID.
+- **The git index.** Other agents leave files **staged**. A bare `git add -A` + `git commit` will
+  **swallow their half-finished work into your commit**. Always `git status` first, `git add` explicit
+  paths, and commit with a pathspec: `git commit -- path/to/your/file`.
+- **Files someone is mid-edit on.** Check `git status` before you touch a file. If it is already
+  modified and it isn't yours, **leave it and say so** — or wait. Do not "fix" your way through it.
+
+**Rough territories** (not walls — but cross them deliberately, not by accident): storefront UI/UX &
+responsive · admin + super-admin screens · public API routes (`apps/admin/app/api/public/**`) ·
+`packages/db` schema/seed/migrations · docs. Two agents editing `checkout.astro` at once is how the
+`queueSave is not defined` outage happened: a rename landed in one half of the file and the call sites
+in the other half were left behind, and it blocked **the entire rate load — no rates → no COD → no
+order at all** while `astro check`, lint and build all stayed green.
+
+**Hand off in the repo, not in chat.** A fact only you know is a fact the next agent will re-break.
+Put it in `CHANGELOG.md` / `STATUS.md` / here. If your change alters a contract another surface reads
+(a data-layer signature, a payment/shipping flag, a DB column), **say so in the commit body** — that is
+the message the other agent will actually see.
+
 Shopify-style commerce SaaS for Indonesia. **No Themes menu, no Apps/Plugins.** **Backend live on local PostgreSQL** (Docker :5433, Drizzle): all 3 surfaces READ + all 12 admin editors WRITE the DB, plus local auth (login/session) + local media upload (see Database below). Bahasa Indonesia UI, IDR. **Prod target = self-hosted Postgres + PostgREST on a VPS (NOT Supabase), deferred.** Full spec: `~/Documents/Development/tokophi/PRD.md`.
 
 ## Monorepo (npm workspaces) — 4 surfaces
