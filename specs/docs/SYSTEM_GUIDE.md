@@ -119,7 +119,7 @@ annotated reference = [`SCHEMA.md`](SCHEMA.md).
 ### Admin (merchant) — 16 modules, all DB-backed
 Dashboard (KPIs, FB-style date range, charts) · **Pesanan** (list + detail with status pipeline +
 **Cek Ongkir** live rates) · **Produk** (editor with real variants, + Kategori / Inventori / Pembelian
-PO) · **Pelanggan** (+ detail / Segmen / Ulasan) · **CRM** (follow-up WA / pipeline / templates) ·
+PO) · **Pelanggan** (+ detail / Segmen / Ulasan / **Keranjang Ditinggal**) · **CRM** (follow-up WA / pipeline / templates) ·
 **Diskon** · **Analitik** · **Pemasaran** (per-provinsi, channel ROAS) · **Halaman** & **Blog**
 (create+edit) · **Navigasi** (drag-and-drop menu builder) · **Pengaturan**. All 12 editors persist
 via server actions; **CSV export** on every Ekspor button; **global search (⌘K)** returns real results.
@@ -137,6 +137,17 @@ beranda · kategori (real collections + virtual "semua"/"promo") · **produk** (
 **creates a real DB order** (customer + order + line items) with **live ongkir** + a **real payment**
 (VA/QRIS/DANA) via the platform proxies; the order appears in the merchant admin and the pay callback
 marks it paid. · akun · blog · kontak. Reads the same Postgres catalog.
+
+**Buying never requires an account** — `customers.registered_at IS NULL` = guest, and that is the
+normal case (a registration wall in front of an Indonesian checkout loses the sale). Checkout also
+**captures abandoned carts** (migrations 0044/0045, `checkout_sessions`): there is no "abandon" event
+to listen for — abandonment is the *absence* of an order — so the row is written **as the shopper
+types** (`POST /api/checkout-session`, tenant from the `Host` header, fails quiet), aged
+`aktif → ditinggal` after 60 min of silence by an opportunistic sweep (no cron), and flipped to `pulih`
+by `/api/public/order` when that session becomes that order. The merchant works the list at
+**Pelanggan → Keranjang Ditinggal** and recovers over **WhatsApp** (`wa.me` + a *signed*, store-bound,
+7-day `?r=` link — never a raw session id, which would hand anyone who sees the URL a stranger's name,
+phone and address).
 
 ---
 

@@ -42,8 +42,8 @@ unmeasurable**. Ordered.
 
 ## P0 — Foundation
 
-- [x] **Backend** — local PostgreSQL 16 + Drizzle (`@tokophi/db`): **67 tables, 44 migrations
-  (`0000`–`0043`), RLS on 43**. All four surfaces read; all admin editors write; local auth (jose JWT) +
+- [x] **Backend** — local PostgreSQL 16 + Drizzle (`@tokophi/db`): **68 tables, 46 migrations
+  (`0000`–`0045`), RLS on 44**. All four surfaces read; all admin editors write; local auth (jose JWT) +
   RBAC + **RLS enforcing at runtime** under the non-owner `tokophi_app` role.
 - [x] **Data-layer seam on every screen** — reads via `lib/data/*`, writes via `lib/actions/*`.
 - [x] **Auth + real multi-tenancy** — the tenancy boundary is the database, not application code.
@@ -123,6 +123,12 @@ unmeasurable**. Ordered.
   the printed label.
 - [x] **Pemasaran stops inventing ad performance** (`62df4a1`) — there is no Meta/Google/TikTok
   integration; the cards now say "Belum terhubung".
+- [x] **The CRM stops chasing carts that never existed** (`9206220`) — "keranjang ditinggal" follow-ups
+  (chase *Dress Midi Motif Bunga*, chase *Gamis Syari Polos*) were being shown for baskets that
+  **existed nowhere in the database**. It was sending merchants after ghosts. The seed now derives its 3
+  cart follow-ups from **real `checkout_sessions` rows**; orphan cart follow-ups: **0**. Also killed: the
+  Pelanggan stat card's **"Total Pelanggan 3.128 · +8,2% bulan ini"** — the store has **24** customers,
+  and nothing anywhere computed a month-over-month change.
 
 - [ ] **🔴 `invitePlatformAdmin` escalation** — see the top-five list.
 - [ ] **🔴 `billing.ts` has no capability gate** — see the top-five list.
@@ -181,6 +187,23 @@ unmeasurable**. Ordered.
   **shared** Puck config (`5016bb3`) after shipping first as a fork the storefront could not render.
 - [x] Real variants · CSV export · ⌘K search · RBAC UI rollout · content edit routes · order detail.
 - [x] Landing page on the apex + SEO hygiene + `www` → apex 301.
+- [x] **Abandoned-checkout capture** (migrations `0044` + `0045`, `d7fc92f`) — `checkout_sessions`, written
+  by the storefront **as the shopper types** (debounced beacons), because **there is no "abandon" event to
+  listen for: abandonment is the ABSENCE of an order**. A sweep flips `aktif` → `ditinggal` after 60 min
+  of silence and stamps `abandoned_at`. `0045` exists because a straight-through checkout **also** ends
+  `pulih`: without it the naive `pulih/(pulih+ditinggal)` renders a **19,3%** "recovery rate" and tells a
+  shop it rescued every ordinary sale. Real rates (30-day window, `aktif` excluded from both sides):
+  **abandon 80,0%**, **recovery 11,2%** (ditinggal 792 · orders 198 · rescued 100). Recovery links are
+  **signed, store-bound, 7-day HS256 tokens**, never the raw session id.
+- [x] **`/pelanggan/keranjang`** (`9206220`) — **792 abandoned carts that until this week were not recorded
+  at all.** Ranked by what a merchant can act on: has-phone first, then basket value **decayed by age**
+  (`subtotal / (1 + minutesAgo/1440)`). Tabs count with **true SQL totals**, not the loaded slice.
+  WhatsApp recovery records **"WA dibuka", not "terkirim"** — wa.me cannot tell us whether the message was
+  sent or read, and we do not display what we cannot observe.
+- [x] **Guest vs registered customers** (`0044`) — `customers.registered_at IS NULL` = guest (7 terdaftar /
+  17 tamu). Buying never requires an account, so **Tamu is the NORMAL case, not a defect**: a registration
+  wall in front of an Indonesian checkout is the most reliable way to lose the sale. The UI styles Tamu as
+  neutral and Terdaftar as the extra.
 
 - [~] **Google OAuth** — code done, **UNPROVEN**. The code-exchange / JWKS path has **never been run
   against real Google credentials**. Feature-flagged, so an unset env hides the button rather than
@@ -218,12 +241,35 @@ unmeasurable**. Ordered.
 
 ---
 
+## P1.8 — Abandoned-cart capture: what go-live still needs
+
+The feature is built and proven **locally, end-to-end, in a real browser**. None of that is true in
+production yet.
+
+- [ ] **🔴 Not deployed.** Both commits (`d7fc92f`, `9206220`) sit on `worktree-super-admin-overhaul` and
+  are **not merged to main**, so Coolify has shipped none of it. **Production still runs without
+  abandoned-cart capture** — every cart a real shopper leaves today is still lost, unrecorded.
+- [ ] **The ageing sweep is opportunistic** — it piggybacks on storefront traffic, so **a store with no
+  visitors never ages its own carts**. Acceptable now. On the VPS, decide between a cron and having the
+  read layer derive `ditinggal` on the fly.
+- [ ] **The capture rate limiter is in-process memory** (per SSR process) — the same known gap as
+  `/api/track`. Multi-instance needs a Cloudflare rule.
+- [ ] **Set `CHECKOUT_RECOVERY_SECRET` in the production env.** It falls back to `AUTH_SECRET`, which
+  works — but it means **rotating the auth secret silently invalidates every outstanding recovery link**.
+- [ ] **Google OAuth has still never been run against real credentials** (see *Feature completeness*
+  above) — a signup blocker, not an abandoned-cart one, but it is the other thing standing between this
+  branch and a merchant using it.
+
+---
+
 ## P2 — Missing modules
 
 - [ ] Produk: transfer stok antar-lokasi (`stock_transfers` exists, 0 rows, no UI) · pemasok CRUD.
 - [ ] Pelanggan: loyalitas / poin.
 - [ ] CRM: WhatsApp broadcast & automation (today: follow-up worklist + templates + pipeline).
-- [ ] Pemasaran: kampanye email/WA, automations (welcome, abandoned-cart).
+- [~] Pemasaran: kampanye email/WA, automations (welcome, abandoned-cart). **Abandoned-cart recovery is
+  now MANUAL** — the carts are captured and `/pelanggan/keranjang` opens a filled `wa.me` on one click.
+  What is missing is the **automation** (send without a human, on a schedule).
 - [ ] Kartu hadiah · Template notifikasi (toggles exist; the message editor does not).
 - [ ] Analitik: laporan kustom + saved reports.
 - [ ] **A real ad-platform integration** — or the permanent removal of `ad_channels` / `ad_metrics`. The

@@ -178,6 +178,45 @@ Full transition table — including what each one does to inventory and to the l
 shipment. So the per-courier return-rate report — **the number the whole COD policy is betting on** —
 cannot yet produce a per-courier answer.
 
+### 5.1 Before the order: the checkout that never became one
+
+Indonesia abandons the great majority of its carts, and **TokoΦ recorded none of them** — there was no
+cart table. `checkout_sessions` (migrations `0044` + `0045`) is that record.
+
+**There is no "abandon" event to listen for. Abandonment is the ABSENCE of an order.** So the storefront
+writes the row **as the shopper types** (debounced beacons → `apps/storefront/src/pages/api/checkout-session.ts`);
+a session that stops updating and never becomes an order **is** the abandonment. A sweep flips
+`aktif` → `ditinggal` after 60 minutes of silence and stamps `abandoned_at`.
+
+| Metric | Definition | Today |
+|---|---|---|
+| **Abandon rate** | `ditinggal / (ditinggal + orders)` | **80,0%** |
+| **Recovery rate** | `rescued / (rescued + ditinggal)`, where **`rescued = abandoned_at IS NOT NULL AND recovered_at IS NOT NULL`** | **11,2%** |
+
+30-day window. **`aktif` is excluded from both sides** — nobody has abandoned anything yet; the shopper
+is still typing.
+
+> **Why `abandoned_at` (0045) exists.** A straight-through checkout **also** ends `pulih`. The naive
+> `pulih / (pulih + ditinggal)` renders **19,3%** — it counts every ordinary sale as a save and tells a
+> merchant it rescued carts it never lost. **A number that looks real and is wrong is worse than no
+> number.**
+
+**Recovery travels on WhatsApp**, so the phone is the field the whole table is paid for.
+`/pelanggan/keranjang` ranks by what a merchant can act on — has-phone first, then basket value **decayed
+by age** (`subtotal / (1 + minutesAgo/1440)`) — and one click opens `wa.me` with the template filled
+server-side. It records **"WA dibuka", not "terkirim"**: wa.me cannot tell us whether the message was
+sent or read, and **we do not display what we cannot observe.** The link back into the checkout is a
+**signed, store-bound, 7-day HS256 token**, never the raw session id — which in a URL is a bearer
+credential for a stranger's name, phone and address the moment it is forwarded or leaks via `Referer`.
+
+**Buying never requires an account.** `customers.registered_at IS NULL` = **guest**, and guest is the
+**normal** case, not a defect: a registration wall in front of an Indonesian checkout is the most
+reliable way to lose the sale. The admin styles **Tamu as neutral** and Terdaftar as the extra.
+
+⚠️ **Built and proven locally, end-to-end in a real browser — and NOT deployed.** Both commits sit on a
+branch; production still records nothing. The ageing sweep is **opportunistic** (a store with no visitors
+never ages its own carts) and the capture rate limiter is in-process. ([`BACKLOG.md`](docs/BACKLOG.md) §P1.8)
+
 ---
 
 ## 6. Subscription billing (what merchants pay us)
@@ -200,7 +239,7 @@ contact us about the billing problem that suspended it.
 
 ## 7. Data & tenancy
 
-**67 tables. 44 migrations. RLS on 43.** ([`SCHEMA.md`](docs/SCHEMA.md) — regenerated from the catalog,
+**68 tables. 46 migrations. RLS on 44.** ([`SCHEMA.md`](docs/SCHEMA.md) — regenerated from the catalog,
 not from memory.)
 
 **The tenant boundary is RLS, not a hand-written `WHERE`.** Every admin read and write runs inside a
@@ -231,12 +270,16 @@ Grounded; see [`STATUS.md`](docs/STATUS.md) for the item-by-item 🟢/🟡/🔴 
 | **Super-admin** | 🟢 Rebuilt on real numbers (`571ed17`). The merchant float is shown as a **liability** |
 | **Analytics** | 🟡 Honest maths, demo rows. The funnel is a `GROUP BY` over `analytics_events`; those rows are still overwhelmingly seeded |
 | **Ads / Pemasaran** | 🔴 **There is no Meta/Google/TikTok integration.** The cards say "Belum terhubung". Only `orders.channel` attribution is real |
+| **Abandoned checkouts** (§5.1) | 🟢 Captured (`0044` + `0045`), `/pelanggan/keranjang` + one-click WA recovery, rates that distinguish a **rescue** from an ordinary sale. 🔴 **Not deployed** — production still records none of them |
+| **Customers** | 🟢 Guest (`registered_at IS NULL`) vs registered, as a real column. The Pelanggan card used to claim **3.128 customers and "+8,2% bulan ini"**; there are **24**, and nothing computed the change |
 | **Chat** | 🟡 Schema landed (migration 0043); app code in flight |
 | **Tests** | 🔴 **One test file in the whole repo.** Nothing automatically tests the ledger, the COD gate, or the order state machine |
 
 ### Aspirational — NOT built (do not describe these as if they were)
 
 - Meta / Google / TikTok ad integration, and any ROAS or spend figure.
+- **Abandoned-cart AUTOMATION.** The carts are captured and recovery is one click — but a human makes
+  that click. Nothing sends on a schedule.
 - A merchant-facing **payment fee-bearer** setting. `payment-fees.ts` has **zero importers**.
 - A **COD fee** (`fee_pct`).
 - **Custom domains** — `stores.custom_domain` does not exist; resolution is a `return null` stub.

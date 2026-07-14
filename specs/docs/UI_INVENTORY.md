@@ -27,7 +27,7 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 `Utama:` Dashboard · Pesanan · Produk▸ · Pelanggan▸ · CRM▸ · Diskon · Analitik · Pemasaran
 `Toko Online:` Tema · Halaman · Blog · Navigasi
 `Sistem:` Pengaturan
-(▸ = expandable submenu — Produk: Kategori/Inventori/Pembelian · Pelanggan: Segmen/Ulasan · CRM: Follow-up WA/Pipeline/Template)
+(▸ = expandable submenu — Produk: Kategori/Inventori/Pembelian · Pelanggan: **Keranjang Ditinggal**/Segmen/Ulasan · CRM: Follow-up WA/Pipeline/Template)
 
 **Channel model:** the only **sales channel** is "Toko Online". "Sumber/atribusi" (Dashboard/Analitik "Sumber Penjualan", Pesanan "Sumber") = **Meta Ads · TikTok Ads · Google Ads · Organic · Other**.
 
@@ -53,8 +53,9 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 ### Customers (Pelanggan▸)
 | Route | Purpose | Key components / interactions | Status |
 |---|---|---|---|
-| `/pelanggan` | Customer list | list, segment tabs, sort, bulk select, rows → detail | ✅ mock |
-| `/pelanggan/[id]` | Customer detail (`customer-detail.tsx`) | full profile: stats (belanja/pesanan/AOV/terakhir), order history, activity, contact, address, tags+notes, segment, Kirim WA/email | ✅ mock |
+| `/pelanggan` | Customer list | list, segment tabs, sort, bulk select, rows → detail; **Tamu vs Terdaftar badge** (`customers.registered_at IS NULL` = guest — the **normal** case: buying never requires an account) | ✅ real DB |
+| `/pelanggan/keranjang` | **Keranjang Ditinggal** (`keranjang-client.tsx`) | abandoned checkouts from `checkout_sessions` (0044/0045): abandon + recovery rate cards, tabs (Semua / Ada nomor WA / Belum dihubungi / Anonim) counted with **true SQL totals**, ranked has-phone-first then value **decayed by age**, one-click **WA recovery** (filled `wa_templates` body; records **"WA dibuka"**, not "terkirim") via a **signed, store-bound, 7-day** recovery link | ✅ real DB |
+| `/pelanggan/[id]` | Customer detail (`customer-detail.tsx`) | full profile: stats (belanja/pesanan/AOV/terakhir), order history, activity, contact, address, tags+notes, segment, akun (tamu/terdaftar), Kirim WA/email | ✅ real DB |
 | `/pelanggan/segmen` | Segments (Segmen) | segment cards (count, growth, rule), create dialog | ✅ mock |
 | `/pelanggan/ulasan` | Reviews (Ulasan) | rating stats, status tabs, **moderation** (terbit/menunggu) | ✅ mock |
 
@@ -62,7 +63,7 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 | Route | Purpose | Key components / interactions | Status |
 |---|---|---|---|
 | `/crm` | CRM overview | follow-ups due today, pipeline funnel, KPIs | ✅ mock |
-| `/crm/followup` | WhatsApp follow-up | worklist (keranjang/pembayaran/pascabeli/repeat/ulasan), type/status tabs, **Kirim WA** (real `wa.me` + filled template), mark-done | ✅ mock |
+| `/crm/followup` | WhatsApp follow-up | worklist (keranjang/pembayaran/pascabeli/repeat/ulasan), type/status tabs, **Kirim WA** (real `wa.me` + filled template), mark-done. **`keranjang` follow-ups now come from real `checkout_sessions` rows** — they used to chase baskets that existed nowhere in the DB | ✅ real DB |
 | `/crm/pipeline` | Sales pipeline | kanban (Baru→Menang), lead cards, source badges, WA quick-action | ✅ mock |
 | `/crm/template` | WA templates | templates as chat bubbles, placeholder legend, create dialog | ✅ mock |
 
@@ -132,7 +133,7 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 ---
 
 ## Not built yet (planned, all apps)
-Draft/manual orders · abandoned checkout · refunds/returns · stock transfers · supplier CRUD · loyalty · email/WA campaigns & automations · gift cards · custom reports/export · domains · notification templates · real auth/accounts · storefront CMS pages (`/halaman/*`) + article detail (`/blog/*`) · live "edit in admin → storefront" (needs M3 backend).
+Draft/manual orders · refunds/returns · stock transfers · supplier CRUD · loyalty · email/WA campaigns & automations · gift cards · custom reports/export · domains · notification templates · real auth/accounts · storefront CMS pages (`/halaman/*`) + article detail (`/blog/*`) · live "edit in admin → storefront" (needs M3 backend).
 
 ## Wireframes
 Admin screenshots in `../wireframes/`. Regenerate via Playwright (system Chrome channel) — not `chrome --headless` (mis-sizes Recharts).

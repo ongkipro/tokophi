@@ -10,14 +10,14 @@
 > statement, so the message silently becomes a syntax error.
 >
 > Companions: [`SYSTEM_MAP.md`](./SYSTEM_MAP.md) (routes → tables) · [`FLOWS.md`](./FLOWS.md)
-> (sequence diagrams for the six critical flows) · [`SCHEMA.md`](./SCHEMA.md) (the catalog) ·
+> (sequence diagrams for the seven critical flows) · [`SCHEMA.md`](./SCHEMA.md) (the catalog) ·
 > [`REQUIREMENTS.md`](./REQUIREMENTS.md) (what must be true).
 
 ---
 
 ## 1. Domain model — ER / class diagram
 
-The load-bearing entities only. Money is `bigint` IDR throughout. 67 tables exist; the other 40 hang
+The load-bearing entities only. Money is `bigint` IDR throughout. 68 tables exist; the rest hang
 off these.
 
 ```mermaid
@@ -42,6 +42,11 @@ erDiagram
     stores ||--o{ orders : ""
     orders ||--o{ order_line_items : ""
     product_variants ||--o{ order_line_items : "variant_id nullable"
+
+    stores ||--o{ checkout_sessions : "abandoned checkout"
+    customers ||--o{ checkout_sessions : "customer_id, set when it becomes an order"
+    checkout_sessions ||--o| orders : "recovered_order_id"
+    stores ||--o{ followups : "WhatsApp worklist"
 
     orders ||--o{ payments : "1..n"
     payments ||--o| ledger_entries : "kind=sale, 1 per payment"
@@ -107,9 +112,34 @@ erDiagram
         text bank_name "SNAPSHOT at request time"
         text note "rejection reason"
     }
+
+    customers {
+        uuid id PK
+        uuid store_id FK
+        text phone "THE identity here, not the email"
+        timestamptz registered_at "0044 - NULL means GUEST, the normal case"
+        text password_hash "0044 - provisioned, NO reader yet"
+        timestamptz last_order_at "0044 - backfilled from orders"
+    }
+
+    checkout_sessions {
+        uuid id PK
+        uuid store_id FK "tenant key, RLS, ALWAYS from the Host header"
+        text session_id "same id the funnel beacons carry"
+        uuid customer_id FK "set when it becomes an order"
+        text phone "the field this table is paid for"
+        jsonb items "snapshot - handle name variant qty price"
+        bigint subtotal_idr
+        enum step "keranjang kontak alamat pengiriman pembayaran - forward only"
+        enum status "aktif ditinggal pulih kedaluwarsa"
+        timestamptz abandoned_at "0045 - when it went QUIET"
+        uuid recovered_order_id FK
+        timestamptz recovered_at
+        timestamptz updated_at "the last time anyone touched it"
+    }
 ```
 
-**The two relationships that carry the most weight:**
+**The three relationships that carry the most weight:**
 
 1. `payments.amount_idr` → `ledger_entries.amount_idr`. The ledger credits what the *merchant* is
    owed, never `payments.total` — the gateway's admin fee is the gateway's money and never was the
@@ -117,6 +147,9 @@ erDiagram
    construction** rather than by coincidence.
 2. `orders.ship_district_id` (0042) is the **verified** destination. `orders.province` is what the
    buyer typed. Money decisions read the former. See §5.
+3. `checkout_sessions.recovered_order_id` → `orders` (0044) is what makes "recovered" a **join** rather
+   than a vibe: *this* session became *that* order. Paired with `abandoned_at` (0045) it is also the
+   only way to tell a **rescue** from an ordinary sale. See §9.
 
 ---
 
@@ -150,7 +183,7 @@ graph TB
         KA["KiriminAja<br/>courier aggregator"]
     end
 
-    PG[("PostgreSQL 16<br/>67 tables - 44 migrations<br/>RLS on 43")]
+    PG[("PostgreSQL 16<br/>68 tables - 46 migrations<br/>RLS on 44")]
     DISK[/"public/uploads<br/>local media"/]
 
     SH --> SF
@@ -531,9 +564,97 @@ render what the merchant built. It was folded back into the shared registry (`he
 
 ---
 
+## 9. Abandoned checkout — a state machine with no event to listen for
+
+`checkout_sessions` (migration **0044**, `abandoned_at` in **0045**). Every other state machine in this
+document is driven by something that *happens*. This one is not: **abandonment is the ABSENCE of an
+order.** Nothing fires. So the row is written **as the shopper types** — debounced beacons from
+`checkout.astro` into `apps/storefront/src/pages/api/checkout-session.ts`, the table's only writer from
+the shop — and it is judged later by what never happened to it.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> aktif : first beacon<br/>UPSERT on store_id + session_id<br/>store_id from the HOST HEADER, never the body
+
+    aktif --> aktif : more beacons<br/>step moves FORWARD only<br/>sendBeacon has no ordering guarantee
+    aktif --> ditinggal : 60 min of silence<br/>opportunistic sweep in the SAME endpoint<br/>abandoned_at = coalesce(updated_at, created_at)
+    aktif --> pulih : POST /api/public/order<br/>STRAIGHT THROUGH - abandoned_at stays NULL
+
+    ditinggal --> aktif : the shopper comes back and types again
+    ditinggal --> pulih : the order finally happens<br/>RESCUED - abandoned_at AND recovered_at are both set
+
+    pulih --> [*] : settled history<br/>a late beacon can NEVER resurrect this row
+
+    note right of ditinggal
+        There is no cron. The sweep runs at most once a
+        minute per SSR process, on the store being written
+        to, riding the store_id + status + updated_at index.
+        abandoned_at is stamped as the moment it went QUIET,
+        not as "now" - updated_at IS that moment.
+    end note
+
+    note right of pulih
+        pagehide fires on the redirect to /checkout/sukses,
+        so a stray beacon arrives AFTER the order. The upsert
+        carries setWhere status <> 'pulih' - otherwise that
+        beacon would flip a real sale back to aktif and
+        un-recover it.
+    end note
+```
+
+### 9.1 Why `abandoned_at` exists — the metric would otherwise be a lie
+
+A checkout that **sailed straight through** also ends as `status='pulih'`. Without a column saying
+*this one first went quiet*, the two are indistinguishable, and the obvious formula counts every
+ordinary sale as a rescue.
+
+| Quantity | Definition | Local data (30 d, `CHECKOUT_TODAY=2026-07-02`) |
+|---|---|---|
+| abandoned | `status = 'ditinggal'` | **792** |
+| orders | `orders` placed in the window (a completed checkout — **including one later cancelled**; the checkout still finished) | **198** |
+| **rescued** | `abandoned_at IS NOT NULL AND recovered_at IS NOT NULL` | **100** |
+| straight-through | `abandoned_at IS NULL AND recovered_at IS NOT NULL` — an **ordinary sale**, not a save | **90** |
+| `abandonRate` | `ditinggal / (ditinggal + orders)` | **80,0%** |
+| `recoveryRate` | `rescued / (rescued + ditinggal)` | **11,2%** |
+
+The naive `pulih / (pulih + ditinggal)` would report **19,3%** on exactly this data — it would tell a
+shop it "rescued" every ordinary sale it has ever made. **A number that looks real and is wrong is
+worse than no number.** `aktif` sessions are excluded from **both** sides of both ratios: the shopper
+is still typing and nobody has abandoned anything yet.
+
+**Context, not our measurement:** Indonesia abandons **82–83%** of carts against a ~70% global figure,
+and recovery here travels on **WhatsApp**, not email — which is why `phone` is the column this table is
+paid for, and why the merchant's action is a `wa.me` deep link.
+
+### 9.2 The recovery link is signed, and that is not decoration
+
+The merchant's WhatsApp message links back into the checkout, and clicking it restores the basket
+**plus everything the shopper had typed** — name, phone, address. So the link **cannot** be
+`/checkout?sid=<session id>`: session ids are generated in the browser and echoed in every tracking
+beacon, and a raw id in a URL is a **bearer credential over a stranger's personal data** the moment the
+link is forwarded, screenshotted, or leaks through a `Referer` header. Guessing is not even the main
+risk — leakage is.
+
+`apps/storefront/src/lib/recovery.ts` therefore mints an **HS256 JWT `{sid, st}`** (jose), keyed on
+`CHECKOUT_RECOVERY_SECRET ?? AUTH_SECRET`:
+
+| Property | Consequence |
+|---|---|
+| unforgeable | no secret, no token — guessing session ids buys nothing |
+| **store-bound** (`st`) | a token minted for store A is rejected on store B's host, so one shared secret across tenants is still safe |
+| self-expiring (7 days) | a forwarded link goes dead on its own; a raw id never would |
+| stateless | no token column in 0044, and none is needed — the token is derived from the row |
+
+A bad, expired, or other-tenant token renders the **ordinary empty checkout**, never an error. A
+session already `pulih` is never re-hydrated: it was already bought, and re-hydrating it would push the
+shopper to buy it twice.
+
+---
+
 ## Validation
 
-All 8 diagrams above — 1 `erDiagram`, 2 `stateDiagram-v2`, 1 `flowchart`, 4 `graph` — were rendered to
+All 9 diagrams above — 1 `erDiagram`, 3 `stateDiagram-v2`, 1 `flowchart`, 4 `graph` — were rendered to
 SVG with `@mermaid-js/mermaid-cli` **v11.16.0** on **2026-07-14**. Re-validate after editing:
 
 ```bash

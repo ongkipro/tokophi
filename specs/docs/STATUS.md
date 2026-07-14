@@ -1,7 +1,7 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
 > **Refreshed 2026-07-14** against the source tree and the live database
-> (`docker exec tokophi-db psql -U tokophi -d tokophi`) — **67 tables, 44 migrations, RLS on 43**.
+> (`docker exec tokophi-db psql -U tokophi -d tokophi`) — **68 tables, 46 migrations, RLS on 44**.
 > Not against the older docs in this folder, which have been wrong three times in ways that mattered.
 >
 > **The rule: verify, or say you did not.** This project has shipped a fee-bearer feature that was never
@@ -21,7 +21,7 @@
 
 | Thing | Evidence |
 |---|---|
-| **Multi-tenant isolation** | 43 tables `relrowsecurity = true`; non-owner role `tokophi_app`; `platform_activity` is the only `store_id` table without a policy, deliberately. No tenant context ⇒ **0 rows** |
+| **Multi-tenant isolation** | 44 tables `relrowsecurity = true`; non-owner role `tokophi_app`; `platform_activity` is the only `store_id` table without a policy, deliberately. No tenant context ⇒ **0 rows** |
 | **The ledger** | 642 entries live. Balance **derived** (`Σ amount_idr` by status), book **append-only**, 3 partial unique indexes make double-credit a DB impossibility |
 | **Sale credited on collection** | `creditSaleForPayment` fires only when a `payments` row reaches `berhasil`, and credits `amount_idr` — never `total`, which adds the gateway's fee |
 | **COD booked at the door** | `collectCodOnDelivery` flips the payment at `selesai`; `batal`/`retur` **fail** the pending payment, so cash never collected is never booked |
@@ -45,6 +45,13 @@
 | **Pesanan is a seller centre** | 6 tabs, server-side search/filter/paging, product-led rows. **The five status tabs are a strict partition**: `0 + 24 + 23 + 595 + 43 = 685 = count(*)`, verified tab by tab against SQL |
 | **Super-admin runs on real numbers** | `store_stats` is **no longer read anywhere** (`571ed17`). GMV/orders/products come from `orders` and `products` |
 | **The merchant float is shown as a LIABILITY** | "Uang Merchant yang Kami Pegang" — not as revenue. It is what we owe |
+| **Abandoned checkouts are CAPTURED** | `checkout_sessions` (migrations `0044` + `0045`, RLS on). The storefront writes the row **as the shopper types** — there is no "abandon" event to listen for; abandonment is the **absence of an order**. A sweep flips `aktif` → `ditinggal` after 60 min of silence and stamps `abandoned_at`. 994 rows: 792 `ditinggal` · 198 `pulih` · 4 `aktif`. **Driven end-to-end in a real browser** (type into checkout → close the tab → the row lands with the true basket → ages → appears on `/pelanggan/keranjang` with its WA number) |
+| **The abandonment + recovery rates are honest** | 30-day window, `aktif` excluded from **both** sides. `abandonRate = ditinggal/(ditinggal+orders)` = **80,0%**; `recoveryRate = rescued/(rescued+ditinggal)` = **11,2%**, where **`rescued = abandoned_at IS NOT NULL AND recovered_at IS NOT NULL`**. Migration `0045` exists precisely because a straight-through checkout **also** ends `pulih`: the naive `pulih/(pulih+ditinggal)` renders **19,3%** (190 / 982) and tells a shop it rescued every ordinary sale. Both figures re-derived from SQL and reconciled |
+| **Recovery links are signed, not guessable** | HS256 jose token `{sid, st}`, **store-bound**, 7-day expiry (`apps/storefront/src/lib/recovery.ts`) — never the raw session id, which in a URL is a bearer credential for a stranger's name, phone and address the moment the link is forwarded or leaks via `Referer` |
+| **WA recovery records what it can OBSERVE** | one click opens `wa.me` with the `wa_templates` body filled server-side, and the screen says **"WA dibuka"** — **not "terkirim"**. wa.me cannot tell us whether the message was sent or read, so we do not display it |
+| **Tamu vs Terdaftar is a real column, not a defect** | `customers.registered_at IS NULL` = guest (7 terdaftar / 17 tamu). Buying never requires an account — a registration wall in front of an Indonesian checkout is the most reliable way to lose the sale — so the UI styles **Tamu as neutral** and Terdaftar as the extra |
+| **The CRM no longer chases carts that never existed** | **Fixed `9206220`** — "keranjang ditinggal" follow-ups (chase *Dress Midi Motif Bunga*, chase *Gamis Syari Polos*) were being shown for baskets that **existed nowhere in the database**: merchants were being sent after ghosts. The seed now derives its 3 cart follow-ups from **real `checkout_sessions` rows**. Orphan cart follow-ups: **0** |
+| **Pelanggan counts its customers** | **Fixed `9206220`** — the stat card claimed **"Total Pelanggan 3.128 · +8,2% bulan ini"**. The store has **24**, and nothing anywhere computed a month-over-month change |
 | **Analitik / Pelanggan / Pemasaran aggregates** | every figure is a counted row |
 | **Public API rate limits** | ongkir 60/min · order 10/min · pay 20/min · callback 60/min · track 30/min (all per IP) |
 | **Self-serve signup** | `/daftar` → one-transaction `provision.ts` |
@@ -62,6 +69,7 @@ Honest arithmetic over demo rows. These are **not** lies — but do not quote th
 | **Dashboard / Analitik series** | `analytics_daily` | 122 rows |
 | **Ledger balances** | derived correctly, entry by entry | backfilled by migration `0041` from seeded payments: 595 `sale/available` (Rp209.374.000) + 47 `sale/pending` (Rp18.436.000), **and zero payouts** |
 | **Store catalogue** | — | 7 stores · 14 products · 700 orders · 685 payments · 24 customers · 1.767 line items. Anchored `TODAY = 2026-06-30` |
+| **Keranjang Ditinggal (`/pelanggan/keranjang`)** | every figure is a `count`/`sum` over `checkout_sessions` + `orders`; tabs count with **true SQL totals**, not the loaded slice; the ranking is `has-phone first, then subtotal / (1 + minutesAgo/1440)` — a big cart from three weeks ago is not a better call than a fresh one | **994 seeded sessions** (792 `ditinggal`). The real writer exists and works (`apps/storefront/src/pages/api/checkout-session.ts`) and was proven end-to-end in a browser |
 | **Super-admin health verdicts** | `100 − fails×40 − warns×15` | hardcoded thresholds |
 
 ---
@@ -137,6 +145,17 @@ Honest arithmetic over demo rows. These are **not** lies — but do not quote th
 | 38 | **`apps/admin/lib/mock/store.ts` still exists**, with 6 `mulberry32` generators | imported by ~10 client components — almost entirely for its **TypeScript types**, plus the constants `TODAY` / `PRODUCTS` / `BLOG_CATEGORIES`. A loaded gun on the shelf: one careless import from putting invented data back on a screen |
 | 39 | 🔴 **One test file in the entire repo** | `packages/lib/src/integration-status.test.ts`. **Nothing automatically tests the ledger, the COD gate, or the order state machine** |
 | 40 | **`stores.plan` / `plans` / `plan_key` are legacy** | the product has **one** plan; the enum still defaults to `'pemula'` |
+
+### 3.7 Abandoned-cart capture — what is NOT there yet (`d7fc92f`, `9206220`)
+
+The capture itself is 🟢 (§1). These are its known gaps, stated rather than left to be discovered.
+
+| # | Item | Detail |
+|---|---|---|
+| 41 | 🔴 **Production has none of this** | both commits sit on `worktree-super-admin-overhaul` and are **not merged to main**, so Coolify has shipped nothing. **The live product still records zero abandoned carts** |
+| 42 | **The ageing sweep is OPPORTUNISTIC** | it piggybacks on storefront traffic (at most once a minute per SSR process, on the store being written). **A store with no visitors never ages its own carts.** Acceptable now; on the VPS this is a cron, or the read layer derives `ditinggal` on the fly |
+| 43 | **The capture rate limiter is in-process memory** | 60/min/IP, per SSR process — the same known gap as `/api/track` (#32). Multi-instance needs a Cloudflare rule |
+| 44 | **`CHECKOUT_RECOVERY_SECRET` falls back to `AUTH_SECRET`** | which works — but it means **rotating the auth secret silently invalidates every outstanding recovery link**. Set it explicitly in production |
 
 ---
 

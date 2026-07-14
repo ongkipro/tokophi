@@ -45,6 +45,15 @@ The editor exposes a conditions builder (all/any + field/op/value) that maps to 
 ### Customer  *(mock: `Customer`, `CUSTOMERS`)*
 `id, name, email, phone, city, orders, spent, segment(baru|reguler|loyal|vip), joinedDaysAgo`
 → `customers` (+ `customer_addresses`). Segment is derived (spent/orders thresholds) — later a computed column/view.
+- **Guest vs registered (migration 0044):** `registered_at` (NULL = **guest**), `password_hash`, `last_order_at`. **Buying never requires an account** — a registration wall in front of an Indonesian checkout loses the sale — so *guest is the normal case*, and the read layer (`apps/admin/lib/data/customers.ts`) exposes it as `registered: boolean` with a deliberately neutral `Tamu` badge. The identity that does the work is the **phone**, not the email. `password_hash` is provisioned; there is **no shopper login yet**.
+
+### Checkout session  *(new — migration 0044/0045, no mock: it is captured live)*
+`id, store_id, session_id, customer_id, name, phone, email, address, city, province, postcode, district_id, items(jsonb [{handle,name,variant,qty,price}]), subtotal_idr, shipping_idr, step(keranjang|kontak|alamat|pengiriman|pembayaran), status(aktif|ditinggal|pulih|kedaluwarsa), abandoned_at, recovered_order_id, recovered_at, created_at, updated_at`
+→ `checkout_sessions`, UNIQUE `(store_id, session_id)`, indexed on `(store_id, status, updated_at)`, **RLS** like every other tenant table (a half-typed checkout carries a name, a phone and an address — it is merchant data).
+- **Written progressively, as the shopper types** (debounced beacons from `checkout.astro` → `apps/storefront/src/pages/api/checkout-session.ts`, the table's only writer from the shop). There is no "abandon" event to listen for: abandonment is the **absence** of an order, so the row is captured up-front and judged later by what never happened to it. `session_id` is the **same** id the funnel beacons carry, so a cart joins its own journey. `step` only ever moves **forward** (`sendBeacon` has no ordering guarantee).
+- **Ageing:** `aktif → ditinggal` after 60 minutes of silence, by an opportunistic sweep in that same endpoint. No cron. `abandoned_at` is stamped as `coalesce(updated_at, created_at)` — *the moment it went quiet*, not "now".
+- **`abandoned_at` is what makes the metrics honest:** a straight-through checkout also ends as `pulih`, so `rescued = abandoned_at IS NOT NULL AND recovered_at IS NOT NULL`, while `abandoned_at IS NULL AND recovered_at IS NOT NULL` is an ordinary sale, **not** a save. `abandonRate = ditinggal / (ditinggal + orders)`; `recoveryRate = rescued / (rescued + ditinggal)`; `aktif` sessions are excluded from both — nobody has abandoned anything yet.
+- Read by `apps/admin/lib/data/checkout.ts` → `/pelanggan/keranjang`; the WhatsApp recovery attempt is recorded in **`followups`** (`type='keranjang'`) by `apps/admin/lib/actions/checkout.ts`. Recovery links back into the storefront are **signed** HS256 JWTs `{sid, st}` (`apps/storefront/src/lib/recovery.ts`), never a raw session id.
 
 ### Customer Segment  *(mock: `CustSegment`, `SEGMENTS`)*
 `id, name, count, growth, description` → `customer_segments` (saved segment + rule engine, `member_count`).
@@ -72,6 +81,7 @@ The editor exposes a conditions builder (all/any + field/op/value) that maps to 
 ### Follow-up  *(mock: `Followup`, `FOLLOWUPS`)* — WhatsApp worklist
 `id, customer, phone, type(keranjang|pembayaran|konfirmasi|pascabeli|repeat|ulasan), context, dueDays, status(menunggu|terkirim|dibalas|selesai), lastMessage`
 → `followups`. Generated from events (abandoned cart, pending payment, delivered, repeat-due). "Kirim WA" = `wa.me` deep link with a filled template; real WhatsApp Business API send = M4 (`wa_messages` send log).
+- The `keranjang` type finally has a **real cart behind it** (`checkout_sessions`, 0044) — it used to point at a basket that never existed. A recovery attempt writes `status='menunggu'` + `sent_at` (= *"kontak dibuka"*), **never `terkirim`**: `wa.me` is a deep link, so delivery and read are things we cannot observe and therefore do not claim.
 
 ### WA Template  *(mock: `WaTemplate`, `WA_TEMPLATES`)*
 `id, name, type(FollowupType | broadcast), body` — placeholders `{{nama}} {{produk}} {{no_pesanan}} {{total}} {{toko}}`
@@ -135,6 +145,6 @@ Self-contained mock for the demo store, kept 1:1 with the admin fashion demo (sa
 - **Super-admin:** platform payment gateways, shipping aggregator, COD config, platform users/roles → `platform_payment_gateways`, `shipping_aggregator`, `platform_couriers`, `platform_cod`.
 
 ## Deferred
-Inventory locations, refunds, gift cards, abandoned carts, loyalty, notification templates, domains, storefront customer accounts. Add when the corresponding screens ship.
+Inventory locations, refunds, gift cards, loyalty, notification templates, domains, **storefront customer accounts** (`customers.password_hash` exists; nothing reads it). ~~abandoned carts~~ — shipped in 0044/0045 (`checkout_sessions`). Add the rest when the corresponding screens ship.
 
 *Living doc — update alongside the mocks whenever an entity is added.*

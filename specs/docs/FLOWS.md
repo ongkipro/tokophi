@@ -69,6 +69,9 @@ sequenceDiagram
     ORD->>DB: INSERT order_line_items[]
     ORD->>DB: UPDATE inventory_levels SET available = GREATEST(available - qty, 0)
 
+    ORD->>DB: UPDATE checkout_sessions SET status='pulih', recovered_order_id, recovered_at, customer_id<br/>WHERE store_id = ? AND session_id = ?
+    Note over ORD,DB: THIS session became THAT order — the only honest<br/>definition of "recovered". Non-fatal by design: a paid<br/>order must never fail because a marketing table did.
+
     alt COD
         ORD->>DB: INSERT payments (method='cod', status='menunggu', provider='cod')
         Note over ORD,DB: menunggu, NOT berhasil — the platform holds<br/>NOTHING at checkout. Cash exists at the door.
@@ -384,6 +387,94 @@ application code, is the tenant boundary — for the admin panel.
 |---|---|---|
 | `lib/auth.ts` | owner | Reads `store_users` before a session exists. |
 | `apps/super-admin/**` | owner | Cross-tenant by definition. `withTenant` is never called there (grepped: zero source hits). |
-| `apps/storefront` | owner, read-only | Resolves the tenant from `Host`, then reads that store's catalog + writes `analytics_events` with a **Host-derived** `store_id` (never client-supplied). |
+| `apps/storefront` | owner | Resolves the tenant from `Host`, then reads that store's catalog + writes `analytics_events` (`/api/track`) and `checkout_sessions` (`/api/checkout-session`) with a **Host-derived** `store_id` (never client-supplied — the capture body has no field for one). |
 | **`/api/public/*`** | owner + an explicit `store_id` from `storeSlug` | ⚠️ **The real hole.** The shopper has no session, so there is no GUC to set. Tenant correctness on the *checkout* path — the path that writes orders, payments and inventory — rests on application code. On the VPS this becomes PostgREST with the `store_id` JWT claim feeding the GUC. Until then, treat `/api/public/order` as unguarded by the database. |
 | `/api/cron/billing` | owner | Iterates every store on purpose. |
+
+---
+
+## 7. Abandoned checkout — progressive capture, ageing, and WhatsApp recovery
+
+Migrations **0044** / **0045**. The flow that has **no event of its own**: abandonment is the *absence*
+of an order, so nothing fires when it happens. The row is therefore written **as the shopper types**,
+and judged later by what never happened to it.
+
+Indonesia abandons **82–83%** of carts (market research, not our measurement, against a ~70% global
+figure) and we recorded **none** of them — while the CRM was already showing `keranjang` follow-ups
+with a WhatsApp template ready to send, pointing at baskets that did not exist.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor S as Shopper
+    participant CO as storefront<br/>checkout.astro
+    participant CAP as storefront<br/>POST /api/checkout-session
+    participant ORD as admin<br/>POST /api/public/order
+    participant DB as PostgreSQL
+    actor M as Merchant
+    participant KJ as admin<br/>/pelanggan/keranjang
+    participant RC as lib/actions/checkout.ts<br/>recordCartContact()
+    participant WA as WhatsApp (wa.me)
+
+    rect rgb(240, 245, 255)
+        Note over S,DB: ── PROGRESSIVE CAPTURE — there is no "abandon" event to wait for ──
+        S->>CO: types name / phone / address
+        CO->>CAP: debounced beacon (~1.2 s of quiet, flushed on blur,<br/>step change, visibilitychange and pagehide)
+        Note over CO,CAP: sendBeacon on the way out. Fire-and-forget:<br/>a capture that dies must NEVER break a working checkout.
+        CAP->>CAP: bot-UA reject · 60/min/IP · store = locals.store (HOST header)
+        Note over CAP: a store id in the body is never read — the body has<br/>no place to put one. One shop cannot write a cart<br/>into another shop's funnel.
+        CAP->>DB: UPSERT checkout_sessions ON (store_id, session_id)<br/>status='aktif', items snapshot, step = FURTHEST reached
+        Note over CAP,DB: step never regresses — beacons have no ordering<br/>guarantee. setWhere status <> 'pulih' — a row that<br/>already became an order is settled history.
+    end
+
+    rect rgb(255, 250, 235)
+        Note over CAP,DB: ── AGEING — opportunistic, no cron ──
+        CAP->>DB: UPDATE checkout_sessions SET status='ditinggal',<br/>abandoned_at = coalesce(updated_at, created_at)<br/>WHERE status='aktif' AND updated_at < now() - 60 min
+        Note over CAP,DB: at most once a minute per SSR process, on the store<br/>being written to, riding the (store_id, status,<br/>updated_at) index. abandoned_at is the moment it went<br/>QUIET, not "now" — and it is what separates a RESCUE<br/>from an ordinary sale later.
+    end
+
+    alt the shopper completes the checkout
+        S->>ORD: POST /api/public/order (sessionId = the same id)
+        ORD->>DB: INSERT orders + line items, decrement stock
+        ORD->>DB: UPDATE checkout_sessions SET status='pulih',<br/>recovered_order_id, recovered_at, customer_id
+        Note over ORD,DB: straight through → abandoned_at is NULL → an ORDINARY SALE<br/>came back after ditinggal → abandoned_at is set → a RESCUE
+    else the merchant chases it
+        M->>KJ: Keranjang Ditinggal — ranked by phone first,<br/>then basket value decayed by age
+        KJ->>WA: wa.me deep link, `keranjang` wa_template pre-filled<br/>(+ /checkout?r=<signed HS256 JWT {sid, st}, 7 d>)
+        M->>RC: recordCartContact(id)  [requireCapability crm:write]
+        RC->>DB: INSERT followups (type='keranjang', sent_at=now,<br/>status='menunggu')
+        Note over RC,DB: sent_at means "WA DIBUKA", never "terkirim".<br/>wa.me is a deep link — delivery and read are things<br/>we cannot observe, so we do not claim them.
+        S->>CO: clicks the link → verifyRecoveryToken(r, store.id)
+        Note over CO: store-bound and self-expiring. NOT a raw session id,<br/>which would be a bearer credential over a stranger's<br/>name, phone and address the moment the link leaks.
+        CO->>DB: restore basket + typed fields from the snapshot<br/>(the price the shopper SAW, not today's price)
+        Note over CO,DB: a `pulih` row is never re-hydrated — it was already<br/>bought, and re-offering it would push a double purchase.
+    end
+```
+
+### 7.1 The four numbers on the screen, and why one of them needed a migration
+
+Every figure on `/pelanggan/keranjang` is a `count` / `sum` over `checkout_sessions` + `orders`
+(`apps/admin/lib/data/checkout.ts`, wrapped in `withCurrentTenant`). Nothing is modelled, blended or
+estimated, and what cannot be counted — *was the message delivered? read?* — is **not shown at all**.
+
+```sql
+rescued       = abandoned_at IS NOT NULL AND recovered_at IS NOT NULL   -- a save
+straight-thru = abandoned_at IS NULL     AND recovered_at IS NOT NULL   -- an ordinary sale, NOT a save
+abandonRate   = ditinggal / (ditinggal + orders)
+recoveryRate  = rescued   / (rescued + ditinggal)
+```
+
+**`aktif` sessions are excluded from both sides of both ratios** — the shopper is still typing, and
+nobody has abandoned anything yet. An order counts as a completed checkout **even if it was later
+cancelled**: the checkout still finished.
+
+**Why `abandoned_at` (0045) had to exist.** A checkout that sailed straight through *also* ends as
+`status='pulih'`. On the local data (store `batik-nusantara`, 30-day window anchored at
+`CHECKOUT_TODAY = 2026-07-02`): **792 ditinggal · 198 orders · 100 rescued · 90 straight-through** →
+abandonRate **80,0%**, recoveryRate **11,2%**. The naive `pulih / (pulih + ditinggal)` reports
+**19,3%** on that same data — it would tell a shop it "rescued" every ordinary sale it ever made. A
+number that looks real and is wrong is worse than no number.
+
+**`phone` is the column this table is paid for.** Recovery in Indonesia travels on WhatsApp, not email,
+so the list ranks carts with a number first and says plainly that the rest (`anonim`) cannot be
+contacted at all — rather than quietly hiding them and implying every cart is actionable.

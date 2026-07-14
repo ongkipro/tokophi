@@ -48,7 +48,7 @@ tokophi/
 
 | Package | Exports / key modules | Notes |
 |---|---|---|
-| `db` | `db`, `client`, `schema` (57 tables), `migrations/`, `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
+| `db` | `db`, `client`, `schema` (**68 tables**), `migrations/` (**0000–0045**), `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
 | `lib` | `./billing` (pricing, `computeBilling`, `storeSegment`, `withPpn`), `./format` (IDR/num), `./couriers`, `./kiriminaja`, `./autolaris`, `./payment-fees`, `./integration-status`, `./totp`, `./cache`, `./colors` | Pure/shared. `kiriminaja`/`autolaris` are `server-only`. |
 | `ui` | 23 components (`button card dialog dropdown-menu table tabs switch …`) + `lib/utils` (cn) + Tailwind tokens | **shadcn on Base UI** — `render` prop not `asChild`, no `Select`. |
 | `data` | menu helpers | small shared. |
@@ -66,7 +66,7 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 | Produk | `/produk`(+`/baru`,`/[id]`) | products | `products.ts`, `media.ts` |
 | Produk › Inventori/Kategori/Pembelian | `/produk/inventori`,`/kategori`,`/pembelian` | inventory, collections, purchases | `inventory.ts`, `collections.ts`, `purchases.ts` |
 | Pesanan | `/pesanan`(+`/[id]`) | orders | `orders.ts` |
-| Pelanggan | `/pelanggan`(+`/[id]`,`/segmen`,`/ulasan`) | customers, segments, reviews | `customers.ts`, `segments.ts` |
+| Pelanggan | `/pelanggan`(+`/[id]`,`/segmen`,`/ulasan`,**`/keranjang`**) | customers (guest vs registered), segments, reviews, **checkout** | `customers.ts`, `segments.ts`, **`checkout.ts`** |
 | CRM | `/crm`(+`/followup`,`/pipeline`,`/template`) | crm | `crm.ts` |
 | Diskon | `/diskon`(+`/baru`,`/[id]`) | discounts | `discounts.ts` |
 | Analitik / Pemasaran | `/analitik`, `/pemasaran` | analytics, marketing | — |
@@ -101,13 +101,22 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 
 `/` · `/produk/[handle]` · `/kategori/[handle]` · `/keranjang` · `/checkout`(+`/sukses`) · `/blog` · `/akun` · `/kontak`. **SSR** (`@astrojs/node` standalone, `output: 'server'`): reads the DB via `@tokophi/db` at **server boot** (module-level in `src/data/catalog.ts`), so the container starts fast (no build-at-start). Dynamic routes resolve per-request from `Astro.params` (404 on unknown handle) — no `getStaticPaths`. Ongkir + order + pay proxied to the admin's public APIs (`PUBLIC_ONGKIR_API`/`PUBLIC_ORDER_API`). Store Builder sections render from `page_templates.sections`.
 
+**Its own two API routes — the storefront's only writes**, both tenant-resolved from the `Host` header (`Astro.locals.store`), never from the body, and both **fail quiet** (204 + an `x-…` reason header) because a broken beacon must never break a working page:
+
+| Route | Writes | Guards |
+|---|---|---|
+| `POST /api/track` | `analytics_events` | bot-UA reject · 30/min/IP |
+| **`POST /api/checkout-session`** | **`checkout_sessions`** — progressive capture **as the shopper types** (debounced beacons from `checkout.astro`), upsert on `(store_id, session_id)`, `step` only ever moves **forward**, a `pulih` row is never resurrected. Also carries the opportunistic **`aktif → ditinggal` sweep** (60 min of silence, ≤ once/min per SSR process — **no cron**) | bot-UA reject · 60/min/IP |
+
+`src/lib/recovery.ts` mints/verifies the **signed** recovery link (`/checkout?r=…`): an HS256 JWT `{sid, st}` (jose), store-bound, 7-day expiry, secret `CHECKOUT_RECOVERY_SECRET ?? AUTH_SECRET`. Deliberately **not** a raw session id — that would be a bearer credential over a stranger's name, phone and address the moment the link is forwarded or leaks via `Referer`. `/api/public/order` flips the session to `pulih` + `recovered_at` when it becomes an order.
+
 ---
 
 ## 7. Data mapping (schema domains → SCHEMA.md)
 
-57 tables. Domains: **identity** (accounts, stores, store_stats, users, store_users, locations) · **catalog** (products, product_media, product_options/variants, inventory_levels, collections + membership/conditions, **media**) · **suppliers/purchasing** · **orders/fulfillment** (orders, line_items, payments) · **customers/CRM** · **discounts** · **content** (pages, articles, menus, **page_templates** ADR 0009) · **marketing/analytics** · **platform** (plans[legacy], invoices, platform_activity, platform_admins, platform_payment_gateways/channels/cod, platform_couriers, shipping_aggregator) · **support** (support_tickets, support_messages) · **settings** (store_settings: couriers[], payment_channels[], payment_fee_bearer, tax, sender).
+**68 tables** (verified from the catalog — see `SCHEMA.md` §1). Domains: **identity** (accounts, stores, store_stats, users, store_users, locations) · **catalog** (products, product_media, product_options/variants, inventory_levels, collections + membership/conditions, **media**) · **suppliers/purchasing** · **orders/fulfillment** (orders, line_items, payments) · **customers/CRM** (customers — `registered_at` NULL = guest, **checkout_sessions** 0044/0045, segments, leads, followups, wa_templates) · **discounts** · **content** (pages, articles, menus, **page_templates** ADR 0009) · **marketing/analytics** · **platform** (plans[legacy], invoices, platform_activity, platform_admins, platform_payment_gateways/channels/cod, platform_couriers, shipping_aggregator) · **support** (support_tickets, support_messages) · **chat** (chat_visitors, conversations, conversation_messages) · **settings** (store_settings: couriers[], payment_channels[], payment_fee_bearer, tax, sender).
 
-**RLS** (`0012`) on 32 store-scoped tables, enforced under `tokophi_app`. Owner exceptions: auth, super-admin, storefront.
+**RLS** (`0012`) on **44** store-scoped tables, enforced under `tokophi_app` — `checkout_sessions` included, because a half-typed checkout carries a name, a phone and an address. Owner exceptions: auth, super-admin, storefront, `/api/public/*`, cron.
 
 ---
 
@@ -135,6 +144,7 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 | **Store Builder (ADR 0009)** | `page_templates` (migr 0031/0032) · `stores.logo_url/brand_color` · `@tokophi/sections` · admin `/tema` (Puck) · storefront renderer · `@tokophi/lib/colors` |
 | **Impersonation** | super `impersonateStore` (signed token) → admin `/impersonate` route (cookie exchange, relative-redirect) |
 | **Payments (real)** | KiriminAja (shipping) + AutoLaris (VA/QRIS) — `@tokophi/lib/{kiriminaja,autolaris}` · pay callback `/api/public/pay/callback` |
+| **Abandoned checkout + guest/registered customers** | `checkout_sessions` + `customers.registered_at/password_hash/last_order_at` (migr **0044**/**0045**) · storefront `src/pages/api/checkout-session.ts` (progressive capture + the `aktif→ditinggal` sweep) + `src/lib/recovery.ts` (signed `?r=` link) + `checkout.astro` (debounced beacons, `?r=` restore) · `/api/public/order` stamps `pulih`/`recovered_at` · admin `lib/data/checkout.ts` + `lib/actions/checkout.ts` (WA recovery → a `followups` row) · `/pelanggan/keranjang` + `components/admin/pelanggan/{account-badge,checkout-step-badge}.tsx` |
 
 ---
 

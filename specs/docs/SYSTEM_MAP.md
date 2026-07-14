@@ -62,7 +62,7 @@ graph TB
 
     SF -- "POST /api/public/ongkir<br/>POST /api/public/order" --> ADM
     SF -- "img src" --> ADM
-    SF -- "POST /api/track (own route)" --> PG
+    SF -- "POST /api/track + /api/checkout-session<br/>(own routes — store_id from Host)" --> PG
     SA -- "signed 2-min JWT → /impersonate" --> ADM
 
     ADM -- "reads + writes<br/>(lib/data/*, lib/actions/*)" --> TENANT
@@ -98,15 +98,16 @@ Everything else is **through the database**. There is no service mesh, no intern
 Verified from the catalog, not from a doc:
 
 ```sql
-select count(*) from information_schema.tables where table_schema='public';   -- 67
+select count(*) from information_schema.tables where table_schema='public';   -- 68
 select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
- where n.nspname='public' and c.relkind='r' and c.relrowsecurity;             -- 43
+ where n.nspname='public' and c.relkind='r' and c.relrowsecurity;             -- 44
 ```
 
-- **67 tables**, **44 migrations** (`0000` … `0043`). *(Re-verified 2026-07-14: `0042_order_address_snapshot`
-  and `0043_chat` landed after this file was first written. `0043` is the shopper⇄merchant chat feature and its
-  application code was still in flight — see `SCHEMA.md` §1.)*
-- **43 tables have `relrowsecurity = true`.** Every one carries the same policy:
+- **68 tables**, **46 migrations** (`0000` … `0045`). *(Re-verified 2026-07-14: `0042_order_address_snapshot`,
+  `0043_chat`, and then `0044_customers_and_abandoned_checkout` / `0045_checkout_abandoned_at` landed after this
+  file was first written. `0043` is the shopper⇄merchant chat feature; `0044`/`0045` add **`checkout_sessions`**
+  and the guest/registered columns on `customers` — see `SCHEMA.md` §1 and §3.4.)*
+- **44 tables have `relrowsecurity = true`.** Every one carries the same policy:
   `USING (store_id = app_current_store_id()) WITH CHECK (store_id = app_current_store_id())`.
 - `app_current_store_id()` is `SELECT nullif(current_setting('app.store_id', true), '')::uuid`.
 - Two DB roles exist: **`tokophi`** (owner, bypasses RLS) and **`tokophi_app`** (non-owner, 256 table grants, policies enforce).
@@ -132,7 +133,7 @@ export async function withTenant<T>(storeId: string, fn: (tx: typeof db) => Prom
 | admin **auth** (`lib/auth.ts`) | owner | Reads `store_users` *before a session exists* — under RLS it would lock everyone out. |
 | admin **public API** (`/api/public/*`) | owner + an **explicit** `store_id` resolved from `storeSlug` | The shopper has no session, so there is no GUC to set. **This is the largest deliberate RLS hole in the system** — tenant correctness on the checkout path rests on application code, not the database. |
 | admin **cron** (`/api/cron/billing`) | owner | Iterates every store by design. |
-| **storefront** | owner, read-only | Resolves the tenant from `Host`, then reads that store's catalog. |
+| **storefront** | owner | Resolves the tenant from `Host`, then reads that store's catalog — and **writes two tables with a Host-derived `store_id`**: `analytics_events` (`/api/track`) and `checkout_sessions` (`/api/checkout-session`). The client never names a store. |
 | **super-admin** | owner | Cross-tenant by definition. `withTenant` is **never called** anywhere in `apps/super-admin` (grepped: zero source hits). |
 
 ---
@@ -158,6 +159,9 @@ erDiagram
     stores ||--o{ customers : ""
     customers ||--o{ orders : "placed"
     stores ||--o{ orders : ""
+    stores ||--o{ checkout_sessions : "abandoned checkout (0044)"
+    checkout_sessions ||--o| orders : "recovered_order_id"
+    customers ||--o{ checkout_sessions : "customer_id set when it becomes an order"
     orders ||--o{ order_line_items : ""
     product_variants ||--o{ order_line_items : "variant_id (nullable)"
 
@@ -267,7 +271,8 @@ Every mutating server action re-checks with `requireCapability(cap)` — **that*
 | `/produk/kategori/*` | `collections` | `collections`, `collection_products` | `collections` | + `collection_conditions` |
 | `/produk/inventori` | `products` | `inventory_levels`, `product_variants` | `inventory` | `inventory_levels` |
 | `/produk/pembelian` | `purchases` | `purchase_orders`, `purchase_order_items`, `suppliers` | `purchases` | same + `inventory_levels` (on "Terima barang") |
-| `/pelanggan`, `/pelanggan/[id]` | `customers` | `customers`, `orders`, `order_line_items` | `customers` | `customers` |
+| `/pelanggan`, `/pelanggan/[id]` | `customers` | `customers` (incl. `registered_at` → **Tamu / Terdaftar**), `orders`, `order_line_items` | `customers` | `customers` |
+| **`/pelanggan/keranjang`** (Keranjang Ditinggal) | `checkout` | **`checkout_sessions`**, `orders` (the completed-checkout denominator), `followups`, `wa_templates` | `checkout.recordCartContact` | `followups` (`type='keranjang'`) |
 | `/pelanggan/segmen` | `segments` | `customer_segments` | `segments` | `customer_segments` |
 | `/pelanggan/ulasan` | `reviews` | `reviews`, `customers` | — | — |
 | `/crm`, `/crm/{followup,pipeline,template}` | `crm` | `followups`, `leads`, `wa_templates`, `customers` | `crm` | `followups` |
@@ -287,7 +292,7 @@ Every mutating server action re-checks with `requireCapability(cap)` — **that*
 | Route | Auth | Rate limit | What it does |
 |---|---|---|---|
 | `POST /api/public/ongkir` | **none** (CORS `*`) | 60/min/IP | `op=search` → `kiriminaja_areas` autocomplete · `op=rates` → live `kaShippingPrice`, filtered by (merchant selection ∩ platform-enabled couriers), each rate labelled with the **effective** COD flag · `op=instant` → same-day pricing from the store's `sender_lat/lng`. |
-| `POST /api/public/order` | **none** (CORS `*`) | 10/min/IP | The checkout. **Enforces the 5-condition COD gate before any row is written**, then upserts `customers`, checks stock, writes `orders` + `order_line_items`, decrements `inventory_levels`, and creates either a `cod` payment (`menunggu`) or an AutoLaris bill. |
+| `POST /api/public/order` | **none** (CORS `*`) | 10/min/IP | The checkout. **Enforces the 5-condition COD gate before any row is written**, then upserts `customers`, checks stock, writes `orders` + `order_line_items`, decrements `inventory_levels`, and creates either a `cod` payment (`menunggu`) or an AutoLaris bill. Finally flips the matching `checkout_sessions` row (scoped to the **unique** `(store_id, session_id)`) to `pulih` + `recovered_order_id` + `recovered_at` + `customer_id` — **the only honest definition of "recovered"**: not "we sent a WhatsApp and they bought something later", but *this session became that order*. Non-fatal: a paid order must never fail because a marketing table did. |
 | `POST /api/public/pay` | **none** | 20/min/IP | Standalone `alCreatePayment`. **Dead**: `PUBLIC_PAY_API` is declared in `apps/storefront/.env.example` but no storefront source file reads it. |
 | `POST /api/public/pay/callback` | **shared secret** `X-Callback-Token` / `?token=`, constant-time compare; **returns 401 in production when `AUTOLARIS_CALLBACK_SECRET` is unset** (fails closed) | 60/min/IP | Marks payments paid → syncs `orders.financial_status` → **credits the ledger** → extends store subscriptions. |
 | `GET /api/cron/billing` | `CRON_SECRET` header/query. ✅ **Fails CLOSED (fixed 2026-07-14, `0776e99`)** — 401 in production when the secret is unset. It used to read `if (secret && provided !== secret)`, so **no secret meant no check at all**, on a route excluded from the auth middleware that walks every store to suspend it or bill it. | none | Syncs `stores.status` to the computed lifecycle; generates renewal VA invoices for `past_due`/`suspended` stores. |
@@ -367,20 +372,23 @@ The resolved `{store, catalog}` goes on `Astro.locals`; all reads are memoised p
 | `/produk/[handle]` | `produk/[handle].astro` | `products`, `product_variants`, `product_media`, `product_options`, `inventory_levels` |
 | `/kategori/[handle]` | `kategori/[handle].astro` | `collections`, `collection_products` (+ 2 **hardcoded virtual** collections: `semua`, `promo-gajian`) |
 | `/keranjang` | `keranjang.astro` | none — pure `localStorage` |
-| `/checkout` | `checkout.astro` | `platform_payment_channels`, COD policy → then `fetch` to the admin API |
+| `/checkout` | `checkout.astro` | `platform_payment_channels`, COD policy → then `fetch` to the admin API. Also **captures** into `checkout_sessions` as the shopper types, and **restores** a basket + typed fields from `?r=<signed token>` (`src/lib/recovery.ts`) — a `pulih` session is never re-hydrated (it was already bought) |
 | `/checkout/sukses` | `sukses.astro` | none — renders `localStorage.lastOrder` |
 | `/blog` | `blog/index.astro` | **none — 4 articles hardcoded in a source literal.** The `blogs`/`articles` tables are never read; there is no detail route. |
 | `/akun` | `akun.astro` | **none — non-functional demo form** ("sistem akun aktif setelah backend terhubung") |
 | `/kontak` | `kontak.astro` | `stores` — but `email` is the hardcoded `halo@batiknusantara.id` |
 | **`POST /api/track`** | `api/track.ts` | **INSERT `analytics_events`** |
+| **`POST /api/checkout-session`** | `api/checkout-session.ts` | **UPSERT `checkout_sessions`** |
 
-`/api/track` is the storefront's only API route and its only write. Guards, in order:
-1. `store_id` comes from `Astro.locals.store` (Host-derived) — **never from the client**;
+These two are the storefront's only API routes and its only writes. Both carry the same guards, in order:
+1. `store_id` comes from `Astro.locals.store` (Host-derived) — **never from the client**. The checkout-capture body has **no field for a store id**, and one would be ignored if it did: one shop's page cannot write a cart into another shop's funnel;
 2. **bot filter** — a ~40-pattern UA regex (`bot|crawl|spider|headless|puppeteer|curl/|python-requests|axios/|…`); an **empty UA is treated as a bot**;
-3. **rate limit** — in-process per-IP fixed window, **30 events / 60 s**;
-4. type/device allow-lists; rejections are a silent `204` with an `x-track: bot|rate-limited` header.
+3. **rate limit** — in-process per-IP fixed window: **30 / 60 s** for track, **60 / 60 s** for checkout capture (a debounced checkout fires a handful);
+4. rejections are a silent `204` with a reason header (`x-track:` / `x-capture:`). **Failing quiet is the point** for the capture: a broken beacon must never break a checkout that is otherwise working.
 
-⚠️ Both guards are **per-process in-memory** — they do not hold across replicas, and there is no proof-of-work, no signature, and no session validation. A distributed script with a browser UA can still inflate the funnel.
+**`/api/checkout-session` is progressive capture.** There is no "abandon" event to listen for — abandonment is the *absence* of an order — so the row is written **as the shopper types** (debounced beacons from `checkout.astro`; `sendBeacon` on `pagehide`/hidden). It upserts on the `(store_id, session_id)` unique key, `step` only ever moves **forward** (beacons have no ordering guarantee), and a session already `pulih` is **never** resurrected to `aktif` by a late beacon (`pagehide` fires on the redirect to `/checkout/sukses` — un-recovering a real sale). The same endpoint carries the **ageing sweep**: `aktif → ditinggal` after 60 minutes of silence, at most once a minute per SSR process, riding the `(store_id, status, updated_at)` index. **No cron.**
+
+⚠️ The bot and rate-limit guards are **per-process in-memory** — they do not hold across replicas, and there is no proof-of-work, no signature, and no session validation. A distributed script with a browser UA can still inflate the funnel (and now the cart table).
 
 ---
 

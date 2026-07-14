@@ -15,17 +15,20 @@
 
 | Fact | Value | How it was checked |
 |---|---|---|
-| Tables (`public`, `relkind='r'`) | **67** | `select count(*) from pg_class c join pg_namespace n … where n.nspname='public' and c.relkind='r'` |
-| Tables with RLS enabled | **43** | `… and c.relrowsecurity` |
-| Tables carrying a `store_id` column | **44** | `pg_attribute … attname='store_id'` |
+| Tables (`public`, `relkind='r'`) | **68** | `select count(*) from pg_class c join pg_namespace n … where n.nspname='public' and c.relkind='r'` |
+| Tables with RLS enabled | **44** | `… and c.relrowsecurity` |
+| Tables carrying a `store_id` column | **45** | `pg_attribute … attname='store_id'` |
 | `store_id` tables **without** RLS | **1** — `platform_activity` | set difference of the two above |
-| Migrations applied | **44** (`0000` … `0043`) | `_journal.json` |
+| Migrations applied | **46** (`0000` … `0045`) | `_journal.json` |
 | DB roles | `tokophi` (owner, bypasses RLS) · `tokophi_app` (non-owner, policies enforce) | `pg_roles` |
-| Enums | **41** | `pg_type` ⋈ `pg_enum` |
+| Enums | **42** | `pg_type` ⋈ `pg_enum` |
 | Money representation | `bigint`, whole rupiah, column suffix `_idr` | catalog |
 | Naming | snake_case; PKs are `uuid default gen_random_uuid()` | catalog |
 
-**43 − 1 = 42.** Every store-scoped table except `platform_activity` is held by the *database*, not by
+*(Re-verified 2026-07-14 after **0044** / **0045** — `checkout_sessions` is the 68th table and the 44th
+with RLS. The counts moved; the shape of the boundary did not.)*
+
+**44 − 1 = 43.** Every store-scoped table except `platform_activity` is held by the *database*, not by
 application code. `platform_activity` is the platform's audit log *about* tenants; a tenant must never
 read or write it, so it is deliberately owner-only.
 
@@ -39,7 +42,7 @@ read or write it, so it is deliberately owner-only.
 
 ## 2. The tenant boundary
 
-Every one of the 43 RLS tables carries the identical policy:
+Every one of the 44 RLS tables carries the identical policy:
 
 ```sql
 USING      (store_id = app_current_store_id())
@@ -78,12 +81,12 @@ code rather than on the database:
 | `apps/admin/lib/auth.ts` | reads `store_users` *before a session exists* — under RLS it would lock everyone out |
 | `apps/admin/app/api/public/*` | the shopper has no session, so there is no GUC to set. **The largest RLS hole in the system**: tenant correctness on the checkout path rests on application code passing an explicit `store_id` |
 | `apps/admin/app/api/cron/billing` | walks every store by design |
-| `apps/storefront` | resolves the tenant from the `Host` header, then reads that store's catalog read-only |
+| `apps/storefront` | resolves the tenant from the `Host` header, then reads that store's catalog. **Not read-only any more:** `/api/track` writes `analytics_events` and `/api/checkout-session` writes `checkout_sessions` — both with a **Host-derived** `store_id`. The body has no place to name a store, and would be ignored if it did |
 | `apps/super-admin` | cross-tenant by definition. `withTenant` is **never called** anywhere in it (grepped: zero hits) |
 
 ---
 
-## 3. Table inventory (all 67)
+## 3. Table inventory (all 68)
 
 Row counts are `pg_stat_user_tables.n_live_tup` on the **local demo seed**; they say nothing about
 production. A `0` in a table the product claims to depend on is a finding, not a footnote — the ones
@@ -238,9 +241,10 @@ went. `note` carries the rejection reason.
 
 | Table | Cols | Rows | `store_id` | RLS |
 |---|---:|---:|:--:|:--:|
-| `customers` | 13 | 24 | yes | **YES** |
+| `customers` | 16 | 24 | yes | **YES** |
 | `customer_addresses` | 9 | 24 | — | — |
 | `customer_segments` | 7 | 6 | yes | **YES** |
+| **`checkout_sessions`** | **22** | **994** | yes | **YES** |
 | `reviews` | 10 | 8 | yes | **YES** |
 | `leads` | 9 | 12 | yes | **YES** |
 | `followups` | 10 | 10 | yes | **YES** |
@@ -252,6 +256,69 @@ went. `note` carries the rejection reason.
 detail page invented street addresses (`Jl. Merdeka No. {hash % 90}`). It now seeds 24.
 `wa_messages` + `notification_templates` are **empty and unread**: WhatsApp is a `wa.me` deep link, not
 an API integration.
+
+#### `customers` — guest vs registered (**0044**)
+
+| Column | Type | Meaning |
+|---|---|---|
+| `registered_at` | timestamptz | **NULL = guest.** Buying **never** requires an account — a registration wall in front of an Indonesian checkout is the most reliable way to lose the sale. Guest is the *normal* case, not a defect, and the UI's `Tamu` badge is deliberately neutral (`components/admin/pelanggan/account-badge.tsx`) |
+| `password_hash` | text | scrypt `salt:hash`, same shape as `users`. 🔴 **No reader today** — there is no shopper login; the column is provisioned, not wired |
+| `last_order_at` | timestamptz | backfilled by 0044 from `max(orders.placed_at)`. Nothing else was inferred: **every pre-existing customer stayed a guest**, because none of them ever had an account to register with. Marking them "registered" would have been inventing a fact |
+
+Local seed: **7 registered · 17 guest**. The identity that actually does the work is the **phone**:
+Indonesian shoppers hand over a WhatsApp number far more readily than an email, and WhatsApp is the
+channel every follow-up travels on.
+
+#### `checkout_sessions` (22 columns, **0044** + **0045**) — the abandoned checkout
+
+Indonesia abandons **82–83%** of carts against a ~70% global figure (market research, not our
+measurement), and we recorded **none** of them. Worse, the CRM was already showing `keranjang`
+follow-ups with a WhatsApp template ready to send — and **there was no cart behind any of them**.
+
+| Column | Type | Note |
+|---|---|---|
+| `id` | uuid PK | |
+| `store_id` | uuid NOT NULL | tenant key, RLS. Always **Host-derived** — never from the request body |
+| `session_id` | text NOT NULL | the **same** id the funnel beacons carry (`Analytics.astro`, `sessionStorage` `tphi:sid`) — so a cart joins to its own journey |
+| `customer_id` | uuid | set when the session becomes an order (the guest finally has a customer row) |
+| `name` `phone` `email` | text | **`phone` is the field this table is paid for.** Recovery travels on WhatsApp |
+| `address` `city` `province` `postcode` `district_id` | text / int | what they had typed when they stopped |
+| `items` | jsonb | array of `{handle,name,variant,qty,price}` — a **snapshot** at the price the shopper actually saw, not today's price |
+| `subtotal_idr` `shipping_idr` | bigint | |
+| `step` | `checkout_step` | `keranjang \| kontak \| alamat \| pengiriman \| pembayaran` — the **furthest** step reached, never the current one |
+| `status` | `checkout_status` | `aktif \| ditinggal \| pulih \| kedaluwarsa` |
+| `abandoned_at` | timestamptz | **0045.** When it was judged abandoned — see below |
+| `recovered_order_id` `recovered_at` | uuid / timestamptz | stamped by `/api/public/order` when *this* session becomes *that* order |
+| `created_at` `updated_at` | timestamptz | `updated_at` **is** the moment it went quiet: the last time anyone touched it |
+
+| Index | Why |
+|---|---|
+| `checkout_sessions_store_session_uq` UNIQUE `(store_id, session_id)` | the row is written **as the shopper types**; typing must UPDATE one row, not leave a trail of half-filled duplicates |
+| `checkout_sessions_store_status_idx` `(store_id, status, updated_at)` | the query the merchant actually runs ("what was abandoned, newest first") **and** the ageing sweep |
+
+**There is no "abandon" event to listen for.** Abandonment is the *absence* of an order, so nothing
+fires. The row is therefore captured **progressively** (`apps/storefront/src/pages/api/checkout-session.ts`
+— the only writer from the shop) and judged later by what never happened to it. A session goes
+`aktif → ditinggal` after **60 minutes** of silence, via an opportunistic sweep in that same endpoint
+(max once a minute per SSR process). **No cron.**
+
+**Why `abandoned_at` exists at all (0045) — it is a correctness control, not a convenience.** A
+checkout that sailed **straight through** also ends as `status='pulih'`. Without a column that says
+*this one first went quiet*, the two are indistinguishable after the fact, and the obvious formula
+`pulih / (pulih + ditinggal)` reports **19,3%** on the local data where the honest one reports
+**11,2%** — it would tell a shop it "rescued" every ordinary sale it ever made.
+
+```sql
+rescued       = abandoned_at IS NOT NULL AND recovered_at IS NOT NULL   -- a save
+straight-thru = abandoned_at IS NULL     AND recovered_at IS NOT NULL   -- an ordinary sale, NOT a save
+abandonRate   = ditinggal / (ditinggal + orders)
+recoveryRate  = rescued   / (rescued + ditinggal)
+```
+
+Live local state (store `batik-nusantara`, 30-day window anchored at `CHECKOUT_TODAY=2026-07-02`):
+**792 `ditinggal` · 198 orders · 100 rescued · 90 straight-through** → abandonRate **80,0%**,
+recoveryRate **11,2%**. `aktif` sessions are excluded from **both** sides of both ratios: the shopper
+is still typing, and nobody has abandoned anything yet.
 
 ### 3.5 Purchasing & stock
 
@@ -363,11 +430,13 @@ seeded local DB no service is COD-allowed and COD cannot be exercised at all** u
 
 ---
 
-## 4. Enums (41)
+## 4. Enums (42)
 
 | Enum | Values |
 |---|---|
 | `order_status` | `baru` `diproses` `dikirim` `selesai` `batal` `retur` |
+| `checkout_status` | `aktif` `ditinggal` `pulih` `kedaluwarsa` — **0044** |
+| `checkout_step` | `keranjang` `kontak` `alamat` `pengiriman` `pembayaran` — **0044**, ordered; `step` only moves forward |
 | `financial_status` | `pending` `dibayar` `refund_sebagian` `refund` |
 | `order_channel` | `meta_ads` `google_ads` `tiktok_ads` `organic` `other` |
 | `payment_method` | `transfer` `qris` `ovo` `gopay` `dana` `va` `cod` |
@@ -410,7 +479,7 @@ seeded local DB no service is COD-allowed and COD cannot be exercised at all** u
 
 ---
 
-## 5. Migration journal (44 — `0000` → `0043`)
+## 5. Migration journal (46 — `0000` → `0045`)
 
 From `packages/db/drizzle/meta/_journal.json`. Drizzle's auto-generated names are noise; the ones that
 carry meaning were named by hand.
@@ -431,6 +500,8 @@ carry meaning were named by hand.
 | **0041** | `ledger_credit_sale` | `ledger_entries.payment_id` + `ledger_one_sale_per_payment` + an **idempotent backfill** of every already-collected payment |
 | **0042** | `order_address_snapshot` | `orders.ship_*` — the address the parcel was actually sent to |
 | **0043** | `chat` | `chat_visitors`, `conversations`, `conversation_messages` + RLS — **in flight** |
+| **0044** | `customers_and_abandoned_checkout` | `customers.registered_at` (**NULL = guest**) / `password_hash` / `last_order_at` (backfilled from `orders`) + the new **`checkout_sessions`** table, its two indexes and its RLS policy |
+| **0045** | `checkout_abandoned_at` | `checkout_sessions.abandoned_at` + a backfill of every existing `ditinggal` row from `coalesce(updated_at, created_at)`. **Without this column a "recovery rate" is a lie** — see §3.4 |
 
 ```bash
 docker compose up -d db            # PostgreSQL 16 @ localhost:5433
@@ -474,6 +545,7 @@ entire repo: the schema definition and the seed. **There is no COD fee.** It is 
 | `domains` | custom-domain resolution is a `return null` stub |
 | `wa_messages`, `notification_templates` | WhatsApp is a `wa.me` deep link, not an API |
 | `platform_cod.fee_pct`, `platform_payout.auto_approve` | stored, never read |
+| `customers.password_hash` | provisioned by 0044 for a shopper login that **does not exist yet** — storefront `/akun` is still a demo form. Nothing writes it and nothing reads it |
 | `discount_usages`, `collection_conditions`, `stock_transfers`, `color_palettes`, `media`, `page_templates` | 0 rows locally — schema exists, demo data does not |
 
 **Rule:** anything in this table that is *also displayed in a UI* is a lie waiting to happen. None
