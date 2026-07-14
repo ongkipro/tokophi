@@ -9,7 +9,19 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     items: [
       { label: "Dashboard", href: "/", icon: LayoutDashboard },
-      { label: "Pesanan", href: "/pesanan", icon: ShoppingBag, badge: "7" },
+      // Shopee's Pesanan submenu is four items; ours is three, because two of theirs
+      // ("Pengiriman Massal", "Serah Terima Pesanan") are features TokoΦ does not have — a nav row
+      // that opens onto nothing is worse than a nav row that isn't there. What is left are the two
+      // views a seller actually lives in, as saved links onto the real list: the queue of parcels
+      // to pack, and the pile of orders that went wrong.
+      {
+        label: "Pesanan", href: "/pesanan", icon: ShoppingBag, badge: "7",
+        children: [
+          { label: "Pesanan Saya", href: "/pesanan" },
+          { label: "Perlu Dikirim", href: "/pesanan?tab=perlu_dikirim" },
+          { label: "Pengembalian/Pembatalan", href: "/pesanan?tab=pengembalian" },
+        ],
+      },
       // Saldo is deliberately NOT in the sidebar. Shopify's restraint: the nav is for the WORK,
       // and money is not a place you navigate to — it is a thing you glance at. It lives in the
       // topbar chip (always visible, next to the avatar, the way every Indonesian seller tool does
