@@ -683,7 +683,25 @@ async function main() {
   // the next re-seed, taking a business decision with it. The platform half of the policy was already
   // seeded (platform_cod + codAllowed = SPX only, below); this is the merchant half. The other six
   // demo stores keep the default (off) — that is realistic, and it keeps the toggle meaningful.
-  await db.insert(schema.storeSettings).values({ storeId: store.id, codEnabled: true });
+  // PICKUP ADDRESS (alamat pengambilan) — it was NULL on every column, and ongkir is priced FROM it.
+  // With it empty the rate endpoint fell back to fuzzy-matching the store's city name, so every quote
+  // was a guess. A warehouse in a different city from the registered shop address is normal here
+  // (gudang ≠ kantor), and seeding it that way is deliberate: Batik Nusantara is registered in
+  // Yogyakarta but ships out of Surabaya, so a rate computed from the WRONG origin is immediately
+  // visible as wrong instead of accidentally matching. `senderKecamatanId` is a KiriminAja district
+  // id (6138 = Gubeng, Surabaya) — the same currency as the shopper's `destinationId`, so the origin
+  // needs no resolution and cannot be guessed at.
+  await db.insert(schema.storeSettings).values({
+    storeId: store.id,
+    codEnabled: true,
+    senderName: "Gudang Batik Nusantara",
+    senderPhone: "081234567890",
+    senderAddress: "Jl. Raya Gubeng No. 42, Gubeng",
+    senderKecamatanId: 6138,
+    senderKecamatanName: "Gubeng, Surabaya, Jawa Timur",
+    senderLat: "-7.2650",
+    senderLng: "112.7520",
+  });
   await db.insert(schema.storeStats).values({ storeId: store.id, gmvIdr: STORE.gmv, ordersCount: STORE.orders, productsCount: CATALOG.length, ship7dAvg: 15, updatedAt: TODAY });
 
   // catalog: product → 1 default variant (price) + inventory (stock) + base media (image)

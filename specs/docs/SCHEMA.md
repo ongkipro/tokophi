@@ -428,11 +428,14 @@ switched off was still offered at checkout. `store_settings.couriers` survives a
 store with no rows here (a merchant who never opened the card must not get a checkout with zero shipping
 options). `store_payment_methods` remains **empty and unread**.
 
-⚠️ **`platform_couriers.services` currently holds legacy plain strings in the local seed**
-(`["Reguler","Same Day"]`), not the `{type,name,group,cod,codAllowed}` objects the live
-`syncCouriersFromKiriminaja()` writes. `getCodPolicy()` skips non-object entries, so **on a freshly
-seeded local DB no service is COD-allowed and COD cannot be exercised at all** until someone presses
-"Sync dari KiriminAja" in super-admin `/pengaturan`. This is a seed gap, not a code gap.
+✅ **`platform_couriers.services` holds the `{type,name,group,cod,codAllowed}` objects** that
+`getCodPolicy()` expects — the seed used to write plain strings (`["Reguler","Same Day"]`), which
+`getCodPolicy()` skips, so a freshly seeded DB had **zero** COD-allowed services and COD could not be
+exercised at all until someone pressed "Sync dari KiriminAja". Fixed: the seed now writes objects with
+`codAllowed = cod && courier === "spx"` (the platform policy), giving a fresh DB 2 COD-allowed services
+— SPX Standard (`type=1`) and SPX Economy (`type=3`). `540af0a` completed the picture: the seed also
+writes `store_settings.cod_enabled = true` for Batik Nusantara and 11 `store_shipping_methods` rows, so
+**COD is exercisable end-to-end on a fresh clone with no API key and no clicking.**
 
 ---
 

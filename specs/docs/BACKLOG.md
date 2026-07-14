@@ -114,10 +114,14 @@ unmeasurable**. Ordered.
 - [ ] **No super-admin UI for `max_amount_idr` / `allowed_provinces` / `fee_pct`.** They are *enforced*
   (from the seed) but not editable from the panel — while the `/pengaturan` copy says "limit & area
   diatur di sini". Either build the form or fix the copy.
-- [ ] **The seed writes legacy string services** into `platform_couriers.services`
-  (`["Reguler","Same Day"]`, not `{type,name,cod,codAllowed}`). `getCodPolicy` skips non-objects, so
-  **on a freshly seeded local DB no service is COD-allowed and COD cannot be exercised at all** until
-  someone presses "Sync dari KiriminAja". A developer following the README will conclude COD is broken.
+- [x] **The seed writes legacy string services** into `platform_couriers.services` — **fixed.** It now
+  writes objects (`{type,name,group,cod,codAllowed}`), `codAllowed = cod && courier === "spx"`, so a
+  fresh DB has 2 COD-allowed services and COD is exercisable without pressing "Sync dari KiriminAja".
+  Extended in `540af0a`: the seed also writes `store_settings.cod_enabled = true` for Batik Nusantara
+  and **11 `store_shipping_methods` rows**. Both were missing, and both mattered — a re-seed used to
+  switch COD off (the column defaults to FALSE) and leave the per-service table empty, which
+  `/api/public/ongkir` reads as "the seller never opened the card" and answers with the courier-level
+  fallback, re-offering services the seller never picked. Verified on a forced re-seed.
 - [ ] **The seed has no `retur` orders, no `cod` payments, and no `payouts`.** The three most expensive
   code paths in the product have **no demo data** and cannot be exercised by clicking around.
 - [ ] **`KIRIMINAJA_ENV` defaults to `sandbox`** — an unset env in production silently books nothing.

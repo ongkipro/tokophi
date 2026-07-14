@@ -71,9 +71,6 @@ export async function POST(req: Request) {
   // rates
   if (body.op === "rates") {
     if (!body.destinationId) return NextResponse.json({ ok: false, error: "Tujuan belum dipilih." }, { headers: CORS });
-    const originOpts = await resolveArea(body.originCity || "Yogyakarta", 1);
-    const origin = originOpts[0]?.id;
-    if (!origin) return NextResponse.json({ ok: false, error: "Area asal tidak ditemukan." }, { headers: CORS });
     // Two-level courier control: platform (super-admin) sets the hard-enabled pool; the merchant
     // picks a subset. Effective = (merchant selection ?? all) ∩ platform-enabled.
     const platformRows = await db
@@ -81,10 +78,46 @@ export async function POST(req: Request) {
       .from(schema.platformCouriers);
     const platformOn = platformRows.filter((p) => p.enabled).map((p) => p.courier);
     const [store] = await db
-      .select({ id: schema.stores.id })
+      .select({ id: schema.stores.id, city: schema.stores.city })
       .from(schema.stores)
       .where(eq(schema.stores.slug, body.storeSlug || "batik-nusantara"))
       .limit(1);
+
+    // ── ORIGIN = the seller's SAVED PICKUP ADDRESS (Pengaturan → Alamat) ──────────────────────────
+    // It used to be `resolveArea(body.originCity || "Yogyakarta")`: a CITY NAME posted by the
+    // shopper's browser, fuzzy-matched to whatever district happened to come back first, with a
+    // hard-coded Yogyakarta behind it. Two things were wrong with that, and both cost money:
+    //   1. The pickup address the seller actually configures was never read. A merchant shipping out
+    //      of Surabaya quoted Yogyakarta rates on every order — wrong in both directions, and the
+    //      parcel is collected from an address that had nothing to do with the price.
+    //   2. The origin was CLIENT-SUPPLIED. `originCity` is an untrusted string that decided a price;
+    //      a script could post any city and pick the ongkir it liked.
+    // `sender_kecamatan_id` IS a KiriminAja district id — the same currency as `destinationId` — so
+    // there is nothing to resolve and nothing to guess. `body.originCity` is now ignored entirely.
+    const [settings] = store
+      ? await db
+          .select({
+            kecamatanId: schema.storeSettings.senderKecamatanId,
+            kecamatanName: schema.storeSettings.senderKecamatanName,
+            couriers: schema.storeSettings.couriers,
+          })
+          .from(schema.storeSettings)
+          .where(eq(schema.storeSettings.storeId, store.id))
+          .limit(1)
+      : [];
+
+    let origin: number | undefined = settings?.kecamatanId ?? undefined;
+    let originFrom = "pickup";
+    if (!origin) {
+      // The seller has not set a pickup address yet. Fall back to the store's REGISTERED city (still
+      // the shop's own data, never the shopper's) so checkout keeps working — but say so, because a
+      // fuzzy city match is a guess and a quote built on a guess should be visible as one.
+      originFrom = "store-city";
+      const opts = await resolveArea(store?.city || "Yogyakarta", 1);
+      origin = opts[0]?.id;
+    }
+    if (!origin) return NextResponse.json({ ok: false, error: "Alamat pengambilan toko belum diatur." }, { headers: CORS });
+
     let merchant: string[] | null = null;
     // The merchant's PER-SERVICE selection (store_shipping_methods) — what the Jasa Kirim card in
     // Pengaturan actually writes, and what it promises the seller: "Pilih layanan yang ditawarkan ke
@@ -95,12 +128,7 @@ export async function POST(req: Request) {
     // only unique within its courier.
     let services: Set<string> | null = null;
     if (store) {
-      const [ss] = await db
-        .select({ couriers: schema.storeSettings.couriers })
-        .from(schema.storeSettings)
-        .where(eq(schema.storeSettings.storeId, store.id))
-        .limit(1);
-      merchant = ss?.couriers ?? null;
+      merchant = settings?.couriers ?? null;
 
       const picked = await db
         .select({ courier: schema.storeShippingMethods.courier, service: schema.storeShippingMethods.service })
@@ -141,7 +169,13 @@ export async function POST(req: Request) {
     // …then by the merchant's per-service selection, which is the finer of the two and the one the
     // seller actually sees a switch for.
     if (services) rates = rates.filter((x) => services.has(`${x.code}:${x.type}`));
-    return NextResponse.json({ ok: true, rates, codEnabled: !!cod?.enabled }, { headers: CORS });
+    // `origin`/`originFrom` are returned so the caller can never be confused about which address the
+    // price was built from — and so a missing pickup address is visible instead of silently priced
+    // from a fuzzy city guess.
+    return NextResponse.json(
+      { ok: true, rates, codEnabled: !!cod?.enabled, origin, originFrom, originName: settings?.kecamatanName || store?.city || null },
+      { headers: CORS },
+    );
   }
 
   return NextResponse.json({ ok: false, error: "op tidak dikenal." }, { status: 400, headers: CORS });
