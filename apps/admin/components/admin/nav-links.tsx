@@ -1,12 +1,39 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { NAV_GROUPS, type NavItem } from "@/lib/nav";
 import { cn } from "@tokophi/ui/lib/utils";
 import { Badge } from "@tokophi/ui/badge";
 import { useStoreHref } from "@/components/admin/store-context";
+
+
+/**
+ * Child links may differ ONLY by query string — /pesanan, /pesanan?tab=perlu_dikirim,
+ * /pesanan?tab=pengembalian are three saved views onto one route. Comparing `pathname` alone (which
+ * is what this did) makes the first child win on every one of them: click "Perlu Dikirim" and
+ * "Pesanan Saya" stays lit. The nav then lies about where you are, which is worse than no highlight
+ * at all — you stop trusting it.
+ *
+ * So compare the path AND the params the link actually carries. A link with no params is active only
+ * when the URL carries none of the params its siblings use — otherwise "Pesanan Saya" would also
+ * light up while you are looking at ?tab=pengembalian.
+ */
+function isChildActive(pathname: string, search: URLSearchParams, href: string): boolean {
+  const [path, query = ""] = href.split("?");
+  if (pathname !== path && !pathname.startsWith(path + "/")) return false;
+
+  const want = new URLSearchParams(query);
+  if ([...want.keys()].length === 0) {
+    // the "plain" sibling: active only when no sibling's discriminating param is present
+    return !search.get("tab");
+  }
+  for (const [k, v] of want) {
+    if (search.get(k) !== v) return false;
+  }
+  return true;
+}
 
 function isSectionActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -21,6 +48,7 @@ function stripStore(pathname: string): string {
 function Item({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   const storeHref = useStoreHref();
   const pathname = stripStore(usePathname());
+  const search = useSearchParams();
   const active = isSectionActive(pathname, item.href);
   const [open, setOpen] = React.useState<boolean | null>(null);
   const expanded = item.children ? (open ?? active) : false;
@@ -59,7 +87,7 @@ function Item({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) 
       {expanded && (
         <div className="mt-0.5 ml-[26px] flex flex-col gap-0.5 border-l pl-3">
           {item.children.map((c) => {
-            const cActive = pathname === c.href || pathname.startsWith(c.href + "/");
+            const cActive = isChildActive(pathname, search, c.href);
             return (
               <Link
                 key={c.href}

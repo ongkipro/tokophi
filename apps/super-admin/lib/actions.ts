@@ -308,13 +308,33 @@ export async function testAutolarisConnection(): Promise<{ ok: boolean; message:
 }
 
 // ---- platform team: invite another operator (real platform_admins row) ----
+/**
+ * 🔴 This was a PRIVILEGE-ESCALATION PATH, and it quietly undid the role hierarchy added earlier
+ * today. It required only `admin`, and it took `role` from the caller **unvalidated** —
+ * `role: input.role || "admin"`. So any `admin` could invite themselves (or a colleague) as
+ * `owner`, and `owner` is what gates impersonation and merchant password resets.
+ *
+ * A role check is worth nothing if the thing that HANDS OUT roles is not itself checked. Minting an
+ * operator is an owner-level act, the role must be one we recognise, and it is now audited — it was
+ * previously unlogged, so a self-promotion would have left no trace whatsoever.
+ */
 export async function invitePlatformAdmin(input: { name: string; email: string; role: string }): Promise<{ ok: boolean; error?: string }> {
-  await requirePlatformAdmin();
+  const admin = await requirePlatformAdmin("owner");
+
   const email = input.email?.trim().toLowerCase();
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, error: "Email tidak valid." };
+
+  // Whitelist, not a fallback. `input.role || "admin"` accepted literally anything.
+  const role = String(input.role ?? "").trim();
+  if (!["support", "admin", "owner"].includes(role)) {
+    return { ok: false, error: "Peran tidak dikenal. Pilih support, admin, atau owner." };
+  }
+
   const [dup] = await db.select({ id: schema.platformAdmins.id }).from(schema.platformAdmins).where(eq(schema.platformAdmins.email, email)).limit(1);
   if (dup) return { ok: false, error: "Email sudah terdaftar sebagai operator." };
-  await db.insert(schema.platformAdmins).values({ email, name: input.name?.trim() || null, role: input.role || "admin", passwordHash: hashPassword(DEV_PASSWORD) });
+
+  await db.insert(schema.platformAdmins).values({ email, name: input.name?.trim() || null, role, passwordHash: hashPassword(DEV_PASSWORD) });
+  await logPlatform(`Operator ${email} ditambahkan sebagai ${role} oleh ${admin.email}`);
   revalidatePath("/pengaturan");
   return { ok: true };
 }

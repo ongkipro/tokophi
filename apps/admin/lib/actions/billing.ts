@@ -4,6 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import QRCode from "qrcode";
 import { getSession } from "@/lib/auth";
+import { requireCapability } from "@/lib/rbac";
 import { quote, withPpn, type Cycle } from "@tokophi/lib/billing";
 import { alCreatePayment, autolarisConfigured, channelLabel } from "@tokophi/lib/autolaris";
 
@@ -59,8 +60,14 @@ export async function getInvoicePayment(number: string): Promise<PaymentDetail |
 // Start (or resume) a subscription payment. If an unpaid subscription invoice already exists we
 // RETURN IT — never create a duplicate. Otherwise create one AutoLaris payment via the chosen channel.
 export async function createSubscriptionPayment(cycle: Cycle, channelCode: string): Promise<{ ok: boolean; detail?: PaymentDetail; reused?: boolean; error?: string }> {
-  const session = await getSession();
-  if (!session) return { ok: false, error: "Sesi berakhir." };
+  // These two actions RAISE and VOID the store's own subscription invoices — they are money, and
+  // they were gated on nothing but "is someone logged in". A `gudang` (warehouse) user could bill
+  // the shop or cancel its subscription invoice. Every other mutating action in this app goes
+  // through requireCapability; these two were simply missed, and being missed is invisible.
+  //
+  // `allowSuspended` because a SUSPENDED store must still be able to pay its way back in — refusing
+  // the payment that would un-suspend it is a trap that locks a paying merchant out permanently.
+  const session = await requireCapability("settings:write", { allowSuspended: true });
   if (!autolarisConfigured()) return { ok: false, error: "Pembayaran belum dikonfigurasi oleh platform." };
   if (!channelCode) return { ok: false, error: "Pilih metode pembayaran dulu." };
 
@@ -95,8 +102,7 @@ export async function createSubscriptionPayment(cycle: Cycle, channelCode: strin
 
 // Cancel an unpaid subscription invoice (so the merchant can start a different cycle).
 export async function cancelSubscriptionInvoice(number: string): Promise<{ ok: boolean; error?: string }> {
-  const session = await getSession();
-  if (!session) return { ok: false, error: "Sesi berakhir." };
+  const session = await requireCapability("settings:write", { allowSuspended: true });
   const [inv] = await db
     .select({ storeId: schema.invoices.storeId, kind: schema.invoices.kind, status: schema.invoices.status })
     .from(schema.invoices).where(eq(schema.invoices.number, number)).limit(1);

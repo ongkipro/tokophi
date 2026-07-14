@@ -1273,11 +1273,45 @@ async function main() {
     { provider: "autolaris", enabled: true, isCod: false },
   ]);
   await db.insert(schema.shippingAggregator).values({ provider: "kiriminaja", enabled: true });
+  // ⚠️ The seed used to write `services: c.services` — a plain STRING array ("REG", "BEST") from the
+  // hand-written roster. But every reader now expects OBJECTS ({type, name, group, cod, codAllowed}),
+  // written by syncCouriersFromKiriminaja(). The result on a fresh database: ZERO services were
+  // COD-allowed, so COD could not be exercised AT ALL, and a new developer would reasonably conclude
+  // the feature was broken. It was not — the seed was speaking the old dialect.
+  //
+  // The authoritative roster still comes from KiriminAja (Sync in super-admin). This is a plausible
+  // OFFLINE stand-in so a fresh clone can exercise COD without an API key. The `cod` flags mirror
+  // what the live API actually returns; `codAllowed` follows the current platform policy: SPX only,
+  // because a refused COD parcel ships back free on SPX and is billed to the merchant elsewhere.
+  const SEED_SERVICES: Record<string, Array<{ type: string; name: string; group: string; cod: boolean }>> = {
+    spx: [
+      { type: "1", name: "SPX Standard", group: "regular", cod: true },
+      { type: "3", name: "SPX Economy", group: "economy", cod: true },
+    ],
+    jne: [
+      { type: "REG23", name: "JNE Express Reguler", group: "regular", cod: true },
+      { type: "YES23", name: "JNE Express YES", group: "next_day", cod: true },
+    ],
+    sicepat: [{ type: "REG", name: "Sicepat REGULER", group: "regular", cod: true }],
+    jnt: [{ type: "EZ", name: "J&T EZ", group: "regular", cod: true }],
+    anteraja: [
+      { type: "FLREG", name: "AnterAja Regular Flat", group: "regular", cod: true },
+      { type: "ND", name: "AnterAja Next Day", group: "next_day", cod: false },
+    ],
+    ninja: [{ type: "Standard", name: "Ninja Xpress Standard", group: "regular", cod: true }],
+    sap: [{ type: "UDRREG", name: "SAP Satria Reg", group: "regular", cod: true }],
+    lion: [{ type: "REGPACK", name: "Regpack", group: "regular", cod: true }],
+    idx: [{ type: "00", name: "ID Express Standard", group: "regular", cod: true }],
+    jtcargo: [{ type: "REG", name: "J&T Cargo Regular", group: "cargo", cod: true }],
+  };
   await db.insert(schema.platformCouriers).values(
     // KiriminAja codes from the shared roster; niche ones off by default (super-admin toggles).
     COURIERS.map((c) => ({
       courier: c.code,
-      services: c.services,
+      services: (SEED_SERVICES[c.code] ?? []).map((s) => ({
+        ...s,
+        codAllowed: s.cod && c.code === "spx", // platform policy today: COD via SPX only
+      })),
       enabled: !["idx", "tiki", "jtcargo", "pos"].includes(c.code),
     })),
   );
