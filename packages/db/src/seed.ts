@@ -78,6 +78,19 @@ type DemoStore = {
   firstPaid?: boolean; // false → still on the Rp50rb first-month (segment "bulan pertama")
   ship7d?: number; // avg shipments/day over the last 7 days (demo signal for VIP thresholds)
 };
+// Pickup origin per demo store — real KiriminAja district + village ids (POST /api/mitra/kelurahan,
+// verified 2026-07-14), one warehouse in each store's own city. Keyed by store name.
+const DEMO_SENDER: Record<string, {
+  kecamatanId: number; kecamatanName: string; kelurahanId: number; kelurahanName: string; zip: string;
+}> = {
+  "Kopi Senja": { kecamatanId: 307, kecamatanName: "Arjasari, Kabupaten Bandung, Jawa Barat", kelurahanId: 4978, kelurahanName: "Ancolmekar", zip: "40379" },
+  "Hijab Amara": { kecamatanId: 726, kecamatanName: "Babelan, Kabupaten Bekasi, Jawa Barat", kelurahanId: 6589, kelurahanName: "Babelan Kota", zip: "17610" },
+  "Sepatu Lokal Project": { kecamatanId: 6131, kecamatanName: "Asemrowo, Kota Surabaya, Jawa Timur", kelurahanId: 69212, kelurahanName: "Asem Rowo", zip: "60182" },
+  "Snack Rumahan Bu Tati": { kecamatanId: 3601, kecamatanName: "Ampelgading, Kabupaten Malang, Jawa Timur", kelurahanId: 47089, kelurahanName: "Argoyuwono", zip: "65183" },
+  "Gadget Murah ID": { kecamatanId: 2087, kecamatanName: "Cengkareng, Kota Jakarta Barat, DKI Jakarta", kelurahanId: 17523, kelurahanName: "Cengkareng Barat", zip: "11730" },
+  "Tas Rajut Handmade": { kecamatanId: 6981, kecamatanName: "Danurejan, Kota Yogyakarta, DI Yogyakarta", kelurahanId: 31404, kelurahanName: "Bausasran", zip: "55211" },
+};
+
 const DEMO_STORES: DemoStore[] = [
   // healthy: recent orders, invoices paid
   { name: "Kopi Senja", owner: "Rangga Saputra", email: "rangga@kopisenja.id", city: "Bandung", plan: "bisnis", status: "active", gmv: 42_600_000, orders: 210, products: 22, createdDaysAgo: 95, lastOrderDaysAgo: 1, invoices: [{ status: "dibayar", daysAgo: 2 }, { status: "dibayar", daysAgo: 32 }], ship7d: 8 },
@@ -1547,7 +1560,27 @@ async function main() {
     const [st] = await db.insert(schema.stores).values({ accountId: acc.id, name: d.name, slug: slugify(d.name), city: d.city, plan: d.plan, status: d.status, ...bill, ...comp, createdAt: daysAgo(d.createdDaysAgo) }).returning();
     await db.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: daysAgo(d.createdDaysAgo) });
     await db.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
-    await db.insert(schema.storeSettings).values({ storeId: st.id });
+    // Every demo store gets a REAL pickup address, not an empty settings row. An empty one has no
+    // origin, so its rates fall back to guessing from the city name and its parcels cannot be booked
+    // at all — which made the other six stores useless the moment you impersonated one. The ids below
+    // are KiriminAja's own (district + village, verified via POST /api/mitra/kelurahan on 2026-07-14),
+    // so a seeded store can quote and book like the flagship one. Street lines are dummy; the AREA is not.
+    const snd = DEMO_SENDER[d.name];
+    await db.insert(schema.storeSettings).values({
+      storeId: st.id,
+      ...(snd
+        ? {
+            senderName: `Gudang ${d.name}`,
+            senderPhone: "081234567890",
+            senderAddress: `Jl. Merdeka No. 10, ${snd.kelurahanName}`,
+            senderKecamatanId: snd.kecamatanId,
+            senderKecamatanName: snd.kecamatanName,
+            senderKelurahanId: snd.kelurahanId,
+            senderKelurahanName: snd.kelurahanName,
+            senderZip: snd.zip,
+          }
+        : {}),
+    });
     await db.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: d.gmv, ordersCount: d.orders, productsCount: d.products, ship7dAvg: d.ship7d ?? 0, updatedAt: TODAY });
     if (d.invoices.length) {
       // single plan: Rp50rb first-month promo (firstPaid=false) else Rp275rb recurring

@@ -1257,23 +1257,38 @@ if (rToken) {
       var shipEl = form.querySelector('input[name="shipping"]:checked');
       var ship = selectedShipping();
 
-      var destLine = "";
+      // The area alone is not the address a parcel is delivered to — the street line is. Show the
+      // whole thing the shopper typed (penerima · HP · jalan · area), so the rail is a proof-read of
+      // the real destination, not just of the administrative region.
+      var areaLine = "";
       if (destId.value) {
         var bits = [];
         if (kelNameEl.value) bits.push("Kel. " + kelNameEl.value);
         if (destText.value) bits.push(destText.value);
-        destLine = bits.join(", ");
-        if (kodeposEl.value) destLine += " " + kodeposEl.value;
+        areaLine = bits.join(", ");
+        if (kodeposEl.value) areaLine += " " + kodeposEl.value;
       }
-      summaryDestText.textContent = destLine;
-      show(summaryDest, !!destLine);
+      var namaVal = (form.elements["nama"] && form.elements["nama"].value || "").trim();
+      var waVal = (form.elements["whatsapp"] && form.elements["whatsapp"].value || "").trim();
+      var jalanVal = (form.elements["alamat"] && form.elements["alamat"].value || "").trim();
+
+      var destHtml = "";
+      var whoBits = [];
+      if (namaVal) whoBits.push(esc(namaVal));
+      if (waVal) whoBits.push(esc(waVal));
+      if (whoBits.length) destHtml += '<span class="block font-medium text-ink">' + whoBits.join(" · ") + "</span>";
+      if (jalanVal) destHtml += '<span class="mt-0.5 block text-muted">' + esc(jalanVal) + "</span>";
+      if (areaLine) destHtml += '<span class="mt-0.5 block text-muted">' + esc(areaLine) + "</span>";
+
+      summaryDestText.innerHTML = destHtml;
+      show(summaryDest, !!destHtml);
 
       if (shipEl) {
         summaryShipText.textContent =
           shipEl.getAttribute("data-label") + " · estimasi " + (shipEl.getAttribute("data-etd") || "-") + " hari";
       }
       show(summaryShip, !!shipEl);
-      show(summaryPicks, !!destLine || !!shipEl);
+      show(summaryPicks, !!destHtml || !!shipEl);
 
       // The ongkir line is honest about which of the three states it is in: it cannot be a number
       // before an address exists, so it says so rather than showing a confident Rp0 that the Total
@@ -1915,6 +1930,12 @@ if (rToken) {
     });
 
     form.addEventListener("input", captureSoon);
+    // The rail mirrors the address as it is typed — penerima, HP and the street line are part of the
+    // destination, not just the picked area, so they must not lag behind the form.
+    ["nama", "whatsapp", "alamat"].forEach(function (n) {
+      var el = form.elements[n];
+      if (el) el.addEventListener("input", renderSummary);
+    });
     form.addEventListener("change", function (e) {
       var t = e.target;
       if (t && t.name === "payment") {
