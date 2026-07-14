@@ -129,12 +129,19 @@ export async function quoteShipping(input: QuoteInput): Promise<Quote> {
   if (!cart.length) return { ok: false, error: "Keranjang kosong — ongkir tidak bisa dihitung." };
   const pkg = await weightForCart(db, input.storeId, cart);
 
+  // Ask for the couriers we will actually offer. We used to ask for EVERY courier and then throw the
+  // rest away below — and an unfiltered quote makes KiriminAja walk its whole roster, including
+  // couriers that do not serve the route: measured on Gubeng → Pleret, unfiltered took **5.5s** and
+  // returned 18 services, while naming the 7 enabled couriers took **0.5s** and returned the 14 we
+  // were keeping anyway. The checkout was paying eleven seconds-worth of latency per two shoppers to
+  // fetch rows it discarded. The filters below stay: the courier list is a request, not a guarantee.
   const r = await kaShippingPrice({
     origin,
     destination: input.destinationId,
     weight: pkg.billableGrams,
     itemValue: input.itemValue || 0,
     insurance: 0,
+    ...(effective.length ? { couriers: effective } : {}),
   });
   if (!r.ok) return { ok: false, error: r.error ?? "Gagal mengambil tarif." };
 

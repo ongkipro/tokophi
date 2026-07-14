@@ -167,9 +167,16 @@ export async function getShippingRates(input: {
   // fabricated one, which hid how wrong the number was).
   const weight = Math.max(1000, ctx.weight || 0);
   const itemValue = Number(ctx.order?.subtotal ?? 0);
-  const r = await kaShippingPrice({ origin, destination, weight, itemValue, insurance: 0 });
-  if (!r.ok) return { ok: false, rates: [], error: r.error ?? "Gagal mengambil tarif dari KiriminAja." };
+  // Name the couriers we will actually keep (same reason as lib/shipping-quote.ts): an unfiltered
+  // quote makes KiriminAja walk its entire roster — measured 5.5s unfiltered vs 0.5s when the 7
+  // enabled couriers are named, for the same rates. The scope filter below still runs; the courier
+  // list is what we ASK for, the filter is what we ACCEPT.
   const scope = await shippingScope(session.storeId);
+  const r = await kaShippingPrice({
+    origin, destination, weight, itemValue, insurance: 0,
+    ...(scope.platformOn.length ? { couriers: scope.platformOn } : {}),
+  });
+  if (!r.ok) return { ok: false, rates: [], error: r.error ?? "Gagal mengambil tarif dari KiriminAja." };
   // Same EFFECTIVE COD flag the storefront sees (lib/cod.ts): the merchant's own switch + the
   // platform's per-service allowance. Booking a COD shipment on a service the platform disallowed
   // is exactly the return-cost trap cod_enabled exists to prevent — so it isn't offered here either.
