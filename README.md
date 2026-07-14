@@ -1,102 +1,130 @@
 # TokoΦ
 
-**Shopify-style commerce SaaS for the Indonesian market.** A shared, modern-SaaS **Seller** panel (`apps/admin` — the UI calls itself "Dashboard Seller") runs many merchant stores; a **Super Admin** control plane (`apps/super-admin`) is what we (the platform) use to manage all stores/plans/billing; each client gets a bespoke **Astro storefront** (hand-built per brand — no theme editor).
+**Shopify-style commerce SaaS for Indonesia.** One platform runs many merchant stores: a **Seller** dashboard the shop owner uses, a **Super Admin** control plane we use to run the platform, and **one storefront container that serves every merchant** — the tenant is resolved from the request's `Host` header.
 
-> Deliberately **no Themes menu** and **no Apps/Plugins marketplace**. Curated, lightweight, **Bahasa Indonesia** UI tuned for local sellers (WhatsApp, COD, QRIS/e-wallets, local couriers) with modern-SaaS polish. The **local backend is fully wired** on PostgreSQL (Drizzle) — all 3 surfaces read + all admin editors write + auth/RBAC/RLS + real product variants; VPS deploy is the only remaining milestone.
+Bahasa Indonesia UI · IDR · built around how Indonesians actually buy: WhatsApp, COD, QRIS, VA, local couriers.
 
-Full spec & docs: [`specs/`](specs/) (mirrors `~/Documents/Development/tokophi/`) — **new here? start with [`specs/docs/SYSTEM_GUIDE.md`](specs/docs/SYSTEM_GUIDE.md)** (whole-system overview), then [`specs/PRD.md`](specs/PRD.md), [`specs/docs/ARCHITECTURE.md`](specs/docs/ARCHITECTURE.md), [`specs/docs/GUIDE.md`](specs/docs/GUIDE.md).
+> **Live** on `tokophi.com` since 2026-07-13. Deliberately **no Apps/Plugins marketplace**. There *is* a drag-and-drop Store Builder (`/tema`), but no "Themes" gallery — a merchant composes their own homepage from a fixed section registry.
 
-## The three surfaces
+**New here? Read [`AGENTS.md`](AGENTS.md) first** — several agents share this repo, this database and this machine, and the rules in it were learned by breaking things. Then [`specs/docs/SYSTEM_GUIDE.md`](specs/docs/SYSTEM_GUIDE.md) for the whole-system tour.
 
-| Surface | App | Who | Tech | Port |
+---
+
+## The four surfaces
+
+One deploy per surface. The storefront is the interesting one: **it is not per-merchant** — a single container serves every store, and `<slug>.tokophi.com` (or, later, a merchant's own domain) decides which.
+
+| Surface | App | Who | Stack | Local |
 |---|---|---|---|---|
-| **Admin** | `apps/admin` | merchant operators | Next 16 (App Router) + shadcn on Base UI | :3000 |
-| **Super Admin** | `apps/super-admin` | the platform (us) | Next 16 + shared UI | :3001 |
-| **Storefront** | `apps/storefront` | end shoppers | Astro 5 + Tailwind v4 | :4327 |
-
-Demo storefront = **"Batik Nusantara"** (women's fashion, 14 products × 5 AI-generated images).
-
-## Monorepo layout (npm workspaces)
+| **Seller dashboard** | `apps/admin` | the shop owner | Next 16 · shadcn on **Base UI** | `:3000` |
+| **Super Admin** | `apps/super-admin` | us (the platform) | Next 16 · shared UI | `:3001` |
+| **Storefront** | `apps/storefront` | shoppers | Astro 5 SSR · **multi-tenant by Host** | `:4327` |
+| **Landing** | `apps/landing` | the apex (`tokophi.com`) | Astro, static, **no DB on purpose** | `:4328` |
 
 ```
 tokophi/
-  apps/
-    admin/         # merchant store admin (:3000)
-    super-admin/   # platform control plane (:3001)
-    storefront/    # per-client Astro shopper site (:4327)
+  apps/       admin · super-admin · storefront · landing
   packages/
-    ui/            # @tokophi/ui   — shadcn on Base UI + design tokens
-    lib/           # @tokophi/lib  — IDR / number formatters
-    data/          # @tokophi/data — canonical nav (single source of truth)
-  specs/           # mirror of the docs (PRD, ARCHITECTURE, GUIDE, UML, ADRs, …)
+    db/         @tokophi/db       — Drizzle schema, migrations, seed (the source of truth)
+    ui/         @tokophi/ui       — shadcn on Base UI + design tokens
+    lib/        @tokophi/lib      — IDR/number formatters, billing, colours, integrations
+    sections/   @tokophi/sections — Store Builder section registry (shared by admin + storefront)
+    data/       @tokophi/data     — fallback nav, used only when a store has no menu of its own
+  specs/      PRD · ARCHITECTURE · ADRs · BACKLOG · WORKLOG · CHAT_SPEC · CUSTOM_DOMAIN
 ```
 
-`@tokophi/data` holds `MAIN_MENU` / `FOOTER_MENU`, consumed by **both** the admin menu builder and the storefront header — edit once, both stay in sync on rebuild.
+Demo store: **Batik Nusantara** (women's fashion, 14 products × 5 images, real variants Warna×Ukuran).
+
+---
 
 ## Quickstart
 
 ```bash
-npm install                          # installs all workspaces
+npm install                       # all workspaces
+docker compose up -d db           # PostgreSQL 16 → localhost:5433
+npm run migrate -w @tokophi/db    # apply migrations (canonical)
+npm run seed    -w @tokophi/db    # demo data — idempotent
+npm run seed:areas -w @tokophi/db # KiriminAja districts + kelurahan→kodepos (78k rows, one-off)
 
-npm run dev:admin                    # merchant admin → http://localhost:3000
-npm run dev:super                    # super-admin    → http://localhost:3001
-cd apps/storefront && npm run dev    # storefront      → http://localhost:4327
+npm run dev:admin                 # seller dashboard → :3000   (ongki@batiknusantara.id / tokophi123)
+npm run dev:super                 # super admin      → :3001   (admin@tokophi.id / tokophi123)
+npm run dev -w @tokophi/storefront   # storefront    → :4327
 ```
 
-Build: `npm run build:admin` · `npm run build:super` · (storefront) `cd apps/storefront && npm run build`.
+⚠️ The storefront reads its config from **`process.env`, not `import.meta.env`** (the Docker image is built without env, so anything read at build time would bake in as `undefined`). `astro dev` only loads `.env` into `import.meta.env` — so export `DATABASE_URL` and `STORE_SLUG` in the shell, or the tenant will not resolve and you get a clean *"Toko tidak ditemukan"* 404.
 
-## Database (local Postgres — `@tokophi/db`)
+**Builds:** `npm run build:admin` · `npm run build:super` · `npm run build -w @tokophi/storefront`
 
-Local backend is live end-to-end: **plain PostgreSQL 16 in Docker + Drizzle** (54 tables, migrations 0000–0016; prod target = self-hosted Postgres + PostgREST (VPS) — ADR 0007). **All 3 surfaces read + all 12 admin editors write** the DB; local auth + RBAC + RLS enforcing + local media upload done. Multi-store: 7 stores (super-admin control plane) + real product variants end-to-end (admin → storefront → cart).
+---
+
+## Database
+
+**PostgreSQL 16 in Docker + Drizzle.** 69 tables · migrations through `0048`. Money is `bigint` IDR (no decimals, survives aggregates). Prod target is self-hosted Postgres + PostgREST on a VPS — **not** Supabase (ADR 0007).
 
 ```bash
-docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted)
-npm run migrate -w @tokophi/db     # apply versioned migrations
-npm run seed    -w @tokophi/db     # (re)load demo data — idempotent
-npm run reset   -w @tokophi/db     # drop public + drizzle schemas (then migrate + seed)
-npm run studio  -w @tokophi/db     # Drizzle Studio
+npm run studio     -w @tokophi/db   # Drizzle Studio
+npm run generate   -w @tokophi/db   # after editing src/schema.ts → a new migration
+npm run verify-rls -w @tokophi/db   # proves tenant isolation actually holds
+npm run reset      -w @tokophi/db   # drops public + drizzle schemas
 ```
-`DATABASE_URL` in root `.env` (tooling) + each app's `.env.local` (copy from `.env.example`). See `specs/decisions/0007` (stack) + `0008` (per-client topology).
 
-## Stack
+⚠️ **`npm run reset` and `SEED_FORCE=1 npm run seed` TRUNCATE everything** and hand out new `store_id`s — anyone else mid-verification loses their data and their session, silently. Announce before you re-seed; prefer a targeted SQL write.
 
-Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 · **shadcn/ui on Base UI (`@base-ui/react`)** · Recharts · lucide-react · date-fns · Astro 5 (storefront) · **Drizzle + PostgreSQL 16** (`@tokophi/db`, local via Docker) · (later) self-hosted Auth + Storage + Postgres RLS.
+### Row-Level Security is real, and it is enforced at runtime
 
-## Key conventions
+**44 of the 45 store-scoped tables** carry the `tenant_isolation` policy, and the admin does not merely *hope* it holds: every read (`lib/data/*` via `withCurrentTenant`) and every write (`lib/actions/*` via `withTenant`) runs inside a transaction that sets `app.store_id` and **drops to the non-owner `tokophi_app` role**, so Postgres enforces the policy live rather than the app remembering a `where` clause.
 
-- **UI = shadcn on Base UI** (`@base-ui/react`), **not Radix**: use the **`render` prop, not `asChild`**; there is **no `Select`** primitive; `Button`-as-link needs `nativeButton={false}`. See [`apps/admin/AGENTS.md`](apps/admin/AGENTS.md).
-- **Determinism:** all mock data is seeded (mulberry32) and anchored to `TODAY = 2026-06-30` — SSR===client, stable across reloads.
-- **Money** in IDR via `@tokophi/lib`; **nav** via `@tokophi/data`.
-- **Payments & shipping are platform-managed** (ADR 0004): the platform configures the **AutoLaris** payment gateway (VA/QRIS/DANA) + COD + KiriminAja aggregator; merchants only enable methods and pick couriers/services.
-- Sales channel = **Toko Online only**; analytics attribution = Meta / TikTok / Google Ads + Organic / Other.
-- Keep it **console-clean** (no Base UI warnings) and responsive; `npm run build` must pass.
+`verify-rls` derives the store-scoped set **from the catalog**, so a new table with a `store_id` and no policy fails the check instead of quietly shipping. The one exception is `platform_activity` — the platform's own audit log, read cross-tenant by super-admin and written before a session exists. That is a decision, not a gap.
 
-## Status (2026-07-08) — full local stack, rebranded to TokoΦ, multi-store + variants end-to-end
+Auth, super-admin and the storefront run on the owner connection **on purpose**: an anonymous shopper has no session and therefore no GUC to set, which makes the *application* the isolation boundary there. Every storefront query filters on `store_id` explicitly.
 
-> **Current focus = local Linux.** Everything runs locally: PostgreSQL 16 in Docker (:5433) + the two Next dev servers + the Astro storefront. Prod (self-hosted Postgres + PostgREST on a VPS) is deferred (user hasn't provisioned a VPS yet) — local is feature-complete.
->
-> **Since 2026-07-04 (all local, verified E2E):** rebranded indostore → **TokoΦ**; **super-admin = functional control plane** (7 stores, healthcheck, impersonation into admin, platform-admin auth, provisioning "Tambah toko", settings persistence, team invite, billing actions); **admin multi-store polish** (store identity data-driven, real per-store activity feed); **real product variants end-to-end** (adaptive TikTok-Shop/Shopee-style editor with chip values + bulk apply → storefront variant picker → variant-aware cart; all 14 fashion products seeded Warna×Ukuran); **CSV export** on all Ekspor buttons; **functional global search** (⌘K); **KiriminAja shipping** complete (super-admin config + Test koneksi · admin Cek Ongkir/Alamat Pengirim/Buat Pengiriman→AWB/Lacak/Cetak label · storefront checkout live ongkir); **AutoLaris payment gateway** complete (super-admin config + Test koneksi · admin Buat Tagihan → VA/QRIS · storefront checkout create payment → VA/QRIS on sukses); **provider brands hidden from the client** (white-label; only super-admin sees KiriminAja/AutoLaris). See `CHANGELOG.md` / `specs/docs/SYSTEM_GUIDE.md` / `specs/docs/WORKLOG.md`.
+**RBAC** is a separate layer (`lib/rbac.ts`): every mutating server action calls `requireCapability()` first. The UI's `useCan()` gating is UX — the server action is the boundary.
 
-- **Admin:** Dashboard (KPIs, FB-style date range, charts) · Pesanan (+detail) · Produk (+editor, Kategori/Inventori/Pembelian) · Pelanggan (+detail/Segmen/Ulasan) · CRM (Follow-up WA/Pipeline/Template) · Diskon (+editor) · Analitik · Pemasaran (per-provinsi) · Halaman & Blog (create+edit) · **Navigasi** (drag-and-drop menu builder + up/down + sub-menu) · Pengaturan.
-- **Super Admin:** Dashboard (MRR/GMV) · Toko (+detail) · Paket · Analitik · Pengaturan (gateways + KiriminAja + couriers). **← all 5 pages live on PostgreSQL** via `lib/data.ts`.
-- **DB-backed (admin, 16):** Produk · Diskon · Pelanggan · Kategori · Pesanan · Halaman · Blog · Inventori · CRM · Pembelian · Segmen · Ulasan · Navigasi · Dashboard · Analitik · Pemasaran read from PostgreSQL via `lib/data/*` (`force-dynamic`). all admin modules now read PostgreSQL.
-- **Storefront:** beranda · kategori (+ virtual "semua"/"promo-gajian") · produk (**5-image gallery**) · keranjang · **checkout → sukses** · akun (mock login) · blog · kontak — reads the **same Postgres catalog** (`src/data/catalog.ts` → `@tokophi/db` at build/SSR), localStorage cart, 70 AI product images.
-- **Writes — all 12 admin editors persist to Postgres via server actions (`lib/actions/*`):** Produk · Diskon · Halaman · Blog · Kategori (create/edit/delete) · order-status · Inventori-stock · Navigasi · Pelanggan · CRM (follow-up) · Segmen · Pembelian (PO create/receive→stock/cancel).
-- **Auth (local):** email/password login (jose JWT httpOnly cookie) against `users`⋈`store_users`; `middleware.ts` protects the admin, topbar shows the user + logout. Owner: `ongki@batiknusantara.id / tokophi123`.
-- **RBAC (local):** every mutating server action gates on a capability (`lib/rbac.ts` `requireCapability`) — role→capability matrix (owner/admin/staff/gudang) from the session JWT. **UI:** `useCan()`/`<Can>` + topbar role badge; **all admin editors** hide their write/delete/create controls per role (verified via Playwright).
-- **RLS (local, enforcing at runtime):** migration `0012` = `tenant_isolation` policy (`store_id`) on all 32 store-scoped tables + non-owner `tokophi_app` role. The admin runs **every** read (`lib/data` via `withCurrentTenant`) + write (`lib/actions` via `withTenant`) inside a txn that sets `app.store_id` + drops to `tokophi_app`, so RLS enforces live. Auth/super-admin/storefront stay owner. `npm run verify-rls` + `verify-rls-app` + Playwright E2E all green.
-- **Media (local):** product editor uploads real images → `public/uploads/` + `product_media` (5MB cap), with per-image delete.
+---
 
-**Next (prod):** the **VPS server itself** (infra) — the app side is done (RLS enforces at runtime via `withTenant`, `tokophi_app` role ready). Provision self-hosted Postgres + PostgREST (JWT `store_id` claim → `app.store_id` GUC, connect as `tokophi_app`) + Storage (MinIO/S3 replacing `public/uploads`) → payments/couriers + multi-store provisioning. Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md); task breakdown in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).
+## What runs the money
 
-## Recent log (newest first)
+- **Shipping — KiriminAja.** Ongkir is priced **from the seller's pickup address** (`store_settings.sender_kecamatan_id`, which *is* a KiriminAja district id). It used to come from a city name posted by the **shopper's browser** — an untrusted string deciding a price, and a Surabaya merchant quoting Yogyakarta rates. **Never let the client choose the origin.**
+- ⚠️ **`KIRIMINAJA_ENV` defaults to `sandbox`** (`tdev.kiriminaja.com`). The rates are genuine API responses and genuinely origin-driven — they are **not production tariffs**, and an unset env in production silently talks to sandbox. That flag is the last step between the demo and real money.
+- **Payments — AutoLaris** (VA/QRIS). Channels are filtered on `enabled AND active`: *we* choose to offer it, *and* the gateway actually accepts it (probed live). Six channels pass today — QRIS + five Virtual Accounts. The e-wallets are refused by the gateway, so they are not rendered: a payment method that cannot be charged has no business on the checkout.
+- **COD** is a chain of three agreements — platform cap + province allow-list, per-service `codAllowed` (SPX only), and the merchant's own switch — and `/api/public/order` **re-checks every one**. Hiding the option in the storefront is UX; **that endpoint is the boundary.**
+- **Provider brands are hidden from merchants** (ADR 0004) — generic labels only. Only super-admin sees KiriminAja/AutoLaris.
 
-- **2026-07-04** — **RLS enforcing at runtime (local)**: admin routes every read (`withCurrentTenant`) + write (`withTenant`) through the non-owner `tokophi_app` role, so Postgres RLS enforces live (auth/super-admin/storefront stay owner). Verified via `verify-rls-app` + Playwright E2E; all 3 apps build clean.
-- **2026-07-04** — **RBAC UI (all editors)**: `useCan()`/`<Can>` gating rolled to every admin editor (Produk/Diskon/Halaman/Blog/Kategori/Pelanggan/CRM/Segmen/Pembelian/Inventori/Navigasi/Pesanan + Pengaturan); topbar role badge. Playwright-verified across owner/staff/gudang.
-- **2026-07-04** — **RBAC + Postgres RLS**: capability matrix gates all 13 mutating action files; migration `0012` enables RLS + `tenant_isolation` on 32 tables + `tokophi_app` role + `withTenant()`; `verify-rls` proves tenant isolation.
-- **2026-07-03** — **Local media upload**: product editor uploads real images → `public/uploads/` + `product_media` (server action, 5MB cap) + per-image delete.
-- **2026-07-03** — **Local admin auth**: email/password login, jose JWT httpOnly session, `middleware.ts` route protection, topbar user + logout (`users.password_hash` scrypt).
-- **2026-07-03** — **All 12 admin editors now WRITE Postgres** (added Navigasi, Pelanggan, CRM, Segmen, Pembelian incl. a real line-item PO builder with receive→stock) via `lib/actions/*`.
-- **2026-07-03** — Decision: **prod backend = self-hosted Postgres + PostgREST on a VPS (not Supabase)**; all docs reframed. Focus stays **local Linux**.
-- **2026-07-03** — **All three surfaces READ Postgres** (storefront `catalog.ts` reads `@tokophi/db`); **admin 100% DB-backed** (16 modules); 54 tables.
-- **Next up** — admin-client feature depth (Real variants first; VPS infra deferred) (see [`specs/docs/WORKLOG.md`](specs/docs/WORKLOG.md) CURRENT STATE). Full history: [`CHANGELOG.md`](CHANGELOG.md).
+---
+
+## Conventions that will bite you
+
+- **shadcn here runs on Base UI (`@base-ui/react`), NOT Radix.** Triggers use `render`, not `asChild`. There is **no `Select`** primitive. A `Button` rendered as a link needs `nativeButton={false}`. See [`apps/admin/AGENTS.md`](apps/admin/AGENTS.md).
+- **A control that cannot work must not be rendered.** Not greyed out, not with an excuse — *absent*. A shop that shows a payment method it cannot charge, a rating it did not count, or a form that discards the message it says it received, is lying to a shopper. This rule has teeth: an audit removed a fake login page (it swallowed passwords), a newsletter that submitted nowhere, and product ratings invented by the seed.
+- **Money and checkout paths must be EXERCISED, not typechecked.** `astro check`, lint and build all stayed green while a `ReferenceError` inside a client `<script>` blocked the **entire rate load** — no rates, no COD, no order at all. Only a browser caught it.
+- **Determinism:** no `Date.now()` / `Math.random()` in a render path. Seeded data is anchored to a fixed `TODAY`, so SSR === client.
+- **Money is IDR** via `@tokophi/lib`; figures use `tabular-nums`.
+
+---
+
+## Gates
+
+```bash
+npm run verify-rls -w @tokophi/db              # tenant isolation actually holds
+npm run audit:responsive -w @tokophi/storefront # 10 routes × 11 device widths (320→1920)
+```
+
+The responsive audit fails on **any horizontal overflow** — the one symptom that reliably means the layout broke, invisible in a screenshot at a single width, and exactly what a shopper feels on a phone. It has caught real breaks that the eye missed (a `flex-1` inside a `flex-col` sizing the *height*; an implicit `auto` grid track sized from its *content*).
+
+---
+
+## Docs
+
+| | |
+|---|---|
+| [`AGENTS.md`](AGENTS.md) | **Read first.** Multi-agent working agreement + the domain rules (shipping, COD, payments). |
+| [`CHANGELOG.md`](CHANGELOG.md) | What changed, and *why* — written to be read, not skimmed. |
+| [`specs/docs/WORKLOG.md`](specs/docs/WORKLOG.md) | Session log, newest first. Resume from here. |
+| [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md) | Prioritised work. Pull the top unchecked item. |
+| [`specs/docs/SYSTEM_GUIDE.md`](specs/docs/SYSTEM_GUIDE.md) | Whole-system tour. |
+| [`specs/docs/DEPLOY.md`](specs/docs/DEPLOY.md) | Cloudflare + Traefik + Coolify on Vultr, and the TLS gotchas. |
+| [`specs/docs/CUSTOM_DOMAIN.md`](specs/docs/CUSTOM_DOMAIN.md) | Merchant custom domains via CNAME (spec — not built). |
+| [`specs/docs/CHAT_SPEC.md`](specs/docs/CHAT_SPEC.md) | Shopper ⇄ merchant chat. |
+| [`specs/decisions/`](specs/decisions/) | ADRs. `0004` platform-managed payments/shipping · `0007` Postgres+PostgREST · `0009` Store Builder + multi-tenant storefront. |
+
+Private repo — `github.com/ongkipro/tokophi`.
