@@ -2,7 +2,7 @@
 // (the same store the admin manages and the storefront sells). Run:
 //   npm run seed -w @tokophi/db   (idempotent — truncates public tables first)
 import { db, client, schema } from "./client";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { scryptSync, randomBytes } from "node:crypto";
 import { COURIERS } from "@tokophi/lib/couriers";
 
@@ -296,23 +296,145 @@ const ORDERS_SEED = (() => {
 })();
 
 // ---- CMS: pages, blogs, articles ----
-const PAGES: Array<{ title: string; handle: string; published: boolean; updatedDaysAgo: number; template: string; views: number }> = [
-  { title: "Tentang Kami", handle: "tentang-kami", published: true, updatedDaysAgo: 3, template: "page", views: 1240 },
-  { title: "Kontak", handle: "kontak", published: true, updatedDaysAgo: 12, template: "page.contact", views: 980 },
-  { title: "Cara Pemesanan", handle: "cara-pemesanan", published: true, updatedDaysAgo: 8, template: "page", views: 2110 },
-  { title: "Kebijakan Pengembalian & Refund", handle: "kebijakan-pengembalian", published: true, updatedDaysAgo: 21, template: "page", views: 640 },
-  { title: "Syarat & Ketentuan", handle: "syarat-ketentuan", published: true, updatedDaysAgo: 30, template: "page", views: 410 },
-  { title: "Kebijakan Privasi", handle: "kebijakan-privasi", published: true, updatedDaysAgo: 30, template: "page", views: 305 },
-  { title: "FAQ — Pertanyaan Umum", handle: "faq", published: false, updatedDaysAgo: 1, template: "page", views: 0 },
+// `body` is PLAIN TEXT, not HTML or markdown: the admin's page/article editor is still a textarea
+// (Tiptap is on the backlog), so whatever a merchant types lands here verbatim. The storefront
+// renders it by splitting on blank lines into <p> — never `set:html` — so merchant text can't inject
+// markup. Blocks are separated by a blank line; a line ending in ":" reads as a lead-in, and lines
+// starting with "- " render as a list (see apps/storefront/src/data/content.ts).
+const PAGES: Array<{ title: string; handle: string; published: boolean; updatedDaysAgo: number; template: string; views: number; body: string }> = [
+  { title: "Tentang Kami", handle: "tentang-kami", published: true, updatedDaysAgo: 3, template: "page", views: 1240, body: `Batik Nusantara lahir dari satu keyakinan sederhana: batik tidak harus disimpan untuk acara resmi saja. Kain yang indah pantas dipakai di hari biasa — ke kantor, ke undangan, atau sekadar menemani akhir pekan.
+
+Kami mulai pada 2019 dari satu meja jahit di Solo, bekerja sama dengan pembatik yang sudah puluhan tahun menekuni motif tulis. Hari ini kami bekerja dengan 14 perajin, dan setiap potong yang kami kirim masih melewati tangan mereka.
+
+Yang kami pegang:
+
+- Motif tulis dan cap dari perajin, bukan cetakan pabrik.
+- Bahan yang adem — katun primissima, rayon, dan linen pilihan.
+- Jahitan yang rapi di bagian yang tidak terlihat sekalipun.
+- Harga yang jujur: kami sebutkan biayanya, tanpa harga coret palsu.
+
+Terima kasih sudah mampir. Kalau ada yang ingin ditanyakan, sapa kami lewat WhatsApp — kami balas sendiri, bukan robot.` },
+  { title: "Kontak", handle: "kontak", published: true, updatedDaysAgo: 12, template: "page.contact", views: 980, body: `Ada pertanyaan soal ukuran, bahan, atau pesanan yang sedang berjalan? Kami senang dibantu.
+
+WhatsApp adalah jalur tercepat — biasanya kami balas di bawah 1 jam pada jam kerja.
+
+Jam operasional:
+
+- Senin–Jumat: 09.00–17.00 WIB
+- Sabtu: 09.00–14.00 WIB
+- Minggu & hari libur nasional: tutup
+
+Pesan yang masuk di luar jam kerja tetap kami baca dan balas di hari kerja berikutnya.` },
+  { title: "Cara Pemesanan", handle: "cara-pemesanan", published: true, updatedDaysAgo: 8, template: "page", views: 2110, body: `Belanja di Batik Nusantara tidak perlu membuat akun. Empat langkah, selesai.
+
+1. Pilih produk, lalu tentukan warna dan ukurannya. Stok setiap kombinasi tampil langsung — kalau bisa dipilih, artinya barangnya ada.
+
+2. Masukkan ke keranjang. Anda bisa menambah produk lain sebelum lanjut.
+
+3. Isi data pengiriman di halaman checkout. Ongkir dihitung otomatis begitu kota tujuan terisi, dari kurir yang benar-benar melayani alamat Anda.
+
+4. Pilih cara bayar — transfer bank (virtual account), QRIS, e-wallet, atau COD bila tersedia di daerah Anda. Pesanan kami proses setelah pembayaran terkonfirmasi.
+
+Nomor resi kami kirimkan lewat WhatsApp begitu paket diserahkan ke kurir, biasanya di hari kerja yang sama bila pesanan masuk sebelum pukul 14.00 WIB.` },
+  { title: "Kebijakan Pengembalian & Refund", handle: "kebijakan-pengembalian", published: true, updatedDaysAgo: 21, template: "page", views: 640, body: `Kami ingin Anda puas dengan yang Anda terima. Kalau ada yang tidak beres, kabari kami.
+
+Pengembalian bisa diajukan dalam 7 hari sejak paket diterima, dengan syarat:
+
+- Produk belum dipakai dan belum dicuci.
+- Label dan kemasan asli masih terpasang.
+- Ada foto/video saat paket dibuka bila alasannya cacat produk atau salah kirim.
+
+Cacat produk atau salah kirim: ongkos kirim balik kami tanggung, dan Anda boleh memilih tukar ukuran, tukar produk, atau refund penuh.
+
+Berubah pikiran atau salah pilih ukuran: penukaran tetap kami layani, namun ongkos kirim balik ditanggung pembeli.
+
+Dana refund kami kembalikan ke rekening atau e-wallet asal dalam 3–5 hari kerja setelah barang kami terima dan kami periksa.
+
+Tidak bisa dikembalikan: produk diskon akhir stok (tertulis jelas di halaman produk) dan produk custom sesuai permintaan.` },
+  { title: "Syarat & Ketentuan", handle: "syarat-ketentuan", published: true, updatedDaysAgo: 30, template: "page", views: 410, body: `Dengan berbelanja di Batik Nusantara, Anda menyetujui ketentuan berikut.
+
+Harga dan ketersediaan. Semua harga dalam Rupiah dan sudah termasuk pajak yang berlaku. Stok dapat berubah sewaktu-waktu; bila produk yang Anda pesan ternyata habis, kami akan menghubungi Anda untuk penggantian atau refund penuh.
+
+Warna produk. Foto kami ambil dengan pencahayaan senetral mungkin, namun warna dapat tampak sedikit berbeda antar layar. Perbedaan tipis semacam ini tidak termasuk cacat produk.
+
+Kain tulis. Motif batik tulis dikerjakan tangan, sehingga selalu ada variasi kecil antar potong. Itu tanda keasliannya, bukan kerusakan.
+
+Pembayaran. Pesanan diproses setelah pembayaran terkonfirmasi. Pesanan yang belum dibayar dalam 24 jam akan dibatalkan otomatis dan stoknya dilepas kembali.
+
+Pengiriman. Estimasi waktu kirim berasal dari kurir dan di luar kendali kami. Keterlambatan oleh kurir tidak menjadi dasar pembatalan sepihak, namun kami akan membantu menelusurinya.` },
+  { title: "Kebijakan Privasi", handle: "kebijakan-privasi", published: true, updatedDaysAgo: 30, template: "page", views: 305, body: `Kami mengumpulkan data seperlunya saja, untuk mengantar pesanan Anda.
+
+Yang kami simpan: nama, nomor WhatsApp, alamat pengiriman, dan riwayat pesanan. Itu saja.
+
+Yang TIDAK kami simpan: nomor kartu, PIN, atau kredensial pembayaran apa pun. Pembayaran diproses oleh penyedia pembayaran berlisensi; data itu tidak pernah melewati sistem kami.
+
+Kami membagikan data Anda hanya kepada pihak yang memang perlu untuk menyelesaikan pesanan — kurir pengiriman dan penyedia pembayaran. Kami tidak menjual data Anda kepada siapa pun.
+
+Anda berhak meminta salinan data Anda, atau meminta kami menghapusnya. Sampaikan lewat WhatsApp dan kami proses dalam 7 hari kerja. Data pesanan yang wajib kami simpan untuk keperluan pembukuan akan kami pertahankan sesuai ketentuan yang berlaku.` },
+  { title: "FAQ — Pertanyaan Umum", handle: "faq", published: false, updatedDaysAgo: 1, template: "page", views: 0, body: `Draf. Belum tayang.` },
 ];
 const BLOGS = ["Berita Toko", "Tips & Panduan"];
-const ARTICLES: Array<{ title: string; handle: string; blog: string; author: string; published: boolean; publishedDaysAgo: number; excerpt: string; comments: number }> = [
-  { title: "Promo Gajian: Diskon s/d 40% Sepanjang Bulan Ini", handle: "promo-gajian-diskon", blog: "Berita Toko", author: "Ongki Pratama", published: true, publishedDaysAgo: 2, excerpt: "Nikmati potongan harga untuk ratusan produk pilihan selama periode gajian.", comments: 8 },
-  { title: "5 Tips Memilih Ukuran Baju yang Pas saat Belanja Online", handle: "tips-memilih-ukuran-baju", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 5, excerpt: "Panduan singkat agar tidak salah ukuran ketika belanja fashion secara online.", comments: 3 },
-  { title: "Cara Merawat Baju Rajut Agar Awet", handle: "cara-merawat-rajut", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 9, excerpt: "Langkah mudah mencuci dan menyimpan baju rajut agar tidak melar.", comments: 12 },
-  { title: "Kami Kini Melayani Pengiriman Instan Se-Jabodetabek", handle: "pengiriman-instan-jabodetabek", blog: "Berita Toko", author: "Ongki Pratama", published: true, publishedDaysAgo: 14, excerpt: "Pesanan sampai di hari yang sama dengan GoSend & GrabExpress.", comments: 5 },
-  { title: "Rekomendasi Hadiah untuk Anak Sesuai Usia", handle: "rekomendasi-hadiah-anak", blog: "Tips & Panduan", author: "Dewi Anggraini", published: false, publishedDaysAgo: 1, excerpt: "Bingung memilih mainan edukatif? Simak rekomendasi berdasarkan usia anak.", comments: 0 },
-  { title: "Panduan Menentukan Ukuran Baju yang Pas", handle: "panduan-ukuran-baju", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 25, excerpt: "Cara mengukur badan dan memilih size chart agar tidak salah beli.", comments: 2 },
+const ARTICLES: Array<{ title: string; handle: string; blog: string; author: string; published: boolean; publishedDaysAgo: number; excerpt: string; comments: number; imageUrl: string; body: string }> = [
+  { title: "Promo Gajian: Diskon s/d 40% Sepanjang Bulan Ini", handle: "promo-gajian-diskon", blog: "Berita Toko", author: "Ongki Pratama", published: true, publishedDaysAgo: 2, excerpt: "Nikmati potongan harga untuk ratusan produk pilihan selama periode gajian.", comments: 8, imageUrl: "/products/dress-batik.webp", body: `Gajian sudah cair, dan kami menyiapkan sesuatu untuk Anda.
+
+Sepanjang bulan ini, ratusan produk pilihan kami turunkan harganya hingga 40%. Bukan harga coret yang dinaikkan dulu — harga sebelumnya bisa Anda cek sendiri di riwayat halaman produk.
+
+Yang masuk promo:
+
+- Koleksi dress midi dan dress batik — diskon hingga 40%.
+- Atasan katun dan blouse — diskon 25%.
+- Busana muslim: gamis, tunik, dan khimar — diskon 30%.
+
+Beberapa catatan jujur. Stok ukuran populer (M dan L) biasanya habis lebih dulu, jadi kalau ada yang Anda incar, jangan menunggu terlalu lama. Produk diskon akhir stok tidak bisa ditukar — statusnya kami tulis jelas di halaman produknya masing-masing.
+
+Promo berlaku otomatis di keranjang. Tidak perlu kode.` },
+  { title: "5 Tips Memilih Ukuran Baju yang Pas saat Belanja Online", handle: "tips-memilih-ukuran-baju", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 5, excerpt: "Panduan singkat agar tidak salah ukuran ketika belanja fashion secara online.", comments: 3, imageUrl: "/products/blouse-katun.webp", body: `Salah ukuran adalah alasan nomor satu orang enggan belanja baju online. Padahal sebagian besar bisa dihindari dengan lima menit persiapan.
+
+Ukur badan Anda, bukan menebak. Siapkan meteran kain. Ukur lingkar dada di titik terlebar, lingkar pinggang di bagian tersempit, dan lingkar pinggul di titik terlebar. Catat angkanya — sekali saja, dipakai seterusnya.
+
+Baca size chart tiap produk, jangan andalkan "biasanya saya M". Ukuran M satu merek bisa berbeda 4 cm dari merek lain. Size chart kami tempel di setiap halaman produk, dalam sentimeter, bukan istilah samar.
+
+Perhatikan bahannya. Katun dan linen nyaris tidak melar — pilih pas badan. Rajut dan jersey punya toleransi, jadi masih aman kalau ukuran Anda di antara dua nomor.
+
+Kalau angka Anda di perbatasan, naik satu ukuran. Baju kebesaran bisa dikecilkan penjahit; baju kesempitan tidak bisa apa-apa.
+
+Kalau masih ragu, tanya kami. Sebutkan angka lingkar dada dan tinggi badan Anda, kami sarankan ukurannya. Ini gratis, dan jauh lebih murah daripada ongkos kirim balik.` },
+  { title: "Cara Merawat Baju Rajut Agar Awet", handle: "cara-merawat-rajut", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 9, excerpt: "Langkah mudah mencuci dan menyimpan baju rajut agar tidak melar.", comments: 12, imageUrl: "/products/cardigan-rajut.webp", body: `Baju rajut melar bukan karena bahannya jelek. Sembilan dari sepuluh kali, penyebabnya cara mencuci dan cara menyimpan.
+
+Cuci dengan tangan, air dingin. Mesin cuci memutar dan menarik serat rajut sampai kehilangan bentuknya. Rendam sebentar dengan deterjen lembut, tekan-tekan pelan, jangan dikucek dan jangan diperas.
+
+Jangan digantung saat basah. Ini kesalahan yang paling sering. Rajut basah itu berat, dan gantungan akan menarik bahunya sampai memanjang permanen. Gulung dengan handuk untuk menyerap air, lalu keringkan dengan cara dibentangkan mendatar.
+
+Simpan dengan dilipat, bukan digantung. Berlaku juga untuk rajut kering — gravitasi bekerja pelan tapi pasti.
+
+Bulu-bulu kecil itu wajar. Cukur pelan dengan alat pencukur kain atau silet tumpul. Jangan ditarik dengan tangan; itu justru menarik benangnya keluar.
+
+Rajut yang dirawat begini bisa bertahan bertahun-tahun dan tetap jatuh bagus di badan.` },
+  { title: "Kami Kini Melayani Pengiriman Instan Se-Jabodetabek", handle: "pengiriman-instan-jabodetabek", blog: "Berita Toko", author: "Ongki Pratama", published: true, publishedDaysAgo: 14, excerpt: "Pesanan sampai di hari yang sama dengan GoSend & GrabExpress.", comments: 5, imageUrl: "/products/kemeja-oversized.webp", body: `Mulai minggu ini, pesanan ke wilayah Jabodetabek bisa sampai di hari yang sama.
+
+Kami membuka opsi pengiriman instan lewat kurir motor. Pilihannya muncul otomatis di halaman checkout bila alamat Anda masuk jangkauan — tidak perlu kode atau permintaan khusus.
+
+Yang perlu diketahui:
+
+- Pesanan yang dibayar sebelum pukul 15.00 WIB dikirim di hari yang sama.
+- Ongkirnya dihitung berdasarkan jarak sebenarnya, tampil langsung sebelum Anda membayar.
+- Berlaku untuk paket sampai 5 kg.
+
+Di luar Jabodetabek, pilihan kurir reguler tetap seperti biasa. Kami sedang menyiapkan kota berikutnya — Bandung dan Surabaya menyusul.` },
+  { title: "Rekomendasi Hadiah untuk Anak Sesuai Usia", handle: "rekomendasi-hadiah-anak", blog: "Tips & Panduan", author: "Dewi Anggraini", published: false, publishedDaysAgo: 1, excerpt: "Bingung memilih mainan edukatif? Simak rekomendasi berdasarkan usia anak.", comments: 0, imageUrl: "", body: `Draf. Belum tayang — menunggu koleksi anak dirilis.` },
+  { title: "Panduan Menentukan Ukuran Baju yang Pas", handle: "panduan-ukuran-baju", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 25, excerpt: "Cara mengukur badan dan memilih size chart agar tidak salah beli.", comments: 2, imageUrl: "/products/dress-midi-bunga.webp", body: `Size chart hanya berguna kalau Anda tahu angka badan Anda sendiri. Berikut cara mengukurnya dengan benar, di rumah, tanpa alat khusus.
+
+Yang Anda butuhkan hanya meteran kain (yang lentur, bukan meteran tukang) dan cermin. Kenakan pakaian tipis, jangan mengukur di atas jaket atau sweter.
+
+Lingkar dada. Lingkarkan meteran di titik terpenuh dada, sejajar lantai. Tarik napas biasa — jangan ditahan, jangan dikempiskan.
+
+Lingkar pinggang. Cari bagian tersempit badan, biasanya sedikit di atas pusar. Beri jarak satu jari agar tidak terlalu ketat.
+
+Lingkar pinggul. Ukur di titik terlebar pinggul dan bokong, kaki rapat.
+
+Panjang bahu ke pinggang. Dari tulang bahu turun ke garis pinggang — ini yang menentukan apakah potongan pinggang sebuah dress akan jatuh di tempat yang tepat.
+
+Catat keempat angka itu, cocokkan dengan size chart di halaman produk. Bila dua nomor sama-sama masuk, pilih yang lebih besar untuk bahan kaku (katun, linen) dan yang lebih kecil untuk bahan melar (rajut, jersey).` },
 ];
 
 // ---- CRM: leads, followups, wa templates ----
@@ -781,6 +903,7 @@ async function main() {
       storeId: store.id,
       title: p.title,
       handle: p.handle,
+      body: p.body,
       status: (p.published ? "terbit" : "draft") as "terbit" | "draft",
       template: p.template,
       views: p.views,
@@ -797,8 +920,10 @@ async function main() {
       storeId: store.id,
       title: a.title,
       handle: a.handle,
+      body: a.body,
       excerpt: a.excerpt,
       author: a.author,
+      imageUrl: a.imageUrl || null,
       status: (a.published ? "terbit" : "draft") as "terbit" | "draft",
       comments: a.comments,
       publishedAt: new Date(ADMIN_TODAY.getTime() - a.publishedDaysAgo * 86_400_000),
@@ -1035,6 +1160,77 @@ async function main() {
   ]);
   const [tkt2] = await db.insert(schema.supportTickets).values({ storeId: store.id, subject: "Tagihan bulan ini belum masuk", status: "open", createdAt: minutesAgo(30), lastMessageAt: minutesAgo(30) }).returning();
   await db.insert(schema.supportMessages).values({ ticketId: tkt2.id, storeId: store.id, sender: "merchant", body: "Saya sudah bayar VA tapi status masih menunggu. Mohon dicek ya.", createdAt: minutesAgo(30) });
+
+  // Obrolan — shopper ⇄ merchant chat (migration 0043). Deterministic like everything else here:
+  // anchored to TODAY via minutesAgo(), no Math.random(), so the demo inbox is stable across seeds.
+  // 3 visitors × 4 conversations: (1) anonymous + unread, (2) assigned + answered, (3) linked to a
+  // real customer + order, (4) closed.
+  const [convOrder] = await db
+    .select({ id: schema.orders.id, number: schema.orders.number, customerId: schema.orders.customerId })
+    .from(schema.orders)
+    .where(eq(schema.orders.storeId, store.id))
+    .orderBy(desc(schema.orders.placedAt))
+    .limit(1);
+  const [vis1] = await db.insert(schema.chatVisitors).values({ storeId: store.id, name: "Rina", phone: "081234567801", userAgent: "Mozilla/5.0 (Linux; Android 14)", firstSeenAt: minutesAgo(180), lastSeenAt: minutesAgo(12) }).returning();
+  const [vis2] = await db.insert(schema.chatVisitors).values({ storeId: store.id, name: "Dewi", firstSeenAt: minutesAgo(600), lastSeenAt: minutesAgo(240) }).returning();
+  const [vis3] = await db.insert(schema.chatVisitors).values({ storeId: store.id, name: CUSTOMERS[0].name, phone: CUSTOMERS[0].phone, customerId: custByName.get(CUSTOMERS[0].name) ?? null, firstSeenAt: minutesAgo(2880), lastSeenAt: minutesAgo(1440) }).returning();
+
+  const seedConv = async (
+    v: { id: string },
+    c: {
+      status: "open" | "snoozed" | "closed"; unreadMerchant: number; lastAgo: number; entryUrl: string;
+      productHandle?: string | null; customerId?: string | null; orderId?: string | null; assigned?: boolean;
+      msgs: Array<{ sender: "customer" | "merchant" | "system"; body: string; ago: number }>;
+    },
+  ) => {
+    const last = c.msgs[c.msgs.length - 1];
+    const [conv] = await db.insert(schema.conversations).values({
+      storeId: store.id, visitorId: v.id, customerId: c.customerId ?? null, orderId: c.orderId ?? null,
+      status: c.status, assignedUserId: c.assigned ? user.id : null,
+      unreadMerchant: c.unreadMerchant, unreadVisitor: 0,
+      lastMessageAt: minutesAgo(c.lastAgo), lastMessageBody: last.body.slice(0, 140),
+      entryUrl: c.entryUrl, productHandle: c.productHandle ?? null,
+      createdAt: minutesAgo(c.msgs[0].ago),
+    }).returning();
+    await db.insert(schema.conversationMessages).values(
+      c.msgs.map((m) => ({
+        conversationId: conv.id, storeId: store.id, sender: m.sender,
+        senderUserId: m.sender === "merchant" ? user.id : null,
+        body: m.body, createdAt: minutesAgo(m.ago),
+      })),
+    );
+  };
+
+  await seedConv(vis1, {
+    status: "open", unreadMerchant: 2, lastAgo: 12, entryUrl: `/produk/${CATALOG[0].slug}`, productHandle: CATALOG[0].slug,
+    msgs: [
+      { sender: "customer", body: `Kak, ${CATALOG[0].name} ini ready ukuran L?`, ago: 18 },
+      { sender: "customer", body: "Kalau ready saya mau ambil 2 ya kak 🙏", ago: 12 },
+    ],
+  });
+  await seedConv(vis2, {
+    status: "open", unreadMerchant: 0, lastAgo: 240, entryUrl: "/", assigned: true,
+    msgs: [
+      { sender: "customer", body: "Halo, ongkir ke Surabaya berapa ya?", ago: 300 },
+      { sender: "merchant", body: "Halo kak Dewi! Ongkir ke Surabaya mulai Rp18.000 (reguler, 2-3 hari). Bisa dicek otomatis di halaman checkout ya.", ago: 240 },
+    ],
+  });
+  await seedConv(vis3, {
+    status: "open", unreadMerchant: 1, lastAgo: 1440, entryUrl: "/checkout/sukses",
+    customerId: convOrder?.customerId ?? null, orderId: convOrder?.id ?? null,
+    msgs: [
+      { sender: "system", body: `Obrolan ditautkan ke pesanan ${convOrder?.number ?? "-"}.`, ago: 1500 },
+      { sender: "customer", body: "Pesanan saya sudah dikirim belum ya kak?", ago: 1440 },
+    ],
+  });
+  await seedConv(vis1, {
+    status: "closed", unreadMerchant: 0, lastAgo: 2700, entryUrl: "/kategori/batik",
+    msgs: [
+      { sender: "customer", body: "Bahan batiknya katun apa sutra?", ago: 2880 },
+      { sender: "merchant", body: "Katun primissima kak, adem dipakai seharian.", ago: 2760 },
+      { sender: "customer", body: "Oke makasih kak!", ago: 2700 },
+    ],
+  });
 
   // additional demo stores (platform view + healthcheck variety)
   let invSeq = 9100;

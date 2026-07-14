@@ -1,7 +1,14 @@
 ---
 // Tenant resolved per-request from the Host header (src/middleware.ts).
+import { getPages } from "../data/content";
+
 const { store, catalog } = Astro.locals;
 const COLLECTIONS = catalog.collections;
+
+// The store's published CMS pages (Tentang Kami, Kebijakan Pengembalian, …). The footer is where
+// they become DISCOVERABLE: /halaman/<handle> exists now, but a route nothing links to is still an
+// orphan. Driven by the DB, so a page a merchant publishes shows up here without a code change.
+const PAGES = await getPages(store.id);
 
 const waHref = `https://wa.me/${store.whatsapp}`;
 ---

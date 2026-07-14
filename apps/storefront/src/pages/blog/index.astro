@@ -1,53 +1,17 @@
 ---
+// Jurnal (blog index). Was a hardcoded array of 4 fake articles with `href="#"` — the merchant's
+// real articles, written in the admin's Blog editor, had no way to reach a shopper at all. Now it
+// reads the DB (published only) and links to /blog/<handle>.
 import Layout from "../../layouts/Layout.astro";
+import { getArticles, formatDate } from "../../data/content";
 
-type Article = {
-  title: string;
-  excerpt: string;
-  date: string;
-  image: string;
-  handle: string;
-};
-
-const articles: Article[] = [
-  {
-    title: "Merawat Kain Batik agar Warnanya Awet",
-    excerpt:
-      "Tips sederhana mencuci dan menyimpan batik supaya motif tetap tajam dan warna tidak cepat pudar.",
-    date: "24 Juni 2026",
-    image: "/products/dress-batik.webp",
-    handle: "merawat-kain-batik",
-  },
-  {
-    title: "5 Padu Padan Dress Midi untuk Sehari-hari",
-    excerpt:
-      "Dari kantor sampai acara akhir pekan — inspirasi styling dress midi yang anggun dan praktis.",
-    date: "12 Juni 2026",
-    image: "/products/dress-midi-bunga.webp",
-    handle: "padu-padan-dress-midi",
-  },
-  {
-    title: "Panduan Memilih Hijab Voal yang Nyaman",
-    excerpt:
-      "Kenali karakter bahan voal, cara memilih ukuran, dan warna yang cocok dengan warna kulit.",
-    date: "3 Juni 2026",
-    image: "/products/hijab-voal.webp",
-    handle: "panduan-hijab-voal",
-  },
-  {
-    title: "Loungewear Estetik untuk Hari Santai",
-    excerpt:
-      "Tetap tampil manis saat di rumah dengan set piyama dan loungewear berbahan lembut pilihan kami.",
-    date: "21 Mei 2026",
-    image: "/products/piyama-satin.webp",
-    handle: "loungewear-estetik",
-  },
-];
+const { store } = Astro.locals;
+const articles = await getArticles(store.id);
 ---
 
 <Layout
   title="Jurnal"
-  description="Jurnal Batik Nusantara — tips fashion, perawatan kain, dan inspirasi gaya busana wanita."
+  description={`Jurnal ${store.name} — tips fashion, perawatan kain, dan inspirasi gaya busana wanita.`}
 >
   <section class="bg-brand-50">
     <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-16">
@@ -59,48 +23,60 @@ const articles: Article[] = [
       <p class="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Jurnal</p>
       <h1 class="mt-2 font-display text-4xl font-semibold text-ink">Cerita & Inspirasi</h1>
       <p class="mt-3 max-w-xl leading-relaxed text-muted">
-        Tips merawat kain, inspirasi padu padan, dan kisah di balik koleksi Batik Nusantara.
+        Tips merawat kain, inspirasi padu padan, dan kisah di balik koleksi {store.name}.
       </p>
     </div>
   </section>
 
   <section class="mx-auto max-w-7xl px-4 py-12 sm:px-6">
-    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      {
-        articles.map((a) => (
-          <a
-            href="#"
-            class="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
-          >
-            <div class="aspect-[4/3] overflow-hidden bg-brand-50">
-              <img
-                src={a.image}
-                alt={a.title}
-                loading="lazy"
-                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              />
-            </div>
-            <div class="flex flex-1 flex-col p-5">
-              <p class="text-xs font-medium uppercase tracking-[0.15em] text-brand-500">{a.date}</p>
-              <h2 class="mt-2 font-display text-xl font-semibold leading-snug text-ink transition-colors group-hover:text-brand-700">
-                {a.title}
-              </h2>
-              <p class="mt-2 flex-1 text-sm leading-relaxed text-muted">{a.excerpt}</p>
-              <span class="mt-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700">
-                Baca selengkapnya
-                <svg
-                  viewBox="0 0 24 24"
-                  class="h-4 w-4 fill-none stroke-current transition-transform group-hover:translate-x-0.5"
-                  stroke-width="2"
-                  aria-hidden="true"
-                >
-                  <path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </span>
-            </div>
-          </a>
-        ))
-      }
-    </div>
+    {
+      articles.length === 0 ? (
+        <p class="rounded-2xl border border-line bg-white p-10 text-center text-muted">
+          Belum ada tulisan yang terbit. Nantikan cerita pertama kami.
+        </p>
+      ) : (
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {articles.map((a) => (
+            <a
+              href={`/blog/${a.handle}`}
+              class="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+            >
+              {/* An article with no image keeps the brand tint showing instead of a broken frame —
+                  merchants do publish imageless posts. */}
+              <div class="aspect-[4/3] overflow-hidden bg-brand-50">
+                {a.imageUrl && (
+                  <img
+                    src={a.imageUrl}
+                    alt=""
+                    loading="lazy"
+                    class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                )}
+              </div>
+              <div class="flex flex-1 flex-col p-5">
+                <p class="text-xs font-medium uppercase tracking-[0.15em] text-brand-500">
+                  {formatDate(a.publishedAt)}
+                </p>
+                <h2 class="mt-2 font-display text-xl font-semibold leading-snug text-ink transition-colors group-hover:text-brand-700">
+                  {a.title}
+                </h2>
+                <p class="mt-2 flex-1 text-sm leading-relaxed text-muted">{a.excerpt}</p>
+                <span class="mt-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700">
+                  Baca selengkapnya
+                  <svg
+                    viewBox="0 0 24 24"
+                    class="h-4 w-4 fill-none stroke-current transition-transform group-hover:translate-x-0.5"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </span>
+              </div>
+            </a>
+          ))}
+        </div>
+      )
+    }
   </section>
 </Layout>

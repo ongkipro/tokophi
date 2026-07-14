@@ -1,0 +1,269 @@
+---
+// Obrolan — the shopper's chat widget (specs/docs/CHAT_SPEC.md §5a).
+//
+// PLAIN ASTRO + a vanilla inline script. No React, no Base UI: the storefront has no framework island
+// today (the Header dropdown is vanilla too), and pulling a component library in for a bubble would
+// double the JS budget of an SEO-first, ad-landing storefront.
+//
+// The markup below is EMPTY of data on purpose — it renders no message server-side and hydrates
+// from /api/chat/poll when the panel opens. Timestamps are formatted client-side only (id-ID): a
+// server-rendered relative time is exactly the SSR/CSR hydration mismatch the determinism rule in
+// CLAUDE.md forbids.
+const { store } = Astro.locals;
+const waHref = `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(`Halo ${store.name}, saya mau tanya.`)}`;
+---
+
+<div id="chat-widget" class="fixed bottom-5 right-5 z-50 print:hidden">
+  <!-- Panel -->
+  <div
+    id="chat-panel"
+    class="mb-3 hidden w-[min(22rem,calc(100vw-2.5rem))] origin-bottom-right overflow-hidden rounded-2xl border border-line bg-white shadow-2xl"
+    role="dialog"
+    aria-label={`Obrolan dengan ${store.name}`}
+  >
+    <header class="flex items-start gap-3 bg-brand-600 px-4 py-3 text-white">
+      <div class="flex-1">
+        <p class="text-sm font-semibold leading-tight">Tanya {store.name}</p>
+        <p class="mt-0.5 text-xs text-white/80">Biasanya balas &lt; 1 jam</p>
+      </div>
+      <button id="chat-close" type="button" aria-label="Tutup obrolan" class="-mr-1 rounded-lg p-1 text-white/80 hover:bg-white/15 hover:text-white">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-5"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
+    </header>
+
+    <!-- First run: Nama (wajib) + WhatsApp (opsional). One tiny form — NOT a login. -->
+    <form id="chat-intro" class="hidden space-y-2.5 border-b border-line px-4 py-3">
+      <p class="text-xs text-muted">Kenalan dulu yuk, biar kami bisa balas dengan tepat.</p>
+      <input id="chat-name" name="name" required maxlength="60" placeholder="Nama" autocomplete="name"
+        class="w-full rounded-xl border border-line bg-cream px-3 py-2 text-sm text-ink outline-none focus:border-brand-600" />
+      <input id="chat-phone" name="phone" maxlength="32" inputmode="tel" placeholder="No. WhatsApp (opsional)" autocomplete="tel"
+        class="w-full rounded-xl border border-line bg-cream px-3 py-2 text-sm text-ink outline-none focus:border-brand-600" />
+    </form>
+
+    <div id="chat-messages" class="flex h-72 flex-col gap-2 overflow-y-auto px-4 py-3 text-sm">
+      <p id="chat-empty" class="m-auto max-w-[16rem] text-center text-xs text-muted">
+        Tanya apa saja — stok, ukuran, ongkir. Kami balas secepatnya.
+      </p>
+    </div>
+
+    <p id="chat-error" class="hidden px-4 pb-1 text-xs text-brand-600"></p>
+
+    <form id="chat-form" class="flex items-end gap-2 border-t border-line px-3 py-2.5">
+      <textarea id="chat-input" rows="1" maxlength="2000" placeholder="Tulis pesan…" required
+        class="max-h-24 min-h-9 flex-1 resize-none rounded-xl border border-line bg-cream px-3 py-2 text-sm text-ink outline-none focus:border-brand-600"></textarea>
+      <button type="submit" id="chat-send" aria-label="Kirim" class="rounded-xl bg-brand-600 p-2 text-white transition hover:opacity-90 disabled:opacity-50">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-5"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
+      </button>
+    </form>
+
+    <!-- Never remove the WA path: Indonesian shoppers expect it (spec §5a). -->
+    <a href={waHref} target="_blank" rel="noopener" class="block border-t border-line px-4 py-2 text-center text-xs text-muted hover:text-ink">
+      Atau balas via WhatsApp
+    </a>
+  </div>
+
+  <!-- Bubble -->
+  <button id="chat-toggle" type="button" aria-label="Buka obrolan"
+    class="relative flex size-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-xl transition hover:scale-105">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="size-6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" /></svg>
+    <span id="chat-dot" class="absolute -right-0.5 -top-0.5 hidden size-3.5 rounded-full border-2 border-white bg-red-500"></span>
+  </button>
+</div>
+
+<script>
+  (function () {
+    var panel = document.getElementById("chat-panel");
+    var toggle = document.getElementById("chat-toggle");
+    var closeBtn = document.getElementById("chat-close");
+    var list = document.getElementById("chat-messages");
+    var empty = document.getElementById("chat-empty");
+    var intro = document.getElementById("chat-intro");
+    var nameEl = document.getElementById("chat-name") as HTMLInputElement | null;
+    var phoneEl = document.getElementById("chat-phone") as HTMLInputElement | null;
+    var form = document.getElementById("chat-form") as HTMLFormElement | null;
+    var input = document.getElementById("chat-input") as HTMLTextAreaElement | null;
+    var sendBtn = document.getElementById("chat-send") as HTMLButtonElement | null;
+    var errEl = document.getElementById("chat-error");
+    var dot = document.getElementById("chat-dot");
+    if (!panel || !toggle || !list || !form || !input || !sendBtn) return;
+
+    // ---- state ----------------------------------------------------------------------------
+    var open = false;
+    var cursor: string | null = null; // "<iso>,<uuid>" — the poll cursor, NOT a full refetch
+    var identified = false; // has a conversation → we already know who this is
+    var seen: Record<string, boolean> = {};
+    var timer: number | undefined;
+    var idleSince = Date.now();
+    var IDLE_STOP_MS = 5 * 60 * 1000;
+
+    // The page the widget was opened on, and the product if we're on one — context the merchant
+    // sees in the thread header. Read at runtime so the Layout can mount the widget prop-free.
+    var entryUrl = location.pathname + location.search;
+    var m = location.pathname.match(/^\/produk\/([^/]+)/);
+    var productHandle = m ? decodeURIComponent(m[1]) : null;
+
+    var time = function (iso: string) {
+      return new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    };
+
+    // The "kenalan dulu" form shows only while the panel is open AND we don't have a thread yet.
+    function syncIntro() {
+      if (intro) intro.classList.toggle("hidden", identified || !open);
+    }
+
+    function showError(msg: string | null) {
+      if (!errEl) return;
+      errEl.textContent = msg || "";
+      errEl.classList.toggle("hidden", !msg);
+    }
+
+    function render(messages: Array<{ id: string; sender: string; body: string; createdAt: string }>) {
+      var added = false;
+      for (var i = 0; i < messages.length; i++) {
+        var msg = messages[i];
+        if (seen[msg.id]) continue;
+        seen[msg.id] = true;
+        added = true;
+        var mine = msg.sender === "customer";
+        var row = document.createElement("div");
+        row.className = "flex " + (mine ? "justify-end" : "justify-start");
+        var bubble = document.createElement("div");
+        bubble.className =
+          "max-w-[85%] rounded-2xl px-3 py-2 " +
+          (msg.sender === "system"
+            ? "mx-auto bg-cream text-center text-[11px] text-muted"
+            : mine
+              ? "bg-brand-600 text-white"
+              : "border border-line bg-cream text-ink");
+        var text = document.createElement("p");
+        text.className = "whitespace-pre-wrap break-words";
+        text.textContent = msg.body; // textContent, never innerHTML — the body is shopper input
+        bubble.appendChild(text);
+        if (msg.sender !== "system") {
+          var meta = document.createElement("p");
+          meta.className = "mt-0.5 text-[10px] " + (mine ? "text-white/70" : "text-muted");
+          meta.textContent = (mine ? "Anda" : "Tim") + " · " + time(msg.createdAt);
+          bubble.appendChild(meta);
+        }
+        row.appendChild(bubble);
+        list!.appendChild(row);
+      }
+      if (added) {
+        if (empty) empty.classList.add("hidden");
+        list!.scrollTop = list!.scrollHeight;
+      }
+      return added;
+    }
+
+    async function poll() {
+      try {
+        var res = await fetch("/api/chat/poll" + (cursor ? "?since=" + encodeURIComponent(cursor) : ""), {
+          headers: { accept: "application/json" },
+        });
+        if (!res.ok) return;
+        var d = await res.json();
+        identified = !!d.conversationId;
+        syncIntro();
+        if (d.cursor) cursor = d.cursor;
+        var added = render(d.messages || []);
+        if (!open && (d.unread > 0 || (added && d.messages.some((x: any) => x.sender !== "customer")))) {
+          if (dot) dot.classList.remove("hidden");
+        }
+        if (open && d.unread > 0) markRead();
+      } catch {
+        /* a failed poll is a no-op — the next tick retries */
+      }
+    }
+
+    function markRead() {
+      fetch("/api/chat/read", { method: "POST" }).catch(function () {});
+      if (dot) dot.classList.add("hidden");
+    }
+
+    // Cadence (spec §4): 3s while open + focused, 15s when closed or the tab is hidden, and stop
+    // entirely after 5 minutes idle with the panel closed. A poll is one indexed query.
+    function schedule() {
+      if (timer) window.clearTimeout(timer);
+      if (!open && Date.now() - idleSince > IDLE_STOP_MS) return; // stopped — a click restarts it
+      var ms = open && document.visibilityState === "visible" ? 3000 : 15000;
+      timer = window.setTimeout(function () {
+        poll().finally(schedule);
+      }, ms);
+    }
+
+    function setOpen(next: boolean) {
+      open = next;
+      idleSince = Date.now();
+      panel!.classList.toggle("hidden", !open);
+      toggle!.setAttribute("aria-label", open ? "Tutup obrolan" : "Buka obrolan");
+      syncIntro();
+      if (open) {
+        poll().then(function () {
+          syncIntro();
+          markRead();
+        });
+        input!.focus();
+      }
+      schedule();
+    }
+
+    toggle.addEventListener("click", function () {
+      setOpen(!open);
+    });
+    if (closeBtn) closeBtn.addEventListener("click", function () { setOpen(false); });
+    document.addEventListener("visibilitychange", schedule);
+
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        form!.requestSubmit();
+      }
+    });
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var body = input!.value.trim();
+      if (!body) return;
+      if (!identified && nameEl && !nameEl.value.trim()) {
+        showError("Isi nama dulu ya.");
+        nameEl.focus();
+        return;
+      }
+      showError(null);
+      sendBtn!.disabled = true;
+      try {
+        var res = await fetch("/api/chat/send", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            body: body,
+            name: !identified && nameEl ? nameEl.value.trim() : undefined,
+            phone: !identified && phoneEl && phoneEl.value.trim() ? phoneEl.value.trim() : undefined,
+            entryUrl: entryUrl,
+            productHandle: productHandle,
+          }),
+        });
+        var d = await res.json();
+        if (!res.ok) {
+          showError(d.error || "Gagal mengirim. Coba lagi.");
+          return;
+        }
+        input!.value = "";
+        identified = true;
+        syncIntro();
+        render(d.messages || []);
+        if (d.cursor) cursor = d.cursor;
+        idleSince = Date.now();
+        schedule();
+      } catch {
+        showError("Tidak ada koneksi. Coba lagi.");
+      } finally {
+        sendBtn!.disabled = false;
+      }
+    });
+
+    // One quiet background poll on load so a returning shopper sees the unread dot without opening
+    // the panel. Everything after that is driven by schedule().
+    poll().finally(schedule);
+  })();
+</script>

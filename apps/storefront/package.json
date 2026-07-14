@@ -15,6 +15,7 @@
     "@tokophi/lib": "*",
     "@tokophi/sections": "*",
     "astro": "^5.14.1",
+    "jose": "^6.2.3",
     "typescript": "^5.9.3",
     "@astrojs/node": "^9.2.1"
   },

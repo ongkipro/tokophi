@@ -2,9 +2,9 @@
 // ADR 0009 — Hero section (storefront half). Props-driven, placed + edited from the Tema builder;
 // nothing here is hardcoded to the homepage.
 //
-// Layout: a split hero — copy column on the left, one contained portrait image panel on the right.
-// The slides CROSS-FADE (opacity), they don't translate: no width math, no clones, and it is the
-// one transition that degrades to "nothing moves" under prefers-reduced-motion without breaking.
+// Layout: a FULL-BLEED hero — the image is the background of the whole section, the copy sits on
+// top of it. The slides CROSS-FADE (opacity), they don't translate: no width math, no clones, and it
+// is the one transition that degrades to "nothing moves" under prefers-reduced-motion.
 //
 // Carousel chrome (dots, autoplay) only appears from 2 slides up — a 1-slide hero, which is what
 // every pre-carousel saved template resolves to via `heroSlides()`, stays a plain static hero.
@@ -18,31 +18,78 @@ const isCarousel = slides.length > 1;
 // 0 (or a nonsense value) = autoplay off; the merchant can park the hero on slide 1.
 const interval = typeof intervalMs === "number" && intervalMs >= 0 ? intervalMs : HERO_INTERVAL_MS;
 
-// The panel is portrait, the source photos are landscape — so most of the frame's width is cropped.
-// `focal` is what keeps the subject in frame (see registry.ts).
+// Copy sits ON the photo, so it is white — which makes the layer UNDER the image load-bearing for
+// legibility, not decoration. It is `ink` (a fixed dark token), never `brand-*`: brand is a merchant
+// hex expanded to a scale (@tokophi/lib/colors), so a store with a pale brand would render white
+// text on a near-white panel the moment an image 404s or a slide carries no imageUrl at all.
 const FOCAL = { left: "object-left", center: "object-center", right: "object-right" } as const;
 const focalClass = (s: (typeof slides)[number]) => FOCAL[s.focal ?? "center"];
+const centered = align === "center";
 ---
 
 <section
-  class="relative overflow-hidden bg-gradient-to-b from-brand-50 to-cream"
+  class="relative isolate flex min-h-[32rem] items-end overflow-hidden bg-ink md:min-h-[36rem] md:items-center lg:min-h-[42rem]"
   data-hero
   data-interval={interval}
   aria-roledescription={isCarousel ? "carousel" : undefined}
   aria-label={isCarousel ? "Sorotan koleksi" : undefined}
 >
-  <div
-    class="mx-auto grid max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.15fr_1fr] md:gap-14 md:py-16 lg:gap-20"
-  >
-    <!-- Copy column — slides stacked in a single grid cell so the tallest one sets the height. -->
-    <div class:list={[align === "center" && "text-center"]}>
+  <!-- Background images — full-bleed, cross-faded. A failed/missing image just reveals the `ink`
+       section background, so the copy stays legible instead of landing on a broken frame. -->
+  {
+    slides.map((slide, i) =>
+      slide.imageUrl ? (
+        <img
+          data-hero-img
+          src={slide.imageUrl}
+          alt=""
+          width="1920"
+          height="1080"
+          loading={i === 0 ? "eager" : "lazy"}
+          fetchpriority={i === 0 ? "high" : "auto"}
+          decoding={i === 0 ? "sync" : "async"}
+          onerror="this.style.display='none'"
+          class:list={[
+            "absolute inset-0 -z-10 h-full w-full object-cover transition-opacity duration-1000 ease-out motion-reduce:transition-none",
+            focalClass(slide),
+            i === 0 ? "opacity-100" : "opacity-0",
+          ]}
+        />
+      ) : (
+        <div
+          data-hero-img
+          class:list={["absolute inset-0 -z-10", i === 0 ? "opacity-100" : "opacity-0"]}
+        />
+      ),
+    )
+  }
+
+  <!-- Scrim. Two layers, and they are what buys AA contrast for white text over an arbitrary
+       merchant photo: a bottom-up wash (a light sky would otherwise wash out the copy) plus, for a
+       left-aligned hero, a left-to-right wash that darkens exactly the column the text occupies and
+       leaves the right of the photo clean.
+       The horizontal wash is DESKTOP-ONLY (`hidden md:block`): a phone is too narrow to have a
+       "text column" and a "photo column", so there it would just dim the whole frame. Narrow screens
+       instead drop the copy to the bottom (`items-end` above) and lean on the vertical wash, which
+       keeps the subject's face visible ABOVE the text instead of behind it. -->
+  <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/90 via-ink/55 to-ink/30"></div>
+  {
+    !centered && (
+      <div class="absolute inset-0 -z-10 hidden bg-gradient-to-r from-ink/80 via-ink/35 to-transparent md:block" />
+    )
+  }
+
+  <div class="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 md:py-24">
+    <div class:list={["max-w-xl", centered && "mx-auto text-center"]}>
       {
         badge && (
-          <span class="mb-6 inline-flex rounded-full bg-white px-3.5 py-1.5 text-xs font-medium tracking-wide text-brand-600 ring-1 ring-brand-200">
+          <span class="mb-6 inline-flex rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-medium tracking-wide text-white ring-1 ring-white/30 backdrop-blur-sm">
             {badge}
           </span>
         )
       }
+      <!-- Slides stacked in a single grid cell so the tallest one sets the height (no layout jump
+           mid-cross-fade). -->
       <div class="grid grid-cols-1 grid-rows-1">
         {
           slides.map((slide, i) => (
@@ -54,22 +101,22 @@ const focalClass = (s: (typeof slides)[number]) => FOCAL[s.focal ?? "center"];
                 i === 0 ? "opacity-100" : "pointer-events-none opacity-0",
               ]}
             >
-              <h1 class="font-display text-4xl font-semibold leading-[1.08] text-balance text-ink sm:text-5xl md:text-[3.25rem]">
+              <h1 class="font-display text-4xl font-semibold leading-[1.08] text-balance text-white drop-shadow-sm sm:text-5xl md:text-[3.5rem]">
                 {slide.heading}
               </h1>
               <p
                 class:list={[
-                  "mt-5 max-w-md text-base leading-relaxed text-muted sm:text-lg",
-                  align === "center" && "mx-auto",
+                  "mt-5 max-w-md text-base leading-relaxed text-white/85 sm:text-lg",
+                  centered && "mx-auto",
                 ]}
               >
                 {slide.subheading}
               </p>
               {slide.ctaLabel && (
-                <div class:list={["mt-8 flex flex-wrap gap-3", align === "center" && "justify-center"]}>
+                <div class:list={["mt-8 flex flex-wrap gap-3", centered && "justify-center"]}>
                   <a
                     href={slide.ctaHref}
-                    class="rounded-full bg-brand-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-200/60 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+                    class="rounded-full bg-white px-7 py-3 text-sm font-semibold text-ink shadow-lg shadow-ink/30 transition-all hover:-translate-y-0.5 hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink motion-reduce:transition-none motion-reduce:hover:translate-y-0"
                   >
                     {slide.ctaLabel}
                   </a>
@@ -83,7 +130,7 @@ const focalClass = (s: (typeof slides)[number]) => FOCAL[s.focal ?? "center"];
       <div
         class:list={[
           "mt-9 flex flex-wrap items-center gap-x-6 gap-y-3",
-          align === "center" && "justify-center",
+          centered && "justify-center",
         ]}
       >
         {
@@ -103,45 +150,14 @@ const focalClass = (s: (typeof slides)[number]) => FOCAL[s.focal ?? "center"];
                   aria-selected={i === 0 ? "true" : "false"}
                   aria-label={`Sorotan ${i + 1}: ${slide.heading}`}
                   tabindex={i === 0 ? 0 : -1}
-                  class="h-1.5 rounded-full bg-brand-200 transition-all duration-300 hover:bg-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none aria-selected:w-8 aria-selected:bg-brand-600 w-2.5"
+                  class="h-1.5 rounded-full bg-white/40 transition-all duration-300 hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink motion-reduce:transition-none aria-selected:w-8 aria-selected:bg-white w-2.5"
                 />
               ))}
             </div>
           )
         }
-        {ratingText && <p class="text-sm text-muted">{ratingText}</p>}
+        {ratingText && <p class="text-sm text-white/75">{ratingText}</p>}
       </div>
-    </div>
-
-    <!-- Image panel. Its own gradient is the graceful-degradation layer: a missing/failed image
-         (or a hero with no image at all) simply leaves the brand tint showing — never a broken icon. -->
-    <div
-      class="relative aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-brand-100 via-brand-200 to-brand-50 shadow-xl shadow-brand-200/40 ring-1 ring-line sm:aspect-[16/10] md:aspect-[9/10]"
-    >
-      {
-        slides.map((slide, i) =>
-          slide.imageUrl ? (
-            <img
-              data-hero-img
-              src={slide.imageUrl}
-              alt=""
-              width="1920"
-              height="1080"
-              loading={i === 0 ? "eager" : "lazy"}
-              fetchpriority={i === 0 ? "high" : "auto"}
-              decoding={i === 0 ? "sync" : "async"}
-              onerror="this.style.display='none'"
-              class:list={[
-                "absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-out motion-reduce:transition-none",
-                focalClass(slide),
-                i === 0 ? "opacity-100" : "opacity-0",
-              ]}
-            />
-          ) : (
-            <div data-hero-img class:list={["absolute inset-0", i === 0 ? "opacity-100" : "opacity-0"]} />
-          ),
-        )
-      }
     </div>
   </div>
 </section>

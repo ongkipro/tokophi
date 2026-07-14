@@ -12,6 +12,11 @@ const PRODUCTS = catalog.products;
 const { handle } = Astro.params;
 
 // Virtual (non-catalog) collections used by the nav.
+//
+// `catalog.collections` is built from CATEGORY_ORDER — a 6-handle allowlist — so a collection that
+// exists in the DB but isn't on it can't be found by `findCollection()`. That is why these live
+// here. `produk-terlaris` was NOT listed and had no virtual entry either, so the hero's own default
+// CTA ("Lihat Produk Terlaris", @tokophi/sections registry) shipped pointing at a 404.
 const VIRTUAL: Record<string, ResolvedCollection & { products: Product[] }> = {
   semua: {
     name: "Semua Produk",
@@ -24,6 +29,12 @@ const VIRTUAL: Record<string, ResolvedCollection & { products: Product[] }> = {
     emoji: "🏷️",
     blurb: "Diskon spesial periode gajian",
     products: PRODUCTS.filter((p) => p.compareAt || p.bestseller),
+  },
+  "produk-terlaris": {
+    name: "Produk Terlaris",
+    emoji: "⭐",
+    blurb: `Paling banyak dibeli di ${store.name}`,
+    products: catalog.bestsellers(),
   },
 };
 

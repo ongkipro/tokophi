@@ -1,0 +1,45 @@
+---
+// CMS page (Halaman) — NEW. The admin has a full Halaman editor and the seed ships 6 published
+// pages (Tentang Kami, Cara Pemesanan, Kebijakan Pengembalian, Syarat & Ketentuan, Kebijakan
+// Privasi, Kontak), but the storefront had NO route for them: every one of those was unreachable.
+//
+// A draft 404s (getPage hard-filters status='terbit').
+//
+// Note: `/kontak` is its own hand-built page (WhatsApp CTA, map, form) and stays the one the nav
+// points at. The `kontak` CMS row is therefore also reachable at /halaman/kontak — harmless, but a
+// merchant could edit it and wonder why the nav page doesn't change. Worth reconciling later.
+import Layout from "../../layouts/Layout.astro";
+import Prose from "../../components/Prose.astro";
+import { getPage } from "../../data/content";
+
+const { store } = Astro.locals;
+const { handle } = Astro.params;
+
+const page = handle ? await getPage(store.id, handle) : null;
+if (!page) return new Response(null, { status: 404, statusText: "Not Found" });
+---
+
+<Layout title={page.title} description={`${page.title} — ${store.name}.`}>
+  <section class="bg-brand-50">
+    <div class="mx-auto max-w-3xl px-4 py-14 sm:px-6 sm:py-16">
+      <nav class="text-sm text-muted">
+        <a href="/" class="transition-colors hover:text-brand-600">Beranda</a>
+        <span class="mx-2 text-line">/</span>
+        <span class="text-ink">{page.title}</span>
+      </nav>
+      <h1 class="mt-6 font-display text-3xl font-semibold leading-tight text-balance text-ink sm:text-4xl">
+        {page.title}
+      </h1>
+    </div>
+  </section>
+
+  <div class="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-14">
+    {
+      page.body.trim() ? (
+        <Prose body={page.body} />
+      ) : (
+        <p class="text-muted">Halaman ini belum memiliki isi.</p>
+      )
+    }
+  </div>
+</Layout>

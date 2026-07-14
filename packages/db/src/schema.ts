@@ -948,6 +948,65 @@ export const supportMessages = pgTable("support_messages", {
   createdAt: createdAt(),
 });
 
+// ---------- shopper ⇄ merchant chat, "Obrolan" (migration 0043 — specs/docs/CHAT_SPEC.md) ----------
+//
+// A SECOND message axis, deliberately NOT support_tickets widened (DECISION 1): the other party
+// here is an ANONYMOUS shopper, so there is a third isolation dimension (visitor_id) that a
+// support ticket does not have, plus a spam surface, a block-list and an upgrade path to
+// `customers` — none of which belongs on a ticket row. The volume shapes differ by ~100×, and the
+// hot path (chat polling) must not share indexes with the cold one.
+export const chatVisitorStatus = pgEnum("chat_visitor_status", ["active", "blocked"]);
+export const conversationStatus = pgEnum("conversation_status", ["open", "snoozed", "closed"]);
+export const messageSender = pgEnum("message_sender", ["customer", "merchant", "system"]);
+
+// The subject of the shopper's signed `tokophi_chat` cookie (`vid`). Created on the FIRST message,
+// never on page load — a bot that never types leaves no row.
+export const chatVisitors = pgTable("chat_visitors", {
+  id: pk(),
+  storeId: uuid().notNull().references(() => stores.id),
+  customerId: uuid().references(() => customers.id), // set on identity upgrade (checkout)
+  name: text(), // what the shopper typed ("Nama") — only if they typed it
+  phone: text(),
+  status: chatVisitorStatus().notNull().default("active"),
+  ipHash: text(), // sha256(ip + AUTH_SECRET) — abuse tracking only, never the raw IP
+  userAgent: text(),
+  firstSeenAt: createdAt(),
+  lastSeenAt: createdAt(),
+  createdAt: createdAt(),
+});
+
+export const conversations = pgTable("conversations", {
+  id: pk(),
+  storeId: uuid().notNull().references(() => stores.id),
+  visitorId: uuid().notNull().references(() => chatVisitors.id),
+  customerId: uuid().references(() => customers.id), // denormalized on upgrade (fast inbox join)
+  orderId: uuid().references(() => orders.id),
+  status: conversationStatus().notNull().default("open"),
+  assignedUserId: uuid().references(() => users.id),
+  // Counters, not a scan: the inbox badge is one sum(), maintained in the same txn as the insert.
+  unreadMerchant: integer().notNull().default(0),
+  unreadVisitor: integer().notNull().default(0),
+  lastMessageAt: createdAt(),
+  lastMessageBody: text(), // inbox preview, truncated to 140 chars on write
+  entryUrl: text(),
+  productHandle: text(),
+  createdAt: createdAt(),
+});
+
+export const conversationMessages = pgTable("conversation_messages", {
+  id: pk(),
+  conversationId: uuid().notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  // DENORMALIZED on purpose: every RLS policy keys on store_id (0012). A join-based policy would be
+  // slower and inconsistent with the other 38 store-scoped tables. support_messages got this wrong
+  // (fixed in 0035) — don't repeat it.
+  storeId: uuid().notNull().references(() => stores.id),
+  sender: messageSender().notNull(),
+  senderUserId: uuid().references(() => users.id), // which staff replied (null for customer/system)
+  body: text().notNull(), // ≤ 2000 chars, checked in the action/route (not a CHECK)
+  readAt: ts(), // when the OTHER side read it
+  createdAt: createdAt(),
+});
+
 // ---------- inferred types (Row = select, New* = insert) ----------
 export type Account = typeof accounts.$inferSelect;
 export type Store = typeof stores.$inferSelect;
@@ -988,3 +1047,9 @@ export type Plan = typeof plans.$inferSelect;
 export type Invoice = typeof invoices.$inferSelect;
 export type PlatformActivity = typeof platformActivity.$inferSelect;
 export type PlatformAdmin = typeof platformAdmins.$inferSelect;
+export type ChatVisitor = typeof chatVisitors.$inferSelect;
+export type NewChatVisitor = typeof chatVisitors.$inferInsert;
+export type Conversation = typeof conversations.$inferSelect;
+export type NewConversation = typeof conversations.$inferInsert;
+export type ConversationMessage = typeof conversationMessages.$inferSelect;
+export type NewConversationMessage = typeof conversationMessages.$inferInsert;

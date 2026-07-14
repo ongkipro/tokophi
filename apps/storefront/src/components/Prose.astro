@@ -1,0 +1,30 @@
+---
+// Renders a merchant-authored `body` (plain text) as typeset prose.
+//
+// The ONE place that turns merchant text into markup, so the safety rule lives in one place: the
+// text is emitted as text nodes, never `set:html`. The admin's editor is a textarea, so `body` is
+// whatever the merchant typed — treating it as HTML would be stored XSS on the shopper-facing site.
+import { parseBody } from "../data/content";
+
+type Props = { body: string | null | undefined };
+const blocks = parseBody(Astro.props.body);
+---
+
+<div class="space-y-5">
+  {
+    blocks.map((b) =>
+      b.kind === "ul" ? (
+        <ul class="space-y-2.5 pl-1">
+          {b.items.map((item) => (
+            <li class="flex gap-3 leading-relaxed text-ink/80">
+              <span class="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400" aria-hidden="true" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p class="leading-[1.8] text-ink/80">{b.text}</p>
+      ),
+    )
+  }
+</div>
