@@ -58,11 +58,15 @@ for (const route of ROUTES) {
       const overflow = document.documentElement.scrollWidth - vw;
       if (overflow <= 1) return { overflow, culprits: [] };
 
-      // Anything inside a position:fixed subtree is ignored: the mobile drawer is parked off-screen
-      // on purpose (translate-x-full) and is not a layout break.
-      const insideFixed = (el) => {
+      // Ignore two kinds of "overflow" that are working as designed and never reach the document:
+      //   · position:fixed subtrees — the mobile drawer is parked off-screen (translate-x-full).
+      //   · anything inside a horizontal SCROLL container — a thumbnail strip is supposed to run
+      //     wider than its box; it is clipped by it, and scrolls.
+      const excused = (el) => {
         for (let n = el; n && n !== document.body; n = n.parentElement) {
-          if (getComputedStyle(n).position === "fixed") return true;
+          const cs = getComputedStyle(n);
+          if (cs.position === "fixed") return true;
+          if (cs.overflowX === "auto" || cs.overflowX === "scroll" || cs.overflowX === "hidden") return true;
         }
         return false;
       };
@@ -72,7 +76,7 @@ for (const route of ROUTES) {
         const box = el.getBoundingClientRect();
         if (box.width === 0 || box.height === 0) continue;
         if (box.right <= vw + 1) continue;
-        if (insideFixed(el)) continue;
+        if (excused(el)) continue;
         const cls =
           typeof el.className === "string" && el.className
             ? "." + el.className.trim().split(/\s+/).slice(0, 3).join(".")

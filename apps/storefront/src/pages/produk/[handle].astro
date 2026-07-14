@@ -108,7 +108,10 @@ const TEMPLATE = catalog.productTemplate(product);
           <span class="text-muted">· {rating.count} ulasan</span>
         </a>
 
-        <div class="mt-5 flex items-center gap-3">
+        <!-- `flex-wrap`: price + struck-through price + the discount badge are three items on one
+             line, and together they exceed the 288px of content a 320px phone has. Without wrapping,
+             the badge pushed the page sideways. -->
+        <div class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
           <span id="pdp-price" class="text-2xl font-semibold text-ink tabular-nums sm:text-3xl">{IDR(product.price)}</span>
           {
             product.compareAt && (
