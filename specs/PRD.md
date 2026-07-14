@@ -129,18 +129,25 @@ platform → merchant) with days of lag, and returns that reverse the flow.
 `/api/public/order`, before any row is written** — hiding the option at checkout is UX; that endpoint
 is the boundary. A script POSTing `channelCode:"cod"` gets a 403 and zero rows.
 
-| # | Condition | Source |
-|---|---|---|
-| 1 | the platform allows COD at all | `platform_cod.enabled` |
-| 2 | **this merchant** wants COD | `store_settings.cod_enabled` — default **false**, opt-in |
-| 3 | the order total is within the cap | `platform_cod.max_amount_idr` (seeded Rp2.000.000; `0` = no cap) |
-| 4 | the destination province is allow-listed | `platform_cod.allowed_provinces` (seeded 6; empty = anywhere) |
-| 5 | the **service** the shopper picked may carry it | `platform_couriers.services[].cod && .codAllowed !== false` |
+| # | Condition | Source | Today |
+|---|---|---|---|
+| 1 | the platform allows COD at all | `platform_cod.enabled` | **on** |
+| 2 | **this merchant** wants COD | `store_settings.cod_enabled` — default **false**, opt-in | **on** for the demo store; the other six are off |
+| 3 | the order total is within the cap | `platform_cod.max_amount_idr` (`0` = no cap) | **Rp2.000.000** |
+| 4 | the destination province is allow-listed | `platform_cod.allowed_provinces` (empty = anywhere) | **6**: DI Yogyakarta, Jawa Tengah, Jawa Barat, DKI Jakarta, Banten, Jawa Timur |
+| 5 | the **service** the shopper picked may carry it | `platform_couriers.services[].cod && .codAllowed !== false` | **SPX Standard + SPX Economy only** |
 
 **Condition 4 does not read the typed address.** The province is resolved from the **KiriminAja district
 id the ongkir quote was issued for** — the id the parcel is actually booked against. A hostile client
 can type "DKI Jakarta" and ship to Papua; it cannot forge a district that prices to a different
 province. If COD is requested and the district cannot be verified, the request is **refused**.
+
+The merchant's half of the chain is one switch: Pengaturan → **Pengiriman** → "Bayar di Tempat (COD)".
+Under it, the Jasa Kirim list states each service's COD status, so the seller can see *why* — the two SPX
+services carry a green **COD** badge, everything else says "Tidak mendukung COD.". At checkout the `cod`
+flag on a rate is the **effective** one — KiriminAja's capability **×** the platform's per-service
+allowance **×** this store's switch — so the storefront can only ever advertise COD where the order API
+would in fact allow it.
 
 ### Why only SPX Standard + SPX Economy
 
@@ -264,8 +271,8 @@ Grounded; see [`STATUS.md`](docs/STATUS.md) for the item-by-item 🟢/🟡/🔴 
 |---|---|
 | **Admin** — 20+ modules | 🟢 All read the DB; all editors write it. Dashboard is an **action queue**, not vanity metrics. Pesanan is a **seller centre** (Shopee-style tabs, server-side search/filter/paging, counts that partition exactly) |
 | **Money** — Saldo, ledger, payouts | 🟢 Real, end-to-end. Balance derived, book append-only, payout approval in super-admin |
-| **COD** | 🟢 Enforced end-to-end. ⚠️ Its central premise is unverified (§4) |
-| **Shipping** | 🟢 Live ongkir + live roster sync + shipment booking. ⚠️ The sandbox never issues an AWB |
+| **COD** | 🟢 Enforced **and switched on** end-to-end (SPX only), exercised in a real browser. ⚠️ Its central premise is unverified (§4), and the return rate it optimises for is unmeasurable (§5) |
+| **Shipping** | 🟢 Live ongkir + live roster sync + shipment booking, and the checkout now offers **exactly the services the seller ticked** (`store_shipping_methods`; until `35b88a4` it read the courier-level list and offered services the seller had switched off). ⚠️ The sandbox never issues an AWB |
 | **Storefront** | 🟢 SSR multi-tenant, Store Builder, real funnel events. 🔴 `/blog` is hardcoded; every store shares one WhatsApp number |
 | **Super-admin** | 🟢 Rebuilt on real numbers (`571ed17`). The merchant float is shown as a **liability** |
 | **Analytics** | 🟡 Honest maths, demo rows. The funnel is a `GROUP BY` over `analytics_events`; those rows are still overwhelmingly seeded |

@@ -409,7 +409,7 @@ Two different things, deliberately two different table sets (CHAT_SPEC Decision 
 | `platform_payout` | 4 | 1 | — | — |
 | `shipping_aggregator` | 4 | 1 | — | — |
 | `store_payment_methods` | 4 | 0 | yes | **YES** |
-| `store_shipping_methods` | 5 | 0 | yes | **YES** |
+| `store_shipping_methods` | 5 | 11 | yes | **YES** |
 | `kiriminaja_areas` | 7 | 7030 | — | — |
 
 | Table | What it holds |
@@ -419,8 +419,14 @@ Two different things, deliberately two different table sets (CHAT_SPEC Decision 
 | `platform_payout` | single row: `release_on` (`'selesai'`), `min_payout_idr` (50.000), `auto_approve` 🔴 **unread** |
 | `kiriminaja_areas` | 7.030 districts — the lookup that makes `provinceForDistrict(destId)` possible |
 
-`store_payment_methods` and `store_shipping_methods` are **empty and unread**: the merchant's courier
-selection lives in `store_settings.couriers` (a `text[]`), not here.
+`store_shipping_methods` (`store_id`, `courier`, `service`, `enabled`) is the merchant's **per-service**
+shipping selection — what the Jasa Kirim card in Pengaturan writes, and what `/api/public/ongkir` filters
+the live rates by, keyed `"<courier>:<service_type>"`. It exists because `store_settings.couriers` (a
+courier-level `text[]`) **cannot express "I ship JNE Reguler but not JNE YES"**. ⚠️ Until `35b88a4` the
+public rates endpoint read the courier list and **ignored this table**, so every service a seller had
+switched off was still offered at checkout. `store_settings.couriers` survives as the **fallback** for a
+store with no rows here (a merchant who never opened the card must not get a checkout with zero shipping
+options). `store_payment_methods` remains **empty and unread**.
 
 ⚠️ **`platform_couriers.services` currently holds legacy plain strings in the local seed**
 (`["Reguler","Same Day"]`), not the `{type,name,group,cod,codAllowed}` objects the live
@@ -541,7 +547,7 @@ entire repo: the schema definition and the seed. **There is no COD fee.** It is 
 | `store_stats` | a rollup that contradicted `orders`. No longer read |
 | `plans`, `plan_key`, `stores.plan` | legacy 3-tier pricing. The product has **one** plan |
 | `fulfillments` | never written, never read |
-| `store_payment_methods`, `store_shipping_methods` | superseded by `store_settings.couriers` |
+| `store_payment_methods` | superseded by the platform channel list (ADR 0004). *(`store_shipping_methods` is **not** dead — it is the per-service shipping selection the checkout filters on; see §3.)* |
 | `domains` | custom-domain resolution is a `return null` stub |
 | `wa_messages`, `notification_templates` | WhatsApp is a `wa.me` deep link, not an API |
 | `platform_cod.fee_pct`, `platform_payout.auto_approve` | stored, never read |

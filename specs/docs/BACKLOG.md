@@ -36,7 +36,10 @@ unmeasurable**. Ordered.
 5. **[ ] Tests for the ledger, the COD gate, and the order state machine.** There is **one test file in
    the entire repo** (`packages/lib/src/integration-status.test.ts`); vitest is wired and unused.
    `select sum(…) for update` — which Postgres rejects outright, so **every withdrawal threw** — shipped
-   because `tsc` cannot see inside a SQL string. **Money paths must be exercised, not typechecked.**
+   because `tsc` cannot see inside a SQL string. Same family, one week later: a `ReferenceError:
+   queueSave is not defined` inside a client `<script>` in `checkout.astro` blocked the **entire rate
+   load** (no rates → no COD → **no order at all**) while `astro check`, lint and build were **all
+   green** — only a browser caught it. **Money and checkout paths must be exercised, not typechecked.**
 
 ---
 
@@ -72,6 +75,21 @@ unmeasurable**. Ordered.
 - [x] **COD enforced end-to-end** (`0038`) — five conditions, server-side in `/api/public/order`
   **before any row is written**. `max_amount_idr` and `allowed_provinces` were stored and read
   **nowhere**; they bounded nothing. Now they bound.
+- [x] **COD is switched ON** (`35b88a4`) — the feature was built and never turned on. All three switches
+  now agree: `platform_cod.enabled` (cap **Rp2.000.000**, **6** allow-listed provinces) ∧
+  `platform_couriers.services[].codAllowed` = **SPX only** (SPX Standard `type=1` + SPX Economy
+  `type=3`; every other courier is `codAllowed=false` *even where KiriminAja reports `cod=true`*) ∧
+  `store_settings.cod_enabled = true` for batik-nusantara (default **false** — the merchant opts in, via
+  Pengaturan → Pengiriman → "Bayar di Tempat (COD)"). **Verified in a real browser**, 0 console errors:
+  the COD badge appears on the two SPX rates only, and "COD (Bayar di Tempat)" appears in Pembayaran
+  only while an SPX service is selected.
+- [x] **The checkout offers exactly the services the seller picked** (`35b88a4`) — `/api/public/ongkir`
+  filtered on `store_settings.couriers` (the COURIER list) while the Jasa Kirim card promises *"Pilih
+  layanan yang ditawarkan ke pembeli saat checkout"* and writes to **`store_shipping_methods`** (per
+  service), so **every service the seller switched OFF was still offered**: **14 rates, 4 never
+  enabled** (Jagopack, Sicepat CARGO, BIGPACK, SAP One Day) → **10** after the fix. Now
+  **(platform-enabled couriers) ∩ (per-service picks)**, keyed `"<courier>:<service_type>"`; no rows =
+  fall back to courier-level rather than a checkout with zero shipping options.
 - [x] **The COD province is verified, not typed** (`f846cba`) — resolved from the KiriminAja district id
   the ongkir quote was issued for. Fail-closed if unresolvable.
 - [x] **Live KiriminAja courier roster** — the hand-written roster had drifted badly (it listed TIKI and

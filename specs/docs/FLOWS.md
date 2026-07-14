@@ -30,7 +30,8 @@ sequenceDiagram
     ONG-->>SF: districts[] (each with destId)
 
     SF->>ONG: {op:"rates", storeSlug, destinationId, weight: qty*500}
-    ONG->>DB: platform_couriers.enabled ∩ store_settings.couriers
+    ONG->>DB: platform_couriers.enabled ∩ store_shipping_methods (per SERVICE)
+    Note over ONG,DB: keyed "courier:service_type" — a service_type is only<br/>unique within its courier. NO rows = the merchant never<br/>opened the Jasa Kirim card → fall back to the courier-level<br/>list, never a checkout with zero shipping options
     ONG->>KA: kaShippingPrice(origin, destination, weight)
     KA-->>ONG: services[] (each with a raw cod flag)
     ONG->>COD: getCodPolicy(store.id)
@@ -292,13 +293,14 @@ sequenceDiagram
     SA->>DB: platform_couriers.services[].codAllowed
     Note over SA,DB: KiriminAja's own `cod` flag is the hard ceiling:<br/>codAllowed = s.cod && wanted
 
-    M->>AD: pick couriers + COD toggle  [requireCapability("settings:write")]
-    AD->>DB: store_settings.couriers (string[]), store_settings.cod_enabled
+    M->>AD: pick SERVICES + COD toggle  [requireCapability("settings:write")]
+    AD->>DB: store_shipping_methods (courier, service) — saveStoreServices()<br/>store_settings.cod_enabled — setCodEnabled()
+    Note over AD,DB: the card says "Pilih layanan yang ditawarkan ke pembeli<br/>saat checkout" and each row states its COD status:<br/>green COD badge on SPX Standard + SPX Economy,<br/>"Tidak mendukung COD." on everything else
 
     S->>ONG: {op:"rates", storeSlug, destinationId, weight}
     ONG->>DB: platformOn = platform_couriers WHERE enabled
-    ONG->>DB: merchant = store_settings.couriers
-    Note over ONG: effective = (merchant ?? platformOn) ∩ platformOn<br/>— platform is the HARD cap
+    ONG->>DB: picked = store_shipping_methods WHERE enabled
+    Note over ONG: effective = platformOn ∩ picked, keyed "courier:service_type"<br/>— platform is the HARD cap. ⚠️ Fixed in 35b88a4: this used to<br/>filter on store_settings.couriers (the COURIER list), so every<br/>SERVICE the seller switched off was still offered at checkout —<br/>14 rates for 11 picks. NO picked rows = fall back to the<br/>courier-level list rather than show zero options.
     ONG->>KA: kaShippingPrice(origin, destination, weight, itemValue)
     KA-->>ONG: rates[]
     ONG->>ONG: rate.cod = KA.cod && getCodPolicy(store).allows(service, serviceType)

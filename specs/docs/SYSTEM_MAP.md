@@ -291,7 +291,7 @@ Every mutating server action re-checks with `requireCapability(cap)` — **that*
 
 | Route | Auth | Rate limit | What it does |
 |---|---|---|---|
-| `POST /api/public/ongkir` | **none** (CORS `*`) | 60/min/IP | `op=search` → `kiriminaja_areas` autocomplete · `op=rates` → live `kaShippingPrice`, filtered by (merchant selection ∩ platform-enabled couriers), each rate labelled with the **effective** COD flag · `op=instant` → same-day pricing from the store's `sender_lat/lng`. |
+| `POST /api/public/ongkir` | **none** (CORS `*`) | 60/min/IP | `op=search` → `kiriminaja_areas` autocomplete · `op=rates` → live `kaShippingPrice`, filtered by **(platform-enabled couriers) ∩ (the merchant's per-service picks in `store_shipping_methods`)**, keyed `"<courier>:<service_type>"`; no picked rows = fall back to the courier-level list rather than a checkout with zero options. ⚠️ **Fixed `35b88a4`** — it filtered on `store_settings.couriers` (the COURIER list) while the Jasa Kirim card writes per *service*, so every service the seller switched off was still offered (**14 rates for 11 picks** → **10**). Each rate is labelled with the **effective** COD flag (KiriminAja capability × platform `codAllowed` × the store's `cod_enabled`) · `op=instant` → same-day pricing from the store's `sender_lat/lng`. |
 | `POST /api/public/order` | **none** (CORS `*`) | 10/min/IP | The checkout. **Enforces the 5-condition COD gate before any row is written**, then upserts `customers`, checks stock, writes `orders` + `order_line_items`, decrements `inventory_levels`, and creates either a `cod` payment (`menunggu`) or an AutoLaris bill. Finally flips the matching `checkout_sessions` row (scoped to the **unique** `(store_id, session_id)`) to `pulih` + `recovered_order_id` + `recovered_at` + `customer_id` — **the only honest definition of "recovered"**: not "we sent a WhatsApp and they bought something later", but *this session became that order*. Non-fatal: a paid order must never fail because a marketing table did. |
 | `POST /api/public/pay` | **none** | 20/min/IP | Standalone `alCreatePayment`. **Dead**: `PUBLIC_PAY_API` is declared in `apps/storefront/.env.example` but no storefront source file reads it. |
 | `POST /api/public/pay/callback` | **shared secret** `X-Callback-Token` / `?token=`, constant-time compare; **returns 401 in production when `AUTOLARIS_CALLBACK_SECRET` is unset** (fails closed) | 60/min/IP | Marks payments paid → syncs `orders.financial_status` → **credits the ledger** → extends store subscriptions. |
@@ -411,20 +411,22 @@ CTAs come from build-time `PUBLIC_LOGIN_URL` / `PUBLIC_SIGNUP_URL`, joined with 
 
 - Env: `KIRIMINAJA_API_KEY`, `KIRIMINAJA_ENV` — **defaults to `sandbox`** (`https://tdev.kiriminaja.com`). An unset env in production silently talks to the sandbox.
 - **KiriminAja also has no "list couriers" endpoint.** `kaServices()` prices **one hardcoded reference route** (origin `2099` Menteng → dest `356` Coblong, 1 kg, item value Rp100k) and harvests the service list out of the `shipping_price` response, cached 24 h. **The roster is therefore only as complete as that one route.**
-- Two-level courier control: super-admin sets the hard-enabled pool (`platform_couriers.enabled`); the merchant picks a subset (`store_settings.couriers`). Effective = `(merchant ?? all) ∩ platform-enabled`.
+- Two-level control, and the merchant's level is **per SERVICE**: super-admin sets the hard-enabled courier pool (`platform_couriers.enabled`); the merchant ticks the individual services shown at checkout (`store_shipping_methods`, written by the Jasa Kirim card). Effective = `platform-enabled ∩ picked services`, keyed `"<courier>:<service_type>"` — no picked rows = fall back to the courier-level list. `store_settings.couriers` is the older courier-level list and is now only that fallback.
 - Live roster (12 rows): `anteraja, jne, jnt, lion, ninja, sap, sicepat, spx` enabled · `idx, jtcargo, pos, tiki` disabled.
 
 ## 10. COD — the five conditions
 
 `apps/admin/lib/cod.ts#getCodPolicy` is the single place that answers "may this be paid on delivery?". All five must agree:
 
-| # | Condition | Source |
-|---|---|---|
-| 1 | platform allows COD at all | `platform_cod.enabled` |
-| 2 | **this merchant** wants COD | `store_settings.cod_enabled` (0038, default **false**) |
-| 3 | order total ≤ the cap | `platform_cod.max_amount_idr` (0 = no cap; seeded Rp2.000.000) |
-| 4 | destination province is allow-listed | `platform_cod.allowed_provinces` (empty = anywhere) |
-| 5 | the **service** the shopper picked may carry it | `platform_couriers.services[].cod && .codAllowed !== false`, courier row `enabled` |
+| # | Condition | Source | Today |
+|---|---|---|---|
+| 1 | platform allows COD at all | `platform_cod.enabled` | **true** |
+| 2 | **this merchant** wants COD | `store_settings.cod_enabled` (0038, default **false**) | **true** for batik-nusantara (the other six demo stores are off — the toggle means something) |
+| 3 | order total ≤ the cap | `platform_cod.max_amount_idr` (0 = no cap) | **Rp2.000.000** |
+| 4 | destination province is allow-listed | `platform_cod.allowed_provinces` (empty = anywhere) | **6**: DI Yogyakarta, Jawa Tengah, Jawa Barat, DKI Jakarta, Banten, Jawa Timur |
+| 5 | the **service** the shopper picked may carry it | `platform_couriers.services[].cod && .codAllowed !== false`, courier row `enabled` | **SPX only** — SPX Standard (`type=1`) + SPX Economy (`type=3`). Every other courier is `codAllowed=false` **even where KiriminAja reports `cod=true`** |
+
+The merchant's half of the chain is Pengaturan → **Pengiriman** → "Bayar di Tempat (COD)" (*"Tersedia lewat Shopee Express (SPX)."*); the Jasa Kirim list below it badges the two SPX services **COD** and tells every other row "Tidak mendukung COD." (`components/admin/pengaturan/jasa-kirim-card.tsx` · `getCodEnabled`/`setCodEnabled` in `lib/actions/shipping.ts`).
 
 Condition 4's province is taken from the **KiriminAja district id the ongkir quote was issued for**, resolved via `provinceForDistrict(destId)` — *never* from `address.provinsi`, which the buyer types by hand and a hostile client can lie about. If COD is requested and the district cannot be verified, the request is **refused** (fail closed).
 

@@ -175,10 +175,10 @@ varies per endpoint** (`shipping_price`=v6.1, `get_address_by_name`=v2, `provinc
 `request_pickup`=v6.1). The whole flow is wired + verified E2E:
 - **Super-admin** → Pengaturan: aggregator = KiriminAja + live **"Test koneksi"**.
 - **Admin** order detail → **"Cek Ongkir"**: live rates (store city + order dest → district IDs → `shipping_price`).
-- **Admin** Pengaturan → Pengiriman → **"Alamat Pengirim"** (kecamatan autocomplete, persisted per store).
+- **Admin** Pengaturan → Pengiriman → **"Alamat Pengirim"** (kecamatan autocomplete, persisted per store) + **Jasa Kirim**: the seller ticks the individual **services** offered at checkout (→ `store_shipping_methods`; the courier-level list cannot say "JNE Reguler but not JNE YES") + the **"Bayar di Tempat (COD)"** switch (→ `store_settings.cod_enabled`, default off). Each service row states its COD status: a green **COD** badge on SPX Standard + SPX Economy, "Tidak mendukung COD." on the rest.
 - **Admin** → **"Buat Pengiriman"** (per rate): `request_pickup` (sender + recipient + item_name/shipping_cost/cod/package_type_id) → saves **AWB/courier** to the order, advances it to **dikirim**.
 - **Admin** → **"Lacak"** (polls `/api/mitra/tracking`, syncs the real courier AWB) + **"Cetak resi"** (100×150mm label → print→PDF).
-- **Storefront** checkout → **live ongkir** via the public proxy `apps/admin/app/api/public/ongkir` (`op=search`/`op=rates`; key stays server-side; `PUBLIC_ONGKIR_API` env-driven).
+- **Storefront** checkout → **live ongkir** via the public proxy `apps/admin/app/api/public/ongkir` (`op=search`/`op=rates`; key stays server-side; `PUBLIC_ONGKIR_API` env-driven). Rates are filtered to **(platform-enabled couriers) ∩ (the seller's per-service picks)** — until `35b88a4` this read the courier-level column and offered services the seller had switched off — and each rate carries the **effective** COD flag (KiriminAja capability × platform `codAllowed` × the store's `cod_enabled`), so **"COD (Bayar di Tempat)"** shows up in Pembayaran only while a COD-capable service (today: SPX only) is selected. The gate itself is `apps/admin/lib/cod.ts`, enforced in `/api/public/order`.
 - **Prod-only remaining:** tracking **webhook** (needs a public URL); shipment **payment** flow (KA returns `unpaid` + `qr_url`; platform pays via KA Credit/gateway).
 
 ### Payments — AutoLaris (real payment gateway) — COMPLETE (checkout)

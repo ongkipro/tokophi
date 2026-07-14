@@ -91,7 +91,7 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 ### System
 | Route | Purpose | Key components / interactions | Status |
 |---|---|---|---|
-| `/pengaturan` | Settings | store profile, **Pembayaran** (transfer/QRIS/e-wallet/COD/VA), **Pengiriman** (JNE/J&T/SiCepat/…), Pajak (PPN 11%), Pengguna/peran | ✅ mock |
+| `/pengaturan` | Settings | store profile, **Pengiriman** (Jasa Kirim: per-**service** picks → `store_shipping_methods`, each row stating its COD status — green **COD** badge on SPX Standard + SPX Economy, "Tidak mendukung COD." elsewhere; + **"Bayar di Tempat (COD)"** switch → `store_settings.cod_enabled`; + Alamat Pengirim), Pajak (PPN 11%), Pengguna/peran. *(The Pembayaran tab was removed 2026-07-13 — channels are a platform decision, ADR 0004.)* | ✅ real DB (`components/admin/pengaturan/jasa-kirim-card.tsx` → `lib/actions/shipping.ts`) |
 
 **Admin cross-cutting:** shell = sidebar (expandable submenus) + topbar (store switcher, search, notif, theme) + plan card. Deterministic mock (no hydration mismatch). Base UI gotchas handled (`render` prop, patched `DropdownMenuLabel`, SEO preview standardized to content-column width). sonner toasts on save/delete. **Fashion demo:** 14 women's-clothing products with AI-generated photos (`public/products/*.webp`), rendered via `ProductThumb` (image + emoji fallback).
 
@@ -122,7 +122,7 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 | `/kategori/promo-gajian` | Virtual "Promo Gajian" | products with `compareAt` or `bestseller` (virtual collection) | ✅ mock |
 | `/produk/[handle]` | Product detail | **5-image gallery** (`productImages`), price/compareAt, sizes, description, related (same collection), add-to-cart | ✅ mock |
 | `/keranjang` | Cart | client-side cart (localStorage), qty edit, totals, WhatsApp checkout deep-link, proceed to checkout | ✅ mock |
-| `/checkout` | Checkout | contact/address form, **province** picker, **shipping** options (JNE/SiCepat/GoSend), **payment** methods (transfer/QRIS/COD), order summary | ✅ mock |
+| `/checkout` | Checkout | contact/address form, kecamatan autocomplete, **live ongkir** (`/api/public/ongkir`) — only the services the seller ticked, each carrying the **effective** COD badge (today: **SPX Standard Rp17.000** + **SPX Economy Rp12.700** only) — and **Pembayaran** where **"COD (Bayar di Tempat)"** appears *only* while a COD-capable service is selected; order summary | ✅ real (live rates + real order; verified in a browser, 0 console errors) |
 | `/checkout/sukses` | Order success | thank-you, generated order number (client), next steps | ✅ mock |
 | `/akun` | Account (login/register) | login form; submit shows "aktif setelah backend terhubung" demo note | 🟡 stub (no auth) |
 | `/blog` (`blog/index.astro`) | Blog index | article cards (hardcoded in-page list); **no article detail route yet** | 🟡 partial |

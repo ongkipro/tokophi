@@ -79,6 +79,8 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 
 **Auth/RBAC/tenancy:** `lib/auth.ts` (jose JWT session), `lib/rbac.ts` (`requireCapability`) + `lib/rbac-policy.ts` (role→cap matrix, client-safe), `lib/tenant.ts` (`withTenant`/`withCurrentTenant` → `tokophi_app` role + `app.store_id` GUC → RLS). `middleware.ts` = edge JWT gate.
 
+**Shipping & COD:** `lib/cod.ts` (`getCodPolicy` — the **single** answer to "may this order be paid on delivery?", five conditions; enforced in `app/api/public/order/route.ts`, the boundary) · `lib/actions/shipping.ts` (`getStoreServices`/`saveStoreServices` → the merchant's **per-service** picks in `store_shipping_methods`; `getCodEnabled`/`setCodEnabled` → `store_settings.cod_enabled`) · `components/admin/pengaturan/jasa-kirim-card.tsx` (the Pengiriman UI: service list with COD badges + the COD switch) · `app/api/public/ongkir/route.ts` (live rates ∩ platform-enabled couriers ∩ picked services, each labelled with the **effective** COD flag).
+
 ---
 
 ## 5. Code mapping — super-admin (`apps/super-admin`)
