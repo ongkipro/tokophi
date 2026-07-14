@@ -1,5 +1,5 @@
 ---
-import { ShoppingCart, Banknote, MapPin, Truck, ChevronDown } from "@lucide/astro";
+import { ShoppingCart, Banknote, MapPin, Truck, ChevronDown, Check, Search, CircleAlert } from "@lucide/astro";
 import PayIcon from "../components/PayIcon.astro";
 import Layout from "../layouts/Layout.astro";
 import { enabledPaymentChannels, mediaUrl, storeCodPolicy } from "../data/catalog";
@@ -14,10 +14,11 @@ const store = Astro.locals.store;
 const catalog = Astro.locals.catalog;
 const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null; // null → wordmark fallback
 
-// Platform shipping proxy (admin) + this store's origin city.
+// Platform shipping proxy (admin). NOTE: no ORIGIN_CITY is sent any more — the ongkir origin is the
+// SELLER's pickup district, read server-side (store_settings.sender_kecamatan_id). A city name posted
+// by the shopper's browser used to decide the price; the client does not get to choose the origin.
 const ONGKIR_API = import.meta.env.PUBLIC_ONGKIR_API || "http://localhost:3000/api/public/ongkir";
 const ORDER_API = import.meta.env.PUBLIC_ORDER_API || "http://localhost:3000/api/public/order";
-const ORIGIN_CITY = store.city || "Yogyakarta";
 const STORE_SLUG = store.slug;
 
 // Payment channels = whatever the platform (super-admin) enabled (platform_payment_channels),
@@ -28,7 +29,20 @@ const payDesc = (kind: string, label: string) =>
   : kind === "ewallet" ? `Bayar pakai saldo ${label}`
   : kind === "retail" ? `Bayar tunai di gerai ${label}`
   : "Bayar online";
-const PAYMENTS = (await enabledPaymentChannels()).map((c) => ({ id: c.code, label: c.label, kind: c.kind, desc: payDesc(c.kind, c.label) }));
+
+// What actually happens after "Bayar Sekarang" — shown under the SELECTED row, so the shopper knows
+// what they are agreeing to before they press it, not on the next page. Generic wording: the payment
+// provider is platform-managed and its brand never reaches a shopper (ADR 0004).
+const payDetail = (kind: string) =>
+  kind === "qris" ? "Kode QR muncul setelah pesanan dibuat — scan pakai e-wallet atau m-banking mana pun."
+  : kind === "va" ? "Nomor Virtual Account muncul setelah pesanan dibuat. Transfer lewat ATM, m-banking, atau internet banking."
+  : kind === "ewallet" ? "Kamu akan diarahkan untuk menyelesaikan pembayaran dari saldo dompet digitalmu."
+  : kind === "retail" ? "Kode pembayaran muncul setelah pesanan dibuat — bayar tunai di kasir gerai."
+  : "Instruksi pembayaran muncul setelah pesanan dibuat.";
+
+const PAYMENTS = (await enabledPaymentChannels()).map((c) => ({
+  id: c.code, label: c.label, kind: c.kind, desc: payDesc(c.kind, c.label), detail: payDetail(c.kind),
+}));
 
 // Group by kind. A flat list of 6 radios made the five Virtual Accounts look like five unrelated
 // choices, so the shopper had to read every row to find their bank. Grouping is the whole job of this
@@ -133,11 +147,11 @@ if (rToken) {
 ---
 
 <Layout title="Checkout" description={`Selesaikan pesananmu di ${store.name}.`}>
-  <section class="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-    <nav class="text-sm text-muted">
-      <a href="/keranjang" class="hover:text-brand-600">Keranjang</a>
-      <span class="mx-1">/</span>
-      <span class="text-ink">Checkout</span>
+  <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+    <nav class="text-sm text-muted" aria-label="Breadcrumb">
+      <a href="/keranjang" class="rounded hover:text-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">Keranjang</a>
+      <span class="mx-1" aria-hidden="true">/</span>
+      <span class="text-ink" aria-current="page">Checkout</span>
     </nav>
 
     <!-- Merchant branding (ADR 0009 §4): the merchant's logo, or their name as a wordmark when
@@ -148,16 +162,16 @@ if (rToken) {
           <img
             src={LOGO}
             alt={store.name}
-            class="h-11 w-auto max-w-[12rem] object-contain"
+            class="h-10 w-auto max-w-[9rem] object-contain sm:h-11 sm:max-w-[12rem]"
             data-store-logo
           />
         ) : (
-          <span class="font-display text-2xl font-semibold tracking-tight text-ink" data-store-logo>
+          <span class="font-display text-xl font-semibold tracking-tight text-ink sm:text-2xl" data-store-logo>
             {store.name}
           </span>
         )
       }
-      <span class="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-muted">
+      <span class="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted">
         <svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
           <path d="M12 3l7 3v5.5c0 4.2-2.9 7.9-7 9-4.1-1.1-7-4.8-7-9V6l7-3Z" stroke-linejoin="round" />
           <path d="M9 12.2l2.1 2.1L15 10.5" stroke-linecap="round" stroke-linejoin="round" />
@@ -166,14 +180,9 @@ if (rToken) {
       </span>
     </div>
 
-    <h1 class="mt-5 font-display text-3xl font-semibold text-ink">Checkout</h1>
-    <p class="mt-1 text-sm text-muted">
-      Kolom bertanda <span class="text-red-500">*</span> wajib diisi.
-    </p>
-
     {
       RECOVER && (
-        <p class="mt-4 rounded-xl border border-brand-600/30 bg-brand-50 px-4 py-3 text-sm text-ink">
+        <p class="mt-5 rounded-xl border border-brand-600/30 bg-brand-50 px-4 py-3 text-sm text-ink">
           Selamat datang kembali{RECOVER.name ? `, ${RECOVER.name.split(" ")[0]}` : ""}! Keranjang dan datamu sudah
           kami simpan — tinggal lanjut bayar.
         </p>
@@ -184,301 +193,718 @@ if (rToken) {
       <ShoppingCart class="mx-auto h-10 w-10 text-brand-400" stroke-width={1.5} aria-hidden="true" />
       <h2 class="mt-4 font-display text-2xl font-semibold text-ink">Keranjangmu masih kosong</h2>
       <p class="mt-2 text-muted">Tambahkan produk dulu sebelum checkout.</p>
-      <a href="/" class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700">Mulai Belanja</a>
+      <a href="/" class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">Mulai Belanja</a>
     </div>
 
-    <form id="checkout-form" class="mt-8 grid gap-8 lg:grid-cols-[1.4fr_1fr] lg:items-start">
-      <!-- LEFT: form -->
-      <div class="space-y-8">
-        <!-- Kontak -->
-        <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
-          <legend class="px-2 font-display text-lg font-semibold text-ink">Kontak</legend>
-          <label class="block">
-            <span class="text-sm font-medium text-ink">Email <span class="font-normal text-muted">(opsional)</span></span>
-            <input
-              type="email"
-              name="email"
-              placeholder="nama@email.com"
-              class="mt-1.5 w-full rounded-lg border border-line bg-cream px-3.5 py-2.5 text-sm text-ink outline-none transition-colors focus:border-brand-400 focus:bg-white"
-            />
-            {/* Honest copy: there is NO mailer in this codebase, so the email cannot be promised as
-                the confirmation channel — it is kept for a future account / promo use, and the
-                confirmation the shopper actually gets is on WhatsApp. Do not re-add "kami kirim
-                struk ke email" here unless a mailer exists. */}
-            <span class="mt-1.5 block text-xs text-muted">
-              Untuk akun &amp; info promo nanti. <b class="font-medium text-ink">Konfirmasi pesanan dikirim lewat WhatsApp.</b>
-            </span>
-          </label>
-        </fieldset>
+    <!-- ── THE SHELL ────────────────────────────────────────────────────────────────────────────
+         Two columns, Shopify's arrangement: the form on the left (one calm surface, sections split by
+         hairlines — not four heavy bordered boxes), the order summary on a tinted rail to the right,
+         sticky. The rail comes FIRST in the DOM so that on a phone it is the collapsed
+         "Ringkasan pesanan · Rp…" bar at the TOP — where a shopper looks to confirm what they are
+         about to pay for — instead of a card stranded below the pay button. On desktop it is placed
+         back into column 2 with col-start/row-start, so reading order and visual order agree.
 
-        <!-- Alamat pengiriman -->
-        <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
-          <legend class="px-2 font-display text-lg font-semibold text-ink">Alamat Pengiriman</legend>
-          <div class="grid gap-4 sm:grid-cols-2">
-            <label class="block">
-              <span class="text-sm font-medium text-ink">Nama Lengkap <span class="text-red-500" aria-hidden="true">*</span></span>
-              <input type="text" name="nama" required autocomplete="name" class="input-field" />
-            </label>
-            <label class="block">
-              <span class="text-sm font-medium text-ink">No. WhatsApp <span class="text-red-500" aria-hidden="true">*</span></span>
-              <input type="tel" name="whatsapp" required inputmode="tel" placeholder="08xxxxxxxxxx" autocomplete="tel" class="input-field" />
-            </label>
-            <label class="block sm:col-span-2">
-              <span class="text-sm font-medium text-ink">Alamat Lengkap <span class="text-red-500" aria-hidden="true">*</span></span>
-              <textarea name="alamat" required rows="2" placeholder="Nama jalan, no. rumah, RT/RW, patokan" class="input-field resize-none"></textarea>
-            </label>
-            <!-- Kecamatan comes FIRST, and it drives Kota + Provinsi.
-                 Before: the shopper typed Kota, Provinsi and Kode Pos by hand AND then separately
-                 searched a kecamatan for the ongkir quote — re-keying an address the aggregator
-                 already knows, with nothing keeping the two in agreement.
-                 It also closes a real hole. `apps/admin/lib/data/areas.ts` puts it plainly: a typed
-                 province is a CLAIM, not a fact — the backend already refuses to trust it and derives
-                 the province from the district id when gating COD. Deriving the visible fields from
-                 the same id means the form can no longer disagree with what ships. -->
-            <div class="sm:col-span-2">
-              <label class="block">
-                <span class="text-sm font-medium text-ink">
-                  Kecamatan Tujuan <span class="text-red-500" aria-hidden="true">*</span>
-                </span>
-                <input type="text" id="dest-search" autocomplete="off" placeholder="Ketik kecamatan / kota, mis. Semarang" class="input-field" />
+        `novalidate`: the inline messages below ARE the validation UI. The native bubbles could not be
+         styled, spoke a different register of Bahasa, and — worse — silently skipped the readonly
+         derived fields, so `checkValidity()` passed with no destination at all. Every rule still runs
+         (the submit handler), and /api/public/order re-runs all of them regardless: this is UX, that
+         is the boundary. -->
+    <form
+      id="checkout-form"
+      novalidate
+      class="mt-6 grid gap-6 lg:mt-8 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] lg:items-start lg:gap-10"
+    >
+      <!-- ── ORDER SUMMARY RAIL ───────────────────────────────────────────────────────────────
+           `min-w-0`: a grid item defaults to `min-width:auto`, i.e. it refuses to shrink below the
+           min-content width of what is inside it — so on a 360px phone the rail grew to 366px and
+           pushed the whole document into a horizontal scroll. Both columns get it. -->
+      <aside id="summary-panel" class="summary-rail min-w-0 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-6">
+        <button
+          type="button"
+          id="summary-toggle"
+          aria-expanded="false"
+          aria-controls="summary-body"
+          class="summary-toggle"
+        >
+          <ShoppingCart class="h-4 w-4 shrink-0 text-brand-600" stroke-width={1.75} aria-hidden="true" />
+          <span class="text-sm font-medium text-ink">Ringkasan pesanan</span>
+          <ChevronDown id="summary-caret" class="h-4 w-4 shrink-0 text-muted transition-transform" stroke-width={2} aria-hidden="true" />
+          <span id="m-total" class="ml-auto font-display text-base font-semibold text-ink tabular-nums">Rp0</span>
+        </button>
+
+        <div id="summary-body" class="summary-body">
+          <h2 class="hidden font-display text-lg font-semibold text-ink lg:block">Ringkasan Pesanan</h2>
+
+          <div id="summary-items" class="space-y-4 lg:mt-5"></div>
+
+          <!-- The rail states the one thing the shopper is actually deciding besides the goods: WHERE
+               it goes. It showed neither destination nor service, so the ongkir was a bare number with
+               nothing attached to it. -->
+          <dl id="summary-picks" hidden class="mt-5 space-y-3 border-t border-line pt-4">
+            <div id="summary-dest" hidden class="flex items-start gap-2.5">
+              <MapPin class="mt-0.5 h-4 w-4 shrink-0 text-brand-600" stroke-width={1.75} aria-hidden="true" />
+              <div class="min-w-0">
+                <dt class="text-xs font-medium text-muted">Dikirim ke</dt>
+                <dd id="summary-dest-text" class="break-words text-sm text-ink"></dd>
+              </div>
+            </div>
+            <div id="summary-ship" hidden class="flex items-start gap-2.5">
+              <Truck class="mt-0.5 h-4 w-4 shrink-0 text-brand-600" stroke-width={1.75} aria-hidden="true" />
+              <div class="min-w-0">
+                <dt class="text-xs font-medium text-muted">Metode pengiriman</dt>
+                <dd id="summary-ship-text" class="break-words text-sm text-ink"></dd>
+              </div>
+            </div>
+          </dl>
+
+          <div class="mt-5 space-y-2 border-t border-line pt-4 text-sm">
+            <div class="flex items-start justify-between gap-3">
+              <span class="text-muted">Subtotal</span>
+              <span id="summary-subtotal" class="shrink-0 font-medium text-ink tabular-nums">Rp0</span>
+            </div>
+            <div class="flex items-start justify-between gap-3">
+              <span class="text-muted">Ongkir</span>
+              <!-- Shopify's honest placeholder: an ongkir cannot exist before an address does, so it
+                   says so instead of showing a confident Rp0 the total then contradicts. -->
+              <span id="summary-shipping" class="shrink-0 text-right text-xs text-muted">Dihitung di langkah berikutnya</span>
+            </div>
+          </div>
+
+          <div class="mt-4 flex items-end justify-between gap-3 border-t border-line pt-4">
+            <span class="text-base font-medium text-ink">Total</span>
+            <span class="flex shrink-0 items-baseline gap-1.5">
+              <span class="text-xs font-medium uppercase text-muted">IDR</span>
+              <span id="summary-total" class="font-display text-xl font-semibold text-ink tabular-nums sm:text-2xl">Rp0</span>
+            </span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ── THE FORM ───────────────────────────────────────────────────────────────────────────
+           Kontak → Pengiriman → Metode pengiriman → Pembayaran. Shopify's order, because it is the
+           order the answers actually depend on each other in: you cannot price a delivery before you
+           know where it goes, and you cannot offer COD before you know which courier is carrying it. -->
+      <div class="min-w-0 lg:col-start-1 lg:row-start-1">
+        <div class="rounded-2xl border border-line bg-white">
+          <!-- ① Kontak -->
+          <section class="checkout-section" aria-labelledby="h-kontak">
+            <h2 id="h-kontak" class="section-title">Kontak</h2>
+
+            <div class="mt-4">
+              <label class="field-label" for="f-email">Email <span class="font-normal text-muted">(opsional)</span></label>
+              <input
+                type="email"
+                id="f-email"
+                name="email"
+                placeholder="nama@email.com"
+                autocomplete="email"
+                aria-describedby="hint-email err-email"
+                class="input-field"
+              />
+              <p id="err-email" class="field-error" role="alert" hidden></p>
+              {/* Honest copy: there is NO mailer in this codebase, so the email cannot be promised as
+                  the confirmation channel — it is kept for a future account / promo use, and the
+                  confirmation the shopper actually gets is on WhatsApp. Do not re-add "kami kirim
+                  struk ke email" here unless a mailer exists. */}
+              <p id="hint-email" class="mt-1.5 text-xs text-muted">
+                Untuk akun &amp; info promo nanti. <b class="font-medium text-ink">Konfirmasi pesanan dikirim lewat WhatsApp.</b>
+              </p>
+            </div>
+          </section>
+
+          <!-- ② Pengiriman (the address) -->
+          <section class="checkout-section" aria-labelledby="h-alamat">
+            <h2 id="h-alamat" class="section-title">Pengiriman</h2>
+            <p class="section-sub">Ke sinilah paketmu dikirim — pastikan sudah benar.</p>
+
+            <div class="mt-4 grid gap-4">
+              <!-- Two-up only where the pair genuinely reads as one line. -->
+              <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label class="field-label" for="f-nama">Nama lengkap <span class="req" aria-hidden="true">*</span><span class="sr-only">(wajib)</span></label>
+                  <input type="text" id="f-nama" name="nama" autocomplete="name" aria-describedby="err-nama" class="input-field" />
+                  <p id="err-nama" class="field-error" role="alert" hidden></p>
+                </div>
+                <div>
+                  <label class="field-label" for="f-whatsapp">No. WhatsApp <span class="req" aria-hidden="true">*</span><span class="sr-only">(wajib)</span></label>
+                  <input type="tel" id="f-whatsapp" name="whatsapp" inputmode="tel" placeholder="08xxxxxxxxxx" autocomplete="tel" aria-describedby="err-whatsapp" class="input-field" />
+                  <p id="err-whatsapp" class="field-error" role="alert" hidden></p>
+                </div>
+              </div>
+
+              <div>
+                <label class="field-label" for="f-alamat">Alamat lengkap <span class="req" aria-hidden="true">*</span><span class="sr-only">(wajib)</span></label>
+                <textarea id="f-alamat" name="alamat" rows="2" placeholder="Nama jalan, no. rumah, RT/RW, patokan" aria-describedby="err-alamat" class="input-field resize-none"></textarea>
+                <p id="err-alamat" class="field-error" role="alert" hidden></p>
+              </div>
+
+              <!-- ── THE CASCADE: kecamatan → kelurahan → (kota, provinsi, kodepos) ────────────────
+                   ONE authoritative pick drives the whole address. The shopper used to free-type Kota,
+                   Provinsi and Kode Pos AND separately search a kecamatan for the ongkir — re-keying an
+                   address the aggregator already knows, with nothing keeping the two in agreement.
+
+                   It also closes a real hole. `apps/admin/lib/data/areas.ts` puts it plainly: a typed
+                   province is a CLAIM, not a fact — the backend already refuses to trust it and derives
+                   the province from the district id when gating COD. Deriving the visible fields from
+                   the SAME id the parcel is booked against means the form can no longer disagree with
+                   what ships: the area the shopper picks IS the area the parcel goes to. -->
+              <div>
+                <label class="field-label" for="dest-search">
+                  Kecamatan tujuan <span class="req" aria-hidden="true">*</span><span class="sr-only">(wajib)</span>
+                </label>
+
+                <!-- A real combobox (role/aria-expanded/aria-activedescendant), not a text box with a
+                     div of clickable divs under it: the results were mouse-only, so a keyboard or
+                     screen-reader shopper could not choose a destination at all — i.e. could not buy. -->
+                <div class="relative">
+                  <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">
+                    <Search class="h-4 w-4" stroke-width={1.75} aria-hidden="true" />
+                  </span>
+                  <input
+                    type="text"
+                    id="dest-search"
+                    role="combobox"
+                    aria-expanded="false"
+                    aria-controls="dest-results"
+                    aria-autocomplete="list"
+                    aria-describedby="dest-msg"
+                    autocomplete="off"
+                    placeholder="Ketik kecamatan / kota, mis. Semarang"
+                    class="input-field pl-9 pr-9"
+                  />
+                  <span id="dest-spinner" hidden class="absolute right-3 top-1/2 -translate-y-1/2 text-brand-600">
+                    <svg viewBox="0 0 24 24" class="h-4 w-4 animate-spin fill-none stroke-current" stroke-width="2.5" aria-hidden="true">
+                      <path d="M21 12a9 9 0 1 1-6.2-8.6" stroke-linecap="round" />
+                    </svg>
+                  </span>
+                  <span id="dest-ok" hidden class="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-700">
+                    <Check class="h-4 w-4" stroke-width={2.5} aria-hidden="true" />
+                  </span>
+
+                  <ul
+                    id="dest-results"
+                    role="listbox"
+                    aria-label="Hasil pencarian kecamatan"
+                    hidden
+                    class="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto overscroll-contain rounded-xl border border-line bg-white py-1 shadow-lg"
+                  ></ul>
+                </div>
+
                 <input type="hidden" name="dest_id" id="dest-id" />
                 <input type="hidden" name="dest_text" id="dest-text" />
-                <div id="dest-results" class="mt-1 hidden max-h-48 overflow-y-auto rounded-xl border border-line bg-white shadow-sm"></div>
-              </label>
 
-              <!-- KOTA + PROVINSI ARE DERIVED, SO THEY ARE SHOWN, NOT ASKED.
-                   They used to be two readonly boxes the shopper could not fill in anyway — two more
-                   columns of chrome for values that are a pure function of the district id. They are
-                   still SUBMITTED (hidden inputs, same `name`s, same FormData / capture payload), but
-                   they are now displayed as a quiet derived line: "Kota Semarang · Jawa Tengah".
-                   The hidden inputs remain the single source the payload + the COD province gate read
-                   (codProvinceOk), so nothing downstream changed. -->
+                <!-- One line that is the search box's status: hint → "mencari…" → "tidak ditemukan" →
+                     error. `aria-live` so it is announced; `role=alert` deliberately NOT used (a hint is
+                     not an alarm). -->
+                <p id="dest-msg" class="mt-1.5 text-xs text-muted" aria-live="polite">
+                  Ketik minimal 3 huruf, lalu pilih dari daftar.
+                </p>
+              </div>
+
+              <!-- KOTA + PROVINSI ARE DERIVED, SO THEY ARE SHOWN, NOT ASKED. They are still SUBMITTED
+                   (hidden inputs, same `name`s, same FormData / capture payload) but displayed in the
+                   read-only recap below — which renders FROM these inputs, so it can never say
+                   something different from what is sent. -->
               <input type="hidden" name="kota" id="kota" />
               <input type="hidden" name="provinsi" id="provinsi" />
-              <p id="area-derived" hidden class="mt-1.5 flex items-center gap-1.5 text-xs text-muted">
-                <MapPin class="h-3.5 w-3.5 shrink-0 text-brand-600" stroke-width={1.75} aria-hidden="true" />
-                <span id="area-derived-text" class="min-w-0 truncate"></span>
-              </p>
-            </div>
 
-            <!-- Kelurahan + Kode Pos, ONE ROW: picking a kelurahan is what fills the kodepos, so the
-                 cause sits next to its effect instead of a screen apart. Stacks to one column below
-                 `sm` (the sub-grid is grid-cols-1 by default) — on a 320px phone they are never
-                 squeezed side by side.
+              <!-- Kelurahan + Kode Pos, ONE ROW (Shopify's kota+kodepos pair): picking a kelurahan is
+                   what fills the kodepos, so the cause sits next to its effect. Stacks to one column
+                   below `sm` — on a 360px phone they are never squeezed side by side.
 
-                 Kelurahan is the level a KODEPOS is actually assigned at. A kecamatan cannot give us
-                 one: 17% of them span several kodepos, and those are the dense urban ones where the
-                 orders are (Semarang Tengah alone has 11). Shown only once a kecamatan is chosen, and
-                 only for districts we have kelurahan for (~96% of KiriminAja's list); for the rest the
-                 kelurahan row stays hidden, Kode Pos widens to the full row and is TYPED — that path
-                 must never block the order. See packages/db/scripts/build-kelurahan.mjs. -->
-            <div class="grid gap-4 sm:col-span-2 sm:grid-cols-2">
-              <label id="kel-wrap" hidden class="block">
-                <span class="text-sm font-medium text-ink">
-                  Kelurahan / Desa <span class="font-normal text-muted">(opsional)</span>
-                </span>
-                <select name="kelurahan" id="kel-select" class="input-field">
-                  <option value="">Pilih kelurahan…</option>
-                </select>
-              </label>
+                   Kelurahan is the level a KODEPOS is actually assigned at, and the level a courier
+                   label is addressed at. A kecamatan gives us neither: 17% of them span several kodepos,
+                   and those are the dense urban ones where the orders are (Semarang Tengah alone has
+                   11). So the kelurahan is a REQUIRED part of the address whenever we have data for the
+                   district (~96% of KiriminAja's list) — not merely a kodepos-filling convenience.
 
-              <label id="kodepos-wrap" class="block sm:col-span-2">
-                <span class="text-sm font-medium text-ink">Kode Pos <span class="font-normal text-muted">(opsional)</span></span>
-                <input type="text" name="kodepos" id="kodepos" inputmode="numeric" autocomplete="postal-code" placeholder="mis. 50241" class="input-field" />
-              </label>
-
-              <!-- Shown ONLY for the 18% of districts that really do span several postcodes: there the
-                   kelurahan is the question, so say why we are asking it. -->
-              <p id="kel-note" hidden class="text-xs text-muted sm:col-span-2">
-                Kecamatan ini punya beberapa kode pos — pilih kelurahan agar kode posnya terisi benar.
-              </p>
-            </div>
-          </div>
-        </fieldset>
-
-        <!-- Pengiriman -->
-        <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
-          <legend class="px-2 font-display text-lg font-semibold text-ink">Pengiriman</legend>
-          <p id="ship-hint" class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
-            Pilih <b>kecamatan tujuan</b> di atas untuk melihat ongkir real-time.
-          </p>
-
-          <!-- PROGRESSIVE DISCLOSURE (user's design). One `op=rates` call already prices EVERY service
-               in one round-trip, so the shopper sees the sensible default (SPX Reguler) immediately and
-               the other ~8-19 rows stay behind "Pilih ekspedisi lain" — grouped by KiriminAja's own
-               `group` field, never by guessing at names. Revealing them is instant: nothing is fetched
-               on click (a second call would only make the click slower). -->
-          <div id="ship-express-group" class="hidden">
-            <div id="ship-express" class="space-y-2"></div>
-            <p id="ship-default-note" hidden class="mt-2 text-xs text-muted"></p>
-
-            <button
-              type="button"
-              id="ship-more-btn"
-              hidden
-              aria-expanded="false"
-              aria-controls="ship-more"
-              class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:bg-brand-50 sm:w-auto"
-            >
-              <Truck class="h-4 w-4 shrink-0 text-brand-600" stroke-width={1.75} aria-hidden="true" />
-              <span id="ship-more-label">Pilih ekspedisi lain</span>
-              <ChevronDown id="ship-more-caret" class="h-4 w-4 shrink-0 transition-transform" stroke-width={2} aria-hidden="true" />
-            </button>
-
-            <div id="ship-more" hidden class="mt-4 space-y-5"></div>
-          </div>
-        </fieldset>
-
-        <!-- Pembayaran -->
-        <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
-          <legend class="px-2 font-display text-lg font-semibold text-ink">Pembayaran</legend>
-
-          <div class="space-y-4">
-            {PAY_GROUPS.map((group) => (
-              <div>
-                {/* A group with ONE channel is rendered as a single selectable row, not a header with
-                    one item under it: QRIS was appearing twice — once as the group title and once as
-                    its only row. And a multi-channel group's rows show only the BANK NAME, because
-                    the group hint already says how you pay; repeating "Bayar via ATM / m-banking"
-                    five times is noise a shopper has to read past. */}
-                {group.items.length === 1 ? (
-                  <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
-                    <input
-                      type="radio"
-                      name="payment"
-                      value={group.items[0].id}
-                      data-label={group.items[0].label}
-                      required
-                      class="h-4 w-4 shrink-0 accent-brand-600"
-                    />
-                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 ring-1 ring-brand-100">
-                      <PayIcon kind={group.kind} />
-                    </span>
-                    <span class="min-w-0 flex-1">
-                      <span class="block text-sm font-medium text-ink">{group.title}</span>
-                      <span class="block text-xs text-muted">{group.hint}</span>
-                    </span>
+                   For the ~4% we have NO kelurahan for, the row stays hidden, Kode Pos widens to the
+                   full row and is TYPED — that path must never block the order. An unmatched district
+                   degrades to "the shopper types it", never to a guess and never to a dead end.
+                   See packages/db/scripts/build-kelurahan.mjs. -->
+              <div class="grid gap-4 sm:grid-cols-2">
+                <div id="kel-wrap" hidden>
+                  <label class="field-label" for="kel-select">
+                    Kelurahan / desa <span class="req" aria-hidden="true">*</span><span class="sr-only">(wajib)</span>
                   </label>
-                ) : (
+                  <div class="relative">
+                    <select name="kelurahan" id="kel-select" aria-describedby="kel-note err-kelurahan" class="input-field appearance-none pr-9">
+                      <option value="">Pilih kelurahan…</option>
+                    </select>
+                    <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted">
+                      <ChevronDown class="h-4 w-4" stroke-width={2} aria-hidden="true" />
+                    </span>
+                  </div>
+                  <p id="err-kelurahan" class="field-error" role="alert" hidden></p>
+                  <!-- The kelurahan id + name travel with the order: the merchant's shipment is booked
+                       from exactly what was picked here, with no name re-resolution on the way. -->
+                  <input type="hidden" name="kelurahan_id" id="kel-id" />
+                  <input type="hidden" name="kelurahan_name" id="kel-name" />
+                </div>
+
+                <div id="kodepos-wrap" class="sm:col-span-2">
+                  <label class="field-label" for="kodepos">Kode pos</label>
+                  <input type="text" id="kodepos" name="kodepos" inputmode="numeric" maxlength="5" autocomplete="postal-code" placeholder="mis. 50241" aria-describedby="err-kodepos" class="input-field" />
+                  <p id="err-kodepos" class="field-error" role="alert" hidden></p>
+                </div>
+
+                <p id="kel-note" class="text-xs text-muted sm:col-span-2" hidden>
+                  Kode pos terisi otomatis dari kelurahan yang kamu pilih.
+                </p>
+              </div>
+
+              <!-- The address as we will actually print it. A shopper who can SEE the derived kota,
+                   provinsi and kodepos can catch a wrong pick before the parcel is booked; hidden
+                   inputs they never see cannot be verified. -->
+              <div id="area-derived" hidden class="rounded-xl border border-line bg-cream px-4 py-3">
+                <p class="flex items-start gap-2.5 text-sm">
+                  <MapPin class="mt-0.5 h-4 w-4 shrink-0 text-brand-600" stroke-width={1.75} aria-hidden="true" />
+                  <span class="min-w-0">
+                    <span class="block text-xs font-medium text-muted">Alamat tujuan</span>
+                    <span id="area-derived-text" class="mt-0.5 block break-words text-ink"></span>
+                  </span>
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ③ Metode pengiriman -->
+          <section class="checkout-section" aria-labelledby="h-kirim">
+            <h2 id="h-kirim" class="section-title">Metode pengiriman</h2>
+
+            <div class="mt-4">
+              <!-- Shopify's placeholder: the list cannot exist before an address does, so the frame
+                   stands there and says why it is empty. -->
+              <p id="ship-placeholder" class="ship-placeholder">
+                Masukkan alamat pengiriman untuk melihat metode pengiriman yang tersedia.
+              </p>
+
+              <!-- Loading is a ROW in the same frame the rates will land in, so the card does not jump
+                   when they arrive. -->
+              <div id="ship-loading" hidden class="list-group">
+                <p class="flex items-center gap-3 px-4 py-4 text-sm text-muted">
+                  <svg viewBox="0 0 24 24" class="h-4 w-4 shrink-0 animate-spin fill-none stroke-current text-brand-600" stroke-width="2.5" aria-hidden="true">
+                    <path d="M21 12a9 9 0 1 1-6.2-8.6" stroke-linecap="round" />
+                  </svg>
+                  Menghitung ongkir…
+                </p>
+              </div>
+              <p id="ship-loading-sr" class="sr-only" role="status" aria-live="polite"></p>
+
+              <!-- Empty ("no service on this route") and error ("the call failed") are DIFFERENT states
+                   and get different copy: the first is final, the second is worth retrying. -->
+              <div id="ship-empty" hidden class="rounded-xl border border-dashed border-line px-4 py-6 text-center">
+                <Truck class="mx-auto h-7 w-7 text-brand-400" stroke-width={1.5} aria-hidden="true" />
+                <p class="mt-2 text-sm font-medium text-ink">Tidak ada layanan untuk rute ini</p>
+                <p id="ship-empty-note" class="mt-1 text-xs text-muted"></p>
+              </div>
+
+              <div id="ship-error" hidden class="rounded-xl border border-red-200 bg-red-50 px-4 py-4">
+                <p class="flex items-start gap-2 text-sm text-red-800">
+                  <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" stroke-width={2} aria-hidden="true" />
+                  <span id="ship-error-text" class="min-w-0">Gagal memuat ongkir.</span>
+                </p>
+                <button type="button" id="ship-retry" class="mt-3 inline-flex items-center rounded-full border border-red-300 bg-white px-4 py-1.5 text-xs font-semibold text-red-800 transition-colors hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700">
+                  Coba lagi
+                </button>
+              </div>
+
+              <!-- PROGRESSIVE DISCLOSURE. One `op=rates` call already prices EVERY service in one
+                   round-trip, so the shopper sees the sensible default immediately and the other ~8-19
+                   rows stay behind "Pilih ekspedisi lain" — grouped by KiriminAja's own `group` field,
+                   never by guessing at names. Revealing them is instant: nothing is fetched on click. -->
+              <div id="ship-express-group" hidden>
+                <div id="ship-express" class="list-group" role="radiogroup" aria-label="Metode pengiriman"></div>
+                <p id="ship-default-note" hidden class="mt-2 text-xs text-muted"></p>
+
+                <button
+                  type="button"
+                  id="ship-more-btn"
+                  hidden
+                  aria-expanded="false"
+                  aria-controls="ship-more"
+                  class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:bg-brand-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:w-auto"
+                >
+                  <Truck class="h-4 w-4 shrink-0 text-brand-600" stroke-width={1.75} aria-hidden="true" />
+                  <span id="ship-more-label">Pilih ekspedisi lain</span>
+                  <ChevronDown id="ship-more-caret" class="h-4 w-4 shrink-0 transition-transform" stroke-width={2} aria-hidden="true" />
+                </button>
+
+                <div id="ship-more" hidden class="mt-4 space-y-4"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ④ Pembayaran -->
+          <section class="checkout-section" aria-labelledby="h-bayar">
+            <h2 id="h-bayar" class="section-title">Pembayaran</h2>
+            <p class="section-sub">Semua transaksi aman dan terenkripsi.</p>
+
+            <!-- ONE list group, Shopify-style, and the SELECTED method expands its instructions right
+                 underneath itself — so "what happens after I press the button" is answered before the
+                 button is pressed, not on the next page.
+                 The family grouping is kept (a flat list of six rows made five Virtual Accounts look
+                 like five unrelated choices — the shopper had to read every row to find their bank):
+                 a family with several banks gets a quiet header row, and its rows then show only what
+                 DISTINGUISHES them, the bank name. -->
+            <div class="mt-4 list-group" role="radiogroup" aria-label="Metode pembayaran">
+              {PAY_GROUPS.map((group) =>
+                group.items.length === 1 ? (
                   <>
-                    <div class="mb-2 flex items-center gap-3 px-1">
-                      <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 ring-1 ring-brand-100">
+                    <label class="lg-row">
+                      <input type="radio" name="payment" value={group.items[0].id} data-label={group.items[0].label} class="lg-radio" />
+                      <span class="lg-icon">
                         <PayIcon kind={group.kind} />
                       </span>
-                      <div class="min-w-0">
-                        <p class="text-sm font-semibold text-ink">{group.title}</p>
-                        <p class="text-xs text-muted">{group.hint}</p>
-                      </div>
+                      <span class="min-w-0 flex-1">
+                        <span class="lg-title">{group.title}</span>
+                        <span class="lg-sub">{group.hint}</span>
+                      </span>
+                    </label>
+                    <div class="pay-detail" data-for={group.items[0].id} hidden>{group.items[0].detail}</div>
+                  </>
+                ) : (
+                  <>
+                    <div class="lg-header">
+                      <span class="lg-icon">
+                        <PayIcon kind={group.kind} />
+                      </span>
+                      <span class="min-w-0">
+                        <span class="lg-title">{group.title}</span>
+                        <span class="lg-sub">{group.hint}</span>
+                      </span>
                     </div>
-                    <div class="space-y-2">
-                      {group.items.map((pm) => (
-                        <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-2.5 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
-                          <input
-                            type="radio"
-                            name="payment"
-                            value={pm.id}
-                            data-label={pm.label}
-                            required
-                            class="h-4 w-4 shrink-0 accent-brand-600"
-                          />
+                    {group.items.map((pm) => (
+                      <>
+                        <label class="lg-row">
+                          <input type="radio" name="payment" value={pm.id} data-label={pm.label} class="lg-radio" />
                           <span class="min-w-0 flex-1 text-sm font-medium text-ink">{pm.short}</span>
                         </label>
-                      ))}
-                    </div>
+                        <div class="pay-detail" data-for={pm.id} hidden>{pm.detail}</div>
+                      </>
+                    ))}
                   </>
-                )}
-              </div>
-            ))}
+                ),
+              )}
 
-            {/* COD is HIDDEN until it is genuinely available: the chosen courier must support it, the
-                total must sit under the platform cap, and the province (derived from the kecamatan,
-                not typed) must be on the allow-list. A greyed-out row with an excuse would be worse —
-                a COD we would reject has no business being on screen at all. */}
-            {COD_ENABLED && (
-              <div id="cod-option" hidden>
-                <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="cod"
-                    data-label="COD (Bayar di Tempat)"
-                    disabled
-                    class="h-4 w-4 shrink-0 accent-brand-600"
-                  />
-                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 ring-1 ring-brand-100">
-                    <Banknote class="h-4 w-4 text-brand-600" stroke-width={1.75} aria-hidden="true" />
-                  </span>
-                  <span class="min-w-0 flex-1">
-                    <span class="block text-sm font-medium text-ink">Bayar di Tempat (COD)</span>
-                    <span class="block text-xs text-muted">Bayar tunai ke kurir saat paket tiba</span>
-                  </span>
-                </label>
-              </div>
-            )}
-          </div>
-
-          <p class="mt-4 text-xs text-muted">Pembayaran diproses aman — disediakan TokoΦ.</p>
-        </fieldset>
-      </div>
-
-      <!-- RIGHT: order summary -->
-      <aside class="lg:sticky lg:top-24">
-        <div class="rounded-2xl border border-line bg-white p-5 sm:p-6">
-          <h2 class="font-display text-lg font-semibold text-ink">Ringkasan Pesanan</h2>
-
-          <div id="summary-items" class="mt-4 space-y-4"></div>
-
-          <div class="mt-6 space-y-2 border-t border-line pt-4 text-sm">
-            <div class="flex items-center justify-between">
-              <span class="text-muted">Subtotal</span>
-              <span id="summary-subtotal" class="font-medium text-ink tabular-nums">Rp0</span>
+              {/* COD is HIDDEN until it is genuinely available: the chosen courier must support it, the
+                  total must sit under the platform cap, and the province (derived from the kecamatan,
+                  not typed) must be on the allow-list. A greyed-out row with an excuse would be worse —
+                  a COD we would reject has no business being on screen at all. */}
+              {COD_ENABLED && (
+                <div id="cod-option" hidden>
+                  <label class="lg-row">
+                    <input type="radio" name="payment" value="cod" data-label="COD (Bayar di Tempat)" disabled class="lg-radio" />
+                    <span class="lg-icon">
+                      <Banknote class="h-4 w-4 text-brand-600" stroke-width={1.75} aria-hidden="true" />
+                    </span>
+                    <span class="min-w-0 flex-1">
+                      <span class="lg-title">Bayar di Tempat (COD)</span>
+                      <span class="lg-sub">Bayar tunai ke kurir saat paket tiba</span>
+                    </span>
+                  </label>
+                  <div class="pay-detail" data-for="cod" hidden>
+                    Bayar tunai ke kurir saat paket tiba. Siapkan uang pas supaya prosesnya cepat.
+                  </div>
+                </div>
+              )}
             </div>
-            <div class="flex items-center justify-between">
-              <span class="text-muted">Ongkir</span>
-              <span id="summary-shipping" class="font-medium text-ink tabular-nums">Rp0</span>
-            </div>
-          </div>
 
-          <div class="mt-4 flex items-center justify-between border-t border-line pt-4">
-            <span class="text-base font-medium text-ink">Total</span>
-            <span id="summary-total" class="font-display text-2xl font-semibold text-ink tabular-nums">Rp0</span>
-          </div>
+            <p id="err-payment" class="field-error" role="alert" hidden></p>
+          </section>
+        </div>
 
+        <!-- The primary action closes the LEFT column (Shopify), not the summary rail: it is the end of
+             the form, and putting it there keeps the tab order honest. Disabled until there is
+             something to pay FOR — a destination, a service and a method. It used to be live from the
+             first paint, so "Bayar Sekarang" with no shipping selected produced a rejected order and a
+             shopper with no idea why. A disabled button must always SAY what it is waiting for. -->
+        <div class="mt-6">
           <button
             type="submit"
             id="pay-btn"
-            class="mt-6 w-full rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-200/50 transition-colors hover:bg-brand-700"
+            disabled
+            aria-describedby="pay-reason"
+            class="w-full rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-200/40 transition-colors hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed disabled:bg-line disabled:text-muted disabled:shadow-none"
           >
             Bayar Sekarang
           </button>
-          <p id="form-error" class="mt-3 hidden text-center text-sm font-medium text-brand-700"></p>
-          <a href="/keranjang" class="mt-3 block text-center text-sm text-muted underline hover:text-brand-600">Kembali ke keranjang</a>
+          <p id="pay-reason" class="mt-2.5 text-center text-xs text-muted" aria-live="polite"></p>
+          <p id="form-error" class="mt-3 hidden rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-center text-sm font-medium text-red-800" role="alert"></p>
+          <a href="/keranjang" class="mt-4 block rounded text-center text-sm text-muted underline hover:text-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
+            Kembali ke keranjang
+          </a>
         </div>
-      </aside>
+      </div>
     </form>
   </section>
 </Layout>
 
 <style is:global>
+  /* ── Sections: a titled block on one calm surface, split by a hairline. Not four bordered boxes. */
+  .checkout-section {
+    padding: 1.25rem 1rem;
+    border-top: 1px solid var(--color-line);
+  }
+  .checkout-section:first-child {
+    border-top: 0;
+  }
+  @media (min-width: 640px) {
+    .checkout-section {
+      padding: 1.75rem;
+    }
+  }
+  .section-title {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+  .section-sub {
+    margin-top: 0.125rem;
+    font-size: 0.8125rem;
+    color: var(--color-muted);
+  }
+  .req {
+    color: #b91c1c; /* AA on white and on cream */
+  }
+
+  /* ── Fields: persistent label, one subtle border, one focus ring. */
+  .field-label {
+    display: block;
+    margin-bottom: 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-ink);
+  }
   .input-field {
-    margin-top: 0.375rem;
     width: 100%;
     border-radius: 0.5rem;
     border: 1px solid var(--color-line);
-    background: var(--color-cream);
+    background: #fff;
     padding: 0.625rem 0.875rem;
     font-size: 0.875rem;
     color: var(--color-ink);
     outline: none;
-    transition: border-color 0.15s, background 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .input-field::placeholder {
+    color: var(--color-muted);
+  }
+  .input-field:hover:not(:disabled):not([readonly]) {
+    border-color: var(--color-brand-400);
   }
   .input-field:focus {
-    border-color: var(--color-brand-400);
+    border-color: var(--color-brand-600);
+    box-shadow: 0 0 0 3px var(--color-brand-100);
+  }
+  /* A derived value the shopper may READ but not type — visibly not-an-input, so nobody sits there
+     wondering why their keystrokes do nothing. */
+  .input-field[readonly] {
+    background: var(--color-cream);
+    color: var(--color-muted);
+    cursor: default;
+  }
+  .input-field[aria-invalid="true"] {
+    border-color: #dc2626;
+  }
+  .input-field[aria-invalid="true"]:focus {
+    box-shadow: 0 0 0 3px #fee2e2;
+  }
+  /* Bahasa, inline, under the field it belongs to, with an icon — not a native bubble that vanishes on
+     the next click and cannot be re-read. */
+  .field-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.375rem;
+    margin-top: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #b91c1c;
+  }
+  .field-error[hidden] {
+    display: none;
+  }
+  .field-error svg {
+    height: 0.875rem;
+    width: 0.875rem;
+    flex: none;
+    margin-top: 0.0625rem;
+  }
+
+  /* ── List groups: the shipping + payment tables. Hairline-separated rows in one frame; the selected
+     row is tinted and its radio filled; anything priced is right-aligned. */
+  .list-group {
+    overflow: hidden;
+    border: 1px solid var(--color-line);
+    border-radius: 0.75rem;
     background: #fff;
+  }
+  .list-group > * + * {
+    border-top: 1px solid var(--color-line);
+  }
+  .lg-row {
+    display: flex;
+    cursor: pointer;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    transition: background 0.15s;
+  }
+  .lg-row:hover {
+    background: color-mix(in srgb, var(--color-brand-50) 55%, #fff);
+  }
+  .lg-row:has(:checked) {
+    background: var(--color-brand-50);
+  }
+  .lg-row:has(:focus-visible) {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: -2px;
+  }
+  .lg-radio {
+    height: 1rem;
+    width: 1rem;
+    flex: none;
+    accent-color: var(--color-brand-600);
+  }
+  .lg-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    background: var(--color-cream);
+  }
+  .lg-icon {
+    display: flex;
+    height: 2rem;
+    width: 2rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    background: var(--color-brand-50);
+    box-shadow: inset 0 0 0 1px var(--color-brand-100);
+  }
+  .lg-title {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-ink);
+  }
+  .lg-sub {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--color-muted);
+  }
+  .lg-price {
+    flex: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  /* The selected method's instructions, expanded under its own row. */
+  .pay-detail {
+    border-top: 1px solid var(--color-line);
+    background: color-mix(in srgb, var(--color-brand-50) 60%, #fff);
+    padding: 0.75rem 1rem 0.875rem 2.75rem;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--color-muted);
+  }
+  .pay-detail[hidden] {
+    display: none;
+  }
+  .ship-placeholder {
+    border-radius: 0.75rem;
+    border: 1px dashed var(--color-line);
+    background: var(--color-cream);
+    padding: 1rem;
+    font-size: 0.875rem;
+    color: var(--color-muted);
+  }
+  .ship-group-label {
+    margin-bottom: 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-muted);
+  }
+
+  /* Keyboard result rows in the kecamatan combobox. */
+  .dest-opt {
+    display: block;
+    width: 100%;
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    text-align: left;
+    font-size: 0.875rem;
+    color: var(--color-ink);
+  }
+  .dest-opt[aria-selected="true"],
+  .dest-opt:hover {
+    background: var(--color-brand-50);
+  }
+
+  /* ── The summary rail: a muted panel, distinct from both the cream page and the white form. */
+  .summary-rail {
+    border: 1px solid var(--color-line);
+    border-radius: 1rem;
+    background: color-mix(in srgb, var(--color-line) 30%, #fff);
+  }
+  /* The collapsed bar is a PHONE control. Its `display` is decided here, not by a `lg:hidden`
+     utility: this stylesheet is unlayered and Tailwind's utilities live in a layer, so a plain
+     `.summary-toggle { display: flex }` silently outranks `lg:hidden` and the bar showed up on
+     desktop, on top of the rail it is supposed to replace. */
+  .summary-toggle {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.875rem 1rem;
+    text-align: left;
+  }
+  @media (min-width: 1024px) {
+    .summary-toggle {
+      display: none;
+    }
+  }
+  .summary-toggle:focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: -2px;
+    border-radius: 1rem;
+  }
+  .summary-body {
+    padding: 1rem;
+  }
+  @media (min-width: 640px) {
+    .summary-body {
+      padding: 1.5rem;
+    }
+  }
+  /* On a phone the rail is the collapsed bar at the top; the body opens on demand. Desktop needs no
+     JS at all — the media query simply does not apply, so the body is visible on first paint (no
+     flash of a collapsed panel). */
+  @media (max-width: 1023.98px) {
+    .summary-body {
+      display: none;
+      border-top: 1px solid var(--color-line);
+    }
+    .summary-rail.is-open .summary-body {
+      display: block;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-spin,
+    .animate-pulse {
+      animation: none;
+    }
   }
 </style>
 
-<script is:inline define:vars={{ ONGKIR_API, ORDER_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, RECOVER }}>
+<script is:inline define:vars={{ ONGKIR_API, ORDER_API, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, RECOVER }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -498,6 +924,9 @@ if (rToken) {
       return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
         return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
       });
+    }
+    function show(el, on) {
+      if (el) el.hidden = !on;
     }
 
     // ---- The funnel session id (Analytics.astro, sessionStorage "tphi:sid") ----
@@ -634,9 +1063,9 @@ if (rToken) {
           "</div>" +
           '<div class="min-w-0 flex-1">' +
           '<p class="truncate text-sm font-medium text-ink">' + esc(item.name) + "</p>" +
-          ((item.variant || item.size) ? '<p class="text-xs text-muted">Varian: ' + esc(item.variant || item.size) + "</p>" : "") +
+          ((item.variant || item.size) ? '<p class="truncate text-xs text-muted">Varian: ' + esc(item.variant || item.size) + "</p>" : "") +
           "</div>" +
-          '<span class="text-sm font-medium text-ink tabular-nums">' + idr.format(sub) + "</span>" +
+          '<span class="shrink-0 text-sm font-medium text-ink tabular-nums">' + idr.format(sub) + "</span>" +
           "</div>"
         );
       })
@@ -645,9 +1074,109 @@ if (rToken) {
     document.getElementById("summary-items").innerHTML = itemsHtml;
     document.getElementById("summary-subtotal").textContent = idr.format(subtotal);
 
+    // ── Elements ────────────────────────────────────────────────────────────────────────────────
+    var destSearch = document.getElementById("dest-search");
+    var destResults = document.getElementById("dest-results");
+    var destId = document.getElementById("dest-id");
+    var destText = document.getElementById("dest-text");
+    var destMsg = document.getElementById("dest-msg");
+    var destSpinner = document.getElementById("dest-spinner");
+    var destOk = document.getElementById("dest-ok");
+
+    var kotaEl = form.querySelector('input[name="kota"]');
+    var provinsiEl = form.querySelector('input[name="provinsi"]');
+    var kodeposEl = document.getElementById("kodepos");
+    var kodeposWrap = document.getElementById("kodepos-wrap");
+    var kelWrap = document.getElementById("kel-wrap");
+    var kelNote = document.getElementById("kel-note");
+    var kelSelect = document.getElementById("kel-select");
+    var kelIdEl = document.getElementById("kel-id");
+    var kelNameEl = document.getElementById("kel-name");
+    var areaLine = document.getElementById("area-derived");
+    var areaText = document.getElementById("area-derived-text");
+
+    var shipPlaceholder = document.getElementById("ship-placeholder");
+    var shipLoading = document.getElementById("ship-loading");
+    var shipLoadingSr = document.getElementById("ship-loading-sr");
+    var shipEmpty = document.getElementById("ship-empty");
+    var shipEmptyNote = document.getElementById("ship-empty-note");
+    var shipError = document.getElementById("ship-error");
+    var shipErrorText = document.getElementById("ship-error-text");
+    var shipRetry = document.getElementById("ship-retry");
+    var expressGroup = document.getElementById("ship-express-group");
+    var expressBox = document.getElementById("ship-express");
+    var defaultNote = document.getElementById("ship-default-note");
+    var moreBox = document.getElementById("ship-more");
+    var moreBtn = document.getElementById("ship-more-btn");
+    var moreLabel = document.getElementById("ship-more-label");
+    var moreCaret = document.getElementById("ship-more-caret");
+
+    var payBtn = document.getElementById("pay-btn");
+    var payReason = document.getElementById("pay-reason");
+    var summaryPanel = document.getElementById("summary-panel");
+    var summaryToggle = document.getElementById("summary-toggle");
+    var summaryCaret = document.getElementById("summary-caret");
+    var summaryPicks = document.getElementById("summary-picks");
+    var summaryDest = document.getElementById("summary-dest");
+    var summaryDestText = document.getElementById("summary-dest-text");
+    var summaryShip = document.getElementById("summary-ship");
+    var summaryShipText = document.getElementById("summary-ship-text");
+    var mTotal = document.getElementById("m-total");
+
+    // The mobile "Ringkasan pesanan · Rp…" bar. Desktop needs no JS — the media query simply stops
+    // applying and the body is visible on first paint.
+    if (summaryToggle) {
+      summaryToggle.addEventListener("click", function () {
+        var open = !summaryPanel.classList.contains("is-open");
+        summaryPanel.classList.toggle("is-open", open);
+        summaryToggle.setAttribute("aria-expanded", open ? "true" : "false");
+        if (summaryCaret) summaryCaret.classList.toggle("rotate-180", open);
+      });
+    }
+
+    // State the gate reads.
+    var kelList = [];        // the kelurahan of the chosen kecamatan ([] = none known for it)
+    var kelRequired = false; // true whenever we HAVE kelurahan for the district → it must be picked
+    var ratesLoading = false;
+
+    function api(payload) {
+      return fetch(ONGKIR_API, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      }).then(function (r) { return r.json(); });
+    }
+
     function selectedShipping() {
       var el = form.querySelector('input[name="shipping"]:checked');
       return el ? Number(el.getAttribute("data-price")) : 0;
+    }
+
+    // ── Inline errors ───────────────────────────────────────────────────────────────────────────
+    // Red text WITH an icon, under the field it belongs to — colour alone is not an accessible way to
+    // say "this is wrong".
+    var ERR_ICON =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+      '<circle cx="12" cy="12" r="10" /><path d="M12 8v4" stroke-linecap="round" /><path d="M12 16h.01" stroke-linecap="round" /></svg>';
+    function setError(fieldName, msg) {
+      var box = document.getElementById("err-" + fieldName);
+      var el = form.querySelector('[name="' + fieldName + '"]');
+      if (box) {
+        box.innerHTML = msg ? ERR_ICON + "<span>" + esc(msg) + "</span>" : "";
+        box.hidden = !msg;
+      }
+      if (el) {
+        if (msg) el.setAttribute("aria-invalid", "true");
+        else el.removeAttribute("aria-invalid");
+      }
+      return !msg;
+    }
+
+    // ── The selected payment method expands its own instructions ────────────────────────────────
+    function syncPayDetail() {
+      var checked = form.querySelector('input[name="payment"]:checked');
+      var code = checked ? checked.value : null;
+      document.querySelectorAll(".pay-detail").forEach(function (d) {
+        d.hidden = !code || d.getAttribute("data-for") !== code;
+      });
     }
 
     // ---- COD availability — the same five conditions the order API enforces ----
@@ -661,12 +1190,9 @@ if (rToken) {
     // the same lie in a nicer font). /api/public/order re-checks all of it regardless — this is UX.
     var codOption = document.getElementById("cod-option");
     var codRadio = codOption ? codOption.querySelector('input[name="payment"]') : null;
-    var provinsiEl = form.querySelector('input[name="provinsi"]');
 
-    // Must match normProvince() in apps/admin/lib/cod.ts — the buyer TYPES their province (the
-    // datalist only suggests), so "DI Yogyakarta" / "Daerah Istimewa Yogyakarta" / "prov. jawa barat"
-    // all have to land on the same key. Duplicated because the storefront (Astro, inline script)
-    // cannot import from the admin app; the API's copy is the one that decides.
+    // Must match normProvince() in apps/admin/lib/cod.ts. Duplicated because the storefront (Astro,
+    // inline script) cannot import from the admin app; the API's copy is the one that decides.
     function normProvince(s) {
       return String(s || "")
         .toLowerCase()
@@ -674,14 +1200,12 @@ if (rToken) {
         .replace(/\b(provinsi|prov\.?|daerah istimewa|daerah khusus ibukota|d\.?k\.?i\.?|d\.?i\.?y?\.?)\b/g, " ")
         .replace(/[^a-z0-9]+/g, "");
     }
-
     function codProvinceOk() {
       if (!COD_PROVINCES || !COD_PROVINCES.length) return true; // no allow-list = anywhere
       var p = normProvince(provinsiEl ? provinsiEl.value : "");
       if (!p) return false;
       return COD_PROVINCES.some(function (x) { return normProvince(x) === p; });
     }
-
     function syncCod() {
       if (!codOption || !codRadio) return;
       var shipEl = form.querySelector('input[name="shipping"]:checked');
@@ -706,15 +1230,81 @@ if (rToken) {
       codOption.hidden = true;
     }
 
-    function recompute() {
-      var ship = selectedShipping();
-      document.getElementById("summary-shipping").textContent = idr.format(ship);
-      document.getElementById("summary-total").textContent = idr.format(subtotal + ship);
-      syncCod();
+    // ── THE GATE — "Bayar Sekarang" is only live when there is something to pay FOR ──────────────
+    // Not the typed fields (disabling a button because a name box is still empty is hostile — those
+    // are validated on submit, inline, where the shopper can see them). Only the PICKS: a destination
+    // the parcel can be booked to, a service that can carry it, and a way to pay. The reason line
+    // always says which one is missing — a dead button with no explanation is the worst of both.
+    function updateGate() {
+      var shipEl = form.querySelector('input[name="shipping"]:checked');
+      var payEl = form.querySelector('input[name="payment"]:checked');
+      var reason = "";
+      if (!destId.value) reason = "Pilih kecamatan tujuan dulu.";
+      else if (kelRequired && !kelIdEl.value) reason = "Pilih kelurahan / desa tujuan.";
+      else if (ratesLoading) reason = "Menghitung ongkir…";
+      else if (!shipEl) reason = "Pilih layanan pengiriman.";
+      else if (!payEl) reason = "Pilih metode pembayaran.";
+
+      payBtn.disabled = !!reason;
+      payReason.textContent = reason;
+      payReason.hidden = !reason;
     }
 
-    // NOTE: the province is no longer typed (it is a hidden, derived field), so there is nothing to
-    // listen to — applyArea()/clearArea() call syncCod() at the only moments it can change.
+    // ── The summary states WHERE it goes and HOW ─────────────────────────────────────────────────
+    // Rendered FROM the same hidden inputs the order payload reads, so the panel can never show a
+    // destination the order does not contain.
+    function renderSummary() {
+      var shipEl = form.querySelector('input[name="shipping"]:checked');
+      var ship = selectedShipping();
+
+      var destLine = "";
+      if (destId.value) {
+        var bits = [];
+        if (kelNameEl.value) bits.push("Kel. " + kelNameEl.value);
+        if (destText.value) bits.push(destText.value);
+        destLine = bits.join(", ");
+        if (kodeposEl.value) destLine += " " + kodeposEl.value;
+      }
+      summaryDestText.textContent = destLine;
+      show(summaryDest, !!destLine);
+
+      if (shipEl) {
+        summaryShipText.textContent =
+          shipEl.getAttribute("data-label") + " · estimasi " + (shipEl.getAttribute("data-etd") || "-") + " hari";
+      }
+      show(summaryShip, !!shipEl);
+      show(summaryPicks, !!destLine || !!shipEl);
+
+      // The ongkir line is honest about which of the three states it is in: it cannot be a number
+      // before an address exists, so it says so rather than showing a confident Rp0 that the Total
+      // then quietly contradicts.
+      var shipCell = document.getElementById("summary-shipping");
+      shipCell.classList.remove("text-muted", "text-ink", "text-xs", "font-medium");
+      if (shipEl) {
+        shipCell.textContent = idr.format(ship);
+        shipCell.classList.add("text-ink", "font-medium", "tabular-nums");
+      } else if (!destId.value) {
+        shipCell.textContent = "Dihitung di langkah berikutnya";
+        shipCell.classList.add("text-muted", "text-xs");
+      } else if (ratesLoading) {
+        shipCell.textContent = "Menghitung…";
+        shipCell.classList.add("text-muted", "text-xs");
+      } else {
+        shipCell.textContent = "Belum dipilih";
+        shipCell.classList.add("text-muted", "text-xs");
+      }
+
+      var total = idr.format(subtotal + ship);
+      document.getElementById("summary-total").textContent = total;
+      if (mTotal) mTotal.textContent = total; // the collapsed mobile bar shows the same number
+    }
+
+    function recompute() {
+      syncCod();
+      syncPayDetail();
+      renderSummary();
+      updateGate();
+    }
 
     function bindShipping() {
       form.querySelectorAll('input[name="shipping"]').forEach(function (el) {
@@ -722,26 +1312,323 @@ if (rToken) {
       });
       recompute();
     }
-    bindShipping();
 
-    // ---- Live KiriminAja ongkir (via platform proxy on the admin) ----
-    // ONGKIR_API + ORIGIN_CITY injected via define:vars (env-driven, per-store origin)
-    var destSearch = document.getElementById("dest-search");
-    var destResults = document.getElementById("dest-results");
-    var destId = document.getElementById("dest-id");
-    var destText = document.getElementById("dest-text");
-    var shipHint = document.getElementById("ship-hint");
-    var expressGroup = document.getElementById("ship-express-group");
-    var expressBox = document.getElementById("ship-express");
-    var defaultNote = document.getElementById("ship-default-note");
-    var moreBox = document.getElementById("ship-more");
-    var moreBtn = document.getElementById("ship-more-btn");
-    var moreLabel = document.getElementById("ship-more-label");
-    var moreCaret = document.getElementById("ship-more-caret");
+    // ── Derived kota / provinsi ─────────────────────────────────────────────────────────────────
+    function showArea() {
+      if (!areaLine || !areaText) return;
+      var parts = [];
+      if (kelNameEl.value) parts.push("Kel. " + kelNameEl.value);
+      if (destText.value) parts.push(destText.value);
+      else {
+        if (kotaEl.value) parts.push(kotaEl.value);
+        if (provinsiEl.value) parts.push(provinsiEl.value);
+      }
+      var line = parts.join(", ");
+      if (kodeposEl.value) line += " " + kodeposEl.value;
+      if (!line) { areaLine.hidden = true; areaText.textContent = ""; return; }
+      areaText.textContent = line;
+      areaLine.hidden = false;
+    }
 
-    // Reveal, do not re-fetch: every service is already in the DOM (one `op=rates` call prices them
-    // all). Clicking this is instant.
+    function applyArea(city, province) {
+      if (kotaEl && city) kotaEl.value = city;
+      if (provinsiEl && province) provinsiEl.value = province;
+      showArea();
+      recompute(); // COD is province-gated — recheck now that the province actually exists
+      captureSoon();
+    }
+    function clearArea() {
+      if (kotaEl) kotaEl.value = "";
+      if (provinsiEl) provinsiEl.value = "";
+      destText.value = "";
+      resetKelurahan();
+      resetRates();
+      showArea();
+      recompute();
+    }
+
+    // ---- Kelurahan → the address AND the kodepos ------------------------------------------------
+    // The village is part of what gets booked, not just a lookup for a postal code — so its id and
+    // name travel with the order. The kodepos comes from the picked village, because a kodepos is
+    // assigned per kelurahan and 17% of kecamatan span several of them.
+    function setKodeposManual(manual) {
+      if (!kodeposEl) return;
+      kodeposEl.readOnly = !manual;
+    }
+
+    function resetKelurahan() {
+      kelList = [];
+      kelRequired = false;
+      if (kelWrap) kelWrap.hidden = true;
+      if (kelNote) kelNote.hidden = true;
+      if (kelSelect) kelSelect.innerHTML = '<option value="">Pilih kelurahan…</option>';
+      if (kelIdEl) kelIdEl.value = "";
+      if (kelNameEl) kelNameEl.value = "";
+      if (kodeposEl) kodeposEl.value = "";
+      setError("kelurahan", "");
+      // No kelurahan next to it → Kode Pos takes the whole row instead of sitting in a half-width
+      // column with a hole beside it.
+      if (kodeposWrap) kodeposWrap.classList.add("sm:col-span-2");
+      setKodeposManual(true); // back to a plain typed field until a district tells us otherwise
+    }
+
+    // The two shapes of the same endpoint. `{villages:[{id,name,postalCode}]}` is the newer contract;
+    // `{kelurahan:[{name,postcode}]}` is what this deployment's proxy returns today (it selects no id
+    // — see the report/backend gap). Reading both means the checkout works against either, and picks
+    // up the ids the moment the proxy starts sending them, with no second deploy.
+    function readVillages(res) {
+      var raw = (res && res.ok && (res.villages || res.kelurahan)) || [];
+      return raw
+        .map(function (v) {
+          return {
+            id: v.id != null ? String(v.id) : "",
+            name: String(v.name || ""),
+            postcode: String(v.postalCode || v.postcode || ""),
+          };
+        })
+        .filter(function (v) { return v.name; });
+    }
+
+    function pickKelurahan(idx) {
+      var k = kelList[idx];
+      if (!k) {
+        kelIdEl.value = "";
+        kelNameEl.value = "";
+        if (kodeposEl) kodeposEl.value = "";
+      } else {
+        // No id from the proxy → fall back to the NAME as the identifier. The order API is given both
+        // fields; a name is worse than an id but it is not a guess, and it is what the label needs.
+        kelIdEl.value = k.id || k.name;
+        kelNameEl.value = k.name;
+        if (kodeposEl) kodeposEl.value = k.postcode || "";
+        // A village with no postal code in the dataset → let them type it rather than ship a blank.
+        setKodeposManual(!k.postcode);
+      }
+      setError("kelurahan", "");
+      setError("kodepos", "");
+      showArea();
+      recompute();
+      captureSoon();
+    }
+
+    // ── THE KELURAHAN IS ASKED WHENEVER WE HAVE ONE ─────────────────────────────────────────────
+    // Measured on the real table (78.764 kelurahan across 6.735 of KiriminAja's 7.030 districts):
+    //   · 6.735 districts (95,8%) have kelurahan → the picker is shown and REQUIRED. It used to be
+    //     shown only for the 18% of districts that span several postcodes, because it was treated as a
+    //     kodepos-filling trick. But the village is part of the ADDRESS: the merchant books the
+    //     shipment to exactly the area picked here, so leaving it unanswered for 82% of orders meant
+    //     the parcel was booked one administrative level coarser than the shopper's real address.
+    //     A district with exactly ONE kelurahan auto-selects it — that is not a guess, it is the only
+    //     answer, and it keeps the zero-interaction path for the districts that genuinely have none.
+    //   ·   295 districts (4,2%) have no kelurahan data → the picker is not shown, the kodepos is
+    //     TYPED, and the order is NOT blocked. An unmatched district must degrade to "the shopper
+    //     types it", never to a dead end.
+    // Never guessed: a postcode is only ever taken from a village the shopper actually chose.
+    function loadKelurahan(districtId) {
+      resetKelurahan();
+      if (!kelWrap || !kelSelect || !districtId) return Promise.resolve();
+      return api({
+        op: "kelurahan",
+        destinationId: Number(districtId), // this deployment's key
+        kecamatanId: Number(districtId),   // the newer proxy's key — harmless to either
+      })
+        .then(function (res) {
+          var list = readVillages(res);
+          if (!list.length) return; // resetKelurahan() already left it typed-and-optional
+          kelList = list;
+          kelRequired = true;
+
+          kelSelect.innerHTML =
+            '<option value="">Pilih kelurahan…</option>' +
+            list
+              .map(function (k, i) {
+                return '<option value="' + i + '">' + esc(k.name) + (k.postcode ? " — " + esc(k.postcode) : "") + "</option>";
+              })
+              .join("");
+          kelWrap.hidden = false;
+          if (kodeposWrap) kodeposWrap.classList.remove("sm:col-span-2"); // share the row again
+          if (kelNote) kelNote.hidden = false;
+          setKodeposManual(false); // it comes from the picker now
+
+          // Exactly one candidate → answer it for them.
+          if (list.length === 1) {
+            kelSelect.value = "0";
+            pickKelurahan(0);
+          } else {
+            recompute(); // the gate now waits on the kelurahan
+          }
+        })
+        .catch(function () {
+          // The lookup failed → do NOT block the order on a village we could not fetch. Typed kodepos.
+          resetKelurahan();
+          recompute();
+        });
+    }
+
+    if (kelSelect) {
+      kelSelect.addEventListener("change", function () {
+        pickKelurahan(kelSelect.value === "" ? -1 : Number(kelSelect.value));
+      });
+    }
+
+    // ── The kecamatan combobox ──────────────────────────────────────────────────────────────────
+    var searchTimer;
+    var searchSeq = 0;   // only the newest response may paint — a slow one must not overwrite it
+    var destOpts = [];   // the rendered <li>s
+    var activeIdx = -1;
+
+    function destMessage(text, tone) {
+      destMsg.textContent = text;
+      destMsg.className = "mt-1.5 text-xs " + (tone === "error" ? "text-red-700" : "text-muted");
+    }
+    function closeResults() {
+      destResults.hidden = true;
+      destResults.innerHTML = "";
+      destSearch.setAttribute("aria-expanded", "false");
+      destSearch.removeAttribute("aria-activedescendant");
+      destOpts = [];
+      activeIdx = -1;
+    }
+    function setActive(i) {
+      if (!destOpts.length) return;
+      if (activeIdx >= 0 && destOpts[activeIdx]) destOpts[activeIdx].setAttribute("aria-selected", "false");
+      activeIdx = (i + destOpts.length) % destOpts.length;
+      var el = destOpts[activeIdx];
+      el.setAttribute("aria-selected", "true");
+      destSearch.setAttribute("aria-activedescendant", el.id);
+      // Keep the highlighted row in view when arrowing past the fold.
+      if (el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+    }
+
+    function chooseResult(el) {
+      if (!el) return;
+      destId.value = el.getAttribute("data-id");
+      destText.value = el.getAttribute("data-text");
+      destSearch.value = el.getAttribute("data-text");
+      closeResults();
+      show(destOk, true);
+      destMessage("Kecamatan terpilih. Kota, provinsi & kode pos terisi otomatis.");
+      setError("dest", ""); // no-op unless a submit had flagged it
+      applyArea(el.getAttribute("data-city"), el.getAttribute("data-province"));
+      loadKelurahan(destId.value).then(loadRates);
+    }
+
+    if (destSearch) {
+      destSearch.addEventListener("input", function () {
+        // Editing the search box invalidates the SELECTION — the derived city/province/kodepos and the
+        // rates all belonged to a district id that no longer applies. Everything downstream goes.
+        destId.value = "";
+        show(destOk, false);
+        clearArea();
+        clearTimeout(searchTimer);
+
+        var q = destSearch.value.trim();
+        if (q.length < 3) {
+          closeResults();
+          show(destSpinner, false);
+          destMessage("Ketik minimal 3 huruf, lalu pilih dari daftar.");
+          return;
+        }
+        show(destSpinner, true);
+        destMessage("Mencari kecamatan…");
+
+        var seq = ++searchSeq;
+        searchTimer = setTimeout(function () {
+          api({ op: "search", q: q })
+            .then(function (res) {
+              if (seq !== searchSeq) return; // a newer keystroke already owns the box
+              show(destSpinner, false);
+              var results = (res && res.ok && res.results) || [];
+              if (!results.length) {
+                closeResults();
+                destMessage("Kecamatan “" + q + "” tidak ditemukan. Coba nama lain.");
+                return;
+              }
+              destResults.innerHTML = results
+                .slice(0, 8)
+                .map(function (a, i) {
+                  // data-city / data-province ride along so picking a result fills the form without a
+                  // second round-trip. They may be absent (the live-API fallback cannot always be
+                  // parsed), in which case applyArea() leaves those inputs alone rather than blanking
+                  // them.
+                  return (
+                    '<li role="option" id="dest-opt-' + i + '" aria-selected="false" class="dest-opt" ' +
+                    'data-id="' + esc(a.id) + '" data-text="' + esc(a.text) + '" ' +
+                    'data-city="' + esc(a.city || "") + '" data-province="' + esc(a.province || "") + '">' +
+                    esc(a.text) +
+                    "</li>"
+                  );
+                })
+                .join("");
+              destResults.hidden = false;
+              destSearch.setAttribute("aria-expanded", "true");
+              destOpts = Array.prototype.slice.call(destResults.querySelectorAll('[role="option"]'));
+              activeIdx = -1;
+              destMessage(results.length + " kecamatan ditemukan — pilih satu (panah atas/bawah, Enter).");
+            })
+            .catch(function () {
+              if (seq !== searchSeq) return;
+              show(destSpinner, false);
+              closeResults();
+              destMessage("Gagal mencari kecamatan. Periksa koneksimu lalu coba lagi.", "error");
+            });
+        }, 300);
+      });
+
+      // FULL KEYBOARD SUPPORT. The results were a div of clickable divs — mouse-only, so a keyboard or
+      // screen-reader shopper literally could not pick a destination, i.e. could not buy anything.
+      destSearch.addEventListener("keydown", function (e) {
+        if (destResults.hidden) {
+          if (e.key === "ArrowDown" && destOpts.length) { e.preventDefault(); destResults.hidden = false; setActive(0); }
+          return;
+        }
+        if (e.key === "ArrowDown") { e.preventDefault(); setActive(activeIdx + 1); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); setActive(activeIdx - 1); }
+        else if (e.key === "Home") { e.preventDefault(); setActive(0); }
+        else if (e.key === "End") { e.preventDefault(); setActive(destOpts.length - 1); }
+        else if (e.key === "Enter") {
+          // Only swallow Enter when a row is actually highlighted — otherwise Enter must keep meaning
+          // "submit the form".
+          if (activeIdx >= 0) { e.preventDefault(); chooseResult(destOpts[activeIdx]); }
+        } else if (e.key === "Escape") { e.preventDefault(); closeResults(); }
+        else if (e.key === "Tab") { closeResults(); }
+      });
+
+      destResults.addEventListener("mousedown", function (e) {
+        // mousedown, not click: `blur` fires first and would close the list out from under the click.
+        e.preventDefault();
+        var li = e.target.closest('[role="option"]');
+        if (li) chooseResult(li);
+      });
+
+      // Click anywhere else = "I'm done with this list".
+      document.addEventListener("click", function (e) {
+        if (!destResults.hidden && !destResults.contains(e.target) && e.target !== destSearch) closeResults();
+      });
+      destSearch.addEventListener("blur", function () {
+        setTimeout(function () { if (document.activeElement !== destSearch) closeResults(); }, 120);
+      });
+    }
+
+    // ── Rates ───────────────────────────────────────────────────────────────────────────────────
+    function resetRates() {
+      ratesLoading = false;
+      expressBox.innerHTML = "";
+      moreBox.innerHTML = "";
+      moreBox.hidden = true;
+      show(expressGroup, false);
+      show(shipLoading, false);
+      show(shipEmpty, false);
+      show(shipError, false);
+      show(moreBtn, false);
+      show(defaultNote, false);
+      shipPlaceholder.hidden = false; // back to "masukkan alamat pengiriman…"
+      shipLoadingSr.textContent = "";
+    }
+
     if (moreBtn) {
+      // Reveal, do not re-fetch: every service is already in the DOM (one `op=rates` call prices them
+      // all). Clicking this is instant.
       moreBtn.addEventListener("click", function () {
         var open = moreBox.hidden;
         moreBox.hidden = !open;
@@ -753,271 +1640,154 @@ if (rToken) {
         }
       });
     }
-
-    function api(payload) {
-      return fetch(ONGKIR_API, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
-      }).then(function (r) { return r.json(); });
-    }
-
-    var searchTimer;
-    // Kota + Provinsi are DERIVED from the chosen kecamatan — the shopper never types them. They are
-    // readonly in the markup, so this is the only writer.
-    var kotaEl = form.querySelector('input[name="kota"]');
-    var kodeposEl = document.getElementById("kodepos");
-    var kodeposWrap = document.getElementById("kodepos-wrap");
-    var kelWrap = document.getElementById("kel-wrap");
-    var kelNote = document.getElementById("kel-note");
-    var kelSelect = document.getElementById("kel-select");
-    var areaLine = document.getElementById("area-derived");
-    var areaText = document.getElementById("area-derived-text");
-
-    // The derived line IS the display of the hidden kota/provinsi inputs — it renders from them, so
-    // it can never say something different from what is submitted.
-    function showArea() {
-      if (!areaLine || !areaText) return;
-      var parts = [kotaEl && kotaEl.value, provinsiEl && provinsiEl.value].filter(Boolean);
-      if (!parts.length) { areaLine.hidden = true; areaText.textContent = ""; return; }
-      areaText.textContent = parts.join(" · ");
-      areaLine.hidden = false;
-    }
-
-    function applyArea(city, province) {
-      if (kotaEl && city) kotaEl.value = city;
-      if (provinsiEl && province) provinsiEl.value = province;
-      showArea();
-      // COD eligibility is province-gated — recheck it now that the province actually exists.
-      syncCod();
-      captureSoon();
-    }
-    function clearArea() {
-      if (kotaEl) kotaEl.value = "";
-      if (provinsiEl) provinsiEl.value = "";
-      showArea();
-      resetKelurahan();
-      syncCod();
-    }
-
-    // ---- Kelurahan → kodepos -------------------------------------------------------------------
-    // A kodepos belongs to a kelurahan, not to a kecamatan, so it cannot be filled from the district
-    // the shopper picked for ongkir. Ask for the kelurahan and take the kodepos from it.
-    function setKodeposManual(manual) {
-      if (!kodeposEl) return;
-      kodeposEl.readOnly = !manual;
-      kodeposEl.classList.toggle("cursor-not-allowed", !manual);
-      kodeposEl.classList.toggle("bg-brand-50/60", !manual);
-      kodeposEl.classList.toggle("text-muted", !manual);
-    }
-
-    function resetKelurahan() {
-      if (kelWrap) kelWrap.hidden = true;
-      if (kelNote) kelNote.hidden = true;
-      if (kelSelect) kelSelect.innerHTML = '<option value="">Pilih kelurahan…</option>';
-      if (kodeposEl) kodeposEl.value = "";
-      // No kelurahan next to it → Kode Pos takes the whole row instead of sitting in a half-width
-      // column with a hole beside it.
-      if (kodeposWrap) kodeposWrap.classList.add("sm:col-span-2");
-      // Back to a plain typed field until a district tells us otherwise.
-      setKodeposManual(true);
-    }
-
-    // ── THE KODEPOS FILLS ITSELF WHENEVER IT HONESTLY CAN ────────────────────────────────────────
-    // Measured on the real table (78.764 kelurahan across 6.735 of KiriminAja's 7.030 districts):
-    //   · 5.520 districts (82,0%) have exactly ONE postcode across every kelurahan in them. For those
-    //     the kelurahan choice cannot change the answer — so the kodepos is filled the moment the
-    //     district is picked, and the kelurahan row is not shown at all. Zero extra interaction.
-    //   · 1.215 districts (18,0%) genuinely span several postcodes (the dense urban ones — Semarang
-    //     Tengah has 11). There the kelurahan IS the question, so it is asked, and the kodepos fills
-    //     on that pick.
-    //   ·   295 districts (4,2% of all) have no kelurahan data → the kodepos stays typed by hand.
-    // Never guessed: a postcode is only auto-filled when every candidate agrees on it.
-    function loadKelurahan(districtId) {
-      if (!kelWrap || !kelSelect || !districtId) return;
-      api({ op: "kelurahan", destinationId: Number(districtId) }).then(function (res) {
-        var list = (res && res.ok && res.kelurahan) || [];
-        if (!list.length) {
-          // No kelurahan data for this district. Degrade to a typed kodepos rather than inventing
-          // one — this number gets printed on a real parcel.
-          resetKelurahan();
-          return;
-        }
-
-        var codes = [];
-        list.forEach(function (k) { if (k.postcode && codes.indexOf(k.postcode) < 0) codes.push(k.postcode); });
-
-        if (codes.length === 1) {
-          // One postcode for the whole district → answer it for them.
-          resetKelurahan();                       // hides the kelurahan row, kodepos full width
-          if (kodeposEl) kodeposEl.value = codes[0];
-          setKodeposManual(false);                // derived, not typed
-          if (kelNote) kelNote.hidden = true;
-          captureSoon();
-          return;
-        }
-
-        kelSelect.innerHTML =
-          '<option value="">Pilih kelurahan…</option>' +
-          list
-            .map(function (k) {
-              return '<option value="' + esc(k.postcode) + '">' + esc(k.name) + " — " + esc(k.postcode) + "</option>";
-            })
-            .join("");
-        kelWrap.hidden = false;
-        // Kelurahan is back → the two share the row (Kelurahan | Kode Pos).
-        if (kodeposWrap) kodeposWrap.classList.remove("sm:col-span-2");
-        if (kelNote) kelNote.hidden = false;
-        // The kodepos now comes from the picker, so stop it being typed — and leave it EMPTY until a
-        // kelurahan is actually chosen. Pre-filling the first one would silently ship a wrong code.
-        if (kodeposEl) kodeposEl.value = "";
-        setKodeposManual(false);
-      });
-    }
-
-    if (kelSelect) {
-      kelSelect.addEventListener("change", function () {
-        if (kodeposEl) kodeposEl.value = kelSelect.value;
-        captureSoon();
-      });
-    }
-
-    if (destSearch) {
-      destSearch.addEventListener("input", function () {
-        // Editing the search box invalidates the selection — so the derived city/province must go
-        // too, or the form would keep showing an address the district id no longer matches.
-        destId.value = "";
-        clearArea();
-        clearTimeout(searchTimer);
-        var q = destSearch.value.trim();
-        if (q.length < 3) { destResults.classList.add("hidden"); return; }
-        searchTimer = setTimeout(function () {
-          api({ op: "search", q: q }).then(function (res) {
-            if (!res.ok || !res.results.length) { destResults.classList.add("hidden"); return; }
-            destResults.innerHTML = res.results.slice(0, 8).map(function (a) {
-              // data-city / data-province ride along so picking a result can fill the form without a
-              // second round-trip. They may be absent (the live-API fallback can't always be parsed),
-              // in which case applyArea() leaves those inputs alone rather than blanking them.
-              return '<button type="button" data-id="' + a.id + '" data-text="' + esc(a.text) + '" data-city="' + esc(a.city || "") + '" data-province="' + esc(a.province || "") + '" class="block w-full border-b border-line px-4 py-2 text-left text-sm last:border-0 hover:bg-brand-50">' + esc(a.text) + "</button>";
-            }).join("");
-            destResults.classList.remove("hidden");
-          });
-        }, 300);
-      });
-      destResults.addEventListener("click", function (e) {
-        var btn = e.target.closest("button[data-id]");
-        if (!btn) return;
-        destId.value = btn.getAttribute("data-id");
-        destText.value = btn.getAttribute("data-text");
-        destSearch.value = btn.getAttribute("data-text");
-        destResults.classList.add("hidden");
-        applyArea(btn.getAttribute("data-city"), btn.getAttribute("data-province"));
-        loadKelurahan(destId.value);
-        loadRates();
-      });
-    }
+    if (shipRetry) shipRetry.addEventListener("click", loadRates);
 
     function loadRates() {
       if (!destId.value) return;
-      if (shipHint) shipHint.classList.add("hidden");
-      expressGroup.classList.remove("hidden");
-      expressBox.innerHTML = '<p class="px-4 py-3 text-sm text-muted">Menghitung ongkir…</p>';
+
+      ratesLoading = true;
+      shipPlaceholder.hidden = true;
+      show(shipEmpty, false);
+      show(shipError, false);
+      show(expressGroup, false);
+      show(shipLoading, true);
+      shipLoadingSr.textContent = "Menghitung ongkir…";
+      recompute();
+
       // The cart lines go to the server and the SERVER weighs them (Σ product_variants.weight_grams).
-      // This used to post `weight: totalQty * 500` — a fabricated 500 g per item that quoted a 670 g
-      // apparel cart as 1.500 g, i.e. 3x the true postage. A weight is a price input: the client does
-      // not get to state it.
+      // A weight is a price input: the client does not get to state it. Same for the origin — it is
+      // the seller's pickup district, resolved server-side.
       var rateItems = cart.map(function (l) { return { handle: l.handle, variant: l.variant, qty: l.qty }; });
-      api({ op: "rates", storeSlug: STORE_SLUG, destinationId: Number(destId.value), items: rateItems, itemValue: subtotal }).then(function (res) {
-        if (!res.ok || !res.rates.length) {
-          expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">' + esc(res.error || "Tidak ada layanan untuk rute ini.") + "</p>";
-          recompute();
-          return;
-        }
-        // SORT BY PRICE. The API returns whatever order KiriminAja felt like, and the old code both
-        // rendered that order AND auto-checked `i === 0` — so a shopper's DEFAULT ongkir was
-        // "whichever service happened to come back first", which on this route was Rp26.000 sitting
-        // above a Rp9.000 one.
-        var rates = res.rates.slice().sort(function (a, b) { return a.cost - b.cost; });
+      var payload = {
+        op: "rates",
+        storeSlug: STORE_SLUG,
+        destinationId: Number(destId.value),
+        items: rateItems,
+        itemValue: subtotal,
+      };
+      // The village makes the quote MORE precise where the proxy supports it (and is ignored where it
+      // does not) — the same id the order is booked to, so the price and the parcel agree.
+      if (kelIdEl.value) payload.destinationVillageId = kelIdEl.value;
 
-        // "Tercepat" = the smallest number in the ETD string ("1-2" → 1, "2-4" → 2). Ties go to the
-        // cheaper one, which is already first after the sort. Both badges are computed across ALL
-        // rates, not just the visible one — a "Termurah" badge that only ranks what you can see is a
-        // lie the moment the list expands.
-        var etdMin = function (e) { var m = String(e || "").match(/\d+/); return m ? Number(m[0]) : 99; };
-        var cheapest = rates[0];
-        var fastest = rates.reduce(function (best, s) { return etdMin(s.etd) < etdMin(best.etd) ? s : best; }, rates[0]);
+      api(payload)
+        .then(function (res) {
+          ratesLoading = false;
+          show(shipLoading, false);
+          shipLoadingSr.textContent = "";
 
-        // ── THE DEFAULT IS SPX REGULER ─────────────────────────────────────────────────────────────
-        // Not "whatever is cheapest": the merchant's own default courier is a product decision, so it
-        // is named (spx / service_type "1" — "SPX Standard"). If the route does not offer it, or the
-        // seller switched it off, we fall back to the cheapest AND SAY SO — a different courier
-        // silently sitting in the default slot is exactly the substitution the shopper would not
-        // notice until the parcel arrives with someone else's label.
-        var preferred = rates.filter(function (s) { return s.code === "spx" && s.type === "1"; })[0];
-        var def = preferred || cheapest;
-
-        function row(s, checked) {
-          // s.cod is the EFFECTIVE flag from the API (KiriminAja capability × platform per-service
-          // allowance × this store's cod_enabled) — never the raw courier capability. The regrouping
-          // does not touch it: syncCod() still reads data-cod off whichever radio is checked.
-          var tags = "";
-          if (s === cheapest) tags += ' <span class="ml-1 rounded bg-brand-100 px-1.5 py-px text-[10px] font-semibold text-brand-700">Termurah</span>';
-          if (s === fastest) tags += ' <span class="ml-1 rounded bg-sky-100 px-1.5 py-px text-[10px] font-semibold text-sky-700">Tercepat</span>';
-          if (s.cod) tags += ' <span class="ml-1 rounded bg-emerald-100 px-1.5 py-px text-[10px] font-semibold text-emerald-700">COD</span>';
-          return '<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">' +
-            '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (checked ? " checked" : "") + ' required class="h-4 w-4 shrink-0 accent-brand-600" />' +
-            '<span class="min-w-0 flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + tags + '</span><span class="block text-xs text-muted">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
-            '<span class="shrink-0 text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
-        }
-
-        // The default row is the ONLY thing rendered up front.
-        expressBox.innerHTML = row(def, true);
-
-        if (defaultNote) {
-          if (preferred) {
-            defaultNote.hidden = true;
-          } else {
-            defaultNote.textContent = "SPX Reguler tidak tersedia untuk rute ini — kami pilihkan ongkir termurah.";
-            defaultNote.hidden = false;
+          if (!res || !res.ok) {
+            shipErrorText.textContent = (res && res.error) || "Gagal memuat ongkir.";
+            show(shipError, true);
+            recompute();
+            return;
           }
-        }
+          var rates = (res.rates || []).slice();
+          if (!rates.length) {
+            // "No service on this route" is FINAL, not a failure to retry — different card, different
+            // copy, no retry button.
+            shipEmptyNote.textContent = "Kurir yang aktif di toko ini belum melayani rute tersebut. Coba kecamatan lain, atau hubungi kami.";
+            show(shipEmpty, true);
+            recompute();
+            return;
+          }
+          show(expressGroup, true);
 
-        // ── THE REST, GROUPED BY KIRIMINAJA'S OWN `group` ─────────────────────────────────────────
-        // GROUPS is exhaustive over what the API returns (regular / economy / next_day / one_day /
-        // cargo), and anything unrecognised lands in "Lainnya" rather than being dropped: a service
-        // KiriminAja prices but the checkout hides is a service the shopper cannot buy.
-        var GROUPS = [
-          { label: "1 Hari", keys: ["next_day", "one_day"] },
-          { label: "Reguler", keys: ["regular"] },
-          { label: "Ekonomi", keys: ["economy"] },
-          { label: "Kargo", keys: ["cargo"] },
-        ];
-        var others = rates.filter(function (s) { return s !== def; });
-        var taken = [];
-        var html = "";
-        GROUPS.forEach(function (g) {
-          var list = others.filter(function (s) { return g.keys.indexOf(String(s.group || "")) >= 0; });
-          list.forEach(function (s) { taken.push(s); });
-          if (!list.length) return; // an empty group is not rendered — no headers over nothing
-          html += '<div><p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">' + esc(g.label) + '</p><div class="space-y-2">' +
-            list.map(function (s) { return row(s, false); }).join("") + "</div></div>";
+          // SORT BY PRICE. The API returns whatever order KiriminAja felt like, and the old code both
+          // rendered that order AND auto-checked `i === 0` — so a shopper's DEFAULT ongkir was
+          // "whichever service happened to come back first", which on one route was Rp26.000 sitting
+          // above a Rp9.000 one.
+          rates.sort(function (a, b) { return a.cost - b.cost; });
+
+          // "Tercepat" = the smallest number in the ETD string ("1-2" → 1). Ties go to the cheaper one,
+          // already first after the sort. Both badges are computed across ALL rates, not just the
+          // visible one — a "Termurah" badge that only ranks what you can see is a lie the moment the
+          // list expands.
+          var etdMin = function (e) { var m = String(e || "").match(/\d+/); return m ? Number(m[0]) : 99; };
+          var cheapest = rates[0];
+          var fastest = rates.reduce(function (best, s) { return etdMin(s.etd) < etdMin(best.etd) ? s : best; }, rates[0]);
+
+          // ── THE DEFAULT IS SPX REGULER ──────────────────────────────────────────────────────────
+          // Not "whatever is cheapest": the merchant's own default courier is a product decision, so it
+          // is named (spx / service_type "1"). If the route does not offer it, we fall back to the
+          // cheapest AND SAY SO — a different courier silently sitting in the default slot is exactly
+          // the substitution the shopper would not notice until the parcel arrives.
+          var preferred = rates.filter(function (s) { return s.code === "spx" && s.type === "1"; })[0];
+          var def = preferred || cheapest;
+
+          // One row of the shipping list group: radio, name + badges, ETA, price hard-right — Shopify's
+          // shipping-method table.
+          function row(s, checked) {
+            // s.cod is the EFFECTIVE flag from the API (KiriminAja capability × platform per-service
+            // allowance × this store's cod_enabled) — never the raw courier capability.
+            var tags = "";
+            if (s === cheapest) tags += ' <span class="ml-1 whitespace-nowrap rounded bg-brand-100 px-1.5 py-px text-[10px] font-semibold text-brand-700">Termurah</span>';
+            if (s === fastest) tags += ' <span class="ml-1 whitespace-nowrap rounded bg-sky-100 px-1.5 py-px text-[10px] font-semibold text-sky-800">Tercepat</span>';
+            if (s.cod) tags += ' <span class="ml-1 whitespace-nowrap rounded bg-emerald-100 px-1.5 py-px text-[10px] font-semibold text-emerald-800">COD</span>';
+            return (
+              '<label class="lg-row">' +
+              '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-etd="' + esc(s.etd) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (checked ? " checked" : "") + ' class="lg-radio" />' +
+              '<span class="min-w-0 flex-1"><span class="lg-title">' + esc(s.name) + tags + '</span><span class="lg-sub">Estimasi ' + esc(s.etd) + " hari</span></span>" +
+              '<span class="lg-price">' + idr.format(s.cost) + "</span></label>"
+            );
+          }
+
+          expressBox.innerHTML = row(def, true); // the default row is the ONLY thing rendered up front
+
+          if (defaultNote) {
+            if (preferred) {
+              defaultNote.hidden = true;
+            } else {
+              defaultNote.textContent = "Layanan reguler pilihan toko tidak tersedia untuk rute ini — kami pilihkan ongkir termurah.";
+              defaultNote.hidden = false;
+            }
+          }
+
+          // ── THE REST, GROUPED BY KIRIMINAJA'S OWN `group` ──────────────────────────────────────
+          // Anything unrecognised lands in "Lainnya" rather than being dropped: a service KiriminAja
+          // prices but the checkout hides is a service the shopper cannot buy.
+          var GROUPS = [
+            { label: "1 Hari", keys: ["next_day", "one_day"] },
+            { label: "Reguler", keys: ["regular"] },
+            { label: "Ekonomi", keys: ["economy"] },
+            { label: "Kargo", keys: ["cargo"] },
+          ];
+          var others = rates.filter(function (s) { return s !== def; });
+          var taken = [];
+          var html = "";
+          var groupBlock = function (label, list) {
+            return (
+              '<div><p class="ship-group-label">' + esc(label) + '</p><div class="list-group">' +
+              list.map(function (s) { return row(s, false); }).join("") +
+              "</div></div>"
+            );
+          };
+          GROUPS.forEach(function (g) {
+            var list = others.filter(function (s) { return g.keys.indexOf(String(s.group || "")) >= 0; });
+            list.forEach(function (s) { taken.push(s); });
+            if (!list.length) return; // an empty group is not rendered — no headers over nothing
+            html += groupBlock(g.label, list);
+          });
+          var rest = others.filter(function (s) { return taken.indexOf(s) < 0; });
+          if (rest.length) html += groupBlock("Lainnya", rest);
+
+          moreBox.innerHTML = html;
+          moreBox.hidden = true;
+          if (moreBtn) {
+            moreBtn.hidden = others.length === 0; // one service on the route → nothing to reveal
+            moreBtn.setAttribute("aria-expanded", "false");
+            if (moreLabel) moreLabel.textContent = "Pilih ekspedisi lain (" + others.length + ")";
+            if (moreCaret) moreCaret.classList.remove("rotate-180");
+          }
+          bindShipping();
+        })
+        .catch(function () {
+          ratesLoading = false;
+          show(shipLoading, false);
+          shipLoadingSr.textContent = "";
+          shipErrorText.textContent = "Gagal memuat ongkir. Periksa koneksimu lalu coba lagi.";
+          show(shipError, true);
+          recompute();
         });
-        var rest = others.filter(function (s) { return taken.indexOf(s) < 0; });
-        if (rest.length) {
-          html += '<div><p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Lainnya</p><div class="space-y-2">' +
-            rest.map(function (s) { return row(s, false); }).join("") + "</div></div>";
-        }
-
-        moreBox.innerHTML = html;
-        moreBox.hidden = true;
-        if (moreBtn) {
-          moreBtn.hidden = others.length === 0; // one service on the route → nothing to reveal
-          moreBtn.setAttribute("aria-expanded", "false");
-          if (moreLabel) moreLabel.textContent = "Pilih ekspedisi lain (" + others.length + ")";
-          if (moreCaret) moreCaret.classList.remove("rotate-180");
-        }
-        bindShipping();
-      }).catch(function () {
-        expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">Gagal memuat ongkir. Coba lagi.</p>';
-      });
     }
 
     // ---- Recovered destination → re-quote ongkir straight away ----
@@ -1025,22 +1795,31 @@ if (rToken) {
     // the RATE is not: prices move. Re-fetching is the honest option.
     if (RECOVER && RECOVER.destId) {
       destId.value = String(RECOVER.destId);
+      destText.value = RECOVER.city || "";
       if (destSearch && !destSearch.value) destSearch.value = RECOVER.city || "";
-      // kota/provinsi were restored into the hidden inputs above → render the derived line for them,
-      // otherwise a returning shopper sees a district with no city/province under it.
-      showArea();
-      // Restore the kelurahan picker as well, then put the saved kodepos back — loadKelurahan()
-      // deliberately blanks it, and a recovered checkout must not lose what the shopper had chosen.
+      show(destOk, true);
       var savedPostcode = RECOVER.postcode || "";
-      loadKelurahan(RECOVER.destId);
-      setTimeout(function () {
-        if (kodeposEl && savedPostcode) {
-          kodeposEl.value = savedPostcode;
-          if (kelSelect) kelSelect.value = savedPostcode;
+      // Restore the kelurahan picker, then put the saved kodepos back — but only by SELECTING the
+      // village it belongs to, never by writing the number back on its own: a kodepos with no village
+      // behind it is exactly the unverifiable claim this cascade exists to remove.
+      loadKelurahan(RECOVER.destId).then(function () {
+        if (savedPostcode && kelList.length) {
+          for (var i = 0; i < kelList.length; i++) {
+            if (kelList[i].postcode === savedPostcode) {
+              kelSelect.value = String(i);
+              pickKelurahan(i);
+              break;
+            }
+          }
+        } else if (savedPostcode && !kelRequired && kodeposEl) {
+          kodeposEl.value = savedPostcode; // the ~4% with no village data — it was typed, keep it
         }
-      }, 600);
-      loadRates();
+        showArea();
+        loadRates();
+      });
     }
+
+    recompute(); // paint the gate ("Pilih kecamatan tujuan dulu.") on first load
 
     // ═══ PROGRESSIVE CAPTURE (checkout_sessions) ══════════════════════════════════════════════
     // There is no "abandon" event to hook — abandonment is the ABSENCE of an order. So the row is
@@ -1113,17 +1892,11 @@ if (rToken) {
     }
 
     // ---- Field-level feedback: show the problem where the problem is ----
-    // On blur, not on keystroke: telling someone their email is invalid while they are still typing
-    // the "@" is nagging, not help. The WhatsApp number is also REWRITTEN to what we will actually
-    // store (`0812…` → `62812…`) so the shopper can see the number we will message them on — no
-    // silent transformation between the field and the database.
+    // On blur, not on keystroke: telling someone their email is invalid while they are still typing the
+    // "@" is nagging, not help. The WhatsApp number is also REWRITTEN to what we will actually store
+    // (`0812…` → `62812…`) so the shopper can see the number we will message them on — no silent
+    // transformation between the field and the database.
     var VALIDATED = ["nama", "whatsapp", "email", "alamat", "kodepos"];
-    function checkField(el) {
-      if (!el || VALIDATED.indexOf(el.name) < 0) return "";
-      var msg = fieldError(el.name, el.value);
-      el.setCustomValidity(msg);
-      return msg;
-    }
     VALIDATED.forEach(function (n) {
       var el = form.querySelector('[name="' + n + '"]');
       if (!el) return;
@@ -1132,21 +1905,24 @@ if (rToken) {
           var canon = normalizePhone(el.value);
           if (canon) el.value = canon;
         }
-        var msg = checkField(el); // always recorded → submit still refuses an empty required field
-        // …but only SHOWN when they actually typed something. Popping "Nama wajib diisi" the instant
-        // someone tabs past an empty field is nagging, and reportValidity() drags the focus back —
-        // a shopper who meant to fill it in last gets trapped in it. Empty is not yet a mistake.
-        if (msg && el.value.trim()) el.reportValidity();
+        // Only SHOWN when they actually typed something. Popping "Nama wajib diisi" the instant someone
+        // tabs past an empty field is nagging — empty is not yet a mistake. Submit still refuses it.
+        setError(n, el.value.trim() ? fieldError(n, el.value) : "");
       });
-      // Typing again clears the stale message — otherwise the browser keeps refusing a field the
-      // shopper has already fixed.
-      el.addEventListener("input", function () { el.setCustomValidity(""); });
+      // Typing again clears the stale message — otherwise the shopper is still being told off for a
+      // mistake they have already fixed.
+      el.addEventListener("input", function () { setError(n, ""); });
     });
 
     form.addEventListener("input", captureSoon);
     form.addEventListener("change", function (e) {
       var t = e.target;
-      if (t && t.name === "payment") paymentTouched = true;
+      if (t && t.name === "payment") {
+        paymentTouched = true;
+        setError("payment", "");
+        syncPayDetail(); // the chosen method opens its own instructions
+        updateGate();
+      }
       captureNow(); // a radio/step change is a decision, not a keystroke → flush immediately
     });
     form.addEventListener("blur", captureNow, true); // leaving a field = they finished typing it
@@ -1159,43 +1935,59 @@ if (rToken) {
     // arrival — a shopper who opens checkout and vanishes without typing anything still counts.
     capture(false);
 
+    // ── Submit ──────────────────────────────────────────────────────────────────────────────────
+    function focusInvalid(el) {
+      if (!el) return;
+      if (el.focus) el.focus();
+      if (el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       var err = document.getElementById("form-error");
-
-      // Our own rules run BEFORE checkValidity(), so the message the browser shows is ours (nama /
-      // whatsapp / email / alamat / kodepos). The API re-checks all of them anyway — this is only
-      // here so the shopper is not told "something is wrong" by a server round-trip.
-      for (var vi = 0; vi < VALIDATED.length; vi++) {
-        var vel = form.querySelector('[name="' + VALIDATED[vi] + '"]');
-        if (vel && checkField(vel)) { vel.reportValidity(); vel.focus(); return; }
-      }
-      if (!form.checkValidity()) {
-        form.reportValidity();
-        return;
-      }
-      // Kota/Provinsi are readonly, and a readonly input is BARRED from constraint validation — so
-      // `required` on them never fired and checkValidity() would happily pass with no destination at
-      // all. The real rule is "a kecamatan was chosen"; enforce it here, where it runs.
-      if (!destId.value) {
-        if (destSearch) {
-          destSearch.setCustomValidity("Pilih kecamatan tujuan dari daftar.");
-          destSearch.reportValidity();
-          destSearch.setCustomValidity("");
-          destSearch.focus();
-        }
-        return;
-      }
       if (err) err.classList.add("hidden");
 
-      var fd = new FormData(form);
-      var shipEl = form.querySelector('input[name="shipping"]:checked');
-      var payEl = form.querySelector('input[name="payment"]:checked');
-      var ship = shipEl ? Number(shipEl.getAttribute("data-price")) : 0;
-      if (!payEl) {
-        if (err) { err.textContent = "Pilih metode pembayaran."; err.classList.remove("hidden"); }
+      // Our rules, our messages, inline. The API re-checks every one of them anyway — this is only
+      // here so the shopper is not told "something is wrong" by a server round-trip.
+      var firstBad = null;
+      for (var vi = 0; vi < VALIDATED.length; vi++) {
+        var n = VALIDATED[vi];
+        var vel = form.querySelector('[name="' + n + '"]');
+        if (!vel) continue;
+        var msg = fieldError(n, vel.value);
+        setError(n, msg);
+        if (msg && !firstBad) firstBad = vel;
+      }
+      if (firstBad) { focusInvalid(firstBad); return; }
+
+      // The destination is a PICK, not a typed field: `required` on a readonly/hidden input is never
+      // enforced by the browser, so this is the only place the rule actually runs.
+      if (!destId.value) {
+        destMessage("Pilih kecamatan tujuan dari daftar.", "error");
+        focusInvalid(destSearch);
         return;
       }
+      if (kelRequired && !kelIdEl.value) {
+        setError("kelurahan", "Pilih kelurahan / desa tujuan.");
+        focusInvalid(kelSelect);
+        return;
+      }
+
+      var shipEl = form.querySelector('input[name="shipping"]:checked');
+      if (!shipEl) {
+        if (err) { err.textContent = "Pilih layanan pengiriman."; err.classList.remove("hidden"); }
+        focusInvalid(document.getElementById("ship-express"));
+        return;
+      }
+      var payEl = form.querySelector('input[name="payment"]:checked');
+      if (!payEl) {
+        setError("payment", "Pilih metode pembayaran.");
+        focusInvalid(document.querySelector('input[name="payment"]:not([disabled])'));
+        return;
+      }
+
+      var fd = new FormData(form);
+      var ship = Number(shipEl.getAttribute("data-price"));
 
       var order = {
         createdAt: new Date().toISOString(),
@@ -1207,16 +1999,11 @@ if (rToken) {
           kota: fd.get("kota"),
           provinsi: fd.get("provinsi"),
           kodepos: fd.get("kodepos"),
+          kecamatan: destText.value,
+          kelurahan: kelNameEl.value,
         },
-        shipping: {
-          id: shipEl ? shipEl.value : "",
-          label: shipEl ? shipEl.getAttribute("data-label") : "",
-          price: ship,
-        },
-        payment: {
-          id: payEl ? payEl.value : "",
-          label: payEl ? payEl.getAttribute("data-label") : "",
-        },
+        shipping: { id: shipEl.value, label: shipEl.getAttribute("data-label"), price: ship },
+        payment: { id: payEl.value, label: payEl.getAttribute("data-label") },
         items: cart,
         subtotal: subtotal,
         total: subtotal + ship,
@@ -1228,15 +2015,18 @@ if (rToken) {
       }
       function fail(msg) {
         if (err) { err.textContent = msg; err.classList.remove("hidden"); }
-        if (btn) { btn.disabled = false; btn.textContent = "Bayar Sekarang"; }
+        payBtn.disabled = false;
+        payBtn.textContent = "Bayar Sekarang";
+        updateGate();
       }
 
-      var btn = form.querySelector('button[type="submit"]');
-      if (btn) { btn.disabled = true; btn.textContent = "Memproses pesanan…"; }
+      payBtn.disabled = true;
+      payBtn.textContent = "Memproses pesanan…";
+      if (payReason) payReason.hidden = true;
 
       // Last capture BEFORE the order: the row must exist (with everything typed, at step
-      // "pembayaran") for the order API to find and flip to `pulih`. If the payment then fails, this
-      // is exactly the session worth chasing — a shopper who got all the way to the pay button.
+      // "pembayaran") for the order API to find and flip to `pulih`. If the payment then fails, this is
+      // exactly the session worth chasing — a shopper who got all the way to the pay button.
       paymentTouched = true;
       captureNow();
 
@@ -1251,26 +2041,37 @@ if (rToken) {
           items: cart.map(function (i) { return { handle: i.handle, name: i.name, price: i.price, variant: i.variant || i.size || "", qty: i.qty }; }),
           // The phone goes up CANONICAL (62…) — the API normalises it again regardless; sending the
           // shape we store means the two can never quietly disagree.
-          customer: { name: order.shippingAddress.nama, phone: normalizePhone(order.shippingAddress.whatsapp) || order.shippingAddress.whatsapp, email: order.contact.email },
-          // kota/provinsi ride along for the abandoned-cart snapshot only — the API DERIVES both from
-          // destId (kiriminaja_areas) and ignores what is sent here. A typed province is a claim.
-          address: { alamat: order.shippingAddress.alamat, kota: order.shippingAddress.kota, provinsi: order.shippingAddress.provinsi, kodepos: order.shippingAddress.kodepos },
+          customer: {
+            name: order.shippingAddress.nama,
+            phone: normalizePhone(order.shippingAddress.whatsapp) || order.shippingAddress.whatsapp,
+            email: order.contact.email,
+          },
+          // THE DESTINATION SNAPSHOT. The ids are the point: the merchant's shipment is booked from
+          // exactly these, with no name re-resolution on the way, so the area the shopper picked IS the
+          // area the parcel goes to. kota/provinsi/kodepos ride along for the abandoned-cart snapshot
+          // and for display — the API DERIVES kota + provinsi from kecamatanId and ignores what is sent
+          // here, because a typed province is a claim (send "DKI Jakarta", ship to Papua).
+          address: {
+            alamat: order.shippingAddress.alamat,
+            kota: order.shippingAddress.kota,
+            provinsi: order.shippingAddress.provinsi,
+            kodepos: order.shippingAddress.kodepos,
+            kecamatanId: Number(destId.value),
+            kecamatanName: destText.value || undefined,
+            kelurahanId: kelIdEl.value || undefined,
+            kelurahanName: kelNameEl.value || undefined,
+          },
           // service/serviceType identify WHICH service the shopper picked (a label cannot). There is
-          // deliberately NO `cost` here any more: the order API RE-QUOTES the ongkir server-side and
-          // writes its own number. A price posted by the browser is a price the browser gets to
-          // choose — `cost: 0` bought free shipping and the merchant paid the courier the difference.
+          // deliberately NO `cost` here: the order API RE-QUOTES the ongkir server-side and writes its
+          // own number. A price posted by the browser is a price the browser gets to choose — `cost: 0`
+          // bought free shipping and the merchant paid the courier the difference.
           shipping: {
             label: order.shipping.label,
-            service: shipEl ? shipEl.getAttribute("data-svc-code") || undefined : undefined,
-            serviceType: shipEl ? shipEl.getAttribute("data-svc-type") || undefined : undefined,
-            // The KiriminAja district this quote was issued for. The order API resolves the province
-            // from THIS, not from the province the buyer typed — that field is a claim (a client can
-            // put "DKI Jakarta" and ship to Papua, walking through allowed_provinces). The district
-            // is what the parcel is actually booked against, so it cannot lie about the destination.
-            destId: (function () {
-              var d = document.getElementById("dest-id");
-              return d && d.value ? Number(d.value) : undefined;
-            })(),
+            service: shipEl.getAttribute("data-svc-code") || undefined,
+            serviceType: shipEl.getAttribute("data-svc-type") || undefined,
+            // The KiriminAja district this quote was issued for — kept at the top level of `shipping`
+            // as well, because that is where the current order API reads it from.
+            destId: Number(destId.value),
           },
           channelCode: payEl.value,
         }),
@@ -1282,7 +2083,8 @@ if (rToken) {
             // The API tells us WHICH field it refused — put the cursor there instead of making the
             // shopper hunt for it.
             var fel = res.field ? form.querySelector('[name="' + res.field + '"]') : null;
-            if (fel && fel.focus) fel.focus();
+            if (res.field === "kecamatan") fel = destSearch;
+            focusInvalid(fel);
             return;
           }
           settled = true; // the session is now `pulih` — the pagehide beacon must not touch it again
