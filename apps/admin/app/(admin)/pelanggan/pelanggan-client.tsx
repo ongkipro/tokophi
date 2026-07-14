@@ -40,11 +40,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@tokophi/ui/dropdown-menu";
-import { type Customer, type Segment } from "@/lib/mock/store";
+import { type Segment } from "@/lib/mock/store";
+import type { CustomerRow } from "@/lib/data/customers";
 import { IDR, num } from "@tokophi/lib/format";
 import { exportCsv } from "@/lib/csv";
 import { cn } from "@tokophi/ui/lib/utils";
 import { SegmentBadge } from "@/components/admin/pelanggan/segment-badge";
+import { AccountBadge } from "@/components/admin/pelanggan/account-badge";
 
 // ---- helpers ----
 function initials(name: string) {
@@ -80,19 +82,27 @@ const SORTS: Record<SortKey, string> = {
   recent: "Terbaru",
 };
 
-export function PelangganClient({ customers }: { customers: Customer[] }) {
+// Punya akun / tidak. "Tamu" is the normal case here — checkout never asks for a registration.
+type AccountTab = "semua" | "terdaftar" | "tamu";
+
+export function PelangganClient({ customers }: { customers: CustomerRow[] }) {
   const router = useRouter();
   const [tab, setTab] = useState<"semua" | Segment>("semua");
+  const [account, setAccount] = useState<AccountTab>("semua");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("spent");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // ---- stats ----
-  const totalDisplay = num(3128);
+  // Every one of these is counted from the rows on this page. The old "Total Pelanggan: 3.128
+  // (+8,2% bulan ini)" was neither: the store has 24 customers and nothing anywhere computed a
+  // month-over-month change.
+  const registeredCount = customers.filter((c) => c.registered).length;
+  const guestCount = customers.length - registeredCount;
   const vipCount = customers.filter((c) => c.segment === "vip").length;
-  const avgSpent = Math.round(
-    customers.reduce((a, c) => a + c.spent, 0) / customers.length,
-  );
+  const avgSpent = customers.length
+    ? Math.round(customers.reduce((a, c) => a + c.spent, 0) / customers.length)
+    : 0;
   const activeCount = customers.filter((c) => c.orders > 0).length;
 
   const counts = useMemo(() => {
@@ -101,11 +111,18 @@ export function PelangganClient({ customers }: { customers: Customer[] }) {
       c[seg] = customers.filter((x) => x.segment === seg).length;
     }
     return c;
-  }, []);
+  }, [customers]);
+
+  const accountCounts: Record<AccountTab, number> = {
+    semua: customers.length,
+    terdaftar: registeredCount,
+    tamu: guestCount,
+  };
 
   const rows = useMemo(() => {
     let list = customers.slice();
     if (tab !== "semua") list = list.filter((c) => c.segment === tab);
+    if (account !== "semua") list = list.filter((c) => (account === "terdaftar" ? c.registered : !c.registered));
     const q = query.trim().toLowerCase();
     if (q) {
       list = list.filter(
@@ -119,7 +136,7 @@ export function PelangganClient({ customers }: { customers: Customer[] }) {
       return a.joinedDaysAgo - b.joinedDaysAgo;
     });
     return list;
-  }, [tab, query, sort]);
+  }, [customers, tab, account, query, sort]);
 
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
   function toggleAll() {
@@ -142,15 +159,17 @@ export function PelangganClient({ customers }: { customers: Customer[] }) {
   const stats = [
     {
       label: "Total Pelanggan",
-      value: totalDisplay,
+      value: num(customers.length),
       icon: Users,
-      delta: "+8,2% bulan ini",
+      delta: `${num(registeredCount)} terdaftar · ${num(guestCount)} tamu`,
     },
     {
       label: "Pelanggan VIP",
       value: num(vipCount),
       icon: Crown,
-      delta: `${Math.round((vipCount / customers.length) * 100)}% dari total`,
+      delta: customers.length
+        ? `${Math.round((vipCount / customers.length) * 100)}% dari total`
+        : "—",
     },
     {
       label: "Rata-rata Belanja",
@@ -175,7 +194,7 @@ export function PelangganClient({ customers }: { customers: Customer[] }) {
         <Button
           variant="outline"
           className="gap-2"
-          onClick={() => exportCsv("pelanggan", rows.map((c) => ({ Nama: c.name, Email: c.email, Telepon: c.phone, Kota: c.city, Pesanan: c.orders, "Total Belanja": c.spent, Segmen: c.segment })))}
+          onClick={() => exportCsv("pelanggan", rows.map((c) => ({ Nama: c.name, Email: c.email, Telepon: c.phone, Kota: c.city, Pesanan: c.orders, "Total Belanja": c.spent, Segmen: c.segment, Akun: c.registered ? "Terdaftar" : "Tamu" })))}
         >
           <Download className="size-4" /> Ekspor
         </Button>
@@ -223,7 +242,25 @@ export function PelangganClient({ customers }: { customers: Customer[] }) {
             </TabsList>
           </Tabs>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Tabs value={account} onValueChange={(v) => setAccount(v as AccountTab)}>
+              <TabsList>
+                {(
+                  [
+                    ["semua", "Semua"],
+                    ["terdaftar", "Terdaftar"],
+                    ["tamu", "Tamu"],
+                  ] as Array<[AccountTab, string]>
+                ).map(([k, label]) => (
+                  <TabsTrigger key={k} value={k} className="gap-1.5">
+                    {label}
+                    <span className="rounded-full bg-muted-foreground/15 px-1.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                      {accountCounts[k]}
+                    </span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
             <div className="relative">
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -277,6 +314,7 @@ export function PelangganClient({ customers }: { customers: Customer[] }) {
               <TableHead className="text-right">Pesanan</TableHead>
               <TableHead className="text-right">Total Belanja</TableHead>
               <TableHead>Segmen</TableHead>
+              <TableHead>Akun</TableHead>
               <TableHead className="hidden text-right lg:table-cell">
                 Bergabung
               </TableHead>
@@ -330,6 +368,9 @@ export function PelangganClient({ customers }: { customers: Customer[] }) {
                 <TableCell>
                   <SegmentBadge segment={c.segment} />
                 </TableCell>
+                <TableCell>
+                  <AccountBadge registered={c.registered} />
+                </TableCell>
                 <TableCell className="hidden text-right text-sm text-muted-foreground tabular-nums lg:table-cell">
                   {joinedLabel(c.joinedDaysAgo)}
                 </TableCell>
@@ -370,7 +411,7 @@ export function PelangganClient({ customers }: { customers: Customer[] }) {
             {rows.length === 0 && (
               <TableRow className="hover:bg-transparent">
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="py-12 text-center text-sm text-muted-foreground"
                 >
                   Tidak ada pelanggan yang cocok.

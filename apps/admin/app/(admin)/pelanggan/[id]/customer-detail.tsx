@@ -20,7 +20,8 @@ import {
 } from "lucide-react";
 
 import { type Customer } from "@/lib/mock/store";
-import type { CustomerOrder } from "@/lib/data/customers";
+import type { CustomerOrder, CustomerRow } from "@/lib/data/customers";
+import { AccountBadge } from "@/components/admin/pelanggan/account-badge";
 import { IDR, num, timeAgo, waLink } from "@tokophi/lib/format";
 import { cn } from "@tokophi/ui/lib/utils";
 
@@ -82,7 +83,7 @@ export function CustomerDetail({
   customer,
   orders,
 }: {
-  customer: Customer;
+  customer: CustomerRow;
   // Real order history for THIS customer (matched on orders.customer_id, from the DB).
   orders: CustomerOrder[];
 }) {
@@ -190,6 +191,7 @@ export function CustomerDetail({
                 {customer.name}
               </h1>
               <SegmentBadge segment={customer.segment} />
+              <AccountBadge registered={customer.registered} />
             </div>
           </div>
         </div>
@@ -446,15 +448,32 @@ export function CustomerDetail({
             </CardContent>
           </Card>
 
-          {/* segment */}
+          {/* segment + account */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Segmen</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <SegmentBadge segment={customer.segment} />
-              <div className="text-sm text-muted-foreground">
-                Pelanggan sejak {num(customer.joinedDaysAgo)} hari lalu
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <SegmentBadge segment={customer.segment} />
+                <div className="text-sm text-muted-foreground">
+                  Pelanggan sejak {num(customer.joinedDaysAgo)} hari lalu
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Akun (customers.registered_at). Tamu = normal: belanja di sini tidak pernah
+                  mewajibkan akun, dan memang tidak boleh — itu keputusan, bukan kekurangan data. */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <AccountBadge registered={customer.registered} />
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {customer.registered
+                    ? `Membuat akun ${num(customer.registeredDaysAgo ?? 0)} hari lalu — bisa masuk & melihat riwayat pesanannya sendiri.`
+                    : "Belanja tanpa akun. Normal — checkout tidak pernah mewajibkan pendaftaran. Dikenali lewat nomor WhatsApp & email."}
+                </div>
               </div>
             </CardContent>
           </Card>

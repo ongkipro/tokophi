@@ -457,10 +457,13 @@ const LEADS: Array<{ name: string; phone: string; source: string; stage: "baru" 
 ];
 type FType = "keranjang" | "pembayaran" | "konfirmasi" | "pascabeli" | "repeat" | "ulasan";
 type FStatus = "menunggu" | "terkirim" | "dibalas" | "selesai";
+// ⚠️ The two `keranjang` rows that used to sit at the top of this list were FICTION: they told the
+// merchant to chase "Dress Midi Motif Bunga, still in Siti's cart" when no cart existed anywhere in
+// the database — there was no cart table at all. They are gone. Cart follow-ups are now GENERATED
+// from real `checkout_sessions` rows further down (search "keranjang follow-ups"), so every one of
+// them points at a basket that exists, with the value and the phone that basket actually carries.
 const FOLLOWUPS: Array<{ customer: string; phone: string; type: FType; context: string; dueDays: number; status: FStatus; lastMessage: string }> = [
-  { customer: "Siti Nurhaliza", phone: "6281234511001", type: "keranjang", context: "Dress Midi Motif Bunga", dueDays: 0, status: "menunggu", lastMessage: "" },
   { customer: "Agus Salim", phone: "6281234511002", type: "pembayaran", context: "#INV-4821 · Rp275.000", dueDays: 0, status: "menunggu", lastMessage: "" },
-  { customer: "Rina Wijaya", phone: "6281234511003", type: "keranjang", context: "Gamis Syari Polos", dueDays: -1, status: "menunggu", lastMessage: "" },
   { customer: "Budi Santoso", phone: "6281234511004", type: "pembayaran", context: "#INV-4818 · Rp189.000", dueDays: -2, status: "menunggu", lastMessage: "" },
   { customer: "Maya Sari", phone: "6281234511005", type: "pascabeli", context: "#INV-4815 · Rok Plisket Panjang", dueDays: 0, status: "terkirim", lastMessage: "Terima kasih sudah belanja! 🙏" },
   { customer: "Andi Pratama", phone: "6281234511006", type: "ulasan", context: "Cardigan Rajut Wanita", dueDays: 1, status: "menunggu", lastMessage: "" },
@@ -737,19 +740,33 @@ async function main() {
   }
 
   // customers (capture name → id for order linking)
+  //
+  // registered_at (0044): NULL = GUEST. Guest is the NORMAL case in Indonesia — checkout never asks
+  // for an account, so most buyers never make one — 17 of these 24 never did. Only the heaviest
+  // repeat buyers bothered: the rule is `orders >= 30` (an explicit, checkable rule, not a coin
+  // flip), which is exactly the shopper who wants to look up her own order history.
+  // `password_hash` is scrypt `salt:hash`, the same format as `users` — a registered customer can
+  // actually log in once the storefront account area exists.
+  const isRegistered = (c: (typeof CUSTOMERS)[number]) => c.orders >= 30;
   const custRows = await db.insert(schema.customers).values(
-    CUSTOMERS.map((c) => ({
-      storeId: store.id,
-      name: c.name,
-      email: c.email,
-      phone: c.phone,
-      city: c.city,
-      ordersCount: c.orders,
-      totalSpentIdr: c.spent,
-      segment: c.segment,
-      tags: ["pelanggan", c.segment],
-      createdAt: new Date(ADMIN_TODAY.getTime() - c.joinedDaysAgo * 86_400_000),
-    })),
+    CUSTOMERS.map((c) => {
+      const createdAt = new Date(ADMIN_TODAY.getTime() - c.joinedDaysAgo * 86_400_000);
+      return {
+        storeId: store.id,
+        name: c.name,
+        email: c.email,
+        phone: c.phone,
+        city: c.city,
+        ordersCount: c.orders,
+        totalSpentIdr: c.spent,
+        segment: c.segment,
+        tags: ["pelanggan", c.segment],
+        // They made the account at (or right after) their first purchase — not before it.
+        registeredAt: isRegistered(c) ? createdAt : null,
+        passwordHash: isRegistered(c) ? hashPassword(DEV_OWNER_PASSWORD) : null,
+        createdAt,
+      };
+    }),
   ).returning({ id: schema.customers.id, name: schema.customers.name });
   const custByName = new Map(custRows.map((c) => [c.name, c.id]));
 
@@ -848,6 +865,9 @@ async function main() {
   const shipRnd = mulberry32(3131);
 
   // orders (+ line items + payment) — customers link by name
+  // Captured so a RECOVERED checkout session (0044) can point at the real order it became —
+  // `recovered_order_id` is the only thing that makes "pulih" a fact instead of a guess.
+  const seededOrders: Array<{ id: string; customer: string; total: number; picks: number[]; minutesAgo: number }> = [];
   for (const o of ORDERS_SEED) {
     const [ord] = await db.insert(schema.orders).values({
       storeId: store.id,
@@ -877,7 +897,16 @@ async function main() {
     // storeId is the RLS key (0036) — the app write paths always set it; the seed used to omit it,
     // which left every seeded payment orphaned (store_id NULL = belongs to no tenant).
     await db.insert(schema.payments).values({ orderId: ord.id, storeId: store.id, method: "transfer", amountIdr: o.total, status: o.status === "batal" ? "gagal" : "berhasil", paidAt: o.status === "batal" ? null : minutesAgo(o.minutesAgo) });
+    seededOrders.push({ id: ord.id, customer: o.customer, total: o.total, picks: o.picks, minutesAgo: o.minutesAgo });
   }
+
+  // customers.last_order_at (0044) — DERIVED from the orders just written, never typed in beside them.
+  await db.execute(sql`
+    update customers c
+       set last_order_at = o.last_at
+      from (select customer_id, max(placed_at) as last_at from orders where customer_id is not null group by customer_id) o
+     where o.customer_id = c.id
+  `);
 
   // Saldo ledger (migrations 0040 + 0041) — DERIVED from the payments above, not invented beside
   // them. Every collected payment (`berhasil`) is booked as one `sale`: `available` once the order
@@ -896,6 +925,170 @@ async function main() {
      where p.status = 'berhasil' and o.status <> 'batal'
     on conflict do nothing
   `);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // checkout_sessions (0044) — the carts that never became orders.
+  //
+  // Indonesia abandons ~82–83% of carts (global ~70%). A seed that showed 3 tidy abandoned carts
+  // next to 200 orders would be a toy: it would tell a merchant abandonment is a rounding error,
+  // which is the opposite of true. So the volume is DERIVED from the orders themselves, per day:
+  //
+  //     abandoned(day) = round(4 × orders(day))   →   4 / (4 + 1) = 80% abandonment
+  //
+  // and the RESCUED ones are pulled OUT of that pool (≈14% of it → recovery ≈ 12%, the honest band
+  // for WhatsApp cart recovery — not the 30–40% a vendor deck would claim).
+  //
+  // ⚠️ `abandoned_at` (0045) is what separates a RESCUE from an ordinary sale. Every order also has a
+  // checkout session behind it, and those sessions end up `pulih` too — but they never went quiet, so
+  // they carry `abandoned_at = NULL`. Count them as recoveries and a shop that has never saved a
+  // single cart reports a ~100% recovery rate. So both kinds are seeded here, distinguishable:
+  //   rescued  = abandoned_at IS NOT NULL and recovered_at IS NOT NULL   (went quiet, then came back)
+  //   straight = abandoned_at IS NULL     and recovered_at IS NOT NULL   (an ordinary sale)
+  //
+  // Every `pulih` row points at an order that actually exists in `orders`. Nothing here is a status
+  // nobody can observe: there is no `terkirim`-style claim, and no `kedaluwarsa` rows either — no
+  // job expires carts yet, so seeding that state would be inventing a lifecycle we do not run.
+  // ─────────────────────────────────────────────────────────────────────────────
+  const CK_WINDOW_DAYS = 30;
+  const ckRnd = mulberry32(7373);
+  const pick = <T>(arr: T[]): T => arr[Math.floor(ckRnd() * arr.length)];
+
+  // orders bucketed by day-ago (same clock the orders were stamped from)
+  const ordersByDay = new Map<number, typeof seededOrders>();
+  for (const o of seededOrders) {
+    const d = Math.floor(o.minutesAgo / 1440);
+    if (d >= CK_WINDOW_DAYS) continue;
+    (ordersByDay.get(d) ?? ordersByDay.set(d, []).get(d)!).push(o);
+  }
+
+  type CkStep = "keranjang" | "kontak" | "alamat" | "pengiriman" | "pembayaran";
+  // How far they got before leaving. Most never even reach the contact form — which is exactly why
+  // the ones that DID leave a phone number are worth so much more than the rest.
+  const STEP_MIX: Array<[CkStep, number]> = [
+    ["keranjang", 0.46], ["kontak", 0.2], ["alamat", 0.15], ["pengiriman", 0.11], ["pembayaran", 0.08],
+  ];
+  const rollStep = (): CkStep => {
+    let r = ckRnd();
+    for (const [s, w] of STEP_MIX) { if ((r -= w) <= 0) return s; }
+    return "keranjang";
+  };
+  const STEP_RANK: Record<CkStep, number> = { keranjang: 0, kontak: 1, alamat: 2, pengiriman: 3, pembayaran: 4 };
+
+  const cartItems = (picks: number[]) =>
+    picks.map((idx) => {
+      const p = CATALOG[idx];
+      const qty = ckRnd() < 0.18 ? 2 : 1;
+      return { handle: p.slug, name: p.name, variant: (WARNA_BY_SLUG[p.slug] ?? ["Default"])[0], qty, price: p.price };
+    });
+  const cartSubtotal = (items: ReturnType<typeof cartItems>) => items.reduce((a, i) => a + i.price * i.qty, 0);
+
+  type CkRow = typeof schema.checkoutSessions.$inferInsert;
+  const ckRows: CkRow[] = [];
+  let ckSeq = 0;
+
+  for (let d = 0; d < CK_WINDOW_DAYS; d++) {
+    const dayOrders = ordersByDay.get(d) ?? [];
+    if (dayOrders.length === 0) continue;
+    const nAbandoned = Math.round(dayOrders.length * 4);
+    const nRescued = Math.min(Math.round(nAbandoned * 0.14), dayOrders.length);
+
+    // ---- abandoned: never became anything ----
+    for (let k = 0; k < nAbandoned; k++) {
+      const step = rollStep();
+      const rank = STEP_RANK[step];
+      const items = cartItems(Array.from({ length: 1 + Math.floor(ckRnd() * 3) }, () => Math.floor(ckRnd() * CATALOG.length)));
+      // A quarter of the identified carts belong to someone who has bought here before — the admin
+      // can then open the whole customer, not just a phone number.
+      const known = rank >= 1 && ckRnd() < 0.25 ? pick(CUSTOMERS) : null;
+      const city = known?.city ?? pick(CITIES);
+      const anon = rank === 0; // never reached the contact form → we have nothing but a session id
+      const startedMin = d * 1440 + Math.floor(ckRnd() * 1380);
+      ckRows.push({
+        storeId: store.id,
+        sessionId: `ck-${d}-${k}-${ckSeq++}`,
+        customerId: known ? custByName.get(known.name) ?? null : null,
+        name: anon ? null : known?.name ?? pick(CUST_POOL),
+        phone: anon ? null : known?.phone ?? "0812" + String(1000000 + Math.floor(ckRnd() * 8999999)),
+        email: anon || ckRnd() < 0.45 ? null : known?.email ?? null,
+        address: rank >= 2 ? `${(STREETS[city] ?? ["Jl. Merdeka"])[0]} No. ${1 + Math.floor(ckRnd() * 120)}` : null,
+        city: rank >= 2 ? city : null,
+        province: rank >= 2 ? PROV_OF[city] ?? null : null,
+        postcode: rank >= 2 ? `${POST_OF[city] ?? "40"}${String(100 + Math.floor(ckRnd() * 899))}` : null,
+        districtId: rank >= 2 ? districtByCity.get(city) ?? null : null,
+        items,
+        subtotalIdr: cartSubtotal(items),
+        shippingIdr: rank >= 3 ? 20_000 : 0,
+        step,
+        status: "ditinggal",
+        createdAt: minutesAgo(startedMin),
+        updatedAt: minutesAgo(startedMin - Math.floor(2 + ckRnd() * 25)), // last touch, a few minutes later
+        // The sweep flips a session to `ditinggal` once it has been quiet for 60 minutes — that hour
+        // is when the cart was actually given up on, so that is what `abandoned_at` says.
+        abandonedAt: minutesAgo(startedMin - Math.floor(2 + ckRnd() * 25) - 60),
+      });
+    }
+
+    // ---- pulih: the sessions that BECAME one of this day's orders ----
+    // Two different things, and the difference is the whole point of `abandoned_at`:
+    //   k < nRescued        → went quiet, was chased, came back  → a real RESCUE
+    //   k >= nRescued       → walked straight through to payment → an ordinary sale
+    for (let k = 0; k < dayOrders.length; k++) {
+      const o = dayOrders[k];
+      const cust = CUSTOMERS.find((c) => c.name === o.customer);
+      const items = cartItems(o.picks);
+      const rescued = k < nRescued;
+      // A rescue started a day or two before it finally paid; a straight-through checkout takes
+      // minutes.
+      const startedMin = rescued ? o.minutesAgo + 1440 + Math.floor(ckRnd() * 2880) : o.minutesAgo + 6 + Math.floor(ckRnd() * 20);
+      ckRows.push({
+        storeId: store.id,
+        sessionId: `ck-${rescued ? "pulih" : "lurus"}-${d}-${k}-${ckSeq++}`,
+        customerId: custByName.get(o.customer) ?? null,
+        name: o.customer,
+        phone: cust?.phone ?? null,
+        email: cust?.email ?? null,
+        city: cust?.city ?? null,
+        items,
+        subtotalIdr: o.total,
+        shippingIdr: 20_000,
+        step: "pembayaran",
+        status: "pulih",
+        recoveredOrderId: o.id,
+        recoveredAt: minutesAgo(o.minutesAgo),
+        // The rescue went quiet an hour after its last touch; the straight-through sale never did.
+        abandonedAt: rescued ? minutesAgo(startedMin - 90) : null,
+        createdAt: minutesAgo(startedMin),
+        updatedAt: minutesAgo(o.minutesAgo),
+      });
+    }
+  }
+
+  // A few carts still OPEN right now — not abandoned yet (nobody has left; they are mid-checkout).
+  // Excluded from every abandonment number on purpose: calling a live cart "abandoned" would be a lie
+  // by 20 minutes.
+  //
+  // ⚠️ These are stamped from the REAL clock, not the 2026-07-02 demo anchor: the storefront's ageing
+  // sweep flips anything quieter than 60 minutes of `now()` to `ditinggal`, so an anchor-dated "aktif"
+  // row would silently stop being aktif the moment the sweep next runs.
+  for (let k = 0; k < 3; k++) {
+    const items = cartItems([Math.floor(ckRnd() * CATALOG.length)]);
+    const startedMin = 8 + Math.floor(ckRnd() * 40);
+    ckRows.push({
+      storeId: store.id,
+      sessionId: `ck-aktif-${k}`,
+      name: k === 0 ? pick(CUST_POOL) : null,
+      phone: k === 0 ? "0812" + String(1000000 + Math.floor(ckRnd() * 8999999)) : null,
+      items,
+      subtotalIdr: cartSubtotal(items),
+      step: k === 0 ? "kontak" : "keranjang",
+      status: "aktif",
+      createdAt: new Date(Date.now() - startedMin * 60_000),
+      updatedAt: new Date(Date.now() - Math.max(1, startedMin - 5) * 60_000),
+    });
+  }
+  for (let i = 0; i < ckRows.length; i += 500) {
+    await db.insert(schema.checkoutSessions).values(ckRows.slice(i, i + 500));
+  }
 
   // CMS: pages
   await db.insert(schema.pages).values(
@@ -956,6 +1149,34 @@ async function main() {
     })),
   );
   await db.insert(schema.waTemplates).values(WA_TEMPLATES.map((t) => ({ storeId: store.id, name: t.name, type: t.type, body: t.body })));
+
+  // keranjang follow-ups — REAL ones, derived from carts that exist.
+  // The merchant has already opened WhatsApp on the three biggest recent baskets that left a phone
+  // number. `sent_at` records THAT: we opened the chat. It is not proof the message was delivered or
+  // read — wa.me cannot tell us — so the status stays `menunggu`, never `terkirim`.
+  const contactable = ckRows
+    .filter((r) => r.status === "ditinggal" && r.phone && (r.createdAt as Date).getTime() > TODAY.getTime() - 7 * 86_400_000)
+    .sort((a, b) => (b.subtotalIdr ?? 0) - (a.subtotalIdr ?? 0))
+    .slice(0, 3);
+  if (contactable.length) {
+    await db.insert(schema.followups).values(
+      contactable.map((r) => {
+        const items = (r.items as Array<{ name: string; qty: number }>) ?? [];
+        const label = items.length > 1 ? `${items[0].name} +${items.length - 1} lainnya` : items[0]?.name ?? "Keranjang";
+        return {
+          storeId: store.id,
+          customerId: r.customerId ?? null,
+          phone: r.phone!,
+          type: "keranjang" as const,
+          context: `${label} · Rp${(r.subtotalIdr ?? 0).toLocaleString("id-ID")}`,
+          dueAt: r.createdAt as Date,
+          status: "menunggu" as const,
+          sentAt: new Date((r.updatedAt as Date).getTime() + 45 * 60_000), // WA dibuka ~45 mnt setelah cart ditinggal
+          lastMessage: null,
+        };
+      }),
+    );
+  }
 
   // purchasing: suppliers + purchase orders (+ items for the count)
   const supRows = await db.insert(schema.suppliers).values(SUPPLIERS.map((n) => ({ storeId: store.id, name: n }))).returning({ id: schema.suppliers.id, name: schema.suppliers.name });

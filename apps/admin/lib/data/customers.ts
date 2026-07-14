@@ -8,11 +8,24 @@ const ADMIN_TODAY = new Date("2026-06-30T00:00:00Z");
 // Same anchor as `lib/data/orders.ts` so relative times match the Pesanan screens.
 const ORDERS_TODAY = new Date("2026-07-02T00:00:00Z");
 
+// A customer, plus the one fact the flat mock shape never carried: does this person have an ACCOUNT?
+//
+//   registered_at IS NULL  →  Tamu (guest)
+//
+// Guest is the NORMAL case, not a defect. Indonesian checkout never asks for a registration, and it
+// must not — a signup wall in front of the payment step is the most reliable way to lose the sale.
+// The screen presents "Tamu" as the ordinary state, and "Terdaftar" as the extra.
+export type CustomerRow = Customer & {
+  registered: boolean;
+  registeredDaysAgo: number | null;
+  lastOrderMinutesAgo: number | null;
+};
+
 function toCustomer(r: {
   id: string; name: string; email: string | null; phone: string | null; city: string | null;
   ordersCount: number; totalSpentIdr: number; segment: "baru" | "reguler" | "loyal" | "vip"; createdAt: Date;
-  tags?: unknown; notes?: string | null;
-}): Customer {
+  tags?: unknown; notes?: string | null; registeredAt?: Date | null; lastOrderAt?: Date | null;
+}): CustomerRow {
   return {
     id: r.id,
     name: r.name,
@@ -25,17 +38,24 @@ function toCustomer(r: {
     joinedDaysAgo: Math.round((ADMIN_TODAY.getTime() - r.createdAt.getTime()) / 86_400_000),
     tags: (r.tags as string[] | null) ?? undefined,
     notes: r.notes ?? undefined,
+    registered: r.registeredAt != null,
+    registeredDaysAgo: r.registeredAt
+      ? Math.round((ADMIN_TODAY.getTime() - r.registeredAt.getTime()) / 86_400_000)
+      : null,
+    lastOrderMinutesAgo: r.lastOrderAt
+      ? Math.max(0, Math.round((ORDERS_TODAY.getTime() - r.lastOrderAt.getTime()) / 60_000))
+      : null,
   };
 }
 
-export async function getCustomers(): Promise<Customer[]> {
+export async function getCustomers(): Promise<CustomerRow[]> {
   return withCurrentTenant(async (db) => {
     const rows = await db.select().from(schema.customers).orderBy(desc(schema.customers.totalSpentIdr));
     return rows.map(toCustomer);
   });
 }
 
-export async function getCustomer(id: string): Promise<Customer | null> {
+export async function getCustomer(id: string): Promise<CustomerRow | null> {
   return withCurrentTenant(async (db) => {
     const rows = await db.select().from(schema.customers).where(eq(schema.customers.id, id)).limit(1);
     return rows[0] ? toCustomer(rows[0]) : null;

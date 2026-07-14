@@ -38,6 +38,10 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: "Pelanggan", href: "/pelanggan", icon: Users,
         children: [
+          // The carts that never became orders — ~80% of them, in this market. They belong under
+          // Pelanggan and not under Pesanan: an abandoned checkout is a PERSON you can still call,
+          // not an order you can fulfil.
+          { label: "Keranjang Ditinggal", href: "/pelanggan/keranjang" },
           { label: "Segmen", href: "/pelanggan/segmen" },
           { label: "Ulasan", href: "/pelanggan/ulasan" },
         ],
