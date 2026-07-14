@@ -75,7 +75,10 @@ erDiagram
         text courier "NULL on 699 of 700 rows"
         text awb "real waybill only, never our order id"
         text ka_order_id "KiriminAja booking ref"
-        int ship_district_id "0042 the verified destination"
+        int ship_district_id "0042 the verified destination - PRICES the parcel"
+        int ship_kelurahan_id "0049 KiriminAja village id - BOOKS the parcel"
+        text ship_kelurahan_name "0049"
+        text ship_postcode "0042"
         text ship_address "0042 snapshot, not a lookup"
         timestamptz returned_at "0039"
     }
@@ -147,6 +150,10 @@ erDiagram
    construction** rather than by coincidence.
 2. `orders.ship_district_id` (0042) is the **verified** destination. `orders.province` is what the
    buyer typed. Money decisions read the former. See §5.
+2b. `orders.ship_kelurahan_id` (0049) is **KiriminAja's own village id**, verified to belong to
+   `ship_district_id` before it is stored. **Kecamatan PRICES the parcel; kelurahan BOOKS it** —
+   `shipping_price` ignores village ids, `request_pickup` needs one. The shipment is booked from this
+   snapshot, never re-resolved from the free-text city name (which once shipped Surabaya → Lampung).
 3. `checkout_sessions.recovered_order_id` → `orders` (0044) is what makes "recovered" a **join** rather
    than a vibe: *this* session became *that* order. Paired with `abandoned_at` (0045) it is also the
    only way to tell a **rescue** from an ordinary sale. See §9.
@@ -183,7 +190,7 @@ graph TB
         KA["KiriminAja<br/>courier aggregator"]
     end
 
-    PG[("PostgreSQL 16<br/>68 tables - 46 migrations<br/>RLS on 44")]
+    PG[("PostgreSQL 16<br/>68 tables - 50 migrations<br/>RLS on 43 of 44 store-scoped")]
     DISK[/"public/uploads<br/>local media"/]
 
     SH --> SF

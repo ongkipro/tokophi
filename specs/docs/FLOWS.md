@@ -1,8 +1,11 @@
 # TokoΦ — CRITICAL FLOWS
 
 > Every diagram below carries the **real file and function names** and the **actual guards** as they exist
-> in the tree on **2026-07-13**. Read with [`SYSTEM_MAP.md`](./SYSTEM_MAP.md) (structure) and
+> in the tree on **2026-07-14**. Read with [`SYSTEM_MAP.md`](./SYSTEM_MAP.md) (structure) and
 > [`STATUS.md`](./STATUS.md) (what is real vs. seeded vs. fake).
+>
+> **§5 is the shipping flow end to end** (address cascade → quote → order snapshot → booking → label) and
+> is the doc to read before touching anything that prices or ships a parcel.
 
 ---
 
@@ -29,25 +32,44 @@ sequenceDiagram
     ONG->>DB: resolveArea() → kiriminaja_areas
     ONG-->>SF: districts[] (each with destId)
 
-    SF->>ONG: {op:"rates", storeSlug, destinationId, weight: qty*500}
+    SF->>ONG: {op:"kelurahan", destinationId}
+    ONG->>KA: kaKelurahan(kecamatanId) → POST /api/mitra/kelurahan
+    ONG-->>SF: kelurahan[] {id, name, postcode}
+    Note over SF,ONG: THE CASCADE is kecamatan → kelurahan.<br/>Kota, provinsi and kodepos are DERIVED from the pick —<br/>the shopper never types them. `id` is KiriminAja's own<br/>village id: the ONLY one request_pickup accepts, and<br/>null for the ~4% of districts that fall back to the local<br/>Kemendagri table (a name + a kodepos we have, a bookable<br/>id we do not — never invent one).
+
+    SF->>ONG: {op:"rates", storeSlug, destinationId, items[], scope:"primary"|"all"}
+    Note over SF,ONG: NO weight, NO price, NO originCity in the body.<br/>The cart says WHAT is in it — the server says what it<br/>weighs, what it costs and where it ships from.<br/>`scope` chooses how MANY couriers are priced, never<br/>what they cost: "primary" = the chain SPX → JNE on<br/>first paint, and "all" only when the shopper opens<br/>"Lihat kurir lainnya". Both go through the SAME<br/>quoteShipping() the order re-quotes with.
     ONG->>DB: origin = store_settings.sender_kecamatan_id (the seller's PICKUP address)
     Note over ONG,DB: ⚠️ Fixed in a68f7af: origin used to be resolveArea(body.originCity),<br/>a CITY NAME posted by the shopper's browser — so the seller's real<br/>warehouse was ignored AND an untrusted client string set the price.<br/>sender_kecamatan_id IS a KiriminAja district id (same currency as<br/>destinationId): nothing to resolve, nothing to guess. No pickup<br/>address → fall back to the store's REGISTERED city and say so<br/>(originFrom:"store-city") — a fuzzy match is a guess, so show it.
     ONG->>DB: platform_couriers.enabled ∩ store_shipping_methods (per SERVICE)
     Note over ONG,DB: keyed "courier:service_type" — a service_type is only<br/>unique within its courier. NO rows = the merchant never<br/>opened the Jasa Kirim card → fall back to the courier-level<br/>list, never a checkout with zero shipping options
-    ONG->>KA: kaShippingPrice(origin, destination, weight)
+    ONG->>DB: weightForCart() — Σ product_variants.weight_grams, min 1 kg billable
+    ONG->>KA: kaShippingPrice(origin, destination, billableGrams, couriers:[…])
+    Note over ONG,KA: ALWAYS name the couriers. Unfiltered, KiriminAja walks<br/>its whole roster: measured 5.513 ms / 18 services vs<br/>512 ms / 14 when the enabled couriers are named.<br/>NO village id is sent — pricing is KECAMATAN-level (§5).
     KA-->>ONG: services[] (each with a raw cod flag)
     ONG->>COD: getCodPolicy(store.id)
     Note over ONG,COD: rate.cod = KiriminAja's cod<br/>AND policy.allows(service, serviceType)<br/>— the EFFECTIVE flag, not the raw one
-    ONG-->>SF: {rates[], codEnabled}
+    ONG-->>SF: {rates[], codEnabled, origin, originFrom, weight, billableWeight}
 
     S->>SF: pick service + channel, submit
-    SF->>ORD: {storeSlug, items, customer, address,<br/>shipping:{service,serviceType,cost,destId}, channelCode}
+    SF->>ORD: {storeSlug, items, customer,<br/>address:{alamat, kodepos, kelurahanId},<br/>shipping:{service,serviceType,destId}, channelCode}
+    Note over SF,ORD: `shipping.cost` is NOT sent and would not be read.<br/>kota/provinsi are not sent — they are DERIVED from destId.
+
+    rect rgb(240, 245, 255)
+        Note over ORD,DB: ── EVERY NUMBER THAT DECIDES MONEY IS RECOMPUTED HERE ──
+        ORD->>DB: areaById(destId) → kota + provinsi DERIVED (typed values ignored)
+        ORD->>DB: verifyKelurahan(destId, address.kelurahanId)
+        Note over ORD,DB: the village id is proven to BELONG to destId before it is<br/>stored. A village id from another kecamatan would sail<br/>through request_pickup and land the parcel somewhere<br/>nobody chose. Unverifiable ⇒ null — the village is optional<br/>to the courier, and losing a real sale over it is the worse bug.
+        ORD->>DB: prices ← product_variants.price_idr (items[].price ignored)
+        ORD->>ORD: quoteShipping() — the SAME function /api/public/ongkir used
+        Note over ORD: findRate(courier + service_type). A picked service that is<br/>NOT in the fresh quote is REJECTED — never silently<br/>re-couriered. body.shipping.cost is never read.
+    end
 
     rect rgb(255, 240, 240)
         Note over ORD,COD: ── THE COD GATE — before ANY row is written ──
         ORD->>ORD: rateLimited(req,"order",10,60_000) → 429?
         ORD->>DB: stores WHERE slug = storeSlug
-        ORD->>ORD: total = subtotal + shippingIdr
+        ORD->>ORD: total = subtotal + shippingIdr (both OURS)
         alt channelCode === "cod"
             ORD->>COD: getCodPolicy(store.id)
             ORD->>DB: provinceForDistrict(destId)
@@ -63,12 +85,14 @@ sequenceDiagram
         end
     end
 
-    ORD->>DB: upsert customers (by email, within store)
+    ORD->>DB: upsert customers (by canonical `62…` PHONE, within store)
+    Note over ORD,DB: in Indonesia the WA number IS the identity. Keying on it<br/>only works because normalizePhone() made it canonical —<br/>the same person used to land twice as 0812… and +62 812…
     ORD->>DB: resolve each item → product_variants, then check inventory_levels
     alt any line is short
         ORD-->>SF: {ok:false, "Stok … tidak mencukupi"} — nothing written
     end
-    ORD->>DB: INSERT orders (status='baru', financial_status='pending')
+    ORD->>DB: INSERT orders (status='baru', financial_status='pending')<br/>+ ship_recipient, ship_phone, ship_address, ship_postcode,<br/>ship_district_id, ship_kelurahan_id, ship_kelurahan_name
+    Note over ORD,DB: THE ADDRESS SNAPSHOT (0042 + 0049). The address belongs<br/>to the TRANSACTION, not to the person: without it a buyer<br/>who moves house moves every past order with them.<br/>ship_district_id + ship_kelurahan_id are the ids the<br/>parcel will actually be BOOKED with (§5).
     ORD->>DB: INSERT order_line_items[]
     ORD->>DB: UPDATE inventory_levels SET available = GREATEST(available - qty, 0)
 
@@ -89,10 +113,14 @@ sequenceDiagram
     SF->>S: redirect /checkout/sukses
 ```
 
-**Instant (same-day) is a separate leg.** If the shopper picks an instant service, `/api/public/order` calls
-`kaCreateInstantOrder()` with the store's `sender_lat/lng` and, on success, sets `orders.awb`, `orders.courier`,
-`orders.ka_order_id` and jumps the order straight to `dikirim`. Instant is **never COD** — `lib/cod.ts` nulls the
-service out for instant orders because instant is not in the roster.
+**No shipment is booked at checkout.** The order is written, and the parcel is booked later by the merchant from
+Pesanan → "Buat pengiriman" (§5). `orders.courier` / `awb` / `ka_order_id` stay NULL until then.
+
+**Instant / same-day is GONE.** `kaInstantPricing` / `kaCreateInstantOrder` (KiriminAja `/api/mitra/v4/instant/*`),
+the checkout option and the shopper/store lat-lng they needed were **deleted** (`1c084ad`). TokoΦ ships by
+expedition courier only. `isInstantCourier()` / `isInstantService()` in `@tokophi/lib/couriers` remain as a **guard**:
+if KiriminAja ever folds an on-demand courier into the express roster, it still cannot reach a store. Note the
+boundary — `one_day` (AnterAja Same Day, SAP One Day) is an *expedition* service and stays.
 
 ---
 
@@ -270,7 +298,48 @@ all (the courier collects at the door and settles days later).
 
 ---
 
-## 5. Shipping — roster sync → merchant selection → ongkir → shipment
+## 5. Shipping, end to end — address cascade → quote → snapshot → booking → label
+
+**The one rule to carry out of this section:**
+
+> ### 🚚 Kecamatan PRICES the parcel. Kelurahan BOOKS it.
+>
+> `shipping_price` accepts `subdistrict_origin` / `subdistrict_destination` and **silently ignores them** — a
+> nonsense village id returns the identical services at identical costs (verified on the sandbox). Tariffs are
+> **kecamatan-level**. The **kelurahan matters for the BOOKING and the printed label**, where `request_pickup`
+> takes `destination_kelurahan_id` and a driver has to find the door.
+>
+> **Do not re-add village ids to the pricing call.** It would imply a precision the price does not have.
+
+### 5.1 The address cascade: kecamatan → kelurahan → (kota, provinsi, kodepos)
+
+The shopper picks **two** things. Everything else is derived.
+
+| Field | Where it comes from | Why not typed |
+|---|---|---|
+| **Kecamatan** | autocomplete → `kiriminaja_areas` (`op:"search"` → `resolveArea`) | the `dest_id` is what the ongkir is priced against and what the parcel is booked to |
+| **Kelurahan** | `op:"kelurahan"` → **`POST /api/mitra/kelurahan`** (`kaKelurahan`) | only KiriminAja's own village id is bookable |
+| **Kodepos** | the `postal_code` KiriminAja returns **per village** (100% coverage in sampling) | a kodepos is assigned per *kelurahan*, not per kecamatan — 17% of kecamatan span several |
+| **Kota, Provinsi** | **derived** from the district id (`areaById`) | typed values are a *claim*: "DKI Jakarta" + a Papua district was the COD hole |
+
+**Two kelurahan sources, and they are NOT interchangeable:**
+
+| Source | Id looks like | Bookable? |
+|---|---|---|
+| KiriminAja `POST /api/mitra/kelurahan` | `31483` (numeric) | ✅ **the only id `request_pickup` accepts** |
+| local `kelurahan` table (0046, Kemendagri/BPS) — 78.764 rows | `34.02.13.2004` | ❌ a name and a kodepos, useless to the courier |
+
+KiriminAja wins when it answers; the local table is the fallback for the ~4% of districts it has no list for
+(and for when the API is down — a checkout must not lose its kodepos field because an upstream is having a bad
+day). **Fallback rows carry `id: null` deliberately.** A null id books a parcel with no village, which is legal.
+A *wrong* id books it to the wrong village, which is not. **Never invent one to fill the column.**
+
+> **The cross-surface bug worth remembering.** The checkout posted `kelurahanId` as a JSON **string**; the API
+> guarded it with `Number.isFinite()` — which is **false for a string** — so every village id was silently
+> discarded and `ship_kelurahan_id` stayed NULL. **Both builds were green.** `verifyKelurahan()` now coerces at
+> the boundary. **A cross-surface contract is proven by DRIVING it, never by two passing typechecks.**
+
+### 5.2 The whole path
 
 ```mermaid
 sequenceDiagram
@@ -280,48 +349,132 @@ sequenceDiagram
     participant KA as KiriminAja
     participant DB as PostgreSQL
     actor M as Merchant
-    participant AD as admin /pengaturan<br/>Jasa Kirim
+    participant AD as admin /pengaturan
     actor S as Shopper
     participant ONG as POST /api/public/ongkir
+    participant Q as lib/shipping-quote.ts<br/>quoteShipping()
     participant ORD as POST /api/public/order
+    participant SH as lib/actions/shipping.ts<br/>createShipment()
 
-    OP->>SA: "Sync dari KiriminAja"  [requirePlatformAdmin]
-    SA->>KA: kaServices()
-    Note over SA,KA: ⚠️ KiriminAja has NO list-couriers endpoint.<br/>kaServices() prices ONE hardcoded reference route<br/>(origin 2099 Menteng → dest 356 Coblong, 1kg, Rp100k)<br/>and harvests the services out of the shipping_price<br/>response. Cached 24h. The roster is only as complete<br/>as that single route.
-    KA-->>SA: services[] {courier, serviceType, name, group, cod}
-    SA->>DB: UPSERT platform_couriers.services (jsonb)<br/>{type, name, group, cod, codAllowed}
-    Note over SA,DB: a previous super-admin codAllowed decision is PRESERVED —<br/>otherwise it follows KiriminAja's cod flag.<br/>Couriers KA no longer offers are DISABLED, never deleted<br/>(old orders still reference them).
-    OP->>SA: tick per-service COD  → saveCodAllowed()
-    SA->>DB: platform_couriers.services[].codAllowed
-    Note over SA,DB: KiriminAja's own `cod` flag is the hard ceiling:<br/>codAllowed = s.cod && wanted
-
-    M->>AD: pick SERVICES + COD toggle  [requireCapability("settings:write")]
-    AD->>DB: store_shipping_methods (courier, service) — saveStoreServices()<br/>store_settings.cod_enabled — setCodEnabled()
-    Note over AD,DB: the card says "Pilih layanan yang ditawarkan ke pembeli<br/>saat checkout" and each row states its COD status:<br/>green COD badge on SPX Standard + SPX Economy,<br/>"Tidak mendukung COD." on everything else
-
-    S->>ONG: {op:"rates", storeSlug, destinationId, weight}
-    ONG->>DB: origin = store_settings.sender_kecamatan_id (seller's pickup address)
-    Note over ONG,DB: NOT body.originCity. Proven by moving the warehouse:<br/>Gubeng/Surabaya → Coblong/Bandung repriced SPX Standard<br/>Rp17.000 → Rp17.700 and SPX Economy Rp12.700 → Rp10.400,<br/>while an injected originCity:"Jakarta Pusat" was ignored.
-    ONG->>DB: platformOn = platform_couriers WHERE enabled
-    ONG->>DB: picked = store_shipping_methods WHERE enabled
-    Note over ONG: effective = platformOn ∩ picked, keyed "courier:service_type"<br/>— platform is the HARD cap. ⚠️ Fixed in 35b88a4: this used to<br/>filter on store_settings.couriers (the COURIER list), so every<br/>SERVICE the seller switched off was still offered at checkout —<br/>14 rates for 11 picks. NO picked rows = fall back to the<br/>courier-level list rather than show zero options.
-    ONG->>KA: kaShippingPrice(origin, destination, weight, itemValue)
-    KA-->>ONG: rates[]
-    ONG->>ONG: rate.cod = KA.cod && getCodPolicy(store).allows(service, serviceType)
-    ONG-->>S: rates[] filtered to `effective`, each with the EFFECTIVE cod flag
-
-    S->>ORD: submit (shipping.service, shipping.serviceType, shipping.destId)
-    alt instant (same-day)
-        ORD->>KA: kaCreateInstantOrder(origin = store sender_lat/lng, dest = shopper lat/lng)
-        KA-->>ORD: {orderId}
-        ORD->>DB: orders.awb = orderId, orders.courier = "<SVC> Instant",<br/>orders.ka_order_id, orders.status = 'dikirim'
-    else regular
-        Note over ORD,DB: ⚠️ NO shipment is booked at checkout.<br/>orders.courier / awb / ka_order_id stay NULL.<br/>kaCreateOrder() exists in packages/lib and is called from<br/>lib/actions/shipping.ts (merchant-initiated), NOT from the<br/>public order API. See STATUS.md — orders.courier is NULL<br/>on 700/700 rows in the live DB.
+    rect rgb(245, 245, 245)
+        Note over OP,DB: ── ① PLATFORM: the roster ──
+        OP->>SA: "Sync dari KiriminAja"  [requirePlatformAdmin]
+        SA->>KA: kaServices()
+        Note over SA,KA: ⚠️ KiriminAja has NO list-couriers endpoint. kaServices()<br/>prices ONE hardcoded reference route (Menteng → Coblong,<br/>1 kg) and harvests the services out of the response.<br/>The roster is only as complete as that ONE lane — which is<br/>why TIKI never entered it and no merchant could enable it.<br/>Being fixed to a multi-route UNION.
+        KA-->>SA: services[] {courier, serviceType, name, group, cod}
+        SA->>DB: UPSERT platform_couriers.services (jsonb {type,name,group,cod,codAllowed})
+        Note over SA,DB: a previous codAllowed decision is PRESERVED. Couriers KA no<br/>longer offers are DISABLED, never deleted (old orders point at them).
     end
+
+    rect rgb(240, 245, 255)
+        Note over M,DB: ── ② SELLER: pickup address + services ──
+        M->>AD: Pengaturan → Alamat: kecamatan → kelurahan → kodepos
+        AD->>DB: store_settings.sender_kecamatan_id / _kelurahan_id / _zip (0049)
+        Note over AD,DB: sender_kecamatan_id IS a KiriminAja district id — the same<br/>currency as the shopper's destinationId. Nothing to resolve.
+        M->>AD: Pengaturan → Pengiriman: tick SERVICES + the COD switch
+        AD->>DB: store_shipping_methods (courier, service) · store_settings.cod_enabled
+        Note over AD,DB: PER SERVICE, not per courier — a courier-level list cannot say<br/>"JNE Reguler but not JNE YES". The seller only sees the eight<br/>SELLER_COURIER_CODES, and SPX + JNE are BASELINE — they cannot<br/>be switched off (ADR 0010).
+    end
+
+    rect rgb(240, 255, 240)
+        Note over S,Q: ── ③ SHOPPER: the QUOTE (kecamatan-level) ──
+        S->>ONG: op:"search" → kecamatan · op:"kelurahan" → village + kodepos
+        S->>ONG: op:"rates" {items[], destinationId, scope:"primary"|"all"}
+        ONG->>Q: quoteShipping()
+        Q->>DB: origin  = store_settings.sender_kecamatan_id (NEVER a client city)
+        Q->>DB: weight  = Σ product_variants.weight_grams (NEVER body.weight)
+        Q->>DB: scope   = (platform-enabled) ∩ (the seller's per-service picks)
+        Q->>KA: kaShippingPrice(origin, destination, billableGrams, couriers:[…])
+        Note over Q,KA: NAME THE COURIERS. Unfiltered = 5.513 ms / 18 services.<br/>Naming the enabled ones = 512 ms / 14. NO village id is sent.
+        KA-->>Q: rates[]
+        Q->>Q: rate.cod = KA.cod && getCodPolicy(store).allows(courier, serviceType)
+        Q-->>S: rates[] — each with the EFFECTIVE cod flag
+        Note over S,Q: FIRST PAINT prices ONE courier (PRIMARY_CHAIN: SPX → JNE).<br/>"Lihat kurir lainnya" → scope:"all". Same function either<br/>way, so the two steps can never produce two prices.
+    end
+
+    rect rgb(255, 250, 235)
+        Note over S,ORD: ── ④ ORDER: re-quote + SNAPSHOT ──
+        S->>ORD: submit {shipping:{service, serviceType, destId}, address:{kelurahanId}}
+        ORD->>Q: quoteShipping() AGAIN — the same function, the same origin
+        Note over ORD,Q: body.shipping.cost is not read. findRate(courier + service_type) —<br/>a service missing from the fresh quote is REJECTED, not re-couriered.
+        ORD->>DB: verifyKelurahan(destId, kelurahanId) — proven, or dropped to NULL
+        ORD->>DB: INSERT orders … ship_recipient, ship_phone, ship_address,<br/>ship_postcode, ship_district_id, ship_kelurahan_id, ship_kelurahan_name
+        Note over ORD,DB: 0042 + 0049. The destination is FROZEN onto the order.
+    end
+
+    rect rgb(255, 240, 240)
+        Note over M,SH: ── ⑤ MERCHANT: the BOOKING (kelurahan-level) ──
+        M->>SH: Pesanan → "Buat pengiriman"  [requireCapability("orders:write")]
+        SH->>DB: read the order's ship_* SNAPSHOT — the ids, not the city name
+        SH->>SH: destAddress = composeAddress([street, kelurahan, kecamatan, kota])
+        Note over SH: lib/address.ts de-duplicates: "Jl. Raya Gubeng No. 42, Gubeng"<br/>+ kel "Gubeng" + kec "Gubeng, Surabaya" is NOT<br/>"Gubeng, Gubeng, Gubeng". REFUSES to book under KiriminAja's<br/>10-char minimum rather than shipping a "Bad Address".
+        SH->>KA: kaCreateOrder(sender{kecamatanId, kelurahanId, zipcode},<br/>pkg{destKecamatanId, destKelurahanId, destZipcode, …})
+        KA-->>SH: {pickup_number, details[0].awb (may be NULL), kj_order_id}
+        SH->>DB: orders.awb = details[0].awb ONLY · ka_order_id = kj_order_id · status='dikirim'
+        Note over SH,DB: ⚠️ awb stays NULL until a courier issues one (the norm in sandbox).<br/>It used to store OUR OWN order id and print it on parcels under<br/>"No. resi" — an unscannable barcode on a real package (0b3cdda).
+    end
+
+    M->>SH: "Lacak" (kaTrack) → picks up the AWB once it is issued
+    M->>M: "Cetak resi" → 100×150 mm label (browser print / PDF) — only with a REAL awb
 ```
 
-Tracking: the storefront has **no** `/api/track`-style shipment lookup; `kaTrack()` exists in `packages/lib` and is
-reachable from the merchant admin only.
+### 5.3 The legacy fallback, and why it must be loud
+
+An order written **before** 0042 has no `ship_district_id`. `createShipment` then falls back to matching the
+**city name** — the exact behaviour that once booked a Surabaya parcel to Lampung. It still works, but it now
+returns `destinationGuessed` and the UI raises a **warning toast**. A guess that succeeds quietly is how the bug
+survived; a guess must be visible as one.
+
+### 5.4 Courier policy (ADR 0010)
+
+| Constant (`packages/lib/src/couriers.ts`) | Value | Meaning |
+|---|---|---|
+| `SELLER_COURIER_CODES` | spx, jne, jnt, lion, sap, sicepat, idx, anteraja | the **only** couriers a SELLER may offer. Super Admin sees everything KiriminAja carries (minus instant). **J&T Cargo / TIKI are platform-only.** |
+| `BASELINE_COURIER_CODES` | **spx, jne** | the baseline pair. SPX is the primary + the COD rail; JNE is the backup. **Binds only their STANDARD service** — see below. |
+| `PRIMARY_CHAIN` | spx → jne | the order the checkout's first quote walks. |
+| `INSTANT_COURIER_CODES` | gosend, grab, borzo, … | out of scope — a guard, not a feature. |
+
+**The baseline binds the STANDARD service only.** Express and economy are the seller's choice; what they may
+not do is leave a route with no ordinary way to ship on it.
+
+| Courier | Service | `type` | `group` | Baseline? |
+|---|---|---|---|---|
+| SPX | SPX Standard | `1` | `regular` | ✅ **mandatory** (and the COD rail) |
+| SPX | SPX Economy | `3` | `economy` | ⬜ optional |
+| JNE | JNE Express **Reguler** | `REG23` | `regular` | ✅ **mandatory** |
+| JNE | JNE Express **YES** | `YES23` | `next_day` | ⬜ optional (the express one) |
+
+> ⚠️ **Match on `group`, never on the name.** JNE's *standard* service is called **"JNE Express Reguler"** —
+> the word "Express" sits in the name of the service that is **not** express. The baseline service is the
+> **`group: "regular"`** one; `economy`, `next_day`, `one_day` and `cargo` are all optional.
+>
+> **Code gap:** `BASELINE_COURIER_CODES` is courier-level, so it currently reads as "the whole courier is
+> locked". The policy is **service-level**. See BACKLOG.
+
+> ⚠️ **"Enabled" ≠ "the shopper will see it". Availability is decided per PICKUP ORIGIN.** Measured 2026-07-14:
+> **J&T quotes from Jakarta and Yogyakarta origins but NEVER from Gubeng (Surabaya)** — to any destination. A
+> courier that does not collect from the seller's warehouse is simply absent from the quote.
+
+**COD is SPX-only by OUR policy, not by a courier limit.** KiriminAja marks JNE, SiCepat, Lion, Ninja and
+AnterAja COD-capable too. The restriction rests on the belief that a refused SPX parcel returns free — **which is
+still unverified** (it is a *Shopee Seller Center* benefit; we reach SPX through *KiriminAja*, a different
+contract, whose API has no return field at all). Widening COD is a **data change**
+(`platform_couriers.services[].codAllowed`), never `if (courier === "spx")` in code. See BACKLOG.
+
+### 5.5 Where each concern lives
+
+| Concern | File |
+|---|---|
+| **The one place a shipping PRICE is produced** | `apps/admin/lib/shipping-quote.ts` (`quoteShipping`, `findRate`) |
+| **The one place COD is decided** | `apps/admin/lib/cod.ts` (`getCodPolicy` — five conditions) |
+| Parcel weight, from the DB | `apps/admin/lib/shipping-weight.ts` (`weightForCart`; NULL → 500 g fallback, **reported** in `weightFallback[]`; 1 kg billable minimum) |
+| Area / village resolution | `apps/admin/lib/data/areas.ts` (`resolveArea`, `areaById`, `kelurahanOptions`, `verifyKelurahan`) |
+| Address composition | `apps/admin/lib/address.ts` (`composeAddress`) |
+| Booking / cancel / track | `apps/admin/lib/actions/shipping.ts` (`createShipment`, …) |
+| KiriminAja client | `packages/lib/src/kiriminaja.ts` — ⚠️ **version prefixes VARY per endpoint**: `shipping_price` = **v6.1**, `request_pickup` = **v6.1**, `get_address_by_name` = **v2**, `cancel_shipment` = **v3**, `kelurahan` / `province` / `tracking` = **unversioned** |
+| Courier policy | `packages/lib/src/couriers.ts` (ADR 0010) |
+
+Tracking: the storefront has **no** shipment lookup; `kaTrack()` is reachable from the merchant admin only.
 
 ---
 
@@ -384,8 +537,9 @@ sequenceDiagram
     end
 ```
 
-**43 of the 67 tables carry that policy** (re-verified from `pg_class.relrowsecurity` on 2026-07-14). The DB, not
-application code, is the tenant boundary — for the Seller panel (`apps/admin`).
+**43 of the 44 store-scoped tables carry that policy** — every table with a `store_id` except `platform_activity`
+(our log *about* tenants; deliberate). 68 tables in total. Re-verified from `pg_class.relrowsecurity`, 2026-07-14.
+The DB, not application code, is the tenant boundary — for the Seller panel (`apps/admin`).
 
 **The deliberate exceptions**, and why:
 

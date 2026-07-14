@@ -2,7 +2,9 @@
 
 > Practical "how do I…" guide. For the *why* and the big picture read [`ARCHITECTURE.md`](ARCHITECTURE.md); for the product spec see [`../PRD.md`](../PRD.md); for the future DB see [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md); for diagrams [`UML.md`](UML.md).
 
-TokoΦ is a Shopify-style commerce SaaS for Indonesia: **Bahasa Indonesia UI, IDR.** the **local backend is fully wired** on PostgreSQL (Drizzle, `@tokophi/db`) — all 3 surfaces read + all 12 admin editors write + auth/RBAC/RLS + real product variants. No Themes menu, no Apps/Plugins.
+TokoΦ is a Shopify-style commerce SaaS for Indonesia: **Bahasa Indonesia UI, IDR.** **All four surfaces are live on `tokophi.com`** and run on one PostgreSQL (Drizzle, `@tokophi/db`) — every surface reads it, every admin editor writes it, auth/RBAC/RLS enforce, real product variants, and shipping (KiriminAja) is real end to end. No Themes menu, no Apps/Plugins.
+
+> 🚚 **Touching checkout, ongkir or a shipment? Read [`FLOWS.md`](FLOWS.md) §5 first** — *kecamatan PRICES the parcel, kelurahan BOOKS it.*
 
 ---
 
@@ -209,4 +211,4 @@ Edit **one file**: `packages/data/src/menu.ts` (`MAIN_MENU` for header, `FOOTER_
 ---
 
 ## Docs map
-[`ARCHITECTURE.md`](ARCHITECTURE.md) · [`../PRD.md`](../PRD.md) · [`UML.md`](UML.md) · [`SCHEMA.md`](SCHEMA.md) · [`DATA_MODEL.md`](DATA_MODEL.md) · [`TASKS.md`](TASKS.md) · [`BACKLOG.md`](BACKLOG.md). Working agreement: `apps/admin/CLAUDE.md`.
+[`ARCHITECTURE.md`](ARCHITECTURE.md) · [`../PRD.md`](../PRD.md) · [`UML.md`](UML.md) · [`SCHEMA.md`](SCHEMA.md) · [`DATA_MODEL.md`](DATA_MODEL.md) · [`BACKLOG.md`](BACKLOG.md). Working agreement: `apps/admin/CLAUDE.md`.

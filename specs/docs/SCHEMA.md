@@ -13,20 +13,24 @@
 
 ## 1. Headline numbers (verified)
 
-| Fact | Value | How it was checked |
+**Count against `packages/db/src/schema.ts` on `main`** — that is the codebase. The shared dev container
+reports one table more (see the warning below).
+
+| Fact | Value (`main`) | How it was checked |
 |---|---|---|
-| Tables (`public`, `relkind='r'`) | **68** | `select count(*) from pg_class c join pg_namespace n … where n.nspname='public' and c.relkind='r'` |
-| Tables with RLS enabled | **44** | `… and c.relrowsecurity` |
-| Tables carrying a `store_id` column | **45** | `pg_attribute … attname='store_id'` |
+| Tables (`public`, `relkind='r'`) | **68** | `pgTable(` declarations in `schema.ts`, cross-checked against `pg_class` |
+| Tables carrying a `store_id` column | **44** | `pg_attribute … attname='store_id'` |
+| Tables with RLS enabled | **43** | `… and c.relrowsecurity` |
 | `store_id` tables **without** RLS | **1** — `platform_activity` | set difference of the two above |
-| Migrations applied | **46** (`0000` … `0045`) | `_journal.json` |
+| Migrations | **50** (`0000` … `0049`) | `_journal.json` + `ls packages/db/drizzle/*.sql` |
 | DB roles | `tokophi` (owner, bypasses RLS) · `tokophi_app` (non-owner, policies enforce) | `pg_roles` |
-| Enums | **42** | `pg_type` ⋈ `pg_enum` |
 | Money representation | `bigint`, whole rupiah, column suffix `_idr` | catalog |
 | Naming | snake_case; PKs are `uuid default gen_random_uuid()` | catalog |
 
-*(Re-verified 2026-07-14 after **0044** / **0045** — `checkout_sessions` is the 68th table and the 44th
-with RLS. The counts moved; the shape of the boundary did not.)*
+> ⚠️ **The shared dev DB (`tokophi-db`) reports 69 tables / 45 `store_id` / 44 RLS.** The extra one is
+> **`color_palettes`**, from the unmerged `worktree-color-palettes` branch whose migration has been applied
+> to the shared container. It is **not in `schema.ts` on `main`**. Counting the container rather than the
+> codebase is how a table that does not exist keeps getting "discovered".
 
 **44 − 1 = 43.** Every store-scoped table except `platform_activity` is held by the *database*, not by
 application code. `platform_activity` is the platform's audit log *about* tenants; a tenant must never
@@ -161,11 +165,21 @@ stopped by the database. Do not write one.
 | `subtotal_idr` `discount_idr` `shipping_idr` `tax_idr` `total_idr` | bigint | |
 | `city` `province` | text | **buyer-typed free text.** Never gate money on these — see §6 |
 | `placed_at` | timestamptz | |
-| `awb` | text | 🔴 **NULL on 700/700 local rows.** Written only from a waybill KiriminAja actually returned |
-| `courier` | text | 🔴 **NULL on 699/700.** A regular checkout books no shipment |
+| `awb` | text | 🔴 **NULL on 702/702 local rows.** Written only from a waybill KiriminAja actually returned |
+| `courier` | text | 🔴 **NULL on 702/702.** A regular checkout books no shipment |
 | `ka_order_id` | text | KiriminAja *booking* reference — **not** a waybill |
 | `returned_at` `return_reason` | timestamptz / text | **0039** |
-| `ship_recipient` `ship_phone` `ship_address` `ship_postcode` `ship_district_id` | **0042** | the address **snapshot** |
+| `ship_recipient` `ship_phone` `ship_address` `ship_postcode` `ship_district_id` | text/int, **0042** | the address **snapshot** |
+| `ship_kelurahan_id` `ship_kelurahan_name` | integer / text, **0049** | the **village**. `ship_kelurahan_id` is **KiriminAja's own id** — the only one `request_pickup` accepts — and is verified to belong to `ship_district_id` before it is stored. NULL on 702/702 locally **on purpose**: only the live API can issue that id, and a plausible integer there would book the parcel to the wrong village |
+
+**`ship_district_id` + `ship_kelurahan_id` are what the parcel is BOOKED with** (0042 + 0049). Before the
+snapshot, `createShipment` re-resolved the destination from the free-text **city name** — which is how a
+Surabaya parcel was once booked to Lampung. A legacy order without `ship_district_id` still falls back to
+that city-name match, but the booking now **says so** (`destinationGuessed` → a warning toast): a guess must
+never succeed quietly.
+
+> **Kecamatan PRICES the parcel; kelurahan BOOKS it.** `shipping_price` accepts village ids and **ignores
+> them** — tariffs are kecamatan-level. Do not add village ids to the pricing call. See `FLOWS.md` §5.
 
 **`awb` vs `ka_order_id` is load-bearing** (fixed in `0b3cdda`). The code used to write
 `awb = r.awb ?? r.kaOrderId`, which stamped **our own order id** onto the shipping label under
@@ -403,7 +417,7 @@ Two different things, deliberately two different table sets (CHAT_SPEC Decision 
 | `platform_admins` | 6 | 1 | — | — |
 | `platform_activity` | 5 | 4 | **yes** | **— (deliberate)** |
 | `platform_cod` | 5 | 1 | — | — |
-| `platform_couriers` | 4 | 12 | — | — |
+| `platform_couriers` | 4 | 10 | — | — |
 | `platform_payment_channels` | 6 | 15 | — | — |
 | `platform_payment_gateways` | 5 | 1 | — | — |
 | `platform_payout` | 4 | 1 | — | — |
@@ -415,9 +429,10 @@ Two different things, deliberately two different table sets (CHAT_SPEC Decision 
 | Table | What it holds |
 |---|---|
 | `platform_cod` | `enabled`, `max_amount_idr` (seeded Rp2.000.000), `allowed_provinces` (jsonb, seeded 6), `fee_pct` 🔴 **unread** |
-| `platform_couriers` | `courier`, `services` (jsonb), `enabled`. 12 rows: `anteraja jne jnt lion ninja sap sicepat spx` enabled · `idx jtcargo pos tiki` disabled |
+| `platform_couriers` | `courier`, `services` (jsonb `{type,name,group,cod,codAllowed}`), `enabled`. **10 rows**: `anteraja jne jnt lion ninja sap sicepat spx` enabled · `idx jtcargo` disabled. ⚠️ **Harvested from ONE reference route** (`kaServices()`), so the roster is only as complete as that lane — `idx`, `jtcargo` and `ninja` carry **1 service each**, and TIKI never entered it at all. The **courier POLICY** (which of these a *seller* may offer) lives in code, not here: `packages/lib/src/couriers.ts`, **ADR 0010** |
 | `platform_payout` | single row: `release_on` (`'selesai'`), `min_payout_idr` (50.000), `auto_approve` 🔴 **unread** |
-| `kiriminaja_areas` | 7.030 districts — the lookup that makes `provinceForDistrict(destId)` possible |
+| `kiriminaja_areas` | **7.030** kecamatan — KiriminAja's own district ids. This is the id the ongkir is priced against, the parcel booked to, and the COD province derived from |
+| `kelurahan` | **78.764** villages (migration **0046**, Kemendagri/BPS). ⚠️ **Keyed by BPS codes (`34.02.13.2004`), NOT KiriminAja ids (`31483`) — these ids are NOT bookable.** It supplies a *name* and a *kodepos* only; the bookable village id comes from the live API (`POST /api/mitra/kelurahan`). ⚠️ **`npm run seed` used to TRUNCATE this table** — it was missing from the keep-list, so every reseed silently killed the checkout's kodepos auto-fill. Keep it in the keep-list |
 
 `store_shipping_methods` (`store_id`, `courier`, `service`, `enabled`) is the merchant's **per-service**
 shipping selection — what the Jasa Kirim card in Pengaturan writes, and what `/api/public/ongkir` filters
@@ -488,7 +503,7 @@ writes `store_settings.cod_enabled = true` for Batik Nusantara and 11 `store_shi
 
 ---
 
-## 5. Migration journal (46 — `0000` → `0045`)
+## 5. Migration journal (50 — `0000` → `0049`)
 
 From `packages/db/drizzle/meta/_journal.json`. Drizzle's auto-generated names are noise; the ones that
 carry meaning were named by hand.
@@ -511,6 +526,18 @@ carry meaning were named by hand.
 | **0043** | `chat` | `chat_visitors`, `conversations`, `conversation_messages` + RLS — **in flight** |
 | **0044** | `customers_and_abandoned_checkout` | `customers.registered_at` (**NULL = guest**) / `password_hash` / `last_order_at` (backfilled from `orders`) + the new **`checkout_sessions`** table, its two indexes and its RLS policy |
 | **0045** | `checkout_abandoned_at` | `checkout_sessions.abandoned_at` + a backfill of every existing `ditinggal` row from `coalesce(updated_at, created_at)`. **Without this column a "recovery rate" is a lie** — see §3.4 |
+| **0046** | `silky_king_cobra` | the **`kelurahan`** reference table (78.764 rows, Kemendagri/BPS codes) — names + kodepos. ⚠️ Its journal entry once referenced a `.sql` that was **never committed**, so `drizzle-kit migrate` died, the table never existed, and `/api/public/ongkir op=kelurahan` 500'd on every checkout — **surfacing in the browser as a CORS error**, which pointed at the wrong layer for hours |
+| **0047** | `courier_roster_normalise` | `platform_couriers.services` held **two shapes at once** — the seed wrote plain strings (`"Reguler"`), the KiriminAja sync wrote objects. `getCodPolicy` skips non-objects, so a seeded DB had **zero** COD-allowed services |
+| **0048** | `phone_canonical_62` | backfills every phone to canonical `62…` (customers, orders, leads, followups, wa_messages, chat_visitors, customer_addresses). ⚠️ **Its journal `when` is stamped in the FUTURE** — see the warning below |
+| **0049** | `shipping_kelurahan` | `orders.ship_kelurahan_id` + `ship_kelurahan_name` + `store_settings.sender_zip`. **The parcel is addressed to a village, not a district** |
+
+> ### ⚠️ The journal-timestamp landmine — read before adding `0050`
+> `drizzle-kit` applies a migration only when its `folderMillis > max(created_at)` already in the DB.
+> **`0048`'s `when` is `1784106162290` — a timestamp in the future.** A truthfully-stamped `0049` was
+> therefore **SKIPPED — while drizzle still printed "migrations applied successfully"**. `0049` works around
+> it by bumping its own `when` above `0048`'s. **Anyone adding `0050` must check
+> `packages/db/drizzle/meta/_journal.json` and do the same, until `0048` is corrected.** A migration that
+> silently does not run is a data-loss trap wearing a success message.
 
 ```bash
 docker compose up -d db            # PostgreSQL 16 @ localhost:5433
