@@ -795,14 +795,30 @@ if (rToken) {
           return;
         }
         var anyChecked = !!form.querySelector('input[name="shipping"]:checked');
-        expressBox.innerHTML = res.rates.map(function (s, i) {
+
+        // SORT BY PRICE. The API returns whatever order KiriminAja felt like, and the old code both
+        // rendered that order AND auto-checked `i === 0` — so a shopper's DEFAULT ongkir was
+        // "whichever service happened to come back first", which on this route was Rp26.000 sitting
+        // above a Rp9.000 one. Cheapest first, and cheapest is the default.
+        var rates = res.rates.slice().sort(function (a, b) { return a.cost - b.cost; });
+
+        // "Tercepat" = the smallest number in the ETD string ("1-2" → 1, "2-4" → 2). Ties go to the
+        // cheaper one, which is already first after the sort.
+        var etdMin = function (e) { var m = String(e || "").match(/\d+/); return m ? Number(m[0]) : 99; };
+        var fastest = rates.reduce(function (best, s) { return etdMin(s.etd) < etdMin(best.etd) ? s : best; }, rates[0]);
+
+        expressBox.innerHTML = rates.map(function (s, i) {
           // s.cod is the EFFECTIVE flag from the API (KiriminAja capability × platform per-service
           // allowance × this store's cod_enabled) — never the raw courier capability.
-          var cod = s.cod ? ' <span class="ml-1 rounded bg-emerald-100 px-1 text-[10px] font-semibold text-emerald-700">COD</span>' : "";
-          return '<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">' +
-            '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (i === 0 && !anyChecked ? " checked" : "") + ' required class="h-4 w-4 accent-brand-600" />' +
-            '<span class="flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + cod + '</span><span class="block text-xs text-muted">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
-            '<span class="text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
+          var tags = "";
+          if (i === 0) tags += ' <span class="ml-1 rounded bg-brand-100 px-1.5 py-px text-[10px] font-semibold text-brand-700">Termurah</span>';
+          if (s === fastest) tags += ' <span class="ml-1 rounded bg-sky-100 px-1.5 py-px text-[10px] font-semibold text-sky-700">Tercepat</span>';
+          if (s.cod) tags += ' <span class="ml-1 rounded bg-emerald-100 px-1.5 py-px text-[10px] font-semibold text-emerald-700">COD</span>';
+
+          return '<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">' +
+            '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (i === 0 && !anyChecked ? " checked" : "") + ' required class="h-4 w-4 shrink-0 accent-brand-600" />' +
+            '<span class="min-w-0 flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + tags + '</span><span class="block text-xs text-muted">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
+            '<span class="shrink-0 text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
         }).join("");
         bindShipping();
       }).catch(function () {
