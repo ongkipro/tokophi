@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { signImpersonation } from "./session";
 import { requirePlatformAdmin } from "./platform-auth";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
-import { isInstantService } from "@tokophi/lib/couriers";
+import { isInstantService, isSellerCourier, isBaselineCourier, courierName } from "@tokophi/lib/couriers";
 import { alTestConnection, alProbeChannels, alCreatePayment } from "@tokophi/lib/autolaris";
 import { addMonths, quote, withPpn } from "@tokophi/lib/billing";
 
@@ -172,9 +172,26 @@ export async function saveGateways(updates: { key: string; on: boolean }[]): Pro
   revalidatePath("/pengaturan");
 }
 
+/**
+ * Platform enable/disable. `enabled` means "OFFERED TO SELLERS" — that is the only thing it gates
+ * (shipping-quote filters rates by platform-enabled ∩ the store's picked services), so it must not
+ * be settable to something the seller roster contradicts:
+ *
+ *  · BASELINE (spx/jne) can never be switched off. SPX is the COD rail — switching it off kills COD
+ *    across every store silently — and JNE is the fallback for the routes SPX does not serve. The UI
+ *    disables the switch and says so; this is the boundary that makes it true.
+ *  · A courier OUTSIDE SELLER_COURIER_CODES (TIKI, J&T Cargo, Ninja) can never be switched ON. No
+ *    seller can pick it, so a green toggle would change nothing and lie about it — exactly the trap
+ *    the client-admin "Pembayaran" tab fell into. It stays visible to the platform, and off.
+ *
+ * Widening the seller roster is a code change (@tokophi/lib/couriers), deliberately — not a toggle.
+ */
 export async function saveCouriers(updates: { key: string; on: boolean }[]): Promise<void> {
   await requirePlatformAdmin();
-  for (const u of updates) await db.update(schema.platformCouriers).set({ enabled: u.on }).where(eq(schema.platformCouriers.courier, u.key));
+  for (const u of updates) {
+    const on = isBaselineCourier(u.key) ? true : isSellerCourier(u.key) ? u.on : false;
+    await db.update(schema.platformCouriers).set({ enabled: on }).where(eq(schema.platformCouriers.courier, u.key));
+  }
   revalidatePath("/pengaturan");
 }
 
@@ -282,19 +299,27 @@ export async function syncCouriersFromKiriminaja(): Promise<{ ok: boolean; couri
     byCourier.set(s.courier, list);
   }
 
+  // EVERY courier in the union is upserted — including the ones sellers may not offer (TIKI, J&T
+  // Cargo, Ninja). They exist, the platform must see that they exist, and the row is what makes them
+  // visible. `enabled` still obeys the seller roster (see saveCouriers): baseline forced on, a
+  // non-seller courier forced off, everything else keeps the operator's decision.
   for (const [courier, services] of byCourier) {
     const was = prev.get(courier);
+    const enabled = isBaselineCourier(courier)
+      ? true
+      : !isSellerCourier(courier)
+        ? false
+        : (was?.enabled ?? true); // a NEW courier inside the seller roster arrives offered
     if (was) {
-      await db
-        .update(schema.platformCouriers)
-        .set({ services, enabled: was.enabled })
-        .where(eq(schema.platformCouriers.courier, courier));
+      await db.update(schema.platformCouriers).set({ services, enabled }).where(eq(schema.platformCouriers.courier, courier));
     } else {
-      await db.insert(schema.platformCouriers).values({ courier, services, enabled: true });
+      await db.insert(schema.platformCouriers).values({ courier, services, enabled });
     }
   }
 
-  // couriers KiriminAja no longer offers: disable, don't delete (old orders still reference them)
+  // couriers KiriminAja no longer offers: disable, don't delete (old orders still reference them).
+  // ⚠️ "no longer offers" now means "absent from the UNION of four reference routes", not "absent
+  // from one route". The single-route roster is why TIKI never existed here at all.
   for (const e of existing) {
     if (!byCourier.has(e.courier) && e.enabled) {
       await db.update(schema.platformCouriers).set({ enabled: false }).where(eq(schema.platformCouriers.courier, e.courier));
@@ -303,12 +328,14 @@ export async function syncCouriersFromKiriminaja(): Promise<{ ok: boolean; couri
 
   revalidatePath("/pengaturan");
   const stale = existing.filter((e) => !byCourier.has(e.courier)).map((e) => e.courier);
+  const added = [...byCourier.keys()].filter((c) => !prev.has(c));
   return {
     ok: true,
     couriers: byCourier.size,
     services: r.services.length,
     message:
       `${byCourier.size} kurir · ${r.services.length} layanan disinkronkan dari KiriminAja.` +
+      (added.length ? ` Kurir baru: ${added.map(courierName).join(", ")}.` : "") +
       (stale.length ? ` Dinonaktifkan (tidak lagi ditawarkan): ${stale.join(", ")}.` : ""),
   };
 }

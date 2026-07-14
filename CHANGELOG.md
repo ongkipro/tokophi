@@ -4,6 +4,58 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-14
 
+### 🚚 The courier roster was harvested from ONE route — so TIKI did not exist
+`kaServices()` priced a single reference route (Menteng 2099 → Coblong 356) and called the answer "the
+roster". **Coverage is route- AND origin-dependent**, so that was never a roster, it was one route's
+opinion. TIKI quotes on Menteng→Pleret, Gubeng→Menteng and Danurejan→Menteng — but *not* on
+Menteng→Coblong. So TIKI never entered `platform_couriers`, never appeared in super-admin, and **no
+merchant could ever have enabled it**. It was invisible, not absent.
+
+- **The roster is now the UNION of four reference routes** (`ROSTER_ROUTES`, `packages/lib/src/kiriminaja.ts`):
+  Menteng→Coblong, Menteng→Pleret (rural dest), Gubeng→Menteng (2nd origin), Danurejan→Menteng (3rd origin).
+  Two origins would miss the origin effect; two destinations would miss the rural one. Merged by
+  `courier:service_type`. Measured live 2026-07-14: **11 couriers / 23 services** — the single route gave 10/20.
+- **COD merge rule: `cod` is true if ANY route reports it.** It is a **ceiling** ("KiriminAja can collect cash
+  on this service *somewhere*"), never a promise: `codAllowed` (platform) ∧ `store_settings.cod_enabled` ∧ the
+  province allow-list still decide. Intersecting instead would permanently hide a real capability (TIKI Reguler
+  is `cod:true` on 3 of 4 routes) and make it un-tickable forever — a silent, invisible loss.
+- **A total API failure is no longer cached.** A cached empty roster would survive the outage for a day and the
+  next Sync would disable every courier.
+
+### 🧭 "Enabled" is not "the shopper will see it" — per-origin coverage (`kaCoverage`)
+A courier that does not **collect** from the seller's pickup district never appears in a quote, however green
+the toggle. Measured: **J&T does not collect from Gubeng (Surabaya)** — to any destination. New server-side
+probe, shared by both admin surfaces:
+
+```ts
+// @tokophi/lib/kiriminaja  (server-only)
+kaCoverage(originId: number): Promise<{
+  ok: boolean; origin: number; destination: number;
+  couriers: string[];      // codes that quoted FROM this origin (instant filtered out)
+  services: string[];      // "courier:service_type" keys
+  error?: string;          // set ⇒ UNKNOWN, never "nothing covers this origin"
+}>
+```
+ONE priced route per origin (dest = Menteng 2099, the best-served district; Coblong when the origin *is*
+Menteng), cached a day. `ok:false` means **unknown** — never render an outage as an empty courier list.
+Super-admin wraps it as `getStoreCoverage(storeId)` → the store page now says *"J&T Express tidak menjemput
+dari gudang toko ini"*.
+
+### 🛡️ `platform_couriers.enabled` means "OFFERED TO SELLERS" — and the toggles stop lying
+- Sync **upserts every courier in the union**, including the ones sellers may not offer. The row is what makes
+  them visible; without it "does KiriminAja carry TIKI?" has no answer anywhere in the product.
+- **Baseline (spx/jne) can never be switched off** (SPX is the COD rail; JNE the fallback) and a courier
+  **outside `SELLER_COURIER_CODES` can never be switched on** (nobody could pick it — a green toggle would
+  change nothing and lie about it). Enforced in `saveCouriers` + the sync, and the switch is **locked in the UI
+  with the reason written underneath**, not hidden in a tooltip. Widening the seller roster stays a code change.
+- ⚠️ **DB consequence on the shared dev DB (already applied via the Sync button):** `tiki` added (off),
+  `ninja` disabled (platform-only, not in the seller roster). `idx` keeps whatever the operator last chose.
+- `pengaturan-client` re-seeds its local `couriers` state from props on `router.refresh()`. It did not, so a
+  Sync that discovered TIKI **did not show TIKI** until a hard reload — a Sync that appears broken.
+- Seed mirrors the 4-route union (11 couriers / 23 services, incl. TIKI) and derives `enabled` from
+  `isSellerCourier()` — the hand-written `COURIERS_OFF = ["idx","jtcargo"]` had already drifted (`idx` *is* in
+  the seller roster). No migration: `platform_couriers` needed no schema change.
+
 ### 🔗 The seam: a village id posted as a string was thrown away in silence
 The seller side (`0049`) and the checkout landed from two parallel worktrees and each was correct alone.
 Together they weren't: the checkout posts JSON, so `kelurahanId` arrived as `"31487"` — a **string** — and
