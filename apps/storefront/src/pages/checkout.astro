@@ -539,6 +539,69 @@ if (rToken) {
     }
     var SESSION_ID = sid();
 
+    // ═══ INPUT RULES — A MIRROR OF @tokophi/lib/validate, AND ONLY THAT ═══════════════════════════
+    // These exist so the shopper sees the mistake while their hands are still on the keyboard. They
+    // decide NOTHING: /api/public/order re-normalises and re-validates every one of these fields and
+    // is the only thing that can reject an order (same relationship as normProvince() below — the
+    // storefront is an inline script and cannot import from the package, so the rules are restated
+    // here; the API's copy is the one that counts). Keep the two in step.
+    //
+    // Normalise generously, reject narrowly: over-validation is itself a bug. A rule that refuses a
+    // real name (`Nur'aini`, `M. Rizky`), a brand-new carrier prefix, or an unusual address costs a
+    // sale and nobody ever finds out — the shopper just leaves.
+    function normalizePhone(raw) {
+      var d = String(raw == null ? "" : raw).replace(/\D+/g, "");
+      if (!d) return null;
+      if (d.slice(0, 3) === "620") d = d.slice(3);
+      else if (d.slice(0, 2) === "62") d = d.slice(2);
+      else if (d[0] === "0") d = d.replace(/^0+/, "");
+      if (d[0] !== "8") return null;              // Indonesian mobiles are 8xx — no prefix table
+      if (d.length < 9 || d.length > 12) return null;
+      return "62" + d;
+    }
+    function fieldError(nameAttr, value) {
+      var v = String(value == null ? "" : value).trim();
+      if (nameAttr === "nama") {
+        var n = v.replace(/\s+/g, " ");
+        if (!n) return "Nama lengkap wajib diisi.";
+        if (n.length < 2) return "Nama terlalu pendek.";
+        if (n.length > 80) return "Nama terlalu panjang (maks. 80 karakter).";
+        if (/\d/.test(n)) return "Nama tidak boleh mengandung angka.";
+        if (!/^[\p{L}\p{M}][\p{L}\p{M} .'’\-]*$/u.test(n)) return "Nama hanya boleh berisi huruf, spasi, titik, apostrof, dan tanda hubung.";
+        return "";
+      }
+      if (nameAttr === "whatsapp") {
+        if (!v) return "Nomor WhatsApp wajib diisi.";
+        if (!normalizePhone(v)) return "Nomor WhatsApp tidak valid. Contoh: 08123456789.";
+        return "";
+      }
+      if (nameAttr === "email") {
+        // Optional, shape only, and NO domain whitelist — a gmail/yahoo allow-list would reject
+        // corporate, university and self-hosted addresses, i.e. the higher-value buyers.
+        if (!v) return "";
+        if (v.length > 254) return "Email terlalu panjang.";
+        if (!/^[^\s@,;:<>()[\]\\"]+@[^\s@.,;:<>()[\]\\"]+(\.[^\s@.,;:<>()[\]\\"]+)+$/u.test(v.toLowerCase())) return "Format email tidak valid. Contoh: nama@email.com.";
+        return "";
+      }
+      if (nameAttr === "alamat") {
+        var a = v.replace(/\r\n?/g, "\n").replace(/[^\S\n]+/g, " ").replace(/\s*\n+\s*/g, ", ").trim();
+        if (!a) return "Alamat lengkap wajib diisi.";
+        if (a.length < 10) return "Alamat terlalu pendek — tulis nama jalan, no. rumah, RT/RW.";
+        if (a.length > 300) return "Alamat terlalu panjang (maks. 300 karakter).";
+        if (/[\u0000-\u001F\u007F\u200B-\u200D\uFEFF]/.test(a) || /\p{Extended_Pictographic}/u.test(a)) return "Alamat mengandung karakter yang tidak didukung.";
+        var distinct = new Set(a.replace(/\s+/g, "").toLowerCase()).size;
+        if (distinct < 4) return "Alamat tidak valid — tulis alamat lengkapmu.";
+        if ((a.match(/\p{L}/gu) || []).length < 4) return "Alamat tidak valid — tulis alamat lengkapmu.";
+        return "";
+      }
+      if (nameAttr === "kodepos") {
+        if (!v) return ""; // optional — the ~4% of districts with no kelurahan data type it by hand
+        if (!/^\d{5}$/.test(v)) return "Kode pos harus 5 angka.";
+        return "";
+      }
+      return "";
+    }
+
     var cart = readCart();
     var form = document.getElementById("checkout-form");
     var empty = document.getElementById("checkout-empty");
@@ -663,7 +726,6 @@ if (rToken) {
 
     // ---- Live KiriminAja ongkir (via platform proxy on the admin) ----
     // ONGKIR_API + ORIGIN_CITY injected via define:vars (env-driven, per-store origin)
-    var totalQty = cart.reduce(function (a, i) { return a + i.qty; }, 0) || 1;
     var destSearch = document.getElementById("dest-search");
     var destResults = document.getElementById("dest-results");
     var destId = document.getElementById("dest-id");
@@ -1050,6 +1112,37 @@ if (rToken) {
       capture(false);
     }
 
+    // ---- Field-level feedback: show the problem where the problem is ----
+    // On blur, not on keystroke: telling someone their email is invalid while they are still typing
+    // the "@" is nagging, not help. The WhatsApp number is also REWRITTEN to what we will actually
+    // store (`0812…` → `62812…`) so the shopper can see the number we will message them on — no
+    // silent transformation between the field and the database.
+    var VALIDATED = ["nama", "whatsapp", "email", "alamat", "kodepos"];
+    function checkField(el) {
+      if (!el || VALIDATED.indexOf(el.name) < 0) return "";
+      var msg = fieldError(el.name, el.value);
+      el.setCustomValidity(msg);
+      return msg;
+    }
+    VALIDATED.forEach(function (n) {
+      var el = form.querySelector('[name="' + n + '"]');
+      if (!el) return;
+      el.addEventListener("blur", function () {
+        if (el.name === "whatsapp") {
+          var canon = normalizePhone(el.value);
+          if (canon) el.value = canon;
+        }
+        var msg = checkField(el); // always recorded → submit still refuses an empty required field
+        // …but only SHOWN when they actually typed something. Popping "Nama wajib diisi" the instant
+        // someone tabs past an empty field is nagging, and reportValidity() drags the focus back —
+        // a shopper who meant to fill it in last gets trapped in it. Empty is not yet a mistake.
+        if (msg && el.value.trim()) el.reportValidity();
+      });
+      // Typing again clears the stale message — otherwise the browser keeps refusing a field the
+      // shopper has already fixed.
+      el.addEventListener("input", function () { el.setCustomValidity(""); });
+    });
+
     form.addEventListener("input", captureSoon);
     form.addEventListener("change", function (e) {
       var t = e.target;
@@ -1070,6 +1163,13 @@ if (rToken) {
       e.preventDefault();
       var err = document.getElementById("form-error");
 
+      // Our own rules run BEFORE checkValidity(), so the message the browser shows is ours (nama /
+      // whatsapp / email / alamat / kodepos). The API re-checks all of them anyway — this is only
+      // here so the shopper is not told "something is wrong" by a server round-trip.
+      for (var vi = 0; vi < VALIDATED.length; vi++) {
+        var vel = form.querySelector('[name="' + VALIDATED[vi] + '"]');
+        if (vel && checkField(vel)) { vel.reportValidity(); vel.focus(); return; }
+      }
       if (!form.checkValidity()) {
         form.reportValidity();
         return;
@@ -1149,13 +1249,18 @@ if (rToken) {
           // recovered_order_id. "Recovered" = THIS session became THAT order; anything else is a guess.
           sessionId: SESSION_ID,
           items: cart.map(function (i) { return { handle: i.handle, name: i.name, price: i.price, variant: i.variant || i.size || "", qty: i.qty }; }),
-          customer: { name: order.shippingAddress.nama, phone: order.shippingAddress.whatsapp, email: order.contact.email },
+          // The phone goes up CANONICAL (62…) — the API normalises it again regardless; sending the
+          // shape we store means the two can never quietly disagree.
+          customer: { name: order.shippingAddress.nama, phone: normalizePhone(order.shippingAddress.whatsapp) || order.shippingAddress.whatsapp, email: order.contact.email },
+          // kota/provinsi ride along for the abandoned-cart snapshot only — the API DERIVES both from
+          // destId (kiriminaja_areas) and ignores what is sent here. A typed province is a claim.
           address: { alamat: order.shippingAddress.alamat, kota: order.shippingAddress.kota, provinsi: order.shippingAddress.provinsi, kodepos: order.shippingAddress.kodepos },
-          // service/serviceType let the order API verify the COD allowance of the SERVICE the
-          // shopper actually picked (platform_couriers.services[].codAllowed) — a label + cost can't.
+          // service/serviceType identify WHICH service the shopper picked (a label cannot). There is
+          // deliberately NO `cost` here any more: the order API RE-QUOTES the ongkir server-side and
+          // writes its own number. A price posted by the browser is a price the browser gets to
+          // choose — `cost: 0` bought free shipping and the merchant paid the courier the difference.
           shipping: {
             label: order.shipping.label,
-            cost: ship,
             service: shipEl ? shipEl.getAttribute("data-svc-code") || undefined : undefined,
             serviceType: shipEl ? shipEl.getAttribute("data-svc-type") || undefined : undefined,
             // The KiriminAja district this quote was issued for. The order API resolves the province
@@ -1172,9 +1277,20 @@ if (rToken) {
       })
         .then(function (r) { return r.json(); })
         .then(function (res) {
-          if (!res.ok) { fail(res.error || "Gagal memproses pesanan."); return; }
+          if (!res.ok) {
+            fail(res.error || "Gagal memproses pesanan.");
+            // The API tells us WHICH field it refused — put the cursor there instead of making the
+            // shopper hunt for it.
+            var fel = res.field ? form.querySelector('[name="' + res.field + '"]') : null;
+            if (fel && fel.focus) fel.focus();
+            return;
+          }
           settled = true; // the session is now `pulih` — the pagehide beacon must not touch it again
           order.number = res.orderNumber;
+          // The ongkir + total the SERVER priced (it re-quotes; it does not take ours). The success
+          // page must show what the order actually says, not what this tab last calculated.
+          if (typeof res.shipping === "number") order.shipping.price = res.shipping;
+          if (typeof res.total === "number") order.total = res.total;
           if (res.payment) order.payment.instruction = res.payment;
           finish();
         })

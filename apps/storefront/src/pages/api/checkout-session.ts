@@ -16,6 +16,7 @@
 import type { APIRoute } from "astro";
 import { db, schema } from "@tokophi/db";
 import { and, eq, lt, sql } from "drizzle-orm";
+import { normalizePhone } from "@tokophi/lib/validate";
 
 const STEPS = ["keranjang", "kontak", "alamat", "pengiriman", "pembayaran"] as const;
 type Step = (typeof STEPS)[number];
@@ -146,7 +147,11 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
     storeId: store.id, // ← Host-resolved. Never from the body.
     sessionId,
     name: str(body.name, 120),
-    phone: str(body.phone, 32),
+    // Canonical `62…` the moment it is parseable — this is the number the recovery WhatsApp is sent
+    // to, so it must be in the shape wa.me/KiriminAja want, not the shape it was typed in. While the
+    // shopper is still MID-TYPING ("0812…"), it is not parseable yet — keep the raw text rather than
+    // blanking the field: a half-typed number is still worth more than nothing on an abandoned cart.
+    phone: normalizePhone(body.phone) ?? str(body.phone, 32),
     email: str(body.email, 160),
     address: str(body.address, 400),
     city: str(body.city, 120),

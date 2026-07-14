@@ -195,7 +195,11 @@ const CUSTOMERS = (() => {
     out.push({
       name,
       email: name.toLowerCase().replace(/[^a-z]+/g, ".") + "@mail.com",
-      phone: "0812" + String(1000000 + Math.floor(rnd() * 8999999)),
+      // CANONICAL `62…` (migration 0048 / @tokophi/lib/validate normalizePhone). The seed used to
+      // write `0812…`, which is what a human types — but not what KiriminAja books against, what a
+      // wa.me link needs, or what the customer lookup keys on. Storing the typed shape is how the
+      // same buyer ended up as two customers.
+      phone: "62812" + String(1000000 + Math.floor(rnd() * 8999999)),
       city: CITIES[Math.floor(rnd() * CITIES.length)],
       orders,
       spent,

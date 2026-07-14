@@ -3,6 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
+import { normalizePhone } from "@tokophi/lib/validate";
 import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant, type Tx } from "@/lib/tenant";
 import { getCodPolicy } from "@/lib/cod";
@@ -204,7 +205,12 @@ export async function saveSenderAddress(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   const { storeId } = await requireCapability("settings:write");
   const values = {
-    senderName: input.name, senderPhone: input.phone, senderAddress: input.address,
+    senderName: input.name,
+    // Canonical `62…` (the shape KiriminAja books `sender.phone` against). Normalised, NOT rejected:
+    // if the seller's number cannot be parsed we still save what they typed — refusing to save an
+    // address because of a phone format would be a worse bug than the format.
+    senderPhone: normalizePhone(input.phone) ?? input.phone,
+    senderAddress: input.address,
     senderKecamatanId: input.kecamatanId, senderKecamatanName: input.kecamatanName,
     senderKelurahanId: input.kelurahanId ?? null, senderKelurahanName: input.kelurahanName ?? "",
   };

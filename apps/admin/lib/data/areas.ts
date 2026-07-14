@@ -68,6 +68,31 @@ export async function resolveArea(q: string, limit = 8): Promise<Area[]> {
  * Returns null when the id is unknown. Callers gating money (COD) must treat null as "cannot
  * verify" and refuse, never as "probably fine".
  */
+/**
+ * The kecamatan behind a `dest_id` — the ONLY validation a kecamatan can meaningfully have.
+ *
+ * The district is PICKED FROM A LIST, so a character rule on the text the shopper sees proves
+ * nothing: what matters is that the id resolves to a real KiriminAja district, because that id is
+ * what the ongkir was priced against and what the parcel will be booked to. Null = it does not
+ * exist → the order API refuses the order rather than write an address nothing can ship to.
+ */
+export async function areaById(districtId: number): Promise<Area | null> {
+  if (!Number.isFinite(districtId) || districtId <= 0) return null;
+  const [r] = await db
+    .select()
+    .from(schema.kiriminajaAreas)
+    .where(eq(schema.kiriminajaAreas.id, districtId))
+    .limit(1);
+  if (!r) return null;
+  return {
+    id: r.id,
+    text: fmt(r),
+    district: r.districtName,
+    city: `${r.cityType ?? ""} ${r.cityName}`.replace(/\s+/g, " ").trim(),
+    province: r.provinceName,
+  };
+}
+
 export async function provinceForDistrict(districtId: number): Promise<string | null> {
   if (!Number.isFinite(districtId) || districtId <= 0) return null;
   const [row] = await db

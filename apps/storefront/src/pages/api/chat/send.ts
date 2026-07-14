@@ -9,6 +9,7 @@
 import type { APIRoute } from "astro";
 import { db, schema } from "@tokophi/db";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { normalizePhone } from "@tokophi/lib/validate";
 import {
   LIMITS, MAX_BODY, MAX_NAME, MAX_OPEN_CONVERSATIONS,
   clientIp, cursorOf, ipHash, json, mintVisitorCookie, rateLimit, readVisitorToken,
@@ -79,7 +80,10 @@ export const POST: APIRoute = async (ctx) => {
   if (name || phone) {
     await db
       .update(schema.chatVisitors)
-      .set({ ...(name ? { name } : {}), ...(phone ? { phone } : {}), lastSeenAt: new Date() })
+      // The phone is a WhatsApp number → canonical `62…` (@tokophi/lib/validate), so the merchant's
+      // wa.me link works and the visitor joins to the same customer as their order. Unparseable text is
+      // kept as typed rather than dropped — a half-typed number is still a lead.
+      .set({ ...(name ? { name } : {}), ...(phone ? { phone: normalizePhone(phone) ?? phone } : {}), lastSeenAt: new Date() })
       .where(and(eq(schema.chatVisitors.id, visitorId), eq(schema.chatVisitors.storeId, store.id)));
   } else {
     await db

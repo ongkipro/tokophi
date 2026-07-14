@@ -1,4 +1,5 @@
 // Indonesian-market formatting helpers.
+import { normalizePhone } from "./validate";
 
 export const IDR = (n: number, opts: { compact?: boolean } = {}) => {
   if (opts.compact) {
@@ -46,9 +47,15 @@ export function dateShort(ts: number): string {
   return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(new Date(ts));
 }
 
-// Build a wa.me deep link from an Indonesian phone (digits only) + optional prefilled message.
+// Build a wa.me deep link from an Indonesian phone + optional prefilled message.
+//
+// wa.me needs the COUNTRY CODE: `wa.me/08124612804` does not open a chat — it is not a phone number
+// as far as WhatsApp is concerned, it is a local dialling string. Everything is stored canonical now
+// (`62…`, migration 0048 + normalizePhone on write), but a legacy/imported `08…` row must still
+// produce a link that works, so normalise here as well and only fall back to raw digits when the
+// number cannot be understood at all.
 export function waLink(phone: string, message = ""): string {
-  const p = String(phone).replace(/\D/g, "");
+  const p = normalizePhone(phone) ?? String(phone).replace(/\D/g, "");
   return `https://wa.me/${p}${message ? `?text=${encodeURIComponent(message)}` : ""}`;
 }
 
