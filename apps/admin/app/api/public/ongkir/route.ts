@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
+import { PRIMARY_CHAIN } from "@tokophi/lib/couriers";
 import { resolveArea, kelurahanOptions } from "@/lib/data/areas";
 import { rateLimited } from "@/lib/public-guard";
 import { quoteShipping } from "@/lib/shipping-quote";
@@ -29,10 +30,13 @@ export function OPTIONS() {
 // `kelurahan` table showed up as a CORS error for hours: the message pointed at the wrong layer.
 // Wrap the handler so a failure looks like a failure.
 
-// The courier the shipping step opens with, in order of preference. SPX is the store's regular
-// service; JNE and J&T are the fallbacks for routes SPX does not serve. Each is still subject to the
-// platform/merchant scope — a courier the store switched off is never quoted, primary or not.
-const PRIMARY_CHAIN = ["spx", "jne", "jnt"];
+// The courier the shipping step opens with, in order of preference, comes from
+// `@tokophi/lib/couriers` (SPX primary → JNE backup) — the SAME constant the seller's Jasa Kirim
+// screen locks its baseline toggles against. It used to be a local `["spx","jne","jnt"]`: the day
+// the seller policy changed, the checkout's first quote kept asking for a courier the policy no
+// longer guaranteed, and nothing failed loudly. One list, two readers, no drift.
+// Each courier is still subject to the platform/merchant scope — a courier the store switched off is
+// never quoted, primary or not.
 
 export async function POST(req: Request) {
   try {
