@@ -63,7 +63,9 @@ export async function POST(req: Request) {
     // Optional: a checkout that doesn't offer the step (or a district with no village list) simply
     // omits it, and the parcel is booked to the kecamatan as before. `kelurahan` (the name) is only
     // ever taken from the verified id — never from the client's string.
-    address?: { alamat?: string; kota?: string; provinsi?: string; kodepos?: string; kelurahanId?: number };
+    // `kelurahanId` arrives as whatever JSON carried — a number or a numeric string. verifyKelurahan
+    // coerces and then proves it belongs to the destination district before anything is stored.
+    address?: { alamat?: string; kota?: string; provinsi?: string; kodepos?: string; kelurahanId?: number | string };
     // `cost` is deliberately NOT read — the price is re-quoted below. `service`/`serviceType` ARE:
     // they say WHICH service the shopper picked, which is a choice, not a price.
     shipping?: { label?: string; cost?: number; service?: string; serviceType?: string; destId?: number };

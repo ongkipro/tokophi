@@ -2058,7 +2058,7 @@ if (rToken) {
             kodepos: order.shippingAddress.kodepos,
             kecamatanId: Number(destId.value),
             kecamatanName: destText.value || undefined,
-            kelurahanId: kelIdEl.value || undefined,
+            kelurahanId: kelIdEl.value ? Number(kelIdEl.value) : undefined,
             kelurahanName: kelNameEl.value || undefined,
           },
           // service/serviceType identify WHICH service the shopper picked (a label cannot). There is

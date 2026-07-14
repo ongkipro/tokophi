@@ -162,11 +162,15 @@ export async function kelurahanOptions(districtId: number): Promise<KelurahanOpt
  */
 export async function verifyKelurahan(
   districtId: number,
-  kelurahanId: number | null | undefined,
+  // JSON off the wire types this however it likes — a browser that posts "31483" (a string) used to
+  // fail `Number.isFinite` and have its village dropped in silence, which quietly demoted the parcel
+  // back to kecamatan precision. Coerce at the boundary; the id is still verified against the district.
+  kelurahanId: number | string | null | undefined,
 ): Promise<{ id: number; name: string } | null> {
-  if (!kelurahanId || !Number.isFinite(kelurahanId) || kelurahanId <= 0) return null;
+  const id = Number(kelurahanId);
+  if (!Number.isFinite(id) || id <= 0) return null;
   if (!kiriminajaConfigured()) return null;
   const list = await kaKelurahan(districtId);
-  const hit = list.find((k) => k.id === Number(kelurahanId));
+  const hit = list.find((k) => k.id === id);
   return hit ? { id: hit.id, name: hit.name } : null;
 }
