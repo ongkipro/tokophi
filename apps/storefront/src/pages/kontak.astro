@@ -1,4 +1,5 @@
 ---
+import { MessageCircle } from "@lucide/astro";
 import Layout from "../layouts/Layout.astro";
 const store = Astro.locals.store;
 
@@ -82,48 +83,52 @@ const email = "halo@batiknusantara.id";
       </div>
 
       <!-- Contact form -->
+      {/* The form that used to live here was the worst control on the site: it called
+          `e.preventDefault()`, revealed "Terima kasih! Pesan Anda sudah kami terima", and then called
+          `form.reset()` — DESTROYING the message a millisecond after telling the shopper it had been
+          received. No fetch, no endpoint, no inbox. The shopper then waited for a reply instead of
+          using a channel that works.
+
+          Two channels DO work, and both are already wired: the chat widget (Chat.astro →
+          /api/chat/send → support_* tables, which the merchant reads in the admin) and WhatsApp. So
+          this card points at those instead of pretending to be a third one. */}
       <div class="rounded-2xl border border-line bg-white/70 p-6 shadow-sm">
         <h2 class="font-display text-2xl font-semibold text-ink">Kirim Pesan</h2>
-        <p class="mt-1 text-sm text-muted">Isi formulir di bawah, kami akan membalas secepatnya.</p>
+        <p class="mt-1 text-sm text-muted">
+          Balasan tercepat lewat obrolan atau WhatsApp — pesanmu langsung masuk ke tim {store.name}.
+        </p>
 
-        <form id="contact-form" class="mt-6 flex flex-col gap-4">
-          <div class="flex flex-col gap-1.5">
-            <label for="nama" class="text-sm font-medium text-ink">Nama</label>
-            <input id="nama" name="nama" type="text" required placeholder="Nama lengkap"
-              class="rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-400/40" />
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <label for="email" class="text-sm font-medium text-ink">Email</label>
-            <input id="email" name="email" type="email" required placeholder="nama@email.com"
-              class="rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-400/40" />
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <label for="pesan" class="text-sm font-medium text-ink">Pesan</label>
-            <textarea id="pesan" name="pesan" rows="5" required placeholder="Tulis pesan Anda…"
-              class="resize-y rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-400/40"></textarea>
-          </div>
-          <button type="submit"
-            class="mt-1 rounded-full bg-ink px-6 py-3 text-sm font-semibold text-cream transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream">
-            Kirim
+        <div class="mt-6 flex flex-col gap-3">
+          <button
+            type="button"
+            data-open-chat
+            class="inline-flex items-center justify-center gap-2 rounded-full bg-ink px-6 py-3 text-sm font-semibold text-cream transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+          >
+            <MessageCircle class="h-4 w-4" stroke-width={1.75} aria-hidden="true" />
+            Mulai obrolan
           </button>
-          <p id="contact-note" class="hidden rounded-lg bg-brand-50 px-4 py-3 text-center text-sm text-brand-700">
-            Terima kasih! Pesan Anda sudah kami terima — tim kami akan segera membalas.
-          </p>
-        </form>
+
+          <a
+            href={waHref}
+            target="_blank"
+            rel="noopener"
+            class="inline-flex items-center justify-center gap-2 rounded-full border border-line bg-white px-6 py-3 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          >
+            Chat via WhatsApp
+          </a>
+        </div>
+
+        <p class="mt-4 text-xs text-muted">
+          Kami membaca setiap pesan. Sertakan nomor pesanan bila menanyakan pesanan yang sedang berjalan.
+        </p>
       </div>
     </div>
   </section>
 </Layout>
 
 <script is:inline>
-  (function () {
-    var form = document.getElementById("contact-form");
-    var note = document.getElementById("contact-note");
-    if (!form || !note) return;
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      note.classList.remove("hidden");
-      form.reset();
-    });
-  })();
+  // Open the real chat widget (Chat.astro mounts #chat-toggle on every page).
+  document.querySelector("[data-open-chat]")?.addEventListener("click", function () {
+    document.getElementById("chat-toggle")?.click();
+  });
 </script>

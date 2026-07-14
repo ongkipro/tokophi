@@ -7,7 +7,13 @@
 
   --color-cream: #faf6f2;
   --color-ink: #2b2326;
-  --color-muted: #8a7f82;
+  /* WCAG AA needs 4.5:1. The old #8a7f82 measured 3.59:1 on cream, 3.86:1 on white, 3.53:1 on brand-50
+     — it FAILED on every background, and it is the entire secondary text layer of the shop: product
+     categories, breadcrumbs, nav links, "/ item" prices, cart line prices, blog dek, footer. 182 of the
+     182 contrast violations in the storefront came from this one line.
+     #736669 keeps the same warm grey and measures 5.09:1 / 5.48:1 / 5.01:1 — passes on all three.
+     (#7a6f72 hits exactly 4.50 on cream but 4.42 on brand-50, so it is NOT enough.) */
+  --color-muted: #736669;
   --color-line: #ece3dd;
 
   --color-brand-50: #fdf2f5;

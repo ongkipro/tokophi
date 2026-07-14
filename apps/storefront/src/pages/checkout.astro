@@ -201,12 +201,18 @@ if (rToken) {
               placeholder="nama@email.com"
               class="mt-1.5 w-full rounded-lg border border-line bg-cream px-3.5 py-2.5 text-sm text-ink outline-none transition-colors focus:border-brand-400 focus:bg-white"
             />
-            {/* Honest copy: there is NO mailer in this codebase, so the email cannot be promised as
-                the confirmation channel — it is kept for a future account / promo use, and the
-                confirmation the shopper actually gets is on WhatsApp. Do not re-add "kami kirim
-                struk ke email" here unless a mailer exists. */}
+            {/* There is NO mailer AND no order-notification of any kind in this codebase. So neither
+                email nor WhatsApp may be promised as the confirmation channel. The email is collected
+                for a future account / promo use only. Do NOT re-add "kami kirim struk ke email" or
+                "konfirmasi dikirim lewat WhatsApp" unless something actually sends them. */}
             <span class="mt-1.5 block text-xs text-muted">
-              Untuk akun &amp; info promo nanti. <b class="font-medium text-ink">Konfirmasi pesanan dikirim lewat WhatsApp.</b>
+              {/* An HTML comment here would SHIP to the browser — use a JSX comment.
+                  The old copy promised, in bold, that an order confirmation is sent over WhatsApp.
+                  Nothing sends it: /api/public/order dispatches no notification of any kind, and the
+                  only WhatsApp code in the repo is a MERCHANT-initiated wa.me link for abandoned
+                  carts. It was the last thing a shopper read before paying — they paid, then waited
+                  for a message that never came. */}
+              Untuk info promo &amp; kalau kami perlu menghubungimu soal pesanan ini.
             </span>
           </label>
         </fieldset>
@@ -833,7 +839,11 @@ if (rToken) {
     // Never guessed: a postcode is only auto-filled when every candidate agrees on it.
     function loadKelurahan(districtId) {
       if (!kelWrap || !kelSelect || !districtId) return;
-      api({ op: "kelurahan", destinationId: Number(districtId) }).then(function (res) {
+      api({ op: "kelurahan", destinationId: Number(districtId) }).catch(function () {
+        // Lookup unreachable → fall back to a typed kodepos rather than leaving the field readonly and
+        // empty, which would make the form unsubmittable with no way for the shopper to fix it.
+        return { ok: true, kelurahan: [] };
+      }).then(function (res) {
         var list = (res && res.ok && res.kelurahan) || [];
         if (!list.length) {
           // No kelurahan data for this district. Degrade to a typed kodepos rather than inventing
@@ -890,6 +900,11 @@ if (rToken) {
         var q = destSearch.value.trim();
         if (q.length < 3) { destResults.classList.add("hidden"); return; }
         searchTimer = setTimeout(function () {
+          // A .catch() is not optional here. Without one, a hiccup in the ongkir proxy made this an
+          // UNHANDLED REJECTION and the shopper saw NOTHING: no dropdown, no spinner, no error — they
+          // typed a kecamatan, nothing happened, and "Bayar Sekarang" then silently did nothing either.
+          // A dead checkout with no explanation. The rates call at the bottom of this file already
+          // degrades properly; these two just never followed it.
           api({ op: "search", q: q }).then(function (res) {
             if (!res.ok || !res.results.length) { destResults.classList.add("hidden"); return; }
             destResults.innerHTML = res.results.slice(0, 8).map(function (a) {
@@ -898,6 +913,9 @@ if (rToken) {
               // in which case applyArea() leaves those inputs alone rather than blanking them.
               return '<button type="button" data-id="' + a.id + '" data-text="' + esc(a.text) + '" data-city="' + esc(a.city || "") + '" data-province="' + esc(a.province || "") + '" class="block w-full border-b border-line px-4 py-2 text-left text-sm last:border-0 hover:bg-brand-50">' + esc(a.text) + "</button>";
             }).join("");
+            destResults.classList.remove("hidden");
+          }).catch(function () {
+            destResults.innerHTML = '<p class="px-4 py-3 text-sm text-muted">Gagal mencari kecamatan. Periksa koneksi lalu coba lagi.</p>';
             destResults.classList.remove("hidden");
           });
         }, 300);

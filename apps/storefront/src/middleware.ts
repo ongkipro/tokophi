@@ -44,5 +44,20 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   context.locals.store = store;
   context.locals.catalog = await getCatalog(store);
+
+  // The canonical ORIGIN for THIS request. There is no correct value to bake in: one deploy serves
+  // every merchant, so the right host is whatever the shopper actually landed on — a custom domain,
+  // a <slug>.tokophi.com subdomain, or localhost.
+  //
+  // Built from headers, not from `Astro.url`: behind Cloudflare the Node adapter sees plain HTTP on
+  // the origin, so `Astro.url.protocol` yields `http://` — canonicals that point at a URL which 301s,
+  // wasting a redirect hop on every crawl. `x-forwarded-proto` is the truth.
+  const proto = context.request.headers.get("x-forwarded-proto")?.split(",")[0].trim() || "https";
+  const fwdHost = context.request.headers.get("x-forwarded-host")?.split(",")[0].trim();
+  const rawHost = fwdHost || context.request.headers.get("host") || context.url.host;
+  // localhost has no TLS in dev — emitting https:// there would break every link we print.
+  const scheme = /^(localhost|127\.0\.0\.1)(:|$)/.test(rawHost) ? "http" : proto;
+  context.locals.origin = `${scheme}://${rawHost}`;
+
   return next();
 });

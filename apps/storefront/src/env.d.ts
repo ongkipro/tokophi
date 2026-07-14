@@ -6,5 +6,7 @@ declare namespace App {
   interface Locals {
     store: import("./data/store").StoreInfo;
     catalog: import("./data/catalog").Catalog;
+    /** Scheme + host of THIS request (per-tenant). Canonicals, OG urls and the sitemap are built from it. */
+    origin: string;
   }
 }

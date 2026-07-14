@@ -5,10 +5,10 @@ import { Check } from "@lucide/astro";
 import Stars from "../../components/Stars.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import { IDR } from "@tokophi/lib/format";
-import { productImages, ratingBreakdown } from "../../data/catalog";
+import { productImages } from "../../data/catalog";
 
 // SSR: tenant from the Host header (src/middleware.ts), product from the handle param.
-const { catalog } = Astro.locals;
+const { store, catalog } = Astro.locals;
 const { handle } = Astro.params;
 const product = handle ? catalog.findProduct(handle) : undefined;
 if (!product) return new Response(null, { status: 404, statusText: "Not Found" });
@@ -24,8 +24,10 @@ const discount =
 
 const gallery = productImages(product);
 
+// `null` = no published reviews. The page then shows no stars and no review block at all — see
+// data/catalog.ts: the old code invented "4.8 · 187 ulasan" on a catalog holding 5 published reviews.
 const rating = catalog.productRating(product);
-const breakdown = ratingBreakdown(rating); // [5★, 4★, 3★, 2★, 1★]
+const breakdown = rating ? catalog.ratingHistogram(product) : [];   // real counts, 5★→1★
 const maxBucket = Math.max(...breakdown, 1);
 
 // ADR 0009 — Store Builder: this product's own template → the store's default `product` template
@@ -38,9 +40,82 @@ const maxBucket = Math.max(...breakdown, 1);
 // banner, testimoni, a Grid Produk that is auto-scoped to this product's category — see
 // components/sections/context.ts), and the buy box always stays.
 const TEMPLATE = catalog.productTemplate(product);
+
+// ── SEO: schema.org Product ──────────────────────────────────────────────────────────────────────
+// Every field below is ALREADY loaded and already rendered visually on this page — it was simply
+// being thrown away instead of also being handed to Google. A PDP with valid Product markup gets the
+// price, stock and star rating drawn straight into the search result, which on a mobile SERP in a
+// category this visual is the largest free CTR lever there is.
+//
+// Prices come from the real variant rows when they exist (an AggregateOffer is the truthful shape for
+// a product whose variants differ in price), and availability from real stock — never a guess.
+const ORIGIN = Astro.locals.origin;
+const abs = (u: string) => new URL(u, ORIGIN).href;
+
+const variantPrices = (product.variants ?? []).map((v) => v.price).filter((n) => n > 0);
+const inStock = (product.variants ?? []).some((v) => v.stock > 0) || !product.variants?.length;
+const offers =
+  variantPrices.length > 1 && Math.min(...variantPrices) !== Math.max(...variantPrices)
+    ? {
+        "@type": "AggregateOffer",
+        priceCurrency: "IDR",
+        lowPrice: Math.min(...variantPrices),
+        highPrice: Math.max(...variantPrices),
+        offerCount: variantPrices.length,
+        availability: `https://schema.org/${inStock ? "InStock" : "OutOfStock"}`,
+        url: abs(`/produk/${product.handle}`),
+      }
+    : {
+        "@type": "Offer",
+        priceCurrency: "IDR",
+        price: product.price,
+        availability: `https://schema.org/${inStock ? "InStock" : "OutOfStock"}`,
+        url: abs(`/produk/${product.handle}`),
+      };
+
+const productLd: Record<string, unknown> = {
+  "@context": "https://schema.org",
+  "@type": "Product",
+  name: product.name,
+  description: product.description,
+  image: gallery.map(abs),
+  sku: product.handle,
+  brand: { "@type": "Brand", name: store.name },
+  offers,
+};
+// aggregateRating is emitted ONLY when the rating is REAL. `rating` is null when the product has no
+// published reviews (data/catalog.ts) — and Google penalises invented review markup, so a store with
+// no reviews must not claim stars in its structured data either.
+if (rating && rating.count > 0) {
+  productLd.aggregateRating = {
+    "@type": "AggregateRating",
+    ratingValue: rating.value,
+    reviewCount: rating.count,
+  };
+}
+
+const breadcrumbLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Beranda", item: abs("/") },
+    { "@type": "ListItem", position: 2, name: product.category, item: abs(`/kategori/${product.categoryHandle}`) },
+    { "@type": "ListItem", position: 3, name: product.name },
+  ],
+};
+
+const HEAD = [productLd, breadcrumbLd]
+  .map((ld) => `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>`)
+  .join("");
 ---
 
-<Layout title={product.name} description={product.description}>
+<Layout
+  title={product.name}
+  description={product.description}
+  image={product.image}
+  type="product"
+  head={HEAD}
+>
   <section class="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
     <!-- `grid-cols-1` is not decoration. Without an explicit template below `md`, the single column
          is an IMPLICIT `auto` track — and an auto track is sized from its CONTENT, so it may exceed
@@ -102,11 +177,15 @@ const TEMPLATE = catalog.productTemplate(product);
         <p class="mt-5 text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">{product.category}</p>
         <h1 class="mt-2 font-display text-3xl font-semibold leading-tight text-ink sm:text-4xl">{product.name}</h1>
 
-        <a href="#ulasan" class="mt-3 inline-flex items-center gap-2 text-sm transition-colors hover:text-brand-700">
-          <Stars value={rating.value} size="md" showValue={false} />
-          <span class="font-semibold text-ink tabular-nums">{rating.value.toFixed(1)}</span>
-          <span class="text-muted">· {rating.count} ulasan</span>
-        </a>
+        {
+          rating && (
+            <a href="#ulasan" class="mt-3 inline-flex items-center gap-2 text-sm transition-colors hover:text-brand-700">
+              <Stars value={rating.value} size="md" showValue={false} />
+              <span class="font-semibold text-ink tabular-nums">{rating.value.toFixed(1)}</span>
+              <span class="text-muted">· {rating.count} ulasan</span>
+            </a>
+          )
+        }
 
         <!-- `flex-wrap`: price + struck-through price + the discount badge are three items on one
              line, and together they exceed the 288px of content a 320px phone has. Without wrapping,
@@ -227,7 +306,11 @@ const TEMPLATE = catalog.productTemplate(product);
       </div>
     </div>
 
-    <!-- Ulasan -->
+    <!-- Ulasan. Rendered ONLY when real published reviews exist. The summary and the histogram used to
+         be manufactured: the score came from a seed column nothing recomputes, and the 5★→1★ bars came
+         from a curve fitted to that score, not from counting anything. A product with no reviews now
+         shows no review section — a new product is not a badly-reviewed one. -->
+    {rating && (
     <div id="ulasan" class="mt-20 scroll-mt-24 border-t border-line pt-14">
       <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Ulasan Pembeli</p>
       <h2 class="mt-2 font-display text-2xl font-semibold text-ink sm:text-3xl">Apa kata pelanggan</h2>
@@ -261,6 +344,7 @@ const TEMPLATE = catalog.productTemplate(product);
         </div>
       </div>
     </div>
+    )}
 
     <!-- Related — hand-built tail; a product template takes this slot instead (below). -->
     {

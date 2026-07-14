@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",
+    "playwright": "^1.61.1",
     "tailwindcss": "^4"
   }
 }

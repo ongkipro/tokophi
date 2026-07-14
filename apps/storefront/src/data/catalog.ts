@@ -66,7 +66,10 @@ export type Catalog = {
   productTemplate: (p: Product) => StoredTemplateData | null;
   /** 11-shade scale derived from the store's brand hex — injected as CSS vars by Layout.astro. */
   brandShades: Record<string, string>;
-  productRating: (p: Product | string) => Rating;
+  /** `null` = this product has no published reviews. Render NO stars — do not invent a default. */
+  productRating: (p: Product | string) => Rating | null;
+  /** Real 5★→1★ counts from the review rows. */
+  ratingHistogram: (p: Product | string) => number[];
   bestsellers: (list?: Product[]) => Product[];
   byCollection: (handle: string) => Product[];
   findProduct: (handle: string) => Product | undefined;
@@ -211,10 +214,43 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
     };
   });
 
-  // ratings (aggregate score + count, denormalized on products)
-  const ratings: Record<string, Rating> = Object.fromEntries(
-    rows.map((r) => [r.handle, { value: r.ratingValue ?? 4.5, count: r.ratingCount }]),
-  );
+  // RATINGS — aggregated from the REAL `reviews` table, published rows only.
+  //
+  // `products.rating_value` / `rating_count` are written by exactly one thing: the seed. Nothing ever
+  // recomputes them from `reviews`, so the PDP was advertising "4.8 · 187 ulasan" on a catalog that
+  // holds 8 reviews in total (5 published). Worse, the old fallbacks (`?? 4.5` and `{value:4.5,
+  // count:40}`) handed a brand-new store 4.5 stars on a product with zero reviews, forever.
+  //
+  // A star rating is the strongest purchase signal on the page and an advertising claim under
+  // Indonesian consumer law — and the merchant's real, moderated reviews were never reaching a
+  // shopper at all. So: count what exists, and when nothing exists, say nothing.
+  //
+  // `null` (not a default) is the answer for "no reviews yet" — the UI must render no stars at all,
+  // because "0 ulasan · ★☆☆☆☆" reads as a bad product rather than a new one.
+  const reviewRows = await db
+    .select({
+      productId: schema.reviews.productId,
+      rating: schema.reviews.rating,
+    })
+    .from(schema.reviews)
+    .where(and(eq(schema.reviews.storeId, storeId), eq(schema.reviews.status, "terbit")));
+
+  const byProduct = new Map<string, number[]>();
+  for (const r of reviewRows) {
+    if (!r.productId) continue;
+    const list = byProduct.get(r.productId) ?? [];
+    list.push(r.rating);
+    byProduct.set(r.productId, list);
+  }
+  const ratings: Record<string, Rating> = {};
+  const starsByHandle: Record<string, number[]> = {};
+  for (const r of rows) {
+    const stars = byProduct.get(r.id) ?? [];
+    if (!stars.length) continue; // no reviews → no entry → productRating() returns null
+    const sum = stars.reduce((a, b) => a + b, 0);
+    ratings[r.handle] = { value: Math.round((sum / stars.length) * 10) / 10, count: stars.length };
+    starsByHandle[r.handle] = stars;
+  }
 
   // ADR 0009 — all page templates in one query, cached with the catalog: rendering a template
   // (any number of sections) costs ZERO extra DB round-trips at request time.
@@ -230,7 +266,17 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       resolveTemplate(templates, collectionTemplateId.get(handle) ?? null, templates.categoryDefault),
     productTemplate: (p) => resolveTemplate(templates, p.templateId, templates.productDefault),
     brandShades: brandShadesFor(store.brandColor),
-    productRating: (p) => ratings[typeof p === "string" ? p : p.handle] ?? { value: 4.5, count: 40 },
+    productRating: (p) => ratings[typeof p === "string" ? p : p.handle] ?? null,
+    // The real 5→1 histogram, counted from the actual review rows — not a curve fitted to a fake mean.
+    ratingHistogram: (p) => {
+      const stars = starsByHandle[typeof p === "string" ? p : p.handle] ?? [];
+      const buckets = [0, 0, 0, 0, 0]; // index 0 = 5★ … index 4 = 1★
+      for (const n of stars) {
+        const i = 5 - Math.min(5, Math.max(1, n));
+        buckets[i] += 1;
+      }
+      return buckets;
+    },
     bestsellers: (list = products) => list.filter((p) => p.bestseller),
     byCollection: (handle) => products.filter((p) => p.categoryHandle === handle),
     findProduct: (handle) => products.find((p) => p.handle === handle),
@@ -245,15 +291,9 @@ export async function getCatalog(store: StoreInfo): Promise<Catalog> {
 
 // ---- pure helpers (no store scope needed) ----
 
-// Deterministic 5→1 star distribution that sums to `count` (for the review summary).
-export const ratingBreakdown = (r: Rating): number[] => {
-  const skew = (r.value - 4) / 1;
-  const weights = [0.55 + skew * 0.35, 0.28 - skew * 0.12, 0.1, 0.045, 0.025];
-  const raw = weights.map((w) => Math.round(w * r.count));
-  const diff = r.count - raw.reduce((a, b) => a + b, 0);
-  raw[0] += diff;
-  return raw;
-};
+// REMOVED: `ratingBreakdown()` fitted a plausible-looking star distribution to an aggregate score.
+// It never counted anything — it manufactured a histogram. Use `catalog.ratingHistogram(product)`,
+// which counts the real review rows.
 
 // Seeded products have a 5-image gallery by convention (base + -2..-5). Merchant-uploaded images
 // (absolute /api/uploads/) have no such siblings, so show just the primary.

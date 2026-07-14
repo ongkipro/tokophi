@@ -22,7 +22,11 @@ for (const key of ["DATABASE_URL", "STORE_SLUG", "DEFAULT_STORE_SLUG", "STOREFRO
 }
 
 export default defineConfig({
-  site: "https://batiknusantara.id",
+  // NO `site:`. This is ONE deploy serving EVERY merchant (ADR 0009) — a hardcoded origin here is a
+  // platform-wide SEO self-destruct waiting for the first person to use `Astro.site` or @astrojs/sitemap:
+  // every store would emit canonicals and sitemap URLs pointing at one specific merchant's domain, and
+  // Google would de-index the rest as duplicates of a shop they don't own. The canonical origin is
+  // per-request — see `Astro.locals.origin` (src/middleware.ts).
   output: "server",
   adapter: node({ mode: "standalone" }),
   vite: {

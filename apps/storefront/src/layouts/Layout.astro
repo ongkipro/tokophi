@@ -8,12 +8,51 @@ import Chat from "../components/Chat.astro";
 interface Props {
   title: string;
   description?: string;
+  /** Social-card image. Site-relative or absolute — it is made absolute below. */
+  image?: string;
+  /** og:type. `product` on a PDP, `article` on a blog post, `website` everywhere else. */
+  type?: "website" | "product" | "article";
+  /** Extra <head> markup (JSON-LD, article:* tags). Rendered raw — pass ONLY server-built strings. */
+  head?: string;
 }
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
-const { store, catalog } = Astro.locals;
+const { store, catalog, origin } = Astro.locals;
 const BRAND_SHADES = catalog.brandShades;
-const { title, description = store.tagline } = Astro.props;
+const { title, description = store.tagline, image, type = "website", head } = Astro.props;
+
+const fullTitle = `${title} — ${store.name}`;
+
+// A meta/OG description longer than ~155 chars is truncated mid-sentence by Google and hard-cut by
+// WhatsApp's preview card. The merchant writes the product copy; clamp it at the boundary, on a word.
+const clamp = (text: string, max = 155) => {
+  const t = (text ?? "").replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max);
+  return cut.slice(0, cut.lastIndexOf(" ")).trimEnd() + "…";
+};
+const desc = clamp(description);
+
+// CANONICAL — per request, never baked in. One deploy serves every merchant, so the correct host is
+// whatever the shopper landed on (a custom domain, <slug>.tokophi.com, or localhost). `origin` comes
+// from the middleware, which reads x-forwarded-proto/host — behind Cloudflare the adapter sees plain
+// HTTP, so Astro.url.protocol would emit http:// canonicals that 301 on every crawl.
+//
+// The query string is dropped: this is ad-landed traffic, so `?utm_source=…` arrives constantly, and
+// leaving it in would splinter one page's ranking signals across dozens of URL variants.
+const canonical = new URL(Astro.url.pathname, origin).href;
+
+// og:image MUST be absolute — crawlers do not resolve a relative one. Product images are either
+// site-relative (/products/x.webp) or already absolute (mediaUrl() rewrites admin uploads).
+const ogImage = (() => {
+  const src = image || store.logoUrl || "";
+  if (!src) return null;
+  try {
+    return new URL(src, origin).href;
+  } catch {
+    return null;
+  }
+})();
 ---
 
 <!doctype html>
@@ -22,8 +61,32 @@ const { title, description = store.tagline } = Astro.props;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>{title} — {store.name}</title>
-    <meta name="description" content={description} />
+    <title>{fullTitle}</title>
+    <meta name="description" content={desc} />
+    <link rel="canonical" href={canonical} />
+
+    <!-- Open Graph / Twitter. There were NONE — so every product link forwarded to a WhatsApp group
+         (the cheapest acquisition channel these merchants have) landed as a bare grey URL: no photo,
+         no name, no price. For an ad-landed fashion store that is the difference between a share that
+         converts and one nobody taps. -->
+    <meta property="og:type" content={type} />
+    <meta property="og:site_name" content={store.name} />
+    <meta property="og:locale" content="id_ID" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={desc} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content={ogImage ? "summary_large_image" : "summary"} />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={desc} />
+    {
+      ogImage && (
+        <Fragment>
+          <meta property="og:image" content={ogImage} />
+          <meta property="og:image:alt" content={fullTitle} />
+          <meta name="twitter:image" content={ogImage} />
+        </Fragment>
+      )
+    }
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -34,6 +97,8 @@ const { title, description = store.tagline } = Astro.props;
          after global.css so these custom properties win the cascade; every bg-brand-*/text-brand-*
          utility already in the storefront reads them via var(), so this alone re-themes the site. -->
     <style set:html={`:root { ${Object.entries(BRAND_SHADES).map(([shade, hex]) => `--color-brand-${shade}: ${hex};`).join(" ")} }`} />
+    <!-- Per-page <head> extras: JSON-LD, article:* tags. Server-built strings only. -->
+    {head && <Fragment set:html={head} />}
     <!-- Funnel/device tracking → POST /api/track → analytics_events → admin /analitik. -->
     <Analytics />
   </head>

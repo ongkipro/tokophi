@@ -63,7 +63,7 @@ const featured = catalog.bestsellers()[0];
       }
     </a>
 
-    <nav class="mx-auto hidden items-center gap-7 text-sm text-muted lg:flex">
+    <nav aria-label="Navigasi utama" class="mx-auto hidden items-center gap-7 text-sm text-muted lg:flex">
       {
         MAIN_NAV.map((item) =>
           item.children ? (
@@ -235,17 +235,12 @@ const featured = catalog.bestsellers()[0];
     </nav>
 
     <div class="ml-auto flex items-center gap-2 lg:ml-0">
-      <a
-        href="/akun"
-        class="hidden items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:inline-flex"
-        aria-label="Akun"
-      >
-        <svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
-          <circle cx="12" cy="8" r="3.2" stroke-linecap="round" />
-          <path d="M5 20c0-3.3 3.1-5.5 7-5.5s7 2.2 7 5.5" stroke-linecap="round" />
-        </svg>
-        Akun
-      </a>
+      {/* REMOVED: the "Akun" pill. It pointed at /akun, which was a FAKE login page: the form had no
+          handler and no endpoint — it swallowed an email and a PASSWORD, called preventDefault(), and
+          revealed a div reading "Demo — sistem akun aktif setelah backend terhubung." Shipped demo text
+          on a live shop, and a shopper typing a password they have certainly reused elsewhere into a
+          form that discards it. There are no shopper accounts by design (buying never requires one —
+          see AGENTS.md), so there is nothing for this link to point at. */}
 
       <a
         href="/keranjang"
@@ -311,7 +306,7 @@ const featured = catalog.bestsellers()[0];
       </button>
     </div>
 
-    <nav class="flex-1 overflow-y-auto px-3 py-4">
+    <nav aria-label="Navigasi seluler" class="flex-1 overflow-y-auto px-3 py-4">
       <ul class="flex flex-col gap-1">
         {
           MAIN_NAV.map((item) =>
@@ -405,16 +400,7 @@ const featured = catalog.bestsellers()[0];
     </nav>
 
     <div class="border-t border-line px-5 py-4">
-      <a
-        href="/akun"
-        class="inline-flex w-full items-center justify-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-medium text-cream transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-      >
-        <svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
-          <circle cx="12" cy="8" r="3.2" stroke-linecap="round" />
-          <path d="M5 20c0-3.3 3.1-5.5 7-5.5s7 2.2 7 5.5" stroke-linecap="round" />
-        </svg>
-        Akun Saya
-      </a>
+      {/* Same reason as the desktop pill above — /akun is gone. */}
     </div>
   </aside>
 </div>

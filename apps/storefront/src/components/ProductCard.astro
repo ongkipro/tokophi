@@ -31,14 +31,10 @@ const rating = Astro.locals.catalog.productRating(product);
       )
     }
 
-    <span
-      class="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-white/80 text-brand-600 opacity-0 shadow-sm backdrop-blur transition-all duration-300 group-hover:opacity-100"
-      aria-hidden="true"
-    >
-      <svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current transition-colors group-hover:fill-brand-600" stroke-width="1.8">
-        <path d="M12 21s-6.7-4.35-9.33-8.24C1.3 10.6 1.85 7.3 4.6 6.1c1.9-.83 4.1-.1 5.2 1.6l.2.32.2-.32c1.1-1.7 3.3-2.43 5.2-1.6 2.75 1.2 3.3 4.5 1.93 6.66C18.7 16.65 12 21 12 21Z" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-    </span>
+    {/* REMOVED: a heart in a white circle, top-right of the image, fading in on hover — exactly where
+        Tokopedia and Shopee put "save to wishlist". It had no handler and there is no wishlist; it was
+        a <span> inside the card's <a>, so clicking it just opened the product. Decoration wearing a
+        control's clothes. */}
   </div>
 
   <div class="p-4">
@@ -46,7 +42,9 @@ const rating = Astro.locals.catalog.productRating(product);
     <h3 class="mt-1 truncate font-medium text-ink transition-colors group-hover:text-brand-700">
       {product.name}
     </h3>
-    <Stars value={rating.value} count={rating.count} class="mt-1.5" />
+    {/* No published reviews → NO stars. Not "0 ulasan · ☆☆☆☆☆", which reads as a bad product rather
+        than a new one — and not an invented 4.5, which is what this used to show. */}
+    {rating && <Stars value={rating.value} count={rating.count} class="mt-1.5" />}
     <div class="mt-2 flex items-baseline gap-2">
       <span class="font-semibold text-ink tabular-nums">{IDR(product.price)}</span>
       {
