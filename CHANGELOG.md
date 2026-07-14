@@ -2,6 +2,52 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-07-14
+
+### 🔒 Security: three fail-open holes closed (`0776e99`, `571ed17`)
+- **`/api/cron/billing` failed OPEN.** The guard read `if (secret && provided !== secret)` — so with `CRON_SECRET` **unset there was no check at all**, on a route that is excluded from the auth middleware and walks **every store** to suspend it or raise an invoice against it. Anyone who guessed the path could bill the whole platform. It now **401s in production** when the secret is absent. This is the same fail-open shape already closed on the AutoLaris callback; it survived here because the guard *reads* as if it works — a missing secret quietly meant "no gate" instead of "no entry". **If it can move money, an absent secret must mean NO.**
+- **Platform admin ROLES were never checked.** `platform_admins.role` was carried in the JWT and read by nothing: `requirePlatformAdmin()` only asked "is anyone logged in?". A `support` operator could **reject payouts, reset passwords and impersonate merchants**. Now ranked — `support` 1 < `admin` 2 < `owner` 3 — and compared. `impersonateStore` and `resetOwnerPassword` require **`owner`**.
+- **Impersonation is now AUDITED** and owner-only. It previously required only "logged in" and left **no trace at all** — someone could read a merchant's orders and nothing recorded it.
+- **`platform_payout.release_on` read nothing.** `settleOrderLedger` hardcoded `selesai` while migration 0040's own header claimed the rule was tunable without a deploy. An operator could flip the toggle, believe the policy had changed, and it had not. **A knob that moves nothing is worse than no knob.** It is read now — and the default stays `selesai`, because releasing at `dikirim` lets a merchant withdraw money for goods that can still come back.
+
+### 🎭 The super-admin control plane was largely fiction — and it was giving away subscriptions (`571ed17`)
+Screened every platform screen against the database. Most of the headline numbers were invented.
+- **`store_stats`** — a rollup that **disagreed with the orders it claimed to summarise**, feeding GMV, order counts and product counts on *every* screen. Batik: rollup said Rp104,3jt / 502 orders; the `orders` table says Rp227,8jt / 642. Kopi Senja: rollup Rp42,6jt / 210 orders, reality **Rp450rb / 3**. It claimed 12–40 products for stores that have **zero**. No longer read anywhere.
+- **`ship7d_avg` had no source at all** (`fulfillments` is empty; there is no shipments table) — and it drove a banner telling the operator to **give away a Rp275rb/mo subscription**: *"Volume tinggi (24/hari) — jadikan VIP gratis?"*. **A fabricated number was recommending that revenue be waived.**
+- Also deleted: a **`mulberry32(4242)`** "Pertumbuhan MRR" chart compounding random 6–11%/month (the "+x% MoM" beside it was the slope of that noise) · five of six **delta chips** that were a literal `0` rendered as "▲ 0%" · a hardcoded **`churnRate: 0`** shown as a KPI · **two disagreeing MRR figures on one page** (Rp1.100.000 vs Rp875.000) · the legacy Pemula/Bisnis/Skala tiers, which `CLAUDE.md` forbids and which were still live in code.
+- **Built instead:** "Uang Merchant yang Kami Pegang" — the merchant float, presented as a **LIABILITY, not revenue**. It is what we owe. Plus a "Perlu tindakan" worklist, a real bar chart from **paid** invoices, and trial→paid conversion derived from paid invoices rather than a flag that disagreed with them. Metrics we cannot support (churn, shipments/day, COD exposure, GMV/province, MoM deltas) are now **stated as unsupported instead of faked**.
+
+### 📦 The order detail INVENTED the box a merchant was about to pack (`2a5ffc4`)
+`/pesanan/[id]` fabricated, all from `hash(order.id)`: **the line items** (products picked from a mock array, quantities from bit-shifting the hash), the **ongkir** (`[0, 15_000, 20_000, 25_000][seed % 4]`), a **"Penyesuaian"** line back-solved as `total − subtotal − ongkir` so the invented items would reconcile to the order's real total, the **courier**, the **resi**, the **payment method**, the **street address** (`Jl. Merdeka No. {seed % 90}`) — and even the **barcode bars on the printed shipping label**, i.e. an unscannable barcode on a real parcel.
+
+**A merchant opened an order to pack it and saw products the customer never bought.** All of it now comes from `order_line_items`, `payments`, `orders` and the address snapshot.
+
+### 🧾 An order now carries the address it was SHIPPED TO (migration `0042`)
+`orders.ship_recipient / ship_phone / ship_address / ship_postcode / ship_district_id`. Deliberately **a snapshot, not a lookup** back into `customer_addresses`: that address lives on the *customer* and changes. Without this, a buyer who moves house silently moves **every past order** with them — reprint an old label and the parcel goes to the wrong door. **The address belongs to the transaction, not the person.** `ship_district_id` is the same KiriminAja kecamatan the COD province gate already refuses to take the typed city's word over.
+
+### 🏷️ The AWB printed on parcels was OUR OWN order id (`0b3cdda`)
+`orders.awb` was written as `r.awb ?? r.kaOrderId` — so when KiriminAja returned no waybill (**the sandbox never issues one**), we stored our own booking reference (`5758-INV4534`) in the `awb` column and **printed it on the shipping label under "No. resi"**. Now only a waybill the courier actually returned lands in `awb`; the booking reference goes in `ka_order_id`, where it belongs; and `awb` stays NULL — with the UI saying `awbPending` — until a real one exists.
+
+### 🛒 Pesanan rebuilt as a seller centre (`4b4775c`)
+Shopee-style tabs (Semua · Belum Bayar · Perlu Dikirim · Dikirim · Selesai · Pengembalian/Pembatalan), a search box with a **field picker** (no. pesanan / nama pembeli / produk / no. resi), courier and payment filters, product-led rows. All filtering, search and paging is **server-side** — 685 orders never reach the browser.
+- **The five status tabs are a strict PARTITION**: `0 + 24 + 23 + 595 + 43 = 685 = count(*)`. No order counted twice, none missed. Verified against SQL, tab by tab.
+- **What the data said when "Belum Bayar" was checked rather than assumed:** the obvious definition (no successful payment) returns 43 rows — and **all 43 are cancelled orders whose payment failed**. Not one is an order a seller should chase. Scoped to orders that are *live* and unpaid, the honest answer is **0**, and the empty state says so instead of looking broken.
+
+### 🌱 The seed was CRASHING silently — and everything after the crash never ran (`ab68abe`, `e81cfb8`)
+- The seed reported success while **everything after the crash point was never inserted**. That is how `platform_payout` came to be a policy table with **zero rows** while the super-admin displayed a policy that did not exist in the database, and `min_payout_idr` silently fell back to a code default.
+- **`customer_addresses` had a schema and ZERO rows** — which is precisely why the order detail invented street addresses. It now seeds 24.
+- `orders` is now the single source of truth in the seed, so the dashboard stopped contradicting Saldo.
+
+### 🎨 Storefront hero carousel — and the fork that could not render (`8fad2f9` → `5016bb3`)
+Three slides, auto-advance, editable in Tema. It shipped first as a **fork** of the shared Puck config *inside the admin* — which meant the storefront could not render what the merchant built. Folded back into `@tokophi/sections` (`heroSlides()`, `HERO_INTERVAL_MS`) and the fork deleted. Two real bugs surfaced doing it: Puck portals its canvas into an iframe while the React root lives in the parent document, so React `onClick` **never fired** on the dots; and `[data-puck-component] * { pointer-events: none }` made them unclickable anyway. **The fork's dots had zero invocations.**
+- Also: the first banner set had **garbled AI text baked into the images** — regenerated (`7e1580f`).
+
+### 📖 Documentation rebuilt from the code and the database
+`specs/PRD.md`, `specs/docs/UML.md`, `specs/docs/SCHEMA.md`, `specs/docs/STATUS.md`, `specs/docs/BACKLOG.md` rewritten, and **`specs/docs/REQUIREMENTS.md` created** (functional + non-functional requirements as *verifiable statements*, each with a query or grep that checks it — including the security invariants learned the hard way: money endpoints fail closed, the tenant boundary is RLS and not a hand-written `WHERE`, the ledger is append-only and the balance is derived, and **a number on screen must be traceable to a query**).
+- **Corrections to the docs, again:** they said **54 tables** (there are **67**), migrations through **0036** or **0040** (there are **44**, through **`0043_chat`**), and **RLS on 32–39** (it is **43**). `SCHEMA.md` is now generated from `information_schema` / `pg_class`, not from memory.
+- **New findings from this pass** (tracked, not yet fixed): **`invitePlatformAdmin` is `admin`-gated, takes `role` UNVALIDATED and is unlogged — so an `admin` can mint themselves an `owner`**, which quietly undoes the role check that landed this morning · **`lib/actions/billing.ts` has no capability gate**, so a `gudang` user can raise or void the store's subscription invoices · the platform `support` role is **unreachable** (zero actions accept it) · six privileged super-admin mutations write **nothing** to `platform_activity`, including `setInvoiceStatus` · the seed writes **legacy string** courier services, so **on a fresh local DB no service is COD-allowed and COD cannot be exercised at all** · there is **one test file in the entire repo**.
+- All 8 Mermaid diagrams in `UML.md` were **rendered with mermaid-cli and verified**. A previous pass shipped four that silently failed to parse.
+
 ## 2026-07-13
 
 ### 📖 The definitive system documentation — `specs/docs/{SYSTEM_MAP,FLOWS,STATUS}.md`

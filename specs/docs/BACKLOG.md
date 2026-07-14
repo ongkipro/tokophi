@@ -1,176 +1,245 @@
 # TokoΦ — Backlog & task board
 
-> Prioritized work list derived from a full screening of the codebase. Living doc — update as items ship.
-> Companion to `CONCEPT.md` (what/why), `SCHEMA.md` (backend target), `UI_INVENTORY.md` (screen status), `../PRD.md`.
-> Legend: `[ ]` todo · `[~]` partial · `[x]` done. Updated 2026-07-03.
+> **Reconciled against the code and the database 2026-07-14.** Items that shipped are marked and
+> collapsed; items that are still open are stated **honestly**, including the ones we would rather not
+> look at. Legend: `[ ]` todo · `[~]` partial · `[x]` done.
+>
+> Companions: [`STATUS.md`](./STATUS.md) (real vs fake) · [`REQUIREMENTS.md`](./REQUIREMENTS.md)
+> (verifiable statements) · [`PRD.md`](../PRD.md).
 
-## P0 — Foundation (do before/for backend)
-- [~] **Backend** — ✅ **local PostgreSQL 16 + Drizzle** (`@tokophi/db`, 54 tables, migrations 0000–0016; payments+gateway+shipping cols) live: all 3 surfaces read + all 12 admin editors write + local auth (jose JWT) + **RBAC** (capability matrix gates all mutations) + **RLS ENFORCING at runtime** (migration 0012 + admin routes every read/write through the non-owner `tokophi_app` role via `withTenant`/`withCurrentTenant`; `verify-rls` + `verify-rls-app` + E2E green) + local media upload. ⏳ then the VPS server itself (self-hosted Postgres + PostgREST + Storage). See `SCHEMA.md` + ADR 0007/0008.
-- [x] **Extend the data-layer seam to ALL screens.** ✅ Reads via `lib/data/*` (super-admin + 16 admin modules + storefront `@tokophi/db`). ✅ Writes via `lib/actions/*` (all 12 editors). `lib/mock` kept only for decorative bits (live ticker, analitik breakdowns).
-- [x] **Auth + real multi-tenant.** ✅ local login/session + **RBAC** (capability matrix, `store_id` from the session) + **RLS enforcing at runtime** (admin routes every read/write through `tokophi_app` via `withTenant`/`withCurrentTenant`). Store switcher is still cosmetic (single-tenant demo), but the tenancy boundary is real. VPS just points PostgREST at the same setup.
+---
 
-## P1 — Functional completeness (mostly wireable now, no backend)
-- [x] **RBAC UI rollout.** ✅ infra (`lib/rbac-policy.ts` + `useCan`/`<Can>` + role badge) + **all admin editors** gate their write/delete/create controls per role (Produk, Diskon, Halaman, Blog, Kategori, Pelanggan, CRM, Segmen, Pembelian, Inventori, Navigasi, Pesanan, Pengaturan). Playwright-verified across owner/staff/gudang. (Server actions still enforce — UI is UX.)
-- [ ] **De-dup: migrate `apps/admin` to consume `@tokophi/ui` + `@tokophi/lib`** and delete its local `components/ui` + `lib/format`/`utils`. (Monorepo is set up; super-admin already uses the shared packages; admin still has its own copies — see AGENTS.md. Do this carefully so the mature admin keeps building.)
-- [~] **Super-admin: deepen** — ✅ DONE (2026-07-08): provisioning ("Tambah toko" one-txn tenant onboard), **real impersonation** (mints admin session → opens admin scoped to the store via RLS), settings persistence (gateways/couriers/COD), team invite (real `platform_admins`), billing actions (mark invoice), composite healthcheck, platform-admin auth (`platform_session`). ⏳ still: support/tickets, saved reports.
-- [x] Edit routes for content: `/halaman/[id]`, `/blog/[id]` (prefilled) — done.
-- [x] Fix no-op "Edit" menu items (Produk, Kategori) — now open editors.
-- [x] Storefront slugs Indonesian & consistent: `/produk/`, `/kategori/`, nav uses `/blog//halaman/` — done.
-- [x] Toasts (sonner) on save/delete for Produk, Koleksi, Menu — done. **[ ] extend** to remaining editors (Halaman, Blog, Pelanggan, Pengaturan, Diskon) + destructive **confirm dialogs** before delete.
-- [x] **Pesanan detail page** `/pesanan/[id]` — DONE: full detail route (status pipeline, shipping card + Cek Ongkir/Buat Pengiriman/Lacak/Cetak label, payment card + Buat Tagihan). ⏳ still: draft/manual order, refund/return, abandoned checkout.
-- [x] **Payments — AutoLaris gateway** — DONE: super-admin config + Test koneksi; admin order "Buat Tagihan" (VA/QRIS/DANA, persisted+linked); storefront checkout create payment → sukses VA/QRIS. ⏳ still: callback signature verification.
-- [x] **Storefront → real DB order** — DONE: checkout `/api/public/order` creates customer + order + line items + linked payment (`WEB-…`); appears in the merchant admin; pay callback → order `dibayar`. Line items resolve to `variantId`, **inventory decrements**, and **out-of-stock carts are rejected** (real oversell prevention). ⏳ still: restore stock on order-cancel; abandoned-cart.
-- [ ] **Diskon edit route** `/diskon/[id]` (today create-only dialog).
-- [x] **Real variants** — DONE (2026-07-08): adaptive TikTok-Shop/Shopee-style editor (2 option types, chip values, "Terapkan ke semua" bulk apply) → cartesian matrix (per-variant sku/harga/stok) → reconcile-by-combo (history-safe) → storefront variant picker → variant-aware cart. All 14 fashion products seeded Warna×Ukuran.
-- [~] **Shipping — KiriminAja (real courier API)** — ✅ **live ongkir** in the order detail ("Cek Ongkir" → live rates via `shipping_price`, city→district resolved by `get_address_by_name`; key in gitignored `.env.local`). ✅ **live ROSTER (2026-07-13)** — `kaServices()` prices ONE reference route (Menteng→Coblong) and harvests the services from the response: KiriminAja has no "list couriers" endpoint, so that IS the source of truth. It carries the real `service_type` codes, the speed `group`, and a per-service `cod` flag. **The hand-written roster in `packages/lib/couriers.ts` had drifted badly** — it listed TIKI and Pos Indonesia (the API returns NEITHER; the sync now auto-disables them) and gave SPX "Standard"/"Hemat" when the live service_types are `"1"` and `"3"`. A merchant could enable a service that did not exist and the storefront filter would silently never match it. Super-admin has a **"Sync dari KiriminAja"** button (`syncCouriersFromKiriminaja()`); re-syncing preserves prior decisions and never deletes a courier (old orders reference it). ⏳ still: **Buat Pengiriman** (`request_pickup` → resi/AWB, needs a store sender address: kecamatan_id/kelurahan_id/lat/lng); **cetak label PDF** (the "Cetak" button is still a toast stub); tracking webhook. See `CHANGELOG.md` + `SYSTEM_GUIDE.md` §Integrations.
-- [x] **Jasa Kirim page + COD, end-to-end** — ✅ DONE (2026-07-13, migration `0038`). The merchant now picks **SERVICES**, grouped by KiriminAja's own speed classes (Reguler / Same Day / Next Day / Hemat / Kargo) — the shape a seller thinks in ("I want next-day", not "I want JNE"). The old page ticked COURIERS, which cannot express "JNE Reguler yes, JNE YES no". "Alamat" split into its own section (the pickup origin is an address, not a shipping preference, and every rate depends on it). Two toggles there — "Ambil di tempat" and "Gratis ongkir Rp250.000" — were plain `useState` with **no column and no action**: the merchant set them and nothing happened. Removed.
-  **COD, three layers, each owning one decision:** `platform_cod` (platform allows it at all + cap + provinces) → `platform_couriers.services[].codAllowed` (which SERVICES may carry it — super-admin) → `store_settings.cod_enabled` (this merchant wants it; default **off**).
-  **COD is NOT SPX-only in the data, and that was worth checking rather than assuming:** KiriminAja reports `cod=true` on **14 services across 10 couriers**. The asymmetry that actually costs money is **RETURNS** — a refused COD parcel ships back free on SPX and is billed to the merchant elsewhere. So the narrowing is a per-service boolean the super-admin can flip (KiriminAja's `cod` is the ceiling; a service it won't COD can never be switched on), **not `if (courier === "spx")` welded into the code**. Current policy: SPX Standard + SPX Economy allowed, the other 12 blocked. Widening is a tick box, not a deploy.
-  **`platform_cod.max_amount_idr` (Rp2jt) and `allowed_provinces` (6) were stored and editable but read NOWHERE** — grep found zero call sites. They bounded nothing. Now enforced. All five conditions are checked SERVER-SIDE in `/api/public/order` **before any row is written** (gate at :79, first insert at :128) — the UI check is convenience; a hostile client can POST `cod` directly. Merchant-booked shipments go through the same gate (booking a Rp5jt COD from the admin was a way around the cap). Proven against the running server: merchant-off → 403, courier `anteraja` → 403 (**the SPX-only policy proving itself: KiriminAja DOES support COD there; we do not**), province Papua → 403; orders 75 → 75, every rejection wrote zero rows.
-- [ ] **🔴 COD: the province is the one the buyer TYPED.** Normalised aggressively (DI Yogyakarta / Daerah Istimewa Yogyakarta / prov. jawa barat all match) but a hostile client can claim "DKI Jakarta" and ship to Papua, defeating `allowed_provinces`. The trustworthy signal is the province of the **KiriminAja destination district the ongkir quote was issued for** — the storefront currently sends only the label and cost, not `dest_id`. Fix: send `dest_id`, resolve server-side.
-- [ ] **🔴 Verify the "SPX free return" claim with KiriminAja, in writing.** The entire SPX-only COD policy rests on it, and **it is unverified**: free returns are a *Shopee Seller Center* benefit, and we reach SPX through KiriminAja — a third-party aggregator with its own contract. The API has **no return field at all** (`KaRate` = service, service_name, service_type, cost, etd, cod, group). If returns are in fact billed through KiriminAja, the policy's whole rationale collapses and we have restricted COD to one courier for nothing.
-- [ ] **COD fee (`platform_cod.fee_pct`, currently 0, unused)** — the lever that could let us open COD on ALL couriers instead of one. A 2–3% COD fee charged to the buyer (normal and accepted in Indonesia; every marketplace does it) funds a return pool, so the merchant does not eat the return leg alone. Strictly better than courier-restriction IF the SPX return claim above turns out to be false.
-- [ ] **Measure COD return rate per courier from day one.** We cannot currently record it — there is no return/refusal status anywhere in the schema. Without that data we will never know when it is safe to widen COD beyond SPX, and the decision stays a guess.
-- [~] **Media / rich-text** — ✅ real product **image upload** (`public/uploads/` + `product_media`, 5MB cap, per-image delete). ⏳ still: video slot, Storage (VPS/MinIO/S3), **Tiptap** rich-text for product/page/article bodies (currently textarea + decorative toolbar).
-- [x] **Ekspor CSV** — DONE (2026-07-08): all 6 Ekspor buttons (Pesanan/Pelanggan/Inventori/Analitik/Dashboard/Pemasaran) download real CSV via `lib/csv.ts`.
-- [x] **Global search (⌘K)** — DONE (2026-07-08): topbar returns real results (products/orders/customers, RLS-scoped) linking to entity routes; ⌘K focus.
+## 🔴 The five that matter most
 
-## P1.5 — Self-serve Store Builder / "Tema" (ADR 0009 — merged to `main` 2026-07-10, **NOT finished**)
-> Core builder is live on `main` (`/tema`, `@measured/puck`, 8 sections, brand colour, migrations 0031–0032). **Still open** (see unchecked items below) — the "tema" feature is **not done yet**: template variants, checkout branding, and now that the storefront is SSR, live-reflect-on-deployed still needs `Host`-multi-tenant.
-- [x] **Homepage drag-drop builder** — DONE: `@measured/puck` at `/tema` (`theme:write` gated), 8 sections (Hero/Grid Produk/Banner Promo/Testimoni/Image+Teks/Marquee/Rich Text/Navigasi Kategori), `@tokophi/sections` shared registry, `page_templates` schema (migrations 0031–0032). Verified E2E repeatedly (real drag-drop → publish → `astro build` → rendered HTML).
-- [x] **Brand colour panel** — DONE: one merchant hex → full shade scale (`@tokophi/lib/colors`) → storefront-wide CSS-var override, no markup changes needed. `stores.brand_color` (migration 0031).
-- [x] **Category/product template variants** — ✅ DONE (2026-07-13): `/tema` is a template manager (3 tabs, create/rename/set-default/delete + per-kategori & per-produk assignment + bulk apply); builder moved to `/tema/[id]`, saves per template id. **No migration** — `0031` already had `collections.template_id` + `products.template_id`. ⏳ **the storefront still renders only the homepage template** — consuming category/product templates is the next slice (contract in WORKLOG 2026-07-13).
-- [x] **SSR multi-tenant storefront** — ✅ **DONE (2026-07-13)**: SSR base (2026-07-10) + **`Host`-header multi-tenant** — `getStoreByHost()` + Astro middleware put `{store, catalog}` on `Astro.locals`; per-store memoized catalog (15s TTL); resolution = custom domain (seam) → `<slug>.$STOREFRONT_BASE_DOMAIN` → first host label → fallback `STORE_SLUG`; unknown host → clean 404, never another merchant's store. ONE deploy serves EVERY store. Verified with 2 stores on one process + DB-free `astro build`.
-- [x] **Checkout branding** — ✅ DONE (2026-07-13): `checkout.astro` renders the resolved store's `logo_url` (wordmark fallback when null); brand colour already flowed via CSS vars.
-- [x] **Merge** — ✅ rebased onto `main` and landed (migrations renumbered 0031–0032; conflicts in layout/schema/lib resolved, re-verified). Tema now builds + deploys with the rest.
+Not the biggest, not the newest — the ones where the product is currently **lying, leaking, or
+unmeasurable**. Ordered.
 
-## P1.6 — Next up (onboarding + client comms) — planned 2026-07-11
-> New capability track requested 2026-07-10. Turns TokoΦ from a single seeded demo into a self-serve, multi-merchant platform + gives each merchant a real customer-comms surface.
+1. **[ ] `orders.courier` is NULL on 699/700 rows.** A regular checkout books no shipment, so the
+   per-courier COD return-rate report — **the instrument the entire COD policy is betting on** — cannot
+   produce a per-courier number. We optimised for a metric we cannot measure. Fix: book the shipment
+   (or at minimum record the selected courier) at checkout.
+2. **[ ] Verify the "SPX free return" claim with KiriminAja, in writing.** The whole SPX-only COD
+   policy rests on it and **it is unverified**: free returns are a *Shopee Seller Center* benefit, we
+   reach SPX through *KiriminAja* (a different contract), and the KiriminAja API has **no return field
+   at all** (`KaRate` = service, service_name, service_type, cost, etd, cod, group). If returns are in
+   fact billed through KiriminAja, the rationale collapses and we have restricted COD to one courier
+   for nothing. **This is one email.**
+3. **[ ] `invitePlatformAdmin` is a privilege-escalation path.** It is `admin`-gated, takes `role`
+   **unvalidated** (`role: input.role || "admin"`), and is **not audit-logged**. An `admin` operator can
+   mint themselves an `owner` and thereby reach the two `owner`-only actions (impersonate, reset owner
+   password). **This quietly undoes the role check that landed in `0776e99`.** It also hashes a fixed
+   password (`tokophi123`).
+4. **[ ] `lib/actions/billing.ts` has no capability gate.** `createSubscriptionPayment` and
+   `cancelSubscriptionInvoice` raise and void **real invoices**, gated on `getSession()` alone — so a
+   `gudang` user can create or cancel the store's subscription bill. Every other mutating action file
+   calls `requireCapability` as its first statement.
+5. **[ ] Tests for the ledger, the COD gate, and the order state machine.** There is **one test file in
+   the entire repo** (`packages/lib/src/integration-status.test.ts`); vitest is wired and unused.
+   `select sum(…) for update` — which Postgres rejects outright, so **every withdrawal threw** — shipped
+   because `tsc` cannot see inside a SQL string. **Money paths must be exercised, not typechecked.**
 
-- [x] **Self-serve register (signup)** — ✅ DONE (2026-07-13): public `/daftar` → `lib/actions/register.ts` → `lib/provision.ts` `provisionStore()` (ONE txn: accounts→users(scrypt)→stores(trial, +3d)→store_users(owner)→locations→store_settings→store_stats→`platform_activity(signup)`), slug dedupe + email uniqueness → session cookie → redirect. Verified E2E against the real DB. Logic replicated from super-admin `createStore` (not imported — super-admin keeps its ANCHOR date; signup uses real `now()`).
-- [~] **Google auth (OAuth login)** — code DONE (2026-07-13), **UNPROVEN**: migration `0034` (`users.auth_provider`, `users.google_sub`), `lib/google.ts` + `/api/auth/google/{start,callback}` (jose + Google JWKS). **Decided:** Google on `/daftar` auto-provisions a store; Google on `/login` with an unknown email is rejected (no silent store creation); existing password user + same verified email → link `google_sub`, KEEP `password_hash`. Feature-flagged (env unset → button hidden, routes redirect, no crash). ⏳ **needs real Google credentials** — the code-exchange/JWKS path has never actually run.
-- [ ] **Custom domain for client** — a merchant attaches their own domain (e.g. `batiknusantara.com`) to their storefront. **Unblocked now** (`Host`-multi-tenant landed): the `slugFromCustomDomain()` SEAM in `apps/storefront/src/data/store.ts` is a one-function stub, and the host is already the cache key. Still needed: `stores.custom_domain` / `store_domains` migration + admin UI + Cloudflare-for-SaaS (`cname.tokophi.com`) or a Traefik per-domain router + cert. Supersedes the P2 "Domain" stub. White-label: their domain, our infra.
-- [ ] **Ticketing UI/UX → customer⇄seller chat + merchant chat dashboard** — 📄 **SPEC DONE (2026-07-13): `specs/docs/CHAT_SPEC.md`** (7 slices, slice 1 unblocked). Decisions: `support_*` ("Tiket", merchant⇄platform) and the new "Obrolan" (shopper⇄merchant) stay **separate tables** sharing one extracted `<Thread>` UI; transport v1 = **short polling with a cursor** (no pub/sub exists; Traefik/CF mangle long-lived connections; payload = the future SSE payload so the upgrade is drop-in); anonymous shopper = signed jose JWT in a first-party httpOnly `tokophi_chat` cookie minted on first message; chat API lives in the storefront's own Astro routes (first-party cookie survives merchant custom domains). Migration `0035`. **Nothing built yet.**
-- [x] **🔴 RLS retrofit for `support_*`** — ✅ **DONE (2026-07-13, migration `0035`)**: `support_messages.store_id` added + backfilled (NOT NULL + FK); RLS + the `0012` `tenant_isolation` policy on both support tables; admin reads → `withCurrentTenant` (`lib/data/support.ts`), writes → `requireCapability("support:write")` + `withTenant`. New cap granted to all 4 roles; `requireCapability(cap, {allowSuspended})` lets a suspended store still open a ticket. **Proven in psql:** as `tokophi_app` with store A's GUC, store B's ticket is invisible even by PK and an insert for store B is rejected by the policy. `verify-rls` now derives the table set from the catalog (36/39 green).
-- [x] **🔴 RLS for `media` + `payments`** — ✅ **DONE + LIVE (2026-07-13, migration `0036`)**. `payments.store_id` was **nullable and NULL on every row** (the seed never set it; only prod code did) — a nullable tenant key matches no policy, so enabling RLS naively would have made every payment vanish from the app. Order matters: **backfill `store_id` from the parent order → SET NOT NULL + FK → only then ENABLE RLS + policy**. Checked prod for orphan payments before deploying (0 — the failure mode that would have aborted the migration). **Proven on PRODUCTION data as `tokophi_app`:** owning store sees its 60 payments, another store sees **0**, no tenant GUC sees **0**, and a forged cross-tenant insert is **rejected by the policy** (`new row violates row-level security policy`). `verify-rls` now **38/39**. ⚠️ Test-design trap for whoever repeats this: an `INSERT … SELECT FROM orders WHERE store_id = <A>` run as tenant B is filtered to zero rows by RLS *on `orders`*, so it inserts nothing and "passes" — the write test must hand the INSERT a literal row belonging to A.
-- [x] **Payment callback fails CLOSED** — ✅ DONE + LIVE: `secretOk()` returned `true` when `AUTOLARIS_CALLBACK_SECRET` was missing, so a lost/typo'd env var would silently open the endpoint that marks orders **PAID** and extends subscriptions. Now 401 in production (dev still runs without a secret). Verified live: `POST /api/public/pay/callback` without a token → **401**.
-- [ ] **`platform_activity`** — also `store_id`-without-RLS, but a *different* case: it's a platform log read cross-tenant by super-admin, so owner-only may be correct. Needs a deliberate decision + a comment, not a silent whitelist entry.
-- [x] **Hydration bug `/bantuan`** — ✅ DONE (2026-07-13): `bantuan-client.tsx` computed "x mnt lalu" with `Date.now()` **during render**, so SSR and hydration could land on opposite sides of a minute boundary and React threw the tree away. Fixed with the pattern already used by orders/activity: the data layer computes `minutesAgo` on the server, the client renders it through `timeAgo()`. Swept every `"use client"` file in both apps — this was the only violator.
-- [x] **Finish "Tema" / Store Builder** — ✅ DONE (2026-07-13): template variants + checkout branding + **the storefront now renders category/product templates** (assignment → type default → hand-built fallback; empty templates degrade instead of rendering blank; Grid Produk auto-scopes to the category/product in context).
-- [ ] **`product-detail` section** — a product template currently replaces only the TAIL of the PDP; the buy box (galeri/harga/varian/Tambah ke Keranjang) + Ulasan are always kept, because **no registry section can render them** and a full replace would ship unbuyable product pages. Add a `product-detail` section to `@tokophi/sections` + admin Puck + an Astro renderer → then a product template can own the whole page.
-- [ ] **Landing page for the apex** (`tokophi.com`) — still not built; the domain cutover points apex/`www` at a placeholder or a redirect to `app.` until it exists.
-- [ ] **etc.** — capture more of the "own app / unified" vision as it firms up (notifications, presence, mobile).
+---
 
-## P1.8 — 🔴 Finance & analytics integrity (screening 2026-07-13)
-> A full screening of every number the merchant admin renders. Verdict: the **lists** (pesanan,
-> produk, pelanggan, diskon…) and the **daily revenue/orders series** are real DB reads. But several
-> headline numbers are **hardcoded constants from `lib/mock/store.ts`, identical for every store**,
-> presented as if they were the merchant's own. Distinguish carefully: most `lib/mock` imports in
-> `apps/admin` are `import type` (harmless); the list below is the subset that renders VALUES.
+## P0 — Foundation
 
-- [ ] **🔴 Ad channels are pure fiction — the most dangerous screen.** `AD_CHANNELS` (analitik +
-  pemasaran) hardcodes Meta Ads spend `Rp18,5jt` → revenue `Rp78,2jt` (ROAS ~4,2×), a Pixel ID, and
-  `connected: true`. **There is no Meta/Google integration at all.** A merchant can raise ad budget
-  on a return that never existed. **Hide the card until a real ad-platform integration exists** — a
-  fabricated number is worse than no number.
-- [ ] **🔴 Customer order history is faked.** `pelanggan/[id]/customer-detail.tsx` reads mock `ORDERS`
-  and filters **by customer NAME**. A real customer's purchase history is invented. This is a bug,
-  not a stub — real orders exist in the DB and are already joined elsewhere.
-- [x] **Funnel + device split are now COUNTED, not typed** — ✅ (2026-07-13, migration `0037`).
-  `analytics_events` was an empty shell (0 rows, no writer) and had no `device` column, so a device
-  split was impossible even in principle. `0037` adds `device` + a `(store_id, ts)` index; the seed
-  now populates the table, and `lib/data/funnel.ts` aggregates it (day-bucketed, so the range
-  switcher actually moves the numbers).
-  **The data is synthetic but the maths on screen is real, and it RECONCILES with the KPIs beside
-  it — by construction, not luck:** `visit` events == `analytics_daily.visitors` (the Pengunjung
-  KPI) and `purchase` events == `analytics_daily.orders` (the Pesanan KPI). Verified in psql:
-  63.150 == 63.150 and 2.122 == 2.122 → conversion **3,36%**, device **77,9/18,2/3,9** (emergent,
-  not the old round 78/18/4). One device is pinned per SESSION, so the split is a share of sessions,
-  not of clicks. ⏳ **Still open:** the storefront tracking script that writes REAL events. The query
-  shape is already the real one — point the tracker at `analytics_events` and the cards go live with
-  no query changes.
-- [ ] **Cheap wins — the data is already in the DB:**
-  - Penjualan per kota (`REGION_SALES` hardcoded) → `orders.city` / `orders.province` exist.
-  - Pelanggan baru vs kembali (`NEW_VS_RETURNING` hardcoded) → derive from `customers` + `orders`.
-  - Grafik kategori (`category-chart.tsx` imports mock `PRODUCTS`) → `order_line_items` → produk → kategori.
-  - Dashboard "47 pengunjung online" (`ONLINE_NOW = 47`) → decorative; label it or drop it.
+- [x] **Backend** — local PostgreSQL 16 + Drizzle (`@tokophi/db`): **67 tables, 44 migrations
+  (`0000`–`0043`), RLS on 43**. All four surfaces read; all admin editors write; local auth (jose JWT) +
+  RBAC + **RLS enforcing at runtime** under the non-owner `tokophi_app` role.
+- [x] **Data-layer seam on every screen** — reads via `lib/data/*`, writes via `lib/actions/*`.
+- [x] **Auth + real multi-tenancy** — the tenancy boundary is the database, not application code.
+- [ ] **VPS: self-hosted Postgres + PostgREST + Storage (MinIO/S3).** Media is still local disk
+  (`public/uploads/`). ADR 0007 / 0008.
 
-- [ ] **Order processing should mirror an Indonesian marketplace (Shopee/Tokopedia)** — idea raised
-  2026-07-13. Today `/pesanan` is a generic status pipeline. Sellers here already have Shopee muscle
-  memory: a **"Perlu Dikirim" queue** as the default landing tab, bulk-print thermal labels, one-tap
-  "Atur Pengiriman" → pickup/drop-off, an SLA countdown ("kirim sebelum …") that visibly ages, and
-  buyer-facing statuses in the same words they know (Belum Bayar / Perlu Dikirim / Dikirim / Selesai
-  / Dibatalkan). Pairs with the open KiriminAja work (`request_pickup` → AWB, label PDF) — the
-  pipeline is the UI half of that. Design before building: pick the status vocabulary FIRST, because
-  it leaks into the storefront, the DB enum, and the buyer's notifications.
-- [ ] **🔴 COD × no-ledger is the dangerous combination.** COD is the ONLY payment method where physical cash moves through four parties — buyer → courier → aggregator → platform → merchant — with days of lag, and returns that reverse the flow. With no ledger (below) we cannot answer the merchant's most basic question: *"which of my COD money has settled, which is still with the courier, which came back as a return?"* **Do not open COD widely before the ledger exists.** The current SPX-only + Rp2jt cap + 6 provinces is, conveniently, also a way to keep the un-reconcilable surface small.
-- [ ] **🔴 No merchant balance / payout ledger — a hole in the business model, not a missing feature.**
-  The finance schema is `invoices`, `payments`, `platform_payment_channels`,
-  `platform_payment_gateways`, `store_payment_methods`. There is **no `saldo` / payout / ledger /
-  settlement concept anywhere** (grepped schema + both apps: zero hits). A shopper pays via QRIS/VA →
-  the money lands in the **platform's** gateway account → and TokoΦ has **no record of what it owes
-  the merchant**. Needed: a ledger (credit on payment success, debit on payout), a **Saldo** page in
-  client-admin (available vs held + history), and payout control in super-admin. Design first —
-  when do funds become "available", who triggers a payout, how is it reconciled against the gateway.
+---
 
-## P1.9 — Next up (planned 2026-07-13, in flight)
-> Three slices that are unblocked TODAY. The ledger (P1.8) is deliberately NOT here: it needs a
-> business decision first (when do funds become "available", who triggers a payout, how is it
-> reconciled against the gateway) and coding it before that decision means migrating money later.
+## P1 — Money, shipping, COD
 
-- [x] **🔴 Record returns/refusals** — ✅ DONE (2026-07-13, migration `0039`). `order_status += 'retur'` + `orders.returned_at/return_reason`; `lib/data/returns.ts` `getReturnsByCourier()` gives the return rate AND the COD return rate side by side (denominator = orders that actually SHIPPED — counting `baru`/`diproses` would flatter it). **The bug that would have bitten:** only `batal` restored inventory, but a returned parcel is physically back on the shelf too — without that, every refused COD order silently shrank real stock. Both paths now also fail a still-pending payment (for a refused COD, the cash was never collected). Proven: marking an order retur restored stock 42→43; report returns 48 shipped / 1 retur / 2,1%. ⚠️ `orders.courier` is NULL on seeded orders — it is only set when a shipment is booked through KiriminAja, so the PER-COURIER split only becomes meaningful for orders shipped through the integration. Original problem statement: `order_status` is
-  `baru | diproses | dikirim | selesai | batal`. **There is no "retur".** A refused COD parcel — the
-  single biggest cost in COD, and the whole reason the SPX-only policy exists — has nowhere to be
-  recorded. So the question "what is our COD return rate, per courier?" is unanswerable, and every
-  decision about widening COD stays a guess. Add the status + a way for the merchant to set it, and
-  the return-rate report becomes a `group by`.
-- [x] **Storefront event tracking → `analytics_events`** — ✅ DONE (2026-07-13). First-party Astro ingest (`/api/track`); store resolved from the Host header, a client-supplied storeId is IGNORED. Session id in sessionStorage; **device decided ONCE per session** (the split counts sessions, not clicks). `visit` gated on a session flag and `purchase` keyed on the order number — the two that could double-count. `sendBeacon` so the event survives the unload from "Beli Sekarang". Driven with Playwright across 3 sessions: 9 events, correct per-device, reloads did not re-fire. ⚠️ **No bot filter and no rate limit on /api/track** — a script could inflate a store's funnel. Fine while it only drives a dashboard; must be fixed before it drives anything billable. Original: The funnel + device split are currently
-  COUNTED (good) but from SEEDED rows (migration 0037). The table shape is already the real one, so
-  the tracker is a drop-in: post `visit / product_view / add_to_cart / checkout_start / purchase`
-  with a session id + device. Then the funnel reflects live traffic and the seed can go.
-- [x] **🔴 The Iklan card** — ✅ DONE (2026-07-13). `connected` now resolves against an intentionally EMPTY credentials map (the seam for a real integration); `ad_channels.connected` is no longer consulted — a DB column asserting a connection that does not exist is just the lie in a different place. Every channel reads "Belum terhubung"; spend/ROAS render "—". The Pelacakan tab's hardcoded Pixel IDs are gone (and that form never persisted anything anyway). `getProvinceStats()` was fiction too — it read seeded `ad_metrics`, and could never have been real: **`orders.province` is NULL on 100% of rows**. **What IS real and stays:** `orders.channel` is recorded per order, so orders/revenue ATTRIBUTED to a channel are countable (meta 12/Rp4.332.000, google 8/Rp3.431.000, tiktok 10/Rp2.710.000) — that claims nothing about spend. Original: The hardcoded `AD_CHANNELS`
-  mock is gone and `/pemasaran` reads `ad_channels`, but the ROWS are seeded fiction: Meta Ads spend
-  `Rp18,5jt` → revenue `Rp78,2jt` (ROAS ~4,2×), a Pixel ID, and **`connected: true`**. There is no
-  Meta/Google integration anywhere in the codebase. A merchant can raise ad budget on a return that
-  never existed. Unlike the funnel, this CANNOT be made "dummy but computed" — there is no source of
-  truth to compute from. Show the channels as **not connected**, hide the performance numbers until
-  a real ad-platform integration exists. A fabricated ROAS is worse than an empty state.
+### Shipped
 
-## P1.7 — Domain cutover to `tokophi.com` — ✅ **DONE 2026-07-13, LIVE**
-> Scheme: **`<slug>.tokophi.com`** (one label deep → free Cloudflare Universal SSL, stays proxied). TLS for the wildcard = **Cloudflare Origin CA cert** as Traefik's default cert (LE cannot issue a wildcard over HTTP-01) → **every record must stay PROXIED**. Full detail + gotchas in WORKLOG 2026-07-13 and `DEPLOY.md`.
+- [x] **The ledger** (migrations `0040` + `0041`). `0040` built the book and **nothing ever wrote a
+  `sale` into it** — the withdraw path worked, the release and claw-back paths worked, on entries that
+  were never created; every merchant's balance read Rp0 no matter how much came in. `0041` credits it.
+  Balance derived, book append-only, three partial unique indexes make double-credit a DB impossibility.
+- [x] **Payouts + super-admin `/pencairan`** — request (owner-only, advisory-locked, bank snapshot),
+  process, mark paid (**no ledger write** — already debited), reject (**opposing `adjustment`** computed
+  from the ledger, not from `payouts.amount_idr`).
+- [x] **The release rule is actually read** (`0776e99`) — `platform_payout.release_on`, default
+  `selesai`. It was hardcoded while the super-admin toggle changed nothing. A knob that moves nothing is
+  worse than no knob.
+- [x] **`retur` order status** (`0039`) — restores inventory (exactly like `batal`; missing it would have
+  quietly shrunk real stock on every refused COD parcel), fails the pending payment, claws the credit
+  back with an opposing entry carrying the sale's status.
+- [x] **COD enforced end-to-end** (`0038`) — five conditions, server-side in `/api/public/order`
+  **before any row is written**. `max_amount_idr` and `allowed_provinces` were stored and read
+  **nowhere**; they bounded nothing. Now they bound.
+- [x] **The COD province is verified, not typed** (`f846cba`) — resolved from the KiriminAja district id
+  the ongkir quote was issued for. Fail-closed if unresolvable.
+- [x] **Live KiriminAja courier roster** — the hand-written roster had drifted badly (it listed TIKI and
+  Pos Indonesia, which the API returns *neither* of, and gave SPX service names that do not exist).
+- [x] **Shipment booking** (`request_pickup` → AWB) — and **`orders.awb` no longer stores our own order
+  id** (`0b3cdda`), which had been printing an unscannable barcode on real parcels under "No. resi".
+- [x] **Order address snapshot** (`0042`) — an order carries the address it was *shipped to*.
+- [x] **Pesanan rebuilt as a seller centre** (`4b4775c`) — Shopee-style tabs, server-side
+  search/filter/paging. The five status tabs are a **strict partition** (`0+24+23+595+43 = 685`).
+- [x] **Money endpoints fail CLOSED** — pay callback and the billing cron both 401 in production when
+  their secret is unset.
 
-- [x] DNS in Cloudflare — `@`, `www`, `app`, `rich`, `toko`, `*` → `45.77.33.112`, all **proxied**. (Proxied wildcard turned out to be allowed on the **Free** plan.)
-- [x] Coolify per-service domains (old `.sslip.io` hosts kept alongside as a fallback) + **Traefik wildcard router** with **`priority=1`** — load-bearing: the regexp also matches `app.`/`rich.` and Traefik's default priority is rule LENGTH, so without it the storefront would have hijacked the admin host.
-- [x] Cross-surface env → `https://app.tokophi.com`, plus `STOREFRONT_BASE_DOMAIN=tokophi.com` + `STORE_SLUG` fallback.
-- [x] **Landing app** (`apps/landing`, static Astro, "Segera hadir", no DB) on the apex + `www`.
-- [x] **Verified in production:** a store signed up through the real `/daftar` form got a working HTTPS storefront at `<its-slug>.tokophi.com` with **zero deploys and zero DNS work**.
-- [x] **SEO hygiene** — admin + super-admin are `noindex, nofollow` in 3 layers (config header + middleware header + `metadata`/`robots.txt`), with `/api/uploads/*` carved out so merchant product photos stay in Google Images. Storefronts + landing stay indexable. Landing has `robots.txt` + `sitemap.xml`.
-- [x] **`www` → apex 301** (Traefik `redirectregex`, path+query preserved).
-- [ ] **⏳ YOU: set the zone's SSL mode to `Full (strict)`** in the Cloudflare dashboard — our API token lacks *Zone Settings: Edit*, so it could not be set programmatically.
-- [ ] **⏳ YOU (if any panel URL is already indexed):** check `site:app.tokophi.com` / `site:rich.tokophi.com` and purge via Search Console → Removals. The `noindex` header handles everything not yet indexed.
-- [ ] Move the `www` redirect to the **Cloudflare edge** (cheaper than hitting the origin) — needs *Zone → Config Rules → Edit* on the API token, which it currently lacks.
-- [ ] De-dup: `noRobots()` is copy-pasted in both apps' `middleware.ts` — belongs in `@tokophi/lib`.
-- [ ] Cloudflare cache rules: bypass for `app.`/`rich.`/`/api/*`; cache `/_astro/*` + `/products/*` on storefront hosts.
-- [ ] Billing-cron URL + AutoLaris callback still point at the old host — move to `https://app.tokophi.com` (`PUBLIC_APP_URL` is already correct, verify the AutoLaris dashboard).
-- [ ] A Coolify API token **`claude-domain-cutover`** was created for this cutover — revoke it when you want.
+### Open
 
-## P2 — Missing modules (from the concept feature map)
-- [x] **Storefront (Astro)** — DONE: Batik Nusantara reads the shared catalog live; real variant picker (Warna/Ukuran → live price+stock) + variant-aware cart (keranjang/checkout).
-- [ ] Produk: **transfer stok** antar-lokasi, **pemasok (supplier) CRUD** (PO references suppliers).
-- [ ] Pelanggan: **loyalitas/poin**.
-- [ ] CRM: **broadcast & otomasi WhatsApp** (today: follow-up worklist + templates + pipeline only).
-- [ ] Pemasaran: **kampanye email/WA**, automations (welcome, abandoned-cart).
-- [ ] **Kartu hadiah (gift cards)**, **Domain**, **Template notifikasi** (toggles exist in Pengaturan; message editor doesn't).
-- [ ] Analitik: **laporan kustom** + saved reports.
+- [ ] **🔴 `orders.courier` NULL on 699/700** — see the top-five list.
+- [ ] **🔴 Verify the SPX free-return claim** — see the top-five list.
+- [ ] **COD fee (`platform_cod.fee_pct`)** — currently `0` and **read by nothing** (2 grep hits: the
+  schema and the seed). This is the lever that would let COD open on **all** couriers instead of one: a
+  2–3% fee charged to the buyer (normal and accepted in Indonesia; every marketplace does it) funds a
+  return pool so the merchant does not eat the return leg alone. **Strictly better than
+  courier-restriction if the SPX claim turns out to be false.**
+- [ ] **No super-admin UI for `max_amount_idr` / `allowed_provinces` / `fee_pct`.** They are *enforced*
+  (from the seed) but not editable from the panel — while the `/pengaturan` copy says "limit & area
+  diatur di sini". Either build the form or fix the copy.
+- [ ] **The seed writes legacy string services** into `platform_couriers.services`
+  (`["Reguler","Same Day"]`, not `{type,name,cod,codAllowed}`). `getCodPolicy` skips non-objects, so
+  **on a freshly seeded local DB no service is COD-allowed and COD cannot be exercised at all** until
+  someone presses "Sync dari KiriminAja". A developer following the README will conclude COD is broken.
+- [ ] **The seed has no `retur` orders, no `cod` payments, and no `payouts`.** The three most expensive
+  code paths in the product have **no demo data** and cannot be exercised by clicking around.
+- [ ] **`KIRIMINAJA_ENV` defaults to `sandbox`** — an unset env in production silently books nothing.
+  Make production refuse to start instead.
+- [ ] Cetak label PDF (still a toast stub) · tracking webhook · parcel weight is hardcoded `qty × 500 g`.
+
+---
+
+## P1 — Security & integrity
+
+- [x] **RLS on `support_*`** (`0035`), **on `payments` + `media`** (`0036`, proven on production data).
+- [x] **Platform operator roles enforced** (`0776e99`) — `support` < `admin` < `owner`.
+- [x] **Impersonation is `owner`-only and audited** (`571ed17`).
+- [x] **Every fabricated number removed from the super-admin** (`571ed17`) — `store_stats` (a rollup that
+  disagreed with the `orders` it summarised by up to **140×**), a `mulberry32` MRR chart, five of six
+  delta chips hardcoded to `0`, a hardcoded `churnRate: 0`, two **disagreeing** MRR figures on one page,
+  and `ship7d_avg` — a metric with **no source at all** that drove a banner recommending the operator
+  **give away a Rp275rb/mo subscription**.
+- [x] **Every fabricated number removed from the order detail** (`2a5ffc4`) — line items, ongkir, a
+  back-solved "Penyesuaian" line, courier, resi, payment method, street address, and the barcode bars on
+  the printed label.
+- [x] **Pemasaran stops inventing ad performance** (`62df4a1`) — there is no Meta/Google/TikTok
+  integration; the cards now say "Belum terhubung".
+
+- [ ] **🔴 `invitePlatformAdmin` escalation** — see the top-five list.
+- [ ] **🔴 `billing.ts` has no capability gate** — see the top-five list.
+- [ ] **Super-admin audit gaps** — `setInvoiceStatus` (**money**), `invitePlatformAdmin`,
+  `setStoreUserRole`, `saveGateways`, `saveCodAllowed` (**COD risk policy**) and `createStore` all mutate
+  and write **nothing** to `platform_activity`. An unlogged privileged mutation is indistinguishable from
+  an attack.
+- [ ] **The `support` platform role is unreachable** — **zero** actions accept it, including the ticket
+  actions its own doc comment says it exists for. Either wire it or delete it.
+- [ ] **Platform role checks are action-only** — the middleware and page guards check for *a* session,
+  not a role, so a lower-privileged operator sees every screen and the buttons throw on click.
+- [ ] **`/api/public/*` runs on the owner connection, outside RLS** — **the single largest RLS hole, on
+  the most security-sensitive path in the system.** Tenant correctness at checkout rests on application
+  code passing an explicit `store_id`. Options: a `store_id`-scoped read role for the public path, or an
+  explicit, documented acceptance. Not a silent one.
+- [ ] **`POST /api/public/pay` is dead but live** — no storefront file reads `PUBLIC_PAY_API`, yet the
+  route still accepts unauthenticated requests to create real gateway bills. Delete it.
+- [ ] **All rate limits are in-process** — they do not survive a restart and do not hold across replicas.
+  `/api/track` in particular has no proof-of-work, signature or session check: a distributed script with
+  a browser UA can inflate a store's funnel. Move to the Cloudflare edge.
+- [ ] **`AUTH_SECRET` falls back to `"dev-insecure-secret-change-me"`.** Convenient in dev; must be
+  impossible in production.
+- [ ] **No login rate limit** on either panel.
+- [ ] **`platform_activity` has a `store_id` and no RLS.** Deliberate (it is our log *about* tenants), but
+  it deserves a written decision + a comment, not a silent whitelist entry.
+
+---
+
+## P1 — Honesty debt
+
+- [ ] **🔴 The storefront `/blog` is four hardcoded articles.** `const articles: Article[] = [ … ]` in the
+  page source. The `blogs` / `articles` tables are **never read** and there is no detail route. **The
+  merchant's blog editor publishes into a void** — they write posts that no shopper will ever see.
+- [ ] **Every store shares one WhatsApp number** (`DEFAULT_WHATSAPP = "6281234567890"`) and one email.
+  There is no per-store column to override either.
+- [ ] **`SECTION_DEFAULTS` ships fake testimonials** and a "Gratis Ongkir" marquee onto live storefronts.
+  `page_templates` has 0 rows, so **every** store falls back to them. A real merchant's shop currently
+  displays invented customer quotes.
+- [ ] **`apps/admin/lib/mock/store.ts` still exists**, with six `mulberry32` generators, imported by ~10
+  client components (almost entirely for its **types**, plus `TODAY` / `PRODUCTS` / `BLOG_CATEGORIES`).
+  Extract the types, delete the generators. It is one careless import from putting invented data back on
+  a screen.
+- [ ] **`astro.config.mjs` hardcodes `site: "https://batiknusantara.id"`** — one demo brand baked into a
+  multi-tenant app.
+- [ ] **`/akun` on the storefront is a dead demo form.**
+- [ ] **Stale source comments** — `lib/data/analytics.ts`, `lib/data/funnel.ts` and `schema.ts` all still
+  say `analytics_events` has no writer. It has had one since `b7ae0ff`.
+
+---
+
+## P1 — Feature completeness
+
+- [x] Self-serve signup (`/daftar` → one-transaction `provision.ts`).
+- [x] Store Builder / "Tema" (ADR 0009) — homepage + category + product templates, brand colour,
+  8 sections, SSR multi-tenant storefront, checkout branding. Hero carousel folded back into the
+  **shared** Puck config (`5016bb3`) after shipping first as a fork the storefront could not render.
+- [x] Real variants · CSV export · ⌘K search · RBAC UI rollout · content edit routes · order detail.
+- [x] Landing page on the apex + SEO hygiene + `www` → apex 301.
+
+- [~] **Google OAuth** — code done, **UNPROVEN**. The code-exchange / JWKS path has **never been run
+  against real Google credentials**. Feature-flagged, so an unset env hides the button rather than
+  crashing.
+- [~] **Chat (shopper ⇄ merchant)** — spec done ([`CHAT_SPEC.md`](./CHAT_SPEC.md)); **migration `0043`
+  landed** (`chat_visitors`, `conversations`, `conversation_messages`, with RLS). Application code was in
+  flight and uncommitted at the time of writing. Note: CHAT_SPEC targets migration `0036`, which was
+  taken by the payments/media RLS migration — the real slot is `0043`.
+- [ ] **Custom domain for a merchant** — `slugFromCustomDomain()` is a one-function `return null` stub and
+  the host is already the cache key, so the seam is ready. Needs `stores.custom_domain`, an admin UI, and
+  Cloudflare-for-SaaS or a Traefik per-domain router + cert.
+- [ ] **`product-detail` section** — a product template currently replaces only the *tail* of the PDP; the
+  buy box is always kept, because no registry section can render it and a full replace would ship
+  unbuyable product pages.
+- [ ] **De-dup `apps/admin` onto `@tokophi/ui` + `@tokophi/lib`** and delete its local `components/ui` +
+  `lib/format`. Super-admin already consumes the shared packages.
+- [ ] **Diskon edit route** `/diskon/[id]` (create-only dialog today).
+- [ ] Tiptap rich text (textarea + a decorative toolbar today) · video slot · MinIO/S3.
+
+---
+
+## P1.7 — Domain cutover (LIVE, residual items)
+
+- [x] DNS, Traefik wildcard router (`priority=1` — load-bearing), landing app, SEO hygiene, `www` 301.
+- [x] **Verified in production:** a store signed up through the real `/daftar` got a working HTTPS
+  storefront at `<slug>.tokophi.com` with **zero deploys and zero DNS work**.
+- [ ] **⏳ YOU: set the zone's SSL mode to `Full (strict)`** — our API token lacks *Zone Settings: Edit*.
+- [ ] **⏳ YOU:** check `site:app.tokophi.com` / `site:rich.tokophi.com` and purge anything already indexed
+  via Search Console → Removals. The `noindex` header handles everything not yet indexed.
+- [ ] Move the `www` redirect to the Cloudflare edge · Cloudflare cache rules.
+- [ ] De-dup `noRobots()` (copy-pasted into both apps' `middleware.ts`) into `@tokophi/lib`.
+- [ ] **Billing-cron URL + the AutoLaris callback URL still point at the old host** — verify the AutoLaris
+  dashboard.
+- [ ] Revoke the `claude-domain-cutover` Coolify token.
+
+---
+
+## P2 — Missing modules
+
+- [ ] Produk: transfer stok antar-lokasi (`stock_transfers` exists, 0 rows, no UI) · pemasok CRUD.
+- [ ] Pelanggan: loyalitas / poin.
+- [ ] CRM: WhatsApp broadcast & automation (today: follow-up worklist + templates + pipeline).
+- [ ] Pemasaran: kampanye email/WA, automations (welcome, abandoned-cart).
+- [ ] Kartu hadiah · Template notifikasi (toggles exist; the message editor does not).
+- [ ] Analitik: laporan kustom + saved reports.
+- [ ] **A real ad-platform integration** — or the permanent removal of `ad_channels` / `ad_metrics`. The
+  tables exist and describe a product we do not have.
+
+---
 
 ## P3 — Polish
-- [ ] Loading/skeleton states (all static today).
+
+- [ ] Loading / skeleton states.
 - [ ] Full dark-mode visual QA pass.
-- [ ] Accessibility audit (aria mostly present; not formally checked).
-- [ ] Tests (none yet) — at least smoke tests per route.
-- [ ] "Rentang khusus…" custom date range (currently disabled "segera").
+- [ ] Accessibility audit (aria mostly present; never formally checked).
+- [ ] "Rentang khusus…" custom date range.
 
-## Recently shipped (context)
-**Monorepo** (npm workspaces): `apps/admin` + `apps/super-admin` + `packages/ui` (shared shadcn/Base UI) + `packages/lib` (formatters). **Super Admin platform panel** (Dashboard MRR/GMV/churn, Toko/merchant management + detail, Paket & Billing, Analitik, Pengaturan) on the shared design system, :3001. · CRM module (Follow-up WA/Pipeline/Template) · product sub-modules (Kategori/Koleksi editor Manual+Otomatis, Inventori stepper, Purchase Orders) · customer detail page · collection editor · Halaman/Blog edit routes · Pemasaran province filter · Pengaturan redesign (settings-nav + Notifikasi) · **fashion-niche demo with 14 AI-generated product photos** · product list → Shopify-style compact table · channel model (sales channel = Toko Online; attribution = Meta/TikTok/Google Ads + Organic/Other) · concept docs (CONCEPT/SCHEMA/UI_INVENTORY).
+---
 
-*How to use: pull the top unchecked P0/P1 item, ship it, check it, add a CHANGELOG line, and update `UI_INVENTORY.md` if a screen changed.*
+*How to use: pull the top unchecked item, ship it, check it, add a `CHANGELOG.md` line, and re-verify
+[`STATUS.md`](./STATUS.md). **Do not check an item off because the code exists — check it off because you
+ran it.***

@@ -1,202 +1,277 @@
-# TokoΦ — Product Requirements Document (PRD v0.4)
+# TokoΦ — Product Requirements Document (v0.5)
 
-> ⚠️ **Amended 2026-07-09 by [ADR 0009](decisions/0009-self-serve-store-builder.md):** the storefront is **no longer** "hand-built per client, not a self-serve theme editor." Merchants now get a **self-serve, section-based drag-and-drop store builder** (homepage/category/product templates); storefront topology moves to **SSR multi-tenant** (1 deploy for all stores, resolved by `Host` header) instead of 1 static build per client. Checkout stays locked/uniform (branding tokens only). Passages below still saying "hand-built" / "per-client deploy" / "no theme editor" are pre-ADR-0009 history — ADR 0009 is authoritative.
-
-> **Name:** TokoΦ (rebranded from "indostore" 2026-07-08) · **Owner:** Paduka Ongki / ongkipro
-> **Phase:** UI/UX-first → **backend M3, local Linux** — all 3 surfaces READ + all 12 admin editors WRITE local PostgreSQL/Drizzle; local auth + **RBAC** (capability matrix + role-aware UI on all editors) + **RLS ENFORCING at runtime** (admin routes every read/write through the non-owner `tokophi_app` role via `withTenant`; `verify-rls`+`verify-rls-app`+E2E green) + local media upload done. **Next: admin-client feature depth** (Real variants) — VPS/PostgREST infra deferred. · **Updated:** 2026-07-08
-> **Code:** `~/projects/tokophi` (monorepo) · **Docs:** `~/Documents/Development/tokophi`
-> **Run:** `npm i` at root, then `npm run dev:admin` (→ :3000) · `npm run dev:super` (→ :3001) · `cd apps/storefront && npm run dev` (→ :4327)
-
----
-
-## 1. Vision & Positioning
-
-A **Shopify-style commerce platform for the Indonesian market**: one shared, modern-SaaS **admin panel** that runs many merchant stores, and an **Astro storefront** merchants customize themselves via a **self-serve, section-based drag-and-drop store builder** (ADR 0009) — one SSR multi-tenant deploy, not a hand-built site per client.
-
-**Deliberately NOT Shopify:**
-- ✅ **Self-serve store builder** (ADR 0009), but **section-based, not free-form** — a curated section registry (Hero, Product Grid, …), not arbitrary HTML/CSS/Liquid. Checkout is locked/uniform across every store (branding tokens only).
-- ❌ **No Apps / Plugins marketplace.** Feature set is curated in-core (the section registry itself is curated by us, not an open plugin surface).
-- ✅ Lightweight, fast, **Bahasa Indonesia** UI tuned to Indonesian sellers (WhatsApp, COD, local couriers, e-wallets/QRIS, payday cycles) — with the polish of a modern SaaS (Linear/Vercel/Shopify-admin quality, not a heavy ERP).
-
-**Three surfaces** (monorepo, npm workspaces — `apps/*` + shared `packages/*`):
-| Surface | Who | Tech | Port | Multiplicity |
-|---|---|---|---|---|
-| **Super Admin** (`apps/super-admin`) | **platform = us** | Next 16 + shared UI | :3001 | **1**, manages all stores/plans/billing |
-| **Admin** (`apps/admin`) | merchant operators | Next 16 + shadcn/Base UI | :3000 | **1 shared app**, multi-store |
-| **Storefront** (`apps/storefront`) ✅ | end shoppers | Astro 5 + Tailwind v4 | :4327 | ~~1 per client~~ → **1 SSR multi-tenant deploy** (ADR 0009); "Batik Nusantara" demo built |
-
-Super-admin & merchant-admin **share the design system** (`@tokophi/ui`) + formatters (`@tokophi/lib`); admin & storefront **share the canonical nav** (`@tokophi/data`). Backend later = one self-hosted Postgres; super-admin = platform role (cross-tenant), admin = `store_id`-scoped (RLS).
-
-**Payments & shipping are platform-managed (merchant "terima matang")** — ADR 0004. We (platform) set up payment the **AutoLaris** payment gateway (VA/QRIS/DANA) + **COD** and connect ONE **shipping aggregator** (KiriminAja → all couriers). The merchant only **enables which payment methods to accept** and **picks which couriers + services (ekspedisi)** to offer; credentials, resi & tariffs are automatic. Money flow: platform collects → settles/payouts to merchant (fee/margin).
-
-📐 Diagrams: **[docs/UML.md](docs/UML.md)** · 🗂️ Task breakdown: **[docs/TASKS.md](docs/TASKS.md)** · 🧱 Backend schema: **[docs/SCHEMA.md](docs/SCHEMA.md)** · ✅ Priorities: **[docs/BACKLOG.md](docs/BACKLOG.md)** · 🏛️ Architecture: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+> **Rewritten 2026-07-14 against the code and the database.** Prior versions of this PRD described the
+> product as it was *planned*, not as it *is*: they claimed 54 tables (there are 67), three surfaces
+> (there are four), a payment fee-bearer feature (it does not exist), and an ad-platform integration
+> (there is none). **Everything below is either verified or explicitly labelled aspirational.**
+>
+> **Owner:** Paduka Ongki / ongkipro · **Code:** `~/projects/tokophi` (monorepo)
+> **Verification companions:** [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) (what must be true) ·
+> [`docs/STATUS.md`](docs/STATUS.md) (what is real vs. fake) · [`docs/SCHEMA.md`](docs/SCHEMA.md) ·
+> [`docs/UML.md`](docs/UML.md) · [`docs/SYSTEM_MAP.md`](docs/SYSTEM_MAP.md) ·
+> [`docs/FLOWS.md`](docs/FLOWS.md) · [`docs/BACKLOG.md`](docs/BACKLOG.md)
 
 ---
 
-## 2. Current status (what's built)
+## 1. What this is
 
-**All three surfaces are clickable, coherent products; backend M3 in progress.** Every screen reads typed fixtures through a thin data layer so backend is "just wiring." **On local PostgreSQL** (Drizzle via `@tokophi/db`, Docker :5433 — ADR 0007): **super-admin (all 5) + 16 admin modules** read the DB via `lib/data/*` (`force-dynamic`); all three surfaces (super-admin + admin + storefront) read it. **All 12 admin editors now WRITE** (`lib/actions/*` server actions) — Produk/Diskon/Halaman/Blog/Kategori CRUD, order-status, Inventori-stock, Navigasi, Pelanggan, CRM (follow-up), Segmen, Pembelian (PO create/receive→stock/cancel). **Local auth** (email/password login, jose JWT cookie, route-protecting middleware) + **local media upload** (product images → `public/uploads/` + `product_media`) are done. **RBAC** (`lib/rbac.ts` gates all 13 mutating action files by role; UI hides controls per role across all editors) + **RLS ENFORCING at runtime** (migration 0012 — `tenant_isolation` on all 32 store-scoped tables + non-owner `tokophi_app` role; the admin routes every read via `withCurrentTenant` + write via `withTenant` through that role, so RLS applies live; auth/super-admin/storefront stay owner; `verify-rls`+`verify-rls-app`+Playwright E2E green) are done. **Dev runs entirely on local Linux** (Docker Postgres :5433). Single-tenant "Batik Nusantara" MVP; per-client topology = ADR 0008.
+A **Shopify-style commerce platform for the Indonesian market**. One multi-tenant merchant admin, one
+multi-tenant SSR storefront, a platform control plane we run, and a marketing front door. Bahasa
+Indonesia, IDR, tuned to how Indonesian sellers actually work: WhatsApp, COD, local couriers, QRIS and
+e-wallets, payday cycles.
 
-### Admin — merchant store admin (`apps/admin`, :3000) — DONE
-- **Shell** — grouped sidebar (Utama / Toko Online / Sistem), topbar (store switcher, search ⌘K, notifications, account, **dark-mode toggle**), fully responsive (mobile drawer).
-- **Dashboard** ⭐ — KPI cards + SVG sparklines, **Facebook-style date-range switcher** (Hari ini / Kemarin / 7 Hari / 30 Hari / Bulan ini / Bulan lalu + compare-to-previous %), sales area chart (current vs previous), live activity feed (realtime ticker), recent orders, top products, sales-by-channel donut, order-status breakdown, monthly target.
-- **Pesanan** — status tabs + counts, search + channel filter, table, pagination; **full order detail page** (`/pesanan/[id]`) with line items + timeline.
-- **Produk** — stat cards, filters, grid/list toggle (Shopify-style compact table default) → **full Shopify-style product editor** (`/produk/[id]` edit + `/produk/baru` new): title/description, **5-image gallery Media** (+ 1 video slot), pricing (live margin), inventory, variants, shipping + sidebar (status, sales channels, organization, SEO w/ Google preview), "Tindakan lainnya" menu (ubah kategori / perbarui stok / buat PO). Sub-modules: **Kategori/Koleksi** editor (Manual vs Otomatis + conditions builder, members/preview, image, SEO), **Inventori** (editable stock stepper + date filter), **Pembelian** (Purchase Orders).
-- **Pelanggan** — segment tabs (Baru/Reguler/Loyal/VIP), stat cards, sortable table + **detail page** (`/pelanggan/[id]`: stats, order history, activity, address, tags/notes, Kirim WA/email); **Segmen** + **Ulasan** sub-pages.
-- **CRM** — Follow-up WhatsApp worklist (real wa.me deep links + templates), Pipeline kanban, Template WA.
-- **Diskon** — usage Progress bars, status tabs + **create/edit editor** (`/diskon/baru`, `/diskon/[id]`).
-- **Analitik** — KPIs + sales trend + category bar + channel donut + top products + conversion funnel, sales-by-region, device/new-vs-returning, ad-performance (ROAS) summary.
-- **Pemasaran** — ads + conversion tracking for **Meta / Google / TikTok**: Ringkasan (blended spend/revenue/ROAS + comparison), Saluran Iklan (per-channel connect + campaigns + CPA/ROAS), Pelacakan (Meta Pixel/CAPI, GA4/Google Ads, TikTok Pixel/Events API), **province filter + "Performa per Provinsi"**.
-- **Toko Online** — modeled on Shopify's real content entities (screened live via Shopify CLI):
-  - **Halaman** — pages list + Shopify-style two-column editor with create **and** edit (`/halaman/baru`, `/halaman/[id]`): content, visibility, template, SEO Google-preview + auto-slug.
-  - **Blog** — posts list (blog tabs, authors, comments) + article editor create/edit (`/blog/baru`, `/blog/[id]`): content, excerpt, featured image, tags, SEO.
-  - **Navigasi** — **menu builder** for Menu Utama / Footer: parent/child (2 levels), typed link picker, **drag-and-drop reorder + ↑/↓ buttons**, "Tambah sub-menu" / "Jadikan sub-menu" / "Naikkan jadi induk", add/edit/delete. Reads/writes against the shared `@tokophi/data` menu shape.
-- **Pengaturan** — redesigned settings-nav + store summary; Profil / **Pembayaran** / **Pengiriman** / Pajak / Pengguna / Notifikasi. Payments & shipping shown as **platform-managed** (merchant only toggles methods + picks couriers).
+**Deliberately not Shopify:**
 
-### Super Admin — platform control plane (`apps/super-admin`, :3001) — DONE · **LIVE ON POSTGRESQL**
-> All 5 pages read the database via server-only `lib/data.ts` (`dynamic="force-dynamic"`); no mock. **Single-tenant MVP** — seeded with one real store (**Batik Nusantara**); metrics computed honestly for one store (ADR 0008 = the multi-tenant target). Verified + live-mutation test.
-- **Dashboard** — MRR / GMV / platform metrics, deltas, MRR trend, plan distribution, recent invoices, store status, top stores, activity feed.
-- **Toko** — all stores list + **detail** (`/toko/[id]`, real uuid route).
-- **Paket** — plans/packages + invoices.
-- **Analitik** — cross-tenant GMV per plan / per city + status.
-- **Pengaturan** — payment gateways (**AutoLaris** — VA/QRIS/DANA + COD), shipping aggregator (**KiriminAja**), courier catalog — read from `platform_*` tables; the platform-managed config merchants consume "matang".
-
-### Storefront — shopper site (`apps/storefront`, :4327) — DONE (was "next", now built)
-Demo brand **"Batik Nusantara"** — a women's-fashion store.
-- **Header** — sticky, active-nav highlight, **Account icon** (WhatsApp removed), **Kategori dropdown** mirroring the admin menu, mobile hamburger drawer.
-- **Footer** — informational links + **newsletter**.
-- **Pages / flows:**
-  - **Beranda** (`/`) — hero, collection cards using real product photos, brand-story band, bestseller grid, values, newsletter.
-  - **Kategori** (`/kategori/[handle]`) — includes virtual collections "semua" / "promo-gajian"; eyebrow header + sort dropdown.
-  - **Produk** (`/produk/[handle]`) — **5-image gallery** + size selector + **Tambah ke Keranjang** + **Beli Sekarang → checkout**.
-  - **Keranjang** (`/keranjang`) — cart backed by **localStorage**.
-  - **Checkout** (`/checkout`) — kontak / alamat / pengiriman / pembayaran + sticky order summary → **`/checkout/sukses`**.
-  - **Akun** (`/akun`) — mock login.
-  - **Blog** (`/blog`), **Kontak** (`/kontak`).
-- **Media:** 14 women's-fashion products × **5 AI-generated images each = 70 webp** in `public/products/`.
-
-### Shared packages
-- **`@tokophi/ui`** — shadcn components on **Base UI** (`@base-ui/react`) + design tokens; consumed by both Next apps.
-- **`@tokophi/lib`** — formatters (IDR / number, `id-ID`).
-- **`@tokophi/data`** — canonical `MAIN_MENU` / `FOOTER_MENU`: the **single source of truth for navigation**, consumed by BOTH the admin menu builder (`apps/admin/lib/mock/store.ts`) and the storefront header (`apps/storefront/src/data/nav.ts`). Edit once → both surfaces stay in sync on rebuild.
-- **`@tokophi/db`** (NEW) — **Drizzle** schema (54 tables, snake_case, money=`bigint` IDR) + `db` client + versioned migrations + seed/reset. Server-only. Backs super-admin today (see ADR 0007). `docker compose up -d db` → `npm run migrate` → `npm run seed`.
-
-**Non-goals (still):** auth backend, payment/courier integrations, live "edit-in-admin → storefront" persistence — mocked/deferred. **No longer a non-goal:** the DB is real (local Postgres) and multi-tenant provisioning is decided (ADR 0008). See `docs/BACKLOG.md`.
+| | |
+|---|---|
+| ✅ **Self-serve store builder** (ADR 0009) — but **section-based, not free-form**. A curated registry (Hero, Product Grid, …), not arbitrary HTML/CSS/Liquid. | ❌ **No Themes menu.** No Liquid. No theme marketplace. |
+| ✅ **Checkout is locked and uniform** across every store (branding tokens only). | ❌ **No Apps / plugins marketplace.** The feature set is curated in-core. |
+| ✅ **Payments and shipping are platform-managed** — the merchant "terima matang" (ADR 0004). | ❌ **No plan tiers.** One plan, all features. |
+| ✅ **The platform holds the money and pays the merchant out.** That makes us a custodian, and it is the single most consequential thing about this product. | ❌ **Provider brands are never shown** to merchants or shoppers. |
 
 ---
 
-## 3. Architecture
+## 2. The four surfaces
 
-```
-Shopper ──▶ Astro storefront (per client, CF Pages/Workers) ─┐
-                                                              ├─▶ (later) API / self-hosted Postgres (shared)
-Merchant ─▶ Next.js admin (shared, Vercel) ───────────────────┤
-Platform ─▶ Next.js super-admin (cross-tenant) ───────────────┘
-```
+| # | Surface | Package | Tech | Dev port | Prod host | Indexable | Multiplicity |
+|---|---|---|---|---|---|:--:|---|
+| 1 | **admin** | `@tokophi/admin` | Next.js (App Router, RSC + server actions) | 3000 | `app.tokophi.com` | **no** | 1 app, all merchants. **Also hosts the entire public HTTP API** and the media store |
+| 2 | **super-admin** | `@tokophi/super-admin` | Next.js | 3001 | `rich.tokophi.com` | **no** | 1. Cross-tenant. Owner DB connection, deliberately outside RLS |
+| 3 | **storefront** | `@tokophi/storefront` | Astro **SSR** | 4327 | `<slug>.tokophi.com` | yes | **1 deploy serves every tenant**, resolved from the `Host` header (ADR 0009) |
+| 4 | **landing** | `@tokophi/landing` | Astro **static** | 4328 | `tokophi.com` | yes | 1. **Zero DB dependency, on purpose** — the front door must serve when everything behind it is down |
 
-- **Now:** every screen reads typed mock fixtures (`apps/admin/lib/mock/store.ts`) through a thin data layer (`apps/admin/lib/data/*`). Swapping mock → API is a per-function change; component contracts stay identical.
-- **Determinism:** all mock data is seeded (mulberry32) and anchored to a fixed `TODAY = 2026-06-30`, so SSR and client render identically (no hydration mismatch) and the demo is stable across reloads.
-- **Nav auto-connect:** admin menu builder + storefront header both derive from `@tokophi/data/menu` — one edit propagates to both on rebuild (live edit-in-UI persistence needs M3 backend). Admin↔storefront product data is aligned 1:1 today via separate catalog mocks; full catalog-share is a backlog item.
-- **Later:** self-hosted Postgres (Postgres + Auth + Storage) as the shared backend; each store = a `store_id` scope with Row-Level Security. Storefronts consume published data via a read API or a static build per deploy.
+Five shared packages: `@tokophi/db` (Drizzle schema + `withTenant`), `@tokophi/lib` (formatters,
+billing, the AutoLaris and KiriminAja clients), `@tokophi/ui` (shadcn on **Base UI**, not Radix),
+`@tokophi/sections` (**types only** — the Store Builder contract, shared by the admin's editor and the
+storefront's renderer so they cannot drift), `@tokophi/data` (canonical nav).
 
-**Stack:** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 · **shadcn/ui on Base UI (`@base-ui/react`)** — `render` prop (not `asChild`), no `Select` · Astro 5 · Recharts · lucide-react · date-fns. Brand accent = indigo. Private GitHub repo `ongkipro/tokophi`.
-
-**Repo layout:**
-```
-tokophi/
-  apps/
-    admin/                 # Next 16 — shared merchant admin (:3000)
-      app/(admin)/         # route group: dashboard (/) + module routes + detail/editor subroutes
-      components/          # shell + per-screen components; shadcn primitives
-      lib/mock/store.ts    # deterministic fixtures (seeded, anchored)
-      lib/data/            # thin data layer over the mock (swap for API later)
-    super-admin/           # Next 16 — platform control plane (:3001)
-      app/(platform)/      # dashboard + toko/paket/analitik/pengaturan
-    storefront/            # Astro 5 — per-client shopper site (:4327)
-      src/pages/           # beranda, kategori, produk, keranjang, checkout(+sukses), akun, blog, kontak
-      src/data/nav.ts      # storefront nav derived from @tokophi/data
-      public/products/     # 70 AI-generated webp (14 products × 5)
-  packages/
-    ui/                    # @tokophi/ui — shadcn on Base UI + tokens
-    lib/                   # @tokophi/lib — IDR / number formatters
-    data/                  # @tokophi/data — canonical MAIN_MENU / FOOTER_MENU
-```
-
-See `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`, and `decisions/` for detail.
+**There are only four cross-surface edges** — see [`UML.md` §2](docs/UML.md). Everything else goes
+through the database. No service mesh, no queue.
 
 ---
 
-## 4. Admin IA (Shopify-core minus Themes/Apps)
+## 3. The money model
 
-Grouped sidebar:
-- **Utama:** Dashboard, Pesanan, Produk (▸ Kategori/Inventori/Pembelian), Pelanggan (▸ Segmen/Ulasan), CRM (▸ Follow-up/Pipeline/Template), Diskon, Analitik, Pemasaran
-- **Toko Online:** Halaman, Blog, Navigasi
-- **Sistem:** Pengaturan
+**This is the heart of the product and the part most likely to be got wrong.** TokoΦ collects money on
+the merchant's behalf and owes it back. Every design decision below exists because a specific, cheaper
+alternative would have lost someone's money.
 
-Global chrome: store switcher, search (⌘K placeholder), notifications, account, dark mode. Responsive down to cheap-Android widths.
+### 3.1 The ledger
 
-### 4.1 Dashboard analytics (flagship)
-- **Date-range switcher (FB-style)** with compare-to-previous deltas on every metric.
-- **Realtime feel:** online-visitor ticker + live activity feed (mock now; websockets/polling later).
-- KPI cards w/ sparkline + delta; sales/orders over time; top products; channel mix; order-status; monthly target.
+`ledger_entries` is an **append-only book**. Nothing is ever edited in place; a reversal is always a
+**new opposing entry**, so the book can be replayed and audited.
 
-### 4.2 Channel model
-Sales channel = **Toko Online only**; analytics attribution = **Meta Ads / TikTok Ads / Google Ads / Organic / Other**.
+| Concept | Rule |
+|---|---|
+| **Balance** | **DERIVED, never stored.** `saldo tersedia = Σ amount_idr WHERE status='available'`; `dana dalam proses = Σ WHERE status='pending'` |
+| **What is credited** | `payments.amount_idr` — **what the merchant is owed**. Never `payments.total`, which adds the gateway's admin fee. That fee is the gateway's money and never was the merchant's |
+| **When a sale is booked** | When money is **COLLECTED** — a `payments` row reaching `berhasil`. Not at order creation (the shopper may never pay), not at bill creation (a VA number is not money), not at despatch |
+| **Entry kinds** | `sale` · `retur` · `payout` · `adjustment`, each `pending` or `available`, `amount_idr` **signed** |
+
+Because the ledger credits `amount_idr`, Dashboard revenue, the Pesanan list and Saldo agree **by
+construction** rather than by coincidence.
+
+Before this existed, the Saldo chip was `sum(payments)` — Rp18,9jt — presented as if all of it were
+withdrawable, when two thirds was still held against unfinished orders.
+
+### 3.2 The release rule — `selesai`, not `dikirim`
+
+A sale lands `pending` and is released to `available` when the order reaches
+`platform_payout.release_on`, **default `selesai`**.
+
+> **Releasing at `dikirim` looks generous and is a trap.** A parcel can only be *returned* after it has
+> shipped — so despatch-time release lets a merchant withdraw money for goods that come back. And on
+> **COD the cash does not exist at despatch at all**: the courier collects at the door and settles days
+> later. The knob exists (an operator can widen it without a deploy) and it **is actually read**; the
+> default should stay where it is.
+
+### 3.3 COD is booked at the door
+
+With COD the platform holds **nothing** when the order is placed. The payment row is created `menunggu`
+and must stay that way. It becomes `berhasil` only when the parcel is delivered — which in this product
+the merchant signals by moving the order to `selesai` (there is no courier "delivered" webhook yet).
+A refused parcel goes `batal` / `retur`, where the pending payment is **failed**: cash that was never
+collected is never booked.
+
+### 3.4 Payouts
+
+A merchant requests a withdrawal; **only an `owner`** can (it requires `settings:write`). It is refused
+below `platform_payout.min_payout_idr` (Rp50.000), above the available balance, or with no bank account
+on file. Bank details are **snapshotted onto the payout** — editing the account later must not rewrite
+where past money went.
+
+A platform operator then `processPayout` → `markPayoutPaid` (**no ledger write**: the merchant was
+already debited at request time, so re-crediting would double-count) or **`rejectPayout`**, which posts
+an opposing `adjustment` computed from `Σ ledger_entries WHERE payout_id = ?` — never from
+`payouts.amount_idr` — so it is exact by construction and cannot over- or under-refund.
+
+### 3.5 What makes it safe
+
+| Guarantee | Mechanism |
+|---|---|
+| A retried gateway callback cannot credit twice | `ledger_one_sale_per_payment` (partial unique index) |
+| A double-clicked "Retur" cannot double-refund | `ledger_one_retur_per_order` |
+| Two concurrent withdrawals cannot both pass the balance check | `pg_advisory_xact_lock(hashtext(store_id))` inside the txn |
+| The money endpoints cannot be called by anyone | `/api/public/pay/callback` and `/api/cron/billing` **fail CLOSED** — 401 in production when the secret is unset |
+
+Double-credit is a **database impossibility**, not an application hope. Gateway callbacks retry;
+buttons get double-clicked.
 
 ---
 
-## 5. Storefront (self-serve builder, ADR 0009) — BUILT (base), builder IN PROGRESS
+## 4. COD policy — and why it is SPX-only today
 
-Astro 5 + Tailwind v4, sharing the `@tokophi/data` nav and `@tokophi/lib` formatters. Demo = **"Batik Nusantara"** women's fashion, 14 products × 5 AI images. Layout/appearance now driven by each store's chosen `page_templates` (homepage/category/product), assembled by the merchant in the admin's drag-drop **Store Builder** from a curated section registry — not hand-built HTML per brand. SEO-first (petcue/pixsgo pattern).
+COD is the payment method Indonesian shoppers ask for and the one that costs the most to get wrong: it
+is the only method where physical cash moves through four parties (buyer → courier → aggregator →
+platform → merchant) with days of lag, and returns that reverse the flow.
 
-**Pages:** beranda · kategori/[handle] (+ virtual "semua"/"promo-gajian", sort) · produk/[handle] (5-image gallery, size, add-to-cart, Beli Sekarang) · keranjang · checkout (kontak/alamat/pengiriman/pembayaran) · checkout/sukses · akun (mock login) · blog · kontak.
+**Five conditions must all agree** before an order may be COD. They are checked **server-side in
+`/api/public/order`, before any row is written** — hiding the option at checkout is UX; that endpoint
+is the boundary. A script POSTing `channelCode:"cod"` gets a 403 and zero rows.
 
-**Header:** sticky, active nav, Account icon, Kategori dropdown mirroring the admin menu, mobile drawer. **Footer:** links + newsletter. **Cart:** localStorage.
+| # | Condition | Source |
+|---|---|---|
+| 1 | the platform allows COD at all | `platform_cod.enabled` |
+| 2 | **this merchant** wants COD | `store_settings.cod_enabled` — default **false**, opt-in |
+| 3 | the order total is within the cap | `platform_cod.max_amount_idr` (seeded Rp2.000.000; `0` = no cap) |
+| 4 | the destination province is allow-listed | `platform_cod.allowed_provinces` (seeded 6; empty = anywhere) |
+| 5 | the **service** the shopper picked may carry it | `platform_couriers.services[].cod && .codAllowed !== false` |
 
-**Deferred:** live product/content from backend, real checkout/payment, catalog-share with admin, auth (all M3/M4).
+**Condition 4 does not read the typed address.** The province is resolved from the **KiriminAja district
+id the ongkir quote was issued for** — the id the parcel is actually booked against. A hostile client
+can type "DKI Jakarta" and ship to Papua; it cannot forge a district that prices to a different
+province. If COD is requested and the district cannot be verified, the request is **refused**.
+
+### Why only SPX Standard + SPX Economy
+
+**Not because KiriminAja restricts it.** KiriminAja reports `cod = true` on **14 services across 10
+couriers** — that was worth checking rather than assuming. The asymmetry that actually costs money is
+**RETURNS**: a refused COD parcel is believed to ship back **free on SPX** and to be **billed to the
+merchant elsewhere**.
+
+> ⚠️ **That belief is UNVERIFIED, and the entire policy rests on it.** Free returns are a *Shopee Seller
+> Center* benefit; we reach SPX through *KiriminAja*, a third-party aggregator with its own contract,
+> and the KiriminAja API exposes **no return field at all**. If returns are in fact billed through
+> KiriminAja, the rationale collapses and we have restricted COD to one courier for nothing.
+> **Get this in writing.** ([`BACKLOG.md`](docs/BACKLOG.md))
+
+Because of that uncertainty, the narrowing is a **per-service boolean an operator can flip**
+(`codAllowed`), not `if (courier === "spx")` welded into the code. Widening is a tick box, not a deploy.
+`platform_cod.fee_pct` — a COD fee charged to the buyer, which would fund a return pool and let COD open
+on every courier — **exists in the schema, is seeded to 0, and nothing reads it.** It is the obvious
+next lever and it is not built.
 
 ---
 
-## 6. Data model
+## 5. Order lifecycle
 
-Mock entities today → tables later. See `docs/DATA_MODEL.md` / `docs/SCHEMA.md`. Core: `Store, Product, Order(+LineItem/Fulfillment/Payment), Customer, Discount, User` + content: `Page, Blog/Article, Menu(+MenuItem)` + analytics day/hour series. Content types mirror Shopify's Admin API shapes (title/handle/body/isPublished/SEO; Menu handle/title/items[]/MenuItemType). The `Menu` shape is already the canonical `@tokophi/data` type shared across surfaces.
+`baru → diproses → dikirim → selesai | batal | retur`
 
----
+`retur` (migration 0039) exists because **COD's biggest cost was unmeasurable**: a refused parcel could
+not be recorded at all. It restores inventory (the goods are back on the shelf, exactly like `batal`),
+fails the pending payment, and claws the credit back with an opposing ledger entry.
 
-## 7. Design language
+Full transition table — including what each one does to inventory and to the ledger — is
+[`UML.md` §3.1](docs/UML.md). Read it before touching `setOrderStatus`.
 
-Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palette, one indigo accent, light + dark. Font: Geist. Accessibility AA (console-clean, no Base UI warnings). Fast on low-end devices. Component base: **shadcn/ui (Base UI + Tailwind)** shared by admin & super-admin; storefront hand-styled with the same tokens.
-
----
-
-## 8. Roadmap
-
-- **M0 (DONE 2026-07-01):** repo + PRD + admin shell + Dashboard.
-- **M1 (DONE 2026-07-01):** Pesanan, Produk, Pelanggan, Diskon, Analitik, Pengaturan + Toko Online (Halaman, Blog, Navigasi).
-- **M1.5 (DONE 2026-07-02):** Produk sub-modules (Kategori/Inventori/Pembelian) + CRM + customer & collection editors + Halaman/Blog edit routes + order detail page + Pemasaran province filter + Pengaturan redesign + fashion demo with AI product photos + Shopify-style product list.
-- **M2 — storefront + monorepo (DONE 2026-07-02):** repo restructured to `apps/*` + `packages/*`; **super-admin** control plane; **`@tokophi/data`** canonical nav shared by admin + storefront; **Navigasi drag-and-drop** menu builder; **Astro storefront built** — "Batik Nusantara" with beranda, kategori, produk (5-image gallery), keranjang, **checkout (+sukses)**, akun, blog, kontak; localStorage cart; 70 AI product images.
-- **M3 — backend (IN PROGRESS):**
-  - ✅ **Local PostgreSQL 16 + Drizzle** (`@tokophi/db`, ADR 0007): 54 tables, versioned migrations, seed.
-  - ✅ **super-admin wired to DB** (`lib/data.ts`) — live, verified parity.
-  - 🟡 **admin → DB**: ✅ **all 16 modules** — Produk / Diskon / Pelanggan / Kategori / Pesanan / Halaman / Blog / Inventori / CRM / Pembelian / Segmen / Ulasan / Navigasi / Dashboard / Analitik / Pemasaran (seeded full demo: products/collections/customers/orders/discounts/pages/articles/leads/followups/templates/suppliers+POs/segments/reviews/menus/daily-stats/ad-channels; via `lib/data/*`, `force-dynamic`). Admin fully wired.
-  - ✅ **storefront → DB**: `src/data/catalog.ts` reads `@tokophi/db` (top-level await, build/SSR). **All three surfaces now read Postgres.**
-  - 🟡 **Mutations persist** (`lib/actions/*` server actions): ✅ Produk / Diskon / Halaman / Blog / Kategori (create/edit/delete) + order-status + Inventori-stock; ⏳ Pelanggan / Navigasi / CRM / Segmen / Pembelian.
-  - **Current focus = local Linux** — finish the local stack (all mutations + local auth/media) before deploying.
-  - ⏳ **VPS (prod, later)**: self-hosted PostgreSQL + PostgREST + JWT Auth + Storage (MinIO/S3) + enable RLS (`store_id`); storefront resolves store by **`Host` header** (SSR multi-tenant, ADR 0009 amends ADR 0008 — `STORE_SLUG`-per-deploy dropped); same migrations carry up.
-  - ⏳ **Store Builder (ADR 0009):** `page_templates` schema + Puck-based admin editor + Astro section renderer — see `decisions/0009-self-serve-store-builder.md`.
-- **M4:** Payments/couriers integration (AutoLaris + KiriminAja), storefront SSR multi-tenant deploy, billing/plans.
-
-> Detailed, prioritized tasks live in **`docs/BACKLOG.md`**.
+**Known gap:** `orders.courier` is NULL on 699 of 700 rows, because a regular checkout books no
+shipment. So the per-courier return-rate report — **the number the whole COD policy is betting on** —
+cannot yet produce a per-courier answer.
 
 ---
 
-## 9. Open questions
+## 6. Subscription billing (what merchants pay us)
 
-- Final product name & brand accent.
-- Auth model (email+password vs Google; roles owner/staff/gudang).
-- ~~Multi-store: shared DB + `store_id` RLS vs DB-per-client.~~ **Decided:** shared DB + `store_id` (+ RLS at self-hosted Postgres); one multi-tenant admin; storefront **SSR multi-tenant** (1 deploy, resolved by `Host`) — **ADR 0008, amended by ADR 0009**.
-- ~~Storefront data delivery: static build per deploy vs live read API.~~ **Decided:** live SSR read per request (required for the self-serve builder to reflect saves immediately) — **ADR 0009**.
-- Rich-text editor choice for Halaman/Blog content (currently mock textarea).
-- Catalog-share mechanism: single shared catalog source vs published snapshot per storefront build.
+**One plan, all features.** 3-day trial → **Rp50.000** first month → **Rp275.000/mo** (annual
+Rp2.700.000). Prices are the **DPP (ex-tax)**; the merchant pays base + **PPN 11%**. Invoices store the
+PPN-inclusive total; the faktur itemises DPP + PPN.
 
-*Living doc. Screens verified visually in `wireframes/`. Change history in `~/projects/tokophi` git + `CHANGELOG.md`.*
+**Store lifecycle:** `trial → first_month → regular → vip`. **VIP = `stores.comped`** — free, always
+active, never billed, never suspended.
+
+A past-due store goes **read-only** after its grace period (`requireCapability` throws
+`SuspendedError`) — but `support:write` opts out, because a suspended store must still be able to
+contact us about the billing problem that suspended it.
+
+> **Do not reintroduce plan tiers.** `plans`, `plan_key` and `stores.plan` are legacy, unread, and kept
+> only because dropping them is destructive.
+
+---
+
+## 7. Data & tenancy
+
+**67 tables. 44 migrations. RLS on 43.** ([`SCHEMA.md`](docs/SCHEMA.md) — regenerated from the catalog,
+not from memory.)
+
+**The tenant boundary is RLS, not a hand-written `WHERE`.** Every admin read and write runs inside a
+transaction that sets `app.store_id` and drops to the non-owner `tokophi_app` role, so the policies
+actually apply. No tenant context ⇒ **zero rows**: it fails closed.
+
+Exactly one `store_id` table has no RLS — `platform_activity`, the platform's audit log *about*
+tenants, deliberately owner-only.
+
+**Five deliberate owner-connection exceptions** (auth, `/api/public/*`, the billing cron, the storefront,
+super-admin). The largest is `/api/public/*`: the shopper has no session, so there is no GUC to set, and
+tenant correctness on the **checkout path** rests on application code passing an explicit `store_id`.
+That is the biggest structural risk in the system and it is named, not hidden.
+
+---
+
+## 8. Status — what is actually built
+
+Grounded; see [`STATUS.md`](docs/STATUS.md) for the item-by-item 🟢/🟡/🔴 inventory.
+
+| Area | State |
+|---|---|
+| **Admin** — 20+ modules | 🟢 All read the DB; all editors write it. Dashboard is an **action queue**, not vanity metrics. Pesanan is a **seller centre** (Shopee-style tabs, server-side search/filter/paging, counts that partition exactly) |
+| **Money** — Saldo, ledger, payouts | 🟢 Real, end-to-end. Balance derived, book append-only, payout approval in super-admin |
+| **COD** | 🟢 Enforced end-to-end. ⚠️ Its central premise is unverified (§4) |
+| **Shipping** | 🟢 Live ongkir + live roster sync + shipment booking. ⚠️ The sandbox never issues an AWB |
+| **Storefront** | 🟢 SSR multi-tenant, Store Builder, real funnel events. 🔴 `/blog` is hardcoded; every store shares one WhatsApp number |
+| **Super-admin** | 🟢 Rebuilt on real numbers (`571ed17`). The merchant float is shown as a **liability** |
+| **Analytics** | 🟡 Honest maths, demo rows. The funnel is a `GROUP BY` over `analytics_events`; those rows are still overwhelmingly seeded |
+| **Ads / Pemasaran** | 🔴 **There is no Meta/Google/TikTok integration.** The cards say "Belum terhubung". Only `orders.channel` attribution is real |
+| **Chat** | 🟡 Schema landed (migration 0043); app code in flight |
+| **Tests** | 🔴 **One test file in the whole repo.** Nothing automatically tests the ledger, the COD gate, or the order state machine |
+
+### Aspirational — NOT built (do not describe these as if they were)
+
+- Meta / Google / TikTok ad integration, and any ROAS or spend figure.
+- A merchant-facing **payment fee-bearer** setting. `payment-fees.ts` has **zero importers**.
+- A **COD fee** (`fee_pct`).
+- **Custom domains** — `stores.custom_domain` does not exist; resolution is a `return null` stub.
+- Storefront blog, storefront accounts.
+- Courier tracking webhooks, thermal-label PDF.
+- Google OAuth **proven against real credentials**.
+- MinIO/S3 media (local disk today).
+
+---
+
+## 9. Design language
+
+Modern SaaS: clean, generous spacing, rounded-xl, soft shadows, restrained palette, one indigo accent,
+light + dark. Font: Geist. AA accessibility, console-clean, fast on cheap Android.
+
+**shadcn/ui here runs on Base UI (`@base-ui/react`), NOT Radix** — the #1 source of mistakes. Triggers
+use `render`, not `asChild`. Do not use `Select`. A `Button` rendered as a link needs
+`nativeButton={false}`. See `AGENTS.md`.
+
+---
+
+## 10. Open questions
+
+1. **The SPX free-return claim.** Verify with KiriminAja in writing. The COD policy depends on it. (§4)
+2. **`/api/public/*` runs outside RLS.** Do we introduce a `store_id`-scoped read role for the public
+   path, or accept application-enforced tenancy on the checkout endpoint?
+3. **Rate limiting is in-process.** Move to the Cloudflare edge, or accept that limits do not hold
+   across replicas.
+4. **`platform_activity` has a `store_id` and no RLS.** Deliberate today. Revisit if merchants ever get
+   to see their own audit trail.
+5. **Tests.** The ledger, the COD gate and the state machine have none. `select sum(…) for update` —
+   which Postgres rejects outright, breaking *every* withdrawal — shipped because `tsc` cannot see
+   inside a SQL string. What is the minimum suite that would have caught it?
+
+---
+
+*Living document. Every claim here is checkable — see [`REQUIREMENTS.md`](docs/REQUIREMENTS.md).
+Change history: `CHANGELOG.md` + git.*

@@ -1,210 +1,480 @@
-# TokoΦ — Backend schema (PostgreSQL, Drizzle)
+# TokoΦ — SCHEMA
 
-> **Implemented** as `@tokophi/db` (Drizzle) — **57 tables** on local **PostgreSQL 16** (Docker, port 5433). Prod target = self-hosted Postgres (ADR 0007). Source of truth = `packages/db/src/schema.ts`; this doc is the annotated reference.
-> **ADR 0009 (Store Builder, migrations `0031`/`0032`):** `page_templates` table + `template_id` FKs on `collections`/`products` + `stores.logo_url`/`brand_color` — see [`decisions/0009-self-serve-store-builder.md`](../decisions/0009-self-serve-store-builder.md).
-> **Status:** live end-to-end — all three surfaces (super-admin 5 pages + admin 16 modules + storefront) **read**, all **12 admin editors write** (`lib/actions/*`), super-admin writes (provisioning/lifecycle/settings/billing/invite) via `requirePlatformAdmin()`. Real product variants (`product_options`/`product_variants`/`inventory_levels`) are wired end-to-end. `admin/lib/mock/store.ts` remains only as deterministic seed-parity shape.
-> **Impl deltas vs the design below:** `stores.city`; **`store_stats`** rollup table (platform metrics cache); `invoices.number` ("INV-9001"); `products.emoji` + `products.units_sold` + storefront fields (`sizes`/`badge`/`bestseller`/`rating_value`/`rating_count`); `analytics_daily` rollup; `ad_channels` enriched (name/brand/pixel/aggregate/`campaigns` jsonb) + `ad_metrics.channel_key` nullable; `collections.emoji`; `pages.template` + `pages.views`; `articles.comments`; `followups.last_message`; `customer_segments.growth`; `reviews.product_name` + `reviews.emoji` (denorm — legacy demo products); **`platform_admins`** (platform operators / super-admin login, migration `0013` — email/password scrypt, distinct from store `users`). RLS is **written + enabled + ENFORCING at runtime locally** (migration `0012_tenant_rls`): `tenant_isolation` policies on all 32 store-scoped tables keyed on a GUC (`app.store_id`, set per-txn — no Supabase `auth.*` needed), enforced under the non-owner `tokophi_app` role. The admin runs every read (`withCurrentTenant`) + write (`withTenant`) through that role; auth/super-admin/storefront stay owner. `npm run verify-rls` + `verify-rls-app` prove isolation (incl. the real withTenant path).
+> **Generated from the live catalog on 2026-07-14**, not from `schema.ts` and not from memory:
+> `docker exec tokophi-db psql -U tokophi -d tokophi` → `pg_class` / `pg_attribute` / `pg_constraint` /
+> `pg_enum`, plus `packages/db/drizzle/meta/_journal.json` for the migration list.
+> Prior versions of this file claimed **57 tables** and **RLS on 32**. Both were wrong.
+>
+> Source of truth for the *shape*: `packages/db/src/schema.ts` (Drizzle).
+> Source of truth for *what is deployed*: the migration journal.
+> This file is the annotated reference over both. **Where they disagree, the catalog wins.**
 
-## Conventions
-- **Postgres** on self-hosted Postgres. PK = `id uuid default gen_random_uuid()`. Timestamps `created_at/updated_at timestamptz default now()`.
-- **Multi-tenant:** almost every table has `store_id uuid references stores(id)`. **RLS ON** across all 32 store-scoped tables (migration `0012`); policy `tenant_isolation`: row visible when `store_id = app_current_store_id()` (a `STABLE` helper reading the `app.store_id` GUC, set per-request from the JWT claim — by `withTenant()` locally, by PostgREST on the VPS). The owner role (tooling) + platform-admin bypass.
-- **Money:** integer **rupiah** (no decimals) — column suffix `_idr`. Never floats for money.
-- **Enums** as Postgres `enum` (or `text` + check). **Slugs/handles** unique per store: `unique(store_id, handle)`.
-- **Soft delete** via `archived_at timestamptz null` where useful (products, collections).
-- Money/derived (margin, ROAS) computed in queries/views, not stored.
+---
 
-## Identity & tenancy
-```
-accounts(id, name, plan enum[pemula|bisnis|skala], created_at)         -- billing owner
-stores(id, account_id→accounts, name, slug unique, city, currency='IDR', timezone='Asia/Jakarta',
-       plan, status enum[trial|active|suspended], created_at)
-store_stats(store_id pk→stores, gmv_idr, orders_count, products_count, updated_at)  -- platform rollup CACHE (super-admin); refreshed by a job, seeded for demo
-users(id, email unique, name, password_hash, ...)                       -- local auth (scrypt salt:hash); JWT session
-store_users(id, store_id→stores, user_id→users, role enum[owner|admin|staff|gudang],
-            invited_at, accepted_at)                                    -- membership + RBAC
-locations(id, store_id, name, address, is_default bool)                 -- gudang/lokasi stok
-```
-`auth_store()` resolves the caller's `store_id` from `store_users` (active store in session).
+## 1. Headline numbers (verified)
 
-## Catalog — products
-```
-products(id, store_id, title, handle, description, status enum[active|draft|archived],
-         product_type, vendor, category, emoji, units_sold, has_variants bool, archived_at, created_at,
-         sizes jsonb, badge, bestseller bool, rating_value real, rating_count)  -- storefront-facing fields
-product_media(id, product_id→products, url, alt, position)             -- real images (Storage)
-product_options(id, product_id, name, position)                        -- e.g. "Ukuran","Warna"
-product_variants(id, product_id, store_id, title, sku, barcode,
-                 price_idr, compare_at_idr, cost_idr, weight_grams,
-                 option1, option2, option3, position)                  -- the real sellable unit
-inventory_levels(id, variant_id→product_variants, location_id→locations,
-                 available int, incoming int, committed int,
-                 unique(variant_id, location_id))                      -- stock per location
-```
-> Mock today: flat `Product{price,stock}`. Target: variant-level price/stock + per-location inventory. UI (varian toggle, inventori stepper, harga+margin) already anticipates this.
+| Fact | Value | How it was checked |
+|---|---|---|
+| Tables (`public`, `relkind='r'`) | **67** | `select count(*) from pg_class c join pg_namespace n … where n.nspname='public' and c.relkind='r'` |
+| Tables with RLS enabled | **43** | `… and c.relrowsecurity` |
+| Tables carrying a `store_id` column | **44** | `pg_attribute … attname='store_id'` |
+| `store_id` tables **without** RLS | **1** — `platform_activity` | set difference of the two above |
+| Migrations applied | **44** (`0000` … `0043`) | `_journal.json` |
+| DB roles | `tokophi` (owner, bypasses RLS) · `tokophi_app` (non-owner, policies enforce) | `pg_roles` |
+| Enums | **41** | `pg_type` ⋈ `pg_enum` |
+| Money representation | `bigint`, whole rupiah, column suffix `_idr` | catalog |
+| Naming | snake_case; PKs are `uuid default gen_random_uuid()` | catalog |
 
-## Catalog — collections (Kategori)
-```
-collections(id, store_id, title, handle, description, image_url,
-            type enum[manual|otomatis], match enum[all|any], published bool,
-            template text, template_id→page_templates null, seo_title, seo_desc, archived_at)
-collection_products(collection_id, product_id, position)               -- manual membership
-collection_conditions(id, collection_id, field enum[tag|title|type|price|stock|category],
-                      operator enum[eq|neq|gt|lt|contains], value text) -- automated rules
+**43 − 1 = 42.** Every store-scoped table except `platform_activity` is held by the *database*, not by
+application code. `platform_activity` is the platform's audit log *about* tenants; a tenant must never
+read or write it, so it is deliberately owner-only.
+
+> ⚠️ **Migration `0043_chat` landed while this document was being written** — a peer agent is building
+> the chat feature from [`CHAT_SPEC.md`](./CHAT_SPEC.md). Its three tables (`chat_visitors`,
+> `conversations`, `conversation_messages`) **are in the database and in the journal**, with RLS, and
+> are included below. The application code that reads and writes them was **uncommitted at the time of
+> writing**. Treat chat as **schema-real, app-unverified**.
+
+---
+
+## 2. The tenant boundary
+
+Every one of the 43 RLS tables carries the identical policy:
+
+```sql
+USING      (store_id = app_current_store_id())
+WITH CHECK (store_id = app_current_store_id())
 ```
 
-## Store Builder — page templates (ADR 0009)
-```
-page_templates(id, store_id, type enum[homepage|category|product], name,
-               sections jsonb,        -- ordered [{ type, config }], read by both the Puck
-                                       -- admin editor and the Astro storefront renderer
-               is_default bool,       -- the store's single active `homepage` template
-               created_at, updated_at)
-```
-- `products.template_id` / `collections.template_id` → `page_templates(id)`, nullable (falls back to the store's default template per type when null).
-- Store-scoped like every other tenant table: **RLS `tenant_isolation`** (migration `0032`, same pattern as `0012`).
-- `stores.logo_url` + `stores.brand_color` (migration `0031`) — the only per-store fields the **locked/uniform checkout** and the storefront's colour theming read; checkout itself is out of scope for the builder.
-Automated members = products matching conditions (query/view). Mirrors the collection editor exactly.
-
-## Suppliers & purchasing
-```
-suppliers(id, store_id, name, contact, phone, email)
-purchase_orders(id, store_id, supplier_id→suppliers, code unique,
-                status enum[draft|dipesan|sebagian|diterima],
-                total_idr, eta_date, note, created_at)
-purchase_order_items(id, purchase_order_id, variant_id, qty, cost_idr, received_qty)
-stock_transfers(id, store_id, from_location, to_location, status, created_at)  -- planned
+```sql
+-- migration 0012 — the whole mechanism
+create function app_current_store_id() returns uuid language sql stable as $$
+  select nullif(current_setting('app.store_id', true), '')::uuid
+$$;
 ```
 
-## Orders & fulfillment
-```
-orders(id, store_id, number unique, customer_id→customers null,
-       status enum[baru|diproses|dikirim|selesai|batal],
-       financial_status enum[pending|dibayar|refund_sebagian|refund],
-       channel enum[meta_ads|tiktok_ads|google_ads|organic|other],  -- attribution source (NOT sales channel; the only sales channel is the online store)
-       subtotal_idr, discount_idr, shipping_idr, tax_idr, total_idr,
-       city, province, placed_at)
-order_line_items(id, order_id, variant_id, title, qty, price_idr, total_idr)
-payments(id, order_id, method enum[transfer|qris|ovo|gopay|dana|va|cod],
-         amount_idr, status, paid_at)
-fulfillments(id, order_id, courier text, tracking_no, status, shipped_at)  -- JNE/J&T/SiCepat/...
+`packages/db/src/rls.ts#withTenant()` opens a transaction, sets the GUC, and **drops to the non-owner
+role** so the policies actually apply. Without the role switch RLS would be written and enabled and
+still enforce nothing, because the owner bypasses it:
+
+```ts
+export async function withTenant<T>(storeId: string, fn: (tx: typeof db) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.store_id', ${storeId}, true)`);
+    await tx.execute(sql`set local role tokophi_app`);
+    return fn(tx as unknown as typeof db);
+  });
+}
 ```
 
-## Customers
-```
-customers(id, store_id, name, email, phone, city, province, tags jsonb, notes,
-          orders_count int, total_spent_idr int, segment enum[baru|reguler|loyal|vip],
-          created_at)
-customer_addresses(id, customer_id, label, recipient, phone, address, city, province, postcode)
-customer_segments(id, store_id, name, description, rule jsonb, member_count int)  -- saved segments
-reviews(id, store_id, customer_id, product_id, rating int, body,
-        status enum[terbit|menunggu], created_at)                       -- moderation queue
--- planned: loyalty_points(customer_id, balance, ...)
-```
+Unset GUC → `app_current_store_id()` returns NULL → `store_id = NULL` is never true → **zero rows.
+It fails closed.** (See `REQUIREMENTS.md` SEC-1.)
 
-## CRM — WhatsApp follow-up & pipeline
-```
-leads(id, store_id, name, phone, source enum[whatsapp|instagram|tiktok|referral|marketplace],
-      stage enum[baru|dihubungi|nego|closing|menang|kalah], value_idr, note, last_contact_at)
-followups(id, store_id, customer_id→customers null, phone,
-          type enum[keranjang|pembayaran|konfirmasi|pascabeli|repeat|ulasan],
-          context, due_at, status enum[menunggu|terkirim|dibalas|selesai], sent_at)
-wa_templates(id, store_id, name, type, body)   -- placeholders {{nama}}{{produk}}{{no_pesanan}}{{total}}{{toko}}
-wa_messages(id, store_id, followup_id null, lead_id null, phone, body, sent_at)  -- send log (planned)
-```
-Follow-ups are generated from events (abandoned cart, pending payment, delivered order, repeat-due) → the worklist. "Kirim WA" = a wa.me deep link with a filled template; real WhatsApp Business API send is M4.
+**The five deliberate owner-connection exceptions.** Know all of them; they are where tenancy rests on
+code rather than on the database:
 
-## Discounts
-```
-discounts(id, store_id, code unique, kind enum[persen|nominal|gratis_ongkir],
-          value int, min_purchase_idr, usage_limit, used_count,
-          starts_at, ends_at, status enum[aktif|terjadwal|nonaktif])
-discount_usages(id, discount_id, order_id, used_at)
-```
-
-## Content (Toko Online)
-```
-pages(id, store_id, title, handle, body, status enum[terbit|draft], updated_at)
-blogs(id, store_id, title, handle)                                     -- blog channels
-articles(id, blog_id→blogs, store_id, title, handle, body, excerpt,
-         author, image_url, status, seo_title, seo_desc, published_at)
-menus(id, store_id, name, handle)                                      -- nav menus
-menu_items(id, menu_id, parent_id→menu_items null, label,
-           type enum[home|collection|product|page|blog|url|catalog], target, position)
-```
-Modeled from real Shopify Page/Blog/Article/Menu (screened via Shopify CLI).
-
-## Marketing & analytics
-```
-ad_channels(id, store_id, key enum[meta|google|tiktok], connected bool, pixel_id,
-            capi_enabled bool)
-ad_metrics(id, store_id, channel_key, date, province,
-           spend_idr, impressions, clicks, conversions, revenue_idr, reach)  -- daily rollup
-analytics_events(id, store_id, ts, type, session_id, ...)              -- raw (or provider)
-analytics_daily(id, store_id, date, sales_idr, orders, visitors, unique(store_id,date))  -- daily sales ROLLUP for Dashboard/Analitik
--- dashboards read daily rollups keyed by (store_id, date[, province][, channel])
-```
-Province filter + "Performa per Provinsi" = `ad_metrics` grouped by `province`. Analytics screens = rollups over `orders`/`analytics_events`.
-
-## Settings
-> **Payments/COD/couriers are platform-managed** (ADR 0004): credentials & tariffs live at the **platform/account** level and apply to all stores; per-store rows only carry an `enabled` flag (merchant just toggles).
-```
-store_settings(store_id pk, tax_rate_pct=11, tax_inclusive bool, couriers text[], payment_channels text[],
-               payment_fee_bearer[seller|buyer|split]=seller, sender_* …)   -- PPN + merchant courier/channel subset + who bears the gateway fee (migr 0028)
--- platform-level (super-admin) = source of truth:
-platform_payment_gateways(id, provider[midtrans|xendit|duitku], credentials jsonb, enabled, is_cod bool)
-shipping_aggregator(id, provider[biteship|rajaongkir|shipper], api_key, enabled)  -- ONE connection, all couriers
-platform_couriers(id, courier, services jsonb, enabled) -- from the aggregator: JNE/J&T/SiCepat/AnterAja/Pos/GoSend/Grab
-platform_cod(id, enabled, max_amount_idr, allowed_provinces jsonb, fee_pct)
--- per-store = enable/disable only (no credentials):
-store_payment_methods(id, store_id, method, enabled)                    -- transfer/QRIS/ewallet/COD/VA
-store_shipping_methods(id, store_id, courier, service, enabled)         -- merchant picks courier AND each service (JNE.reg/JNE.yes/…)
-domains(id, store_id, hostname, verified bool)                          -- planned
-notification_templates(id, store_id, event, channel[email|wa], subject, body)  -- planned
-```
-
-## Platform & billing (super-admin control plane)
-> Source: `apps/super-admin/lib/mock.ts`. Not store-scoped — these live at the **platform/account** level (no `store_id`); only platform-admins read them.
-```
-plans(id, key enum[pemula|bisnis|skala], name, price_idr, blurb, features jsonb)   -- LEGACY tiers, unused (single plan now)
--- SINGLE-PLAN billing (@tokophi/lib/billing): 3-day trial → Rp50rb first month → Rp275rb/mo (DPP, ex-tax).
--- Merchant pays base + PPN 11% (invoices store the PPN-inclusive total; faktur itemizes DPP+PPN). Annual Rp2.7jt.
-stores(… trial_ends_at, current_period_end, first_invoice_paid,                    -- lifecycle (migr 0022)
-       comped bool, comped_reason, comped_at)                                       -- VIP: billing bypassed, free (migr 0026)
-store_stats(… ship7d_avg int)                                                       -- 7-day avg shipments/day (VIP signal, migr 0027)
-invoices(id, number unique, account_id→accounts, store_id→stores null, plan_key, amount_idr[PPN-incl],
-         kind, cycle[monthly|annual], period_months, reff_id, trx_id, virtual_account, paid_at, status, issued_at)
-platform_activity(id, kind enum[signup|upgrade|payment|churn|support|admin], text, store_id→stores null, ts)  -- feed + per-store audit (migr 0026)
--- Store SEGMENT (derived, storeSegment()): trial | first_month(50rb) | regular(275rb) | vip(comped).
--- Derived: MRR = Rp275rb × active (VIP excluded); GMV = sum(store gmv); ARPU; status_distribution.
-```
-`stores.status` = trial|active|past_due|suspended (UI: aktif|trial|menunggak|ditangguhkan); `comped=true` ⇒ VIP (always active, no charge, never billed/suspended — admin `getBilling` + cron honor it).
-
-## Mock → table map (keep in sync)
-| Mock (`lib/mock/store.ts`) | Target table(s) |
+| Caller | Why it bypasses RLS |
 |---|---|
-| `PRODUCTS` | `products` + `product_variants` + `inventory_levels` + `product_media` |
-| `COLLECTIONS` | `collections` (+ `collection_products` / `collection_conditions`) |
-| `PURCHASE_ORDERS` | `purchase_orders` (+ `_items`, `suppliers`) |
-| `ORDERS` | `orders` (+ `order_line_items`, `payments`, `fulfillments`) |
-| `CUSTOMERS` / `SEGMENTS` / `REVIEWS` | `customers` / `customer_segments` / `reviews` |
-| `LEADS` / `FOLLOWUPS` / `WA_TEMPLATES` | `leads` / `followups` / `wa_templates` |
-| `DISCOUNTS` | `discounts` |
-| `PAGES` / `BLOG_POSTS` / `MENUS` | `pages` / `articles`(+`blogs`) / `menus`(+`menu_items`) |
-| `AD_CHANNELS` / `AD_PROVINCES` / `DAYS` | `ad_channels` / `ad_metrics` |
-| `MENUS` (admin) ← `MAIN_MENU`/`FOOTER_MENU` (`@tokophi/data`) | `menus` (+ `menu_items`) |
-| `STORES` (super-admin) | `stores` (+ `accounts`, `store_users`) |
-| `PLANS` / `INVOICES` / `P_ACTIVITY` (super-admin) | `plans` / `invoices` / `platform_activity` |
+| `apps/admin/lib/auth.ts` | reads `store_users` *before a session exists* — under RLS it would lock everyone out |
+| `apps/admin/app/api/public/*` | the shopper has no session, so there is no GUC to set. **The largest RLS hole in the system**: tenant correctness on the checkout path rests on application code passing an explicit `store_id` |
+| `apps/admin/app/api/cron/billing` | walks every store by design |
+| `apps/storefront` | resolves the tenant from the `Host` header, then reads that store's catalog read-only |
+| `apps/super-admin` | cross-tenant by definition. `withTenant` is **never called** anywhere in it (grepped: zero hits) |
 
-## M3 migration steps (safe, contained)
-1. ✅ **Local Postgres + Drizzle** (`@tokophi/db`): all tables + enums as versioned migrations (`docker compose up -d db` → `npm run migrate`).
-2. ✅ **Seed (single-tenant MVP)** — one store **Batik Nusantara** (+account/owner/membership/settings/store_stats), 3 plans, 6 invoices, activity, platform payments/shipping/COD. All 3 surfaces center on this one store; the multi-tenant topology (ADR 0008) is the target, seeded 1-store for now.
-3. ✅ **Wire super-admin → DB** (`apps/super-admin/lib/data.ts`; `dynamic="force-dynamic"`) — 5 pages live, signatures unchanged, UI untouched.
-4. 🟡 **Seed the store's catalog** (Batik Nusantara): ✅ products (14) + variants + inventory + media, **collections (8) + membership**, **customers (24)**, **orders (60) + line-items + payments**, **discounts (6)**, **analytics_daily (120-day rollup)**, **pages (7) + blogs/articles**, **leads (12) + followups (10) + wa_templates (6)**, **suppliers (4) + purchase_orders (6) + items**, **customer_segments (6)**, **reviews (8)**; ⏳ menus, ad_metrics, fulfillments.
-5. 🟡 Replace **`admin/lib/data/*` bodies** with Drizzle — **signatures unchanged**: ✅ **all 16 modules** — Produk, Diskon, Pelanggan, Kategori, Pesanan, Halaman, Blog, Inventori, CRM, Pembelian, Segmen, Ulasan, Navigasi, Dashboard, Analitik, Pemasaran (list + detail/editor). All 16 admin modules done; ⏳ storefront + mutations next.
-6. ⏳ Storefront reads its store by `store_id`/`STORE_SLUG` (ADR 0008).
-7. ⏳ **Mutations** (save product/collection/order, stock adjust, PO) → `insert/update`.
-8. ✅ **RLS + RBAC (local, enforcing)**: migration `0012` `tenant_isolation` (`store_id = app_current_store_id()`) on 32 tables + `tokophi_app` role; the admin routes every read (`withCurrentTenant`) + write (`withTenant`) through that role so RLS enforces at runtime; `lib/rbac.ts` gates mutations by `store_users.role`. `verify-rls` + `verify-rls-app` green.
-9. ⏳ **self-hosted Postgres (VPS)**: provision the server, apply the same migrations, front with **PostgREST** (connect as `tokophi_app`, JWT `store_id` claim → `app.store_id` GUC), **Storage** (MinIO/S3) + Tiptap rich-text.
-9. ⏳ Real payment/courier integrations behind `store_payment_methods`/`store_shipping_methods` (M4).
+---
 
-*Living doc — update alongside the mock whenever an entity is added.*
+## 3. Table inventory (all 67)
+
+Row counts are `pg_stat_user_tables.n_live_tup` on the **local demo seed**; they say nothing about
+production. A `0` in a table the product claims to depend on is a finding, not a footnote — the ones
+that matter are called out in [`STATUS.md`](./STATUS.md).
+
+### 3.1 Identity & tenancy
+
+| Table | Cols | Rows | `store_id` | RLS | Notes |
+|---|---:|---:|:--:|:--:|---|
+| `accounts` | 4 | 7 | — | — | billing account; owns 1..n stores |
+| `users` | 9 | 7 | — | — | `password_hash` = scrypt `salt:hash` |
+| `stores` | 18 | 7 | — | — | **the tenant.** `comped` = VIP (never billed, never suspended) |
+| `store_users` | 6 | 7 | yes | **YES** | membership + `role` ∈ owner/admin/staff/gudang |
+| `store_settings` | 19 | 7 | yes | **YES** | 1:1. Sender address, `couriers[]`, `cod_enabled`, bank details |
+| `store_stats` | 6 | 7 | yes | **YES** | 🔴 a rollup that **disagreed with the `orders` it summarised** (one store: rollup Rp42,6jt/210 orders, reality Rp450rb/3). **No longer read by anything** (`571ed17`) |
+| `locations` | 5 | 7 | yes | **YES** | stock lives at a location |
+| `domains` | 4 | 0 | yes | **YES** | 🔴 **empty and unread** — custom-domain resolution is a `return null` stub |
+| `plans` | 6 | 3 | — | — | 🔴 **LEGACY** (Pemula/Bisnis/Skala). Pricing lives in `@tokophi/lib/billing` |
+
+⚠️ `stores.plan` is still the `plan_key` enum defaulting to `'pemula'` even though the product has
+**one plan**. Vestigial: the billing engine never consults it.
+
+### 3.2 Catalog
+
+| Table | Cols | Rows | `store_id` | RLS |
+|---|---:|---:|:--:|:--:|
+| `products` | 23 | 14 | yes | **YES** |
+| `product_variants` | 14 | 96 | yes | **YES** |
+| `product_options` | 4 | 28 | — | — |
+| `product_media` | 5 | 70 | — | — |
+| `inventory_levels` | 6 | 96 | — | — |
+| `collections` | 15 | 8 | yes | **YES** |
+| `collection_products` | 3 | 32 | — | — |
+| `collection_conditions` | 5 | 0 | — | — |
+| `media` | 9 | 0 | yes | **YES** |
+| `color_palettes` | 9 | 0 | yes | **YES** |
+
+`inventory_levels.available` is the **only** stock number in the system. Everything that moves stock —
+checkout, cancel, retur, PO receive, the Inventori editor — writes here. See [`UML.md`](./UML.md) §3.
+
+The four tables with **no `store_id`** (`product_media`, `product_options`, `inventory_levels`,
+`collection_products`) therefore have **no RLS**: they are reachable only through a parent that does.
+That is a deliberate shape, but it means a query that joins to them from the *wrong* parent is not
+stopped by the database. Do not write one.
+
+### 3.3 Orders & money
+
+| Table | Cols | Rows | `store_id` | RLS |
+|---|---:|---:|:--:|:--:|
+| `orders` | 25 | 700 | yes | **YES** |
+| `order_line_items` | 7 | 1767 | — | — |
+| `payments` | 17 | 685 | yes | **YES** |
+| `fulfillments` | 6 | 0 | — | — |
+| `ledger_entries` | 11 | 642 | yes | **YES** |
+| `payouts` | 10 | 0 | yes | **YES** |
+| `invoices` | 18 | 16 | yes | **YES** |
+
+`fulfillments` is **empty and unread**. There is no shipments table: shipment state lives on
+`orders.awb` / `.courier` / `.ka_order_id`.
+
+#### `orders` (25 columns)
+
+| Column | Type | Note |
+|---|---|---|
+| `id` | uuid PK | |
+| `store_id` | uuid NOT NULL | tenant key |
+| `number` | text NOT NULL | `WEB-xxxxxxxxx` from the storefront; `INV-xxxx` in the seed |
+| `customer_id` | uuid | |
+| `status` | `order_status` | `baru \| diproses \| dikirim \| selesai \| batal \| retur` — `retur` added by **0039** |
+| `financial_status` | `financial_status` | `pending \| dibayar \| refund_sebagian \| refund` |
+| `channel` | `order_channel` | attribution only. **There is no ad integration** |
+| `subtotal_idr` `discount_idr` `shipping_idr` `tax_idr` `total_idr` | bigint | |
+| `city` `province` | text | **buyer-typed free text.** Never gate money on these — see §6 |
+| `placed_at` | timestamptz | |
+| `awb` | text | 🔴 **NULL on 700/700 local rows.** Written only from a waybill KiriminAja actually returned |
+| `courier` | text | 🔴 **NULL on 699/700.** A regular checkout books no shipment |
+| `ka_order_id` | text | KiriminAja *booking* reference — **not** a waybill |
+| `returned_at` `return_reason` | timestamptz / text | **0039** |
+| `ship_recipient` `ship_phone` `ship_address` `ship_postcode` `ship_district_id` | **0042** | the address **snapshot** |
+
+**`awb` vs `ka_order_id` is load-bearing** (fixed in `0b3cdda`). The code used to write
+`awb = r.awb ?? r.kaOrderId`, which stamped **our own order id** onto the shipping label under
+"No. resi" — an unscannable barcode on a real parcel. `awb` now stays NULL until the courier issues a
+real one, and the **KiriminAja sandbox never issues one**, so `awbPending: true` is the normal state
+in dev.
+
+**Why `ship_*` is a snapshot and not a lookup** (0042): `customer_addresses` belongs to the *customer*
+and changes. Without the snapshot, a buyer who moves house silently moves every past order with them —
+reprint an old label and the parcel goes to the wrong door. **The address belongs to the transaction,
+not the person.**
+
+#### `payments` (17 columns) — the fee distinction that keeps three screens agreeing
+
+| Column | Meaning |
+|---|---|
+| `amount_idr` | **what the merchant is owed.** This is what the ledger credits |
+| `admin_fee` | the gateway's cut |
+| `total` | `amount_idr + admin_fee` — what the shopper pays. **Never the merchant's money** |
+| `method` | `transfer \| qris \| ovo \| gopay \| dana \| va \| cod` |
+| `status` | `menunggu \| berhasil \| gagal` |
+| `provider` | `autolaris` \| `cod` |
+| `reff_id` | `= orders.number` |
+| `store_id` | NOT NULL since **0036** |
+
+`store_id` was **nullable and NULL on every seeded row** (only production code ever set it). A nullable
+tenant key matches no policy, so enabling RLS naively would have made every payment vanish from the
+app. Migration 0036 backfills from the parent order, sets NOT NULL + FK, and *only then* enables RLS.
+
+Crediting `amount_idr` (not `total`) is why Dashboard revenue, the Pesanan list and Saldo agree **by
+construction** rather than by coincidence.
+
+#### `ledger_entries` (11 columns) — the book
+
+| Column | Meaning |
+|---|---|
+| `kind` | `sale \| retur \| payout \| adjustment` |
+| `status` | `pending \| available` |
+| `amount_idr` | **SIGNED.** Negative = money out |
+| `order_id` `payment_id` `payout_id` | what the entry is about. `payment_id` added by **0041** |
+| `available_at` | when it became withdrawable |
+
+Three **partial unique indexes** make double-credit a database impossibility rather than an
+application hope:
+
+| Index | Prevents |
+|---|---|
+| `ledger_one_sale_per_payment` (0041) | a **retried gateway callback** crediting twice |
+| `ledger_one_sale_per_order` (0040) | two payments on one order both booking a sale |
+| `ledger_one_retur_per_order` (0040) | a **double-clicked "Retur"** double-refunding |
+
+Plus `ledger_store_status_idx` for the balance query.
+
+**The balance is DERIVED, never stored:**
+
+```sql
+saldo tersedia    = Σ amount_idr WHERE store_id = ? AND status = 'available'
+dana dalam proses = Σ amount_idr WHERE store_id = ? AND status = 'pending'
+```
+
+Live local state (2026-07-14, post-reseed): **642 entries, all `sale`** — 595 `available`
+(Rp209.374.000) + 47 `pending` (Rp18.436.000). **`payouts` is 0 rows**: the seed creates no
+withdrawals, so the payout / adjustment paths have **no demo data and cannot be exercised by clicking
+around**. Exercise them by hand.
+
+#### `payouts` (10 columns)
+
+`status`: `menunggu → diproses → selesai | gagal`. `bank_name` / `bank_account` / `bank_holder` are a
+**snapshot taken at request time** — editing the bank account later must not rewrite where past money
+went. `note` carries the rejection reason.
+
+### 3.4 Customers & CRM
+
+| Table | Cols | Rows | `store_id` | RLS |
+|---|---:|---:|:--:|:--:|
+| `customers` | 13 | 24 | yes | **YES** |
+| `customer_addresses` | 9 | 24 | — | — |
+| `customer_segments` | 7 | 6 | yes | **YES** |
+| `reviews` | 10 | 8 | yes | **YES** |
+| `leads` | 9 | 12 | yes | **YES** |
+| `followups` | 10 | 10 | yes | **YES** |
+| `wa_templates` | 5 | 6 | yes | **YES** |
+| `wa_messages` | 7 | 0 | yes | **YES** |
+| `notification_templates` | 6 | 0 | yes | **YES** |
+
+`customer_addresses` had a schema and **zero rows** until `e81cfb8` — which is precisely why the order
+detail page invented street addresses (`Jl. Merdeka No. {hash % 90}`). It now seeds 24.
+`wa_messages` + `notification_templates` are **empty and unread**: WhatsApp is a `wa.me` deep link, not
+an API integration.
+
+### 3.5 Purchasing & stock
+
+| Table | Cols | Rows | `store_id` | RLS |
+|---|---:|---:|:--:|:--:|
+| `suppliers` | 6 | 4 | yes | **YES** |
+| `purchase_orders` | 9 | 6 | yes | **YES** |
+| `purchase_order_items` | 6 | 21 | — | — |
+| `stock_transfers` | 6 | 0 | yes | **YES** |
+
+`stock_transfers` is **empty and has no UI**.
+
+### 3.6 Content & storefront
+
+| Table | Cols | Rows | `store_id` | RLS |
+|---|---:|---:|:--:|:--:|
+| `pages` | 9 | 7 | yes | **YES** |
+| `blogs` | 4 | 2 | yes | **YES** |
+| `articles` | 14 | 6 | yes | **YES** |
+| `menus` | 4 | 2 | yes | **YES** |
+| `menu_items` | 7 | 17 | — | — |
+| `page_templates` | 8 | 0 | yes | **YES** |
+
+🔴 `blogs` + `articles` have rows and the admin has a full editor — but **the storefront `/blog` route
+renders four hardcoded articles from a source literal and never reads either table.** The merchant's
+blog editor publishes into a void.
+
+`page_templates` is the Store Builder (ADR 0009): `type` ∈ `homepage | category | product`, `sections`
+= the JSON the Puck editor writes and the Astro `SectionRenderer` reads. The contract lives in
+`@tokophi/sections` (**types only, zero runtime**) so the editor and the renderer cannot drift.
+**0 rows locally** — every storefront currently falls back to `SECTION_DEFAULTS`, which ships **fake
+testimonials** and a "Gratis Ongkir" marquee onto a live shop.
+
+### 3.7 Marketing & analytics
+
+| Table | Cols | Rows | `store_id` | RLS |
+|---|---:|---:|:--:|:--:|
+| `discounts` | 11 | 6 | yes | **YES** |
+| `discount_usages` | 4 | 0 | — | — |
+| `ad_channels` | 16 | 3 | yes | **YES** |
+| `ad_metrics` | 11 | 11 | yes | **YES** |
+| `analytics_daily` | 6 | 122 | yes | **YES** |
+| `analytics_events` | 6 | 47804 | yes | **YES** |
+
+🔴 `ad_channels` / `ad_metrics`: **there is no Meta / Google / TikTok integration anywhere in this
+codebase.** The only OAuth in the repo is Google *Sign-In*. `/pemasaran` reads `ad_channels` for
+**labels only** and shows "Belum terhubung"; spend, impressions, ROAS and campaign lists were deleted
+(`62df4a1`) because a merchant could have raised a real ad budget against a return that never happened.
+
+`analytics_events` (**0037**) — the one table the funnel is counted from:
+
+| Column | Values |
+|---|---|
+| `type` | `visit` · `product_view` · `add_to_cart` · `checkout_start` · `purchase` |
+| `device` | `ponsel` · `desktop` · `tablet` |
+| `session_id` | opaque, client-generated |
+
+Written by **exactly one place**: `apps/storefront/src/pages/api/track.ts`. Local rows: 47.804 across
+the 5 types — **still overwhelmingly seeded**.
+
+### 3.8 Support & chat
+
+| Table | Cols | Rows | `store_id` | RLS |
+|---|---:|---:|:--:|:--:|
+| `support_tickets` | 6 | 2 | yes | **YES** |
+| `support_messages` | 6 | 3 | yes | **YES** |
+| `chat_visitors` | 11 | 3 | yes | **YES** |
+| `conversations` | 14 | 4 | yes | **YES** |
+| `conversation_messages` | 8 | 9 | yes | **YES** |
+
+Two different things, deliberately two different table sets (CHAT_SPEC Decision 1):
+
+- `support_*` = **merchant ⇄ platform** (`/bantuan`, super-admin `/tiket`). RLS retrofitted by **0035**.
+- `chat_*` / `conversation*` = **shopper ⇄ merchant** — migration **0043**, landing now.
+  `conversation_messages.store_id` is denormalised on purpose so the RLS policy is the same one-liner
+  as everywhere else. `chat_visitors.ip_hash` = `sha256(ip + AUTH_SECRET)` — never the raw IP.
+
+### 3.9 Platform (control plane)
+
+| Table | Cols | Rows | `store_id` | RLS |
+|---|---:|---:|:--:|:--:|
+| `platform_admins` | 6 | 1 | — | — |
+| `platform_activity` | 5 | 4 | **yes** | **— (deliberate)** |
+| `platform_cod` | 5 | 1 | — | — |
+| `platform_couriers` | 4 | 12 | — | — |
+| `platform_payment_channels` | 6 | 15 | — | — |
+| `platform_payment_gateways` | 5 | 1 | — | — |
+| `platform_payout` | 4 | 1 | — | — |
+| `shipping_aggregator` | 4 | 1 | — | — |
+| `store_payment_methods` | 4 | 0 | yes | **YES** |
+| `store_shipping_methods` | 5 | 0 | yes | **YES** |
+| `kiriminaja_areas` | 7 | 7030 | — | — |
+
+| Table | What it holds |
+|---|---|
+| `platform_cod` | `enabled`, `max_amount_idr` (seeded Rp2.000.000), `allowed_provinces` (jsonb, seeded 6), `fee_pct` 🔴 **unread** |
+| `platform_couriers` | `courier`, `services` (jsonb), `enabled`. 12 rows: `anteraja jne jnt lion ninja sap sicepat spx` enabled · `idx jtcargo pos tiki` disabled |
+| `platform_payout` | single row: `release_on` (`'selesai'`), `min_payout_idr` (50.000), `auto_approve` 🔴 **unread** |
+| `kiriminaja_areas` | 7.030 districts — the lookup that makes `provinceForDistrict(destId)` possible |
+
+`store_payment_methods` and `store_shipping_methods` are **empty and unread**: the merchant's courier
+selection lives in `store_settings.couriers` (a `text[]`), not here.
+
+⚠️ **`platform_couriers.services` currently holds legacy plain strings in the local seed**
+(`["Reguler","Same Day"]`), not the `{type,name,group,cod,codAllowed}` objects the live
+`syncCouriersFromKiriminaja()` writes. `getCodPolicy()` skips non-object entries, so **on a freshly
+seeded local DB no service is COD-allowed and COD cannot be exercised at all** until someone presses
+"Sync dari KiriminAja" in super-admin `/pengaturan`. This is a seed gap, not a code gap.
+
+---
+
+## 4. Enums (41)
+
+| Enum | Values |
+|---|---|
+| `order_status` | `baru` `diproses` `dikirim` `selesai` `batal` `retur` |
+| `financial_status` | `pending` `dibayar` `refund_sebagian` `refund` |
+| `order_channel` | `meta_ads` `google_ads` `tiktok_ads` `organic` `other` |
+| `payment_method` | `transfer` `qris` `ovo` `gopay` `dana` `va` `cod` |
+| `payment_status` | `menunggu` `berhasil` `gagal` |
+| `ledger_kind` | `sale` `retur` `payout` `adjustment` |
+| `ledger_status` | `pending` `available` |
+| `payout_status` | `menunggu` `diproses` `selesai` `gagal` |
+| `store_status` | `trial` `active` `past_due` `suspended` |
+| `store_user_role` | `owner` `admin` `staff` `gudang` |
+| `invoice_status` | `dibayar` `menunggu` `gagal` |
+| `product_status` | `active` `draft` `archived` |
+| `content_status` | `terbit` `draft` |
+| `customer_segment` | `baru` `reguler` `loyal` `vip` |
+| `discount_kind` | `persen` `nominal` `gratis_ongkir` |
+| `discount_status` | `aktif` `terjadwal` `nonaktif` |
+| `collection_type` | `manual` `otomatis` |
+| `collection_match` | `all` `any` |
+| `condition_field` | `tag` `title` `type` `price` `stock` `category` |
+| `condition_operator` | `eq` `neq` `gt` `lt` `contains` |
+| `po_status` | `draft` `dipesan` `sebagian` `diterima` |
+| `transfer_status` | `draft` `dikirim` `diterima` `batal` |
+| `lead_source` | `whatsapp` `instagram` `tiktok` `referral` `marketplace` |
+| `lead_stage` | `baru` `dihubungi` `nego` `closing` `menang` `kalah` |
+| `followup_type` | `keranjang` `pembayaran` `konfirmasi` `pascabeli` `repeat` `ulasan` |
+| `followup_status` | `menunggu` `terkirim` `dibalas` `selesai` |
+| `page_template_type` | `homepage` `category` `product` |
+| `menu_item_type` | `home` `collection` `product` `page` `blog` `url` `catalog` |
+| `review_status` | `terbit` `menunggu` |
+| `ticket_status` | `open` `answered` `closed` |
+| `conversation_status` | `open` `snoozed` `closed` |
+| `chat_visitor_status` | `active` `blocked` |
+| `message_sender` | `customer` `merchant` `system` |
+| `platform_activity_kind` | `signup` `upgrade` `payment` `churn` `support` `admin` |
+| `notification_channel` | `email` `wa` |
+| `fulfillment_status` | `menunggu` `diproses` `dikirim` `terkirim` `batal` |
+| `ad_channel_key` | `meta` `google` `tiktok` |
+| `plan_key` | `pemula` `bisnis` `skala` — 🔴 **LEGACY** |
+| `gateway_provider` | `midtrans` `xendit` `duitku` `autolaris` — only **autolaris** is real |
+| `aggregator_provider` | `biteship` `rajaongkir` `shipper` `kiriminaja` — only **kiriminaja** is real |
+
+---
+
+## 5. Migration journal (44 — `0000` → `0043`)
+
+From `packages/db/drizzle/meta/_journal.json`. Drizzle's auto-generated names are noise; the ones that
+carry meaning were named by hand.
+
+| # | Tag | What it does |
+|---|---|---|
+| 0000–0011 | *(auto-named)* | initial schema build-out |
+| **0012** | `tenant_rls` | **the tenant boundary** — `app_current_store_id()`, the `tokophi_app` role, `tenant_isolation` policies |
+| 0013–0031 | *(auto-named)* | feature columns: `platform_admins` (0013), real variants, media, brand colour, sender address, billing fields, `customers.tags/notes`, `support_*` (0030), `kiriminaja_areas` … |
+| **0032** | `page_templates_rls` | Store Builder templates (ADR 0009) under RLS |
+| 0033–0034 | *(auto-named)* | Tema / named template variants |
+| **0035** | `support_rls` | RLS retrofit for `support_tickets` / `support_messages` |
+| **0036** | `payments_media_rls` | RLS on `payments` + `media`. Backfills `payments.store_id`, sets NOT NULL + FK, **then** enables RLS |
+| **0037** | `analytics_events_device` | `analytics_events.device` + `(store_id, ts)` index → the funnel becomes a **count** |
+| **0038** | `cod_toggle` | `store_settings.cod_enabled` (default **false**) |
+| **0039** | `order_retur` | `order_status += 'retur'`, `orders.returned_at`, `orders.return_reason` |
+| **0040** | `ledger_payouts` | `ledger_entries`, `payouts`, `platform_payout` + RLS + the sale/retur unique indexes |
+| **0041** | `ledger_credit_sale` | `ledger_entries.payment_id` + `ledger_one_sale_per_payment` + an **idempotent backfill** of every already-collected payment |
+| **0042** | `order_address_snapshot` | `orders.ship_*` — the address the parcel was actually sent to |
+| **0043** | `chat` | `chat_visitors`, `conversations`, `conversation_messages` + RLS — **in flight** |
+
+```bash
+docker compose up -d db            # PostgreSQL 16 @ localhost:5433
+npm run migrate  -w @tokophi/db    # apply (canonical)
+npm run generate -w @tokophi/db    # after editing src/schema.ts
+npm run seed     -w @tokophi/db    # idempotent — TRUNCATES first
+npm run reset    -w @tokophi/db    # drop public + drizzle schemas
+npm run verify-rls -w @tokophi/db  # prove isolation under tokophi_app
+```
+
+⚠️ **The seed truncates every table.** Anything it does not re-insert is silently empty afterwards.
+That is exactly how `platform_payout` became a policy table with **zero rows** while the super-admin
+screen displayed a policy that did not exist in the database — and how a silent crash mid-seed
+(`ab68abe`) left every table after the crash point empty while the seed reported success.
+
+---
+
+## 6. Two schema facts that are security controls
+
+**1. `orders.province` / `orders.city` are buyer-typed free text. They must never gate money.**
+The COD province check resolves the province from `orders.ship_district_id` → `kiriminaja_areas` →
+`provinceForDistrict()`, because the district id is what the parcel is *actually booked against* and
+cannot disagree with where the package goes. A hostile client can type "DKI Jakarta" and ship to Papua;
+it cannot forge a district id that prices to a different province.
+
+**2. `platform_cod.fee_pct` exists, is seeded to `0`, and NOTHING READS IT.** Two grep hits in the
+entire repo: the schema definition and the seed. **There is no COD fee.** It is a column, not a feature.
+
+---
+
+## 7. Known dead schema (kept because dropping is destructive)
+
+| Object | Why it is dead |
+|---|---|
+| `store_settings.payment_fee_bearer` | **the fee-bearer feature does not exist.** `packages/lib/src/payment-fees.ts` has **zero importers** anywhere in the repo. The tab that wrote it was removed |
+| `store_settings.payment_channels` | same tab. The storefront reads the *platform's* channel list (ADR 0004) |
+| `store_stats` | a rollup that contradicted `orders`. No longer read |
+| `plans`, `plan_key`, `stores.plan` | legacy 3-tier pricing. The product has **one** plan |
+| `fulfillments` | never written, never read |
+| `store_payment_methods`, `store_shipping_methods` | superseded by `store_settings.couriers` |
+| `domains` | custom-domain resolution is a `return null` stub |
+| `wa_messages`, `notification_templates` | WhatsApp is a `wa.me` deep link, not an API |
+| `platform_cod.fee_pct`, `platform_payout.auto_approve` | stored, never read |
+| `discount_usages`, `collection_conditions`, `stock_transfers`, `color_palettes`, `media`, `page_templates` | 0 rows locally — schema exists, demo data does not |
+
+**Rule:** anything in this table that is *also displayed in a UI* is a lie waiting to happen. None
+currently is. Keep it that way.

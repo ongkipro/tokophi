@@ -1,18 +1,56 @@
 # TokoΦ — Specs & Docs
 
-**Shopify-style commerce SaaS for Indonesia.** A shared, modern-SaaS Next.js **admin** runs many merchant stores; a Next.js **super-admin** is the platform control plane; each client gets a bespoke **Astro storefront** (hand-built, no theme editor). Bahasa Indonesia UI tuned for local sellers (WhatsApp, COD, QRIS/e-wallets, local couriers). UI/UX-first; the **local backend is fully wired** on PostgreSQL (Drizzle) — all 3 surfaces read + all 12 admin editors write + auth/RBAC/RLS + real variants (VPS deploy is the only remaining milestone).
+**Shopify-style commerce SaaS for Indonesia.** Bahasa Indonesia UI, IDR, tuned to how Indonesian
+sellers actually work: WhatsApp, COD, local couriers, QRIS/e-wallets.
 
-- **Code:** `~/projects/tokophi` — **monorepo (npm workspaces)**: `apps/*` + `packages/*`
-- **Conventions/gotchas for coding:** `~/projects/tokophi/AGENTS.md`
-- **Changelog:** `~/projects/tokophi/CHANGELOG.md`
+**Four surfaces**, one Postgres. The platform collects the money and pays the merchant out — which
+makes us a custodian, and makes the ledger the most consequential thing in the codebase.
 
-## The three surfaces
+- **Code:** `~/projects/tokophi` — monorepo (npm workspaces)
+- **Coding conventions & gotchas:** `AGENTS.md` (repo root) — **read it, shadcn here runs on Base UI, not Radix**
+- **Changelog:** `CHANGELOG.md`
 
-| Surface | App | Who | Tech | Port |
-|---|---|---|---|---|
-| **Admin** | `apps/admin` | merchant operators | Next 16 (App Router) + shadcn/Base UI | :3000 |
-| **Super Admin** | `apps/super-admin` | platform (us) | Next 16 + shared UI | :3001 |
-| **Storefront** | `apps/storefront` | end shoppers | Astro 5 + Tailwind v4 | :4327 |
+---
+
+## Read these first
+
+Written from the code and the database, and re-verified 2026-07-14. **They are the authoritative ones.**
+
+| Doc | What it answers |
+|---|---|
+| **[PRD.md](PRD.md)** | What the product is, the money model, the COD policy, the four surfaces. Aspirational items are labelled aspirational |
+| **[docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)** | What must be **true** — functional + non-functional requirements as **verifiable statements**, each with the query or grep that checks it. Includes the security invariants learned the hard way |
+| **[docs/STATUS.md](docs/STATUS.md)** | 🟢 REAL / 🟡 SEEDED-BUT-COMPUTED / 🔴 FAKE. **Read before you trust a number on a screen** |
+| **[docs/SYSTEM_MAP.md](docs/SYSTEM_MAP.md)** | Every route → its data layer → its tables, per surface. Where the RLS boundary actually sits |
+| **[docs/FLOWS.md](docs/FLOWS.md)** | The six critical flows as sequence diagrams: checkout + COD gate, payment callback, order lifecycle, money, shipping, auth/RLS |
+| **[docs/UML.md](docs/UML.md)** | ER/class diagram, order + ledger state machines, component and deployment diagrams. **Every diagram is validated with mermaid-cli** |
+| **[docs/SCHEMA.md](docs/SCHEMA.md)** | The database, **generated from `information_schema` / `pg_class`** — 67 tables, 44 migrations, RLS on 43. Not from memory |
+| **[docs/BACKLOG.md](docs/BACKLOG.md)** | What is left, honestly — including the five things that are currently lying, leaking, or unmeasurable |
+
+**Supporting:** [ARCHITECTURE](docs/ARCHITECTURE.md) · [CONCEPT](docs/CONCEPT.md) ·
+[CHAT_SPEC](docs/CHAT_SPEC.md) · [DEPLOY](docs/DEPLOY.md) · [CODE_MAP](docs/CODE_MAP.md) ·
+[UI_INVENTORY](docs/UI_INVENTORY.md) · [WORKLOG](docs/WORKLOG.md) · [PROD_PLAN](docs/PROD_PLAN.md) ·
+[DATA_MODEL](docs/DATA_MODEL.md) · [TASKS](docs/TASKS.md) · **wireframes/**
+
+> ⚠️ **DATA_MODEL.md, TASKS.md, GUIDE.md, SYSTEM_GUIDE.md and CONCEPT.md predate the backend** and
+> describe a mock-first product. Where they disagree with the docs in the table above, **the table above
+> wins.** Where anything disagrees with the database, **the database wins.**
+
+---
+
+## The four surfaces
+
+| Surface | App | Who | Tech | Dev port | Prod host |
+|---|---|---|---|---|---|
+| **admin** | `apps/admin` | merchant operators | Next.js (RSC + server actions) | :3000 | `app.tokophi.com` |
+| **super-admin** | `apps/super-admin` | the platform (us) | Next.js | :3001 | `rich.tokophi.com` |
+| **storefront** | `apps/storefront` | shoppers | Astro **SSR** | :4327 | `<slug>.tokophi.com` |
+| **landing** | `apps/landing` | the world | Astro **static** | :4328 | `tokophi.com` |
+
+**The admin hosts the entire public HTTP API** (`/api/public/*`, `/api/cron/*`, `/api/uploads/*`) and the
+media store. **The landing page has no database dependency, on purpose** — the front door must serve when
+everything behind it is down. The storefront is **one deploy serving every tenant**, resolved from the
+`Host` header (ADR 0009).
 
 Demo storefront = **"Batik Nusantara"** (women's fashion, 14 products × 5 AI images).
 
@@ -21,60 +59,85 @@ Demo storefront = **"Batik Nusantara"** (women's fashion, 14 products × 5 AI im
 ```
 tokophi/
   apps/
-    admin/         # merchant store admin (:3000)
+    admin/         # merchant admin (:3000) + ALL public API routes
     super-admin/   # platform control plane (:3001)
-    storefront/    # per-client Astro shopper site (:4327)
+    storefront/    # Astro SSR, multi-tenant by Host (:4327)
+    landing/       # Astro static, apex (:4328) — no DB
   packages/
-    ui/            # @tokophi/ui  — shadcn on Base UI + design tokens
-    lib/           # @tokophi/lib — IDR / number formatters
-    data/          # @tokophi/data — canonical nav (single source of truth)
+    db/            # @tokophi/db       — Drizzle schema + withTenant() (the RLS boundary)
+    lib/           # @tokophi/lib      — format, billing, autolaris, kiriminaja, cache
+    ui/            # @tokophi/ui       — shadcn on Base UI + design tokens
+    sections/      # @tokophi/sections — TYPES ONLY: the Store Builder contract
+    data/          # @tokophi/data     — canonical nav
 ```
 
-`@tokophi/data` holds `MAIN_MENU` / `FOOTER_MENU` consumed by **both** the admin menu builder and the storefront header — edit once, both stay in sync on rebuild.
+`@tokophi/sections` is what stops the admin's Puck editor and the storefront's Astro renderer from
+drifting: a section added on one side and not the other is a **type error**, not a blank slot on a live
+shop.
 
 ## Quickstart
 
 ```bash
-cd ~/projects/tokophi
-npm install                     # installs all workspaces
+npm install                        # all workspaces
+docker compose up -d db            # PostgreSQL 16 @ localhost:5433
+npm run migrate -w @tokophi/db     # apply migrations
+npm run seed    -w @tokophi/db     # demo data (TRUNCATES first)
 
-npm run dev:admin               # merchant admin  → http://localhost:3000
-npm run dev:super               # super-admin     → http://localhost:3001
-cd apps/storefront && npm run dev   # storefront   → http://localhost:4327
+npm run dev:admin                  # → http://localhost:3000
+npm run dev:super                  # → http://localhost:3001
+cd apps/storefront && npm run dev  # → http://localhost:4327
 ```
 
-Build: `npm run build:admin` / `npm run build:super`; storefront `cd apps/storefront && npm run build`.
+Seeded owner login: **ongki@batiknusantara.id / tokophi123**
 
-## Docs in this folder
-
-- **[PRD.md](PRD.md)** — product requirements, current status, roadmap (**v0.4**).
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — how it's built: data-layer seam, determinism, nav auto-connect, rendering, UI system, path to backend.
-- **[docs/CONCEPT.md](docs/CONCEPT.md)** — mature product concept: vision, personas, full feature map, monetization, why deferring backend is safe.
-- **[docs/SCHEMA.md](docs/SCHEMA.md)** — backend-ready Postgres schema (tables, RLS, enums) + mock→table map + M3 migration steps.
-- **[docs/DATA_MODEL.md](docs/DATA_MODEL.md)** — mock entities → future Postgres tables (Shopify-modeled content).
-- **[docs/UI_INVENTORY.md](docs/UI_INVENTORY.md)** — every screen, its status, and what backend work it needs.
-- **[docs/TASKS.md](docs/TASKS.md)** — granular prototype task breakdown (Epics, sized, with acceptance criteria).
-- **[docs/BACKLOG.md](docs/BACKLOG.md)** — prioritized task board (P0–P3) from a full codebase screening.
-- **[docs/UML.md](docs/UML.md)** — Mermaid diagrams: system/components, ER data model, checkout sequence, deployment, roles.
-- **decisions/** — ADRs:
-  - [0001](decisions/0001-stack-and-mock-first.md) — Stack: Next.js admin + Astro storefront, mock-first.
-  - [0002](decisions/0002-shadcn-base-ui.md) — shadcn/ui on Base UI (`render` prop, no `Select`, `nativeButton`).
-  - [0003](decisions/0003-scope-and-multitenancy.md) — No Themes/Apps + `store_id` RLS multi-tenancy.
-  - [0004](decisions/0004-platform-managed-payments-shipping.md) — Payments/COD/shipping are **platform-managed** (merchant "terima matang").
-- **wireframes/** — screenshots of the built admin.
+> ⚠️ **On a fresh seed, COD cannot be exercised.** The seed writes legacy *string* courier services, and
+> the COD gate requires per-service objects. Press **"Sync dari KiriminAja"** in super-admin
+> `/pengaturan` first. (Tracked in BACKLOG.)
 
 ## Key conventions
 
-- **UI = shadcn on Base UI** (`@base-ui/react`): use the **`render` prop, not `asChild`**; there is **no `Select`** primitive.
-- **Determinism:** all mock data is seeded (mulberry32) and anchored to `TODAY = 2026-06-30` — no hydration mismatch, stable across reloads.
-- **Money:** IDR formatting via `@tokophi/lib` (`id-ID`); nav via `@tokophi/data`.
-- **Payments & shipping are platform-managed** (ADR 0004): the platform configures the **AutoLaris** payment gateway (VA/QRIS/DANA) + COD + KiriminAja aggregator; merchants only enable methods and pick couriers.
-- Sales channel = **Toko Online only**; analytics attribution = Meta/TikTok/Google Ads + Organic/Other.
+- **shadcn/ui runs on Base UI (`@base-ui/react`), NOT Radix.** Triggers use the **`render` prop, not
+  `asChild`**; there is **no `Select`** primitive; a `Button` rendered as a link needs
+  `nativeButton={false}`. This is the #1 source of mistakes. See `AGENTS.md`.
+- **The tenant boundary is RLS, not a hand-written `WHERE`.** Admin reads wrap in `withCurrentTenant`,
+  writes in `withTenant`. A bare module-level `db` in admin tenant code runs as **owner** and silently
+  bypasses every policy.
+- **Money is `bigint` whole rupiah** (`_idr` suffix), formatted via `@tokophi/lib`. Never a float.
+- **Payments and shipping are platform-managed** (ADR 0004) — the merchant enables *methods* and picks
+  *couriers*; credentials, tariffs and resi are ours. **Provider brands are never shown** to merchants or
+  shoppers.
+- **A number on screen must be traceable to a query.** If we cannot count it, the UI says "Belum
+  terhubung" or shows an empty state. This rule exists because we have violated it, repeatedly, and it
+  cost real trust.
 
-## Status (2026-07-04)
+## ADRs
 
-**All three surfaces built as clickable products; backend M3 in progress.** Admin (M0+M1+M1.5): Dashboard, Pesanan (+detail), Produk (+editor, Kategori/Inventori/Pembelian), Pelanggan (+detail/Segmen/Ulasan), CRM, Diskon (+editor), Analitik, Pemasaran, Toko Online (Halaman/Blog with create+edit, Navigasi drag-and-drop menu builder), Pengaturan. Super-admin: Dashboard/Toko/Paket/Analitik/Pengaturan. Storefront: beranda, kategori, produk (5-image gallery), keranjang, checkout (+sukses), akun, blog, kontak — localStorage cart, 70 AI product images.
+| # | Decision |
+|---|---|
+| [0001](decisions/0001-stack-and-mock-first.md) | Stack: Next.js admin + Astro storefront, mock-first |
+| [0002](decisions/0002-shadcn-base-ui.md) | shadcn/ui on Base UI |
+| [0003](decisions/0003-scope-and-multitenancy.md) | No Themes/Apps + `store_id` RLS multi-tenancy |
+| [0004](decisions/0004-platform-managed-payments-shipping.md) | Payments/COD/shipping are platform-managed |
+| [0005](decisions/0005-monorepo-shared-packages.md) | Monorepo + shared packages |
+| [0006](decisions/0006-shared-nav-source-auto-connect.md) | Shared nav source |
+| [0007](decisions/0007-backend-postgres-drizzle.md) | Self-hosted Postgres + Drizzle (**not** Supabase) |
+| [0008](decisions/0008-per-client-provisioning-model.md) | Per-client provisioning |
+| [0009](decisions/0009-self-serve-store-builder.md) | Self-serve section-based Store Builder + SSR multi-tenant storefront |
 
-**Backend (M3):** **local PostgreSQL 16 + Drizzle** (`@tokophi/db`, 54 tables, migrations 0000–0016, single-tenant "Batik Nusantara") is live end-to-end: **super-admin (all 5) + 16 admin modules + storefront read** the DB; **all 12 admin editors write** via `lib/actions/*`; **local auth** (jose JWT) + **RBAC** (capability matrix gates every mutation; UI hides controls per role via `useCan`/`<Can>` across all admin editors) + **RLS enforcing at runtime** (migration 0012 — `tenant_isolation` on 32 tables + `tokophi_app` role; admin routes every read/write through it via `withTenant`/`withCurrentTenant`; `verify-rls` + `verify-rls-app` green) + **local media upload**. See ADR **0007** (stack) / **0008** (per-client topology).
+---
 
-**Next:** RBAC UI polish (hide/disable per role) → **VPS activation** (connect as `tokophi_app` + route through `withTenant()` so RLS enforces; self-hosted Postgres + PostgREST + Storage) → payment/courier integrations + provisioning (M4). See **[docs/BACKLOG.md](docs/BACKLOG.md)**.
+## Status (2026-07-14)
+
+**All four surfaces are live products on a real database.** 67 tables, 44 migrations, RLS enforcing on
+43. Auth + RBAC + tenant isolation are real. The **money system** (append-only ledger, derived balance,
+payouts with approval, release on `selesai`) is real end-to-end. **COD** is enforced through a
+five-condition server-side gate with the destination province verified from the courier's district id,
+not from what the buyer typed. Orders support **`retur`**, which restores inventory and claws the credit
+back.
+
+**What is not real, and is documented as such:** there is **no ad-platform integration** · the storefront
+blog is hardcoded · the per-courier COD return rate — the number the whole COD policy is betting on —
+**cannot be computed**, because `orders.courier` is NULL on 699/700 rows · the "SPX free return" premise
+the policy rests on is **UNVERIFIED** · there is **one test file in the repo**.
+
+**Start at [docs/STATUS.md](docs/STATUS.md) and [docs/BACKLOG.md](docs/BACKLOG.md).**

@@ -1,414 +1,545 @@
-# TokoΦ — Diagrams (UML / Mermaid)
+# TokoΦ — UML
 
-> Renders on GitHub / any Mermaid viewer. Kept text-based so it lives with the code.
-> Companion to `SYSTEM_GUIDE.md` (overview), `../PRD.md`, `SCHEMA.md`. Updated 2026-07-09.
+> **Rewritten 2026-07-14 from the code and the live database.** The previous version described 55
+> tables, migrations `0000–0018`, three surfaces, and drew the admin and storefront as *not yet* on
+> Postgres. All four were false.
 >
-> **Current state:** monorepo (npm workspaces) — 3 apps (`apps/admin` Next 16 :3000, `apps/super-admin` Next 16 :3001, `apps/storefront` Astro 5 :4327) + **4 shared packages** (`@tokophi/db`, `@tokophi/lib` [+ server-only `kiriminaja`/`autolaris`/`cache` subpaths], `@tokophi/ui`, `@tokophi/data`). **Backend fully wired** on local PostgreSQL 16 (Docker :5433) via `@tokophi/db` (55 tables, migrations 0000–0018, RLS enforcing). **Commerce loop is COMPLETE**: storefront checkout → real DB order + inventory + payment + shipping; merchant admin runs it; callbacks close it. **Real integrations**: KiriminAja (shipping — express + instant, area DB, pricing cache) + AutoLaris (payment — VA/QRIS/DANA + COD), both platform-managed + brand-hidden from clients. Prod target = self-hosted Postgres on a VPS (ADR 0007, NOT Supabase) + Cloudflare-native edge (CDN/R2/Images/KV); per-client topology = ADR 0008.
+> **Every diagram in this file has been rendered with `@mermaid-js/mermaid-cli` v11.16.0.** A diagram
+> that does not render is worse than no diagram: it looks like documentation and communicates nothing.
+> A previous pass shipped four broken ones — a `;` inside `sequenceDiagram` message text terminates the
+> statement, so the message silently becomes a syntax error.
+>
+> Companions: [`SYSTEM_MAP.md`](./SYSTEM_MAP.md) (routes → tables) · [`FLOWS.md`](./FLOWS.md)
+> (sequence diagrams for the six critical flows) · [`SCHEMA.md`](./SCHEMA.md) (the catalog) ·
+> [`REQUIREMENTS.md`](./REQUIREMENTS.md) (what must be true).
 
-## 1. System context / container (C4-ish)
-> Who talks to what: shoppers→storefront, merchants→admin, platform→super-admin; the 3 apps sit on shared packages; self-hosted Postgres + payment/shipping integrations are platform-managed and land at M3.
-```mermaid
-graph TB
-  Shopper([Pembeli / shopper]):::user
-  Merchant([Merchant / pemilik toko]):::user
-  PlatformAdmin([Platform admin — kita]):::user
+---
 
-  subgraph Monorepo["Monorepo (npm workspaces)"]
-    Admin["apps/admin :3000<br/>merchant admin (Next 16)"]
-    SuperAdmin["apps/super-admin :3001<br/>platform control plane (Next 16)"]
-    Storefront["apps/storefront :4327<br/>per-client shop (Astro 5)"]
-    subgraph Packages["packages/*"]
-      UI["@tokophi/ui<br/>shadcn/Base UI + tokens"]
-      Lib["@tokophi/lib<br/>formatters/types"]
-      Data["@tokophi/data<br/>canonical MAIN_MENU / FOOTER_MENU"]
-      Db["@tokophi/db<br/>Drizzle schema + client"]
-    end
-  end
+## 1. Domain model — ER / class diagram
 
-  subgraph Backend["Backend — Postgres now, self-hosted VPS target"]
-    PGSQL[("local PostgreSQL 16<br/>store_id scoping · Drizzle")]
-    subgraph Sb["Self-hosted Postgres — VPS (prod)"]
-      Auth["Auth"]
-      Storage["Storage (media)"]
-    end
-  end
+The load-bearing entities only. Money is `bigint` IDR throughout. 67 tables exist; the other 40 hang
+off these.
 
-  subgraph Integrations["Platform integrations (set up by us — ADR 0004)"]
-    PG["Payment gateway<br/>AutoLaris (VA/QRIS/DANA) + COD"]
-    AGG["Shipping aggregator<br/>KiriminAja (all couriers)"]
-  end
-
-  Shopper --> Storefront
-  Merchant --> Admin
-  PlatformAdmin --> SuperAdmin
-
-  SuperAdmin --> UI
-  SuperAdmin --> Lib
-  Admin --> Data
-  Storefront --> Lib
-  Storefront --> Data
-
-  SuperAdmin --> Db
-  Db ==>|live now| PGSQL
-  Admin -. next .-> PGSQL
-  Storefront -. next .-> PGSQL
-  PGSQL -. prod target .-> Sb
-  Admin -. M3 .-> Storage
-  SuperAdmin -. configures .-> PG
-  SuperAdmin -. configures .-> AGG
-  Storefront -. M3 .-> PG
-  Storefront -. M3 .-> AGG
-
-  classDef user fill:#eef,stroke:#88a;
-```
-
-## 2. Monorepo components — who imports what
-> The 3 apps and 3 packages, with **actual** import edges verified in the repo. `@tokophi/data` is the only package shared by *both* admin and storefront (single nav source). Admin still ships its **own local `components/ui/*`** (Base UI) rather than `@tokophi/ui` — de-dup is backlog (ADR 0005).
-```mermaid
-graph LR
-  subgraph apps
-    AD["apps/admin<br/>Next 16 · local components/ui/*"]
-    SA["apps/super-admin<br/>Next 16"]
-    SF["apps/storefront<br/>Astro 5"]
-  end
-  subgraph packages
-    UI["@tokophi/ui"]
-    LIB["@tokophi/lib"]
-    DATA["@tokophi/data<br/>menu (MAIN_MENU / FOOTER_MENU)"]
-  end
-
-  SA --> UI
-  SA --> LIB
-  SF --> LIB
-  SF --> DATA
-  AD --> DATA
-
-  AD -. "backlog: adopt" .-> UI
-  SF -. "own Astro components" .-> UI
-
-  classDef pkg fill:#efe,stroke:#8a8;
-  class UI,LIB,DATA pkg;
-```
-
-## 3. Data model (ER — key entities)
-> Target relational shape for M3. Adds content/nav entities (`pages`, `menus`+`menu_items`, `articles`) alongside catalog, orders, customers, discounts. Payments/shipping config lives at platform level, not here (see note + ADR 0004).
 ```mermaid
 erDiagram
-  accounts ||--o{ stores : owns
-  accounts ||--o{ subscriptions : has
-  plans ||--o{ subscriptions : on
-  subscriptions ||--o{ invoices : bills
-  stores ||--o{ store_users : members
-  users ||--o{ store_users : "belongs to"
-  stores ||--o{ products : sells
-  products ||--o{ product_variants : has
-  products ||--o{ product_media : has
-  stores ||--o{ collections : groups
-  collections ||--o{ collection_products : contains
-  products ||--o{ collection_products : "in"
-  stores ||--o{ orders : receives
-  orders ||--o{ order_line_items : has
-  order_line_items }o--|| product_variants : of
-  orders ||--o{ fulfillments : ships
-  orders ||--|| payments : "paid via"
-  stores ||--o{ customers : has
-  customers ||--o{ orders : places
-  stores ||--o{ leads : crm
-  stores ||--o{ followups : crm
-  stores ||--o{ discounts : offers
-  stores ||--o{ pages : content
-  stores ||--o{ articles : blog
-  stores ||--o{ menus : nav
-  menus ||--o{ menu_items : contains
-  menu_items ||--o{ menu_items : children
+    accounts ||--o{ stores : owns
+    stores ||--o{ store_users : "has members"
+    users ||--o{ store_users : "belongs to"
+    stores ||--|| store_settings : "1:1 config"
+    stores ||--o{ locations : "stock sites"
+    stores ||--o{ invoices : "subscription billing"
 
-  accounts {
-    uuid id PK
-    string name
-    enum plan
-  }
-  stores {
-    uuid id PK
-    uuid account_id FK
-    string name
-    string slug
-    enum status
-  }
-  users {
-    uuid id PK
-    string email
-    string name
-  }
-  store_users {
-    uuid id PK
-    uuid store_id FK
-    uuid user_id FK
-    enum role
-  }
-  products {
-    uuid id PK
-    uuid store_id FK
-    string title
-    enum status
-    string category
-  }
-  product_variants {
-    uuid id PK
-    uuid product_id FK
-    int price_idr
-    int stock
-    string sku
-  }
-  orders {
-    uuid id PK
-    uuid store_id FK
-    uuid customer_id FK
-    enum status
-    enum channel
-    int total_idr
-  }
-  order_line_items {
-    uuid id PK
-    uuid order_id FK
-    uuid variant_id FK
-    int qty
-    int price_idr
-  }
-  fulfillments {
-    uuid id PK
-    uuid order_id FK
-    string courier
-    string tracking_no
-    enum status
-  }
-  payments {
-    uuid id PK
-    uuid order_id FK
-    enum method
-    enum status
-    int amount_idr
-  }
-  customers {
-    uuid id PK
-    uuid store_id FK
-    string name
-    enum segment
-    int total_spent_idr
-  }
-  discounts {
-    uuid id PK
-    uuid store_id FK
-    enum type
-    int value
-    enum status
-  }
-  pages {
-    uuid id PK
-    uuid store_id FK
-    string handle
-    string title
-  }
-  articles {
-    uuid id PK
-    uuid store_id FK
-    string handle
-    string title
-    enum status
-  }
-  menus {
-    uuid id PK
-    uuid store_id FK
-    string handle
-    string title
-    bool is_default
-  }
-  menu_items {
-    uuid id PK
-    uuid menu_id FK
-    uuid parent_id FK
-    string label
-    enum item_type
-    string href
-    int position
-  }
+    stores ||--o{ products : ""
+    products ||--o{ product_variants : ""
+    products ||--o{ product_media : ""
+    product_variants ||--o{ inventory_levels : "available qty"
+    locations ||--o{ inventory_levels : ""
+    stores ||--o{ collections : ""
+    collections ||--o{ collection_products : ""
+
+    stores ||--o{ customers : ""
+    customers ||--o{ orders : places
+    stores ||--o{ orders : ""
+    orders ||--o{ order_line_items : ""
+    product_variants ||--o{ order_line_items : "variant_id nullable"
+
+    orders ||--o{ payments : "1..n"
+    payments ||--o| ledger_entries : "kind=sale, 1 per payment"
+    orders ||--o{ ledger_entries : "kind=sale or retur"
+    payouts ||--o{ ledger_entries : "kind=payout or adjustment"
+    stores ||--o{ ledger_entries : ""
+    stores ||--o{ payouts : "withdrawal requests"
+
+    stores ||--o{ analytics_events : "5 event types"
+    stores ||--o{ page_templates : "store builder"
+    stores ||--o{ support_tickets : "merchant to platform"
+    stores ||--o{ conversations : "shopper to merchant"
+
+    orders {
+        uuid id PK
+        uuid store_id FK "tenant key, RLS"
+        uuid customer_id FK
+        text number "WEB-xxxxxxxxx"
+        enum status "baru diproses dikirim selesai batal retur"
+        enum financial_status "pending dibayar refund_sebagian refund"
+        bigint subtotal_idr
+        bigint shipping_idr
+        bigint total_idr
+        text city "buyer-typed, do NOT trust"
+        text province "buyer-typed, do NOT trust"
+        text courier "NULL on 699 of 700 rows"
+        text awb "real waybill only, never our order id"
+        text ka_order_id "KiriminAja booking ref"
+        int ship_district_id "0042 the verified destination"
+        text ship_address "0042 snapshot, not a lookup"
+        timestamptz returned_at "0039"
+    }
+
+    payments {
+        uuid id PK
+        uuid order_id FK
+        uuid store_id FK "NOT NULL since 0036"
+        enum method "transfer qris ovo gopay dana va cod"
+        enum status "menunggu berhasil gagal"
+        bigint amount_idr "what the MERCHANT is owed"
+        bigint admin_fee "the gateway cut"
+        bigint total "amount_idr plus admin_fee"
+        text provider "autolaris or cod"
+    }
+
+    ledger_entries {
+        uuid id PK
+        uuid store_id FK
+        uuid order_id FK
+        uuid payment_id FK "0041"
+        uuid payout_id FK
+        enum kind "sale retur payout adjustment"
+        enum status "pending available"
+        bigint amount_idr "SIGNED, negative is money out"
+        timestamptz available_at
+    }
+
+    payouts {
+        uuid id PK
+        uuid store_id FK
+        bigint amount_idr
+        enum status "menunggu diproses selesai gagal"
+        text bank_name "SNAPSHOT at request time"
+        text note "rejection reason"
+    }
 ```
-> Payments/shipping/COD config is **platform-level** (see `SCHEMA.md`): `shipping_aggregator`, `platform_couriers`, `platform_payment_gateways`, `platform_cod`; per-store rows keep only `enabled` flags. `menus`/`menu_items` mirror the canonical shapes in `@tokophi/data` (see §6).
 
-## 4. Commerce loop — storefront checkout → order → payment → shipping (IMPLEMENTED)
-> The real, working end-to-end loop. Cart lives in `localStorage`; checkout calls the platform proxy endpoints (in `apps/admin/app/api/public/*`, no-auth, CORS) which own the KiriminAja/AutoLaris keys. `/api/public/order` creates the order + inventory + payment; callbacks close it. Provider brands are hidden from the shopper (white-label).
+**The two relationships that carry the most weight:**
+
+1. `payments.amount_idr` → `ledger_entries.amount_idr`. The ledger credits what the *merchant* is
+   owed, never `payments.total` — the gateway's admin fee is the gateway's money and never was the
+   merchant's. This single choice is why Dashboard revenue, the Pesanan list and Saldo agree **by
+   construction** rather than by coincidence.
+2. `orders.ship_district_id` (0042) is the **verified** destination. `orders.province` is what the
+   buyer typed. Money decisions read the former. See §5.
+
+---
+
+## 2. Component diagram — four surfaces, five packages, one database
+
 ```mermaid
-sequenceDiagram
-  actor Pembeli
-  participant SF as Storefront (Astro)
-  participant OG as /api/public/ongkir (proxy)
-  participant OR as /api/public/order (proxy)
-  participant KA as KiriminAja
-  participant AL as AutoLaris (PSP)
-  participant DB as Postgres (RLS)
-  participant AD as Merchant admin
+graph TB
+    subgraph clients["Actors"]
+        SH["Shopper"]
+        ME["Merchant"]
+        OP["Platform operator - us"]
+    end
 
-  Pembeli->>SF: produk → keranjang (localStorage)
-  Pembeli->>SF: checkout — cari kecamatan tujuan
-  SF->>OG: op=search (resolveArea: DB lokal → KA fallback)
-  SF->>OG: op=rates (KA shipping_price, cache 10m)
-  OG-->>SF: tarif Ekspedisi + (⚡) Instan (geolokasi)
-  Pembeli->>SF: pilih kurir + metode bayar → Bayar
-  SF->>OR: {items, customer, address, shipping, channelCode, instant?}
-  OR->>DB: cek stok → upsert customer → insert order + line items (variantId) → kurangi stok
-  alt instant
-    OR->>KA: v4/instant/pickup/request (dispatch driver)
-    KA-->>OR: instant order_id → order.awb, status dikirim
-  end
-  alt non-COD
-    OR->>AL: create_payment (VA/QRIS/DANA)
-    AL-->>OR: trx_id + VA/QRIS → payments row (linked)
-  else COD
-    OR->>DB: payments row (method=cod)
-  end
-  OR-->>SF: orderNumber (WEB-…) + instruksi bayar
-  SF-->>Pembeli: /sukses (No. pesanan + VA/QRIS)
-  DB-->>AD: order muncul di Pesanan + payment linked
-  AL->>OR: callback (PAID) → payment berhasil + order dibayar
+    subgraph apps["Deployable surfaces"]
+        LAND["landing - Astro static<br/>tokophi.com<br/>NO DB dependency"]
+        SF["storefront - Astro SSR<br/>slug.tokophi.com<br/>tenant = Host header"]
+        ADM["admin - Next.js RSC<br/>app.tokophi.com<br/>plus ALL public API routes"]
+        SA["super-admin - Next.js RSC<br/>rich.tokophi.com<br/>cross-tenant"]
+    end
+
+    subgraph pkgs["Shared packages"]
+        DBP["@tokophi/db<br/>Drizzle schema plus withTenant"]
+        LIB["@tokophi/lib<br/>format billing autolaris<br/>kiriminaja cache totp"]
+        UIP["@tokophi/ui<br/>shadcn on Base UI"]
+        SEC["@tokophi/sections<br/>TYPES ONLY - the builder contract"]
+        DAT["@tokophi/data<br/>canonical nav"]
+    end
+
+    subgraph ext["Third parties"]
+        AL["AutoLaris - PSP<br/>VA QRIS e-wallet"]
+        KA["KiriminAja<br/>courier aggregator"]
+    end
+
+    PG[("PostgreSQL 16<br/>67 tables - 44 migrations<br/>RLS on 43")]
+    DISK[/"public/uploads<br/>local media"/]
+
+    SH --> SF
+    SH --> LAND
+    ME --> ADM
+    ME --> LAND
+    OP --> SA
+
+    SF -->|"POST /api/public/ongkir<br/>POST /api/public/order"| ADM
+    SF -->|"img src"| ADM
+    SA -->|"signed 2-min JWT to /impersonate"| ADM
+
+    ADM --> DBP
+    SA --> DBP
+    SF --> DBP
+    ADM --> LIB
+    SA --> LIB
+    SF --> LIB
+    ADM --> UIP
+    SA --> UIP
+    ADM --> SEC
+    SF --> SEC
+    ADM --> DAT
+    SF --> DAT
+
+    DBP --> PG
+    ADM --> DISK
+
+    ADM -->|"alCreatePayment"| AL
+    AL -->|"POST /api/public/pay/callback<br/>shared secret - fails CLOSED"| ADM
+    ADM -->|"kaShippingPrice / kaCreateOrder"| KA
+    SA -->|"kaServices roster sync"| KA
 ```
 
-## 5. Shipping — express (resi/AWB) + instant (same-day) (IMPLEMENTED)
-> Merchant admin creates shipments from an order. Express = district-id based (pickup → AWB); Instant = coordinate based (dispatch a driver now). Insurance/COD/dimensions supported (volumetric). Area names resolve from the local `kiriminaja_areas` table first (no rate limit).
+**Three facts in this diagram that surprise people:**
+
+- **The admin hosts the entire public HTTP API.** `/api/public/*`, `/api/cron/*`, `/api/uploads/*` all
+  live in `apps/admin`. The storefront reaches them over HTTP, like any third party would.
+- **`landing` has no `@tokophi/db` dependency and no `DATABASE_URL`.** That is the feature: the front
+  door must serve when everything behind it is down.
+- **`@tokophi/sections` is types-only, zero runtime.** It is the one contract shared by the admin's
+  Puck editor and the storefront's Astro renderer — the thing that stops the two from drifting.
+
+**There are only four cross-surface edges.** Everything else goes through the database. No service
+mesh, no internal RPC, no queue.
+
+| Edge | Mechanism |
+|---|---|
+| storefront → admin | `fetch` to `PUBLIC_ONGKIR_API` / `PUBLIC_ORDER_API` |
+| storefront → admin (images) | `ADMIN_BASE` derived from `new URL(PUBLIC_ONGKIR_API).origin` — **a load-bearing coupling**: change the ongkir URL and product images silently move |
+| super-admin → admin | 2-minute JWT → `/impersonate` → a real `session` cookie (cookies do not cross subdomains) |
+| AutoLaris → admin | webhook `POST /api/public/pay/callback` |
+
+---
+
+## 3. Order lifecycle — state machine
+
+`baru → diproses → dikirim → selesai | batal | retur`. Enum `order_status`; migration **0039** added
+`retur`.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> baru : checkout writes the order<br/>INVENTORY IS DECREMENTED HERE
+
+    baru --> diproses : merchant confirms
+    baru --> batal : cancel
+    diproses --> dikirim : shipment booked via kaCreateOrder
+    diproses --> batal : cancel
+    dikirim --> selesai : delivered
+    dikirim --> retur : parcel refused or sent back
+    selesai --> retur : returned after completion
+
+    batal --> [*]
+    selesai --> [*]
+    retur --> [*]
+
+    note right of baru
+        Stock leaves at CHECKOUT, not at despatch.
+        An order that exists has already taken the stock.
+    end note
+
+    note right of selesai
+        THE RELEASE POINT. A sale becomes withdrawable
+        here and NOT at dikirim. A parcel can only be
+        returned after it shipped, so releasing at
+        despatch would let a merchant withdraw money for
+        goods that come back. On COD the cash does not
+        even exist yet at despatch.
+    end note
+```
+
+### 3.1 What every transition does to inventory and to the ledger
+
+This is the table to read before touching `setOrderStatus`. Source: `apps/admin/lib/actions/orders.ts`
++ `apps/admin/lib/ledger-credit.ts#settleOrderLedger`, both inside **one transaction**, so the book can
+never disagree with the order it describes.
+
+| Transition | `inventory_levels` | `payments` | `ledger_entries` |
+|---|---|---|---|
+| *(checkout)* → `baru` | **− qty** per line (`GREATEST(available − qty, 0)`) | insert `menunggu` (COD) **or** an AutoLaris bill | — |
+| `baru → diproses` | — | — | — |
+| `diproses → dikirim` | — | — | — |
+| **`* → selesai`** | — | COD: `menunggu → berhasil` (`collectCodOnDelivery`) — the honest moment the cash exists | **`sale` booked** if absent (`creditSalesForOrder`), then every `pending` sale on the order → **`available`** |
+| **`* → batal`** | **+ qty** restored | any `menunggu` → **`gagal`** | — (a cancelled order is never credited: `creditSaleForPayment` excludes `o.status='batal'`) |
+| **`* → retur`** | **+ qty** restored | any `menunggu` → **`gagal`** | **opposing entry** `kind='retur'`, `amount = −sale.amount`, **carrying the same `status` as the sale it reverses** |
+| *(gateway callback)* | — | `menunggu → berhasil` | **`sale` booked**: `pending` normally, `available` if the order is already `selesai`/`retur` |
+
+**Four subtleties, each of which was once a bug:**
+
+1. **`retur` restores inventory, exactly like `batal`.** The goods are back on the merchant's shelf in
+   both cases. Missing this would have quietly shrunk real stock on every refused COD parcel.
+2. **Both restores are guarded on the previous status** (`order.status !== status`), so a repeat click
+   cannot double-restore.
+3. **The claw-back carries the sale's status.** A parcel can be returned straight from `dikirim`, where
+   the sale is still `pending`. Reversing that out of `available` (as the code originally did,
+   unconditionally) drives the withdrawable balance **negative** while the held pool still shows the
+   money. Reverse a pending sale out of pending, a released one out of available; either way the pair
+   nets to zero.
+4. **Cancelling fails the pending payment.** For a refused COD parcel this is the whole point: cash
+   that was never collected must never become collectable later.
+
+---
+
+## 4. Money — the ledger state machine
+
+`platform_payout.release_on` (default `'selesai'`) decides the release point, and it **is** read
+(`settleOrderLedger`). Until `0776e99` it was hardcoded to `selesai` while the super-admin toggle saved
+a value that changed nothing — a knob that moves nothing is worse than no knob.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    state "money collected" as collected
+    state "sale / pending" as pending
+    state "sale / available" as available
+    state "payout entry - NEGATIVE" as payoutEntry
+    state "adjustment entry - POSITIVE" as adjustment
+
+    [*] --> collected : payments.status reaches berhasil<br/>gateway callback OR COD cash at the door
+    collected --> pending : creditSaleForPayment<br/>credits amount_idr, never total
+    pending --> available : order reaches release_on, default selesai
+    pending --> [*] : retur posts an opposing PENDING entry
+    available --> [*] : retur posts an opposing AVAILABLE entry
+
+    available --> payoutEntry : requestPayout<br/>advisory lock, OWNER only
+    payoutEntry --> adjustment : super-admin REJECTS the payout
+    payoutEntry --> [*] : super-admin marks it PAID<br/>no ledger write, already debited
+
+    note right of available
+        saldo tersedia = SUM amount_idr WHERE status = available
+        dana dalam proses = SUM amount_idr WHERE status = pending
+        The balance is DERIVED. It is never stored.
+    end note
+```
+
+| Invariant | Enforced by |
+|---|---|
+| The book is **append-only** — nothing is ever edited in place | convention + review. A reversal is always a **new opposing entry** |
+| A retried gateway callback cannot credit twice | `ledger_one_sale_per_payment` (partial unique index) |
+| A double-clicked "Retur" cannot double-refund | `ledger_one_retur_per_order` (partial unique index) |
+| Two concurrent withdrawals cannot both pass the balance check | `pg_advisory_xact_lock(hashtext(store_id))` inside the txn |
+| A rejected payout restores **exactly** what left | the adjustment is computed from `Σ ledger_entries WHERE payout_id = ?`, **not** from `payouts.amount_idr` |
+| Only a store **owner** can withdraw | `requestPayout` requires `settings:write`, which only `owner` holds |
+| Marking a payout PAID writes **no** ledger entry | the merchant was already debited at request time. Re-crediting would double-count |
+
+> **Why an advisory lock and not `FOR UPDATE`?** It *was* `FOR UPDATE`, originally — and
+> `select sum(amount_idr) … for update` is rejected outright by Postgres ("FOR UPDATE is not allowed
+> with aggregate functions"). **Every withdrawal threw.** The guard against losing money was itself the
+> thing that broke the feature, and `tsc` cannot see inside a SQL string. Money paths must be
+> *exercised*, not typechecked. The advisory lock is also O(1) in ledger size, where row-locking an
+> ever-growing table is not.
+
+---
+
+## 5. COD — the five-condition gate
+
+`apps/admin/lib/cod.ts#getCodPolicy` is the single place that answers "may this be paid on delivery?".
+All five conditions must agree, and they are checked **server-side in `/api/public/order` before any
+row is written**. Hiding the option at checkout is UX; *this* is the boundary. A script POSTing
+`channelCode:"cod"` straight at the API gets a 403 and zero rows — never a silently-downgraded order
+that hides a COD request as a "transfer".
+
 ```mermaid
 flowchart TD
-  A[Order detail — Cek Ongkir] --> B{Jenis}
-  B -->|Ekspedisi| C[shipping_price v6.1<br/>district IDs + weight+dims+insurance]
-  B -->|Instan| D[v4/instant/pricing<br/>lat/long + gosend/grab/borzo]
-  C --> E["Buat Pengiriman (request_pickup v6.1)<br/>+insurance_amount +cod +package dims"]
-  E --> F["orders.awb / courier / kaOrderId · status dikirim"]
-  F --> G["Lacak (tracking) · Cetak label PDF (100×150) · Batalkan (cancel_shipment)"]
-  D --> H["request_pickup instant (shipping_costs, order_prefix)"]
-  H --> F
+    REQ["POST /api/public/order<br/>channelCode = cod"] --> C1{"platform_cod.enabled"}
+    C1 -- no --> DENY["403 cod_not_allowed<br/>ZERO rows written"]
+    C1 -- yes --> C2{"store_settings.cod_enabled<br/>default FALSE"}
+    C2 -- no --> DENY
+    C2 -- yes --> C3{"total is within<br/>platform_cod.max_amount_idr<br/>0 means no cap"}
+    C3 -- no --> DENY
+    C3 -- yes --> RES["provinceForDistrict ship_district_id<br/>via kiriminaja_areas"]
+    RES --> VER{"district resolvable"}
+    VER -- no --> DENY
+    VER -- yes --> C4{"province is in<br/>platform_cod.allowed_provinces<br/>empty means anywhere"}
+    C4 -- no --> DENY
+    C4 -- yes --> C5{"service.cod AND service.codAllowed<br/>AND the courier row is enabled"}
+    C5 -- no --> DENY
+    C5 -- yes --> OK["order written<br/>payments row method=cod status=menunggu"]
 ```
 
-## 6. Shared nav — single source of truth (`@tokophi/data`)
-> `@tokophi/data/menu` exports canonical `MAIN_MENU` + `FOOTER_MENU`. Both the admin menu builder and the storefront header **derive** from it, so they stay in sync. **Today** this is a build-time sync (edit the file → rebuild both). **M3** persists menus in self-hosted Postgres so runtime edits in the admin UI go live on the storefront (ADR 0006).
-```mermaid
-flowchart TB
-  subgraph SRC["@tokophi/data/menu (canonical)"]
-    MM["MAIN_MENU: MenuItem[]"]
-    FM["FOOTER_MENU: MenuItem[]"]
-  end
+**Condition 4 does not read `address.provinsi`.** The buyer types that by hand and a hostile client can
+simply lie — "DKI Jakarta", then ship to Papua. The province is resolved from the **KiriminAja district
+id the ongkir quote was issued for**, which is what the parcel is actually booked against. If COD is
+requested and the district cannot be verified, the request is **refused**. An unverifiable destination
+is exactly the case `allowed_provinces` exists to stop, and this is money — "probably fine" is not good
+enough.
 
-  subgraph ADMIN["apps/admin — Navigasi (menu builder)"]
-    AS["lib/mock/store.ts<br/>toNavItems(MAIN_MENU/FOOTER_MENU) → MENUS"]
-    BUILDER["/navigasi drag-drop builder<br/>(edits = local React state)"]
-  end
+**Why COD is narrow today (SPX Standard + SPX Economy only).** *Not* because KiriminAja restricts it —
+it reports `cod = true` on **14 services across 10 couriers**. The asymmetry that costs money is
+**RETURNS**: a refused COD parcel is claimed to ship back free on SPX and to be billed to the merchant
+elsewhere. **That claim is UNVERIFIED** — free returns are a *Shopee Seller Center* benefit and we
+reach SPX through *KiriminAja*, a different contract with no return field in its API at all. The
+narrowing is therefore a per-service boolean an operator can flip
+(`platform_couriers.services[].codAllowed`), **not `if (courier === "spx")` welded into the code**.
+Widening is a tick box, not a deploy. See [`BACKLOG.md`](./BACKLOG.md).
 
-  subgraph STORE["apps/storefront — header/footer"]
-    NAV["src/data/nav.ts<br/>MAIN_NAV = MAIN_MENU.map(...)"]
-    HEADER["Header.astro / Footer"]
-  end
+---
 
-  MM --> AS --> BUILDER
-  FM --> AS
-  MM --> NAV --> HEADER
-  FM --> NAV
+## 6. Deployment
 
-  BUILDER -. "M3: persist to Postgres" .-> DB[("menus / menu_items")]
-  DB -. "M3: live read" .-> HEADER
+One VPS, Docker Compose behind Traefik, Cloudflare in front. There is no Kubernetes, no queue, no
+pub/sub — and the chat transport (short polling, not SSE) was chosen *because* of this box, not in
+spite of it.
 
-  classDef now fill:#eef,stroke:#88a;
-  class SRC,ADMIN,STORE now;
-```
-> Sync direction now is **file → both surfaces (build-time)**. The dotted edges are the M3 upgrade: admin UI edits persist to `menus`/`menu_items` and the storefront reads them live.
-
-## 7. Data-layer seam (IMPLEMENTED — server-only → Postgres via RLS)
-> Screens never touch storage directly. Admin/super-admin read through server-only `lib/data/*` selectors + write via `lib/actions/*` server actions; the storefront reads `src/data/catalog.ts` (via `@tokophi/db`). Admin tenant queries run inside `withTenant`/`withCurrentTenant` (sets `app.store_id` GUC + `SET LOCAL ROLE tokophi_app`) so RLS enforces. `lib/mock/*` remains only as deterministic seed-parity shape.
 ```mermaid
 graph TB
-  subgraph Screens
-    A1["admin (admin)/* + api/public/*"]
-    S1["super-admin (platform)/*"]
-    F1["storefront pages/*.astro"]
-  end
-  subgraph Seam["Server-only data/actions"]
-    AD["admin lib/data/* (withCurrentTenant) + lib/actions/* (withTenant)"]
-    SD["super-admin lib/data.ts + actions.ts (owner, cross-tenant)"]
-    SC["storefront src/data/catalog.ts (build/SSR)"]
-    INT["@tokophi/lib/{kiriminaja,autolaris,cache}"]
-  end
-  DB[("PostgreSQL 16 + RLS (tokophi_app role)")]
-  EXT["KiriminAja · AutoLaris (live APIs)"]
+    subgraph edge["Cloudflare"]
+        CF["DNS plus TLS plus CDN<br/>www 301 to apex"]
+    end
 
-  A1 --> AD --> DB
-  A1 --> INT --> EXT
-  S1 --> SD --> DB
-  F1 --> SC --> DB
+    subgraph vps["VPS - single host, Docker Compose plus Traefik"]
+        TR["Traefik<br/>routes by Host"]
+        C1["landing<br/>Astro static"]
+        C2["storefront<br/>Astro SSR - node standalone"]
+        C3["admin<br/>Next.js standalone"]
+        C4["super-admin<br/>Next.js standalone"]
+        C5[("postgres 16<br/>persisted volume")]
+        VOL[/"uploads volume"/]
+    end
+
+    subgraph third["Third parties"]
+        AL2["AutoLaris"]
+        KA2["KiriminAja"]
+    end
+
+    CF --> TR
+    TR -->|"tokophi.com"| C1
+    TR -->|"slug.tokophi.com"| C2
+    TR -->|"app.tokophi.com"| C3
+    TR -->|"rich.tokophi.com"| C4
+
+    C2 --> C5
+    C3 --> C5
+    C4 --> C5
+    C3 --> VOL
+    C2 -.->|"HTTP - ongkir, order, images"| C3
+
+    C3 --> AL2
+    C3 --> KA2
+    C4 --> KA2
+    AL2 -.->|"webhook"| C3
 ```
 
-## 8. Deployment & scaling (target — Cloudflare-native, sized for 50–100 clients / 10–30k ad traffic)
-> Storefront static+edge absorbs ad traffic cheaply; the load-bearing paths are **images** and **live ongkir** — solved by R2+Cloudflare Images and KV/in-proc pricing cache. DB is self-hosted Postgres on a VPS (ADR 0007, NOT Supabase) behind a pooler.
+| Surface | Host | Indexable | DB access |
+|---|---|:--:|---|
+| `landing` | `tokophi.com` / `www.` → 301 | **yes** | **none** |
+| `storefront` | `<slug>.tokophi.com`, `toko.` | **yes** | read-only, owner conn |
+| `admin` | `app.tokophi.com` | **no** — `noindex, nofollow` in 3 layers | `withTenant` (RLS) |
+| `super-admin` | `rich.tokophi.com` | **no** — `noindex, nofollow` in 3 layers | owner conn (cross-tenant) |
+
+The three noindex layers per panel are `next.config.ts headers()` (covers `/api/*`, static assets,
+non-HTML) + the same header re-stamped in `middleware.ts` (a redirect short-circuits before
+`headers()` runs) + `metadata.robots` and `app/robots.ts`. All three are needed; the first alone was
+not enough, which is how both panels ended up crawlable after the domain cutover.
+
+**`/api/uploads/*` is deliberately carved OUT** (`X-Robots-Tag: all`). Merchant product photos are
+served from the admin origin but embedded in public storefronts — a blanket noindex would have removed
+every merchant's product photography from Google Images.
+
+`astro build` for the storefront is **DB-free** (verified with `DATABASE_URL` unset). That is what
+preserves the zero-downtime deploy: the image builds even when the database is unreachable.
+
+---
+
+## 7. Identity and access
+
+Three **non-overlapping** identities. A merchant login never grants control-plane access, and the
+shopper has no identity at all.
+
 ```mermaid
 graph LR
-  Ads[Ad traffic 10–30k] --> CDN
-  subgraph Cloudflare[Cloudflare edge]
-    CDN[CDN / Pages — Astro storefronts]
-    IMG[Cloudflare Images + R2 — product media]
-    KV[Workers KV / Cache API — ongkir & KPI cache]
-    Q[Cloudflare Queues / Inngest — callbacks · notif · shipment]
-    W["Workers (opsi) — /api/public/*"]
-  end
-  subgraph VPS[VPS — Coolify/Docker]
-    ADMIN[admin + super-admin Next]
-    POOL[PgBouncer / Hyperdrive]
-    PG[(Postgres 16 + RLS)]
-  end
-  EXT[KiriminAja · AutoLaris]
+    subgraph ids["Three identities - no overlap"]
+        M["Merchant<br/>cookie: session<br/>tables: users plus store_users"]
+        P["Platform operator<br/>cookie: platform_session<br/>table: platform_admins"]
+        S["Shopper<br/>NO identity<br/>chat visitors get tokophi_chat"]
+    end
 
-  CDN --> W --> POOL --> PG
-  CDN --> IMG
-  W --> KV
-  W --> EXT
-  ADMIN --> POOL
-  Q --> EXT
-  Q --> PG
+    M --> RBAC["requireCapability cap<br/>lib/rbac.ts - THE boundary"]
+    RBAC --> TEN["withTenant storeId<br/>SET app.store_id<br/>SET LOCAL ROLE tokophi_app"]
+    TEN --> PGA[("Postgres<br/>RLS ENFORCED")]
+
+    P --> PROLE["requirePlatformAdmin min<br/>rank support 1, admin 2, owner 3"]
+    PROLE --> OWNER[("Postgres owner conn<br/>RLS BYPASSED by design<br/>cross-tenant")]
+
+    S --> PUB["/api/public/*<br/>owner conn plus explicit store_id"]
+    PUB --> OWNER
 ```
-> **Priority before ads:** ① R2 + Cloudflare Images (media) · ② KV cache for `shipping_price` (avoid KiriminAja rate-limit) · ③ DB pooling · ④ Queue for async (callbacks/notif/shipment). Backend extraction (Hono/Workers) + full Redis are optional at this scale. Open decision: storefront **SSG-rebuild-per-store** vs **SSR + edge-cache** (better for 50–100 stores with frequent updates).
 
-## 9. User roles (who touches what)
-> Access map across the three surfaces; RLS by `store_id` enforces tenant isolation at M3 (ADR 0003), super-admin is the cross-tenant platform plane.
+### 7.1 Merchant RBAC (`store_users.role`)
+
+`lib/rbac-policy.ts` is the client-safe matrix; `lib/rbac.ts#requireCapability` is the server guard and
+**the** security boundary — it is the first statement of every mutating server action, and it throws.
+The UI gating (`useCan` / `<Can>`) is convenience only and secures nothing.
+
+| Role | Capabilities |
+|---|---|
+| `owner` | all |
+| `admin` | all **except `settings:write`** |
+| `staff` | `products:write`, `discounts:write`, `content:write`, `orders:write`, `customers:write`, `crm:write`, `media:write`, `support:write` |
+| `gudang` | `inventory:write`, `purchases:write`, `support:write` |
+
+Two consequences worth naming out loud:
+
+- **`requestPayout` requires `settings:write` → only an `owner` can withdraw money.** Correct, and not
+  obvious from the capability name.
+- `requireCapability` **also** blocks writes when the subscription is past its grace period
+  (`getBilling().readOnly` → `SuspendedError`). `support:write` opts out via `allowSuspended` — a
+  suspended store must still be able to contact us about the billing problem that suspended it.
+
+### 7.2 Platform roles (`platform_admins.role`)
+
+Ranked, not a matrix: `requirePlatformAdmin(min)` compares `RANK[session.role] >= RANK[min]`
+(`support` 1 < `admin` 2 < `owner` 3). Added in `0776e99` — before that the role was carried in the JWT
+and **never read**, so a `support` operator could reject payouts, reset passwords and impersonate.
+
+| Guard | Actions |
+|---|---|
+| `owner` | `impersonateStore`, `resetOwnerPassword` |
+| `admin` (default) | everything else — 28 call sites, including every payout and COD-policy action |
+| `support` | **zero call sites** — the role exists and can do nothing, not even the ticket queue its own doc comment says it is for |
+
+⚠️ **Known escalation, tracked in [`BACKLOG.md`](./BACKLOG.md):** `invitePlatformAdmin` is
+`admin`-gated, takes `role` **unvalidated**, and is **not audit-logged** — so an `admin` operator can
+mint themselves an `owner` and thereby reach the two `owner`-only actions. Enforcement is at the
+**action** layer only: the middleware and page guards check for *a* session, not for a role, so a
+lower-privileged operator sees every screen and the buttons throw on click.
+
+---
+
+## 8. Store Builder — why the editor and the renderer cannot drift
+
 ```mermaid
 graph LR
-  Platform["Platform admin (us)"] --> SA["super-admin: toko, paket, billing,<br/>gateway/kurir/COD config"]
-  Owner["Store owner"] --> AD["admin: produk, pesanan, CRM,<br/>navigasi, aktifkan metode/kurir"]
-  Staff["Staf / gudang"] --> AD2["admin: pesanan, stok (peran terbatas)"]
-  Buyer["Pembeli"] --> SF2["storefront: belanja, checkout"]
+    SECT["@tokophi/sections<br/>SECTION_TYPES<br/>SECTION_DEFAULTS<br/>StoredTemplateData<br/>heroSlides<br/>TYPES ONLY - zero runtime"]
+
+    PUCK["apps/admin<br/>lib/theme/puck-config.tsx<br/>Puck drag-drop editor"]
+    PREV["apps/admin<br/>components/theme/sections<br/>React preview"]
+    REND["apps/storefront<br/>components/sections<br/>Astro SectionRenderer"]
+
+    PT[("page_templates<br/>type: homepage category product<br/>sections: jsonb")]
+
+    SECT --> PUCK
+    SECT --> PREV
+    SECT --> REND
+    PUCK -->|"writes"| PT
+    PT -->|"reads at SSR"| REND
 ```
 
-## 10. Per-client topology & provisioning (ADR 0008)
-> One control plane + one **multi-tenant** admin + a **storefront per client**, all on one shared DB. "Client Admin A/B" = the *same* admin app scoped by `store_id` — not a deploy per client.
-```mermaid
-graph TB
-  Super["Super Admin<br/>(1 deploy, cross-tenant)"] --> DB[("shared PostgreSQL<br/>store_id + RLS")]
-  Admin["Client Admin<br/>(1 multi-tenant deploy)"] --> DB
-  subgraph Clients["Per client = a store_id + a storefront deploy"]
-    A["Storefront A<br/>STORE_SLUG=a · domain A"]
-    B["Storefront B<br/>STORE_SLUG=b · domain B"]
-    C["Storefront C<br/>STORE_SLUG=c · domain C"]
-  end
-  A --> DB
-  B --> DB
-  C --> DB
-  MA([Merchant A]) -->|login → store_id=A| Admin
-  MB([Merchant B]) -->|login → store_id=B| Admin
+The admin writes `page_templates.sections`; the storefront reads it at SSR. Both sides import their
+shape from `@tokophi/sections`, so a section added on one side and not the other is a **type error**,
+not a silently blank slot on a live shop.
+
+The hero carousel (`8fad2f9` → `5016bb3`) is the worked example of what happens when you skip that: it
+shipped first as a **fork** of the shared config inside the admin, which meant the storefront could not
+render what the merchant built. It was folded back into the shared registry (`heroSlides()`,
+`HERO_INTERVAL_MS`) and the fork deleted.
+
+---
+
+## Validation
+
+All 8 diagrams above — 1 `erDiagram`, 2 `stateDiagram-v2`, 1 `flowchart`, 4 `graph` — were rendered to
+SVG with `@mermaid-js/mermaid-cli` **v11.16.0** on **2026-07-14**. Re-validate after editing:
+
+```bash
+printf '{"executablePath":"/usr/bin/google-chrome","args":["--no-sandbox"]}' > /tmp/pp.json
+npx @mermaid-js/mermaid-cli -i specs/docs/UML.md -o /tmp/uml-check.md -p /tmp/pp.json
 ```
 
-**Onboard a client (3 steps, no new admin/DB):**
-```mermaid
-sequenceDiagram
-  participant P as Platform (super-admin)
-  participant DB as shared Postgres
-  participant CF as Cloudflare
-  participant M as Merchant
-  P->>DB: 1. create account + store (+owner, plan, settings, location)
-  P->>CF: 2. deploy storefront (STORE_SLUG + custom domain)
-  M->>DB: login → admin scoped to store_id (RLS)
-  M->>DB: 3. fill catalog / pages via scoped admin
-  Note over DB,CF: storefront reads that store by slug → live shop
-```
-*Living doc — update diagrams when the architecture moves.*
+**The failure mode to watch for:** a `;` inside `sequenceDiagram` message text terminates the
+statement. Write "then", or an em dash — never a semicolon.

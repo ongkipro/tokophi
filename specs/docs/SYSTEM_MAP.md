@@ -50,7 +50,7 @@ graph TB
     subgraph Data["Data layer"]
         TENANT["withTenant / withCurrentTenant<br/>SET app.store_id + SET LOCAL ROLE tokophi_app"]
         OWNER["owner connection<br/>role: tokophi — RLS bypassed"]
-        PG[("PostgreSQL 16 :5433<br/>64 tables · 42 migrations<br/>RLS on 39")]
+        PG[("PostgreSQL 16 :5433<br/>67 tables · 44 migrations<br/>RLS on 43")]
         DISK["public/uploads/<br/>local media (→ MinIO on VPS)"]
     end
 
@@ -98,13 +98,15 @@ Everything else is **through the database**. There is no service mesh, no intern
 Verified from the catalog, not from a doc:
 
 ```sql
-select count(*) from information_schema.tables where table_schema='public';   -- 64
+select count(*) from information_schema.tables where table_schema='public';   -- 67
 select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
- where n.nspname='public' and c.relkind='r' and c.relrowsecurity;             -- 39
+ where n.nspname='public' and c.relkind='r' and c.relrowsecurity;             -- 43
 ```
 
-- **64 tables**, **42 migrations** (`0000` … `0041` — the docs still say 54 tables / 0000–0040).
-- **39 tables have `relrowsecurity = true`.** Every one carries the same policy:
+- **67 tables**, **44 migrations** (`0000` … `0043`). *(Re-verified 2026-07-14: `0042_order_address_snapshot`
+  and `0043_chat` landed after this file was first written. `0043` is the shopper⇄merchant chat feature and its
+  application code was still in flight — see `SCHEMA.md` §1.)*
+- **43 tables have `relrowsecurity = true`.** Every one carries the same policy:
   `USING (store_id = app_current_store_id()) WITH CHECK (store_id = app_current_store_id())`.
 - `app_current_store_id()` is `SELECT nullif(current_setting('app.store_id', true), '')::uuid`.
 - Two DB roles exist: **`tokophi`** (owner, bypasses RLS) and **`tokophi_app`** (non-owner, 256 table grants, policies enforce).
@@ -288,7 +290,7 @@ Every mutating server action re-checks with `requireCapability(cap)` — **that*
 | `POST /api/public/order` | **none** (CORS `*`) | 10/min/IP | The checkout. **Enforces the 5-condition COD gate before any row is written**, then upserts `customers`, checks stock, writes `orders` + `order_line_items`, decrements `inventory_levels`, and creates either a `cod` payment (`menunggu`) or an AutoLaris bill. |
 | `POST /api/public/pay` | **none** | 20/min/IP | Standalone `alCreatePayment`. **Dead**: `PUBLIC_PAY_API` is declared in `apps/storefront/.env.example` but no storefront source file reads it. |
 | `POST /api/public/pay/callback` | **shared secret** `X-Callback-Token` / `?token=`, constant-time compare; **returns 401 in production when `AUTOLARIS_CALLBACK_SECRET` is unset** (fails closed) | 60/min/IP | Marks payments paid → syncs `orders.financial_status` → **credits the ledger** → extends store subscriptions. |
-| `GET /api/cron/billing` | `CRON_SECRET` header/query — **but the check is `if (secret && provided !== secret)`, so an unset `CRON_SECRET` leaves it OPEN**. See STATUS.md. | none | Syncs `stores.status` to the computed lifecycle; generates renewal VA invoices for `past_due`/`suspended` stores. |
+| `GET /api/cron/billing` | `CRON_SECRET` header/query. ✅ **Fails CLOSED (fixed 2026-07-14, `0776e99`)** — 401 in production when the secret is unset. It used to read `if (secret && provided !== secret)`, so **no secret meant no check at all**, on a route excluded from the auth middleware that walks every store to suspend it or bill it. | none | Syncs `stores.status` to the computed lifecycle; generates renewal VA invoices for `past_due`/`suspended` stores. |
 | `GET /api/uploads/[name]` | **none** (public by design — storefronts embed these) | none | Serves runtime-uploaded media from `public/uploads/`. Filename regex `^[a-zA-Z0-9._-]+$` blocks traversal. |
 | `GET /api/auth/google/{start,callback}` | — | none | Google OAuth (feature-flagged; routes redirect when env is unset). |
 | `GET /impersonate` | 2-min JWT from super-admin | none | Exchanges the token for a `session` cookie on the admin domain. |
@@ -331,10 +333,17 @@ Mutations that touch **money or identity** (all audit-logged to `platform_activi
 `compStore`, `extendTrial`, `setStoreComped`, `resetOwnerPassword`, `resetStoreUserPassword`, `addStoreUser`, `removeStoreUser`,
 `createManualInvoice`, `setStoreStatus`.
 
-⚠️ **Audit gaps** (they mutate, they do not log): `impersonateStore`, `createStore`, `setStorePlan`, `setInvoiceStatus`,
-`invitePlatformAdmin`, every `/pengaturan` mutation, every ticket action.
-⚠️ **`requirePlatformAdmin()` checks only that a session exists — `platform_admins.role` is never enforced.** An invited
-`support` operator can reject payouts, reset passwords and impersonate. See STATUS.md.
+✅ **FIXED 2026-07-14 (`0776e99`, `571ed17`): `requirePlatformAdmin(min)` now enforces the role** — ranked
+`support` 1 < `admin` 2 < `owner` 3. `impersonateStore` and `resetOwnerPassword` require **`owner`**, and
+**impersonation is audit-logged**. Before this, the role was carried in the JWT and read by nothing.
+
+⚠️ **Audit gaps that REMAIN** (they mutate, they do not log): `createStore`, `setInvoiceStatus` (**money**),
+`invitePlatformAdmin`, `setStoreUserRole`, `saveGateways`, `saveCodAllowed` (**COD risk policy**), every ticket action.
+
+🔴 **The role check has a hole:** `invitePlatformAdmin` is `admin`-gated, takes `role` **unvalidated**
+(`role: input.role || "admin"`), and is **unlogged** — so an `admin` operator can mint themselves an `owner` and
+reach the two owner-only actions. Role enforcement is also **action-only**: the middleware and page guards check for
+*a* session, not a role, so a lower-privileged operator sees every screen. See STATUS.md §3.3.
 
 ---
 
@@ -417,10 +426,16 @@ Condition 4's province is taken from the **KiriminAja district id the ongkir quo
 
 `platform_payout` is a single-row policy table: `release_on` (default `'selesai'`), `min_payout_idr` (default `50000`), `auto_approve`.
 
-- `min_payout_idr` **is** read — `apps/admin/lib/actions/ledger.ts:49`, falling back to `50_000`.
-- **`release_on` is NOT read by anything that moves money.** `settleOrderLedger()` hardcodes `if (status === "selesai")`. The super-admin's "Rilis: Dikirim" toggle saves the row and changes nothing. See STATUS.md.
-- `auto_approve` is read into the type and never written or displayed.
-- The `platform_payout` table is **currently empty in the local DB** (0 rows) — the seed truncates it and does not re-insert, so both values fall back to their code defaults.
+- `min_payout_idr` **is** read — `apps/admin/lib/actions/ledger.ts`, falling back to `50_000`.
+- ✅ **`release_on` IS read now (fixed 2026-07-14, `0776e99`).** `settleOrderLedger()` reads the row and releases at
+  whatever it says, defaulting to `selesai`. It previously hardcoded `selesai` while the super-admin's "Rilis: Dikirim"
+  toggle saved a value and changed nothing — an operator could flip it, believe the policy had changed, and it had not.
+  The default should stay `selesai`: a parcel can only be *returned* after it shipped, and on COD the cash does not
+  exist at despatch at all.
+- `auto_approve` is read into the type and never written or displayed. **Still dead.**
+- ✅ **`platform_payout` now has its row** (fixed 2026-07-14, `ab68abe`). It used to be **empty** — the seed truncates
+  every table and never re-inserted this one, so the policy screen displayed values that did not exist in the database
+  and `min_payout_idr` silently fell back to a code default.
 
 ---
 

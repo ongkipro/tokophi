@@ -254,9 +254,13 @@ sequenceDiagram
 ```
 
 **Release timing.** `platform_payout.release_on` defaults to `'selesai'` and the super-admin can flip it to `'dikirim'`.
-⚠️ **Nothing reads it.** `settleOrderLedger()` hardcodes `if (status === "selesai")`. The toggle persists and changes no
-behaviour — see `STATUS.md`. Release-on-despatch would be dangerous anyway (a shipped parcel can still come back; a COD
-parcel has not been paid yet), so the code is doing the *right* thing — it just is not doing what the setting says.
+✅ **It IS read now (fixed 2026-07-14, `0776e99`).** `settleOrderLedger()` reads the row and releases at whatever it
+says. It previously hardcoded `if (status === "selesai")`, so the toggle persisted and changed nothing — an operator
+could flip it, believe the policy had changed, and it had not. **A knob that moves nothing is worse than no knob.**
+
+The default should stay `selesai`. Release-on-despatch looks generous and is a trap: a shipped parcel can still come
+back, so the merchant could withdraw money for goods that return — and on COD the cash does not exist at despatch at
+all (the courier collects at the door and settles days later).
 
 ---
 
@@ -371,8 +375,8 @@ sequenceDiagram
     end
 ```
 
-**39 of the 64 tables carry that policy** (verified from `pg_class.relrowsecurity`). The DB, not application code, is
-the tenant boundary — for the admin panel.
+**43 of the 67 tables carry that policy** (re-verified from `pg_class.relrowsecurity` on 2026-07-14). The DB, not
+application code, is the tenant boundary — for the admin panel.
 
 **The deliberate exceptions**, and why:
 
