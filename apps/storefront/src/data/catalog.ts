@@ -276,14 +276,30 @@ export const randomProducts = (list: Product[]) => {
   return arr;
 };
 
-// Payment channels the platform (super-admin) has enabled — offered at checkout (+ COD).
-// Platform-wide (not store-scoped), so it gets its own cache key.
+// Payment channels offered at checkout (+ COD). Platform-wide (not store-scoped) → own cache key.
+//
+// BOTH flags must hold, and the difference is the shopper's money:
+//   `enabled` — WE (super-admin) chose to offer it.
+//   `active`  — AUTOLARIS actually accepts it, from a live probe (`create_payment` → rc == "00").
+//
+// This used to filter on `enabled` alone. It only ever worked because the two sets happened to
+// coincide (6 channels: QRIS + 5 VA). The moment anyone enables a channel the gateway has NOT
+// activated — the obvious thing to do when you want to "turn everything on and test" — the shopper
+// is shown a payment method that CANNOT be charged: they pick OVO, we call create_payment, AutoLaris
+// answers rc=07, and the sale dies at the last step with the buyer's money already in hand mentally.
+// Probed live 2026-07-14: 6 active (rc=00), 9 refused (rc=07 — BSI, CIMB, Danamon, DANA, ShopeePay,
+// LinkAja, GoPay, Alfamart, Indomaret). An `enabled` flag is an intention; `active` is a fact. Offer
+// only what the gateway will actually take.
+//
+// Note the asymmetry this fixes: the merchant's own SUBSCRIPTION payment (admin
+// `lib/actions/payment-settings.ts`) already filtered on `enabled && active` — so we were protecting
+// our own invoice while exposing the shopper's checkout. Backwards.
 export async function enabledPaymentChannels(): Promise<{ code: string; label: string; kind: string }[]> {
   return cached("platform:payment-channels", async () => {
     const rows = await db
       .select()
       .from(schema.platformPaymentChannels)
-      .where(eq(schema.platformPaymentChannels.enabled, true))
+      .where(and(eq(schema.platformPaymentChannels.enabled, true), eq(schema.platformPaymentChannels.active, true)))
       .orderBy(asc(schema.platformPaymentChannels.id));
     return rows.map((r) => ({ code: r.channel, label: r.label, kind: r.kind }));
   });
