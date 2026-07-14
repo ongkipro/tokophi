@@ -235,45 +235,81 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
     ratingText: "",
   },
   "product-grid": {
-    heading: "Terlaris Minggu Ini",
+    // "Terlaris Minggu Ini" was a claim about a TIME WINDOW we do not compute: `mode: "terlaris"`
+    // sorts the whole catalog by all-time `units_sold`, not by last-7-days sales. The heading now
+    // says only what the section actually does. Do not put a period ("minggu ini", "hari ini",
+    // "bulan ini") back in unless the data layer starts windowing the bestseller query.
+    heading: "Produk Terlaris",
     mode: "terlaris",
     collectionHandle: "",
     limit: 8,
     columns: 4,
   },
   "banner-promo": {
-    heading: "Promo Gajian",
-    subheading: "Diskon hingga 30% untuk semua kategori.",
+    // NOT a promo. The old default shipped "Promo Gajian · Diskon hingga 30% untuk semua kategori"
+    // + a "Terbatas" scarcity badge + a link to a category only the demo store owns — three claims
+    // (a discount rate, a scarcity, a destination) that are bound to NOTHING: no `discounts` row,
+    // no deadline, no collection. A merchant who drags this section and publishes has advertised a
+    // 30% sale they never created. Defaults are PROMPTS; the merchant supplies the real offer.
+    heading: "Judul promo kamu",
+    subheading: "Tulis penawaran yang benar-benar kamu jalankan, lalu tautkan ke kategori terkait.",
     imageUrl: "",
-    href: "/kategori/promo-gajian",
-    badge: "Terbatas",
+    href: "/",
+    badge: "",
   },
   testimoni: {
-    heading: "Kata Mereka",
-    items: [
-      { name: "Sari", quote: "Bahannya adem, jahitan rapi. Repeat order terus!", rating: 5 },
-      { name: "Dewi", quote: "Pengiriman cepat, sesuai foto.", rating: 5 },
-    ],
+    // EMPTY ON PURPOSE — a testimonial is an advertising claim, and one we cannot source.
+    // This used to ship two invented customers ("Sari", "Dewi") with invented 5★ quotes about
+    // fabric, stitching and delivery speed. Dragging the section published two fake reviews from
+    // two people who do not exist, for a store whose products the platform has never seen. Same
+    // class of problem as the fake product ratings removed from the storefront. Never seed people.
+    // The merchant adds their own quotes via the Puck array field (Judul + Nama/Kutipan/Rating).
+    heading: "Kata Pelanggan",
+    items: [],
   },
   "image-text": {
+    // Was a finished brand story for a batik womenswear label ("Dibuat dengan Bahan Pilihan …
+    // setiap helai kami rancang untuk perempuan Indonesia"). Read as real copy, it is a product-
+    // quality claim about goods the platform has never seen, in a niche most stores are not in —
+    // exactly the kind of plausible text a merchant publishes without reading. Prompt copy instead.
     eyebrow: "Kenapa Kami",
-    heading: "Dibuat dengan Bahan Pilihan",
-    body: "Setiap helai kami rancang untuk perempuan Indonesia — memadukan warisan budaya dengan siluet masa kini, agar kamu tampil anggun tanpa kehilangan kenyamanan.",
+    heading: "Judul cerita toko kamu",
+    body: "Ceritakan apa yang membuat produk kamu berbeda — bahan, proses, atau orang di baliknya. Ganti teks ini sebelum menerbitkan.",
     imageUrl: "",
     imageSide: "left",
   },
   marquee: {
-    text: "Gratis Ongkir Se-Indonesia · Kualitas Premium · COD Tersedia",
+    // The old default — "Gratis Ongkir Se-Indonesia · Kualitas Premium · COD Tersedia" — was three
+    // claims, two of which the platform CANNOT honour:
+    //   • "Gratis Ongkir": there is NO free-shipping mechanism anywhere in the product. Checkout
+    //     always charges a real courier rate; `keranjang.astro` deliberately refuses to render a
+    //     free-shipping progress bar because no threshold exists in our data. The `gratis_ongkir`
+    //     discount kind carries no minimum and is not wired to the rate quote.
+    //   • "COD Tersedia": COD is OPT-IN and defaults to OFF (`store_settings.cod_enabled`,
+    //     migration 0038) — false for every store until the merchant enables it in Pengiriman.
+    // A marquee runs on every page: it is the single loudest place to publish a promise you then
+    // break at checkout. The default is now a PROMPT. If you want a shipping/COD line back here,
+    // it has to be DERIVED from the store's real settings, not typed into a constant.
+    text: "Tulis pengumuman toko kamu di sini · Ganti teks ini di Store Builder",
     speed: "sedang",
   },
   "rich-text": {
-    heading: "Siap tampil anggun setiap hari?",
-    body: "Jelajahi koleksi kami dan temukan busana yang membuatmu percaya diri.",
+    // ctaHref was "/kategori/semua" — a collection NO store has (there is no /kategori index route
+    // either), so the default CTA 404'd on every storefront including the demo. "/" is the one link
+    // that is valid for every tenant; the merchant repoints it. Copy here is brand voice, not a
+    // factual claim, so it stays as prompt-ish placeholder.
+    heading: "Judul ajakan kamu",
+    body: "Ceritakan singkat kenapa pelanggan harus belanja di toko kamu.",
     ctaLabel: "Mulai Belanja",
-    ctaHref: "/kategori/semua",
+    ctaHref: "/",
     theme: "terang",
   },
   "category-nav": {
+    // ⚠️ NOT a claim, but still wrong for anyone but the demo store: these three handles are the
+    // demo catalog's (Dress/Atasan/Bawahan) and 404 on a store that does not have them. The real
+    // fix is a builder-side field that picks from the store's OWN `collections` (an "external"/
+    // select Puck field) instead of a free-text href — see the report/BACKLOG. Left as-is for now
+    // because an empty array renders an empty husk (the array field is the only way to add items).
     items: [
       { label: "Dress", imageUrl: "", href: "/kategori/dress" },
       { label: "Atasan", imageUrl: "", href: "/kategori/atasan" },

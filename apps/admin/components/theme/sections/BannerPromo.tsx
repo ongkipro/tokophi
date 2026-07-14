@@ -3,7 +3,7 @@ import type { BannerPromoConfig } from "@tokophi/sections";
 export function BannerPromo({ heading, subheading, imageUrl, href, badge }: BannerPromoConfig) {
   return (
     <a
-      href={href}
+      href={href || undefined}
       className="group relative flex min-h-[200px] items-center overflow-hidden rounded-2xl bg-gradient-to-br from-rose-200 to-rose-50 p-8"
     >
       {imageUrl && (

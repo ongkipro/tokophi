@@ -2,7 +2,7 @@
 // `Host` header, load its catalog, and hand both to every page/component via `Astro.locals`.
 // One deploy serves every store — no per-client build, no STORE_SLUG-per-deploy.
 import { defineMiddleware } from "astro:middleware";
-import { getStoreByHost, normalizeHost } from "./data/store";
+import { getStoreByHost, normalizeHost, primaryOrigin } from "./data/store";
 import { getCatalog } from "./data/catalog";
 
 const notFoundHtml = (host: string) => `<!doctype html>
@@ -57,7 +57,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const rawHost = fwdHost || context.request.headers.get("host") || context.url.host;
   // localhost has no TLS in dev — emitting https:// there would break every link we print.
   const scheme = /^(localhost|127\.0\.0\.1)(:|$)/.test(rawHost) ? "http" : proto;
-  context.locals.origin = `${scheme}://${rawHost}`;
+
+  // The PRIMARY origin — not merely the one this request arrived on.
+  //
+  // A store is ALWAYS reachable at <slug>.tokophi.com. Once custom domains land, the same catalogue is
+  // reachable at two hosts, and if both are indexable Google sees a full duplicate of every product
+  // page and both hosts lose. So exactly ONE host is canonical, and canonicals / og:url / the sitemap
+  // must all be built from it — never from whichever host the shopper happened to type.
+  //
+  // Today there are no custom domains, so the subdomain IS the primary and this is a no-op. The seam
+  // is here now so that adding `stores.custom_domain` later is a one-line change in primaryOrigin()
+  // instead of a hunt through every place a URL is emitted.
+  context.locals.origin = primaryOrigin(store, `${scheme}://${rawHost}`);
 
   return next();
 });

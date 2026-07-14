@@ -123,3 +123,27 @@ export async function getStoreByHost(host: string | null | undefined): Promise<S
     return fallback ? await getStoreBySlug(fallback) : null;
   });
 }
+
+/**
+ * The store's PRIMARY origin — the single host its pages are canonical on.
+ *
+ * Every store is permanently reachable at `<slug>.tokophi.com`. When a merchant attaches a custom
+ * domain, the identical catalogue becomes reachable at TWO hosts. If both are indexable, Google sees a
+ * complete duplicate of every product page and splits the ranking signal between them — the merchant
+ * ends up competing with themselves. So exactly one host must be canonical, and canonicals, `og:url`
+ * and the sitemap must all be built from it, never from whichever host the request arrived on.
+ *
+ * TODAY: no custom domains exist (`slugFromCustomDomain()` above is still a stub), so the subdomain is
+ * the primary and this returns the requested origin unchanged. That is deliberate and matches the
+ * product decision: the subdomain IS the primary until a merchant sets a custom domain in the seller
+ * dashboard — which does not exist yet either.
+ *
+ * WHEN `stores.custom_domain` LANDS, this becomes:
+ *     if (store.customDomain) return `https://${store.customDomain}`;
+ * and every URL the storefront emits follows automatically, because they all come through here.
+ * The subdomain must then either 301 to the custom domain, or serve `rel=canonical` pointing at it —
+ * see specs/docs/CUSTOM_DOMAIN.md.
+ */
+export function primaryOrigin(_store: StoreInfo, requestedOrigin: string): string {
+  return requestedOrigin;
+}

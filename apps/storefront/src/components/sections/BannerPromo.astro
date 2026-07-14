@@ -3,11 +3,15 @@ import type { BannerPromoConfig } from "@tokophi/sections";
 
 type Props = BannerPromoConfig;
 const { heading, subheading, imageUrl, href, badge } = Astro.props;
+
+// A merchant who clears the link leaves `href=""`, which reloads the current page — a control that
+// looks like a link and behaves like a mistake. With no destination this is a banner, not a link.
+const Tag = href ? "a" : "div";
 ---
 
 <section class="mx-auto max-w-7xl px-4 sm:px-6">
-  <a
-    href={href}
+  <Tag
+    href={href || undefined}
     class="group relative flex min-h-[220px] items-center overflow-hidden rounded-2xl bg-brand-100 p-8 sm:p-12"
   >
     {
@@ -31,5 +35,5 @@ const { heading, subheading, imageUrl, href, badge } = Astro.props;
       <h3 class="font-display text-2xl font-semibold text-white sm:text-3xl">{heading}</h3>
       <p class="max-w-sm text-white/85">{subheading}</p>
     </div>
-  </a>
+  </Tag>
 </section>

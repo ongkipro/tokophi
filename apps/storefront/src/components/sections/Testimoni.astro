@@ -4,13 +4,20 @@ import type { TestimoniConfig } from "@tokophi/sections";
 
 type Props = TestimoniConfig;
 const { heading, items } = Astro.props;
+
+// A testimonial is an advertising claim — so the registry default is now `items: []` (it used to ship
+// two INVENTED customers, with names and 5★ ratings). An empty list is therefore the NORMAL state for
+// a store that has just dragged this section on, and rendering the section anyway would publish a
+// heading with prev/next arrows over an empty track. Render nothing at all instead.
+const testimonials = items ?? [];
 ---
 
+{testimonials.length > 0 && (
 <section class="bg-brand-50">
   <div class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
     <div class="flex items-center justify-between gap-4">
       <h2 class="font-display text-3xl font-semibold text-ink sm:text-4xl">{heading}</h2>
-      <div class="flex shrink-0 gap-2" data-testimoni-nav>
+      <div class:list={["shrink-0 gap-2", testimonials.length > 1 ? "flex" : "hidden"]} data-testimoni-nav>
         <button
           type="button"
           aria-label="Sebelumnya"
@@ -34,7 +41,7 @@ const { heading, items } = Astro.props;
       class="mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {
-        items.map((item) => (
+        testimonials.map((item) => (
           <figure class="w-[85%] shrink-0 snap-start rounded-2xl bg-white p-6 shadow-sm ring-1 ring-line sm:w-[45%] lg:w-[31%]">
             {/* The shared SVG <Stars> — this used to hand-roll the rating out of "★" TEXT, which
                 renders in whatever star glyph the OS font ships and is a second, drifting copy of
@@ -51,6 +58,7 @@ const { heading, items } = Astro.props;
     </div>
   </div>
 </section>
+)}
 
 <script>
   // Lightweight scroll-snap carousel — no framework, one listener pair per section instance.
