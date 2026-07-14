@@ -1,14 +1,25 @@
 ---
-// Article detail — NEW. `/blog` listed articles but this route did not exist, so nothing a merchant
-// wrote in the admin's Blog editor was ever readable by a shopper.
+// Article detail — Medium-style reading layout.
+//
+// Anatomy (top → bottom): topic chip · big title · subtitle · author row (avatar, name, read time,
+// date) · hairline action bar · 3:2 feature image · body · "Baca juga".
+//
+// One column, no coloured hero band: the point of this layout is that nothing competes with the
+// text. Body type is the `article` scale in Prose.astro (larger, looser) — a shopper reading a
+// 900-word guide is doing something different from a shopper skimming Syarat & Ketentuan.
+//
+// Deliberately NOT copied from Medium: clap/comment counters. `articles.comments` exists in the DB
+// and is seeded (8, 12, …) but there is NO comment system — rendering a count nobody can open would
+// promise a feature that doesn't exist. The action bar carries share actions that actually work.
 //
 // A draft 404s (getArticle hard-filters status='terbit'): unreleased work must not be reachable by
 // guessing its handle.
 import Layout from "../../layouts/Layout.astro";
 import Prose from "../../components/Prose.astro";
+import ProductCard from "../../components/ProductCard.astro";
 import { getArticle, getArticles, formatDate, readMinutes } from "../../data/content";
 
-const { store } = Astro.locals;
+const { store, catalog } = Astro.locals;
 const { handle } = Astro.params;
 
 const article = handle ? await getArticle(store.id, handle) : null;
@@ -16,87 +27,240 @@ if (!article) return new Response(null, { status: 404, statusText: "Not Found" }
 
 // "Baca juga" — newest other posts. Cheap: the listing is already cached per store.
 const others = (await getArticles(store.id)).filter((a) => a.handle !== article.handle).slice(0, 3);
+
+// Promoted products under the article. "Random" — but NOT `randomProducts()` (which is Math.random):
+// a reload would reshuffle the same article's picks, which reads as broken and makes the page
+// uncacheable. Seeding the rotation on the handle gives the actual goal — a different set per
+// article — while staying stable for a given article. Rotating (not sampling) also guarantees no
+// duplicates.
+const pool = catalog.products;
+const seed = [...article.handle].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+const start = pool.length ? seed % pool.length : 0;
+const promoted = [...pool.slice(start), ...pool.slice(0, start)].slice(0, 4);
+
+// No author avatars exist (articles.author is a bare text name), so we draw an initial instead of
+// shipping a broken <img> or a stock silhouette.
+const initial = (article.author ?? store.name).trim().charAt(0).toUpperCase();
 ---
 
 <!-- No `image` prop: Layout emits no OG/Twitter tags at all today, so an article's imageUrl has
-     nowhere to go. Passing it would be a prop that silently does nothing. Social cards for the
-     storefront are a separate gap (the landing app has them; the storefront doesn't). -->
+     nowhere to go. Passing it would be a prop that silently does nothing. -->
 <Layout
   title={article.seoTitle || article.title}
   description={article.seoDesc || article.excerpt}
 >
-  <article>
-    <header class="bg-brand-50">
-      <div class="mx-auto max-w-3xl px-4 py-14 sm:px-6 sm:py-16">
-        <nav class="text-sm text-muted">
-          <a href="/" class="transition-colors hover:text-brand-600">Beranda</a>
-          <span class="mx-2 text-line">/</span>
-          <a href="/blog" class="transition-colors hover:text-brand-600">Jurnal</a>
-        </nav>
+  <article class="mx-auto max-w-2xl px-4 pb-4 pt-10 sm:px-6 sm:pt-14">
+    <!-- Topic chip. Medium shows several tags; we have exactly one axis that is real — the blog the
+         article belongs to (Berita Toko / Tips & Panduan). -->
+    <div class="flex flex-wrap items-center gap-2 text-sm">
+      <a
+        href="/blog"
+        class="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium tracking-wide text-brand-700 ring-1 ring-brand-100 transition-colors hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+      >
+        {article.blog ?? "Jurnal"}
+      </a>
+    </div>
 
-        {
-          article.blog && (
-            <p class="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">
-              {article.blog}
-            </p>
-          )
-        }
-        <h1 class="mt-2 font-display text-3xl font-semibold leading-tight text-balance text-ink sm:text-4xl">
-          {article.title}
-        </h1>
-        {article.excerpt && <p class="mt-4 text-lg leading-relaxed text-muted">{article.excerpt}</p>}
-
-        <div class="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
-          {article.author && <span class="font-medium text-ink">{article.author}</span>}
-          {article.author && article.publishedAt && <span class="text-line">·</span>}
-          {
-            article.publishedAt && (
-              <time datetime={article.publishedAt.toISOString()}>{formatDate(article.publishedAt)}</time>
-            )
-          }
-          <span class="text-line">·</span>
-          <span>{readMinutes(article.body)} menit baca</span>
-        </div>
-      </div>
-    </header>
+    <!-- Medium's 42px works on a geometric sans; our `font-display` is a high-contrast serif, which
+         reads noticeably heavier at the same size. Dialled back to 28/36px, and to `semibold` — the
+         title should lead the page, not shout over the subtitle it sits above. -->
+    <h1 class="mt-5 font-display text-[1.75rem] font-semibold leading-[1.2] text-balance text-ink sm:text-[2.25rem]">
+      {article.title}
+    </h1>
 
     {
-      article.imageUrl && (
-        <div class="mx-auto max-w-5xl px-4 sm:px-6">
-          <img
-            src={article.imageUrl}
-            alt=""
-            width="1600"
-            height="900"
-            fetchpriority="high"
-            class="-mt-8 aspect-[16/9] w-full rounded-2xl object-cover shadow-lg ring-1 ring-line"
-          />
-        </div>
+      article.excerpt && (
+        <p class="mt-3 text-base leading-relaxed text-muted sm:text-lg">{article.excerpt}</p>
       )
     }
 
-    <div class="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-14">
-      {
-        article.body.trim() ? (
-          <Prose body={article.body} />
-        ) : (
-          <p class="text-muted">Tulisan ini belum memiliki isi.</p>
-        )
-      }
+    <!-- Author row -->
+    <div class="mt-8 flex items-center gap-3">
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 font-display text-lg font-semibold text-brand-700"
+        aria-hidden="true"
+      >
+        {initial}
+      </span>
+      <div class="min-w-0 text-sm">
+        {article.author && <p class="font-medium text-ink">{article.author}</p>}
+        <p class="flex flex-wrap items-center gap-x-2 text-muted">
+          <span>{readMinutes(article.body)} menit baca</span>
+          {
+            article.publishedAt && (
+              <>
+                <span aria-hidden="true">·</span>
+                <time datetime={article.publishedAt.toISOString()}>
+                  {formatDate(article.publishedAt)}
+                </time>
+              </>
+            )
+          }
+        </p>
+      </div>
+    </div>
 
-      <div class="mt-12 border-t border-line pt-6">
+    <!-- Action bar. Hairline top + bottom, exactly where Medium puts the clap/share row. -->
+    <div class="mt-8 flex items-center justify-between border-y border-line py-2.5">
+      <a
+        href="/blog"
+        class="inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm text-muted transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+      >
+        <svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current" stroke-width="2" aria-hidden="true">
+          <path d="M19 12H5M11 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        Jurnal
+      </a>
+
+      <!-- Share only. Medium's clap / comment / bookmark / listen / repost controls all sit on
+           product we do not have (no engagement, no comment system, no shopper account, no TTS) —
+           rendering them would be chrome that promises features that don't exist.
+           Instagram is absent because it HAS no web share intent: a button for it could not work.
+           `data-image` feeds Pinterest, which requires an absolute media URL. -->
+      <div class="flex items-center gap-0.5" data-share data-image={article.imageUrl ?? ""}>
         <a
-          href="/blog"
-          class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 transition-colors hover:text-brand-600"
+          data-share-fb
+          href="#"
+          target="_blank"
+          rel="noopener"
+          title="Bagikan ke Facebook"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
         >
-          <svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current" stroke-width="2" aria-hidden="true">
-            <path d="M19 12H5M11 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round" />
+          <span class="sr-only">Bagikan ke Facebook</span>
+          <svg viewBox="0 0 24 24" class="h-[18px] w-[18px] fill-current" aria-hidden="true">
+            <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.9h2.54V9.85c0-2.52 1.5-3.91 3.77-3.91 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56v1.88h2.78l-.44 2.9h-2.34V22c4.78-.76 8.44-4.92 8.44-9.94Z" />
           </svg>
-          Kembali ke Jurnal
         </a>
+        <a
+          data-share-x
+          href="#"
+          target="_blank"
+          rel="noopener"
+          title="Bagikan ke X"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        >
+          <span class="sr-only">Bagikan ke X</span>
+          <svg viewBox="0 0 24 24" class="h-[15px] w-[15px] fill-current" aria-hidden="true">
+            <path d="M18.9 2H22l-6.77 7.73L23.2 22h-6.24l-4.88-6.38L6.5 22H3.4l7.24-8.27L2.8 2h6.4l4.41 5.83L18.9 2Zm-1.09 18.14h1.72L8.27 3.77H6.42l11.39 16.37Z" />
+          </svg>
+        </a>
+        <a
+          data-share-pin
+          href="#"
+          target="_blank"
+          rel="noopener"
+          title="Simpan ke Pinterest"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        >
+          <span class="sr-only">Simpan ke Pinterest</span>
+          <svg viewBox="0 0 24 24" class="h-[18px] w-[18px] fill-current" aria-hidden="true">
+            <path d="M12 2C6.48 2 2 6.48 2 12c0 4.24 2.64 7.86 6.36 9.32-.09-.79-.17-2.01.03-2.88.18-.78 1.17-4.97 1.17-4.97s-.3-.6-.3-1.48c0-1.39.81-2.43 1.81-2.43.85 0 1.26.64 1.26 1.41 0 .86-.55 2.14-.83 3.33-.24 1 .5 1.81 1.48 1.81 1.78 0 3.15-1.88 3.15-4.58 0-2.4-1.72-4.07-4.18-4.07-2.85 0-4.52 2.13-4.52 4.34 0 .86.33 1.78.74 2.28.08.1.09.19.07.29-.08.33-.26 1-.29 1.14-.05.19-.15.23-.35.14-1.3-.61-2.11-2.5-2.11-4.03 0-3.28 2.38-6.29 6.87-6.29 3.61 0 6.41 2.57 6.41 6.01 0 3.58-2.26 6.47-5.4 6.47-1.05 0-2.04-.55-2.38-1.2l-.65 2.47c-.23.9-.86 2.03-1.29 2.72.97.3 2 .46 3.07.46 5.52 0 10-4.48 10-10S17.52 2 12 2Z" />
+          </svg>
+        </a>
+        <button
+          type="button"
+          data-share-copy
+          title="Salin tautan"
+          class="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        >
+          <span class="sr-only">Salin tautan</span>
+          <svg viewBox="0 0 24 24" class="h-[18px] w-[18px] fill-none stroke-current" stroke-width="2" aria-hidden="true">
+            <path
+              d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span
+            data-share-copied
+            hidden
+            role="status"
+            class="absolute -top-9 right-0 whitespace-nowrap rounded-md bg-ink px-2.5 py-1 text-xs font-medium text-cream"
+          >
+            Tautan disalin
+          </span>
+        </button>
       </div>
     </div>
   </article>
+
+  <!-- Feature image — LOCKED 3:2. The ratio is fixed, not the photo's: merchant art comes in every
+       shape (our seed reuses portrait product shots), and letting each article set the page's rhythm
+       makes the Jurnal look broken. object-cover crops to the frame; a missing image renders no
+       frame at all rather than an empty box.
+       Nearly square corners and NO shadow: in an editorial layout the photo is content, not a card.
+       A raised, heavily-rounded frame reads as UI chrome and competes with the text — which is the
+       one thing this page exists to get out of the way of. -->
+  {
+    article.imageUrl && (
+      <figure class="mx-auto mt-8 max-w-2xl px-4 sm:px-6">
+        <img
+          src={article.imageUrl}
+          alt=""
+          width="1500"
+          height="1000"
+          fetchpriority="high"
+          class="aspect-[3/2] w-full rounded-sm bg-brand-50 object-cover"
+        />
+      </figure>
+    )
+  }
+
+  <div class="mx-auto max-w-2xl px-4 py-12 sm:px-6 sm:py-14">
+    {
+      article.body.trim() ? (
+        <Prose body={article.body} size="article" />
+      ) : (
+        <p class="text-muted">Tulisan ini belum memiliki isi.</p>
+      )
+    }
+  </div>
+
+  <!-- Promoted products. Sits between the body and "Baca juga" ON PURPOSE: a reader who finished the
+       article is at peak intent, and the next thing they meet should be something to buy — "Baca
+       juga" pulls them back into reading, so it goes after.
+       Labelled "Dari koleksi kami", NOT "Bersponsor": these are the merchant's OWN products. In
+       Indonesian, "bersponsor" signals a PAID third-party placement — using it for a store's own
+       goods would be an ad-disclosure lie, and if TokoΦ ever sells real placements the word has to
+       still mean something. -->
+  {
+    promoted.length > 0 && (
+      <section class="border-t border-line">
+        <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-14">
+          <div class="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">
+                Dari koleksi kami
+              </p>
+              <h2 class="mt-2 font-display text-2xl font-semibold text-ink">
+                Mungkin kamu suka ini
+              </h2>
+            </div>
+            <a
+              href="/kategori/semua"
+              class="inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+            >
+              Lihat semua produk
+              <svg
+                viewBox="0 0 24 24"
+                class="h-4 w-4 fill-none stroke-current"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </a>
+          </div>
+
+          <div class="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {promoted.map((p) => (
+              <ProductCard product={p} />
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
 
   {
     others.length > 0 && (
@@ -105,11 +269,15 @@ const others = (await getArticles(store.id)).filter((a) => a.handle !== article.
           <h2 class="font-display text-2xl font-semibold text-ink">Baca juga</h2>
           <div class="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-3">
             {others.map((a) => (
+              <!-- Editorial, not card-chrome: the same restraint as the feature image (flat, barely
+                   rounded, no shadow). The article page is the one place the shop's card language
+                   would fight the reading. -->
               <a
                 href={`/blog/${a.handle}`}
-                class="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+                class="group flex flex-col overflow-hidden rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
               >
-                <div class="aspect-[4/3] overflow-hidden bg-brand-50">
+                {/* Same 3:2 lock as the feature image, so the cards and the article agree. */}
+                <div class="aspect-[3/2] overflow-hidden rounded-sm bg-brand-50">
                   {a.imageUrl && (
                     <img
                       src={a.imageUrl}
@@ -119,7 +287,7 @@ const others = (await getArticles(store.id)).filter((a) => a.handle !== article.
                     />
                   )}
                 </div>
-                <div class="flex flex-1 flex-col p-5">
+                <div class="flex flex-1 flex-col pt-4">
                   <p class="text-xs font-medium uppercase tracking-[0.15em] text-brand-500">
                     {formatDate(a.publishedAt)}
                   </p>
@@ -135,3 +303,56 @@ const others = (await getArticles(store.id)).filter((a) => a.handle !== article.
     )
   }
 </Layout>
+
+<script is:inline>
+  // Share targets are built on the client: the canonical URL depends on the host the shopper
+  // actually landed on (a merchant custom domain, a <slug>.tokophi.com subdomain, or localhost), and
+  // the storefront is one deploy serving every store — so there is no correct URL to bake in at SSR.
+  (function () {
+    var root = document.querySelector("[data-share]");
+    if (!root) return;
+
+    var url = window.location.href;
+    var title = document.title;
+    var enc = encodeURIComponent;
+
+    var set = function (sel, href) {
+      var el = root.querySelector(sel);
+      if (el) el.href = href;
+    };
+    set("[data-share-fb]", "https://www.facebook.com/sharer/sharer.php?u=" + enc(url));
+    set("[data-share-x]", "https://twitter.com/intent/tweet?url=" + enc(url) + "&text=" + enc(title));
+
+    // Pinterest needs an ABSOLUTE media URL. `imageUrl` is a site-relative path (/products/x.webp),
+    // so resolve it against the current origin — the only place the real host is known.
+    var img = root.getAttribute("data-image");
+    var media = img ? new URL(img, window.location.origin).href : "";
+    set(
+      "[data-share-pin]",
+      "https://pinterest.com/pin/create/button/?url=" + enc(url) + "&media=" + enc(media) + "&description=" + enc(title),
+    );
+
+    var copy = root.querySelector("[data-share-copy]");
+    if (!copy) return;
+    copy.addEventListener("click", function () {
+      // On a phone the native share sheet is strictly better than a clipboard copy. On desktop,
+      // clipboard. Neither is guaranteed — a non-HTTPS origin exposes NO clipboard API at all — so
+      // both paths fail silently instead of throwing at the shopper.
+      if (navigator.share) {
+        navigator.share({ title: title, url: url }).catch(function () {});
+        return;
+      }
+      if (!navigator.clipboard) return;
+      navigator.clipboard.writeText(url).then(function () {
+        // Visible confirmation: a `title` tooltip would never be seen on touch, and a copy with no
+        // feedback reads as a dead button.
+        var done = copy.querySelector("[data-share-copied]");
+        if (!done) return;
+        done.hidden = false;
+        setTimeout(function () {
+          done.hidden = true;
+        }, 1600);
+      }, function () {});
+    });
+  })();
+</script>

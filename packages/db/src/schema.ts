@@ -866,6 +866,18 @@ export const kiriminajaAreas = pgTable("kiriminaja_areas", {
   provinceName: text().notNull(),
 });
 
+// Kelurahan (village) + its postcode, under a KiriminAja district. Migration 0046 created the
+// table but the Drizzle definition never landed with it, so `schema.kelurahan` did not exist and
+// apps/admin/lib/data/areas.ts could not compile. Reference data, not store-scoped (no RLS).
+export const kelurahan = pgTable("kelurahan", {
+  id: text().primaryKey(),
+  districtId: integer()
+    .notNull()
+    .references(() => kiriminajaAreas.id),
+  name: text().notNull(),
+  postcode: text().notNull(),
+});
+
 export const shippingAggregator = pgTable("shipping_aggregator", {
   id: pk(),
   provider: aggregatorProvider().notNull(),

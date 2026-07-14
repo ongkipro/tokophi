@@ -28,12 +28,44 @@ async function main() {
     });
   }
 
-  await client.unsafe(`truncate "kiriminaja_areas"`);
+  // `kelurahan` FKs into this table, so it has to go first — and both are truncated together, or a
+  // reload would leave kelurahan rows pointing at district ids that no longer exist.
+  await client.unsafe(`truncate "kiriminaja_areas", "kelurahan"`);
   const BATCH = 1000;
   for (let i = 0; i < rows.length; i += BATCH) {
     await db.insert(schema.kiriminajaAreas).values(rows.slice(i, i + BATCH));
   }
   console.log(`Seeded ${rows.length} KiriminAja areas (${new Set(rows.map((r) => r.provinceName)).size} provinces).`);
+
+  await seedKelurahan();
   await client.end();
 }
+
+// Kelurahan → kodepos (see scripts/build-kelurahan.mjs for where the CSV comes from and why this
+// level exists at all: a kodepos cannot be derived from a kecamatan).
+async function seedKelurahan() {
+  const csvPath = join(dirname(fileURLToPath(import.meta.url)), "../data/kelurahan.csv");
+  const lines = readFileSync(csvPath, "utf8").trim().split("\n").slice(1);
+
+  const rows: (typeof schema.kelurahan.$inferInsert)[] = [];
+  for (const line of lines) {
+    // name is quoted (it may in principle contain a comma); the other three fields never are.
+    const m = /^([^,]+),(\d+),"((?:[^"]|"")*)",(\d+)$/.exec(line);
+    if (!m) continue;
+    rows.push({
+      id: m[1],
+      districtId: Number(m[2]),
+      name: m[3].replaceAll('""', '"'),
+      postcode: m[4],
+    });
+  }
+
+  const BATCH = 2000;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    await db.insert(schema.kelurahan).values(rows.slice(i, i + BATCH));
+  }
+  const districts = new Set(rows.map((r) => r.districtId)).size;
+  console.log(`Seeded ${rows.length} kelurahan across ${districts} districts.`);
+}
+
 main();

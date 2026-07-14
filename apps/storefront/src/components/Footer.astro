@@ -1,14 +1,15 @@
 ---
 // Tenant resolved per-request from the Host header (src/middleware.ts).
-import { getPages } from "../data/content";
+import { MapPin } from "@lucide/astro";
+import { getFooterNav } from "../data/nav";
 
 const { store, catalog } = Astro.locals;
 const COLLECTIONS = catalog.collections;
 
-// The store's published CMS pages (Tentang Kami, Kebijakan Pengembalian, …). The footer is where
-// they become DISCOVERABLE: /halaman/<handle> exists now, but a route nothing links to is still an
-// orphan. Driven by the DB, so a page a merchant publishes shows up here without a code change.
-const PAGES = await getPages(store.id);
+// The store's OWN footer menu (admin → Navigasi), with links to unpublished pages dropped — the
+// seed's menu points at "FAQ", which is still a draft, and honouring it verbatim would put a 404 on
+// every page of the shop. See getFooterNav().
+const PAGES = await getFooterNav(store.id);
 
 const waHref = `https://wa.me/${store.whatsapp}`;
 ---
@@ -90,7 +91,10 @@ const waHref = `https://wa.me/${store.whatsapp}`;
             Customer Service
           </a>
         </li>
-        <li class="pt-1 text-cream/50">📍 {store.city}, Indonesia</li>
+        <li class="flex items-center gap-2 pt-1 text-cream/50">
+          <MapPin class="h-3.5 w-3.5 shrink-0" stroke-width={1.75} aria-hidden="true" />
+          {store.city}, Indonesia
+        </li>
       </ul>
     </div>
 
@@ -104,10 +108,10 @@ const waHref = `https://wa.me/${store.whatsapp}`;
           PAGES.map((p) => (
             <li>
               <a
-                href={`/halaman/${p.handle}`}
+                href={p.href}
                 class="rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
               >
-                {p.title}
+                {p.label}
               </a>
             </li>
           ))

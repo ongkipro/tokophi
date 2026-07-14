@@ -1,4 +1,8 @@
 ---
+// Icons: Lucide, not emoji. Emoji render as full-colour glyphs from the OS font — they ignore the
+// brand palette, look different on every device, and read as decoration. A stroked icon inherits
+// `currentColor`, so it sits inside the brand scale like everything else.
+import { Truck, Banknote, ShieldCheck, QrCode } from "@lucide/astro";
 import Layout from "../layouts/Layout.astro";
 import ProductCard from "../components/ProductCard.astro";
 import SectionRenderer from "../components/sections/SectionRenderer.astro";
@@ -46,15 +50,15 @@ const collections = catalog.collections.map((c) => {
     <div class="mx-auto grid max-w-7xl gap-x-8 gap-y-5 px-4 py-7 sm:grid-cols-3 sm:px-6">
       {
         [
-          { icon: "🚚", title: "Kirim se-Indonesia", text: "Lewat kurir terpercaya." },
+          { Icon: Truck, title: "Kirim se-Indonesia", text: "Lewat kurir terpercaya." },
           COD_ENABLED
-            ? { icon: "💵", title: "COD Tersedia", text: "Bayar di tempat, area terpilih." }
-            : { icon: "🔒", title: "Transaksi Aman", text: "Pembayaran lewat kanal resmi." },
-          { icon: "📱", title: "QRIS & E-Wallet", text: "Bayar praktis, tanpa ribet." },
+            ? { Icon: Banknote, title: "COD Tersedia", text: "Bayar di tempat, area terpilih." }
+            : { Icon: ShieldCheck, title: "Transaksi Aman", text: "Pembayaran lewat kanal resmi." },
+          { Icon: QrCode, title: "QRIS & E-Wallet", text: "Bayar praktis, tanpa ribet." },
         ].map((v) => (
           <div class="flex items-center gap-3">
-            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-base ring-1 ring-brand-100">
-              {v.icon}
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 ring-1 ring-brand-100">
+              <v.Icon class="h-[18px] w-[18px] text-brand-600" stroke-width={1.75} aria-hidden="true" />
             </span>
             <div class="min-w-0">
               <p class="text-sm font-semibold text-ink">{v.title}</p>

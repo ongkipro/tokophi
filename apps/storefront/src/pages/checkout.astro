@@ -1,4 +1,5 @@
 ---
+import { ShoppingCart, Package, Zap } from "@lucide/astro";
 import Layout from "../layouts/Layout.astro";
 import { enabledPaymentChannels, mediaUrl, storeCodPolicy } from "../data/catalog";
 import { db, schema } from "@tokophi/db";
@@ -18,20 +19,6 @@ const ORDER_API = import.meta.env.PUBLIC_ORDER_API || "http://localhost:3000/api
 const ORIGIN_CITY = store.city || "Yogyakarta";
 const STORE_SLUG = store.slug;
 
-const PROVINCES = [
-  "DKI Jakarta",
-  "Jawa Barat",
-  "Jawa Tengah",
-  "DI Yogyakarta",
-  "Jawa Timur",
-  "Banten",
-  "Bali",
-  "Sumatera Utara",
-  "Sumatera Barat",
-  "Sulawesi Selatan",
-  "Kalimantan Timur",
-];
-
 // Payment channels = whatever the platform (super-admin) enabled (platform_payment_channels),
 // read per request. Brand hidden — generic method labels only.
 const payDesc = (kind: string, label: string) =>
@@ -50,7 +37,9 @@ const PAYMENTS = (await enabledPaymentChannels()).map((c) => ({ id: c.code, labe
 //       – the shopper picked a shipping service whose rate came back cod:true (the ongkir API
 //         returns the EFFECTIVE flag: courier capability × platform codAllowed × store switch)
 //       – subtotal + ongkir ≤ platform_cod.max_amount_idr
-//       – the typed province is on platform_cod.allowed_provinces (when that list is non-empty)
+//       – the province is on platform_cod.allowed_provinces (when that list is non-empty). It is now
+//         DERIVED from the chosen kecamatan, not typed, so it can no longer disagree with the
+//         district the parcel is actually booked against.
 //     Any of them failing → the row disappears. NOT a greyed-out row with an excuse: a COD we would
 //     reject has no business being on screen at all.
 // Either way /api/public/order re-checks all of it and rejects a COD order it should not accept —
@@ -154,18 +143,21 @@ if (rToken) {
     </div>
 
     <h1 class="mt-5 font-display text-3xl font-semibold text-ink">Checkout</h1>
+    <p class="mt-1 text-sm text-muted">
+      Kolom bertanda <span class="text-red-500">*</span> wajib diisi.
+    </p>
 
     {
       RECOVER && (
         <p class="mt-4 rounded-xl border border-brand-600/30 bg-brand-50 px-4 py-3 text-sm text-ink">
-          👋 Selamat datang kembali{RECOVER.name ? `, ${RECOVER.name.split(" ")[0]}` : ""}! Keranjang dan datamu sudah
+          Selamat datang kembali{RECOVER.name ? `, ${RECOVER.name.split(" ")[0]}` : ""}! Keranjang dan datamu sudah
           kami simpan — tinggal lanjut bayar.
         </p>
       )
     }
 
     <div id="checkout-empty" class="mt-10 hidden rounded-2xl border border-dashed border-line bg-white py-20 text-center">
-      <p class="text-4xl">🛒</p>
+      <ShoppingCart class="mx-auto h-10 w-10 text-brand-400" stroke-width={1.5} aria-hidden="true" />
       <h2 class="mt-4 font-display text-2xl font-semibold text-ink">Keranjangmu masih kosong</h2>
       <p class="mt-2 text-muted">Tambahkan produk dulu sebelum checkout.</p>
       <a href="/" class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700">Mulai Belanja</a>
@@ -178,11 +170,10 @@ if (rToken) {
         <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
           <legend class="px-2 font-display text-lg font-semibold text-ink">Kontak</legend>
           <label class="block">
-            <span class="text-sm font-medium text-ink">Email</span>
+            <span class="text-sm font-medium text-ink">Email <span class="font-normal text-muted">(opsional)</span></span>
             <input
               type="email"
               name="email"
-              required
               placeholder="nama@email.com"
               class="mt-1.5 w-full rounded-lg border border-line bg-cream px-3.5 py-2.5 text-sm text-ink outline-none transition-colors focus:border-brand-400 focus:bg-white"
             />
@@ -194,38 +185,78 @@ if (rToken) {
           <legend class="px-2 font-display text-lg font-semibold text-ink">Alamat Pengiriman</legend>
           <div class="grid gap-4 sm:grid-cols-2">
             <label class="block">
-              <span class="text-sm font-medium text-ink">Nama Lengkap</span>
+              <span class="text-sm font-medium text-ink">Nama Lengkap <span class="text-red-500" aria-hidden="true">*</span></span>
               <input type="text" name="nama" required autocomplete="name" class="input-field" />
             </label>
             <label class="block">
-              <span class="text-sm font-medium text-ink">No. WhatsApp</span>
+              <span class="text-sm font-medium text-ink">No. WhatsApp <span class="text-red-500" aria-hidden="true">*</span></span>
               <input type="tel" name="whatsapp" required inputmode="tel" placeholder="08xxxxxxxxxx" autocomplete="tel" class="input-field" />
             </label>
             <label class="block sm:col-span-2">
-              <span class="text-sm font-medium text-ink">Alamat Lengkap</span>
+              <span class="text-sm font-medium text-ink">Alamat Lengkap <span class="text-red-500" aria-hidden="true">*</span></span>
               <textarea name="alamat" required rows="2" placeholder="Nama jalan, no. rumah, RT/RW, patokan" class="input-field resize-none"></textarea>
             </label>
-            <label class="block">
-              <span class="text-sm font-medium text-ink">Kota / Kabupaten</span>
-              <input type="text" name="kota" required autocomplete="address-level2" class="input-field" />
-            </label>
-            <label class="block">
-              <span class="text-sm font-medium text-ink">Provinsi</span>
-              <input type="text" name="provinsi" required list="provinsi-list" autocomplete="address-level1" class="input-field" />
-              <datalist id="provinsi-list">
-                {PROVINCES.map((p) => <option value={p} />)}
-              </datalist>
-            </label>
-            <label class="block">
-              <span class="text-sm font-medium text-ink">Kode Pos</span>
-              <input type="text" name="kodepos" required inputmode="numeric" autocomplete="postal-code" class="input-field" />
-            </label>
+            <!-- Kecamatan comes FIRST, and it drives Kota + Provinsi.
+                 Before: the shopper typed Kota, Provinsi and Kode Pos by hand AND then separately
+                 searched a kecamatan for the ongkir quote — re-keying an address the aggregator
+                 already knows, with nothing keeping the two in agreement.
+                 It also closes a real hole. `apps/admin/lib/data/areas.ts` puts it plainly: a typed
+                 province is a CLAIM, not a fact — the backend already refuses to trust it and derives
+                 the province from the district id when gating COD. Deriving the visible fields from
+                 the same id means the form can no longer disagree with what ships. -->
             <label class="block sm:col-span-2">
-              <span class="text-sm font-medium text-ink">Kecamatan Tujuan <span class="font-normal text-muted">(untuk hitung ongkir)</span></span>
+              <span class="text-sm font-medium text-ink">
+                Kecamatan Tujuan <span class="text-red-500" aria-hidden="true">*</span> <span class="font-normal text-muted">(kota & provinsi terisi otomatis)</span>
+              </span>
               <input type="text" id="dest-search" autocomplete="off" placeholder="Ketik kecamatan / kota, mis. Semarang" class="input-field" />
               <input type="hidden" name="dest_id" id="dest-id" />
               <input type="hidden" name="dest_text" id="dest-text" />
               <div id="dest-results" class="mt-1 hidden max-h-48 overflow-y-auto rounded-xl border border-line bg-white shadow-sm"></div>
+            </label>
+
+            <!-- Readonly, not disabled: a disabled input is not submitted, and the order route still
+                 needs these. Readonly also means the pair can't drift from the district id. -->
+            <label class="block">
+              <span class="text-sm font-medium text-ink">Kota / Kabupaten</span>
+              <input
+                type="text"
+                name="kota"
+                readonly
+                autocomplete="address-level2"
+                placeholder="Pilih kecamatan dulu"
+                class="input-field cursor-not-allowed bg-brand-50/60 text-muted read-only:focus:ring-0"
+              />
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium text-ink">Provinsi</span>
+              <input
+                type="text"
+                name="provinsi"
+                readonly
+                autocomplete="address-level1"
+                placeholder="Pilih kecamatan dulu"
+                class="input-field cursor-not-allowed bg-brand-50/60 text-muted read-only:focus:ring-0"
+              />
+            </label>
+            <!-- Kelurahan — the level a KODEPOS is actually assigned at. A kecamatan cannot give us
+                 one: 17% of them span several kodepos, and those are the dense urban ones where the
+                 orders are (Semarang Tengah alone has 11). Shown only once a kecamatan is chosen, and
+                 only for districts we have kelurahan for (~96% of KiriminAja's list); the rest fall
+                 back to typing the kodepos. See packages/db/scripts/build-kelurahan.mjs. -->
+            <label id="kel-wrap" hidden class="block sm:col-span-2">
+              <span class="text-sm font-medium text-ink">
+                Kelurahan / Desa <span class="font-normal text-muted">(opsional — mengisi kode pos otomatis)</span>
+              </span>
+              <select name="kelurahan" id="kel-select" class="input-field">
+                <option value="">Pilih kelurahan…</option>
+              </select>
+            </label>
+
+            <!-- Kode Pos: readonly once a kelurahan supplies it, editable when we have no kelurahan
+                 for that district. Required either way — a guessed postcode goes on a real parcel. -->
+            <label class="block sm:col-span-2">
+              <span class="text-sm font-medium text-ink">Kode Pos <span class="font-normal text-muted">(opsional)</span></span>
+              <input type="text" name="kodepos" id="kodepos" inputmode="numeric" autocomplete="postal-code" placeholder="mis. 50241" class="input-field" />
             </label>
           </div>
         </fieldset>
@@ -240,7 +271,10 @@ if (rToken) {
           <!-- Group: Ekspedisi (reguler / express) -->
           <div id="ship-express-group" class="hidden">
             <div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              <span>📦 Ekspedisi</span><span class="h-px flex-1 bg-line"></span>
+              <span class="inline-flex items-center gap-1.5">
+                <Package class="h-3.5 w-3.5" stroke-width={1.75} aria-hidden="true" />
+                Ekspedisi
+              </span><span class="h-px flex-1 bg-line"></span>
             </div>
             <div id="ship-express" class="space-y-2"></div>
           </div>
@@ -248,13 +282,17 @@ if (rToken) {
           <!-- Group: Kirim Instan (same-day) -->
           <div id="ship-instant-group" class="mt-4 hidden">
             <div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              <span>⚡ Kirim Instan (hari ini)</span><span class="h-px flex-1 bg-line"></span>
+              <span class="inline-flex items-center gap-1.5">
+                <Zap class="h-3.5 w-3.5" stroke-width={1.75} aria-hidden="true" />
+                Kirim Instan (hari ini)
+              </span><span class="h-px flex-1 bg-line"></span>
             </div>
             <div id="ship-instant" class="space-y-2"></div>
           </div>
 
           <button type="button" id="instant-btn" class="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-brand-600 px-4 py-2 text-sm font-medium text-brand-600 transition-colors hover:bg-brand-50">
-            ⚡ Cek kirim instan (pakai lokasiku)
+            <Zap class="h-4 w-4" stroke-width={1.75} aria-hidden="true" />
+            Cek kirim instan (pakai lokasiku)
           </button>
           <p id="instant-note" class="mt-1 hidden text-xs text-muted"></p>
         </fieldset>
@@ -474,7 +512,7 @@ if (rToken) {
     // they are re-evaluated on every change:
     //   · service — the ongkir API stamps each rate with the EFFECTIVE cod flag → data-cod on the radio
     //   · amount  — subtotal + ongkir must be ≤ COD_MAX (platform_cod.max_amount_idr; 0 = no cap)
-    //   · region  — the typed province must be on COD_PROVINCES (empty list = anywhere)
+    //   · region  — the province (derived from the kecamatan) must be on COD_PROVINCES (empty = anywhere)
     // Any of them failing → the row is hidden AND the radio disabled (a disabled-but-visible row is
     // the same lie in a nicer font). /api/public/order re-checks all of it regardless — this is UX.
     var codOption = document.getElementById("cod-option");
@@ -565,9 +603,84 @@ if (rToken) {
     }
 
     var searchTimer;
+    // Kota + Provinsi are DERIVED from the chosen kecamatan — the shopper never types them. They are
+    // readonly in the markup, so this is the only writer.
+    var kotaEl = form.querySelector('input[name="kota"]');
+    var kodeposEl = document.getElementById("kodepos");
+    var kelWrap = document.getElementById("kel-wrap");
+    var kelSelect = document.getElementById("kel-select");
+
+    function applyArea(city, province) {
+      if (kotaEl && city) kotaEl.value = city;
+      if (provinsiEl && province) provinsiEl.value = province;
+      // COD eligibility is province-gated — recheck it now that the province actually exists.
+      syncCod();
+      captureSoon();
+    }
+    function clearArea() {
+      if (kotaEl) kotaEl.value = "";
+      if (provinsiEl) provinsiEl.value = "";
+      resetKelurahan();
+      syncCod();
+    }
+
+    // ---- Kelurahan → kodepos -------------------------------------------------------------------
+    // A kodepos belongs to a kelurahan, not to a kecamatan, so it cannot be filled from the district
+    // the shopper picked for ongkir. Ask for the kelurahan and take the kodepos from it.
+    function setKodeposManual(manual) {
+      if (!kodeposEl) return;
+      kodeposEl.readOnly = !manual;
+      kodeposEl.classList.toggle("cursor-not-allowed", !manual);
+      kodeposEl.classList.toggle("bg-brand-50/60", !manual);
+      kodeposEl.classList.toggle("text-muted", !manual);
+    }
+
+    function resetKelurahan() {
+      if (kelWrap) kelWrap.hidden = true;
+      if (kelSelect) kelSelect.innerHTML = '<option value="">Pilih kelurahan…</option>';
+      if (kodeposEl) kodeposEl.value = "";
+      // Back to a plain typed field until a district tells us otherwise.
+      setKodeposManual(true);
+    }
+
+    function loadKelurahan(districtId) {
+      if (!kelWrap || !kelSelect || !districtId) return;
+      api({ op: "kelurahan", destinationId: Number(districtId) }).then(function (res) {
+        var list = (res && res.ok && res.kelurahan) || [];
+        if (!list.length) {
+          // ~4% of KiriminAja districts have no kelurahan in our dataset. Degrade to a typed kodepos
+          // rather than inventing one — this number gets printed on a real parcel.
+          resetKelurahan();
+          return;
+        }
+        kelSelect.innerHTML =
+          '<option value="">Pilih kelurahan…</option>' +
+          list
+            .map(function (k) {
+              return '<option value="' + esc(k.postcode) + '">' + esc(k.name) + " — " + esc(k.postcode) + "</option>";
+            })
+            .join("");
+        kelWrap.hidden = false;
+        // The kodepos now comes from the picker, so stop it being typed — and leave it EMPTY until a
+        // kelurahan is actually chosen. Pre-filling the first one would silently ship a wrong code.
+        if (kodeposEl) kodeposEl.value = "";
+        setKodeposManual(false);
+      });
+    }
+
+    if (kelSelect) {
+      kelSelect.addEventListener("change", function () {
+        if (kodeposEl) kodeposEl.value = kelSelect.value;
+        captureSoon();
+      });
+    }
+
     if (destSearch) {
       destSearch.addEventListener("input", function () {
+        // Editing the search box invalidates the selection — so the derived city/province must go
+        // too, or the form would keep showing an address the district id no longer matches.
         destId.value = "";
+        clearArea();
         clearTimeout(searchTimer);
         var q = destSearch.value.trim();
         if (q.length < 3) { destResults.classList.add("hidden"); return; }
@@ -575,7 +688,10 @@ if (rToken) {
           api({ op: "search", q: q }).then(function (res) {
             if (!res.ok || !res.results.length) { destResults.classList.add("hidden"); return; }
             destResults.innerHTML = res.results.slice(0, 8).map(function (a) {
-              return '<button type="button" data-id="' + a.id + '" data-text="' + esc(a.text) + '" class="block w-full border-b border-line px-4 py-2 text-left text-sm last:border-0 hover:bg-brand-50">' + esc(a.text) + "</button>";
+              // data-city / data-province ride along so picking a result can fill the form without a
+              // second round-trip. They may be absent (the live-API fallback can't always be parsed),
+              // in which case applyArea() leaves those inputs alone rather than blanking them.
+              return '<button type="button" data-id="' + a.id + '" data-text="' + esc(a.text) + '" data-city="' + esc(a.city || "") + '" data-province="' + esc(a.province || "") + '" class="block w-full border-b border-line px-4 py-2 text-left text-sm last:border-0 hover:bg-brand-50">' + esc(a.text) + "</button>";
             }).join("");
             destResults.classList.remove("hidden");
           });
@@ -588,6 +704,8 @@ if (rToken) {
         destText.value = btn.getAttribute("data-text");
         destSearch.value = btn.getAttribute("data-text");
         destResults.classList.add("hidden");
+        applyArea(btn.getAttribute("data-city"), btn.getAttribute("data-province"));
+        loadKelurahan(destId.value);
         loadRates();
       });
     }
@@ -626,13 +744,13 @@ if (rToken) {
     if (instantBtn) {
       instantBtn.addEventListener("click", function () {
         if (!navigator.geolocation) { showInstantNote("Browser tidak mendukung lokasi."); return; }
-        instantBtn.disabled = true; instantBtn.textContent = "⚡ Mengambil lokasi…";
+        instantBtn.disabled = true; instantBtn.textContent = "Mengambil lokasi…";
         instantNote.classList.add("hidden");
         navigator.geolocation.getCurrentPosition(function (pos) {
           window.__instantLat = pos.coords.latitude; window.__instantLng = pos.coords.longitude;
-          instantBtn.textContent = "⚡ Menghitung ongkir instan…";
+          instantBtn.textContent = "Menghitung ongkir instan…";
           api({ op: "instant", storeSlug: STORE_SLUG, destLat: pos.coords.latitude, destLng: pos.coords.longitude, weight: totalQty * 500, itemValue: subtotal }).then(function (res) {
-            instantBtn.disabled = false; instantBtn.textContent = "⚡ Perbarui kirim instan";
+            instantBtn.disabled = false; instantBtn.textContent = "Perbarui kirim instan";
             if (!res.ok || !res.instant || !res.instant.length) { showInstantNote(res.error || "Tidak ada layanan instan untuk lokasimu."); return; }
             if (shipHint) shipHint.classList.add("hidden");
             instantGroup.classList.remove("hidden");
@@ -641,13 +759,13 @@ if (rToken) {
                 // instant (same-day courier) is dispatched immediately and is not part of the
                 // platform_couriers roster → no COD (data-cod="0"); the order API agrees.
                 '<input type="radio" name="shipping" value="instant-' + esc(s.code) + '-' + esc(s.serviceType) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="0" data-inst-service="' + esc(s.code) + '" data-inst-type="' + esc(s.serviceType) + '" data-inst-cost="' + s.shippingCosts + '" required class="h-4 w-4 accent-brand-600" />' +
-                '<span class="flex-1"><span class="block text-sm font-medium text-ink">⚡ ' + esc(s.name) + '</span><span class="block text-xs text-muted">' + esc(s.etd) + (res.distanceKm ? " · " + res.distanceKm + " km" : "") + '</span></span>' +
+                '<span class="flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + '</span><span class="block text-xs text-muted">' + esc(s.etd) + (res.distanceKm ? " · " + res.distanceKm + " km" : "") + '</span></span>' +
                 '<span class="text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
             }).join("");
             bindShipping();
-          }).catch(function () { instantBtn.disabled = false; instantBtn.textContent = "⚡ Cek kirim instan (pakai lokasiku)"; showInstantNote("Gagal memuat ongkir instan."); });
+          }).catch(function () { instantBtn.disabled = false; instantBtn.textContent = "Cek kirim instan (pakai lokasiku)"; showInstantNote("Gagal memuat ongkir instan."); });
         }, function () {
-          instantBtn.disabled = false; instantBtn.textContent = "⚡ Cek kirim instan (pakai lokasiku)";
+          instantBtn.disabled = false; instantBtn.textContent = "Cek kirim instan (pakai lokasiku)";
           showInstantNote("Izin lokasi ditolak — kirim instan butuh lokasimu.");
         });
       });
@@ -659,6 +777,16 @@ if (rToken) {
     if (RECOVER && RECOVER.destId) {
       destId.value = String(RECOVER.destId);
       if (destSearch && !destSearch.value) destSearch.value = RECOVER.city || "";
+      // Restore the kelurahan picker as well, then put the saved kodepos back — loadKelurahan()
+      // deliberately blanks it, and a recovered checkout must not lose what the shopper had chosen.
+      var savedPostcode = RECOVER.postcode || "";
+      loadKelurahan(RECOVER.destId);
+      setTimeout(function () {
+        if (kodeposEl && savedPostcode) {
+          kodeposEl.value = savedPostcode;
+          if (kelSelect) kelSelect.value = savedPostcode;
+        }
+      }, 600);
       loadRates();
     }
 
@@ -754,6 +882,18 @@ if (rToken) {
 
       if (!form.checkValidity()) {
         form.reportValidity();
+        return;
+      }
+      // Kota/Provinsi are readonly, and a readonly input is BARRED from constraint validation — so
+      // `required` on them never fired and checkValidity() would happily pass with no destination at
+      // all. The real rule is "a kecamatan was chosen"; enforce it here, where it runs.
+      if (!destId.value) {
+        if (destSearch) {
+          destSearch.setCustomValidity("Pilih kecamatan tujuan dari daftar.");
+          destSearch.reportValidity();
+          destSearch.setCustomValidity("");
+          destSearch.focus();
+        }
         return;
       }
       if (err) err.classList.add("hidden");

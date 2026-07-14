@@ -1,11 +1,12 @@
 ---
 import Layout from "../../layouts/Layout.astro";
+import { PackageOpen } from "@lucide/astro";
 import ProductCard from "../../components/ProductCard.astro";
 import RevealGrid from "../../components/RevealGrid.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import type { Product } from "../../data/catalog";
 
-type ResolvedCollection = { name: string; emoji: string; blurb: string };
+type ResolvedCollection = { name: string; blurb: string };
 
 // SSR: tenant from the Host header (src/middleware.ts), collection from the handle param.
 const { store, catalog } = Astro.locals;
@@ -21,19 +22,16 @@ const { handle } = Astro.params;
 const VIRTUAL: Record<string, ResolvedCollection & { products: Product[] }> = {
   semua: {
     name: "Semua Produk",
-    emoji: "🛍️",
     blurb: `Semua koleksi ${store.name}`,
     products: PRODUCTS,
   },
   "promo-gajian": {
     name: "Promo Gajian",
-    emoji: "🏷️",
     blurb: "Diskon spesial periode gajian",
     products: PRODUCTS.filter((p) => p.compareAt || p.bestseller),
   },
   "produk-terlaris": {
     name: "Produk Terlaris",
-    emoji: "⭐",
     blurb: `Paling banyak dibeli di ${store.name}`,
     products: catalog.bestsellers(),
   },
@@ -43,12 +41,12 @@ let collection: ResolvedCollection;
 let products: Product[];
 const virtual = handle ? VIRTUAL[handle] : undefined;
 if (virtual) {
-  collection = { name: virtual.name, emoji: virtual.emoji, blurb: virtual.blurb };
+  collection = { name: virtual.name, blurb: virtual.blurb };
   products = virtual.products;
 } else {
   const real = handle ? catalog.findCollection(handle) : undefined;
   if (!real) return new Response(null, { status: 404, statusText: "Not Found" });
-  collection = { name: real.name, emoji: real.emoji, blurb: real.blurb };
+  collection = { name: real.name, blurb: real.blurb };
   products = catalog.byCollection(real.handle);
 }
 
@@ -79,7 +77,7 @@ const TEMPLATE = handle ? catalog.categoryTemplate(handle) : null;
       </nav>
       <p class="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Koleksi</p>
       <h1 class="mt-2 font-display text-4xl font-semibold text-ink">
-        <span class="mr-2 align-middle text-2xl">{collection.emoji}</span>{collection.name}
+        {collection.name}
       </h1>
       <p class="mt-3 max-w-xl leading-relaxed text-muted">{collection.blurb}</p>
     </div>
@@ -122,7 +120,7 @@ const TEMPLATE = handle ? catalog.categoryTemplate(handle) : null;
         </>
       ) : (
         <div class="rounded-2xl border border-dashed border-line bg-white py-20 text-center">
-          <p class="text-4xl">🛍️</p>
+          <PackageOpen class="mx-auto h-10 w-10 text-brand-400" stroke-width={1.5} aria-hidden="true" />
           <h2 class="mt-4 font-display text-2xl font-semibold text-ink">Belum ada produk</h2>
           <p class="mt-2 text-muted">Koleksi ini sedang dalam perjalanan. Cek koleksi lainnya, yuk.</p>
           <a

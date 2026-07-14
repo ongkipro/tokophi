@@ -37,3 +37,24 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 .fadeup { animation: fadeup 0.5s ease both; }
+
+/* ── No auto-zoom on focus (touch) ──────────────────────────────────────────────────────────────
+   iOS Safari zooms the whole page when a focused input/select/textarea has a computed font-size
+   under 16px — and it never zooms back out. Our controls were 14px (`text-sm`), so every checkout
+   field and the chat composer punted the shopper into a zoomed, side-scrolling page mid-purchase.
+
+   The fix is the FONT SIZE, not the viewport: `user-scalable=no` / `maximum-scale=1` would "work"
+   by disabling pinch-zoom for everyone (an accessibility failure — and iOS has ignored it since
+   iOS 10 anyway). 16px is the threshold; this sets exactly that, only where it matters.
+
+   `pointer: coarse` scopes it to touch input rather than to a width, because the zoom is a property
+   of the touch keyboard, not of the screen size — a large phone in landscape zooms too. */
+@media (pointer: coarse) {
+  /* `:where()` on the left keeps specificity at ZERO for the element part, and the trailing
+     `:not(#\0)` — a selector that can never match — adds one ID's worth of weight. Without it the
+     bare `textarea` / `select` selectors (0,0,1) lose to `.input-field` (0,1,0) and checkout's
+     address box and kelurahan picker stay at 14px, still zooming. Measured, not assumed. */
+  :where(input:not([type="radio"]):not([type="checkbox"]), select, textarea):not(#\0) {
+    font-size: 16px;
+  }
+}

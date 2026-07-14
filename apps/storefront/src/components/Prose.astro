@@ -6,24 +6,36 @@
 // whatever the merchant typed — treating it as HTML would be stored XSS on the shopper-facing site.
 import { parseBody } from "../data/content";
 
-type Props = { body: string | null | undefined };
-const blocks = parseBody(Astro.props.body);
+// `article` is the reading-optimised scale (larger type, looser leading) used by the blog post;
+// `page` is the tighter default for CMS pages like Syarat & Ketentuan, which are scanned, not read.
+type Props = { body: string | null | undefined; size?: "page" | "article" };
+const { body, size = "page" } = Astro.props;
+const blocks = parseBody(body);
+
+const article = size === "article";
+const text = article ? "text-lg leading-[1.85] sm:text-xl" : "leading-[1.8]";
 ---
 
-<div class="space-y-5">
+<div class:list={[article ? "space-y-7" : "space-y-5"]}>
   {
     blocks.map((b) =>
       b.kind === "ul" ? (
-        <ul class="space-y-2.5 pl-1">
+        <ul class:list={["pl-1", article ? "space-y-3.5" : "space-y-2.5"]}>
           {b.items.map((item) => (
-            <li class="flex gap-3 leading-relaxed text-ink/80">
-              <span class="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400" aria-hidden="true" />
+            <li class:list={["flex gap-3 text-ink/80", text]}>
+              <span
+                class:list={[
+                  "shrink-0 rounded-full bg-brand-400",
+                  article ? "mt-3.5 h-1.5 w-1.5" : "mt-2.5 h-1.5 w-1.5",
+                ]}
+                aria-hidden="true"
+              />
               <span>{item}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p class="leading-[1.8] text-ink/80">{b.text}</p>
+        <p class:list={["text-ink/80", text]}>{b.text}</p>
       ),
     )
   }

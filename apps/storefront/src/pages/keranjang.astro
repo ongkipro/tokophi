@@ -1,20 +1,170 @@
 ---
+// Cart — Shopify-shaped: line items on the left, a STICKY order-summary card on the right, and a
+// recommendation strip below. The old page was a single narrow column with the total buried at the
+// bottom, so on a phone the checkout button sat below the fold of an already-scrolled list.
+//
+// The cart itself lives in localStorage (there is no shopper account, ADR/§storefront), so the line
+// items must be rendered client-side. Everything that does NOT depend on the cart — headings, the
+// summary shell, trust copy, recommendations — is server-rendered instead of built in JS strings:
+// less layout shift, and the markup stays reviewable.
+//
+// Deliberately NOT copied from Shopify: the "spend Rp X more for free shipping" progress bar. There
+// is no free-shipping threshold anywhere in our data (a `gratis_ongkir` discount has no minimum), so
+// the bar would be inventing a promise the checkout would not honour.
+import { ShoppingCart, ShieldCheck, Truck, RotateCcw, ArrowRight, ArrowLeft } from "@lucide/astro";
 import Layout from "../layouts/Layout.astro";
-const store = Astro.locals.store;
+import ProductCard from "../components/ProductCard.astro";
+
+const { store, catalog } = Astro.locals;
+// Bestsellers FIRST, then topped up from the rest of the catalog. `bestsellers()` alone returns only
+// what the merchant flagged — 3 in the seed — which left a hole in the 4-up grid. The strip is a
+// fixed-width row, so it must be filled from the catalog rather than left ragged.
+const recommended = [
+  ...catalog.bestsellers(),
+  ...catalog.products.filter((p) => !p.bestseller),
+].slice(0, 4);
 ---
 
-<Layout title="Keranjang" description={`Keranjang belanja di ${store.name}. Checkout mudah via WhatsApp.`}>
-  <section class="mx-auto max-w-4xl px-4 py-12 sm:px-6">
-    <h1 class="font-display text-3xl font-semibold text-ink">Keranjang Belanja</h1>
+<Layout title="Keranjang" description={`Keranjang belanja di ${store.name}.`}>
+  <section class="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
+    <nav class="text-sm text-muted">
+      <a href="/" class="transition-colors hover:text-brand-600">Beranda</a>
+      <span class="mx-2 text-line">/</span>
+      <span class="text-ink">Keranjang</span>
+    </nav>
 
-    <div id="cart-root" class="mt-8"></div>
+    <div class="mt-5 flex flex-wrap items-baseline justify-between gap-3">
+      <h1 class="font-display text-3xl font-semibold text-ink">Keranjang Belanja</h1>
+      <a
+        href="/kategori/semua"
+        class="inline-flex items-center gap-1.5 rounded-sm text-sm font-medium text-brand-700 transition-colors hover:text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+      >
+        <ArrowLeft class="h-4 w-4" stroke-width={2} aria-hidden="true" />
+        Lanjut belanja
+      </a>
+    </div>
+
+    <!-- Empty state -->
+    <div
+      id="cart-empty"
+      hidden
+      class="mt-8 rounded-2xl border border-dashed border-line bg-white py-20 text-center"
+    >
+      <ShoppingCart class="mx-auto h-10 w-10 text-brand-400" stroke-width={1.5} aria-hidden="true" />
+      <h2 class="mt-4 font-display text-2xl font-semibold text-ink">Keranjangmu masih kosong</h2>
+      <p class="mt-2 text-muted">Yuk jelajahi koleksi dan temukan busana favoritmu.</p>
+      <a
+        href="/kategori/semua"
+        class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+      >
+        Mulai Belanja
+      </a>
+    </div>
+
+    <!-- Cart body -->
+    <div id="cart-body" hidden class="mt-8 grid gap-8 lg:grid-cols-[1fr_21rem] lg:items-start">
+      <div class="rounded-2xl border border-line bg-white">
+        <!-- Column headers: desktop only. On a phone each row is a card, and headers for a
+             one-column list are noise. -->
+        <div
+          class="hidden grid-cols-[1fr_auto_7rem] gap-4 border-b border-line px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted sm:grid"
+        >
+          <span>Produk</span>
+          <span class="text-center">Jumlah</span>
+          <span class="text-right">Total</span>
+        </div>
+        <div id="cart-items"></div>
+      </div>
+
+      <!-- Order summary. `sticky` is the point of the two-column layout: on a long cart the
+           checkout button must never scroll out of reach. -->
+      <aside class="rounded-2xl border border-line bg-white p-5 lg:sticky lg:top-24">
+        <h2 class="font-display text-lg font-semibold text-ink">Ringkasan pesanan</h2>
+
+        <dl class="mt-4 space-y-3 text-sm">
+          <div class="flex items-center justify-between">
+            <dt class="text-muted">Subtotal (<span id="cart-count-label">0</span> item)</dt>
+            <dd class="font-medium text-ink tabular-nums" id="cart-subtotal">—</dd>
+          </div>
+          <div class="flex items-center justify-between">
+            <dt class="text-muted">Ongkos kirim</dt>
+            <!-- Honest: ongkir is a live courier quote keyed on the destination (KiriminAja), so it
+                 genuinely cannot be known until the address is entered. Say that, don't show "Rp0". -->
+            <dd class="text-muted">Dihitung saat checkout</dd>
+          </div>
+        </dl>
+
+        <div class="mt-4 flex items-baseline justify-between border-t border-line pt-4">
+          <span class="font-medium text-ink">Total sementara</span>
+          <span
+            class="font-display text-2xl font-semibold text-ink tabular-nums"
+            id="cart-total"
+            aria-live="polite">—</span
+          >
+        </div>
+
+        <a
+          href="/checkout"
+          class="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-200/50 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+        >
+          Lanjut ke Checkout
+          <ArrowRight class="h-4 w-4" stroke-width={2} aria-hidden="true" />
+        </a>
+
+        <ul class="mt-5 space-y-2 border-t border-line pt-4 text-xs text-muted">
+          <li class="flex items-start gap-2">
+            <ShieldCheck class="mt-0.5 h-4 w-4 shrink-0 text-brand-500" stroke-width={1.75} aria-hidden="true" />
+            <span>Pembayaran lewat kanal resmi — transfer, QRIS, dan e-wallet.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <Truck class="mt-0.5 h-4 w-4 shrink-0 text-brand-500" stroke-width={1.75} aria-hidden="true" />
+            <span>Dikirim se-Indonesia lewat kurir terpercaya.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <RotateCcw class="mt-0.5 h-4 w-4 shrink-0 text-brand-500" stroke-width={1.75} aria-hidden="true" />
+            <span>
+              <a
+                href="/halaman/kebijakan-pengembalian"
+                class="underline transition-colors hover:text-brand-700"
+              >
+                Pengembalian dalam 7 hari
+              </a>
+              bila ada yang tidak sesuai.
+            </span>
+          </li>
+        </ul>
+      </aside>
+    </div>
   </section>
+
+  <!-- Recommendations. Shown whether the cart is full or empty: an empty cart is exactly when a
+       shopper most needs somewhere to go. -->
+  {
+    recommended.length > 0 && (
+      <section class="border-t border-line">
+        <div class="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+          <h2 class="font-display text-2xl font-semibold text-ink">Produk terlaris</h2>
+          <div class="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {recommended.map((p) => (
+              <ProductCard product={p} />
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
 </Layout>
 
-<script define:vars={{ whatsapp: store.whatsapp, storeName: store.name }}>
+<script is:inline>
   (function () {
-    var root = document.getElementById("cart-root");
-    if (!root) return;
+    var itemsEl = document.getElementById("cart-items");
+    var bodyEl = document.getElementById("cart-body");
+    var emptyEl = document.getElementById("cart-empty");
+    if (!itemsEl || !bodyEl || !emptyEl) return;
+
+    var subtotalEl = document.getElementById("cart-subtotal");
+    var totalEl = document.getElementById("cart-total");
+    var countEl = document.getElementById("cart-count-label");
 
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -24,74 +174,103 @@ const store = Astro.locals.store;
 
     function readCart() {
       try {
-        return JSON.parse(localStorage.getItem("cart") || "[]");
+        var c = JSON.parse(localStorage.getItem("cart") || "[]");
+        return Array.isArray(c) ? c : [];
       } catch (e) {
         return [];
       }
     }
-
     function writeCart(cart) {
       localStorage.setItem("cart", JSON.stringify(cart));
       window.dispatchEvent(new Event("cart:updated"));
     }
-
+    // Cart contents come from localStorage — attacker-writable in principle, and merchant text in
+    // practice. It is interpolated into HTML below, so it MUST be escaped.
     function esc(s) {
       return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
         return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
       });
     }
 
+    function row(item, idx) {
+      var sub = item.price * item.qty;
+      var variant = item.variant || item.size || "";
+      // The title links to the product. In the old cart it was dead text — a shopper who wanted to
+      // re-check a size or the fabric had to navigate out and search for it again.
+      var href = item.handle ? "/produk/" + encodeURIComponent(item.handle) : null;
+      var title = esc(item.name);
+
+      // ONE stepper and ONE remove button per line, placed into the right cell by grid at each
+      // breakpoint. Rendering a mobile copy and a desktop copy would double every interactive
+      // control — two elements sharing an index, two click handlers, and a hidden duplicate that
+      // still sits in the tab order. Only the line-total TEXT is duplicated (static, no handler).
+      return (
+        '<div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 border-b border-line p-4 last:border-b-0 sm:grid-cols-[auto_1fr_auto_8rem] sm:items-center sm:px-5">' +
+        (href
+          ? '<a href="' + href + '" class="row-span-3 shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:row-span-1">'
+          : '<span class="row-span-3 shrink-0 sm:row-span-1">') +
+        '<img src="' + esc(item.image) + '" alt="" loading="lazy" class="h-24 w-20 rounded-lg bg-brand-50 object-cover" />' +
+        (href ? "</a>" : "</span>") +
+        // Product info
+        '<div class="min-w-0">' +
+        (href
+          ? '<a href="' + href + '" class="rounded-sm font-medium text-ink transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">' + title + "</a>"
+          : '<p class="font-medium text-ink">' + title + "</p>") +
+        (variant
+          ? '<p class="mt-1 inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-700">' + esc(variant) + "</p>"
+          : "") +
+        '<p class="mt-1 text-sm text-muted tabular-nums">' + idr.format(item.price) + " / item</p>" +
+        "</div>" +
+        // Qty — under the title on mobile, its own column on desktop.
+        '<div class="col-start-2 flex items-center justify-between gap-4 sm:col-start-3 sm:justify-center">' +
+        stepper(idx, item.qty) +
+        '<span class="font-semibold text-ink tabular-nums sm:hidden">' + idr.format(sub) + "</span>" +
+        "</div>" +
+        // Line total + remove.
+        '<div class="col-start-2 sm:col-start-4 sm:text-right">' +
+        '<p class="hidden font-semibold text-ink tabular-nums sm:block">' + idr.format(sub) + "</p>" +
+        '<button type="button" data-remove="' + idx + '" class="rounded-sm text-sm text-muted underline transition-colors hover:text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:mt-1">Hapus</button>' +
+        "</div>" +
+        "</div>"
+      );
+    }
+
+    function stepper(idx, qty) {
+      return (
+        '<div class="inline-flex items-center rounded-full border border-line">' +
+        '<button type="button" data-dec="' + idx + '" class="flex h-9 w-9 items-center justify-center rounded-l-full text-muted transition-colors hover:bg-brand-50 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400" aria-label="Kurangi jumlah">−</button>' +
+        '<span class="w-9 text-center text-sm font-medium tabular-nums" aria-live="polite">' + qty + "</span>" +
+        '<button type="button" data-inc="' + idx + '" class="flex h-9 w-9 items-center justify-center rounded-r-full text-muted transition-colors hover:bg-brand-50 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400" aria-label="Tambah jumlah">+</button>' +
+        "</div>"
+      );
+    }
+
     function render() {
       var cart = readCart();
 
+      emptyEl.hidden = cart.length > 0;
+      bodyEl.hidden = cart.length === 0;
       if (!cart.length) {
-        root.innerHTML =
-          '<div class="rounded-2xl border border-dashed border-line bg-white py-20 text-center">' +
-          '<p class="text-4xl">🛒</p>' +
-          '<h2 class="mt-4 font-display text-2xl font-semibold text-ink">Keranjangmu masih kosong</h2>' +
-          '<p class="mt-2 text-muted">Yuk jelajahi koleksi dan temukan busana favoritmu.</p>' +
-          '<a href="/" class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700">Mulai Belanja</a>' +
-          "</div>";
+        itemsEl.innerHTML = "";
         return;
       }
 
-      var total = 0;
-      var rows = cart
-        .map(function (item, idx) {
-          var sub = item.price * item.qty;
-          total += sub;
-          return (
-            '<div class="flex items-center gap-4 border-b border-line py-4">' +
-            '<img src="' + esc(item.image) + '" alt="' + esc(item.name) + '" class="h-24 w-20 shrink-0 rounded-lg object-cover bg-brand-50" loading="lazy" />' +
-            '<div class="min-w-0 flex-1">' +
-            '<p class="truncate font-medium text-ink">' + esc(item.name) + "</p>" +
-            ((item.variant || item.size) ? '<p class="mt-0.5 text-sm text-muted">Varian: ' + esc(item.variant || item.size) + "</p>" : "") +
-            '<div class="mt-2 inline-flex items-center rounded-lg border border-line">' +
-            '<button type="button" data-dec="' + idx + '" class="px-3 py-1 text-muted hover:text-ink" aria-label="Kurangi">−</button>' +
-            '<span class="w-8 text-center text-sm tabular-nums">' + item.qty + "</span>" +
-            '<button type="button" data-inc="' + idx + '" class="px-3 py-1 text-muted hover:text-ink" aria-label="Tambah">+</button>' +
-            "</div>" +
-            "</div>" +
-            '<div class="text-right">' +
-            '<p class="font-semibold text-ink tabular-nums">' + idr.format(sub) + "</p>" +
-            '<button type="button" data-remove="' + idx + '" class="mt-2 text-sm text-muted underline hover:text-brand-600">Hapus</button>' +
-            "</div>" +
-            "</div>"
-          );
+      var subtotal = 0;
+      var count = 0;
+      itemsEl.innerHTML = cart
+        .map(function (item, i) {
+          subtotal += item.price * item.qty;
+          count += item.qty;
+          return row(item, i);
         })
         .join("");
 
-      root.innerHTML =
-        '<div class="rounded-2xl border border-line bg-white p-4 sm:p-6">' + rows +
-        '<div class="mt-6 flex items-center justify-between">' +
-        '<span class="text-lg font-medium text-ink">Total</span>' +
-        '<span class="font-display text-2xl font-semibold text-ink tabular-nums">' + idr.format(total) + "</span>" +
-        "</div>" +
-        '<a href="/checkout" class="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-200/50 transition-colors hover:bg-brand-700">Lanjut ke Checkout</a>' +
-        '<a href="/" class="mt-3 block text-center text-sm text-muted underline hover:text-brand-600">Lanjut belanja</a>' +
-        "</div>";
+      if (subtotalEl) subtotalEl.textContent = idr.format(subtotal);
+      // "Total sementara" — ongkir is still unknown here, so this is deliberately not called "Total".
+      if (totalEl) totalEl.textContent = idr.format(subtotal);
+      if (countEl) countEl.textContent = String(count);
 
-      root.querySelectorAll("[data-remove]").forEach(function (b) {
+      itemsEl.querySelectorAll("[data-remove]").forEach(function (b) {
         b.addEventListener("click", function () {
           var c = readCart();
           c.splice(Number(b.getAttribute("data-remove")), 1);
@@ -99,7 +278,7 @@ const store = Astro.locals.store;
           render();
         });
       });
-      root.querySelectorAll("[data-inc]").forEach(function (b) {
+      itemsEl.querySelectorAll("[data-inc]").forEach(function (b) {
         b.addEventListener("click", function () {
           var c = readCart();
           var i = Number(b.getAttribute("data-inc"));
@@ -108,16 +287,18 @@ const store = Astro.locals.store;
           render();
         });
       });
-      root.querySelectorAll("[data-dec]").forEach(function (b) {
+      itemsEl.querySelectorAll("[data-dec]").forEach(function (b) {
         b.addEventListener("click", function () {
           var c = readCart();
           var i = Number(b.getAttribute("data-dec"));
-          c[i].qty = Math.max(1, c[i].qty - 1);
+          // At 1, decrementing removes the line — the Shopify behaviour, and it avoids a stepper
+          // that appears to do nothing.
+          if (c[i].qty <= 1) c.splice(i, 1);
+          else c[i].qty -= 1;
           writeCart(c);
           render();
         });
       });
-
     }
 
     render();

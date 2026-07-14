@@ -1,4 +1,5 @@
 ---
+import Stars from "../Stars.astro";
 import type { TestimoniConfig } from "@tokophi/sections";
 
 type Props = TestimoniConfig;
@@ -35,11 +36,11 @@ const { heading, items } = Astro.props;
       {
         items.map((item) => (
           <figure class="w-[85%] shrink-0 snap-start rounded-2xl bg-white p-6 shadow-sm ring-1 ring-line sm:w-[45%] lg:w-[31%]">
-            <div class="mb-2 flex items-center gap-1.5 text-brand-500" aria-hidden="true">
-              <span>
-                {"★".repeat(item.rating)}
-                <span class="text-line">{"★".repeat(5 - item.rating)}</span>
-              </span>
+            {/* The shared SVG <Stars> — this used to hand-roll the rating out of "★" TEXT, which
+                renders in whatever star glyph the OS font ships and is a second, drifting copy of
+                something the product page already solves. */}
+            <div class="mb-2 flex items-center gap-1.5">
+              <Stars value={item.rating} size="sm" showValue={false} />
               <span class="text-xs font-medium text-muted">{item.rating}/5</span>
             </div>
             <blockquote class="text-ink">&ldquo;{item.quote}&rdquo;</blockquote>

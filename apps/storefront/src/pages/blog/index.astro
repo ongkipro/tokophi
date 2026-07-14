@@ -43,9 +43,10 @@ const articles = await getArticles(store.id);
               href={`/blog/${a.handle}`}
               class="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
             >
-              {/* An article with no image keeps the brand tint showing instead of a broken frame —
-                  merchants do publish imageless posts. */}
-              <div class="aspect-[4/3] overflow-hidden bg-brand-50">
+              {/* 3:2, same lock as the article's feature image — merchant art arrives in every
+                  shape, and letting each one set its own ratio makes the Jurnal look broken. An
+                  article with no image keeps the brand tint instead of a broken frame. */}
+              <div class="aspect-[3/2] overflow-hidden bg-brand-50">
                 {a.imageUrl && (
                   <img
                     src={a.imageUrl}

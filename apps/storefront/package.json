@@ -10,14 +10,15 @@
   },
   "dependencies": {
     "@astrojs/check": "^0.9.9",
+    "@astrojs/node": "^9.2.1",
+    "@lucide/astro": "^1.24.0",
     "@tokophi/data": "*",
     "@tokophi/db": "*",
     "@tokophi/lib": "*",
     "@tokophi/sections": "*",
     "astro": "^5.14.1",
     "jose": "^6.2.3",
-    "typescript": "^5.9.3",
-    "@astrojs/node": "^9.2.1"
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",

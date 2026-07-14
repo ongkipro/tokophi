@@ -13,11 +13,14 @@ const { store } = Astro.locals;
 const waHref = `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(`Halo ${store.name}, saya mau tanya.`)}`;
 ---
 
-<div id="chat-widget" class="fixed bottom-5 right-5 z-50 print:hidden">
+<div
+  id="chat-widget"
+  class="fixed bottom-4 right-4 z-50 pb-[env(safe-area-inset-bottom)] print:hidden sm:bottom-5 sm:right-5"
+>
   <!-- Panel -->
   <div
     id="chat-panel"
-    class="mb-3 hidden w-[min(22rem,calc(100vw-2.5rem))] origin-bottom-right overflow-hidden rounded-2xl border border-line bg-white shadow-2xl"
+    class="mb-3 hidden h-[min(30rem,calc(100dvh-7.5rem))] w-[min(22rem,calc(100vw-2rem))] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-2xl data-[open]:flex"
     role="dialog"
     aria-label={`Obrolan dengan ${store.name}`}
   >
@@ -32,7 +35,7 @@ const waHref = `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(`Halo 
     </header>
 
     <!-- First run: Nama (wajib) + WhatsApp (opsional). One tiny form — NOT a login. -->
-    <form id="chat-intro" class="hidden space-y-2.5 border-b border-line px-4 py-3">
+    <form id="chat-intro" class="hidden shrink-0 space-y-2.5 border-b border-line px-4 py-3">
       <p class="text-xs text-muted">Kenalan dulu yuk, biar kami bisa balas dengan tepat.</p>
       <input id="chat-name" name="name" required maxlength="60" placeholder="Nama" autocomplete="name"
         class="w-full rounded-xl border border-line bg-cream px-3 py-2 text-sm text-ink outline-none focus:border-brand-600" />
@@ -40,7 +43,7 @@ const waHref = `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(`Halo 
         class="w-full rounded-xl border border-line bg-cream px-3 py-2 text-sm text-ink outline-none focus:border-brand-600" />
     </form>
 
-    <div id="chat-messages" class="flex h-72 flex-col gap-2 overflow-y-auto px-4 py-3 text-sm">
+    <div id="chat-messages" class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-3 text-sm">
       <p id="chat-empty" class="m-auto max-w-[16rem] text-center text-xs text-muted">
         Tanya apa saja — stok, ukuran, ongkir. Kami balas secepatnya.
       </p>
@@ -48,7 +51,7 @@ const waHref = `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(`Halo 
 
     <p id="chat-error" class="hidden px-4 pb-1 text-xs text-brand-600"></p>
 
-    <form id="chat-form" class="flex items-end gap-2 border-t border-line px-3 py-2.5">
+    <form id="chat-form" class="flex shrink-0 items-end gap-2 border-t border-line px-3 py-2.5">
       <textarea id="chat-input" rows="1" maxlength="2000" placeholder="Tulis pesan…" required
         class="max-h-24 min-h-9 flex-1 resize-none rounded-xl border border-line bg-cream px-3 py-2 text-sm text-ink outline-none focus:border-brand-600"></textarea>
       <button type="submit" id="chat-send" aria-label="Kirim" class="rounded-xl bg-brand-600 p-2 text-white transition hover:opacity-90 disabled:opacity-50">
@@ -195,6 +198,8 @@ const waHref = `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(`Halo 
       open = next;
       idleSince = Date.now();
       panel!.classList.toggle("hidden", !open);
+      if (open) panel!.setAttribute("data-open", "");
+      else panel!.removeAttribute("data-open");
       toggle!.setAttribute("aria-label", open ? "Tutup obrolan" : "Buka obrolan");
       syncIntro();
       if (open) {

@@ -1,6 +1,7 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import ProductCard from "../../components/ProductCard.astro";
+import { Check } from "@lucide/astro";
 import Stars from "../../components/Stars.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import { IDR } from "@tokophi/lib/format";
@@ -213,7 +214,7 @@ const TEMPLATE = catalog.productTemplate(product);
         </div>
 
         <p id="cart-toast" class="mt-4 hidden rounded-lg bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
-          ✓ Ditambahkan ke keranjang.
+          <Check class="inline h-4 w-4" stroke-width={2.5} aria-hidden="true" /> Ditambahkan ke keranjang.
           <a href="/keranjang" class="ml-1 underline">Lihat keranjang</a>
         </p>
       </div>

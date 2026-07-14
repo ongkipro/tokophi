@@ -1,9 +1,14 @@
 ---
+import { ShoppingBag, Tag, ArrowRight } from "@lucide/astro";
+import { IDR } from "@tokophi/lib/format";
 import { mediaUrl } from "../data/catalog";
-import { MAIN_NAV, type NavItem } from "../data/nav";
+import { getMainNav, type NavItem } from "../data/nav";
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
-const store = Astro.locals.store;
+const { store, catalog } = Astro.locals;
+// The store's OWN menu, as built in the admin's Navigasi editor (falls back to the shared default
+// when a store has no menu rows yet).
+const MAIN_NAV = await getMainNav(store.id);
 // Merchant logo (stores.logo_url) when set, else the store name as a wordmark.
 const logo = store.logoUrl ? mediaUrl(store.logoUrl) : null;
 const pathname = Astro.url.pathname;
@@ -15,10 +20,36 @@ const isItemActive = (item: NavItem) => {
   if (item.href && isActive(item.href)) return true;
   return !!item.children?.some((c) => isActive(c.href));
 };
+
+// --- Mega menu content ---
+//
+// The nav TREE comes from the store's own menu in the DB (getMainNav → the admin's Navigasi editor).
+// What the panel SHOWS on top of it is live per-tenant catalog data: a thumbnail and a real product
+// count per category. The menu decides WHICH categories to list; the catalog decides what they
+// actually contain — so a store whose categories differ from the seed still gets a truthful panel.
+const categoryMeta = (href: string) => {
+  const handle = href.startsWith("/kategori/") ? href.slice("/kategori/".length) : "";
+  if (!handle) return null;
+  const items = catalog.byCollection(handle);
+  const col = catalog.findCollection(handle);
+  // A menu entry pointing at a category with no products is a dead end — the panel says so rather
+  // than sending a shopper to an empty grid with no warning.
+  // No emoji fallback: a category with no photo gets a Lucide glyph (see the panel), which stays
+  // inside the brand palette instead of an OS-coloured pictograph.
+  return { count: items.length, image: items[0]?.image };
+};
+
+// The one product the panel promotes. Bestseller, not random: the menu is prime real estate and a
+// shopper opening it is browsing, not committed — show them the thing most likely to convert.
+const featured = catalog.bestsellers()[0];
 ---
 
 <header class="sticky top-0 z-40 border-b border-line bg-cream/85 backdrop-blur">
-  <div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6">
+  <!-- `relative` here is what the mega panel anchors to. It used to anchor to its own trigger
+       (left-1/2 + -translate-x-1/2), which centres a 62rem panel on a button sitting far right in
+       the nav — so the panel hung off the left edge of the screen. A mega menu belongs to the
+       HEADER, not to the word that opens it. -->
+  <div class="relative mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6">
     <a
       href="/"
       class="shrink-0 rounded-md font-display text-xl font-semibold tracking-tight text-ink transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:text-2xl"
@@ -36,7 +67,9 @@ const isItemActive = (item: NavItem) => {
       {
         MAIN_NAV.map((item) =>
           item.children ? (
-            <div class="dropdown relative" data-dropdown>
+            <!-- NOT `relative`: the panel must position against the header container above, not
+                 against this trigger. -->
+            <div class="dropdown" data-dropdown>
               <button
                 type="button"
                 class:list={[
@@ -58,24 +91,128 @@ const isItemActive = (item: NavItem) => {
                   <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
               </button>
+              <!-- `pt-3` instead of `mt-3`: the gap between the trigger and the card must be INSIDE
+                   the hover target, or moving the pointer down into the panel crosses a dead zone
+                   and the menu snaps shut. A transparent pad is the bridge. -->
               <div
-                class="dropdown-panel invisible absolute left-1/2 top-full z-50 mt-2 w-[22rem] -translate-x-1/2 translate-y-1 rounded-2xl border border-line bg-cream/95 p-2 opacity-0 shadow-xl backdrop-blur transition-all duration-200"
+                class="dropdown-panel invisible absolute inset-x-4 top-full z-50 translate-y-1 pt-3 opacity-0 transition-all duration-200 sm:inset-x-6"
               >
-                <div class="grid grid-cols-2 gap-1">
-                  {item.children.map((child) => (
+                <div
+                  class="overflow-hidden rounded-2xl border border-line bg-cream/95 shadow-xl backdrop-blur"
+                >
+                  <div class="grid gap-6 p-5 md:grid-cols-[1.7fr_1fr]">
+                    <!-- Categories -->
+                    <div>
+                      <div class="flex items-center justify-between px-1 pb-3">
+                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">
+                          Kategori
+                        </p>
+                        <a
+                          href="/kategori/semua"
+                          class="rounded-sm text-xs font-medium text-muted transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                        >
+                          Lihat semua
+                          <ArrowRight class="ml-1 inline h-3.5 w-3.5" stroke-width={2} aria-hidden="true" />
+                        </a>
+                      </div>
+
+                      <div class="grid gap-1 sm:grid-cols-2">
+                        {item.children.map((child) => {
+                          const meta = categoryMeta(child.href);
+                          return (
+                            <a
+                              href={child.href}
+                              aria-current={isActive(child.href) ? "page" : undefined}
+                              class:list={[
+                                "group/cat flex items-center gap-3 rounded-xl p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+                                isActive(child.href) ? "bg-brand-50" : "hover:bg-brand-50/70",
+                              ]}
+                            >
+                              {/* Thumbnail = the category's first product. No product → a Lucide
+                                  glyph, never an empty or broken frame. */}
+                              <span class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-50 ring-1 ring-line">
+                                {meta?.image ? (
+                                  <img
+                                    src={meta.image}
+                                    alt=""
+                                    loading="lazy"
+                                    class="h-full w-full object-cover transition-transform duration-300 group-hover/cat:scale-105"
+                                  />
+                                ) : (
+                                  <ShoppingBag class="h-5 w-5 text-brand-400" stroke-width={1.75} aria-hidden="true" />
+                                )}
+                              </span>
+                              <span class="min-w-0">
+                                <span
+                                  class:list={[
+                                    "block truncate text-sm transition-colors",
+                                    isActive(child.href)
+                                      ? "font-medium text-brand-700"
+                                      : "text-ink group-hover/cat:text-brand-700",
+                                  ]}
+                                >
+                                  {child.label}
+                                </span>
+                                <span class="block text-xs text-muted tabular-nums">
+                                  {meta
+                                    ? meta.count > 0
+                                      ? `${meta.count} produk`
+                                      : "Segera hadir"
+                                    : "Lihat koleksi"}
+                                </span>
+                              </span>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <!-- Featured product. The menu is prime real estate; a column of links wastes it. -->
+                    {featured && (
+                      <a
+                        href={`/produk/${featured.handle}`}
+                        class="group/feat flex flex-col rounded-xl border border-line bg-white p-3 transition-all hover:border-brand-400 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                      >
+                        <span class="aspect-[4/3] w-full overflow-hidden rounded-lg bg-brand-50">
+                          <img
+                            src={featured.image}
+                            alt=""
+                            loading="lazy"
+                            class="h-full w-full object-cover transition-transform duration-500 group-hover/feat:scale-105"
+                          />
+                        </span>
+                        <span class="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">
+                          Terlaris
+                        </span>
+                        <span class="mt-1 line-clamp-2 text-sm font-medium leading-snug text-ink transition-colors group-hover/feat:text-brand-700">
+                          {featured.name}
+                        </span>
+                        <span class="mt-1 text-sm font-semibold text-ink tabular-nums">
+                          {IDR(featured.price)}
+                        </span>
+                      </a>
+                    )}
+                  </div>
+
+                  <!-- Utility bar: the two destinations a category browser most often wants next. -->
+                  <div
+                    class="flex items-center justify-between gap-4 border-t border-line bg-brand-50/50 px-6 py-3 text-sm"
+                  >
                     <a
-                      href={child.href}
-                      aria-current={isActive(child.href) ? "page" : undefined}
-                      class:list={[
-                        "block rounded-xl px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
-                        isActive(child.href)
-                          ? "bg-brand-50 font-medium text-brand-700"
-                          : "text-ink hover:bg-brand-50/70 hover:text-brand-700",
-                      ]}
+                      href="/kategori/promo-gajian"
+                      class="inline-flex items-center gap-2 rounded-sm font-medium text-brand-700 transition-colors hover:text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                     >
-                      {child.label}
+                      <Tag class="h-4 w-4 shrink-0" stroke-width={1.75} aria-hidden="true" />
+                      Promo Gajian — diskon periode gajian
                     </a>
-                  ))}
+                    <a
+                      href="/kategori/produk-terlaris"
+                      class="hidden rounded-sm text-muted transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:block"
+                    >
+                      Produk terlaris
+                      <ArrowRight class="ml-1 inline h-3.5 w-3.5" stroke-width={2} aria-hidden="true" />
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -206,22 +343,44 @@ const isItemActive = (item: NavItem) => {
                     isItemActive(item) ? "" : "hidden",
                   ]}
                 >
-                  {item.children.map((child) => (
-                    <li>
-                      <a
-                        href={child.href}
-                        aria-current={isActive(child.href) ? "page" : undefined}
-                        class:list={[
-                          "block rounded-xl px-4 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
-                          isActive(child.href)
-                            ? "bg-brand-50 font-medium text-brand-700"
-                            : "text-muted hover:bg-brand-50/60 hover:text-brand-700",
-                        ]}
-                      >
-                        {child.label}
-                      </a>
-                    </li>
-                  ))}
+                  {/* Same thumbnail + live count as the desktop mega panel. A phone is where most
+                      Indonesian shoppers actually browse — it should not get the stripped version. */}
+                  {item.children.map((child) => {
+                    const meta = categoryMeta(child.href);
+                    return (
+                      <li>
+                        <a
+                          href={child.href}
+                          aria-current={isActive(child.href) ? "page" : undefined}
+                          class:list={[
+                            "flex items-center gap-3 rounded-xl p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+                            isActive(child.href) ? "bg-brand-50" : "hover:bg-brand-50/60",
+                          ]}
+                        >
+                          <span class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-50 ring-1 ring-line">
+                            {meta?.image ? (
+                              <img src={meta.image} alt="" loading="lazy" class="h-full w-full object-cover" />
+                            ) : (
+                              <ShoppingBag class="h-4 w-4 text-brand-400" stroke-width={1.75} aria-hidden="true" />
+                            )}
+                          </span>
+                          <span class="min-w-0">
+                            <span
+                              class:list={[
+                                "block truncate text-sm",
+                                isActive(child.href) ? "font-medium text-brand-700" : "text-ink",
+                              ]}
+                            >
+                              {child.label}
+                            </span>
+                            <span class="block text-xs text-muted tabular-nums">
+                              {meta ? (meta.count > 0 ? `${meta.count} produk` : "Segera hadir") : "Lihat koleksi"}
+                            </span>
+                          </span>
+                        </a>
+                      </li>
+                    );
+                  })}
                 </ul>
               </li>
             ) : (
@@ -313,18 +472,36 @@ const isItemActive = (item: NavItem) => {
 </script>
 
 <style>
-  /* Desktop dropdown: open on hover / keyboard focus-within, or when JS marks it open */
+  /* Desktop mega menu: open on hover / keyboard focus-within, or when JS marks it open */
   .dropdown:hover > .dropdown-panel,
   .dropdown:focus-within > .dropdown-panel,
   .dropdown.is-open > .dropdown-panel {
     visibility: visible;
     opacity: 1;
-    transform: translate(-50%, 0);
+    transform: translateY(0);
   }
   .dropdown:hover .dropdown-chevron,
   .dropdown:focus-within .dropdown-chevron,
   .dropdown.is-open .dropdown-chevron {
     transform: rotate(180deg);
+  }
+
+  /* Click-to-close was broken: the `:hover` rule above kept the panel visible while the pointer sat
+     on the trigger, so removing `.is-open` did nothing and the click looked dead. `.is-closed` is
+     the explicit override — set on click-close, cleared on mouseleave so hover works again after. */
+  .dropdown.is-closed > .dropdown-panel {
+    visibility: hidden;
+    opacity: 0;
+  }
+  .dropdown.is-closed .dropdown-chevron {
+    transform: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dropdown-panel,
+    .dropdown-chevron {
+      transition: none;
+    }
   }
 </style>
 
@@ -338,23 +515,35 @@ const isItemActive = (item: NavItem) => {
 
       function openDD() {
         dd.classList.add("is-open");
+        dd.classList.remove("is-closed");
         trigger.setAttribute("aria-expanded", "true");
       }
       function closeDD() {
         dd.classList.remove("is-open");
+        // `.is-closed` beats the CSS `:hover` rule — without it, a click-to-close under a resting
+        // pointer leaves the panel on screen and the button feels broken.
+        dd.classList.add("is-closed");
         trigger.setAttribute("aria-expanded", "false");
       }
 
       trigger.addEventListener("click", function (e) {
         e.preventDefault();
-        if (dd.classList.contains("is-open")) closeDD();
+        // Toggle on what the shopper actually SEES, not on `.is-open`. Hover opens the panel purely
+        // in CSS without ever setting that class — so a class-only check made the first click on a
+        // hovered (visible) panel "open" it again, i.e. do nothing.
+        var visible =
+          !dd.classList.contains("is-closed") &&
+          (dd.classList.contains("is-open") || dd.matches(":hover") || dd.contains(document.activeElement));
+        if (visible) closeDD();
         else openDD();
       });
       // keep aria in sync when hovering opens it
       dd.addEventListener("mouseenter", function () {
-        trigger.setAttribute("aria-expanded", "true");
+        if (!dd.classList.contains("is-closed")) trigger.setAttribute("aria-expanded", "true");
       });
       dd.addEventListener("mouseleave", function () {
+        // Leaving resets the click-suppression, so hover opens it again next time.
+        dd.classList.remove("is-closed");
         if (!dd.classList.contains("is-open")) trigger.setAttribute("aria-expanded", "false");
       });
       dd.addEventListener("keydown", function (e) {
@@ -362,6 +551,11 @@ const isItemActive = (item: NavItem) => {
           closeDD();
           trigger.focus();
         }
+      });
+      // Navigating away from an open panel should not leave it hanging if the browser restores the
+      // page from bfcache.
+      dd.querySelectorAll("a[href]").forEach(function (a) {
+        a.addEventListener("click", closeDD);
       });
       dd.__closeDD = closeDD;
     });
