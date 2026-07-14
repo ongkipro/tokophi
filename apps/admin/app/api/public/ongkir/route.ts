@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { kaShippingPrice, kaInstantPricing, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
-import { resolveArea } from "@/lib/data/areas";
+import { resolveArea, kelurahanForDistrict } from "@/lib/data/areas";
 import { rateLimited } from "@/lib/public-guard";
 import { getCodPolicy } from "@/lib/cod";
 
@@ -41,6 +41,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, results }, { headers: CORS });
   }
 
+  // kelurahan of a district → the checkout fills the kodepos from the one the shopper picks.
+  // A kodepos is assigned per kelurahan, not per kecamatan (17% of kecamatan span several — the
+  // urban ones), so it cannot be derived from the district alone. Districts we could not match to
+  // the Kemendagri dataset (~4%) return an empty list, and the checkout keeps kodepos manual for
+  // them — an unmatched district must degrade to "the shopper types it", never to a guess.
+  if (body.op === "kelurahan") {
+    const id = Number(body.destinationId);
+    if (!Number.isFinite(id) || id <= 0) {
+      return NextResponse.json({ ok: true, kelurahan: [] }, { headers: CORS });
+    }
+    return NextResponse.json({ ok: true, kelurahan: await kelurahanForDistrict(id) }, { headers: CORS });
+  }
+
   // instant (same-day) pricing — needs shopper coordinates; origin = store sender lat/lng (or default)
   if (body.op === "instant") {
     if (!body.destLat || !body.destLng) return NextResponse.json({ ok: false, error: "Lokasi tujuan belum ada." }, { headers: CORS });
@@ -73,6 +86,14 @@ export async function POST(req: Request) {
       .where(eq(schema.stores.slug, body.storeSlug || "batik-nusantara"))
       .limit(1);
     let merchant: string[] | null = null;
+    // The merchant's PER-SERVICE selection (store_shipping_methods) — what the Jasa Kirim card in
+    // Pengaturan actually writes, and what it promises the seller: "Pilih layanan yang ditawarkan ke
+    // pembeli saat checkout." That promise was not kept: this endpoint filtered on the COURIER column
+    // only (store_settings.couriers), so a seller who switched OFF, say, JNE YES still had it offered
+    // at checkout — and the courier-level model cannot even express that choice, which is precisely
+    // why the per-service table exists. Keyed "<courier>:<service_type>" because a service_type is
+    // only unique within its courier.
+    let services: Set<string> | null = null;
     if (store) {
       const [ss] = await db
         .select({ couriers: schema.storeSettings.couriers })
@@ -80,6 +101,19 @@ export async function POST(req: Request) {
         .where(eq(schema.storeSettings.storeId, store.id))
         .limit(1);
       merchant = ss?.couriers ?? null;
+
+      const picked = await db
+        .select({ courier: schema.storeShippingMethods.courier, service: schema.storeShippingMethods.service })
+        .from(schema.storeShippingMethods)
+        .where(
+          and(
+            eq(schema.storeShippingMethods.storeId, store.id),
+            eq(schema.storeShippingMethods.enabled, true),
+          ),
+        );
+      // No rows = the merchant has never opened the card. Fall back to the courier-level behaviour
+      // rather than showing a checkout with zero shipping options.
+      if (picked.length) services = new Set(picked.map((s) => `${s.courier}:${s.service}`));
     }
     const effective = (merchant ?? platformOn).filter((c) => platformOn.includes(c));
     const r = await kaShippingPrice({
@@ -104,6 +138,9 @@ export async function POST(req: Request) {
     }));
     // filter by effective couriers (platform is the hard cap; empty platform = show all as fallback)
     if (platformOn.length) rates = rates.filter((x) => effective.includes(x.code));
+    // …then by the merchant's per-service selection, which is the finer of the two and the one the
+    // seller actually sees a switch for.
+    if (services) rates = rates.filter((x) => services.has(`${x.code}:${x.type}`));
     return NextResponse.json({ ok: true, rates, codEnabled: !!cod?.enabled }, { headers: CORS });
   }
 
