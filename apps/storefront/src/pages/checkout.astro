@@ -1,5 +1,6 @@
 ---
-import { ShoppingCart, Package, Zap } from "@lucide/astro";
+import { ShoppingCart, Package, Zap, Banknote } from "@lucide/astro";
+import PayIcon from "../components/PayIcon.astro";
 import Layout from "../layouts/Layout.astro";
 import { enabledPaymentChannels, mediaUrl, storeCodPolicy } from "../data/catalog";
 import { db, schema } from "@tokophi/db";
@@ -27,7 +28,30 @@ const payDesc = (kind: string, label: string) =>
   : kind === "ewallet" ? `Bayar pakai saldo ${label}`
   : kind === "retail" ? `Bayar tunai di gerai ${label}`
   : "Bayar online";
-const PAYMENTS = (await enabledPaymentChannels()).map((c) => ({ id: c.code, label: c.label, desc: payDesc(c.kind, c.label) }));
+const PAYMENTS = (await enabledPaymentChannels()).map((c) => ({ id: c.code, label: c.label, kind: c.kind, desc: payDesc(c.kind, c.label) }));
+
+// Group by kind. A flat list of 6 radios made the five Virtual Accounts look like five unrelated
+// choices, so the shopper had to read every row to find their bank. Grouping is the whole job of this
+// screen: pick a FAMILY first (I'll scan a QR / I'll transfer / I'll pay at a minimart), then a bank.
+// Order is by how Indonesians actually pay, not alphabetically.
+const KIND_ORDER = ["qris", "va", "ewallet", "retail"] as const;
+const KIND_META: Record<string, { title: string; hint: string }> = {
+  qris: { title: "QRIS", hint: "Scan dari e-wallet atau m-banking mana pun" },
+  va: { title: "Transfer Bank (Virtual Account)", hint: "Bayar lewat ATM, m-banking, atau internet banking" },
+  ewallet: { title: "E-Wallet", hint: "Bayar pakai saldo dompet digital" },
+  retail: { title: "Gerai Retail", hint: "Bayar tunai di minimarket" },
+};
+// Inside a group, a channel is shown by what DISTINGUISHES it. The five VA labels all read "Virtual
+// Account <Bank>" under a heading that already says Virtual Account — so the shopper reads the same
+// two words five times to find one that differs. Strip the prefix and only the bank remains.
+const shortLabel = (label: string, kind: string) =>
+  kind === "va" ? label.replace(/^Virtual Account\s+/i, "") : label;
+
+const PAY_GROUPS = KIND_ORDER.map((kind) => ({
+  kind,
+  ...KIND_META[kind],
+  items: PAYMENTS.filter((p) => p.kind === kind).map((p) => ({ ...p, short: shortLabel(p.label, p.kind) })),
+})).filter((g) => g.items.length > 0);
 
 // COD is NOT a payment channel like the others — it is a merchant switch (store_settings.cod_enabled,
 // migration 0038, default OFF) narrowed further by the PLATFORM's risk limits (platform_cod: a max
@@ -300,42 +324,91 @@ if (rToken) {
         <!-- Pembayaran -->
         <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
           <legend class="px-2 font-display text-lg font-semibold text-ink">Pembayaran</legend>
-          <div class="space-y-3">
-            {
-              PAYMENTS.map((p, i) => (
-                <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
+
+          <div class="space-y-4">
+            {PAY_GROUPS.map((group) => (
+              <div>
+                {/* A group with ONE channel is rendered as a single selectable row, not a header with
+                    one item under it: QRIS was appearing twice — once as the group title and once as
+                    its only row. And a multi-channel group's rows show only the BANK NAME, because
+                    the group hint already says how you pay; repeating "Bayar via ATM / m-banking"
+                    five times is noise a shopper has to read past. */}
+                {group.items.length === 1 ? (
+                  <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
+                    <input
+                      type="radio"
+                      name="payment"
+                      value={group.items[0].id}
+                      data-label={group.items[0].label}
+                      required
+                      class="h-4 w-4 shrink-0 accent-brand-600"
+                    />
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 ring-1 ring-brand-100">
+                      <PayIcon kind={group.kind} />
+                    </span>
+                    <span class="min-w-0 flex-1">
+                      <span class="block text-sm font-medium text-ink">{group.title}</span>
+                      <span class="block text-xs text-muted">{group.hint}</span>
+                    </span>
+                  </label>
+                ) : (
+                  <>
+                    <div class="mb-2 flex items-center gap-3 px-1">
+                      <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 ring-1 ring-brand-100">
+                        <PayIcon kind={group.kind} />
+                      </span>
+                      <div class="min-w-0">
+                        <p class="text-sm font-semibold text-ink">{group.title}</p>
+                        <p class="text-xs text-muted">{group.hint}</p>
+                      </div>
+                    </div>
+                    <div class="space-y-2">
+                      {group.items.map((pm) => (
+                        <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-2.5 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
+                          <input
+                            type="radio"
+                            name="payment"
+                            value={pm.id}
+                            data-label={pm.label}
+                            required
+                            class="h-4 w-4 shrink-0 accent-brand-600"
+                          />
+                          <span class="min-w-0 flex-1 text-sm font-medium text-ink">{pm.short}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+
+            {/* COD is HIDDEN until it is genuinely available: the chosen courier must support it, the
+                total must sit under the platform cap, and the province (derived from the kecamatan,
+                not typed) must be on the allow-list. A greyed-out row with an excuse would be worse —
+                a COD we would reject has no business being on screen at all. */}
+            {COD_ENABLED && (
+              <div id="cod-option" hidden>
+                <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
                   <input
                     type="radio"
                     name="payment"
-                    value={p.id}
-                    data-label={p.label}
-                    checked={i === 0}
-                    required
-                    class="h-4 w-4 accent-brand-600"
+                    value="cod"
+                    data-label="COD (Bayar di Tempat)"
+                    disabled
+                    class="h-4 w-4 shrink-0 accent-brand-600"
                   />
-                  <span class="flex-1">
-                    <span class="block text-sm font-medium text-ink">{p.label}</span>
-                    <span class="block text-xs text-muted">{p.desc}</span>
+                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 ring-1 ring-brand-100">
+                    <Banknote class="h-4 w-4 text-brand-600" stroke-width={1.75} aria-hidden="true" />
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-medium text-ink">Bayar di Tempat (COD)</span>
+                    <span class="block text-xs text-muted">Bayar tunai ke kurir saat paket tiba</span>
                   </span>
                 </label>
-              ))
-            }
-            {
-              COD_ENABLED && (
-                <label
-                  id="cod-option"
-                  hidden
-                  class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50"
-                >
-                  <input type="radio" name="payment" value="cod" data-label="COD (Bayar di Tempat)" disabled class="h-4 w-4 accent-brand-600" />
-                  <span class="flex-1">
-                    <span class="block text-sm font-medium text-ink">COD (Bayar di Tempat)</span>
-                    <span class="block text-xs text-muted">Bayar tunai saat paket tiba</span>
-                  </span>
-                </label>
-              )
-            }
+              </div>
+            )}
           </div>
+
           <p class="mt-4 text-xs text-muted">Pembayaran diproses aman — disediakan TokoΦ.</p>
         </fieldset>
       </div>

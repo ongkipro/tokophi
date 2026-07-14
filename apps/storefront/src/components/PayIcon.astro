@@ -1,0 +1,11 @@
+---
+// One icon per payment FAMILY (not per bank): the shopper picks a family first — scan a QR, transfer
+// to a bank, pay from a wallet, pay cash at a minimart — and only then a specific channel.
+import { QrCode, Landmark, Wallet, Store, CreditCard } from "@lucide/astro";
+
+type Props = { kind: string };
+const { kind } = Astro.props;
+const Icon = kind === "qris" ? QrCode : kind === "va" ? Landmark : kind === "ewallet" ? Wallet : kind === "retail" ? Store : CreditCard;
+---
+
+<Icon class="h-4 w-4 text-brand-600" stroke-width={1.75} aria-hidden="true" />
