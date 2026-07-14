@@ -17,7 +17,7 @@ import {
   setCodEnabled,
   type PlatformService,
 } from "@/lib/actions/shipping";
-import { courierName, isBaselineCourier } from "@tokophi/lib/couriers";
+import { courierName, isBaselineService } from "@tokophi/lib/couriers";
 
 // KiriminAja's own speed classes (the `group` on every rate). Grouping the page by them — rather
 // than by courier — is what makes it read like a shipping menu instead of a vendor list: a seller
@@ -32,8 +32,9 @@ const GROUPS: { key: string; label: string; desc: string }[] = [
 
 const key = (s: { courier: string; type: string }) => `${s.courier}:${s.type}`;
 
-// Why a baseline courier's switch is greyed out. Written for a shop owner, not for us: no provider
-// names, no "chain", no talk of rails or fallbacks.
+// Why a baseline SERVICE's switch is greyed out. Written for a shop owner, not for us: no provider
+// names, no "chain", no talk of rails or fallbacks. Only the regular service of each baseline courier
+// is locked — the seller keeps SPX Economy and JNE YES as their own commercial choice.
 const BASELINE_REASON: Record<string, string> = {
   spx: "Layanan utama toko dan satu-satunya yang melayani COD — selalu aktif.",
   jne: "Cadangan untuk rute yang tidak dijangkau layanan utama — selalu aktif.",
@@ -75,7 +76,7 @@ export function JasaKirimCard() {
       // by a hand-posted payload. Forcing them on here (rather than only rendering them as locked)
       // is what keeps the screen honest: the switch the seller sees and the payload the Simpan
       // button sends say the same thing.
-      for (const p of platform) if (isBaselineCourier(p.courier)) picked[key(p)] = true;
+      for (const p of platform) if (isBaselineService(p.courier, p.type)) picked[key(p)] = true;
       setOn(picked);
       setCod(codOn);
       setCoverage(cov);
@@ -90,15 +91,16 @@ export function JasaKirimCard() {
   const codCapable = services.filter((s) => s.codAllowed);
   const codCouriers = [...new Set(codCapable.map((s) => courierName(s.courier)))];
 
-  // SPX and JNE are baseline (@tokophi/lib/couriers): their switches are locked ON. Not a courtesy
-  // rail the seller can talk themselves out of — switching off the primary silently kills COD (it is
-  // the only COD rail) and switching off the backup leaves the routes the primary does not serve
-  // with no shipping at all. Neither failure announces itself; the option simply stops appearing at
-  // checkout. The seller keeps full control of the other six couriers.
+  // Locked = SPX Standard and JNE Reguler ONLY (@tokophi/lib/couriers BASELINE_SERVICES) — not every
+  // service those two couriers sell. Switching off the primary silently kills COD (it is the only COD
+  // rail) and switching off the backup leaves the routes the primary does not serve with no shipping
+  // at all; neither failure announces itself, the option simply stops appearing at checkout. But
+  // nothing depends on SPX Economy or the pricey JNE YES existing, so those stay the seller's call,
+  // as does every other courier.
   //
   // The lock is an AFFORDANCE. `saveStoreServices` re-checks it on the server, because a disabled
   // switch stops a seller, not a POST.
-  const isLocked = (s: PlatformService) => isBaselineCourier(s.courier);
+  const isLocked = (s: PlatformService) => isBaselineService(s.courier, s.type);
 
   // `false` = the probe priced a route from this store's pickup district and this courier did not
   // quote. `undefined` = unknown (no probe) → say nothing.

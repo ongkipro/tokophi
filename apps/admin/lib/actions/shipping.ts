@@ -12,10 +12,10 @@ import {
   isInstantCourier,
   isInstantService,
   isSellerCourier,
-  isBaselineCourier,
+  isBaselineService,
   courierName,
   SELLER_COURIER_CODES,
-  BASELINE_COURIER_CODES,
+  BASELINE_SERVICES,
 } from "@tokophi/lib/couriers";
 import { courierCoverage, type CourierCoverage } from "@/lib/courier-coverage";
 import { resolveArea, provinceForDistrict, areaById } from "@/lib/data/areas";
@@ -427,14 +427,25 @@ export async function saveStoreServices(
   // persist either (@tokophi/lib/couriers).
   const clean = services.filter((s) => !isInstantCourier(s.courier) && isSellerCourier(s.courier));
 
+  // The lock is per SERVICE, not per courier: SPX Standard (the primary + COD rail) and JNE Reguler
+  // (the backup) must stay on. Everything else those couriers sell — SPX Economy, JNE YES — is the
+  // seller's own commercial call and may be switched off. Only enforced for a service the PLATFORM
+  // currently offers: if super-admin has pulled SPX platform-wide, the seller cannot be asked to keep
+  // it on.
   const pool = await getPlatformServices();
-  const gutted = BASELINE_COURIER_CODES.filter(
-    (c) => pool.some((p) => p.courier === c) && !clean.some((s) => isBaselineCourier(s.courier) && s.courier === c),
+  const missing = BASELINE_SERVICES.filter(
+    (b) =>
+      pool.some((p) => p.courier === b.courier && p.type === b.type) &&
+      !clean.some((s) => s.courier === b.courier && s.type === b.type),
   );
-  if (gutted.length) {
+  if (missing.length) {
+    const names = missing.map((b) => {
+      const svc = pool.find((p) => p.courier === b.courier && p.type === b.type);
+      return svc?.name ?? `${courierName(b.courier)} ${b.type}`;
+    });
     return {
       ok: false,
-      error: `${gutted.map(courierName).join(" dan ")} tidak bisa dimatikan — minimal satu layanannya harus aktif.`,
+      error: `${names.join(" dan ")} tidak bisa dimatikan — ini layanan wajib toko.`,
     };
   }
 

@@ -69,6 +69,22 @@ export const BASELINE_COURIER_CODES = ["spx", "jne"];
 export const isBaselineCourier = (code: string | null | undefined): boolean =>
   !!code && BASELINE_COURIER_CODES.includes(normalizeCode(code));
 
+// …but the lock is on the REGULAR SERVICE, not on everything the baseline couriers sell. SPX Standard
+// is the primary + the COD rail and JNE Reguler is the backup — those two must always be buyable. The
+// rest of their catalogue (SPX Economy, the pricey JNE YES next-day) is the seller's own commercial
+// choice and stays switchable. Locking a whole courier would have taken that choice away for no
+// safety gain: nothing depends on JNE YES existing.
+//
+// service_type codes are KiriminAja's own (verified live 2026-07-14): SPX Standard = "1" (Economy is
+// "3"), JNE Reguler = "REG23" (YES = "YES23").
+export const BASELINE_SERVICES: { courier: string; type: string }[] = [
+  { courier: "spx", type: "1" },
+  { courier: "jne", type: "REG23" },
+];
+export const isBaselineService = (courier: string | null | undefined, type: string | null | undefined): boolean =>
+  !!courier && !!type &&
+  BASELINE_SERVICES.some((b) => b.courier === normalizeCode(courier) && b.type === String(type).trim());
+
 /** Preference order the checkout's first quote walks: primary, then backup. */
 export const PRIMARY_CHAIN = ["spx", "jne"];
 
