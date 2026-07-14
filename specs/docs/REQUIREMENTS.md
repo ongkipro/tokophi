@@ -133,7 +133,7 @@
 
 | ID | Requirement | Verify | Status |
 |---|---|---|---|
-| F-E1 | Both admin panels are `noindex, nofollow` in **three layers** (`next.config.ts headers()`, `middleware.ts` re-stamp, `metadata.robots` + `app/robots.ts`). | `curl -sI https://app.tokophi.com/login \| grep -i x-robots` | MET |
+| F-E1 | Both admin surfaces (Seller + Super Admin) are `noindex, nofollow` in **three layers** (`next.config.ts headers()`, `middleware.ts` re-stamp, `metadata.robots` + `app/robots.ts`). | `curl -sI https://app.tokophi.com/login \| grep -i x-robots` | MET |
 | F-E2 | `/api/uploads/*` is **carved out** (`X-Robots-Tag: all`) — merchant product photos must stay in Google Images. | `apps/admin/next.config.ts` | MET |
 | F-E3 | The landing page and every storefront remain fully indexable, with `robots.txt` + a generated `sitemap.xml` + an OG social card. | `apps/landing/public/robots.txt`, `src/pages/sitemap.xml.ts`, `public/og.png` | MET |
 | F-E4 | `www.tokophi.com` 301s to the apex. | Traefik redirect router | MET |

@@ -61,7 +61,7 @@ export function ProfilClient({ profile }: { profile: Profile }) {
             <div className="space-y-1.5">
               <Label htmlFor="pf-email">Email</Label>
               <Input id="pf-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-              <p className="text-xs text-muted-foreground">Email dipakai untuk masuk ke panel admin.</p>
+              <p className="text-xs text-muted-foreground">Email dipakai untuk masuk ke Dashboard Seller.</p>
             </div>
             <div className="flex justify-end border-t pt-4">
               <Button disabled={pending || !dirty} onClick={save}>{pending ? "Menyimpan…" : "Simpan perubahan"}</Button>

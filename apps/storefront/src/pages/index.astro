@@ -125,8 +125,13 @@ const collections = catalog.collections.map((c) => {
         <h2 class="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">Paling Dicari</h2>
         <p class="mt-2 text-muted">Favorit pelanggan minggu ini.</p>
       </div>
+      {/* NOT /kategori/dress. One container serves every store (ADR 0009) and `dress` is just one
+          merchant's category — on a store that has no such category the handle does not resolve and
+          `/kategori/[handle]` returns 404, so the homepage's own CTAs would point at a dead page.
+          `produk-terlaris` / `semua` are VIRTUAL collections (kategori/[handle].astro) that every
+          store always has. `produk-terlaris` is also literally the list shown above it. */}
       <a
-        href="/kategori/dress"
+        href="/kategori/produk-terlaris"
         class="hidden shrink-0 text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 sm:block"
       >
         Lihat semua →
@@ -136,7 +141,7 @@ const collections = catalog.collections.map((c) => {
       {best.map((p) => <ProductCard product={p} />)}
     </div>
     <div class="mt-8 text-center sm:hidden">
-      <a href="/kategori/dress" class="text-sm font-medium text-brand-600 hover:text-brand-700">
+      <a href="/kategori/produk-terlaris" class="text-sm font-medium text-brand-600 hover:text-brand-700">
         Lihat semua →
       </a>
     </div>
@@ -151,7 +156,7 @@ const collections = catalog.collections.map((c) => {
       Jelajahi koleksi {store.name} dan temukan busana yang membuatmu percaya diri.
     </p>
     <a
-      href="/kategori/dress"
+      href="/kategori/semua"
       class="mt-8 inline-block rounded-full bg-brand-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-200/60 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
     >
       Mulai Belanja

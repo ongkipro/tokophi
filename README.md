@@ -1,6 +1,6 @@
 # TokoΦ
 
-**Shopify-style commerce SaaS for the Indonesian market.** A shared, modern-SaaS **admin panel** runs many merchant stores; a **super-admin** control plane is what we (the platform) use to manage all stores/plans/billing; each client gets a bespoke **Astro storefront** (hand-built per brand — no theme editor).
+**Shopify-style commerce SaaS for the Indonesian market.** A shared, modern-SaaS **Seller** panel (`apps/admin` — the UI calls itself "Dashboard Seller") runs many merchant stores; a **Super Admin** control plane (`apps/super-admin`) is what we (the platform) use to manage all stores/plans/billing; each client gets a bespoke **Astro storefront** (hand-built per brand — no theme editor).
 
 > Deliberately **no Themes menu** and **no Apps/Plugins marketplace**. Curated, lightweight, **Bahasa Indonesia** UI tuned for local sellers (WhatsApp, COD, QRIS/e-wallets, local couriers) with modern-SaaS polish. The **local backend is fully wired** on PostgreSQL (Drizzle) — all 3 surfaces read + all admin editors write + auth/RBAC/RLS + real product variants; VPS deploy is the only remaining milestone.
 

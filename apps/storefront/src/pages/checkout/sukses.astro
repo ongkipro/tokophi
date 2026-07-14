@@ -5,18 +5,27 @@ const store = Astro.locals.store;
 
 <Layout title="Pesanan Berhasil" description={`Terima kasih telah berbelanja di ${store.name}.`}>
   <section class="mx-auto max-w-2xl px-4 py-16 sm:px-6">
+    <!-- Both states of this page are rendered here and one is hidden on arrival. This page is
+         reachable by simply typing the URL (and by a refresh long after the order), so it must NOT
+         assert "pesanan diterima" unless there is actually an order in localStorage to show. -->
     <div class="rounded-2xl border border-line bg-white p-6 text-center sm:p-10">
-      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-100">
+      <div id="ok-icon" class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-100">
         <svg viewBox="0 0 24 24" class="h-9 w-9 fill-none stroke-brand-600" stroke-width="2.5" aria-hidden="true">
           <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </div>
-      <h1 class="mt-5 font-display text-3xl font-semibold text-ink">Terima kasih! Pesanan kamu diterima</h1>
-      <p class="mt-2 text-muted">
-        Kami sudah menerima pesananmu. Detail konfirmasi akan dikirim ke emailmu.
+      <h1 id="ok-title" class="mt-5 font-display text-3xl font-semibold text-ink">Terima kasih! Pesanan kamu diterima</h1>
+      <!-- No email is sent (the platform has no mailer): the payment instruction is on THIS page,
+           and the order number is what identifies the order to the merchant. Promising an email
+           that never arrives is how a paid-for order turns into a support ticket. -->
+      <p id="ok-sub" class="mt-2 text-muted">
+        Simpan nomor pesanan di bawah — sebutkan saat menghubungi {store.name}.
       </p>
-      <p class="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-50 px-4 py-1.5 text-sm font-medium text-brand-700">
-        No. Pesanan: <span id="order-number" class="font-semibold tabular-nums">—</span>
+      <!-- The order number comes from the order API (`orders.number`, e.g. WEB-…). If it is not
+           there, the row is HIDDEN. It is never invented — a made-up "INV-2026-4112" is a number
+           that exists in no system, and the shopper would quote it to a merchant who cannot find it. -->
+      <p id="order-number-row" class="mt-4 hidden items-center gap-2 rounded-full bg-brand-50 px-4 py-1.5 text-sm font-medium text-brand-700">
+        No. Pesanan: <span id="order-number" class="font-semibold tabular-nums"></span>
       </p>
     </div>
 
@@ -59,14 +68,8 @@ const store = Astro.locals.store;
     } catch (e) {}
     window.dispatchEvent(new Event("cart:updated"));
 
-    // Generate a client-side order number.
-    var num =
-      "INV-" +
-      new Date().getFullYear() +
-      "-" +
-      String(Math.floor(1000 + Math.random() * 9000));
     var numEl = document.getElementById("order-number");
-    if (numEl) numEl.textContent = num;
+    var numRow = document.getElementById("order-number-row");
 
     var order = null;
     try {
@@ -75,16 +78,34 @@ const store = Astro.locals.store;
       order = null;
     }
 
-    // Prefer the real DB order number (WEB-…) over the client-side placeholder.
-    if (order && order.number && numEl) numEl.textContent = order.number;
-
     var summary = document.getElementById("order-summary");
+
+    // No order on this device → this is somebody who typed the URL, or refreshed on a new machine.
+    // Say that, instead of congratulating them on a purchase we have no evidence of.
     if (!order || !order.items || !order.items.length) {
+      var icon = document.getElementById("ok-icon");
+      var title = document.getElementById("ok-title");
+      var sub = document.getElementById("ok-sub");
+      if (icon) icon.classList.add("hidden");
+      if (title) title.textContent = "Tidak ada pesanan untuk ditampilkan";
+      if (sub) {
+        sub.textContent =
+          "Detail pesanan tidak tersimpan di perangkat ini. Kalau kamu baru saja memesan, nomor pesanan ada di halaman yang terbuka setelah checkout.";
+      }
       if (summary) {
         summary.innerHTML =
-          '<div class="rounded-2xl border border-line bg-white p-6 text-center text-muted">Detail pesanan tidak tersedia.</div>';
+          '<div class="rounded-2xl border border-line bg-white p-6 text-center text-muted">' +
+          'Belum ada pesanan. <a href="/keranjang" class="text-brand-600 underline">Lihat keranjang</a>.' +
+          "</div>";
       }
       return;
+    }
+
+    // The REAL order number (orders.number from /api/public/order) or nothing at all.
+    if (order.number && numEl && numRow) {
+      numEl.textContent = order.number;
+      numRow.classList.remove("hidden");
+      numRow.classList.add("inline-flex");
     }
 
     var rows = order.items
@@ -98,7 +119,9 @@ const store = Astro.locals.store;
           "</div>" +
           '<div class="min-w-0 flex-1">' +
           '<p class="truncate text-sm font-medium text-ink">' + esc(item.name) + "</p>" +
-          (item.size ? '<p class="text-xs text-muted">Ukuran: ' + esc(item.size) + "</p>" : "") +
+          // A cart line carries a VARIANT ("Dusty Blue / L"), not a size — labelling it "Ukuran"
+          // printed the colour as if it were the size. /keranjang and /checkout both say "Varian".
+          ((item.variant || item.size) ? '<p class="text-xs text-muted">Varian: ' + esc(item.variant || item.size) + "</p>" : "") +
           "</div>" +
           '<span class="text-sm font-medium text-ink tabular-nums">' + idr.format(sub) + "</span>" +
           "</div>"
@@ -146,12 +169,21 @@ const store = Astro.locals.store;
       var addrLine = [addr.alamat, addr.kota, addr.provinsi, addr.kodepos]
         .filter(Boolean)
         .join(", ");
+      // What is TRUE about the payment, per case. Nothing is emailed — there is no mailer on the
+      // platform — so the old "Instruksi pembayaran dikirim ke email" sent the shopper to an inbox
+      // that stays empty while their VA number sits unread on this very page.
+      var payHint = pay
+        ? "Instruksi pembayaran ada di halaman ini — selesaikan sebelum kedaluwarsa."
+        : order.payment && order.payment.id === "cod"
+          ? "Bayar tunai ke kurir saat paket tiba."
+          : "";
       noteEl.classList.remove("hidden");
       noteEl.innerHTML =
         '<div class="grid gap-4 sm:grid-cols-2">' +
         '<div><p class="text-xs font-semibold uppercase tracking-wide text-muted">Pembayaran</p>' +
         '<p class="mt-1 text-ink">' + esc(order.payment ? order.payment.label : "—") + "</p>" +
-        '<p class="mt-1 text-xs text-muted">Instruksi pembayaran dikirim ke email — disediakan TokoΦ.</p></div>' +
+        (payHint ? '<p class="mt-1 text-xs text-muted">' + esc(payHint) + "</p>" : "") +
+        "</div>" +
         '<div><p class="text-xs font-semibold uppercase tracking-wide text-muted">Pengiriman</p>' +
         '<p class="mt-1 text-ink">' + esc(order.shipping ? order.shipping.label : "—") + "</p>" +
         '<p class="mt-1 text-xs text-muted">' + esc(addr.nama || "") + (addrLine ? " — " + esc(addrLine) : "") + "</p></div>" +

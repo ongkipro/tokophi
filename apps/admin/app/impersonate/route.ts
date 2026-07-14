@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { SESSION_COOKIE, signSession, type Session } from "@/lib/auth";
 
-// Cross-subdomain impersonation exchange. The super-admin ("Buka panel admin") sends a short-lived
+// Cross-subdomain impersonation exchange. The super-admin ("Buka Dashboard Seller") sends a short-lived
 // signed token (same AUTH_SECRET) here; we verify it and set a real `session` cookie on THIS
 // (admin) domain, then deep-link into the impersonated store. Cookies can't be shared across
 // subdomains, so setting the cookie from the super-admin app doesn't reach here — hence this route.

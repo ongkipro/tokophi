@@ -6,9 +6,9 @@ const geistSans = Geist({ variable: "--font-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "TokoΦ — Panel Admin",
-  description: "Panel admin toko online modern untuk pasar Indonesia.",
-  // Panel admin merchant: tidak boleh diindeks mesin pencari (login, daftar, akun, faktur, …).
+  title: "TokoΦ — Dashboard Seller",
+  description: "Dashboard Seller TokoΦ: kelola toko online Anda untuk pasar Indonesia.",
+  // Dashboard Seller (merchant): tidak boleh diindeks mesin pencari (login, daftar, akun, faktur, …).
   // Lapisan kedua di samping header X-Robots-Tag (middleware.ts + next.config.ts).
   robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
 };

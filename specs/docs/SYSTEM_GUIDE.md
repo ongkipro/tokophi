@@ -11,9 +11,13 @@
 ## 1. What TokoΦ is
 
 **A Shopify-style commerce SaaS built for the Indonesian market.** A shared, modern-SaaS
-**admin panel** runs many merchant stores; a **super-admin** control plane is what the platform
-(us) uses to manage every store, plan, and integration; each client gets a bespoke **Astro
-storefront**, hand-built per brand (no theme editor).
+**Seller** panel (`apps/admin`) runs many merchant stores; a **Super Admin** control plane
+(`apps/super-admin`) is what the platform (us) uses to manage every store, plan, and integration;
+each client gets a bespoke **Astro storefront**, hand-built per brand (no theme editor).
+
+> **Naming:** `apps/admin` = **Seller** (the merchant's panel — its UI says "Dashboard Seller") ·
+> `apps/super-admin` = **Super Admin** (ours). Copy and docs say "Seller"; directories, packages,
+> routes, env vars, DB columns and the store-user role `admin` keep their existing names.
 
 **Deliberately opinionated — what it is NOT:**
 - **No Themes menu.** Storefronts are hand-built per client, not editable by merchants.
@@ -30,7 +34,7 @@ quality, not a heavy ERP).
 
 | Surface | App | Who uses it | Tech | Port |
 |---|---|---|---|---|
-| **Admin** | `apps/admin` | merchant operators (owner/admin/staff/gudang) | Next 16 (App Router, Turbopack) + shadcn on Base UI | :3000 |
+| **Seller** | `apps/admin` | merchant operators (owner/admin/staff/gudang) | Next 16 (App Router, Turbopack) + shadcn on Base UI | :3000 |
 | **Super Admin** | `apps/super-admin` | the platform (us) | Next 16 + shared `@tokophi/ui` | :3001 |
 | **Storefront** | `apps/storefront` | end shoppers | Astro 5 + Tailwind v4 (SSG) | :4327 |
 
@@ -116,7 +120,7 @@ annotated reference = [`SCHEMA.md`](SCHEMA.md).
 
 ## 7. Feature map
 
-### Admin (merchant) — 16 modules, all DB-backed
+### Seller (`apps/admin`, merchant) — 16 modules, all DB-backed
 Dashboard (KPIs, FB-style date range, charts) · **Pesanan** (list + detail with status pipeline +
 **Cek Ongkir** live rates) · **Produk** (editor with real variants, + Kategori / Inventori / Pembelian
 PO) · **Pelanggan** (+ detail / Segmen / Ulasan / **Keranjang Ditinggal**) · **CRM** (follow-up WA / pipeline / templates) ·
@@ -126,7 +130,7 @@ via server actions; **CSV export** on every Ekspor button; **global search (⌘K
 
 ### Super Admin (platform) — functional control plane
 Dashboard (MRR/GMV + platform healthcheck rollup) · **Toko** (list + detail, health column/filter,
-provisioning "Tambah toko", **impersonation** "Buka panel admin", suspend/activate, change plan) ·
+provisioning "Tambah toko", **impersonation** "Buka Dashboard Seller", suspend/activate, change plan) ·
 **Paket** (invoices + mark paid/pending/failed) · **Analitik** · **Pengaturan** (payment gateways +
 COD + KiriminAja courier config + "Tim Platform" operators). Composite **healthcheck** per store
 (Sehat/Perhatian/Bermasalah + 0–100 score from billing/activity/stock/subscription signals).

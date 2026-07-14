@@ -147,10 +147,10 @@ export function TokoClient({
     startTransition(async () => {
       const r = await impersonateStore(s.id);
       if (r.ok && r.adminUrl) {
-        toast.success(`Membuka panel admin “${s.name}”…`);
+        toast.success(`Membuka Dashboard Seller “${s.name}”…`);
         window.open(r.adminUrl, "_blank", "noopener");
       } else {
-        toast.error(r.error ?? "Gagal membuka panel admin.");
+        toast.error(r.error ?? "Gagal membuka Dashboard Seller.");
       }
     });
   }
@@ -352,7 +352,7 @@ export function TokoClient({
                           <Eye className="size-4" /> Lihat & kontrol
                         </DropdownMenuItem>
                         <DropdownMenuItem disabled={pending} onClick={() => openAdmin(s)}>
-                          <ExternalLink className="size-4" /> Buka panel admin
+                          <ExternalLink className="size-4" /> Buka Dashboard Seller
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem disabled={pending} onClick={() => toggleVip(s)}>

@@ -2,7 +2,7 @@ import "server-only";
 import { SignJWT } from "jose";
 
 // Mints the SAME session cookie the admin app verifies — so the super-admin can
-// "Buka Panel Admin" (impersonate) a store's owner. This MUST stay in lock-step with
+// "Buka Dashboard Seller" (impersonate) a store's owner. This MUST stay in lock-step with
 // apps/admin/lib/auth.ts (cookie name, HS256, AUTH_SECRET, and the Session payload shape).
 // Cookies on localhost are host-scoped (not port-scoped), so a cookie set here (:3001)
 // is also sent to the admin (:3000).

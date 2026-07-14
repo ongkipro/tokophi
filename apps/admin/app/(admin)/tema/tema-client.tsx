@@ -277,7 +277,7 @@ function TemplateCard({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Ganti Nama Template</DialogTitle>
-            <DialogDescription>Nama ini hanya tampil di admin, bukan di storefront.</DialogDescription>
+            <DialogDescription>Nama ini hanya tampil di Dashboard Seller, bukan di storefront.</DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor={`rename-${tpl.id}`}>Nama Template</Label>

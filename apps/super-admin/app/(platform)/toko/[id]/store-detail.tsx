@@ -74,8 +74,8 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
   function openAdmin() {
     startTransition(async () => {
       const r = await impersonateStore(store.id);
-      if (r.ok && r.adminUrl) { toast.success(`Membuka panel admin “${store.name}”…`); window.open(r.adminUrl, "_blank", "noopener"); }
-      else toast.error(r.error ?? "Gagal membuka panel admin.");
+      if (r.ok && r.adminUrl) { toast.success(`Membuka Dashboard Seller “${store.name}”…`); window.open(r.adminUrl, "_blank", "noopener"); }
+      else toast.error(r.error ?? "Gagal membuka Dashboard Seller.");
     });
   }
   const toggleSuspend = () => run(() => setStoreStatus(store.id, suspended ? "active" : "suspended"), suspended ? "Toko diaktifkan." : "Toko ditangguhkan.");
@@ -153,7 +153,7 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
           </div>
         </div>
         <div className="flex gap-2">
-          <Button className="gap-1.5" disabled={pending} onClick={openAdmin}><ExternalLink className="size-4" /> Buka panel admin</Button>
+          <Button className="gap-1.5" disabled={pending} onClick={openAdmin}><ExternalLink className="size-4" /> Buka Dashboard Seller</Button>
           <Button variant="ghost" disabled={pending} className={cn(!suspended && "text-destructive hover:text-destructive")} onClick={toggleSuspend}>
             {suspended ? <><Play className="size-4" /> Aktifkan</> : <><Ban className="size-4" /> Tangguhkan</>}
           </Button>
@@ -371,7 +371,7 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
           <Card>
             <CardHeader><CardTitle>Kontrol langganan</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full justify-start gap-2" disabled={pending} onClick={openAdmin}><ExternalLink className="size-4" /> Buka panel admin</Button>
+              <Button variant="outline" className="w-full justify-start gap-2" disabled={pending} onClick={openAdmin}><ExternalLink className="size-4" /> Buka Dashboard Seller</Button>
               <Button variant="outline" className="w-full justify-start gap-2" disabled={pending} onClick={giveComp}><Gift className="size-4" /> Gratiskan 1 bulan</Button>
               <Button variant="outline" className="w-full justify-start gap-2" disabled={pending} onClick={giveTrial}><Clock className="size-4" /> Perpanjang trial 7 hari</Button>
               {!comp.comped && (

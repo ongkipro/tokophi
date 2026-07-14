@@ -17,7 +17,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl tracking-tight">TokoΦ</CardTitle>
-          <CardDescription>Masuk ke panel admin toko Anda</CardDescription>
+          <CardDescription>Masuk ke Dashboard Seller toko Anda</CardDescription>
         </CardHeader>
         <CardContent>
           <LoginForm googleEnabled={googleEnabled()} notice={error ? (NOTICES[error] ?? "Gagal masuk.") : undefined} />

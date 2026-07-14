@@ -86,7 +86,7 @@ graph TB
 |---|---|---|
 | storefront → admin | `fetch` to `PUBLIC_ONGKIR_API` / `PUBLIC_ORDER_API` (defaults `http://localhost:3000/api/public/…`) | `apps/storefront/src/pages/checkout.astro:12-13` |
 | storefront → admin (images) | `ADMIN_BASE` is derived as `new URL(PUBLIC_ONGKIR_API).origin` — **a load-bearing coupling**: change the ongkir URL and product images silently move | `apps/storefront/src/data/catalog.ts` |
-| super-admin → admin | "Buka panel admin" mints a **2-minute JWT** signed with the shared `AUTH_SECRET`, redirects to `${ADMIN_URL}/impersonate?token=…&slug=…`, which exchanges it for a real `session` cookie on the admin domain (cookies don't cross subdomains) | `apps/super-admin/lib/session.ts` → `apps/admin/app/impersonate/route.ts` |
+| super-admin → admin | "Buka Dashboard Seller" mints a **2-minute JWT** signed with the shared `AUTH_SECRET`, redirects to `${ADMIN_URL}/impersonate?token=…&slug=…`, which exchanges it for a real `session` cookie on the admin domain (cookies don't cross subdomains) | `apps/super-admin/lib/session.ts` → `apps/admin/app/impersonate/route.ts` |
 | AutoLaris → admin | webhook `POST /api/public/pay/callback` | `apps/admin/app/api/public/pay/callback/route.ts` |
 
 Everything else is **through the database**. There is no service mesh, no internal RPC, no queue.

@@ -9,7 +9,7 @@ export function Brand({ className }: { className?: string }) {
       </div>
       <div className="leading-none">
         <div className="font-semibold tracking-tight">TokoΦ</div>
-        <div className="text-[11px] text-muted-foreground">Panel Admin</div>
+        <div className="text-[11px] text-muted-foreground">Dashboard Seller</div>
       </div>
     </div>
   );
