@@ -4,6 +4,33 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-14
 
+### 🔗 The seam: a village id posted as a string was thrown away in silence
+The seller side (`0049`) and the checkout landed from two parallel worktrees and each was correct alone.
+Together they weren't: the checkout posts JSON, so `kelurahanId` arrived as `"31487"` — a **string** — and
+the order API guarded it with `Number.isFinite(...)`, which is `false` for a string. Every village id was
+discarded at the boundary, `orders.ship_kelurahan_id` stayed `NULL`, and the parcel went back to being
+addressed one administrative level too coarse. **Typecheck cannot catch this** (the type says `number`;
+the wire disagrees), and both surfaces stayed green. Fixed by coercing at the boundary — `verifyKelurahan`
+still proves the id belongs to the destination district before storing it — and posting a `Number`.
+Verified against the running API: Pleret → district 548 → real village ids + kodepos → COD order on SPX →
+`ship_kelurahan_id = 31487` (Wonolelo), `ship_postcode = 55791`, ongkir re-quoted server-side.
+**Lesson: a cross-surface contract is only proven by driving it, never by two green builds.**
+
+### ⚠️ `main` was NOT the project — it was ~90 commits behind `origin/main`
+A session working from a stale local `main` (HEAD `2b86541`) built a duplicate shipping foundation
+(`ship_kecamatan_id`/`ship_zip`, migration `0034`) on top of it, unaware that `origin/main` already carried
+the real lineage (`ship_district_id`/`ship_postcode`, `0042`, up to `0048`). `main` has been reset to
+`origin/main`; the duplicate is discarded (kept only as tag `scrap/foundation-625bbe2`). Its migration
+`0034` **never actually applied** — drizzle skipped it while printing "migrations applied successfully",
+which is the same journal-timestamp trap recorded below. **Check `git fetch && git log origin/main` before
+building a "foundation".**
+
+### 📌 Pricing is kecamatan-level — the village does NOT change the tariff
+`shipping_price` accepts `subdistrict_origin`/`subdistrict_destination` and **ignores them** (proven: a
+nonsense village id returns identical services at identical costs). The village is required for the
+**booking and the label** (`destination_kelurahan_id`, full address, kodepos), not for the price. Do not
+re-add village ids to the pricing call — it implies a precision the tariff does not have.
+
 ### 📦 Shipping: the parcel is addressed to a village, not a district (migration `0049`)
 
 A kecamatan is **not an address** — Gubeng alone spans six kelurahan, and the courier books a pickup against the village id + kodepos. The Seller could only pick a district, so we handed KiriminAja a district and hoped. Now precise on both ends. **Pengaturan → Alamat** is a two-step picker (kecamatan → kelurahan → kodepos, defaulted from the picked village and editable) that **reads the composed address back**, so the screen shows the string the courier is actually handed. `createShipment` sent `orders.ship_address` alone as `destination_address`; it now composes **street + kelurahan + kecamatan + kota** (`apps/admin/lib/address.ts`, de-duplicated — "Jl. Raya Gubeng No. 42, Gubeng" + kel "Gubeng" + kec "Gubeng, Surabaya" must not become "Gubeng, Gubeng, Gubeng") and **refuses to book** below KiriminAja's 10-char minimum instead of shipping a "Bad Address". It also passes `destination_kelurahan_id` + the sender's `zipcode`. Order detail + the printed label now show the full destination (nama, HP, jalan, kelurahan, kecamatan, kota, provinsi, kodepos), **named from `ship_district_id`** — the same id the booking uses, so the screen cannot disagree with the parcel. A legacy order (no `ship_district_id`) still falls back to a city-name match, but the booking now **says so** (warning toast): that fallback is what once booked Surabaya to Lampung, and it must never succeed quietly.
