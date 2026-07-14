@@ -43,8 +43,15 @@ export type OrderMoney = {
 export type OrderShipment = {
   /** orders.courier — NULL unless a shipment was booked (KiriminAja). */
   courier: string | null;
-  /** orders.awb — same. */
+  /**
+   * orders.awb — the COURIER's waybill. NULL until a courier actually issues one: KiriminAja's
+   * request_pickup returns `awb: null` and only fills it once the pickup is accepted. It is never
+   * back-filled with the booking reference, so a NULL here means "no scannable resi exists yet"
+   * and the shipping label is correctly unprintable.
+   */
   awb: string | null;
+  /** orders.ka_order_id — the KiriminAja booking reference. Real, but NOT a waybill. */
+  kaOrderId: string | null;
   city: string | null;
   province: string | null;
 };
@@ -128,6 +135,7 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
         province: schema.orders.province,
         courier: schema.orders.courier,
         awb: schema.orders.awb,
+        kaOrderId: schema.orders.kaOrderId,
       })
       .from(schema.orders)
       .where(eq(schema.orders.number, number))
@@ -259,6 +267,7 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
       shipment: {
         courier: o.courier ?? null,
         awb: o.awb ?? null,
+        kaOrderId: o.kaOrderId ?? null,
         city: o.city ?? null,
         province: o.province ?? null,
       },

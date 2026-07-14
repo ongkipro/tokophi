@@ -25,7 +25,15 @@ import {
 import { toast } from "sonner";
 import { setOrderStatus } from "@/lib/actions/orders";
 import type { OrderReturn } from "./return-info";
-import { getShippingRates, createShipment, trackShipment, cancelShipment, type Rate } from "@/lib/actions/shipping";
+import {
+  getShippingRates,
+  createShipment,
+  trackShipment,
+  cancelShipment,
+  type Rate,
+  type TrackResult,
+} from "@/lib/actions/shipping";
+import { buildLabelHtml } from "@/components/admin/pesanan/shipping-label";
 import { createOrderPayment } from "@/lib/actions/payments";
 import type { OrderDetail as OrderDetailData } from "@/lib/data/order-detail";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -127,7 +135,13 @@ export function OrderDetail({
   const cancelled = order.status === "batal";
   const returned = order.status === "retur";
 
-  const shipped = !!shipment.awb;
+  // Two DIFFERENT facts, deliberately not collapsed into one:
+  //   booked   — KiriminAja accepted the pickup request (orders.ka_order_id).
+  //   hasResi  — a COURIER issued a waybill (orders.awb). This is what a label needs.
+  // A booking without a waybill is the normal state right after "Buat Pengiriman"; the AWB arrives
+  // when the courier accepts the parcel and is synced by "Lacak".
+  const booked = !!shipment.kaOrderId || !!shipment.awb;
+  const hasResi = !!shipment.awb;
   const totalQty = lines.reduce((a, l) => a + l.qty, 0);
   const isCod = payment?.method === "cod";
   // A gateway bill (VA/QRIS/DANA) exists only when the payments row carries a channel code.
@@ -196,12 +210,20 @@ export function OrderDetail({
     });
   };
 
-  // Create a real KiriminAja shipment from a chosen rate → saves AWB on the order.
+  // Book a real KiriminAja shipment from a chosen rate.
+  //
+  // On success this persists the booking reference + courier and moves the order to `dikirim`. It
+  // does NOT necessarily produce a resi: KiriminAja returns `awb: null` until a courier accepts the
+  // pickup. The toast says which of the two happened, because the difference decides whether the
+  // merchant can print a label — telling them "resi dibuat" when no resi exists is the lie this
+  // whole flow was rebuilt to remove.
   const [makingRate, setMakingRate] = React.useState<string | null>(null);
   const [insureShipment, setInsureShipment] = React.useState(false);
   const [codShipment, setCodShipment] = React.useState(false);
+  const [senderError, setSenderError] = React.useState<string | null>(null);
   const makeShipment = (rate: Rate) => {
     setMakingRate(rate.code + rate.type);
+    setSenderError(null);
     startRate(async () => {
       const r = await createShipment({
         orderNumber: order.id.replace("#", ""),
@@ -210,11 +232,28 @@ export function OrderDetail({
       });
       setMakingRate(null);
       if (r.ok) {
-        toast.success(`Pengiriman dibuat — resi ${r.awb}`);
         setRateOpen(false);
+        if (r.awb) {
+          toast.success(`Pengiriman dibuat — resi ${r.awb}`);
+        } else {
+          toast.success("Pengiriman dibooking ke kurir.", {
+            description:
+              "Kurir belum menerbitkan nomor resi. Klik “Lacak” untuk mengambil resi begitu terbit — label baru bisa dicetak setelah itu.",
+            duration: 8000,
+          });
+        }
         router.refresh();
+      } else if (r.senderIncomplete) {
+        // The single most common blocker, and the one the merchant can actually fix. Keep it on
+        // screen (not just a transient toast) and point at the exact page.
+        setSenderError(r.error ?? "Alamat pengirim belum lengkap.");
+        toast.error("Alamat pengirim belum lengkap", {
+          description: r.error,
+          action: { label: "Buka Pengaturan", onClick: () => router.push("/pengaturan") },
+          duration: 10000,
+        });
       } else {
-        toast.error(r.error ?? "Gagal membuat pengiriman");
+        toast.error(r.error ?? "Gagal membuat pengiriman", { duration: 8000 });
       }
     });
   };
@@ -232,19 +271,21 @@ export function OrderDetail({
     });
   };
 
-  // Poll KiriminAja tracking → sync the real courier AWB / show status.
+  // Poll KiriminAja tracking → show the real response and sync the courier AWB the moment it
+  // exists. The result is rendered in a dialog rather than flashed as a toast: the tracking
+  // history IS the answer to "where is my parcel", and throwing it away to show a one-line toast
+  // was the reason this button felt like a placeholder.
   const [tracking, setTracking] = React.useState(false);
+  const [trackOpen, setTrackOpen] = React.useState(false);
+  const [track, setTrack] = React.useState<TrackResult | null>(null);
   const trackNow = () => {
     setTracking(true);
     startRate(async () => {
       const r = await trackShipment(order.id.replace("#", ""));
       setTracking(false);
-      if (r.ok) {
-        toast.success(r.message);
-        router.refresh();
-      } else {
-        toast.message(r.message);
-      }
+      setTrack(r);
+      setTrackOpen(true);
+      if (r.ok && r.awb) router.refresh(); // a resi may have just landed → re-read the order
     });
   };
 
@@ -267,16 +308,24 @@ export function OrderDetail({
     gagal: { label: "Gagal / kedaluwarsa", cls: "bg-red-500/12 text-red-600 dark:text-red-400" },
   };
 
-  // Print a shipping label (resi) → browser print dialog (Save as PDF). Uses the order's REAL
-  // courier + AWB; without a booked shipment there is no resi to print, so we refuse instead of
-  // printing an invented one.
+  // Print a shipping label (resi) → browser print dialog (Save as PDF / thermal 100×150mm).
+  //
+  // Hard requirement: a REAL `orders.awb`. Not the KiriminAja booking reference, not the order
+  // number, not a placeholder. A label is the thing a courier scans; a number no courier issued
+  // makes the parcel undeliverable while looking perfectly fine on the desk. So when the AWB is
+  // missing we refuse and explain, and the barcode itself is a genuine Code 128-B encoding of that
+  // exact AWB (see components/admin/pesanan/shipping-label.ts).
   const storeName = useStoreName();
   const printLabel = () => {
     if (!shipment.awb || !shipment.courier) {
-      toast.error("Belum ada resi — buat pengiriman dulu lewat Cek Ongkir.");
+      toast.error("Belum ada nomor resi — label tidak bisa dicetak.", {
+        description: booked
+          ? "Pengiriman sudah dibooking, tapi kurir belum menerbitkan resi. Klik “Lacak” untuk mengambil resi begitu terbit."
+          : "Buat pengiriman dulu lewat “Cek Ongkir” → pilih layanan → Buat.",
+        duration: 8000,
+      });
       return;
     }
-    const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
     // Street only when the saved address actually belongs to this order's city; otherwise the
     // label carries the destination the order recorded and nothing more.
     const dest = usableAddress
@@ -284,37 +333,34 @@ export function OrderDetail({
           .filter(Boolean)
           .join(", ")
       : destination;
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Resi ${esc(order.id)}</title>
-<style>
-  @page { size: 100mm 150mm; margin: 0 }
-  * { box-sizing: border-box; font-family: system-ui, sans-serif }
-  body { margin: 0 }
-  .label { width: 100mm; height: 150mm; padding: 5mm; border: 1px solid #000; display: flex; flex-direction: column; gap: 2mm }
-  .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 3mm }
-  .courier { font-size: 18pt; font-weight: 800; letter-spacing: -.02em }
-  .svc { font-size: 8pt; color: #333 }
-  .cod { border: 2px solid #000; padding: 1mm 2mm; font-weight: 800; font-size: 11pt }
-  .resi { font-family: ui-monospace, monospace; font-size: 14pt; font-weight: 700; letter-spacing: .08em; text-align: center; border: 1px solid #000; padding: 2mm }
-  .box { border-top: 1px solid #000; padding-top: 2mm }
-  .lbl { font-size: 7pt; text-transform: uppercase; letter-spacing: .08em; color: #555 }
-  .val { font-size: 9.5pt; font-weight: 600; line-height: 1.35 }
-  .foot { margin-top: auto; border-top: 1px dashed #000; padding-top: 2mm; display: flex; justify-content: space-between; font-size: 8pt }
-</style></head><body>
-  <div class="label">
-    <div class="row">
-      <div><div class="courier">${esc(shipment.courier)}</div><div class="svc">${esc(storeName)} · ${esc(order.id)}</div></div>
-      ${isCod ? `<div class="cod">COD<br><span style="font-size:9pt">${IDR(money.total)}</span></div>` : `<div class="svc" style="text-align:right">NON-COD<br><b>${esc(payment?.methodLabel ?? "Belum ada pembayaran")}</b></div>`}
-    </div>
-    <div class="resi">${esc(shipment.awb)}</div>
-    <div class="box"><div class="lbl">Penerima</div><div class="val">${esc(usableAddress?.recipient ?? buyer?.name ?? order.customer)}<br>${esc(dest)}${buyer?.phone ? `<br>${esc(buyer.phone)}` : ""}</div></div>
-    <div class="box"><div class="lbl">Pengirim</div><div class="val">${esc(storeName)}</div></div>
-    <div class="box"><div class="lbl">Isi (${lines.length} item)</div><div class="val">${lines.map((l) => `${l.qty}× ${esc(l.title)}${l.variant ? ` (${esc(l.variant)})` : ""}`).join(" · ")}</div></div>
-    <div class="foot"><span>${totalQty} pcs</span><span>Total ${IDR(money.total)}</span></div>
-  </div>
-  <script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)}</script>
-</body></html>`;
-    const w = window.open("", "_blank", "width=420,height=640");
-    if (!w) { toast.error("Popup diblokir — izinkan popup untuk mencetak resi."); return; }
+
+    let html: string;
+    try {
+      html = buildLabelHtml({
+        awb: shipment.awb,
+        courier: shipment.courier,
+        orderNumber: order.id,
+        storeName,
+        recipient: usableAddress?.recipient ?? buyer?.name ?? order.customer,
+        destination: dest,
+        recipientPhone: usableAddress?.phone ?? buyer?.phone ?? null,
+        kaOrderId: shipment.kaOrderId,
+        cod: isCod,
+        totalLabel: IDR(money.total),
+        paymentLabel: payment?.methodLabel ?? "Belum ada pembayaran",
+        items: lines.map((l) => ({ qty: l.qty, title: l.title, variant: l.variant })),
+        totalQty,
+      });
+    } catch {
+      toast.error("Label tidak bisa dibuat — nomor resi tidak valid.");
+      return;
+    }
+
+    const w = window.open("", "_blank", "width=460,height=700");
+    if (!w) {
+      toast.error("Popup diblokir — izinkan popup untuk mencetak resi.");
+      return;
+    }
     w.document.write(html);
     w.document.close();
   };
@@ -353,8 +399,14 @@ export function OrderDetail({
           <Button
             variant="ghost"
             onClick={printLabel}
-            disabled={!shipped}
-            title={shipped ? undefined : "Belum ada resi — buat pengiriman dulu"}
+            disabled={!hasResi}
+            title={
+              hasResi
+                ? `Cetak label resi ${shipment.awb}`
+                : booked
+                  ? "Pengiriman sudah dibooking, tapi kurir belum menerbitkan nomor resi — klik Lacak"
+                  : "Belum ada resi — buat pengiriman dulu"
+            }
           >
             <Printer /> Cetak resi
           </Button>
@@ -621,24 +673,56 @@ export function OrderDetail({
                 </span>
                 {shipment.awb ? (
                   <span className="font-mono text-xs font-medium">{shipment.awb}</span>
+                ) : booked ? (
+                  <span className="text-amber-700 dark:text-amber-400">Menunggu resi dari kurir</span>
                 ) : (
                   <span className="text-muted-foreground">Belum ada resi</span>
                 )}
               </div>
-              {shipped && (
-                <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-500/10 px-3 py-2">
-                  <span className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                    <Truck className="size-4" /> Pengiriman terdaftar
-                  </span>
-                  {canWrite && (
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" disabled={tracking} onClick={trackNow}>
-                        {tracking ? "Melacak…" : "Lacak"}
-                      </Button>
-                      <Button size="sm" variant="outline" disabled={cancelling} onClick={cancelNow} className="text-red-600 hover:text-red-600">
-                        {cancelling ? "…" : "Batalkan"}
-                      </Button>
-                    </div>
+              {/* The booking reference is real and worth showing — but it is NOT the resi, and the
+                  label never treats it as one. */}
+              {shipment.kaOrderId && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Ref. booking</span>
+                  <span className="font-mono text-[11px] text-muted-foreground">{shipment.kaOrderId}</span>
+                </div>
+              )}
+              {booked && (
+                <div
+                  className={
+                    "space-y-2 rounded-lg px-3 py-2 " +
+                    (hasResi ? "bg-emerald-500/10" : "bg-amber-500/10")
+                  }
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={
+                        "flex items-center gap-2 text-xs font-medium " +
+                        (hasResi
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-amber-700 dark:text-amber-400")
+                      }
+                    >
+                      <Truck className="size-4" />
+                      {hasResi ? "Pengiriman terdaftar" : "Dibooking — belum ada resi"}
+                    </span>
+                    {canWrite && (
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" disabled={tracking} onClick={trackNow}>
+                          {tracking ? "Melacak…" : "Lacak"}
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={cancelling} onClick={cancelNow} className="text-red-600 hover:text-red-600">
+                          {cancelling ? "…" : "Batalkan"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  {!hasResi && (
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      Kurir menerbitkan nomor resi setelah paket dijemput/diproses. Klik{" "}
+                      <span className="font-medium text-foreground">Lacak</span> untuk mengambilnya —
+                      label baru bisa dicetak setelah resi terbit.
+                    </p>
                   )}
                 </div>
               )}
@@ -754,7 +838,7 @@ export function OrderDetail({
           <p className="text-xs text-muted-foreground">
             {rateMeta.origin?.split(",")[0]} → {rateMeta.destination?.split(",")[0]} · ongkir real-time
           </p>
-          {canWrite && !shipped && (
+          {canWrite && !booked && (
             <div className="mt-1 flex items-center gap-4 text-sm">
               <label className="flex items-center gap-1.5 cursor-pointer">
                 <input type="checkbox" checked={insureShipment} onChange={(e) => setInsureShipment(e.target.checked)} className="size-4 accent-primary" /> Asuransi
@@ -766,6 +850,26 @@ export function OrderDetail({
               )}
             </div>
           )}
+          {/* The booking blocker the merchant can actually fix. Stays on screen until resolved —
+              a toast that vanishes is not an error message for a setup problem. */}
+          {senderError && (
+            <div className="mt-2 flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-xs">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-500" />
+              <div className="space-y-1.5 text-muted-foreground">
+                <div className="font-medium text-red-600 dark:text-red-400">
+                  Pengiriman tidak bisa dibuat — alamat pengirim belum lengkap
+                </div>
+                <div>{senderError}</div>
+                <div>
+                  Kurir menjemput paket dari alamat ini, jadi KiriminAja menolak booking tanpa{" "}
+                  <span className="font-medium text-foreground">kecamatan</span>.
+                </div>
+                <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/pengaturan" />}>
+                  <MapPin className="size-4" /> Buka Pengaturan → Alamat
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="mt-2 max-h-[60vh] overflow-y-auto rounded-lg border">
             <table className="w-full text-sm">
               <thead>
@@ -773,7 +877,7 @@ export function OrderDetail({
                   <th className="px-3 py-2 font-medium">Layanan</th>
                   <th className="px-3 py-2 font-medium">Estimasi</th>
                   <th className="px-3 py-2 text-right font-medium">Ongkir</th>
-                  {canWrite && !shipped && <th className="px-2 py-2" />}
+                  {canWrite && !booked && <th className="px-2 py-2" />}
                 </tr>
               </thead>
               <tbody>
@@ -782,7 +886,7 @@ export function OrderDetail({
                     <td className="px-3 py-2 font-medium">{r.service}{r.cod && <span className="ml-1.5 rounded bg-emerald-500/12 px-1 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">COD</span>}</td>
                     <td className="px-3 py-2 text-muted-foreground">{r.etd} hari</td>
                     <td className="px-3 py-2 text-right tabular-nums font-medium">{IDR(r.cost)}</td>
-                    {canWrite && !shipped && (
+                    {canWrite && !booked && (
                       <td className="px-2 py-2 text-right">
                         <Button size="sm" variant="outline" disabled={ratePending || (codShipment && !r.cod)} title={codShipment && !r.cod ? "Layanan ini tidak mendukung COD" : ""} onClick={() => makeShipment(r)}>
                           {makingRate === r.code + r.type ? "Membuat…" : "Buat"}
@@ -798,6 +902,73 @@ export function OrderDetail({
             </table>
           </div>
           <p className="mt-1 text-[11px] text-muted-foreground">{rates.length} layanan · tarif real-time · dikelola TokoΦ.</p>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lacak — the REAL KiriminAja tracking response. When there is no movement yet we say
+          exactly that, instead of inventing a "Paket sedang dalam perjalanan" line. */}
+      <Dialog open={trackOpen} onOpenChange={setTrackOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Lacak pengiriman — {order.id}</DialogTitle>
+          </DialogHeader>
+          {track && (
+            <div className="space-y-3 text-sm">
+              <div className="space-y-1.5 rounded-lg border p-3 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Kurir</span>
+                  <span className="font-medium">{shipment.courier ?? "—"}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">No. resi</span>
+                  {track.awb ? (
+                    <span className="font-mono font-medium">{track.awb}</span>
+                  ) : (
+                    <span className="text-amber-700 dark:text-amber-400">Belum diterbitkan kurir</span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Ref. booking</span>
+                  <span className="font-mono text-muted-foreground">{track.kaOrderId ?? "—"}</span>
+                </div>
+                {track.status && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Status</span>
+                    <span className="font-medium">{track.status}</span>
+                  </div>
+                )}
+              </div>
+
+              <div
+                className={
+                  "rounded-lg border p-3 text-xs leading-snug " +
+                  (track.ok
+                    ? "border-emerald-500/30 bg-emerald-500/5"
+                    : "border-amber-500/30 bg-amber-500/5")
+                }
+              >
+                {track.message}
+              </div>
+
+              {track.history.length > 0 ? (
+                <ol className="space-y-2">
+                  {[...track.history].reverse().map((h, i) => (
+                    <li key={i} className="flex gap-2.5">
+                      <div className="mt-1 size-2 shrink-0 rounded-full bg-primary" />
+                      <div className="leading-snug">
+                        <div className="text-sm">{h.desc || "—"}</div>
+                        {h.date && <div className="text-xs text-muted-foreground">{h.date}</div>}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Belum ada riwayat perjalanan dari kurir untuk pengiriman ini.
+                </p>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
