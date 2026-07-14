@@ -678,7 +678,12 @@ async function main() {
   }).returning();
   await db.insert(schema.storeUsers).values({ storeId: store.id, userId: user.id, role: "owner", acceptedAt: daysAgo(STORE.createdDaysAgo) });
   const [loc] = await db.insert(schema.locations).values({ storeId: store.id, name: "Gudang Utama", isDefault: true }).returning();
-  await db.insert(schema.storeSettings).values({ storeId: store.id });
+  // COD is ON for the demo merchant. `cod_enabled` defaults to FALSE (0038), and the seed used to
+  // leave it there — so COD was switched on by hand in the UI and then silently switched back OFF by
+  // the next re-seed, taking a business decision with it. The platform half of the policy was already
+  // seeded (platform_cod + codAllowed = SPX only, below); this is the merchant half. The other six
+  // demo stores keep the default (off) — that is realistic, and it keeps the toggle meaningful.
+  await db.insert(schema.storeSettings).values({ storeId: store.id, codEnabled: true });
   await db.insert(schema.storeStats).values({ storeId: store.id, gmvIdr: STORE.gmv, ordersCount: STORE.orders, productsCount: CATALOG.length, ship7dAvg: 15, updatedAt: TODAY });
 
   // catalog: product → 1 default variant (price) + inventory (stock) + base media (image)
@@ -1537,6 +1542,17 @@ async function main() {
     })),
   );
   await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
+
+  // The merchant's PER-SERVICE selection (store_shipping_methods) — never seeded, so a fresh database
+  // had ZERO rows and /api/public/ongkir fell back to the courier-level filter, which is exactly the
+  // hole fixed in 35b88a4: services the seller never picked (Jagopack, BIGPACK, Sicepat CARGO, SAP One
+  // Day) reappeared at checkout. Seed the demo merchant as having accepted everything the platform
+  // enables — 11 services, incl. both SPX ones, so COD is exercisable out of the box.
+  const enabledCouriers = COURIERS.filter((c) => !["idx", "tiki", "jtcargo", "pos"].includes(c.code));
+  const merchantServices = enabledCouriers.flatMap((c) =>
+    (SEED_SERVICES[c.code] ?? []).map((s) => ({ storeId: store.id, courier: c.code, service: s.type, enabled: true })),
+  );
+  if (merchantServices.length) await db.insert(schema.storeShippingMethods).values(merchantServices);
   // Payout policy. The seed TRUNCATES every table, and this one was never re-inserted — so after any
   // re-seed `platform_payout` was EMPTY and min_payout_idr silently fell back to a code default while
   // the super-admin screen showed a policy that did not exist in the DB. Seed it explicitly.
