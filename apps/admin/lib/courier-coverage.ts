@@ -1,4 +1,8 @@
 import "server-only";
+import { schema } from "@tokophi/db";
+import { kaCoverage } from "@tokophi/lib/kiriminaja";
+import { SELLER_COURIER_CODES } from "@tokophi/lib/couriers";
+import { withCurrentTenant } from "@/lib/tenant";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // "Enabled" ≠ "the shopper will see it".
@@ -13,21 +17,15 @@ import "server-only";
 // courier actually collect from MY pickup address?" — one thin wrapper the Jasa Kirim card is built
 // against, so the screen does not have to care where the answer comes from.
 //
-// ⚠️ THE ANSWER IS "UNKNOWN" TODAY — AND THAT IS DELIBERATE.
-// The real answer needs a server-side probe: price one representative route FROM the store's pickup
-// district and report which couriers came back with a rate, cached (a live KiriminAja call per page
-// render is not a page render). That probe is being built in `@tokophi/lib` and does not exist on
-// this branch yet. Until it lands we return `null` = "we do not know", and the UI renders NO badge
-// at all rather than a guess. A coverage claim we cannot substantiate is worse than none: the whole
-// point of this screen is to stop it lying about what the shopper will see.
+// The answer comes from `kaCoverage(originId)` (@tokophi/lib/kiriminaja): it prices ONE representative
+// route from the store's pickup district and reports which couriers came back with a rate, cached for
+// a day (a live courier call per page render is not a page render). An API outage returns ok:false and
+// is NOT cached — because "the API was down" must never be remembered for a day as "this courier does
+// not collect from you".
 //
-// TODO(coverage-probe): when `@tokophi/lib/coverage` lands, this becomes:
-//     import { probeCourierCoverage } from "@tokophi/lib/coverage";
-//     const origin = await senderKecamatanId();           // store_settings.sender_kecamatan_id
-//     if (!origin) return null;                            // no pickup address → nothing to probe
-//     const quoted = await probeCourierCoverage(origin);   // cached Set<string> of courier codes
-//     return Object.fromEntries(SELLER_COURIER_CODES.map((c) => [c, quoted.has(c)]));
-// Nothing else in apps/admin needs to change: the card already renders the three states.
+// UNKNOWN stays a first-class answer: no pickup address set, or the probe failed → `null`, and the UI
+// renders NO coverage state at all rather than a guess. A coverage claim we cannot substantiate is
+// worse than none — the entire point of this screen is to stop it lying about what the shopper sees.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -37,5 +35,18 @@ import "server-only";
 export type CourierCoverage = Record<string, boolean> | null;
 
 export async function courierCoverage(): Promise<CourierCoverage> {
-  return null; // unknown — see TODO(coverage-probe) above.
+  const origin = await withCurrentTenant(async (db) => {
+    const [s] = await db
+      .select({ kecamatanId: schema.storeSettings.senderKecamatanId })
+      .from(schema.storeSettings)
+      .limit(1);
+    return s?.kecamatanId ?? null;
+  });
+  if (!origin) return null; // no pickup address → nothing to probe, and nothing to claim
+
+  const r = await kaCoverage(origin);
+  if (!r.ok) return null; // probe failed → unknown, never "not covered"
+
+  const quoted = new Set(r.couriers.map((c) => c.toLowerCase()));
+  return Object.fromEntries(SELLER_COURIER_CODES.map((c) => [c, quoted.has(c)]));
 }
