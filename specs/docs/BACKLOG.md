@@ -171,17 +171,17 @@ unmeasurable**. Ordered.
   coverage fact or a sandbox artefact is **unknown**. Ask KiriminAja. It decides whether the Jasa Kirim
   screen should say "tidak melayani penjemputan dari alamatmu" or hide the courier for that origin — today
   it shows a green toggle that does nothing.
-- [ ] **The courier roster is harvested from ONE reference route** — which is why TIKI never entered it and
-  **no merchant could ever enable it**. Fix to a multi-route union (in flight). Symptom today: `idx`,
-  `jtcargo` and `ninja` carry **1 service each**.
-- [ ] **`PRIMARY_CHAIN` is defined twice** — `packages/lib/src/couriers.ts` says `["spx","jne"]` (ADR 0010);
-  `apps/admin/app/api/public/ongkir/route.ts` still declares a local `["spx","jne","jnt"]`. Import the
-  shared constant.
-- [ ] **🔴 The baseline must bind the SERVICE, not the courier.** Decided policy (ADR 0010): a seller cannot
-  switch off the **standard** service of SPX and JNE — **but express and economy are theirs to drop.**
-  `BASELINE_COURIER_CODES` is a **courier-level** list, so as written it locks the whole courier and a
-  seller cannot drop **SPX Economy** or **JNE YES**, which they are entitled to drop. Make the baseline
-  service-level:
+- [x] **The courier roster is a multi-route union** (`f40e7ea`) — it used to be harvested from ONE reference
+  route, which is why **TIKI never entered it and no merchant could ever enable it**. Now 11 couriers /
+  23 services; the super-admin Sync reported "Kurir baru: TIKI" on the shared DB. Never conclude "courier X
+  does not exist" from one route.
+- [x] **`PRIMARY_CHAIN` has one definition** (`ce0ae21`) — `apps/admin/app/api/public/ongkir/route.ts` imports
+  `["spx","jne"]` from `packages/lib/src/couriers.ts` instead of declaring a local `["spx","jne","jnt"]`.
+- [x] **The baseline binds the SERVICE, not the courier** (`5174189`). A seller cannot switch off the
+  **standard** service of SPX and JNE — **express and economy are theirs to drop.** `BASELINE_SERVICES`
+  (`spx:"1"`, `jne:"REG23"`) + `isBaselineService` in `packages/lib/src/couriers.ts`; `saveStoreServices`
+  re-checks it server-side; the card locks exactly those two rows (verified in a browser: 2 of 16 switches
+  locked). Match by `service_type`, never by name — JNE's standard service is called "JNE Express Reguler":
 
   | Courier | Service | `type` | `group` | Baseline? |
   |---|---|---|---|---|

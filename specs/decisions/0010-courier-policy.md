@@ -83,10 +83,13 @@ rather than imply that "enabled" means "offered".
 - **The baseline is enforced per SERVICE, not per courier.** The seller's Jasa Kirim card must lock the two
   `group:"regular"` rows (SPX Standard, JNE Express Reguler) and leave every economy / next-day / one-day /
   cargo row freely togglable.
-- ⚠️ **Code gap at the time of writing:** `BASELINE_COURIER_CODES` is a **courier-level** list, so as written
-  it reads as "the whole courier cannot be switched off". The decided policy is **service-level** — only the
-  standard service is mandatory. The constant (or its consumers) must express that, or a seller will be
-  unable to drop JNE YES / SPX Economy, which they are entitled to drop. Tracked in BACKLOG.
+- ✅ **Implemented service-level** (`5174189`): `BASELINE_SERVICES` = `spx:"1"` + `jne:"REG23"` (+ `isBaselineService`)
+  in `packages/lib/src/couriers.ts`. `saveStoreServices` rejects a payload that drops a baseline **service**,
+  and the Jasa Kirim card locks exactly those two rows — verified in a browser: 2 of 16 switches locked, SPX
+  Economy and JNE YES switchable. `BASELINE_COURIER_CODES` remains as the courier-level answer to "which
+  couriers are the primary/backup" (it drives `PRIMARY_CHAIN`), NOT as the lock.
+  ⚠️ Match on the **`service_type`**, never on the name: JNE's standard service is called "JNE Express
+  **Reguler**", and a name match is a trap waiting for a rename.
 - Widening or narrowing the seller list is a code change in `packages/lib/src/couriers.ts` — deliberately,
   so it is reviewed.
 - **This is OUR policy, not a courier limit.** KiriminAja marks JNE, SiCepat, Lion, Ninja and AnterAja
