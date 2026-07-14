@@ -1,8 +1,8 @@
 "use client";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@tokophi/ui/chart";
 import type { CategorySale } from "@/lib/data/analytics";
-import { IDR } from "@/lib/format";
+import { IDR } from "@tokophi/lib/format";
 
 const config = {
   revenue: { label: "Penjualan", color: "var(--chart-1)" },

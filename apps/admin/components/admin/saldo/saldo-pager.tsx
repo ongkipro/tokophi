@@ -6,7 +6,7 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination";
+} from "@tokophi/ui/pagination";
 import { PAGE_SIZE } from "./ledger-ui";
 import { useSaldoUrl } from "./use-saldo-url";
 

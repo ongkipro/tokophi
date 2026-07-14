@@ -1,5 +1,5 @@
 import { Store } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@tokophi/ui/lib/utils";
 
 export function Brand({ className }: { className?: string }) {
   return (

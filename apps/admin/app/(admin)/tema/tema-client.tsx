@@ -18,10 +18,10 @@ import {
 import { Can, useCan } from "@/components/admin/permissions";
 import { PageHeader } from "@/components/admin/page-header";
 import { BrandColorDialog } from "@/components/theme/brand-color-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@tokophi/ui/badge";
+import { Button } from "@tokophi/ui/button";
+import { Card, CardContent } from "@tokophi/ui/card";
+import { Checkbox } from "@tokophi/ui/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -31,18 +31,18 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@tokophi/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+} from "@tokophi/ui/dropdown-menu";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
 
 type Props = {
   templates: TemplateSummary[];

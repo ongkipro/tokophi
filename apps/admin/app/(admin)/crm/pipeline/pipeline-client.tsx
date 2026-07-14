@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
-import { IDR, waLink, fillTemplate } from "@/lib/format";
+import { IDR, waLink, fillTemplate } from "@tokophi/lib/format";
 import {
   type Lead,
   type LeadStage,
@@ -23,12 +23,12 @@ import {
   type WaTemplate,
 } from "@/lib/mock/store";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Badge } from "@tokophi/ui/badge";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
+import { Textarea } from "@tokophi/ui/textarea";
 import {
   Dialog,
   DialogClose,
@@ -38,14 +38,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@tokophi/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 import { useStoreName } from "@/components/admin/store-context";
 
 // Board columns (kalah is intentionally excluded — still counted for closing rate).

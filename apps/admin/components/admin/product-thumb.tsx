@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@tokophi/ui/lib/utils";
 
 // Product image tile with emoji fallback. Size/rounding via className on the box.
 export function ProductThumb({

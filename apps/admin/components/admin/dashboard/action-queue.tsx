@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { ArrowRight, Check, Truck, ShoppingBag, PackageX, Star, LifeBuoy, type LucideIcon } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { IDR, num } from "@/lib/format";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@tokophi/ui/card";
+import { cn } from "@tokophi/ui/lib/utils";
+import { IDR, num } from "@tokophi/lib/format";
 import type { QueueItem, QueueTone, StuckMoney } from "@/lib/data/dashboard";
 
 const ICON: Record<string, LucideIcon> = {

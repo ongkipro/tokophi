@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@tokophi/ui/badge";
 
 export function BlogStatusBadge({ published }: { published: boolean }) {
   if (published) {

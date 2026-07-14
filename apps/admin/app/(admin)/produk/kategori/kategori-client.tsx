@@ -9,19 +9,19 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
-import { num } from "@/lib/format";
+import { num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { type Collection } from "@/lib/mock/store";
 
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Badge } from "@tokophi/ui/badge";
+import { Input } from "@tokophi/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 
 function TypeBadge({ type }: { type: Collection["type"] }) {
   return type === "otomatis" ? (

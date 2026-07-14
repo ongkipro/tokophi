@@ -21,21 +21,21 @@ import {
 
 import { type Customer } from "@/lib/mock/store";
 import type { CustomerOrder } from "@/lib/data/customers";
-import { IDR, num, timeAgo, waLink } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { IDR, num, timeAgo, waLink } from "@tokophi/lib/format";
+import { cn } from "@tokophi/ui/lib/utils";
 
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
+} from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Badge } from "@tokophi/ui/badge";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
+import { Textarea } from "@tokophi/ui/textarea";
+import { Separator } from "@tokophi/ui/separator";
 import {
   Table,
   TableBody,
@@ -43,7 +43,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@tokophi/ui/table";
 import { OrderStatusBadge } from "@/components/admin/order-status";
 
 // ---- segment styling (per spec: vip=amber, loyal=violet, reguler=blue, baru=emerald) ----

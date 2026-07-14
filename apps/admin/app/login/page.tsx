@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@tokophi/ui/card";
 import { googleEnabled } from "@/lib/google";
 import { LoginForm } from "./login-form";
 

@@ -11,23 +11,23 @@ import { toast } from "sonner";
 import { createSegment, deleteSegment } from "@/lib/actions/segments";
 import { PageHeader } from "@/components/admin/page-header";
 import { useCan } from "@/components/admin/permissions";
-import { num, pct } from "@/lib/format";
+import { num, pct } from "@tokophi/lib/format";
 import { type CustSegment } from "@/lib/mock/store";
-import { cn } from "@/lib/utils";
+import { cn } from "@tokophi/ui/lib/utils";
 
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Card } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
+import { Textarea } from "@tokophi/ui/textarea";
 import {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@tokophi/ui/dialog";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 
 /** Pilih ikon + warna tint berdasarkan nama segmen. */
 function segmentVisual(name: string): { Icon: typeof Users; tint: string } {

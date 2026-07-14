@@ -1,8 +1,8 @@
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
+import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import { OrderStatusBadge } from "./order-status";
 import type { Order } from "@/lib/mock/store";
-import { IDR, timeAgo } from "@/lib/format";
+import { IDR, timeAgo } from "@tokophi/lib/format";
 
 export function RecentOrders({ orders }: { orders: Order[] }) {
   return (

@@ -8,7 +8,7 @@ import {
   Bold, Italic, Strikethrough, Heading2, Heading3, List, ListOrdered,
   Quote, Link as LinkIcon, Undo2, Redo2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 
 // Free WYSIWYG editor (Tiptap, MIT). Value/onChange are HTML strings stored in the `body` column.
 export function RichTextEditor({

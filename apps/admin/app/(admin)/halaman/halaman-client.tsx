@@ -17,11 +17,11 @@ import {
 
 import { PageHeader } from "@/components/admin/page-header";
 import { PageStatusBadge } from "@/components/admin/halaman/status-badge";
-import { num } from "@/lib/format";
+import { num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { type CmsPage } from "@/lib/mock/store";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@tokophi/ui/card";
 import {
   Table,
   TableBody,
@@ -29,17 +29,17 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+} from "@tokophi/ui/table";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Checkbox } from "@tokophi/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 
 // ---- status filter ----
 type StatusFilter = "semua" | "terbit" | "draft";

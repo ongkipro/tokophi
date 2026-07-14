@@ -18,23 +18,23 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
-import { IDR, num } from "@/lib/format";
+import { IDR, num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { type Discount, type DiscountType } from "@/lib/mock/store";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Card, CardContent } from "@tokophi/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
+import { Badge } from "@tokophi/ui/badge";
+import { Button } from "@tokophi/ui/button";
+import { Progress } from "@tokophi/ui/progress";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@tokophi/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 
 // ---- presentation helpers ----
 type StatusKey = Discount["status"];

@@ -1,6 +1,6 @@
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { num } from "@/lib/format";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@tokophi/ui/card";
+import { cn } from "@tokophi/ui/lib/utils";
+import { num } from "@tokophi/lib/format";
 import type { ReturnSummary } from "@/lib/data/dashboard";
 
 /**

@@ -5,9 +5,9 @@ import { generateBrandShades, DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
 import { toast } from "sonner";
 import { saveBrandColor } from "@/lib/actions/theme";
 import { useCan } from "@/components/admin/permissions";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
 import {
   Dialog,
   DialogClose,
@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@tokophi/ui/dialog";
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 

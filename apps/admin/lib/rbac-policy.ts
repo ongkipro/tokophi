@@ -18,6 +18,11 @@ export type Capability =
   | "media:write"
   | "settings:write"
   | "support:write" // Bantuan — open/reply/close platform support tickets
+  // Obrolan — shopper ⇄ merchant chat (specs/docs/CHAT_SPEC.md §6). `chat:read` is the FIRST read
+  // capability in this matrix: the /obrolan route guards on it too, not just the sidebar, because
+  // hiding a nav item is not access control.
+  | "chat:read"
+  | "chat:write"
   | "theme:write"; // Store Builder (ADR 0009) — homepage/category/product section templates
 
 export const ALL_CAPABILITIES: Capability[] = [
@@ -33,6 +38,8 @@ export const ALL_CAPABILITIES: Capability[] = [
   "media:write",
   "settings:write",
   "support:write",
+  "chat:read",
+  "chat:write",
   "theme:write",
 ];
 
@@ -56,6 +63,10 @@ export const ROLE_CAPS: Record<Role, readonly Capability[]> = {
     "crm:write",
     "media:write",
     "support:write",
+    // Staff answer shoppers — that IS the job. Gudang does not (spec §6): a warehouse role has no
+    // business reading customer conversations.
+    "chat:read",
+    "chat:write",
   ],
   gudang: ["inventory:write", "purchases:write", "support:write"],
 };

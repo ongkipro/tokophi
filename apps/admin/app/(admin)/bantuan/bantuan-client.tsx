@@ -3,17 +3,17 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Card, CardContent } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
+import { Textarea } from "@tokophi/ui/textarea";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@tokophi/ui/dialog";
 import { Plus, LifeBuoy, ChevronRight } from "lucide-react";
 import { createTicket } from "@/lib/actions/support";
 import type { TicketRow } from "@/lib/data/support";
 import { useCan } from "@/components/admin/permissions";
-import { timeAgo } from "@/lib/format";
+import { timeAgo } from "@tokophi/lib/format";
 import { TicketStatus } from "./ticket-status";
 
 export function BantuanClient({ tickets }: { tickets: TicketRow[] }) {

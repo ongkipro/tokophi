@@ -1,8 +1,8 @@
 "use client";
 import { Cell, Pie, PieChart } from "recharts";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@tokophi/ui/chart";
 import type { ChannelSlice } from "@/lib/data/dashboard";
-import { IDR } from "@/lib/format";
+import { IDR } from "@tokophi/lib/format";
 
 const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
 const config = { value: { label: "Penjualan" } } satisfies ChartConfig;

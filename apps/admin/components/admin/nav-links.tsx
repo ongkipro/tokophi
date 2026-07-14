@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { NAV_GROUPS, type NavItem } from "@/lib/nav";
-import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@tokophi/ui/lib/utils";
+import { Badge } from "@tokophi/ui/badge";
 import { useStoreHref } from "@/components/admin/store-context";
 
 function isSectionActive(pathname: string, href: string) {

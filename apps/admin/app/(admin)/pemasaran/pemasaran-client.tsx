@@ -11,18 +11,18 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
-import { IDR, num } from "@/lib/format";
+import { IDR, num } from "@tokophi/lib/format";
 import type { AdChannelStatus } from "@/lib/data/marketing";
 import { exportCsv } from "@/lib/csv";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
+import { Badge } from "@tokophi/ui/badge";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
+import { Switch } from "@tokophi/ui/switch";
+import { Separator } from "@tokophi/ui/separator";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@tokophi/ui/tabs";
 import {
   Table,
   TableBody,
@@ -31,7 +31,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@tokophi/ui/table";
 
 // ---------------------------------------------------------------------------
 // NOTHING on this page may show ad spend, impressions, clicks, ROAS, or a Pixel

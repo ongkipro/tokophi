@@ -1,6 +1,6 @@
 import { Undo2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { num } from "@/lib/format";
+import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
+import { num } from "@tokophi/lib/format";
 
 // `pct()` in lib/format is a *delta* formatter (prefixes "+") — wrong for a rate. Local one.
 const rate = (n: number) => `${(n * 100).toFixed(1)}%`;

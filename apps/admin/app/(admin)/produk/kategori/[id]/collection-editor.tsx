@@ -25,24 +25,24 @@ import {
 
 import { type Collection, PRODUCTS } from "@/lib/mock/store";
 import { ProductThumb } from "@/components/admin/product-thumb";
-import { IDR, num } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { IDR, num } from "@tokophi/lib/format";
+import { cn } from "@tokophi/ui/lib/utils";
 import { toast } from "sonner";
 
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardHeader, CardTitle, CardContent } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Badge } from "@tokophi/ui/badge";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
+import { Textarea } from "@tokophi/ui/textarea";
+import { Switch } from "@tokophi/ui/switch";
+import { Separator } from "@tokophi/ui/separator";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 
 // Slugify a title into a URL handle.
 const slugify = (s: string) =>

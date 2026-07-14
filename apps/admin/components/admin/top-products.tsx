@@ -1,6 +1,6 @@
 import type { TopProduct } from "@/lib/data/dashboard";
 import { ProductThumb } from "@/components/admin/product-thumb";
-import { IDR, num } from "@/lib/format";
+import { IDR, num } from "@tokophi/lib/format";
 
 export function TopProducts({ items }: { items: TopProduct[] }) {
   const max = Math.max(...items.map((i) => i.revenue), 1);

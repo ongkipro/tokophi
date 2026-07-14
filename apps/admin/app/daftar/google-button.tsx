@@ -1,5 +1,5 @@
 "use client";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tokophi/ui/button";
 
 // "Masuk dengan Google" — a plain link into the OAuth start route (no client-side SDK).
 // Rendered only when the server says Google auth is configured (see lib/google.ts).

@@ -2,8 +2,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Download } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
 import { DateRangeSwitcher } from "@/components/admin/date-range-switcher";
 import { SalesChart } from "@/components/admin/sales-chart";
 import { ChannelChart } from "@/components/admin/channel-chart";
@@ -25,7 +25,7 @@ import type { FunnelDay } from "@/lib/data/funnel";
 import type { CourierReturns } from "@/lib/data/returns";
 import type { TicketRow } from "@/lib/data/support";
 import type { DayPoint, Product, Order, Activity, Review } from "@/lib/mock/store";
-import { IDR, num, pct } from "@/lib/format";
+import { IDR, num, pct } from "@tokophi/lib/format";
 import { exportCsv } from "@/lib/csv";
 
 export function DashboardClient({

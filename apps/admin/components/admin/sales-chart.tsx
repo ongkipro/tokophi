@@ -1,8 +1,8 @@
 "use client";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@tokophi/ui/chart";
 import type { SeriesPoint } from "@/lib/data/dashboard";
-import { IDR } from "@/lib/format";
+import { IDR } from "@tokophi/lib/format";
 
 const config = {
   sales: { label: "Penjualan", color: "var(--chart-1)" },

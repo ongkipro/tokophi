@@ -149,3 +149,6 @@
   --ring: oklch(0.62 0.20 277);
   --chart-1: oklch(0.66 0.20 277);
 }
+
+/* scan shared design system for Tailwind classes */
+@source "../../../packages/ui/src";

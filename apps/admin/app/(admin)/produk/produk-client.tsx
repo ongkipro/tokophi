@@ -11,22 +11,22 @@ import {
 
 import { PageHeader } from "@/components/admin/page-header";
 import { ProductThumb } from "@/components/admin/product-thumb";
-import { IDR, num, dateTimeShort } from "@/lib/format";
+import { IDR, num, dateTimeShort } from "@tokophi/lib/format";
 import { TODAY, type Product } from "@/lib/mock/store";
-import { cn } from "@/lib/utils";
+import { cn } from "@tokophi/ui/lib/utils";
 import { useCan } from "@/components/admin/permissions";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Badge } from "@tokophi/ui/badge";
+import { Input } from "@tokophi/ui/input";
+import { Checkbox } from "@tokophi/ui/checkbox";
+import { Separator } from "@tokophi/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 
 const LOW_STOCK = 20;
 

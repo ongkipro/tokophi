@@ -1,5 +1,5 @@
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { Badge } from "@tokophi/ui/badge";
+import { cn } from "@tokophi/ui/lib/utils";
 import type { OrderStatus } from "@/lib/mock/store";
 
 const MAP: Record<OrderStatus, { label: string; cls: string }> = {

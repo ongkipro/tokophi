@@ -18,16 +18,16 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
-import { num } from "@/lib/format";
+import { num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { BLOG_CATEGORIES, type BlogPost } from "@/lib/mock/store";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Badge } from "@tokophi/ui/badge";
+import { Input } from "@tokophi/ui/input";
+import { Checkbox } from "@tokophi/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
 import {
   Table,
   TableBody,
@@ -35,7 +35,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@tokophi/ui/table";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -43,7 +43,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 
 import { BlogStatusBadge } from "@/components/admin/blog/status-badge";
 import { AuthorCell } from "@/components/admin/blog/author-cell";

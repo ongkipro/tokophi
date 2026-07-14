@@ -2,8 +2,8 @@
 
 import * as React from "react"
 
-import { cn } from "@/lib/utils"
-import { Switch } from "@/components/ui/switch"
+import { cn } from "@tokophi/ui/lib/utils"
+import { Switch } from "@tokophi/ui/switch"
 
 export function ToggleRow({
   icon,

@@ -14,16 +14,16 @@ import {
   BadgeCheck,
 } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { IDR, num, waLink, fillTemplate } from "@/lib/format";
+import { Card } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Badge } from "@tokophi/ui/badge";
+import { Separator } from "@tokophi/ui/separator";
+import { IDR, num, waLink, fillTemplate } from "@tokophi/lib/format";
 import { type FollowupType, type LeadStage } from "@/lib/mock/store";
 import { getLeads, getFollowups, getWaTemplates } from "@/lib/data/crm";
 import { getStoreName } from "@/lib/data/store";
 import { getSession } from "@/lib/auth";
-import { cn } from "@/lib/utils";
+import { cn } from "@tokophi/ui/lib/utils";
 
 
 // ---- follow-up type presentation ----

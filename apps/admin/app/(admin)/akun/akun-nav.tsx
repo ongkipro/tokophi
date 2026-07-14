@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserRound, ShieldCheck, Sparkles } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@tokophi/ui/lib/utils";
 
 const TABS = [
   { href: "/akun/profil", label: "Profil", icon: UserRound },

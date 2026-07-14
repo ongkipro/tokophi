@@ -2,14 +2,14 @@
 import * as React from "react";
 import Image from "next/image";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Button } from "@tokophi/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@tokophi/ui/dialog";
 import { Landmark, Wallet, QrCode, Store, Copy, Check, ArrowRight, X } from "lucide-react";
 import { createSubscriptionPayment, cancelSubscriptionInvoice, type PaymentDetail } from "@/lib/actions/billing";
 import { IDR } from "@tokophi/lib/format";
 import { quote, withPpn, type Cycle } from "@tokophi/lib/billing";
 import type { PlatformChannel } from "@/lib/actions/payment-settings";
-import { cn } from "@/lib/utils";
+import { cn } from "@tokophi/ui/lib/utils";
 
 const KIND_ICON: Record<string, React.ReactNode> = {
   qris: <QrCode className="size-4" />, va: <Landmark className="size-4" />, ewallet: <Wallet className="size-4" />, retail: <Store className="size-4" />,

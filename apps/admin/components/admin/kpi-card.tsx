@@ -1,7 +1,7 @@
 import { ArrowDownRight, ArrowUpRight, type LucideIcon } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { pct } from "@/lib/format";
+import { Card } from "@tokophi/ui/card";
+import { cn } from "@tokophi/ui/lib/utils";
+import { pct } from "@tokophi/lib/format";
 
 function Sparkline({ data, up }: { data: number[]; up: boolean }) {
   if (!data.length) return null;

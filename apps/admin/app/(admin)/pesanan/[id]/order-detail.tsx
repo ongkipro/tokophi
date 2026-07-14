@@ -36,19 +36,19 @@ import {
 import { buildLabelHtml } from "@/components/admin/pesanan/shipping-label";
 import { createOrderPayment } from "@/lib/actions/payments";
 import type { OrderDetail as OrderDetailData } from "@/lib/data/order-detail";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@tokophi/ui/dialog";
 import { useStoreName } from "@/components/admin/store-context";
 import { useCan } from "@/components/admin/permissions";
 import { OrderStatusBadge } from "@/components/admin/order-status";
 import { ProductThumb } from "@/components/admin/product-thumb";
-import { IDR, timeAgo } from "@/lib/format";
+import { IDR, timeAgo } from "@tokophi/lib/format";
 import type { Order, OrderStatus } from "@/lib/mock/store";
 
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Card, CardHeader, CardTitle, CardContent } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Separator } from "@tokophi/ui/separator";
+import { Textarea } from "@tokophi/ui/textarea";
+import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import {
   Table,
   TableHeader,
@@ -56,7 +56,7 @@ import {
   TableRow,
   TableHead,
   TableCell,
-} from "@/components/ui/table";
+} from "@tokophi/ui/table";
 
 function initials(name: string) {
   return name

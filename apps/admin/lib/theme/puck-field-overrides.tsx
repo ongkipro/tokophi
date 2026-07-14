@@ -1,7 +1,7 @@
 import type { Overrides } from "@measured/puck";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { Input } from "@tokophi/ui/input";
+import { Textarea } from "@tokophi/ui/textarea";
+import { Label } from "@tokophi/ui/label";
 
 // Puck's own field inputs (hashed CSS-module styling, not overridable via variables) feel like
 // a generic dev tool next to the rest of the admin. Swapping in our own shadcn/Base-UI Input,

@@ -6,8 +6,8 @@ import { heroSlides, type HeroConfig } from "@tokophi/sections";
 // ADR 0009 — Hero section (admin/editor half). Preview approximation of the storefront's rendered
 // output (own Tailwind palette here, not the storefront's brand tokens — see
 // apps/storefront/src/components/sections/Hero.astro for the real render). Kept visually close on
-// purpose: same split layout (copy column + contained portrait image panel) so the builder stays
-// WYSIWYG-ish.
+// purpose: same full-bleed layout (image as the section background, copy on top of it) so the
+// builder stays WYSIWYG-ish. `stone-900` stands in for the storefront's `ink`.
 //
 // The slides come from `heroSlides()` (@tokophi/sections) — the SAME normaliser the Astro renderer
 // calls, so the editor and the storefront can never disagree about what a saved hero means (a hero
@@ -43,31 +43,57 @@ export function Hero(props: HeroConfig) {
     active.focal ?? "center"
   ];
 
+  const centered = align === "center";
+
   return (
-    <section className="bg-gradient-to-b from-stone-100 to-white">
-      <div className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-14 md:grid-cols-[1.15fr_1fr]">
-        <div className={align === "center" ? "text-center" : "text-left"}>
+    // `bg-stone-900` is not decoration: the copy is white, so it is what keeps the text legible when
+    // an image 404s or a slide has no imageUrl — which is the COMMON case in here, since hero images
+    // live in the storefront's public dir and usually don't resolve inside the admin.
+    <section className="relative isolate flex min-h-[28rem] items-end overflow-hidden bg-stone-900 md:items-center">
+      {active.imageUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- editor preview of an arbitrary URL
+        <img
+          key={active.imageUrl}
+          src={active.imageUrl}
+          alt=""
+          style={{ objectPosition }}
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+          className="absolute inset-0 -z-10 h-full w-full object-cover"
+        />
+      )}
+
+      {/* Scrim — mirrors the storefront: a bottom-up wash, plus a left-to-right one when the copy is
+          left-aligned so only the text column is darkened. The horizontal wash is desktop-only, and
+          narrow viewports drop the copy to the bottom instead — Puck can preview at phone width, so
+          the breakpoints have to match the storefront or the builder would lie. */}
+      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-stone-900/90 via-stone-900/55 to-stone-900/30" />
+      {!centered && (
+        <div className="absolute inset-0 -z-10 hidden bg-gradient-to-r from-stone-900/80 via-stone-900/35 to-transparent md:block" />
+      )}
+
+      <div className="mx-auto w-full max-w-6xl px-6 py-14 md:py-16">
+        <div className={`max-w-xl ${centered ? "mx-auto text-center" : "text-left"}`}>
           {badge && (
-            <span className="mb-6 inline-flex rounded-full bg-white px-3.5 py-1.5 text-xs font-medium text-rose-800 ring-1 ring-rose-200">
+            <span className="mb-6 inline-flex rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white ring-1 ring-white/30 backdrop-blur-sm">
               {badge}
             </span>
           )}
-          <h1 className="text-4xl font-semibold leading-tight tracking-tight text-stone-900">
+          <h1 className="text-4xl font-semibold leading-tight tracking-tight text-white">
             {active.heading}
           </h1>
-          <p className={`mt-5 max-w-md text-stone-500 ${align === "center" ? "mx-auto" : ""}`}>
+          <p className={`mt-5 max-w-md text-white/85 ${centered ? "mx-auto" : ""}`}>
             {active.subheading}
           </p>
           {active.ctaLabel && (
-            <div className={`mt-8 flex gap-3 ${align === "center" ? "justify-center" : ""}`}>
-              <span className="rounded-full bg-rose-800 px-7 py-3 text-sm font-semibold text-white">
+            <div className={`mt-8 flex gap-3 ${centered ? "justify-center" : ""}`}>
+              <span className="rounded-full bg-white px-7 py-3 text-sm font-semibold text-stone-900">
                 {active.ctaLabel}
               </span>
             </div>
           )}
-          <div
-            className={`mt-9 flex items-center gap-4 ${align === "center" ? "justify-center" : ""}`}
-          >
+          <div className={`mt-9 flex items-center gap-4 ${centered ? "justify-center" : ""}`}>
             {slides.length > 1 && (
               <div ref={dotsRef} className="flex items-center gap-2">
                 {slides.map((slide, i) => (
@@ -81,34 +107,14 @@ export function Hero(props: HeroConfig) {
                     aria-label={`Lihat slide ${i + 1}: ${slide.heading}`}
                     aria-pressed={i === index}
                     className={`h-1.5 rounded-full transition-all ${
-                      i === index ? "w-8 bg-rose-800" : "w-2.5 bg-rose-200 hover:bg-rose-300"
+                      i === index ? "w-8 bg-white" : "w-2.5 bg-white/40 hover:bg-white/70"
                     }`}
                   />
                 ))}
               </div>
             )}
-            {ratingText && <p className="text-sm text-stone-500">{ratingText}</p>}
+            {ratingText && <p className="text-sm text-white/75">{ratingText}</p>}
           </div>
-        </div>
-
-        {/* The gradient is the graceful-degradation layer: a missing/failed image leaves the brand
-            tint showing instead of a broken-image icon — same behaviour as the storefront. */}
-        <div className="relative aspect-[9/10] overflow-hidden rounded-2xl bg-gradient-to-br from-rose-100 via-rose-200 to-rose-50 shadow-xl ring-1 ring-stone-200">
-          {active.imageUrl && (
-            // eslint-disable-next-line @next/next/no-img-element -- editor preview of an arbitrary URL
-            <img
-              key={active.imageUrl}
-              src={active.imageUrl}
-              alt=""
-              style={{ objectPosition }}
-              // Hero images live in the STOREFRONT's public dir, so they very often don't resolve
-              // inside the admin — hide the broken <img> and let the gradient show through.
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-              }}
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-          )}
         </div>
       </div>
     </section>

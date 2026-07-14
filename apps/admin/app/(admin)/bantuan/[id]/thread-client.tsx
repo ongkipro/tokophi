@@ -3,15 +3,15 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Textarea } from "@tokophi/ui/textarea";
 import { ChevronLeft, Send, CheckCheck } from "lucide-react";
 import { replyTicket, closeTicket } from "@/lib/actions/support";
 import type { TicketDetail } from "@/lib/data/support";
 import { useCan } from "@/components/admin/permissions";
 import { TicketStatus } from "../ticket-status";
-import { cn } from "@/lib/utils";
+import { cn } from "@tokophi/ui/lib/utils";
 
 const time = (d: Date) => new Date(d).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 

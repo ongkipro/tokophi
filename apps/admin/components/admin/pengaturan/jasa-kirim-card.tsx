@@ -2,11 +2,11 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { ChevronDown, Truck, Info, Loader2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Switch } from "@tokophi/ui/switch";
+import { Badge } from "@tokophi/ui/badge";
+import { cn } from "@tokophi/ui/lib/utils";
 import { useCan } from "@/components/admin/permissions";
 import {
   getPlatformServices,

@@ -4,8 +4,8 @@ import { getPendingSubscription } from "@/lib/actions/billing";
 import { getPlatformChannels } from "@/lib/actions/payment-settings";
 import { IDR } from "@tokophi/lib/format";
 import { BILLING, withPpn } from "@tokophi/lib/billing";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
+import { Badge } from "@tokophi/ui/badge";
 import { CheckCircle2, Sparkles, Receipt, Printer } from "lucide-react";
 import { PaySubscription } from "@/components/admin/pengaturan/pay-subscription";
 

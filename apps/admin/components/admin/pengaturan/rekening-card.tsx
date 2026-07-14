@@ -2,10 +2,10 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { Landmark, Loader2, Info, ShieldCheck } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
 import { useCan } from "@/components/admin/permissions";
 import { getBankAccount } from "@/lib/actions/rekening";
 import { saveBankAccount } from "@/lib/actions/ledger";

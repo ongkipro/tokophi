@@ -2,9 +2,9 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { registerStore } from "@/lib/actions/register";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
 import { GoogleButton } from "./google-button";
 
 export function DaftarForm({ googleEnabled, notice }: { googleEnabled: boolean; notice?: string }) {

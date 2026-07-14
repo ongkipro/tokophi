@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 
 function initials(name: string) {
   return name

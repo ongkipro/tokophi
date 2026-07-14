@@ -6,9 +6,9 @@ import { Check, ChevronDown } from "lucide-react";
 import type { NavItem, NavItemType } from "@/lib/mock/store";
 import { TYPE_META, TYPE_OPTIONS, TARGET_PLACEHOLDER } from "./nav-meta";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
 import {
   Dialog,
   DialogClose,
@@ -17,13 +17,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@tokophi/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 
 export type ItemDraft = { title: string; type: NavItemType; target: string };
 

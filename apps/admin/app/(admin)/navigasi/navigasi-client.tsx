@@ -42,12 +42,12 @@ import {
   type DropPos,
 } from "@/components/admin/navigasi/tree-ops";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardContent, CardHeader } from "@tokophi/ui/card";
+import { Badge } from "@tokophi/ui/badge";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
+import { Separator } from "@tokophi/ui/separator";
 import {
   Dialog,
   DialogClose,
@@ -57,14 +57,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@tokophi/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 
 // ---- local state helpers ----
 function cloneItems(items: NavItem[]): NavItem[] {

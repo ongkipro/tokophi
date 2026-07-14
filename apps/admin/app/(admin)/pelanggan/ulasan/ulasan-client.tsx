@@ -12,22 +12,22 @@ import {
   Clock,
 } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@tokophi/ui/card";
+import { Badge } from "@tokophi/ui/badge";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Separator } from "@tokophi/ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 import { type Review, type ReviewStatus } from "@/lib/mock/store";
-import { num } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { num } from "@tokophi/lib/format";
+import { cn } from "@tokophi/ui/lib/utils";
 
 // Render a 1..5 rating as filled/empty stars.
 function Stars({

@@ -1,7 +1,7 @@
 import { ArrowDownRight, ArrowUpRight, Wallet, Undo2 } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { IDR, num } from "@/lib/format";
+import { Card } from "@tokophi/ui/card";
+import { cn } from "@tokophi/ui/lib/utils";
+import { IDR, num } from "@tokophi/lib/format";
 import type { MoneyTile, ReturnSummary } from "@/lib/data/dashboard";
 
 /**

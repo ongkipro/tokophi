@@ -11,7 +11,7 @@ import { puckFieldOverrides } from "@/lib/theme/puck-field-overrides";
 import { puckConfig } from "@/lib/theme/puck-config";
 import { saveTemplate } from "@/lib/actions/theme";
 import { useCan } from "@/components/admin/permissions";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tokophi/ui/button";
 import { BrandColorDialog } from "@/components/theme/brand-color-dialog";
 
 export function BuilderClient({

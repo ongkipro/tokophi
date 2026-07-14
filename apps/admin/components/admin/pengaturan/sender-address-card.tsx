@@ -2,10 +2,10 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { MapPin, Search, Check } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@tokophi/ui/card";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
+import { Button } from "@tokophi/ui/button";
 import { getSenderAddress, saveSenderAddress, searchArea } from "@/lib/actions/shipping";
 
 // Sender / pickup address used to create KiriminAja shipments (origin). Platform-managed

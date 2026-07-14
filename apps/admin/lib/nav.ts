@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingBag, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessageSquare, MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon } from "lucide-react";
 
 export type NavChild = { label: string; href: string };
 export type NavItem = { label: string; href: string; icon: LucideIcon; badge?: string; children?: NavChild[] };
@@ -42,6 +42,10 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Ulasan", href: "/pelanggan/ulasan" },
         ],
       },
+      // Obrolan = shopper ⇄ merchant chat (specs/docs/CHAT_SPEC.md). It sits with Pesanan/Pelanggan
+      // because that is the axis it belongs to — Bantuan (merchant ⇄ platform) deliberately stays
+      // at the bottom, a different axis entirely.
+      { label: "Obrolan", href: "/obrolan", icon: MessageSquare },
       {
         label: "CRM", href: "/crm", icon: MessagesSquare,
         children: [

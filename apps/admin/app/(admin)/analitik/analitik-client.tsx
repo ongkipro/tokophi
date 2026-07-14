@@ -2,9 +2,9 @@
 import { useState } from "react";
 import { Wallet, ShoppingBag, Users, Receipt, Download, MapPin, Smartphone, Filter } from "lucide-react";
 import type { DayPoint, Product } from "@/lib/mock/store";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Separator } from "@tokophi/ui/separator";
 import { PageHeader } from "@/components/admin/page-header";
 import { DateRangeSwitcher } from "@/components/admin/date-range-switcher";
 import { KpiCard } from "@/components/admin/kpi-card";
@@ -18,7 +18,7 @@ import {
 } from "@/lib/data/dashboard";
 import type { FunnelDay, DeviceDay } from "@/lib/data/funnel"; // type-only: funnel.ts is server-only
 import type { RegionSale, CustomerMix, CategorySale, ChannelDay, ProductSaleDay, OrderStats } from "@/lib/data/analytics";
-import { IDR, num, pct } from "@/lib/format";
+import { IDR, num, pct } from "@tokophi/lib/format";
 import { exportCsv } from "@/lib/csv";
 
 // Every number on this page is COUNTED from rows: orders / order_line_items (penjualan, wilayah,

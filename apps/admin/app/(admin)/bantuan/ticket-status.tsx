@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@tokophi/ui/badge";
 
 // Merchant-facing labels for a ticket's state.
 export const TICKET_UI: Record<string, { label: string; cls: string }> = {

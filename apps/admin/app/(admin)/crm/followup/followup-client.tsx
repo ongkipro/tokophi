@@ -24,12 +24,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Card } from "@tokophi/ui/card";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Badge } from "@tokophi/ui/badge";
+import { Separator } from "@tokophi/ui/separator";
+import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import {
   Table,
   TableBody,
@@ -37,8 +37,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+} from "@tokophi/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -46,15 +46,15 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 import {
   type Followup,
   type FollowupType,
   type FollowupStatus,
   type WaTemplate,
 } from "@/lib/mock/store";
-import { num, waLink, fillTemplate } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { num, waLink, fillTemplate } from "@tokophi/lib/format";
+import { cn } from "@tokophi/ui/lib/utils";
 
 
 // ---- helpers ----

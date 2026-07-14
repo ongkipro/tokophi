@@ -1,10 +1,10 @@
 "use client";
 import { Calendar, ChevronDown, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tokophi/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@tokophi/ui/dropdown-menu";
 import { RANGE_OPTIONS, rangeLabel, type RangeKey } from "@/lib/data/dashboard";
 
 export function DateRangeSwitcher({ value, onChange }: { value: RangeKey; onChange: (k: RangeKey) => void }) {
