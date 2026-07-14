@@ -22,7 +22,22 @@ export function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS });
 }
 
+// The storefront lives on a DIFFERENT origin (<slug>.tokophi.com → app.tokophi.com), so a response
+// without CORS headers is unreadable to it. Every explicit return below carries them — but an
+// UNCAUGHT throw does not: Next renders its own 500, the browser sees a missing
+// Access-Control-Allow-Origin, and the console reports a CORS problem. That is how a missing
+// `kelurahan` table showed up as a CORS error for hours: the message pointed at the wrong layer.
+// Wrap the handler so a failure looks like a failure.
 export async function POST(req: Request) {
+  try {
+    return await handle(req);
+  } catch (err) {
+    console.error("[ongkir] unhandled:", err);
+    return NextResponse.json({ ok: false, error: "Gagal menghitung ongkir." }, { status: 500, headers: CORS });
+  }
+}
+
+async function handle(req: Request) {
   const limited = rateLimited(req, "ongkir", 60, 60_000, CORS);
   if (limited) return limited;
   if (!kiriminajaConfigured()) {
