@@ -410,17 +410,17 @@ Simpan dengan dilipat, bukan digantung. Berlaku juga untuk rajut kering — grav
 Bulu-bulu kecil itu wajar. Cukur pelan dengan alat pencukur kain atau silet tumpul. Jangan ditarik dengan tangan; itu justru menarik benangnya keluar.
 
 Rajut yang dirawat begini bisa bertahan bertahun-tahun dan tetap jatuh bagus di badan.` },
-  { title: "Kami Kini Melayani Pengiriman Instan Se-Jabodetabek", handle: "pengiriman-instan-jabodetabek", blog: "Berita Toko", author: "Ongki Pratama", published: true, publishedDaysAgo: 14, excerpt: "Pesanan sampai di hari yang sama dengan GoSend & GrabExpress.", comments: 5, imageUrl: "/products/kemeja-oversized.webp", body: `Mulai minggu ini, pesanan ke wilayah Jabodetabek bisa sampai di hari yang sama.
+  { title: "Pilihan Ekspedisi & Estimasi Sampai", handle: "pilihan-ekspedisi-estimasi-sampai", blog: "Berita Toko", author: "Ongki Pratama", published: true, publishedDaysAgo: 14, excerpt: "Ongkir semua ekspedisi tampil langsung di checkout — pilih yang termurah atau tercepat.", comments: 5, imageUrl: "/products/kemeja-oversized.webp", body: `Sekarang semua pilihan ekspedisi muncul langsung di halaman checkout, lengkap dengan ongkir dan estimasi harinya.
 
-Kami membuka opsi pengiriman instan lewat kurir motor. Pilihannya muncul otomatis di halaman checkout bila alamat Anda masuk jangkauan — tidak perlu kode atau permintaan khusus.
+Begitu Anda memilih kecamatan tujuan, tarifnya dihitung real-time dari alamat gudang kami. Tidak ada ongkir kira-kira, dan tidak perlu tanya-tanya dulu lewat chat.
 
 Yang perlu diketahui:
 
-- Pesanan yang dibayar sebelum pukul 15.00 WIB dikirim di hari yang sama.
-- Ongkirnya dihitung berdasarkan jarak sebenarnya, tampil langsung sebelum Anda membayar.
-- Berlaku untuk paket sampai 5 kg.
+- Pesanan yang dibayar sebelum pukul 15.00 WIB kami serahkan ke kurir di hari yang sama.
+- Layanan reguler biasanya 2–3 hari; layanan next day tiba keesokan harinya.
+- Label "Termurah" dan "Tercepat" muncul otomatis supaya Anda tidak perlu membandingkan satu per satu.
 
-Di luar Jabodetabek, pilihan kurir reguler tetap seperti biasa. Kami sedang menyiapkan kota berikutnya — Bandung dan Surabaya menyusul.` },
+Nomor resi dikirim lewat WhatsApp begitu paket dijemput kurir, jadi Anda bisa melacaknya sendiri.` },
   { title: "Rekomendasi Hadiah untuk Anak Sesuai Usia", handle: "rekomendasi-hadiah-anak", blog: "Tips & Panduan", author: "Dewi Anggraini", published: false, publishedDaysAgo: 1, excerpt: "Bingung memilih mainan edukatif? Simak rekomendasi berdasarkan usia anak.", comments: 0, imageUrl: "", body: `Draf. Belum tayang — menunggu koleksi anak dirilis.` },
   { title: "Panduan Menentukan Ukuran Baju yang Pas", handle: "panduan-ukuran-baju", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 25, excerpt: "Cara mengukur badan dan memilih size chart agar tidak salah beli.", comments: 2, imageUrl: "/products/dress-midi-bunga.webp", body: `Size chart hanya berguna kalau Anda tahu angka badan Anda sendiri. Berikut cara mengukurnya dengan benar, di rumah, tanpa alat khusus.
 

@@ -173,6 +173,10 @@ async function handle(req: Request) {
         cost: Number(x.cost),
         etd: x.etd,
         cod: !!x.cod && !!cod?.allows(x.service, x.service_type),
+        // KiriminAja's own speed class (cargo | regular | next_day | economy | one_day). The checkout
+        // groups the "other couriers" list by THIS — a storefront that guessed the group from the
+        // service NAME would be inventing a taxonomy the booking API does not share.
+        group: x.group,
       }));
     // filter by effective couriers (platform is the hard cap; empty platform = show all as fallback)
     if (platformOn.length) rates = rates.filter((x) => effective.includes(x.code));

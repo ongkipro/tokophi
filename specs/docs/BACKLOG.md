@@ -254,6 +254,22 @@ unmeasurable**. Ordered.
 
 ---
 
+## 🔴 P2.0 — Checkout input validation (QUEUED — "part 2", after the 3 shipping agents land)
+> User's ask: lock down nama / email / WhatsApp / alamat / kecamatan / kodepos so we stop collecting junk, fake numbers and spam — and so what we push to KiriminAja is in the format it expects (`62xxx`).
+
+**The governing principle, and the trap:** *over-validation rejects real customers, and it does so silently — the shopper just leaves.* A rule that blocks a legitimate Indonesian name, a new carrier prefix, or an address with an unusual character costs a sale and nobody ever finds out. So the rule is **normalise generously, reject narrowly, and validate on the SERVER** — the browser is UX, the API is the boundary (same lesson as the ongkir origin and the COD province: *a claim from the client is not a fact*).
+
+- [ ] **WhatsApp — normalise, don't reject.** Real data in prod is stored as **`08124612804`** (local format, 24/24 customers) — so this is a data-normalisation job, not just a form rule.
+  - Accept everything a human types: `0812…`, `812…`, `+62812…`, `62812…`, with spaces, dots or dashes. **Strip and canonicalise to `62xxx`** — that is what KiriminAja wants and what the Seller admin should display.
+  - Validate **structure, not carrier**: after `62` it must start with `8`, and the whole number must be 10–13 digits. **Do NOT hardcode provider prefixes** (811/812/813/821/…): carriers add prefixes, and a hardcoded list will one day reject a real customer on a new number — a silent, permanent bug. Structure catches fakes; a prefix table catches yesterday's fakes.
+  - Backfill the 24 existing `08…` customers to `62…`, and normalise on write from every path (checkout, Seller admin, CRM).
+- [ ] **Email — format only, and no domain whitelist.** There is **no mailer in this repo**, so we can validate the shape but must never claim we sent anything. Validate a standard email shape; **do not restrict to gmail/yahoo** — a whitelist would reject corporate, university and self-hosted addresses (i.e. exactly the higher-value buyers). If we want to help typists, offer domain *suggestions*, never a block. Email stays **optional** (the user keeps it for future accounts + mailing list).
+- [ ] **Nama** — letters, spaces, apostrophes, hyphens and dots (Indonesian names carry all of these: `Nur'aini`, `Siti Aisyah binti Abdullah`, `M. Rizky`). Reject digits and symbols. Do NOT reject diacritics.
+- [ ] **Alamat lengkap** — letters **and digits** (house numbers, RT/RW are the whole point) plus ordinary punctuation. Only block obvious junk (emoji, control chars, a single repeated character). Set a sane min length so `-` is not an address.
+- [ ] **Kecamatan** — do NOT validate it as free text. It is **picked from a list**, so the real rule is: **there must be a valid `dest_id`** that resolves in `kiriminaja_areas`. That is a far stronger check than any character rule, and it is the id the parcel is actually booked against.
+- [ ] **Kode pos** — auto-filled from the picked kelurahan (see the checkout work in flight). Validate as 5 digits; stays typeable for the ~4% of districts with no kelurahan data.
+- [ ] **Server-side enforcement in `/api/public/order`** — the UI rules are UX. The API must re-normalise and re-validate every one of these before it writes a customer or an order, and reject with a clear Bahasa error. Otherwise a script still posts whatever it likes.
+
 ## 🔴 P1.9 — Shipping weight must come from the DB, not the browser (QUEUED — blocked on the GoSend/Grab removal touching the same files)
 > **The bug (found 2026-07-14 by the user: "Mampang, Jakarta Selatan → SPX Standard Rp40rb"):** `checkout.astro` prices every parcel with **`weight: totalQty * 500`** — a fabricated 500 g per item. The real column `product_variants.weight_grams` exists and the Seller's product editor has always had a required "Berat (gram)" field — it was simply **NULL on all 96 variants**, so nobody noticed the checkout never read it.
 >
