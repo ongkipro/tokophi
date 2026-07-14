@@ -2,6 +2,7 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { eq, asc, desc, sql } from "drizzle-orm";
 import { withCurrentTenant } from "@/lib/tenant";
+import { areaById } from "@/lib/data/areas";
 
 // The real, per-order truth the detail page needs: line items straight out of `order_line_items`
 // (joined to the variant + product for the variant title / image / emoji), the money columns the
@@ -79,6 +80,10 @@ export type OrderAddress = {
   recipient: string | null;
   phone: string | null;
   street: string | null;
+  /** The village the shopper picked at checkout (0049). Null on legacy orders. */
+  kelurahan: string | null;
+  /** The district behind `ship_district_id` — named from kiriminaja_areas, not from the typed city. */
+  kecamatan: string | null;
   city: string | null;
   province: string | null;
   postcode: string | null;
@@ -145,6 +150,8 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
         shipPhone: schema.orders.shipPhone,
         shipAddress: schema.orders.shipAddress,
         shipPostcode: schema.orders.shipPostcode,
+        shipDistrictId: schema.orders.shipDistrictId,
+        shipKelurahanName: schema.orders.shipKelurahanName,
       })
       .from(schema.orders)
       .where(eq(schema.orders.number, number))
@@ -205,13 +212,21 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
     // CUSTOMER's row instead means a buyer who moved house silently moves every past parcel with
     // them — and this address is what gets PRINTED ON THE LABEL (order-detail.tsx → buildLabelHtml).
     // The snapshot is the address the shopper checked out with and the one createShipment books.
+    //
+    // The kecamatan is named from `ship_district_id` via kiriminaja_areas — the id the ongkir was
+    // quoted on and the parcel is booked to — NOT from the free-text city. The whole point of showing
+    // the destination to the merchant is that it is the destination the courier will be given; a label
+    // rendered from a different field than the booking uses is a label that can lie.
+    const destArea = o.shipDistrictId ? await areaById(o.shipDistrictId) : null;
     let address: OrderAddress | null = o.shipAddress?.trim()
       ? {
           recipient: o.shipRecipient ?? null,
           phone: o.shipPhone ?? null,
           street: o.shipAddress,
-          city: o.city ?? null,
-          province: o.province ?? null,
+          kelurahan: o.shipKelurahanName ?? null,
+          kecamatan: destArea?.district ?? null,
+          city: destArea?.city ?? o.city ?? null,
+          province: destArea?.province ?? o.province ?? null,
           postcode: o.shipPostcode ?? null,
           // It IS the order's own address — it cannot disagree with the order's city.
           cityMatchesOrder: true,
@@ -259,6 +274,11 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
           recipient: a.recipient ?? null,
           phone: a.phone ?? null,
           street: a.address ?? null,
+          // A customer's saved address has no kecamatan/kelurahan — it is a legacy free-text row.
+          // Left null rather than back-filled from the order's district: this address may not even
+          // be this parcel's destination (see cityMatchesOrder below).
+          kelurahan: null,
+          kecamatan: null,
           city: a.city ?? null,
           province: a.province ?? null,
           postcode: a.postcode ?? null,

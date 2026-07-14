@@ -458,6 +458,14 @@ export const orders = pgTable("orders", {
   // The KiriminAja district the ongkir was quoted against and the parcel is booked to. The
   // authoritative destination — a typed city name is a claim, a district id is what the courier acts on.
   shipDistrictId: integer(),
+  // The kelurahan under that district (migration 0049). KiriminAja's own kelurahan id + the name the
+  // shopper picked. The id is optional to the courier and does NOT affect the price — shipping_price
+  // ignores village params entirely (verified against the sandbox: a nonsense village id returns the
+  // same 20 rates). It matters for BOOKING: request_pickup takes `destination_kelurahan_id`, and the
+  // name is what turns a bare street into an address a driver can find. Null for orders placed before
+  // the checkout offered the step — and for the ~4% of districts we have no kelurahan list for.
+  shipKelurahanId: integer(),
+  shipKelurahanName: text(),
 
   // KiriminAja shipment (set when "Buat Pengiriman" succeeds)
   awb: text(),
@@ -828,8 +836,16 @@ export const storeSettings = pgTable("store_settings", {
   senderAddress: text(),
   senderKecamatanId: integer(),
   senderKecamatanName: text(),
+  // KiriminAja's OWN kelurahan id (from POST /api/mitra/kelurahan) — NOT the Kemendagri code in the
+  // local `kelurahan` table. request_pickup's `kelurahan_id` only accepts the former, which is why
+  // the picker calls the live endpoint instead of reading the reference table.
   senderKelurahanId: integer(),
   senderKelurahanName: text(),
+  // Pickup postal code (migration 0049). Defaulted from the picked kelurahan's postal_code and
+  // then editable: a kelurahan can span more than one kodepos, and the merchant knows theirs.
+  // request_pickup carries it as `zipcode` — without it the courier's own address validation is
+  // working from the district alone.
+  senderZip: text(),
   // DEAD COLUMNS — instant/same-day delivery (GoSend/Grab) was removed and it was the only feature
   // that needed coordinates. Nothing reads or writes these; kept only to avoid a destructive
   // migration. Do not wire them back up.

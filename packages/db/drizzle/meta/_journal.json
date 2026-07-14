@@ -344,6 +344,13 @@
       "when": 1784106162290,
       "tag": "0048_phone_canonical_62",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1784109762290,
+      "tag": "0049_shipping_kelurahan",
+      "breakpoints": true
     }
   ]
 }

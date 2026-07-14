@@ -30,7 +30,51 @@ export async function kaAddressByName(search: string): Promise<KaAddress[]> {
   return r.status && Array.isArray(r.data) ? r.data : [];
 }
 
-// pricing (express) — origin/destination are kecamatan (district) IDs
+// ─────────────────────────────────────────────────────────────────────────────
+// Kelurahan (village) of a kecamatan — VERIFIED live: POST /api/mitra/kelurahan {kecamatan_id}
+//   → { status: true, method: "get_kelurahan_from_kecamatan_id",
+//       results: [{ id: 17617, kelurahan_name: "Cikini", kecamatan_id: 2099, postal_code: "10330" }] }
+// (unversioned path — KiriminAja's versions vary per endpoint; do not add /v2/ or /v6.1/ here.)
+//
+// This `id` is KiriminAja's OWN kelurahan id and it is the ONLY thing `request_pickup` accepts for
+// `kelurahan_id` / `destination_kelurahan_id`. The local `kelurahan` reference table (migration 0046)
+// is keyed by the Kemendagri code ("11.01.01.2001") — a different namespace. It is the right source
+// for a postcode and a name; it can never supply a booking id. That is why this call exists.
+//
+// The village list of a district changes about as often as Indonesia redraws its subdistricts, so it
+// is cached for a day — the picker is used on every visit to Pengaturan → Pengiriman.
+// ─────────────────────────────────────────────────────────────────────────────
+const KELURAHAN_TTL = 24 * 60 * 60 * 1000;
+export type KaKelurahan = { id: number; name: string; postalCode: string };
+
+export async function kaKelurahan(kecamatanId: number): Promise<KaKelurahan[]> {
+  if (!Number.isFinite(kecamatanId) || kecamatanId <= 0) return [];
+  const key = `ka:kelurahan:${kecamatanId}`;
+  const hit = cacheGet<KaKelurahan[]>(key);
+  if (hit) return hit;
+  const r = await ka<{
+    status: boolean;
+    results?: { id: number; kelurahan_name: string; postal_code: string }[];
+  }>("/api/mitra/kelurahan", { kecamatan_id: kecamatanId });
+  if (!r.status || !Array.isArray(r.results)) return [];
+  const out = r.results.map((x) => ({
+    id: x.id,
+    name: x.kelurahan_name,
+    postalCode: String(x.postal_code ?? ""),
+  }));
+  cacheSet(key, out, KELURAHAN_TTL);
+  return out;
+}
+
+// pricing (express) — origin/destination are kecamatan (district) IDs.
+//
+// ⚠️ There is NO village-level pricing. `shipping_price` accepts `origin_village`/
+// `destination_village` in the body and IGNORES them: sent with a nonsense destination village id
+// (9999999) the sandbox still answered `status: true` with the same 20 services at the same costs
+// (verified 2026-07-14). So do not add village params here — they would imply a precision the
+// tariff does not have, and a parameter the API silently discards is worse than no parameter: the
+// next reader will believe the quote was village-accurate. Kelurahan is a BOOKING and ADDRESS
+// concern (request_pickup + the printed label), not a price one.
 export type KaRate = { service: string; service_name: string; service_type: string; cost: string; etd: string; cod: boolean; group: string };
 export async function kaShippingPrice(p: {
   origin: number;
@@ -64,6 +108,7 @@ export async function kaShippingPrice(p: {
 export type KaSender = {
   name: string; phone: string; address: string;
   kecamatanId: number; kelurahanId?: number | null;
+  zipcode?: string | null; // pickup postal code (store_settings.sender_zip)
 };
 export type KaPackage = {
   orderRef: string; // becomes `${KA_ORDER_PREFIX}-${orderRef}`
@@ -85,6 +130,7 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
     name: sender.name, phone: sender.phone, address: sender.address,
     kecamatan_id: sender.kecamatanId,
     ...(sender.kelurahanId ? { kelurahan_id: sender.kelurahanId } : {}),
+    ...(sender.zipcode ? { zipcode: sender.zipcode } : {}),
     platform_name: "mitra",
     schedule,
     packages: [{

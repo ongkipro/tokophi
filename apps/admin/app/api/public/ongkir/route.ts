@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
-import { resolveArea, kelurahanForDistrict } from "@/lib/data/areas";
+import { resolveArea, kelurahanOptions } from "@/lib/data/areas";
 import { rateLimited } from "@/lib/public-guard";
 import { quoteShipping } from "@/lib/shipping-quote";
 
@@ -58,15 +58,21 @@ async function handle(req: Request) {
 
   // kelurahan of a district → the checkout fills the kodepos from the one the shopper picks.
   // A kodepos is assigned per kelurahan, not per kecamatan (17% of kecamatan span several — the
-  // urban ones), so it cannot be derived from the district alone. Districts we could not match to
-  // the Kemendagri dataset (~4%) return an empty list, and the checkout keeps kodepos manual for
-  // them — an unmatched district must degrade to "the shopper types it", never to a guess.
+  // urban ones), so it cannot be derived from the district alone. Districts with no village list
+  // return an empty array, and the checkout keeps kodepos manual for them — an unmatched district
+  // must degrade to "the shopper types it", never to a guess.
+  //
+  // Rows now also carry `id` — KiriminAja's own kelurahan id, the only one `request_pickup` accepts.
+  // Posting it back on the order (`kelurahanId`) is what lets the seller book the parcel to the
+  // village rather than to the district. It is null when the row came from the local Kemendagri
+  // fallback: a name and a kodepos we have, a bookable id we do not, and we will not fake one.
+  // `name`/`postcode` are unchanged, so a client that ignores `id` keeps working.
   if (body.op === "kelurahan") {
     const id = Number(body.destinationId);
     if (!Number.isFinite(id) || id <= 0) {
       return NextResponse.json({ ok: true, kelurahan: [] }, { headers: CORS });
     }
-    return NextResponse.json({ ok: true, kelurahan: await kelurahanForDistrict(id) }, { headers: CORS });
+    return NextResponse.json({ ok: true, kelurahan: await kelurahanOptions(id) }, { headers: CORS });
   }
 
   // NOTE: `op === "instant"` (GoSend/Grab same-day pricing) was REMOVED — the product ships via

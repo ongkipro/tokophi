@@ -15,7 +15,7 @@ import {
   postcodeError,
   destIdError,
 } from "@tokophi/lib/validate";
-import { areaById } from "@/lib/data/areas";
+import { areaById, verifyKelurahan } from "@/lib/data/areas";
 import { rateLimited } from "@/lib/public-guard";
 import { getCodPolicy } from "@/lib/cod";
 import { quoteShipping, findRate } from "@/lib/shipping-quote";
@@ -59,7 +59,11 @@ export async function POST(req: Request) {
     sessionId?: string; // the storefront checkout session this order came from (checkout_sessions)
     items?: Item[];
     customer?: { name?: string; phone?: string; email?: string };
-    address?: { alamat?: string; kota?: string; provinsi?: string; kodepos?: string };
+    // `kelurahanId` = KiriminAja's own village id, as returned by /api/public/ongkir op:"kelurahan".
+    // Optional: a checkout that doesn't offer the step (or a district with no village list) simply
+    // omits it, and the parcel is booked to the kecamatan as before. `kelurahan` (the name) is only
+    // ever taken from the verified id — never from the client's string.
+    address?: { alamat?: string; kota?: string; provinsi?: string; kodepos?: string; kelurahanId?: number };
     // `cost` is deliberately NOT read — the price is re-quoted below. `service`/`serviceType` ARE:
     // they say WHICH service the shopper picked, which is a choice, not a price.
     shipping?: { label?: string; cost?: number; service?: string; serviceType?: string; destId?: number };
@@ -122,6 +126,13 @@ export async function POST(req: Request) {
   const destId = Number(body.shipping?.destId ?? body.destId);
   const area = await areaById(destId);
   if (!area) return bad("Kecamatan tujuan tidak valid — pilih dari daftar.", "kecamatan");
+
+  // The village, resolved AGAINST the district we just verified — not merely accepted. A kelurahan id
+  // from a different kecamatan would pass straight through `request_pickup` and land the parcel in a
+  // village nobody chose, so the id is only kept when it actually belongs to `destId`. An unverifiable
+  // one is dropped to null rather than refused: the village is optional to the courier, and losing a
+  // real sale over an optional field is the worse bug. Same posture as kodepos.
+  const kel = await verifyKelurahan(destId, addr.kelurahanId);
   const kota = area.city ?? null;
   const provinsi = area.province ?? null;
 
@@ -270,6 +281,10 @@ export async function POST(req: Request) {
     shipAddress: alamat,
     shipPostcode: kodepos,
     shipDistrictId: destId,
+    // The village (0049) — verified to belong to shipDistrictId, or null. This is what lets
+    // createShipment book `destination_kelurahan_id` and print a full address on the label.
+    shipKelurahanId: kel?.id ?? null,
+    shipKelurahanName: kel?.name ?? null,
   }).returning({ id: schema.orders.id, number: schema.orders.number });
 
   for (const r of resolved) {
