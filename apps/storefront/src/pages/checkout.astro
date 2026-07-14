@@ -1660,24 +1660,65 @@ if (rToken) {
       shipLoadingSr.textContent = "";
     }
 
+    // ── TWO-STEP RATES ────────────────────────────────────────────────────────────────────────────
+    // First paint quotes ONE courier (the store's primary: SPX, falling back to JNE → J&T on routes
+    // SPX does not serve — the server walks that chain). The other couriers are only priced if the
+    // shopper asks to see them. `othersLoaded` is what keeps the second click from re-fetching.
+    var othersLoaded = false;
+    var othersLoading = false;
+
     if (moreBtn) {
-      // Reveal, do not re-fetch: every service is already in the DOM (one `op=rates` call prices them
-      // all). Clicking this is instant.
       moreBtn.addEventListener("click", function () {
+        if (!othersLoaded) { loadOthers(); return; } // first click = fetch, then open
         var open = moreBox.hidden;
         moreBox.hidden = !open;
         moreBtn.setAttribute("aria-expanded", open ? "true" : "false");
         if (moreCaret) moreCaret.classList.toggle("rotate-180", open);
-        if (moreLabel) {
-          var n = moreBox.querySelectorAll('input[name="shipping"]').length;
-          moreLabel.textContent = open ? "Tutup pilihan lain" : "Pilih ekspedisi lain (" + n + ")";
-        }
+        setMoreLabel(open);
       });
     }
-    if (shipRetry) shipRetry.addEventListener("click", loadRates);
+    if (shipRetry) shipRetry.addEventListener("click", function () { loadRates(); });
+
+    function setMoreLabel(open) {
+      if (!moreLabel) return;
+      if (othersLoading) { moreLabel.textContent = "Memuat kurir lain…"; return; }
+      if (!othersLoaded) { moreLabel.textContent = "Lihat kurir lainnya"; return; }
+      var n = moreBox.querySelectorAll('input[name="shipping"]').length;
+      moreLabel.textContent = open ? "Tutup pilihan lain" : "Pilih ekspedisi lain (" + n + ")";
+    }
+
+    // The full quote. The chosen service is re-rendered from the SAME list, so the shopper's pick and
+    // its price survive the expansion — and the Termurah/Tercepat badges finally rank the whole list
+    // instead of the one row we happened to have fetched.
+    function loadOthers() {
+      if (othersLoading || othersLoaded || !destId.value) return;
+      othersLoading = true;
+      setMoreLabel(false);
+      if (moreBtn) moreBtn.setAttribute("aria-busy", "true");
+
+      fetchRates("all")
+        .then(function (rates) {
+          othersLoading = false;
+          othersLoaded = true;
+          if (moreBtn) moreBtn.removeAttribute("aria-busy");
+          if (!rates || !rates.length) { setMoreLabel(false); return; }
+          renderRates(rates, true);
+          moreBox.hidden = false; // they asked to see them — show them
+          if (moreBtn) moreBtn.setAttribute("aria-expanded", "true");
+          if (moreCaret) moreCaret.classList.add("rotate-180");
+          setMoreLabel(true);
+        })
+        .catch(function () {
+          othersLoading = false;
+          if (moreBtn) moreBtn.removeAttribute("aria-busy");
+          if (moreLabel) moreLabel.textContent = "Gagal memuat kurir lain — coba lagi";
+        });
+    }
 
     function loadRates() {
       if (!destId.value) return;
+      othersLoaded = false;
+      othersLoading = false;
 
       ratesLoading = true;
       shipPlaceholder.hidden = true;
@@ -1688,140 +1729,162 @@ if (rToken) {
       shipLoadingSr.textContent = "Menghitung ongkir…";
       recompute();
 
-      // The cart lines go to the server and the SERVER weighs them (Σ product_variants.weight_grams).
-      // A weight is a price input: the client does not get to state it. Same for the origin — it is
-      // the seller's pickup district, resolved server-side.
-      var rateItems = cart.map(function (l) { return { handle: l.handle, variant: l.variant, qty: l.qty }; });
+      fetchRates("primary")
+        .then(function (rates) {
+          ratesLoading = false;
+          show(shipLoading, false);
+          shipLoadingSr.textContent = "";
+          renderRates(rates, false);
+        })
+        .catch(function (e) {
+          ratesLoading = false;
+          show(shipLoading, false);
+          shipLoadingSr.textContent = "";
+          shipErrorText.textContent = (e && e.message) || "Gagal memuat ongkir. Periksa koneksimu lalu coba lagi.";
+          show(shipError, true);
+          recompute();
+        });
+    }
+
+    // The request. `scope` decides how many couriers the server prices — never what they cost.
+    // The cart lines go to the server and the SERVER weighs them (Σ product_variants.weight_grams):
+    // a weight is a price input, and the client does not get to state it. Same for the origin — it is
+    // the seller's pickup district, resolved server-side.
+    function fetchRates(scope) {
       var payload = {
         op: "rates",
+        scope: scope,
         storeSlug: STORE_SLUG,
         destinationId: Number(destId.value),
-        items: rateItems,
+        items: cart.map(function (l) { return { handle: l.handle, variant: l.variant, qty: l.qty }; }),
         itemValue: subtotal,
       };
       // The village makes the quote MORE precise where the proxy supports it (and is ignored where it
       // does not) — the same id the order is booked to, so the price and the parcel agree.
       if (kelIdEl.value) payload.destinationVillageId = kelIdEl.value;
 
-      api(payload)
-        .then(function (res) {
-          ratesLoading = false;
-          show(shipLoading, false);
-          shipLoadingSr.textContent = "";
+      return api(payload).then(function (res) {
+        if (!res || !res.ok) throw new Error((res && res.error) || "Gagal memuat ongkir.");
+        return (res.rates || []).slice();
+      });
+    }
 
-          if (!res || !res.ok) {
-            shipErrorText.textContent = (res && res.error) || "Gagal memuat ongkir.";
-            show(shipError, true);
-            recompute();
-            return;
-          }
-          var rates = (res.rates || []).slice();
-          if (!rates.length) {
-            // "No service on this route" is FINAL, not a failure to retry — different card, different
-            // copy, no retry button.
-            shipEmptyNote.textContent = "Kurir yang aktif di toko ini belum melayani rute tersebut. Coba kecamatan lain, atau hubungi kami.";
-            show(shipEmpty, true);
-            recompute();
-            return;
-          }
-          show(expressGroup, true);
+    // `full` = this list is every courier in scope. Until then the Termurah/Tercepat badges are NOT
+    // drawn: ranking one fetched row as "cheapest" would be a claim we have not checked.
+    function renderRates(rates, full) {
+      if (!rates.length) {
+        // "No service on this route" is FINAL, not a failure to retry — different card, different
+        // copy, no retry button. Only the FULL quote may say this: the primary courier not serving a
+        // route is not the route having no couriers, and the server already walked SPX → JNE → J&T
+        // before returning nothing.
+        shipEmptyNote.textContent = "Kurir yang aktif di toko ini belum melayani rute tersebut. Coba kecamatan lain, atau hubungi kami.";
+        show(shipEmpty, true);
+        show(moreBtn, false);
+        recompute();
+        return;
+      }
+      show(expressGroup, true);
 
-          // SORT BY PRICE. The API returns whatever order KiriminAja felt like, and the old code both
-          // rendered that order AND auto-checked `i === 0` — so a shopper's DEFAULT ongkir was
-          // "whichever service happened to come back first", which on one route was Rp26.000 sitting
-          // above a Rp9.000 one.
-          rates.sort(function (a, b) { return a.cost - b.cost; });
+      // SORT BY PRICE. The API returns whatever order KiriminAja felt like, and the old code both
+      // rendered that order AND auto-checked `i === 0` — so a shopper's DEFAULT ongkir was
+      // "whichever service happened to come back first", which on one route was Rp26.000 sitting
+      // above a Rp9.000 one.
+      rates.sort(function (a, b) { return a.cost - b.cost; });
 
-          // "Tercepat" = the smallest number in the ETD string ("1-2" → 1). Ties go to the cheaper one,
-          // already first after the sort. Both badges are computed across ALL rates, not just the
-          // visible one — a "Termurah" badge that only ranks what you can see is a lie the moment the
-          // list expands.
-          var etdMin = function (e) { var m = String(e || "").match(/\d+/); return m ? Number(m[0]) : 99; };
-          var cheapest = rates[0];
-          var fastest = rates.reduce(function (best, s) { return etdMin(s.etd) < etdMin(best.etd) ? s : best; }, rates[0]);
+      // "Tercepat" = the smallest number in the ETD string ("1-2" → 1). Ties go to the cheaper one,
+      // already first after the sort. Both badges are only drawn on the FULL list: ranking the one
+      // courier we fetched as "Termurah" would be a claim about services we never priced.
+      var etdMin = function (e) { var m = String(e || "").match(/\d+/); return m ? Number(m[0]) : 99; };
+      var cheapest = full ? rates[0] : null;
+      var fastest = full ? rates.reduce(function (best, s) { return etdMin(s.etd) < etdMin(best.etd) ? s : best; }, rates[0]) : null;
 
-          // ── THE DEFAULT IS SPX REGULER ──────────────────────────────────────────────────────────
-          // Not "whatever is cheapest": the merchant's own default courier is a product decision, so it
-          // is named (spx / service_type "1"). If the route does not offer it, we fall back to the
-          // cheapest AND SAY SO — a different courier silently sitting in the default slot is exactly
-          // the substitution the shopper would not notice until the parcel arrives.
-          var preferred = rates.filter(function (s) { return s.code === "spx" && s.type === "1"; })[0];
-          var def = preferred || cheapest;
+      // ── THE DEFAULT IS SPX REGULER ────────────────────────────────────────────────────────────
+      // Not "whatever is cheapest": the merchant's default courier is a product decision, so it is
+      // named (spx / service_type "1"). The server quotes it alone on first paint and falls back to
+      // JNE → J&T where SPX does not serve — so on those routes `preferred` is absent and we take the
+      // cheapest of what came back AND SAY SO. A different courier silently occupying the default slot
+      // is exactly the substitution a shopper would only discover when the parcel arrives.
+      var preferred = rates.filter(function (s) { return s.code === "spx" && s.type === "1"; })[0];
+      var def = preferred || rates[0];
 
-          // One row of the shipping list group: radio, name + badges, ETA, price hard-right — Shopify's
-          // shipping-method table.
-          function row(s, checked) {
-            // s.cod is the EFFECTIVE flag from the API (KiriminAja capability × platform per-service
-            // allowance × this store's cod_enabled) — never the raw courier capability.
-            var tags = "";
-            if (s === cheapest) tags += ' <span class="ml-1 whitespace-nowrap rounded bg-brand-100 px-1.5 py-px text-[10px] font-semibold text-brand-700">Termurah</span>';
-            if (s === fastest) tags += ' <span class="ml-1 whitespace-nowrap rounded bg-sky-100 px-1.5 py-px text-[10px] font-semibold text-sky-800">Tercepat</span>';
-            if (s.cod) tags += ' <span class="ml-1 whitespace-nowrap rounded bg-emerald-100 px-1.5 py-px text-[10px] font-semibold text-emerald-800">COD</span>';
-            return (
-              '<label class="lg-row">' +
-              '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-etd="' + esc(s.etd) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (checked ? " checked" : "") + ' class="lg-radio" />' +
-              '<span class="min-w-0 flex-1"><span class="lg-title">' + esc(s.name) + tags + '</span><span class="lg-sub">Estimasi ' + esc(s.etd) + " hari</span></span>" +
-              '<span class="lg-price">' + idr.format(s.cost) + "</span></label>"
-            );
-          }
+      // Keep the shopper's pick across the expansion: once they have chosen a service, re-rendering
+      // with the full list must not silently move them back to the default.
+      var chosenEl = form.querySelector('input[name="shipping"]:checked');
+      var chosenKey = chosenEl ? chosenEl.value : "";
+      var keyOf = function (s) { return s.code + "-" + s.type; };
+      if (chosenKey) {
+        var stillThere = rates.filter(function (s) { return keyOf(s) === chosenKey; })[0];
+        if (stillThere) def = stillThere;
+      }
 
-          expressBox.innerHTML = row(def, true); // the default row is the ONLY thing rendered up front
+      // One row of the shipping list group: radio, name + badges, ETA, price hard-right — Shopify's
+      // shipping-method table.
+      function row(s, checked) {
+        // s.cod is the EFFECTIVE flag from the API (KiriminAja capability × platform per-service
+        // allowance × this store's cod_enabled) — never the raw courier capability.
+        var tags = "";
+        if (cheapest && s === cheapest) tags += ' <span class="ml-1 whitespace-nowrap rounded bg-brand-100 px-1.5 py-px text-[10px] font-semibold text-brand-700">Termurah</span>';
+        if (fastest && s === fastest) tags += ' <span class="ml-1 whitespace-nowrap rounded bg-sky-100 px-1.5 py-px text-[10px] font-semibold text-sky-800">Tercepat</span>';
+        if (s.cod) tags += ' <span class="ml-1 whitespace-nowrap rounded bg-emerald-100 px-1.5 py-px text-[10px] font-semibold text-emerald-800">COD</span>';
+        return (
+          '<label class="lg-row">' +
+          '<input type="radio" name="shipping" value="' + esc(keyOf(s)) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-etd="' + esc(s.etd) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (checked ? " checked" : "") + ' class="lg-radio" />' +
+          '<span class="min-w-0 flex-1"><span class="lg-title">' + esc(s.name) + tags + '</span><span class="lg-sub">Estimasi ' + esc(s.etd) + " hari</span></span>" +
+          '<span class="lg-price">' + idr.format(s.cost) + "</span></label>"
+        );
+      }
 
-          if (defaultNote) {
-            if (preferred) {
-              defaultNote.hidden = true;
-            } else {
-              defaultNote.textContent = "Layanan reguler pilihan toko tidak tersedia untuk rute ini — kami pilihkan ongkir termurah.";
-              defaultNote.hidden = false;
-            }
-          }
+      expressBox.innerHTML = row(def, true); // the chosen/default row is the only one shown up front
 
-          // ── THE REST, GROUPED BY KIRIMINAJA'S OWN `group` ──────────────────────────────────────
-          // Anything unrecognised lands in "Lainnya" rather than being dropped: a service KiriminAja
-          // prices but the checkout hides is a service the shopper cannot buy.
-          var GROUPS = [
-            { label: "1 Hari", keys: ["next_day", "one_day"] },
-            { label: "Reguler", keys: ["regular"] },
-            { label: "Ekonomi", keys: ["economy"] },
-            { label: "Kargo", keys: ["cargo"] },
-          ];
-          var others = rates.filter(function (s) { return s !== def; });
-          var taken = [];
-          var html = "";
-          var groupBlock = function (label, list) {
-            return (
-              '<div><p class="ship-group-label">' + esc(label) + '</p><div class="list-group">' +
-              list.map(function (s) { return row(s, false); }).join("") +
-              "</div></div>"
-            );
-          };
-          GROUPS.forEach(function (g) {
-            var list = others.filter(function (s) { return g.keys.indexOf(String(s.group || "")) >= 0; });
-            list.forEach(function (s) { taken.push(s); });
-            if (!list.length) return; // an empty group is not rendered — no headers over nothing
-            html += groupBlock(g.label, list);
-          });
-          var rest = others.filter(function (s) { return taken.indexOf(s) < 0; });
-          if (rest.length) html += groupBlock("Lainnya", rest);
+      if (defaultNote) {
+        if (preferred) {
+          defaultNote.hidden = true;
+        } else {
+          defaultNote.textContent = "Layanan reguler pilihan toko tidak tersedia untuk rute ini — kami pilihkan ongkir termurah.";
+          defaultNote.hidden = false;
+        }
+      }
 
-          moreBox.innerHTML = html;
-          moreBox.hidden = true;
-          if (moreBtn) {
-            moreBtn.hidden = others.length === 0; // one service on the route → nothing to reveal
-            moreBtn.setAttribute("aria-expanded", "false");
-            if (moreLabel) moreLabel.textContent = "Pilih ekspedisi lain (" + others.length + ")";
-            if (moreCaret) moreCaret.classList.remove("rotate-180");
-          }
-          bindShipping();
-        })
-        .catch(function () {
-          ratesLoading = false;
-          show(shipLoading, false);
-          shipLoadingSr.textContent = "";
-          shipErrorText.textContent = "Gagal memuat ongkir. Periksa koneksimu lalu coba lagi.";
-          show(shipError, true);
-          recompute();
-        });
+      // ── THE REST, GROUPED BY KIRIMINAJA'S OWN `group` ────────────────────────────────────────
+      // Anything unrecognised lands in "Lainnya" rather than being dropped: a service KiriminAja
+      // prices but the checkout hides is a service the shopper cannot buy.
+      var GROUPS = [
+        { label: "1 Hari", keys: ["next_day", "one_day"] },
+        { label: "Reguler", keys: ["regular"] },
+        { label: "Ekonomi", keys: ["economy"] },
+        { label: "Kargo", keys: ["cargo"] },
+      ];
+      var others = rates.filter(function (s) { return s !== def; });
+      var taken = [];
+      var html = "";
+      var groupBlock = function (label, list) {
+        return (
+          '<div><p class="ship-group-label">' + esc(label) + '</p><div class="list-group">' +
+          list.map(function (s) { return row(s, false); }).join("") +
+          "</div></div>"
+        );
+      };
+      GROUPS.forEach(function (g) {
+        var list = others.filter(function (s) { return g.keys.indexOf(String(s.group || "")) >= 0; });
+        list.forEach(function (s) { taken.push(s); });
+        if (!list.length) return; // an empty group is not rendered — no headers over nothing
+        html += groupBlock(g.label, list);
+      });
+      var rest = others.filter(function (s) { return taken.indexOf(s) < 0; });
+      if (rest.length) html += groupBlock("Lainnya", rest);
+
+      moreBox.innerHTML = html;
+      moreBox.hidden = true;
+      if (moreBtn) {
+        // Before the full quote we do not yet know how many other couriers exist — so the button
+        // invites ("Lihat kurir lainnya") instead of promising a count it has not counted. After it,
+        // an empty list means this route really has only this one service: nothing left to reveal.
+        moreBtn.hidden = full && others.length === 0;
+        moreBtn.setAttribute("aria-expanded", "false");
+        if (moreCaret) moreCaret.classList.remove("rotate-180");
+        setMoreLabel(false);
+      }
+      bindShipping();
     }
 
     // ---- Recovered destination → re-quote ongkir straight away ----

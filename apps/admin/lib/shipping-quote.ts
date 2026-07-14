@@ -63,6 +63,13 @@ export type QuoteInput = {
   items: CartItemRef[];
   /** declared goods value, for insurance. Comes from the SERVER-priced subtotal in the order API. */
   itemValue?: number;
+  /**
+   * Ask for only these couriers (still intersected with the platform/merchant scope — a caller
+   * cannot widen what the store offers, only narrow it). The checkout uses this to quote its primary
+   * courier alone on first paint and fetch the rest only if the shopper opens "kurir lainnya".
+   * Omit = every courier in scope, which is what the ORDER re-quote always does.
+   */
+  couriers?: string[];
 };
 
 /** Find the rate the shopper picked inside a fresh quote. Courier + service_type — a label cannot. */
@@ -135,13 +142,18 @@ export async function quoteShipping(input: QuoteInput): Promise<Quote> {
   // returned 18 services, while naming the 7 enabled couriers took **0.5s** and returned the 14 we
   // were keeping anyway. The checkout was paying eleven seconds-worth of latency per two shoppers to
   // fetch rows it discarded. The filters below stay: the courier list is a request, not a guarantee.
+  // A caller may narrow the ask (the checkout's first paint quotes one courier), never widen it: the
+  // requested set is intersected with the scope, and an empty intersection falls back to the scope.
+  const asked = input.couriers?.length ? effective.filter((c) => input.couriers!.includes(c)) : effective;
+  const ask = asked.length ? asked : effective;
+
   const r = await kaShippingPrice({
     origin,
     destination: input.destinationId,
     weight: pkg.billableGrams,
     itemValue: input.itemValue || 0,
     insurance: 0,
-    ...(effective.length ? { couriers: effective } : {}),
+    ...(ask.length ? { couriers: ask } : {}),
   });
   if (!r.ok) return { ok: false, error: r.error ?? "Gagal mengambil tarif." };
 
