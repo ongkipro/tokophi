@@ -35,6 +35,41 @@ export const courierName = (code: string): string => COURIERS.find((c) => c.code
 export const courierMeta = (code: string): CourierMeta | undefined => COURIERS.find((c) => c.code === code);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// WHAT THE SELLER MAY OFFER — a curated subset, not everything KiriminAja carries.
+//
+// The platform (super-admin) sees every courier the API returns; the seller sees only these. A
+// merchant choosing between fourteen near-identical services is a merchant who chooses badly, and
+// each extra courier is a support surface we take on. This list is a BUSINESS decision, so it lives
+// here and not in a database toggle someone can widen by accident.
+//
+// Anything outside it — J&T Cargo, TIKI, and any courier KiriminAja onboards later — stays visible to
+// the platform and invisible to sellers until it is added here deliberately.
+// ─────────────────────────────────────────────────────────────────────────────
+export const SELLER_COURIER_CODES = [
+  "spx", "jne", "jnt", "lion", "sap", "sicepat", "idx", "anteraja",
+];
+export const isSellerCourier = (code: string | null | undefined): boolean =>
+  !!code && SELLER_COURIER_CODES.includes(normalize(code));
+
+// SPX is the primary: it is the COD rail (our own gateway economics depend on it) and it is the only
+// courier that quoted on every route we have measured. JNE is the backup — SPX first, JNE where SPX
+// does not serve the route. Both are BASELINE: a seller cannot switch them off, because switching off
+// the primary silently kills COD and switching off the backup leaves routes with no service at all.
+export const BASELINE_COURIER_CODES = ["spx", "jne"];
+export const isBaselineCourier = (code: string | null | undefined): boolean =>
+  !!code && BASELINE_COURIER_CODES.includes(normalizeCode(code));
+
+/** Preference order the checkout's first quote walks: primary, then backup. */
+export const PRIMARY_CHAIN = ["spx", "jne"];
+
+// ⚠️ Availability is decided per PICKUP ORIGIN, not globally. Measured 2026-07-14: J&T quotes from
+// Jakarta and Yogyakarta origins but NOT from Gubeng (Surabaya) — to any destination. So "enabled"
+// never means "the shopper will see it"; a courier that does not collect from the seller's warehouse
+// is simply absent. Surfaces must SAY that rather than show a green toggle that does nothing.
+
+const normalizeCode = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Instant / on-demand couriers are OUT OF SCOPE (product decision, 2026-07).
 //
 // WHY: instant delivery (GoSend, GrabExpress, Borzo…) is too much to build for launch — TokoΦ ships
