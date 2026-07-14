@@ -711,6 +711,20 @@ async function main() {
     }
   }
 
+  // Real KiriminAja district ids, one per demo city. The orders snapshot these (0042) so the parcel
+  // has an authoritative destination the courier can actually be booked to — a typed city name is a
+  // claim; a kecamatan id is what KiriminAja acts on, and it is what the COD province gate trusts.
+  const districtByCity = new Map<string, number>();
+  for (const city of CITIES) {
+    const [row] = await db
+      .select({ id: schema.kiriminajaAreas.id })
+      .from(schema.kiriminajaAreas)
+      .where(eq(schema.kiriminajaAreas.cityName, city))
+      .limit(1);
+    if (row) districtByCity.set(city, row.id);
+  }
+  const shipRnd = mulberry32(3131);
+
   // orders (+ line items + payment) — customers link by name
   for (const o of ORDERS_SEED) {
     const [ord] = await db.insert(schema.orders).values({
@@ -723,6 +737,16 @@ async function main() {
       subtotalIdr: o.total,
       totalIdr: o.total,
       city: o.city,
+      province: PROV_OF[o.city] ?? null,
+      // Shipping address SNAPSHOT (0042) — generated AT the order's own destination city, not looked
+      // up from the customer. That lookup is precisely the bug: a customer's saved address lives on
+      // the person and moves with them, so 624 of 685 orders ended up "shipping" to a city the order
+      // was never for. Snapshotting at purchase makes the order self-contained.
+      shipRecipient: o.customer,
+      shipPhone: CUSTOMERS.find((c) => c.name === o.customer)?.phone ?? null,
+      shipAddress: `${(STREETS[o.city] ?? ["Jl. Merdeka"])[Math.floor(shipRnd() * (STREETS[o.city]?.length ?? 1))]} No. ${1 + Math.floor(shipRnd() * 120)}, RT 0${1 + Math.floor(shipRnd() * 8)}/RW 0${1 + Math.floor(shipRnd() * 9)}`,
+      shipPostcode: `${POST_OF[o.city] ?? "40"}${String(100 + Math.floor(shipRnd() * 899))}`,
+      shipDistrictId: districtByCity.get(o.city) ?? null,
       placedAt: minutesAgo(o.minutesAgo),
     }).returning();
     await db.insert(schema.orderLineItems).values(

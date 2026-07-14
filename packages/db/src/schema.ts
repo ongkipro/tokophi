@@ -367,6 +367,25 @@ export const orders = pgTable("orders", {
   totalIdr: money().notNull().default(0),
   city: text(),
   province: text(),
+
+  // ── Shipping address SNAPSHOT (migration 0042) ─────────────────────────────
+  // An order must carry the address it was SHIPPED TO, frozen at purchase. It used to carry only
+  // `city`/`province` and the street was looked up from `customer_addresses` — which lives on the
+  // CUSTOMER and changes. So when a buyer moved house, every past order silently moved with them:
+  // reprint a label for an old parcel and it goes to the new address. 624 of 685 orders already had
+  // a customer address in a DIFFERENT city from the order's destination — the model was drifting in
+  // production, quietly.
+  //
+  // This is why an order snapshot is not an optimisation: the address is part of the transaction,
+  // not part of the person.
+  shipRecipient: text(),
+  shipPhone: text(),
+  shipAddress: text(), // street + RT/RW
+  shipPostcode: text(),
+  // The KiriminAja district the ongkir was quoted against and the parcel is booked to. The
+  // authoritative destination — a typed city name is a claim, a district id is what the courier acts on.
+  shipDistrictId: integer(),
+
   // KiriminAja shipment (set when "Buat Pengiriman" succeeds)
   awb: text(),
   courier: text(),

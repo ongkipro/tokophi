@@ -142,6 +142,22 @@ export async function POST(req: Request) {
     storeId: store.id, number, customerId, status: "baru", financialStatus: "pending", channel: "organic",
     subtotalIdr: subtotal, shippingIdr: shippingCost, totalIdr: total,
     city: addr.kota ?? null, province: addr.provinsi ?? null,
+
+    // SNAPSHOT the shipping address onto the order (0042). It is deliberately NOT a lookup back to
+    // `customer_addresses`: that lives on the CUSTOMER and changes. Without this, a buyer who moves
+    // house silently moves every past order with them — reprint an old label and the parcel goes to
+    // the wrong door. The address belongs to the TRANSACTION, not the person.
+    //
+    // `shipDistrictId` is the KiriminAja kecamatan this order's ongkir was quoted against; it is the
+    // same id the COD province gate already refuses to trust the typed city over, and it is what the
+    // courier will actually be booked to.
+    shipRecipient: cust.name || null,
+    shipPhone: cust.phone || null,
+    shipAddress: addr.alamat || null,
+    shipPostcode: addr.kodepos || null,
+    shipDistrictId: Number.isFinite(Number(body.shipping?.destId ?? body.destId))
+      ? Number(body.shipping?.destId ?? body.destId)
+      : null,
   }).returning({ id: schema.orders.id, number: schema.orders.number });
 
   for (const { i, variantId, qty } of resolved) {
