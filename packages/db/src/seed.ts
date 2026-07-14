@@ -4,7 +4,7 @@
 import { db, client, schema } from "./client";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { scryptSync, randomBytes } from "node:crypto";
-import { COURIERS } from "@tokophi/lib/couriers";
+import { COURIERS, isSellerCourier } from "@tokophi/lib/couriers";
 
 // Local auth: scrypt "salt:hash". Dev owner password below (change for real deploys).
 const DEV_OWNER_PASSWORD = "tokophi123";
@@ -1617,12 +1617,20 @@ async function main() {
   // EMPTY and AnterAja Same Day / SAP One Day / J&T JND / Sicepat CARGO / Jagopack / BIGPACK /
   // Boss Pack could not be offered to a shopper at all — services KiriminAja will happily book,
   // that no merchant could sell. Every entry below was captured from
-  // POST /api/mitra/v6.1/shipping_price (sandbox, 2026-07-14, origin 2099 Menteng → destination 356
-  // Coblong, 1 kg): 10 couriers, 20 services, `cod` exactly as the API reports it.
+  // POST /api/mitra/v6.1/shipping_price (sandbox, 2026-07-14) across the FOUR reference routes the
+  // roster now unions (see ROSTER_ROUTES in @tokophi/lib/kiriminaja): Menteng→Coblong,
+  // Menteng→Pleret, Gubeng→Menteng, Danurejan→Menteng. That union is **11 couriers / 23 services**.
   //
-  // `codAllowed` follows the current platform policy: SPX only, because a refused COD parcel ships
-  // back free on SPX and is billed to the merchant everywhere else. That is a POLICY, not a
-  // capability — super-admin can widen it per service without a deploy.
+  // ⚠️ It used to mirror ONE route (Menteng→Coblong) and therefore missed TIKI entirely — TIKI does
+  // not serve that route but quotes on the other three. A seeded database simply had no TIKI row, so
+  // it could never be enabled, never be debugged, never be seen. Coverage is route- and
+  // origin-dependent: never mirror a single route.
+  //
+  // `cod` is the CEILING and is true if ANY of the four routes reported the service COD-capable
+  // (same merge rule as kaServices) — TIKI reports cod=true on 3 of 4. `codAllowed` follows the
+  // current platform policy: SPX only, because a refused COD parcel ships back free on SPX and is
+  // billed to the merchant everywhere else. That is a POLICY, not a capability — super-admin can
+  // widen it per service without a deploy.
   const SEED_SERVICES: Record<string, Array<{ type: string; name: string; group: string; cod: boolean }>> = {
     spx: [
       { type: "1", name: "SPX Standard", group: "regular", cod: true },
@@ -1657,19 +1665,31 @@ async function main() {
       { type: "BIGPACK", name: "BIGPACK", group: "cargo", cod: false },
     ],
     idx: [{ type: "00", name: "ID Express Standard", group: "regular", cod: true }],
+    // TIKI — absent from Menteng→Coblong, present on the other three reference routes.
+    tiki: [
+      { type: "REG", name: "Tiki Reguler", group: "regular", cod: true },
+      { type: "ECO", name: "Tiki Economy", group: "economy", cod: true },
+      { type: "TRC", name: "Tiki Trucking", group: "cargo", cod: true },
+    ],
     jtcargo: [{ type: "REG", name: "J&T Cargo Regular", group: "cargo", cod: true }],
   };
-  // Couriers the platform does not offer by default (super-admin can switch them on). Cargo/niche.
-  const COURIERS_OFF = ["idx", "jtcargo"];
+  // EVERY courier in the union gets a row — including the ones a Seller may not offer (TIKI, J&T
+  // Cargo, Ninja). The row is what makes them VISIBLE to the platform operator; without it, "does
+  // KiriminAja carry TIKI?" has no answer anywhere in the product.
+  //
+  // `enabled` = OFFERED TO SELLERS, and it is derived, not hand-listed: a courier inside
+  // SELLER_COURIER_CODES is on, anything else is off (a Seller cannot pick it, so an enabled row
+  // would be a lie). This replaces the hand-written COURIERS_OFF = ["idx","jtcargo"], which had
+  // already drifted — `idx` IS in the seller roster. Widening the roster is a code change
+  // (@tokophi/lib/couriers), matching syncCouriersFromKiriminaja + saveCouriers exactly.
   await db.insert(schema.platformCouriers).values(
-    // KiriminAja codes from the shared roster; niche ones off by default (super-admin toggles).
     COURIERS.map((c) => ({
       courier: c.code,
       services: (SEED_SERVICES[c.code] ?? []).map((s) => ({
         ...s,
         codAllowed: s.cod && c.code === "spx", // platform policy today: COD via SPX only
       })),
-      enabled: !COURIERS_OFF.includes(c.code),
+      enabled: isSellerCourier(c.code),
     })),
   );
   await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
@@ -1679,7 +1699,7 @@ async function main() {
   // hole fixed in 35b88a4: services the seller never picked (Jagopack, BIGPACK, Sicepat CARGO, SAP One
   // Day) reappeared at checkout. Seed the demo merchant as having accepted everything the platform
   // enables (incl. both SPX ones, so COD is exercisable out of the box).
-  const enabledCouriers = COURIERS.filter((c) => !COURIERS_OFF.includes(c.code));
+  const enabledCouriers = COURIERS.filter((c) => isSellerCourier(c.code));
   const merchantServices = enabledCouriers.flatMap((c) =>
     (SEED_SERVICES[c.code] ?? []).map((s) => ({ storeId: store.id, courier: c.code, service: s.type, enabled: true })),
   );

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ChevronLeft, ExternalLink, Ban, Play, ShoppingBag, Package, Wallet, Activity,
   User, Mail, MapPin, UserPlus, Gift, Crown, KeyRound, Clock, Copy, Trash2, Users,
-  CircleCheck, AlertTriangle, CircleAlert, Receipt, Send,
+  CircleCheck, AlertTriangle, CircleAlert, Receipt, Send, Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,7 +24,8 @@ import { type Store } from "@/lib/types";
 import { BILLING, SEGMENT_META, type BillingState } from "@tokophi/lib/billing";
 import { type StoreHealth, type CheckStatus, checkToneClass } from "@/lib/health-types";
 import { SegmentBadge, StatusBadge, HealthBadge, InvoiceBadge, ActivityIcon, initials } from "@/components/bits";
-import type { StoreInvoiceRow, StoreUserRow, StoreBalance, StoreMovement, StorePayout, StoreMoneySignals } from "@/lib/data";
+import type { StoreInvoiceRow, StoreUserRow, StoreBalance, StoreMovement, StorePayout, StoreMoneySignals, StoreCoverage } from "@/lib/data";
+import { courierName } from "@tokophi/lib/couriers";
 import type { PActivity } from "@/lib/types";
 import { SaldoSection } from "./saldo-section";
 import {
@@ -42,7 +43,7 @@ function CheckIcon({ status }: { status: CheckStatus }) {
   return <Icon className={cn("size-4 shrink-0", checkToneClass[status])} />;
 }
 
-export function StoreDetail({ store, health, billing, invoices, users, activity, comp, balance, movements, payouts, signals }: {
+export function StoreDetail({ store, health, billing, invoices, users, activity, comp, balance, movements, payouts, signals, coverage }: {
   store: Store; health: StoreHealth | null; billing: BillingState | null;
   invoices: StoreInvoiceRow[]; users: StoreUserRow[]; activity: PActivity[];
   comp: { comped: boolean; reason: string | null };
@@ -50,6 +51,7 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
   movements: { rows: StoreMovement[]; total: number; page: number; pages: number };
   payouts: StorePayout[];
   signals: StoreMoneySignals;
+  coverage: StoreCoverage;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -339,6 +341,36 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
               <div className="flex items-center gap-2"><MapPin className="size-4 text-muted-foreground" /><span>{store.city}</span></div>
               <Separator />
               <Button variant="outline" size="sm" className="w-full justify-start gap-2" disabled={pending} onClick={resetOwner}><KeyRound className="size-4" /> Reset password owner</Button>
+            </CardContent>
+          </Card>
+
+          {/* Jangkauan kurir — "aktif" bukan berarti "muncul di checkout".
+              Kurir yang tidak MENJEMPUT dari gudang toko ini tidak akan pernah muncul, seberapa pun
+              hijaunya sakelar di Pengaturan. J&T, terukur, tidak menjemput dari Gubeng (Surabaya).
+              Satu rute referensi per origin, di-cache sehari (kaCoverage). */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Truck className="size-4 text-muted-foreground" /> Jangkauan kurir</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p className="text-xs text-muted-foreground">
+                Gudang: {coverage.originName ?? (coverage.originId ? `Kecamatan #${coverage.originId}` : "belum diatur")}
+              </p>
+              {!coverage.ok ? (
+                <p className="text-xs text-muted-foreground">{coverage.message}</p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-1.5">
+                    {coverage.covered.map((c) => (
+                      <Badge key={c} variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">{courierName(c)}</Badge>
+                    ))}
+                    {coverage.missing.map((c) => (
+                      <Badge key={c} variant="secondary" className="border-transparent bg-destructive/10 text-destructive line-through">{courierName(c)}</Badge>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{coverage.message}</p>
+                </>
+              )}
             </CardContent>
           </Card>
 
