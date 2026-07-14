@@ -1,11 +1,15 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { enabledPaymentChannels, mediaUrl, storeCodPolicy } from "../data/catalog";
+import { db, schema } from "@tokophi/db";
+import { and, eq } from "drizzle-orm";
+import { verifyRecoveryToken } from "../lib/recovery";
 
 // ADR 0009 §4 — checkout is LOCKED (not part of the Store Builder); its only per-store variance is
 // branding read from the store profile: the logo (stores.logo_url) + the brand colour (already
 // injected as CSS vars by Layout.astro). Store itself is resolved per-request from the Host header.
 const store = Astro.locals.store;
+const catalog = Astro.locals.catalog;
 const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null; // null → wordmark fallback
 
 // Platform shipping proxy (admin) + this store's origin city.
@@ -55,6 +59,64 @@ const COD = await storeCodPolicy(store.id);
 const COD_ENABLED = COD.enabled;
 const COD_MAX = COD.maxAmountIdr; // 0 = no cap
 const COD_PROVINCES = COD.allowedProvinces; // [] = every province
+
+// ── Recovery link (?r=<signed token>) ────────────────────────────────────────────────────────────
+// The merchant's WhatsApp "kamu meninggalkan keranjang" message links here. The token is an HS256
+// JWT bound to (session id, store id) with a 7-day life (src/lib/recovery.ts) — NOT a raw session
+// id, which would hand anyone who sees the URL a stranger's name, phone and address.
+//
+// A valid token restores: the basket (from the snapshot in checkout_sessions.items — the price the
+// shopper actually saw, not today's price) and everything they had typed. The session id is handed
+// to the client too, so the shopper's continued edits keep updating the SAME row — and so the order,
+// when it finally happens, can flip THAT row to `pulih`. Without that, the rescue would be invisible.
+//
+// A bad/expired/other-tenant token is simply ignored → the ordinary empty checkout, never an error.
+const rToken = Astro.url.searchParams.get("r");
+type RecoverItem = { handle: string | null; name: string | null; variant: string | null; qty: number; price: number };
+let RECOVER: {
+  sessionId: string;
+  items: { handle: string; name: string; variant: string; qty: number; price: number; image: string }[];
+  name: string; phone: string; email: string; address: string;
+  city: string; province: string; postcode: string; destId: number | null;
+} | null = null;
+
+if (rToken) {
+  const sid = await verifyRecoveryToken(rToken, store.id);
+  if (sid) {
+    const [row] = await db
+      .select()
+      .from(schema.checkoutSessions)
+      .where(and(eq(schema.checkoutSessions.storeId, store.id), eq(schema.checkoutSessions.sessionId, sid)))
+      .limit(1);
+    // `pulih` = already bought. Re-hydrating that cart would push the shopper to buy it twice.
+    if (row && row.status !== "pulih") {
+      const snap = (Array.isArray(row.items) ? row.items : []) as RecoverItem[];
+      RECOVER = {
+        sessionId: sid,
+        // The image is NOT in the snapshot (that stays the documented {handle,name,variant,qty,price}
+        // shape) — it is re-resolved from the live catalog, so a re-shot photo shows up correctly.
+        items: snap
+          .filter((i) => i?.name && i.qty > 0)
+          .map((i) => ({
+            handle: i.handle ?? "",
+            name: i.name ?? "",
+            variant: i.variant ?? "",
+            qty: i.qty,
+            price: i.price,
+            image: (i.handle && catalog.findProduct(i.handle)?.image) || "",
+          })),
+        name: row.name ?? "",
+        phone: row.phone ?? "",
+        email: row.email ?? "",
+        address: row.address ?? "",
+        city: row.city ?? "",
+        province: row.province ?? "",
+        postcode: row.postcode ?? "",
+        destId: row.districtId ?? null,
+      };
+    }
+  }
+}
 ---
 
 <Layout title="Checkout" description={`Selesaikan pesananmu di ${store.name}.`}>
@@ -92,6 +154,15 @@ const COD_PROVINCES = COD.allowedProvinces; // [] = every province
     </div>
 
     <h1 class="mt-5 font-display text-3xl font-semibold text-ink">Checkout</h1>
+
+    {
+      RECOVER && (
+        <p class="mt-4 rounded-xl border border-brand-600/30 bg-brand-50 px-4 py-3 text-sm text-ink">
+          👋 Selamat datang kembali{RECOVER.name ? `, ${RECOVER.name.split(" ")[0]}` : ""}! Keranjang dan datamu sudah
+          kami simpan — tinggal lanjut bayar.
+        </p>
+      )
+    }
 
     <div id="checkout-empty" class="mt-10 hidden rounded-2xl border border-dashed border-line bg-white py-20 text-center">
       <p class="text-4xl">🛒</p>
@@ -288,7 +359,7 @@ const COD_PROVINCES = COD.allowedProvinces; // [] = every province
   }
 </style>
 
-<script is:inline define:vars={{ ONGKIR_API, ORDER_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES }}>
+<script is:inline define:vars={{ ONGKIR_API, ORDER_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, RECOVER }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -310,6 +381,45 @@ const COD_PROVINCES = COD.allowedProvinces; // [] = every province
       });
     }
 
+    // ---- The funnel session id (Analytics.astro, sessionStorage "tphi:sid") ----
+    // The SAME id, deliberately: the cart must join to its own journey. A recovery link arrives in a
+    // BRAND-NEW browser session (they clicked from WhatsApp, hours later), so it overwrites the id
+    // with the recovered one — otherwise the rescued shopper would open a second, orphan row and the
+    // original abandoned one would never flip to `pulih`.
+    var SID_KEY = "tphi:sid";
+    function sid() {
+      try {
+        var v = sessionStorage.getItem(SID_KEY);
+        if (v) return v;
+        v = crypto && crypto.randomUUID ? crypto.randomUUID() : "s-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+        sessionStorage.setItem(SID_KEY, v);
+        return v;
+      } catch (e) {
+        return "";
+      }
+    }
+    if (RECOVER && RECOVER.sessionId) {
+      try { sessionStorage.setItem(SID_KEY, RECOVER.sessionId); } catch (e) {}
+      // Restore the basket from the server-side snapshot BEFORE it is read below (the price the
+      // shopper saw, not today's).
+      if (RECOVER.items && RECOVER.items.length) {
+        try {
+          localStorage.setItem(
+            "cart",
+            JSON.stringify(RECOVER.items.map(function (i) {
+              return { handle: i.handle, name: i.name, price: i.price, image: i.image, variant: i.variant, size: i.variant, qty: i.qty };
+            })),
+          );
+          // The header badge already read localStorage (it was empty — this is a fresh browser).
+          // DOMContentLoaded, because Header.astro's listener is registered by a deferred module.
+          document.addEventListener("DOMContentLoaded", function () {
+            window.dispatchEvent(new Event("cart:updated"));
+          });
+        } catch (e) {}
+      }
+    }
+    var SESSION_ID = sid();
+
     var cart = readCart();
     var form = document.getElementById("checkout-form");
     var empty = document.getElementById("checkout-empty");
@@ -318,6 +428,15 @@ const COD_PROVINCES = COD.allowedProvinces; // [] = every province
       if (form) form.classList.add("hidden");
       if (empty) empty.classList.remove("hidden");
       return;
+    }
+
+    // ---- Restore what they had already typed ----
+    if (RECOVER) {
+      var pre = { email: RECOVER.email, nama: RECOVER.name, whatsapp: RECOVER.phone, alamat: RECOVER.address, kota: RECOVER.city, provinsi: RECOVER.province, kodepos: RECOVER.postcode };
+      Object.keys(pre).forEach(function (k) {
+        var el = form.querySelector('[name="' + k + '"]');
+        if (el && pre[k]) el.value = pre[k];
+      });
     }
 
     var subtotal = 0;
@@ -534,6 +653,101 @@ const COD_PROVINCES = COD.allowedProvinces; // [] = every province
       });
     }
 
+    // ---- Recovered destination → re-quote ongkir straight away ----
+    // The district id is restored (it is what the ongkir/COD checks are actually booked against), but
+    // the RATE is not: prices move. Re-fetching is the honest option.
+    if (RECOVER && RECOVER.destId) {
+      destId.value = String(RECOVER.destId);
+      if (destSearch && !destSearch.value) destSearch.value = RECOVER.city || "";
+      loadRates();
+    }
+
+    // ═══ PROGRESSIVE CAPTURE (checkout_sessions) ══════════════════════════════════════════════
+    // There is no "abandon" event to hook — abandonment is the ABSENCE of an order. So the row is
+    // written AS THEY TYPE and judged later by what never happened to it. Debounced (~1.2s of quiet,
+    // NOT per keystroke), plus an immediate flush on blur / radio change / leaving the page.
+    //
+    // Everything below is fire-and-forget and wrapped: a capture failure must never break a checkout.
+    var CAPTURE_API = "/api/checkout-session"; // same-origin → the store comes from the Host header
+    var STEPS = ["keranjang", "kontak", "alamat", "pengiriman", "pembayaran"];
+    var furthest = 0; // monotonic: the furthest step REACHED, never the current one
+    var paymentTouched = !!(RECOVER && RECOVER.destId); // a returning shopper is already deep in
+    var settled = false; // set once the order exists → stop writing to a row that is now `pulih`
+
+    function currentStep() {
+      var v = function (n) { var el = form.querySelector('[name="' + n + '"]'); return el ? el.value.trim() : ""; };
+      var i = 0;
+      if (v("email") || v("nama") || v("whatsapp")) i = 1; // kontak
+      if (v("alamat") && v("kota") && v("provinsi")) i = 2; // alamat
+      if (form.querySelector('input[name="shipping"]:checked')) i = 3; // pengiriman
+      if (paymentTouched) i = 4; // pembayaran
+      if (i > furthest) furthest = i;
+      return STEPS[furthest];
+    }
+
+    function capturePayload() {
+      var v = function (n) { var el = form.querySelector('[name="' + n + '"]'); return el ? el.value.trim() : ""; };
+      return {
+        sessionId: SESSION_ID, // NO store id — the server takes that from the Host header
+        name: v("nama"),
+        phone: v("whatsapp"), // the WhatsApp number: in Indonesia this IS the recovery channel
+        email: v("email"),
+        address: v("alamat"),
+        city: v("kota"),
+        province: v("provinsi"),
+        postcode: v("kodepos"),
+        districtId: destId && destId.value ? Number(destId.value) : null,
+        items: cart.map(function (i) {
+          return { handle: i.handle, name: i.name, variant: i.variant || i.size || "", qty: i.qty, price: i.price };
+        }),
+        subtotal: subtotal,
+        shipping: selectedShipping(),
+        step: currentStep(),
+      };
+    }
+
+    var lastSent = "";
+    function capture(force) {
+      if (settled || !SESSION_ID) return;
+      try {
+        var payload = capturePayload();
+        var body = JSON.stringify(payload);
+        if (!force && body === lastSent) return; // nothing actually changed
+        lastSent = body;
+        if (force && navigator.sendBeacon) {
+          // survives the unload that "Bayar Sekarang" / closing the tab causes
+          if (navigator.sendBeacon(CAPTURE_API, new Blob([body], { type: "application/json" }))) return;
+        }
+        fetch(CAPTURE_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: body, keepalive: true }).catch(function () {});
+      } catch (e) {}
+    }
+
+    var captureTimer;
+    function captureSoon() {
+      clearTimeout(captureTimer);
+      captureTimer = setTimeout(function () { capture(false); }, 1200); // ~1.2s of quiet, not per keystroke
+    }
+    function captureNow() {
+      clearTimeout(captureTimer);
+      capture(false);
+    }
+
+    form.addEventListener("input", captureSoon);
+    form.addEventListener("change", function (e) {
+      var t = e.target;
+      if (t && t.name === "payment") paymentTouched = true;
+      captureNow(); // a radio/step change is a decision, not a keystroke → flush immediately
+    });
+    form.addEventListener("blur", captureNow, true); // leaving a field = they finished typing it
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") capture(true); // tab hidden = maybe gone for good
+    });
+    window.addEventListener("pagehide", function () { capture(true); });
+
+    // The cart itself is already worth a row (an anonymous cart is still a cart), so write one on
+    // arrival — a shopper who opens checkout and vanishes without typing anything still counts.
+    capture(false);
+
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       var err = document.getElementById("form-error");
@@ -589,11 +803,21 @@ const COD_PROVINCES = COD.allowedProvinces; // [] = every province
 
       var btn = form.querySelector('button[type="submit"]');
       if (btn) { btn.disabled = true; btn.textContent = "Memproses pesanan…"; }
+
+      // Last capture BEFORE the order: the row must exist (with everything typed, at step
+      // "pembayaran") for the order API to find and flip to `pulih`. If the payment then fails, this
+      // is exactly the session worth chasing — a shopper who got all the way to the pay button.
+      paymentTouched = true;
+      captureNow();
+
       fetch(ORDER_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storeSlug: STORE_SLUG,
+          // The checkout session this order came from → /api/public/order marks it `pulih` with
+          // recovered_order_id. "Recovered" = THIS session became THAT order; anything else is a guess.
+          sessionId: SESSION_ID,
           items: cart.map(function (i) { return { handle: i.handle, name: i.name, price: i.price, variant: i.variant || i.size || "", qty: i.qty }; }),
           customer: { name: order.shippingAddress.nama, phone: order.shippingAddress.whatsapp, email: order.contact.email },
           address: { alamat: order.shippingAddress.alamat, kota: order.shippingAddress.kota, provinsi: order.shippingAddress.provinsi, kodepos: order.shippingAddress.kodepos },
@@ -625,6 +849,7 @@ const COD_PROVINCES = COD.allowedProvinces; // [] = every province
         .then(function (r) { return r.json(); })
         .then(function (res) {
           if (!res.ok) { fail(res.error || "Gagal memproses pesanan."); return; }
+          settled = true; // the session is now `pulih` — the pagehide beacon must not touch it again
           order.number = res.orderNumber;
           if (res.payment) order.payment.instruction = res.payment;
           finish();

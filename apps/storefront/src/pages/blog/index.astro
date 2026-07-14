@@ -3,6 +3,7 @@
 // real articles, written in the admin's Blog editor, had no way to reach a shopper at all. Now it
 // reads the DB (published only) and links to /blog/<handle>.
 import Layout from "../../layouts/Layout.astro";
+import RevealGrid from "../../components/RevealGrid.astro";
 import { getArticles, formatDate } from "../../data/content";
 
 const { store } = Astro.locals;
@@ -35,7 +36,8 @@ const articles = await getArticles(store.id);
           Belum ada tulisan yang terbit. Nantikan cerita pertama kami.
         </p>
       ) : (
-        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <RevealGrid rows={3} unit="tulisan">
+        <div data-reveal-grid class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {articles.map((a) => (
             <a
               href={`/blog/${a.handle}`}
@@ -76,6 +78,7 @@ const articles = await getArticles(store.id);
             </a>
           ))}
         </div>
+        </RevealGrid>
       )
     }
   </section>

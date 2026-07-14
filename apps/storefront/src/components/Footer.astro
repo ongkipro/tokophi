@@ -41,7 +41,7 @@ const waHref = `https://wa.me/${store.whatsapp}`;
     </div>
   </div>
 
-  <div class="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 md:grid-cols-3">
+  <div class="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 md:grid-cols-2 lg:grid-cols-4">
     <div class="md:col-span-1">
       <p class="font-display text-2xl font-semibold text-cream">{store.name}</p>
       <p class="mt-3 max-w-xs text-sm leading-relaxed text-cream/60">{store.tagline}</p>
@@ -91,6 +91,27 @@ const waHref = `https://wa.me/${store.whatsapp}`;
           </a>
         </li>
         <li class="pt-1 text-cream/50">📍 {store.city}, Indonesia</li>
+      </ul>
+    </div>
+
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-widest text-cream/50">Informasi</p>
+      <ul class="mt-5 space-y-3 text-sm text-cream/75">
+        <li>
+          <a href="/blog" class="rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">Jurnal</a>
+        </li>
+        {
+          PAGES.map((p) => (
+            <li>
+              <a
+                href={`/halaman/${p.handle}`}
+                class="rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              >
+                {p.title}
+              </a>
+            </li>
+          ))
+        }
       </ul>
     </div>
   </div>

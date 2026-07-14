@@ -331,6 +331,15 @@ export const stockTransfers = pgTable("stock_transfers", {
 });
 
 // ---------- orders & fulfillment ----------
+// A shopper. NOT a login — buying never requires an account, and it must not: forcing a
+// registration wall in front of an Indonesian checkout is the single most reliable way to lose the
+// sale. A customer row is created the moment someone buys, account or not.
+//
+//   registeredAt = NULL  → GUEST (bought without an account; identified by phone/email)
+//   registeredAt set     → has an account (can see their orders, save addresses)
+//
+// The identity that actually matters here is the PHONE. Indonesian shoppers give a WhatsApp number
+// far more reliably than an email, and WhatsApp is the channel every follow-up actually travels on.
 export const customers = pgTable("customers", {
   id: pk(),
   storeId: uuid().notNull().references(() => stores.id),
@@ -344,7 +353,71 @@ export const customers = pgTable("customers", {
   segment: customerSegment().notNull().default("baru"),
   tags: jsonb(), // string[] labels (CRM)
   notes: text(), // internal note
+  // Account, or not (0044). NULL = guest. `passwordHash` is scrypt `salt:hash`, same as `users`.
+  registeredAt: ts(),
+  passwordHash: text(),
+  lastOrderAt: ts(),
   createdAt: createdAt(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Abandoned checkout (0044).
+//
+// Indonesia abandons ~82-83% of carts — well above the ~70% global figure. We were recording NONE
+// of them: no cart table existed at all. So the single biggest pool of nearly-made sales was
+// invisible — and the CRM was already showing "keranjang ditinggal" follow-ups with NO CART BEHIND
+// THEM, telling merchants to chase a basket that never existed.
+//
+// The row is written PROGRESSIVELY as the shopper fills the checkout in, not at some final "abandon"
+// event — there is no such event. Abandonment is the ABSENCE of one: a session that stops updating
+// and never becomes an order IS the abandonment.
+//
+// Recovery in Indonesia travels on WhatsApp, not email. That is why `phone` is the field that
+// matters most here, and why a session carrying a phone but no order is worth more than a hundred
+// anonymous carts. `wa_templates` already holds a `keranjang` template — it finally has something
+// real to point at.
+// ─────────────────────────────────────────────────────────────────────────────
+export const checkoutStatus = pgEnum("checkout_status", ["aktif", "ditinggal", "pulih", "kedaluwarsa"]);
+export const checkoutStep = pgEnum("checkout_step", ["keranjang", "kontak", "alamat", "pengiriman", "pembayaran"]);
+
+export const checkoutSessions = pgTable("checkout_sessions", {
+  id: pk(),
+  storeId: uuid().notNull().references(() => stores.id),
+  // The storefront session id the funnel events already use, so a cart joins to its own journey.
+  sessionId: text().notNull(),
+  customerId: uuid().references(() => customers.id),
+
+  // Whatever had been typed before they left. Partial ON PURPOSE: a name and a phone with no address
+  // is still a recoverable sale — arguably the most recoverable kind there is.
+  name: text(),
+  phone: text(),
+  email: text(),
+  address: text(),
+  city: text(),
+  province: text(),
+  postcode: text(),
+  districtId: integer(),
+
+  // Snapshot, so a later price change cannot rewrite what the shopper actually saw.
+  items: jsonb(), // [{handle,name,variant,qty,price}]
+  subtotalIdr: money().notNull().default(0),
+  shippingIdr: money().notNull().default(0),
+
+  step: checkoutStep().notNull().default("keranjang"),
+  status: checkoutStatus().notNull().default("aktif"),
+  // Stamped when the session goes quiet and is judged abandoned (0045). WITHOUT this, a cart that
+  // converted straight through and one that was genuinely RESCUED are indistinguishable after the
+  // fact — both end up `pulih`, and a "recovery rate" built on that counts every ordinary sale as a
+  // save. That is a number that looks real and lies.
+  //   rescued  = abandoned_at IS NOT NULL AND recovered_at IS NOT NULL
+  //   straight = abandoned_at IS NULL     AND recovered_at IS NOT NULL
+  abandonedAt: ts(),
+  // Set when this session BECAME an order. That is what "recovered" means — anything else is a guess.
+  recoveredOrderId: uuid(),
+  recoveredAt: ts(),
+
+  createdAt: createdAt(),
+  updatedAt: ts(),
 });
 
 export const orders = pgTable("orders", {

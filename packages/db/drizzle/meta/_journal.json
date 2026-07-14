@@ -309,6 +309,20 @@
       "when": 1783998940518,
       "tag": "0043_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1784001316056,
+      "tag": "0044_customers_and_abandoned_checkout",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1784002095373,
+      "tag": "0045_checkout_abandoned_at",
+      "breakpoints": true
     }
   ]
 }

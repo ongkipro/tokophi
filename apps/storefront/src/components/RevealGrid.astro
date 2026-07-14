@@ -1,0 +1,106 @@
+---
+// Progressive "Muat lebih banyak" for a grid: show N rows, reveal N more per click.
+//
+// The unit is ROWS, not items — and rows only exist at render time, because the grid's column count
+// changes with the breakpoint (products: 2 → 3 → 4). So the limit is computed from the grid's REAL
+// resolved `grid-template-columns`, not hardcoded per breakpoint, and it is recomputed on resize.
+// That also means it keeps working for any grid we pass it, without this component knowing the
+// page's Tailwind classes.
+//
+// PROGRESSIVE ENHANCEMENT: nothing is hidden server-side. With JS off (or before hydration) every
+// item is in the HTML and visible — the storefront is SEO-first and ad-landed, so a crawler must
+// still see the whole grid. Hiding is a client-side affordance, never a data boundary.
+//
+// Usage: wrap the grid, and mark the grid element with `data-reveal-grid`. Its DIRECT CHILDREN are
+// the items.
+type Props = {
+  /** Rows visible initially, and rows added per click. */
+  rows?: number;
+  /** Plural noun for the counter — "produk", "tulisan". */
+  unit?: string;
+};
+const { rows = 3, unit = "item" } = Astro.props;
+---
+
+<div data-reveal data-reveal-rows={rows} data-reveal-unit={unit}>
+  <slot />
+
+  <!-- `hidden` by default: if the grid fits in `rows` (or JS never runs) no control should appear. -->
+  <div class="mt-10 flex flex-col items-center gap-3" data-reveal-footer hidden>
+    <p class="text-sm text-muted" data-reveal-status aria-live="polite"></p>
+    <button
+      type="button"
+      data-reveal-more
+      class="rounded-full border border-line bg-white px-7 py-3 text-sm font-semibold text-ink shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-400 hover:text-brand-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+    >
+      Muat lebih banyak
+    </button>
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    document.querySelectorAll("[data-reveal]").forEach(function (root) {
+      var grid = root.querySelector("[data-reveal-grid]");
+      var footer = root.querySelector("[data-reveal-footer]");
+      var button = root.querySelector("[data-reveal-more]");
+      var status = root.querySelector("[data-reveal-status]");
+      if (!grid || !footer || !button || !status) return;
+
+      var step = Number(root.getAttribute("data-reveal-rows")) || 3;
+      var unit = root.getAttribute("data-reveal-unit") || "item";
+      var rowsShown = step;
+
+      // The live column count. Reading the RESOLVED grid-template-columns is what makes "3 rows"
+      // mean 6 items on a phone and 12 on a desktop without this component knowing either number.
+      function columns() {
+        var cols = getComputedStyle(grid).gridTemplateColumns;
+        if (!cols || cols === "none") return 1;
+        return cols.split(" ").filter(Boolean).length || 1;
+      }
+
+      function apply() {
+        var items = Array.prototype.slice.call(grid.children);
+        var limit = columns() * rowsShown;
+        items.forEach(function (item, i) {
+          item.hidden = i >= limit;
+        });
+        var visible = Math.min(limit, items.length);
+        var done = visible >= items.length;
+        footer.hidden = done && rowsShown === step; // nothing was ever hidden → no control at all
+        button.hidden = done;
+        status.textContent = done
+          ? "Menampilkan semua " + items.length + " " + unit
+          : "Menampilkan " + visible + " dari " + items.length + " " + unit;
+      }
+
+      button.addEventListener("click", function () {
+        var before = columns() * rowsShown;
+        rowsShown += step;
+        apply();
+        // Move focus to the first newly revealed item so a keyboard/screen-reader user isn't
+        // stranded on a button that just moved down the page.
+        var next = grid.children[before];
+        if (next) {
+          next.setAttribute("tabindex", "-1");
+          next.focus({ preventScroll: true });
+        }
+      });
+
+      // The column count changes with the viewport, so the item limit has to follow it.
+      var t;
+      window.addEventListener("resize", function () {
+        clearTimeout(t);
+        t = setTimeout(apply, 120);
+      });
+
+      // The category page's "Urutkan" control re-appends the grid's children to reorder them. That
+      // rewrites which items sit past the limit, so the reveal has to run again — observing the grid
+      // keeps the two features decoupled (the sort script doesn't know this exists).
+      // childList only: `apply()` toggles the `hidden` ATTRIBUTE, so it can't retrigger itself.
+      new MutationObserver(apply).observe(grid, { childList: true });
+
+      apply();
+    });
+  })();
+</script>

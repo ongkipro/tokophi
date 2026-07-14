@@ -29,6 +29,7 @@ export async function POST(req: Request) {
   if (limited) return limited;
   let body: {
     storeSlug?: string;
+    sessionId?: string; // the storefront checkout session this order came from (checkout_sessions)
     items?: Item[];
     customer?: { name?: string; phone?: string; email?: string };
     address?: { alamat?: string; kota?: string; provinsi?: string; kodepos?: string };
@@ -170,6 +171,34 @@ export async function POST(req: Request) {
       await db.update(schema.inventoryLevels)
         .set({ available: sql`GREATEST(${schema.inventoryLevels.available} - ${qty}, 0)` })
         .where(eq(schema.inventoryLevels.variantId, variantId));
+    }
+  }
+
+  // ── The checkout session BECAME this order (0044) ────────────────────────────────────────────
+  // That is the only honest definition of "recovered": not "we sent a WhatsApp and they bought
+  // something later", but THIS session turned into THAT order. So it is written here, at the one
+  // moment we actually know it — with the order id and the timestamp, so the merchant's recovery
+  // number is a join, not a vibe. The session id is the SAME one the funnel beacons carry
+  // (Analytics.astro), so the cart joins to its own journey.
+  //
+  // Scoped to (store_id, session_id) — the UNIQUE key — so this can only ever touch a session that
+  // belongs to the store the order was just created in. Non-fatal by design: a paid order must never
+  // fail because a marketing table did.
+  const checkoutSessionId = typeof body.sessionId === "string" ? body.sessionId.slice(0, 64) : "";
+  if (checkoutSessionId) {
+    try {
+      await db.update(schema.checkoutSessions).set({
+        status: "pulih",
+        recoveredOrderId: order.id,
+        recoveredAt: new Date(),
+        customerId, // the guest finally has a customer row — link it back
+        updatedAt: new Date(),
+      }).where(and(
+        eq(schema.checkoutSessions.storeId, store.id),
+        eq(schema.checkoutSessions.sessionId, checkoutSessionId),
+      ));
+    } catch (err) {
+      console.error("[order] checkout session recover failed", err);
     }
   }
 
