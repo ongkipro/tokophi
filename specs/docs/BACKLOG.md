@@ -125,7 +125,14 @@ unmeasurable**. Ordered.
 - [ ] **The seed has no `retur` orders, no `cod` payments, and no `payouts`.** The three most expensive
   code paths in the product have **no demo data** and cannot be exercised by clicking around.
 - [ ] **`KIRIMINAJA_ENV` defaults to `sandbox`** — an unset env in production silently books nothing.
-  Make production refuse to start instead.
+  Make production refuse to start instead. **This is now the last thing standing between the shop and
+  real tariffs:** ongkir is a genuine KiriminAja call, genuinely priced from the seller's pickup
+  address, and the storefront renders exactly what the server returns (verified 8/8) — but it all
+  talks to `tdev.kiriminaja.com`. Everything downstream of the price is real; the price is not.
+- [ ] **Pickup address is unvalidated against the courier.** `sender_kecamatan_id` is trusted as a
+  KiriminAja district id because the picker writes it — but nothing re-checks it, and a merchant with
+  a stale or hand-edited id would price every order from the wrong city with no error. Cheap fix:
+  verify the id resolves in `kiriminaja_areas` on save.
 - [ ] Cetak label PDF (still a toast stub) · tracking webhook · parcel weight is hardcoded `qty × 500 g`.
 
 ---

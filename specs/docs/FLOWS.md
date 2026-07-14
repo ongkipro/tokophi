@@ -30,6 +30,8 @@ sequenceDiagram
     ONG-->>SF: districts[] (each with destId)
 
     SF->>ONG: {op:"rates", storeSlug, destinationId, weight: qty*500}
+    ONG->>DB: origin = store_settings.sender_kecamatan_id (the seller's PICKUP address)
+    Note over ONG,DB: ⚠️ Fixed in a68f7af: origin used to be resolveArea(body.originCity),<br/>a CITY NAME posted by the shopper's browser — so the seller's real<br/>warehouse was ignored AND an untrusted client string set the price.<br/>sender_kecamatan_id IS a KiriminAja district id (same currency as<br/>destinationId): nothing to resolve, nothing to guess. No pickup<br/>address → fall back to the store's REGISTERED city and say so<br/>(originFrom:"store-city") — a fuzzy match is a guess, so show it.
     ONG->>DB: platform_couriers.enabled ∩ store_shipping_methods (per SERVICE)
     Note over ONG,DB: keyed "courier:service_type" — a service_type is only<br/>unique within its courier. NO rows = the merchant never<br/>opened the Jasa Kirim card → fall back to the courier-level<br/>list, never a checkout with zero shipping options
     ONG->>KA: kaShippingPrice(origin, destination, weight)
@@ -298,6 +300,8 @@ sequenceDiagram
     Note over AD,DB: the card says "Pilih layanan yang ditawarkan ke pembeli<br/>saat checkout" and each row states its COD status:<br/>green COD badge on SPX Standard + SPX Economy,<br/>"Tidak mendukung COD." on everything else
 
     S->>ONG: {op:"rates", storeSlug, destinationId, weight}
+    ONG->>DB: origin = store_settings.sender_kecamatan_id (seller's pickup address)
+    Note over ONG,DB: NOT body.originCity. Proven by moving the warehouse:<br/>Gubeng/Surabaya → Coblong/Bandung repriced SPX Standard<br/>Rp17.000 → Rp17.700 and SPX Economy Rp12.700 → Rp10.400,<br/>while an injected originCity:"Jakarta Pusat" was ignored.
     ONG->>DB: platformOn = platform_couriers WHERE enabled
     ONG->>DB: picked = store_shipping_methods WHERE enabled
     Note over ONG: effective = platformOn ∩ picked, keyed "courier:service_type"<br/>— platform is the HARD cap. ⚠️ Fixed in 35b88a4: this used to<br/>filter on store_settings.couriers (the COURIER list), so every<br/>SERVICE the seller switched off was still offered at checkout —<br/>14 rates for 11 picks. NO picked rows = fall back to the<br/>courier-level list rather than show zero options.
