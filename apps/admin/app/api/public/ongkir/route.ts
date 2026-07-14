@@ -6,6 +6,7 @@ import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, kelurahanForDistrict } from "@/lib/data/areas";
 import { rateLimited } from "@/lib/public-guard";
 import { getCodPolicy } from "@/lib/cod";
+import { weightForCart } from "@/lib/shipping-weight";
 
 // Public (no-auth) storefront-facing shipping endpoint. The storefront checkout calls this to
 // (a) search a destination area and (b) get live KiriminAja rates. Shipping is platform-managed
@@ -44,7 +45,7 @@ async function handle(req: Request) {
   if (!kiriminajaConfigured()) {
     return NextResponse.json({ ok: false, error: "Shipping belum dikonfigurasi." }, { status: 200, headers: CORS });
   }
-  let body: { op?: string; q?: string; originCity?: string; destinationId?: number; weight?: number; itemValue?: number; storeSlug?: string };
+  let body: { op?: string; q?: string; destinationId?: number; items?: { handle?: string; variant?: string; variantId?: string; qty?: number }[]; itemValue?: number; storeSlug?: string };
   try {
     body = await req.json();
   } catch {
@@ -151,10 +152,30 @@ async function handle(req: Request) {
       if (picked.length) services = new Set(picked.map((s) => `${s.courier}:${s.service}`));
     }
     const effective = (merchant ?? platformOn).filter((c) => platformOn.includes(c));
+
+    // ── WEIGHT = summed from the CART, in the database, never from the browser ────────────────────
+    // It used to be `Math.max(1000, body.weight)`, and the storefront posted `totalQty * 500` — a
+    // fabricated 500 g per item. A 3-piece apparel cart that really weighs 670 g was billed as
+    // 1.500 g: Rp27.400 instead of Rp13.700, i.e. the shopper was quoted 3x the true postage on
+    // every order, and nobody could see why the carts were abandoned.
+    // Weight is a PRICE INPUT. If the client states it, the client sets the price and the merchant
+    // eats the difference with the courier. Same lesson as the ongkir origin (now the seller's
+    // pickup district) and the COD province (now the KiriminAja district id): a claim from the
+    // client is not a fact. There is no `body.weight` to fall back to — that is deliberate.
+    if (!store) return NextResponse.json({ ok: false, error: "Toko tidak ditemukan." }, { headers: CORS });
+    const cart = (body.items ?? []).filter((i) => (i.qty ?? 0) > 0);
+    if (!cart.length) {
+      return NextResponse.json(
+        { ok: false, error: "Keranjang kosong — ongkir tidak bisa dihitung." },
+        { headers: CORS },
+      );
+    }
+    const pkg = await weightForCart(db, store.id, cart);
+
     const r = await kaShippingPrice({
       origin,
       destination: body.destinationId,
-      weight: Math.max(1000, body.weight || 1000),
+      weight: pkg.billableGrams,
       itemValue: body.itemValue || 0,
       insurance: 0,
     });
@@ -187,7 +208,7 @@ async function handle(req: Request) {
     // price was built from — and so a missing pickup address is visible instead of silently priced
     // from a fuzzy city guess.
     return NextResponse.json(
-      { ok: true, rates, codEnabled: !!cod?.enabled, origin, originFrom, originName: settings?.kecamatanName || store?.city || null },
+      { ok: true, rates, weight: pkg.grams, billableWeight: pkg.billableGrams, weightFallback: pkg.missing, codEnabled: !!cod?.enabled, origin, originFrom, originName: settings?.kecamatanName || store?.city || null },
       { headers: CORS },
     );
   }
