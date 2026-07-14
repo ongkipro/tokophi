@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { signImpersonation } from "./session";
 import { requirePlatformAdmin } from "./platform-auth";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
+import { isInstantService } from "@tokophi/lib/couriers";
 import { alTestConnection, alProbeChannels, alCreatePayment } from "@tokophi/lib/autolaris";
 import { addMonths, quote, withPpn } from "@tokophi/lib/billing";
 
@@ -256,6 +257,11 @@ export async function syncCouriersFromKiriminaja(): Promise<{ ok: boolean; couri
   // group the flat service list by courier
   const byCourier = new Map<string, { type: string; name: string; group: string; cod: boolean; codAllowed: boolean }[]>();
   for (const s of r.services) {
+    // INSTANT COURIERS NEVER ENTER THE ROSTER (isInstantService — @tokophi/lib/couriers).
+    // Instant delivery is out of scope for launch; the product ships via expedition couriers only.
+    // KiriminAja's express endpoint does not return gosend/grab today, so this is a GUARD at the
+    // source: if it ever did, the row would never be written and no store could offer it.
+    if (isInstantService({ courier: s.courier, group: s.group })) continue;
     const old = (prev.get(s.courier)?.services as { type: string; codAllowed?: boolean }[] | null) ?? [];
     const keptDecision = old.find((o) => typeof o === "object" && o.type === s.serviceType)?.codAllowed;
     const list = byCourier.get(s.courier) ?? [];

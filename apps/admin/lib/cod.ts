@@ -1,5 +1,6 @@
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
+import { isInstantCourier } from "@tokophi/lib/couriers";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COD policy — the ONE place that answers "may this order be paid on delivery?".
@@ -104,6 +105,9 @@ export async function getCodPolicy(storeId: string): Promise<CodPolicy> {
   const allowedServices = new Set<string>();
   for (const row of couriers) {
     if (!row.enabled) continue;
+    // Instant couriers are out of scope (@tokophi/lib/couriers) — a stale row cannot grant COD on a
+    // service the product no longer ships with.
+    if (isInstantCourier(row.courier)) continue;
     const list = (row.services as StoredService[] | null) ?? [];
     for (const s of list) {
       // legacy rows stored plain strings ("REG") — no cod info, so no COD

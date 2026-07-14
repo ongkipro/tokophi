@@ -699,8 +699,7 @@ async function main() {
     senderAddress: "Jl. Raya Gubeng No. 42, Gubeng",
     senderKecamatanId: 6138,
     senderKecamatanName: "Gubeng, Surabaya, Jawa Timur",
-    senderLat: "-7.2650",
-    senderLng: "112.7520",
+    // no senderLat/senderLng — those columns are dead (instant/same-day delivery removed).
   });
   await db.insert(schema.storeStats).values({ storeId: store.id, gmvIdr: STORE.gmv, ordersCount: STORE.orders, productsCount: CATALOG.length, ship7dAvg: 15, updatedAt: TODAY });
 
@@ -720,10 +719,12 @@ async function main() {
       sizes: meta?.sizes ?? null,
       badge: meta?.badge ?? null,
       bestseller: meta?.bestseller ?? false,
-      // shipping dims (cm) — folded apparel; hijab/accessory flatter
-      lengthCm: 30,
-      widthCm: 25,
-      heightCm: c.category === "Busana Muslim" ? 3 : 5,
+      // Shipping dims (cm). 1×1×1 by product decision: volumetric weight (l×w×h÷6000) is then
+      // negligible, so the courier bills the ACTUAL weight — which is what apparel should be
+      // charged on. Set real dims here only if a merchant ships bulky-but-light goods.
+      lengthCm: 1,
+      widthCm: 1,
+      heightCm: 1,
       ratingValue: meta?.rating[0] ?? null,
       ratingCount: meta?.rating[1] ?? 0,
       hasVariants: true,
@@ -744,6 +745,10 @@ async function main() {
         const [nv] = await db.insert(schema.productVariants).values({
           productId: p.id, storeId: store.id, title: `${w} / ${u}`, position: vPos,
           option1: w, option2: u, priceIdr: c.price, compareAtIdr: meta?.compareAt ?? null,
+          // Real apparel weight, 150–300 g. It was NULL on every variant, and the checkout
+          // papered over that with `totalQty * 500` — a fabricated weight priced every parcel.
+          // Deterministic (mulberry32), never Math.random(): the seed must reproduce byte-for-byte.
+          weightGrams: 150 + Math.round(rndV() * 150),
         }).returning();
         if (vPos === 0) v = nv;
         await db.insert(schema.inventoryLevels).values({ variantId: nv.id, locationId: loc.id, available: Math.round(3 + rndV() * 40) });

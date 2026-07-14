@@ -254,6 +254,39 @@ unmeasurable**. Ordered.
 
 ---
 
+## 🔴 P1.9 — Shipping weight must come from the DB, not the browser (QUEUED — blocked on the GoSend/Grab removal touching the same files)
+> **The bug (found 2026-07-14 by the user: "Mampang, Jakarta Selatan → SPX Standard Rp40rb"):** `checkout.astro` prices every parcel with **`weight: totalQty * 500`** — a fabricated 500 g per item. The real column `product_variants.weight_grams` exists and the Seller's product editor has always had a required "Berat (gram)" field — it was simply **NULL on all 96 variants**, so nobody noticed the checkout never read it.
+>
+> Measured on the live API (Surabaya → Mampang Prapatan, SPX Standard): 3.000 g → **Rp41.100** (what the user saw) · 1.500 g → Rp27.400 · **675 g (3 items at their REAL ~225 g) → Rp13.700**. Shoppers were being quoted **3× the true postage** — a silent conversion killer for an apparel store, and nobody would ever know why the carts were abandoned.
+>
+> ✅ **Done already:** weights backfilled (96 variants, 150–300 g, stable per-id; prod + local), dims set to 1×1×1 (volumetric negligible → the courier bills the ACTUAL weight, correct for apparel), and `seed.ts` now seeds weight deterministically (mulberry32 — never `Math.random()`).
+>
+> ❌ **Still open — and this is the important half:** the checkout still sends the weight **from the browser**. Filling the data is not enough if the client is still the one doing the arithmetic. **Weight is a price input, so it must be computed server-side**, exactly like the ongkir ORIGIN (now read from the seller's pickup address, not a client-posted city) and the COD PROVINCE (now read from the KiriminAja district id, not the buyer's typed text). Same lesson, third time: **a claim from the client is not a fact.** A script posting `weight: 100` for a 5 kg parcel gets the cheap quote and the **merchant eats the difference with the courier**.
+
+- [ ] `/api/public/ongkir` `op=rates` accepts `items: [{variantId, qty}]` and **sums `product_variants.weight_grams` itself**; `body.weight` from the client is ignored entirely (delete it, don't merely distrust it).
+- [ ] Variants with a NULL weight → fall back to 500 g **and** surface a warning on the Seller's product list ("Berat belum diisi — ongkir bisa salah"). A silent fallback is the same lie in a smaller font.
+- [ ] Make weight genuinely required for new products (the field already defaults to 500 — that default is itself a guess worth showing).
+
+## 🔴 P1.8 — Healthcheck & watchdog (DESIGNED, NOT BUILT — user: "catat dulu, nanti eksekusi")
+> **Why this is here:** on 2026-07-14 production went down **three times** and every deploy failed **silently for an hour** — and *every single one* was found only because someone happened to look. Nothing told us. That is the gap: not the bugs, the **absence of a witness**.
+>
+> **The three failure shapes seen (design against these, not against a generic "is it up?"):**
+> 1. **Containers created but never started.** Coolify built `admin`/`super-admin`/`storefront`, left them in `created` (exit 0, no logs, disk fine), and moved on. The site 503'd; `landing` stayed up (it has no deps — that design held). Recovery was a plain `docker start`.
+> 2. **Deploy failing while the API answers "queued".** `npm ci` refused to run (lockfile out of sync — `playwright` in `package.json`, absent from the lock), so **every** build died at `RUN npm ci` for an hour. `POST /api/v1/deploy` kept returning `deployment queued`. Coolify's own `application_deployment_queues` table said `failed` the whole time — nobody was reading it.
+> 3. **A migration that never applied.** The journal referenced `0046_good_dust` whose `.sql` was never committed → `drizzle-kit migrate` died → the `kelurahan` table never existed → `/api/public/ongkir op=kelurahan` 500'd on every checkout. **And the 500 surfaced in the browser as a CORS error** (an uncaught throw returns Next's own 500, which carries no CORS headers), so the message pointed at the wrong layer for hours.
+>
+> **Design (3 layers — one is not enough, each catches what the others cannot):**
+> - **L1 — self-healing watchdog ON the box** (cron, 1 min): any of the 4 app containers in `created`/`exited` → `docker start` it. Fixes shape #1 with no human awake. **Needs no credentials — can be built today.**
+> - **L2 — external probe** (must NOT run on the box; a watchdog on a dead box is worthless): the 5 public hosts **plus one endpoint that actually touches Postgres** — a container can be `healthy` while the DB is gone, so a static page proving 200 proves nothing. Suggested: `POST /api/public/ongkir {op:"search"}` (hits `kiriminaja_areas`).
+> - **L3 — deploy-failure alarm** (shape #2): read Coolify's `application_deployment_queues` for `status='failed'`. Do not trust the deploy API's response.
+>
+> **Blocked on ONE decision from the user: where do alerts go?** Telegram (fastest to a phone; needs a @BotFather bot token + chat id in `~/.config/ai-local/secrets.env`), or email/SMTP. Until that exists, L1 can still ship (self-heal + `/var/log/tokophi-watchdog.log`) — it just heals in silence.
+
+- [ ] **L1 self-healing watchdog** (no credentials needed — do this first, it alone would have prevented all 3 outages today)
+- [ ] **L2 external probe** incl. a DB-touching endpoint, off-box
+- [ ] **L3 deploy-failure alarm** reading Coolify's queue table, not its API response
+- [ ] **Alert channel** — user decision (Telegram bot token / SMTP)
+
 ## P1.7 — Domain cutover (LIVE, residual items)
 
 - [x] DNS, Traefik wildcard router (`priority=1` — load-bearing), landing app, SEO hygiene, `www` 301.

@@ -1,5 +1,5 @@
 ---
-import { ShoppingCart, Package, Zap, Banknote } from "@lucide/astro";
+import { ShoppingCart, Banknote, MapPin } from "@lucide/astro";
 import PayIcon from "../components/PayIcon.astro";
 import Layout from "../layouts/Layout.astro";
 import { enabledPaymentChannels, mediaUrl, storeCodPolicy } from "../data/catalog";
@@ -201,6 +201,13 @@ if (rToken) {
               placeholder="nama@email.com"
               class="mt-1.5 w-full rounded-lg border border-line bg-cream px-3.5 py-2.5 text-sm text-ink outline-none transition-colors focus:border-brand-400 focus:bg-white"
             />
+            {/* Honest copy: there is NO mailer in this codebase, so the email cannot be promised as
+                the confirmation channel — it is kept for a future account / promo use, and the
+                confirmation the shopper actually gets is on WhatsApp. Do not re-add "kami kirim
+                struk ke email" here unless a mailer exists. */}
+            <span class="mt-1.5 block text-xs text-muted">
+              Untuk akun &amp; info promo nanti. <b class="font-medium text-ink">Konfirmasi pesanan dikirim lewat WhatsApp.</b>
+            </span>
           </label>
         </fieldset>
 
@@ -228,60 +235,58 @@ if (rToken) {
                  province is a CLAIM, not a fact — the backend already refuses to trust it and derives
                  the province from the district id when gating COD. Deriving the visible fields from
                  the same id means the form can no longer disagree with what ships. -->
-            <label class="block sm:col-span-2">
-              <span class="text-sm font-medium text-ink">
-                Kecamatan Tujuan <span class="text-red-500" aria-hidden="true">*</span> <span class="font-normal text-muted">(kota & provinsi terisi otomatis)</span>
-              </span>
-              <input type="text" id="dest-search" autocomplete="off" placeholder="Ketik kecamatan / kota, mis. Semarang" class="input-field" />
-              <input type="hidden" name="dest_id" id="dest-id" />
-              <input type="hidden" name="dest_text" id="dest-text" />
-              <div id="dest-results" class="mt-1 hidden max-h-48 overflow-y-auto rounded-xl border border-line bg-white shadow-sm"></div>
-            </label>
+            <div class="sm:col-span-2">
+              <label class="block">
+                <span class="text-sm font-medium text-ink">
+                  Kecamatan Tujuan <span class="text-red-500" aria-hidden="true">*</span>
+                </span>
+                <input type="text" id="dest-search" autocomplete="off" placeholder="Ketik kecamatan / kota, mis. Semarang" class="input-field" />
+                <input type="hidden" name="dest_id" id="dest-id" />
+                <input type="hidden" name="dest_text" id="dest-text" />
+                <div id="dest-results" class="mt-1 hidden max-h-48 overflow-y-auto rounded-xl border border-line bg-white shadow-sm"></div>
+              </label>
 
-            <!-- Readonly, not disabled: a disabled input is not submitted, and the order route still
-                 needs these. Readonly also means the pair can't drift from the district id. -->
-            <label class="block">
-              <span class="text-sm font-medium text-ink">Kota / Kabupaten</span>
-              <input
-                type="text"
-                name="kota"
-                readonly
-                autocomplete="address-level2"
-                placeholder="Pilih kecamatan dulu"
-                class="input-field cursor-not-allowed bg-brand-50/60 text-muted read-only:focus:ring-0"
-              />
-            </label>
-            <label class="block">
-              <span class="text-sm font-medium text-ink">Provinsi</span>
-              <input
-                type="text"
-                name="provinsi"
-                readonly
-                autocomplete="address-level1"
-                placeholder="Pilih kecamatan dulu"
-                class="input-field cursor-not-allowed bg-brand-50/60 text-muted read-only:focus:ring-0"
-              />
-            </label>
-            <!-- Kelurahan — the level a KODEPOS is actually assigned at. A kecamatan cannot give us
+              <!-- KOTA + PROVINSI ARE DERIVED, SO THEY ARE SHOWN, NOT ASKED.
+                   They used to be two readonly boxes the shopper could not fill in anyway — two more
+                   columns of chrome for values that are a pure function of the district id. They are
+                   still SUBMITTED (hidden inputs, same `name`s, same FormData / capture payload), but
+                   they are now displayed as a quiet derived line: "Kota Semarang · Jawa Tengah".
+                   The hidden inputs remain the single source the payload + the COD province gate read
+                   (codProvinceOk), so nothing downstream changed. -->
+              <input type="hidden" name="kota" id="kota" />
+              <input type="hidden" name="provinsi" id="provinsi" />
+              <p id="area-derived" hidden class="mt-1.5 flex items-center gap-1.5 text-xs text-muted">
+                <MapPin class="h-3.5 w-3.5 shrink-0 text-brand-600" stroke-width={1.75} aria-hidden="true" />
+                <span id="area-derived-text" class="min-w-0 truncate"></span>
+              </p>
+            </div>
+
+            <!-- Kelurahan + Kode Pos, ONE ROW: picking a kelurahan is what fills the kodepos, so the
+                 cause sits next to its effect instead of a screen apart. Stacks to one column below
+                 `sm` (the sub-grid is grid-cols-1 by default) — on a 320px phone they are never
+                 squeezed side by side.
+
+                 Kelurahan is the level a KODEPOS is actually assigned at. A kecamatan cannot give us
                  one: 17% of them span several kodepos, and those are the dense urban ones where the
                  orders are (Semarang Tengah alone has 11). Shown only once a kecamatan is chosen, and
-                 only for districts we have kelurahan for (~96% of KiriminAja's list); the rest fall
-                 back to typing the kodepos. See packages/db/scripts/build-kelurahan.mjs. -->
-            <label id="kel-wrap" hidden class="block sm:col-span-2">
-              <span class="text-sm font-medium text-ink">
-                Kelurahan / Desa <span class="font-normal text-muted">(opsional — mengisi kode pos otomatis)</span>
-              </span>
-              <select name="kelurahan" id="kel-select" class="input-field">
-                <option value="">Pilih kelurahan…</option>
-              </select>
-            </label>
+                 only for districts we have kelurahan for (~96% of KiriminAja's list); for the rest the
+                 kelurahan row stays hidden, Kode Pos widens to the full row and is TYPED — that path
+                 must never block the order. See packages/db/scripts/build-kelurahan.mjs. -->
+            <div class="grid gap-4 sm:col-span-2 sm:grid-cols-2">
+              <label id="kel-wrap" hidden class="block">
+                <span class="text-sm font-medium text-ink">
+                  Kelurahan / Desa <span class="font-normal text-muted">(opsional)</span>
+                </span>
+                <select name="kelurahan" id="kel-select" class="input-field">
+                  <option value="">Pilih kelurahan…</option>
+                </select>
+              </label>
 
-            <!-- Kode Pos: readonly once a kelurahan supplies it, editable when we have no kelurahan
-                 for that district. Required either way — a guessed postcode goes on a real parcel. -->
-            <label class="block sm:col-span-2">
-              <span class="text-sm font-medium text-ink">Kode Pos <span class="font-normal text-muted">(opsional)</span></span>
-              <input type="text" name="kodepos" id="kodepos" inputmode="numeric" autocomplete="postal-code" placeholder="mis. 50241" class="input-field" />
-            </label>
+              <label id="kodepos-wrap" class="block sm:col-span-2">
+                <span class="text-sm font-medium text-ink">Kode Pos <span class="font-normal text-muted">(opsional)</span></span>
+                <input type="text" name="kodepos" id="kodepos" inputmode="numeric" autocomplete="postal-code" placeholder="mis. 50241" class="input-field" />
+              </label>
+            </div>
           </div>
         </fieldset>
 
@@ -292,33 +297,12 @@ if (rToken) {
             Pilih <b>kecamatan tujuan</b> di atas untuk melihat ongkir real-time.
           </p>
 
-          <!-- Group: Ekspedisi (reguler / express) -->
+          <!-- Ekspedisi (reguler / express). Instant / same-day couriers (GoSend, Grab) were removed —
+               regular expedition couriers are the whole shipping story now, so this needs no group
+               header to distinguish it from anything. -->
           <div id="ship-express-group" class="hidden">
-            <div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              <span class="inline-flex items-center gap-1.5">
-                <Package class="h-3.5 w-3.5" stroke-width={1.75} aria-hidden="true" />
-                Ekspedisi
-              </span><span class="h-px flex-1 bg-line"></span>
-            </div>
             <div id="ship-express" class="space-y-2"></div>
           </div>
-
-          <!-- Group: Kirim Instan (same-day) -->
-          <div id="ship-instant-group" class="mt-4 hidden">
-            <div class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              <span class="inline-flex items-center gap-1.5">
-                <Zap class="h-3.5 w-3.5" stroke-width={1.75} aria-hidden="true" />
-                Kirim Instan (hari ini)
-              </span><span class="h-px flex-1 bg-line"></span>
-            </div>
-            <div id="ship-instant" class="space-y-2"></div>
-          </div>
-
-          <button type="button" id="instant-btn" class="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-brand-600 px-4 py-2 text-sm font-medium text-brand-600 transition-colors hover:bg-brand-50">
-            <Zap class="h-4 w-4" stroke-width={1.75} aria-hidden="true" />
-            Cek kirim instan (pakai lokasiku)
-          </button>
-          <p id="instant-note" class="mt-1 hidden text-xs text-muted"></p>
         </fieldset>
 
         <!-- Pembayaran -->
@@ -666,8 +650,6 @@ if (rToken) {
     var shipHint = document.getElementById("ship-hint");
     var expressGroup = document.getElementById("ship-express-group");
     var expressBox = document.getElementById("ship-express");
-    var instantGroup = document.getElementById("ship-instant-group");
-    var instantBox = document.getElementById("ship-instant");
 
     function api(payload) {
       return fetch(ONGKIR_API, {
@@ -823,40 +805,6 @@ if (rToken) {
         bindShipping();
       }).catch(function () {
         expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">Gagal memuat ongkir. Coba lagi.</p>';
-      });
-    }
-
-    // ---- Kirim Instan (same-day) — uses the shopper's geolocation ----
-    var instantBtn = document.getElementById("instant-btn");
-    var instantNote = document.getElementById("instant-note");
-    function showInstantNote(msg) { instantNote.textContent = msg; instantNote.classList.remove("hidden"); }
-    if (instantBtn) {
-      instantBtn.addEventListener("click", function () {
-        if (!navigator.geolocation) { showInstantNote("Browser tidak mendukung lokasi."); return; }
-        instantBtn.disabled = true; instantBtn.textContent = "Mengambil lokasi…";
-        instantNote.classList.add("hidden");
-        navigator.geolocation.getCurrentPosition(function (pos) {
-          window.__instantLat = pos.coords.latitude; window.__instantLng = pos.coords.longitude;
-          instantBtn.textContent = "Menghitung ongkir instan…";
-          api({ op: "instant", storeSlug: STORE_SLUG, destLat: pos.coords.latitude, destLng: pos.coords.longitude, weight: totalQty * 500, itemValue: subtotal }).then(function (res) {
-            instantBtn.disabled = false; instantBtn.textContent = "Perbarui kirim instan";
-            if (!res.ok || !res.instant || !res.instant.length) { showInstantNote(res.error || "Tidak ada layanan instan untuk lokasimu."); return; }
-            if (shipHint) shipHint.classList.add("hidden");
-            instantGroup.classList.remove("hidden");
-            instantBox.innerHTML = res.instant.map(function (s) {
-              return '<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-brand-600/40 bg-brand-50/30 px-4 py-3 transition-colors has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">' +
-                // instant (same-day courier) is dispatched immediately and is not part of the
-                // platform_couriers roster → no COD (data-cod="0"); the order API agrees.
-                '<input type="radio" name="shipping" value="instant-' + esc(s.code) + '-' + esc(s.serviceType) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="0" data-inst-service="' + esc(s.code) + '" data-inst-type="' + esc(s.serviceType) + '" data-inst-cost="' + s.shippingCosts + '" required class="h-4 w-4 accent-brand-600" />' +
-                '<span class="flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + '</span><span class="block text-xs text-muted">' + esc(s.etd) + (res.distanceKm ? " · " + res.distanceKm + " km" : "") + '</span></span>' +
-                '<span class="text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
-            }).join("");
-            bindShipping();
-          }).catch(function () { instantBtn.disabled = false; instantBtn.textContent = "Cek kirim instan (pakai lokasiku)"; showInstantNote("Gagal memuat ongkir instan."); });
-        }, function () {
-          instantBtn.disabled = false; instantBtn.textContent = "Cek kirim instan (pakai lokasiku)";
-          showInstantNote("Izin lokasi ditolak — kirim instan butuh lokasimu.");
-        });
       });
     }
 
@@ -1067,12 +1015,6 @@ if (rToken) {
             })(),
           },
           channelCode: payEl.value,
-          instant: (shipEl && shipEl.getAttribute("data-inst-service")) ? {
-            service: shipEl.getAttribute("data-inst-service"),
-            serviceType: shipEl.getAttribute("data-inst-type"),
-            shippingCosts: Number(shipEl.getAttribute("data-inst-cost")),
-            destLat: window.__instantLat, destLng: window.__instantLng,
-          } : undefined,
         }),
       })
         .then(function (r) { return r.json(); })

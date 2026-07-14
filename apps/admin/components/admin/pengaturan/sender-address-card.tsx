@@ -17,17 +17,6 @@ export function SenderAddressCard() {
   const [address, setAddress] = React.useState("");
   const [kecId, setKecId] = React.useState<number | null>(null);
   const [kecName, setKecName] = React.useState("");
-  const [lat, setLat] = React.useState("");
-  const [lng, setLng] = React.useState("");
-  const [locating, setLocating] = React.useState(false);
-  const useCurrentLocation = () => {
-    if (!navigator.geolocation) { toast.error("Browser tidak mendukung lokasi."); return; }
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => { setLat(pos.coords.latitude.toFixed(6)); setLng(pos.coords.longitude.toFixed(6)); setLocating(false); toast.success("Koordinat diisi dari lokasi."); },
-      () => { setLocating(false); toast.error("Izin lokasi ditolak."); },
-    );
-  };
   const [q, setQ] = React.useState("");
   const [results, setResults] = React.useState<{ id: number; text: string }[]>([]);
   const [searching, setSearching] = React.useState(false);
@@ -37,7 +26,7 @@ export function SenderAddressCard() {
     getSenderAddress().then((s) => {
       if (s) {
         setName(s.name); setPhone(s.phone); setAddress(s.address);
-        setKecId(s.kecamatanId); setKecName(s.kecamatanName); setLat(s.lat); setLng(s.lng);
+        setKecId(s.kecamatanId); setKecName(s.kecamatanName);
       }
       setLoaded(true);
     });
@@ -54,7 +43,7 @@ export function SenderAddressCard() {
   };
   const save = () =>
     startTransition(async () => {
-      const r = await saveSenderAddress({ name, phone, address, kecamatanId: kecId, kecamatanName: kecName, lat, lng });
+      const r = await saveSenderAddress({ name, phone, address, kecamatanId: kecId, kecamatanName: kecName });
       if (r.ok) toast.success("Alamat pengirim disimpan.");
       else toast.error(r.error ?? "Gagal menyimpan.");
     });
@@ -108,25 +97,6 @@ export function SenderAddressCard() {
               )}
             </>
           )}
-        </div>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <Label>Titik koordinat <span className="font-normal text-muted-foreground">(untuk kirim instan)</span></Label>
-            <Button type="button" variant="outline" size="sm" disabled={!loaded || locating} onClick={useCurrentLocation}>
-              <MapPin className="size-3.5" /> {locating ? "Mengambil…" : "Gunakan lokasi saat ini"}
-            </Button>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="s-lat" className="text-xs text-muted-foreground">Latitude</Label>
-              <Input id="s-lat" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="-7.79" disabled={!loaded} className="tabular-nums" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="s-lng" className="text-xs text-muted-foreground">Longitude</Label>
-              <Input id="s-lng" value={lng} onChange={(e) => setLng(e.target.value)} placeholder="110.36" disabled={!loaded} className="tabular-nums" />
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">Diambil dari lokasi perangkat di toko. Dipakai kurir <b>instan</b> (GoSend/Grab) untuk titik jemput.</p>
         </div>
         <div className="flex justify-end">
           <Button onClick={save} disabled={pending || !loaded || !kecId}>{pending ? "Menyimpan…" : "Simpan alamat"}</Button>

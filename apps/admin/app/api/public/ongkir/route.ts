@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
-import { kaShippingPrice, kaInstantPricing, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
+import { kaShippingPrice, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
+import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, kelurahanForDistrict } from "@/lib/data/areas";
 import { rateLimited } from "@/lib/public-guard";
 import { getCodPolicy } from "@/lib/cod";
@@ -43,7 +44,7 @@ async function handle(req: Request) {
   if (!kiriminajaConfigured()) {
     return NextResponse.json({ ok: false, error: "Shipping belum dikonfigurasi." }, { status: 200, headers: CORS });
   }
-  let body: { op?: string; q?: string; originCity?: string; destinationId?: number; weight?: number; itemValue?: number; storeSlug?: string; destLat?: number; destLng?: number };
+  let body: { op?: string; q?: string; originCity?: string; destinationId?: number; weight?: number; itemValue?: number; storeSlug?: string };
   try {
     body = await req.json();
   } catch {
@@ -69,19 +70,8 @@ async function handle(req: Request) {
     return NextResponse.json({ ok: true, kelurahan: await kelurahanForDistrict(id) }, { headers: CORS });
   }
 
-  // instant (same-day) pricing — needs shopper coordinates; origin = store sender lat/lng (or default)
-  if (body.op === "instant") {
-    if (!body.destLat || !body.destLng) return NextResponse.json({ ok: false, error: "Lokasi tujuan belum ada." }, { headers: CORS });
-    let originLat = -7.8014, originLng = 110.3644; // default: Yogyakarta (Batik Nusantara)
-    const [store] = await db.select({ id: schema.stores.id }).from(schema.stores).where(eq(schema.stores.slug, body.storeSlug || "batik-nusantara")).limit(1);
-    if (store) {
-      const [ss] = await db.select({ lat: schema.storeSettings.senderLat, lng: schema.storeSettings.senderLng }).from(schema.storeSettings).where(eq(schema.storeSettings.storeId, store.id)).limit(1);
-      if (ss?.lat && ss?.lng) { originLat = Number(ss.lat); originLng = Number(ss.lng); }
-    }
-    const r = await kaInstantPricing({ originLat, originLng, destLat: body.destLat, destLng: body.destLng, weight: Math.max(1000, body.weight || 1000), itemPrice: body.itemValue || 0 });
-    if (!r.ok) return NextResponse.json({ ok: false, error: r.error ?? "Gagal ambil tarif instan." }, { headers: CORS });
-    return NextResponse.json({ ok: true, instant: r.results, distanceKm: r.distanceKm }, { headers: CORS });
-  }
+  // NOTE: `op === "instant"` (GoSend/Grab same-day pricing) was REMOVED — the product ships via
+  // regular expedition couriers only. It was the only consumer of shopper/store coordinates.
 
   // rates
   if (body.op === "rates") {
@@ -91,7 +81,9 @@ async function handle(req: Request) {
     const platformRows = await db
       .select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled })
       .from(schema.platformCouriers);
-    const platformOn = platformRows.filter((p) => p.enabled).map((p) => p.courier);
+    // Instant / on-demand couriers are out of scope (@tokophi/lib/couriers): a stale `gosend` row in
+    // platform_couriers must not become a checkout option, so it is dropped from the enabled pool.
+    const platformOn = platformRows.filter((p) => p.enabled && !isInstantCourier(p.courier)).map((p) => p.courier);
     const [store] = await db
       .select({ id: schema.stores.id, city: schema.stores.city })
       .from(schema.stores)
@@ -171,14 +163,17 @@ async function handle(req: Request) {
     // (store_settings.cod_enabled) AND the platform's per-service allowance must both agree, or the
     // storefront would keep advertising COD on a store that turned it off (lib/cod.ts).
     const cod = store ? await getCodPolicy(store.id) : null;
-    let rates = r.results.map((x) => ({
-      name: x.service_name,
-      code: x.service,
-      type: x.service_type,
-      cost: Number(x.cost),
-      etd: x.etd,
-      cod: !!x.cod && !!cod?.allows(x.service, x.service_type),
-    }));
+    let rates = r.results
+      // Never quote an instant courier, whatever KiriminAja returns — the checkout cannot book one.
+      .filter((x) => !isInstantService({ courier: x.service, group: x.group }))
+      .map((x) => ({
+        name: x.service_name,
+        code: x.service,
+        type: x.service_type,
+        cost: Number(x.cost),
+        etd: x.etd,
+        cod: !!x.cod && !!cod?.allows(x.service, x.service_type),
+      }));
     // filter by effective couriers (platform is the hard cap; empty platform = show all as fallback)
     if (platformOn.length) rates = rates.filter((x) => effective.includes(x.code));
     // …then by the merchant's per-service selection, which is the finer of the two and the one the

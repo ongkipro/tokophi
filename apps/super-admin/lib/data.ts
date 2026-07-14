@@ -1,6 +1,6 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
-import { courierName, COURIER_CODES } from "@tokophi/lib/couriers";
+import { courierName, COURIER_CODES, isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { autolarisConfigured } from "@tokophi/lib/autolaris";
 import { asc, desc, eq, sql } from "drizzle-orm";
@@ -553,12 +553,17 @@ export async function getCouriers(): Promise<CourierRow[]> {
   const rows = await db.select().from(schema.platformCouriers);
   const order = COURIER_CODES;
   return rows
+    // Instant couriers are out of scope (see @tokophi/lib/couriers). A row left over from an older
+    // sync is not shown or toggleable here — and the next sync disables it, since it can no longer
+    // enter `byCourier`. Defence in depth: the sync guards the WRITE, this guards the READ.
+    .filter((c) => !isInstantCourier(c.courier))
     .map((c) => {
       const raw = Array.isArray(c.services) ? (c.services as unknown[]) : [];
       // Tolerate the legacy string[] shape: those rows predate the sync and carry no group/cod.
       // They render as a bare name and are replaced the next time the roster is pulled.
       const services: CourierService[] = raw
         .filter((s): s is CourierService => typeof s === "object" && s !== null && "type" in s)
+        .filter((s) => !isInstantService({ courier: c.courier, group: s.group }))
         .map((s) => ({ ...s, codAllowed: !!s.cod && s.codAllowed !== false }));
       return { key: c.courier, name: courierName(c.courier), on: c.enabled, services };
     })

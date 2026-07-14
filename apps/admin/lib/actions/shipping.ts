@@ -7,6 +7,7 @@ import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant } from "@/lib/tenant";
 import { getCodPolicy } from "@/lib/cod";
 import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
+import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea } from "@/lib/data/areas";
 
 export type Rate = { service: string; code: string; type: string; cost: number; etd: string; cod: boolean; group: string };
@@ -38,6 +39,9 @@ export async function getShippingRates(input: {
 
   const r = await kaShippingPrice({ origin, destination, weight: Math.max(1000, input.weightGrams || 0), itemValue: input.itemValue, insurance: 0 });
   if (!r.ok) return { ok: false, rates: [], error: r.error ?? "Gagal mengambil tarif dari KiriminAja." };
+  // Instant couriers are out of scope (@tokophi/lib/couriers) — they cannot be booked, so they are
+  // never quoted. KiriminAja's express endpoint does not return them today; this is the guard.
+  r.results = r.results.filter((x) => !isInstantService({ courier: x.service, group: x.group }));
   // Same EFFECTIVE COD flag the storefront sees (lib/cod.ts): the merchant's own switch + the
   // platform's per-service allowance. Booking a COD shipment on a service the platform disallowed
   // is exactly the return-cost trap cod_enabled exists to prevent — so it isn't offered here either.
@@ -58,11 +62,13 @@ export async function searchArea(q: string): Promise<{ id: number; text: string 
   return resolveArea(q.trim());
 }
 
+// No lat/lng — instant (same-day) couriers were removed and they were the only consumer of the
+// coordinates. `store_settings.sender_lat/sender_lng` still exist in the DB but are DEAD: neither
+// read nor written here. Don't wire them back.
 export type SenderAddress = {
   name: string; phone: string; address: string;
   kecamatanId: number | null; kecamatanName: string;
   kelurahanId: number | null; kelurahanName: string;
-  lat: string; lng: string;
 };
 
 export async function getSenderAddress(): Promise<SenderAddress | null> {
@@ -74,7 +80,6 @@ export async function getSenderAddress(): Promise<SenderAddress | null> {
       name: s.senderName ?? "", phone: s.senderPhone ?? "", address: s.senderAddress ?? "",
       kecamatanId: s.senderKecamatanId ?? null, kecamatanName: s.senderKecamatanName ?? "",
       kelurahanId: s.senderKelurahanId ?? null, kelurahanName: s.senderKelurahanName ?? "",
-      lat: s.senderLat ?? "", lng: s.senderLng ?? "",
     };
   });
 }
@@ -82,14 +87,13 @@ export async function getSenderAddress(): Promise<SenderAddress | null> {
 export async function saveSenderAddress(input: {
   name: string; phone: string; address: string;
   kecamatanId: number | null; kecamatanName: string;
-  kelurahanId?: number | null; kelurahanName?: string; lat?: string; lng?: string;
+  kelurahanId?: number | null; kelurahanName?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const { storeId } = await requireCapability("settings:write");
   const values = {
     senderName: input.name, senderPhone: input.phone, senderAddress: input.address,
     senderKecamatanId: input.kecamatanId, senderKecamatanName: input.kecamatanName,
     senderKelurahanId: input.kelurahanId ?? null, senderKelurahanName: input.kelurahanName ?? "",
-    senderLat: input.lat ?? "", senderLng: input.lng ?? "",
   };
   await withTenant(storeId, (db) =>
     db.insert(schema.storeSettings).values({ storeId, ...values }).onConflictDoUpdate({ target: schema.storeSettings.storeId, set: values }),
@@ -114,11 +118,14 @@ export async function getPlatformCouriers(): Promise<string[]> {
   const rows = await db
     .select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled })
     .from(schema.platformCouriers);
-  return rows.filter((r) => r.enabled).map((r) => r.courier);
+  // A stale instant row (gosend/grab) from an older roster sync must never reach the seller, even if
+  // it is still `enabled` in the DB — instant delivery is out of scope (@tokophi/lib/couriers).
+  return rows.filter((r) => r.enabled && !isInstantCourier(r.courier)).map((r) => r.courier);
 }
 
-export async function saveCouriers(couriers: string[]): Promise<{ ok: boolean; error?: string }> {
+export async function saveCouriers(input: string[]): Promise<{ ok: boolean; error?: string }> {
   const { storeId } = await requireCapability("settings:write");
+  const couriers = input.filter((c) => !isInstantCourier(c)); // instant is out of scope
   await withTenant(storeId, (db) =>
     db
       .insert(schema.storeSettings)
@@ -170,11 +177,15 @@ export async function getPlatformServices(): Promise<PlatformService[]> {
   const out: PlatformService[] = [];
   for (const r of rows) {
     if (!r.enabled) continue;
+    // Instant / on-demand couriers (GoSend, Grab…) are out of scope — the Jasa Kirim card must not
+    // offer them even if a stale row survived in platform_couriers (@tokophi/lib/couriers).
+    if (isInstantCourier(r.courier)) continue;
     const list = (r.services as StoredService[] | null) ?? [];
     for (const s of list) {
       // Legacy rows stored plain strings ("REG"). Skip them — they carry no group/cod and the
       // sync will replace them on the next run.
       if (typeof s !== "object" || !s.type) continue;
+      if (isInstantService({ courier: r.courier, group: s.group })) continue;
       out.push({
         courier: r.courier,
         type: s.type,
@@ -199,7 +210,9 @@ export async function getStoreServices(): Promise<{ courier: string; type: strin
         enabled: schema.storeShippingMethods.enabled,
       })
       .from(schema.storeShippingMethods);
-    return rows.filter((r) => r.enabled).map((r) => ({ courier: r.courier, type: r.service }));
+    return rows
+      .filter((r) => r.enabled && !isInstantCourier(r.courier)) // instant is out of scope — never offered
+      .map((r) => ({ courier: r.courier, type: r.service }));
   });
 }
 
@@ -207,12 +220,15 @@ export async function saveStoreServices(
   services: { courier: string; type: string }[],
 ): Promise<{ ok: boolean; error?: string }> {
   const { storeId } = await requireCapability("settings:write");
+  // The UI cannot show an instant courier, but the action is the boundary — a hand-posted payload
+  // must not persist one either (@tokophi/lib/couriers).
+  const clean = services.filter((s) => !isInstantCourier(s.courier));
   await withTenant(storeId, async (db) => {
     // full replace — the UI always sends the complete set
     await db.delete(schema.storeShippingMethods);
-    if (services.length) {
+    if (clean.length) {
       await db.insert(schema.storeShippingMethods).values(
-        services.map((s) => ({ storeId, courier: s.courier, service: s.type, enabled: true })),
+        clean.map((s) => ({ storeId, courier: s.courier, service: s.type, enabled: true })),
       );
     }
   });
@@ -281,6 +297,11 @@ export async function createShipment(input: {
 }): Promise<CreateShipmentResult> {
   const { storeId } = await requireCapability("orders:write");
   if (!kiriminajaConfigured()) return { ok: false, error: "KiriminAja belum dikonfigurasi oleh platform." };
+  // A shipment can only be booked with an expedition courier — the instant (rider) booking path was
+  // removed with the feature (@tokophi/lib/couriers). This is the boundary, not the UI.
+  if (isInstantCourier(input.service)) {
+    return { ok: false, error: "Kurir instan tidak didukung — gunakan layanan ekspedisi." };
+  }
 
   const data = await withTenant(storeId, async (db) => {
     const [s] = await db.select().from(schema.storeSettings).where(eq(schema.storeSettings.storeId, storeId)).limit(1);
@@ -372,7 +393,7 @@ export async function createShipment(input: {
   const r = await kaCreateOrder(
     {
       name: s.senderName || "Toko", phone: s.senderPhone || "081200000000", address: s.senderAddress || "-",
-      kecamatanId: s.senderKecamatanId, kelurahanId: s.senderKelurahanId, lat: s.senderLat, lng: s.senderLng,
+      kecamatanId: s.senderKecamatanId, kelurahanId: s.senderKelurahanId,
     },
     {
       orderRef: input.orderNumber.replace(/[^A-Za-z0-9]/g, ""),
@@ -390,11 +411,9 @@ export async function createShipment(input: {
     // KiriminAja's rejections are actionable — surface WHAT to fix, not just that it failed.
     const hint = e.includes("prefix")
       ? " (daftarkan prefix order_id di KiriminAja Dashboard, atau set KIRIMINAJA_ORDER_PREFIX)"
-      : e.includes("latitude") || e.includes("longitude")
-        ? " (kurir ini butuh titik koordinat pengirim — isi Latitude/Longitude di Pengaturan → Alamat)"
-        : e.includes("batas pemrosesan") || e.includes("penjadwalan")
-          ? " (kurir ini sudah melewati jam cut-off — coba layanan lain atau jadwalkan besok)"
-          : "";
+      : e.includes("batas pemrosesan") || e.includes("penjadwalan")
+        ? " (kurir ini sudah melewati jam cut-off — coba layanan lain atau jadwalkan besok)"
+        : "";
     return { ok: false, error: (r.error ?? "Gagal membuat pengiriman.") + hint };
   }
 

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { alCreatePayment, autolarisConfigured, AUTOLARIS_KNOWN_CHANNELS } from "@tokophi/lib/autolaris";
-import { kaCreateInstantOrder } from "@tokophi/lib/kiriminaja";
 import { provinceForDistrict } from "@/lib/data/areas";
 import { rateLimited } from "@/lib/public-guard";
 import { getCodPolicy } from "@/lib/cod";
@@ -36,7 +35,6 @@ export async function POST(req: Request) {
     shipping?: { label?: string; cost?: number; service?: string; serviceType?: string; destId?: number };
     destId?: number; // KiriminAja district id the ongkir quote was issued for (COD province check)
     channelCode?: string;
-    instant?: { service?: string; serviceType?: string; shippingCosts?: number; destLat?: number; destLng?: number };
   };
   try {
     body = await req.json();
@@ -70,8 +68,8 @@ export async function POST(req: Request) {
   //
   if (isCod) {
     const policy = await getCodPolicy(store.id);
-    const svc = body.instant?.service ? null : body.shipping?.service; // instant is not in the roster → never COD
-    const svcType = body.instant?.service ? null : body.shipping?.serviceType;
+    const svc = body.shipping?.service ?? null;
+    const svcType = body.shipping?.serviceType ?? null;
 
     // The province is taken from the KiriminAja DISTRICT the ongkir quote was issued for — never
     // from `address.provinsi`, which the buyer types by hand and a hostile client can simply lie
@@ -202,30 +200,9 @@ export async function POST(req: Request) {
     }
   }
 
-  // Instant (same-day) → dispatch a driver now from the store's coordinates → save the reference
-  const inst = body.instant;
-  if (inst?.service && inst.serviceType && inst.shippingCosts && inst.destLat && inst.destLng) {
-    const [ss] = await db.select({
-      name: schema.storeSettings.senderName, phone: schema.storeSettings.senderPhone,
-      address: schema.storeSettings.senderAddress, lat: schema.storeSettings.senderLat, lng: schema.storeSettings.senderLng,
-    }).from(schema.storeSettings).where(eq(schema.storeSettings.storeId, store.id)).limit(1);
-    const r = await kaCreateInstantOrder({
-      orderRef: order.number.replace(/[^A-Za-z0-9]/g, ""),
-      service: inst.service, serviceType: inst.serviceType, shippingCosts: inst.shippingCosts,
-      origin: {
-        name: ss?.name || "Toko", phone: ss?.phone || "081200000000",
-        lat: Number(ss?.lat) || -7.8014, long: Number(ss?.lng) || 110.3644, address: ss?.address || "Toko",
-      },
-      dest: {
-        name: cust.name || "Pelanggan", phone: cust.phone || "081200000000",
-        lat: inst.destLat, long: inst.destLng, address: addr.alamat || addr.kota || "Rumah",
-      },
-      item: { name: `Pesanan ${order.number}`, description: items.map((i) => i.name).join(", ").slice(0, 100) || "Barang", price: subtotal, weight: 1000 },
-    });
-    if (r.ok && r.orderId) {
-      await db.update(schema.orders).set({ awb: r.orderId, courier: `${inst.service.toUpperCase()} Instant`, kaOrderId: r.orderId, status: "dikirim" }).where(eq(schema.orders.id, order.id));
-    }
-  }
+  // NOTE: the instant (same-day GoSend/Grab) dispatch that used to run here was REMOVED. A web order
+  // is now always shipped by the seller from Pesanan → Buat pengiriman (regular expedition couriers).
+  // Orders booked as instant BEFORE the removal keep their courier/awb text and render unchanged.
 
   // COD → order created; record a COD payment (collected on delivery), no gateway bill
   if (isCod) {

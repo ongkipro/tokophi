@@ -59,9 +59,11 @@ export async function kaShippingPrice(p: {
 }
 
 // create an express shipment (pickup request) → returns AWB / KiriminAja order id
+// No lat/lng: the pickup point is identified by kecamatan/kelurahan + the written address. The
+// coordinate pair only ever existed for the (removed) instant couriers.
 export type KaSender = {
   name: string; phone: string; address: string;
-  kecamatanId: number; kelurahanId?: number | null; lat?: string | null; lng?: string | null;
+  kecamatanId: number; kelurahanId?: number | null;
 };
 export type KaPackage = {
   orderRef: string; // becomes `${KA_ORDER_PREFIX}-${orderRef}`
@@ -83,8 +85,6 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
     name: sender.name, phone: sender.phone, address: sender.address,
     kecamatan_id: sender.kecamatanId,
     ...(sender.kelurahanId ? { kelurahan_id: sender.kelurahanId } : {}),
-    ...(sender.lat ? { latitude: Number(sender.lat) } : {}),
-    ...(sender.lng ? { longitude: Number(sender.lng) } : {}),
     platform_name: "mitra",
     schedule,
     packages: [{
@@ -110,65 +110,15 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
   };
 }
 
-// create an instant (same-day) pickup order — verified: shipping_price MUST be `shipping_costs`
-// (not total_price, which adds admin_fee), plus a top-level `order_prefix` + `service_type`.
-export async function kaCreateInstantOrder(p: {
-  orderRef: string; service: string; serviceType: string; shippingCosts: number;
-  origin: { name: string; phone: string; lat: number; long: number; address: string; note?: string };
-  dest: { name: string; phone: string; lat: number; long: number; address: string; note?: string };
-  item: { name: string; description: string; price: number; weight: number };
-}): Promise<{ ok: boolean; orderId?: string; paymentId?: string; error?: string }> {
-  const r = await ka<{
-    status: boolean; text?: string;
-    result?: { payment?: { payment_id?: string }; packages?: { order_id?: string; awb?: string }[] };
-  }>("/api/mitra/v4/instant/pickup/request", {
-    service: p.service, service_type: p.serviceType, order_prefix: KA_ORDER_PREFIX,
-    packages: [{
-      order_id: `${KA_ORDER_PREFIX}-${p.orderRef}`,
-      origin_name: p.origin.name, origin_phone: p.origin.phone, origin_lat: p.origin.lat, origin_long: p.origin.long,
-      origin_address: p.origin.address, origin_address_note: p.origin.note || "Toko",
-      destination_name: p.dest.name, destination_phone: p.dest.phone, destination_lat: p.dest.lat, destination_long: p.dest.long,
-      destination_address: p.dest.address, destination_address_note: p.dest.note || "Rumah",
-      shipping_price: p.shippingCosts, item: p.item,
-    }],
-  });
-  return { ok: !!r.status, orderId: r.result?.packages?.[0]?.order_id, paymentId: r.result?.payment?.payment_id, error: r.status ? undefined : r.text };
-}
+// NOTE: the instant / same-day courier client (GoSend, Grab, Borzo — `kaInstantPricing` +
+// `kaCreateInstantOrder`, /api/mitra/v4/instant/*) was REMOVED. TokoΦ ships via regular expedition
+// couriers only (SPX, JNE, SiCepat, AnterAja, …). Do not reintroduce it without a product decision:
+// it is the only feature that ever needed lat/lng coordinates.
 
 // cancel/void an express shipment by AWB (= kj_order_id / resi we stored)
 export async function kaCancelShipment(awb: string, reason: string): Promise<{ ok: boolean; error?: string }> {
   const r = await ka<{ status: boolean; text?: string }>("/api/mitra/v3/cancel_shipment", { awb, reason });
   return { ok: !!r.status, error: r.status ? undefined : r.text };
-}
-
-// instant (same-day / on-demand) pricing — uses lat/long, not district ids. gosend/grab/borzo.
-export type KaInstantRate = { name: string; code: string; serviceType: string; cost: number; shippingCosts: number; etd: string };
-export async function kaInstantPricing(p: {
-  originLat: number; originLng: number; destLat: number; destLng: number;
-  weight: number; itemPrice: number; originAddress?: string; destAddress?: string; services?: string[];
-}): Promise<{ ok: boolean; results: KaInstantRate[]; distanceKm?: number; error?: string }> {
-  const r = await ka<{
-    status: boolean; text?: string; meta?: { distance?: number };
-    result?: { name: string; costs?: { service_type: string; estimation: string; price?: { total_price?: number; shipping_costs?: number } }[] }[];
-  }>("/api/mitra/v4/instant/pricing", {
-    service: p.services ?? ["gosend", "grab_express", "borzo"],
-    item_price: p.itemPrice,
-    origin: { lat: p.originLat, long: p.originLng, address: p.originAddress || "Lokasi toko" },
-    destination: { lat: p.destLat, long: p.destLng, address: p.destAddress || "Lokasi pelanggan" },
-    weight: Math.max(1, p.weight), vehicle: "motor", timezone: "WIB",
-  });
-  if (!r.status) return { ok: false, results: [], error: r.text };
-  const results: KaInstantRate[] = [];
-  for (const courier of r.result ?? []) {
-    for (const c of courier.costs ?? []) {
-      results.push({
-        name: `${courier.name.toUpperCase()} ${c.service_type}`,
-        code: courier.name, serviceType: c.service_type,
-        cost: c.price?.total_price ?? 0, shippingCosts: c.price?.shipping_costs ?? c.price?.total_price ?? 0, etd: c.estimation,
-      });
-    }
-  }
-  return { ok: true, results, distanceKm: r.meta?.distance };
 }
 
 // express tracking by order id / AWB

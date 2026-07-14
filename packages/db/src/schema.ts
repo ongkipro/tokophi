@@ -830,6 +830,9 @@ export const storeSettings = pgTable("store_settings", {
   senderKecamatanName: text(),
   senderKelurahanId: integer(),
   senderKelurahanName: text(),
+  // DEAD COLUMNS — instant/same-day delivery (GoSend/Grab) was removed and it was the only feature
+  // that needed coordinates. Nothing reads or writes these; kept only to avoid a destructive
+  // migration. Do not wire them back up.
   senderLat: text(),
   senderLng: text(),
   // Enabled courier codes offered to shoppers (KiriminAja codes: sicepat/jne/jnt/spx/lion/…).
