@@ -1328,7 +1328,10 @@ if (rToken) {
       recompute();
     }
 
-    // ── Derived kota / provinsi ─────────────────────────────────────────────────────────────────
+    // ── The address, read back whole ────────────────────────────────────────────────────────────
+    // Not just the derived region: a parcel is delivered to a street. This block is the shopper's
+    // final proof-read — penerima · WhatsApp, the street they typed, then kelurahan → kecamatan →
+    // kota → provinsi → kodepos — so a wrong house number is as visible as a wrong kecamatan.
     function showArea() {
       if (!areaLine || !areaText) return;
       var parts = [];
@@ -1340,8 +1343,24 @@ if (rToken) {
       }
       var line = parts.join(", ");
       if (kodeposEl.value) line += " " + kodeposEl.value;
-      if (!line) { areaLine.hidden = true; areaText.textContent = ""; return; }
-      areaText.textContent = line;
+
+      var namaVal = (form.elements["nama"] && form.elements["nama"].value || "").trim();
+      var waVal = (form.elements["whatsapp"] && form.elements["whatsapp"].value || "").trim();
+      var jalanVal = (form.elements["alamat"] && form.elements["alamat"].value || "").trim();
+
+      // The area is what makes this block meaningful — without a picked destination there is nothing
+      // to confirm, so it stays hidden even if a name was typed.
+      if (!line) { areaLine.hidden = true; areaText.innerHTML = ""; return; }
+
+      var html = "";
+      var who = [];
+      if (namaVal) who.push(esc(namaVal));
+      if (waVal) who.push(esc(waVal));
+      if (who.length) html += '<span class="block font-medium">' + who.join(" · ") + "</span>";
+      if (jalanVal) html += '<span class="mt-0.5 block">' + esc(jalanVal) + "</span>";
+      html += '<span class="mt-0.5 block">' + esc(line) + "</span>";
+
+      areaText.innerHTML = html;
       areaLine.hidden = false;
     }
 
@@ -1934,7 +1953,7 @@ if (rToken) {
     // destination, not just the picked area, so they must not lag behind the form.
     ["nama", "whatsapp", "alamat"].forEach(function (n) {
       var el = form.elements[n];
-      if (el) el.addEventListener("input", renderSummary);
+      if (el) el.addEventListener("input", function () { renderSummary(); showArea(); });
     });
     form.addEventListener("change", function (e) {
       var t = e.target;
