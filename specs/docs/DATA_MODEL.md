@@ -1,6 +1,6 @@
 # TokoΦ — Data Model
 
-> The entities the UI works with, and how they map to the **PostgreSQL** tables (now live via `@tokophi/db` — see `SCHEMA.md`). Super-admin + 16 admin modules already read the DB; the rest still read the mock shapes below.
+> The entities the UI works with, and how they map to the **PostgreSQL** tables (live via `@tokophi/db` — see `SCHEMA.md`). **All four surfaces read the database and every admin editor writes it.** The mock shapes below survive mostly as TypeScript *types*; where a mock and the DB disagree, **the DB wins**.
 > Mock shapes live in three places:
 > - **admin-mock** → `apps/admin/lib/mock/store.ts`
 > - **super-admin-mock** → `apps/super-admin/lib/mock.ts`
@@ -38,9 +38,13 @@ The editor exposes a conditions builder (all/any + field/op/value) that maps to 
 → `page_templates`. One row per template a merchant assembles by drag-and-drop (Puck) from the curated section registry (Hero, Product Grid, Banner, Testimoni, …). `sections[].type` maps to the same-named component on both the admin editor (React) and the storefront renderer (Astro) — one config schema drives both. Checkout is **not** a `page_templates` type — it's locked/uniform, reading only `stores.logo_url`/`stores.name`.
 
 ### Order  *(mock: `Order`, `ORDERS`)*
-`id, customer, city, total, items, status(baru|diproses|dikirim|selesai|batal), channel, minutesAgo→created_at`
+`id, customer, city, total, items, status(baru|diproses|dikirim|selesai|batal|retur), channel, minutesAgo→created_at`
 → `orders` (+ `order_line_items`, `payments`, `fulfillments`).
 - **`channel` = attribution/traffic source, NOT a sales channel.** Enum: **Meta Ads · TikTok Ads · Google Ads · Organic · Other** (the only sales channel is Toko Online).
+- **The shipping address SNAPSHOT** (migrations **0042** + **0049**): `ship_recipient`, `ship_phone` (canonical `62…`), `ship_address`, `ship_postcode`, `ship_district_id` (KiriminAja **kecamatan** id), `ship_kelurahan_id` (KiriminAja **village** id) and `ship_kelurahan_name`. It is deliberately **not** a lookup back to `customer_addresses`: that belongs to the *customer* and changes, so a buyer who moves house would silently move every past order with them. **The address belongs to the transaction.** The shipment is booked with these exact ids.
+- ⚠️ **Kecamatan PRICES the parcel; kelurahan BOOKS it.** `shipping_price` accepts village ids and ignores them; `request_pickup` takes `destination_kelurahan_id`. See [`FLOWS.md` §5](FLOWS.md).
+- `city` / `province` are **buyer-typed free text** — never gate money on them. The province used by the COD gate is **derived** from `ship_district_id`.
+- `courier` / `awb` / `ka_order_id`: written only when the merchant books the shipment. `awb` holds **only a waybill the courier actually issued** (NULL until then).
 
 ### Customer  *(mock: `Customer`, `CUSTOMERS`)*
 `id, name, email, phone, city, orders, spent, segment(baru|reguler|loyal|vip), joinedDaysAgo`

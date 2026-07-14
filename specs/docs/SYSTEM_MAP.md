@@ -50,7 +50,7 @@ graph TB
     subgraph Data["Data layer"]
         TENANT["withTenant / withCurrentTenant<br/>SET app.store_id + SET LOCAL ROLE tokophi_app"]
         OWNER["owner connection<br/>role: tokophi — RLS bypassed"]
-        PG[("PostgreSQL 16 :5433<br/>67 tables · 44 migrations<br/>RLS on 43")]
+        PG[("PostgreSQL 16 :5433<br/>68 tables · 50 migrations<br/>RLS on 43 of 44 store-scoped")]
         DISK["public/uploads/<br/>local media (→ MinIO on VPS)"]
     end
 
@@ -103,11 +103,11 @@ select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
  where n.nspname='public' and c.relkind='r' and c.relrowsecurity;             -- 44
 ```
 
-- **68 tables**, **46 migrations** (`0000` … `0045`). *(Re-verified 2026-07-14: `0042_order_address_snapshot`,
+- **68 tables**, **50 migrations** (`0000` … `0049`). *(Re-verified 2026-07-14: `0042_order_address_snapshot`,
   `0043_chat`, and then `0044_customers_and_abandoned_checkout` / `0045_checkout_abandoned_at` landed after this
   file was first written. `0043` is the shopper⇄merchant chat feature; `0044`/`0045` add **`checkout_sessions`**
   and the guest/registered columns on `customers` — see `SCHEMA.md` §1 and §3.4.)*
-- **44 tables have `relrowsecurity = true`.** Every one carries the same policy:
+- **43 of the 44 store-scoped tables have `relrowsecurity = true`** (all but `platform_activity`). Every one carries the same policy:
   `USING (store_id = app_current_store_id()) WITH CHECK (store_id = app_current_store_id())`.
 - `app_current_store_id()` is `SELECT nullif(current_setting('app.store_id', true), '')::uuid`.
 - Two DB roles exist: **`tokophi`** (owner, bypasses RLS) and **`tokophi_app`** (non-owner, 256 table grants, policies enforce).

@@ -2,11 +2,13 @@
 
 **Shopify-style commerce SaaS for the Indonesian market.** A shared, modern-SaaS **Seller** panel (`apps/admin` — the UI calls itself "Dashboard Seller") runs many merchant stores; a **Super Admin** control plane (`apps/super-admin`) is what we (the platform) use to manage all stores/plans/billing; each client gets a bespoke **Astro storefront** (hand-built per brand — no theme editor).
 
-> Deliberately **no Themes menu** and **no Apps/Plugins marketplace**. Curated, lightweight, **Bahasa Indonesia** UI tuned for local sellers (WhatsApp, COD, QRIS/e-wallets, local couriers) with modern-SaaS polish. The **local backend is fully wired** on PostgreSQL (Drizzle) — all 3 surfaces read + all admin editors write + auth/RBAC/RLS + real product variants; VPS deploy is the only remaining milestone.
+> Deliberately **no Themes menu** and **no Apps/Plugins marketplace**. Curated, lightweight, **Bahasa Indonesia** UI tuned for local sellers (WhatsApp, COD, QRIS/e-wallets, local couriers) with modern-SaaS polish. **All four surfaces are live on `tokophi.com`** and run on one PostgreSQL: every surface reads it, every admin editor writes it, auth/RBAC/RLS enforce, and shipping is real (KiriminAja) end to end.
 
-Full spec & docs: [`specs/`](specs/) (mirrors `~/Documents/Development/tokophi/`) — **new here? start with [`specs/docs/SYSTEM_GUIDE.md`](specs/docs/SYSTEM_GUIDE.md)** (whole-system overview), then [`specs/PRD.md`](specs/PRD.md), [`specs/docs/ARCHITECTURE.md`](specs/docs/ARCHITECTURE.md), [`specs/docs/GUIDE.md`](specs/docs/GUIDE.md).
+Full spec & docs: [`specs/`](specs/) — **new here? start with [`specs/docs/SYSTEM_GUIDE.md`](specs/docs/SYSTEM_GUIDE.md)** (whole-system overview), then [`specs/docs/CODE_MAP.md`](specs/docs/CODE_MAP.md) (where everything lives), [`specs/docs/STATUS.md`](specs/docs/STATUS.md) (**real vs seeded vs fake — read before trusting a number**) and [`specs/PRD.md`](specs/PRD.md).
 
-## The three surfaces
+> 🚚 **Touching checkout, ongkir or a shipment? Read [`specs/docs/FLOWS.md`](specs/docs/FLOWS.md) §5 first.** The one rule: **kecamatan PRICES the parcel, kelurahan BOOKS it.**
+
+## The four surfaces
 
 | Surface | App | Who | Tech | Port |
 |---|---|---|---|---|
@@ -28,7 +30,7 @@ tokophi/
     ui/            # @tokophi/ui   — shadcn on Base UI + design tokens
     lib/           # @tokophi/lib  — IDR / number formatters
     data/          # @tokophi/data — canonical nav (single source of truth)
-  specs/           # mirror of the docs (PRD, ARCHITECTURE, GUIDE, UML, ADRs, …)
+  specs/           # the docs (PRD, CODE_MAP, FLOWS, SCHEMA, STATUS, BACKLOG, ADRs, …)
 ```
 
 `@tokophi/data` holds `MAIN_MENU` / `FOOTER_MENU`, consumed by **both** the admin menu builder and the storefront header — edit once, both stay in sync on rebuild.
@@ -47,7 +49,9 @@ Build: `npm run build:admin` · `npm run build:super` · (storefront) `cd apps/s
 
 ## Database (local Postgres — `@tokophi/db`)
 
-Local backend is live end-to-end: **plain PostgreSQL 16 in Docker + Drizzle** (54 tables, migrations 0000–0016; prod target = self-hosted Postgres + PostgREST (VPS) — ADR 0007). **All 3 surfaces read + all 12 admin editors write** the DB; local auth + RBAC + RLS enforcing + local media upload done. Multi-store: 7 stores (super-admin control plane) + real product variants end-to-end (admin → storefront → cart).
+Backend is live end-to-end: **plain PostgreSQL 16 in Docker + Drizzle** — **68 tables, 50 migrations (`0000`–`0049`), RLS on 43 of the 44 store-scoped tables** (prod target = self-hosted Postgres + PostgREST on a VPS — ADR 0007). **All four surfaces read + every admin editor writes** the DB; auth + RBAC + RLS enforcing + media upload done. Multi-store: 7 stores (super-admin control plane) + real product variants end-to-end (admin → storefront → cart).
+
+> ⚠️ **`npm run seed` TRUNCATES**, and the DB is shared with other agents — **announce before you reseed.** It preserves the reference tables (`kiriminaja_areas`, `kelurahan`) via a keep-list. Adding migration `0050`? **Check `packages/db/drizzle/meta/_journal.json` first** — `0048`'s `when` is stamped in the future, which makes drizzle SKIP later migrations *while printing "migrations applied successfully"*.
 
 ```bash
 docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted)
@@ -84,10 +88,10 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS v4 
 - **Writes — all 12 admin editors persist to Postgres via server actions (`lib/actions/*`):** Produk · Diskon · Halaman · Blog · Kategori (create/edit/delete) · order-status · Inventori-stock · Navigasi · Pelanggan · CRM (follow-up) · Segmen · Pembelian (PO create/receive→stock/cancel).
 - **Auth (local):** email/password login (jose JWT httpOnly cookie) against `users`⋈`store_users`; `middleware.ts` protects the admin, topbar shows the user + logout. Owner: `ongki@batiknusantara.id / tokophi123`.
 - **RBAC (local):** every mutating server action gates on a capability (`lib/rbac.ts` `requireCapability`) — role→capability matrix (owner/admin/staff/gudang) from the session JWT. **UI:** `useCan()`/`<Can>` + topbar role badge; **all admin editors** hide their write/delete/create controls per role (verified via Playwright).
-- **RLS (local, enforcing at runtime):** migration `0012` = `tenant_isolation` policy (`store_id`) on all 32 store-scoped tables + non-owner `tokophi_app` role. The admin runs **every** read (`lib/data` via `withCurrentTenant`) + write (`lib/actions` via `withTenant`) inside a txn that sets `app.store_id` + drops to `tokophi_app`, so RLS enforces live. Auth/super-admin/storefront stay owner. `npm run verify-rls` + `verify-rls-app` + Playwright E2E all green.
+- **RLS (enforcing at runtime):** migration `0012` = `tenant_isolation` policy (`store_id`), now on **43 of the 44 store-scoped tables** (sole exception: `platform_activity`, our audit log *about* tenants) + non-owner `tokophi_app` role. The admin runs **every** read (`lib/data` via `withCurrentTenant`) + write (`lib/actions` via `withTenant`) inside a txn that sets `app.store_id` + drops to `tokophi_app`, so RLS enforces live. Auth/super-admin/storefront stay owner. `npm run verify-rls` + `verify-rls-app` + Playwright E2E all green.
 - **Media (local):** product editor uploads real images → `public/uploads/` + `product_media` (5MB cap), with per-image delete.
 
-**Next (prod):** the **VPS server itself** (infra) — the app side is done (RLS enforces at runtime via `withTenant`, `tokophi_app` role ready). Provision self-hosted Postgres + PostgREST (JWT `store_id` claim → `app.store_id` GUC, connect as `tokophi_app`) + Storage (MinIO/S3 replacing `public/uploads`) → payments/couriers + multi-store provisioning. Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md); task breakdown in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).
+**Next (prod):** the **VPS server itself** (infra) — the app side is done (RLS enforces at runtime via `withTenant`, `tokophi_app` role ready). Provision self-hosted Postgres + PostgREST (JWT `store_id` claim → `app.store_id` GUC, connect as `tokophi_app`) + Storage (MinIO/S3 replacing `public/uploads`) → payments/couriers + multi-store provisioning. Prioritized in [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md).
 
 ## Recent log (newest first)
 

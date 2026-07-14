@@ -14,10 +14,11 @@
 Not the biggest, not the newest — the ones where the product is currently **lying, leaking, or
 unmeasurable**. Ordered.
 
-1. **[ ] `orders.courier` is NULL on 699/700 rows.** A regular checkout books no shipment, so the
+1. **[ ] `orders.courier` is NULL on 702/702 rows.** A regular checkout books no shipment, so the
    per-courier COD return-rate report — **the instrument the entire COD policy is betting on** — cannot
    produce a per-courier number. We optimised for a metric we cannot measure. Fix: book the shipment
-   (or at minimum record the selected courier) at checkout.
+   (or at minimum record the selected courier) at checkout. **Note:** the order now *does* snapshot the
+   destination (`ship_*`, 0042 + 0049), so the missing piece is genuinely just the courier/service.
 2. **[ ] Verify the "SPX free return" claim with KiriminAja, in writing.** The whole SPX-only COD
    policy rests on it and **it is unverified**: free returns are a *Shopee Seller Center* benefit, we
    reach SPX through *KiriminAja* (a different contract), and the KiriminAja API has **no return field
@@ -45,9 +46,9 @@ unmeasurable**. Ordered.
 
 ## P0 — Foundation
 
-- [x] **Backend** — local PostgreSQL 16 + Drizzle (`@tokophi/db`): **68 tables, 46 migrations
-  (`0000`–`0045`), RLS on 44**. All four surfaces read; all admin editors write; local auth (jose JWT) +
-  RBAC + **RLS enforcing at runtime** under the non-owner `tokophi_app` role.
+- [x] **Backend** — local PostgreSQL 16 + Drizzle (`@tokophi/db`): **68 tables, 50 migrations
+  (`0000`–`0049`), RLS on 43 of the 44 store-scoped tables**. All four surfaces read; all admin editors
+  write; local auth (jose JWT) + RBAC + **RLS enforcing at runtime** under the non-owner `tokophi_app` role.
 - [x] **Data-layer seam on every screen** — reads via `lib/data/*`, writes via `lib/actions/*`.
 - [x] **Auth + real multi-tenancy** — the tenancy boundary is the database, not application code.
 - [ ] **VPS: self-hosted Postgres + PostgREST + Storage (MinIO/S3).** Media is still local disk
@@ -104,7 +105,7 @@ unmeasurable**. Ordered.
 
 ### Open
 
-- [ ] **🔴 `orders.courier` NULL on 699/700** — see the top-five list.
+- [ ] **🔴 `orders.courier` NULL on 702/702** — see the top-five list.
 - [ ] **🔴 Verify the SPX free-return claim** — see the top-five list.
 - [ ] **COD fee (`platform_cod.fee_pct`)** — currently `0` and **read by nothing** (2 grep hits: the
   schema and the seed). This is the lever that would let COD open on **all** couriers instead of one: a
@@ -133,7 +134,66 @@ unmeasurable**. Ordered.
   KiriminAja district id because the picker writes it — but nothing re-checks it, and a merchant with
   a stale or hand-edited id would price every order from the wrong city with no error. Cheap fix:
   verify the id resolves in `kiriminaja_areas` on save.
-- [ ] Cetak label PDF (still a toast stub) · tracking webhook · parcel weight is hardcoded `qty × 500 g`.
+- [ ] Tracking webhook (needs a public URL) · shipment payment flow (KA returns `unpaid` + `qr_url`).
+
+### Shipped in the kelurahan / courier-policy session (2026-07-14)
+
+- [x] **The parcel is addressed to a village, not a district** (`0049`). The order **snapshots** the
+  destination (`orders.ship_recipient/_phone/_address/_district_id/_kelurahan_id/_kelurahan_name/_postcode`,
+  0042 + 0049) and `createShipment` books with **those exact ids**. It used to re-resolve the destination
+  from the free-text **city name** — the behaviour that once booked a Surabaya parcel to Lampung. The legacy
+  fallback survives for pre-0042 orders but now returns `destinationGuessed` + a **warning toast**.
+- [x] **The address cascade is kecamatan → kelurahan**; kota, provinsi and **kodepos** are all derived from
+  the pick. Checkout went from 9 typed fields to 4.
+- [x] **Ongkir names the couriers** — unfiltered, KiriminAja walks its whole roster: **5.513 ms / 18
+  services** vs **512 ms / 14** when the enabled couriers are named. The checkout now quotes in **two steps**
+  (`scope:"primary"` = the chain SPX → JNE on first paint; `scope:"all"` only when the shopper opens "Lihat
+  kurir lainnya") — through the **same** `quoteShipping()` the order re-quotes with, so the two steps can
+  never produce two prices.
+- [x] **Parcel weight comes from the DB** (`lib/shipping-weight.ts`) — the P1.9 item below is **DONE**.
+- [x] **Cetak resi prints a real 100×150 mm label** and refuses when there is no real AWB.
+- [x] **Courier policy is code** (ADR 0010, `c981498`) — `SELLER_COURIER_CODES` (8) + `BASELINE_COURIER_CODES`
+  (**spx, jne** — a seller cannot switch them off) + `PRIMARY_CHAIN`.
+- [x] **Two shared landmines fixed:** the seed was **wiping the 78k-row `kelurahan` table** (missing from the
+  truncate keep-list — every reseed killed the checkout's kodepos auto-fill), and a **future-stamped journal
+  `when` (0048) makes drizzle SKIP later migrations while printing "migrations applied successfully"**.
+
+### Open — the questions this session raised and could not answer
+
+- [ ] **🔴 Should COD be allowed on JNE?** KiriminAja marks **JNE, SiCepat, Lion, Ninja and AnterAja
+  COD-capable**. The SPX-only restriction is **our policy, not a courier limit**, and it rests on the
+  (unverified) belief that a refused SPX parcel returns free. Widening is a **data change**
+  (`platform_couriers.services[].codAllowed`), never a deploy. Decide it deliberately — with the return
+  economics in hand, not by default.
+- [ ] **🔴 What is J&T's real pickup-origin coverage?** Measured: J&T quotes from Jakarta and Yogyakarta
+  origins but **never from Gubeng (Surabaya)** — to any destination. **"Enabled" does not mean "the shopper
+  will see it": availability is per PICKUP ORIGIN.** Whether that is a KiriminAja account limit, a J&T
+  coverage fact or a sandbox artefact is **unknown**. Ask KiriminAja. It decides whether the Jasa Kirim
+  screen should say "tidak melayani penjemputan dari alamatmu" or hide the courier for that origin — today
+  it shows a green toggle that does nothing.
+- [ ] **The courier roster is harvested from ONE reference route** — which is why TIKI never entered it and
+  **no merchant could ever enable it**. Fix to a multi-route union (in flight). Symptom today: `idx`,
+  `jtcargo` and `ninja` carry **1 service each**.
+- [ ] **`PRIMARY_CHAIN` is defined twice** — `packages/lib/src/couriers.ts` says `["spx","jne"]` (ADR 0010);
+  `apps/admin/app/api/public/ongkir/route.ts` still declares a local `["spx","jne","jnt"]`. Import the
+  shared constant.
+- [ ] **🔴 The baseline must bind the SERVICE, not the courier.** Decided policy (ADR 0010): a seller cannot
+  switch off the **standard** service of SPX and JNE — **but express and economy are theirs to drop.**
+  `BASELINE_COURIER_CODES` is a **courier-level** list, so as written it locks the whole courier and a
+  seller cannot drop **SPX Economy** or **JNE YES**, which they are entitled to drop. Make the baseline
+  service-level:
+
+  | Courier | Service | `type` | `group` | Baseline? |
+  |---|---|---|---|---|
+  | SPX | SPX Standard | `1` | `regular` | ✅ locked (and the COD rail) |
+  | SPX | SPX Economy | `3` | `economy` | ⬜ seller's choice |
+  | JNE | JNE Express **Reguler** | `REG23` | `regular` | ✅ locked |
+  | JNE | JNE Express **YES** | `YES23` | `next_day` | ⬜ seller's choice |
+
+  ⚠️ **Match on `group: "regular"`, NEVER on the name** — JNE's *standard* service is called **"JNE Express
+  Reguler"**, so a name-based rule (`includes("Express")`) locks precisely the wrong row. The Jasa Kirim card
+  must show the two locked rows as locked, and leave every economy/next-day/one-day/cargo row togglable.
+- [ ] **The seller UI does not distinguish "enabled" from "available from your origin"** — see above.
 
 ---
 
@@ -270,18 +330,17 @@ unmeasurable**. Ordered.
 
 **The rule to keep:** *over-validation is itself a bug.* A rejected legitimate name / new carrier prefix / unusual address costs a sale and nobody ever finds out. **Normalise generously, reject narrowly.**
 
-## 🔴 P1.9 — Shipping weight must come from the DB, not the browser (QUEUED — blocked on the GoSend/Grab removal touching the same files)
-> **The bug (found 2026-07-14 by the user: "Mampang, Jakarta Selatan → SPX Standard Rp40rb"):** `checkout.astro` prices every parcel with **`weight: totalQty * 500`** — a fabricated 500 g per item. The real column `product_variants.weight_grams` exists and the Seller's product editor has always had a required "Berat (gram)" field — it was simply **NULL on all 96 variants**, so nobody noticed the checkout never read it.
+## ✅ P1.9 — Shipping weight comes from the DB, not the browser (DONE 2026-07-14)
+> **The bug (found by the user: "Mampang, Jakarta Selatan → SPX Standard Rp40rb"):** `checkout.astro` priced every parcel with **`weight: totalQty * 500`** — a fabricated 500 g per item, computed in the shopper's browser. The real column `product_variants.weight_grams` existed and the product editor has always had a required "Berat (gram)" field; it was simply **NULL on all 96 variants**, so nobody noticed the checkout never read it.
 >
-> Measured on the live API (Surabaya → Mampang Prapatan, SPX Standard): 3.000 g → **Rp41.100** (what the user saw) · 1.500 g → Rp27.400 · **675 g (3 items at their REAL ~225 g) → Rp13.700**. Shoppers were being quoted **3× the true postage** — a silent conversion killer for an apparel store, and nobody would ever know why the carts were abandoned.
->
-> ✅ **Done already:** weights backfilled (96 variants, 150–300 g, stable per-id; prod + local), dims set to 1×1×1 (volumetric negligible → the courier bills the ACTUAL weight, correct for apparel), and `seed.ts` now seeds weight deterministically (mulberry32 — never `Math.random()`).
->
-> ❌ **Still open — and this is the important half:** the checkout still sends the weight **from the browser**. Filling the data is not enough if the client is still the one doing the arithmetic. **Weight is a price input, so it must be computed server-side**, exactly like the ongkir ORIGIN (now read from the seller's pickup address, not a client-posted city) and the COD PROVINCE (now read from the KiriminAja district id, not the buyer's typed text). Same lesson, third time: **a claim from the client is not a fact.** A script posting `weight: 100` for a 5 kg parcel gets the cheap quote and the **merchant eats the difference with the courier**.
+> Measured on the live API (Surabaya → Mampang Prapatan, SPX Standard): 3.000 g → **Rp41.100** (what the user saw) · 1.500 g → Rp27.400 · **675 g (3 items at their REAL ~225 g) → Rp13.700**. Shoppers were quoted **3× the true postage** — a silent conversion killer, and nobody would ever know why the carts were abandoned.
 
-- [ ] `/api/public/ongkir` `op=rates` accepts `items: [{variantId, qty}]` and **sums `product_variants.weight_grams` itself**; `body.weight` from the client is ignored entirely (delete it, don't merely distrust it).
-- [ ] Variants with a NULL weight → fall back to 500 g **and** surface a warning on the Seller's product list ("Berat belum diisi — ongkir bisa salah"). A silent fallback is the same lie in a smaller font.
-- [ ] Make weight genuinely required for new products (the field already defaults to 500 — that default is itself a guess worth showing).
+- [x] Weights backfilled (96 variants, 150–300 g, stable per-id), dims 1×1×1 (volumetric negligible → the courier bills the ACTUAL weight), `seed.ts` seeds weight deterministically (mulberry32).
+- [x] **`lib/shipping-weight.ts` sums `product_variants.weight_grams` server-side** and applies the couriers' 1 kg billable minimum. **`body.weight` does not exist in the request any more** — deleted, not merely distrusted: *a field that exists will eventually be trusted by someone.*
+- [x] NULL weight → 500 g fallback, **reported** in `weightFallback[]` and surfaced to the Seller ("Berat belum diisi — ongkir bisa salah"). A silent fallback is the same lie in a smaller font.
+
+> **The lesson, third time:** origin (a client-posted city), COD province (buyer-typed text), weight (browser
+> arithmetic) — all three were **price inputs taken from the client**. **A claim from the client is not a fact.**
 
 ## 🔴 P1.8 — Healthcheck & watchdog (DESIGNED, NOT BUILT — user: "catat dulu, nanti eksekusi")
 > **Why this is here:** on 2026-07-14 production went down **three times** and every deploy failed **silently for an hour** — and *every single one* was found only because someone happened to look. Nothing told us. That is the gap: not the bugs, the **absence of a witness**.
@@ -321,12 +380,12 @@ unmeasurable**. Ordered.
 
 ## P1.8 — Abandoned-cart capture: what go-live still needs
 
-The feature is built and proven **locally, end-to-end, in a real browser**. None of that is true in
-production yet.
+The feature is built and proven end-to-end in a real browser.
 
-- [ ] **🔴 Not deployed.** Both commits (`d7fc92f`, `9206220`) sit on `worktree-super-admin-overhaul` and
-  are **not merged to main**, so Coolify has shipped none of it. **Production still runs without
-  abandoned-cart capture** — every cart a real shopper leaves today is still lost, unrecorded.
+- [x] **Merged to `main`** (`d7fc92f`, `9206220`) — they sat on `worktree-super-admin-overhaul` for a while,
+  during which production recorded **zero** abandoned carts while the docs said the feature existed. *(This
+  is the shape of the trap: "built" and "shipped" are different words. Check `git merge-base --is-ancestor`
+  before claiming either.)*
 - [ ] **The ageing sweep is opportunistic** — it piggybacks on storefront traffic, so **a store with no
   visitors never ages its own carts**. Acceptable now. On the VPS, decide between a cron and having the
   read layer derive `ditinggal` on the fly.

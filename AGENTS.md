@@ -30,7 +30,19 @@ Put it in `CHANGELOG.md` / `STATUS.md` / here. If your change alters a contract 
 (a data-layer signature, a payment/shipping flag, a DB column), **say so in the commit body** — that is
 the message the other agent will actually see.
 
-Shopify-style commerce SaaS for Indonesia. **No Themes menu, no Apps/Plugins.** **Backend live on local PostgreSQL** (Docker :5433, Drizzle): all 3 surfaces READ + all 12 admin editors WRITE the DB, plus local auth (login/session) + local media upload (see Database below). Bahasa Indonesia UI, IDR. **Prod target = self-hosted Postgres + PostgREST on a VPS (NOT Supabase), deferred.** Full spec: `~/Documents/Development/tokophi/PRD.md`.
+**`git fetch && git log origin/main` BEFORE you start.** Local `main` was once ~90 commits behind, and a
+session built a duplicate "foundation" on the stale base — conflicting column names, and a migration that
+never applied. Check where you are before you build.
+
+### ⚠️ Two landmines in `packages/db` — both silent, both cost a day
+1. **`npm run seed` TRUNCATES.** The reference tables `kiriminaja_areas` and **`kelurahan` (78.764 rows)** are
+   preserved by a keep-list. `kelurahan` was **missing from it**, so every reseed silently killed the
+   checkout's kodepos auto-fill. **Keep it in the keep-list.**
+2. **A migration whose journal `when` is in the FUTURE makes drizzle SKIP later migrations — while printing
+   "migrations applied successfully".** `0048`'s `when` is a future timestamp, so a truthfully-stamped `0049`
+   was skipped in silence. **Adding `0050`? Check `packages/db/drizzle/meta/_journal.json` first.**
+
+Shopify-style commerce SaaS for Indonesia. **No Themes menu, no Apps/Plugins.** **LIVE on `tokophi.com`** — all **4** surfaces READ PostgreSQL (Docker :5433, Drizzle) and every admin editor WRITES it, plus auth (login/session) + media upload (see Database below). Bahasa Indonesia UI, IDR. **Prod target = self-hosted Postgres + PostgREST on a VPS (NOT Supabase), deferred.** Full spec: **`specs/PRD.md`** (in this repo).
 
 ## 📛 Naming — say "Seller", never "admin panel"
 There are TWO admin surfaces and calling them both "admin" is what has repeatedly confused agents *and* users. The **UI copy** now says:
@@ -70,7 +82,7 @@ npm run build:admin ; npm run build:super   # typecheck + lint + static build
 ```
 
 ## Database (local Postgres — `@tokophi/db`)
-Local backend fully wired behind the data layer (all 3 surfaces read + all editors write; auth+RBAC+RLS; real variants). Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (schema mirrors `~/Documents/Development/tokophi/docs/SCHEMA.md`: **54 tables**, snake_case, money = bigint IDR). Single-tenant MVP: one store "Batik Nusantara" (ADR 0008). Auth (local, JWT) + RBAC + RLS are done locally; Storage (self-hosted MinIO/S3) comes with the VPS. **RLS** (migration 0012, extended by 0032 `page_templates` + 0035 `support_*`) is enabled on **36 of the 39 store-scoped tables** AND **enforces at runtime**: the admin runs every read (`lib/data/*` via `withCurrentTenant`) + write (`lib/actions/*` via `withTenant`) inside a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`, so tenant queries execute as the non-owner role with policies applied. `npm run verify-rls -w @tokophi/db` now derives the store-scoped set from the catalog (every table with a `store_id`) and FAILS if one lacks RLS — ⚠️ **3 known exceptions remain: `media`, `payments`, `platform_activity`** (`media` is merchant data → real gap, tracked in BACKLOG). Auth (`lib/auth.ts`, pre-session `store_users` read), super-admin (cross-tenant), and the storefront (`Host`-resolved read-only catalog) stay on the owner connection. On the VPS this becomes PostgREST connecting as `tokophi_app` with the JWT `store_id` claim feeding the GUC. **RBAC** (app-layer, `lib/rbac.ts`) is enforced too.
+Local backend fully wired behind the data layer (all 4 surfaces read + all editors write; auth+RBAC+RLS; real variants). Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle**. **Counted 2026-07-14: 68 tables · 50 migrations (`0000`–`0049`) · RLS on 43 of the 44 store-scoped tables.** Source of truth = `packages/db/src/schema.ts`; annotated = `specs/docs/SCHEMA.md`. *(The shared dev container reports 69/44 — an unmerged branch's `color_palettes` migration is applied to it. Count the codebase, not the container.)* snake_case, money = bigint IDR. Auth (local, JWT) + RBAC + RLS are done locally; Storage (self-hosted MinIO/S3) comes with the VPS. **RLS** (migration 0012, extended by 0032 `page_templates`, 0035 `support_*`, **0036 `payments` + `media`**) **enforces at runtime**: the admin runs every read (`lib/data/*` via `withCurrentTenant`) + write (`lib/actions/*` via `withTenant`) inside a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`, so tenant queries execute as the non-owner role with policies applied. `npm run verify-rls -w @tokophi/db` derives the store-scoped set from the catalog (every table with a `store_id`) and FAILS if one lacks RLS — **the sole remaining exception is `platform_activity`**, deliberately (it is our audit log *about* tenants). Auth (`lib/auth.ts`, pre-session `store_users` read), super-admin (cross-tenant), and the storefront (`Host`-resolved read-only catalog) stay on the owner connection. On the VPS this becomes PostgREST connecting as `tokophi_app` with the JWT `store_id` claim feeding the GUC. **RBAC** (app-layer, `lib/rbac.ts`) is enforced too.
 ```bash
 docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted volume)
 npm run migrate -w @tokophi/db     # apply versioned migrations (canonical)
@@ -100,6 +112,41 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
 - **Provider brands stay hidden from clients** (KiriminAja/AutoLaris) — generic labels; only super-admin sees brands (ADR 0004).
 
 ## Shipping & COD (read before touching checkout)
+
+> ### 🚚 THE RULE: **Kecamatan PRICES the parcel. Kelurahan BOOKS it.**
+> `shipping_price` accepts `subdistrict_origin`/`subdistrict_destination` and **silently IGNORES them** — a
+> nonsense village id returns identical services at identical costs. **Tariffs are kecamatan-level.**
+> The **kelurahan** is what `request_pickup` books against and what a driver reads on the label.
+> **Do NOT re-add village ids to the pricing call.** Full flow: `specs/docs/FLOWS.md` §5.
+
+- **The address cascade is kecamatan → kelurahan.** Kota, provinsi and **kodepos** are all DERIVED from the
+  pick (KiriminAja returns a `postal_code` per village). The shopper types 4 fields, not 9.
+- ⚠️ **The local `kelurahan` table uses BPS/Kemendagri codes (`34.02.13.2004`), NOT KiriminAja ids
+  (`31483`) — its ids are NOT BOOKABLE.** Only ids from `POST /api/mitra/kelurahan` can be booked. The local
+  table is a name + kodepos fallback and its rows carry **`id: null` on purpose**. A null id books a parcel
+  with no village (legal); a **wrong** id books it to the wrong village. **Never invent one.**
+- **The order SNAPSHOTS the destination** — `orders.ship_recipient / ship_phone / ship_address /
+  ship_district_id / ship_kelurahan_id / ship_kelurahan_name / ship_postcode` (migrations **0042** + **0049**) —
+  and `createShipment` books with **those exact ids**. The old code re-resolved the destination from the
+  free-text **city name**, which once booked a Surabaya parcel to Lampung. The legacy fallback survives for
+  pre-0042 orders but now returns `destinationGuessed` + a warning toast: **a guess must never succeed quietly.**
+- **ALWAYS name the couriers in the rate call.** Unfiltered, KiriminAja walks its whole roster: measured
+  **5.513 ms / 18 services** vs **512 ms / 14** when the enabled couriers are named. The checkout quotes in
+  **two steps** — `scope:"primary"` (the chain SPX → JNE) on first paint, `scope:"all"` only when the shopper
+  opens "Lihat kurir lainnya" — both through the **same** `quoteShipping()` the order re-quotes with, so the
+  two steps can never produce two prices.
+- **Courier policy = `packages/lib/src/couriers.ts` (ADR 0010), not a DB toggle:**
+  `SELLER_COURIER_CODES` = spx, jne, jnt, lion, sap, sicepat, idx, anteraja — **the only couriers a SELLER may
+  offer** (Super Admin sees everything; **J&T Cargo + TIKI are platform-only**). Baseline = **spx, jne** (SPX is
+  the primary + the COD rail; JNE is the backup) — **and it binds only their STANDARD service**: express (JNE
+  YES) and economy (SPX Economy) stay the seller's choice. ⚠️ **Match on `group:"regular"`, NEVER on the name —
+  JNE's *standard* service is called "JNE Express Reguler"**, so a name-based rule picks the wrong row.
+  *(`BASELINE_COURIER_CODES` is still courier-level in code; the policy is service-level — see BACKLOG.)*
+  ⚠️ **Availability is per PICKUP ORIGIN, not global: J&T quotes from Jakarta and Yogyakarta origins but NEVER
+  from Gubeng (Surabaya). "Enabled" does not mean "the shopper will see it".**
+- **COD being SPX-only is OUR policy, not a courier limit** — KiriminAja marks JNE/SiCepat/Lion/Ninja/AnterAja
+  COD-capable too. Widening it is a **data change** (`codAllowed`), never `if (courier === "spx")`.
+
 - **Ongkir is priced FROM the seller's pickup address** (`store_settings.sender_kecamatan_id`, set in Pengaturan → Alamat). That column **is** a KiriminAja district id — the same currency as the shopper's `destinationId` — so there is nothing to resolve and nothing to guess. It used to be `resolveArea(body.originCity || "Yogyakarta")`: a **city name posted by the shopper's browser**, fuzzy-matched, with a hard-coded fallback. Two bugs in one line — the seller's real warehouse was ignored (a Surabaya merchant quoted Yogyakarta rates on every order), and **an untrusted client string decided a price**. `body.originCity` is now ignored. **Never let the client choose the origin.** If no pickup address is set we fall back to the store's *registered* city (still the shop's data, never the shopper's) and say so in the response (`originFrom: "store-city"`) — a quote built on a fuzzy match is a guess and must be visible as one.
 - ⚠️ **Rates are REAL KiriminAja API calls, but `KIRIMINAJA_ENV` defaults to `sandbox`** (`tdev.kiriminaja.com`). The numbers are genuine API responses and genuinely origin-driven — they are **not production tariffs**. Setting `KIRIMINAJA_ENV=production` is the last step between the demo and real money; an unset env in production silently talks to sandbox.
 - **COD is ON and it is a CHAIN of three agreements** — break any link and COD silently disappears: `platform_cod.enabled` (+ cap **Rp2.000.000**, **6** allow-listed provinces: DI Yogyakarta, Jawa Tengah, Jawa Barat, DKI Jakarta, Banten, Jawa Timur) ∧ `platform_couriers.services[].codAllowed` = **SPX only** (SPX Standard `type=1`, SPX Economy `type=3` — every other courier is `codAllowed=false` **even where KiriminAja reports `cod=true`**, because a refused parcel is *believed* to return free on SPX; ⚠️ **that belief is UNVERIFIED**) ∧ `store_settings.cod_enabled` (**default false**, migration 0038 — the merchant opts in at Pengaturan → Pengiriman → "Bayar di Tempat (COD)").
@@ -150,5 +197,15 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
 3. Register it in `lib/nav.ts` (`NAV_GROUPS`).
 4. Build + verify console clean + screenshot (Playwright renders charts correctly; `chrome --headless --virtual-time-budget` mis-sizes Recharts).
 
-## Docs
-PRD + architecture + data model + decisions live in `~/Documents/Development/tokophi/`. Changelog: `CHANGELOG.md`. `admin/AGENTS.md` = the create-next-app "Next 16 has breaking changes" note.
+## Docs — they live in `specs/`, in this repo
+| Doc | Read it when |
+|---|---|
+| **`specs/docs/FLOWS.md`** | **§5 = shipping end to end** (address cascade → quote → order snapshot → booking → label). **Before touching checkout, ongkir or a shipment.** |
+| `specs/docs/CODE_MAP.md` | you need to find where a concern lives |
+| `specs/docs/STATUS.md` | **before you trust a number on a screen** — 🟢 real / 🟡 seeded / 🔴 fake |
+| `specs/docs/SCHEMA.md` | the DB, generated from the catalog |
+| `specs/docs/BACKLOG.md` | what is actually open |
+| `specs/PRD.md` · `specs/decisions/` | what the product is · **ADR 0010 = courier policy** |
+
+Changelog: `CHANGELOG.md`. `apps/admin/AGENTS.md` = the "Next 16 has breaking changes" note.
+**If a doc disagrees with the code, the code wins — and the doc is a bug. Fix it.**

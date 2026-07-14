@@ -1,6 +1,6 @@
 # TokoΦ — System Guide
 
-> **The one doc to understand the whole system.** What TokoΦ is, how the three surfaces fit
+> **The one doc to understand the whole system.** What TokoΦ is, how the four surfaces fit
 > together, the data/security model, the features, the integrations, and where it runs.
 > For hands-on contributor setup see [`GUIDE.md`](GUIDE.md); for the DB see [`SCHEMA.md`](SCHEMA.md);
 > for rationale see [`../decisions/`](../decisions/) (ADRs). Status is tracked in
@@ -13,14 +13,17 @@
 **A Shopify-style commerce SaaS built for the Indonesian market.** A shared, modern-SaaS
 **Seller** panel (`apps/admin`) runs many merchant stores; a **Super Admin** control plane
 (`apps/super-admin`) is what the platform (us) uses to manage every store, plan, and integration;
-each client gets a bespoke **Astro storefront**, hand-built per brand (no theme editor).
+**one multi-tenant Astro SSR storefront** serves every merchant, resolved from the `Host` header, and
+merchants build their own homepage with the **self-serve section-based Store Builder** (ADR 0009).
 
 > **Naming:** `apps/admin` = **Seller** (the merchant's panel — its UI says "Dashboard Seller") ·
 > `apps/super-admin` = **Super Admin** (ours). Copy and docs say "Seller"; directories, packages,
 > routes, env vars, DB columns and the store-user role `admin` keep their existing names.
 
 **Deliberately opinionated — what it is NOT:**
-- **No Themes menu.** Storefronts are hand-built per client, not editable by merchants.
+- **No Themes menu, no Liquid, no theme marketplace.** Merchants customise via a **curated section
+  registry** (Hero, Product Grid, …), not arbitrary HTML/CSS (ADR 0009 — which *supersedes* the older
+  "storefronts are hand-built per client, not editable by merchants" line).
 - **No Apps/Plugins marketplace.** Curated, lightweight feature set instead of an ecosystem.
 - **Merchants never touch payment/courier credentials** — the platform owns them (see §4).
 
@@ -30,13 +33,17 @@ quality, not a heavy ERP).
 
 ---
 
-## 2. The three surfaces
+## 2. The four surfaces
 
 | Surface | App | Who uses it | Tech | Port |
 |---|---|---|---|---|
 | **Seller** | `apps/admin` | merchant operators (owner/admin/staff/gudang) | Next 16 (App Router, Turbopack) + shadcn on Base UI | :3000 |
 | **Super Admin** | `apps/super-admin` | the platform (us) | Next 16 + shared `@tokophi/ui` | :3001 |
-| **Storefront** | `apps/storefront` | end shoppers | Astro 5 + Tailwind v4 (SSG) | :4327 |
+| **Storefront** | `apps/storefront` | end shoppers | Astro + Tailwind v4, **SSR** — ONE deploy serves every store, tenant from the `Host` header (ADR 0009) | :4327 |
+| **Landing** | `apps/landing` | visitors on the apex | Astro static — **no DB on purpose** (it must serve when the rest is down) | :4328 |
+
+> **There are FOUR surfaces**, not three. Older docs said three and drew the storefront as SSG, built per
+> client — both are wrong; the pivot to SSR multi-tenant is what makes the Store Builder (ADR 0009) possible.
 
 Demo storefront = **"Batik Nusantara"** (women's fashion, 14 products with real Warna×Ukuran variants).
 The platform seed has **7 stores** total (Batik + 6 demo stores) for the super-admin view.
@@ -48,14 +55,15 @@ The platform seed has **7 stores** total (Batik + 6 demo stores) for the super-a
 **Monorepo (npm workspaces):**
 ```
 tokophi/
-  apps/       admin/  super-admin/  storefront/
-  packages/   ui/ (shadcn on Base UI + tokens)   lib/ (IDR/number formatters)
+  apps/       admin/  super-admin/  storefront/  landing/
+  packages/   ui/ (shadcn on Base UI + tokens)   lib/ (format, billing, couriers, kiriminaja, autolaris, validate)
               data/ (canonical nav — one source for admin builder + storefront header)
               db/ (@tokophi/db — Drizzle schema/client + migrations + seed)
-  specs/      PRD, ARCHITECTURE, GUIDE, SCHEMA, ADRs, this guide
+              sections/ (@tokophi/sections — the Store Builder contract, ADR 0009)
+  specs/      PRD, CODE_MAP, FLOWS, SCHEMA, STATUS, BACKLOG, ADRs, this guide
 ```
 
-**Data flow (all three surfaces talk to ONE local Postgres):**
+**Data flow (all four surfaces talk to ONE Postgres):**
 - **Reads** go through server-only `lib/data/*` selectors; admin pages are `dynamic="force-dynamic"`.
 - **Writes** go through `"use server"` actions in `lib/actions/*` (admin) / `lib/actions.ts` (super-admin).
 - The storefront reads the same catalog at build/SSR via `@tokophi/db`.
@@ -82,12 +90,14 @@ This is why shipping rates, resi, and label printing are a **KiriminAja** integr
 
 ## 5. Data & multi-tenancy
 
-**Local PostgreSQL 16 (Docker, port 5433) + Drizzle** (`@tokophi/db`) — **54 tables**, snake_case,
-money = `bigint` IDR, versioned migrations `0000–0016`. Source of truth = `packages/db/src/schema.ts`;
-annotated reference = [`SCHEMA.md`](SCHEMA.md).
+**Local PostgreSQL 16 (Docker, port 5433) + Drizzle** (`@tokophi/db`) — **68 tables**, snake_case,
+money = `bigint` IDR, **50 versioned migrations (`0000–0049`)**. Source of truth = `packages/db/src/schema.ts`;
+annotated reference = [`SCHEMA.md`](SCHEMA.md). *(The shared dev container reports 69 — an unmerged branch's
+`color_palettes` migration has been applied to it. Count against `schema.ts`.)*
 
-**Row-Level Security (RLS) — enforced at runtime locally** (migration `0012_tenant_rls`):
-- `tenant_isolation` policy on all **32 store-scoped tables**: a row is visible when
+**Row-Level Security (RLS) — enforced at runtime locally** (migration `0012_tenant_rls`, extended by 0032/0035/0036):
+- `tenant_isolation` policy on **43 of the 44 store-scoped tables** — every table carrying a `store_id`
+  except `platform_activity` (our audit log *about* tenants; deliberate). A row is visible when
   `store_id = app_current_store_id()` (a `STABLE` helper reading the `app.store_id` GUC).
 - A non-owner Postgres role **`tokophi_app`** carries the policies.
 - **The admin routes every query through the restricted role:** reads wrap in
@@ -95,7 +105,8 @@ annotated reference = [`SCHEMA.md`](SCHEMA.md).
   writes wrap in `withTenant(session.storeId, db => …)`. So tenant queries run as `tokophi_app`
   with RLS applied, even though the process connects as owner.
 - **Deliberate owner exceptions:** auth (pre-session `store_users` read), super-admin (cross-tenant),
-  and the storefront (per-client build). `verify-rls` + `verify-rls-app` prove isolation.
+  the storefront (`Host`-resolved), `/api/public/*` (the shopper has no session — **the largest RLS hole,
+  and it is on the checkout path**) and the billing cron. `verify-rls` + `verify-rls-app` prove isolation.
 - **On the VPS** this becomes PostgREST connecting as `tokophi_app`, with the JWT `store_id` claim
   feeding the GUC (see §10).
 
@@ -171,19 +182,56 @@ per variant/location.
 
 ## 9. Integrations
 
-### Shipping — KiriminAja (real courier API) — COMPLETE end-to-end
-Platform-managed aggregator (§4). Sandbox base `https://tdev.kiriminaja.com`, `Authorization: Bearer`;
-key + `KIRIMINAJA_ORDER_PREFIX` in **gitignored** `.env.local`, never committed. Client
-`apps/admin/lib/kiriminaja.ts` — endpoints verified against the Postman collection; **version prefix
-varies per endpoint** (`shipping_price`=v6.1, `get_address_by_name`=v2, `province`/`tracking`=unversioned,
-`request_pickup`=v6.1). The whole flow is wired + verified E2E:
-- **Super-admin** → Pengaturan: aggregator = KiriminAja + live **"Test koneksi"**.
-- **Admin** order detail → **"Cek Ongkir"**: live rates (store city + order dest → district IDs → `shipping_price`).
-- **Admin** Pengaturan → Pengiriman → **"Alamat Pengirim"** (kecamatan autocomplete, persisted per store) + **Jasa Kirim**: the seller ticks the individual **services** offered at checkout (→ `store_shipping_methods`; the courier-level list cannot say "JNE Reguler but not JNE YES") + the **"Bayar di Tempat (COD)"** switch (→ `store_settings.cod_enabled`, default off). Each service row states its COD status: a green **COD** badge on SPX Standard + SPX Economy, "Tidak mendukung COD." on the rest.
-- **Admin** → **"Buat Pengiriman"** (per rate): `request_pickup` (sender + recipient + item_name/shipping_cost/cod/package_type_id) → saves **AWB/courier** to the order, advances it to **dikirim**.
-- **Admin** → **"Lacak"** (polls `/api/mitra/tracking`, syncs the real courier AWB) + **"Cetak resi"** (100×150mm label → print→PDF).
-- **Storefront** checkout → **live ongkir** via the public proxy `apps/admin/app/api/public/ongkir` (`op=search`/`op=rates`; key stays server-side; `PUBLIC_ONGKIR_API` env-driven). Rates are filtered to **(platform-enabled couriers) ∩ (the seller's per-service picks)** — until `35b88a4` this read the courier-level column and offered services the seller had switched off — and each rate carries the **effective** COD flag (KiriminAja capability × platform `codAllowed` × the store's `cod_enabled`), so **"COD (Bayar di Tempat)"** shows up in Pembayaran only while a COD-capable service (today: SPX only) is selected. The gate itself is `apps/admin/lib/cod.ts`, enforced in `/api/public/order`.
-- **Prod-only remaining:** tracking **webhook** (needs a public URL); shipment **payment** flow (KA returns `unpaid` + `qr_url`; platform pays via KA Credit/gateway).
+### Shipping — KiriminAja (real courier API)
+
+Platform-managed aggregator (§4). **Full flow, with the diagrams and every guard:
+[`FLOWS.md` §5](./FLOWS.md#5-shipping-end-to-end--address-cascade--quote--snapshot--booking--label).
+Courier policy: [ADR 0010](../decisions/0010-courier-policy.md).** The summary:
+
+> **🚚 Kecamatan PRICES the parcel. Kelurahan BOOKS it.** `shipping_price` accepts village ids and
+> **ignores them** (a nonsense village id returns identical costs) — tariffs are **kecamatan-level**. The
+> **kelurahan** is what `request_pickup` books against and what a driver reads on the label.
+> **Do not add village ids to the pricing call.**
+
+Sandbox base `https://tdev.kiriminaja.com`, `Authorization: Bearer`; key + `KIRIMINAJA_ORDER_PREFIX` in a
+**gitignored** `.env.local`. Client `packages/lib/src/kiriminaja.ts` — **the version prefix varies PER
+endpoint**: `shipping_price` **v6.1** · `request_pickup` **v6.1** · `get_address_by_name` **v2** ·
+`cancel_shipment` **v3** · `kelurahan` / `province` / `tracking` **unversioned**.
+
+- **The address cascade is kecamatan → kelurahan.** Kota, provinsi and kodepos are **derived** from the
+  pick (KiriminAja returns a `postal_code` per village). The shopper types four fields, not nine.
+- ⚠️ **The local `kelurahan` table (78.764 rows) uses BPS/Kemendagri codes (`34.02.13.2004`), NOT
+  KiriminAja ids (`31483`) — its ids are NOT bookable.** Only ids from the live API can be booked; the
+  local table is a name + kodepos fallback (`id: null`) for the ~4% of districts the API has no list for.
+- **The ongkir origin is the seller's pickup address** (`store_settings.sender_kecamatan_id` — itself a
+  KiriminAja district id). **Never a client-posted city.**
+- **The weight is summed from `product_variants.weight_grams`**, server-side. `body.weight` no longer exists.
+- **`lib/shipping-quote.ts` is the ONE place a price is produced** — `/api/public/ongkir` quotes the
+  checkout and `/api/public/order` **RE-QUOTES** the order before it writes `orders.shipping_idr`. The
+  client's `shipping.cost` is not read. A picked service missing from the fresh quote is **rejected**,
+  never silently re-couriered.
+- **Both quote paths NAME the couriers.** Unfiltered, KiriminAja walks its whole roster: **5.513 ms / 18
+  services** vs **512 ms / 14** when the enabled couriers are named. The checkout quotes in **two steps** —
+  `scope:"primary"` (the chain SPX → JNE) on first paint, `scope:"all"` only when the shopper opens "Lihat
+  kurir lainnya" — through the same function, so the two steps cannot disagree.
+- **The order SNAPSHOTS the destination** (`orders.ship_*`, migrations 0042 + 0049) and the shipment is
+  booked with **those exact ids**. The old code re-resolved the destination from the free-text city name and
+  could book a parcel to the wrong district.
+- **Merchant selection is PER SERVICE** (`store_shipping_methods`) — a courier-level list cannot say "JNE
+  Reguler but not JNE YES". Rates = **(platform-enabled couriers) ∩ (the seller's picks)**, each carrying the
+  **effective** COD flag (KiriminAja capability × platform `codAllowed` × the store's `cod_enabled`).
+- **Courier policy (ADR 0010):** a seller may offer only **8** couriers (`SELLER_COURIER_CODES`); **SPX + JNE
+  are BASELINE and cannot be switched off** (SPX is the COD rail, JNE the backup); J&T Cargo and TIKI are
+  platform-only. ⚠️ **Availability is per PICKUP ORIGIN, not global** — J&T quotes from Jakarta and Yogyakarta
+  origins but **never from Gubeng (Surabaya)**. "Enabled" does not mean "the shopper will see it".
+- **Booking:** Pesanan → "Buat pengiriman" → `request_pickup` → `orders.awb` (**only a waybill the courier
+  actually issued**; NULL is the normal outcome in sandbox) + `ka_order_id` + status `dikirim`. Then "Lacak"
+  and "Cetak resi" (100×150 mm label, browser print → PDF; refuses without a real AWB).
+- **Instant / same-day (GoSend, Grab) was REMOVED** — expedition couriers only. What remains is a *guard*.
+- ⚠️ **`KIRIMINAJA_ENV` defaults to `sandbox`.** The rates are genuine API responses but **not production
+  tariffs**; an unset env in production silently talks to the sandbox.
+- **Prod-only remaining:** tracking **webhook** (needs a public URL); shipment **payment** flow (KA returns
+  `unpaid` + `qr_url`).
 
 ### Payments — AutoLaris (real payment gateway) — COMPLETE (checkout)
 Single platform-managed PSP = **AutoLaris** (`gateway_provider` enum; VA 6 banks / QRIS / DANA).
@@ -227,7 +275,7 @@ Base `https://api-h2h.autolaris.com`, Bearer key in gitignored `.env.local`. Cli
 ```bash
 npm install                                   # all workspaces
 docker compose up -d db                        # PostgreSQL 16 @ localhost:5433
-npm run migrate -w @tokophi/db               # apply migrations 0000–0016
+npm run migrate -w @tokophi/db               # apply migrations 0000–0049
 npm run seed    -w @tokophi/db               # demo data (7 stores, fashion variants) — idempotent
 
 npm run dev:admin                              # merchant admin → http://localhost:3000
@@ -253,14 +301,22 @@ Build: `npm run build:admin` · `npm run build:super` · (storefront) `npm run b
 
 ## 13. Current status & what's next
 
-**Done (local, verified E2E):** rebrand indostore→TokoΦ · all 3 surfaces read + all 12 admin editors
-write · auth + RBAC + RLS enforcing + media upload · super-admin functional control plane · real
-product variants end-to-end · CSV export · global search · **KiriminAja shipping complete** (config +
-Test koneksi · Cek Ongkir · Alamat Pengirim · Buat Pengiriman → real AWB · Lacak/tracking · Cetak
-label PDF · storefront checkout live ongkir).
+**Do not trust this section over [`STATUS.md`](STATUS.md)** — that is the doc that separates *real* from
+*seeded* from *fake*, and it is re-derived from the database. In short: all four surfaces are live on
+`tokophi.com`, every admin editor persists, auth + RBAC + RLS enforce, the ledger/payouts/COD gate are real,
+and shipping is **kelurahan-precise end to end** (address cascade → server-side quote → order snapshot →
+booking with the snapshot ids → label).
 
-**Next:** **VPS activation** (self-hosted Postgres + PostgREST + Storage) — carries the shipping
-prod-only bits (tracking webhook, shipment payment flow) + making per-client storefront config env-driven.
+**The honest gaps** (each is in `STATUS.md` / `BACKLOG.md` with evidence):
+- `KIRIMINAJA_ENV` defaults to **sandbox** — everything downstream of the price is real; the price is not.
+- **The SPX-only COD policy rests on an unverified claim** (that a refused SPX parcel returns free).
+- `orders.courier` is **NULL on every row** — a checkout books no shipment, so the per-courier COD
+  return-rate — the number the COD policy is betting on — **cannot be computed**.
+- The courier roster is harvested from **one** reference route (being fixed to a multi-route union).
+- The storefront `/blog` is hardcoded — **the merchant's blog editor publishes into a void**.
+
+**Next:** VPS activation (self-hosted Postgres + PostgREST + Storage) — which carries the shipping prod-only
+bits (tracking webhook, shipment payment flow).
 
 ---
 
@@ -269,12 +325,16 @@ prod-only bits (tracking webhook, shipment payment flow) + making per-client sto
 | Doc | What it covers |
 |---|---|
 | **SYSTEM_GUIDE.md** (this) | whole-system overview |
-| [`../PRD.md`](../PRD.md) | product requirements, scope, milestones |
+| **[`FLOWS.md`](FLOWS.md)** | the critical flows as sequence diagrams. **§5 = shipping end to end — the doc to read before touching checkout** |
+| [`CODE_MAP.md`](CODE_MAP.md) | the development map: structure, packages, where each concern lives |
+| [`STATUS.md`](STATUS.md) | **real vs seeded vs fake**, re-derived from the DB |
+| [`../PRD.md`](../PRD.md) | product requirements, scope, the money + COD policy |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | how the surfaces are built, data-layer seam, topology |
 | [`GUIDE.md`](GUIDE.md) | contributor setup + how-to recipes |
 | [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md) | database |
 | [`UML.md`](UML.md) | detailed diagrams |
+| [`REQUIREMENTS.md`](REQUIREMENTS.md) | verifiable statements + how to check each one |
 | [`UI_INVENTORY.md`](UI_INVENTORY.md) | screen/component inventory |
 | [`CONCEPT.md`](CONCEPT.md) | positioning / vision |
-| [`../decisions/`](../decisions/) | ADRs (0001–0008) |
+| [`../decisions/`](../decisions/) | ADRs (**0001–0010**; 0010 = courier policy) |
 | [`WORKLOG.md`](WORKLOG.md) / [`BACKLOG.md`](BACKLOG.md) | session log / priorities |

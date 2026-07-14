@@ -1,8 +1,12 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **Refreshed 2026-07-14** against the source tree and the live database
-> (`docker exec tokophi-db psql -U tokophi -d tokophi`) — **68 tables, 46 migrations, RLS on 44**.
+> **Refreshed 2026-07-14** (again, after the kelurahan/courier-policy work) against the source tree and the
+> live database (`docker exec tokophi-db psql -U tokophi -d tokophi`) —
+> **68 tables · 50 migrations (`0000`–`0049`) · RLS on 43 of the 44 store-scoped tables.**
 > Not against the older docs in this folder, which have been wrong three times in ways that mattered.
+>
+> *(The shared dev container reports 69 tables / 44 RLS: an unmerged branch's `color_palettes` migration has
+> been applied to it. Count against `packages/db/src/schema.ts`.)*
 >
 > **The rule: verify, or say you did not.** This project has shipped a fee-bearer feature that was never
 > implemented, an ad dashboard with no integration behind it, a courier roster that contradicted the
@@ -40,7 +44,12 @@
 | **RBAC** | `requireCapability` is the first statement of every mutating admin action (17 of 24 files — see §3.1 #5 for the exception that matters). `settings:write` is owner-only ⇒ **only an owner can withdraw money** |
 | **Suspension** | a past-due store goes read-only; `support:write` opts out, so it can still tell us why |
 | **Storefront multi-tenancy** | `Host` → store, 15 s memo, unknown slug **404s** (never another merchant's shop), `astro build` is DB-free |
-| **Courier roster** | 12 rows in `platform_couriers`, synced live from KiriminAja; vanished couriers are disabled, never deleted. `effective = (merchant ?? all) ∩ platform-enabled` |
+| **Courier roster** | **10 rows** in `platform_couriers`, synced live from KiriminAja; vanished couriers are disabled, never deleted. `effective = (merchant ?? all) ∩ platform-enabled`. ⚠️ Harvested from **one** reference route — see §3.2 #9 |
+| **The courier POLICY is code, not a toggle** (ADR 0010) | `packages/lib/src/couriers.ts` (`c981498`): `SELLER_COURIER_CODES` = the **8** couriers a seller may offer (spx, jne, jnt, lion, sap, sicepat, idx, anteraja) — J&T Cargo and TIKI are **platform-only**; baseline = **spx, jne** (SPX is the COD rail; JNE is the backup for routes SPX does not serve) — **and the baseline binds only their STANDARD service**: SPX Standard (`type=1`, `group=regular`) and JNE Express Reguler (`REG23`, `group=regular`) are locked, while SPX Economy (`group=economy`) and JNE YES (`group=next_day`) stay the seller's choice. ⚠️ **Match on `group`, not the name — JNE's standard service is *called* "JNE Express Reguler".** Code gap: `BASELINE_COURIER_CODES` is courier-level, the policy is service-level |
+| **Shipping is kelurahan-precise** | The order **snapshots** the destination (`orders.ship_recipient/_phone/_address/_district_id/_kelurahan_id/_kelurahan_name/_postcode`; migrations **0042** + **0049**) and `createShipment` books with **those exact ids**. It used to re-resolve the destination from the free-text **city name** — which is how a Surabaya parcel was once booked to Lampung. The legacy fallback survives for pre-0042 orders but now returns `destinationGuessed` and raises a **warning toast**: a guess must be visible as one |
+| **The address cascade is kecamatan → kelurahan** | Kota, provinsi and **kodepos** are all **derived** from the pick (KiriminAja returns a `postal_code` per village — 100% coverage in sampling). The shopper types **4** fields, not 9. ⚠️ The local `kelurahan` table (78.764 rows) is keyed by **BPS/Kemendagri codes** (`34.02.13.2004`), **not** KiriminAja ids (`31483`) — **its ids are NOT bookable**; only ids from `POST /api/mitra/kelurahan` are. Local-fallback rows carry `id: null` on purpose: a null id books a parcel with no village (legal); a **wrong** id books it to the wrong village |
+| **Ongkir names the couriers** | An unfiltered `shipping_price` makes KiriminAja walk its whole roster: measured **5.513 ms / 18 services** vs **512 ms / 14 services** when the enabled couriers are named. Both quote paths now name them. The checkout quotes in **two steps** — `scope:"primary"` (the chain SPX → JNE) on first paint, `scope:"all"` only when the shopper opens "Lihat kurir lainnya" — through the **same** `quoteShipping()` the order re-quotes with, so the two steps can never produce two prices |
+| **Pricing is kecamatan-level, and stays that way** | `shipping_price` accepts `subdistrict_origin`/`subdistrict_destination` and **ignores them** — a nonsense village id returns identical services at identical costs (verified). The kelurahan matters for the **booking** and the **label**, not for the tariff. **Do not re-add village ids to the pricing call** |
 | **AWB honesty** | `orders.awb` holds only a waybill the courier actually issued. **Fixed `0b3cdda`** — it used to store *our own order id* and print it on parcels under "No. resi": an unscannable barcode on a real package |
 | **Order address snapshot** | `orders.ship_*` (migration 0042), on 685/700 rows. A buyer who moves house no longer moves every past order with them |
 | **The order detail is real** | line items, ongkir, payment method, courier, resi and street address. **Fixed `2a5ffc4`** — all six were fabricated from `hash(order.id)`, including a back-solved **"Penyesuaian"** line that made the invented items reconcile to the order's real total. A merchant opened an order to pack it and saw products the customer never bought |
@@ -93,14 +102,17 @@ Honest arithmetic over demo rows. These are **not** lies — but do not quote th
 
 | # | Item | Detail |
 |---|---|---|
-| 6 | **`orders.courier` is NULL on 699/700 rows** | a regular checkout books no shipment, so the per-courier COD return-rate card — **the number the whole COD policy is betting on** — collapses into a single "Tidak diketahui" bucket |
-| 7 | **`orders.awb` is NULL on 700/700** | correct behaviour now (only a real waybill lands there), but no demo data exercises the AWB path |
-| 8 | 🔴 **The SPX free-return claim is UNVERIFIED** | it is a *Shopee Seller Center* benefit; we reach SPX through *KiriminAja*, a different contract, whose API has **no return field at all**. **The entire SPX-only COD policy rests on it** |
-| 9 | **The courier roster comes from ONE reference route** | KiriminAja has no list-couriers endpoint, so `kaServices()` prices origin `2099` → dest `356` and harvests the services out of the response. **The roster is only as complete as that one lane** |
-| 10 | **`KIRIMINAJA_ENV` defaults to `sandbox`** | an unset env **in production** silently talks to the sandbox and books no real parcels. The sandbox also never issues an AWB, so `awbPending` is the normal outcome in dev |
+| 6 | **`orders.courier` is NULL on 702/702 rows** | a regular checkout books no shipment, so the per-courier COD return-rate card — **the number the whole COD policy is betting on** — collapses into a single "Tidak diketahui" bucket. **We optimised for a metric we cannot measure** |
+| 7 | **`orders.awb` is NULL on 702/702** | correct behaviour now (only a real waybill lands there), but no demo data exercises the AWB path. The sandbox never issues an AWB, so `awbPending` is the normal outcome in dev |
+| 8 | 🔴 **The SPX free-return claim is UNVERIFIED** | it is a *Shopee Seller Center* benefit; we reach SPX through *KiriminAja*, a different contract, whose API has **no return field at all**. **The entire SPX-only COD policy rests on it.** ⚠️ And KiriminAja marks **JNE, SiCepat, Lion, Ninja and AnterAja COD-capable too** — the SPX-only restriction is **OUR policy, not a courier limit** (open question: should COD be allowed on JNE? It is a `codAllowed` data change, not a deploy) |
+| 9 | **The courier roster comes from ONE reference route** | KiriminAja has no list-couriers endpoint, so `kaServices()` prices origin `2099` → dest `356` and harvests the services out of the response. **The roster is only as complete as that one lane** — which is why **TIKI never entered it and no merchant could ever enable it**. Being fixed to a multi-route union. Symptom in the DB today: `idx`, `jtcargo` and `ninja` carry **1 service each** |
+| 9b | ⚠️ **"Enabled" is not "the shopper will see it"** | **availability is decided per PICKUP ORIGIN, not globally.** Measured 2026-07-14: **J&T quotes from Jakarta and Yogyakarta origins but NEVER from Gubeng (Surabaya)** — to any destination. A courier that does not collect from the seller's warehouse is simply absent from the quote, however green its toggle is. **Open:** ask KiriminAja what J&T's actual origin coverage is |
+| 9c | **`PRIMARY_CHAIN` is defined twice** | `packages/lib/src/couriers.ts` exports `["spx","jne"]` (ADR 0010) while `apps/admin/app/api/public/ongkir/route.ts` still declares a LOCAL `["spx","jne","jnt"]`. The route must import the shared constant — two definitions of one policy is the bug the ADR exists to prevent |
+| 10 | **`KIRIMINAJA_ENV` defaults to `sandbox`** | an unset env **in production** silently talks to the sandbox and books no real parcels. **This is now the last thing standing between the shop and real tariffs** — everything downstream of the price is real; the price is not |
 | 11 | ✅ **`platform_couriers.services` legacy plain strings — FIXED** | the seed wrote `["Reguler","Same Day"]` where `getCodPolicy` expects `{type,name,group,cod,codAllowed}` objects; it skips non-objects, so a fresh DB had **zero** COD-allowed services and COD could not be exercised at all. The seed now writes objects with `codAllowed = cod && courier === "spx"` → 2 COD-allowed services. `540af0a` added the rest: `store_settings.cod_enabled = true` + **11** `store_shipping_methods` rows, so a fresh clone can exercise COD end-to-end with no API key and no clicking. Verified on a forced re-seed. |
-| 12 | **Parcel weight is hardcoded** | `qty × 500 g` |
-| 13 | **The label "Cetak" button is a toast stub** | there is no PDF |
+| 12 | ✅ **Parcel weight is hardcoded — FIXED** | it was `qty × 500 g`, invented in the shopper's browser: a real 675 g apparel cart was quoted as a 3.000 g parcel — **Rp41.100 instead of Rp13.700** (Surabaya → Mampang Prapatan, SPX Standard), 3× the true postage on every order. `lib/shipping-weight.ts` now sums `product_variants.weight_grams` **server-side**; `body.weight` **does not exist** in the request any more (a field that exists will eventually be trusted by someone). NULL weights fall back to 500 g and are **reported** in `weightFallback[]`, never silently |
+| 13 | ✅ **The label "Cetak resi" — FIXED** | it prints a real 100×150 mm label (browser print → PDF) and **refuses when there is no real AWB** ("Belum ada nomor resi"), rather than printing our own order id under "No. resi" |
+| 13b | 🔴 **Two shared landmines in `packages/db`** | (a) **`npm run seed` wiped the 78k-row `kelurahan` reference table** — it was missing from the truncate keep-list, so every reseed silently killed the checkout's kodepos auto-fill. Fixed; keep it in the keep-list. (b) **A migration whose journal `when` is stamped in the FUTURE makes drizzle SKIP later migrations while printing "migrations applied successfully"** — `0048`'s `when` is `1784106162290`, so a truthfully-stamped `0049` was skipped in silence. Anyone adding `0050` must check `packages/db/drizzle/meta/_journal.json`. **A silent data-loss trap** |
 
 ### 3.3 Super-admin
 
@@ -155,7 +167,7 @@ The capture itself is 🟢 (§1). These are its known gaps, stated rather than l
 
 | # | Item | Detail |
 |---|---|---|
-| 41 | 🔴 **Production has none of this** | both commits sit on `worktree-super-admin-overhaul` and are **not merged to main**, so Coolify has shipped nothing. **The live product still records zero abandoned carts** |
+| 41 | ✅ **Merged to `main`** | both commits are now ancestors of `main` (verified with `git merge-base --is-ancestor`). They sat on a worktree branch for a while, during which **production recorded zero abandoned carts while the docs said the feature existed**. "Built" and "shipped" are different words |
 | 42 | **The ageing sweep is OPPORTUNISTIC** | it piggybacks on storefront traffic (at most once a minute per SSR process, on the store being written). **A store with no visitors never ages its own carts.** Acceptable now; on the VPS this is a cron, or the read layer derives `ditinggal` on the fly |
 | 43 | **The capture rate limiter is in-process memory** | 60/min/IP, per SSR process — the same known gap as `/api/track` (#32). Multi-instance needs a Cloudflare rule |
 | 44 | **`CHECKOUT_RECOVERY_SECRET` falls back to `AUTH_SECRET`** | which works — but it means **rotating the auth secret silently invalidates every outstanding recovery link**. Set it explicitly in production |
@@ -177,6 +189,24 @@ Stated as unverified rather than guessed.
 6. **Whether the production database matches this local one.** Every count here is local.
 7. **Chat (migration 0043).** The schema is in the database; the application code was **uncommitted and
    in flight** while this was written. Not exercised.
+8. **J&T's real origin coverage.** We observed that J&T quotes from Jakarta and Yogyakarta origins and
+   **never** from Gubeng (Surabaya). Whether that is a KiriminAja account limitation, a J&T pickup-coverage
+   fact, or a sandbox artefact is **unknown**. Ask KiriminAja. It decides whether the seller UI should show
+   J&T as "unavailable from your warehouse" or not offer it at all for that origin.
+9. **Whether the postal codes KiriminAja returns per village are correct.** Coverage was 100% in sampling;
+   correctness was not audited against Pos Indonesia.
+
+### The lesson from this session, because it will happen again
+
+The checkout posted `kelurahanId` as a JSON **string**; the API guarded it with `Number.isFinite()` — **false
+for a string** — so every village id was silently discarded and `ship_kelurahan_id` stayed NULL. **Both
+builds were green.** Neither typechecker could see across the wire.
+
+> **A cross-surface contract is proven by DRIVING it, never by two passing typechecks.**
+
+Same family as `select sum(…) for update` (Postgres rejects it outright — every withdrawal threw) and the
+`ReferenceError: queueSave is not defined` inside a client `<script>` (no rates → no COD → **no order at
+all**), both of which shipped with lint, typecheck and build all green.
 
 ---
 

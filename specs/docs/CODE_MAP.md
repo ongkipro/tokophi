@@ -1,20 +1,35 @@
 # TokoΦ — Development Map (code · design · structure)
 
 > The one-stop map of the codebase: where everything lives and how it connects. Pairs with
-> `SCHEMA.md` (data model), `ARCHITECTURE.md` (why), `DEPLOY.md` (ops), `WORKLOG.md` (history).
-> Keep this in sync when you add a surface, package, table, or major feature.
+> `SCHEMA.md` (data model), `FLOWS.md` (**§5 = shipping end to end — read it before touching checkout**),
+> `ARCHITECTURE.md` (why), `DEPLOY.md` (ops), `WORKLOG.md` (history).
+> **Verified against the code and the DB on 2026-07-14.** Keep it in sync when you add a surface, package,
+> table, or major feature.
 
 ---
 
 ## 1. Overview
 
-TokoΦ is a **Shopify-style commerce SaaS for Indonesia** — Bahasa Indonesia UI, IDR. Three surfaces, one monorepo, one PostgreSQL. **Single-plan billing** (Rp275rb/mo + PPN 11%), all features unlocked. Provider brands (KiriminAja/AutoLaris) hidden from clients (white-label).
+TokoΦ is a **Shopify-style commerce SaaS for Indonesia** — Bahasa Indonesia UI, IDR. **Four** surfaces, one monorepo, one PostgreSQL. **Single-plan billing** (Rp275rb/mo + PPN 11%), all features unlocked. Provider brands (KiriminAja/AutoLaris) hidden from clients (white-label, ADR 0004).
 
 | Surface | Package | Stack | Who uses it | Port (dev) |
 |---|---|---|---|---|
-| **admin** | `@tokophi/admin` | Next.js 16 (App Router, Turbopack) | a merchant/shop owner | 3000 |
+| **admin** ("Seller") | `@tokophi/admin` | Next.js 16 (App Router, Turbopack) | a merchant/shop owner | 3000 |
 | **super-admin** | `@tokophi/super-admin` | Next.js 16 | us (platform control plane) | 3001 |
-| **storefront** | (Astro app) | Astro 5 **SSR** (`@astrojs/node` standalone; catalog read at server boot) | shoppers | 4327 |
+| **storefront** | `@tokophi/storefront` | Astro **SSR** (`@astrojs/node` standalone) — ONE deploy, tenant from the `Host` header (ADR 0009) | shoppers | 4327 |
+| **landing** | `@tokophi/landing` | Astro static — the apex front door | visitors | 4328 |
+
+**The numbers, counted (not remembered), 2026-07-14:**
+
+| | |
+|---|---|
+| Tables in `packages/db/src/schema.ts` | **68** |
+| Migrations | **50** (`0000` … `0049`) |
+| RLS | **43 of the 44 store-scoped tables** — every table with a `store_id` except `platform_activity` (our log *about* tenants) |
+
+> ⚠️ The **shared dev DB reports 69 tables / 44 RLS** because an unmerged branch's `color_palettes` migration
+> has been applied to it. Count against `schema.ts` on `main`, not against the shared container, or you will
+> keep "discovering" a table that is not in the codebase.
 
 ---
 
@@ -48,8 +63,8 @@ tokophi/
 
 | Package | Exports / key modules | Notes |
 |---|---|---|
-| `db` | `db`, `client`, `schema` (**68 tables**), `migrations/` (**0000–0045**), `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
-| `lib` | `./billing` (pricing, `computeBilling`, `storeSegment`, `withPpn`), `./format` (IDR/num), `./couriers`, `./kiriminaja`, `./autolaris`, `./payment-fees`, `./integration-status`, `./totp`, `./cache`, `./colors` | Pure/shared. `kiriminaja`/`autolaris` are `server-only`. |
+| `db` | `db`, `client`, `schema` (**68 tables**), `drizzle/` (**0000–0049**), `seed.ts`, `seed-areas.ts`, `verify-rls` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. **Two landmines live here — see §12.** |
+| `lib` | `./billing` (pricing, `computeBilling`, `storeSegment`, `withPpn`), `./format` (IDR/num), **`./couriers`** (the courier POLICY — ADR 0010), `./kiriminaja`, `./autolaris`, `./validate` (`normalizePhone` → canonical `62…`, name/address/email/postcode), `./payment-fees` (display only — **zero importers**), `./integration-status`, `./totp`, `./cache`, `./colors` | Pure/shared. `kiriminaja`/`autolaris` are `server-only`. |
 | `ui` | 23 components (`button card dialog dropdown-menu table tabs switch …`) + `lib/utils` (cn) + Tailwind tokens | **shadcn on Base UI** — `render` prop not `asChild`, no `Select`. |
 | `data` | menu helpers | small shared. |
 | `sections` | `registry.ts` — Store-Builder section catalog | consumed by admin `/tema` (Puck) + storefront renderer. |
@@ -79,7 +94,28 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 
 **Auth/RBAC/tenancy:** `lib/auth.ts` (jose JWT session), `lib/rbac.ts` (`requireCapability`) + `lib/rbac-policy.ts` (role→cap matrix, client-safe), `lib/tenant.ts` (`withTenant`/`withCurrentTenant` → `tokophi_app` role + `app.store_id` GUC → RLS). `middleware.ts` = edge JWT gate.
 
-**Shipping & COD:** `lib/cod.ts` (`getCodPolicy` — the **single** answer to "may this order be paid on delivery?", five conditions; enforced in `app/api/public/order/route.ts`, the boundary) · `lib/actions/shipping.ts` (`getStoreServices`/`saveStoreServices` → the merchant's **per-service** picks in `store_shipping_methods`; `getCodEnabled`/`setCodEnabled` → `store_settings.cod_enabled`) · `components/admin/pengaturan/jasa-kirim-card.tsx` (the Pengiriman UI: service list with COD badges + the COD switch) · `app/api/public/ongkir/route.ts` (live rates ∩ platform-enabled couriers ∩ picked services, each labelled with the **effective** COD flag).
+### 4.1 Shipping & COD — the single-owner files
+
+**Full flow: [`FLOWS.md` §5](./FLOWS.md#5-shipping-end-to-end--address-cascade--quote--snapshot--booking--label). Read it before touching any of these.**
+
+> **Kecamatan PRICES the parcel. Kelurahan BOOKS it.** `shipping_price` accepts village ids and **ignores
+> them** — tariffs are kecamatan-level. The kelurahan is for `request_pickup` and the label. **Do not add
+> village ids to the pricing call.**
+
+| File | Owns |
+|---|---|
+| `lib/shipping-quote.ts` | **THE ONE PLACE A SHIPPING PRICE IS PRODUCED** (`quoteShipping`, `findRate`). Both `/api/public/ongkir` *and* `/api/public/order` call it — two copies would be two prices, and the one the order keeps decides what the merchant is paid. Origin = `store_settings.sender_kecamatan_id`; weight = the DB; scope = (platform-enabled) ∩ (the seller's per-service picks). **Always names the couriers** in the KiriminAja call (unfiltered = 5.513 ms / 18 services; named = 512 ms / 14). |
+| `lib/cod.ts` | **THE ONE PLACE COD IS DECIDED** (`getCodPolicy`, five conditions). Enforced in `/api/public/order` — **that endpoint is the boundary**; hiding the option in the storefront is UX. Never `if (courier === "spx")`: widening COD is a data change (`codAllowed`). |
+| `lib/shipping-weight.ts` | `weightForCart` — Σ `product_variants.weight_grams`. NULL → 500 g fallback, **reported** in `weightFallback[]`, never silent. 1 kg billable minimum. `body.weight` **does not exist** in the request any more. |
+| `lib/data/areas.ts` | `resolveArea` · `areaById` (kota/provinsi **derived** from the district id) · `kelurahanOptions` (KiriminAja first, local `kelurahan` table as the `id:null` fallback) · `verifyKelurahan` (a client-supplied village id is **proven against the destination district** or dropped to NULL). |
+| `lib/address.ts` | `composeAddress` — de-duplicating address composition, used by **both** the seller's pickup card and `createShipment`, so the screen cannot disagree with the parcel. |
+| `lib/actions/shipping.ts` | `createShipment` (books with the order's **snapshot ids**, `destinationGuessed` warning on the legacy city-name fallback) · cancel · track · `saveStoreServices` · `setCodEnabled`. |
+| `packages/lib/src/couriers.ts` | **The courier POLICY** (ADR 0010): `SELLER_COURIER_CODES` (8) · `BASELINE_COURIER_CODES` = **spx, jne** (a seller cannot switch them off) · `PRIMARY_CHAIN` · the instant-courier guard. |
+| `packages/lib/src/kiriminaja.ts` | The client. ⚠️ **Version prefixes VARY per endpoint:** `shipping_price` **v6.1** · `request_pickup` **v6.1** · `get_address_by_name` **v2** · `cancel_shipment` **v3** · `kelurahan` / `province` / `tracking` **unversioned**. |
+
+**Order snapshot (0042 + 0049):** `orders.ship_recipient / ship_phone / ship_address / ship_district_id / ship_kelurahan_id / ship_kelurahan_name / ship_postcode`. The shipment is booked with **those exact ids** — the old code re-resolved the destination from the free-text city name and could book a parcel to the wrong district.
+
+**Known drift:** `app/api/public/ongkir/route.ts` still declares a LOCAL `PRIMARY_CHAIN = ["spx","jne","jnt"]` instead of importing the shared one (`["spx","jne"]`). It should import from `@tokophi/lib/couriers`.
 
 ---
 
@@ -116,9 +152,13 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 
 ## 7. Data mapping (schema domains → SCHEMA.md)
 
-**68 tables** (verified from the catalog — see `SCHEMA.md` §1). Domains: **identity** (accounts, stores, store_stats, users, store_users, locations) · **catalog** (products, product_media, product_options/variants, inventory_levels, collections + membership/conditions, **media**) · **suppliers/purchasing** · **orders/fulfillment** (orders, line_items, payments) · **customers/CRM** (customers — `registered_at` NULL = guest, **checkout_sessions** 0044/0045, segments, leads, followups, wa_templates) · **discounts** · **content** (pages, articles, menus, **page_templates** ADR 0009) · **marketing/analytics** · **platform** (plans[legacy], invoices, platform_activity, platform_admins, platform_payment_gateways/channels/cod, platform_couriers, shipping_aggregator) · **support** (support_tickets, support_messages) · **chat** (chat_visitors, conversations, conversation_messages) · **settings** (store_settings: couriers[], payment_channels[], payment_fee_bearer, tax, sender).
+**68 tables** (verified from the catalog — see `SCHEMA.md` §1). Domains: **identity** (accounts, stores, store_stats, users, store_users, locations) · **catalog** (products, product_media, product_options/variants, inventory_levels, collections + membership/conditions, **media**) · **suppliers/purchasing** · **orders/fulfillment** (orders — incl. the **`ship_*` address snapshot** 0042/0049, line_items, payments, fulfillments) · **customers/CRM** (customers — `registered_at` NULL = guest, **checkout_sessions** 0044/0045, segments, leads, followups, wa_templates) · **discounts** · **content** (pages, articles, menus, **page_templates** ADR 0009) · **marketing/analytics** · **platform** (plans[legacy], invoices, platform_activity, platform_admins, platform_payment_gateways/channels/cod, platform_couriers, shipping_aggregator) · **support** · **chat** · **shipping reference** (`kiriminaja_areas` **7.030** kecamatan · `kelurahan` **78.764** villages, BPS/Kemendagri codes — see below) · **settings** (store_settings: couriers[], `cod_enabled`, `sender_kecamatan_id`/`sender_kelurahan_id`/`sender_zip`, tax; `payment_channels[]`/`payment_fee_bearer` are **dead columns**).
 
-**RLS** (`0012`) on **44** store-scoped tables, enforced under `tokophi_app` — `checkout_sessions` included, because a half-typed checkout carries a name, a phone and an address. Owner exceptions: auth, super-admin, storefront, `/api/public/*`, cron.
+> ⚠️ **The `kelurahan` table's ids are BPS/Kemendagri codes (`34.02.13.2004`), NOT KiriminAja ids (`31483`).**
+> **They are not bookable.** Only ids from the live API (`POST /api/mitra/kelurahan`) can be booked. The local
+> table is a name + kodepos fallback only.
+
+**RLS** (`0012`, extended by 0032/0035/0036) on **43 of the 44 store-scoped tables**, enforced under `tokophi_app` — `checkout_sessions` included, because a half-typed checkout carries a name, a phone and an address. Sole store-scoped exception: `platform_activity`. Owner exceptions by design: auth, super-admin, storefront, `/api/public/*`, cron.
 
 ---
 
@@ -140,7 +180,8 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 | **Single-plan billing + PPN** | `@tokophi/lib/billing` (`computeBilling`,`storeSegment`,`quote`,`withPpn`) · admin `lib/data/billing.ts` + `lib/actions/billing.ts` · `/akun/langganan` + `PaySubscription` + `/faktur/[number]` · cron `/api/cron/billing` |
 | **Store lifecycle segments + VIP** | `stores.comped/compedReason/compedAt` + `store_stats.ship7dAvg` (migr 0026/0027) · super-admin `/toko` tabs + `/toko/[id]` control · `SegmentBadge` |
 | **Two-level courier/payment** | platform_* tables · super-admin Pengaturan · client `payment-methods-card`/shipping · storefront ∩ filter |
-| **Payment gateway fees** | `@tokophi/lib/payment-fees` · `store_settings.payment_fee_bearer` (migr 0028) · client `payment-fees-card` |
+| **Shipping, kelurahan-precise** | `lib/shipping-quote.ts` · `lib/cod.ts` · `lib/shipping-weight.ts` · `lib/data/areas.ts` · `lib/address.ts` · `lib/actions/shipping.ts` · `@tokophi/lib/{couriers,kiriminaja}` · migrations **0042** (`ship_*` snapshot) + **0046** (`kelurahan` ref table) + **0049** (`ship_kelurahan_id/_name`, `sender_zip`) — **see §4.1 + FLOWS §5 + ADR 0010** |
+| ~~**Payment gateway fees**~~ | **DOES NOT EXIST.** `@tokophi/lib/payment-fees` has **zero importers** and is display-only; `store_settings.payment_fee_bearer` + `payment_channels` are **dead columns** (kept, not dropped) and the client "Pembayaran" tab that wrote them was removed 2026-07-13 — nothing ever read either value. If a fee-bearer feature is wanted it must be **built into checkout pricing**, not merely stored. |
 | **Support tickets (2-sided)** | `support_tickets`/`support_messages` (migr 0030) · admin `/bantuan` + `lib/actions/support.ts` · super `/tiket` + `data.ts`/`actions.ts` |
 | **Media library + WebP** | `media` table (migr 0033) · `lib/actions/media.ts` (`saveImage` sharp→WebP, already-WebP kept pixel-perfect) · `/files` · `/api/uploads/[name]` · 2MB cap |
 | **Store Builder (ADR 0009)** | `page_templates` (migr 0031/0032) · `stores.logo_url/brand_color` · `@tokophi/sections` · admin `/tema` (Puck) · storefront renderer · `@tokophi/lib/colors` |
@@ -163,8 +204,27 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 
 ## 11. Infra mapping
 
-- **Live:** Vultr Singapore (`45.76.146.40`) + **Coolify v4** (Docker Compose build pack). Domains `admin.`/`super.`/`toko.45.76.146.40.sslip.io`. Deploy = push `main` → Coolify (or API `POST /api/v1/deploy?uuid=…`).
-- **Compose** (`docker-compose.coolify.yml`): `postgres` (volume `tokophi-pgdata`) + one-off `migrate` (drizzle migrate + **idempotent seed**, `SEED_FORCE=1` to force) + `admin` (volume `tokophi-uploads`) + `super-admin` + `storefront` (builds at start) + `cron` (daily billing) + `backup` (daily `pg_dump -Fc` → `tokophi-backups` volume, keeps last 7).
-- **Migrations:** `packages/db/drizzle/` — current head **0033**. `npm run generate` after schema edits; migrate runs on deploy.
-- **Env** (Coolify): `DATABASE_URL`, `AUTH_SECRET`, `KIRIMINAJA_*`, `AUTOLARIS_*`, `CRON_SECRET`, `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API`.
-- **Deferred → prod:** uploads → MinIO/S3 (currently container volume, admin-served — storefront can't yet show *uploaded* product images, only seeded `/products/*.webp`) · email/WA comms (tickets/reminders audit-only now) · HTTPS + custom domain (tokophi.com in Cloudflare, DNS not pointed) · Hetzner migration (host-agnostic).
+- **Live on `tokophi.com`** (since 2026-07-13): `tokophi.com`/`www` = landing · `app.` = admin · `rich.` = super-admin · `toko.` = demo store · **`<slug>.tokophi.com` = that merchant's storefront** (ONE container serves every store; tenant from the `Host` header, ADR 0009). Host: Vultr Singapore + **Coolify v4** (Docker Compose build pack). Deploy = push `main` → Coolify. ⚠️ Every DNS record must stay **Cloudflare-proxied** — the wildcard TLS is a Cloudflare **Origin CA** cert, which browsers do not trust directly. See `DEPLOY.md`.
+- **Compose** (`docker-compose.coolify.yml`): `postgres` (volume `tokophi-pgdata`) + one-off `migrate` (drizzle migrate + **idempotent seed**, `SEED_FORCE=1` to force) + `admin` (volume `tokophi-uploads`) + `super-admin` + `storefront` + `landing` (**no DB, no `depends_on`** — it must serve even when the rest is down) + `cron` (daily billing) + `backup` (daily `pg_dump -Fc`, keeps last 7).
+- **Migrations:** `packages/db/drizzle/` — current head **0049**. `npm run generate` after schema edits; migrate runs on deploy.
+- **Env** (Coolify): `DATABASE_URL`, `AUTH_SECRET`, `KIRIMINAJA_*`, `AUTOLARIS_*`, `CRON_SECRET`, `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API`, `CHECKOUT_RECOVERY_SECRET`.
+- **Deferred → prod:** uploads → MinIO/S3 (currently a container volume, admin-served) · email/WA comms (tickets/reminders are audit-only) · `KIRIMINAJA_ENV=production` (**it defaults to `sandbox` — an unset env in production silently talks to the sandbox and books no real parcels**) · Hetzner migration (host-agnostic).
+
+---
+
+## 12. ⚠️ Two shared landmines in `packages/db`
+
+Both cost a working day; both are invisible until something downstream is silently broken.
+
+1. **`npm run seed` used to WIPE the 78k-row `kelurahan` reference table.** It was missing from `truncateAll()`'s
+   keep-list (next to `kiriminaja_areas`), so every reseed silently killed the checkout's kodepos auto-fill until
+   someone re-ran `seed:areas`. Fixed — **keep it in the keep-list.**
+2. **A migration whose journal `when` is stamped in the FUTURE makes drizzle SKIP later migrations — while
+   printing "migrations applied successfully".** `drizzle-kit` applies a migration only when
+   `folderMillis > max(created_at)`. `0048`'s `when` is `1784106162290` (in the future), so a truthfully-stamped
+   `0049` was skipped **silently**. `0049` bumps its `when` above it. **Anyone adding `0050` must check
+   `packages/db/drizzle/meta/_journal.json` and do the same** until `0048` is corrected. A silent data-loss trap.
+
+**And one process trap:** local `main` was once ~90 commits behind `origin/main`, and a session built a duplicate
+"foundation" on the stale base — conflicting column names, and a migration that never applied.
+**`git fetch && git log origin/main` before starting anything.**

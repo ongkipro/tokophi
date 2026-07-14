@@ -1,7 +1,7 @@
 # TokoΦ — Product Requirements Document (v0.5)
 
 > **Rewritten 2026-07-14 against the code and the database.** Prior versions of this PRD described the
-> product as it was *planned*, not as it *is*: they claimed 54 tables (there are 67), three surfaces
+> product as it was *planned*, not as it *is*: they claimed 54 tables (there are **68**), three surfaces
 > (there are four), a payment fee-bearer feature (it does not exist), and an ad-platform integration
 > (there is none). **Everything below is either verified or explicitly labelled aspirational.**
 >
@@ -170,6 +170,55 @@ next lever and it is not built.
 
 ---
 
+## 4.1 Shipping: what the merchant gets, and what it costs us to be precise
+
+**Full mechanics: [`FLOWS.md` §5](docs/FLOWS.md). Courier policy: [ADR 0010](decisions/0010-courier-policy.md).**
+The product-level facts:
+
+> ### 🚚 Kecamatan PRICES the parcel. Kelurahan BOOKS it.
+> KiriminAja's `shipping_price` accepts village ids and **ignores them** — a nonsense village id returns the
+> identical services at identical costs. **Tariffs are kecamatan-level.** The **kelurahan** is what
+> `request_pickup` books against and what a driver reads on the label. Quoting a village would imply a
+> precision the price does not have.
+
+**The shopper picks two things; everything else is derived.** Kecamatan → kelurahan; **kota, provinsi and
+kodepos all fall out of the pick** (KiriminAja returns a `postal_code` per village). The checkout went from
+nine typed fields to four. A typed province was never a fact anyway — it was the COD hole.
+
+**The order snapshots where it is going** (`orders.ship_*`, migrations 0042 + 0049) and the shipment is booked
+with **those exact ids**. Before that, the booking re-resolved the destination from the free-text city name —
+which is how a Surabaya parcel was once booked to Lampung. **The address belongs to the transaction, not to
+the person:** without the snapshot, a buyer who moves house moves every past order with them, and a reprinted
+label goes to the wrong door.
+
+**Courier policy (ADR 0010) — a curated list, not the whole roster:**
+
+| | |
+|---|---|
+| A seller may offer | **8 couriers**: SPX, JNE, J&T, Lion, SAP, SiCepat, ID Express, AnterAja |
+| A seller **cannot switch off** | the **STANDARD service** of **SPX** (the primary + **the COD rail**) and of **JNE** (the backup for routes SPX does not serve) |
+| A seller **may** switch off | **express** (JNE YES / next-day) and **economy** (SPX Economy) — these are a merchant's choice |
+| Platform-only | **J&T Cargo, TIKI**, and anything KiriminAja onboards later |
+| Out of scope entirely | instant / on-demand couriers (GoSend, Grab) — removed, with a guard left behind |
+
+**The baseline is a SERVICE, not a courier.** A merchant may reasonably not want next-day, and may reasonably
+not want a slow economy tier. What they may not do is leave a route with **no ordinary way to ship on it** —
+so the two `group:"regular"` services (SPX Standard, JNE Express Reguler) are locked, and everything else is
+free. ⚠️ **Match on `group`, never on the name: JNE's *standard* service is called "JNE Express Reguler"** —
+the word "Express" is in the name of the service that is not express.
+
+> ⚠️ **"Enabled" does not mean "the shopper will see it." Availability is decided per PICKUP ORIGIN.**
+> Measured: **J&T quotes from Jakarta and Yogyakarta origins but never from Gubeng (Surabaya)** — to any
+> destination. A courier that does not collect from the seller's warehouse is simply absent from the quote,
+> however green its toggle looks. The seller UI does not yet say this. It should.
+
+**Speed is a product feature here.** An unfiltered rate call makes KiriminAja walk its whole roster —
+**5,5 seconds**. Naming the enabled couriers brings it to **0,5 s**, and the checkout opens by pricing **one**
+courier (SPX → JNE) and fetches the rest only if the shopper asks for them. A shipping step that takes five
+seconds to appear is a shipping step a shopper leaves.
+
+---
+
 ## 5. Order lifecycle
 
 `baru → diproses → dikirim → selesai | batal | retur`
@@ -181,9 +230,10 @@ fails the pending payment, and claws the credit back with an opposing ledger ent
 Full transition table — including what each one does to inventory and to the ledger — is
 [`UML.md` §3.1](docs/UML.md). Read it before touching `setOrderStatus`.
 
-**Known gap:** `orders.courier` is NULL on 699 of 700 rows, because a regular checkout books no
+**Known gap:** `orders.courier` is NULL on **every** row (702/702), because a regular checkout books no
 shipment. So the per-courier return-rate report — **the number the whole COD policy is betting on** —
-cannot yet produce a per-courier answer.
+cannot yet produce a per-courier answer. *(The order does now snapshot the destination — see §4.1 — so
+the missing piece is only the courier/service.)*
 
 ### 5.1 Before the order: the checkout that never became one
 
@@ -220,9 +270,10 @@ credential for a stranger's name, phone and address the moment it is forwarded o
 **normal** case, not a defect: a registration wall in front of an Indonesian checkout is the most
 reliable way to lose the sale. The admin styles **Tamu as neutral** and Terdaftar as the extra.
 
-⚠️ **Built and proven locally, end-to-end in a real browser — and NOT deployed.** Both commits sit on a
-branch; production still records nothing. The ageing sweep is **opportunistic** (a store with no visitors
-never ages its own carts) and the capture rate limiter is in-process. ([`BACKLOG.md`](docs/BACKLOG.md) §P1.8)
+✅ **Merged to `main`.** (It sat on a branch for a while, during which production recorded nothing while the
+docs said the feature existed — "built" and "shipped" are different words.) Still open: the ageing sweep is
+**opportunistic** (a store with no visitors never ages its own carts) and the capture rate limiter is
+in-process. ([`BACKLOG.md`](docs/BACKLOG.md) §P1.8)
 
 ---
 
@@ -246,8 +297,10 @@ contact us about the billing problem that suspended it.
 
 ## 7. Data & tenancy
 
-**68 tables. 46 migrations. RLS on 44.** ([`SCHEMA.md`](docs/SCHEMA.md) — regenerated from the catalog,
-not from memory.)
+**68 tables. 50 migrations (`0000`–`0049`). RLS on 43 of the 44 store-scoped tables.**
+([`SCHEMA.md`](docs/SCHEMA.md) — regenerated from the catalog, not from memory. The shared dev container
+reports 69/44 because an unmerged branch's `color_palettes` migration has been applied to it; count against
+`packages/db/src/schema.ts`.)
 
 **The tenant boundary is RLS, not a hand-written `WHERE`.** Every admin read and write runs inside a
 transaction that sets `app.store_id` and drops to the non-owner `tokophi_app` role, so the policies
