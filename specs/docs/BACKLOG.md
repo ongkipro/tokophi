@@ -171,12 +171,10 @@ unmeasurable**. Ordered.
   coverage fact or a sandbox artefact is **unknown**. Ask KiriminAja. It decides whether the Jasa Kirim
   screen should say "tidak melayani penjemputan dari alamatmu" or hide the courier for that origin — today
   it shows a green toggle that does nothing.
-- [ ] **The courier roster is harvested from ONE reference route** — which is why TIKI never entered it and
-  **no merchant could ever enable it**. Fix to a multi-route union (in flight). Symptom today: `idx`,
-  `jtcargo` and `ninja` carry **1 service each**.
-- [ ] **`PRIMARY_CHAIN` is defined twice** — `packages/lib/src/couriers.ts` says `["spx","jne"]` (ADR 0010);
-  `apps/admin/app/api/public/ongkir/route.ts` still declares a local `["spx","jne","jnt"]`. Import the
-  shared constant.
+- [x] **The courier roster was harvested from ONE reference route** — which is why **TIKI existed and we
+  could not see it**, so no merchant could ever enable it. It is now a **union of 4 routes**
+  (`ROSTER_ROUTES`), priced in parallel and cached for a day. TIKI is now in the roster (platform-only).
+- [x] **`PRIMARY_CHAIN` was defined twice** — the ongkir route now imports the shared constant.
 - [ ] **🔴 The baseline must bind the SERVICE, not the courier.** Decided policy (ADR 0010): a seller cannot
   switch off the **standard** service of SPX and JNE — **but express and economy are theirs to drop.**
   `BASELINE_COURIER_CODES` is a **courier-level** list, so as written it locks the whole courier and a
@@ -193,7 +191,11 @@ unmeasurable**. Ordered.
   ⚠️ **Match on `group: "regular"`, NEVER on the name** — JNE's *standard* service is called **"JNE Express
   Reguler"**, so a name-based rule (`includes("Express")`) locks precisely the wrong row. The Jasa Kirim card
   must show the two locked rows as locked, and leave every economy/next-day/one-day/cargo row togglable.
-- [ ] **The seller UI does not distinguish "enabled" from "available from your origin"** — see above.
+- [x] **The seller UI now distinguishes "enabled" from "available from your origin"** —
+  `apps/admin/lib/courier-coverage.ts` probes coverage from the store's own pickup district and the Jasa
+  Kirim card states it. **UNKNOWN is first-class**: no pickup address / failed probe → no coverage claim at
+  all, and a failed probe is never cached as "does not collect". *(The underlying question — WHY J&T does
+  not collect from Surabaya — is still open, above.)*
 
 ---
 

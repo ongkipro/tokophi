@@ -110,12 +110,13 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 | `lib/data/areas.ts` | `resolveArea` · `areaById` (kota/provinsi **derived** from the district id) · `kelurahanOptions` (KiriminAja first, local `kelurahan` table as the `id:null` fallback) · `verifyKelurahan` (a client-supplied village id is **proven against the destination district** or dropped to NULL). |
 | `lib/address.ts` | `composeAddress` — de-duplicating address composition, used by **both** the seller's pickup card and `createShipment`, so the screen cannot disagree with the parcel. |
 | `lib/actions/shipping.ts` | `createShipment` (books with the order's **snapshot ids**, `destinationGuessed` warning on the legacy city-name fallback) · cancel · track · `saveStoreServices` · `setCodEnabled`. |
-| `packages/lib/src/couriers.ts` | **The courier POLICY** (ADR 0010): `SELLER_COURIER_CODES` (8) · `BASELINE_COURIER_CODES` = **spx, jne** (a seller cannot switch them off) · `PRIMARY_CHAIN` · the instant-courier guard. |
+| `packages/lib/src/couriers.ts` | **The courier POLICY** (ADR 0010): `SELLER_COURIER_CODES` (8) · `BASELINE_COURIER_CODES` = **spx, jne** (a seller cannot switch them off — ⚠️ courier-level in code, **service-level** in policy: only the *standard* service is meant to be locked) · `PRIMARY_CHAIN` · the instant-courier guard. |
+| `lib/courier-coverage.ts` | **"Enabled" ≠ "available".** Probes, per courier, whether it actually collects from *this store's* pickup district (`kaCoverage`). **UNKNOWN is first-class** — no pickup address or a failed probe renders no coverage claim, and a failure is never cached as "does not collect". |
 | `packages/lib/src/kiriminaja.ts` | The client. ⚠️ **Version prefixes VARY per endpoint:** `shipping_price` **v6.1** · `request_pickup` **v6.1** · `get_address_by_name` **v2** · `cancel_shipment` **v3** · `kelurahan` / `province` / `tracking` **unversioned**. |
 
 **Order snapshot (0042 + 0049):** `orders.ship_recipient / ship_phone / ship_address / ship_district_id / ship_kelurahan_id / ship_kelurahan_name / ship_postcode`. The shipment is booked with **those exact ids** — the old code re-resolved the destination from the free-text city name and could book a parcel to the wrong district.
 
-**Known drift:** `app/api/public/ongkir/route.ts` still declares a LOCAL `PRIMARY_CHAIN = ["spx","jne","jnt"]` instead of importing the shared one (`["spx","jne"]`). It should import from `@tokophi/lib/couriers`.
+**The roster is a UNION of 4 reference routes** (`ROSTER_ROUTES` in `packages/lib/src/kiriminaja.ts`) — KiriminAja has no list-couriers endpoint, and a single lane once hid TIKI entirely.
 
 ---
 
