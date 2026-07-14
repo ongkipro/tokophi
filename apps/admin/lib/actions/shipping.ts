@@ -7,9 +7,10 @@ import { normalizePhone } from "@tokophi/lib/validate";
 import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant, type Tx } from "@/lib/tenant";
 import { getCodPolicy } from "@/lib/cod";
-import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
+import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kaKelurahan, kiriminajaConfigured, type KaKelurahan } from "@tokophi/lib/kiriminaja";
 import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
-import { resolveArea, provinceForDistrict } from "@/lib/data/areas";
+import { resolveArea, provinceForDistrict, areaById } from "@/lib/data/areas";
+import { composeAddress } from "@/lib/address";
 
 export type Rate = { service: string; code: string; type: string; cost: number; etd: string; cod: boolean; group: string };
 
@@ -92,7 +93,11 @@ export async function getShippingRates(input: {
   const ctx = await withCurrentTenant(async (db) => {
     const [store] = await db.select({ city: schema.stores.city }).from(schema.stores).where(eq(schema.stores.id, session.storeId)).limit(1);
     const [settings] = await db
-      .select({ kecamatanId: schema.storeSettings.senderKecamatanId, kecamatanName: schema.storeSettings.senderKecamatanName })
+      .select({
+        kecamatanId: schema.storeSettings.senderKecamatanId,
+        kecamatanName: schema.storeSettings.senderKecamatanName,
+        kelurahanName: schema.storeSettings.senderKelurahanName,
+      })
       .from(schema.storeSettings)
       .limit(1);
     const order = input.orderNumber
@@ -101,6 +106,7 @@ export async function getShippingRates(input: {
             .select({
               id: schema.orders.id,
               districtId: schema.orders.shipDistrictId,
+              kelurahanName: schema.orders.shipKelurahanName,
               city: schema.orders.city,
               subtotal: schema.orders.subtotalIdr,
               total: schema.orders.totalIdr,
@@ -117,8 +123,19 @@ export async function getShippingRates(input: {
   // ORIGIN = the seller's saved pickup address (Pengaturan → Alamat) — the address the courier is
   // actually sent to. Only when it is missing do we fall back to a fuzzy match on the store's city,
   // and the label below says so.
+  //
+  // ⚠️ The KELURAHAN does not enter the quote, and that is not an omission. `shipping_price` takes
+  // village params and silently discards them — a nonsense destination village id returns the same
+  // 20 services at the same costs (sandbox, 2026-07-14). Tariffs are kecamatan-level. The village is
+  // carried into the BOOKING (`request_pickup`) and onto the label, where it does change where the
+  // parcel lands. Quoting it here would be theatre.
   let origin = ctx.settings?.kecamatanId ?? undefined;
   let originName = ctx.settings?.kecamatanName ?? "";
+  if (origin && ctx.settings?.kelurahanName) {
+    // composeAddress, not string concat: "Gubeng" (kelurahan) + "Gubeng, Surabaya, Jawa Timur"
+    // (kecamatan) reads as "Gubeng, Gubeng, Surabaya…" otherwise. See lib/address.ts.
+    originName = composeAddress([ctx.settings.kelurahanName, originName]);
+  }
   if (!origin) {
     const opts = await resolveArea(ctx.storeCity, 1);
     origin = opts[0]?.id;
@@ -130,8 +147,11 @@ export async function getShippingRates(input: {
   let destination = ctx.order?.districtId ?? undefined;
   let destinationName = "";
   if (destination) {
-    destinationName = (await provinceForDistrict(destination))
-      ? `${ctx.order?.city ?? ""} (kecamatan tujuan pesanan)`.trim()
+    // Name it from the district id itself (kiriminaja_areas), not from the order's free-text city —
+    // the id is the thing being priced, so the label must be what the id actually says it is.
+    const area = await areaById(destination);
+    destinationName = area
+      ? composeAddress([ctx.order?.kelurahanName, area.text])
       : String(destination);
   } else if (ctx.order?.city) {
     // Pre-0042 orders carry no district snapshot. Fuzzy-match their city — and SAY it is a guess.
@@ -176,6 +196,24 @@ export async function searchArea(q: string): Promise<{ id: number; text: string 
   return resolveArea(q.trim());
 }
 
+/**
+ * The villages of a kecamatan, for step 2 of the pickup-address picker.
+ *
+ * Straight from KiriminAja (`kaKelurahan`), NOT from the local `kelurahan` reference table — and the
+ * difference is the whole point. The local table is keyed by the Kemendagri code
+ * ("11.01.01.2001"); `request_pickup` only accepts KiriminAja's own numeric `kelurahan_id`. A name
+ * we could get from either; the id that actually books a pickup exists in exactly one of them.
+ *
+ * An empty list is NOT an error — it means KiriminAja has no village breakdown for that district. The
+ * card then keeps the kecamatan and lets the merchant type the kodepos, because a pickup with no
+ * village is fine (the field is optional) while a guessed one is a wrong address on a real parcel.
+ */
+export async function listKelurahan(kecamatanId: number): Promise<KaKelurahan[]> {
+  if (!(await getSession())) return [];
+  if (!kiriminajaConfigured()) return [];
+  return kaKelurahan(kecamatanId);
+}
+
 // No lat/lng — instant (same-day) couriers were removed and they were the only consumer of the
 // coordinates. `store_settings.sender_lat/sender_lng` still exist in the DB but are DEAD: neither
 // read nor written here. Don't wire them back.
@@ -183,6 +221,7 @@ export type SenderAddress = {
   name: string; phone: string; address: string;
   kecamatanId: number | null; kecamatanName: string;
   kelurahanId: number | null; kelurahanName: string;
+  zip: string;
 };
 
 export async function getSenderAddress(): Promise<SenderAddress | null> {
@@ -194,6 +233,7 @@ export async function getSenderAddress(): Promise<SenderAddress | null> {
       name: s.senderName ?? "", phone: s.senderPhone ?? "", address: s.senderAddress ?? "",
       kecamatanId: s.senderKecamatanId ?? null, kecamatanName: s.senderKecamatanName ?? "",
       kelurahanId: s.senderKelurahanId ?? null, kelurahanName: s.senderKelurahanName ?? "",
+      zip: s.senderZip ?? "",
     };
   });
 }
@@ -202,6 +242,7 @@ export async function saveSenderAddress(input: {
   name: string; phone: string; address: string;
   kecamatanId: number | null; kecamatanName: string;
   kelurahanId?: number | null; kelurahanName?: string;
+  zip?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const { storeId } = await requireCapability("settings:write");
   const values = {
@@ -213,6 +254,9 @@ export async function saveSenderAddress(input: {
     senderAddress: input.address,
     senderKecamatanId: input.kecamatanId, senderKecamatanName: input.kecamatanName,
     senderKelurahanId: input.kelurahanId ?? null, senderKelurahanName: input.kelurahanName ?? "",
+    // Defaulted from the picked kelurahan, then editable — a kelurahan can span several kodepos.
+    // Kept as typed (5 digits or blank); it is written onto the label, not used to price anything.
+    senderZip: input.zip?.trim() || null,
   };
   await withTenant(storeId, (db) =>
     db.insert(schema.storeSettings).values({ storeId, ...values }).onConflictDoUpdate({ target: schema.storeSettings.storeId, set: values }),
@@ -386,6 +430,13 @@ export type CreateShipmentResult = {
   senderIncomplete?: boolean;
   /** Exactly which sender fields are missing. */
   missing?: string[];
+  /**
+   * The parcel WAS booked, but the destination district had to be guessed from the order's city name
+   * (a legacy order with no `ship_district_id`). The merchant must be able to see that — a guessed
+   * district is how a Surabaya parcel gets booked to Lampung, and a silent success is what let that
+   * happen for months. Shown as a warning, not swallowed.
+   */
+  destinationGuessed?: string;
 };
 
 export async function createShipment(input: {
@@ -420,6 +471,7 @@ export async function createShipment(input: {
         shipRecipient: schema.orders.shipRecipient, shipPhone: schema.orders.shipPhone,
         shipAddress: schema.orders.shipAddress, shipPostcode: schema.orders.shipPostcode,
         shipDistrictId: schema.orders.shipDistrictId,
+        shipKelurahanId: schema.orders.shipKelurahanId, shipKelurahanName: schema.orders.shipKelurahanName,
         custName: schema.customers.name, custPhone: schema.customers.phone,
       })
       .from(schema.orders)
@@ -474,15 +526,47 @@ export async function createShipment(input: {
   // `orders.ship_district_id` IS a KiriminAja district id — the one the shopper picked and the one
   // the ongkir they PAID was quoted against. It is the only destination that cannot disagree with
   // where the parcel is going. The city fallback stays for pre-0042 orders and is flagged as a guess.
+  // A LEGACY order (placed before the snapshot existed) has no district id. It is the ONLY case that
+  // may fall back to a name match — and the merchant is told, in the response, that the destination
+  // was guessed, because `resolveArea("Surabaya")[0]` is "Bandar Surabaya, LAMPUNG".
+  const legacy = !o.shipDistrictId;
   const destDistrictId =
     o.shipDistrictId ?? (await resolveArea(o.city ?? "").then((a) => a[0]?.id ?? null));
-  if (!destDistrictId) return { ok: false, error: `Area tujuan "${o.city}" tidak ditemukan di KiriminAja.` };
-  const destAddress = o.shipAddress?.trim() || o.city || "-";
+  if (!destDistrictId) {
+    return {
+      ok: false,
+      error: `Pesanan ${o.number} tidak punya kecamatan tujuan, dan kota "${o.city ?? "—"}" tidak cocok dengan area kurir mana pun. Pesanan lama seperti ini harus dilengkapi alamatnya sebelum bisa dikirim — hubungi pembeli.`,
+    };
+  }
   if (!o.shipAddress?.trim()) {
     // Never book a parcel with no street. A courier cannot deliver to a city name.
     return {
       ok: false,
       error: `Alamat tujuan pesanan ${o.number} tidak lengkap (hanya kota "${o.city ?? "—"}", tanpa alamat jalan). Kurir tidak bisa mengantar tanpa alamat lengkap — hubungi pembeli dan lengkapi alamat pesanan.`,
+    };
+  }
+
+  // ── The address STRING the driver reads ──────────────────────────────────────────────────────
+  // KiriminAja rejects `destination_address` under 10 characters with "Bad Address", and it is right
+  // to: "Jl. A" is not somewhere. But the street line alone is also not the whole address — the
+  // kelurahan and kecamatan are what disambiguate two "Jl. Merdeka No. 12"s in the same city. So the
+  // address we send is COMPOSED from the snapshot: street, kelurahan, kecamatan, kota. Each part is
+  // one the shopper picked or typed; nothing here is inferred.
+  //
+  // If the composition is still under 10 chars we FAIL, loudly, instead of shipping it. A parcel
+  // booked with a bad address is not a bad row in a table — it is a real box that goes nowhere, and
+  // the merchant finds out days later from the buyer.
+  const destArea = await areaById(destDistrictId);
+  const destAddress = composeAddress([
+    o.shipAddress,
+    o.shipKelurahanName,
+    destArea?.district,
+    destArea?.city ?? o.city,
+  ]);
+  if (destAddress.length < 10) {
+    return {
+      ok: false,
+      error: `Alamat tujuan pesanan ${o.number} terlalu pendek ("${destAddress}") — kurir menolak alamat di bawah 10 karakter. Lengkapi alamat pesanan (jalan, RT/RW, patokan) sebelum membuat pengiriman.`,
     };
   }
 
@@ -518,7 +602,10 @@ export async function createShipment(input: {
   const r = await kaCreateOrder(
     {
       name: s.senderName || "Toko", phone: s.senderPhone || "081200000000", address: s.senderAddress || "-",
+      // Pickup precision: the kecamatan is mandatory, the kelurahan + kodepos are what stop a driver
+      // circling the right district looking for the right street (Pengaturan → Pengiriman writes all three).
       kecamatanId: s.senderKecamatanId, kelurahanId: s.senderKelurahanId,
+      zipcode: s.senderZip,
     },
     {
       orderRef: input.orderNumber.replace(/[^A-Za-z0-9]/g, ""),
@@ -528,6 +615,9 @@ export async function createShipment(input: {
       destPhone: o.shipPhone?.trim() || o.custPhone || "081200000000",
       destAddress,
       destKecamatanId: destDistrictId,
+      // The village the shopper picked at checkout (0049). Optional to the courier — null on legacy
+      // orders and on districts KiriminAja has no village list for — so it is passed, never faked.
+      destKelurahanId: o.shipKelurahanId,
       destZipcode: o.shipPostcode?.trim() || undefined,
       weight, width, length, height, itemValue: o.subtotal || o.total || 0, itemName: `Pesanan ${o.number}`,
       service: input.service, serviceType: input.serviceType, shippingCost: input.cost,
@@ -555,7 +645,12 @@ export async function createShipment(input: {
       .where(eq(schema.orders.number, input.orderNumber)),
   );
   revalidatePath(`/pesanan/${input.orderNumber}`);
-  return { ok: true, awb, kaOrderId: r.kaOrderId, pickupNumber: r.pickupNumber, awbPending: !awb };
+  return {
+    ok: true, awb, kaOrderId: r.kaOrderId, pickupNumber: r.pickupNumber, awbPending: !awb,
+    destinationGuessed: legacy
+      ? `Pesanan lama: kecamatan tujuan ditebak dari nama kota "${o.city ?? "—"}" → "${destArea?.text ?? destDistrictId}". Periksa alamat sebelum paket dijemput.`
+      : undefined,
+  };
 }
 
 // ---- Cancel / void a shipment → clears the booking from the order ----

@@ -639,10 +639,19 @@ const AD_PROVINCES: Array<{ province: string; spend: number; impressions: number
 ];
 
 async function truncateAll() {
-  // kiriminaja_areas is static reference data (7k districts) — never wiped by demo reseeds.
+  // STATIC REFERENCE DATA — never wiped by a demo reseed. It is not demo data: it is the map of
+  // Indonesia the checkout resolves addresses against, and it is loaded by a SEPARATE script
+  // (`npm run seed:areas`), so anything truncated here does not come back when this file finishes.
+  //
+  // `kelurahan` (78k villages, migration 0046) was missing from this list. Every `npm run seed`
+  // therefore emptied it, and nothing said so: the checkout's kodepos auto-fill silently went dead,
+  // the seller's pickup-village picker had nothing to offer, and the only way back was for someone to
+  // notice and re-run seed:areas. A reference table that a reseed deletes is a reference table that is
+  // wrong most of the time.
   const rows = await client<{ table_name: string }[]>`
     select table_name from information_schema.tables
-    where table_schema = 'public' and table_name not in ('__drizzle_migrations', 'kiriminaja_areas')`;
+    where table_schema = 'public'
+      and table_name not in ('__drizzle_migrations', 'kiriminaja_areas', 'kelurahan')`;
   const list = rows.map((r) => `"${r.table_name}"`).join(", ");
   if (list) await client.unsafe(`truncate ${list} restart identity cascade`);
 }
@@ -703,6 +712,13 @@ async function main() {
     senderAddress: "Jl. Raya Gubeng No. 42, Gubeng",
     senderKecamatanId: 6138,
     senderKecamatanName: "Gubeng, Surabaya, Jawa Timur",
+    // …and the VILLAGE inside it (0049). A kecamatan is a district, not an address: Gubeng alone spans
+    // six kelurahan, and the courier books the pickup against the village id + kodepos. These are the
+    // real values KiriminAja returns for district 6138 (POST /api/mitra/kelurahan, verified 2026-07-14:
+    // id 69243 "Gubeng", postal_code 60281) — not placeholders, so the seeded store can actually book.
+    senderKelurahanId: 69243,
+    senderKelurahanName: "Gubeng",
+    senderZip: "60281",
     // no senderLat/senderLng — those columns are dead (instant/same-day delivery removed).
   });
   await db.insert(schema.storeStats).values({ storeId: store.id, gmvIdr: STORE.gmv, ordersCount: STORE.orders, productsCount: CATALOG.length, ship7dAvg: 15, updatedAt: TODAY });
@@ -894,6 +910,25 @@ async function main() {
       .limit(1);
     if (row) districtByCity.set(city, row.id);
   }
+
+  // The villages of each of those districts, from the local `kelurahan` reference table (0046).
+  // Demo orders get a REAL kelurahan name + its REAL kodepos, picked deterministically, so the seller's
+  // order screen shows an address that actually exists instead of a plausible-looking string.
+  //
+  // `ship_kelurahan_id` stays NULL on seeded rows on purpose: that column holds KiriminAja's OWN
+  // village id, which only their live API can issue (the local table is keyed by the Kemendagri code —
+  // a different namespace). Inventing an integer to fill it would be worse than leaving it empty: it
+  // would be a bookable-looking id that books the parcel to a village in another regency. Null is the
+  // honest value, the courier treats the village as optional, and real orders get a real id from checkout.
+  const kelByDistrict = new Map<number, { name: string; postcode: string }[]>();
+  for (const districtId of districtByCity.values()) {
+    const rows = await db
+      .select({ name: schema.kelurahan.name, postcode: schema.kelurahan.postcode })
+      .from(schema.kelurahan)
+      .where(eq(schema.kelurahan.districtId, districtId))
+      .orderBy(schema.kelurahan.name); // ordered → the pick below is reproducible
+    if (rows.length) kelByDistrict.set(districtId, rows);
+  }
   const shipRnd = mulberry32(3131);
 
   // orders (+ line items + payment) — customers link by name
@@ -901,6 +936,10 @@ async function main() {
   // `recovered_order_id` is the only thing that makes "pulih" a fact instead of a guess.
   const seededOrders: Array<{ id: string; customer: string; total: number; picks: number[]; minutesAgo: number }> = [];
   for (const o of ORDERS_SEED) {
+    // Deterministic: same seed → same village → same kodepos, every run. No Math.random / Date.now.
+    const oDistrict = districtByCity.get(o.city) ?? null;
+    const oKelList = oDistrict ? kelByDistrict.get(oDistrict) : undefined;
+    const oKel = oKelList?.length ? oKelList[Math.floor(shipRnd() * oKelList.length)] : null;
     const [ord] = await db.insert(schema.orders).values({
       storeId: store.id,
       number: o.number,
@@ -919,8 +958,13 @@ async function main() {
       shipRecipient: o.customer,
       shipPhone: CUSTOMERS.find((c) => c.name === o.customer)?.phone ?? null,
       shipAddress: `${(STREETS[o.city] ?? ["Jl. Merdeka"])[Math.floor(shipRnd() * (STREETS[o.city]?.length ?? 1))]} No. ${1 + Math.floor(shipRnd() * 120)}, RT 0${1 + Math.floor(shipRnd() * 8)}/RW 0${1 + Math.floor(shipRnd() * 9)}`,
-      shipPostcode: `${POST_OF[o.city] ?? "40"}${String(100 + Math.floor(shipRnd() * 899))}`,
-      shipDistrictId: districtByCity.get(o.city) ?? null,
+      // The REAL kodepos of the picked kelurahan when we have one — a synthetic "40xxx" only where the
+      // district has no village list. A postcode that belongs to the village beats one that merely
+      // starts with the right two digits: it is printed on the parcel.
+      shipPostcode: oKel?.postcode ?? `${POST_OF[o.city] ?? "40"}${String(100 + Math.floor(shipRnd() * 899))}`,
+      shipDistrictId: oDistrict,
+      shipKelurahanName: oKel?.name ?? null,
+      shipKelurahanId: null, // KiriminAja's own id — only their live API can issue it (see above)
       placedAt: minutesAgo(o.minutesAgo),
     }).returning();
     await db.insert(schema.orderLineItems).values(

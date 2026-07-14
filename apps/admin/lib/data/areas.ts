@@ -1,7 +1,7 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
 import { or, ilike, eq } from "drizzle-orm";
-import { kaAddressByName } from "@tokophi/lib/kiriminaja";
+import { kaAddressByName, kaKelurahan, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 
 // The STRUCTURED parts, not just the display string: the storefront checkout uses them to auto-fill
 // Kota and Provinsi from the chosen kecamatan, so the shopper types the district once instead of
@@ -120,4 +120,53 @@ export async function kelurahanForDistrict(districtId: number): Promise<Keluraha
     .from(schema.kelurahan)
     .where(eq(schema.kelurahan.districtId, districtId))
     .orderBy(schema.kelurahan.name);
+}
+
+/** A village the courier can actually be BOOKED against: `id` is KiriminAja's own kelurahan id. */
+export type KelurahanOption = { id: number | null; name: string; postcode: string };
+
+/**
+ * The villages of a district, preferring the ones that carry a bookable id.
+ *
+ * Two sources, and they are NOT interchangeable:
+ *   · KiriminAja `POST /api/mitra/kelurahan` — has the numeric `kelurahan_id` that `request_pickup`
+ *     accepts. This is the only source that can produce a BOOKING.
+ *   · the local `kelurahan` table (migration 0046, Kemendagri) — keyed by "11.01.01.2001". Fine for
+ *     a name and a kodepos; useless to the courier.
+ *
+ * So KiriminAja wins when it answers, and the local table is the fallback for the ~4% of districts it
+ * has no list for (and for when the courier API is down — a checkout must not lose its kodepos field
+ * because an upstream is having a bad day). Fallback rows carry `id: null`, deliberately: a null id
+ * books a parcel with no village, which is legal. A WRONG id books it to the wrong village, which is
+ * not. Never invent one to fill the column.
+ */
+export async function kelurahanOptions(districtId: number): Promise<KelurahanOption[]> {
+  if (!Number.isFinite(districtId) || districtId <= 0) return [];
+  if (kiriminajaConfigured()) {
+    const live = await kaKelurahan(districtId);
+    if (live.length) return live.map((k) => ({ id: k.id, name: k.name, postcode: k.postalCode }));
+  }
+  const local = await kelurahanForDistrict(districtId);
+  return local.map((k) => ({ id: null, name: k.name, postcode: k.postcode }));
+}
+
+/**
+ * Resolve a CLIENT-SUPPLIED kelurahan id against the district the order is actually going to.
+ *
+ * The storefront posts a village id. That is a claim, and this is the boundary: an id that does not
+ * belong to `districtId` is discarded, not stored. Same rule as the district itself (`areaById`) and
+ * for the same reason — the checkout is a form, the API is the truth. A village id from the wrong
+ * kecamatan would sail through `request_pickup` and put the parcel somewhere nobody chose.
+ *
+ * Returns null when it does not verify. Null is a fine outcome: the village is optional to the courier.
+ */
+export async function verifyKelurahan(
+  districtId: number,
+  kelurahanId: number | null | undefined,
+): Promise<{ id: number; name: string } | null> {
+  if (!kelurahanId || !Number.isFinite(kelurahanId) || kelurahanId <= 0) return null;
+  if (!kiriminajaConfigured()) return null;
+  const list = await kaKelurahan(districtId);
+  const hit = list.find((k) => k.id === Number(kelurahanId));
+  return hit ? { id: hit.id, name: hit.name } : null;
 }

@@ -34,6 +34,7 @@ import {
   type TrackResult,
 } from "@/lib/actions/shipping";
 import { buildLabelHtml } from "@/components/admin/pesanan/shipping-label";
+import { composeAddress } from "@/lib/address";
 import { createOrderPayment } from "@/lib/actions/payments";
 import type { OrderDetail as OrderDetailData } from "@/lib/data/order-detail";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@tokophi/ui/dialog";
@@ -246,6 +247,12 @@ export function OrderDetail({
             duration: 8000,
           });
         }
+        // The booking SUCCEEDED but the destination district was guessed from a city name (a legacy
+        // order with no snapshot). That is exactly the case that used to send a Surabaya parcel to
+        // Lampung and report success — so it is never folded into the success toast.
+        if (r.destinationGuessed) {
+          toast.warning("Alamat tujuan ditebak", { description: r.destinationGuessed, duration: 12000 });
+        }
         router.refresh();
       } else if (r.senderIncomplete) {
         // The single most common blocker, and the one the merchant can actually fix. Keep it on
@@ -332,10 +339,20 @@ export function OrderDetail({
     }
     // Street only when the saved address actually belongs to this order's city; otherwise the
     // label carries the destination the order recorded and nothing more.
+    //
+    // The label is the thing a human driver reads at the door, so it carries the SAME composed
+    // address createShipment sends to the courier — street, kelurahan, kecamatan, kota, provinsi,
+    // kodepos. Printing a shorter address than the one that was booked is how a parcel with a valid
+    // AWB still gets returned: the scan says the right district, the paper says half an address.
     const dest = usableAddress
-      ? [usableAddress.street, usableAddress.city, usableAddress.province, usableAddress.postcode]
-          .filter(Boolean)
-          .join(", ")
+      ? composeAddress([
+          usableAddress.street,
+          usableAddress.kelurahan && `Kel. ${usableAddress.kelurahan}`,
+          usableAddress.kecamatan && `Kec. ${usableAddress.kecamatan}`,
+          usableAddress.city,
+          usableAddress.province,
+          usableAddress.postcode,
+        ])
       : destination;
 
     let html: string;
@@ -731,22 +748,50 @@ export function OrderDetail({
                 </div>
               )}
               <Separator />
-              {/* Destination = orders.city/province. A street is shown ONLY when the customer's
-                  saved address is in that same city; otherwise we say the street is unknown. */}
-              <div className="flex gap-2 text-muted-foreground">
-                <MapPin className="mt-0.5 size-4 shrink-0" />
-                <span className="leading-snug">
-                  {usableAddress ? (
-                    [usableAddress.street, usableAddress.city, usableAddress.province, usableAddress.postcode]
-                      .filter(Boolean)
-                      .join(", ")
-                  ) : (
-                    <>
-                      {destination}
-                      <span className="block text-xs">Alamat lengkap belum tercatat untuk pesanan ini</span>
-                    </>
-                  )}
-                </span>
+              {/* The FULL destination, as the courier will receive it: penerima, HP, jalan, kelurahan,
+                  kecamatan, kota, provinsi, kodepos. It used to be the city alone — which is what the
+                  booking used to send as the street address, and a driver cannot deliver to a city.
+                  Kecamatan/kota here are named from `ship_district_id`, the same id createShipment
+                  books against, so what the merchant reads is what the parcel gets. */}
+              <div className="flex gap-2">
+                <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                {usableAddress ? (
+                  <div className="space-y-0.5 leading-snug">
+                    {(usableAddress.recipient || usableAddress.phone) && (
+                      <p className="text-foreground">
+                        {usableAddress.recipient}
+                        {usableAddress.recipient && usableAddress.phone && " · "}
+                        {usableAddress.phone && <span className="tabular-nums">{usableAddress.phone}</span>}
+                      </p>
+                    )}
+                    {usableAddress.street && <p className="text-muted-foreground">{usableAddress.street}</p>}
+                    <p className="text-muted-foreground">
+                      {[
+                        usableAddress.kelurahan && `Kel. ${usableAddress.kelurahan}`,
+                        usableAddress.kecamatan && `Kec. ${usableAddress.kecamatan}`,
+                        usableAddress.city,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {[usableAddress.province, usableAddress.postcode].filter(Boolean).join(" ")}
+                    </p>
+                    {!usableAddress.kelurahan && (
+                      // Not an error — the shopper may have checked out before the step existed, or the
+                      // district may have no village list. Say which field is thin rather than imply the
+                      // address is complete.
+                      <p className="text-[11px] text-muted-foreground/80">
+                        Kelurahan belum tercatat untuk pesanan ini.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <span className="leading-snug text-muted-foreground">
+                    {destination}
+                    <span className="block text-xs">Alamat lengkap belum tercatat untuk pesanan ini</span>
+                  </span>
+                )}
               </div>
               {address?.street && !address.cityMatchesOrder && (
                 <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 text-xs">
