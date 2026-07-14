@@ -6,15 +6,24 @@
 // ⚠️ THIS IS A DISPLAY ROSTER — code → human name + sort order. It deliberately carries NO service
 // list any more. It used to (`services: ["Reguler", "YES"]`), and that hand-written list was the
 // single source of every shipping bug we have had:
-//   · it named TIKI and Pos Indonesia — KiriminAja returns NEITHER, so a merchant could switch on a
-//     courier that can never be booked;
 //   · it gave SPX "Standard"/"Hemat" when the live service_types are "1" and "3" — the storefront
 //     filter compared "Hemat" against "3" and silently matched nothing;
 //   · the seed wrote those STRINGS into platform_couriers.services while the KiriminAja sync writes
 //     OBJECTS, so the same jsonb column held two shapes at once (migration 0047 normalised it).
-// The authoritative service catalogue is the API: kaServices() → platform_couriers.services.
-// Verified against the sandbox 2026-07-14 (Menteng → Coblong, 1 kg): 10 couriers, 20 services,
-// exactly the codes below. Anything not in this list is not a courier KiriminAja will carry.
+// The authoritative service catalogue is the API: kaServices() → platform_couriers.services. This
+// file only supplies the human NAME and the display order; a code missing here still syncs and still
+// renders (courierName falls back to the code) — it just sorts last.
+//
+// ⚠️ TIKI: an earlier version of this comment said "KiriminAja returns neither TIKI nor Pos" — HALF
+// WRONG, and the half that was wrong cost us a courier. TIKI **is** carried; it simply does not serve
+// the one reference route the roster used to be harvested from (Menteng → Coblong). Verified live
+// 2026-07-14 across four routes: TIKI quotes on Menteng → Pleret, Gubeng → Menteng and Danurejan →
+// Menteng. The union of those routes is 11 couriers / 23 services — the codes below. (Pos Indonesia
+// really is absent from every route we have priced.) Never conclude "courier X does not exist" from
+// a single route: see ROSTER_ROUTES in ./kiriminaja.ts.
+/** Codes are compared case- and punctuation-insensitively ("J&T" / "jnt" / "JNT" are one courier). */
+const normalizeCode = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
 export type CourierMeta = { code: string; name: string };
 
 export const COURIERS: CourierMeta[] = [
@@ -27,6 +36,7 @@ export const COURIERS: CourierMeta[] = [
   { code: "lion", name: "Lion Parcel" },
   { code: "ninja", name: "Ninja Xpress" },
   { code: "idx", name: "ID Express" },
+  { code: "tiki", name: "TIKI" },
   { code: "jtcargo", name: "J&T Cargo" },
 ];
 
@@ -49,7 +59,7 @@ export const SELLER_COURIER_CODES = [
   "spx", "jne", "jnt", "lion", "sap", "sicepat", "idx", "anteraja",
 ];
 export const isSellerCourier = (code: string | null | undefined): boolean =>
-  !!code && SELLER_COURIER_CODES.includes(normalize(code));
+  !!code && SELLER_COURIER_CODES.includes(normalizeCode(code));
 
 // SPX is the primary: it is the COD rail (our own gateway economics depend on it) and it is the only
 // courier that quoted on every route we have measured. JNE is the backup — SPX first, JNE where SPX
@@ -66,8 +76,6 @@ export const PRIMARY_CHAIN = ["spx", "jne"];
 // Jakarta and Yogyakarta origins but NOT from Gubeng (Surabaya) — to any destination. So "enabled"
 // never means "the shopper will see it"; a courier that does not collect from the seller's warehouse
 // is simply absent. Surfaces must SAY that rather than show a green toggle that does nothing.
-
-const normalizeCode = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Instant / on-demand couriers are OUT OF SCOPE (product decision, 2026-07).
@@ -99,15 +107,13 @@ export const INSTANT_COURIER_CODES = [
 /** Service groups KiriminAja uses for rider-dispatch delivery (its instant endpoints). */
 export const INSTANT_GROUPS = ["instant", "ondemand"];
 
-const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-
 /** True for an on-demand/rider courier code (gosend, grab_express, borzo…) in any spelling. */
 export const isInstantCourier = (code: string | null | undefined): boolean => {
   if (!code) return false;
-  const c = normalize(code);
+  const c = normalizeCode(code);
   return INSTANT_COURIER_CODES.some((i) => c === i || c.startsWith(i));
 };
 
 /** True for a courier/service pair that is instant delivery — by courier code OR by service group. */
 export const isInstantService = (s: { courier?: string | null; group?: string | null }): boolean =>
-  isInstantCourier(s.courier) || (!!s.group && INSTANT_GROUPS.includes(normalize(s.group)));
+  isInstantCourier(s.courier) || (!!s.group && INSTANT_GROUPS.includes(normalizeCode(s.group)));

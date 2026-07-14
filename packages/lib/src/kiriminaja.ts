@@ -1,6 +1,7 @@
 import "server-only";
 import { cacheGet, cacheSet } from "./cache";
 import { isConfigured } from "./integration-status";
+import { isInstantService } from "./couriers";
 
 // KiriminAja Mitra API client (platform-managed courier aggregator). Endpoints + version
 // prefixes verified against the sandbox Postman collection — versions vary PER endpoint.
@@ -174,32 +175,50 @@ export async function kaTrack(orderId: string): Promise<{ ok: boolean; data?: un
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Live service roster.
+// Live service roster — the UNION of several reference routes, never a single one.
 //
-// KiriminAja has no "list couriers" endpoint — the roster is whatever `shipping_price`
-// returns for a route. So we price ONE reference route and harvest the services from the
-// response. That is the only source of truth: it carries the real `service_type` codes,
-// the speed `group`, and — crucially — the per-service `cod` flag.
+// KiriminAja has no "list couriers" endpoint: the roster is whatever `shipping_price` returns for a
+// route. It used to be harvested from ONE route (Menteng → Coblong) and that was silently wrong,
+// because **coverage is route- AND origin-dependent**. TIKI quotes on Menteng → Pleret and on
+// Danurejan → Jakarta but does NOT serve Menteng → Coblong — so it never entered the roster, never
+// entered `platform_couriers`, and no merchant could ever have enabled it. A courier absent from one
+// route is not a courier that does not exist.
 //
-// This replaces the hand-written COURIERS list in ./couriers.ts, which had drifted badly:
-// it listed TIKI and Pos Indonesia (KiriminAja returns NEITHER) and gave SPX the services
-// "Standard"/"Hemat" when the live service_types are "1" and "3". A merchant could enable a
-// service that does not exist, and the storefront filter would silently never match it.
+// So we price a SPREAD of routes and merge the results by `courier:service_type`:
+//   2099 → 356   Menteng (Jakarta Pusat)  → Coblong (Bandung)      — the classic Jawa corridor
+//   2099 → 548   Menteng (Jakarta Pusat)  → Pleret (Bantul, DIY)   — same origin, RURAL destination
+//   6138 → 2099  Gubeng (Surabaya)        → Menteng                — a DIFFERENT origin (East Java)
+//   6981 → 2099  Danurejan (Yogyakarta)   → Menteng                — a third origin (DIY)
+// Two origins would have missed the origin effect; two destinations would have missed the rural
+// effect. Verified live 2026-07-14 (sandbox, 1 kg): the union is **11 couriers / 23 services** —
+// the single route gave 10/20 and lost `tiki` entirely. J&T (`jnt`) does not quote from Gubeng at
+// all, on any destination: proof that "in the roster" ≠ "available to this seller" (see kaCoverage).
 //
-// Reference route = Menteng (Jakarta Pusat) → Coblong (Bandung), 1 kg. Cross-province and
-// well-served, so it exercises every group (cargo / regular / next_day / economy / one_day).
-// Cached for a day: the roster changes when KiriminAja onboards a courier, not per request.
+// COD MERGE RULE: a service is `cod: true` if **ANY** route reports it COD-capable. `cod` here is a
+// CEILING ("KiriminAja can collect cash on this service somewhere"), not a promise for a given
+// parcel — the platform still has to tick `codAllowed` per service (super-admin), the store still has
+// to opt in, and the province allow-list + KiriminAja itself still decide the actual order. Taking
+// the intersection instead would permanently hide a real capability (TIKI Reguler reports cod=true on
+// 3 of 4 routes and false on the 4th) and make it un-tickable forever, which is a silent, invisible
+// loss; over-reporting here costs nothing because the ceiling is never the last gate.
+//
+// The routes are priced in PARALLEL and the whole roster is cached for a day: it changes when
+// KiriminAja onboards a courier, not per request.
 // ─────────────────────────────────────────────────────────────────────────────
 const ROSTER_TTL = 24 * 60 * 60 * 1000;
-const REF_ORIGIN = 2099; // Menteng, Jakarta Pusat
-const REF_DEST = 356; // Coblong, Bandung
+const ROSTER_ROUTES: { origin: number; destination: number }[] = [
+  { origin: 2099, destination: 356 }, // Menteng → Coblong (Bandung)
+  { origin: 2099, destination: 548 }, // Menteng → Pleret (Bantul) — rural destination
+  { origin: 6138, destination: 2099 }, // Gubeng (Surabaya) → Menteng — second origin
+  { origin: 6981, destination: 2099 }, // Danurejan (Yogyakarta) → Menteng — third origin
+];
 
 export type KaService = {
   courier: string; // KiriminAja `service` — the courier code (spx, jne, sicepat…)
   serviceType: string; // `service_type` — the code to send back when booking (REG23, "1", FLREG…)
   name: string; // `service_name` — human label ("SPX Standard", "JNE Express Reguler")
   group: string; // speed class: cargo | regular | next_day | economy | one_day
-  cod: boolean; // whether KiriminAja will collect cash for this service
+  cod: boolean; // KiriminAja will collect cash for this service on AT LEAST ONE route (a ceiling)
 };
 
 export async function kaServices(): Promise<{ ok: boolean; services: KaService[]; error?: string }> {
@@ -207,18 +226,99 @@ export async function kaServices(): Promise<{ ok: boolean; services: KaService[]
   const hit = cacheGet<{ ok: boolean; services: KaService[] }>(key);
   if (hit) return hit;
 
-  const r = await kaShippingPrice({ origin: REF_ORIGIN, destination: REF_DEST, weight: 1000, itemValue: 100_000 });
-  if (!r.ok) return { ok: false, services: [], error: r.error ?? "Gagal mengambil daftar layanan." };
+  const routes = await Promise.all(
+    ROSTER_ROUTES.map((r) =>
+      kaShippingPrice({ origin: r.origin, destination: r.destination, weight: 1000, itemValue: 100_000 }),
+    ),
+  );
+  const ok = routes.filter((r) => r.ok);
+  // Every route failed → the API is down or the key is bad. Do NOT cache an empty roster: a cached
+  // "0 couriers" would survive the outage for a day and the next Sync would disable every courier.
+  if (!ok.length) {
+    return { ok: false, services: [], error: routes[0]?.error ?? "Gagal mengambil daftar layanan." };
+  }
 
-  const services: KaService[] = r.results.map((x) => ({
-    courier: x.service,
-    serviceType: x.service_type,
-    name: x.service_name,
-    group: x.group,
-    cod: !!x.cod,
-  }));
-  const out = { ok: true, services };
+  // merge by courier:service_type — first sighting wins for the labels, cod is OR-ed (see above)
+  const merged = new Map<string, KaService>();
+  for (const r of ok) {
+    for (const x of r.results) {
+      const k = `${x.service}:${x.service_type}`;
+      const prev = merged.get(k);
+      merged.set(k, {
+        courier: x.service,
+        serviceType: x.service_type,
+        name: prev?.name ?? x.service_name,
+        group: prev?.group ?? x.group,
+        cod: (prev?.cod ?? false) || !!x.cod,
+      });
+    }
+  }
+  const out = { ok: true, services: [...merged.values()] };
   cacheSet(key, out, ROSTER_TTL);
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PER-ORIGIN COVERAGE — "enabled" is not "the shopper will see it".
+//
+// A courier that does not COLLECT from the seller's pickup district simply never appears in the
+// quote. Measured 2026-07-14: J&T quotes from Jakarta and Yogyakarta origins but not from Gubeng
+// (Surabaya) — to any destination. So a Surabaya merchant can have J&T enabled by the platform,
+// ticked on their own Jasa Kirim screen, and still never sell a single J&T parcel, with nothing
+// anywhere saying why. Both admin surfaces must be able to SAY it.
+//
+// The probe is deliberately CHEAP: ONE priced route per origin (not one per courier — that would be
+// eleven calls to answer one question). The destination is a district every courier serves, so an
+// absence is attributable to the ORIGIN. Cached for a day: coverage changes when a courier changes
+// its pickup footprint, not per request.
+//
+// It answers "who collects from here", NOT "who delivers to the shopper". A courier can collect from
+// the origin and still not reach a remote destination — that is the checkout's quote to answer, and
+// it does, per order. This is the seller-side question, and it is the one nobody was asking.
+// ─────────────────────────────────────────────────────────────────────────────
+const COVERAGE_TTL = 24 * 60 * 60 * 1000;
+const COVERAGE_DEST = 2099; // Menteng (Jakarta Pusat) — the best-served destination in the country
+const COVERAGE_DEST_ALT = 356; // Coblong (Bandung) — used when the origin IS Menteng
+
+export type KaCoverage = {
+  ok: boolean;
+  origin: number; // the pickup district we probed (a KiriminAja kecamatan id)
+  destination: number; // the reference destination the probe priced against
+  couriers: string[]; // courier codes that quoted FROM this origin (instant couriers excluded)
+  services: string[]; // the `courier:service_type` keys that quoted, same filter
+  error?: string; // set when the probe could not run (bad origin, API down) — treat as "unknown"
+};
+
+/**
+ * Which couriers collect from `originId` (a KiriminAja kecamatan/district id — the same currency as
+ * `store_settings.sender_kecamatan_id`). One priced reference route, cached for a day.
+ *
+ * `ok: false` means UNKNOWN, not "nothing covers this origin" — never render an outage as an empty
+ * courier list; say the check failed.
+ */
+export async function kaCoverage(originId: number): Promise<KaCoverage> {
+  const destination = originId === COVERAGE_DEST ? COVERAGE_DEST_ALT : COVERAGE_DEST;
+  if (!Number.isFinite(originId) || originId <= 0) {
+    return { ok: false, origin: originId, destination, couriers: [], services: [], error: "Alamat penjemputan belum diatur." };
+  }
+  const key = `ka:coverage:${originId}`;
+  const hit = cacheGet<KaCoverage>(key);
+  if (hit) return hit;
+
+  const r = await kaShippingPrice({ origin: originId, destination, weight: 1000, itemValue: 100_000 });
+  if (!r.ok) {
+    // not cached — an outage must not be remembered as a coverage fact for a day
+    return { ok: false, origin: originId, destination, couriers: [], services: [], error: r.error ?? "Gagal memeriksa jangkauan kurir." };
+  }
+  const quoted = r.results.filter((x) => !isInstantService({ courier: x.service, group: x.group }));
+  const out: KaCoverage = {
+    ok: true,
+    origin: originId,
+    destination,
+    couriers: [...new Set(quoted.map((x) => x.service))],
+    services: [...new Set(quoted.map((x) => `${x.service}:${x.service_type}`))],
+  };
+  cacheSet(key, out, COVERAGE_TTL);
   return out;
 }
 

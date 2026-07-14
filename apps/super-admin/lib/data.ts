@@ -1,7 +1,7 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
-import { courierName, COURIER_CODES, isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
-import { kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
+import { courierName, COURIER_CODES, isInstantCourier, isInstantService, isSellerCourier, isBaselineCourier } from "@tokophi/lib/couriers";
+import { kiriminajaConfigured, kaCoverage } from "@tokophi/lib/kiriminaja";
 import { autolarisConfigured } from "@tokophi/lib/autolaris";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { type Store, type StoreStatus, type Invoice, type PActivity } from "./types";
@@ -547,7 +547,17 @@ export type CourierService = {
   cod: boolean; // KiriminAja will collect cash for this service
   codAllowed: boolean; // …and we permit it (super-admin's call)
 };
-export type CourierRow = { key: string; name: string; on: boolean; services: CourierService[] };
+// `sellerOffered` / `baseline` are NOT columns — they are the business roster in @tokophi/lib/couriers,
+// carried to the screen so a platform operator can SEE that J&T Cargo and TIKI exist and are
+// deliberately not offered to sellers, instead of wondering why they never show up in a store.
+export type CourierRow = {
+  key: string;
+  name: string;
+  on: boolean;
+  services: CourierService[];
+  sellerOffered: boolean; // in SELLER_COURIER_CODES — a merchant may switch it on
+  baseline: boolean; // spx/jne — always on, cannot be switched off (COD rail + fallback)
+};
 
 export async function getCouriers(): Promise<CourierRow[]> {
   const rows = await db.select().from(schema.platformCouriers);
@@ -565,7 +575,15 @@ export async function getCouriers(): Promise<CourierRow[]> {
         .filter((s): s is CourierService => typeof s === "object" && s !== null && "type" in s)
         .filter((s) => !isInstantService({ courier: c.courier, group: s.group }))
         .map((s) => ({ ...s, codAllowed: !!s.cod && s.codAllowed !== false }));
-      return { key: c.courier, name: courierName(c.courier), on: c.enabled, services };
+      return {
+        key: c.courier,
+        name: courierName(c.courier),
+        // a baseline courier reads ON even if a stale row says otherwise — the action forces it true
+        on: c.enabled || isBaselineCourier(c.courier),
+        services,
+        sellerOffered: isSellerCourier(c.courier),
+        baseline: isBaselineCourier(c.courier),
+      };
     })
     .sort((a, b) => {
       // couriers KiriminAja returned but the old hand-written list never knew about (sap, idx,
@@ -573,6 +591,60 @@ export async function getCouriers(): Promise<CourierRow[]> {
       const ai = order.indexOf(a.key), bi = order.indexOf(b.key);
       return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi) || a.key.localeCompare(b.key);
     });
+}
+
+// ---- per-store courier coverage (KiriminAja, per PICKUP ORIGIN) ----
+//
+// "Enabled" is not "the shopper will see it": a courier that does not COLLECT from this store's
+// warehouse never appears in a quote, no matter how many toggles are green. J&T, measured, does not
+// collect from Gubeng (Surabaya). This makes that visible on the store's page instead of leaving a
+// merchant — and us — to guess why a courier never sells.
+//
+// One priced route per origin (kaCoverage), cached a day. Cross-tenant read on the owner connection,
+// like everything else in super-admin.
+export type StoreCoverage = {
+  ok: boolean;
+  originId: number | null; // store_settings.sender_kecamatan_id
+  originName: string | null; // human district, from kiriminaja_areas
+  covered: string[]; // courier codes that quote from this origin (platform-enabled ones only)
+  missing: string[]; // platform-enabled couriers that do NOT collect here — the whole point
+  message: string; // why, in Bahasa Indonesia, when we cannot answer
+};
+
+export async function getStoreCoverage(storeId: string): Promise<StoreCoverage> {
+  const [settings] = await db
+    .select({ origin: schema.storeSettings.senderKecamatanId })
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.storeId, storeId));
+  const originId = settings?.origin ?? null;
+  if (!originId) {
+    return { ok: false, originId: null, originName: null, covered: [], missing: [], message: "Toko belum mengatur alamat penjemputan, jadi jangkauan kurir tidak bisa diperiksa." };
+  }
+
+  const [area] = await db
+    .select({ district: schema.kiriminajaAreas.districtName, city: schema.kiriminajaAreas.cityName })
+    .from(schema.kiriminajaAreas)
+    .where(eq(schema.kiriminajaAreas.id, originId));
+  const originName = area ? `${area.district}, ${area.city}` : null;
+
+  const [cov, couriers] = await Promise.all([kaCoverage(originId), getCouriers()]);
+  if (!cov.ok) {
+    // an outage is UNKNOWN, never "no courier covers this store"
+    return { ok: false, originId, originName, covered: [], missing: [], message: cov.error ?? "Gagal memeriksa jangkauan kurir." };
+  }
+  const enabled = couriers.filter((c) => c.on).map((c) => c.key);
+  const covered = enabled.filter((c) => cov.couriers.includes(c));
+  const missing = enabled.filter((c) => !cov.couriers.includes(c));
+  return {
+    ok: true,
+    originId,
+    originName,
+    covered,
+    missing,
+    message: missing.length
+      ? `${missing.map(courierName).join(", ")} tidak menjemput dari gudang toko ini — kurir ini tidak akan pernah muncul di checkout-nya.`
+      : "Semua kurir aktif menjemput dari gudang toko ini.",
+  };
 }
 
 // ---- platform team (real operators) ----

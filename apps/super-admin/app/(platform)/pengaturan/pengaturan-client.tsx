@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type Dispatch, type SetStateAction, type ReactNode } from "react";
+import { useState, useEffect, useTransition, type Dispatch, type SetStateAction, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug, QrCode, Landmark, Smartphone, Store, RefreshCw, Info } from "lucide-react";
 import { toast } from "sonner";
@@ -91,6 +91,12 @@ export function PengaturanClient({
   const [gateways, setGateways] = useState(initGateways);
   const [couriers, setCouriers] = useState(initCouriers);
   const [channels, setChannels] = useState(initChannels);
+  // `router.refresh()` re-renders the SERVER component and hands us new props — but useState keeps
+  // its first value forever, so the screen kept showing the pre-Sync roster. A Sync that discovers
+  // TIKI and then does not show TIKI is a Sync that appears broken. Re-seed the local copy whenever
+  // the server sends a different one; the server is the truth right after a save or a sync, which is
+  // the only time these props change.
+  useEffect(() => { setCouriers(initCouriers); }, [initCouriers]);
   const autoGateway = gateways.find((g) => g.key === "autolaris");
   const codGateway = gateways.find((g) => g.key === "cod");
   const activeChannels = channels.filter((c) => c.active).length;
@@ -329,7 +335,13 @@ export function PengaturanClient({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm">
                       <Truck className="size-4 text-emerald-600 dark:text-emerald-400" />
-                      <span>Agregator pengiriman: <span className="font-medium">{aggregator.provider}</span> · <span className="font-medium">{couriers.filter((c) => c.on).length}</span>/{couriers.length} kurir aktif</span>
+                      <span>
+                        Agregator pengiriman: <span className="font-medium">{aggregator.provider}</span> ·{" "}
+                        <span className="font-medium">{couriers.filter((c) => c.on).length}</span>/{couriers.length} kurir aktif
+                        {couriers.filter((c) => !c.sellerOffered).length > 0 && (
+                          <> · <span className="font-medium">{couriers.filter((c) => !c.sellerOffered).length}</span> platform-only</>
+                        )}
+                      </span>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {aggregator.enabled && (
@@ -349,6 +361,8 @@ export function PengaturanClient({
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="max-w-xl text-xs text-muted-foreground">
                     Kurir &amp; layanan datang langsung dari <b>KiriminAja</b> — bukan daftar yang kita tulis sendiri.
+                    Daftar ini adalah gabungan <b>empat rute referensi</b> (Jakarta, Bandung, Bantul, Surabaya, Yogyakarta):
+                    satu rute saja menyembunyikan kurir yang tidak melayani rute itu — begitulah TIKI dulu hilang sama sekali.
                     Aktifkan yang ditawarkan ke semua toko; merchant lalu memilih layanan mana yang ia pakai.
                     Centang <b>COD</b> untuk layanan yang boleh menerima bayar-di-tempat.
                   </p>
@@ -374,25 +388,62 @@ export function PengaturanClient({
                     {i > 0 && <Separator />}
                     <div className="py-3">
                       <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Label htmlFor={`ku-${c.key}`} className="font-medium">{c.name}</Label>
                           {c.on && (
                             <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
                           )}
+                          {c.baseline && (
+                            <Badge variant="secondary" className="border-transparent bg-primary/12 text-primary">Wajib</Badge>
+                          )}
+                          {!c.sellerOffered && (
+                            <Badge variant="secondary" className="border-transparent bg-muted text-muted-foreground">Platform-only</Badge>
+                          )}
                           <span className="text-xs text-muted-foreground">{c.services.length} layanan</span>
                         </div>
-                        <Switch id={`ku-${c.key}`} checked={c.on} onCheckedChange={(v) => toggleCourier(c.key, v)} />
+                        {/* A courier the Seller may not offer, and a baseline courier that may not be
+                            switched off, both get a LOCKED switch — a toggle that changes nothing is a
+                            toggle that lies. The reason is written underneath, not hidden in a tooltip. */}
+                        <Switch
+                          id={`ku-${c.key}`}
+                          checked={c.on}
+                          disabled={c.baseline || !c.sellerOffered}
+                          onCheckedChange={(v) => toggleCourier(c.key, v)}
+                        />
                       </div>
 
-                      {c.on && c.services.length > 0 && (
-                        <div className="mt-2 grid gap-1.5 pl-1">
+                      {c.baseline && (
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Kurir dasar — tidak bisa dimatikan. SPX adalah jalur <b>COD</b> (mematikannya menghapus COD di semua toko)
+                          dan JNE adalah cadangan untuk rute yang tidak dilayani SPX.
+                        </p>
+                      )}
+                      {!c.sellerOffered && (
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Ada di KiriminAja, tapi <b>tidak ditawarkan ke Seller</b> — tidak muncul di layar Jasa Kirim mereka,
+                          jadi tidak ada yang bisa memilihnya. Menambahkannya ke daftar Seller adalah keputusan produk
+                          (<code>SELLER_COURIER_CODES</code>), bukan sakelar di sini.
+                        </p>
+                      )}
+
+                      {/* Layanan selalu ditampilkan — juga untuk kurir yang tidak aktif. Operator platform
+                          harus bisa melihat bahwa TIKI/J&T Cargo memang ada beserta layanannya, bukan
+                          menebak-nebak kenapa kurir itu tidak pernah muncul. COD hanya bisa dicentang pada
+                          kurir yang aktif: izin COD di kurir mati tidak berarti apa-apa. */}
+                      {c.services.length > 0 && (
+                        <div className={cn("mt-2 grid gap-1.5 pl-1", !c.on && "opacity-60")}>
                           {c.services.map((s) => (
                             <div key={s.type} className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-2.5 py-1.5">
                               <div className="min-w-0">
                                 <span className="text-xs font-medium">{s.name}</span>
                                 <span className="ml-2 text-[11px] text-muted-foreground">{GROUP_LABEL[s.group] ?? s.group}</span>
                               </div>
-                              {s.cod ? (
+                              {!s.cod ? (
+                                // KiriminAja tidak melayani COD di layanan ini — tak ada yang bisa kita nyalakan.
+                                <span className="shrink-0 text-[11px] text-muted-foreground">COD tak tersedia</span>
+                              ) : !c.on ? (
+                                <span className="shrink-0 text-[11px] text-muted-foreground">Kurir nonaktif</span>
+                              ) : (
                                 <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px]">
                                   <Checkbox
                                     checked={codOn[`${c.key}:${s.type}`] ?? s.codAllowed}
@@ -400,9 +451,6 @@ export function PengaturanClient({
                                   />
                                   COD
                                 </label>
-                              ) : (
-                                // KiriminAja tidak melayani COD di layanan ini — tak ada yang bisa kita nyalakan.
-                                <span className="shrink-0 text-[11px] text-muted-foreground">COD tak tersedia</span>
                               )}
                             </div>
                           ))}
