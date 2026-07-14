@@ -196,8 +196,12 @@ export function OrderDetail({
   const [codAvailable, setCodAvailable] = React.useState(false);
   const checkOngkir = () => {
     startRate(async () => {
-      const weightGrams = (totalQty || 2) * 500;
-      const r = await getShippingRates({ destinationCity: order.city, weightGrams, itemValue: money.subtotal });
+      // The order number is ALL the server needs — and all it will accept. It prices against the
+      // order's own KiriminAja district (`orders.ship_district_id`: the one the shopper picked and
+      // paid ongkir for) and the real summed weight of its line items. This screen used to also
+      // post `weightGrams: (totalQty || 2) * 500` and `destinationCity: order.city`, and both were
+      // guesses the booking then contradicted — one parcel, two different numbers.
+      const r = await getShippingRates({ orderNumber: order.id.replace("#", "") });
       if (r.ok) {
         setRates(r.rates);
         setRateMeta({ origin: r.origin, destination: r.destination });

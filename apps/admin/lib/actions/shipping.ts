@@ -4,54 +4,167 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { requireCapability } from "@/lib/rbac";
-import { withCurrentTenant, withTenant } from "@/lib/tenant";
+import { withCurrentTenant, withTenant, type Tx } from "@/lib/tenant";
 import { getCodPolicy } from "@/lib/cod";
 import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
-import { resolveArea } from "@/lib/data/areas";
+import { resolveArea, provinceForDistrict } from "@/lib/data/areas";
 
 export type Rate = { service: string; code: string; type: string; cost: number; etd: string; cod: boolean; group: string };
 
-// Live shipping rates from KiriminAja for an order's destination. Resolves the store city
-// (origin) + the order's city (destination) to KiriminAja district IDs, then prices.
+// ─────────────────────────────────────────────────────────────────────────────
+// The SAME two-level filter the storefront applies (/api/public/ongkir): the platform (super-admin)
+// sets the hard-enabled courier pool, the merchant picks the services inside it. The seller's own
+// order screen used to apply NEITHER — it listed every rate KiriminAja returned, so a courier the
+// platform had switched OFF (idx, jtcargo) and services the seller had switched OFF in Jasa Kirim
+// were both bookable from the order page. A platform switch that the platform's own admin surface
+// ignores is not a control; it is decoration.
+//
+// `services === null` means the merchant has never opened Jasa Kirim → fall back to the platform
+// pool (same rule as the storefront) rather than showing zero options.
+// ─────────────────────────────────────────────────────────────────────────────
+async function shippingScope(storeId: string): Promise<{ platformOn: string[]; services: Set<string> | null }> {
+  const platformRows = await db
+    .select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled })
+    .from(schema.platformCouriers);
+  const platformOn = platformRows.filter((p) => p.enabled && !isInstantCourier(p.courier)).map((p) => p.courier);
+
+  const picked = await withTenant(storeId, (db) =>
+    db
+      .select({ courier: schema.storeShippingMethods.courier, service: schema.storeShippingMethods.service })
+      .from(schema.storeShippingMethods)
+      .where(eq(schema.storeShippingMethods.enabled, true)),
+  );
+  const services = picked.length ? new Set(picked.map((s) => `${s.courier}:${s.service}`)) : null;
+  return { platformOn, services };
+}
+
+const inScope = (scope: { platformOn: string[]; services: Set<string> | null }, courier: string, type: string) =>
+  (!scope.platformOn.length || scope.platformOn.includes(courier)) &&
+  (!scope.services || scope.services.has(`${courier}:${type}`));
+
+/** Package rows for an order: real variant weights + product dimensions. ONE definition, so the
+ *  price the seller is quoted and the parcel that is booked are built from the same numbers. */
+async function packageRows(db: Tx, orderId: string) {
+  return db
+    .select({
+      weight: schema.productVariants.weightGrams, qty: schema.orderLineItems.qty,
+      l: schema.products.lengthCm, w: schema.products.widthCm, h: schema.products.heightCm,
+    })
+    .from(schema.orderLineItems)
+    .leftJoin(schema.productVariants, eq(schema.productVariants.id, schema.orderLineItems.variantId))
+    .leftJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
+    .where(eq(schema.orderLineItems.orderId, orderId));
+}
+
+async function packageWeight(db: Tx, orderId: string): Promise<number> {
+  const rows = await packageRows(db, orderId);
+  return rows.reduce((a, r) => a + (r.weight ?? 0) * (r.qty ?? 1), 0);
+}
+
+// Live shipping rates from KiriminAja for an order's destination.
+//
+// ⚠️ DESTINATION: pass `orderNumber`. The order carries `ship_district_id` — the KiriminAja district
+// the shopper actually picked at checkout and the id the ongkir they paid was quoted against. The
+// old path resolved a CITY NAME instead (`resolveArea(order.city)[0]`), and that is not a rounding
+// error: `resolveArea("Surabaya")[0]` returns **id 3175 — "Bandar Surabaya, Lampung Tengah,
+// LAMPUNG"**, because the district table ilike-matches "%Surabaya%" and Lampung's districts sort
+// first. So an order to Surabaya was priced, and booked, to Lampung. Verified against the seeded DB
+// (2026-07-14). A district id cannot be ambiguous; a city name always can.
+//
+// Weight and value are read from the ORDER, so the price the seller is quoted is the price the
+// booking is actually made with (createShipment computes the same numbers from the same rows).
+//
+// ⚠️ The caller passes ONLY the order number. It used to also pass `weightGrams`, which the order
+// screen computed as `(totalQty || 2) * 500` in the browser — the same fabricated 500 g/item the
+// storefront used. A weight is a PRICE INPUT: if the client states it, the client sets the price,
+// and the merchant eats the difference with the courier. Same lesson as the ongkir origin (now the
+// seller's pickup district) and the COD province (now the KiriminAja district id): a claim from
+// the client is not a fact. There is no fallback parameter to fall back TO — that is the point.
 export async function getShippingRates(input: {
-  destinationCity: string;
-  weightGrams: number;
-  itemValue: number;
+  orderNumber: string;
 }): Promise<{ ok: boolean; rates: Rate[]; origin?: string; destination?: string; codEnabled?: boolean; error?: string }> {
   const session = await getSession();
   if (!session) return { ok: false, rates: [], error: "Sesi tidak valid." };
   if (!kiriminajaConfigured()) return { ok: false, rates: [], error: "KiriminAja belum dikonfigurasi oleh platform (super-admin → Pengaturan)." };
 
-  const storeCity = await withCurrentTenant(async (db) => {
-    const [s] = await db.select({ city: schema.stores.city }).from(schema.stores).where(eq(schema.stores.id, session.storeId)).limit(1);
-    return s?.city ?? "Yogyakarta";
+  const ctx = await withCurrentTenant(async (db) => {
+    const [store] = await db.select({ city: schema.stores.city }).from(schema.stores).where(eq(schema.stores.id, session.storeId)).limit(1);
+    const [settings] = await db
+      .select({ kecamatanId: schema.storeSettings.senderKecamatanId, kecamatanName: schema.storeSettings.senderKecamatanName })
+      .from(schema.storeSettings)
+      .limit(1);
+    const order = input.orderNumber
+      ? (
+          await db
+            .select({
+              id: schema.orders.id,
+              districtId: schema.orders.shipDistrictId,
+              city: schema.orders.city,
+              subtotal: schema.orders.subtotalIdr,
+              total: schema.orders.totalIdr,
+            })
+            .from(schema.orders)
+            .where(eq(schema.orders.number, input.orderNumber))
+            .limit(1)
+        )[0]
+      : undefined;
+    const weight = order ? await packageWeight(db, order.id) : 0;
+    return { storeCity: store?.city ?? "Yogyakarta", settings, order, weight };
   });
 
-  const [originOpts, destOpts] = await Promise.all([
-    resolveArea(storeCity),
-    resolveArea(input.destinationCity || storeCity),
-  ]);
-  const origin = originOpts[0]?.id;
-  const destination = destOpts[0]?.id;
-  if (!origin) return { ok: false, rates: [], error: `Area asal "${storeCity}" tidak ditemukan di KiriminAja.` };
-  if (!destination) return { ok: false, rates: [], error: `Area tujuan "${input.destinationCity}" tidak ditemukan di KiriminAja.` };
+  // ORIGIN = the seller's saved pickup address (Pengaturan → Alamat) — the address the courier is
+  // actually sent to. Only when it is missing do we fall back to a fuzzy match on the store's city,
+  // and the label below says so.
+  let origin = ctx.settings?.kecamatanId ?? undefined;
+  let originName = ctx.settings?.kecamatanName ?? "";
+  if (!origin) {
+    const opts = await resolveArea(ctx.storeCity, 1);
+    origin = opts[0]?.id;
+    originName = opts[0]?.text ? `${opts[0].text} (perkiraan — alamat jemput belum diatur)` : ctx.storeCity;
+  }
+  if (!origin) return { ok: false, rates: [], error: "Alamat pengambilan toko belum diatur (Pengaturan → Alamat)." };
 
-  const r = await kaShippingPrice({ origin, destination, weight: Math.max(1000, input.weightGrams || 0), itemValue: input.itemValue, insurance: 0 });
+  // DESTINATION — the order's own district id first; a city name only when there is no snapshot.
+  let destination = ctx.order?.districtId ?? undefined;
+  let destinationName = "";
+  if (destination) {
+    destinationName = (await provinceForDistrict(destination))
+      ? `${ctx.order?.city ?? ""} (kecamatan tujuan pesanan)`.trim()
+      : String(destination);
+  } else if (ctx.order?.city) {
+    // Pre-0042 orders carry no district snapshot. Fuzzy-match their city — and SAY it is a guess.
+    // `resolveArea("Surabaya")[0]` once returned "Bandar Surabaya, Lampung Tengah, LAMPUNG": the
+    // parcel was priced 7,5x too high and booked to the wrong island. Never silently.
+    const destOpts = await resolveArea(ctx.order.city, 1);
+    destination = destOpts[0]?.id;
+    destinationName = destOpts[0]?.text ? `${destOpts[0].text} (perkiraan dari nama kota)` : ctx.order.city;
+  }
+  if (!destination) return { ok: false, rates: [], error: "Kecamatan tujuan pesanan tidak diketahui — pesanan ini tidak bisa dihitung ongkirnya." };
+
+  // 1 kg courier minimum, applied ONCE to the real summed weight (it used to be applied to a
+  // fabricated one, which hid how wrong the number was).
+  const weight = Math.max(1000, ctx.weight || 0);
+  const itemValue = Number(ctx.order?.subtotal ?? 0);
+  const r = await kaShippingPrice({ origin, destination, weight, itemValue, insurance: 0 });
   if (!r.ok) return { ok: false, rates: [], error: r.error ?? "Gagal mengambil tarif dari KiriminAja." };
-  // Instant couriers are out of scope (@tokophi/lib/couriers) — they cannot be booked, so they are
-  // never quoted. KiriminAja's express endpoint does not return them today; this is the guard.
-  r.results = r.results.filter((x) => !isInstantService({ courier: x.service, group: x.group }));
+  const scope = await shippingScope(session.storeId);
   // Same EFFECTIVE COD flag the storefront sees (lib/cod.ts): the merchant's own switch + the
   // platform's per-service allowance. Booking a COD shipment on a service the platform disallowed
   // is exactly the return-cost trap cod_enabled exists to prevent — so it isn't offered here either.
   const cod = await getCodPolicy(session.storeId);
   return {
     ok: true,
-    origin: originOpts[0]?.text,
-    destination: destOpts[0]?.text,
+    origin: originName,
+    destination: destinationName,
     codEnabled: cod.enabled,
-    rates: r.results.map((x) => ({ service: x.service_name, code: x.service, type: x.service_type, cost: Number(x.cost), etd: x.etd, cod: x.cod && cod.allows(x.service, x.service_type), group: x.group })),
+    rates: r.results
+      // Instant couriers are out of scope (@tokophi/lib/couriers) — they cannot be booked, so they
+      // are never quoted. KiriminAja's express endpoint does not return them today; this is a guard.
+      .filter((x) => !isInstantService({ courier: x.service, group: x.group }))
+      // …and only what the platform allows and this store actually offers (see shippingScope).
+      .filter((x) => inScope(scope, x.service, x.service_type))
+      .map((x) => ({ service: x.service_name, code: x.service, type: x.service_type, cost: Number(x.cost), etd: x.etd, cod: x.cod && cod.allows(x.service, x.service_type), group: x.group })),
   };
 }
 
@@ -102,39 +215,17 @@ export async function saveSenderAddress(input: {
   return { ok: true };
 }
 
-// ---- Enabled couriers offered to shoppers (KiriminAja codes). null = all. ----
-export async function getCouriers(): Promise<string[] | null> {
-  if (!(await getSession())) return null;
-  return withCurrentTenant(async (db) => {
-    const [s] = await db.select({ couriers: schema.storeSettings.couriers }).from(schema.storeSettings).limit(1);
-    return s?.couriers ?? null;
-  });
-}
-
-// Courier codes the PLATFORM (super-admin) has enabled — the pool a merchant may pick from.
-// platform_couriers is a global table (not tenant-scoped), so it's read on the owner connection.
-export async function getPlatformCouriers(): Promise<string[]> {
-  if (!(await getSession())) return [];
-  const rows = await db
-    .select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled })
-    .from(schema.platformCouriers);
-  // A stale instant row (gosend/grab) from an older roster sync must never reach the seller, even if
-  // it is still `enabled` in the DB — instant delivery is out of scope (@tokophi/lib/couriers).
-  return rows.filter((r) => r.enabled && !isInstantCourier(r.courier)).map((r) => r.courier);
-}
-
-export async function saveCouriers(input: string[]): Promise<{ ok: boolean; error?: string }> {
-  const { storeId } = await requireCapability("settings:write");
-  const couriers = input.filter((c) => !isInstantCourier(c)); // instant is out of scope
-  await withTenant(storeId, (db) =>
-    db
-      .insert(schema.storeSettings)
-      .values({ storeId, couriers })
-      .onConflictDoUpdate({ target: schema.storeSettings.storeId, set: { couriers } }),
-  );
-  revalidatePath("/pengaturan");
-  return { ok: true };
-}
+// ⚠️ REMOVED: getCouriers() / getPlatformCouriers() / saveCouriers() — the COURIER-level selection
+// (store_settings.couriers, a text[] of courier codes).
+//
+// They had no callers: the Jasa Kirim card writes store_shipping_methods (per SERVICE) and nothing
+// in the app has written store_settings.couriers since. The column is NULL for every store in the
+// database (checked 2026-07-14). Keeping the actions around is how the column comes back: the model
+// cannot even express "JNE Reguler yes, JNE YES no", which is the whole reason the per-service table
+// exists, and a second, coarser writer would silently override the finer one at checkout.
+// `/api/public/ongkir` still reads the column as a legacy fallback (`merchant`); with nothing writing
+// it, it is permanently NULL and the per-service filter is the only one in force. That fallback
+// should go with the column — see the report.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Jasa Kirim — the merchant picks SERVICES, not couriers.
@@ -303,6 +394,14 @@ export async function createShipment(input: {
     return { ok: false, error: "Kurir instan tidak didukung — gunakan layanan ekspedisi." };
   }
 
+  // The service must be one the PLATFORM enables and this store OFFERS. The rate list already
+  // filters both (shippingScope), but the UI is UX and this is the boundary: a hand-posted payload
+  // must not book a courier the platform switched off.
+  const scope = await shippingScope(storeId);
+  if (!inScope(scope, input.service, input.serviceType)) {
+    return { ok: false, error: `Layanan ${input.serviceName} tidak aktif untuk toko ini (Pengaturan → Jasa Kirim).` };
+  }
+
   const data = await withTenant(storeId, async (db) => {
     const [s] = await db.select().from(schema.storeSettings).where(eq(schema.storeSettings.storeId, storeId)).limit(1);
     const [o] = await db
@@ -311,6 +410,10 @@ export async function createShipment(input: {
         number: schema.orders.number, city: schema.orders.city, province: schema.orders.province, awb: schema.orders.awb,
         kaOrderId: schema.orders.kaOrderId,
         subtotal: schema.orders.subtotalIdr, total: schema.orders.totalIdr,
+        // Address SNAPSHOT (migration 0042) — where THIS parcel goes. See the note below.
+        shipRecipient: schema.orders.shipRecipient, shipPhone: schema.orders.shipPhone,
+        shipAddress: schema.orders.shipAddress, shipPostcode: schema.orders.shipPostcode,
+        shipDistrictId: schema.orders.shipDistrictId,
         custName: schema.customers.name, custPhone: schema.customers.phone,
       })
       .from(schema.orders)
@@ -318,17 +421,7 @@ export async function createShipment(input: {
       .where(eq(schema.orders.number, input.orderNumber))
       .limit(1);
     // real package weight (sum of variant weight × qty) + dimensions (max per axis across items)
-    const pkgRows = o
-      ? await db
-          .select({
-            weight: schema.productVariants.weightGrams, qty: schema.orderLineItems.qty,
-            l: schema.products.lengthCm, w: schema.products.widthCm, h: schema.products.heightCm,
-          })
-          .from(schema.orderLineItems)
-          .leftJoin(schema.productVariants, eq(schema.productVariants.id, schema.orderLineItems.variantId))
-          .leftJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
-          .where(eq(schema.orderLineItems.orderId, o.id))
-      : [];
+    const pkgRows = o ? await packageRows(db, o.id) : [];
     return { s, o, pkgRows };
   });
 
@@ -362,17 +455,43 @@ export async function createShipment(input: {
   // is loaded, because the cap and the province are properties of the ORDER (a Rp5jt COD parcel to a
   // province we have no return leg for is the risk platform_cod exists to bound — booking it from the
   // admin must not be a way around that).
+  // ── DESTINATION = the order's ADDRESS SNAPSHOT (migration 0042), not a city name ─────────────
+  // What went to the courier before: `destination_kecamatan_id = resolveArea(o.city)[0].id` and
+  // `destination_address = o.city`. Both are wrong, and they are wrong in the way that loses a
+  // parcel rather than the way that looks untidy:
+  //   · resolveArea() ilike-matches "%<city>%" over kiriminaja_areas with NO ordering — for
+  //     "Surabaya" the first row is id 3175, "Bandar Surabaya, Lampung Tengah, **Lampung**". An
+  //     order to Surabaya (Jawa Timur) was priced and BOOKED to Lampung. (Reproduced on the seeded
+  //     DB, 2026-07-14; 624 of 701 orders carry a real ship_district_id that was simply ignored.)
+  //   · the courier was handed the city as the street address, so the driver got "Surabaya" and no
+  //     house to deliver to.
+  // `orders.ship_district_id` IS a KiriminAja district id — the one the shopper picked and the one
+  // the ongkir they PAID was quoted against. It is the only destination that cannot disagree with
+  // where the parcel is going. The city fallback stays for pre-0042 orders and is flagged as a guess.
+  const destDistrictId =
+    o.shipDistrictId ?? (await resolveArea(o.city ?? "").then((a) => a[0]?.id ?? null));
+  if (!destDistrictId) return { ok: false, error: `Area tujuan "${o.city}" tidak ditemukan di KiriminAja.` };
+  const destAddress = o.shipAddress?.trim() || o.city || "-";
+  if (!o.shipAddress?.trim()) {
+    // Never book a parcel with no street. A courier cannot deliver to a city name.
+    return {
+      ok: false,
+      error: `Alamat tujuan pesanan ${o.number} tidak lengkap (hanya kota "${o.city ?? "—"}", tanpa alamat jalan). Kurir tidak bisa mengantar tanpa alamat lengkap — hubungi pembeli dan lengkapi alamat pesanan.`,
+    };
+  }
+
   if (input.cod) {
     const policy = await getCodPolicy(storeId);
+    // The province is taken from the DISTRICT the parcel is booked to, not from the free-text
+    // province on the order: platform_cod.allowed_provinces bounds a real financial risk, and a
+    // typed string is a claim while a district id is where the parcel physically goes (lib/data/areas).
+    const province = (await provinceForDistrict(destDistrictId)) ?? o.province;
     const reason = policy.reason({
       courier: input.service, serviceType: input.serviceType,
-      total: Number(o.total), province: o.province,
+      total: Number(o.total), province,
     });
     if (reason) return { ok: false, error: reason };
   }
-
-  const dest = await resolveArea(o.city ?? "");
-  if (!dest[0]) return { ok: false, error: `Area tujuan "${o.city}" tidak ditemukan di KiriminAja.` };
 
   // Pickup = TOMORROW 10:00 WIB. The date must be computed in Asia/Jakarta, not in the server's
   // timezone, or a UTC box books the wrong day. 10:00 and not 15:00 because couriers enforce a
@@ -397,8 +516,13 @@ export async function createShipment(input: {
     },
     {
       orderRef: input.orderNumber.replace(/[^A-Za-z0-9]/g, ""),
-      destName: o.custName || "Penerima", destPhone: o.custPhone || "081200000000", destAddress: o.city || "-",
-      destKecamatanId: dest[0].id,
+      // Recipient/phone come from the order snapshot too — the customer row can have moved on since
+      // the parcel was bought (that is exactly why 0042 froze them onto the order).
+      destName: o.shipRecipient?.trim() || o.custName || "Penerima",
+      destPhone: o.shipPhone?.trim() || o.custPhone || "081200000000",
+      destAddress,
+      destKecamatanId: destDistrictId,
+      destZipcode: o.shipPostcode?.trim() || undefined,
       weight, width, length, height, itemValue: o.subtotal || o.total || 0, itemName: `Pesanan ${o.number}`,
       service: input.service, serviceType: input.serviceType, shippingCost: input.cost,
       cod: input.cod ? (o.total || o.subtotal || 0) : 0,

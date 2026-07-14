@@ -1,21 +1,33 @@
-// Shared courier roster — KiriminAja codes (must match the live `code` from ongkir).
-// Used by: super-admin (platform enable/disable), client admin (merchant picks a subset of
-// platform-enabled), storefront ongkir filter. NOT server-only (imported by client components).
-export type CourierMeta = { code: string; name: string; services: string[] };
+// Shared courier roster — KiriminAja codes (must match the live `service` code from ongkir).
+// Used by: super-admin (platform enable/disable + display order), client admin (merchant picks a
+// subset of platform-enabled), storefront ongkir filter. NOT server-only (imported by client
+// components).
+//
+// ⚠️ THIS IS A DISPLAY ROSTER — code → human name + sort order. It deliberately carries NO service
+// list any more. It used to (`services: ["Reguler", "YES"]`), and that hand-written list was the
+// single source of every shipping bug we have had:
+//   · it named TIKI and Pos Indonesia — KiriminAja returns NEITHER, so a merchant could switch on a
+//     courier that can never be booked;
+//   · it gave SPX "Standard"/"Hemat" when the live service_types are "1" and "3" — the storefront
+//     filter compared "Hemat" against "3" and silently matched nothing;
+//   · the seed wrote those STRINGS into platform_couriers.services while the KiriminAja sync writes
+//     OBJECTS, so the same jsonb column held two shapes at once (migration 0047 normalised it).
+// The authoritative service catalogue is the API: kaServices() → platform_couriers.services.
+// Verified against the sandbox 2026-07-14 (Menteng → Coblong, 1 kg): 10 couriers, 20 services,
+// exactly the codes below. Anything not in this list is not a courier KiriminAja will carry.
+export type CourierMeta = { code: string; name: string };
 
 export const COURIERS: CourierMeta[] = [
-  { code: "sicepat", name: "SiCepat", services: ["REG", "BEST"] },
-  { code: "jne", name: "JNE", services: ["Reguler", "YES"] },
-  { code: "jnt", name: "J&T Express", services: ["EZ"] },
-  { code: "spx", name: "Shopee Express (SPX)", services: ["Standard", "Hemat"] },
-  { code: "anteraja", name: "AnterAja", services: ["Reguler", "Same Day"] },
-  { code: "sap", name: "SAP Express", services: ["Reguler"] },
-  { code: "lion", name: "Lion Parcel", services: ["Regpack", "Bigpack"] },
-  { code: "ninja", name: "Ninja Xpress", services: ["Standard"] },
-  { code: "idx", name: "ID Express", services: ["Reguler"] },
-  { code: "tiki", name: "TIKI", services: ["Reguler", "ONS"] },
-  { code: "jtcargo", name: "J&T Cargo", services: ["Cargo"] },
-  { code: "pos", name: "Pos Indonesia", services: ["Kilat Khusus"] },
+  { code: "sicepat", name: "SiCepat" },
+  { code: "jne", name: "JNE" },
+  { code: "jnt", name: "J&T Express" },
+  { code: "spx", name: "Shopee Express (SPX)" },
+  { code: "anteraja", name: "AnterAja" },
+  { code: "sap", name: "SAP Express" },
+  { code: "lion", name: "Lion Parcel" },
+  { code: "ninja", name: "Ninja Xpress" },
+  { code: "idx", name: "ID Express" },
+  { code: "jtcargo", name: "J&T Cargo" },
 ];
 
 export const COURIER_CODES = COURIERS.map((c) => c.code);

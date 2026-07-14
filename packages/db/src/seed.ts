@@ -1528,10 +1528,20 @@ async function main() {
   // COD-allowed, so COD could not be exercised AT ALL, and a new developer would reasonably conclude
   // the feature was broken. It was not — the seed was speaking the old dialect.
   //
-  // The authoritative roster still comes from KiriminAja (Sync in super-admin). This is a plausible
-  // OFFLINE stand-in so a fresh clone can exercise COD without an API key. The `cod` flags mirror
-  // what the live API actually returns; `codAllowed` follows the current platform policy: SPX only,
-  // because a refused COD parcel ships back free on SPX and is billed to the merchant elsewhere.
+  // The authoritative roster still comes from KiriminAja (Sync in super-admin). This is an OFFLINE
+  // MIRROR of it so a fresh clone can exercise the whole chain without an API key.
+  //
+  // ⚠️ It must stay a MIRROR, not an approximation. The previous stand-in listed only 11 of the 20
+  // services the API actually returns, so on a seeded database the Seller's "Same Day" group was
+  // EMPTY and AnterAja Same Day / SAP One Day / J&T JND / Sicepat CARGO / Jagopack / BIGPACK /
+  // Boss Pack could not be offered to a shopper at all — services KiriminAja will happily book,
+  // that no merchant could sell. Every entry below was captured from
+  // POST /api/mitra/v6.1/shipping_price (sandbox, 2026-07-14, origin 2099 Menteng → destination 356
+  // Coblong, 1 kg): 10 couriers, 20 services, `cod` exactly as the API reports it.
+  //
+  // `codAllowed` follows the current platform policy: SPX only, because a refused COD parcel ships
+  // back free on SPX and is billed to the merchant everywhere else. That is a POLICY, not a
+  // capability — super-admin can widen it per service without a deploy.
   const SEED_SERVICES: Record<string, Array<{ type: string; name: string; group: string; cod: boolean }>> = {
     spx: [
       { type: "1", name: "SPX Standard", group: "regular", cod: true },
@@ -1541,18 +1551,35 @@ async function main() {
       { type: "REG23", name: "JNE Express Reguler", group: "regular", cod: true },
       { type: "YES23", name: "JNE Express YES", group: "next_day", cod: true },
     ],
-    sicepat: [{ type: "REG", name: "Sicepat REGULER", group: "regular", cod: true }],
-    jnt: [{ type: "EZ", name: "J&T EZ", group: "regular", cod: true }],
+    sicepat: [
+      { type: "REG", name: "Sicepat REGULER", group: "regular", cod: true },
+      { type: "GOKIL", name: "Sicepat CARGO PER KG (MINIMAL 10KG)", group: "cargo", cod: true },
+    ],
+    jnt: [
+      { type: "EZ", name: "J&T EZ", group: "regular", cod: true },
+      { type: "JND", name: "J&T JND", group: "next_day", cod: false },
+    ],
     anteraja: [
       { type: "FLREG", name: "AnterAja Regular Flat", group: "regular", cod: true },
       { type: "ND", name: "AnterAja Next Day", group: "next_day", cod: false },
+      { type: "SD", name: "AnterAja Same Day", group: "one_day", cod: false },
     ],
     ninja: [{ type: "Standard", name: "Ninja Xpress Standard", group: "regular", cod: true }],
-    sap: [{ type: "UDRREG", name: "SAP Satria Reg", group: "regular", cod: true }],
-    lion: [{ type: "REGPACK", name: "Regpack", group: "regular", cod: true }],
+    sap: [
+      { type: "UDRREG", name: "SAP Satria Reg", group: "regular", cod: true },
+      { type: "UDRONS", name: "SAP One Day Services", group: "one_day", cod: false },
+    ],
+    lion: [
+      { type: "REGPACK", name: "Regpack", group: "regular", cod: true },
+      { type: "JAGOPACK", name: "Jagopack", group: "economy", cod: true },
+      { type: "BOSSPACK", name: "Boss Pack", group: "next_day", cod: false },
+      { type: "BIGPACK", name: "BIGPACK", group: "cargo", cod: false },
+    ],
     idx: [{ type: "00", name: "ID Express Standard", group: "regular", cod: true }],
     jtcargo: [{ type: "REG", name: "J&T Cargo Regular", group: "cargo", cod: true }],
   };
+  // Couriers the platform does not offer by default (super-admin can switch them on). Cargo/niche.
+  const COURIERS_OFF = ["idx", "jtcargo"];
   await db.insert(schema.platformCouriers).values(
     // KiriminAja codes from the shared roster; niche ones off by default (super-admin toggles).
     COURIERS.map((c) => ({
@@ -1561,7 +1588,7 @@ async function main() {
         ...s,
         codAllowed: s.cod && c.code === "spx", // platform policy today: COD via SPX only
       })),
-      enabled: !["idx", "tiki", "jtcargo", "pos"].includes(c.code),
+      enabled: !COURIERS_OFF.includes(c.code),
     })),
   );
   await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
@@ -1570,8 +1597,8 @@ async function main() {
   // had ZERO rows and /api/public/ongkir fell back to the courier-level filter, which is exactly the
   // hole fixed in 35b88a4: services the seller never picked (Jagopack, BIGPACK, Sicepat CARGO, SAP One
   // Day) reappeared at checkout. Seed the demo merchant as having accepted everything the platform
-  // enables — 11 services, incl. both SPX ones, so COD is exercisable out of the box.
-  const enabledCouriers = COURIERS.filter((c) => !["idx", "tiki", "jtcargo", "pos"].includes(c.code));
+  // enables (incl. both SPX ones, so COD is exercisable out of the box).
+  const enabledCouriers = COURIERS.filter((c) => !COURIERS_OFF.includes(c.code));
   const merchantServices = enabledCouriers.flatMap((c) =>
     (SEED_SERVICES[c.code] ?? []).map((s) => ({ storeId: store.id, courier: c.code, service: s.type, enabled: true })),
   );

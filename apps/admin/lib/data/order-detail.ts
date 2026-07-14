@@ -65,11 +65,15 @@ export type OrderBuyer = {
 };
 
 /**
- * The customer's SAVED address (`customer_addresses`) — it belongs to the customer, not to this
- * order: an order carries only `orders.city` / `orders.province`, there is no per-order address
- * snapshot. So this is shown as "alamat pelanggan", and `cityMatchesOrder` tells the page whether
- * it is even plausible as this parcel's destination. Null when the customer has no address row —
- * in that case the page shows the order's city and says the street is not recorded. Never invented.
+ * WHERE THIS PARCEL GOES — the order's own address snapshot (`orders.ship_*`, migration 0042):
+ * recipient, phone, street and kodepos frozen at checkout. This is what the label prints and what
+ * `createShipment` books with.
+ *
+ * Only when an order predates the snapshot (no `ship_address`) does this fall back to the
+ * CUSTOMER's saved address (`customer_addresses`) — which belongs to the person, not the
+ * transaction, and moves when they move. `cityMatchesOrder` then says whether that fallback is even
+ * plausible as this parcel's destination; the page warns when it is not. Null when neither exists —
+ * the page then shows the order's city and says the street is not recorded. Never invented.
  */
 export type OrderAddress = {
   recipient: string | null;
@@ -136,6 +140,11 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
         courier: schema.orders.courier,
         awb: schema.orders.awb,
         kaOrderId: schema.orders.kaOrderId,
+        // Address SNAPSHOT (migration 0042) — the address this parcel was BOUGHT with.
+        shipRecipient: schema.orders.shipRecipient,
+        shipPhone: schema.orders.shipPhone,
+        shipAddress: schema.orders.shipAddress,
+        shipPostcode: schema.orders.shipPostcode,
       })
       .from(schema.orders)
       .where(eq(schema.orders.number, number))
@@ -189,7 +198,25 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
     };
 
     let buyer: OrderBuyer | null = null;
-    let address: OrderAddress | null = null;
+    // ── The parcel's address is the ORDER's, not the customer's ──────────────────────────────────
+    // This used to read `customer_addresses` exclusively, and the comment above said "there is no
+    // per-order address snapshot". There is: migration 0042 added ship_recipient/ship_phone/
+    // ship_address/ship_postcode/ship_district_id, and 686 of 701 orders carry one. Reading the
+    // CUSTOMER's row instead means a buyer who moved house silently moves every past parcel with
+    // them — and this address is what gets PRINTED ON THE LABEL (order-detail.tsx → buildLabelHtml).
+    // The snapshot is the address the shopper checked out with and the one createShipment books.
+    let address: OrderAddress | null = o.shipAddress?.trim()
+      ? {
+          recipient: o.shipRecipient ?? null,
+          phone: o.shipPhone ?? null,
+          street: o.shipAddress,
+          city: o.city ?? null,
+          province: o.province ?? null,
+          postcode: o.shipPostcode ?? null,
+          // It IS the order's own address — it cannot disagree with the order's city.
+          cityMatchesOrder: true,
+        }
+      : null;
     if (o.customerId) {
       const [c] = await db
         .select({
@@ -224,7 +251,10 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
         .where(eq(schema.customerAddresses.customerId, o.customerId))
         .orderBy(asc(schema.customerAddresses.id))
         .limit(1);
-      if (a) {
+      // FALLBACK ONLY — a pre-0042 order with no snapshot. Then, and only then, the customer's
+      // saved address is the best guess available, and `cityMatchesOrder` tells the page how much
+      // to trust it (the page shows an amber warning when it points at a different city).
+      if (a && !address) {
         address = {
           recipient: a.recipient ?? null,
           phone: a.phone ?? null,

@@ -232,12 +232,17 @@ export async function testKiriminajaConnection(): Promise<{ ok: boolean; env: st
  * Now the API is the source of truth. Each service keeps KiriminAja's own `cod` flag plus a
  * platform `codAllowed` decision on top.
  *
- * `codAllowed` defaults to KiriminAja's flag (i.e. COD wherever the courier supports it — that is
- * 10 of them, not just SPX). The narrowing that matters in practice is about RETURNS, not COD
- * support: when a COD buyer refuses the parcel, SPX ships it back free while other couriers bill
- * the merchant for the return leg. Keeping that as a per-service BOOLEAN — rather than
- * `if (courier === "spx")` buried in code — means the platform can widen or narrow it from the
- * super-admin without a deploy.
+ * ⚠️ `codAllowed` for a NEWLY DISCOVERED service defaults to **false**, not to KiriminAja's `cod`
+ * flag. It used to default to the flag — which meant that clicking "Sync" (a *catalogue refresh*)
+ * silently OPENED COD on every service KiriminAja happens to support. Proven on 2026-07-14: a sync
+ * pulled in Jagopack and Sicepat CARGO and both came back COD-enabled, against a platform policy
+ * that is deliberately SPX-only, with nobody having decided anything.
+ *
+ * COD is a MONEY decision, not a capability: KiriminAja reports cod=true on 13 of 20 services, but
+ * when a COD buyer refuses the parcel SPX ships it back free while every other courier bills the
+ * merchant for the return leg. A permission that costs money must be granted deliberately — so a new
+ * service arrives switched OFF and the super-admin ticks the box. `cod` remains the ceiling (a
+ * service KiriminAja will not COD can never be ticked).
  *
  * Re-syncing preserves the existing enabled/codAllowed decisions; only the service catalogue is
  * refreshed. A courier that disappears from KiriminAja is disabled, never deleted (stores may
@@ -270,8 +275,9 @@ export async function syncCouriersFromKiriminaja(): Promise<{ ok: boolean; couri
       name: s.name,
       group: s.group,
       cod: s.cod,
-      // keep a previous super-admin decision; otherwise follow KiriminAja
-      codAllowed: keptDecision ?? s.cod,
+      // Keep the super-admin's previous decision. A service we have never seen before starts CLOSED
+      // for COD — a catalogue refresh must not hand out a money-risk permission (see above).
+      codAllowed: s.cod && (keptDecision ?? false),
     });
     byCourier.set(s.courier, list);
   }
