@@ -18,3 +18,14 @@
   --puck-color-azure-11: #eef2ff;
   --puck-color-azure-12: #f5f3ff;
 }
+
+/* Puck makes everything inside a canvas component inert (`[data-puck-component] * { pointer-events:
+   none }`) so any click selects the SECTION instead of hitting its innards. The Hero's carousel dots
+   are the one thing we want interactive again: the editor preview deliberately does NOT autoplay
+   (a hero rotating under the cursor while you type is hostile), so without clickable dots a merchant
+   editing slide 3 could never SEE slide 3. Scoped to the dots — the rest of the section stays inert,
+   and the dot's own onClick stops the event before Puck reads it as a selection. */
+[data-puck-component] [data-hero-dot] {
+  pointer-events: auto;
+  cursor: pointer;
+}

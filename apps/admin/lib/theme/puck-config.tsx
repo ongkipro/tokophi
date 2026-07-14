@@ -1,5 +1,5 @@
 import type { Config } from "@measured/puck";
-import { SECTION_DEFAULTS, type SectionConfigMap } from "@tokophi/sections";
+import { SECTION_DEFAULTS, heroSlides, type SectionConfigMap } from "@tokophi/sections";
 import { Hero } from "@/components/theme/sections/Hero";
 import { ProductGrid } from "@/components/theme/sections/ProductGrid";
 import { BannerPromo } from "@/components/theme/sections/BannerPromo";
@@ -19,11 +19,45 @@ export const puckConfig: Config<SectionConfigMap> = {
       label: "Hero",
       fields: {
         badge: { type: "text", label: "Label Badge (kosong = sembunyi)" },
-        heading: { type: "text", label: "Judul" },
-        subheading: { type: "textarea", label: "Sub-judul" },
-        imageUrl: { type: "text", label: "URL Gambar" },
-        ctaLabel: { type: "text", label: "Teks Tombol" },
-        ctaHref: { type: "text", label: "Link Tombol" },
+        slides: {
+          type: "array",
+          label: "Slide (maks. 5 — bergantian otomatis)",
+          max: 5,
+          getItemSummary: (slide, i) => slide?.heading || `Slide ${(i ?? 0) + 1}`,
+          defaultItemProps: {
+            imageUrl: "",
+            heading: "Judul Slide",
+            subheading: "Satu kalimat singkat tentang koleksi ini.",
+            ctaLabel: "Belanja Sekarang",
+            ctaHref: "/kategori/dress",
+            focal: "center",
+          },
+          arrayFields: {
+            imageUrl: {
+              type: "text",
+              label: "URL Gambar (mis. /hero/hero-1.webp — kosong = gradasi warna brand)",
+            },
+            heading: { type: "text", label: "Judul" },
+            subheading: { type: "textarea", label: "Sub-judul" },
+            ctaLabel: { type: "text", label: "Teks Tombol" },
+            ctaHref: { type: "text", label: "Link Tombol" },
+            focal: {
+              type: "select",
+              label: "Fokus Gambar (bagian yang dipertahankan saat dipotong)",
+              options: [
+                { label: "Tengah", value: "center" },
+                { label: "Kiri", value: "left" },
+                { label: "Kanan", value: "right" },
+              ],
+            },
+          },
+        },
+        intervalMs: {
+          type: "number",
+          label: "Ganti Slide Setiap (milidetik, 0 = tidak berganti)",
+          min: 0,
+          max: 30000,
+        },
         ratingText: { type: "text", label: "Teks Rating/Sosial (kosong = sembunyi)" },
         align: {
           type: "select",
@@ -35,6 +69,16 @@ export const puckConfig: Config<SectionConfigMap> = {
         },
       },
       defaultProps: SECTION_DEFAULTS.hero,
+      // Back-compat: heroes saved before the carousel only carry the flat legacy fields
+      // (heading/subheading/imageUrl/ctaLabel/ctaHref) and no `slides`, so the slides array would
+      // open EMPTY and their copy would be uneditable. On load, migrate them through the same
+      // `heroSlides()` normaliser the renderers use → one slide holding exactly what the storefront
+      // already shows. The legacy fields are left untouched in props (nothing is dropped).
+      resolveData: (data, { trigger }) => {
+        if (trigger !== "load") return data;
+        if (data.props.slides && data.props.slides.length > 0) return data;
+        return { ...data, props: { ...data.props, slides: heroSlides(data.props) } };
+      },
       render: (props) => <Hero {...props} />,
     },
     "product-grid": {

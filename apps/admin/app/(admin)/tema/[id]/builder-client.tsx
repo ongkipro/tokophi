@@ -8,7 +8,7 @@ import "@measured/puck/puck.css";
 import "@/lib/theme/puck-theme.css";
 import { toast } from "sonner";
 import { puckFieldOverrides } from "@/lib/theme/puck-field-overrides";
-import { builderConfig } from "./hero-carousel";
+import { puckConfig } from "@/lib/theme/puck-config";
 import { saveTemplate } from "@/lib/actions/theme";
 import { useCan } from "@/components/admin/permissions";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,7 @@ export function BuilderClient({
   return (
     <div className="h-screen w-full">
       <Puck
-        config={builderConfig}
+        config={puckConfig}
         data={initialData}
         onPublish={handlePublish}
         headerTitle={`Tema Toko — ${title}`}
