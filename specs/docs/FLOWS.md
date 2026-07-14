@@ -360,7 +360,7 @@ sequenceDiagram
         Note over OP,DB: ── ① PLATFORM: the roster ──
         OP->>SA: "Sync dari KiriminAja"  [requirePlatformAdmin]
         SA->>KA: kaServices()
-        Note over SA,KA: ⚠️ KiriminAja has NO list-couriers endpoint. kaServices()<br/>prices ONE hardcoded reference route (Menteng → Coblong,<br/>1 kg) and harvests the services out of the response.<br/>The roster is only as complete as that ONE lane — which is<br/>why TIKI never entered it and no merchant could enable it.<br/>Being fixed to a multi-route UNION.
+        Note over SA,KA: ⚠️ KiriminAja has NO list-couriers endpoint, so the roster is<br/>HARVESTED: kaServices() prices a UNION of 4 reference routes<br/>(ROSTER_ROUTES — 2 destinations incl. a rural one, plus<br/>Surabaya and Yogyakarta ORIGINS) and merges the services by<br/>courier:service_type. It used to price ONE lane, which hid<br/>TIKI entirely — it existed and we could not see it.<br/>Priced in parallel, cached 24h.
         KA-->>SA: services[] {courier, serviceType, name, group, cod}
         SA->>DB: UPSERT platform_couriers.services (jsonb {type,name,group,cod,codAllowed})
         Note over SA,DB: a previous codAllowed decision is PRESERVED. Couriers KA no<br/>longer offers are DISABLED, never deleted (old orders point at them).
@@ -448,12 +448,20 @@ not do is leave a route with no ordinary way to ship on it.
 > the word "Express" sits in the name of the service that is **not** express. The baseline service is the
 > **`group: "regular"`** one; `economy`, `next_day`, `one_day` and `cargo` are all optional.
 >
-> **Code gap:** `BASELINE_COURIER_CODES` is courier-level, so it currently reads as "the whole courier is
-> locked". The policy is **service-level**. See BACKLOG.
+> **Code gap (open):** `BASELINE_COURIER_CODES` is courier-level, so it currently locks the whole courier —
+> a seller cannot drop SPX Economy or JNE YES, which they are entitled to drop. The policy is
+> **service-level**. See BACKLOG.
 
 > ⚠️ **"Enabled" ≠ "the shopper will see it". Availability is decided per PICKUP ORIGIN.** Measured 2026-07-14:
 > **J&T quotes from Jakarta and Yogyakarta origins but NEVER from Gubeng (Surabaya)** — to any destination. A
 > courier that does not collect from the seller's warehouse is simply absent from the quote.
+>
+> ✅ **The seller is now TOLD this.** `apps/admin/lib/courier-coverage.ts` (→ `kaCoverage(originId)`) probes a
+> representative route from the store's own pickup district and the Jasa Kirim card states, per courier,
+> whether it collects from *that* warehouse. **UNKNOWN is a first-class answer**: no pickup address set, or a
+> failed probe, renders **no coverage state at all** rather than a guess — and a failed probe is never cached
+> as "does not collect", because "the API was down" must not be remembered for a day as a fact about a courier.
+> ⚠️ Still unknown: *why* J&T behaves this way (KiriminAja account limit? J&T coverage? sandbox artefact?).
 
 **COD is SPX-only by OUR policy, not by a courier limit.** KiriminAja marks JNE, SiCepat, Lion, Ninja and
 AnterAja COD-capable too. The restriction rests on the belief that a refused SPX parcel returns free — **which is

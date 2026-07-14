@@ -143,7 +143,9 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
   JNE's *standard* service is called "JNE Express Reguler"**, so a name-based rule picks the wrong row.
   *(`BASELINE_COURIER_CODES` is still courier-level in code; the policy is service-level — see BACKLOG.)*
   ⚠️ **Availability is per PICKUP ORIGIN, not global: J&T quotes from Jakarta and Yogyakarta origins but NEVER
-  from Gubeng (Surabaya). "Enabled" does not mean "the shopper will see it".**
+  from Gubeng (Surabaya). "Enabled" does not mean "the shopper will see it".** `lib/courier-coverage.ts`
+  probes this per store and the Jasa Kirim card says it — **UNKNOWN stays first-class** (no pickup address or
+  a failed probe ⇒ NO coverage claim; never cache a failure as "does not collect").
 - **COD being SPX-only is OUR policy, not a courier limit** — KiriminAja marks JNE/SiCepat/Lion/Ninja/AnterAja
   COD-capable too. Widening it is a **data change** (`codAllowed`), never `if (courier === "spx")`.
 

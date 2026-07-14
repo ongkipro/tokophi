@@ -193,7 +193,11 @@ unmeasurable**. Ordered.
   ⚠️ **Match on `group: "regular"`, NEVER on the name** — JNE's *standard* service is called **"JNE Express
   Reguler"**, so a name-based rule (`includes("Express")`) locks precisely the wrong row. The Jasa Kirim card
   must show the two locked rows as locked, and leave every economy/next-day/one-day/cargo row togglable.
-- [ ] **The seller UI does not distinguish "enabled" from "available from your origin"** — see above.
+- [x] **The seller UI now distinguishes "enabled" from "available from your origin"** —
+  `apps/admin/lib/courier-coverage.ts` probes coverage from the store's own pickup district and the Jasa
+  Kirim card states it. **UNKNOWN is first-class**: no pickup address / failed probe → no coverage claim at
+  all, and a failed probe is never cached as "does not collect". *(The underlying question — WHY J&T does
+  not collect from Surabaya — is still open, above.)*
 
 ---
 

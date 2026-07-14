@@ -96,10 +96,18 @@ rather than imply that "enabled" means "offered".
   COD-capable too; the SPX-only COD restriction rests on the (still **unverified**) belief that a refused
   SPX parcel returns free. See BACKLOG — "should COD be allowed on JNE" is an open question, and the
   answer is a data change (`platform_couriers.services[].codAllowed`), never a deploy.
-- **Known drift at the time of writing:** `apps/admin/app/api/public/ongkir/route.ts` still declares a
-  LOCAL `PRIMARY_CHAIN = ["spx","jne","jnt"]` instead of importing the shared constant. Two definitions
-  of the same policy is exactly what this ADR exists to prevent — the route must import from
-  `@tokophi/lib/couriers`.
+- ✅ **Implemented since this ADR was written:**
+  - `apps/admin/app/api/public/ongkir/route.ts` **imports** `PRIMARY_CHAIN` from `@tokophi/lib/couriers`
+    (it briefly shadowed it with a local `["spx","jne","jnt"]` — two definitions of one policy is exactly
+    what this ADR exists to prevent).
+  - **The roster is now a UNION of four reference routes**, not one (`ROSTER_ROUTES` in
+    `packages/lib/src/kiriminaja.ts`: two destinations from Menteng incl. a rural one, plus Surabaya and
+    Yogyakarta origins). **TIKI is now visible to the platform** — it existed all along and one route
+    could not see it.
+  - **The per-origin coverage probe is BUILT** (`apps/admin/lib/courier-coverage.ts` → `kaCoverage()`):
+    the seller's Jasa Kirim card now says whether a courier actually collects from *their* pickup
+    address. **UNKNOWN is a first-class answer** — no pickup address, or a failed probe, renders no
+    coverage state at all rather than a guess, and a failed probe is never cached as "does not collect".
 
 ## Alternatives rejected
 

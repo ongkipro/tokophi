@@ -417,7 +417,7 @@ Two different things, deliberately two different table sets (CHAT_SPEC Decision 
 | `platform_admins` | 6 | 1 | — | — |
 | `platform_activity` | 5 | 4 | **yes** | **— (deliberate)** |
 | `platform_cod` | 5 | 1 | — | — |
-| `platform_couriers` | 4 | 10 | — | — |
+| `platform_couriers` | 4 | 11 | — | — |
 | `platform_payment_channels` | 6 | 15 | — | — |
 | `platform_payment_gateways` | 5 | 1 | — | — |
 | `platform_payout` | 4 | 1 | — | — |
@@ -429,7 +429,7 @@ Two different things, deliberately two different table sets (CHAT_SPEC Decision 
 | Table | What it holds |
 |---|---|
 | `platform_cod` | `enabled`, `max_amount_idr` (seeded Rp2.000.000), `allowed_provinces` (jsonb, seeded 6), `fee_pct` 🔴 **unread** |
-| `platform_couriers` | `courier`, `services` (jsonb `{type,name,group,cod,codAllowed}`), `enabled`. **10 rows**: `anteraja jne jnt lion ninja sap sicepat spx` enabled · `idx jtcargo` disabled. ⚠️ **Harvested from ONE reference route** (`kaServices()`), so the roster is only as complete as that lane — `idx`, `jtcargo` and `ninja` carry **1 service each**, and TIKI never entered it at all. The **courier POLICY** (which of these a *seller* may offer) lives in code, not here: `packages/lib/src/couriers.ts`, **ADR 0010** |
+| `platform_couriers` | `courier`, `services` (jsonb `{type,name,group,cod,codAllowed}`), `enabled`. **11 rows** as of 2026-07-14 — it is a **live sync**, so the count moves when KiriminAja onboards a courier; do not hard-code it. Built from a **UNION of 4 reference routes** (`ROSTER_ROUTES`), because KiriminAja has no list-couriers endpoint and a single lane once hid **TIKI** entirely. The **courier POLICY** (which of these a *seller* may offer) lives in code, not here: `packages/lib/src/couriers.ts`, **ADR 0010** |
 | `platform_payout` | single row: `release_on` (`'selesai'`), `min_payout_idr` (50.000), `auto_approve` 🔴 **unread** |
 | `kiriminaja_areas` | **7.030** kecamatan — KiriminAja's own district ids. This is the id the ongkir is priced against, the parcel booked to, and the COD province derived from |
 | `kelurahan` | **78.764** villages (migration **0046**, Kemendagri/BPS). ⚠️ **Keyed by BPS codes (`34.02.13.2004`), NOT KiriminAja ids (`31483`) — these ids are NOT bookable.** It supplies a *name* and a *kodepos* only; the bookable village id comes from the live API (`POST /api/mitra/kelurahan`). ⚠️ **`npm run seed` used to TRUNCATE this table** — it was missing from the keep-list, so every reseed silently killed the checkout's kodepos auto-fill. Keep it in the keep-list |
