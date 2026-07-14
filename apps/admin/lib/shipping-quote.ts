@@ -2,7 +2,7 @@ import "server-only";
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { kaShippingPrice, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
-import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
+import { isInstantCourier, isInstantService, isSellerCourier } from "@tokophi/lib/couriers";
 import { resolveArea } from "@/lib/data/areas";
 import { getCodPolicy } from "@/lib/cod";
 import { weightForCart, type CartItemRef } from "@/lib/shipping-weight";
@@ -89,10 +89,20 @@ export async function quoteShipping(input: QuoteInput): Promise<Quote> {
   // Two-level courier control: platform (super-admin) sets the hard-enabled pool; the merchant picks
   // a subset. Instant/on-demand couriers are out of scope — a stale `gosend` row must not become a
   // checkout option.
+  //
+  // …and neither may a courier OUTSIDE the seller roster (`SELLER_COURIER_CODES` — Ninja, J&T Cargo,
+  // whatever KiriminAja onboards next). The roster is what a seller is allowed to OFFER, so it has to
+  // hold at the point the offer is actually made. Enforcing it only in Jasa Kirim would leave the one
+  // place it matters unguarded: `store_shipping_methods` still carries rows written before the roster
+  // existed (Ninja was in there on 2026-07-14), and this scope would have gone on quoting them to
+  // shoppers from a courier no seller can even see. A roster the checkout does not honour is a
+  // preference, not a roster.
   const platformRows = await db
     .select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled })
     .from(schema.platformCouriers);
-  const platformOn = platformRows.filter((p) => p.enabled && !isInstantCourier(p.courier)).map((p) => p.courier);
+  const platformOn = platformRows
+    .filter((p) => p.enabled && !isInstantCourier(p.courier) && isSellerCourier(p.courier))
+    .map((p) => p.courier);
 
   const [settings] = await db
     .select({

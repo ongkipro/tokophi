@@ -8,7 +8,16 @@ import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant, type Tx } from "@/lib/tenant";
 import { getCodPolicy } from "@/lib/cod";
 import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kaKelurahan, kiriminajaConfigured, type KaKelurahan } from "@tokophi/lib/kiriminaja";
-import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
+import {
+  isInstantCourier,
+  isInstantService,
+  isSellerCourier,
+  isBaselineCourier,
+  courierName,
+  SELLER_COURIER_CODES,
+  BASELINE_COURIER_CODES,
+} from "@tokophi/lib/couriers";
+import { courierCoverage, type CourierCoverage } from "@/lib/courier-coverage";
 import { resolveArea, provinceForDistrict, areaById } from "@/lib/data/areas";
 import { composeAddress } from "@/lib/address";
 
@@ -311,7 +320,16 @@ export type PlatformService = {
 
 type StoredService = { type: string; name: string; group: string; cod: boolean; codAllowed?: boolean };
 
-/** Services the PLATFORM has enabled — the pool a merchant may offer. Global table → owner conn. */
+/**
+ * Services the PLATFORM has enabled, NARROWED to the couriers a seller may offer.
+ * Global table → owner conn.
+ *
+ * The platform pool is not the seller's menu. Super-admin sees every courier KiriminAja carries;
+ * the seller sees the curated eight (`SELLER_COURIER_CODES` — SPX, JNE, J&T, Lion, SAP, SiCepat,
+ * ID Express, AnterAja). A merchant asked to choose between fourteen near-identical services chooses
+ * badly, and every extra courier is support surface we take on. The list is a business decision and
+ * lives in `@tokophi/lib/couriers`, not here — this function only applies it.
+ */
 export async function getPlatformServices(): Promise<PlatformService[]> {
   if (!(await getSession())) return [];
   const rows = await db
@@ -328,6 +346,9 @@ export async function getPlatformServices(): Promise<PlatformService[]> {
     // Instant / on-demand couriers (GoSend, Grab…) are out of scope — the Jasa Kirim card must not
     // offer them even if a stale row survived in platform_couriers (@tokophi/lib/couriers).
     if (isInstantCourier(r.courier)) continue;
+    // …and neither may it offer a courier outside the seller roster (J&T Cargo, Ninja, and whatever
+    // KiriminAja onboards next): platform-enabled, seller-invisible.
+    if (!isSellerCourier(r.courier)) continue;
     const list = (r.services as StoredService[] | null) ?? [];
     for (const s of list) {
       // Legacy rows stored plain strings ("REG"). Skip them — they carry no group/cod and the
@@ -344,7 +365,23 @@ export async function getPlatformServices(): Promise<PlatformService[]> {
       });
     }
   }
+  // Order by the roster, not by whatever order the table happened to return: SPX first (the primary
+  // and the COD rail), JNE second (the backup), then the rest. The seller reads the list top-down.
+  const rank = (c: string) => {
+    const i = SELLER_COURIER_CODES.indexOf(c);
+    return i < 0 ? SELLER_COURIER_CODES.length : i;
+  };
+  out.sort((a, b) => rank(a.courier) - rank(b.courier) || a.name.localeCompare(b.name, "id"));
   return out;
+}
+
+/**
+ * Does this courier actually collect from THIS store's pickup address? `null` = we do not know yet
+ * (see `lib/courier-coverage.ts`) and the UI must then show no coverage state at all.
+ */
+export async function getCourierCoverage(): Promise<CourierCoverage> {
+  if (!(await getSession())) return null;
+  return courierCoverage();
 }
 
 /** The services THIS store offers. Empty = none picked yet (the UI then offers to enable all). */
@@ -364,13 +401,43 @@ export async function getStoreServices(): Promise<{ courier: string; type: strin
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// THE ACTION IS THE BOUNDARY — the locked toggles in the UI are a courtesy.
+//
+// A curated list a client can widen by POSTing is not a curated list, and a baseline courier a
+// client can switch off by POSTing is not a baseline. Both rules are re-applied here, on a payload
+// that is assumed hostile:
+//
+//   · outside SELLER_COURIER_CODES → dropped SILENTLY. Not an error: the seller never saw it, so
+//     there is nothing to tell them about. Only a hand-crafted request can contain one.
+//   · a baseline courier (SPX, JNE) left with ZERO services → REJECTED, loudly. That is the seller's
+//     own screen misbehaving or someone bypassing it, and it is worth a message either way. Killing
+//     SPX kills COD silently (it is the only COD rail); killing JNE leaves the routes SPX does not
+//     serve with no shipping at all. Neither failure announces itself at checkout — the option just
+//     stops appearing — which is exactly why it must be impossible here rather than noticed later.
+//
+// The baseline is only enforced for a courier the PLATFORM currently offers: if super-admin has SPX
+// switched off platform-wide, the seller cannot be asked to keep it on.
+// ─────────────────────────────────────────────────────────────────────────────
 export async function saveStoreServices(
   services: { courier: string; type: string }[],
 ): Promise<{ ok: boolean; error?: string }> {
   const { storeId } = await requireCapability("settings:write");
-  // The UI cannot show an instant courier, but the action is the boundary — a hand-posted payload
-  // must not persist one either (@tokophi/lib/couriers).
-  const clean = services.filter((s) => !isInstantCourier(s.courier));
+  // The UI cannot show an instant courier or a non-roster one, but a hand-posted payload must not
+  // persist either (@tokophi/lib/couriers).
+  const clean = services.filter((s) => !isInstantCourier(s.courier) && isSellerCourier(s.courier));
+
+  const pool = await getPlatformServices();
+  const gutted = BASELINE_COURIER_CODES.filter(
+    (c) => pool.some((p) => p.courier === c) && !clean.some((s) => isBaselineCourier(s.courier) && s.courier === c),
+  );
+  if (gutted.length) {
+    return {
+      ok: false,
+      error: `${gutted.map(courierName).join(" dan ")} tidak bisa dimatikan — minimal satu layanannya harus aktif.`,
+    };
+  }
+
   await withTenant(storeId, async (db) => {
     // full replace — the UI always sends the complete set
     await db.delete(schema.storeShippingMethods);
