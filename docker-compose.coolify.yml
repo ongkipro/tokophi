@@ -57,6 +57,10 @@ services:
       AUTOLARIS_CALLBACK_SECRET: ${AUTOLARIS_CALLBACK_SECRET:-}
       CRON_SECRET: ${CRON_SECRET:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      # CNAME target a merchant points their custom domain at (Pengaturan → Domain). Defaults to
+      # cname.tokophi.com in code, which is already RESERVED in the storefront host resolver — set here
+      # only if the platform ever moves the target off that label. See specs/docs/CUSTOM_DOMAIN.md.
+      CUSTOM_DOMAIN_CNAME_TARGET: ${CUSTOM_DOMAIN_CNAME_TARGET:-cname.tokophi.com}
     expose:
       - "3000"
     healthcheck:
