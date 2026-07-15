@@ -25,7 +25,34 @@ unmeasurable**. Ordered.
    reach SPX through *KiriminAja* (a different contract), and the KiriminAja API has **no return field
    at all** (`KaRate` = service, service_name, service_type, cost, etd, cod, group). If returns are in
    fact billed through KiriminAja, the rationale collapses and we have restricted COD to one courier
-   for nothing. **This is one email.**
+   for nothing. **This is one email — the draft is ready below, just send it.**
+
+   <details><summary>📧 Ready-to-send email to KiriminAja (2026-07-16)</summary>
+
+   > **Kepada:** support / account manager KiriminAja
+   > **Subjek:** Konfirmasi kebijakan retur COD untuk layanan SPX
+   >
+   > Halo tim KiriminAja,
+   >
+   > Kami mengintegrasikan COD (Cash on Delivery) via API KiriminAja dan ingin mengonfirmasi satu hal
+   > soal **paket COD yang ditolak / gagal diantar**:
+   >
+   > 1. Untuk layanan **SPX (SPX Standard `type=1` dan SPX Economy `type=3`)** — jika penerima menolak
+   >    paket COD, apakah **ongkos retur (pengembalian paket ke penjual) GRATIS** bagi penjual, atau
+   >    **dibebankan** ke penjual?
+   > 2. Apakah kebijakan retur ini **sama** untuk kurir lain yang tersedia di KiriminAja (JNE, J&T,
+   >    SiCepat, dll), atau **berbeda per kurir**?
+   > 3. Apakah biaya retur (jika ada) muncul di response API `KaRate`, atau ditagih terpisah di dashboard?
+   >
+   > Kami perlu kepastian tertulis karena ini menentukan kurir mana yang kami izinkan untuk COD.
+   >
+   > Terima kasih.
+
+   **On the answer:** "retur gratis di SPX, dibebankan di kurir lain" → the SPX-only policy stands as-is.
+   "retur dibebankan di SPX juga" → the rationale collapses; open COD to all couriers behind a buyer-paid
+   fee pool (`platform_cod.fee_pct`, currently 0 and read by nothing — see the COD-fee item under P1).
+   Record the reply verbatim in this file when it arrives.
+   </details>
 3. **[x] `invitePlatformAdmin` escalation — CLOSED** (verified in code 2026-07-15). Now
    `requirePlatformAdmin("owner")` (was `admin`-gated), `role` is whitelisted against
    `["support","admin","owner"]` (was `input.role || "admin"`, which accepted anything), and it
