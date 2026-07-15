@@ -240,7 +240,12 @@ unmeasurable**. Ordered.
   (which run with `NODE_ENV=production` but WITHOUT the runtime `AUTH_SECRET`) still build (proven: an
   import-only load does not throw). Prod already sets a 64-char `AUTH_SECRET`, so runtime behaviour is
   unchanged; this only removes the silent forgeable-key path.
-- [ ] **No login rate limit** on either panel.
+- [x] **Login rate limit on both panels** (2026-07-16) — `signIn` in `apps/admin/lib/actions/auth.ts`
+  (15/min per IP) and `apps/super-admin/lib/actions/auth.ts` (10/min — the control plane, kept tighter)
+  cap attempts by client IP (`cf-connecting-ip` → `x-forwarded-for`) via `@tokophi/lib/cache` `rateLimit`,
+  BEFORE the scrypt password check. ⚠️ In-process — does not survive a restart or span replicas (the same
+  known limitation as every rate limit here; Cloudflare-edge move still tracked below) — but far better
+  than the previous NONE, and generous enough not to lock out a NAT'd office.
 - [ ] **`platform_activity` has a `store_id` and no RLS.** Deliberate (it is our log *about* tenants), but
   it deserves a written decision + a comment, not a silent whitelist entry.
 

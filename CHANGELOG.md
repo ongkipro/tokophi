@@ -21,6 +21,10 @@ Every session JWT, impersonation token, recovery link and abuse hash was signed 
 - **`orders.courier` is recorded at checkout.** `/api/public/order` now writes `courier: rate.code` — the courier of the fresh server-side quote it matched (never the client's raw claim; a service not in the quote already rejects the order). This is what the entire COD policy was betting on: the per-courier return-rate report is now a `group by courier` instead of an impossibility (700/700 orders had a NULL courier). Existing rows stay NULL; new checkouts populate it.
 - **The 500 g weight fallback is now visible on the Seller's Produk list.** The server already sums `product_variants.weight_grams` for the ongkir quote (a variant with no weight falls back to 500 g); that fallback was silent. `getProducts` now flags each product with a weightless variant (`bool_or(weight_grams is null)`) and the Produk list shows an amber **"Berat belum diisi"** on it (grid + table) — "a silent fallback is the same lie in a smaller font". Also fixed a source comment in `shipping-weight.ts` that claimed this warning already existed when it didn't.
 
+### 🚪 Login is rate-limited on both panels
+
+Neither the merchant nor the operator login capped attempts — an unmetered password-guessing surface on both. `signIn` now rate-limits by client IP (`cf-connecting-ip` → `x-forwarded-for`) via `@tokophi/lib/cache`, **before** the scrypt check runs: the merchant panel at 15/min, the super-admin control plane a touch tighter at 10/min. It is in-process (does not survive a restart or span replicas — the same limitation as every rate limit here, and the Cloudflare-edge move is still tracked), but far better than the previous NONE, and generous enough not to lock out a NAT'd office on a few wrong passwords.
+
 ## 2026-07-15
 
 ### 🌐 Custom domain for a merchant — built, deployed, and honest about where it stops
