@@ -8,6 +8,10 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 An unlogged privileged mutation is indistinguishable from an attack, and five super-admin actions mutated and wrote **nothing** to `platform_activity`. Now they all do (`logStore` for store-scoped, `logPlatform` for platform-wide): `setInvoiceStatus` (**money** — a hand-flip to "dibayar" extends a store's paid period without a payment, so it is logged with the store + status), `setStoreUserRole` (a **privilege change** — promoting a user to `owner` grants owner-only powers; logged with the user's email + new role), `saveGateways` and `saveCodAllowed` (**platform payment / COD risk policy** — logged with the diff), and `createStore`. They join `invitePlatformAdmin` (logged the day before) and the add/remove/reset-user + payout actions that already logged. `tsc` clean; behaviour otherwise unchanged. No silent privileged mutation remains among the store-lifecycle / billing / settings actions.
 
+### 🗑️ Deleted the dead `POST /api/public/pay` — an unauthenticated bill-minting endpoint called by nothing
+
+It took the `amount` **from the request body** and created a real VA/QRIS bill via AutoLaris, with no auth, no order verification and no store scoping — the same "the browser decides the number" class the checkout was hardened against, on a route anyone could POST to. Nothing called it: no storefront source read `PUBLIC_PAY_API`, and the real flow creates the payment **server-side inside `/api/public/order`** with the server-computed amount. Removed the route file and the dangling `PUBLIC_PAY_API` from `.env.example`. **`/api/public/pay/callback` (the live AutoLaris callback) is untouched** — a different route, still needed.
+
 ## 2026-07-15
 
 ### 🌐 Custom domain for a merchant — built, deployed, and honest about where it stops

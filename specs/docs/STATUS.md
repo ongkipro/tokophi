@@ -132,7 +132,7 @@ Honest arithmetic over demo rows. These are **not** lies — but do not quote th
 | # | Item | Detail |
 |---|---|---|
 | 29 | 🔴 **`/api/public/*` runs on the owner connection, outside RLS** | **the single largest RLS hole, and it is on the most security-sensitive path.** Tenant correctness at checkout rests on application code passing an explicit `store_id`, not on the database |
-| 30 | **`POST /api/public/pay` is dead but live** | no storefront file reads `PUBLIC_PAY_API`, yet the route still accepts unauthenticated requests to create real gateway bills |
+| 30 | ✅ **`POST /api/public/pay` DELETED** (2026-07-16) | unauthenticated route that took `amount` from the body to create a real VA/QRIS bill, called by nothing (payment is created server-side inside `/api/public/order`). Route + dangling `PUBLIC_PAY_API` removed; `/api/public/pay/callback` untouched |
 | 31 | **`/api/track` guards are per-process in-memory** | they do not hold across replicas. No proof-of-work, no signature, no session check — a distributed script with a browser UA can still inflate the funnel |
 | 32 | **Every rate limit is in-process** | none survives a restart. The production answer is the Cloudflare edge |
 | 33 | **`ADMIN_BASE` is derived from `PUBLIC_ONGKIR_API`'s origin** | a load-bearing coupling with no test: change the ongkir URL and every product image silently moves |

@@ -193,8 +193,12 @@ unmeasurable**. Ordered.
   the most security-sensitive path in the system.** Tenant correctness at checkout rests on application
   code passing an explicit `store_id`. Options: a `store_id`-scoped read role for the public path, or an
   explicit, documented acceptance. Not a silent one.
-- [ ] **`POST /api/public/pay` is dead but live** — no storefront file reads `PUBLIC_PAY_API`, yet the
-  route still accepts unauthenticated requests to create real gateway bills. Delete it.
+- [x] **`POST /api/public/pay` deleted** (2026-07-16) — it was an unauthenticated route that took the
+  `amount` FROM THE BODY and created a real VA/QRIS bill via AutoLaris, called by **nothing** (no
+  storefront source read `PUBLIC_PAY_API`; the real flow creates the payment server-side inside
+  `/api/public/order` with the server-computed amount). Removed the route file and the dangling
+  `PUBLIC_PAY_API` from `.env.example`. **`/api/public/pay/callback` (the live AutoLaris callback) is
+  untouched** — different route, still needed.
 - [ ] **All rate limits are in-process** — they do not survive a restart and do not hold across replicas.
   `/api/track` in particular has no proof-of-work, signature or session check: a distributed script with
   a browser UA can inflate a store's funnel. Move to the Cloudflare edge.
