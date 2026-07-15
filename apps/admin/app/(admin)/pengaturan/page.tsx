@@ -4,6 +4,7 @@ import * as React from "react"
 import {
   Bell,
   MapPin,
+  Globe,
   Landmark,
   Receipt,
   Truck,
@@ -37,6 +38,7 @@ import { Avatar, AvatarFallback } from "@tokophi/ui/avatar"
 import { SenderAddressCard } from "@/components/admin/pengaturan/sender-address-card"
 import { JasaKirimCard } from "@/components/admin/pengaturan/jasa-kirim-card"
 import { RekeningCard } from "@/components/admin/pengaturan/rekening-card"
+import { DomainCard } from "@/components/admin/pengaturan/domain-card"
 
 // NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
 // (super-admin → platform_payment_channels) and flow straight to the shopper's checkout.
@@ -47,6 +49,7 @@ type Section =
   | "profil"
   | "pengiriman"
   | "alamat"
+  | "domain"
   | "rekening"
   | "pajak"
   | "pengguna"
@@ -61,6 +64,7 @@ const SECTIONS: {
   { id: "profil", label: "Profil Toko", desc: "Nama, logo, kontak", icon: <Store /> },
   { id: "pengiriman", label: "Pengiriman", desc: "Jasa kirim & COD", icon: <Truck /> },
   { id: "alamat", label: "Alamat", desc: "Alamat pengambilan", icon: <MapPin /> },
+  { id: "domain", label: "Domain", desc: "Domain kustom storefront", icon: <Globe /> },
   { id: "rekening", label: "Rekening", desc: "Tujuan penarikan saldo", icon: <Landmark /> },
   { id: "pajak", label: "Pajak", desc: "PPN & NPWP", icon: <Receipt /> },
   { id: "pengguna", label: "Pengguna", desc: "Anggota & peran", icon: <Users /> },
@@ -387,6 +391,13 @@ export default function Page() {
           {section === "alamat" && (
             <div className="max-w-3xl">
               <SenderAddressCard />
+            </div>
+          )}
+
+          {/* DOMAIN */}
+          {section === "domain" && (
+            <div className="max-w-3xl">
+              <DomainCard />
             </div>
           )}
 
