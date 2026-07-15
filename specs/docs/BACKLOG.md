@@ -202,8 +202,15 @@ unmeasurable**. Ordered.
 - [ ] **All rate limits are in-process** — they do not survive a restart and do not hold across replicas.
   `/api/track` in particular has no proof-of-work, signature or session check: a distributed script with
   a browser UA can inflate a store's funnel. Move to the Cloudflare edge.
-- [ ] **`AUTH_SECRET` falls back to `"dev-insecure-secret-change-me"`.** Convenient in dev; must be
-  impossible in production.
+- [x] **`AUTH_SECRET` insecure fallback is now impossible in production** (2026-07-16). A shared
+  `@tokophi/lib/secret` (`authSecret()` / `authSecretBytes()`, zero-dep so it is edge-safe) resolves the
+  key and **fails CLOSED**: in production a missing/short `AUTH_SECRET` **throws**; only in development
+  does it return the well-known dev string. Wired into all 8 sites across the three apps (admin +
+  super-admin middleware/auth/session/impersonate, storefront chat + recovery). The throw is **lazy** —
+  it fires when the key is first used at runtime, never at module load — so `next build`/`astro build`
+  (which run with `NODE_ENV=production` but WITHOUT the runtime `AUTH_SECRET`) still build (proven: an
+  import-only load does not throw). Prod already sets a 64-char `AUTH_SECRET`, so runtime behaviour is
+  unchanged; this only removes the silent forgeable-key path.
 - [ ] **No login rate limit** on either panel.
 - [ ] **`platform_activity` has a `store_id` and no RLS.** Deliberate (it is our log *about* tenants), but
   it deserves a written decision + a comment, not a silent whitelist entry.

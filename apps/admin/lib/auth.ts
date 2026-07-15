@@ -4,8 +4,10 @@ import { SignJWT, jwtVerify } from "jose";
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
+import { authSecretBytes } from "@tokophi/lib/secret";
 
-const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me");
+// Lazy (throws in prod if AUTH_SECRET is unset, never at build) — see @tokophi/lib/secret.
+const secret = () => authSecretBytes();
 export const SESSION_COOKIE = "session";
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7d — matches the JWT expiry
 
@@ -49,14 +51,14 @@ export async function findLogin(email: string) {
 }
 
 export async function signSession(s: Session): Promise<string> {
-  return new SignJWT({ ...s }).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("7d").sign(secret);
+  return new SignJWT({ ...s }).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("7d").sign(secret());
 }
 
 export async function getSession(): Promise<Session | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, secret());
     return payload as unknown as Session;
   } catch {
     return null;

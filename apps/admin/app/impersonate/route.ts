@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { authSecretBytes } from "@tokophi/lib/secret";
 import { SESSION_COOKIE, signSession, type Session } from "@/lib/auth";
 
 // Cross-subdomain impersonation exchange. The super-admin ("Buka Dashboard Seller") sends a short-lived
@@ -8,7 +9,7 @@ import { SESSION_COOKIE, signSession, type Session } from "@/lib/auth";
 // subdomains, so setting the cookie from the super-admin app doesn't reach here — hence this route.
 export const runtime = "nodejs";
 
-const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me");
+const secret = () => authSecretBytes(); // lazy: throws in prod if AUTH_SECRET is unset, never at build
 
 // Relative-Location redirect: behind Traefik the Node runtime sees req.url as the internal
 // http://localhost:3000, so `new URL(path, req.url)` leaks the internal host. A relative
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
   const dest = slug ? `/store/${slug}` : "/";
   if (!token) return redirectTo("/login");
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, secret());
     const s = payload as unknown as Session;
     if (!s.userId || !s.storeId) throw new Error("bad payload");
     // re-sign a full-length admin session (the incoming token is intentionally short-lived)

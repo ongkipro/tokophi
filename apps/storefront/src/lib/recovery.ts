@@ -29,16 +29,13 @@
 //   → https://<store host>/checkout?r=<token>
 //
 // Env: CHECKOUT_RECOVERY_SECRET, falling back to AUTH_SECRET (the admin already sets that one, so a
-// single-secret deploy just works). The dev fallback below exists so a local storefront started
-// without env does not crash — it is NOT a production secret.
+// single-secret deploy just works). In production a missing secret must be impossible — `authSecret()`
+// throws there rather than fall back to a public dev string; only in development does it return the
+// dev key (so a local storefront started without env does not crash). Lazy, so build never evaluates it.
 import { SignJWT, jwtVerify } from "jose";
+import { authSecret } from "@tokophi/lib/secret";
 
-const secret = () =>
-  new TextEncoder().encode(
-    process.env.CHECKOUT_RECOVERY_SECRET ||
-      process.env.AUTH_SECRET ||
-      "tokophi-dev-recovery-secret-change-me",
-  );
+const secret = () => new TextEncoder().encode(process.env.CHECKOUT_RECOVERY_SECRET || authSecret());
 
 export const RECOVERY_TTL = "7d";
 

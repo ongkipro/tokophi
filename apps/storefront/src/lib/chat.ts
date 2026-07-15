@@ -18,8 +18,10 @@
 import { SignJWT, jwtVerify } from "jose";
 import { createHash } from "node:crypto";
 import type { APIContext } from "astro";
+import { authSecret, authSecretBytes } from "@tokophi/lib/secret";
 
-const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me");
+// Lazy (throws in prod if AUTH_SECRET is unset, never at build) — see @tokophi/lib/secret.
+const secret = () => authSecretBytes();
 
 export const CHAT_COOKIE = "tokophi_chat";
 const MAX_AGE = 60 * 60 * 24 * 180; // 180 days
@@ -40,7 +42,7 @@ export async function mintVisitorCookie(ctx: APIContext, vid: string, sid: strin
     .setAudience(AUD)
     .setIssuedAt()
     .setExpirationTime("180d")
-    .sign(secret);
+    .sign(secret());
   ctx.cookies.set(CHAT_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -58,7 +60,7 @@ export async function readVisitorToken(ctx: APIContext, storeId: string): Promis
   const raw = ctx.cookies.get(CHAT_COOKIE)?.value;
   if (!raw) return null;
   try {
-    const { payload } = await jwtVerify(raw, secret, { audience: AUD });
+    const { payload } = await jwtVerify(raw, secret(), { audience: AUD });
     const { vid, sid } = payload as { vid?: string; sid?: string };
     if (!vid || !sid || sid !== storeId) return null;
     return { vid, sid };
@@ -81,7 +83,7 @@ export function clientIp(request: Request, clientAddress: string | undefined): s
 
 /** Never the raw IP (PII minimization) — abuse tracking only. */
 export function ipHash(ip: string): string {
-  return createHash("sha256").update(ip + (process.env.AUTH_SECRET ?? "")).digest("hex");
+  return createHash("sha256").update(ip + authSecret()).digest("hex");
 }
 
 // ---------------------------------------------------------------------------------------------

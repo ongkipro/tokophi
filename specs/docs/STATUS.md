@@ -112,7 +112,7 @@ Honest arithmetic over demo rows. These are **not** lies — but do not quote th
 | 17 | **Role checks are action-only** | middleware and page guards check for *a* session, not a role. A lower-privileged operator sees every screen; the buttons throw on click |
 | 18 | ✅ **Audit gaps CLOSED** (2026-07-15) | `setInvoiceStatus` (money), `invitePlatformAdmin`, `setStoreUserRole`, `saveGateways`, `saveCodAllowed` (COD risk policy) and `createStore` now all write to `platform_activity` (`logStore`/`logPlatform`). No silent privileged mutation remains in the store-lifecycle/billing/settings actions |
 | 19 | **`invitePlatformAdmin` hashes a fixed password** | `tokophi123` |
-| 20 | **No login rate limit**, and `AUTH_SECRET` falls back to `"dev-insecure-secret-change-me"` | |
+| 20 | **No login rate limit** (still open). `AUTH_SECRET` insecure fallback ✅ **fixed 2026-07-16** — `@tokophi/lib/secret` fails closed (throws) in production if unset; dev-only fallback | |
 | 21 | **`sendPaymentReminder` sends nothing** | |
 | 22 | **`createStore` still writes a `store_stats` row** | into the table nothing reads any more |
 

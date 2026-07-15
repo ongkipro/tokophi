@@ -12,6 +12,10 @@ An unlogged privileged mutation is indistinguishable from an attack, and five su
 
 It took the `amount` **from the request body** and created a real VA/QRIS bill via AutoLaris, with no auth, no order verification and no store scoping — the same "the browser decides the number" class the checkout was hardened against, on a route anyone could POST to. Nothing called it: no storefront source read `PUBLIC_PAY_API`, and the real flow creates the payment **server-side inside `/api/public/order`** with the server-computed amount. Removed the route file and the dangling `PUBLIC_PAY_API` from `.env.example`. **`/api/public/pay/callback` (the live AutoLaris callback) is untouched** — a different route, still needed.
 
+### 🔑 `AUTH_SECRET` can no longer silently fall back to a public dev key in production
+
+Every session JWT, impersonation token, recovery link and abuse hash was signed with `process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me"` — so an unset secret in production would sign everything with a **public** string, making every session forgeable, silently. New shared `@tokophi/lib/secret` (`authSecret()` / `authSecretBytes()`, dependency-free so it is edge-safe for middleware) **fails CLOSED**: in production a missing or too-short `AUTH_SECRET` **throws**; only in development does it return the well-known dev key (dev data is disposable). Wired into all 8 call sites across the three apps. The throw is **lazy** — it fires when the key is first *used* at runtime, never at module load — because `next build` / `astro build` run with `NODE_ENV=production` but WITHOUT the runtime `AUTH_SECRET` (it is a runtime `environment:` var, not a build arg), and a load-time throw would break every build. Verified: an import-only load does not throw; a call in production-without-secret does. Production already sets a 64-char `AUTH_SECRET` (checked in all three containers), so runtime behaviour is unchanged — this only removes the silent forgeable-key path.
+
 ## 2026-07-15
 
 ### 🌐 Custom domain for a merchant — built, deployed, and honest about where it stops

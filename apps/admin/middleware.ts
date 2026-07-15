@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { authSecretBytes } from "@tokophi/lib/secret";
 
 // Edge-safe: only verifies the session JWT (no DB). Password check happens in the
-// signIn server action (Node runtime).
-const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me");
+// signIn server action (Node runtime). `secret` is lazy (throws in prod if AUTH_SECRET is unset,
+// never at build) — see @tokophi/lib/secret.
+const secret = () => authSecretBytes();
 
 // Nothing in the merchant admin may be indexed. next.config.ts sets X-Robots-Tag for everything
 // the router serves, but a middleware redirect/rewrite short-circuits that — so stamp it here too.
@@ -18,7 +20,7 @@ export async function middleware(req: NextRequest) {
   let valid = false;
   if (token) {
     try {
-      await jwtVerify(token, secret);
+      await jwtVerify(token, secret());
       valid = true;
     } catch {
       valid = false;
