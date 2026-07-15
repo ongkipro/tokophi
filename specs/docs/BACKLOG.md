@@ -319,7 +319,7 @@ unmeasurable**. Ordered.
 - [ ] Variants with a NULL weight → fall back to 500 g **and** surface a warning on the Seller's product list ("Berat belum diisi — ongkir bisa salah"). A silent fallback is the same lie in a smaller font.
 - [ ] Make weight genuinely required for new products (the field already defaults to 500 — that default is itself a guess worth showing).
 
-## 🔴 P1.8 — Healthcheck & watchdog (DESIGNED, NOT BUILT — user: "catat dulu, nanti eksekusi")
+## 🟡 P1.8 — Healthcheck & watchdog (L1 BUILT + LIVE 2026-07-15; L2/L3/alerts still open)
 > **Why this is here:** on 2026-07-14 production went down **three times** and every deploy failed **silently for an hour** — and *every single one* was found only because someone happened to look. Nothing told us. That is the gap: not the bugs, the **absence of a witness**.
 >
 > **The three failure shapes seen (design against these, not against a generic "is it up?"):**
@@ -334,10 +334,24 @@ unmeasurable**. Ordered.
 >
 > **Blocked on ONE decision from the user: where do alerts go?** Telegram (fastest to a phone; needs a @BotFather bot token + chat id in `~/.config/ai-local/secrets.env`), or email/SMTP. Until that exists, L1 can still ship (self-heal + `/var/log/tokophi-watchdog.log`) — it just heals in silence.
 
-- [ ] **L1 self-healing watchdog** (no credentials needed — do this first, it alone would have prevented all 3 outages today)
-- [ ] **L2 external probe** incl. a DB-touching endpoint, off-box
+- [x] **L1 self-healing watchdog — BUILT + LIVE on the VPS** (2026-07-15). `ops/tokophi-watchdog.sh`
+  (in the repo) installed at `/usr/local/bin/tokophi-watchdog.sh`, fired every minute by
+  `/etc/cron.d/tokophi-watchdog`. It `docker start`s any of the 4 app containers (`admin`, `super-admin`,
+  `storefront`, `landing`) found in `created`/`exited`, matched by the stable
+  `<svc>-l7r4qaqcml4zigw1dc7iptun-` prefix. **Deliberately narrow:** never touches `postgres`/`backup`/
+  `coolify`/`cron`, and never `migrate` (which is *supposed* to be `exited (0)` — starting it re-runs
+  migrations); only acts on `created`/`exited`, leaving a `running`-but-unhealthy or `restarting`
+  crash-loop to L2/L3. No credentials, no network. Writes a heartbeat to `/var/run/tokophi-watchdog.last`
+  every run (an observable "the watchdog is alive" signal for L2, since the log stays quiet on a healthy
+  box). **Proven end-to-end:** `docker stop landing` → watchdog → `running` again + HTTP 200 + a `HEAL`
+  log line; cron firing confirmed via the heartbeat advancing + syslog `CRON … tokophi-watchdog.sh`.
+  Survives a bad deploy because it lives on the **host**, not in an app container. ⚠️ Re-install after a
+  full VPS reprovision: copy `ops/tokophi-watchdog.sh` + the cron.d line (see DEPLOY.md).
+- [ ] **L2 external probe** incl. a DB-touching endpoint, off-box. Can now also read the L1 heartbeat
+  (`/var/run/tokophi-watchdog.last`) to detect a dead watchdog / dead box.
 - [ ] **L3 deploy-failure alarm** reading Coolify's queue table, not its API response
-- [ ] **Alert channel** — user decision (Telegram bot token / SMTP)
+- [ ] **Alert channel** — user decision (Telegram bot token / SMTP). ⚠️ **This is what still blocks L2/L3:**
+  L1 heals in silence; L2/L3 have nowhere to send an alert until this is chosen.
 
 ## P1.7 — Domain cutover (LIVE, residual items)
 

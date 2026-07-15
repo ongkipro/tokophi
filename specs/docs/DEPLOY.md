@@ -36,6 +36,36 @@
     - **Module-scope `process.env` reads get baked at build time** (when the var is unset) for app-local server code → `ADMIN_URL` was frozen to `localhost:3000`. Read env **inside the function** at request time (workspace-package reads like the KiriminAja key are runtime, hence unaffected).
     - **Node-runtime `req.url` behind Traefik = the internal `http://localhost:3000`.** `NextResponse.redirect(new URL("/x", req.url))` leaks that host. Use a **relative `Location`** header (`new NextResponse(null, {status:307, headers:{Location:"/x"}})`) so the browser resolves against the real origin. (Middleware/edge already returns relative.)
 
+## L1 self-healing watchdog (LIVE on `volumdev` since 2026-07-15)
+
+On 2026-07-14 production 503'd because Coolify built the app containers, left them `created`, and moved
+on — nothing started them, nothing told us. The watchdog is the automatic recovery for exactly that
+(failure shape #1). It lives on the **host** (not in a container) so it survives a bad deploy.
+
+- **Source of truth:** `ops/tokophi-watchdog.sh` in the repo. Installed at
+  `/usr/local/bin/tokophi-watchdog.sh`; run every minute by `/etc/cron.d/tokophi-watchdog`
+  (`* * * * * root /usr/local/bin/tokophi-watchdog.sh`).
+- **What it does:** `docker start`s any of the 4 app containers (`admin`, `super-admin`, `storefront`,
+  `landing`) found in `created`/`exited`, matched by the stable `<svc>-l7r4qaqcml4zigw1dc7iptun-` prefix
+  (the trailing hash changes every deploy). It **never** touches `postgres`/`backup`/`coolify`/`cron`, and
+  **never `migrate`** (which is *supposed* to be `exited (0)` — starting it would re-run migrations). Only
+  `created`/`exited` are acted on; a `running`-but-unhealthy or `restarting` crash-loop is left for L2/L3.
+- **Liveness:** writes `/var/run/tokophi-watchdog.last` every run (the log is quiet on a healthy box, so
+  that file is how you tell the watchdog itself is alive — check its mtime). Actions log to
+  `/var/log/tokophi-watchdog.log` (`HEAL …`).
+- **Reinstall (after a full VPS reprovision — a normal deploy does NOT wipe it):**
+  ```bash
+  scp ops/tokophi-watchdog.sh root@<box>:/usr/local/bin/tokophi-watchdog.sh
+  ssh root@<box> 'chmod 755 /usr/local/bin/tokophi-watchdog.sh
+    printf "%s\n" "* * * * * root /usr/local/bin/tokophi-watchdog.sh" > /etc/cron.d/tokophi-watchdog
+    chmod 644 /etc/cron.d/tokophi-watchdog'
+  ```
+- **Verify:** `ssh root@<box> 'cat /var/run/tokophi-watchdog.last'` should be < 1 min old; a
+  `docker stop landing-…` then a manual `/usr/local/bin/tokophi-watchdog.sh` must bring it back with a
+  `HEAL` line.
+- **Still open:** L2 (off-box probe incl. a DB-touching endpoint) + L3 (Coolify deploy-failure alarm) +
+  an alert channel — see BACKLOG P1.8. They are blocked on the user's alert-channel decision (Telegram/SMTP).
+
 ## Billing cron (schedule this)
 
 Subscription enforcement is real-time (`computeBilling` in `requireCapability` → suspended stores
