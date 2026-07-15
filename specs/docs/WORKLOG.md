@@ -6,6 +6,20 @@
 ## ▶ CURRENT STATE (2026-07-13) · **LIVE ON `tokophi.com`** (landing · `app.` admin · `rich.` super-admin · `toko.` demo · **`<slug>.tokophi.com` = per-merchant storefront**, Cloudflare-proxied HTTPS, Vultr SG + Coolify) · RBAC + RLS enforcing · single-plan billing (PPN 11%) · super-admin store-control · client Akun section · support tiket 2-sisi · manual invoice + reminder · image→WebP · **self-serve signup `/daftar` + Google OAuth (flagged)** · **storefront SSR + `Host`-header MULTI-TENANT (one deploy serves every store)** · **Tema: named template variants + per-kategori/produk assignment** · chat spec written (not built) · provider brands hidden (white-label)
 
 
+
+## 2026-07-15 — Session: MERGED TO MAIN + DEPLOYED + store-profile editor closes the whatsapp gap ✅ `b937a93` on main, deployed, validated in production
+> Everything from the day's sessions is now LIVE on tokophi.com.
+
+- **Merged & deployed.** Fast-forward `origin main → b937a93` (push HEAD:main, working tree untouched so agent-1's hanging files stayed put), then triggered a Coolify redeploy via API. **Validated in a real browser on production** (`batik-nusantara.tokophi.com/checkout`): kecamatan search ✅, kota/provinsi auto ✅, kelurahan→kodepos ✅, the new "Kirim ke" summary ✅, ongkir ✅, **0 console errors**. og:image + per-tenant sitemap live; the dummy `6281234567890` number gone; every key page HTTP 200 (so migrations 0049/0050 applied cleanly — no 500).
+- **Two production landmines defused BEFORE deploy.** (1) `_journal.json` timestamps had to be monotonic or drizzle silently SKIPS a migration → `stores.whatsapp` never created → storefront 500. Verified monotonic. (2) Migration 0049 hardcoded a demo WhatsApp backfill (`6281234500999`) — on prod (migrate runs, seed does not) that would have put a FAKE live "Hubungi via WhatsApp" button on the real storefront. Removed the backfill (`b937a93`): columns stay NULL on prod → no button (honest) until the merchant sets their own.
+- **Store-profile editor — closes the gap the migration opened.** Pengaturan → Profil was COSMETIC: hardcoded `defaultValue`s (incl. a placeholder WhatsApp `+62 812 3456 7890`), no save wiring, and email/address/currency fields with no column behind them. After migration 0049 the storefront reads `stores.whatsapp` (NULL → no button), so a merchant had NO way to restore their CS button. New `StoreProfileCard` + `store-profile.ts` action: name + tagline + WhatsApp, real columns, `settings:write` + `withTenant`. Number is normalised (`0812…`/`+62…` → `62…`), and clearing it removes the storefront button (honest, not a placeholder). Fake email/address/currency fields dropped. **Proven full-circle in a browser:** set `0812 9000 1234` in admin → stored `6281290001234` → storefront WA button becomes `wa.me/6281290001234`; a store with no number shows no button.
+
+### ▶ NEXT / still open
+- **Set batik-nusantara's REAL WhatsApp on prod** — its storefront button is currently absent (whatsapp NULL after migration). The merchant sets it in Pengaturan → Profil now that the editor exists; or set the real number directly.
+- **Custom domain slices 2–4** (Cloudflare-for-SaaS cert issuance, 301 primary redirect, SNI experiment) — blocked on the user (cost + a CNAME-target domain).
+- **Payment callback HMAC** — blocked on AutoLaris signing spec.
+- **⚠️ Agent-1's pickup-kelurahan feature** (`sender-address-card.tsx` + `shipping.ts`) — still uncommitted, NOT merged/deployed. Their work to finish.
+
 ## 2026-07-15 — Session: storefront honesty sweep + per-tenant SEO + custom-domain groundwork ✅ committed `f71452d` `778d2cd` `c91b276` `53950b3` (worktree `super-admin-overhaul`, **pushed, NOT merged to main**)
 > Four parallel read-only audits (a11y · runtime · SEO · dead-UI) against the live storefront. The money path came back scrupulously honest; every lie was in the soft surfaces nobody re-audited after the DB landed.
 

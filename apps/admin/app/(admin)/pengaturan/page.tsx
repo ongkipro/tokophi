@@ -38,6 +38,7 @@ import { Avatar, AvatarFallback } from "@tokophi/ui/avatar"
 import { SenderAddressCard } from "@/components/admin/pengaturan/sender-address-card"
 import { JasaKirimCard } from "@/components/admin/pengaturan/jasa-kirim-card"
 import { RekeningCard } from "@/components/admin/pengaturan/rekening-card"
+import { StoreProfileCard } from "@/components/admin/pengaturan/store-profile-card"
 import { DomainCard } from "@/components/admin/pengaturan/domain-card"
 
 // NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
@@ -259,110 +260,7 @@ export default function Page() {
         <div className="min-w-0 space-y-5">
           {/* PROFIL TOKO */}
           {section === "profil" && (
-            <Card className="max-w-3xl">
-              <CardHeader>
-                <CardTitle>Profil Toko</CardTitle>
-                <CardDescription>
-                  Informasi ini tampil di toko dan struk pesanan pelanggan.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-5">
-                <div className="flex items-center gap-4">
-                  <Avatar size="lg" className="size-16">
-                    <AvatarFallback className="bg-primary/10 text-base font-semibold text-primary">
-                      BN
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="grid gap-1">
-                    <p className="text-sm font-medium">Logo toko</p>
-                    <p className="text-xs text-muted-foreground">
-                      Format PNG atau JPG, maksimal 2 MB.
-                    </p>
-                    <div className="mt-1">
-                      <Button variant="outline" size="sm">
-                        <Store />
-                        Ubah logo
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <Field label="Nama toko" htmlFor="nama-toko">
-                  <Input id="nama-toko" defaultValue={storeName} />
-                </Field>
-
-                <Field
-                  label="Deskripsi"
-                  htmlFor="deskripsi"
-                  hint="Ceritakan singkat tentang toko Anda."
-                >
-                  <Textarea
-                    id="deskripsi"
-                    rows={3}
-                    defaultValue="Menyediakan batik tulis dan cap asli Nusantara dengan kualitas premium langsung dari pengrajin lokal."
-                  />
-                </Field>
-
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="Email" htmlFor="email">
-                    <Input
-                      id="email"
-                      type="email"
-                      defaultValue="halo@batiknusantara.id"
-                    />
-                  </Field>
-                  <Field label="No. WhatsApp" htmlFor="wa">
-                    <Input id="wa" defaultValue="+62 812 3456 7890" />
-                  </Field>
-                </div>
-
-                <Field label="Alamat" htmlFor="alamat">
-                  <Textarea
-                    id="alamat"
-                    rows={2}
-                    defaultValue="Jl. Malioboro No. 12, Yogyakarta, DI Yogyakarta 55213"
-                  />
-                </Field>
-
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <Field
-                    label="Zona waktu"
-                    htmlFor="zona-waktu"
-                    hint="Digunakan untuk jadwal & laporan."
-                  >
-                    <Input
-                      id="zona-waktu"
-                      value="Asia/Jakarta (WIB)"
-                      readOnly
-                      disabled
-                    />
-                  </Field>
-                  <Field
-                    label="Bahasa"
-                    htmlFor="bahasa"
-                    hint="Bahasa antarmuka dasbor."
-                  >
-                    <Input
-                      id="bahasa"
-                      value="Bahasa Indonesia"
-                      readOnly
-                      disabled
-                    />
-                  </Field>
-                </div>
-
-                <Field
-                  label="Mata uang"
-                  htmlFor="mata-uang"
-                  hint="Mata uang toko tidak dapat diubah."
-                >
-                  <Input id="mata-uang" value="Rupiah (IDR)" readOnly disabled />
-                </Field>
-              </CardContent>
-              <SaveFooter />
-            </Card>
+            <StoreProfileCard />
           )}
 
           {/* PENGIRIMAN — jasa kirim + COD. Grouped by KiriminAja's own speed classes.
