@@ -84,7 +84,9 @@ const CATEGORY_ORDER = ["dress", "atasan", "bawahan", "busana-muslim", "outerwea
 // PUBLIC_ONGKIR_API — no extra env). Seeded /products/*.webp stay relative (served from public/).
 const ADMIN_BASE = (() => {
   try {
-    return new URL(import.meta.env.PUBLIC_ONGKIR_API || "http://localhost:3000").origin;
+    // RUNTIME env, not import.meta.env: built without env, the build-time read bakes in as undefined
+    // and every merchant-uploaded product image would resolve against localhost. See store.ts.
+    return new URL(process.env.PUBLIC_ONGKIR_API || "http://localhost:3000").origin;
   } catch {
     return "";
   }

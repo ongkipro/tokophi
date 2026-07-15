@@ -15,8 +15,15 @@ const catalog = Astro.locals.catalog;
 const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null; // null → wordmark fallback
 
 // Platform shipping proxy (admin) + this store's origin city.
-const ONGKIR_API = import.meta.env.PUBLIC_ONGKIR_API || "http://localhost:3000/api/public/ongkir";
-const ORDER_API = import.meta.env.PUBLIC_ORDER_API || "http://localhost:3000/api/public/order";
+//
+// RUNTIME env (process.env), NOT import.meta.env. `import.meta.env.PUBLIC_*` is replaced at BUILD time,
+// and the Docker image is built WITHOUT env — so those bake in as `undefined` and fall back to
+// `http://localhost:3000`, a host the SHOPPER's browser cannot reach in production. The kecamatan
+// search, the order POST and the payment call would all silently fail. This value is read per-request
+// on the server and handed to the client via define:vars below (the store resolver uses the same
+// pattern — src/data/store.ts).
+const ONGKIR_API = process.env.PUBLIC_ONGKIR_API || "http://localhost:3000/api/public/ongkir";
+const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/public/order";
 const ORIGIN_CITY = store.city || "Yogyakarta";
 const STORE_SLUG = store.slug;
 
