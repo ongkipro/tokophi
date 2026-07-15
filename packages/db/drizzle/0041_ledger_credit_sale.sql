@@ -38,11 +38,11 @@ SELECT COALESCE(p.store_id, o.store_id),
        o.id,
        p.id,
        'sale',
-       CASE WHEN o.status IN ('selesai', 'retur') THEN 'available' ELSE 'pending' END::ledger_status,
+       CASE WHEN o.status::text IN ('selesai', 'retur') THEN 'available' ELSE 'pending' END::ledger_status,
        p.amount_idr,
        'Penjualan ' || o.number,
        COALESCE(p.paid_at, o.placed_at, now()),
-       CASE WHEN o.status IN ('selesai', 'retur') THEN COALESCE(p.paid_at, o.placed_at, now()) END
+       CASE WHEN o.status::text IN ('selesai', 'retur') THEN COALESCE(p.paid_at, o.placed_at, now()) END
   FROM payments p
   JOIN orders o ON o.id = p.order_id
  WHERE p.status = 'berhasil'
@@ -62,7 +62,7 @@ SELECT l.store_id, o.id, 'retur', l.status, -l.amount_idr, 'Retur ' || o.number,
        CASE WHEN l.status = 'available' THEN COALESCE(o.returned_at, now()) END
   FROM ledger_entries l
   JOIN orders o ON o.id = l.order_id
- WHERE l.kind = 'sale' AND o.status = 'retur'
+ WHERE l.kind = 'sale' AND o.status::text = 'retur'
    AND NOT EXISTS (
      SELECT 1 FROM ledger_entries r WHERE r.kind = 'retur' AND r.order_id = o.id
    )
