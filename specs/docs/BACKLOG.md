@@ -24,29 +24,33 @@ unmeasurable**. Ordered.
    at all** (`KaRate` = service, service_name, service_type, cost, etd, cod, group). If returns are in
    fact billed through KiriminAja, the rationale collapses and we have restricted COD to one courier
    for nothing. **This is one email.**
-3. **[ ] `invitePlatformAdmin` is a privilege-escalation path.** It is `admin`-gated, takes `role`
-   **unvalidated** (`role: input.role || "admin"`), and is **not audit-logged**. An `admin` operator can
-   mint themselves an `owner` and thereby reach the two `owner`-only actions (impersonate, reset owner
-   password). **This quietly undoes the role check that landed in `0776e99`.** It also hashes a fixed
-   password (`tokophi123`).
-4. **[ ] `lib/actions/billing.ts` has no capability gate.** `createSubscriptionPayment` and
-   `cancelSubscriptionInvoice` raise and void **real invoices**, gated on `getSession()` alone — so a
-   `gudang` user can create or cancel the store's subscription bill. Every other mutating action file
-   calls `requireCapability` as its first statement.
-5. **[ ] Tests for the ledger, the COD gate, and the order state machine.** There is **one test file in
-   the entire repo** (`packages/lib/src/integration-status.test.ts`); vitest is wired and unused.
-   `select sum(…) for update` — which Postgres rejects outright, so **every withdrawal threw** — shipped
-   because `tsc` cannot see inside a SQL string. Same family, one week later: a `ReferenceError:
-   queueSave is not defined` inside a client `<script>` in `checkout.astro` blocked the **entire rate
-   load** (no rates → no COD → **no order at all**) while `astro check`, lint and build were **all
-   green** — only a browser caught it. **Money and checkout paths must be exercised, not typechecked.**
+3. **[x] `invitePlatformAdmin` escalation — CLOSED** (verified in code 2026-07-15). Now
+   `requirePlatformAdmin("owner")` (was `admin`-gated), `role` is whitelisted against
+   `["support","admin","owner"]` (was `input.role || "admin"`, which accepted anything), and it
+   audit-logs via `logPlatform`. An `admin` can no longer mint an `owner`. ⚠️ Residual (minor, tracked):
+   it still seeds a fixed `DEV_PASSWORD` (`tokophi123`) for the new operator — acceptable only because
+   there is no mailer to send an invite; replace with a random token when the mailer lands.
+4. **[x] `lib/actions/billing.ts` is gated — CLOSED** (verified in code 2026-07-15). Both
+   `createSubscriptionPayment` and `cancelSubscriptionInvoice` now call
+   `requireCapability("settings:write", { allowSuspended: true })` as their first statement (was
+   `getSession()` alone). `allowSuspended` is deliberate: a suspended store must still be able to pay its
+   way back in — refusing that payment would lock a paying merchant out permanently.
+5. **[~] Tests for the money/checkout paths — HALF DONE** (2026-07-15). The **pure-logic** half is done:
+   `packages/lib/src/validate.test.ts` (checkout input boundary — phone normalisation incl. the
+   no-operator-prefix rule, name/email/address/kodepos/dest_id) + `billing.test.ts` (PPN round-trip,
+   promo + annual-bonus quote, the trial→active→past_due→suspended lifecycle) — **31 tests, all green**
+   (was 1 file). Still OPEN: the **DB-dependent** half (the ledger credit/debit/clawback invariants, the
+   5-condition COD gate in `lib/cod.ts`, the order state machine) needs a throwaway-Postgres test harness.
+   `select sum(…) for update` (Postgres rejects it → every withdrawal threw) and the `queueSave is not
+   defined` in `checkout.astro`'s client `<script>` (blocked the whole rate load) both shipped green
+   through tsc/astro-check/lint — **money and checkout paths must be exercised, not typechecked.**
 
 ---
 
 ## P0 — Foundation
 
-- [x] **Backend** — local PostgreSQL 16 + Drizzle (`@tokophi/db`): **68 tables, 46 migrations
-  (`0000`–`0045`), RLS on 44**. All four surfaces read; all admin editors write; local auth (jose JWT) +
+- [x] **Backend** — local PostgreSQL 16 + Drizzle (`@tokophi/db`): **70 tables, 51 migrations
+  (`0000`–`0050`), RLS on 45**. All four surfaces read; all admin editors write; local auth (jose JWT) +
   RBAC + **RLS enforcing at runtime** under the non-owner `tokophi_app` role.
 - [x] **Data-layer seam on every screen** — reads via `lib/data/*`, writes via `lib/actions/*`.
 - [x] **Auth + real multi-tenancy** — the tenancy boundary is the database, not application code.
@@ -159,12 +163,12 @@ unmeasurable**. Ordered.
   Pelanggan stat card's **"Total Pelanggan 3.128 · +8,2% bulan ini"** — the store has **24** customers,
   and nothing anywhere computed a month-over-month change.
 
-- [ ] **🔴 `invitePlatformAdmin` escalation** — see the top-five list.
-- [ ] **🔴 `billing.ts` has no capability gate** — see the top-five list.
-- [ ] **Super-admin audit gaps** — `setInvoiceStatus` (**money**), `invitePlatformAdmin`,
-  `setStoreUserRole`, `saveGateways`, `saveCodAllowed` (**COD risk policy**) and `createStore` all mutate
-  and write **nothing** to `platform_activity`. An unlogged privileged mutation is indistinguishable from
-  an attack.
+- [x] **`invitePlatformAdmin` escalation — CLOSED** (2026-07-15) — see the top-five list.
+- [x] **`billing.ts` capability gate — CLOSED** (2026-07-15) — see the top-five list.
+- [ ] **Super-admin audit gaps** — `setInvoiceStatus` (**money**), `setStoreUserRole`, `saveGateways`,
+  `saveCodAllowed` (**COD risk policy**) and `createStore` all mutate and write **nothing** to
+  `platform_activity`. An unlogged privileged mutation is indistinguishable from an attack.
+  (`invitePlatformAdmin` is now logged — removed from this list 2026-07-15.)
 - [ ] **The `support` platform role is unreachable** — **zero** actions accept it, including the ticket
   actions its own doc comment says it exists for. Either wire it or delete it.
 - [ ] **Platform role checks are action-only** — the middleware and page guards check for *a* session,
@@ -258,7 +262,7 @@ unmeasurable**. Ordered.
   never `/api/*` (a 301 on POST drops the body → kills the checkout beacons); **Cloudflare for SaaS** over
   Traefik+LE (HTTP-01 needs the CNAME target grey-clouded, which publishes the origin IP); **TXT verification**
   before we serve anything (skip it and someone CNAMEs `bank-example.com` at us → TLS-valid phish under our name).
-  Two seams already landed: `slugFromCustomDomain()` (still `return null`) and **`primaryOrigin()`** in
+  Two seams already landed: `slugFromCustomDomain()` (now a real `store_domains` resolver) and **`primaryOrigin()`** in
   `apps/storefront/src/data/store.ts` — every canonical/og:url/sitemap already flows through it, so switching the
   subdomain→custom-domain primary is a one-line change. ⚠️ **Migration slot: `0050`** (spec says `0049`, taken by
   whatsapp/tagline). Riskiest UNVERIFIED thing: what SNI/Host Cloudflare presents to our origin for a custom

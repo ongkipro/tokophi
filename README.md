@@ -59,7 +59,7 @@ npm run dev -w @tokophi/storefront   # storefront    → :4327
 
 ## Database
 
-**PostgreSQL 16 in Docker + Drizzle.** 69 tables · migrations through `0048`. Money is `bigint` IDR (no decimals, survives aggregates). Prod target is self-hosted Postgres + PostgREST on a VPS — **not** Supabase (ADR 0007).
+**PostgreSQL 16 in Docker + Drizzle.** 70 tables · migrations through `0050`. Money is `bigint` IDR (no decimals, survives aggregates). Prod target is self-hosted Postgres + PostgREST on a VPS — **not** Supabase (ADR 0007).
 
 ```bash
 npm run studio     -w @tokophi/db   # Drizzle Studio
@@ -123,7 +123,7 @@ The responsive audit fails on **any horizontal overflow** — the one symptom th
 | [`specs/docs/BACKLOG.md`](specs/docs/BACKLOG.md) | Prioritised work. Pull the top unchecked item. |
 | [`specs/docs/SYSTEM_GUIDE.md`](specs/docs/SYSTEM_GUIDE.md) | Whole-system tour. |
 | [`specs/docs/DEPLOY.md`](specs/docs/DEPLOY.md) | Cloudflare + Traefik + Coolify on Vultr, and the TLS gotchas. |
-| [`specs/docs/CUSTOM_DOMAIN.md`](specs/docs/CUSTOM_DOMAIN.md) | Merchant custom domains via CNAME (spec — not built). |
+| [`specs/docs/CUSTOM_DOMAIN.md`](specs/docs/CUSTOM_DOMAIN.md) | Merchant custom domains via CNAME (spec + slices 1–3 built 2026-07-15; TLS activation pending). |
 | [`specs/docs/CHAT_SPEC.md`](specs/docs/CHAT_SPEC.md) | Shopper ⇄ merchant chat. |
 | [`specs/decisions/`](specs/decisions/) | ADRs. `0004` platform-managed payments/shipping · `0007` Postgres+PostgREST · `0009` Store Builder + multi-tenant storefront. |
 

@@ -384,7 +384,7 @@ sequenceDiagram
     end
 ```
 
-**43 of the 67 tables carry that policy** (re-verified from `pg_class.relrowsecurity` on 2026-07-14). The DB, not
+**45 of the 70 tables carry that policy** (re-verified from `pg_class.relrowsecurity` on 2026-07-14). The DB, not
 application code, is the tenant boundary — for the Seller panel (`apps/admin`).
 
 **The deliberate exceptions**, and why:

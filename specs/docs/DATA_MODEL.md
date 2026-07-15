@@ -107,10 +107,10 @@ The editor exposes a conditions builder (all/any + field/op/value) that maps to 
 ## Content entities (Shopify-modeled) — admin-mock, `@tokophi/data` for menus
 
 ### Page  *(mock: `CmsPage`, `PAGES`)* — Shopify `Page`
-`id, title, handle, published, updatedDaysAgo, template(templateSuffix), views` + body(HTML) + SEO → `pages`. Storefront URL `/halaman/<handle>` (route TBD).
+`id, title, handle, published, updatedDaysAgo, template(templateSuffix), views` + body(HTML) + SEO → `pages`. Storefront URL `/halaman/<handle>` (route built).
 
 ### Blog + Article  *(mock: `BlogPost`, `BLOG_POSTS`, `BLOG_CATEGORIES`)* — Shopify `Blog` + `Article`
-`BlogPost = id, title, handle, blog(category), author, published, publishedDaysAgo, excerpt, comments` + body + tags + featured image + SEO → `blogs` (1) ⟶ `articles` (N). Storefront `/blog` list exists; article detail `/blog/<handle>` TBD.
+`BlogPost = id, title, handle, blog(category), author, published, publishedDaysAgo, excerpt, comments` + body + tags + featured image + SEO → `blogs` (1) ⟶ `articles` (N). Storefront `/blog` list + article detail `/blog/<handle>` both built (2026-07-14).
 
 ### Menu + MenuItem  *(shared: `@tokophi/data` → `MAIN_MENU`/`FOOTER_MENU`; admin re-wraps as `NavMenu`/`NavItem` in `MENUS`)* — Shopify `Menu` + `MenuItem`
 - **Canonical source:** `packages/data/src/menu.ts`. `MenuItem = { id, label, type, href, children? }`; `MenuItemType = beranda | koleksi | produk | halaman | blog | url`.

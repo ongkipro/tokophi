@@ -24,7 +24,7 @@ Written from the code and the database, and re-verified 2026-07-14. **They are t
 | **[docs/SYSTEM_MAP.md](docs/SYSTEM_MAP.md)** | Every route → its data layer → its tables, per surface. Where the RLS boundary actually sits |
 | **[docs/FLOWS.md](docs/FLOWS.md)** | The six critical flows as sequence diagrams: checkout + COD gate, payment callback, order lifecycle, money, shipping, auth/RLS |
 | **[docs/UML.md](docs/UML.md)** | ER/class diagram, order + ledger state machines, component and deployment diagrams. **Every diagram is validated with mermaid-cli** |
-| **[docs/SCHEMA.md](docs/SCHEMA.md)** | The database, **generated from `information_schema` / `pg_class`** — 67 tables, 44 migrations, RLS on 43. Not from memory |
+| **[docs/SCHEMA.md](docs/SCHEMA.md)** | The database, **generated from `information_schema` / `pg_class`** — 70 tables, 51 migrations, RLS on 45. Not from memory |
 | **[docs/BACKLOG.md](docs/BACKLOG.md)** | What is left, honestly — including the five things that are currently lying, leaking, or unmeasurable |
 
 **Supporting:** [ARCHITECTURE](docs/ARCHITECTURE.md) · [CONCEPT](docs/CONCEPT.md) ·
@@ -128,7 +128,7 @@ Seeded owner login: **ongki@batiknusantara.id / tokophi123**
 
 ## Status (2026-07-14)
 
-**All four surfaces are live products on a real database.** 67 tables, 44 migrations, RLS enforcing on
+**All four surfaces are live products on a real database.** 70 tables, 51 migrations, RLS enforcing on
 43. Auth + RBAC + tenant isolation are real. The **money system** (append-only ledger, derived balance,
 payouts with approval, release on `selesai`) is real end-to-end. **COD** is enforced through a
 five-condition server-side gate with the destination province verified from the courier's district id,
@@ -136,7 +136,7 @@ not from what the buyer typed. Orders support **`retur`**, which restores invent
 back.
 
 **What is not real, and is documented as such:** there is **no ad-platform integration** · the storefront
-blog is hardcoded · the per-courier COD return rate — the number the whole COD policy is betting on —
+the per-courier COD return rate — the number the whole COD policy is betting on —
 **cannot be computed**, because `orders.courier` is NULL on 699/700 rows · the "SPX free return" premise
 the policy rests on is **UNVERIFIED** · there is **one test file in the repo**.
 

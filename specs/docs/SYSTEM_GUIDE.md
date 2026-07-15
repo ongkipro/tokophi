@@ -82,7 +82,7 @@ This is why shipping rates, resi, and label printing are a **KiriminAja** integr
 
 ## 5. Data & multi-tenancy
 
-**Local PostgreSQL 16 (Docker, port 5433) + Drizzle** (`@tokophi/db`) — **54 tables**, snake_case,
+**Local PostgreSQL 16 (Docker, port 5433) + Drizzle** (`@tokophi/db`) — **70 tables**, snake_case,
 money = `bigint` IDR, versioned migrations `0000–0016`. Source of truth = `packages/db/src/schema.ts`;
 annotated reference = [`SCHEMA.md`](SCHEMA.md).
 

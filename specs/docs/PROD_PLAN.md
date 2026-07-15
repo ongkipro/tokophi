@@ -66,7 +66,7 @@ cname.tokophi.com                 → target CNAME custom domain + fallback orig
 - **Admin = `app.tokophi.com`** (dikonfirmasi user; gaya Shopify `admin.shopify.com/store/{id}/`). Store-context bisa lewat **path `/store/{slug}/`** (berguna untuk super-admin deep-link/impersonation & merchant multi-toko) — **keputusan terbuka** (default sekarang: scope by session, tanpa path).
 - **Custom domain merchant** (user beli + CNAME sendiri) → `cname.tokophi.com` → **Cloudflare for SaaS** terbitkan SSL otomatis.
 - **Storefront WAJIB SSR multi-tenant** (bukan SSG per-client) — resolve toko dari `Host` header → 1 deploy layani semua toko + custom domain. Update **ADR 0008**.
-- Butuh mapping DB: `stores.custom_domain` (atau tabel `store_domains` many-to-one). **Dev-lokal:** resolve via `Host` / `?store=slug`.
+- DB mapping DONE (2026-07-15): tabel `store_domains` (migration 0050) + RLS + resolver `slugFromCustomDomain()`. **Dev-lokal:** resolve via `Host` / `?store=slug`.
 
 **Impersonation lintas-subdomain** (rich→app): cookie beda subdomain → pakai **one-time token signed + short-lived** redirect (bukan set cookie langsung).
 

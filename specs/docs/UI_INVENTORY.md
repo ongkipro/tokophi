@@ -125,7 +125,7 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 | `/checkout` | Checkout | contact/address form, kecamatan autocomplete, **live ongkir** (`/api/public/ongkir`) — only the services the seller ticked, each carrying the **effective** COD badge (today: **SPX Standard Rp17.000** + **SPX Economy Rp12.700** only) — and **Pembayaran** where **"COD (Bayar di Tempat)"** appears *only* while a COD-capable service is selected; order summary | ✅ real (live rates + real order; verified in a browser, 0 console errors) |
 | `/checkout/sukses` | Order success | thank-you, generated order number (client), next steps | ✅ mock |
 | `/akun` | Account (login/register) | login form; submit shows "aktif setelah backend terhubung" demo note | 🟡 stub (no auth) |
-| `/blog` (`blog/index.astro`) | Blog index | article cards (hardcoded in-page list); **no article detail route yet** | 🟡 partial |
+| `/blog` (`blog/index.astro`) | Blog index | article cards (DB-backed via `content.ts`); `/blog/[handle]` detail route built | 🟢 done |
 | `/kontak` | Contact | WhatsApp + email links, contact info/hero | ✅ mock |
 
 **Storefront gaps:** no `/halaman/[handle]` route yet (footer menu links to `/halaman/tentang-kami`, `/cara-pemesanan`, etc. — currently dead), no `/blog/[handle]` article detail. Nav header/footer sourced from `@tokophi/data` (`MAIN_MENU`/`FOOTER_MENU`).
@@ -133,7 +133,7 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 ---
 
 ## Not built yet (planned, all apps)
-Draft/manual orders · refunds/returns · stock transfers · supplier CRUD · loyalty · email/WA campaigns & automations · gift cards · custom reports/export · domains · notification templates · real auth/accounts · storefront CMS pages (`/halaman/*`) + article detail (`/blog/*`) · live "edit in admin → storefront" (needs M3 backend).
+Draft/manual orders · refunds/returns · stock transfers · supplier CRUD · loyalty · email/WA campaigns & automations · gift cards · custom reports/export · notification templates · real auth/accounts · live "edit in admin → storefront" (needs M3 backend).
 
 ## Wireframes
 Admin screenshots in `../wireframes/`. Regenerate via Playwright (system Chrome channel) — not `chrome --headless` (mis-sizes Recharts).

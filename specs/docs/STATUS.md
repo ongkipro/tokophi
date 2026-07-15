@@ -1,7 +1,7 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
 > **Refreshed 2026-07-14** against the source tree and the live database
-> (`docker exec tokophi-db psql -U tokophi -d tokophi`) — **68 tables, 46 migrations, RLS on 44**.
+> (`docker exec tokophi-db psql -U tokophi -d tokophi`) — **70 tables, 51 migrations (0000–0050), RLS on 45**.
 > Not against the older docs in this folder, which have been wrong three times in ways that mattered.
 >
 > **The rule: verify, or say you did not.** This project has shipped a fee-bearer feature that was never
@@ -21,7 +21,7 @@
 
 | Thing | Evidence |
 |---|---|
-| **Multi-tenant isolation** | 44 tables `relrowsecurity = true`; non-owner role `tokophi_app`; `platform_activity` is the only `store_id` table without a policy, deliberately. No tenant context ⇒ **0 rows** |
+| **Multi-tenant isolation** | 45 tables `relrowsecurity = true`; non-owner role `tokophi_app`; `platform_activity` is the only `store_id` table without a policy, deliberately. No tenant context ⇒ **0 rows** |
 | **The ledger** | 642 entries live. Balance **derived** (`Σ amount_idr` by status), book **append-only**, 3 partial unique indexes make double-credit a DB impossibility |
 | **Sale credited on collection** | `creditSaleForPayment` fires only when a `payments` row reaches `berhasil`, and credits `amount_idr` — never `total`, which adds the gateway's fee |
 | **COD booked at the door** | `collectCodOnDelivery` flips the payment at `selesai`; `batal`/`retur` **fail** the pending payment, so cash never collected is never booked |
@@ -37,7 +37,7 @@
 | **Platform operator roles enforced** | `requirePlatformAdmin(min)` ranks `support` 1 < `admin` 2 < `owner` 3. **Fixed `0776e99`** — the role was carried in the JWT and never read |
 | **Impersonation is `owner`-only and audited** | `impersonateStore` writes `platform_activity`. **Fixed `571ed17`** — it previously required only "logged in" and left **no trace at all** |
 | **Auth** | scrypt + `timingSafeEqual`; jose HS256; **two separate cookies** (`session` / `platform_session`) — a merchant login can never reach the control plane |
-| **RBAC** | `requireCapability` is the first statement of every mutating admin action (17 of 24 files — see §3.1 #5 for the exception that matters). `settings:write` is owner-only ⇒ **only an owner can withdraw money** |
+| **RBAC** | `requireCapability` is the first statement of every mutating admin action (18 of 24 files — billing.ts joined 2026-07-15). `settings:write` is owner-only ⇒ **only an owner can withdraw money** |
 | **Suspension** | a past-due store goes read-only; `support:write` opts out, so it can still tell us why |
 | **Storefront multi-tenancy** | `Host` → store, 15 s memo, unknown slug **404s** (never another merchant's shop), `astro build` is DB-free |
 | **Courier roster** | 12 rows in `platform_couriers`, synced live from KiriminAja; vanished couriers are disabled, never deleted. `effective = (merchant ?? all) ∩ platform-enabled` |
@@ -87,7 +87,7 @@ Honest arithmetic over demo rows. These are **not** lies — but do not quote th
 | 2 | **`platform_payout.auto_approve`** | read into the type, never written, never displayed |
 | 3 | **`max_amount_idr` / `allowed_provinces` have no super-admin UI** | they **are enforced** (from the seed), but there is no screen to edit them — while the `/pengaturan` copy claims "limit & area diatur di sini" |
 | 4 | **`packages/lib/src/payment-fees.ts` has ZERO importers** | the merchant-facing **fee-bearer feature does not exist**. `store_settings.payment_fee_bearer` is a dead column. The tab that wrote it was removed |
-| 5 | **`lib/actions/billing.ts` has no capability gate** | `createSubscriptionPayment` / `cancelSubscriptionInvoice` raise and void **real invoices**, gated on `getSession()` alone — so a `gudang` user can create or cancel the store's subscription bill |
+| 5 | ✅ **`lib/actions/billing.ts` gated** (2026-07-15) | `createSubscriptionPayment` / `cancelSubscriptionInvoice` now call `requireCapability("settings:write", {allowSuspended:true})` as their first statement (was `getSession()` alone). `allowSuspended` so a suspended store can still pay its way back in |
 
 ### 3.2 Shipping & orders
 
@@ -106,7 +106,7 @@ Honest arithmetic over demo rows. These are **not** lies — but do not quote th
 
 | # | Item | Detail |
 |---|---|---|
-| 14 | 🔴 **`invitePlatformAdmin` is a privilege-escalation path** | `admin`-gated, takes `role` **unvalidated**, and is **not audit-logged** — so an `admin` operator can mint themselves an `owner` and thereby reach the two `owner`-only actions (impersonate, reset owner password). **This quietly undoes the role check that landed in `0776e99`** |
+| 14 | ✅ **`invitePlatformAdmin` escalation CLOSED** (2026-07-15) | now `owner`-gated, `role` whitelisted to support/admin/owner, and audit-logged via `logPlatform` — an `admin` can no longer mint an `owner`. Residual: still seeds a fixed `DEV_PASSWORD` until a mailer exists (row 19) |
 | 15 | **`setStoreUserRole` + `resetStoreUserPassword`** | both only `admin`-gated, and together they reproduce the end state of `resetOwnerPassword`, which is `owner`-gated |
 | 16 | **The `support` role is unreachable** | **zero** actions accept it — including the ticket actions its own doc comment says the role exists for |
 | 17 | **Role checks are action-only** | middleware and page guards check for *a* session, not a role. A lower-privileged operator sees every screen; the buttons throw on click |
@@ -188,10 +188,10 @@ Ordered by what is currently **lying, leaking, or unmeasurable** — not by effo
    that would tell us whether we are winning it. We cannot currently measure the thing we optimised for.
 2. **The SPX free-return claim** (#8). One email. If it is false, the COD narrowing is pointless and we
    are leaving money on the table for nothing.
-3. **`invitePlatformAdmin` privilege escalation** (#14). An `admin` can mint an `owner`, unlogged — which
-   undoes the role check that just landed.
-4. **`billing.ts` has no capability gate** (#5). Any logged-in user of a store can raise or void its
-   subscription invoices.
+3. ✅ **`invitePlatformAdmin` escalation CLOSED** (#14, 2026-07-15). `owner`-gated + role whitelisted +
+   logged. (Was: an `admin` could mint an `owner`, unlogged.)
+4. ✅ **`billing.ts` gated** (#5, 2026-07-15). Both money actions now call `requireCapability`; a
+   `gudang` user can no longer raise or void the subscription invoices.
 5. **Tests for the ledger, the COD gate and the state machine** (#39). `select sum(…) for update` — which
    Postgres rejects outright, so **every withdrawal threw** — shipped because `tsc` cannot see inside a
    SQL string. The same family, one week later: a `ReferenceError: queueSave is not defined` inside a

@@ -1,7 +1,7 @@
 # TokoΦ — Product Requirements Document (v0.5)
 
 > **Rewritten 2026-07-14 against the code and the database.** Prior versions of this PRD described the
-> product as it was *planned*, not as it *is*: they claimed 54 tables (there are 67), three surfaces
+> product as it was *planned*, not as it *is*: they claimed 54 tables (there are 70), three surfaces
 > (there are four), a payment fee-bearer feature (it does not exist), and an ad-platform integration
 > (there is none). **Everything below is either verified or explicitly labelled aspirational.**
 >
@@ -246,7 +246,7 @@ contact us about the billing problem that suspended it.
 
 ## 7. Data & tenancy
 
-**68 tables. 46 migrations. RLS on 44.** ([`SCHEMA.md`](docs/SCHEMA.md) — regenerated from the catalog,
+**70 tables. 51 migrations (0000–0050). RLS on 45.** ([`SCHEMA.md`](docs/SCHEMA.md) — regenerated from the catalog,
 not from memory.)
 
 **The tenant boundary is RLS, not a hand-written `WHERE`.** Every admin read and write runs inside a
@@ -273,7 +273,7 @@ Grounded; see [`STATUS.md`](docs/STATUS.md) for the item-by-item 🟢/🟡/🔴 
 | **Money** — Saldo, ledger, payouts | 🟢 Real, end-to-end. Balance derived, book append-only, payout approval in super-admin |
 | **COD** | 🟢 Enforced **and switched on** end-to-end (SPX only), exercised in a real browser. ⚠️ Its central premise is unverified (§4), and the return rate it optimises for is unmeasurable (§5) |
 | **Shipping** | 🟢 Live ongkir + live roster sync + shipment booking, and the checkout now offers **exactly the services the seller ticked** (`store_shipping_methods`; until `35b88a4` it read the courier-level list and offered services the seller had switched off). ⚠️ The sandbox never issues an AWB |
-| **Storefront** | 🟢 SSR multi-tenant, Store Builder, real funnel events. 🔴 `/blog` is hardcoded; every store shares one WhatsApp number |
+| **Storefront** | 🟢 SSR multi-tenant, Store Builder, real funnel events. 🟢 `/blog` reads the DB; WhatsApp is per-store (email still shared) |
 | **Super-admin** | 🟢 Rebuilt on real numbers (`571ed17`). The merchant float is shown as a **liability** |
 | **Analytics** | 🟡 Honest maths, demo rows. The funnel is a `GROUP BY` over `analytics_events`; those rows are still overwhelmingly seeded |
 | **Ads / Pemasaran** | 🔴 **There is no Meta/Google/TikTok integration.** The cards say "Belum terhubung". Only `orders.channel` attribution is real |
@@ -289,8 +289,8 @@ Grounded; see [`STATUS.md`](docs/STATUS.md) for the item-by-item 🟢/🟡/🔴 
   that click. Nothing sends on a schedule.
 - A merchant-facing **payment fee-bearer** setting. `payment-fees.ts` has **zero importers**.
 - A **COD fee** (`fee_pct`).
-- **Custom domains** — `stores.custom_domain` does not exist; resolution is a `return null` stub.
-- Storefront blog, storefront accounts.
+- **Custom domains** — BUILT slices 1–3 (2026-07-15): `store_domains` table (migration 0050) + RLS, `slugFromCustomDomain()` resolver, admin UI (Pengaturan → Domain). TLS activation (slice 4) pending.
+- Storefront accounts. (Storefront blog is BUILT — reads the DB.)
 - Courier tracking webhooks, thermal-label PDF.
 - Google OAuth **proven against real credentials**.
 - MinIO/S3 media (local disk today).

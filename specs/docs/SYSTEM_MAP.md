@@ -103,11 +103,11 @@ select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
  where n.nspname='public' and c.relkind='r' and c.relrowsecurity;             -- 44
 ```
 
-- **68 tables**, **46 migrations** (`0000` … `0045`). *(Re-verified 2026-07-14: `0042_order_address_snapshot`,
+- **70 tables**, **51 migrations** (`0000` … `0050`). *(Re-verified 2026-07-14: `0042_order_address_snapshot`,
   `0043_chat`, and then `0044_customers_and_abandoned_checkout` / `0045_checkout_abandoned_at` landed after this
   file was first written. `0043` is the shopper⇄merchant chat feature; `0044`/`0045` add **`checkout_sessions`**
   and the guest/registered columns on `customers` — see `SCHEMA.md` §1 and §3.4.)*
-- **44 tables have `relrowsecurity = true`.** Every one carries the same policy:
+- **45 tables have `relrowsecurity = true`.** Every one carries the same policy:
   `USING (store_id = app_current_store_id()) WITH CHECK (store_id = app_current_store_id())`.
 - `app_current_store_id()` is `SELECT nullif(current_setting('app.store_id', true), '')::uuid`.
 - Two DB roles exist: **`tokophi`** (owner, bypasses RLS) and **`tokophi_app`** (non-owner, 256 table grants, policies enforce).
@@ -345,7 +345,7 @@ Mutations that touch **money or identity** (all audit-logged to `platform_activi
 ⚠️ **Audit gaps that REMAIN** (they mutate, they do not log): `createStore`, `setInvoiceStatus` (**money**),
 `invitePlatformAdmin`, `setStoreUserRole`, `saveGateways`, `saveCodAllowed` (**COD risk policy**), every ticket action.
 
-🔴 **The role check has a hole:** `invitePlatformAdmin` is `admin`-gated, takes `role` **unvalidated**
+✅ **The role-check hole is CLOSED (2026-07-15):** `invitePlatformAdmin` is now `owner`-gated, takes `role` **whitelisted** (support/admin/owner) and is audit-logged
 (`role: input.role || "admin"`), and is **unlogged** — so an `admin` operator can mint themselves an `owner` and
 reach the two owner-only actions. Role enforcement is also **action-only**: the middleware and page guards check for
 *a* session, not a role, so a lower-privileged operator sees every screen. See STATUS.md §3.3.
@@ -357,7 +357,7 @@ reach the two owner-only actions. Role enforcement is also **action-only**: the 
 `output: "server"`, `@astrojs/node` standalone. **`astro build` is DB-free** (verified in a prior session with `DATABASE_URL` unset), which is what preserves the zero-downtime deploy.
 
 **Tenant resolution** — `src/middleware.ts` → `src/data/store.ts#getStoreByHost`, in order:
-1. custom domain — **a `return null` stub today** (no `stores.custom_domain` column; the `domains` table exists and is unused),
+1. custom domain — **BUILT slices 1–3 (2026-07-15)**: `store_domains` table (0050) + RLS + `slugFromCustomDomain()` resolver + admin UI; TLS activation pending,
 2. `<slug>.$STOREFRONT_BASE_DOMAIN`,
 3. first host label (the sslip box),
 4. `STORE_SLUG` / `DEFAULT_STORE_SLUG` fallback — **only if the host named no store at all**.
@@ -374,9 +374,9 @@ The resolved `{store, catalog}` goes on `Astro.locals`; all reads are memoised p
 | `/keranjang` | `keranjang.astro` | none — pure `localStorage` |
 | `/checkout` | `checkout.astro` | `platform_payment_channels`, COD policy → then `fetch` to the admin API. Also **captures** into `checkout_sessions` as the shopper types, and **restores** a basket + typed fields from `?r=<signed token>` (`src/lib/recovery.ts`) — a `pulih` session is never re-hydrated (it was already bought) |
 | `/checkout/sukses` | `sukses.astro` | none — renders `localStorage.lastOrder` |
-| `/blog` | `blog/index.astro` | **none — 4 articles hardcoded in a source literal.** The `blogs`/`articles` tables are never read; there is no detail route. |
+| `/blog` | `blog/index.astro` | **`articles` (per-tenant, `status='terbit'`) via `content.ts`.** `/blog/[handle]` detail route exists (2026-07-14). |
 | `/akun` | `akun.astro` | **none — non-functional demo form** ("sistem akun aktif setelah backend terhubung") |
-| `/kontak` | `kontak.astro` | `stores` — but `email` is the hardcoded `halo@batiknusantara.id` |
+| `/kontak` | `kontak.astro` | `stores` — WhatsApp from `store.whatsapp`; hardcoded email removed (2026-07-15) |
 | **`POST /api/track`** | `api/track.ts` | **INSERT `analytics_events`** |
 | **`POST /api/checkout-session`** | `api/checkout-session.ts` | **UPSERT `checkout_sessions`** |
 
