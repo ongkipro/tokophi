@@ -3,10 +3,11 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowDownToLine, Clock, Info, Landmark, Loader2, Undo2, Wallet } from "lucide-react";
+import { ArrowDownToLine, ChevronDown, Clock, Info, Landmark, Loader2, Undo2, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
+import { Separator } from "@tokophi/ui/separator";
 import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
 import { Badge } from "@tokophi/ui/badge";
@@ -79,6 +80,67 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="p-10 text-center text-sm text-muted-foreground">{children}</p>;
 }
 
+/** The order behind a Mutasi row, unfolded INLINE under it: what the buyer bought and the money
+ *  breakdown (produk → ongkir → diskon → total). Fetched on expand, so it can be loading or absent. */
+function MovementDetail({ number, detail, loading }: { number: string | null; detail: InvoiceDetail | null | undefined; loading: boolean }) {
+  if (loading || detail === undefined) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" /> Memuat rincian…
+      </div>
+    );
+  }
+  if (!detail) {
+    return <p className="py-6 text-center text-sm text-muted-foreground">Rincian pesanan tidak ditemukan.</p>;
+  }
+  const Row = ({ label, value, muted, strong }: { label: string; value: string; muted?: boolean; strong?: boolean }) => (
+    <div className={`flex justify-between ${strong ? "text-sm font-semibold" : "text-sm"} ${muted ? "text-muted-foreground" : ""}`}>
+      <span>{label}</span>
+      <span className="tabular-nums">{value}</span>
+    </div>
+  );
+  return (
+    <div className="grid gap-4 px-5 py-4 sm:grid-cols-2">
+      {/* Isi pesanan */}
+      <div className="space-y-2">
+        <p className="text-xs font-medium text-muted-foreground">Isi pesanan</p>
+        <ul className="space-y-1.5">
+          {detail.lines.map((l) => (
+            <li key={l.id} className="flex items-baseline justify-between gap-3 text-sm">
+              <span className="min-w-0">
+                <span className="font-medium">{l.product}</span>
+                {l.variant && <span className="text-muted-foreground"> · {l.variant}</span>}
+                <span className="text-muted-foreground"> × {l.qty}</span>
+              </span>
+              <span className="shrink-0 tabular-nums text-muted-foreground">{IDR(l.total)}</span>
+            </li>
+          ))}
+          {detail.lines.length === 0 && <li className="text-sm text-muted-foreground">Tidak ada item tercatat.</li>}
+        </ul>
+        {detail.customer && (
+          <p className="pt-1 text-xs text-muted-foreground">
+            Pembeli: {detail.customer}
+            {detail.courier && <> · {detail.courier}</>}
+          </p>
+        )}
+      </div>
+      {/* Rincian dana */}
+      <div className="space-y-1.5 sm:border-l sm:pl-4">
+        <Row label="Subtotal produk" value={IDR(detail.subtotal)} muted />
+        {detail.discount > 0 && <Row label="Diskon" value={`− ${IDR(detail.discount)}`} muted />}
+        <Row label="Ongkos kirim" value={detail.shipping === 0 ? "Gratis" : IDR(detail.shipping)} muted />
+        <Separator className="my-1.5" />
+        <Row label="Total pesanan" value={IDR(detail.total)} strong />
+        <div className="pt-1.5">
+          <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/pesanan/${number ?? detail.number}`} />}>
+            Buka pesanan
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SaldoClient({
   balance,
   counts,
@@ -125,6 +187,32 @@ export function SaldoClient({
       toast.error("Gagal memuat rincian invoice.");
     } finally {
       setLoadingInvoice(false);
+    }
+  };
+
+  // Mutasi rows expand INLINE (accordion) rather than opening the dialog: click a sale row → its
+  // order detail unfolds in a row right below it; click again to hide. One open at a time. The
+  // detail is fetched on first expand and cached per order so re-opening is instant.
+  const [expandedOrder, setExpandedOrder] = React.useState<string | null>(null);
+  const [rowDetail, setRowDetail] = React.useState<Record<string, InvoiceDetail | null>>({});
+  const [rowLoading, setRowLoading] = React.useState<string | null>(null);
+  const toggleRow = async (orderId: string) => {
+    if (expandedOrder === orderId) {
+      setExpandedOrder(null);
+      return;
+    }
+    setExpandedOrder(orderId);
+    if (rowDetail[orderId] === undefined) {
+      setRowLoading(orderId);
+      try {
+        const d = await fetchInvoiceDetail(orderId);
+        setRowDetail((prev) => ({ ...prev, [orderId]: d }));
+      } catch {
+        toast.error("Gagal memuat rincian pesanan.");
+        setRowDetail((prev) => ({ ...prev, [orderId]: null }));
+      } finally {
+        setRowLoading(null);
+      }
     }
   };
 
@@ -316,32 +404,49 @@ export function SaldoClient({
                       <TableBody>
                         {movements.rows.map((m) => {
                           const s = movementStatus(m);
+                          const canExpand = !!m.orderId;
+                          const isOpen = expandedOrder === m.orderId;
                           return (
-                            <TableRow key={m.id}>
-                              <TableCell className="whitespace-nowrap text-muted-foreground">{dt(m.createdAt)}</TableCell>
-                              <TableCell>
-                                <span className="font-medium">{KIND_LABEL[m.kind] ?? m.kind}</span>
-                                {m.orderNumber && (
-                                  <Link
-                                    href={`/pesanan/${m.orderNumber}`}
-                                    className="ml-2 font-mono text-xs text-muted-foreground hover:underline"
-                                  >
-                                    {m.orderNumber}
-                                  </Link>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="secondary" className={`h-5 border-transparent px-1.5 text-[10px] ${s.cls}`}>
-                                  {s.label}
-                                </Badge>
-                              </TableCell>
-                              <TableCell
-                                className={`text-right tabular-nums ${m.amount < 0 ? "text-red-600 dark:text-red-400" : ""}`}
+                            <React.Fragment key={m.id}>
+                              <TableRow
+                                className={canExpand ? "cursor-pointer" : undefined}
+                                data-state={isOpen ? "selected" : undefined}
+                                onClick={canExpand ? () => toggleRow(m.orderId!) : undefined}
                               >
-                                {m.amount < 0 ? "−" : "+"}
-                                {IDR(Math.abs(m.amount))}
-                              </TableCell>
-                            </TableRow>
+                                <TableCell className="whitespace-nowrap text-muted-foreground">{dt(m.createdAt)}</TableCell>
+                                <TableCell>
+                                  <span className="font-medium">{KIND_LABEL[m.kind] ?? m.kind}</span>
+                                  {m.orderNumber && (
+                                    <span className="ml-2 font-mono text-xs text-muted-foreground">{m.orderNumber}</span>
+                                  )}
+                                  {canExpand && (
+                                    <ChevronDown className={`ml-1.5 inline size-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="secondary" className={`h-5 border-transparent px-1.5 text-[10px] ${s.cls}`}>
+                                    {s.label}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell
+                                  className={`text-right tabular-nums ${m.amount < 0 ? "text-red-600 dark:text-red-400" : ""}`}
+                                >
+                                  {m.amount < 0 ? "−" : "+"}
+                                  {IDR(Math.abs(m.amount))}
+                                </TableCell>
+                              </TableRow>
+                              {isOpen && (
+                                <TableRow className="hover:bg-transparent">
+                                  <TableCell colSpan={4} className="bg-muted/30 p-0">
+                                    <MovementDetail
+                                      number={m.orderNumber}
+                                      detail={m.orderId ? rowDetail[m.orderId] : null}
+                                      loading={rowLoading === m.orderId}
+                                    />
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </React.Fragment>
                           );
                         })}
                       </TableBody>
