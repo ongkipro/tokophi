@@ -16,9 +16,10 @@ import { sql } from "drizzle-orm";
 // Rows are DAY-BUCKETED: /analitik filters by the range switcher on the client (same contract as
 // `days`), so aggregate these in the client and the range actually changes the numbers.
 //
-// ⚠️ The rows are seeded today — the storefront tracking script that will write real events is
-// still open (BACKLOG P1.8). The SHAPE is the real one, so wiring the tracker needs no query
-// changes: point it at analytics_events and these cards start reflecting live traffic.
+// The storefront tracker is LIVE (`apps/storefront/src/pages/api/track.ts`, since b7ae0ff): it writes
+// real `analytics_events` as shoppers browse (bot + rate gated, fail-quiet). In production these cards
+// reflect live traffic; locally the seed also loads events so the demo has parity. No query change was
+// needed — the shape was the real one from the start.
 
 export const FUNNEL_STEPS = [
   { type: "visit", label: "Kunjungan" },

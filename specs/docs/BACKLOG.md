@@ -239,8 +239,10 @@ unmeasurable**. Ordered.
 - [ ] **`astro.config.mjs` hardcodes `site: "https://batiknusantara.id"`** — one demo brand baked into a
   multi-tenant app.
 - [ ] **`/akun` on the storefront is a dead demo form.**
-- [ ] **Stale source comments** — `lib/data/analytics.ts`, `lib/data/funnel.ts` and `schema.ts` all still
-  say `analytics_events` has no writer. It has had one since `b7ae0ff`.
+- [x] **Stale source comments fixed** (2026-07-16) — `lib/data/analytics.ts`, `lib/data/funnel.ts` and
+  `schema.ts` all claimed `analytics_events` had no writer and the tracker was "still to come". It has
+  been written by `apps/storefront/src/pages/api/track.ts` since `b7ae0ff` (47k+ rows locally); the
+  comments now say so. Comment-only, no runtime change.
 
 ---
 

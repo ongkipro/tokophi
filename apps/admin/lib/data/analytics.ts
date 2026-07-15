@@ -18,12 +18,12 @@ export async function getDailyStats(): Promise<DayPoint[]> {
 // withCurrentTenant → a store with no orders gets empty arrays / zeros, and the
 // UI renders a "belum ada data" state rather than a fabricated number.
 //
-// NOT here (deliberately): conversion funnel, device split, ad/ROAS numbers,
-// "pengunjung online". Those need storefront session/event tracking. The seam
-// exists — table `analytics_events` (store_id, ts, type, session_id, RLS'd) —
-// but it has ZERO rows and NO writer anywhere in the codebase, so those cards
-// were removed instead of being fed placeholder data. Wire a storefront tracker
-// into analytics_events first; only then bring the cards back.
+// NOT here (deliberately): ad/ROAS numbers ("Pemasaran" says "Belum terhubung" —
+// there is no Meta/Google/TikTok integration). The conversion funnel + device
+// split ARE live now: `analytics_events` (store_id, ts, type, session_id, device,
+// RLS'd) is written by the storefront tracker (`apps/storefront/src/pages/api/track.ts`,
+// since b7ae0ff) — see `lib/data/funnel.ts`, which COUNTS from it. This file stays
+// order-derived; the event-derived cards live in funnel.ts.
 // ---------------------------------------------------------------------------
 
 // Cancelled orders are excluded from every revenue/customer aggregate.

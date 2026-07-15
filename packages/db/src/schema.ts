@@ -732,9 +732,9 @@ export const adMetrics = pgTable("ad_metrics", {
 
 // Storefront funnel events. `type` is one of: visit | product_view | add_to_cart | checkout_start
 // | purchase. `device` (0037) is what makes the Perangkat breakdown a real COUNT instead of the
-// hardcoded 78/18/4 it used to be. Nothing writes here from the app yet — the storefront tracking
-// script is still to come (BACKLOG P1.8); the seed populates it so every funnel/device number on
-// /analitik is genuinely counted from rows rather than typed in by hand.
+// hardcoded 78/18/4 it used to be. The storefront tracker WRITES here (apps/storefront/src/pages/
+// api/track.ts, since b7ae0ff) as shoppers browse; the seed also populates it so every funnel/device
+// number on /analitik is genuinely counted from rows, in dev and in prod alike.
 export const analyticsEvents = pgTable("analytics_events", {
   id: pk(),
   storeId: uuid().notNull().references(() => stores.id),
