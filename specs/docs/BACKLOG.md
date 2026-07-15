@@ -14,10 +14,12 @@
 Not the biggest, not the newest — the ones where the product is currently **lying, leaking, or
 unmeasurable**. Ordered.
 
-1. **[ ] `orders.courier` is NULL on 699/700 rows.** A regular checkout books no shipment, so the
-   per-courier COD return-rate report — **the instrument the entire COD policy is betting on** — cannot
-   produce a per-courier number. We optimised for a metric we cannot measure. Fix: book the shipment
-   (or at minimum record the selected courier) at checkout.
+1. **[x] `orders.courier` is recorded at checkout** (2026-07-16). `/api/public/order` now writes
+   `courier: rate.code` on the order — the courier of the fresh server-side quote it matched (never the
+   client's raw claim; a picked service not in the quote already rejects the order). So the per-courier
+   COD return-rate report — the instrument the entire COD policy bets on — is now a `group by courier`
+   instead of an impossibility. (Existing rows stay NULL; new checkouts populate it. Full shipment
+   booking at checkout is still deferred — `awb`/`kaOrderId` are set when the seller books the pickup.)
 2. **[ ] Verify the "SPX free return" claim with KiriminAja, in writing.** The whole SPX-only COD
    policy rests on it and **it is unverified**: free returns are a *Shopee Seller Center* benefit, we
    reach SPX through *KiriminAja* (a different contract), and the KiriminAja API has **no return field
@@ -335,7 +337,7 @@ unmeasurable**. Ordered.
 
 **The rule to keep:** *over-validation is itself a bug.* A rejected legitimate name / new carrier prefix / unusual address costs a sale and nobody ever finds out. **Normalise generously, reject narrowly.**
 
-## 🔴 P1.9 — Shipping weight must come from the DB, not the browser (QUEUED — blocked on the GoSend/Grab removal touching the same files)
+## ✅ P1.9 — Shipping weight comes from the DB, not the browser (DONE 2026-07-14/16)
 > **The bug (found 2026-07-14 by the user: "Mampang, Jakarta Selatan → SPX Standard Rp40rb"):** `checkout.astro` prices every parcel with **`weight: totalQty * 500`** — a fabricated 500 g per item. The real column `product_variants.weight_grams` exists and the Seller's product editor has always had a required "Berat (gram)" field — it was simply **NULL on all 96 variants**, so nobody noticed the checkout never read it.
 >
 > Measured on the live API (Surabaya → Mampang Prapatan, SPX Standard): 3.000 g → **Rp41.100** (what the user saw) · 1.500 g → Rp27.400 · **675 g (3 items at their REAL ~225 g) → Rp13.700**. Shoppers were being quoted **3× the true postage** — a silent conversion killer for an apparel store, and nobody would ever know why the carts were abandoned.
@@ -344,9 +346,16 @@ unmeasurable**. Ordered.
 >
 > ❌ **Still open — and this is the important half:** the checkout still sends the weight **from the browser**. Filling the data is not enough if the client is still the one doing the arithmetic. **Weight is a price input, so it must be computed server-side**, exactly like the ongkir ORIGIN (now read from the seller's pickup address, not a client-posted city) and the COD PROVINCE (now read from the KiriminAja district id, not the buyer's typed text). Same lesson, third time: **a claim from the client is not a fact.** A script posting `weight: 100` for a 5 kg parcel gets the cheap quote and the **merchant eats the difference with the courier**.
 
-- [ ] `/api/public/ongkir` `op=rates` accepts `items: [{variantId, qty}]` and **sums `product_variants.weight_grams` itself**; `body.weight` from the client is ignored entirely (delete it, don't merely distrust it).
-- [ ] Variants with a NULL weight → fall back to 500 g **and** surface a warning on the Seller's product list ("Berat belum diisi — ongkir bisa salah"). A silent fallback is the same lie in a smaller font.
-- [ ] Make weight genuinely required for new products (the field already defaults to 500 — that default is itself a guess worth showing).
+- [x] `/api/public/ongkir` `op=rates` accepts `items: [{variantId, qty}]` and **sums
+  `product_variants.weight_grams` itself** (`lib/shipping-weight.ts` `weightForCart`, shared by ongkir +
+  the order re-quote via `shipping-quote.ts`); `body.weight` is not read at all and `checkout.astro` no
+  longer sends it. Committed `1234dcc`.
+- [x] Variants with a NULL weight → 500 g fallback **and a warning on the Seller's Produk list** (2026-07-16):
+  `getProducts` flags each product with `bool_or(weight_grams is null)`; `produk-client.tsx` shows an amber
+  **"Berat belum diisi"** on those rows/cards (grid + table). The fallback is now visible, not silent.
+- [~] Weight required for new products — the editor already marks "Berat (gram)" required (the `*`) and the
+  list now warns on the missing ones; a HARD server reject on save is deliberately NOT added (it would
+  refuse legacy/CSV imports — same "over-validation is a bug" rule). The warning is the honest surfacing.
 
 ## 🟡 P1.8 — Healthcheck & watchdog (L1 BUILT + LIVE 2026-07-15; L2/L3/alerts still open)
 > **Why this is here:** on 2026-07-14 production went down **three times** and every deploy failed **silently for an hour** — and *every single one* was found only because someone happened to look. Nothing told us. That is the gap: not the bugs, the **absence of a witness**.

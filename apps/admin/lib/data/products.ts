@@ -32,6 +32,7 @@ function base(db: Tx) {
 function toProduct(r: {
   id: string; name: string; handle: string; emoji: string | null; status: "active" | "draft" | "archived";
   category: string | null; unitsSold: number; createdAt: Date; price: number | null; stock: number | null; image: string | null;
+  weightMissing?: boolean;
 }): Product {
   return {
     id: r.id,
@@ -45,6 +46,7 @@ function toProduct(r: {
     category: r.category ?? "",
     unitsSold: r.unitsSold,
     addedTs: r.createdAt.getTime(),
+    weightMissing: !!r.weightMissing,
   };
 }
 
@@ -63,6 +65,10 @@ export async function getProducts(): Promise<Product[]> {
         createdAt: schema.products.createdAt,
         price: sql<number>`coalesce(min(${schema.productVariants.priceIdr}), 0)`,
         stock: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)`,
+        // TRUE if ANY variant has no weight_grams — the checkout then prices that parcel with the 500g
+        // fallback (lib/shipping-weight.ts), which can be wrong. Surfaced on the list so the fallback is
+        // visible, not silent.
+        weightMissing: sql<boolean>`bool_or(${schema.productVariants.weightGrams} is null)`,
         image: schema.productMedia.url,
       })
       .from(schema.products)

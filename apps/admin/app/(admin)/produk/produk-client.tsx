@@ -62,6 +62,20 @@ function StatusBadge({ status }: { status: Product["status"] }) {
     : <Badge variant="outline" className="text-muted-foreground">Draft</Badge>;
 }
 
+// A variant with no weight → the checkout prices its parcel with the 500 g fallback, which can be wrong
+// (an apparel item is ~200 g; a 3× quote quietly kills the sale). Surface it so the fallback is visible,
+// not silent — "the same lie in a smaller font" is exactly what this avoids.
+function WeightWarning() {
+  return (
+    <span
+      className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-500"
+      title="Berat produk belum diisi — ongkir dihitung dengan asumsi 500 g dan bisa salah. Isi berat di editor produk."
+    >
+      <AlertTriangle className="h-3 w-3 shrink-0" /> Berat belum diisi
+    </span>
+  );
+}
+
 function RowActions({ id }: { id: string }) {
   const canDelete = useCan("products:delete");
   return (
@@ -315,6 +329,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
                     <span className="text-sm font-semibold tabular-nums">{IDR(p.price)}</span>
                     <StockBadge stock={p.stock} />
                   </div>
+                  {p.weightMissing && <WeightWarning />}
                 </div>
               </Card>
             );
@@ -350,6 +365,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
                         <div className="min-w-0">
                           <p className="truncate font-medium">{p.name}</p>
                           <p className="text-xs text-muted-foreground md:hidden">{p.category}</p>
+                          {p.weightMissing && <WeightWarning />}
                         </div>
                       </div>
                     </TableCell>

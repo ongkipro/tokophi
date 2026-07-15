@@ -94,6 +94,7 @@ export type Product = {
   options?: { name: string; values: string[] }[]; // option definitions in order (editor)
   variants?: { option1: string | null; option2: string | null; option3: string | null; sku: string | null; price: number; stock: number }[];
   weightGrams?: number | null; // shipping weight (default variant)
+  weightMissing?: boolean; // ANY variant has NULL weight_grams → ongkir falls back to 500g (list warning)
   lengthCm?: number | null;
   widthCm?: number | null;
   heightCm?: number | null;

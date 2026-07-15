@@ -255,6 +255,11 @@ export async function POST(req: Request) {
   const [order] = await db.insert(schema.orders).values({
     storeId: store.id, number, customerId, status: "baru", financialStatus: "pending", channel: "organic",
     subtotalIdr: subtotal, shippingIdr: shippingCost, totalIdr: total,
+    // The courier the shopper actually picked — `rate.code`, i.e. the courier of the fresh server-side
+    // quote we matched (svcCode === rate.code by findRate), never the client's raw claim. Recording it
+    // here is what makes the per-courier COD return-rate report a `group by courier` instead of an
+    // impossibility: without it a regular checkout booked no courier and orders.courier stayed NULL.
+    courier: rate.code,
     city: kota, province: provinsi,
 
     // SNAPSHOT the shipping address onto the order (0042). It is deliberately NOT a lookup back to

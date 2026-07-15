@@ -25,8 +25,10 @@ import type { Tx } from "@/lib/tenant";
 
 /**
  * Fallback for a variant whose `weight_grams` is NULL (seller left "Berat" blank / legacy import).
- * DOCUMENTED, not silent: `weightForCart()` returns `missing[]`, and the Seller's Produk list +
- * product editor show "Berat belum diisi — ongkir bisa salah" so the merchant can fix the cause.
+ * DOCUMENTED, not silent: `weightForCart()` returns `missing[]`, the Seller's Produk list shows a
+ * "Berat belum diisi" warning on any product with a weightless variant (`getProducts` flags it via
+ * `bool_or(weight_grams is null)`), and the product editor marks "Berat (gram)" required — so the
+ * merchant can see the fallback is in play and fix the cause.
  */
 export const DEFAULT_WEIGHT_GRAMS = 500;
 
