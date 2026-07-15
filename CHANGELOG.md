@@ -2,6 +2,12 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-07-16
+
+### 🔎 Super-admin: no privileged mutation is silent anymore (BACKLOG SEC-11)
+
+An unlogged privileged mutation is indistinguishable from an attack, and five super-admin actions mutated and wrote **nothing** to `platform_activity`. Now they all do (`logStore` for store-scoped, `logPlatform` for platform-wide): `setInvoiceStatus` (**money** — a hand-flip to "dibayar" extends a store's paid period without a payment, so it is logged with the store + status), `setStoreUserRole` (a **privilege change** — promoting a user to `owner` grants owner-only powers; logged with the user's email + new role), `saveGateways` and `saveCodAllowed` (**platform payment / COD risk policy** — logged with the diff), and `createStore`. They join `invitePlatformAdmin` (logged the day before) and the add/remove/reset-user + payout actions that already logged. `tsc` clean; behaviour otherwise unchanged. No silent privileged mutation remains among the store-lifecycle / billing / settings actions.
+
 ## 2026-07-15
 
 ### 🌐 Custom domain for a merchant — built, deployed, and honest about where it stops

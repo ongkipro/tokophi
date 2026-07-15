@@ -178,10 +178,13 @@ unmeasurable**. Ordered.
 
 - [x] **`invitePlatformAdmin` escalation — CLOSED** (2026-07-15) — see the top-five list.
 - [x] **`billing.ts` capability gate — CLOSED** (2026-07-15) — see the top-five list.
-- [ ] **Super-admin audit gaps** — `setInvoiceStatus` (**money**), `setStoreUserRole`, `saveGateways`,
-  `saveCodAllowed` (**COD risk policy**) and `createStore` all mutate and write **nothing** to
-  `platform_activity`. An unlogged privileged mutation is indistinguishable from an attack.
-  (`invitePlatformAdmin` is now logged — removed from this list 2026-07-15.)
+- [x] **Super-admin audit gaps — CLOSED** (2026-07-15). All the previously-silent privileged mutations
+  now write to `platform_activity`: `setInvoiceStatus` (**money** — a manual "dibayar" is `logStore`d),
+  `setStoreUserRole` (privilege change — logs the user + new role), `saveGateways` + `saveCodAllowed`
+  (**platform payment / COD risk policy** — `logPlatform`d with the diff), and `createStore`. Joins
+  `invitePlatformAdmin` (logged 2026-07-15) and the add/remove/reset user actions that already logged.
+  `tsc` clean. An unlogged privileged mutation is indistinguishable from an attack; there are none left
+  among the store-lifecycle / billing / settings actions.
 - [ ] **The `support` platform role is unreachable** — **zero** actions accept it, including the ticket
   actions its own doc comment says it exists for. Either wire it or delete it.
 - [ ] **Platform role checks are action-only** — the middleware and page guards check for *a* session,

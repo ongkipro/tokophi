@@ -113,6 +113,7 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
     await tx.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: 0, ordersCount: 0, productsCount: 0, updatedAt: ANCHOR });
     return st.id;
   });
+  await logStore(storeId, `Toko dibuat oleh platform: ${name} (${slug}), pemilik ${email}`);
   revalidatePath("/toko");
   revalidatePath("/");
   return { ok: true, storeId };
@@ -121,7 +122,12 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
 // ---- billing: mark an invoice paid / failed / pending ----
 export async function setInvoiceStatus(number: string, status: "dibayar" | "menunggu" | "gagal"): Promise<void> {
   await requirePlatformAdmin();
+  const [inv] = await db.select({ storeId: schema.invoices.storeId }).from(schema.invoices).where(eq(schema.invoices.number, number)).limit(1);
   await db.update(schema.invoices).set({ status }).where(eq(schema.invoices.number, number));
+  // Money: an operator flipping an invoice to "dibayar" by hand extends a store's paid period without
+  // a payment. That MUST leave a trace — an unlogged money mutation is indistinguishable from an attack.
+  if (inv?.storeId) await logStore(inv.storeId, `Status faktur ${number} diubah → ${status} (manual, platform)`);
+  else await logPlatform(`Status faktur ${number} diubah → ${status} (manual, platform)`);
   revalidatePath("/paket");
   revalidatePath("/");
 }
@@ -169,6 +175,7 @@ export async function saveGateways(updates: { key: string; on: boolean }[]): Pro
     if (u.key === "cod") await db.update(schema.platformCod).set({ enabled: u.on });
     else await db.update(schema.platformPaymentGateways).set({ enabled: u.on }).where(eq(schema.platformPaymentGateways.provider, u.key as "midtrans" | "xendit" | "duitku"));
   }
+  if (updates.length) await logPlatform(`Gateway pembayaran diubah: ${updates.map((u) => `${u.key}=${u.on ? "aktif" : "nonaktif"}`).join(", ")}`);
   revalidatePath("/pengaturan");
 }
 
@@ -212,6 +219,9 @@ export async function saveCodAllowed(updates: { courier: string; type: string; a
     );
     await db.update(schema.platformCouriers).set({ services: next }).where(eq(schema.platformCouriers.courier, row.courier));
   }
+  // COD risk policy: which services may carry cash on delivery is the lever that decides who eats a
+  // refused-parcel return. A change here is a platform risk decision and must be auditable.
+  if (updates.length) await logPlatform(`Izin COD per-layanan diubah: ${updates.map((u) => `${u.courier}/${u.type}=${u.allowed ? "boleh" : "tidak"}`).join(", ")}`);
   revalidatePath("/pengaturan");
 }
 
@@ -493,6 +503,15 @@ export async function resetStoreUserPassword(storeId: string, userId: string): P
 export async function setStoreUserRole(storeId: string, storeUserId: string, role: "owner" | "admin" | "staff" | "gudang"): Promise<{ ok: boolean }> {
   await requirePlatformAdmin();
   await db.update(schema.storeUsers).set({ role }).where(and(eq(schema.storeUsers.id, storeUserId), eq(schema.storeUsers.storeId, storeId)));
+  // A role change is a privilege change — promoting a user to `owner` grants them owner-only powers.
+  // Log it (with the user's email) exactly like add/remove/reset already do.
+  const [su] = await db
+    .select({ email: schema.users.email })
+    .from(schema.storeUsers)
+    .innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
+    .where(eq(schema.storeUsers.id, storeUserId))
+    .limit(1);
+  await logStore(storeId, `Peran ${su?.email ?? "user"} diubah → ${role} oleh platform`);
   revalidatePath(`/toko/${storeId}`);
   return { ok: true };
 }

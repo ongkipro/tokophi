@@ -110,7 +110,7 @@ Honest arithmetic over demo rows. These are **not** lies — but do not quote th
 | 15 | **`setStoreUserRole` + `resetStoreUserPassword`** | both only `admin`-gated, and together they reproduce the end state of `resetOwnerPassword`, which is `owner`-gated |
 | 16 | **The `support` role is unreachable** | **zero** actions accept it — including the ticket actions its own doc comment says the role exists for |
 | 17 | **Role checks are action-only** | middleware and page guards check for *a* session, not a role. A lower-privileged operator sees every screen; the buttons throw on click |
-| 18 | **Audit gaps** | `setInvoiceStatus` (**money**), `invitePlatformAdmin`, `setStoreUserRole`, `saveGateways`, `saveCodAllowed` (**COD risk policy**) and `createStore` all mutate and write **nothing** to `platform_activity` |
+| 18 | ✅ **Audit gaps CLOSED** (2026-07-15) | `setInvoiceStatus` (money), `invitePlatformAdmin`, `setStoreUserRole`, `saveGateways`, `saveCodAllowed` (COD risk policy) and `createStore` now all write to `platform_activity` (`logStore`/`logPlatform`). No silent privileged mutation remains in the store-lifecycle/billing/settings actions |
 | 19 | **`invitePlatformAdmin` hashes a fixed password** | `tokophi123` |
 | 20 | **No login rate limit**, and `AUTH_SECRET` falls back to `"dev-insecure-secret-change-me"` | |
 | 21 | **`sendPaymentReminder` sends nothing** | |
