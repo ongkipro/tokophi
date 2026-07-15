@@ -716,6 +716,19 @@ async function main() {
   });
   await db.insert(schema.storeStats).values({ storeId: store.id, gmvIdr: STORE.gmv, ordersCount: STORE.orders, productsCount: CATALOG.length, ship7dAvg: 15, updatedAt: TODAY });
 
+  // One demo custom domain so the CNAME flow is reproducible from a fresh seed. `.test` never resolves
+  // publicly, and `astro.config.mjs` allows it in dev (Vite's Host guard), so `curl -H 'Host:
+  // toko-demo.test' localhost:4327` renders this store with canonical/og:url/sitemap on the custom host.
+  // is_primary=true → primaryOrigin() returns https://toko-demo.test. See CUSTOM_DOMAIN.md.
+  await db.insert(schema.storeDomains).values({
+    storeId: store.id,
+    host: "toko-demo.test",
+    status: "active",
+    isPrimary: true,
+    verificationToken: "demotoken0123456789abcdef01234567",
+    verifiedAt: TODAY,
+  });
+
   // catalog: product → 1 default variant (price) + inventory (stock) + base media (image)
   const seededProducts: Array<{ id: string; variantId: string; category: string; unitsSold: number }> = [];
   // Reviews reference a product by NAME (REVIEWS[].product). Without this map the seed wrote

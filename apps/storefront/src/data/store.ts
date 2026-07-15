@@ -9,7 +9,7 @@
 //   4. fallback env           — STORE_SLUG / DEFAULT_STORE_SLUG   (local dev + today's single-tenant box)
 // Nothing matches → null → middleware renders a clean 404 ("Toko tidak ditemukan"), never a crash.
 import { db, schema } from "@tokophi/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { cached } from "./cache";
 
 export type StoreInfo = {
@@ -23,6 +23,12 @@ export type StoreInfo = {
   city: string;
   logoUrl: string | null;
   brandColor: string | null;
+  /**
+   * The store's PRIMARY custom host, or null. When set, the storefront's canonical/og:url/sitemap use
+   * `https://<primaryHost>` and every OTHER host 301s to it (CUSTOM_DOMAIN.md §2). null → the
+   * `<slug>.tokophi.com` subdomain IS the primary, and `primaryOrigin()` returns the request origin.
+   */
+  primaryHost: string | null;
 };
 
 // REMOVED: `DEFAULT_TAGLINE` / `DEFAULT_WHATSAPP`.
@@ -78,13 +84,23 @@ function slugFromFirstLabel(host: string): string | null {
 }
 
 /**
- * SEAM — custom merchant domains (`toko-pelanggan.com` → store). Deliberately NOT implemented:
- * `stores.custom_domain` / a `store_domains` table does not exist yet (PROD_PLAN §5 calls for it,
- * it's its own track — no migration in this pass). When it lands, the ONLY change needed is to
- * make this query it (and add the host to the cache key, which it already is).
+ * Custom merchant domain (`toko-pelanggan.com`) → store slug, via `store_domains`.
+ *
+ * Only an `active` row resolves — a domain still `pending`/`verifying`/`provisioning` must NOT serve a
+ * store yet (its cert may not exist, and TXT ownership may be unproven). `store_domains.host` is UNIQUE
+ * across the platform, so this returns at most one slug and one store can never be served on another's
+ * verified host. Owner connection is correct here: an anonymous shopper has no session, exactly like
+ * every other read in this file (CUSTOM_DOMAIN.md §1).
  */
-async function slugFromCustomDomain(_host: string): Promise<string | null> {
-  return null;
+async function slugFromCustomDomain(host: string): Promise<string | null> {
+  if (!host) return null;
+  const [row] = await db
+    .select({ slug: schema.stores.slug })
+    .from(schema.storeDomains)
+    .innerJoin(schema.stores, eq(schema.stores.id, schema.storeDomains.storeId))
+    .where(and(eq(schema.storeDomains.host, host), eq(schema.storeDomains.status, "active")))
+    .limit(1);
+  return row?.slug ?? null;
 }
 
 const toStoreInfo = (r: typeof schema.stores.$inferSelect): StoreInfo => ({
@@ -96,12 +112,28 @@ const toStoreInfo = (r: typeof schema.stores.$inferSelect): StoreInfo => ({
   city: r.city ?? "",
   logoUrl: r.logoUrl,
   brandColor: r.brandColor,
+  primaryHost: null, // filled by the caller (getStoreBySlug) — a per-store store_domains lookup
 });
 
 export async function getStoreBySlug(slug: string): Promise<StoreInfo | null> {
   return cached(`store:slug:${slug}`, async () => {
     const [row] = await db.select().from(schema.stores).where(eq(schema.stores.slug, slug)).limit(1);
-    return row ? toStoreInfo(row) : null;
+    if (!row) return null;
+    // The store's primary custom host (if any) — only an ACTIVE, is_primary row counts. A domain still
+    // verifying or provisioning is not yet the canonical host, or we would 301 shoppers to a host that
+    // does not answer.
+    const [dom] = await db
+      .select({ host: schema.storeDomains.host })
+      .from(schema.storeDomains)
+      .where(
+        and(
+          eq(schema.storeDomains.storeId, row.id),
+          eq(schema.storeDomains.status, "active"),
+          eq(schema.storeDomains.isPrimary, true),
+        ),
+      )
+      .limit(1);
+    return { ...toStoreInfo(row), primaryHost: dom?.host ?? null };
   });
 }
 
@@ -151,6 +183,8 @@ export async function getStoreByHost(host: string | null | undefined): Promise<S
  * The subdomain must then either 301 to the custom domain, or serve `rel=canonical` pointing at it —
  * see specs/docs/CUSTOM_DOMAIN.md.
  */
-export function primaryOrigin(_store: StoreInfo, requestedOrigin: string): string {
-  return requestedOrigin;
+export function primaryOrigin(store: StoreInfo, requestedOrigin: string): string {
+  // A store with an active primary custom domain is canonical THERE, always over https. Otherwise the
+  // request origin (the <slug>.tokophi.com subdomain, or localhost in dev) is itself the primary.
+  return store.primaryHost ? `https://${store.primaryHost}` : requestedOrigin;
 }

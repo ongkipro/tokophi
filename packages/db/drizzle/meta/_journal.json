@@ -351,6 +351,13 @@
       "when": 1784109763290,
       "tag": "0049_watery_supernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1784109764290,
+      "tag": "0050_loose_black_knight",
+      "breakpoints": true
     }
   ]
 }

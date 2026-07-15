@@ -32,5 +32,9 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
     ssr: { external: ["postgres"] },
+    // DEV ONLY. Vite's dev server blocks unknown Host headers (a DNS-rebinding guard), which makes it
+    // impossible to test custom-domain resolution locally by faking the Host. Production runs the Node
+    // adapter, which has no such allow-list — so this changes nothing there.
+    server: { allowedHosts: [".test", "localhost", ".tokophi.com", ".sslip.io"] },
   },
 });

@@ -15,8 +15,11 @@ import {
   jsonb,
   primaryKey,
   unique,
+  index,
+  uniqueIndex,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // ---------- shared column helpers ----------
 const pk = () => uuid().primaryKey().defaultRandom();
@@ -62,6 +65,14 @@ export const invoiceStatus = pgEnum("invoice_status", ["dibayar", "menunggu", "g
 export const platformActivityKind = pgEnum("platform_activity_kind", ["signup", "upgrade", "payment", "churn", "support", "admin"]);
 export const notificationChannel = pgEnum("notification_channel", ["email", "wa"]);
 export const pageTemplateType = pgEnum("page_template_type", ["homepage", "category", "product"]); // ADR 0009 — Store Builder
+export const storeDomainStatus = pgEnum("store_domain_status", [
+  "pending", // added, TXT not yet verified
+  "verifying", // TXT check in progress
+  "provisioning", // verified; waiting on the CA / Cloudflare cert
+  "active", // served, cert valid — the ONLY status the storefront resolves on
+  "error", // verification or cert failed; last_error surfaced in the admin UI
+  "disabled", // merchant turned it off
+]);
 
 // ---------- identity & tenancy ----------
 export const accounts = pgTable("accounts", {
@@ -1026,6 +1037,40 @@ export const media = pgTable("media", {
   height: integer(),
   createdAt: createdAt(),
 });
+
+// ---------- custom merchant domains (CNAME) — CUSTOM_DOMAIN.md ----------
+// Holds ONLY custom hosts. `<slug>.tokophi.com` is NOT a row — it is derived (slug + base domain), and
+// storing it would create a second place a store's identity can drift from its slug.
+//
+// `host` is UNIQUE across the whole platform — THE security invariant: two stores cannot both claim
+// toko.com, and it is what stops one merchant hijacking another's (or a bank's) domain once verified.
+// RLS ships in the same migration or `verify-rls` (which derives the store-scoped set from the catalog)
+// goes red. The storefront resolves the host on the OWNER connection (no session → no GUC), exactly as
+// getStoreByHost() already does.
+export const storeDomains = pgTable(
+  "store_domains",
+  {
+    id: pk(),
+    storeId: uuid().notNull().references(() => stores.id, { onDelete: "cascade" }),
+    host: text().notNull(), // normalised: lowercase, no scheme/port/trailing dot
+    status: storeDomainStatus().notNull().default("pending"),
+    isPrimary: boolean().notNull().default(false), // at most ONE per store (partial unique index)
+    verificationToken: text().notNull(), // 32 hex, generated on insert
+    verifiedAt: ts(), // when OUR txt check passed
+    providerId: text(), // Cloudflare custom-hostname id (opaque)
+    certStatus: text(), // mirror of the provider ssl status
+    lastError: text(), // surfaced verbatim in the admin UI
+    lastCheckedAt: ts(),
+    createdAt: createdAt(),
+    updatedAt: createdAt(),
+  },
+  (t) => ({
+    hostKey: uniqueIndex("store_domains_host_key").on(t.host),
+    storeIdx: index("store_domains_store_idx").on(t.storeId),
+    // at most one primary per store — partial unique
+    onePrimary: uniqueIndex("store_domains_one_primary").on(t.storeId).where(sql`is_primary`),
+  }),
+);
 
 // ---------- support tickets (2-sided: merchant ↔ platform) ----------
 export const ticketStatus = pgEnum("ticket_status", ["open", "answered", "closed"]);
