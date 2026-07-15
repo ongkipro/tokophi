@@ -262,16 +262,16 @@ if (rToken) {
               <!-- KOTA + PROVINSI ARE DERIVED, SO THEY ARE SHOWN, NOT ASKED.
                    They used to be two readonly boxes the shopper could not fill in anyway — two more
                    columns of chrome for values that are a pure function of the district id. They are
-                   still SUBMITTED (hidden inputs, same `name`s, same FormData / capture payload), but
-                   they are now displayed as a quiet derived line: "Kota Semarang · Jawa Tengah".
-                   The hidden inputs remain the single source the payload + the COD province gate read
+                   still SUBMITTED (hidden inputs, same `name`s, same FormData / capture payload) and
+                   are shown to the shopper inside the "Kirim ke" summary below the kodepos. The hidden
+                   inputs remain the single source the payload + the COD province gate read
                    (codProvinceOk), so nothing downstream changed. -->
               <input type="hidden" name="kota" id="kota" />
               <input type="hidden" name="provinsi" id="provinsi" />
-              <p id="area-derived" hidden class="mt-1.5 flex items-center gap-1.5 text-xs text-muted">
-                <MapPin class="h-3.5 w-3.5 shrink-0 text-brand-600" stroke-width={1.75} aria-hidden="true" />
-                <span id="area-derived-text" class="min-w-0 truncate"></span>
-              </p>
+              {/* The partial "Kota · Provinsi" line that used to sit here is gone: the "Kirim ke"
+                  summary below the kodepos now shows the FULL destination and appears at the same
+                  moment (as soon as a kecamatan is picked), so a second, lesser copy above was pure
+                  duplication. Kota/Provinsi stay as hidden inputs — the payload + COD gate read them. */}
             </div>
 
             <!-- Kelurahan + Kode Pos, ONE ROW: picking a kelurahan is what fills the kodepos, so the
@@ -305,6 +305,20 @@ if (rToken) {
               <p id="kel-note" hidden class="text-xs text-muted sm:col-span-2">
                 Kecamatan ini punya beberapa kode pos — pilih kelurahan agar kode posnya terisi benar.
               </p>
+
+              <!-- DESTINATION SUMMARY — "this is where the parcel goes", assembled from what has been
+                   entered. Kota/Provinsi are HIDDEN inputs (agent-1 field reduction), so without this
+                   a shopper types a kecamatan and never sees, in one place, the full address they are
+                   shipping to before they pick a courier and pay. It confirms; it is not another
+                   field. Hidden until a kecamatan is chosen (nothing to confirm before then). -->
+              <div id="dest-summary" hidden class="sm:col-span-2 rounded-xl border border-line bg-brand-50/40 p-3">
+                <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-600">
+                  <MapPin class="h-3.5 w-3.5 shrink-0" stroke-width={1.75} aria-hidden="true" />
+                  Kirim ke
+                </p>
+                <p id="dest-summary-street" hidden class="mt-1 text-sm font-medium text-ink"></p>
+                <p id="dest-summary-admin" class="mt-0.5 text-sm leading-relaxed text-muted"></p>
+              </div>
             </div>
           </div>
         </fieldset>
@@ -784,6 +798,37 @@ if (rToken) {
     var kelSelect = document.getElementById("kel-select");
     var areaLine = document.getElementById("area-derived");
     var areaText = document.getElementById("area-derived-text");
+    var alamatEl = form.querySelector('textarea[name="alamat"]');
+    var destTextEl = document.getElementById("dest-text");
+    var summaryBox = document.getElementById("dest-summary");
+    var summaryStreet = document.getElementById("dest-summary-street");
+    var summaryAdmin = document.getElementById("dest-summary-admin");
+    // Typed kodepos (districts with no kelurahan) and the street both feed the summary.
+    if (kodeposEl) kodeposEl.addEventListener("input", function () { renderDestSummary(); });
+    if (alamatEl) alamatEl.addEventListener("input", function () { renderDestSummary(); });
+
+    // The full shipping destination, assembled from what has been entered — the "Kirim ke" card below
+    // the kodepos. Only shown once a kecamatan is chosen (nothing to confirm before then). Built from
+    // the SAME values the order payload submits, so what the shopper confirms is what ships.
+    function renderDestSummary() {
+      if (!summaryBox || !summaryStreet || !summaryAdmin) return;
+      var kec = destTextEl && destTextEl.value ? destTextEl.value.trim() : "";
+      if (!kec) { summaryBox.hidden = true; return; }
+
+      var kel = kelSelect && !kelWrap.hidden ? (kelSelect.options[kelSelect.selectedIndex] || {}).text : "";
+      if (kel && kel.indexOf("Pilih") === 0) kel = ""; // the placeholder option
+      kel = kel.replace(/\s+—.*$/, ""); // strip "— 50135" from the option label
+      var pos = kodeposEl && kodeposEl.value ? kodeposEl.value.trim() : "";
+      var jalan = alamatEl && alamatEl.value ? alamatEl.value.trim() : "";
+
+      // TWO lines, like a real address label: the street the shopper typed on top, then the
+      // administrative parts below. `kec` already carries "Kecamatan, Kota, Provinsi"; prepend the
+      // kelurahan and append the kodepos. A missing piece is simply omitted.
+      summaryStreet.textContent = jalan;
+      summaryStreet.hidden = !jalan;
+      summaryAdmin.textContent = (kel ? "Kel. " + kel + ", " : "") + kec + (pos ? " " + pos : "");
+      summaryBox.hidden = false;
+    }
 
     // The derived line IS the display of the hidden kota/provinsi inputs — it renders from them, so
     // it can never say something different from what is submitted.
@@ -799,6 +844,7 @@ if (rToken) {
       if (kotaEl && city) kotaEl.value = city;
       if (provinsiEl && province) provinsiEl.value = province;
       showArea();
+      renderDestSummary();
       // COD eligibility is province-gated — recheck it now that the province actually exists.
       syncCod();
       captureSoon();
@@ -807,6 +853,7 @@ if (rToken) {
       if (kotaEl) kotaEl.value = "";
       if (provinsiEl) provinsiEl.value = "";
       showArea();
+      renderDestSummary();
       resetKelurahan();
       syncCod();
     }
@@ -893,6 +940,7 @@ if (rToken) {
     if (kelSelect) {
       kelSelect.addEventListener("change", function () {
         if (kodeposEl) kodeposEl.value = kelSelect.value;
+        renderDestSummary();
         captureSoon();
       });
     }
