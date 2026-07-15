@@ -5,6 +5,26 @@
 
 ## ▶ CURRENT STATE (2026-07-13) · **LIVE ON `tokophi.com`** (landing · `app.` admin · `rich.` super-admin · `toko.` demo · **`<slug>.tokophi.com` = per-merchant storefront**, Cloudflare-proxied HTTPS, Vultr SG + Coolify) · RBAC + RLS enforcing · single-plan billing (PPN 11%) · super-admin store-control · client Akun section · support tiket 2-sisi · manual invoice + reminder · image→WebP · **self-serve signup `/daftar` + Google OAuth (flagged)** · **storefront SSR + `Host`-header MULTI-TENANT (one deploy serves every store)** · **Tema: named template variants + per-kategori/produk assignment** · chat spec written (not built) · provider brands hidden (white-label)
 
+
+## 2026-07-15 — Session: storefront honesty sweep + per-tenant SEO + custom-domain groundwork ✅ committed `f71452d` `778d2cd` `c91b276` `53950b3` (worktree `super-admin-overhaul`, **pushed, NOT merged to main**)
+> Four parallel read-only audits (a11y · runtime · SEO · dead-UI) against the live storefront. The money path came back scrupulously honest; every lie was in the soft surfaces nobody re-audited after the DB landed.
+
+- **The shop advertised reviews it did not have.** PDP showed "4.8 · 187 ulasan" on a catalog of 8 reviews — `products.rating_value` is seed-only, recomputed by nothing, and the seed linked reviews by NAME so every `product_id` was NULL (no product COULD show a rating). Now aggregated from `reviews` where terbit; no reviews → no stars, no `aggregateRating`. Seed links the FK (0049). 8/8 linked, PDP shows the real count.
+- **Every store shipped a dead WhatsApp number.** `stores` had no whatsapp/tagline column → platform constant `6281234567890` rendered as a live "Hubungi via WhatsApp" button ~19×/page on every store; `/kontak` hardcoded one merchant's email onto every store's contact page. Migration `0049` adds nullable `stores.whatsapp`+`tagline`; null → render nothing. Proven: kopi-senja emits ZERO wa.me links.
+- **5 dead controls removed** (not "implemented" — implementing would still promise what the system can't deliver): fake /akun login (swallowed passwords), /kontak form (reset() destroyed the message then said "received"), footer newsletter, checkout's bold WhatsApp-confirmation promise, ProductCard wishlist heart.
+- **Silent dead checkout fixed**: `op:"search"` and `op:"kelurahan"` had no `.catch()` → any ongkir-proxy hiccup = shopper types a kecamatan, nothing happens, Bayar does nothing.
+- **A11y**: all 182 contrast violations were ONE token (`--color-muted` 3.59:1 → #736669 5.09:1); cart thumbnail link had no accessible name; chat inputs placeholder-only; two `<nav>` unnamed.
+- **SEO, per-tenant**: canonical + OG + Twitter + schema.org Product/Breadcrumb, all from `locals.origin` (new, from x-forwarded-proto/host — behind Cloudflare `Astro.url` emits http:// canonicals that 301). Per-request `robots.txt` + `sitemap.xml` (a static file would serve one store's URLs on every domain). ⚠️ Deleted `site: "https://batiknusantara.id"` from astro.config — one merchant's domain hardcoded into a deploy serving every merchant.
+- **Store Builder defaults that lied** (packages/sections): marquee "Gratis Ongkir/COD Tersedia" (neither exists/on), banner "Diskon 30%", **two fabricated testimonials** → all now prompts or empty; empty-state guards on both renderers.
+- **Store Builder / hero / mega menu / cart / responsive** from earlier in the session: hero full-bleed, `/tema` template variants consumed, mega menu dynamic from the merchant's own menu, Shopify-shaped cart, kelurahan→kodepos (78k rows, migration `0046`... note: number was `0046` for kelurahan), `audit:responsive` gate (110 checks).
+
+### ▶ NEXT — custom domain (spec done, pickup-ready) then its admin UI
+1. **Custom domain slice 1** — migration `0050` `store_domains` + RLS + `slugFromCustomDomain()` body + `StoreInfo.primaryHost`; flip `primaryOrigin()` to return the custom-domain origin. Verifiable with `curl -H 'Host: …'`, no DNS/Cloudflare/cost. See `CUSTOM_DOMAIN.md`.
+2. **Custom-domain admin UI** — `/pengaturan/domain`, copyable CNAME+TXT, 7 states in Bahasa.
+3. Slices 2–4 (TXT verify → Cloudflare for SaaS → 301 primary redirect) are BLOCKED on: buying a CNAME-target domain, the Cloudflare-for-SaaS cost decision, and the 30-min SNI experiment (§CUSTOM_DOMAIN riskiest-thing).
+- **Payment gateway**: functional (6 channels), but real AutoLaris HMAC callback signature is BLOCKED ON THE VENDOR; env defaults to sandbox.
+- **⚠️ Agent-1 left 81 lines uncommitted** (`sender-address-card.tsx`, `lib/actions/shipping.ts`) — not mine to commit; typecheck clean.
+
 ## 2026-07-14 — Session: storefront UI/UX — the pages with no route, the menu that ignored the merchant, and a layout that broke on a phone ✅ committed `2b1b562` `3da6a8d` `b179e73` `726ef82` (worktree `super-admin-overhaul`, **NOT merged to main → not deployed**)
 > Territory: storefront UI/UX + responsive (see `AGENTS.md` — another agent held admin/db/API at the same time).
 

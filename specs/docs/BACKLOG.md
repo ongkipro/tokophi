@@ -241,9 +241,28 @@ unmeasurable**. Ordered.
   landed** (`chat_visitors`, `conversations`, `conversation_messages`, with RLS). Application code was in
   flight and uncommitted at the time of writing. Note: CHAT_SPEC targets migration `0036`, which was
   taken by the payments/media RLS migration — the real slot is `0043`.
-- [ ] **Custom domain for a merchant** — `slugFromCustomDomain()` is a one-function `return null` stub and
-  the host is already the cache key, so the seam is ready. Needs `stores.custom_domain`, an admin UI, and
-  Cloudflare-for-SaaS or a Traefik per-domain router + cert.
+- [~] **Custom domain for a merchant** — 📄 **SPEC DONE ([`CUSTOM_DOMAIN.md`](./CUSTOM_DOMAIN.md))**, nothing built.
+  Decisions: `store_domains` table (a domain is a *process*, not a value — apex+www, states pending→active→error);
+  **301** to the primary host, not `rel=canonical` (a canonical is a hint, a 301 is a directive) — GET/HEAD only,
+  never `/api/*` (a 301 on POST drops the body → kills the checkout beacons); **Cloudflare for SaaS** over
+  Traefik+LE (HTTP-01 needs the CNAME target grey-clouded, which publishes the origin IP); **TXT verification**
+  before we serve anything (skip it and someone CNAMEs `bank-example.com` at us → TLS-valid phish under our name).
+  Two seams already landed: `slugFromCustomDomain()` (still `return null`) and **`primaryOrigin()`** in
+  `apps/storefront/src/data/store.ts` — every canonical/og:url/sitemap already flows through it, so switching the
+  subdomain→custom-domain primary is a one-line change. ⚠️ **Migration slot: `0050`** (spec says `0049`, taken by
+  whatsapp/tagline). Riskiest UNVERIFIED thing: what SNI/Host Cloudflare presents to our origin for a custom
+  hostname, given the zone is Full(strict) and the origin only has the `*.tokophi.com` Origin CA cert — needs a
+  30-min throwaway-domain experiment before slice 4. **Slice 1 (pickup-ready):** migration `0050` + `store_domains`
+  + RLS + `slugFromCustomDomain()` body + `StoreInfo.primaryHost` — verifiable with `curl -H 'Host: …'`, no DNS/CF/cost.
+- [~] **Payment gateway — AutoLaris VA/QRIS** works end-to-end (6 channels live: QRIS + 5 VA, filtered on
+  `enabled AND active` = we offer it AND the gateway accepts it on a live probe; e-wallets/retail refused by
+  the vendor, so not rendered). Callback is idempotent. ⚠️ **ONE gap, BLOCKED ON THE VENDOR:** the callback
+  (`apps/admin/app/api/public/pay/callback/route.ts`) authenticates with an **interim shared secret**
+  (`X-Callback-Token`), NOT the real AutoLaris HMAC signature — the code says so and points at PROD_PLAN §7.
+  Cannot be built until AutoLaris confirms the signing spec. Until then a leaked token = a forged
+  "paid" callback. And `KIRIMINAJA_ENV`/the AutoLaris env default to **sandbox** — real tariffs are one env flip away.
+- [ ] **Custom-domain admin UI** — new `/pengaturan/domain` (`settings:write`): states belum diatur → menunggu
+  verifikasi → aktif → error, copyable CNAME+TXT records, Bahasa Indonesia copy. Does not exist in any form today.
 - [ ] **`product-detail` section** — a product template currently replaces only the *tail* of the PDP; the
   buy box is always kept, because no registry section can render it and a full replace would ship
   unbuyable product pages.
