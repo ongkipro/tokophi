@@ -19,7 +19,7 @@
 - **Store Builder / hero / mega menu / cart / responsive** from earlier in the session: hero full-bleed, `/tema` template variants consumed, mega menu dynamic from the merchant's own menu, Shopify-shaped cart, kelurahan→kodepos (78k rows, migration `0046`... note: number was `0046` for kelurahan), `audit:responsive` gate (110 checks).
 
 ### ▶ NEXT — custom domain (spec done, pickup-ready) then its admin UI
-1. **Custom domain slice 1** — migration `0050` `store_domains` + RLS + `slugFromCustomDomain()` body + `StoreInfo.primaryHost`; flip `primaryOrigin()` to return the custom-domain origin. Verifiable with `curl -H 'Host: …'`, no DNS/Cloudflare/cost. See `CUSTOM_DOMAIN.md`.
+1. ✅ **Custom domain slice 1 DONE** (`65e896d`) — migration `0050` `store_domains` + RLS + `slugFromCustomDomain()` + `StoreInfo.primaryHost` + `primaryOrigin()`. Proven with `curl -H 'Host: toko-demo.test'`: active domain resolves and canonical/og:url/sitemap all move to it; pending→404; unknown host→404; subdomain unchanged; verify-rls green. Seeded a demo `store_domains` row + dev-only `astro.config` allowedHosts.
 2. **Custom-domain admin UI** — `/pengaturan/domain`, copyable CNAME+TXT, 7 states in Bahasa.
 3. Slices 2–4 (TXT verify → Cloudflare for SaaS → 301 primary redirect) are BLOCKED on: buying a CNAME-target domain, the Cloudflare-for-SaaS cost decision, and the 30-min SNI experiment (§CUSTOM_DOMAIN riskiest-thing).
 - **Payment gateway**: functional (6 channels), but real AutoLaris HMAC callback signature is BLOCKED ON THE VENDOR; env defaults to sandbox.
