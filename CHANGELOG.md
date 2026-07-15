@@ -2,6 +2,26 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-07-15
+
+### 🌐 Custom domain for a merchant — built, deployed, and honest about where it stops
+
+A merchant can attach their own domain to their storefront. **Slices 1–3 are live on production**; slice 4 (a shopper actually served on the domain over TLS) is blocked on a platform decision and the UI **says so** rather than pretending.
+
+- **Migration `0050` `store_domains`** (+ RLS): a domain is a *process*, not a value — states `pending → verifying → provisioning → active → error`, `UNIQUE(host)` across the whole platform (a host claimed by one store is refused for every other by the DB, not by an app check that could be forgotten), and a partial unique index on `(store_id) WHERE is_primary` makes two primaries impossible.
+- **The storefront already resolves it.** `slugFromCustomDomain()` maps an `active` host → the store; `StoreInfo.primaryHost` + `primaryOrigin()` route every canonical / `og:url` / sitemap URL to the primary host, so switching a store's primary from its `<slug>.tokophi.com` subdomain to a custom domain is centralised in one function. A subdomain-only store keeps returning its request origin unchanged.
+- **Admin UI — Pengaturan → Domain** (`DomainCard`, `settings:write`, all writes under `withTenant` so RLS is the tenant boundary): add a domain, copy its CNAME + TXT records, and **verify ownership for real** via `node:dns` `resolveTxt` (ENOTFOUND/ENODATA → "DNS belum terbaca", a normal state, not an error). Remove, and set-primary (only an `active` domain can be primary).
+- **The honest stop.** Verifying ownership does **not** make the domain live — a TLS cert for a custom hostname is Cloudflare-for-SaaS territory and is **not built**. So a verified domain rests at `provisioning` and the UI shows "Menunggu aktivasi — sertifikat sedang disiapkan"; it does **not** offer a control to flip it to `active`, because the platform cannot yet serve a cert for it. A control must not claim what the system cannot do.
+
+### 📞 Per-store WhatsApp + tagline — the shared dummy number is gone
+
+- **Migration `0049`** added `stores.whatsapp` + `stores.tagline` (both nullable) and **removed `DEFAULT_WHATSAPP = "6281234567890"`** from the storefront. The canonical Indonesian dummy number used to ship as a live "Hubungi via WhatsApp" button on **every** store — a control that reached nobody. Now: no number → **no button** (honest), the merchant's own number → their button. (The migration's demo-number backfill was **removed before deploy** — on production, where `migrate` runs but `seed` does not, it would have put a fake live number on a real storefront.)
+- **Pengaturan → Profil is a real editor now** (`StoreProfileCard` + `saveStoreProfile`). It was cosmetic — hardcoded `defaultValue`s including a placeholder WhatsApp `+62 812 3456 7890`, no save wiring, plus email/address/currency fields with no column behind them. Replaced with the fields that have a column *and* reach a shopper: name, tagline (storefront meta description + footer line), WhatsApp (normalised `08…`/`+62…` → `62…`; cleared = button removed, a valid action). The fake fields are dropped, not kept as fields that lie. Proven full-circle in a browser: set `0812 9000 1234` in admin → stored `6281290001234` → the storefront button becomes `wa.me/6281290001234`; a store with no number shows none.
+
+### 🚀 Merged to `main` + deployed to production, validated
+
+The day's storefront-honesty + checkout + custom-domain + WhatsApp work shipped to `tokophi.com` via a fast-forward `main` push + Coolify redeploy. **Two production landmines defused before deploy:** (1) `_journal.json` timestamps had to be monotonic or drizzle **silently skips** a migration → `stores.whatsapp` never created → storefront 500; verified monotonic. (2) the demo-WhatsApp backfill above. Validated in a real browser on `batik-nusantara.tokophi.com`: every key page HTTP 200 (so 0049/0050 applied cleanly), the "Kirim ke" checkout summary + og:image + per-tenant sitemap live, the dummy number gone, a full checkout money-path drive passed with **0 console errors**.
+
 ## 2026-07-14
 
 ### 🔒 Checkout: the browser no longer prices the order, and no longer decides what a valid customer is

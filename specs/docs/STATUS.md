@@ -120,10 +120,10 @@ Honest arithmetic over demo rows. These are **not** lies — but do not quote th
 
 | # | Item | Detail |
 |---|---|---|
-| 23 | 🔴 **`/blog` is four hardcoded articles** | `const articles: Article[] = [ … ]` in the page source. The `blogs` / `articles` tables are **never read** and there is no detail route. **The merchant's blog editor publishes into a void** |
+| 23 | ✅ **`/blog` reads the DB** (2026-07-14) | `src/data/content.ts` `getArticles`/`getArticle` (per-tenant, `status='terbit'` hard-filter → drafts 404). Medium-shaped `/blog/[handle]` + `/halaman/[handle]` exist. The hardcoded 4-article array is gone; the merchant's Blog editor now reaches a shopper |
 | 24 | **`/akun` is a dead demo form** | "sistem akun aktif setelah backend terhubung" |
-| 25 | **Every store shares one WhatsApp number** | `DEFAULT_WHATSAPP = "6281234567890"` (`src/data/store.ts`), and there is **no per-store column** to override it |
-| 26 | **Custom domains are a `return null` stub** | there is no `stores.custom_domain`; the `domains` table exists and is empty |
+| 25 | ✅ **Per-store WhatsApp + tagline** (2026-07-15) | migration `0049` added `stores.whatsapp`/`tagline` (nullable, **no** platform dummy — `DEFAULT_WHATSAPP` removed). NULL → **no button** (honest). Merchant sets it in admin → Pengaturan → Profil (`StoreProfileCard`, normalises `08…`→`62…`) |
+| 26 | ✅ **Custom domain built** (2026-07-15) | migration `0050` `store_domains` + RLS; `slugFromCustomDomain()` resolves an `active` host; `primaryHost`/`primaryOrigin()` drive canonical/og/sitemap; admin UI `DomainCard` (add + TXT-verify real; `active` needs a TLS cert via Cloudflare-for-SaaS = not built, UI says so). Merged + deployed |
 | 27 | **`SECTION_DEFAULTS` ships fake testimonials** and a "Gratis Ongkir" marquee onto live storefronts | `page_templates` has **0 rows**, so every store falls back to them |
 | 28 | **`astro.config.mjs` has `site: "https://batiknusantara.id"`** | one demo brand baked into a multi-tenant app |
 

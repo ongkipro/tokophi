@@ -188,11 +188,16 @@ unmeasurable**. Ordered.
 
 ## P1 — Honesty debt
 
-- [ ] **🔴 The storefront `/blog` is four hardcoded articles.** `const articles: Article[] = [ … ]` in the
-  page source. The `blogs` / `articles` tables are **never read** and there is no detail route. **The
-  merchant's blog editor publishes into a void** — they write posts that no shopper will ever see.
-- [ ] **Every store shares one WhatsApp number** (`DEFAULT_WHATSAPP = "6281234567890"`) and one email.
-  There is no per-store column to override either.
+- [x] **The storefront `/blog` reads the DB** (2026-07-14). `src/data/content.ts` (`getArticles`/`getArticle`,
+  per-tenant, short-TTL) + Medium-shaped `/blog/[handle]` + `/halaman/[handle]`. Every query hard-filters
+  `status='terbit'` so a draft **404s** (proven). The hardcoded 4-article array is deleted; the merchant's
+  Blog/Halaman editors now reach a shopper. (6 articles + 6 pages were `terbit` and unreachable before.)
+- [x] **Per-store WhatsApp + tagline** (2026-07-15). Migration `0049` added `stores.whatsapp`/`tagline`
+  (nullable). `DEFAULT_WHATSAPP = "6281234567890"` is **removed** — a store with no number renders **no**
+  WhatsApp button (honest) rather than a shared dummy. The merchant sets both in admin → Pengaturan → Profil
+  (`StoreProfileCard` + `saveStoreProfile`, normalises `08…`/`+62…` → `62…`). Merged + deployed + validated
+  full-circle in a browser. **Email is still shared** — no per-store email column, and no mailer to use it,
+  so it is not a live gap; deferred with the mailer.
 - [ ] **`SECTION_DEFAULTS` ships fake testimonials** and a "Gratis Ongkir" marquee onto live storefronts.
   `page_templates` has 0 rows, so **every** store falls back to them. A real merchant's shop currently
   displays invented customer quotes.
@@ -241,8 +246,14 @@ unmeasurable**. Ordered.
   landed** (`chat_visitors`, `conversations`, `conversation_messages`, with RLS). Application code was in
   flight and uncommitted at the time of writing. Note: CHAT_SPEC targets migration `0036`, which was
   taken by the payments/media RLS migration — the real slot is `0043`.
-- [~] **Custom domain for a merchant** — 📄 **SPEC DONE ([`CUSTOM_DOMAIN.md`](./CUSTOM_DOMAIN.md))**, nothing built.
-  Decisions: `store_domains` table (a domain is a *process*, not a value — apex+www, states pending→active→error);
+- [~] **Custom domain for a merchant** — 📄 spec ([`CUSTOM_DOMAIN.md`](./CUSTOM_DOMAIN.md)); **slices 1–3 BUILT + deployed
+  2026-07-15**, slice 4 (Cloudflare-for-SaaS cert issuance → `active`) blocked on the user (cost + a CNAME-target domain).
+  **Built:** migration `0050` `store_domains` + RLS; `slugFromCustomDomain()` resolves an `active` host to a slug;
+  `StoreInfo.primaryHost` + `primaryOrigin()` route canonical/`og:url`/sitemap to the primary; admin UI `DomainCard`
+  (Pengaturan → Domain) adds a domain and **TXT-verifies ownership for real** (`node:dns` `resolveTxt`), showing copyable
+  CNAME+TXT records. **HONEST GAP kept visible:** a verified domain rests at `provisioning` and the UI does NOT let the
+  merchant flip it to `active` — a shopper is only served once a TLS cert exists, which is slice 4. Original design notes:
+  `store_domains` table (a domain is a *process*, not a value — apex+www, states pending→active→error);
   **301** to the primary host, not `rel=canonical` (a canonical is a hint, a 301 is a directive) — GET/HEAD only,
   never `/api/*` (a 301 on POST drops the body → kills the checkout beacons); **Cloudflare for SaaS** over
   Traefik+LE (HTTP-01 needs the CNAME target grey-clouded, which publishes the origin IP); **TXT verification**
@@ -261,8 +272,10 @@ unmeasurable**. Ordered.
   (`X-Callback-Token`), NOT the real AutoLaris HMAC signature — the code says so and points at PROD_PLAN §7.
   Cannot be built until AutoLaris confirms the signing spec. Until then a leaked token = a forged
   "paid" callback. And `KIRIMINAJA_ENV`/the AutoLaris env default to **sandbox** — real tariffs are one env flip away.
-- [ ] **Custom-domain admin UI** — new `/pengaturan/domain` (`settings:write`): states belum diatur → menunggu
-  verifikasi → aktif → error, copyable CNAME+TXT records, Bahasa Indonesia copy. Does not exist in any form today.
+- [x] **Custom-domain admin UI** (2026-07-15) — `DomainCard` in Pengaturan → Domain (`settings:write`, RLS via
+  `withTenant`): states belum diverifikasi → menunggu DNS → menunggu aktivasi (provisioning) → aktif → error,
+  copyable CNAME+TXT records, Bahasa Indonesia copy. `addDomain`/`verifyDomain`/`setPrimaryDomain`/`removeDomain`
+  in `lib/actions/domain.ts`; reads via `listDomains()` (server action, so the client never imports `server-only`).
 - [ ] **`product-detail` section** — a product template currently replaces only the *tail* of the PDP; the
   buy box is always kept, because no registry section can render it and a full replace would ship
   unbuyable product pages.

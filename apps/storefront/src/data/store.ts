@@ -172,16 +172,14 @@ export async function getStoreByHost(host: string | null | undefined): Promise<S
  * ends up competing with themselves. So exactly one host must be canonical, and canonicals, `og:url`
  * and the sitemap must all be built from it, never from whichever host the request arrived on.
  *
- * TODAY: no custom domains exist (`slugFromCustomDomain()` above is still a stub), so the subdomain is
- * the primary and this returns the requested origin unchanged. That is deliberate and matches the
- * product decision: the subdomain IS the primary until a merchant sets a custom domain in the seller
- * dashboard — which does not exist yet either.
- *
- * WHEN `stores.custom_domain` LANDS, this becomes:
- *     if (store.customDomain) return `https://${store.customDomain}`;
- * and every URL the storefront emits follows automatically, because they all come through here.
- * The subdomain must then either 301 to the custom domain, or serve `rel=canonical` pointing at it —
- * see specs/docs/CUSTOM_DOMAIN.md.
+ * HOW IT RESOLVES: `slugFromCustomDomain()` above reads `store_domains` for a row whose `status='active'`
+ * and `StoreInfo.primaryHost` carries that host (or null when the subdomain is still the primary). A
+ * merchant attaches and verifies a domain in the seller dashboard (Pengaturan → Domain, `DomainCard`);
+ * a verified-but-not-yet-served domain rests at `provisioning` (a TLS cert via Cloudflare-for-SaaS is
+ * the last step, not built) and does NOT become `primaryHost` until it is `active`. So a subdomain-only
+ * store returns the request origin unchanged; a store with an active primary is canonical there, and the
+ * subdomain 301s to it (GET/HEAD only). Every canonical / `og:url` / sitemap URL flows through here, so
+ * that switch is centralised — see specs/docs/CUSTOM_DOMAIN.md.
  */
 export function primaryOrigin(store: StoreInfo, requestedOrigin: string): string {
   // A store with an active primary custom domain is canonical THERE, always over https. Otherwise the
