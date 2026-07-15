@@ -35,22 +35,28 @@ unmeasurable**. Ordered.
    `requireCapability("settings:write", { allowSuspended: true })` as their first statement (was
    `getSession()` alone). `allowSuspended` is deliberate: a suspended store must still be able to pay its
    way back in — refusing that payment would lock a paying merchant out permanently.
-5. **[~] Tests for the money/checkout paths — MOSTLY DONE** (2026-07-15). **47 tests, all green** (was 1
-   file). Pure-logic: `packages/lib/src/validate.test.ts` (checkout input boundary — phone normalisation
-   incl. the no-operator-prefix rule, name/email/address/kodepos/dest_id) + `billing.test.ts` (PPN
-   round-trip, promo + annual-bonus quote, the trial→active→past_due→suspended lifecycle). **The COD gate
-   is now tested too:** its decision logic was extracted from `lib/cod.ts` (which loads the DB) into a
-   pure `lib/cod-policy.ts` (`buildCodPolicy`, same split as `rbac-policy.ts` vs `rbac.ts`), and
-   `lib/cod-policy.test.ts` exercises all five conditions with fixtures (platform/store switch, the cap
-   incl. missing/negative total, the free-text province allow-list + normalisation, SPX-only service
-   allowance, disabled/instant/legacy couriers). Behaviour-identical refactor — `getCodPolicy` unchanged
-   for its three importers; `tsc --noEmit` clean. Still OPEN: the truly **DB-coupled** half — the ledger
-   credit/debit/clawback invariants (incl. the 3 partial unique indexes that make double-credit a DB
-   impossibility) and the order state machine (batal/retur restoring inventory, guarded) — needs a
-   throwaway-Postgres harness (a vitest globalSetup that creates a temp DB, migrates, seeds; NOT the
-   shared dev DB — see the multi-agent warning in CLAUDE.md). `select sum(…) for update` (Postgres
-   rejects it → every withdrawal threw) and the `queueSave is not defined` in `checkout.astro`'s client
-   `<script>` both shipped green through tsc/astro-check/lint — **money paths must be exercised.**
+5. **[x] Tests for the money/checkout paths — DONE** (2026-07-15). **63 tests, all green** (was 1 file).
+   - **Pure-logic** (`packages/lib`): `validate.test.ts` (checkout input boundary — phone normalisation
+     incl. the no-operator-prefix rule, name/email/address/kodepos/dest_id) + `billing.test.ts` (PPN
+     round-trip, promo + annual-bonus quote, the trial→active→past_due→suspended lifecycle).
+   - **COD gate** (`apps/admin/lib/cod-policy.test.ts`): the five-condition decision logic was extracted
+     from `lib/cod.ts` (DB loader) into a pure `lib/cod-policy.ts` (`buildCodPolicy`, same split as
+     `rbac-policy.ts` vs `rbac.ts`) and exercised with fixtures.
+   - **Ledger + order state machine** (`apps/admin/lib/ledger-credit.test.ts`): run against a REAL
+     throwaway Postgres, each test inside a transaction that is ALWAYS rolled back (full isolation, zero
+     pollution — gated on `TEST_DATABASE_URL`; the suite SKIPS without it so plain `vitest run` stays
+     green; it is NEVER the shared dev DB — see CLAUDE.md). Covers: a sale is booked only for a collected
+     (`berhasil`) payment, at `amount_idr` not `total`, `pending` vs `available` by order status; **the
+     "double-credit is a DB impossibility" claim is PROVEN** — a second raw sale insert is rejected by
+     `ledger_one_sale_per_payment`; COD collected at the door; release honours `platform_payout.release_on`;
+     the `retur` claw-back is an opposing entry that nets to zero, carries the sale's status (a pending
+     sale reversed out of pending → available can never go negative), and is idempotent
+     (`ledger_one_retur_per_order`). The state machine (`applyOrderStatusChange`, extracted from
+     `setOrderStatus` so it is callable — same seam as `settleOrderLedger`) restores stock on **batal AND
+     retur**, cannot double-restore (guarded on previous status), and fails a still-pending payment.
+   - Setup: `docker exec <db> psql -U tokophi -d postgres -c 'CREATE DATABASE tokophi_test'` →
+     `DATABASE_URL=…/tokophi_test npx drizzle-kit migrate` (in `packages/db`) →
+     `TEST_DATABASE_URL=…/tokophi_test npx vitest run`. All behaviour-identical refactors; `tsc` clean.
 
 ---
 
