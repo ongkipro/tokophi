@@ -20,8 +20,8 @@
 
 ### ▶ NEXT — custom domain (spec done, pickup-ready) then its admin UI
 1. ✅ **Custom domain slice 1 DONE** (`65e896d`) — migration `0050` `store_domains` + RLS + `slugFromCustomDomain()` + `StoreInfo.primaryHost` + `primaryOrigin()`. Proven with `curl -H 'Host: toko-demo.test'`: active domain resolves and canonical/og:url/sitemap all move to it; pending→404; unknown host→404; subdomain unchanged; verify-rls green. Seeded a demo `store_domains` row + dev-only `astro.config` allowedHosts.
-2. **Custom-domain admin UI** — `/pengaturan/domain`, copyable CNAME+TXT, 7 states in Bahasa.
-3. Slices 2–4 (TXT verify → Cloudflare for SaaS → 301 primary redirect) are BLOCKED on: buying a CNAME-target domain, the Cloudflare-for-SaaS cost decision, and the 30-min SNI experiment (§CUSTOM_DOMAIN riskiest-thing).
+2. ✅ **Custom-domain admin UI DONE** (`8bc754d`) — Pengaturan → Domain: add + copyable CNAME/TXT + REAL TXT verification (node:dns), 7 states in Bahasa, `settings:write` + `withTenant` (RLS is the boundary), host UNIQUE rejected by Postgres, token never sent to client. Honest cert boundary: a verified domain rests at `provisioning` ("Menunggu aktivasi") — the UI never flips it to active, because a cert (Cloudflare-for-SaaS) is not built. Verified in a real browser logged in, 0 console errors. New files only — the alamat block (agent-1 territory) untouched.
+3. **What remains, all BLOCKED on the user:** Cloudflare-for-SaaS setup (cost + a CNAME-target domain to buy) to issue certs and move `provisioning`→`active`; the 301 primary-host redirect (GET/HEAD only, never /api/*); and the 30-min SNI experiment (§CUSTOM_DOMAIN riskiest-thing) before trusting the origin cert path. TXT verification is DONE, not blocked.
 - **Payment gateway**: functional (6 channels), but real AutoLaris HMAC callback signature is BLOCKED ON THE VENDOR; env defaults to sandbox.
 - **⚠️ Agent-1 left 81 lines uncommitted** (`sender-address-card.tsx`, `lib/actions/shipping.ts`) — not mine to commit; typecheck clean.
 
