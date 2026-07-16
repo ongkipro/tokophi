@@ -135,7 +135,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
         One flex row on a phone; on `lg` the same two columns as the body below, so each end lands
         where its column does. ONE cart link either way — no `lg:hidden` twin to keep in sync. */}
     <header class="border-b border-[var(--co-line)] bg-white">
-      <div class="flex items-center px-4 py-4 sm:px-6 lg:grid lg:grid-cols-2 lg:px-0 lg:py-0">
+      <div class="mx-auto flex max-w-[628px] items-center px-4 py-4 sm:px-6 lg:grid lg:max-w-[1080px] lg:grid-cols-[1fr_480px] lg:px-0 lg:py-0">
         <div class="flex min-w-0 lg:justify-end lg:py-4">
           {/* `lg:pl-6` matches the form column's own `sm:px-6`, so the logo starts on the SAME x as
               the first field (measured: both 168px at 1440). Without it the box is flush at 144 and
@@ -210,26 +210,38 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
       })();
     </script>
 
-    {/* No `items-start`: the cells must STRETCH so the white form column and the recessed panel both
-         run the full height of the row. With items-start each cell shrank to its content and the two
-         zones stopped being zones. */}
-    <div class="lg:grid lg:grid-cols-2">
-      {/* SUMMARY. `order-first` on mobile keeps the collapsed total bar at the very top (the phone
-          pattern); on desktop it is the right column. Explicit col/row placement rather than source
-          order, because the two must not fight over which cell they land in. */}
-      <aside class="order-first border-b border-[var(--co-line)] bg-[var(--co-panel)] lg:order-none lg:col-start-2 lg:row-start-1 lg:min-h-[calc(100vh-4.5rem)] lg:border-b-0 lg:border-l">
-        <div class="w-full px-4 sm:px-6 lg:sticky lg:top-0 lg:max-w-[480px] lg:px-10 lg:py-10">
-          <slot name="summary" />
-        </div>
-      </aside>
+    {/* BOXED AT 1080 (user's call — "melebar banget", and measured: at 1920 the columns were 960 each,
+         so the recessed panel ate half a monitor and the form's fields drifted 400px from the logo).
+         The grid was `lg:grid-cols-2` — a share of the VIEWPORT, so it grew forever. It is now 580+480
+         inside a centred 1080 box: a checkout is a form, and a form has a right size, not a share.
 
-      {/* The BRIGHT zone. White against the panel's cream is the whole contrast the reference is
-           built on — on cream-vs-cream the hairline divider was carrying it alone, and losing. */}
-      <main class="bg-white lg:col-start-1 lg:row-start-1 lg:flex lg:justify-end">
-        <div class="w-full px-4 py-8 sm:px-6 lg:max-w-[580px] lg:py-10 lg:pr-10">
-          <slot />
-        </div>
-      </main>
+         `bg-white` on the wrapper because <body> is cream and cannot be overridden (see above) — the
+         slack either side of the box would otherwise be a warm frame around a neutral page.
+
+         No `items-start`: the cells must STRETCH so both zones run the full height of the row. */}
+    <div class="bg-white">
+      <div class="mx-auto lg:grid lg:max-w-[1080px] lg:grid-cols-[1fr_480px]">
+        {/* SUMMARY. `order-first` on mobile keeps the collapsed total bar at the very top (the phone
+            pattern); on desktop it is the right column. Explicit col/row placement rather than source
+            order, because the two must not fight over which cell they land in. */}
+        <aside class="order-first border-b border-[var(--co-line)] bg-[var(--co-panel)] lg:order-none lg:col-start-2 lg:row-start-1 lg:min-h-[calc(100vh-4.5rem)] lg:border-b-0 lg:border-l">
+          {/* `max-w-[628px] mx-auto` below `lg` is the TABLET fix: from 640 to 1023 this is a single
+              column and the box was `w-full`, so at 768 a lone email field stretched 720px across the
+              screen. 628 = the same 580 of content plus its 48 of padding, centred — a field is
+              readable at 580 and comical at 720. Above `lg` the grid owns the width again. */}
+          <div class="mx-auto w-full max-w-[628px] px-4 sm:px-6 lg:sticky lg:top-0 lg:mx-0 lg:max-w-[480px] lg:px-10 lg:py-10">
+            <slot name="summary" />
+          </div>
+        </aside>
+
+        {/* The BRIGHT zone. White against the panel's grey is the whole contrast the reference is
+            built on — on cream-vs-cream the hairline divider was carrying it alone, and losing. */}
+        <main class="bg-white lg:col-start-1 lg:row-start-1 lg:flex lg:justify-end">
+          <div class="mx-auto w-full max-w-[628px] px-4 py-8 sm:px-6 lg:mx-0 lg:max-w-[580px] lg:py-10 lg:pr-10">
+            <slot />
+          </div>
+        </main>
+      </div>
     </div>
 
     <!-- Minimal by intent: no policy links invented here. If the merchant has such pages they belong
@@ -238,9 +250,9 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
          cannot be overridden there — see the note above), leaving a tinted strip under a page that is
          otherwise neutral. */}
     <footer class="border-t border-[var(--co-line)] bg-white">
-      <div class="lg:grid lg:grid-cols-2">
+      <div class="mx-auto lg:grid lg:max-w-[1080px] lg:grid-cols-[1fr_480px]">
         <div class="lg:flex lg:justify-end">
-          <div class="w-full px-4 py-6 text-xs text-[var(--co-muted)] sm:px-6 lg:max-w-[580px] lg:pr-10">
+          <div class="mx-auto w-full max-w-[628px] px-4 py-6 text-xs text-[var(--co-muted)] sm:px-6 lg:mx-0 lg:max-w-[580px] lg:pr-10">
             {store.name} — Ditenagai TokoΦ
           </div>
         </div>
