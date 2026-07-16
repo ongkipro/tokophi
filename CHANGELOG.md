@@ -199,6 +199,19 @@ The final split (decided with the user): **platform stays on `tokophi.com`** (la
 
 The Domain card now leads with the **system domain** `<slug>.tokophi.id` — shown read-only with a lock ("Aktif otomatis · diatur sistem, tidak bisa diubah") and a Kunjungi link — because that address is derived from the store slug and a merchant must never be able to change or detach it. Below it, the **custom-domain** flow got a Shopify-style numbered tutorial (add → publish CNAME+TXT → verify → make primary), plus the apex/`www` + "email unaffected" notes. **Security hardening in `lib/actions/domain.ts`:** `addDomain` now refuses **every platform-owned zone** — `tokophi.id`/`tokophi.com`/`tokophi.cc` and any host under them (`PLATFORM_ZONES`, one place) — so a merchant can't squat `app.tokophi.com`, the `cname.tokophi.cc` fallback, or another store's `<slug>.tokophi.id`; and a **per-store cap** (`MAX_DOMAINS_PER_STORE=5`) guards the `UNIQUE(host)` space and the poller. (Ownership was already proven by a real TXT check, writes already gated by RBAC + RLS, and `store_domains.host` is DB-UNIQUE across the platform.)
 
+### 🏷️ One order prefix: `PHI-` — three generators were minting three, and one of them collided with invoices
+
+Every order on the platform now reads `PHI-…`. It was minted by **three** generators with three prefixes for the **same entity**: `WEB-` (`/api/public/order`), `INV-` (seed, the demo store) and `ORD-` (seed, the other stores). A seller's list showed all three and nothing explained why.
+
+Worse, **`INV-` was shared with subscription invoices** (`invoices.number` = `INV-9006`): `INV-4517` was an **order**, `INV-9006` a **bill** — different objects wearing the same badge, in a product where both appear in the same admin. Orders move to `PHI-`; **invoices keep `INV-`**, and the collision is gone.
+
+Migration **`0052_order_number_phi.sql`** renames in place. It is destructive, so it was verified against production *before* being written:
+- **Nothing outside `orders` holds a number** — 0 AWBs (no courier has ever booked one), and 0 rows in `platform_activity` / `support_messages` / `conversation_messages` mention one.
+- **No suffix appears under two prefixes**, so `PHI-<suffix>` cannot collide with itself (`ORD-8000..8014`, `INV-4765..4821`, `WEB-020451793..202951778F2Y` — disjoint), and `orders.number` is `UNIQUE`, so a collision would abort the transaction rather than corrupt.
+- **Rehearsed on the local DB first**: 685 `INV-` + 15 `ORD-` → **700 `PHI-`**, with `invoices` untouched at 16 `INV-`.
+
+Done **now** precisely because nothing is public yet — the user's call, and the right one. After launch a buyer, a courier and an invoice all hold this string, and renaming it stops being a migration and becomes a broken promise. The seed generators moved too: without that, a reseed would mint `INV-`/`ORD-` all over again.
+
 ### 🔢 The sidebar's Pesanan badge counted nothing — it was the string `"7"`
 
 `lib/nav.ts` carried `badge: "7"` as a **literal**. It had never counted anything, it was wrong for every store on the platform, and it would have stayed wrong forever — the exact shape of honesty debt this repo keeps digging out: a number that promises a fact it never checked. Ground truth on the demo store was **25**.

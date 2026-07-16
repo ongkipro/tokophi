@@ -284,7 +284,7 @@ const ORDERS_SEED = (() => {
               : sr < 0.45 ? "baru" : sr < 0.85 ? "diproses" : "dikirim";
 
       out.push({
-        number: `INV-${5200 - n}`,
+        number: `PHI-${5200 - n}`,
         customer: NAMES15[Math.floor(rnd() * NAMES15.length)],
         city: CITIES[Math.floor(rnd() * CITIES.length)],
         total,
@@ -467,7 +467,7 @@ type FStatus = "menunggu" | "terkirim" | "dibalas" | "selesai";
 // from real `checkout_sessions` rows further down (search "keranjang follow-ups"), so every one of
 // them points at a basket that exists, with the value and the phone that basket actually carries.
 const FOLLOWUPS: Array<{ customer: string; phone: string; type: FType; context: string; dueDays: number; status: FStatus; lastMessage: string }> = [
-  { customer: "Agus Salim", phone: "6281234511002", type: "pembayaran", context: "#INV-4821 · Rp275.000", dueDays: 0, status: "menunggu", lastMessage: "" },
+  { customer: "Agus Salim", phone: "6281234511002", type: "pembayaran", context: "#PHI-4821 · Rp275.000", dueDays: 0, status: "menunggu", lastMessage: "" },
   { customer: "Budi Santoso", phone: "6281234511004", type: "pembayaran", context: "#INV-4818 · Rp189.000", dueDays: -2, status: "menunggu", lastMessage: "" },
   { customer: "Maya Sari", phone: "6281234511005", type: "pascabeli", context: "#INV-4815 · Rok Plisket Panjang", dueDays: 0, status: "terkirim", lastMessage: "Terima kasih sudah belanja! 🙏" },
   { customer: "Andi Pratama", phone: "6281234511006", type: "ulasan", context: "Cardigan Rajut Wanita", dueDays: 1, status: "menunggu", lastMessage: "" },
@@ -1548,7 +1548,7 @@ async function main() {
       // a few orders; the most-recent placedAt drives the "activity" health signal
       const offsets = [d.lastOrderDaysAgo, d.lastOrderDaysAgo + 4, d.lastOrderDaysAgo + 11];
       await db.insert(schema.orders).values(offsets.map((off) => ({
-        storeId: st.id, number: `ORD-${ordSeq++}`, status: "selesai" as const, financialStatus: "dibayar" as const,
+        storeId: st.id, number: `PHI-${ordSeq++}`, status: "selesai" as const, financialStatus: "dibayar" as const,
         channel: "organic" as const, subtotalIdr: 150_000, totalIdr: 150_000, city: d.city, placedAt: daysAgo(off),
       })));
     }

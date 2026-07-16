@@ -379,8 +379,12 @@ async function handle(req: Request) {
       // need the same millisecond AND 1-in-46656, and the wrapper now answers honestly if it ever does.
       // Math.random is fine here: an API route, not a render path (the determinism rule in CLAUDE.md
       // is about SSR/hydration).
+      // PHI-, not WEB-: ONE prefix for every order on the platform. Three generators used to mint
+      // three (WEB- here, INV- and ORD- in the seed) for the same entity — and INV- was shared with
+      // subscription INVOICES, so "INV-4517" was an order and "INV-9006" a bill. Migration 0052
+      // renamed the existing rows; invoices keep INV-.
       const number =
-        "WEB-" +
+        "PHI-" +
         Date.now().toString().slice(-9) +
         Math.floor(Math.random() * 46656).toString(36).toUpperCase().padStart(3, "0");
       const [ord] = await tx.insert(schema.orders).values({
