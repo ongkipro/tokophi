@@ -38,30 +38,32 @@ export const NAV_GROUPS: NavGroup[] = [
       // sound — for Shopify's market. It is wrong for this one: Shopee, Tokopedia and TikTok Shop
       // Seller all put **Keuangan** in the sidebar, so an Indonesian seller looks for it there and
       // finds nothing. The topbar chip stays — the two do different jobs: the chip is the glance,
-      // this is the work (withdraw, check what is still held, fix the bank account).
+      // this is the work (withdraw, check what is still held).
       //
       // Every row points at a view that EXISTS — the nav rule that killed "Pengiriman Massal" and
-      // "Serah Terima" until they were built. The children are saved links to /saldo's OWN tabs, and
-      // that is NOT the "Perlu Dikirim" mistake: that one was removed because the PARENT pointed at
-      // the same tab (three doors, one room). Here the parent opens Mutasi and each child opens a
-      // DIFFERENT tab. Tagihan is a genuinely separate page — and a different KIND of money: what the
-      // seller PAYS us, not what they earn.
+      // "Serah Terima" until they were built. Each row answers a DIFFERENT question; the first cut
+      // pointed four of them at /saldo's own tabs, which is four doors onto one room and exactly what
+      // "Perlu Dikirim" was deleted for. A sub-menu is not a tab bar with more clicks.
+      //   Keuangan    → is my money healthy?
+      //   Penghasilan → what did I earn, and why is it not cash yet?  (Shopee/Tokopedia split this
+      //                 from Saldo for a real reason: earnings include money still being held, and
+      //                 our `pending` is held against orders that have not reached `selesai` — the
+      //                 same order-completion mechanic, not a payment-settlement lag.)
+      //   Saldo Saya  → what can I withdraw right now?  (Mutasi/Proses/Penarikan/Rekening are its OWN
+      //                 tabs and they STAY there — that genuinely is one room.)
+      //
+      // ⚠️ **Tagihan & Langganan is deliberately NOT here** (removed 2026-07-17, user's call).
+      // Keuangan is money the shop EARNED from shoppers; Langganan is money the merchant PAYS US.
+      // Filing our invoice beside their revenue reads as a deduction from earnings — i.e. exactly the
+      // take-rate model TokoΦ does not have and is differentiating against (we charge a subscription,
+      // never a commission). It also gave /akun/langganan a second nav door next to the avatar menu's.
+      // The cross-link survives where it has context: the "Langganan TokoΦ" card on /keuangan.
       {
-        // Each row answers a DIFFERENT question. The first cut of this menu pointed four of them at
-        // /saldo's own tabs — four doors onto one room, which is exactly what "Perlu Dikirim" was
-        // removed for in this same session. A sub-menu is not a tab bar with more clicks.
-        //   Keuangan    → is my money healthy?
-        //   Penghasilan → what did I earn, and why is it not cash yet?   (Shopee/Tokopedia split this
-        //                 from Saldo for a real reason: earnings include money still being held.)
-        //   Saldo Saya  → what can I withdraw right now?  (Mutasi/Penarikan/Rekening are its OWN tabs,
-        //                 and they stay there — that genuinely IS one room.)
-        //   Tagihan     → what do I pay TokoΦ?  (money flowing the other way)
         label: "Keuangan", href: "/keuangan", icon: Wallet,
         children: [
           { label: "Ringkasan", href: "/keuangan" },
           { label: "Penghasilan", href: "/keuangan/penghasilan" },
           { label: "Saldo Saya", href: "/saldo" },
-          { label: "Tagihan & Langganan", href: "/akun/langganan" },
         ],
       },
       {

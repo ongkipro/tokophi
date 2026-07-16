@@ -64,6 +64,29 @@ field and reports natively — no order posted, nothing silent.
 
 ## 2026-07-17
 
+### 🧭 Keuangan menu, checked against the market — and one row removed
+
+Researched the Finance IA of Shopee / Tokopedia / TikTok Shop / Lazada Seller. Most of it **confirmed
+the existing shape**; the valuable part was the one row it killed.
+
+**Removed: "Tagihan & Langganan" from the Keuangan menu.** Keuangan is money the shop **earned from
+shoppers**; Langganan is money the merchant **pays us**. Filing our invoice beside their revenue reads
+as *a deduction from their earnings* — precisely the take-rate model TokoΦ does not have and is
+differentiating against (we charge a subscription, never a commission). It also gave `/akun/langganan`
+a **second nav door** beside the avatar menu's — the "many doors, one room" pattern this session
+already deleted twice. The contextual cross-link stays where it has meaning: the "Langganan TokoΦ"
+card on `/keuangan`. Keuangan is now **Ringkasan · Penghasilan · Saldo Saya**.
+
+**Rejected, with reasons recorded** (BACKLOG, so nobody re-litigates): *"collapse Penghasilan into
+Saldo — TokoΦ has no escrow"* is **factually wrong about this codebase** (`ledger.ts`: `pending` is
+*held against orders that have not reached `selesai`* — the same order-completion mechanic a
+marketplace uses, not a settlement lag). And *"promote Mutasi / Penarikan / Rekening Bank to nav
+rows"* proposed exactly the four tabs `/saldo` already has — the user ruled on that directly.
+
+**Independently confirmed** the earlier call to ship **no fee breakdown at all**: a line reading
+"Biaya Komisi: Rp 0" is worse than absent — it implies we could charge one and sends the merchant
+hunting for the catch.
+
 ### 📊 Keuangan gets real charts — and the charts immediately caught two lies
 
 Charts were deliberately absent (CSS bars in a list). Adding them surfaced **two defects that only a

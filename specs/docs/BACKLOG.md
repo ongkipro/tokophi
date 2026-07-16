@@ -97,6 +97,36 @@ The menu deliberately points at **four different pages, not four tabs onto `/sal
 - If you want these pages to *demo* well, fix the **seed** — not the page. A finance screen that
   invents a figure is worse than one that doesn't exist, because the merchant will believe it.
 
+### 📚 Marketplace IA research — the menu is SETTLED, don't re-litigate it (2026-07-17)
+
+Researched Shopee / Tokopedia / TikTok Shop / Lazada Seller finance menus (sources in the research
+transcript; Lazada's labels were unverifiable behind a `tbpass` redirect loop — do not cite them).
+Conclusions, so nobody repeats this:
+
+- **✅ NEVER render "Biaya Komisi" / "Biaya Layanan" / "Program Gratis Ongkir", not even as Rp 0.**
+  They exist on marketplaces *only because the platform is a counterparty in the sale*. We charge a
+  **subscription, not a take rate**. A line reading "Biaya Komisi: Rp 0" is worse than absent — it
+  implies we could charge one and sends the merchant hunting for the catch. Same for "Diskon Komisi
+  Platform", "Pinjaman Modal / SPinjam", and marketplace ads spend.
+- **❌ REJECTED: "collapse Penghasilan into Saldo because TokoΦ has no escrow."** The premise is
+  factually wrong about this codebase: `ledger.ts` defines `pending` as *held against orders that
+  have not reached `selesai`* — the same order-completion mechanic a marketplace uses, not a
+  payment-channel settlement lag. Penghasilan stays a distinct page.
+- **❌ REJECTED: promoting Saldo's tabs (Mutasi / Penarikan / Rekening Bank) to nav rows.** The
+  research proposed exactly the four tabs `/saldo` already has. The user ruled on this directly:
+  *"saldo saya ya isi saldo actual beserta tab di dalaman"*. They stay inside.
+- **✅ ACTED: "Tagihan & Langganan" REMOVED from the Keuangan menu (user's call, 2026-07-17).**
+  Keuangan = money the shop **earned from shoppers**; Langganan = money the merchant **pays us**.
+  Filing our invoice beside their revenue reads as a deduction from earnings — the take-rate model we
+  are differentiating against. It also gave `/akun/langganan` a second nav door. The contextual
+  cross-link (the "Langganan TokoΦ" card on `/keuangan`) stays.
+- **🔁 Watch the faktur inversion.** On Shopee/TikTok, *Pusat Invoice* = the marketplace's invoice
+  **to the seller** for fees. Our `/faktur/[number]` is **our** invoice to the merchant for the
+  subscription. Same word, different object — do not "align" them.
+- **Still genuinely open** (convention we lack, none of it built): withdrawal **auto-payout** toggle,
+  ledger **export** + retention (Shopee keeps 24 months), and bank-account **name-match** verification
+  against the verified identity (Tokopedia caps at 3 accounts). All are system work, not menu work.
+
 **⚠️ THE SEED IS 15 DAYS STALE — this is why the charts look dead (2026-07-17).**
 Last order in the DB is **2026-07-02**; today is **2026-07-17**. The seed is anchored to
 `TODAY=2026-06-30` (CLAUDE.md) and wall-clock time has walked past it. Consequences on screen:
