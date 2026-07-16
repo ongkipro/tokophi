@@ -4,7 +4,7 @@ import { PackageOpen } from "@lucide/astro";
 import ProductCard from "../../components/ProductCard.astro";
 import RevealGrid from "../../components/RevealGrid.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
-import type { Product } from "../../data/catalog";
+import type { Product, VirtualCollectionHandle } from "../../data/catalog";
 
 type ResolvedCollection = { name: string; blurb: string };
 
@@ -13,13 +13,15 @@ const { store, catalog } = Astro.locals;
 const PRODUCTS = catalog.products;
 const { handle } = Astro.params;
 
-// Virtual (non-catalog) collections used by the nav.
+// Virtual (non-catalog) collections used by the nav — computed views over THIS store's products, so
+// every tenant can serve them whether or not they have a `collections` row of that handle.
 //
-// `catalog.collections` is built from CATEGORY_ORDER — a 6-handle allowlist — so a collection that
-// exists in the DB but isn't on it can't be found by `findCollection()`. That is why these live
-// here. `produk-terlaris` was NOT listed and had no virtual entry either, so the hero's own default
-// CTA ("Lihat Produk Terlaris", @tokophi/sections registry) shipped pointing at a 404.
-const VIRTUAL: Record<string, ResolvedCollection & { products: Product[] }> = {
+// They take precedence over `findCollection()`, and `catalog.collections` excludes their handles for
+// that reason (see VIRTUAL_COLLECTION_HANDLES in data/catalog.ts — the `Record` key type below is
+// that same list, so adding a virtual route here without declaring it there is a type error).
+// `produk-terlaris` once had no entry at all, so the hero's own default CTA ("Lihat Produk
+// Terlaris", @tokophi/sections registry) shipped pointing at a 404.
+const VIRTUAL: Record<VirtualCollectionHandle, ResolvedCollection & { products: Product[] }> = {
   semua: {
     name: "Semua Produk",
     blurb: `Semua koleksi ${store.name}`,
@@ -39,7 +41,7 @@ const VIRTUAL: Record<string, ResolvedCollection & { products: Product[] }> = {
 
 let collection: ResolvedCollection;
 let products: Product[];
-const virtual = handle ? VIRTUAL[handle] : undefined;
+const virtual = handle ? (VIRTUAL as Record<string, (typeof VIRTUAL)[VirtualCollectionHandle]>)[handle] : undefined;
 if (virtual) {
   collection = { name: virtual.name, blurb: virtual.blurb };
   products = virtual.products;

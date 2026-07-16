@@ -79,8 +79,23 @@ export type Catalog = {
   findCollection: (handle: string) => Collection | undefined;
 };
 
-// The 6 shopper-facing category collections (in display order).
-const CATEGORY_ORDER = ["dress", "atasan", "bawahan", "busana-muslim", "outerwear", "loungewear"];
+/**
+ * Handles that `pages/kategori/[handle].astro` serves from its own VIRTUAL map — computed views over
+ * the store's products, not `collections` rows. Every tenant has them and they always resolve 200.
+ *
+ * They are excluded from `catalog.collections` because that list is "the store's real categories":
+ * it drives the homepage grid (which shows a product COUNT via `byCollection`, i.e. a match on
+ * `products.category` — a virtual handle never matches, so the tile would read "0 produk" next to a
+ * page that renders products) and the nav fallback (which already links "Promo Gajian" itself, so a
+ * store with the row would get it twice). `findCollection` is never consulted for them either —
+ * VIRTUAL wins ahead of it in [handle].astro.
+ *
+ * NOTE this is NOT the old allowlist by another name: it names PLATFORM routes, not one merchant's
+ * catalogue. `[handle].astro` types its VIRTUAL map against it, so the two cannot drift.
+ */
+export const VIRTUAL_COLLECTION_HANDLES = ["semua", "promo-gajian", "produk-terlaris"] as const;
+export type VirtualCollectionHandle = (typeof VIRTUAL_COLLECTION_HANDLES)[number];
+const isVirtualHandle = (h: string): boolean => (VIRTUAL_COLLECTION_HANDLES as readonly string[]).includes(h);
 
 // Merchant-uploaded media is stored as a relative /api/uploads/<name> path served by the ADMIN app.
 // The storefront runs on a different origin, so rewrite those to absolute (admin base derived from
@@ -101,15 +116,36 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
   const storeId = store.id;
 
   const colRows = await db.select().from(schema.collections).where(eq(schema.collections.storeId, storeId));
-  const collections: Collection[] = CATEGORY_ORDER.map((h) => colRows.find((c) => c.handle === h))
-    .filter((c): c is (typeof colRows)[number] => Boolean(c))
+
+  // The store's OWN categories — derived from its rows, never from a constant.
+  //
+  // Was: `CATEGORY_ORDER`, a hardcoded allowlist of the DEMO store's six handles ("dress", "atasan",
+  // …). Any other merchant's real collections were INVISIBLE to their own storefront — no category
+  // grid, no "Kategori" dropdown, and `/kategori/<their-handle>` 404'd, because `findCollection` is
+  // built from this list. Last of the family: the demo's content living in a platform default.
+  //
+  // Two filters the allowlist silently bypassed, both of which are the shopper's business:
+  //   · `published = false` — a DRAFT category. The seed ships `outerwear` as one, and the allowlist
+  //     named it anyway, so the demo has been publishing a category its merchant had switched OFF.
+  //   · `archived_at` — deleted. Nothing archives a collection today, but the column decides, not us.
+  //
+  // ORDER: `collections` has NO ordering column (no `position`, not even `created_at` — checked), so
+  // there is nothing to honour and insertion order is a random uuid away from meaningless. Sorted by
+  // TITLE, id-ID collation: stable across requests, identical for every tenant, and the one order a
+  // shopper can predict when scanning a category list. It is deliberately NOT the demo's old order
+  // (Dress first) — reproducing that requires exactly the constant this change removes. When the
+  // merchant wants their own order, the fix is a `position` column + the Kategori editor, not a list
+  // in the storefront's source.
+  const collections: Collection[] = colRows
+    .filter((c) => c.published && !c.archivedAt && !isVirtualHandle(c.handle))
     .map((c) => ({
       handle: c.handle,
       name: c.title,
       emoji: c.emoji ?? "",
       blurb: c.description ?? "",
       templateId: c.templateId,
-    }));
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "id-ID"));
 
   // handle → assigned category template, for EVERY collection row (not just the 6 in the nav).
   const collectionTemplateId = new Map(colRows.map((c) => [c.handle, c.templateId]));

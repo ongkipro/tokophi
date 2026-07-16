@@ -85,14 +85,21 @@ const HOMEPAGE: StoredTemplateData = {
       type: "category-nav",
       props: {
         id: "kategori-batik",
-        // Real handles, and each thumbnail is the first ACTIVE product in that collection — a draft
-        // product's photo has no business fronting a category a shopper can click into.
+        // Each thumbnail is the first ACTIVE product in that collection — a draft product's photo has
+        // no business fronting a category a shopper can click into.
+        //
+        // ⚠️ FIVE, not six: `outerwear` is `published = false` in this store's own `collections` row,
+        // so `/kategori/outerwear` is a 404. This template shipped it anyway on the first pass —
+        // I filtered the PRODUCTS by status and forgot to filter the COLLECTIONS by `published`,
+        // which is the same mistake `CATEGORY_ORDER` was making one layer down (it named the handle
+        // and ignored the column, so the demo published a category its merchant had switched off).
+        // If the merchant publishes Outerwear, they add the tile in the builder — the platform must
+        // not decide that for them.
         items: [
           { label: "Dress", imageUrl: "/products/dress-midi-bunga.webp", href: "/kategori/dress" },
           { label: "Atasan", imageUrl: "/products/kemeja-oversized.webp", href: "/kategori/atasan" },
           { label: "Bawahan", imageUrl: "/products/rok-plisket.webp", href: "/kategori/bawahan" },
           { label: "Busana Muslim", imageUrl: "/products/hijab-voal.webp", href: "/kategori/busana-muslim" },
-          { label: "Outerwear", imageUrl: "/products/cardigan-rajut.webp", href: "/kategori/outerwear" },
           { label: "Loungewear", imageUrl: "/products/piyama-satin.webp", href: "/kategori/loungewear" },
         ],
       },

@@ -26,6 +26,7 @@
 // INVARIANT (as everywhere in src/data): no DB access at module scope — `astro build` stays DB-free.
 import { db, schema } from "@tokophi/db";
 import { asc, eq } from "drizzle-orm";
+import { VIRTUAL_COLLECTION_HANDLES } from "./catalog";
 import { cached } from "./cache";
 import { getPages } from "./content";
 
@@ -62,8 +63,28 @@ function fallbackNav(collections: NavCollection[]): NavItem[] {
 }
 
 /**
- * @param collections the store's own collections (`catalog.collections`) — used ONLY for the
- *   fallback. A store that has built a menu gets exactly that menu, untouched.
+ * Is `/kategori/<handle>` a page THIS store can actually serve?
+ *
+ * Same principle `getFooterNav` applies to `/halaman/` links, for the same reason: a menu item can
+ * outlive its target. The merchant chooses the ORDER and the LABELS; publication state decides what
+ * a shopper is allowed to be sent to. The seed proves it is not hypothetical — the demo's main menu
+ * links "Outerwear", whose collection ships `published = false`. That link 404s, on every page of
+ * the shop. (It used to resolve only because `catalog.collections` was a hardcoded allowlist that
+ * ignored the `published` column — i.e. the shop was publishing a category its merchant had
+ * switched off, and the dead menu link was hidden behind that bug.)
+ *
+ * Only `/kategori/` links are checked. Everything else (a URL, /blog, /halaman/…) passes through —
+ * we can't verify those here and shouldn't pretend to.
+ */
+function categoryLinkIsLive(href: string, live: Set<string>): boolean {
+  if (!href.startsWith("/kategori/")) return true;
+  return live.has(href.slice("/kategori/".length).replace(/\/$/, ""));
+}
+
+/**
+ * @param collections the store's own collections (`catalog.collections`) — the fallback menu is
+ *   built from them, and a store that HAS built a menu gets exactly that menu minus any category
+ *   link with no live target (see `categoryLinkIsLive`).
  */
 export async function getMainNav(storeId: string, collections: NavCollection[] = []): Promise<NavItem[]> {
   return cached(`nav:main:${storeId}`, async () => {
@@ -92,21 +113,33 @@ export async function getMainNav(storeId: string, collections: NavCollection[] =
       byParent.set(r.parentId, list);
     }
 
+    // Every category this store can serve: its live collections + the virtual routes
+    // (kategori/[handle].astro) that every tenant always resolves.
+    const live = new Set<string>([...collections.map((c) => c.handle), ...VIRTUAL_COLLECTION_HANDLES]);
+
     return rows
       .filter((r) => !r.parentId)
       .map((r): NavItem => {
-        const kids = (byParent.get(r.id) ?? []).map((c) => ({
-          label: c.label,
-          href: c.target ?? "#",
-        }));
+        const kids = (byParent.get(r.id) ?? [])
+          .map((c) => ({ label: c.label, href: c.target ?? "#" }))
+          .filter((c) => categoryLinkIsLive(c.href, live));
         return {
           label: r.label,
           // A parent with children is a dropdown trigger, not a link — its own target ("#" in the
           // seed) must never become an href, or clicking it navigates to nowhere.
           href: kids.length > 0 ? undefined : (r.target ?? "#"),
           children: kids.length > 0 ? kids : undefined,
-        };
-      });
+          // A parent whose children were ALL dropped is not a dropdown any more — mark it for the
+          // filter below rather than rendering a trigger that opens an empty panel.
+          _dead: kids.length === 0 && (byParent.get(r.id)?.length ?? 0) > 0,
+        } as NavItem & { _dead: boolean };
+      })
+      .filter((r) => {
+        const { _dead } = r as NavItem & { _dead?: boolean };
+        if (_dead) return false;
+        return categoryLinkIsLive(r.href ?? "#", live);
+      })
+      .map(({ label, href, children }): NavItem => ({ label, href, children }));
   });
 }
 
