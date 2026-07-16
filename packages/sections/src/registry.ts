@@ -193,45 +193,43 @@ export const SECTION_LABELS: Record<SectionType, string> = {
 /** Seed config used when a merchant drags a fresh instance of this section onto the canvas. */
 export const SECTION_DEFAULTS: SectionConfigMap = {
   hero: {
+    // The LAST default still shipping the demo store's finished homepage — every sibling below was
+    // already turned into a prompt for exactly this reason. It carried three batik slides, the
+    // headline "Batik Modern untuk Hari-Harimu", a "Koleksi 2026" badge, and a "Lihat Koleksi Dress"
+    // button pointing at /kategori/dress: 200 on batik-nusantara, **404 on every other store**
+    // (verified live against kopi-senja). Same for /kategori/busana-muslim.
+    //
+    // It did double duty, which is what hid the problem: it was ALSO the fallback homepage's hero,
+    // so every storefront on the platform rendered a batik womenswear shop under its own name. That
+    // half is fixed in index.astro (the fallback now builds its hero from the store's own name +
+    // tagline). This is now ONLY what a merchant sees after dragging a Hero onto the canvas — and a
+    // default there is a PROMPT they replace, never finished copy about someone else's goods.
+    //
+    // One slide, not three: a merchant adds slides when they have photos. Three identical prompts
+    // would just be three things to delete.
     slides: [
       {
-        imageUrl: "/hero/hero-1.webp", // empty = brand-tinted gradient panel, never a broken image
-        heading: "Batik Modern untuk Hari-Harimu",
+        imageUrl: "", // empty → the brand-tinted panel (Hero.astro), never a broken image
+        heading: "Judul utama toko kamu",
         subheading:
-          "Siluet bersih, motif tulis, dan bahan yang tetap adem dipakai dari pagi sampai petang.",
-        ctaLabel: "Lihat Koleksi Dress",
-        ctaHref: "/kategori/dress",
-        focal: "right",
-      },
-      {
-        imageUrl: "/hero/hero-2.webp",
-        heading: "Bahan Pilihan, Jahitan Rapi",
-        subheading:
-          "Katun, linen, dan tenun yang kami pilih sendiri — nyaman dipakai, awet dicuci berkali-kali.",
-        ctaLabel: "Lihat Produk Terlaris",
-        ctaHref: "/kategori/produk-terlaris",
-        focal: "left",
-      },
-      {
-        imageUrl: "/hero/hero-3.webp",
-        heading: "Anggun di Setiap Momen",
-        subheading:
-          "Padu padan outerwear dan busana muslim untuk kerja, acara keluarga, sampai undangan.",
-        ctaLabel: "Lihat Busana Muslim",
-        ctaHref: "/kategori/busana-muslim",
-        focal: "right",
+          "Satu kalimat tentang apa yang kamu jual dan untuk siapa. Ganti teks ini sebelum menerbitkan.",
+        ctaLabel: "Mulai Belanja",
+        // A VIRTUAL collection (kategori/[handle].astro) that every store always has — verified 200
+        // on both the demo and a store with a completely different catalogue.
+        ctaHref: "/kategori/semua",
+        focal: "center",
       },
     ],
     intervalMs: HERO_INTERVAL_MS,
     // Legacy flat fields mirror slide 1 — they are what a pre-carousel renderer would show.
-    heading: "Batik Modern untuk Hari-Harimu",
+    heading: "Judul utama toko kamu",
     subheading:
-      "Siluet bersih, motif tulis, dan bahan yang tetap adem dipakai dari pagi sampai petang.",
-    imageUrl: "/hero/hero-1.webp",
-    ctaLabel: "Lihat Koleksi Dress",
-    ctaHref: "/kategori/dress",
+      "Satu kalimat tentang apa yang kamu jual dan untuk siapa. Ganti teks ini sebelum menerbitkan.",
+    imageUrl: "",
+    ctaLabel: "Mulai Belanja",
+    ctaHref: "/kategori/semua",
     align: "left",
-    badge: "Koleksi 2026",
+    badge: "", // no invented "Koleksi 2026" — we do not know that they have one
     ratingText: "",
   },
   "product-grid": {
@@ -294,10 +292,14 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
     speed: "sedang",
   },
   "rich-text": {
-    // ctaHref was "/kategori/semua" — a collection NO store has (there is no /kategori index route
-    // either), so the default CTA 404'd on every storefront including the demo. "/" is the one link
-    // that is valid for every tenant; the merchant repoints it. Copy here is brand voice, not a
-    // factual claim, so it stays as prompt-ish placeholder.
+    // ⚠️ CORRECTION (2026-07-16). This note used to claim `/kategori/semua` is "a collection NO store
+    // has … so the default CTA 404'd on every storefront including the demo", and the href was moved
+    // to "/" on that basis. It is NOT true: `semua` is a VIRTUAL collection handled by
+    // kategori/[handle].astro and returns **200 on every store** — measured against both the demo and
+    // a store with an unrelated catalogue. (What genuinely 404s is a REAL handle only the demo owns,
+    // like `/kategori/dress`.) "/" is left as the default because home is a fine place for a brand
+    // CTA to point, not because the other link is broken — do not "re-fix" this. Copy here is brand
+    // voice, not a factual claim, so it stays as prompt-ish placeholder.
     heading: "Judul ajakan kamu",
     body: "Ceritakan singkat kenapa pelanggan harus belanja di toko kamu.",
     ctaLabel: "Mulai Belanja",

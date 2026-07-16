@@ -1,9 +1,23 @@
 @import "tailwindcss";
 
-/* Brand: elegant women's fashion (Batik Nusantara demo) */
+/* ONE container serves every store (ADR 0009) — so nothing in this file may be "the demo's taste".
+   This header used to read "Brand: elegant women's fashion (Batik Nusantara demo)", and the type
+   scale below was exactly that: Playfair Display, an editorial serif, on every heading of every
+   storefront. Same bug as the batik copy that used to sit in the fallback homepage — a display serif
+   is BRAND VOICE, and brand voice belongs to the merchant, not to the platform. It suits a fashion
+   label and actively fights a coffee roaster or a phone shop, and six of our seven stores are not
+   fashion.
+
+   So both tokens now resolve to the SAME neutral sans, and hierarchy comes from weight/size/tracking
+   (which the markup already sets) rather than from a second family. */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Playfair Display", Georgia, "Times New Roman", serif;
+  /* ⚠️ KEEP THIS TOKEN — it is the seam, not dead weight. `.font-display` is used 47× across 21
+     files; the point is that a per-store font can later be injected here as a CSS custom property
+     exactly the way `--color-brand-*` already is (Layout.astro reads `catalog.brandShades` and
+     writes them into :root). Deleting the token would mean re-threading 47 call sites the day the
+     font picker lands. Until then it deliberately equals --font-sans. */
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
 
   --color-cream: #faf6f2;
   --color-ink: #2b2326;
