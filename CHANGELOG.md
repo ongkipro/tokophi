@@ -36,6 +36,18 @@ to hide a thin catalogue would have been fixing the mirror, not the face.
 change. Also: with 12 active products and 4+8 slots the two grids overlap by two — a demo-catalogue
 size artefact, not a bug.
 
+### 🎨 Payment icons: grey until selected — so blue means something again
+
+Every payment row's icon was accent-tinted **at rest**. With three rows all wearing the brand blue, the
+colour stopped saying "this one" and only said "payment" — and the checkout spends colour on exactly one
+job: naming the control that is live. They now sit grey (`black/4%` + `--co-muted`) and turn blue only
+when their radio is checked, via `group-has-[:checked]` on the row. No structural change — same rows,
+same layout, same markup shape (user: *"jangan rubah ui/ux"*).
+
+Measured, transition settled: at rest all three read `rgba(0,0,0,.04)` / `#6b7280`; select QRIS and only
+the first goes `#eff6ff` / `#2563eb`; select Transfer Bank and the blue moves to it while QRIS returns to
+grey. Exactly one lit at a time.
+
 ### 💳 Checkout: payment is hidden until the kecamatan is picked
 
 The same gate Pengiriman already used, one step further on: you cannot choose HOW to pay before anyone

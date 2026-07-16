@@ -441,7 +441,7 @@ if (rToken) {
                     the group hint already says how you pay; repeating "Bayar via ATM / m-banking"
                     five times is noise a shopper has to read past. */}
                 {group.items.length === 1 ? (
-                  <label class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]">
+                  <label class="group flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]">
                     <input
                       type="radio"
                       name="payment"
@@ -449,7 +449,7 @@ if (rToken) {
                       data-label={group.items[0].label}
                       class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
                     />
-                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--co-accent-weak)] text-[var(--co-accent)] ring-1 ring-[var(--co-accent-ring)]">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black/[0.04] text-[var(--co-muted)] ring-1 ring-[var(--co-line)] transition-colors group-has-[:checked]:bg-[var(--co-accent-weak)] group-has-[:checked]:text-[var(--co-accent)] group-has-[:checked]:ring-[var(--co-accent-ring)]">
                       <PayIcon kind={group.kind} />
                     </span>
                     <span class="min-w-0 flex-1">
@@ -472,7 +472,7 @@ if (rToken) {
                         real question ("is my bank here?") is answered by the names either way. */}
                     <label
                       data-pay-parent
-                      class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]"
+                      class="group flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]"
                     >
                       <input
                         type="radio"
@@ -481,7 +481,7 @@ if (rToken) {
                         data-label={group.title}
                         class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
                       />
-                      <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--co-accent-weak)] text-[var(--co-accent)] ring-1 ring-[var(--co-accent-ring)]">
+                      <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black/[0.04] text-[var(--co-muted)] ring-1 ring-[var(--co-line)] transition-colors group-has-[:checked]:bg-[var(--co-accent-weak)] group-has-[:checked]:text-[var(--co-accent)] group-has-[:checked]:ring-[var(--co-accent-ring)]">
                         <PayIcon kind={group.kind} />
                       </span>
                       <span class="min-w-0 flex-1">
@@ -521,7 +521,7 @@ if (rToken) {
                 a COD we would reject has no business being on screen at all. */}
             {COD_ENABLED && (
               <div id="cod-option" hidden>
-                <label class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]">
+                <label class="group flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]">
                   <input
                     type="radio"
                     name="payment"
@@ -530,8 +530,8 @@ if (rToken) {
                     disabled
                     class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
                   />
-                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--co-accent-weak)] text-[var(--co-accent)] ring-1 ring-[var(--co-accent-ring)]">
-                    <Banknote class="h-4 w-4 text-[var(--co-accent)]" stroke-width={1.75} aria-hidden="true" />
+                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black/[0.04] text-[var(--co-muted)] ring-1 ring-[var(--co-line)] transition-colors group-has-[:checked]:bg-[var(--co-accent-weak)] group-has-[:checked]:text-[var(--co-accent)] group-has-[:checked]:ring-[var(--co-accent-ring)]">
+                    <Banknote class="h-4 w-4" stroke-width={1.75} aria-hidden="true" />
                   </span>
                   <span class="min-w-0 flex-1">
                     <span class="block text-sm font-medium text-ink">Bayar di Tempat (COD)</span>
@@ -1376,7 +1376,7 @@ if (rToken) {
           if (s.cod) tags += tag("COD");
           // A ROW, not a card: the border/rounding live on the container, and rows are separated by a
           // hairline. 14 individually-bordered boxes is what made this read as a wall.
-          return '<label class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]">' +
+          return '<label class="group flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]">' +
             '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (checked ? " checked" : "") + ' required class="h-4 w-4 shrink-0 accent-[var(--co-accent)]" />' +
             '<span class="min-w-0 flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + tags + '</span><span class="block text-xs text-[var(--co-muted)]">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
             '<span class="shrink-0 text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
