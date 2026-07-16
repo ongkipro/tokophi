@@ -23,8 +23,22 @@ function mulberry32(seed: number) {
   };
 }
 
-// Review bodies by rating tier — apparel/fashion (the demo niche). Generic enough for any product; the
-// star is what carries the score. Kept plausible + Indonesian, the way a real shopper writes.
+// Review bodies by rating tier — apparel/fashion (the demo niche). The star carries the score; this is
+// only the wording.
+//
+// ⚠️ NOT "generic enough for any product" (this comment used to claim that, and it is false): every
+// line here talks about FABRIC, STITCHING and FIT. Today only `batik-nusantara` has delivered orders,
+// so only it gets reviews and the claim never bit. The moment a coffee roaster or a phone shop has a
+// `selesai` order, this script would publish "bahannya adem dan jatuhnya bagus di badan" under their
+// product. If that day comes, the fix is NOT more sentences — it is to stop seeding reviews for stores
+// whose goods we have never seen. (Same rule the section registry already follows: never seed people,
+// never seed claims.)
+//
+// POOL SIZES ARE LOAD-BEARING — see the without-replacement pick below. A product can have up to ~14
+// delivered pairs, and ~55% of them land on 5★, so a 5★ pool of 7 guaranteed collisions by pigeonhole:
+// `hijab-voal` rendered 14 reviews with only 10 distinct texts, i.e. four shoppers reciting another
+// shopper's sentence word for word on the same page. That is the single loudest "these reviews are
+// fake" signal there is, and it was on the demo's best-selling product.
 const BODIES: Record<number, string[]> = {
   5: [
     "Bahannya adem dan jatuhnya bagus di badan, sesuai foto. Pengiriman cepat, packing rapi. Recommended!",
@@ -34,6 +48,13 @@ const BODIES: Record<number, string[]> = {
     "Pas banget di aku, bahan premium. Dikirim rapi dan wangi. Makasih ya!",
     "Cakep dan berkelas, cocok buat kerja maupun hangout. Fast response juga.",
     "Sesuai deskripsi, adem, dan tidak menerawang. Langganan terus deh.",
+    "Sesuai foto, bahannya lembut. Dikirim cepat, sampai lebih awal dari perkiraan.",
+    "Modelnya bagus, dipakai ke kondangan pas banget. Penjualnya responsif.",
+    "Sudah dicuci beberapa kali, warnanya tetap dan nggak melar. Kualitasnya nyata.",
+    "Ukuran sesuai size chart, nggak perlu tukar. Terima kasih ya.",
+    "Detail jahitannya rapi banget, di luar dugaan untuk harga segini.",
+    "Nyaman banget, adem dipakai di cuaca panas. Bakal beli warna lain.",
+    "Packing rapi berlapis, barang mulus tanpa cacat. Recommended seller.",
   ],
   4: [
     "Bagus dan nyaman, cuma warnanya sedikit beda dari foto. Overall puas.",
@@ -42,16 +63,25 @@ const BODIES: Record<number, string[]> = {
     "Suka modelnya, jahitan rapi. Cuma agak tipis, tetap worth it.",
     "Nyaman dipakai, pengiriman agak lama tapi barang sesuai. Recommended.",
     "Cakep, sesuai ekspektasi. Minus sedikit karena ada benang kecil, gampang dirapikan.",
+    "Barangnya oke, cuma pengirimannya agak lama. Kualitas sesuai harga.",
+    "Suka bahannya, warnanya sedikit lebih gelap dari foto tapi tetap bagus.",
+    "Nyaman dipakai, cuma kancingnya agak longgar sedikit. Sisanya bagus.",
+    "Sesuai deskripsi, packing aman. Kurang satu bintang karena agak lama sampai.",
   ],
   3: [
     "Lumayan untuk harganya. Bahan standar, jahitan bagian lengan kurang rapi.",
     "Biasa aja sih, sesuai harga. Warnanya agak pudar dari foto.",
     "Cukup oke, ukuran sesuai. Pengiriman agak lama.",
     "Bahannya tipis, tapi masih bisa dipakai. Sisanya oke.",
+    "Standar, sesuai harga. Nggak jelek tapi juga nggak istimewa.",
+    "Bahannya agak kaku, mungkin perlu beberapa kali cuci. Ukurannya pas.",
+    "Barang sampai dengan kondisi oke. Warnanya kurang sesuai ekspektasi.",
   ],
   2: [
     "Agak kecewa, ukurannya beda dari yang tertera. Bahan tipis.",
     "Jahitannya kurang rapi dan warna beda dari foto. Sisanya standar.",
+    "Barang sampai lama dan bahannya tidak seperti deskripsi. Kecewa.",
+    "Ukurannya meleset jauh, harus dipermak. Packing juga seadanya.",
   ],
 };
 
@@ -83,11 +113,24 @@ async function main() {
   `)) as unknown as { storeId: string; customerId: string; productId: string; emoji: string | null; orderedAt: Date }[];
 
   // Skip any pair that already has a review (idempotent + never duplicates the curated seed reviews).
+  // `body` comes back too so the without-replacement pick below can see what a product ALREADY says —
+  // otherwise a fresh run would happily hand a new reviewer a sentence that is on the page already.
   const existing = (await db.execute(sql`
-    select customer_id as "customerId", product_id as "productId" from reviews
+    select customer_id as "customerId", product_id as "productId", body as "body" from reviews
      where customer_id is not null and product_id is not null
-  `)) as unknown as { customerId: string; productId: string }[];
+  `)) as unknown as { customerId: string; productId: string; body: string | null }[];
   const seen = new Set(existing.map((e) => `${e.customerId}:${e.productId}`));
+
+  // productId → the sentences already spoken on that product's page (seeded from the DB, then grown
+  // as we go). Uniqueness is per PRODUCT, not global: two different products reusing a line is
+  // invisible to a shopper, two reviewers on the SAME page reusing one is the whole problem.
+  const usedBody = new Map<string, Set<string>>();
+  for (const e of existing) {
+    if (!e.body) continue;
+    const set = usedBody.get(e.productId) ?? new Set<string>();
+    set.add(e.body);
+    usedBody.set(e.productId, set);
+  }
 
   const rows: (typeof schema.reviews.$inferInsert)[] = [];
   let i = 0;
@@ -100,7 +143,16 @@ async function main() {
     if (rnd() > 0.68) continue;
     const rating = pickRating(rnd());
     const pool = BODIES[rating];
-    const body = pool[Math.floor(rnd() * pool.length)];
+    // WITHOUT REPLACEMENT, per product. `pool[floor(rnd() * pool.length)]` drew independently for
+    // every pair, so a product with more reviews than its tier has sentences repeated them verbatim.
+    // If a tier really is exhausted we reuse rather than drop: the pair is REAL (that customer did
+    // receive that parcel), so the review has earned its place — only its wording repeats.
+    const used = usedBody.get(pair.productId) ?? new Set<string>();
+    const free = pool.filter((b) => !used.has(b));
+    const from = free.length ? free : pool;
+    const body = from[Math.floor(rnd() * from.length)];
+    used.add(body);
+    usedBody.set(pair.productId, used);
     // Most reviews are moderated + published; a few sit "menunggu" (pending) like a real queue.
     const status = rnd() < 0.85 ? "terbit" : "menunggu";
     // Written 2–9 days after the parcel arrived.

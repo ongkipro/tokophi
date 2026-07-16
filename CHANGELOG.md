@@ -4,6 +4,16 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-16
 
+### ⭐ Four shoppers were reciting each other's sentences on the demo's best-selling product
+
+`seed-reviews.ts` drew each review body with `pool[floor(rnd() * pool.length)]` — independently, per (customer, product) pair. The 5★ tier held 7 sentences and ~55% of reviews land on 5★, so any product with more than a handful of delivered buyers repeated text **by pigeonhole, not by bad luck**: `hijab-voal` rendered **14 reviews with 10 distinct texts**, `dress-midi-bunga` had two named reviewers delivering the identical sentence word for word. Verbatim repetition is the single loudest "these reviews are fake" signal there is, and it was sitting on the demo we show people.
+
+Now the pick is **without replacement, per product** — seeded from the bodies already in the DB, so a fresh run cannot hand a new reviewer a line that is on the page already. Uniqueness is per product on purpose: two products sharing a line is invisible to a shopper; two reviewers on one page sharing one is the whole problem. If a tier genuinely runs out we reuse rather than drop the review — the pair is real (that customer did receive that parcel), so only the wording repeats. Pools widened (5★ 7→14, 4★ 6→10, 3★ 4→7, 2★ 2→4) to keep that fallback unreachable at realistic volumes.
+
+**The live DB was repaired too** — the script is idempotent and skips pairs that already have a review, so fixing the generator does not fix rows already written. A targeted pass rewrote **32 duplicate bodies across 13 products** (of 150 reviews), drawing an unused sentence from the *same* rating tier; ratings, statuses, dates and authorship untouched (distribution still 83/42/20/5). Verified in a browser: 0 duplicate review paragraphs on `dress-midi-bunga` and `hijab-voal`.
+
+⚠️ **Corrected a false claim in that file:** the bodies were described as "generic enough for any product". They are not — every line is about **fabric, stitching and fit**. It has never bitten because only `batik-nusantara` has `selesai` orders, so only it gets reviews. The day a coffee roaster or a phone shop has a delivered order, this script would publish *"bahannya adem dan jatuhnya bagus di badan"* under their product. The fix then is **not more sentences** — it is to stop seeding reviews for stores whose goods we have never seen.
+
 ### 🔤 One typeface for every store — the display serif was the demo's taste, imposed in CSS
 
 `global.css` said it out loud: *"Brand: elegant women's fashion (Batik Nusantara demo)"*, and `--font-display: Playfair Display` put an editorial serif on every heading of every storefront. Same bug as the batik copy in the fallback homepage, one layer down: **a display serif is brand voice, and brand voice belongs to the merchant, not the platform.** It flatters a fashion label and fights a coffee roaster or a phone shop — and six of our seven stores are not fashion. Both tokens now resolve to the same neutral sans (Inter); hierarchy comes from weight/size/tracking, which the markup already sets (verified: h1 56px/600 vs body 16px/400, unchanged). One less family to download, too — the Google Fonts request drops Playfair and picks up Inter 700.
