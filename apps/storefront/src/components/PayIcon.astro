@@ -8,4 +8,7 @@ const { kind } = Astro.props;
 const Icon = kind === "qris" ? QrCode : kind === "va" ? Landmark : kind === "ewallet" ? Wallet : kind === "retail" ? Store : CreditCard;
 ---
 
-<Icon class="h-4 w-4 text-brand-600" stroke-width={1.75} aria-hidden="true" />
+{/* `currentColor`, not a hardcoded `text-brand-600`. This is used only by the checkout, which has its
+    own palette (--co-accent) rather than the store's brand — but baking THAT in here would just move
+    the coupling. Inheriting means the caller decides, and the icon works on either surface. */}
+<Icon class="h-4 w-4" stroke-width={1.75} aria-hidden="true" />

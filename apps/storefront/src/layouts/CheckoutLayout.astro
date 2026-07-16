@@ -29,12 +29,12 @@ interface Props {
 }
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
-const { store, catalog } = Astro.locals;
-const BRAND_SHADES = catalog.brandShades;
+const { store } = Astro.locals;
 const { title, description } = Astro.props;
 
-// The merchant's logo, or their name as a wordmark when stores.logo_url is null. This — plus the
-// brand colour below — is the ENTIRE per-store variance of the checkout, by design.
+// The merchant's logo, or their name as a wordmark when stores.logo_url is null. This is now the
+// ENTIRE per-store variance of the checkout: the accent is the platform's (see --co-accent below),
+// so the shop's identity on this page is its mark, not its palette.
 const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
 ---
 
@@ -61,21 +61,43 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <!-- ADR 0009 — the merchant's brand colour. Declared after global.css so these custom properties
-         win the cascade; every bg-brand-*/text-brand-* utility on the page reads them via var(). -->
-    <style set:html={`:root { ${Object.entries(BRAND_SHADES).map(([shade, hex]) => `--color-brand-${shade}: ${hex};`).join(" ")} }`} />
-    <!-- CHECKOUT SURFACE — NEUTRAL, not the storefront's cream.
-         The shop is warm on purpose (`--color-cream` #faf6f2, a tinted paper). A checkout should be
-         the opposite: white, quiet, and out of the way, so the only colour left on screen is the
-         merchant's brand on the one button that matters. Cream also made "white form vs recessed
-         panel" a contrast between two nearly identical warm tones.
-         Scoped to the checkout, NOT changed globally — the storefront's cream is the shop's identity
-         and none of this may leak into it. The brand shades above still apply: surface is the
-         platform's, colour is the merchant's. -->
+    <!-- The merchant's brand-shade injection is GONE from this page (2026-07-16). It is not an
+         oversight: nothing on the checkout reads `--color-brand-*` any more — the surface is neutral
+         and the accent is the checkout's own (below). Leaving the <style> in would have been dead
+         code that looks load-bearing, and the next person would have "fixed" a colour by editing a
+         variable no element consumes.
+
+         CHECKOUT SURFACE — NEUTRAL, and its OWN PATTERN, not the storefront's (user's call).
+         The shop is warm on purpose (`--color-cream` #faf6f2, a tinted paper); a checkout is the
+         opposite: white, quiet, out of the way. Cream also made "white form vs recessed panel" a
+         contrast between two nearly identical warm tones. Nothing here may leak back into the
+         storefront — that cream is the shop's identity. -->
     <style is:global>
       :root {
         --co-panel: #f5f5f5; /* the recessed summary column */
         --co-line: #e3e3e3;  /* hairlines — neutral, not the storefront's warm --color-line */
+        /* The last warm leak. `--color-muted` (#736669) is a WARM grey — it belongs to the shop's
+           cream paper, and it is the entire secondary text layer: every label, hint and caption.
+           On a white/blue checkout it reads faintly brown against neutral hairlines. #6b7280 is the
+           same weight of grey without the tint; 4.83:1 on white, so it stays AA. */
+        --co-muted: #6b7280;
+
+        /* THE CHECKOUT'S OWN ACCENT — deliberately NOT the merchant's brand colour.
+           This looks like a contradiction of "surface is the platform's, colour is the merchant's",
+           and it is not: Shopify draws the same line. Their checkout accent is blue for every shop
+           regardless of the theme, until the merchant changes it in CHECKOUT branding — a setting
+           separate from the storefront's colours. Checkout branding and store branding are two
+           different knobs, and we had them wired to one.
+           It matters here more than there: a merchant picks a brand colour for a SHOP — to be
+           pretty. A checkout spends colour on one job, saying "this control is the live one", and a
+           pale or low-contrast brand hex does that badly on the screen where it is most expensive to
+           do badly. The merchant's identity is still on this page — the logo, which is theirs.
+           TODO: make these three configurable per store from the admin (the user's plan). Until
+           then every checkout is blue, on purpose, and consistently. */
+        --co-accent: #2563eb;        /* white on this = 5.17:1, AA */
+        --co-accent-hover: #1d4ed8;
+        --co-accent-weak: #eff6ff;   /* the tint on a selected row */
+        --co-accent-ring: #bfdbfe;
       }
     </style>
     <Analytics />
@@ -117,7 +139,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
           <div class="flex w-full items-center lg:max-w-xl lg:pl-6 lg:pr-10">
             <a
               href="/"
-              class="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
+              class="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--co-accent)] focus-visible:ring-offset-2"
               aria-label={`Beranda ${store.name}`}
             >
               {
@@ -138,7 +160,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
           <div class="flex w-full items-center lg:max-w-md lg:px-10">
             <a
               href="/keranjang"
-              class="ml-auto inline-flex shrink-0 items-center gap-2 rounded-md p-1.5 text-sm font-medium text-muted transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
+              class="ml-auto inline-flex shrink-0 items-center gap-2 rounded-md p-1.5 text-sm font-medium text-[var(--co-muted)] transition-colors hover:text-[var(--co-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--co-accent)]"
               aria-label="Kembali ke keranjang"
             >
               <span class="relative inline-flex">
@@ -153,7 +175,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
                 <span
                   id="checkout-cart-count"
                   hidden
-                  class="absolute -right-2 -top-2 inline-flex min-w-4 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-semibold leading-4 text-white tabular-nums"
+                  class="absolute -right-2 -top-2 inline-flex min-w-4 items-center justify-center rounded-full bg-[var(--co-accent)] px-1 text-[10px] font-semibold leading-4 text-white tabular-nums"
                 ></span>
               </span>
               <span class="hidden sm:inline">Keranjang</span>
@@ -214,7 +236,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
     <footer class="border-t border-[var(--co-line)] bg-white">
       <div class="lg:grid lg:grid-cols-2">
         <div class="lg:flex lg:justify-end">
-          <div class="w-full px-4 py-6 text-xs text-muted sm:px-6 lg:max-w-xl lg:pr-10">
+          <div class="w-full px-4 py-6 text-xs text-[var(--co-muted)] sm:px-6 lg:max-w-xl lg:pr-10">
             {store.name} — Ditenagai TokoΦ
           </div>
         </div>

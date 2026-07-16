@@ -160,12 +160,12 @@ if (rToken) {
       {/* "Lihat"/"Tutup" — same length on purpose. "Tampilkan"/"Sembunyikan ringkasan pesanan"
           wrapped to two lines at 390px, which shoved the caret against the total and changed the
           bar's height on every toggle. `whitespace-nowrap` keeps that from creeping back. */}
-      <span id="summary-toggle-label" class="whitespace-nowrap text-sm font-medium text-brand-600">
+      <span id="summary-toggle-label" class="whitespace-nowrap text-sm font-medium text-[var(--co-accent)]">
         Lihat ringkasan pesanan
       </span>
       <ChevronDown
         id="summary-caret"
-        class="h-4 w-4 shrink-0 text-brand-600 transition-transform"
+        class="h-4 w-4 shrink-0 text-[var(--co-accent)] transition-transform"
         stroke-width={2}
         aria-hidden="true"
       />
@@ -186,11 +186,11 @@ if (rToken) {
             COLLAPSED on a phone, so without the count the subtotal is a number with nothing to
             check it against. `item` has no plural in Indonesian, so the count needs no branching. */}
         <div class="flex items-center justify-between">
-          <span class="text-muted">Subtotal <span id="summary-count" class="tabular-nums"></span></span>
+          <span class="text-[var(--co-muted)]">Subtotal <span id="summary-count" class="tabular-nums"></span></span>
           <span id="summary-subtotal" class="font-medium text-ink tabular-nums">Rp0</span>
         </div>
         <div class="flex items-center justify-between">
-          <span class="text-muted">Ongkir</span>
+          <span class="text-[var(--co-muted)]">Ongkir</span>
           <span id="summary-shipping" class="font-medium text-ink tabular-nums">Rp0</span>
         </div>
       </div>
@@ -210,7 +210,7 @@ if (rToken) {
       of chrome above the first field. */}
   {
     RECOVER && (
-      <p class="mt-4 rounded-lg border border-brand-600/30 bg-brand-50 px-4 py-3 text-sm text-ink">
+      <p class="mt-4 rounded-lg border border-[var(--co-accent)]/30 bg-[var(--co-accent-weak)] px-4 py-3 text-sm text-ink">
         Selamat datang kembali{RECOVER.name ? `, ${RECOVER.name.split(" ")[0]}` : ""}! Keranjang dan datamu sudah
         kami simpan — tinggal lanjut bayar.
       </p>
@@ -218,10 +218,10 @@ if (rToken) {
   }
 
   <div id="checkout-empty" class="mt-10 hidden rounded-lg border border-dashed border-[var(--co-line)] py-20 text-center">
-    <ShoppingCart class="mx-auto h-10 w-10 text-brand-400" stroke-width={1.5} aria-hidden="true" />
+    <ShoppingCart class="mx-auto h-10 w-10 text-[var(--co-accent)]" stroke-width={1.5} aria-hidden="true" />
     <h2 class="mt-4 text-xl font-semibold text-ink">Keranjangmu masih kosong</h2>
-    <p class="mt-2 text-muted">Tambahkan produk dulu sebelum checkout.</p>
-    <a href="/" class="mt-6 inline-block rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700">Mulai Belanja</a>
+    <p class="mt-2 text-[var(--co-muted)]">Tambahkan produk dulu sebelum checkout.</p>
+    <a href="/" class="mt-6 inline-block rounded-lg bg-[var(--co-accent)] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--co-accent-hover)]">Mulai Belanja</a>
   </div>
 
   <form id="checkout-form" class="mt-8">
@@ -244,7 +244,7 @@ if (rToken) {
               The old copy promised, in bold, that an order confirmation is sent over WhatsApp.
               Nothing sends it — it was the last thing a shopper read before paying, and they then
               waited for a message that never came. */}
-          <p class="mt-1.5 text-xs text-muted">
+          <p class="mt-1.5 text-xs text-[var(--co-muted)]">
             Untuk info promo &amp; kalau kami perlu menghubungimu soal pesanan ini.
           </p>
         </fieldset>
@@ -266,7 +266,7 @@ if (rToken) {
                   placeholders — so it moves here rather than disappearing. Kept factual: normalizePhone
                   accepts 0812…/812…/+62…/62… with any separators, so this is an example, not a rule.
                   Do NOT turn it into "nomor aktif untuk konfirmasi pesanan" — nothing notifies anyone. */}
-              <p class="mt-1.5 text-xs text-muted">Contoh: 0812 3456 7890</p>
+              <p class="mt-1.5 text-xs text-[var(--co-muted)]">Contoh: 0812 3456 7890</p>
             </div>
             <div class="sm:col-span-2">
               <div class="field">
@@ -276,7 +276,7 @@ if (rToken) {
               {/* This hint is the field's whole job — an Indonesian address without RT/RW or a patokan
                   is a parcel the rider phones about. The reference has no equivalent because a UK
                   address does not need one; copying it exactly would have deleted this. */}
-              <p class="mt-1.5 text-xs text-muted">Nama jalan, no. rumah, RT/RW, dan patokan terdekat.</p>
+              <p class="mt-1.5 text-xs text-[var(--co-muted)]">Nama jalan, no. rumah, RT/RW, dan patokan terdekat.</p>
             </div>
             <!-- Kecamatan comes FIRST, and it drives Kota + Provinsi.
                  Before: the shopper typed Kota, Provinsi and Kode Pos by hand AND then separately
@@ -300,7 +300,7 @@ if (rToken) {
                   this box is a SEARCH and not a text field. The floating label eats placeholders, so
                   it moves here. Without it the field looks typed-in-freely, and the ongkir quote
                   depends on them picking a row (dest_id), not on what they typed. */}
-              <p class="mt-1.5 text-xs text-muted">Ketik untuk mencari, lalu pilih dari daftar. Mis. Semarang Tengah.</p>
+              <p class="mt-1.5 text-xs text-[var(--co-muted)]">Ketik untuk mencari, lalu pilih dari daftar. Mis. Semarang Tengah.</p>
 
               <!-- KOTA + PROVINSI ARE DERIVED, SO THEY ARE SHOWN, NOT ASKED.
                    They used to be two readonly boxes the shopper could not fill in anyway — two more
@@ -345,7 +345,7 @@ if (rToken) {
 
               <!-- Shown ONLY for the 18% of districts that really do span several postcodes: there the
                    kelurahan is the question, so say why we are asking it. -->
-              <p id="kel-note" hidden class="text-xs text-muted sm:col-span-2">
+              <p id="kel-note" hidden class="text-xs text-[var(--co-muted)] sm:col-span-2">
                 Kecamatan ini punya beberapa kode pos — pilih kelurahan agar kode posnya terisi benar.
               </p>
 
@@ -354,13 +354,13 @@ if (rToken) {
                    a shopper types a kecamatan and never sees, in one place, the full address they are
                    shipping to before they pick a courier and pay. It confirms; it is not another
                    field. Hidden until a kecamatan is chosen (nothing to confirm before then). -->
-              <div id="dest-summary" hidden class="sm:col-span-2 rounded-xl border border-[var(--co-line)] bg-brand-50/40 p-3">
-                <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-600">
+              <div id="dest-summary" hidden class="sm:col-span-2 rounded-xl border border-[var(--co-line)] bg-[var(--co-accent-weak)]/40 p-3">
+                <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--co-accent)]">
                   <MapPin class="h-3.5 w-3.5 shrink-0" stroke-width={1.75} aria-hidden="true" />
                   Kirim ke
                 </p>
                 <p id="dest-summary-street" hidden class="mt-1 text-sm font-medium text-ink"></p>
-                <p id="dest-summary-admin" class="mt-0.5 text-sm leading-relaxed text-muted"></p>
+                <p id="dest-summary-admin" class="mt-0.5 text-sm leading-relaxed text-[var(--co-muted)]"></p>
               </div>
             </div>
           </div>
@@ -369,7 +369,7 @@ if (rToken) {
         <!-- Pengiriman -->
         <fieldset class="min-w-0">
           <legend class="mb-4 text-base font-semibold text-ink">Pengiriman</legend>
-          <p id="ship-hint" class="rounded-xl border border-dashed border-[var(--co-line)] px-4 py-3 text-sm text-muted">
+          <p id="ship-hint" class="rounded-xl border border-dashed border-[var(--co-line)] px-4 py-3 text-sm text-[var(--co-muted)]">
             Pilih <b>kecamatan tujuan</b> di atas untuk melihat ongkir real-time.
           </p>
 
@@ -380,7 +380,7 @@ if (rToken) {
                on click (a second call would only make the click slower). -->
           <div id="ship-express-group" class="hidden">
             <div id="ship-express" class="space-y-2"></div>
-            <p id="ship-default-note" hidden class="mt-2 text-xs text-muted"></p>
+            <p id="ship-default-note" hidden class="mt-2 text-xs text-[var(--co-muted)]"></p>
 
             <button
               type="button"
@@ -388,9 +388,9 @@ if (rToken) {
               hidden
               aria-expanded="false"
               aria-controls="ship-more"
-              class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--co-line)] px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:bg-brand-50 sm:w-auto"
+              class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--co-line)] px-4 py-3 text-sm font-medium text-ink transition-colors hover:bg-black/[0.02]"
             >
-              <Truck class="h-4 w-4 shrink-0 text-brand-600" stroke-width={1.75} aria-hidden="true" />
+              <Truck class="h-4 w-4 shrink-0 text-[var(--co-accent)]" stroke-width={1.75} aria-hidden="true" />
               <span id="ship-more-label">Pilih ekspedisi lain</span>
               <ChevronDown id="ship-more-caret" class="h-4 w-4 shrink-0 transition-transform" stroke-width={2} aria-hidden="true" />
             </button>
@@ -404,7 +404,7 @@ if (rToken) {
           <legend class="text-base font-semibold text-ink">Pembayaran</legend>
           {/* Under the heading, not under the list — the reference's placement, and the better one:
               it reassures BEFORE the shopper picks a method, not after they already have. */}
-          <p class="mb-4 mt-1 text-sm text-muted">Pembayaran diproses aman — disediakan TokoΦ.</p>
+          <p class="mb-4 mt-1 text-sm text-[var(--co-muted)]">Pembayaran diproses aman — disediakan TokoΦ.</p>
 
           {/* ONE BOX, hairline-divided rows — the same shape as Pengiriman above and as the reference.
               This was a stack of floating cards with an inconsistent hierarchy: QRIS was a selectable
@@ -412,7 +412,7 @@ if (rToken) {
               boxes, and COD was another box — so some things in the list were choices and one was a
               caption, with nothing but font weight to tell them apart. Now every row is a choice and
               the group caption sits INSIDE the box, visibly not a row. */}
-          <div class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)] transition-colors has-[:checked]:border-brand-600">
+          <div class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)] transition-colors has-[:checked]:border-[var(--co-accent)]">
             {PAY_GROUPS.map((group) => (
               <div class="divide-y divide-[var(--co-line)]">
                 {/* A group with ONE channel is rendered as a single selectable row, not a header with
@@ -421,46 +421,72 @@ if (rToken) {
                     the group hint already says how you pay; repeating "Bayar via ATM / m-banking"
                     five times is noise a shopper has to read past. */}
                 {group.items.length === 1 ? (
-                  <label class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-brand-50">
+                  <label class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]">
                     <input
                       type="radio"
                       name="payment"
                       value={group.items[0].id}
                       data-label={group.items[0].label}
                       required
-                      class="h-4 w-4 shrink-0 accent-brand-600"
+                      class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
                     />
-                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 ring-1 ring-brand-100">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--co-accent-weak)] text-[var(--co-accent)] ring-1 ring-[var(--co-accent-ring)]">
                       <PayIcon kind={group.kind} />
                     </span>
                     <span class="min-w-0 flex-1">
                       <span class="block text-sm font-medium text-ink">{group.title}</span>
-                      <span class="block text-xs text-muted">{group.hint}</span>
+                      <span class="block text-xs text-[var(--co-muted)]">{group.hint}</span>
                     </span>
                   </label>
                 ) : (
                   <>
-                    {/* A caption, not a row: no radio, tinted, and it reads as the lid of the rows
-                        under it rather than as a sixth thing you might be able to pick. */}
-                    <div class="flex items-center gap-3 bg-black/[0.02] px-4 py-2.5">
-                      <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 ring-1 ring-brand-100">
+                    {/* THE PARENT IS A CHOICE, AND ITS BANKS ARE HIDDEN UNTIL IT IS MADE.
+                        This was a caption with five bank rows permanently underneath — five sixths of
+                        the payment section spent on a decision most shoppers make second, before they
+                        have made the first. Now it is one row like every other; picking it opens the
+                        banks. Same shape as the reference.
+
+                        `value="__va"` is a GROUP marker, never a channel code: the submit handler
+                        swaps in the chosen bank's radio, so `payEl.value`/`data-label` downstream stay
+                        exactly what they were. The banks list which ones we have right in the hint —
+                        the reference uses logos for this; we do not have the assets, and a shopper's
+                        real question ("is my bank here?") is answered by the names either way. */}
+                    <label
+                      data-pay-parent
+                      class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]"
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="__va"
+                        data-label={group.title}
+                        required
+                        class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
+                      />
+                      <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--co-accent-weak)] text-[var(--co-accent)] ring-1 ring-[var(--co-accent-ring)]">
                         <PayIcon kind={group.kind} />
                       </span>
-                      <div class="min-w-0">
-                        <p class="text-sm font-semibold text-ink">{group.title}</p>
-                        <p class="text-xs text-muted">{group.hint}</p>
-                      </div>
-                    </div>
-                    <div class="divide-y divide-[var(--co-line)]">
+                      <span class="min-w-0 flex-1">
+                        <span class="block text-sm font-medium text-ink">{group.title}</span>
+                        <span class="block truncate text-xs text-[var(--co-muted)]">
+                          {group.items.map((pm) => pm.short).join(" · ")}
+                        </span>
+                      </span>
+                    </label>
+                    {/* `hidden` (the attribute) + JS, not `has-[:checked]` CSS: the panel must also be
+                        closed when a DIFFERENT method is picked, which a sibling selector cannot see. */}
+                    <div data-pay-panel hidden class="divide-y divide-[var(--co-line)] bg-black/[0.02]">
                       {group.items.map((pm) => (
-                        <label class="flex cursor-pointer items-center gap-3 px-4 py-3 pl-14 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-brand-50">
+                        /* NOT `required`. A hidden required radio makes the browser refuse to submit
+                           with "An invalid form control is not focusable" — the form would simply die
+                           with no visible error. The choice is enforced in the submit handler. */
+                        <label class="flex cursor-pointer items-center gap-3 py-3 pl-14 pr-4 transition-colors hover:bg-black/[0.03] has-[:checked]:bg-[var(--co-accent-weak)]">
                           <input
                             type="radio"
-                            name="payment"
+                            name="va_bank"
                             value={pm.id}
                             data-label={pm.label}
-                            required
-                            class="h-4 w-4 shrink-0 accent-brand-600"
+                            class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
                           />
                           <span class="min-w-0 flex-1 text-sm font-medium text-ink">{pm.short}</span>
                         </label>
@@ -477,21 +503,21 @@ if (rToken) {
                 a COD we would reject has no business being on screen at all. */}
             {COD_ENABLED && (
               <div id="cod-option" hidden>
-                <label class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-brand-50">
+                <label class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]">
                   <input
                     type="radio"
                     name="payment"
                     value="cod"
                     data-label="COD (Bayar di Tempat)"
                     disabled
-                    class="h-4 w-4 shrink-0 accent-brand-600"
+                    class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
                   />
-                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 ring-1 ring-brand-100">
-                    <Banknote class="h-4 w-4 text-brand-600" stroke-width={1.75} aria-hidden="true" />
+                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--co-accent-weak)] text-[var(--co-accent)] ring-1 ring-[var(--co-accent-ring)]">
+                    <Banknote class="h-4 w-4 text-[var(--co-accent)]" stroke-width={1.75} aria-hidden="true" />
                   </span>
                   <span class="min-w-0 flex-1">
                     <span class="block text-sm font-medium text-ink">Bayar di Tempat (COD)</span>
-                    <span class="block text-xs text-muted">Bayar tunai ke kurir saat paket tiba</span>
+                    <span class="block text-xs text-[var(--co-muted)]">Bayar tunai ke kurir saat paket tiba</span>
                   </span>
                 </label>
               </div>
@@ -514,12 +540,12 @@ if (rToken) {
           <button
             type="submit"
             id="pay-btn"
-            class="w-full rounded-lg bg-brand-600 px-6 py-4 text-base font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
+            class="w-full rounded-lg bg-[var(--co-accent)] px-6 py-4 text-base font-semibold text-white transition-colors hover:bg-[var(--co-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--co-accent)] focus-visible:ring-offset-2"
           >
             Bayar Sekarang
           </button>
-          <p id="form-error" class="mt-3 hidden text-center text-sm font-medium text-brand-700"></p>
-          <a href="/keranjang" class="mt-3 block text-center text-sm text-muted underline hover:text-brand-600">Kembali ke keranjang</a>
+          <p id="form-error" class="mt-3 hidden text-center text-sm font-medium text-[var(--co-accent-hover)]"></p>
+          <a href="/keranjang" class="mt-3 block text-center text-sm text-[var(--co-muted)] underline hover:text-[var(--co-accent)]">Kembali ke keranjang</a>
         </div>
       </div>
 
@@ -572,7 +598,7 @@ if (rToken) {
     transform-origin: left top;
     font-size: 1rem;
     line-height: 1.25rem;
-    color: var(--color-muted);
+    color: var(--co-muted);
     pointer-events: none; /* the click must reach the input under it */
     transition: transform 0.15s ease, color 0.15s ease;
   }
@@ -581,7 +607,7 @@ if (rToken) {
     transform: translateY(-0.625rem) scale(0.75);
   }
   .input-field:focus ~ .float-label {
-    color: var(--color-brand-600);
+    color: var(--co-accent);
   }
   /* A <select> always has a value, so "empty" never applies — its label is parked in the raised
      position permanently rather than sitting on top of the current selection. */
@@ -597,8 +623,8 @@ if (rToken) {
      active field. A colour change alone is too quiet on a hairline border, and `outline: none`
      without a visible replacement would leave keyboard users with no focus indicator at all. */
   .input-field:focus {
-    border-color: var(--color-brand-600);
-    box-shadow: 0 0 0 1px var(--color-brand-600);
+    border-color: var(--co-accent);
+    box-shadow: 0 0 0 1px var(--co-accent);
   }
 </style>
 
@@ -752,12 +778,12 @@ if (rToken) {
         return (
           '<div class="flex items-center gap-3">' +
           '<div class="relative shrink-0">' +
-          '<img src="' + esc(item.image) + '" alt="' + esc(item.name) + '" class="h-16 w-14 rounded-lg object-cover bg-brand-50" loading="lazy" />' +
+          '<img src="' + esc(item.image) + '" alt="' + esc(item.name) + '" class="h-16 w-14 rounded-lg object-cover bg-[var(--co-accent-weak)]" loading="lazy" />' +
           '<span class="absolute -right-2 -top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-xs font-semibold text-cream">' + item.qty + "</span>" +
           "</div>" +
           '<div class="min-w-0 flex-1">' +
           '<p class="truncate text-sm font-medium text-ink">' + esc(item.name) + "</p>" +
-          ((item.variant || item.size) ? '<p class="text-xs text-muted">Varian: ' + esc(item.variant || item.size) + "</p>" : "") +
+          ((item.variant || item.size) ? '<p class="text-xs text-[var(--co-muted)]">Varian: ' + esc(item.variant || item.size) + "</p>" : "") +
           "</div>" +
           '<span class="text-sm font-medium text-ink tabular-nums">' + idr.format(sub) + "</span>" +
           "</div>"
@@ -775,6 +801,37 @@ if (rToken) {
       var units = cart.reduce(function (t, i) { return t + (Number(i && i.qty) || 1); }, 0);
       countEl.textContent = "· " + units + " item";
     }
+
+    // ---- Payment: the bank list is a DROPDOWN, opened by picking its row ----
+    // Inline, never a redirect: Shopify sends the shopper to the gateway's own page ("Mengalihkan
+    // Anda ke…"), which is a page we do not control at the last second before payment. Ours opens in
+    // place, so nothing about the order they just checked leaves the screen.
+    //
+    // Closing on a different method matters as much as opening: a shopper who opens the banks, picks
+    // BCA, then changes to QRIS must not leave a checked bank behind — `va_bank` is cleared, so the
+    // substitution at submit can never smuggle in a stale choice.
+    (function () {
+      var parents = [].slice.call(form.querySelectorAll("[data-pay-parent]"));
+      if (!parents.length) return;
+      function sync() {
+        parents.forEach(function (p) {
+          var radio = p.querySelector('input[name="payment"]');
+          var panel = p.parentNode.querySelector("[data-pay-panel]");
+          if (!radio || !panel) return;
+          var open = radio.checked;
+          panel.hidden = !open;
+          if (!open) {
+            [].slice.call(panel.querySelectorAll('input[name="va_bank"]')).forEach(function (b) {
+              b.checked = false;
+            });
+          }
+        });
+      }
+      form.addEventListener("change", function (e) {
+        if (e.target && e.target.name === "payment") sync();
+      });
+      sync();
+    })();
 
     // ---- Alamat: grow with the address instead of scrolling inside 2 rows ----
     // An Indonesian address is long — street, number, RT/RW, patokan — and on a phone `rows=2` is a
@@ -1010,8 +1067,8 @@ if (rToken) {
       if (!kodeposEl) return;
       kodeposEl.readOnly = !manual;
       kodeposEl.classList.toggle("cursor-not-allowed", !manual);
-      kodeposEl.classList.toggle("bg-brand-50/60", !manual);
-      kodeposEl.classList.toggle("text-muted", !manual);
+      kodeposEl.classList.toggle("bg-[var(--co-accent-weak)]/60", !manual);
+      kodeposEl.classList.toggle("text-[var(--co-muted)]", !manual);
     }
 
     function resetKelurahan() {
@@ -1111,11 +1168,11 @@ if (rToken) {
               // data-city / data-province ride along so picking a result can fill the form without a
               // second round-trip. They may be absent (the live-API fallback can't always be parsed),
               // in which case applyArea() leaves those inputs alone rather than blanking them.
-              return '<button type="button" data-id="' + a.id + '" data-text="' + esc(a.text) + '" data-city="' + esc(a.city || "") + '" data-province="' + esc(a.province || "") + '" class="block w-full border-b border-[var(--co-line)] px-4 py-2 text-left text-sm last:border-0 hover:bg-brand-50">' + esc(a.text) + "</button>";
+              return '<button type="button" data-id="' + a.id + '" data-text="' + esc(a.text) + '" data-city="' + esc(a.city || "") + '" data-province="' + esc(a.province || "") + '" class="block w-full border-b border-[var(--co-line)] px-4 py-2 text-left text-sm last:border-0 hover:bg-[var(--co-accent-weak)]">' + esc(a.text) + "</button>";
             }).join("");
             destResults.classList.remove("hidden");
           }).catch(function () {
-            destResults.innerHTML = '<p class="px-4 py-3 text-sm text-muted">Gagal mencari kecamatan. Periksa koneksi lalu coba lagi.</p>';
+            destResults.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Gagal mencari kecamatan. Periksa koneksi lalu coba lagi.</p>';
             destResults.classList.remove("hidden");
           });
         }, 300);
@@ -1137,7 +1194,7 @@ if (rToken) {
       if (!destId.value) return;
       if (shipHint) shipHint.classList.add("hidden");
       expressGroup.classList.remove("hidden");
-      expressBox.innerHTML = '<p class="px-4 py-3 text-sm text-muted">Menghitung ongkir…</p>';
+      expressBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Menghitung ongkir…</p>';
       // The cart lines go to the server and the SERVER weighs them (Σ product_variants.weight_grams).
       // This used to post `weight: totalQty * 500` — a fabricated 500 g per item that quoted a 670 g
       // apparel cart as 1.500 g, i.e. 3x the true postage. A weight is a price input: the client does
@@ -1145,7 +1202,7 @@ if (rToken) {
       var rateItems = cart.map(function (l) { return { handle: l.handle, variant: l.variant, qty: l.qty }; });
       api({ op: "rates", storeSlug: STORE_SLUG, destinationId: Number(destId.value), items: rateItems, itemValue: subtotal }).then(function (res) {
         if (!res.ok || !res.rates.length) {
-          expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-[var(--co-line)] px-4 py-3 text-sm text-muted">' + esc(res.error || "Tidak ada layanan untuk rute ini.") + "</p>";
+          expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-[var(--co-line)] px-4 py-3 text-sm text-[var(--co-muted)]">' + esc(res.error || "Tidak ada layanan untuk rute ini.") + "</p>";
           recompute();
           return;
         }
@@ -1183,16 +1240,16 @@ if (rToken) {
           // The words carry the meaning; the colour was carrying nothing but noise.
           var tags = "";
           var tag = function (t) {
-            return ' <span class="ml-1.5 rounded border border-[var(--co-line)] px-1.5 py-px text-[10px] font-medium text-muted">' + t + "</span>";
+            return ' <span class="ml-1.5 rounded border border-[var(--co-line)] px-1.5 py-px text-[10px] font-medium text-[var(--co-muted)]">' + t + "</span>";
           };
           if (s === cheapest) tags += tag("Termurah");
           if (s === fastest) tags += tag("Tercepat");
           if (s.cod) tags += tag("COD");
           // A ROW, not a card: the border/rounding live on the container, and rows are separated by a
           // hairline. 14 individually-bordered boxes is what made this read as a wall.
-          return '<label class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-brand-50">' +
-            '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (checked ? " checked" : "") + ' required class="h-4 w-4 shrink-0 accent-brand-600" />' +
-            '<span class="min-w-0 flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + tags + '</span><span class="block text-xs text-muted">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
+          return '<label class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]">' +
+            '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (checked ? " checked" : "") + ' required class="h-4 w-4 shrink-0 accent-[var(--co-accent)]" />' +
+            '<span class="min-w-0 flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + tags + '</span><span class="block text-xs text-[var(--co-muted)]">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
             '<span class="shrink-0 text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
         }
         /**
@@ -1205,7 +1262,7 @@ if (rToken) {
          * one of them is ever lit.
          */
         function box(rowsHtml) {
-          return '<div class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)] transition-colors has-[:checked]:border-brand-600">' + rowsHtml + "</div>";
+          return '<div class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)] transition-colors has-[:checked]:border-[var(--co-accent)]">' + rowsHtml + "</div>";
         }
 
         // The default row is the ONLY thing rendered up front.
@@ -1240,7 +1297,7 @@ if (rToken) {
         }
         bindShipping();
       }).catch(function () {
-        expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-[var(--co-line)] px-4 py-3 text-sm text-muted">Gagal memuat ongkir. Coba lagi.</p>';
+        expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-[var(--co-line)] px-4 py-3 text-sm text-[var(--co-muted)]">Gagal memuat ongkir. Coba lagi.</p>';
       });
     }
 
@@ -1419,6 +1476,19 @@ if (rToken) {
       if (!payEl) {
         if (err) { err.textContent = "Pilih metode pembayaran."; err.classList.remove("hidden"); }
         return;
+      }
+      // `__va` is a GROUP marker, not a channel — swap in the bank the shopper actually picked, so
+      // everything downstream (`payEl.value` → channelCode, `data-label` → the order's payment label)
+      // reads exactly what it always did. Posting "__va" would be rejected by the order API's channel
+      // gate, which is correct but useless as an explanation to the shopper — so it is caught here,
+      // where we can name the actual missing step.
+      if (payEl.value === "__va") {
+        var bankEl = form.querySelector('input[name="va_bank"]:checked');
+        if (!bankEl) {
+          if (err) { err.textContent = "Pilih bank untuk Transfer Bank (Virtual Account)."; err.classList.remove("hidden"); }
+          return;
+        }
+        payEl = bankEl;
       }
 
       var order = {
