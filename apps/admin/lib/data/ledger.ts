@@ -206,6 +206,7 @@ export type Movement = {
   note: string | null;
   createdAt: Date;
   orderNumber: string | null;
+  orderId: string | null; // the order behind this entry (null for payout/adjustment) → opens the detail
 };
 
 export async function getMovements(f: LedgerFilters = {}): Promise<Paged<Movement>> {
@@ -218,7 +219,7 @@ export async function getMovements(f: LedgerFilters = {}): Promise<Paged<Movemen
     ]);
     const rows = (await db.execute(sql`
       select l.id, l.kind::text as "kind", l.status::text as "status", l.amount_idr as "amount",
-             l.note, l.created_at as "createdAt", o.number as "orderNumber",
+             l.note, l.created_at as "createdAt", o.number as "orderNumber", o.id as "orderId",
              count(*) over ()::bigint as "total"
       from ledger_entries l
       left join orders o on o.id = l.order_id
