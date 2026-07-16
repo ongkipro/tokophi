@@ -7,6 +7,7 @@ import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
 import { Button } from "@tokophi/ui/button";
 import { getSenderAddress, saveSenderAddress, searchArea, kelurahanOptions } from "@/lib/actions/shipping";
+import { composePickupAddress } from "@/lib/pickup-address";
 
 // Sender / pickup address used to create KiriminAja shipments (origin). Platform-managed
 // couriers still apply; this is only the store's own pickup point.
@@ -174,6 +175,42 @@ export function SenderAddressCard() {
             </p>
           </div>
         )}
+        {/* Pickup summary — the shopper gets one at checkout; the seller deserves the same. This is
+            the EXACT string request_pickup will carry (same composePickupAddress the booking uses),
+            so what the rider will read is on screen instead of being taken on trust. */}
+        {kecId && (
+          <div className="rounded-xl border bg-muted/30 p-4">
+            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <MapPin className="size-3.5" /> Ringkasan alamat jemput
+            </p>
+            <dl className="space-y-1.5 text-sm">
+              <div className="flex gap-2">
+                <dt className="w-24 shrink-0 text-xs text-muted-foreground">Dijemput dari</dt>
+                <dd className="min-w-0 flex-1 font-medium">
+                  {composePickupAddress({ address, kelurahanName: kelName, postcode }) || (
+                    <span className="font-normal text-muted-foreground">Alamat lengkap belum diisi</span>
+                  )}
+                </dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="w-24 shrink-0 text-xs text-muted-foreground">Kecamatan</dt>
+                <dd className="min-w-0 flex-1">{kecName || "—"}</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="w-24 shrink-0 text-xs text-muted-foreground">Atas nama</dt>
+                <dd className="min-w-0 flex-1">
+                  {name || <span className="text-muted-foreground">—</span>}
+                  {phone ? ` · ${phone}` : ""}
+                </dd>
+              </div>
+            </dl>
+            <p className="mt-2.5 border-t pt-2.5 text-[11px] text-muted-foreground">
+              Inilah yang diterima kurir saat kamu membuat resi. Kecamatan dipakai untuk rute; kelurahan
+              &amp; kode pos ikut tertulis di alamat agar titik jemputnya tepat.
+            </p>
+          </div>
+        )}
+
         <div className="flex justify-end">
           <Button onClick={save} disabled={pending || !loaded || !kecId}>{pending ? "Menyimpan…" : "Simpan alamat"}</Button>
         </div>

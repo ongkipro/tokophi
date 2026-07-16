@@ -3,7 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { SESSION_COOKIE, SESSION_MAX_AGE, signSession } from "@/lib/auth";
 import { OAUTH_STATE_COOKIE, exchangeCode, googleConfig } from "@/lib/google";
-import { provisionStore } from "@/lib/provision";
+import { provisionStore, signupOpen } from "@/lib/provision";
 
 // Google OAuth callback: state check → code exchange → id_token verify (JWKS) → find-or-create the
 // user → sign the SAME jose session JWT as lib/auth.ts.
@@ -72,6 +72,10 @@ export async function GET(req: NextRequest) {
     session = { userId: row.userId, storeId: row.storeId, role: row.role, email: row.email, name: row.name ?? profile.name };
     slug = row.slug;
   } else if (mode === "daftar") {
+    // Signup is closed → land on /daftar with a clear message instead of the 500 that provisionStore's
+    // SignupClosedError would otherwise produce. Signing in with Google to an EXISTING store (the
+    // `row` branch above) is untouched — this only blocks creating a NEW one.
+    if (!signupOpen()) return redirectTo("/daftar?error=ditutup");
     // unknown email (or a user with no store yet) → auto-provision a store on the same one-txn path
     const r = await provisionStore({
       storeName: profile.name,

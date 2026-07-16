@@ -61,8 +61,32 @@ export async function emailTaken(email: string): Promise<boolean> {
   return Boolean(row);
 }
 
+/**
+ * Self-serve signup master switch — CLOSED while the platform is still in development (2026-07-16).
+ *
+ * Fails CLOSED: registration is off unless `SIGNUP_ENABLED` is explicitly turned on, so a forgotten
+ * env var can never quietly re-open the front door (same posture as `authSecret()`). To re-open, set
+ * `SIGNUP_ENABLED=true` in Coolify and redeploy.
+ *
+ * This does NOT touch super-admin's own `createStore` — that is a different path, so we can still
+ * onboard a merchant by hand while public signup is shut.
+ */
+export const signupOpen = () => /^(1|true|yes|on)$/i.test((process.env.SIGNUP_ENABLED ?? "").trim());
+
+export class SignupClosedError extends Error {
+  constructor() {
+    super("Pendaftaran toko baru sedang ditutup sementara.");
+    this.name = "SignupClosedError";
+  }
+}
+
 /** Create account + owner user + store (3-day trial) + membership + default location/settings/stats — ONE txn. */
 export async function provisionStore(input: ProvisionInput): Promise<ProvisionResult> {
+  // THE boundary. Both self-serve paths — the /daftar form (registerStore) and the Google OAuth
+  // callback — funnel through here, so closing the gate HERE closes both. Hiding the form would be
+  // UX only: the server action and the OAuth callback would still happily create a store.
+  if (!signupOpen()) throw new SignupClosedError();
+
   const email = input.email.toLowerCase().trim();
   const storeName = input.storeName.trim();
   const ownerName = input.ownerName.trim() || storeName;

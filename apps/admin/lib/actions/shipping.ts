@@ -10,6 +10,7 @@ import { getCodPolicy } from "@/lib/cod";
 import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, provinceForDistrict, kelurahanForDistrict } from "@/lib/data/areas";
+import { composePickupAddress } from "@/lib/pickup-address";
 
 export type Rate = { service: string; code: string; type: string; cost: number; etd: string; cod: boolean; group: string };
 
@@ -217,27 +218,9 @@ export async function getSenderAddress(): Promise<SenderAddress | null> {
   });
 }
 
-/**
- * The pickup address a courier rider actually reads.
- *
- * KiriminAja's `request_pickup` identifies the SENDER by `kecamatan_id` (+ an optional `kelurahan_id`
- * in THEIR numbering, which we deliberately never send — see kelurahanOptions above) and a free-text
- * `address`. There is NO sender zipcode field; `destination_zipcode` is the buyer's, not ours. So the
- * kelurahan and the postcode only reach the rider if they are written INTO that address string — which
- * is exactly what this does. Without it the kelurahan the seller picks goes nowhere: not as an id, not
- * in the text, and the precision the field exists for is thrown away.
- */
-// NOT exported: a "use server" module may only export async functions, and this is a pure local helper.
-function composePickupAddress(s: {
-  senderAddress?: string | null; senderKelurahanName?: string | null; senderPostcode?: string | null;
-}): string {
-  const kel = (s.senderKelurahanName ?? "").trim();
-  return [
-    (s.senderAddress ?? "").trim(),
-    kel ? `Kel. ${kel}` : "",
-    (s.senderPostcode ?? "").trim(),
-  ].filter(Boolean).join(", ");
-}
+// composePickupAddress lives in lib/pickup-address.ts — a pure, client-safe module — so the Seller's
+// Alamat Pengirim card previews the EXACT string this booking sends. See the note there for why the
+// kelurahan + postcode have to ride inside the address text.
 
 export async function saveSenderAddress(input: {
   name: string; phone: string; address: string;
@@ -566,7 +549,12 @@ export async function createShipment(input: {
       name: s.senderName || "Toko", phone: s.senderPhone || "081200000000",
       // Kelurahan + postcode ride INSIDE the address — KaSender has no field for either (see
       // composePickupAddress). Falls back to "-" only when the seller has written nothing at all.
-      address: composePickupAddress(s) || "-",
+      address:
+        composePickupAddress({
+          address: s.senderAddress,
+          kelurahanName: s.senderKelurahanName,
+          postcode: s.senderPostcode,
+        }) || "-",
       kecamatanId: s.senderKecamatanId, kelurahanId: s.senderKelurahanId,
     },
     {
