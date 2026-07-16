@@ -6,7 +6,13 @@ import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 import { applyOrderStatusChange, type OrderStatus } from "@/lib/order-status";
 
-export type { OrderStatus };
+// ⚠️ Do NOT re-export the type from here. `export type { OrderStatus }` lived here from c86e831 until
+// 2026-07-16 and it took production down: in a `"use server"` module the bundler turns EVERY export
+// into a server-action reference, so it emitted a reference to a name TypeScript had already erased —
+// `ReferenceError: OrderStatus is not defined`, thrown at module evaluation, which killed the whole
+// Pesanan screen and every status change with it. tsc was green, `next build` was green, the ledger
+// tests were green; only a click in the real app found it. Nothing imported the type from here anyway.
+// Import it from `@/lib/order-status` (a plain module) instead.
 
 export async function setOrderStatus(orderId: string, status: OrderStatus, returnReason?: string): Promise<void> {
   const { storeId: sid } = await requireCapability("orders:write");
