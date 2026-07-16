@@ -16,6 +16,7 @@
     "reset": "dotenv -e ../../.env -- tsx src/reset.ts",
     "seed": "dotenv -e ../../.env -- tsx src/seed.ts",
     "seed:areas": "dotenv -e ../../.env -- tsx src/seed-areas.ts",
+    "seed:reviews": "dotenv -e ../../.env -- tsx src/seed-reviews.ts",
     "verify-rls": "dotenv -e ../../.env -- tsx src/verify-rls.ts",
     "verify-rls-app": "dotenv -e ../../.env -- tsx src/verify-rls-app.ts"
   },

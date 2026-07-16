@@ -29,6 +29,9 @@ const gallery = productImages(product);
 const rating = catalog.productRating(product);
 const breakdown = rating ? catalog.ratingHistogram(product) : [];   // real counts, 5★→1★
 const maxBucket = Math.max(...breakdown, 1);
+// The written testimonials (reviews with text), newest first. Each is a real buyer who received a
+// `selesai` order for this product — see packages/db/src/seed-reviews.ts.
+const reviews = rating ? catalog.productReviews(product) : [];
 
 // ADR 0009 — Store Builder: this product's own template → the store's default `product` template
 // → null = today's page, unchanged.
@@ -343,6 +346,25 @@ const HEAD = [productLd, breadcrumbLd]
           }
         </div>
       </div>
+
+      <!-- The written testimonials. Each is a real buyer who received a `selesai` order for this
+           product (seed-reviews.ts), so "Pembelian terverifikasi" is honest, not decoration. -->
+      {reviews.length > 0 && (
+        <ul class="mt-12 grid gap-5 sm:grid-cols-2">
+          {reviews.map((rev) => (
+            <li class="rounded-xl bg-white p-5 ring-1 ring-line">
+              <div class="flex items-center justify-between gap-3">
+                <span class="font-medium text-ink">{rev.author}</span>
+                <Stars value={rev.rating} size="sm" showValue={false} />
+              </div>
+              <p class="mt-3 text-sm leading-relaxed text-muted">{rev.body}</p>
+              <p class="mt-3 text-xs text-muted/70">
+                {rev.daysAgo === 0 ? "Hari ini" : `${rev.daysAgo} hari lalu`} · Pembelian terverifikasi
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
     )}
 

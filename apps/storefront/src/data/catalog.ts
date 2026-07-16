@@ -46,6 +46,7 @@ export type Product = {
   templateId: string | null;
 };
 export type Rating = { value: number; count: number };
+export type Review = { rating: number; author: string; body: string; daysAgo: number };
 
 /** Everything one store's pages need. Built once per store per TTL, then reused across requests. */
 export type Catalog = {
@@ -70,6 +71,8 @@ export type Catalog = {
   productRating: (p: Product | string) => Rating | null;
   /** Real 5★→1★ counts from the review rows. */
   ratingHistogram: (p: Product | string) => number[];
+  /** Published reviews that have text (the testimonials shown on the PDP), newest first, capped. */
+  productReviews: (p: Product | string) => Review[];
   bestsellers: (list?: Product[]) => Product[];
   byCollection: (handle: string) => Product[];
   findProduct: (handle: string) => Product | undefined;
@@ -233,25 +236,53 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
     .select({
       productId: schema.reviews.productId,
       rating: schema.reviews.rating,
+      body: schema.reviews.body,
+      createdAt: schema.reviews.createdAt,
+      author: schema.customers.name,
     })
     .from(schema.reviews)
+    .leftJoin(schema.customers, eq(schema.customers.id, schema.reviews.customerId))
     .where(and(eq(schema.reviews.storeId, storeId), eq(schema.reviews.status, "terbit")));
 
+  // First name + last initial ("Siti Nurhaliza" → "Siti N.") — the way a review site shows a buyer,
+  // enough to feel real without publishing a full name.
+  const authorName = (n: string | null): string => {
+    if (!n?.trim()) return "Pelanggan";
+    const parts = n.trim().split(/\s+/);
+    return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : parts[0];
+  };
+  const nowMs = Date.now();
+
   const byProduct = new Map<string, number[]>();
+  const reviewsByProduct = new Map<string, Review[]>();
   for (const r of reviewRows) {
     if (!r.productId) continue;
     const list = byProduct.get(r.productId) ?? [];
     list.push(r.rating);
     byProduct.set(r.productId, list);
+    // Only rows WITH text become testimonials — a bare star still counts toward the average/histogram.
+    if (r.body?.trim()) {
+      const rl = reviewsByProduct.get(r.productId) ?? [];
+      rl.push({
+        rating: r.rating,
+        author: authorName(r.author),
+        body: r.body.trim(),
+        daysAgo: Math.max(0, Math.floor((nowMs - new Date(r.createdAt).getTime()) / 86_400_000)),
+      });
+      reviewsByProduct.set(r.productId, rl);
+    }
   }
   const ratings: Record<string, Rating> = {};
   const starsByHandle: Record<string, number[]> = {};
+  const reviewsByHandle: Record<string, Review[]> = {};
   for (const r of rows) {
     const stars = byProduct.get(r.id) ?? [];
     if (!stars.length) continue; // no reviews → no entry → productRating() returns null
     const sum = stars.reduce((a, b) => a + b, 0);
     ratings[r.handle] = { value: Math.round((sum / stars.length) * 10) / 10, count: stars.length };
     starsByHandle[r.handle] = stars;
+    const rl = reviewsByProduct.get(r.id);
+    if (rl) reviewsByHandle[r.handle] = rl.sort((a, b) => a.daysAgo - b.daysAgo).slice(0, 12);
   }
 
   // ADR 0009 — all page templates in one query, cached with the catalog: rendering a template
@@ -279,6 +310,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       }
       return buckets;
     },
+    productReviews: (p) => reviewsByHandle[typeof p === "string" ? p : p.handle] ?? [],
     bestsellers: (list = products) => list.filter((p) => p.bestseller),
     byCollection: (handle) => products.filter((p) => p.categoryHandle === handle),
     findProduct: (handle) => products.find((p) => p.handle === handle),
