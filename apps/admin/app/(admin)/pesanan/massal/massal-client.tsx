@@ -140,8 +140,11 @@ export function MassalClient({ data, filters }: { data: BulkShippingResult; filt
         </div>
       </Card>
 
+      {/* Same trap as the Keuangan card: <Card> is `flex flex-col`, so `items-center` on it centres
+          the row horizontally instead of aligning it. The row lives INSIDE. */}
       {canWrite && (
-        <Card className="flex flex-wrap items-center gap-2 p-3">
+        <Card className="p-3">
+          <div className="flex flex-wrap items-center gap-2">
           <Checkbox
             checked={sel.size > 0 && sel.size === rows.length}
             onCheckedChange={() => setSel(sel.size === rows.length ? new Set() : new Set(rows.map((r) => r.number)))}
@@ -161,6 +164,7 @@ export function MassalClient({ data, filters }: { data: BulkShippingResult; filt
               {busy === "print" ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : <Printer className="mr-1 size-3.5" />}
               Cetak resi ({canPrint.length})
             </Button>
+          </div>
           </div>
         </Card>
       )}

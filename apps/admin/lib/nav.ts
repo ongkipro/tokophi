@@ -47,12 +47,20 @@ export const NAV_GROUPS: NavGroup[] = [
       // DIFFERENT tab. Tagihan is a genuinely separate page — and a different KIND of money: what the
       // seller PAYS us, not what they earn.
       {
-        label: "Keuangan", href: "/saldo", icon: Wallet,
+        // Each row answers a DIFFERENT question. The first cut of this menu pointed four of them at
+        // /saldo's own tabs — four doors onto one room, which is exactly what "Perlu Dikirim" was
+        // removed for in this same session. A sub-menu is not a tab bar with more clicks.
+        //   Keuangan    → is my money healthy?
+        //   Penghasilan → what did I earn, and why is it not cash yet?   (Shopee/Tokopedia split this
+        //                 from Saldo for a real reason: earnings include money still being held.)
+        //   Saldo Saya  → what can I withdraw right now?  (Mutasi/Penarikan/Rekening are its OWN tabs,
+        //                 and they stay there — that genuinely IS one room.)
+        //   Tagihan     → what do I pay TokoΦ?  (money flowing the other way)
+        label: "Keuangan", href: "/keuangan", icon: Wallet,
         children: [
+          { label: "Ringkasan", href: "/keuangan" },
+          { label: "Penghasilan", href: "/keuangan/penghasilan" },
           { label: "Saldo Saya", href: "/saldo" },
-          { label: "Dana Dalam Proses", href: "/saldo?tab=proses" },
-          { label: "Penarikan Dana", href: "/saldo?tab=penarikan" },
-          { label: "Rekening Bank", href: "/saldo?tab=rekening" },
           { label: "Tagihan & Langganan", href: "/akun/langganan" },
         ],
       },
