@@ -28,6 +28,7 @@ import { Button } from "@tokophi/ui/button";
 import { Badge } from "@tokophi/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@tokophi/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
+import { TabStrip } from "@/components/admin/tab-strip";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -117,16 +118,20 @@ export function PesananClient({
       {/* Status tabs. Counts are count(*) group by, computed on the server against the SAME filters
           as the table below — so a badge can never promise rows the table does not have. */}
       <Tabs value={tab} onValueChange={(v) => go({ tab: v === "semua" ? undefined : (v as string) })}>
-        <TabsList className="h-9 flex-wrap">
-          {ORDER_TABS.map((t) => (
-            <TabsTrigger key={t.value} value={t.value} className="gap-1.5 px-2.5">
-              {t.label}
-              <span className="rounded-full bg-muted-foreground/15 px-1.5 py-px text-[11px] font-medium tabular-nums text-muted-foreground group-data-[variant=default]/tabs-list:data-active:bg-primary/15 group-data-[variant=default]/tabs-list:data-active:text-primary">
-                {num(counts[t.value])}
-              </span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {/* Was `h-9 flex-wrap`: the height was pinned to ONE row while six counted labels took three
+            on a phone, so rows 2-3 rendered on top of the toolbar below. Scrolls now — see TabStrip. */}
+        <TabStrip>
+          <TabsList className="w-max">
+            {ORDER_TABS.map((t) => (
+              <TabsTrigger key={t.value} value={t.value} className="gap-1.5 px-2.5">
+                {t.label}
+                <span className="rounded-full bg-muted-foreground/15 px-1.5 py-px text-[11px] font-medium tabular-nums text-muted-foreground group-data-[variant=default]/tabs-list:data-active:bg-primary/15 group-data-[variant=default]/tabs-list:data-active:text-primary">
+                  {num(counts[t.value])}
+                </span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </TabStrip>
       </Tabs>
 
       <Card className="overflow-hidden p-0">

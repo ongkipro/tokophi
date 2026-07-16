@@ -132,10 +132,15 @@ function GlobalSearch({ index }: { index: SearchItem[] }) {
  */
 function SaldoChip({ balance }: { balance: TopbarData["balance"] }) {
   return (
+    // Was `hidden … sm:flex` — so below 640px a seller could not see their own money at all, on the
+    // device they actually run the shop from. Shows at every width now. The topbar cannot fit both this
+    // and the store name on a 360px phone, so the NAME gives way (see the store switcher): a seller
+    // knows which shop is theirs, and the name is still one tap away in this bar's dropdown and in the
+    // sidebar — the balance was nowhere.
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="ghost" className="hidden gap-2 px-2 font-medium tabular-nums sm:flex" aria-label="Saldo">
+          <Button variant="ghost" className="flex shrink-0 gap-1.5 px-2 font-medium tabular-nums sm:gap-2" aria-label="Saldo">
             <Wallet className="size-[18px] text-muted-foreground" />
             <span className="text-sm">{IDR(balance.available, { compact: true })}</span>
           </Button>
@@ -217,12 +222,13 @@ export function Topbar({
               <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary/15 text-[10px] font-bold text-primary">
                 {store.name.slice(0, 2).toUpperCase()}
               </span>
-              {/* Below 360px the name is the only thing here big enough to give up: the row is
-                  px-4 + Menu + switcher + the 116px right cluster, and it overflowed a 320px phone by
-                  40px (audit:responsive). The 2-letter badge still identifies the store, the full name
-                  is one tap away in this same dropdown, and 360px+ — every phone people actually use —
-                  keeps it. `min-w-0` lets it truncate before it pushes, instead of pushing. */}
-              <span className="max-w-[140px] truncate max-[359px]:hidden">{store.name}</span>
+              {/* The name is the only thing in this row big enough to give up. It is `hidden` below
+                  `sm` because the balance chip now shows there instead (SaldoChip above) and the two
+                  cannot both fit a 360px phone: px-4 + Menu + switcher + Saldo + the right cluster.
+                  Money beats a name the seller already knows — and the name is still right here in this
+                  dropdown, and in the sidebar. The 2-letter badge keeps the store identifiable.
+                  `min-w-0` lets it truncate before it pushes, instead of pushing. */}
+              <span className="hidden max-w-[140px] truncate sm:inline">{store.name}</span>
               <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
             </Button>
           }

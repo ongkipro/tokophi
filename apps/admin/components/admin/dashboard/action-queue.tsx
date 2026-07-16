@@ -45,8 +45,12 @@ function Tile({ item }: { item: QueueItem }) {
         <div className={cn("text-2xl font-bold tabular-nums", clear && "text-muted-foreground")}>
           {clear ? "Beres" : num(item.count)}
         </div>
-        <div className="mt-0.5 truncate text-sm font-medium">{item.label}</div>
-        <div className="mt-0.5 truncate text-xs text-muted-foreground">{clear ? item.done : item.hint}</div>
+        {/* line-clamp-2, NOT truncate: in the 2-column mobile grid a single line is ~18 characters, so
+            `truncate` cut the tiles down to "pesanan siap dipros…" and "Ulasan perlu diti…" — a label
+            you cannot finish reading is not a label. Two lines fit every current string; the clamp is
+            still there so a future long one degrades instead of shoving the tile. */}
+        <div className="mt-0.5 line-clamp-2 text-sm font-medium">{item.label}</div>
+        <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{clear ? item.done : item.hint}</div>
       </div>
     </Link>
   );
@@ -65,7 +69,10 @@ export function ActionQueue({ items, stuck }: { items: QueueItem[]; stuck: Stuck
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        {/* 5 tiles in 2 mobile columns = 2+2+1, and the orphan left a dead half-row. If the last tile
+            lands in an odd slot it spans the row instead — the grid ends flush. Only bites on the
+            2-col breakpoint; md/xl divide evenly. */}
+        <div className="grid grid-cols-2 gap-3 [&>a:last-child:nth-child(odd)]:col-span-2 md:grid-cols-3 md:[&>a:last-child:nth-child(odd)]:col-span-1 xl:grid-cols-5">
           {items.map((i) => <Tile key={i.key} item={i} />)}
         </div>
 

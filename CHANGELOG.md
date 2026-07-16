@@ -4,6 +4,24 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-16
 
+### 🗂️ `CATEGORY_ORDER` — the last hardcoded allowlist, and it was hiding two other bugs
+
+`catalog.ts` built `collections` (and therefore `findCollection`) from a constant list of the DEMO store's six handles. Any other merchant's real collections were **invisible to their own storefront**: no category grid, no dropdown, and `/kategori/<their-handle>` 404'd. Same family as the batik hero, the brand story, the display serif, the review text and the nav fallback — the demo's content living in a platform default. It is now derived from the store's own rows, filtered on `published` and `archived_at`.
+
+**Two things the allowlist was concealing, both found by honouring the columns:**
+- **The demo has been publishing a category its merchant switched off.** `outerwear` ships `published = false`; the allowlist named the handle and never read the column. Batik has **five** published categories, not six. `/kategori/outerwear` now correctly 404s.
+- **…which exposed a dead link the bug had been masking:** batik's own seeded menu links "Outerwear". `getFooterNav` already states the principle — *the merchant chooses the ORDER and the LABELS; publication state decides what a shopper is allowed to be sent to* — and applies it to `/halaman/` links. `getMainNav` now applies it to `/kategori/` links: dead category links are dropped, and a dropdown left empty goes with them.
+
+**Order: alphabetical by title (id-ID).** `collections` has **no ordering column** — no `position`, not even `created_at` — so there is nothing to honour and insertion order is a random uuid away from meaningless. Deliberately *not* the demo's old order, since reproducing that needs exactly the constant being removed. When a merchant wants their own order, the fix is a `position` column plus the Kategori editor, not a list in the storefront's source.
+
+`VIRTUAL_COLLECTION_HANDLES` (`semua`/`promo-gajian`/`produk-terlaris`) is kept and exported — **not the old allowlist renamed**: it names *platform routes* `[handle].astro` computes for every tenant, and `[handle].astro` now types its `VIRTUAL` map against it so the two cannot drift. Excluding them from `catalog.collections` matters: batik has **real rows** for `promo-gajian` and `produk-terlaris`, so a naive "all collections" query would put a "0 produk" tile next to a page that renders products, and list "Promo Gajian" twice in the nav.
+
+**My own seed shipped the same mistake and is fixed here too:** `seed-templates.ts` put an Outerwear tile on the demo's homepage template — I filtered the *products* by `status` and forgot to filter the *collections* by `published`, which is precisely what `CATEGORY_ORDER` was doing one layer down. Five tiles now. The row was re-seeded (mine, from today, unedited).
+
+Verified per tenant, every rendered `/kategori/` link fetched: **batik** — template renders, nav unchanged (Beranda | Semua Produk | Kategori | Promo Gajian | Blog | Kontak), 8 links, **0 dead**, 0 console errors; **kopi-senja** — neutral fallback, 5-item nav, 2 links, 0 dead, 0 errors. Sitemap no longer lists `outerwear`, which the file's own comment calls a negative signal.
+
+⚠️ **Found, NOT fixed — the next one in the family, and bigger:** `byCollection` matches `slugify(products.category)`, **not** `collection_products`. So a merchant's manual collection membership is invisible to the storefront, and any collection whose handle doesn't equal a product's slugified category text renders empty. It only works for batik because its category strings happen to slugify onto its handles.
+
 ### 💳 The order API could charge a shopper twice, and could oversell without leaving a trace
 
 Four failures in `/api/public/order`, all on the write path, all **exercised against the live endpoint** — including a real two-client race.
@@ -139,6 +157,16 @@ The final split (decided with the user): **platform stays on `tokophi.com`** (la
 ### 🔒 Seller → Pengaturan → Domain: a system-locked default domain + a Shopify-style connect flow, hardened
 
 The Domain card now leads with the **system domain** `<slug>.tokophi.id` — shown read-only with a lock ("Aktif otomatis · diatur sistem, tidak bisa diubah") and a Kunjungi link — because that address is derived from the store slug and a merchant must never be able to change or detach it. Below it, the **custom-domain** flow got a Shopify-style numbered tutorial (add → publish CNAME+TXT → verify → make primary), plus the apex/`www` + "email unaffected" notes. **Security hardening in `lib/actions/domain.ts`:** `addDomain` now refuses **every platform-owned zone** — `tokophi.id`/`tokophi.com`/`tokophi.cc` and any host under them (`PLATFORM_ZONES`, one place) — so a merchant can't squat `app.tokophi.com`, the `cname.tokophi.cc` fallback, or another store's `<slug>.tokophi.id`; and a **per-store cap** (`MAX_DOMAINS_PER_STORE=5`) guards the `UNIQUE(host)` space and the poller. (Ownership was already proven by a real TXT check, writes already gated by RBAC + RLS, and `store_domains.host` is DB-UNIQUE across the platform.)
+
+### 👁️ Looking at the phone, not just measuring it — three defects the overflow audit could never catch
+
+The audit proves one thing: nothing scrolls sideways. It says nothing about whether a screen is *usable*, so the screens got looked at (Playwright, 390px, real session). Three real defects, none of which overflow:
+
+- **Pesanan: the tabs rendered ON TOP of the toolbar.** `<TabsList className="h-9 flex-wrap">` — the height pinned to one row while six counted labels wrapped to three. Invisible on a desktop, where they fit on one line. Now uses the new **`TabStrip`** (`components/admin/tab-strip.tsx`), which is the pattern the four counted strips (Pesanan, Saldo, Blog, Diskon) now share: scroll, never wrap (the trap above), never squeeze (a filter reading `Ra…` is not a filter).
+- **A seller could not see their own money on a phone.** The topbar's balance chip was `hidden … sm:flex` — invisible below 640px, on the device they actually run the shop from. It shows at every width now. The bar cannot fit both it and the store name on a 360px phone, so the **name gives way**: a seller knows which shop is theirs, the name is still in this bar's dropdown and the sidebar — the balance was **nowhere**.
+- **Dashboard tiles cut their own labels**: `truncate` in a 2-column mobile grid left "pesanan siap dipros…" and "Ulasan perlu diti…". Now `line-clamp-2` — a label you cannot finish reading is not a label. The 5-tile grid also left an orphan half-row; the last tile spans it when the count is odd.
+
+Verified both ways: screenshots at 390px for the eye, and the audit re-run for the machine — **264/264 still clean**, so restoring the balance chip did not re-break the narrow widths it was competing for.
 
 ### 📱 The Seller dashboard on a phone: 30 broken route×width combinations → 0, and a gate so it stays that way
 
