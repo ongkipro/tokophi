@@ -51,7 +51,36 @@ type Item = { handle?: string; name?: string; price?: number; variant?: string; 
 const bad = (error: string, field?: string, status = 400) =>
   NextResponse.json({ ok: false, error, field }, { status, headers: CORS });
 
+/** Thrown inside the write transaction when a variant sold out between the pre-check and the lock. */
+class OutOfStock extends Error {
+  constructor(public product: string, public available: number) {
+    super("out of stock");
+  }
+}
+
+// The storefront lives on a DIFFERENT origin, so a response without CORS headers is UNREADABLE to
+// it. Every explicit return below carries them — an uncaught throw does not: Next renders its own
+// 500, the browser reports a CORS error, and `checkout.astro`'s `.catch` shows the generic "Gagal
+// terhubung ke server."
+//
+// On THIS endpoint that was not merely a confusing message, it was a DOUBLE CHARGE: the throw could
+// land after the order row, its line items and the stock decrement were already written. The shopper
+// saw a connection error, pressed Bayar again, and bought the same cart twice with stock decremented
+// twice. `/api/public/ongkir` has wrapped its handler for exactly this reason since it shipped; this
+// one — the one that writes — did not.
 export async function POST(req: Request) {
+  try {
+    return await handle(req);
+  } catch (err) {
+    console.error("[order] unhandled:", err);
+    return NextResponse.json(
+      { ok: false, error: "Terjadi kesalahan saat memproses pesanan. Coba lagi sebentar." },
+      { status: 500, headers: CORS },
+    );
+  }
+}
+
+async function handle(req: Request) {
   const limited = rateLimited(req, "order", 10, 60_000, CORS);
   if (limited) return limited;
   let body: {
@@ -290,31 +319,72 @@ export async function POST(req: Request) {
   // In Indonesia the WA number IS the identity (email is optional and often absent). Keying on it
   // only works because it is normalised: the same person used to land twice as `0812…` and
   // `+62 812…`. Email stays a stored attribute, not the key.
+  // ── THE WRITE — one transaction ───────────────────────────────────────────────────────────────
+  // customer ⋈ order ⋈ line items ⋈ stock were four unguarded statements. A throw between any two
+  // left an order with partial line items and partially decremented stock — a half-order nobody can
+  // reconcile, because nothing records that it is half. Postgres can simply be asked not to allow it.
+  //
+  // The external calls stay OUTSIDE: AutoLaris is a network round-trip and must never hold a database
+  // transaction open.
   let customerId: string;
-  const [existing] = await db
-    .select({ id: schema.customers.id })
-    .from(schema.customers)
-    .where(and(eq(schema.customers.storeId, store.id), eq(schema.customers.phone, phone)))
-    .limit(1);
-  if (existing) {
-    customerId = existing.id;
-    // Keep the row current with what they just typed (a moved buyer, a newly given email) without
-    // ever blanking what we already had.
-    await db
-      .update(schema.customers)
-      .set({ name, ...(email ? { email } : {}), city: kota, province: provinsi })
-      .where(eq(schema.customers.id, existing.id));
-  } else {
-    const [ins] = await db
-      .insert(schema.customers)
-      .values({ storeId: store.id, name, email, phone, city: kota, province: provinsi })
-      .returning({ id: schema.customers.id });
-    customerId = ins.id;
-  }
+  let order: { id: string; number: string };
+  try {
+    ({ customerId, order } = await db.transaction(async (tx) => {
+      // Customer: keyed on the WhatsApp number (canonical `62…`).
+      let cid: string;
+      const [existing] = await tx
+        .select({ id: schema.customers.id })
+        .from(schema.customers)
+        .where(and(eq(schema.customers.storeId, store.id), eq(schema.customers.phone, phone)))
+        .limit(1);
+      if (existing) {
+        cid = existing.id;
+        // Keep the row current with what they just typed (a moved buyer, a newly given email) without
+        // ever blanking what we already had.
+        await tx
+          .update(schema.customers)
+          .set({ name, ...(email ? { email } : {}), city: kota, province: provinsi })
+          .where(eq(schema.customers.id, existing.id));
+      } else {
+        const [ins] = await tx
+          .insert(schema.customers)
+          .values({ storeId: store.id, name, email, phone, city: kota, province: provinsi })
+          .returning({ id: schema.customers.id });
+        cid = ins.id;
+      }
 
-  const number = "WEB-" + Date.now().toString().slice(-9);
-  const [order] = await db.insert(schema.orders).values({
-    storeId: store.id, number, customerId, status: "baru", financialStatus: "pending", channel: "organic",
+      // ── STOCK: lock, re-check, decrement — all inside the txn ──────────────────────────────────
+      // The check up at `available < qty` is a fast fail for the shopper (and saves a pointless
+      // KiriminAja call); it is NOT the authority. It read `sum(available)` and the decrement came
+      // hundreds of lines later, so two orders for the last unit both passed, both inserted, and both
+      // decremented. `GREATEST(… - qty, 0)` then CLAMPED the result at zero — so the oversell left no
+      // trace in the data at all: stock read 0, exactly as it would after one honest sale.
+      //
+      // `FOR UPDATE` serialises concurrent orders for the same variant: the second waits, re-reads the
+      // decremented figure, and loses honestly. No clamp — if this arithmetic can go negative the
+      // lock is not doing its job, and silently flooring it is how we stopped finding out.
+      for (const r of resolved) {
+        const locked = await tx
+          .select({ id: schema.inventoryLevels.id, available: schema.inventoryLevels.available })
+          .from(schema.inventoryLevels)
+          .where(eq(schema.inventoryLevels.variantId, r.variantId))
+          .for("update");
+        const have = locked.reduce((n, l) => n + Number(l.available ?? 0), 0);
+        if (have < r.qty) throw new OutOfStock(r.title, have);
+      }
+
+      // `Date.now().slice(-9)` alone against the GLOBAL `orders_number_unique` constraint: two orders
+      // in the same millisecond (different shoppers, different stores) collided and the insert threw —
+      // which, before the wrapper above, was a CORS-less 500 on a checkout. The random tail makes that
+      // need the same millisecond AND 1-in-46656, and the wrapper now answers honestly if it ever does.
+      // Math.random is fine here: an API route, not a render path (the determinism rule in CLAUDE.md
+      // is about SSR/hydration).
+      const number =
+        "WEB-" +
+        Date.now().toString().slice(-9) +
+        Math.floor(Math.random() * 46656).toString(36).toUpperCase().padStart(3, "0");
+      const [ord] = await tx.insert(schema.orders).values({
+    storeId: store.id, number, customerId: cid, status: "baru", financialStatus: "pending", channel: "organic",
     subtotalIdr: subtotal, shippingIdr: shippingCost, totalIdr: total,
     // The courier the shopper actually picked — `rate.code`, i.e. the courier of the fresh server-side
     // quote we matched (svcCode === rate.code by findRate), never the client's raw claim. Recording it
@@ -338,15 +408,27 @@ export async function POST(req: Request) {
     shipDistrictId: destId,
   }).returning({ id: schema.orders.id, number: schema.orders.number });
 
-  for (const r of resolved) {
-    await db.insert(schema.orderLineItems).values({
-      orderId: order.id, variantId: r.variantId,
-      title: r.title,
-      qty: r.qty, priceIdr: r.price, totalIdr: r.price * r.qty,
-    });
-    await db.update(schema.inventoryLevels)
-      .set({ available: sql`GREATEST(${schema.inventoryLevels.available} - ${r.qty}, 0)` })
-      .where(eq(schema.inventoryLevels.variantId, r.variantId));
+      for (const r of resolved) {
+        await tx.insert(schema.orderLineItems).values({
+          orderId: ord.id, variantId: r.variantId,
+          title: r.title,
+          qty: r.qty, priceIdr: r.price, totalIdr: r.price * r.qty,
+        });
+        // No GREATEST clamp — the rows are locked and re-checked above, so this cannot go negative.
+        // Flooring it at 0 is what made an oversell indistinguishable from an honest sell-out.
+        await tx.update(schema.inventoryLevels)
+          .set({ available: sql`${schema.inventoryLevels.available} - ${r.qty}` })
+          .where(eq(schema.inventoryLevels.variantId, r.variantId));
+      }
+
+      return { customerId: cid, order: ord };
+    }));
+  } catch (err) {
+    if (err instanceof OutOfStock) {
+      // 409, not 500: nothing was written (the txn rolled back) and the shopper can act on it.
+      return bad(`Stok "${err.product}" tidak mencukupi (sisa ${err.available}).`, "items", 409);
+    }
+    throw err; // → the wrapper above, which answers WITH CORS instead of a bare Next 500
   }
 
   // ── The checkout session BECAME this order (0044) ────────────────────────────────────────────
@@ -394,12 +476,28 @@ export async function POST(req: Request) {
   if (!autolarisConfigured()) {
     return NextResponse.json({ ok: true, orderNumber: order.number, error: "Pembayaran belum dikonfigurasi." }, { headers: CORS });
   }
-  const pay = await alCreatePayment({
-    reffId: order.number, channelCode, amount: total,
-    customerId, customerName: name,
-    customerPhone: phone, customerEmail: email || "order@tokophi.id",
-    callbackUrl: (process.env.PUBLIC_APP_URL ?? "http://localhost:3000") + "/api/public/pay/callback",
-  });
+  // THIS is where the double charge came from. `alCreatePayment` does an unguarded `await res.json()`
+  // (packages/lib/src/autolaris.ts), so a network blip or a gateway's HTML 502 page THROWS rather
+  // than returning `{ok:false}` — and by this line the order, its line items and the stock decrement
+  // are already committed. The throw escaped as a CORS-less 500, the shopper read "Gagal terhubung ke
+  // server.", pressed Bayar again, and bought the same cart twice.
+  //
+  // A throw and an rc=07 are the same event to a shopper: the payment did not start. So they take the
+  // same exit — the `payError` path that already existed, one line below. The order stands (it is
+  // real and paid-for-later), nothing is written twice, and the merchant sees an order with no
+  // payment row instead of two orders.
+  let pay: Awaited<ReturnType<typeof alCreatePayment>>;
+  try {
+    pay = await alCreatePayment({
+      reffId: order.number, channelCode, amount: total,
+      customerId, customerName: name,
+      customerPhone: phone, customerEmail: email || "order@tokophi.id",
+      callbackUrl: (process.env.PUBLIC_APP_URL ?? "http://localhost:3000") + "/api/public/pay/callback",
+    });
+  } catch (err) {
+    console.error("[order] alCreatePayment threw for", order.number, err);
+    pay = { ok: false, error: "Pembayaran tidak dapat dimulai. Hubungi penjual dengan nomor pesanan ini." };
+  }
   if (!pay.ok) {
     return NextResponse.json({ ok: true, orderNumber: order.number, payError: pay.error }, { headers: CORS });
   }
