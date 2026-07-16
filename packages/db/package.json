@@ -17,6 +17,7 @@
     "seed": "dotenv -e ../../.env -- tsx src/seed.ts",
     "seed:areas": "dotenv -e ../../.env -- tsx src/seed-areas.ts",
     "seed:reviews": "dotenv -e ../../.env -- tsx src/seed-reviews.ts",
+    "seed:templates": "dotenv -e ../../.env -- tsx src/seed-templates.ts",
     "verify-rls": "dotenv -e ../../.env -- tsx src/verify-rls.ts",
     "verify-rls-app": "dotenv -e ../../.env -- tsx src/verify-rls-app.ts"
   },
@@ -25,6 +26,7 @@
     "postgres": "^3.4.5"
   },
   "devDependencies": {
+    "@tokophi/sections": "*",
     "dotenv-cli": "^7.4.4",
     "drizzle-kit": "^0.28.1",
     "tsx": "^4.19.2"
