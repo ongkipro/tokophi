@@ -1,0 +1,40 @@
+# Traefik dynamic router — the PLATFORM labels on tokophi.id belong on tokophi.com. 301 them there.
+#
+# THE BUG THIS FIXES (mine, 2026-07-16): the storefront's .id wildcard is `^[a-z0-9-]+\.tokophi\.id$`,
+# and `app` is [a-z0-9-]+ — so `app.tokophi.id`, `rich.tokophi.id` and `www.tokophi.id` were all being
+# served the DEMO STOREFRONT ("Beranda — Batik Nusantara", HTTP 200). With a platform path attached —
+# e.g. app.tokophi.id/store/batik-nusantara — Astro has no such route and answers a bare 404, which is
+# exactly the report that surfaced this.
+#
+# I saw this when the .id router shipped and wrote it off as "benign, the storefront is public". That
+# was wrong. The topology now has TWO domains — platform on .com, storefronts on .id — so mixing the
+# TLDs is not an exotic mistake, it is the obvious one. A seller who types the wrong one must land on
+# their dashboard, not on somebody's shop. (Reserved labels in the storefront's own resolver stop them
+# resolving as a store SLUG; they never stopped the host being served at all.)
+#
+# PRIORITY 5 — above the storefront .id wildcard (priority 1) so these three hosts are claimed first,
+# and far below the explicit app./rich. routers on .com, which this never touches.
+#
+# `<slug>.tokophi.id` is deliberately NOT matched: that is a real storefront and must keep serving.
+#
+# DEPLOYED TO: /data/coolify/proxy/dynamic/tokophi-id-platform-redirect.yaml (proxy watches the dir →
+# hot reload). Reinstall: scp ops/tokophi-id-platform-redirect.yaml root@<box>:/data/coolify/proxy/dynamic/
+http:
+  routers:
+    tokophi-id-platform:
+      rule: 'Host(`app.tokophi.id`) || Host(`rich.tokophi.id`) || Host(`www.tokophi.id`)'
+      entryPoints:
+        - https
+      priority: 5
+      middlewares:
+        - tokophi-id-platform
+      service: tokophi-stores@docker
+      tls: {}
+  middlewares:
+    tokophi-id-platform:
+      redirectRegex:
+        # Same label, other TLD: app.tokophi.id/x → app.tokophi.com/x. Path + query preserved, so a
+        # deep link a seller pasted with the wrong TLD still lands where they meant.
+        regex: '^https?://([a-z0-9-]+)\.tokophi\.id/(.*)'
+        replacement: 'https://${1}.tokophi.com/${2}'
+        permanent: true
