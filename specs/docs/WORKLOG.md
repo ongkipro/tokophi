@@ -7,6 +7,14 @@
 
 
 
+## 2026-07-16 — Session: domain topology → storefronts on `tokophi.id`, custom domains via `cname.tokophi.cc` (CF for SaaS) · **infra LIVE, DomainCard code NOT yet deployed**
+
+**Final split (with user):** platform = `tokophi.com` (landing/`app.`/`rich.` — untouched) · storefront default = **`<slug>.tokophi.id`** · custom domains → **`cname.tokophi.cc`**.
+
+- **LIVE now (applied directly on Cloudflare + the origin box, verified):** `tokophi.id` zone active; Traefik dynamic router `ops/tokophi-stores-id.yaml` serves `<slug>.tokophi.id` (200, valid cert); `ops/tokophi-com-to-id-redirect.yaml` 301/308s old `<slug>.tokophi.com` → `.id`; Cloudflare for SaaS **enabled** on `tokophi.cc`, fallback origin `cname.tokophi.cc` active. Coolify env `STOREFRONT_BASE_DOMAIN=tokophi.id` + `CUSTOM_DOMAIN_CNAME_TARGET=cname.tokophi.cc` written (via `/root/cf_env.py`) — applies on next redeploy.
+- **Coded, built clean, NOT deployed (needs commit → push → merge `main` → Coolify redeploy):** Seller → Pengaturan → Domain now shows the **system-locked** `<slug>.tokophi.id` (read-only) + a Shopify-style connect tutorial; `lib/actions/domain.ts` hardened (`addDomain` refuses all platform zones `tokophi.id/.com/.cc`, `MAX_DOMAINS_PER_STORE=5`). `next build` (admin) green. Files: `apps/admin/lib/data/domain.ts`, `apps/admin/lib/actions/domain.ts`, `apps/admin/components/admin/pengaturan/domain-card.tsx`.
+- **Next:** deploy (merge to main) → then screen all 3 panels on the live `.id`/prod (console-clean) + slice-4 provider client (register custom hostname via CF API) remains. See `CUSTOM_DOMAIN.md`, memory `custom-domain-infra`.
+
 ## 2026-07-15 — Session: MERGED TO MAIN + DEPLOYED + store-profile editor closes the whatsapp gap ✅ `b937a93` on main, deployed, validated in production
 > Everything from the day's sessions is now LIVE on tokophi.com.
 

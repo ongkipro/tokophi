@@ -1,0 +1,31 @@
+# Traefik dynamic router — storefront seller subdomains on tokophi.id (namatoko.tokophi.id).
+#
+# DEPLOYED TO: /data/coolify/proxy/dynamic/tokophi-stores-id.yaml on the origin box (the proxy
+# watches that dir with providers.file.watch=true → hot reload, no restart). This copy lives in
+# the repo so a box re-provision (Vultr → Hetzner) can restore it — the deployed dynamic files
+# are NOT otherwise tracked. To (re)install:  scp ops/tokophi-stores-id.yaml root@<box>:/data/coolify/proxy/dynamic/
+#
+# WHY A FILE, NOT A CONTAINER LABEL: the .com wildcard is a docker label on the storefront
+# service (docker-compose.coolify.yml). Rather than recreate that container to add a sibling, this
+# file references the STABLE docker-provider service `tokophi-stores@docker` (port 4327), so it
+# survives every app redeploy without knowing the container's random name suffix, and adds the
+# .id route with zero downtime.
+#
+# TLS: no certresolver → Traefik's DEFAULT cert (Cloudflare Origin CA *.tokophi.com). It does NOT
+# cover *.tokophi.id, which is fine: the tokophi.id zone SSL mode is `full` (NOT strict), so
+# Cloudflare does not validate the origin cert on this leg. Browsers get Cloudflare's own edge
+# cert for *.tokophi.id (Universal SSL — one wildcard level, same constraint as .com).
+#
+# priority 1 = lowest (same as the .com wildcard) so explicit Host routers (app./rich.) win first.
+# Host header reaches the app untouched → tenant resolved from it. Reserved first labels
+# (app/rich/www/toko/…) don't resolve as a slug → they fall to STORE_SLUG (the demo store); if a
+# dedicated app.tokophi.id / rich.tokophi.id surface is ever wanted, give it its own explicit router.
+http:
+  routers:
+    tokophi-stores-id:
+      rule: 'HostRegexp(`^[a-z0-9-]+\.tokophi\.id$`)'
+      entryPoints:
+        - https
+      priority: 1
+      service: tokophi-stores@docker
+      tls: {}

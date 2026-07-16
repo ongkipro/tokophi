@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { toast } from "sonner";
-import { Globe, Loader2, Copy, Check, Star, Trash2, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Globe, Loader2, Copy, Check, Star, Trash2, ShieldCheck, TriangleAlert, Lock, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Input } from "@tokophi/ui/input";
@@ -65,7 +65,8 @@ function CopyField({ label, value }: { label: string; value: string }) {
 export function DomainCard() {
   const canWrite = useCan("settings:write");
   const [rows, setRows] = React.useState<StoreDomainRow[] | null>(null);
-  const [cnameTarget, setCnameTarget] = React.useState("cname.tokophi.com");
+  const [cnameTarget, setCnameTarget] = React.useState("cname.tokophi.cc");
+  const [systemDomain, setSystemDomain] = React.useState("");
   const [host, setHost] = React.useState("");
   const [busy, start] = React.useTransition();
   const [busyId, setBusyId] = React.useState<string | null>(null);
@@ -75,6 +76,7 @@ export function DomainCard() {
       (r) => {
         setRows(r.rows);
         setCnameTarget(r.cnameTarget);
+        setSystemDomain(r.systemDomain);
       },
       () => setRows([]),
     );
@@ -100,15 +102,60 @@ export function DomainCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Globe className="h-5 w-5" /> Domain Kustom
+          <Globe className="h-5 w-5" /> Domain
         </CardTitle>
         <CardDescription>
-          Pakai domain milikmu sendiri (mis. <span className="font-mono">toko-kamu.com</span>) untuk storefront.
-          Tanpa ini, tokomu tetap bisa diakses di <span className="font-mono">{"<toko>"}.tokophi.com</span>.
+          Tokomu selalu punya alamat bawaan di <span className="font-mono">.tokophi.id</span>. Kamu juga
+          bisa menghubungkan domain milikmu sendiri (mis. <span className="font-mono">toko-kamu.com</span>).
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-6">
+        {/* System domain — always on, assigned by the platform, NOT editable by the merchant.
+            This is <slug>.tokophi.id, derived from the store slug (see systemDomainFor). */}
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Domain bawaan
+          </p>
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/30 p-4">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <ShieldCheck className="h-5 w-5 shrink-0 text-emerald-600" />
+              <div className="min-w-0">
+                <p className="truncate font-mono text-sm font-medium">
+                  {systemDomain || <span className="text-muted-foreground">memuat…</span>}
+                </p>
+                <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                  <Lock className="h-3 w-3" /> Aktif otomatis · diatur sistem, tidak bisa diubah
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge className="bg-emerald-100 text-emerald-800">Aktif</Badge>
+              {systemDomain && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  nativeButton={false}
+                  render={
+                    <a href={`https://${systemDomain}`} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="mr-1 h-3.5 w-3.5" /> Kunjungi
+                    </a>
+                  }
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t pt-5">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Domain kustom
+          </p>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Punya domain sendiri? Hubungkan agar storefront tampil di alamatmu. Pengunjung di alamat
+            bawaan akan diarahkan ke domain utama.
+          </p>
+          <div className="space-y-4">
         {/* Add */}
         {canWrite && (
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -196,12 +243,36 @@ export function DomainCard() {
           </ul>
         )}
 
-        <p className="text-xs text-muted-foreground">
-          Cara setup: di panel DNS domainmu, buat <span className="font-medium">CNAME</span> yang mengarah ke{" "}
-          <span className="font-mono">{cnameTarget}</span>, dan satu record <span className="font-medium">TXT</span> untuk
-          verifikasi kepemilikan. Lalu klik Verifikasi. Domain apex (tanpa <span className="font-mono">www</span>) mungkin
-          perlu fitur CNAME-flattening/ALIAS di registrar-mu.
-        </p>
+        {/* Shopify-style step-by-step tutorial */}
+        <div className="mt-4 rounded-xl border bg-muted/20 p-4">
+          <p className="mb-3 text-sm font-medium">Cara menghubungkan domain</p>
+          <ol className="space-y-2.5 text-xs text-muted-foreground">
+            <li className="flex gap-2.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">1</span>
+              <span>Ketik domainmu di kolom atas (mis. <span className="font-mono">toko-kamu.com</span> atau <span className="font-mono">www.toko-kamu.com</span>), lalu klik <span className="font-medium text-foreground">Tambah</span>.</span>
+            </li>
+            <li className="flex gap-2.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">2</span>
+              <span>Buka panel DNS di penyedia domainmu, lalu buat dua record yang kami tampilkan: satu <span className="font-medium text-foreground">CNAME</span> mengarah ke <span className="font-mono">{cnameTarget}</span>, dan satu <span className="font-medium text-foreground">TXT</span> untuk bukti kepemilikan.</span>
+            </li>
+            <li className="flex gap-2.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">3</span>
+              <span>Klik <span className="font-medium text-foreground">Verifikasi</span>. Setelah kepemilikan terbukti, sertifikat keamanan (SSL) diterbitkan otomatis — biasanya beberapa menit. Perubahan DNS bisa perlu waktu hingga 24 jam.</span>
+            </li>
+            <li className="flex gap-2.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">4</span>
+              <span>Saat statusnya <span className="font-medium text-foreground">Aktif</span>, klik <span className="font-medium text-foreground">Jadikan utama</span> agar semua pengunjung diarahkan ke domainmu.</span>
+            </li>
+          </ol>
+          <p className="mt-3 border-t pt-3 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Domain tanpa <span className="font-mono">www</span>?</span>{" "}
+            Sebagian penyedia tidak mengizinkan CNAME di domain utama. Solusinya: pakai <span className="font-mono">www.toko-kamu.com</span> sebagai
+            domain utama lalu arahkan (redirect) domain polosmu ke sana, atau gunakan fitur CNAME-flattening/ALIAS bila tersedia.
+            Email di domainmu tidak terpengaruh.
+          </p>
+        </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

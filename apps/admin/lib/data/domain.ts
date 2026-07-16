@@ -23,9 +23,29 @@ export type StoreDomainRow = {
 };
 
 // The CNAME target and the base domain both come from env — this is a multi-tenant deploy and neither
-// is knowable at build time. `cname.tokophi.com` is the documented default (it is already RESERVED in
-// the storefront's host resolver).
-export const CNAME_TARGET = process.env.CUSTOM_DOMAIN_CNAME_TARGET || "cname.tokophi.com";
+// is knowable at build time. Defaults match production (storefronts on tokophi.id, custom hostnames
+// forwarded through cname.tokophi.cc via Cloudflare-for-SaaS).
+export const CNAME_TARGET = process.env.CUSTOM_DOMAIN_CNAME_TARGET || "cname.tokophi.cc";
+export const BASE_DOMAIN = (process.env.STOREFRONT_BASE_DOMAIN || "tokophi.id").toLowerCase();
+
+// Platform-owned zones a merchant may NEVER attach as a "custom" domain: the storefront base
+// (tokophi.id), the platform surfaces (tokophi.com → app./rich./landing), and the Cloudflare-for-SaaS
+// fallback zone (tokophi.cc). Blocking the whole set — not just the base — stops a merchant from
+// squatting `app.tokophi.com`, `cname.tokophi.cc`, or another store's `<slug>.tokophi.id`. Kept here so
+// the rule lives in ONE place next to the domains it protects.
+export const PLATFORM_ZONES = Array.from(
+  new Set([BASE_DOMAIN, "tokophi.id", "tokophi.com", "tokophi.cc"]),
+);
+
+// Max custom domains a single store may attach (apex + www + a campaign domain, with headroom). A
+// hard cap keeps one store from filling the UNIQUE(host) space or the verification poller.
+export const MAX_DOMAINS_PER_STORE = 5;
+
+/** The always-on, system-assigned storefront address `<slug>.<base>` (e.g. batik-nusantara.tokophi.id).
+ *  Not a store_domains row — it is DERIVED from the store slug, and the merchant can never change it. */
+export function systemDomainFor(slug: string): string {
+  return `${slug}.${BASE_DOMAIN}`;
+}
 
 /** The DNS records a merchant copies. Kept in one place so the card and the verifier never disagree. */
 export function domainRecords(host: string, token: string) {

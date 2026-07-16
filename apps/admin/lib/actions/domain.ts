@@ -6,7 +6,16 @@ import { resolveTxt } from "node:dns/promises";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
-import { domainRecords, getStoreDomains, CNAME_TARGET, type StoreDomainRow } from "@/lib/data/domain";
+import {
+  domainRecords,
+  getStoreDomains,
+  systemDomainFor,
+  CNAME_TARGET,
+  PLATFORM_ZONES,
+  MAX_DOMAINS_PER_STORE,
+  type StoreDomainRow,
+} from "@/lib/data/domain";
+import { getStoreSlug } from "@/lib/data/store";
 
 // Custom-domain writes (Pengaturan → Domain). CUSTOM_DOMAIN.md.
 //
@@ -28,9 +37,18 @@ type Result = { ok: true } | { ok: false; error: string };
 // Reads are exposed as a server action, not imported from lib/data directly: that module is
 // `server-only`, and the card is a client component. `cnameTarget` rides along so the client never has
 // to import the env-reading constant either.
-export async function listDomains(): Promise<{ rows: StoreDomainRow[]; cnameTarget: string }> {
-  await requireCapability("settings:write", { allowSuspended: true });
-  return { rows: await getStoreDomains(), cnameTarget: CNAME_TARGET };
+export async function listDomains(): Promise<{
+  rows: StoreDomainRow[];
+  cnameTarget: string;
+  systemDomain: string;
+}> {
+  const { storeId } = await requireCapability("settings:write", { allowSuspended: true });
+  const slug = await getStoreSlug(storeId);
+  return {
+    rows: await getStoreDomains(),
+    cnameTarget: CNAME_TARGET,
+    systemDomain: slug ? systemDomainFor(slug) : "",
+  };
 }
 
 /** lowercase, strip scheme/port/path/trailing dot. Mirrors the storefront's normalizeHost. */
@@ -55,17 +73,26 @@ export async function addDomain(input: string): Promise<Result> {
   if (!HOST_RE.test(host)) {
     return { ok: false, error: "Format domain tidak valid. Contoh: toko.com atau www.toko.com" };
   }
-  // A store's OWN subdomain is served automatically — adding it as a custom domain is a no-op that
-  // would only confuse. Block the platform's own space outright.
-  const base = (process.env.STOREFRONT_BASE_DOMAIN || "tokophi.com").toLowerCase();
-  if (host === base || host.endsWith(`.${base}`)) {
-    return { ok: false, error: `Domain ${base} sudah otomatis aktif — tambahkan domain milikmu sendiri.` };
+  // SECURITY: a merchant may never attach any platform-owned zone (tokophi.id/.com/.cc) or a host
+  // under it — that would let them squat `app.tokophi.com`, the `cname.tokophi.cc` fallback, or
+  // another store's `<slug>.tokophi.id`. The store's own `<slug>.tokophi.id` is already served
+  // automatically and is system-locked; there is nothing to add here.
+  if (PLATFORM_ZONES.some((z) => host === z || host.endsWith(`.${z}`))) {
+    return { ok: false, error: "Domain bawaan sistem tidak bisa ditambahkan. Masukkan domain milikmu sendiri (mis. toko-kamu.com)." };
   }
 
   const token = randomBytes(16).toString("hex"); // 32 hex
 
   try {
     return await withTenant(storeId, async (db) => {
+      // Per-store cap: cheap guard against one store filling the UNIQUE(host) space / the poller.
+      const existing = await db
+        .select({ id: schema.storeDomains.id })
+        .from(schema.storeDomains)
+        .where(eq(schema.storeDomains.storeId, storeId));
+      if (existing.length >= MAX_DOMAINS_PER_STORE) {
+        return { ok: false, error: `Maksimal ${MAX_DOMAINS_PER_STORE} domain per toko. Hapus salah satu untuk menambah yang baru.` };
+      }
       await db.insert(schema.storeDomains).values({ storeId, host, verificationToken: token });
       await db.insert(schema.platformActivity).values({
         kind: "admin",

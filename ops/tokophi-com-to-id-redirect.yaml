@@ -1,0 +1,33 @@
+# Traefik dynamic router — 301 the OLD storefront hosts <slug>.tokophi.com → <slug>.tokophi.id.
+#
+# Storefronts now live on tokophi.id (see tokophi-stores-id.yaml). This makes tokophi.id the single
+# canonical storefront domain: <slug>.tokophi.com stops being a duplicate and instead 301s to .id,
+# so old links / QR codes / bookmarks keep working (they just bounce). Slug + path + query preserved.
+#
+# DEPLOYED TO: /data/coolify/proxy/dynamic/tokophi-com-to-id-redirect.yaml (proxy watches the dir →
+# hot reload). This repo copy is for box re-provision. Reinstall: scp ops/tokophi-com-to-id-redirect.yaml root@<box>:/data/coolify/proxy/dynamic/
+#
+# PRIORITY: 2 — BEATS the storefront .com wildcard `tokophi-stores` (priority 1) so the redirect wins
+# over serving the store, but LOSES to the explicit high-priority Host routers for app./rich./toko./
+# www.tokophi.com (Coolify-generated, priority = rule length ≫ 2), so the platform surfaces + the
+# demo host are untouched. Only merchant-slug .com hosts (which nothing else claims) are redirected.
+#
+# replacement uses ${1}/${2} (file provider reads these directly — unlike Coolify LABELS, which need
+# $${1}; see the www-apex note in docker-compose.coolify.yml). tls: {} → default Origin CA cert.
+http:
+  routers:
+    tokophi-com-to-id:
+      rule: 'HostRegexp(`^[a-z0-9-]+\.tokophi\.com$`)'
+      entryPoints:
+        - https
+      priority: 2
+      middlewares:
+        - tokophi-com-to-id
+      service: tokophi-stores@docker
+      tls: {}
+  middlewares:
+    tokophi-com-to-id:
+      redirectRegex:
+        regex: '^https?://([a-z0-9-]+)\.tokophi\.com/(.*)'
+        replacement: 'https://${1}.tokophi.id/${2}'
+        permanent: true
