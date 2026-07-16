@@ -4,6 +4,18 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-16
 
+### 🧭 The header shipped Batik Nusantara's menu to every other store — the last "demo's taste" leak
+
+`getMainNav` fell back to `MAIN_MENU` from `@tokophi/data/menu`, a hardcoded copy of the demo's categories, whenever a store had no `menus` rows. That is not an edge case: it is **6 of the 7 stores** in the DB, and — per the file's own comment — **every freshly provisioned store**, because `provisionStore` seeds no menu. So the first real merchant to sign up would get a "Kategori" dropdown reading Dress / Atasan / Bawahan / Busana Muslim / Outerwear / Loungewear, in **their** header, on **every page**. Measured on kopi-senja before the fix: `/kategori/dress` → **404**, `/kategori/atasan` → **404**.
+
+Same bug as the batik hero in the fallback homepage, the brand story signed with someone else's name, the display serif in `global.css`, and the fabric-flavoured review text: the demo's content living in a platform default and leaking to every tenant. This was the last one I know of.
+
+The fallback is now **derived from the store's own collections**, which is the shape `getFooterNav` already uses in the same file ("falls back to listing the published pages"). Only routes every tenant genuinely has stay hardcoded: `/`, `/blog`, `/kontak`, and `/kategori/semua` + `/kategori/promo-gajian` (virtual collections, measured 200 on both the demo and a store with an unrelated catalogue). **No collections → no "Kategori" dropdown at all** — a missing menu item is a smaller loss than a 404.
+
+Verified per store, every header link fetched: **batik unchanged** (Beranda | Semua Produk | Kategori | Promo Gajian | Blog | Kontak — 13 links, 0 dead) because it has its own menu in the DB and this only touches the fallback; **kopi-senja and gadget-murah-id** now show 5 links, 0 dead, and no Kategori.
+
+⚠️ **Inherited, not introduced:** the fallback reads `catalog.collections`, which is built from `CATEGORY_ORDER` — a hardcoded allowlist of the demo's six handles (`catalog.ts:83`). A future store whose real collections are not on that list gets an empty list, so it fails **safe** (no dropdown) rather than wrong (links into another shop). It does not bite today because the other six stores have zero collections. The real fix is for `catalog.collections` to read the store's own rows; tracked, not done here.
+
 ### 🏠 The demo's batik homepage is back — as SELLER data this time, and it finally exercises the Store Builder
 
 `page_templates` had **zero rows**, platform-wide: the storefront's template renderer had never run against real data, and the demo's homepage looked good only because the batik content was hard-coded into the platform's fallback. Making that fallback neutral (earlier today) left the demo plain, because the content had nowhere to live. `seed-templates.ts` puts it where it belongs: Batik Nusantara's own `page_templates` row — hero (3 batik slides) → category-nav (6 real handles) → rich-text "Cerita Kami" → product-grid "Paling Dicari" → rich-text CTA. Standalone + idempotent like `seed-reviews.ts` (`npm run seed:templates -w @tokophi/db`): it inserts only when the store has no homepage template, so it is safe against a live DB and never clobbers what a merchant edited in the builder. Verified: batik renders all 5 sections, 0 broken images, 0 console errors — and `kopi-senja` still shows its own neutral fallback.

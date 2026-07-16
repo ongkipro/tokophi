@@ -6,31 +6,69 @@
 // persists the tree — so a merchant reordering their menu saw NOTHING change on their storefront.
 // This closes that: the nav is per-tenant and dynamic.
 //
-// MAIN_MENU stays as the FALLBACK, not the source: a freshly provisioned store has no menu rows yet
-// (provisionStore doesn't seed one), and a storefront with no navigation at all is worse than a
-// sensible default.
+// The FALLBACK is used when a store has no menu rows of its own — which is not an edge case: per
+// `provisionStore`, that is EVERY freshly provisioned store, and 6 of the 7 stores in the DB today.
+// A storefront with no navigation at all is worse than a sensible default, so a default there must be.
+//
+// ⚠️ It must not be a CONSTANT. It was `MAIN_MENU` from `@tokophi/data/menu` — a hardcoded copy of
+// Batik Nusantara's categories — so every store without a menu served a "Kategori" dropdown reading
+// Dress / Atasan / Bawahan / Busana Muslim / Outerwear / Loungewear. Measured on kopi-senja:
+// `/kategori/dress` → **404**, `/kategori/atasan` → **404**, on every page of the shop. Same bug as
+// the batik hero in the fallback homepage and the display serif in global.css: the demo's content
+// living in a platform default and leaking to every tenant.
+//
+// It is now DERIVED from the store's own collections, and the shape of the fix is the one
+// `getFooterNav` below already uses ("falls back to listing the published pages"). Only routes every
+// tenant genuinely has are hardcoded: `/`, `/blog`, `/kontak`, and `/kategori/semua` +
+// `/kategori/promo-gajian` — VIRTUAL collections `kategori/[handle].astro` always resolves (measured
+// 200 on both the demo and a store with an unrelated catalogue).
 //
 // INVARIANT (as everywhere in src/data): no DB access at module scope — `astro build` stays DB-free.
 import { db, schema } from "@tokophi/db";
 import { asc, eq } from "drizzle-orm";
-import { MAIN_MENU, type MenuItem } from "@tokophi/data/menu";
 import { cached } from "./cache";
 import { getPages } from "./content";
 
 export type NavChild = { label: string; href: string };
 export type NavItem = { label: string; href?: string; children?: NavChild[] };
 
-/** The hardcoded default, used when a store has no menu of its own. */
-const FALLBACK: NavItem[] = MAIN_MENU.map((it: MenuItem) => ({
-  label: it.label,
-  href: it.children && it.children.length > 0 ? undefined : it.href,
-  children: it.children?.map((c) => ({ label: c.label, href: c.href })),
-}));
+/** Just enough of `Collection` to build a menu — the caller passes `catalog.collections`. */
+export type NavCollection = { handle: string; name: string };
 
-export async function getMainNav(storeId: string): Promise<NavItem[]> {
+/**
+ * The default menu for a store that has not built one — every entry a route THIS store can serve.
+ *
+ * No collections → NO "Kategori" dropdown at all, rather than an empty one or (as before) six links
+ * into another merchant's catalogue. A missing menu item is a smaller loss than a 404.
+ */
+function fallbackNav(collections: NavCollection[]): NavItem[] {
+  const items: NavItem[] = [
+    { label: "Beranda", href: "/" },
+    { label: "Semua Produk", href: "/kategori/semua" },
+  ];
+  if (collections.length > 0) {
+    items.push({
+      label: "Kategori",
+      // No `href`: a parent with children is a dropdown trigger, not a link.
+      children: collections.map((c) => ({ label: c.name, href: `/kategori/${c.handle}` })),
+    });
+  }
+  items.push(
+    { label: "Promo Gajian", href: "/kategori/promo-gajian" },
+    { label: "Blog", href: "/blog" },
+    { label: "Kontak", href: "/kontak" },
+  );
+  return items;
+}
+
+/**
+ * @param collections the store's own collections (`catalog.collections`) — used ONLY for the
+ *   fallback. A store that has built a menu gets exactly that menu, untouched.
+ */
+export async function getMainNav(storeId: string, collections: NavCollection[] = []): Promise<NavItem[]> {
   return cached(`nav:main:${storeId}`, async () => {
     const menuId = await resolveMainMenuId(storeId);
-    if (!menuId) return FALLBACK;
+    if (!menuId) return fallbackNav(collections);
 
     const rows = await db
       .select({
@@ -44,7 +82,7 @@ export async function getMainNav(storeId: string): Promise<NavItem[]> {
       .where(eq(schema.menuItems.menuId, menuId))
       .orderBy(asc(schema.menuItems.position));
 
-    if (rows.length === 0) return FALLBACK;
+    if (rows.length === 0) return fallbackNav(collections);
 
     const byParent = new Map<string, typeof rows>();
     for (const r of rows) {

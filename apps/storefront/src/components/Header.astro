@@ -6,9 +6,11 @@ import { getMainNav, type NavItem } from "../data/nav";
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
 const { store, catalog } = Astro.locals;
-// The store's OWN menu, as built in the admin's Navigasi editor (falls back to the shared default
-// when a store has no menu rows yet).
-const MAIN_NAV = await getMainNav(store.id);
+// The store's OWN menu, as built in the admin's Navigasi editor. The collections are passed for the
+// FALLBACK only (a store that has built a menu gets exactly that menu): a store with no menu rows —
+// which is every freshly provisioned one — used to be handed a hardcoded copy of Batik Nusantara's
+// categories, so its header linked to /kategori/dress and 404'd on every page. See data/nav.ts.
+const MAIN_NAV = await getMainNav(store.id, catalog.collections);
 // Merchant logo (stores.logo_url) when set, else the store name as a wordmark.
 const logo = store.logoUrl ? mediaUrl(store.logoUrl) : null;
 const pathname = Astro.url.pathname;
