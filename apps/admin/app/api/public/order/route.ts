@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
-import { alCreatePayment, autolarisConfigured, AUTOLARIS_KNOWN_CHANNELS } from "@tokophi/lib/autolaris";
+import { alCreatePayment, autolarisConfigured } from "@tokophi/lib/autolaris";
 import {
   normalizePhone,
   normalizeName,
@@ -75,8 +75,38 @@ export async function POST(req: Request) {
   if (!items.length) return bad("Keranjang kosong.");
   const channelCode = body.channelCode ?? "cod";
   const isCod = channelCode === "cod";
-  if (!isCod && !AUTOLARIS_KNOWN_CHANNELS.some((c) => c.code === channelCode)) {
-    return bad("Metode pembayaran tidak dikenal.", "payment");
+  // The channel must be one the PLATFORM turned on — `platform_payment_channels` where
+  // `enabled AND active` (ADR 0004: channels are a platform decision, super-admin owned). This used
+  // to test `AUTOLARIS_KNOWN_CHANNELS`, which is the DISCOVERY roster of everything AutoLaris might
+  // support, not our decision — 9 of its 15 codes are switched off in the DB right now.
+  //
+  // The hole that opened: POST channelCode:"ALFAMART" passed this gate, the order was written and
+  // stock decremented, THEN alCreatePayment came back rc=07 — and the response is a 200 carrying
+  // `payError`, so checkout.astro treats it as settled and renders the success page. The shopper is
+  // told the order worked; the merchant gets a pending order with no payment row and no way for
+  // anyone to pay it. Same doctrine as COD: hiding a method in the storefront is UX, THIS is the
+  // boundary. The storefront already reads exactly this list (`enabledPaymentChannels`).
+  // The row is also what NAMES the channel in the response — the DB is the authority now, so the
+  // label the shopper reads comes from the same row that authorised the payment.
+  let payChannel: { code: string; label: string; kind: string } | null = null;
+  if (!isCod) {
+    const [ch] = await db
+      .select({
+        channel: schema.platformPaymentChannels.channel,
+        label: schema.platformPaymentChannels.label,
+        kind: schema.platformPaymentChannels.kind,
+      })
+      .from(schema.platformPaymentChannels)
+      .where(
+        and(
+          eq(schema.platformPaymentChannels.channel, channelCode),
+          eq(schema.platformPaymentChannels.enabled, true),
+          eq(schema.platformPaymentChannels.active, true),
+        ),
+      )
+      .limit(1);
+    if (!ch) return bad("Metode pembayaran tidak tersedia.", "payment");
+    payChannel = { code: ch.channel, label: ch.label, kind: ch.kind };
   }
 
   // resolve store (per-client storefront → one store)
@@ -155,12 +185,29 @@ export async function POST(req: Request) {
       })
       .from(schema.productVariants)
       .where(eq(schema.productVariants.productId, prod.id));
-    // Same resolution as the weight sum (lib/shipping-weight.ts): the exact combo title, else the
-    // default (position-0) variant — legacy "sizes" products have no matching variant row and must
-    // still sell.
-    const match =
-      (i.variant && vars.find((v) => v.title === i.variant)) || vars.slice().sort((a, b) => a.position - b.position)[0];
-    if (!match) return bad(`Produk "${prod.title}" sudah tidak tersedia.`, "items");
+    // A NAMED variant must MATCH. It used to fall through to the position-0 variant whenever the
+    // title lookup missed:
+    //   (i.variant && vars.find(...)) || vars.sort(...)[0]
+    // The `||` fallback is meant for legacy "sizes" products that have no variant rows at all — but
+    // it fired for every product. `i.variant` is a string the BROWSER rebuilds and parks in
+    // localStorage ("Hitam / L"), so a variant renamed in the Seller editor, reordered options, or a
+    // week-old cart all miss the exact-title match — and the order silently became "Putih / S":
+    // stock checked against the wrong variant (a sold-out Hitam / L sails through), the wrong one
+    // decremented, and the wrong colour and size in the box. The shopper is never told.
+    //
+    // Same rule the shipping quote already follows: a picked thing that is no longer on offer is
+    // REJECTED, never silently substituted. Only a cart that named NO variant takes the default.
+    const match = i.variant
+      ? vars.find((v) => v.title === i.variant)
+      : vars.slice().sort((a, b) => a.position - b.position)[0];
+    if (!match) {
+      return bad(
+        i.variant
+          ? `Varian "${i.variant}" untuk "${prod.title}" sudah tidak tersedia. Muat ulang halaman produk.`
+          : `Produk "${prod.title}" sudah tidak tersedia.`,
+        "items",
+      );
+    }
 
     const [inv] = await db
       .select({ available: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)` })
@@ -218,6 +265,20 @@ export async function POST(req: Request) {
   // any row is written. The province is the one DERIVED from the district id (above), and `total` is
   // the one WE priced — both were client claims once, and both were the hole.
   if (isCod) {
+    // `rate.cod` is the EFFECTIVE flag for THIS destination — KiriminAja's live answer for this
+    // actual route (shipping-quote.ts) × the platform's `codAllowed` × the store's switch. It was
+    // computed here and then never read: the gate below consults `policy.reason()`, which is built
+    // purely from STORED config (platform_couriers.services[].codAllowed), so it cannot know that
+    // the courier refuses COD to this particular district. The ongkir response already carries the
+    // false flag and the checkout hides the option — but that is the UX layer, and a direct POST of
+    // channelCode:"cod" sailed through because key("spx","1") is on the allow-list. The result is a
+    // parcel booked COD on a service that will not collect COD there.
+    if (!rate.cod) {
+      return NextResponse.json(
+        { ok: false, error: "COD tidak tersedia untuk layanan dan tujuan ini.", code: "cod_not_allowed" },
+        { status: 403, headers: CORS },
+      );
+    }
     const policy = await getCodPolicy(store.id);
     const reason = policy.reason({ courier: svcCode, serviceType: svcType, total, province: provinsi });
     if (reason) {
@@ -349,7 +410,13 @@ export async function POST(req: Request) {
     adminFee: pay.admin ?? 0, total: pay.total ?? total,
     virtualAccount: pay.virtualAccount, qr: pay.qr, url: pay.url, paymentCode: pay.paymentCode,
   });
-  const channel = AUTOLARIS_KNOWN_CHANNELS.find((c) => c.code === channelCode)!;
+  // `payChannel` is set by the gate above for every non-COD order, and the COD path returned long
+  // before here — so the `??` is unreachable. It exists because this line runs AFTER the payment was
+  // created, and it must not be the thing that throws. It used to be
+  // `AUTOLARIS_KNOWN_CHANNELS.find(...)!` — a non-null assertion against a roster this endpoint no
+  // longer validates against, so a channel enabled in the DB but missing from that list would 500
+  // with the shopper's money already in flight and the order already written.
+  const channel = payChannel ?? { code: channelCode, label: channelCode, kind: "va" };
   return NextResponse.json({
     ok: true, orderNumber: order.number,
     // The ongkir + total the SERVER decided, echoed back so a stale quote in the browser cannot leave
