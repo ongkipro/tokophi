@@ -588,7 +588,21 @@ export async function createShipment(input: {
   const awb = r.awb ?? null;
   await withTenant(storeId, (db) =>
     db.update(schema.orders)
-      .set({ awb, courier: input.serviceName, kaOrderId: r.kaOrderId, status: "dikirim" })
+      // `courier` takes the CODE (`spx`), never `serviceName` ("SPX Standard"). It held the display
+      // name until 2026-07-16 and that quietly corrupted every booked order: `orders.courier` is a
+      // JOIN KEY — to platform_couriers (which carries `codAllowed` and the `group` behind the
+      // 1 day/reguler/ekonomi/cargo filter) and to the per-courier COD return report. "SPX Standard"
+      // matches nothing, so a booked order silently vanished from all of them.
+      // `serviceType` moves with it: the seller may book a DIFFERENT service than the shopper picked,
+      // and leaving the old type behind pairs one courier with another's service — production had
+      // exactly that (courier "SAP Satria Reg" carrying JNE's REG23).
+      .set({
+        awb,
+        courier: input.service,
+        serviceType: input.serviceType,
+        kaOrderId: r.kaOrderId,
+        status: "dikirim",
+      })
       .where(eq(schema.orders.number, input.orderNumber)),
   );
   revalidatePath(`/pesanan/${input.orderNumber}`);

@@ -379,6 +379,13 @@
       "when": 1784188221358,
       "tag": "0053_order_service_type",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1784188221359,
+      "tag": "0054_repair_courier_code",
+      "breakpoints": true
     }
   ]
 }
