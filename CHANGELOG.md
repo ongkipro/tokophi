@@ -4,6 +4,43 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-16
 
+### 📐 Checkout boxed at 1080, tablet rescued, fields tightened
+
+**"Melebar banget"** — measured, and it was. `lg:grid-cols-2` gave each column a share of the
+**viewport**, so at 1920 the columns were **960px each**: the recessed panel ate half a monitor and the
+form's fields drifted 400px from the logo. A checkout is a form, and a form has a right size, not a
+share. Now **580 + 480 inside a centred 1080 box**, and it stops growing there.
+
+⚠️ **The tablet was worse and nobody had looked.** Between 640 and 1023 this is a single column and the
+boxes were `w-full`, so at **768 one email field stretched 720px across the screen**. Every screenshot
+in this session was 390 or 1440 — the tablet never entered the frame, and it took measuring 8 widths at
+once to see it. Capped at 628 (= the same 580 of content plus its 48 of padding), centred. Header and
+footer are boxed to the same grid, or the logo hangs where the fields under it are not.
+
+**Fields tightened**: 3.5rem/1.5rem-of-top-padding read as slabs; now 3rem/1.25rem. Height and padding
+are where "minimal" comes from, not a smaller word. ⚠️ **The 15px font is DESKTOP-ONLY and must stay
+that way.** iOS Safari zooms the page when a focused control computes under 16px and never zooms back;
+`global.css` enforces 16px under `pointer: coarse` with a specificity hack written precisely to beat
+`.input-field`. So the `0.9375rem` is a reduction the touch guard silently overrides — **do not
+"simplify" it to 15px everywhere**. Measured both ways on the LIVE site: mouse@1440 → 15px; touch@390 →
+16px, 0 inputs under the threshold.
+
+**Summary title** was `truncate` — ONE line. "Hijab Voal Segi Empat Motif Bunga Premium Ukuran Jumbo
+Warna Dusty Pink" became "Hijab Voal Segi Empat Motif…" in a panel with room to spare, and an
+Indonesian product title is routinely that long. `line-clamp-2` now gives two lines before clipping: a
+long name keeps enough to be recognised, a short one still reads in full.
+
+Verified on **live** (`batik-nusantara.tokophi.id`) at 8 real widths — 360/390/430/768/1024/1280/1440/
+1920: box caps at 1080 from 1280 up; field 328/358/398 on phones, **580 on tablet (was 720)**, 516 on
+desktop; logo↔field aligned at **every** width; no horizontal overflow anywhere.
+
+⚠️ **A note on verification, because it bit four times today.** Greps lie about this page: Astro bundles
+`<style>` blocks into a hashed CSS file, so `curl … | grep "min-height: 3rem"` returns 0 on a page that
+is rendering it perfectly. Same family as the other three misreads this session (a `div` selector for a
+`<button>`, measuring mid-transition, and a `main` ref stale by three days). **Only a real browser
+against the real URL answers these questions.**
+
+
 ### 🧾 The thank-you page follows the CHECKOUT, and COD finally has an invoice
 
 It sat inside `CheckoutLayout` — so it wore the checkout's white/blue chrome — while its **content was
