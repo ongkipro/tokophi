@@ -37,9 +37,19 @@ export const PLATFORM_ZONES = Array.from(
   new Set([BASE_DOMAIN, "tokophi.id", "tokophi.com", "tokophi.cc"]),
 );
 
-// Max custom domains a single store may attach (apex + www + a campaign domain, with headroom). A
-// hard cap keeps one store from filling the UNIQUE(host) space or the verification poller.
-export const MAX_DOMAINS_PER_STORE = 5;
+// A store attaches AT MOST its root/apex domain + the `www.` of it — like Shopify's primary+redirect
+// pair. Not a free-for-all: one `www` host and one non-`www` (root) host, full stop. `domainKind`
+// classifies which slot a host wants; `addDomain` rejects a second host of the same kind.
+export type DomainKind = "root" | "www";
+export function domainKind(host: string): DomainKind {
+  return /^www\./i.test(host) ? "www" : "root";
+}
+// A domain whose ownership is already proven (cert provisioning or live) is LOCKED — the merchant
+// can't quietly detach it. Changing it goes through a support ticket to the platform (admin/super).
+export const LOCKED_STATUSES = ["provisioning", "active"] as const;
+export function isLockedStatus(status: StoreDomainRow["status"]): boolean {
+  return (LOCKED_STATUSES as readonly string[]).includes(status);
+}
 
 /** The always-on, system-assigned storefront address `<slug>.<base>` (e.g. batik-nusantara.tokophi.id).
  *  Not a store_domains row — it is DERIVED from the store slug, and the merchant can never change it. */

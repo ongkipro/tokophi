@@ -1,14 +1,18 @@
 "use client";
 import * as React from "react";
 import { toast } from "sonner";
-import { Globe, Loader2, Copy, Check, Star, Trash2, ShieldCheck, TriangleAlert, Lock, ExternalLink } from "lucide-react";
+import { Globe, Loader2, Copy, Check, Star, Trash2, ShieldCheck, TriangleAlert, Lock, ExternalLink, LifeBuoy } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Input } from "@tokophi/ui/input";
 import { Badge } from "@tokophi/ui/badge";
 import { useCan } from "@/components/admin/permissions";
 import type { StoreDomainRow } from "@/lib/data/domain";
-import { listDomains, addDomain, verifyDomain, setPrimaryDomain, removeDomain } from "@/lib/actions/domain";
+import { listDomains, addDomain, verifyDomain, setPrimaryDomain, removeDomain, requestDomainChange } from "@/lib/actions/domain";
+
+// A domain whose ownership is proven (cert provisioning/live) is locked — mirrors isLockedStatus in
+// lib/data/domain (which is server-only and can't be imported into this client component).
+const isLocked = (s: StoreDomainRow["status"]) => s === "provisioning" || s === "active";
 
 // Pengaturan → Domain. A merchant attaches their own domain (toko.com) to their storefront.
 // CUSTOM_DOMAIN.md.
@@ -62,6 +66,26 @@ function CopyField({ label, value }: { label: string; value: string }) {
   );
 }
 
+// One DNS record shown the way a registrar's panel asks for it: Tipe · Nama/Host · Nilai. The Name is
+// the crux for beginners — for a root/apex domain most panels want `@` (or an empty Name), for `www`
+// they want `www`. We spell it out so nobody pastes the full domain into the Name box.
+function RecordCard({ type, name, value, note }: { type: string; name: string; value: string; note?: string }) {
+  return (
+    <div className="rounded-lg border bg-background p-3">
+      <div className="grid gap-2 sm:grid-cols-[auto_1fr]">
+        <div className="flex items-center gap-2">
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-primary">{type}</span>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <CopyField label="Nama / Host" value={name} />
+          <CopyField label="Nilai / Value" value={value} />
+        </div>
+      </div>
+      {note && <p className="mt-2 text-[11px] text-muted-foreground">{note}</p>}
+    </div>
+  );
+}
+
 export function DomainCard() {
   const canWrite = useCan("settings:write");
   const [rows, setRows] = React.useState<StoreDomainRow[] | null>(null);
@@ -106,7 +130,7 @@ export function DomainCard() {
         </CardTitle>
         <CardDescription>
           Tokomu selalu punya alamat bawaan di <span className="font-mono">.tokophi.id</span>. Kamu juga
-          bisa menghubungkan domain milikmu sendiri (mis. <span className="font-mono">toko-kamu.com</span>).
+          bisa menghubungkan domain milikmu sendiri (mis. <span className="font-mono">namadomaintokomu.com</span>).
         </CardDescription>
       </CardHeader>
 
@@ -153,7 +177,8 @@ export function DomainCard() {
           </p>
           <p className="mb-3 text-xs text-muted-foreground">
             Punya domain sendiri? Hubungkan agar storefront tampil di alamatmu. Pengunjung di alamat
-            bawaan akan diarahkan ke domain utama.
+            bawaan akan diarahkan ke domain utama. Batas: <span className="font-medium text-foreground">satu domain utama + satu www</span> (mis.{" "}
+            <span className="font-mono">namadomaintokomu.com</span> dan <span className="font-mono">www.namadomaintokomu.com</span>).
           </p>
           <div className="space-y-4">
         {/* Add */}
@@ -162,7 +187,7 @@ export function DomainCard() {
             <Input
               value={host}
               onChange={(e) => setHost(e.target.value)}
-              placeholder="toko-kamu.com"
+              placeholder="namadomaintokomu.com"
               inputMode="url"
               autoCapitalize="none"
               spellCheck={false}
@@ -217,25 +242,66 @@ export function DomainCard() {
                             {rowBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><ShieldCheck className="mr-1 h-3.5 w-3.5" /> Verifikasi</>}
                           </Button>
                         )}
-                        <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-red-600" disabled={rowBusy} onClick={() => run(d.id, () => removeDomain(d.id), "Domain dihapus.")}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {isLocked(d.status) ? (
+                          // Verified/locked: no self-serve delete. The seller opens a ticket; super-admin acts.
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-muted-foreground hover:text-foreground"
+                            disabled={rowBusy}
+                            title="Ajukan perubahan domain (lewat tim kami)"
+                            onClick={() => {
+                              const note = window.prompt(`Ajukan perubahan/penghapusan domain ${d.host}. Alasan (opsional):`);
+                              if (note === null) return; // cancelled
+                              run(d.id, () => requestDomainChange(d.id, note), "Permintaan terkirim — tim kami akan memprosesnya.");
+                            }}
+                          >
+                            <LifeBuoy className="mr-1 h-3.5 w-3.5" /> Ajukan perubahan
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-red-600" disabled={rowBusy} title="Hapus domain" onClick={() => run(d.id, () => removeDomain(d.id), "Domain dihapus.")}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
 
                   <p className="mt-1.5 flex items-start gap-1.5 text-xs text-muted-foreground">
                     {meta.tone === "amber" && <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />}
-                    {d.status === "error" && d.lastError ? d.lastError : meta.hint}
+                    {d.status === "error" && d.lastError
+                      ? d.lastError
+                      : d.status === "active"
+                        ? d.isPrimary
+                          ? "Domain utama — semua pengunjung diarahkan ke sini."
+                          : "Aktif — pengunjung dialihkan ke domain utama. Klik “Jadikan utama” untuk membalik arah."
+                        : meta.hint}
                   </p>
 
                   {/* DNS records — shown until the domain is live. A merchant needs them to set up DNS,
-                      and again to debug a stuck verification. */}
+                      and again to debug a stuck verification. Name/Host spelled out: `@` for a root
+                      domain, `www` for the www one — the #1 thing beginners get wrong. */}
                   {(d.status === "pending" || d.status === "verifying" || d.status === "provisioning") && (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      <CopyField label="CNAME — arahkan domainmu ke" value={cnameTarget} />
-                      <CopyField label={`TXT — ${d.txtName}`} value={d.txtValue} />
-                    </div>
+                    (() => {
+                      const isWww = /^www\./i.test(d.host);
+                      return (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs font-medium">Tambahkan 2 record ini di panel DNS domainmu:</p>
+                          <RecordCard
+                            type="CNAME"
+                            name={isWww ? "www" : "@"}
+                            value={cnameTarget}
+                            note={isWww ? "Nama diisi “www”." : "Untuk domain utama (tanpa www), isi Nama dengan “@” atau kosongkan (tergantung penyedia)."}
+                          />
+                          <RecordCard
+                            type="TXT"
+                            name={isWww ? "_tokophi-verify.www" : "_tokophi-verify"}
+                            value={d.txtValue}
+                            note="Bukti kepemilikan. Bisa dihapus setelah domain aktif."
+                          />
+                        </div>
+                      );
+                    })()
                   )}
                 </li>
               );
@@ -249,7 +315,7 @@ export function DomainCard() {
           <ol className="space-y-2.5 text-xs text-muted-foreground">
             <li className="flex gap-2.5">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">1</span>
-              <span>Ketik domainmu di kolom atas (mis. <span className="font-mono">toko-kamu.com</span> atau <span className="font-mono">www.toko-kamu.com</span>), lalu klik <span className="font-medium text-foreground">Tambah</span>.</span>
+              <span>Ketik domainmu di kolom atas (mis. <span className="font-mono">namadomaintokomu.com</span> atau <span className="font-mono">www.namadomaintokomu.com</span>), lalu klik <span className="font-medium text-foreground">Tambah</span>.</span>
             </li>
             <li className="flex gap-2.5">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">2</span>
@@ -266,9 +332,14 @@ export function DomainCard() {
           </ol>
           <p className="mt-3 border-t pt-3 text-xs text-muted-foreground">
             <span className="font-medium text-foreground">Domain tanpa <span className="font-mono">www</span>?</span>{" "}
-            Sebagian penyedia tidak mengizinkan CNAME di domain utama. Solusinya: pakai <span className="font-mono">www.toko-kamu.com</span> sebagai
+            Sebagian penyedia tidak mengizinkan CNAME di domain utama. Solusinya: pakai <span className="font-mono">www.namadomaintokomu.com</span> sebagai
             domain utama lalu arahkan (redirect) domain polosmu ke sana, atau gunakan fitur CNAME-flattening/ALIAS bila tersedia.
             Email di domainmu tidak terpengaruh.
+          </p>
+          <p className="mt-2 flex items-start gap-1.5 text-xs text-muted-foreground">
+            <Lock className="mt-0.5 h-3 w-3 shrink-0" />
+            Setelah domain <span className="font-medium text-foreground">aktif</span>, ia dikunci demi keamanan. Untuk mengubah atau
+            melepasnya, klik <span className="font-medium text-foreground">Ajukan perubahan</span> — tim kami yang memproses lewat tiket.
           </p>
         </div>
           </div>

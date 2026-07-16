@@ -10,12 +10,14 @@ import {
   domainRecords,
   getStoreDomains,
   systemDomainFor,
+  domainKind,
+  isLockedStatus,
   CNAME_TARGET,
   PLATFORM_ZONES,
-  MAX_DOMAINS_PER_STORE,
   type StoreDomainRow,
 } from "@/lib/data/domain";
 import { getStoreSlug } from "@/lib/data/store";
+import { createTicket } from "@/lib/actions/support";
 
 // Custom-domain writes (Pengaturan → Domain). CUSTOM_DOMAIN.md.
 //
@@ -85,13 +87,21 @@ export async function addDomain(input: string): Promise<Result> {
 
   try {
     return await withTenant(storeId, async (db) => {
-      // Per-store cap: cheap guard against one store filling the UNIQUE(host) space / the poller.
+      // One root + one www per store (Shopify's primary+redirect shape). Reject a second host of the
+      // same kind — not a raw count, so the seller can't attach five random subdomains.
       const existing = await db
-        .select({ id: schema.storeDomains.id })
+        .select({ host: schema.storeDomains.host })
         .from(schema.storeDomains)
         .where(eq(schema.storeDomains.storeId, storeId));
-      if (existing.length >= MAX_DOMAINS_PER_STORE) {
-        return { ok: false, error: `Maksimal ${MAX_DOMAINS_PER_STORE} domain per toko. Hapus salah satu untuk menambah yang baru.` };
+      const kind = domainKind(host);
+      if (existing.some((e) => domainKind(e.host) === kind)) {
+        return {
+          ok: false,
+          error:
+            kind === "www"
+              ? "Kamu sudah punya satu domain www. Batasnya satu domain utama + satu www."
+              : "Kamu sudah punya satu domain utama. Batasnya satu domain utama + satu www (mis. namadomaintokomu.com dan www.namadomaintokomu.com).",
+        };
       }
       await db.insert(schema.storeDomains).values({ storeId, host, verificationToken: token });
       await db.insert(schema.platformActivity).values({
@@ -207,11 +217,21 @@ export async function removeDomain(id: string): Promise<Result> {
 
   return withTenant(storeId, async (db) => {
     const [row] = await db
-      .select({ host: schema.storeDomains.host })
+      .select({ host: schema.storeDomains.host, status: schema.storeDomains.status })
       .from(schema.storeDomains)
       .where(and(eq(schema.storeDomains.id, id), eq(schema.storeDomains.storeId, storeId)))
       .limit(1);
     if (!row) return { ok: false, error: "Domain tidak ditemukan." };
+
+    // A domain whose ownership is proven (cert provisioning/live) is LOCKED: removing or swapping it
+    // silently could point a live storefront at nothing, or free a host someone relies on. Changing it
+    // is a platform decision — the seller raises a ticket (requestDomainChange), super-admin acts.
+    if (isLockedStatus(row.status)) {
+      return {
+        ok: false,
+        error: "Domain ini sudah terverifikasi dan dikunci. Ajukan perubahan lewat tiket — tim kami yang memprosesnya.",
+      };
+    }
 
     await db.delete(schema.storeDomains).where(eq(schema.storeDomains.id, id));
     await db.insert(schema.platformActivity).values({
@@ -222,4 +242,38 @@ export async function removeDomain(id: string): Promise<Result> {
     revalidatePath("/pengaturan");
     return { ok: true };
   });
+}
+
+/** A verified/locked domain can't be self-served away — the seller asks the platform to change it, and
+ *  that request becomes a support ticket super-admin picks up. Keeps a proven domain from being
+ *  detached on a whim while still giving the merchant a clear, tracked path to change it. */
+export async function requestDomainChange(id: string, note: string): Promise<Result> {
+  const { storeId } = await requireCapability("settings:write");
+
+  const host = await withTenant(storeId, async (db) => {
+    const [row] = await db
+      .select({ host: schema.storeDomains.host })
+      .from(schema.storeDomains)
+      .where(and(eq(schema.storeDomains.id, id), eq(schema.storeDomains.storeId, storeId)))
+      .limit(1);
+    return row?.host ?? null;
+  });
+  if (!host) return { ok: false, error: "Domain tidak ditemukan." };
+
+  const reason = (note || "").trim().slice(0, 1000);
+  const res = await createTicket(
+    `Permintaan ubah domain: ${host}`,
+    `Toko meminta perubahan/penghapusan domain terverifikasi \`${host}\`.\n\nAlasan: ${reason || "(tidak diisi)"}`,
+  );
+  if (!res.ok) return { ok: false, error: res.error ?? "Gagal membuat tiket." };
+
+  await withTenant(storeId, async (db) => {
+    await db.insert(schema.platformActivity).values({
+      kind: "admin",
+      storeId,
+      text: `Permintaan ubah domain (tiket): ${host}`,
+    });
+  });
+  revalidatePath("/pengaturan");
+  return { ok: true };
 }

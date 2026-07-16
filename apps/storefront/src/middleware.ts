@@ -58,6 +58,26 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // localhost has no TLS in dev — emitting https:// there would break every link we print.
   const scheme = /^(localhost|127\.0\.0\.1)(:|$)/.test(rawHost) ? "http" : proto;
 
+  // PRIMARY-DOMAIN REDIRECT (the Shopify model the seller picks in Pengaturan → Domain). When a store
+  // has an ACTIVE primary custom domain and the shopper landed on a DIFFERENT host that also resolves
+  // to this store — the `www` when the apex is primary (or the reverse), or the `<slug>.tokophi.id`
+  // subdomain — 301 them to the one canonical host. So whichever of root/www the seller marks primary,
+  // the other redirects to it, and there is never a duplicate storefront.
+  //   • GET/HEAD only — a 301 turns a POST into a GET and drops the body.
+  //   • never `/api/*` — the storefront POSTs to its own API (checkout-session beacons, chat);
+  //     redirecting those would silently break capture. A stale page on the old host keeps working.
+  // No active custom domain → `primaryHost` is null → this whole block is a no-op (today's state).
+  const primaryHost = store.primaryHost ? normalizeHost(store.primaryHost) : null;
+  const method = context.request.method;
+  if (
+    primaryHost &&
+    primaryHost !== normalizeHost(rawHost) &&
+    (method === "GET" || method === "HEAD") &&
+    !context.url.pathname.startsWith("/api/")
+  ) {
+    return Response.redirect(`${scheme}://${primaryHost}${context.url.pathname}${context.url.search}`, 301);
+  }
+
   // The PRIMARY origin — not merely the one this request arrived on.
   //
   // A store is ALWAYS reachable at <slug>.tokophi.com. Once custom domains land, the same catalogue is
