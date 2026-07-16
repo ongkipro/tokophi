@@ -1,6 +1,6 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
-import { or, ilike, eq } from "drizzle-orm";
+import { or, ilike, eq, asc, sql } from "drizzle-orm";
 import { kaAddressByName } from "@tokophi/lib/kiriminaja";
 
 // The STRUCTURED parts, not just the display string: the storefront checkout uses them to auto-fill
@@ -20,12 +20,49 @@ const fmt = (r: { districtName: string; cityType: string | null; cityName: strin
   `${r.districtName}, ${r.cityType ?? ""} ${r.cityName}, ${r.provinceName}`.replace(/\s+/g, " ").trim();
 
 // Local KiriminAja area search (kecamatan/city name → id) from the imported reference table.
+//
+// ⚠️ THE ORDER IS THE FEATURE. This had NO `order by` at all — 7.030 districts, `limit 8`, and
+// whatever Postgres felt like returning. Typing "Semarang" put **"Suti Semarang, Kabupaten
+// Bengkayang, Kalimantan Barat"** first, above Semarang, Jawa Tengah. A shopper who takes the first
+// row — which is what a shopper does — buys a dress with a 13–21 day cargo quote to the wrong island
+// and no COD, and nothing on the page says anything is wrong: the quote is real, it is just for
+// somewhere they have never been. `dest_id` is the ONE field the whole shipping chain hangs off.
+//
+// RANKED BY WHAT A PERSON MEANS WHEN THEY TYPE A PLACE NAME, which is usually a CITY.
+//
+// The obvious ranking — exact district name first — is wrong, and measuring it is the only reason we
+// know: "Bandung" then puts *Bandung, Kabupaten Tulungagung* (a village in East Java) above every
+// district of Kota Bandung, because that village is literally named "Bandung" while Kota Bandung's
+// districts are "Bandung Kidul", "Bandung Kulon", … Same for "Malang" → "Malangbong, Garut".
+// Nobody typing "Bandung" means the village.
+//
+// So an exact CITY match outranks an exact district match, and `Kota` outranks `Kabupaten` within it
+// (723 kota vs 6.307 kabupaten — the kota are where the people and the parcels are). Ties break
+// alphabetically so the list is stable between keystrokes instead of reshuffling under the finger.
 export async function searchAreaLocal(q: string, limit = 8): Promise<Area[]> {
-  const term = `%${q.trim()}%`;
+  const raw = q.trim();
+  // `%` and `_` are LIKE wildcards. Unescaped, a lone "%" matched all 7.030 rows and returned the
+  // first 8 arbitrarily — parameterised, so never injection, but a search that answers nonsense.
+  const lit = raw.replace(/[\\%_]/g, (c) => "\\" + c);
+  const term = `%${lit}%`;
+  const prefix = `${lit}%`;
   const rows = await db
     .select()
     .from(schema.kiriminajaAreas)
     .where(or(ilike(schema.kiriminajaAreas.districtName, term), ilike(schema.kiriminajaAreas.cityName, term)))
+    .orderBy(
+      sql`case
+        when lower(${schema.kiriminajaAreas.cityName}) = lower(${raw})
+             and ${schema.kiriminajaAreas.cityType} = 'Kota' then 0
+        when lower(${schema.kiriminajaAreas.cityName}) = lower(${raw}) then 1
+        when lower(${schema.kiriminajaAreas.districtName}) = lower(${raw}) then 2
+        when ${schema.kiriminajaAreas.districtName} ilike ${prefix} then 3
+        when ${schema.kiriminajaAreas.cityName} ilike ${prefix} then 4
+        when ${schema.kiriminajaAreas.districtName} ilike ${term} then 5
+        else 6
+      end`,
+      asc(schema.kiriminajaAreas.districtName),
+    )
     .limit(limit);
   return rows.map((r) => ({
     id: r.id,

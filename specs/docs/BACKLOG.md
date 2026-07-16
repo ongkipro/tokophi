@@ -116,10 +116,15 @@ a guess — the evidence is in `CHANGELOG.md` under the same date.
   so it is correct now; the unique key is `(variant_id, location_id)`, so multi-location is a supported
   shape, and the day a variant has two rows this subtracts the full qty from each. The real question is
   *which location ships*, which is a design decision, not a patch.
-- **[ ] Kecamatan search ranks a wrong-island match first.** Typing "Semarang" returns **"Suti
-  Semarang, Kabupaten Bengkayang, Kalimantan Barat"** above Semarang, Jawa Tengah. A shopper who takes
-  the first row gets a 13–21 day cargo quote for a dress and no COD. `searchAreaLocal` orders by
-  nothing meaningful; it should rank exact/prefix district matches, then city, then the rest.
+- **[x] Kecamatan search is ranked** (2026-07-16). It had **no `order by` at all** — 7.030 districts,
+  `limit 8`, whatever Postgres returned: "Semarang" put *Suti Semarang, Kabupaten Bengkayang,
+  Kalimantan Barat* first. ⚠️ The obvious fix (exact district first) is ALSO wrong, and only measuring
+  showed it: "Bandung" then ranks *Bandung, Kabupaten Tulungagung* — a village — above every district
+  of Kota Bandung, because the village is literally named "Bandung" while Kota Bandung's districts are
+  "Bandung Kidul", "Bandung Kulon"… Nobody typing "Bandung" means the village. So an exact **city**
+  match outranks an exact district match, and `Kota` outranks `Kabupaten` (723 vs 6.307 — the kota are
+  where the parcels are). Verified: Semarang/Bandung/Malang/Denpasar all return their own city's
+  districts. LIKE wildcards are escaped too — a lone `%` matched all 7.030 rows.
 - **[ ] The Store Builder does not validate section links against live targets.** The demo's
   `CategoryNav` linked `/kategori/outerwear` after that collection turned out to be `published=false`
   (fixed in the seed, but only because I knew). `getFooterNav`/`getMainNav` already drop dead links at
