@@ -173,29 +173,45 @@ async function main() {
     return;
   }
 
-  const existing = await db
+  // ── UPSERT, not insert-if-absent ──────────────────────────────────────────────────────────────
+  //
+  // This started as "insert only when the store has no homepage template", copying seed-reviews'
+  // idempotency so a redeploy could never clobber a merchant's work. That guard was protecting
+  // against a threat THAT CANNOT HAPPEN HERE: this file is hardcoded to `batik-nusantara` and
+  // touches nothing else. It cannot reach a merchant. What it actually did was silently pin
+  // production to whatever shape shipped first — the demo sat on live rendering "Paling Dicari" as
+  // 8 cards at 400px for a whole deploy cycle after the template was rewritten to 4×1 + 4×2, and
+  // the deploy log said "already has a homepage template — left untouched", i.e. success.
+  //
+  // ⚠️ THE COST, STATED: the demo's homepage is now REPLACED on every deploy. If you edit it in the
+  // Store Builder — to show someone the builder — the next deploy reverts it. That is the right
+  // trade for a demo whose template lives in this file, and the wrong one for a real store. If this
+  // script is ever pointed at a merchant, restore the guard first.
+  const [existing] = await db
     .select({ id: schema.pageTemplates.id })
     .from(schema.pageTemplates)
     .where(and(eq(schema.pageTemplates.storeId, store.id), eq(schema.pageTemplates.type, "homepage")))
     .limit(1);
-  if (existing.length) {
-    console.log(`seed-templates: ${store.name} already has a homepage template — left untouched.`);
-    await client.end();
-    return;
-  }
 
   // `sections` is written EXPLICITLY. The column defaults to '[]'::jsonb — an ARRAY, not
   // `{content:[]}` — and the storefront's `withContent()` reads a value with no `.content` as "no
   // template" and silently falls back to the hand-built page. Omitting this would look like success.
-  await db.insert(schema.pageTemplates).values({
-    storeId: store.id,
-    type: "homepage",
-    name: "Beranda",
-    isDefault: true,
-    sections: HOMEPAGE,
-  });
+  if (existing) {
+    await db
+      .update(schema.pageTemplates)
+      .set({ name: "Beranda", isDefault: true, sections: HOMEPAGE, updatedAt: new Date() })
+      .where(eq(schema.pageTemplates.id, existing.id));
+  } else {
+    await db.insert(schema.pageTemplates).values({
+      storeId: store.id,
+      type: "homepage",
+      name: "Beranda",
+      isDefault: true,
+      sections: HOMEPAGE,
+    });
+  }
 
-  console.log(`seed-templates: ${store.name} → homepage template with ${HOMEPAGE.content.length} sections (${HOMEPAGE.content.map((c) => c.type).join(", ")}).`);
+  console.log(`seed-templates: ${store.name} → homepage ${existing ? "REPLACED" : "created"} with ${HOMEPAGE.content.length} sections (${HOMEPAGE.content.map((c) => c.type).join(", ")}).`);
   await client.end();
 }
 

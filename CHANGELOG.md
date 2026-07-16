@@ -36,6 +36,23 @@ to hide a thin catalogue would have been fixing the mirror, not the face.
 change. Also: with 12 active products and 4+8 slots the two grids overlap by two — a demo-catalogue
 size artefact, not a bug.
 
+### 🌱 `seed-templates` upserts — its idempotency was pinning production to the first shape that shipped
+
+The demo's homepage template changed to 4×1 + 4×2 and **live kept rendering the old 8-at-400px grid**,
+because the script only inserted when the store had no template — and prod already had one. The deploy
+log said *"already has a homepage template — left untouched"*, which reads as success. It was a
+one-way door: nothing written to that row after the first deploy could ever reach production.
+
+The guard was copied from `seed-reviews` to stop a redeploy clobbering a merchant's work. **That threat
+cannot happen here**: this file is hardcoded to `batik-nusantara` and touches nothing else — it cannot
+reach a merchant. Now it upserts. Proven by running it twice: second run says `REPLACED`, and the row
+reads `Paling Dicari limit=4 cols=4 | Produk Terbaru limit=8 cols=4`.
+
+⚠️ **The cost, stated:** the demo's homepage is now replaced on every deploy. Edit it in the Store
+Builder to demo the builder and the next deploy reverts it. Right trade for a demo whose template lives
+in a seed file; wrong one for a real store — if this script is ever pointed at a merchant, restore the
+guard first.
+
 ### 🎨 Payment icons: grey until selected — so blue means something again
 
 Every payment row's icon was accent-tinted **at rest**. With three rows all wearing the brand blue, the
