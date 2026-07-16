@@ -103,10 +103,18 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
          The "Pembayaran aman" badge is gone. It sat where a shopper looks for their cart, and a
          platform asserting its own trustworthiness in a corner is the weakest possible place to
          spend that space — the padlock in the address bar already says it, and better. -->
+    {/* The logo aligns with the FORM column and the cart sits at the far RIGHT of the page — the cart
+        used to be `ml-auto` inside the form column's own 36rem box, so on a wide screen it landed
+        mid-canvas and read as floating rather than as the header's right-hand control.
+        One flex row on a phone; on `lg` the same two columns as the body below, so each end lands
+        where its column does. ONE cart link either way — no `lg:hidden` twin to keep in sync. */}
     <header class="border-b border-[var(--co-line)] bg-white">
-      <div class="lg:grid lg:grid-cols-2">
-        <div class="lg:flex lg:justify-end">
-          <div class="flex w-full items-center gap-3 px-4 py-4 sm:px-6 lg:max-w-xl lg:pr-10">
+      <div class="flex items-center px-4 py-4 sm:px-6 lg:grid lg:grid-cols-2 lg:px-0 lg:py-0">
+        <div class="flex min-w-0 lg:justify-end lg:py-4">
+          {/* `lg:pl-6` matches the form column's own `sm:px-6`, so the logo starts on the SAME x as
+              the first field (measured: both 168px at 1440). Without it the box is flush at 144 and
+              the wordmark hangs 24px left of everything under it. */}
+          <div class="flex w-full items-center lg:max-w-xl lg:pl-6 lg:pr-10">
             <a
               href="/"
               class="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
@@ -122,25 +130,59 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
                 )
               }
             </a>
-            {/* Back to the cart they came from. Top-right is where a shopper looks for it, and it is
-                the same destination as "Kembali ke keranjang" in the summary — one intent, two
-                places, no third idea. */}
+          </div>
+        </div>
+        {/* Back to the cart they came from — the same destination as "Kembali ke keranjang" in the
+            summary. One intent, two places, no third idea. */}
+        <div class="ml-auto flex min-w-0 lg:ml-0 lg:justify-start lg:py-4">
+          <div class="flex w-full items-center lg:max-w-md lg:px-10">
             <a
               href="/keranjang"
-              class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md p-1.5 text-sm font-medium text-muted transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
+              class="ml-auto inline-flex shrink-0 items-center gap-2 rounded-md p-1.5 text-sm font-medium text-muted transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
               aria-label="Kembali ke keranjang"
             >
-              <svg viewBox="0 0 24 24" class="h-5 w-5 shrink-0 fill-none stroke-current" stroke-width="1.6" aria-hidden="true">
-                <path d="M2.5 3h1.6l1.5 12.5a1.5 1.5 0 0 0 1.5 1.3h9.3a1.5 1.5 0 0 0 1.47-1.2l1.4-7.3H6" stroke-linecap="round" stroke-linejoin="round" />
-                <circle cx="9" cy="20" r="1.2" fill="currentColor" stroke="none" />
-                <circle cx="17" cy="20" r="1.2" fill="currentColor" stroke="none" />
-              </svg>
+              <span class="relative inline-flex">
+                <svg viewBox="0 0 24 24" class="h-5 w-5 shrink-0 fill-none stroke-current" stroke-width="1.6" aria-hidden="true">
+                  <path d="M2.5 3h1.6l1.5 12.5a1.5 1.5 0 0 0 1.5 1.3h9.3a1.5 1.5 0 0 0 1.47-1.2l1.4-7.3H6" stroke-linecap="round" stroke-linejoin="round" />
+                  <circle cx="9" cy="20" r="1.2" fill="currentColor" stroke="none" />
+                  <circle cx="17" cy="20" r="1.2" fill="currentColor" stroke="none" />
+                </svg>
+                {/* The count. Hidden until JS has actually read the cart — a hard-coded "0" would be
+                    a lie for the ~always case where the cart has something in it, and it would flash
+                    that lie on every load. */}
+                <span
+                  id="checkout-cart-count"
+                  hidden
+                  class="absolute -right-2 -top-2 inline-flex min-w-4 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-semibold leading-4 text-white tabular-nums"
+                ></span>
+              </span>
               <span class="hidden sm:inline">Keranjang</span>
             </a>
           </div>
         </div>
       </div>
     </header>
+
+    <script is:inline>
+      // The cart badge. `localStorage.cart` is the same store `/keranjang` and the checkout summary
+      // read — there is no server-side cart — so this counts UNITS, not lines: two of one dress is
+      // "2", which is what the summary's thumbnails also say.
+      (function () {
+        var el = document.getElementById("checkout-cart-count");
+        if (!el) return;
+        try {
+          var n = JSON.parse(localStorage.getItem("cart") || "[]").reduce(function (t, i) {
+            return t + (Number(i && i.qty) || 1);
+          }, 0);
+          if (n > 0) {
+            el.textContent = String(n);
+            el.hidden = false;
+          }
+        } catch (e) {
+          /* a corrupt cart must never break the page the shopper is paying on */
+        }
+      })();
+    </script>
 
     {/* No `items-start`: the cells must STRETCH so the white form column and the recessed panel both
          run the full height of the row. With items-start each cell shrank to its content and the two

@@ -182,8 +182,11 @@ if (rToken) {
       <div id="summary-items" class="space-y-4 pt-4 lg:pt-6"></div>
 
       <div class="mt-6 space-y-2 border-t border-[var(--co-line)] pt-4 text-sm">
+        {/* "Subtotal · 3 item" — the reference's line, and it earns its place: the item rows are
+            COLLAPSED on a phone, so without the count the subtotal is a number with nothing to
+            check it against. `item` has no plural in Indonesian, so the count needs no branching. */}
         <div class="flex items-center justify-between">
-          <span class="text-muted">Subtotal</span>
+          <span class="text-muted">Subtotal <span id="summary-count" class="tabular-nums"></span></span>
           <span id="summary-subtotal" class="font-medium text-ink tabular-nums">Rp0</span>
         </div>
         <div class="flex items-center justify-between">
@@ -409,7 +412,7 @@ if (rToken) {
               boxes, and COD was another box — so some things in the list were choices and one was a
               caption, with nothing but font weight to tell them apart. Now every row is a choice and
               the group caption sits INSIDE the box, visibly not a row. */}
-          <div class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)]">
+          <div class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)] transition-colors has-[:checked]:border-brand-600">
             {PAY_GROUPS.map((group) => (
               <div class="divide-y divide-[var(--co-line)]">
                 {/* A group with ONE channel is rendered as a single selectable row, not a header with
@@ -764,6 +767,14 @@ if (rToken) {
 
     document.getElementById("summary-items").innerHTML = itemsHtml;
     document.getElementById("summary-subtotal").textContent = idr.format(subtotal);
+
+    // "· 3 item" next to Subtotal. UNITS, not lines — the same number the cart badge in the header
+    // shows, so two counters on one screen can never disagree.
+    var countEl = document.getElementById("summary-count");
+    if (countEl) {
+      var units = cart.reduce(function (t, i) { return t + (Number(i && i.qty) || 1); }, 0);
+      countEl.textContent = "· " + units + " item";
+    }
 
     // ---- Alamat: grow with the address instead of scrolling inside 2 rows ----
     // An Indonesian address is long — street, number, RT/RW, patokan — and on a phone `rows=2` is a
@@ -1184,9 +1195,17 @@ if (rToken) {
             '<span class="min-w-0 flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + tags + '</span><span class="block text-xs text-muted">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
             '<span class="shrink-0 text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
         }
-        /** Wrap rows in the single bordered box they share. */
+        /**
+         * Wrap rows in the single bordered box they share.
+         *
+         * `has-[:checked]` puts the brand border on the BOX, not just a tint on the row — the
+         * reference's signature: the container carrying a selection announces itself, so "which of
+         * these two lists am I actually buying from" is answerable at a glance instead of by hunting
+         * for a filled radio. With the default in one box and the alternatives in another, exactly
+         * one of them is ever lit.
+         */
         function box(rowsHtml) {
-          return '<div class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)]">' + rowsHtml + "</div>";
+          return '<div class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)] transition-colors has-[:checked]:border-brand-600">' + rowsHtml + "</div>";
         }
 
         // The default row is the ONLY thing rendered up front.
