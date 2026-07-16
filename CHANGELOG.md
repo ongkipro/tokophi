@@ -112,6 +112,31 @@ field and reports natively — no order posted, nothing silent.
 
 ## 2026-07-17
 
+### 🛡️ RLS on `stores` (0058) — and the verifier that had been red so long nobody heard it
+
+Follow-up to the cross-tenant leak below. The WHERE clauses fixed the two known callers; **this makes
+the database enforce it**, because a rule 12 authors must remember is a rule that gets forgotten a
+13th time.
+
+`stores` is keyed by `id`, not `store_id`, so the policy reads `id = app_current_store_id()`.
+Measured, not assumed: `tokophi_app` + GUC → **1 store** · no GUC → **0** (fails closed) · **owner →
+all 7**, which is what keeps `provision` working (slug uniqueness — two shops would otherwise collide
+on one subdomain) and the billing cron billing everybody. Safe because **no table in this DB uses
+FORCE ROW LEVEL SECURITY**, so the owner always bypasses; `verify-rls` now asserts that too rather
+than trusting it. Swept all 23 admin routes in a browser afterwards: **0 errors, shell intact**.
+
+**The uncomfortable part: `verify-rls` had the exact bug it exists to catch.** Its own fixture was
+`SELECT id, name FROM stores LIMIT 1`. Once the seed grew past one store, it started picking
+**kopi-senja (0 products)** and comparing an *empty* store's rows against the *global* totals — so
+`RLS VERIFY FAILED` had been permanent background noise. **Both leaks below shipped past a verifier
+that was already red.** An alarm that is always on is an alarm that is off. The fixture now picks the
+store that actually has data (deterministically) and takes ground truth `WHERE store_id = store.id`.
+**11/11 green** — and it now asserts `stores` by hand, since check 5 derives its table list from
+`store_id` columns and structurally cannot see it.
+
+⚠️ Still true: **nothing runs `verify-rls` automatically.** That is precisely how it stayed red
+unnoticed. Tasked.
+
 ### 🔴 SECURITY — Pengaturan showed another merchant's shop, and "Simpan" would have stolen its name
 
 Found while wiring the logo uploader: the Profil Toko form, logged in as **Batik Nusantara**, rendered

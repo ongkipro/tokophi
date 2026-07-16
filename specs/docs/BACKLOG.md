@@ -110,16 +110,32 @@ Two shipped functions trusted RLS to scope it and silently leaked across tenants
 `getBilling` — both `.from(schema.stores).limit(1)` with no WHERE, returning an arbitrary row).
 `withCurrentTenant` now hands the callback its `storeId`, and both filter explicitly.
 
-- [ ] **Make the guard able to see this.** `verify-rls` should treat `stores` (and any other table
-      without a `store_id` that admin code reads) as a **known exception it asserts on**, not a table
-      it never heard of. Today a third instance of this bug would ship green.
-- [ ] **Grep for the pattern, not the symptom:** `.from(schema.stores)` with no `.where` inside
-      `withCurrentTenant`/`withTenant`. Audited 2026-07-17 — the other 12 call sites all filter
-      correctly (`billing.ts:79`, `profile.ts:18`, `theme.ts:144`, `shipping.ts:94`, `store.ts:10/18`,
-      `provision.ts:47`, ongkir/order/pay-callback by slug or id, cron/billing intentionally all-store).
-- [ ] **Consider `stores.id`-based RLS** so the database enforces this rather than 12 authors
-      remembering. Needs the GUC to be readable as the row key — cheap to try, and it would turn a
-      class of leak into a policy.
+**✅ CLOSED 2026-07-17 — the database enforces it now, and the guard can see it.**
+- **`0058` puts RLS on `stores`** with an `id = app_current_store_id()` policy (every other table keys
+  on `store_id`; here `id` IS the tenant key). Measured: `tokophi_app` + GUC → **1 store**; no GUC →
+  **0** (fails closed); **owner → all 7**, which is what keeps `provision` (slug uniqueness — two shops
+  would otherwise collide on one subdomain) and the billing cron working. Safe because **no table here
+  uses FORCE ROW LEVEL SECURITY**, so the owner always bypasses — asserted in `verify-rls`, not assumed.
+  A 13th author writing `.limit(1)` with no WHERE now gets their own store anyway.
+- **`verify-rls` asserts `stores` explicitly** (RLS on · tenant sees exactly its own row · no GUC → 0 ·
+  owner still sees all). Check 5 derives its list from `store_id` columns and structurally cannot see
+  this table, so it is checked by hand.
+- **Audited all 13 `.from(schema.stores)` call sites** — the other 11 filter correctly
+  (`billing.ts:79`, `profile.ts:18`, `theme.ts:144`, `shipping.ts:94`, `store.ts:10/18`,
+  `provision.ts:47`, ongkir/order/pay-callback by slug or id, cron/billing intentionally all-store).
+
+**🔴 AND THE VERIFIER ITSELF HAD THE SAME BUG — fixed, but read the lesson.**
+`verify-rls`'s own fixture was `SELECT id, name FROM stores LIMIT 1`. Once the seed grew past one
+store it started picking **kopi-senja (0 products)** and comparing an EMPTY store's rows against the
+GLOBAL totals — so `RLS VERIFY FAILED` was permanent background noise, and **both cross-tenant leaks
+shipped past a verifier that was already red**. An alarm that is always on is an alarm that is off.
+The fixture now picks the store that actually has data (most products, tie-broken by slug —
+deterministic) and takes ground truth `WHERE store_id = store.id`. **11/11 green.** If you see this go
+red, it means something.
+
+- [ ] **Nothing runs `verify-rls` automatically.** It is a manual `npm run verify-rls -w @tokophi/db`,
+      which is exactly how it stayed red for weeks unnoticed. It belongs in CI, or at minimum in the
+      pre-deploy checklist.
 
 ### 🎨 Tema / Puck — one fixed, one real-but-dormant (2026-07-17)
 

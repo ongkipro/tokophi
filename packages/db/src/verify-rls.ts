@@ -13,8 +13,25 @@ function assert(label: string, cond: boolean) {
 
 async function main() {
   // Ground truth as owner (RLS bypassed): the real store + its product count.
-  const [store] = await client<{ id: string; name: string }[]>`SELECT id, name FROM stores LIMIT 1`;
-  const [{ count: ownerCount }] = await client<{ count: number }[]>`SELECT count(*)::int AS count FROM products`;
+  // The fixture must be the store that actually HAS data, chosen deterministically.
+  //
+  // ⚠️ This was `SELECT id, name FROM stores LIMIT 1` — the very bug this file exists to catch. Once
+  // the seed grew past one store, `LIMIT 1` started returning an arbitrary row (kopi-senja, 0
+  // products), so the checks compared an EMPTY store's rows against the global totals and failed
+  // forever. "RLS VERIFY FAILED" became background noise — and an alarm that is always on is an alarm
+  // that is off. Both cross-tenant leaks fixed in 0058 shipped past a verifier that was already red.
+  const [store] = await client<{ id: string; name: string; slug: string }[]>`
+    SELECT s.id, s.name, s.slug
+    FROM stores s
+    JOIN products p ON p.store_id = s.id
+    GROUP BY s.id, s.name, s.slug
+    ORDER BY count(p.id) DESC, s.slug
+    LIMIT 1`;
+  if (!store) throw new Error("No store with products — seed first (npm run seed -w @tokophi/db).");
+  // Ground truth for THIS store, not the whole table: with several stores seeded, a global count would
+  // be comparing a tenant's rows against everybody's.
+  const [{ count: ownerCount }] = await client<{ count: number }[]>`
+    SELECT count(*)::int AS count FROM products WHERE store_id = ${store.id}`;
   console.log(`store = ${store.name} (${store.id}) · products (owner view) = ${ownerCount}\n`);
 
   // 1. Correct tenant → sees all its rows.
@@ -83,6 +100,44 @@ async function main() {
       (unexpected.length ? ` — MISSING RLS: ${unexpected.join(", ")}` : ` (known exceptions: ${KNOWN_EXCEPTIONS.join(", ")})`),
     unexpected.length === 0,
   );
+
+  // 5b. `stores` — THE BLIND SPOT. Check 5 above derives its table list from the catalog by looking
+  //     for a `store_id` column, so it can never see `stores`: that table is keyed by `id`. The one
+  //     table that IDENTIFIES the tenant was invisible to the check built to protect tenants, and two
+  //     cross-tenant leaks shipped green through it (getStoreProfile + getBilling both did
+  //     `.from(stores).limit(1)` inside withCurrentTenant and got an ARBITRARY store — a merchant read
+  //     a stranger's shop name, WhatsApp and billing countdown). Fixed by 0058 + explicit WHEREs.
+  //
+  //     Asserted here explicitly, because a rule with no test is a rule that comes back.
+  const [{ rls: storesRls }] = await client<{ rls: boolean }[]>`
+    SELECT relrowsecurity AS rls FROM pg_class WHERE relname = 'stores' AND relkind = 'r'`;
+  assert("stores has RLS (0058 — keyed by id, so check 5 cannot see it)", storesRls);
+
+  const storesSeen = await client.begin(async (tx) => {
+    await tx`SELECT set_config('app.store_id', ${store.id}, true)`;
+    await tx`SET LOCAL ROLE tokophi_app`;
+    const rows = await tx<{ slug: string }[]>`SELECT slug FROM stores`;
+    return rows.map((r) => r.slug);
+  });
+  assert(
+    `tenant sees ONLY its own store row (got ${storesSeen.length}: ${storesSeen.join(",") || "-"})`,
+    storesSeen.length === 1 && storesSeen[0] === store.slug,
+  );
+
+  // Fails closed with no GUC — the same rule every other table follows.
+  const storesNoGuc = await client.begin(async (tx) => {
+    await tx`SET LOCAL ROLE tokophi_app`;
+    const [{ count }] = await tx<{ count: number }[]>`SELECT count(*)::int AS count FROM stores`;
+    return count;
+  });
+  assert(`stores: missing app.store_id → 0 rows (got ${storesNoGuc})`, storesNoGuc === 0);
+
+  // The OWNER must still see every store, or the things that legitimately span tenants break:
+  // slug uniqueness at signup (two shops would collide on one subdomain) and the billing cron
+  // (scoping it to one store silently stops billing everyone else). No table here uses FORCE ROW
+  // LEVEL SECURITY, which is exactly what keeps that true — assert it rather than trust it.
+  const [{ count: ownerSees }] = await client<{ count: number }[]>`SELECT count(*)::int AS count FROM stores`;
+  assert(`owner still sees all stores (${ownerSees}) — provision/cron depend on it`, ownerSees > 1);
 
   // 6. support_tickets / support_messages (RLS retrofitted in 0035) isolate like the rest.
   const [{ count: ticketsOwner }] = await client<{ count: number }[]>`SELECT count(*)::int AS count FROM support_tickets WHERE store_id = ${store.id}`;

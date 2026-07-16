@@ -407,6 +407,13 @@
       "when": 1784188221362,
       "tag": "0057_store_favicon",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1784188221363,
+      "tag": "0058_rls_stores",
+      "breakpoints": true
     }
   ]
 }
