@@ -337,13 +337,28 @@ if (rToken) {
                  kelurahan row stays hidden, Kode Pos widens to the full row and is TYPED — that path
                  must never block the order. See packages/db/scripts/build-kelurahan.mjs. -->
             <div class="grid gap-4 sm:col-span-2 sm:grid-cols-2">
-              {/* `field-select`: a <select> always has a value, so `:placeholder-shown` never matches
-                  and the label would sit on top of the current selection. It is parked raised. */}
-              <div id="kel-wrap" hidden class="field field-select">
-                <select name="kelurahan" id="kel-select" class="input-field">
-                  <option value="">Pilih kelurahan…</option>
-                </select>
-                <label for="kel-select" class="float-label">Kelurahan / Desa (opsional)</label>
+              {/* SAME SHAPE AS KECAMATAN — an input with a list that drops below it, not a <select>.
+                  Two reasons beyond consistency. A native <select> on Android/iOS opens a full-screen
+                  wheel: the shopper leaves the page to answer an OPTIONAL question, and Semarang
+                  Tengah has 11 kelurahan to scroll blind. And it made this one field the only control
+                  on the page with its own interaction model.
+                  Lighter than kecamatan, not heavier: the list is ALREADY in memory (loadKelurahan
+                  fetched it when the district was picked), so opening and filtering it costs zero
+                  requests — kecamatan hits the API per keystroke because it is searching 7.030 rows;
+                  this is filtering ~11. */}
+              <div id="kel-wrap" hidden class="relative">
+                <div class="field">
+                  <input type="text" id="kel-search" autocomplete="off" placeholder=" " class="input-field" />
+                  <label for="kel-search" class="float-label">Kelurahan / Desa (opsional)</label>
+                </div>
+                {/* The submitted value. The order API ignores `kelurahan` entirely — only the
+                    checkout-session capture reads it — but it stays a real field so the payload keeps
+                    the shape it always had. */}
+                <input type="hidden" name="kelurahan" id="kel-value" />
+                <div
+                  id="kel-results"
+                  class="absolute inset-x-0 z-20 mt-1 hidden max-h-48 overflow-y-auto rounded-lg border border-[var(--co-line)] bg-white shadow-lg"
+                ></div>
               </div>
 
               <div id="kodepos-wrap" class="field sm:col-span-2">
@@ -1122,7 +1137,10 @@ if (rToken) {
     var kodeposWrap = document.getElementById("kodepos-wrap");
     var kelWrap = document.getElementById("kel-wrap");
     var kelNote = document.getElementById("kel-note");
-    var kelSelect = document.getElementById("kel-select");
+    var kelSearch = document.getElementById("kel-search");
+    var kelValue = document.getElementById("kel-value");
+    var kelResults = document.getElementById("kel-results");
+    var KEL = []; // the district's kelurahan, held in memory — see the markup note
     var areaLine = document.getElementById("area-derived");
     var areaText = document.getElementById("area-derived-text");
     var alamatEl = form.querySelector('textarea[name="alamat"]');
@@ -1142,7 +1160,7 @@ if (rToken) {
       var kec = destTextEl && destTextEl.value ? destTextEl.value.trim() : "";
       if (!kec) { summaryBox.hidden = true; return; }
 
-      var kel = kelSelect && !kelWrap.hidden ? (kelSelect.options[kelSelect.selectedIndex] || {}).text : "";
+      var kel = kelWrap && !kelWrap.hidden && kelValue ? kelValue.value : "";
       if (kel && kel.indexOf("Pilih") === 0) kel = ""; // the placeholder option
       kel = kel.replace(/\s+—.*$/, ""); // strip "— 50135" from the option label
       var pos = kodeposEl && kodeposEl.value ? kodeposEl.value.trim() : "";
@@ -1199,7 +1217,10 @@ if (rToken) {
     function resetKelurahan() {
       if (kelWrap) kelWrap.hidden = true;
       if (kelNote) kelNote.hidden = true;
-      if (kelSelect) kelSelect.innerHTML = '<option value="">Pilih kelurahan…</option>';
+      KEL = [];
+      if (kelSearch) kelSearch.value = "";
+      if (kelValue) kelValue.value = "";
+      if (kelResults) kelResults.classList.add("hidden");
       if (kodeposEl) kodeposEl.value = "";
       // No kelurahan next to it → Kode Pos takes the whole row instead of sitting in a half-width
       // column with a hole beside it.
@@ -1219,7 +1240,7 @@ if (rToken) {
     //   ·   295 districts (4,2% of all) have no kelurahan data → the kodepos stays typed by hand.
     // Never guessed: a postcode is only auto-filled when every candidate agrees on it.
     function loadKelurahan(districtId) {
-      if (!kelWrap || !kelSelect || !districtId) return;
+      if (!kelWrap || !kelSearch || !districtId) return;
       api({ op: "kelurahan", destinationId: Number(districtId) }).catch(function () {
         // Lookup unreachable → fall back to a typed kodepos rather than leaving the field readonly and
         // empty, which would make the form unsubmittable with no way for the shopper to fix it.
@@ -1246,13 +1267,9 @@ if (rToken) {
           return;
         }
 
-        kelSelect.innerHTML =
-          '<option value="">Pilih kelurahan…</option>' +
-          list
-            .map(function (k) {
-              return '<option value="' + esc(k.postcode) + '">' + esc(k.name) + " — " + esc(k.postcode) + "</option>";
-            })
-            .join("");
+        KEL = list;
+        if (kelSearch) kelSearch.value = "";
+        if (kelValue) kelValue.value = "";
         kelWrap.hidden = false;
         // Kelurahan is back → the two share the row (Kelurahan | Kode Pos).
         if (kodeposWrap) kodeposWrap.classList.remove("sm:col-span-2");
@@ -1264,11 +1281,49 @@ if (rToken) {
       });
     }
 
-    if (kelSelect) {
-      kelSelect.addEventListener("change", function () {
-        if (kodeposEl) kodeposEl.value = kelSelect.value;
+    if (kelSearch && kelResults) {
+      // ── The list: opens on focus, filters as you type, picks on click ────────────────────────
+      // No network here — KEL is already loaded. `renderKel()` is the only thing that writes rows.
+      function renderKel(q) {
+        if (!kelResults) return;
+        var needle = String(q || "").trim().toLowerCase();
+        var hits = needle ? KEL.filter(function (k) { return k.name.toLowerCase().indexOf(needle) >= 0; }) : KEL;
+        if (!hits.length) {
+          kelResults.innerHTML = '<p class="px-4 py-2.5 text-sm text-[var(--co-muted)]">Tidak ada kelurahan cocok.</p>';
+        } else {
+          kelResults.innerHTML = hits
+            .map(function (k) {
+              return (
+                '<button type="button" data-name="' + esc(k.name) + '" data-code="' + esc(k.postcode) + '"' +
+                ' class="block w-full border-b border-[var(--co-line)] px-4 py-2.5 text-left text-sm last:border-0 hover:bg-black/[0.03]">' +
+                '<span class="text-ink">' + esc(k.name) + '</span>' +
+                '<span class="ml-2 text-xs text-[var(--co-muted)] tabular-nums">' + esc(k.postcode) + "</span></button>"
+              );
+            })
+            .join("");
+        }
+        kelResults.classList.remove("hidden");
+      }
+      kelSearch.addEventListener("focus", function () { renderKel(kelSearch.value); });
+      kelSearch.addEventListener("input", function () {
+        // Typing invalidates the pick: the kodepos was DERIVED from it, so it must not outlive it.
+        if (kelValue) kelValue.value = "";
+        if (kodeposEl) kodeposEl.value = "";
+        renderKel(kelSearch.value);
+      });
+      kelResults.addEventListener("click", function (e) {
+        var btn = e.target.closest("button[data-code]");
+        if (!btn) return;
+        kelSearch.value = btn.getAttribute("data-name");
+        if (kelValue) kelValue.value = btn.getAttribute("data-name");
+        if (kodeposEl) kodeposEl.value = btn.getAttribute("data-code");
+        kelResults.classList.add("hidden");
         renderDestSummary();
         captureSoon();
+      });
+      // Click-away closes it. Without this the list sits over the kodepos field underneath it.
+      document.addEventListener("click", function (e) {
+        if (kelWrap && !kelWrap.contains(e.target)) kelResults.classList.add("hidden");
       });
     }
 
@@ -1446,7 +1501,16 @@ if (rToken) {
       setTimeout(function () {
         if (kodeposEl && savedPostcode) {
           kodeposEl.value = savedPostcode;
-          if (kelSelect) kelSelect.value = savedPostcode;
+          // Name the kelurahan back from the postcode we saved. The picker holds names now, not
+          // postcodes, and the session only ever stored the code — so the only honest restore is to
+          // look it up. Ambiguous (two kelurahan sharing a code) or absent → leave the picker blank
+          // and keep the kodepos: the code is what ships, and a guessed name next to it adds nothing
+          // but a chance to be wrong.
+          var hits = KEL.filter(function (k) { return k.postcode === savedPostcode; });
+          if (hits.length === 1) {
+            if (kelSearch) kelSearch.value = hits[0].name;
+            if (kelValue) kelValue.value = hits[0].name;
+          }
         }
       }, 600);
       loadRates();

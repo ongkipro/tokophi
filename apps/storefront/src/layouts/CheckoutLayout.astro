@@ -53,7 +53,14 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
          robots.txt already disallows /checkout (src/pages/robots.txt.ts) and that is the primary
          instruction; Google will not fetch this page and so will never read the tag below. It is here
          for the crawlers that fetch anyway — robots.txt is a request, this is on the page itself. -->
-    <meta name="robots" content="noindex,nofollow" />
+    {/* `follow`, not `nofollow` (user's call, and the right one). `noindex` is the whole intent: keep
+        a per-shopper page out of the index. `nofollow` is a different instruction — "treat every link
+        on this page as untrusted" — and the links here are the merchant's own logo, their cart and
+        their policy pages. Telling a crawler to distrust a shop's own links from its own checkout
+        wastes the signal for nothing. It also cost nothing to be wrong until now, which is why it
+        sat unnoticed: robots.txt disallows /checkout, so this tag is only read by crawlers that
+        fetch anyway — and those are exactly the ones you want obeying `noindex` and nothing more. */}
+    <meta name="robots" content="noindex,follow" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

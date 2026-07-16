@@ -4,6 +4,37 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 📍 Kelurahan is a searchable list, like kecamatan — and a leftover `kelSelect` had killed the page
+
+It was a native `<select>`; kecamatan is an input with a list that drops below it. Two reasons beyond
+consistency. **A `<select>` on Android/iOS opens a full-screen wheel** — the shopper leaves the page to
+answer an *optional* question, and Semarang Tengah has 11 kelurahan to scroll blind. And it made this
+one field the only control on the checkout with its own interaction model.
+
+**Lighter than kecamatan, not heavier:** the list is already in memory (`loadKelurahan` fetched it when
+the district was picked), so opening and filtering costs **zero requests**. Kecamatan hits the API per
+keystroke because it searches 7.030 rows; this filters ~11. Verified: click → 15 rows drop with no
+request; type "Pek" → filters to "Pekunden" client-side; pick → `kodepos` fills to **50241** and the
+"Kirim ke" summary reads *Kel. Pekunden, Semarang Tengah, Kota Semarang, Jawa Tengah 50241*.
+
+⚠️ **The rewrite left two `kelSelect` references behind, and the page died.** `ReferenceError:
+kelSelect is not defined` killed the whole checkout script — no kecamatan search, no rates, no order —
+while **`astro check` reported 0 errors**. This is the exact failure CLAUDE.md warns about, and it took
+a browser to see it. The recovery-link path was one of the two: it restored the picker by *postcode*,
+which the old select's `value` happened to be. The picker holds names now, so it looks the name back up
+and, when a code is ambiguous or absent, leaves the picker blank and keeps the kodepos — the code is
+what ships, and a guessed name beside it only adds a chance to be wrong.
+
+### 🤖 Checkout robots: `noindex,follow`, not `noindex,nofollow`
+
+`noindex` is the whole intent — keep a per-shopper page out of the index. `nofollow` is a different
+instruction ("treat every link here as untrusted") and the links are the merchant's own logo, cart and
+policy pages. It cost nothing to be wrong until now, which is why it sat unnoticed: robots.txt already
+disallows `/checkout`, so this tag is only read by crawlers that fetch anyway — exactly the ones you
+want obeying `noindex` and nothing more.
+
+## 2026-07-17
+
 ### 🏆 "Paling Dicari" was not the most wanted — the flag contradicted the sales column beside it
 
 `catalog.bestsellers()` was `list.filter(p => p.bestseller)` — a merchant BOOLEAN. The demo flags
@@ -80,6 +111,59 @@ where we can name what is missing. Verified: pressing Bayar with no kecamatan fo
 field and reports natively — no order posted, nothing silent.
 
 ## 2026-07-17
+
+### 🔴 SECURITY — Pengaturan showed another merchant's shop, and "Simpan" would have stolen its name
+
+Found while wiring the logo uploader: the Profil Toko form, logged in as **Batik Nusantara**, rendered
+**"Kopi Senja"** in the Nama toko field. Not a display quirk — a genuine cross-tenant read.
+
+```ts
+db.select({...}).from(schema.stores).limit(1)   // ← no WHERE, inside withCurrentTenant()
+```
+
+**RLS does not police `stores`.** That table is keyed by `id`, has **no `store_id` column**, and
+`relrowsecurity = false`. So `limit(1)` returned an **arbitrary row** — whichever the planner felt
+like. And `verify-rls` could never have caught it: it derives the store-scoped set from the catalog by
+looking for a `store_id` column, so **`stores` is invisible to the guard built to protect us**.
+
+Two shipped functions did this:
+- **`getStoreProfile`** → the merchant read a stranger's shop **name, tagline and WhatsApp number**.
+  Worse: `saveStoreProfile` writes with a *correct* `where id = storeId`. So pressing **"Simpan
+  Perubahan" without touching a single field** would have renamed their own shop to the leaked one and
+  overwritten their own WhatsApp. **A read leak that becomes a write corruption on the most innocent
+  possible action.**
+- **`getBilling`** → drives the sidebar badge, the past_due/suspended banner, `/akun/langganan` and the
+  Keuangan card. Measured on screen: Batik Nusantara's owner saw **"Aktif · 11h"** — *Kopi Senja's*
+  countdown. Their own is 19h. The **"Langganan ditangguhkan — mode baca-saja"** banner could have
+  fired on a stranger's account.
+
+Fixed with an explicit `where id = storeId` in both, and at the root: **`withCurrentTenant` now hands
+the callback its `storeId`** (`fn(db, storeId)`) — the wrapper only ever gave you `db`, which is
+*why* both authors reached for `limit(1)` and trusted RLS. The guidance now sits in `lib/tenant.ts`
+where the next query gets written: **RLS is not a substitute for a WHERE clause on a table it does not
+police.** Verified in a browser: Nama toko → Batik Nusantara, badge → 19h.
+
+### 🖼️ Logo toko + Favicon — the column that had readers and no writer
+
+`stores.logo_url` has been half-built the whole time: the storefront **reads** it everywhere
+(`Header.astro` renders it, `Layout.astro` feeds the OG image, `checkout.astro` pulls it for branding)
+and **nothing on earth wrote it** — no admin form, no super-admin action, not even the seed. Every shop
+fell back to a wordmark forever and no screen admitted a logo was possible. **`favicon_url` (0057) did
+not exist at all**, so every merchant's storefront served *TokoΦ's* icon — a shop on its own domain
+wearing someone else's favicon reads as "this isn't really my site", the exact impression a white-label
+builder is bought to avoid.
+
+Both now upload from **Pengaturan → Profil Toko**, `settings:write` (Owner only). Exercised in a real
+browser, not typechecked: PNG in → **WebP on disk** (2686 B / 2074 B) → row written → previews survive
+a full reload. The favicon preview renders at **16px inside a mock browser tab**, because a mark that
+reads fine at 200px can be an unrecognisable smudge at 16 and the merchant should learn that here
+rather than from a shopper.
+
+`saveImage` moved to **`lib/image-store.ts`** so the logo and product photos share one encoder — and
+pointedly **not** exported from a `"use server"` file, where *every export becomes a callable action*:
+that would have published an arbitrary-file-writer as an RPC endpoint. (Same family as the
+`export type { OrderStatus }` line that took production down this session.) Type checks are UX on the
+`<input accept=…>`; the real gate is server-side, because a hand-rolled POST ignores HTML attributes.
 
 ### 🧹 Cleanup: 5,4 GB of leaked dev servers, 642 lying ledger notes, and a demo that had gone stale
 
