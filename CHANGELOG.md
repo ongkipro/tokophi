@@ -4,6 +4,37 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-16
 
+### 🧾 The thank-you page follows the CHECKOUT, and COD finally has an invoice
+
+It sat inside `CheckoutLayout` — so it wore the checkout's white/blue chrome — while its **content was
+still the storefront's**: 33 warm tokens (`bg-brand-*`, `text-muted` #736669, `border-line`) and 5
+serif `font-display` headings, plus `text-cream`, `rounded-2xl` and a `shadow-brand-200/50` the palette
+sweep could not even see because they are not `-brand-N` shaped. Two design systems on one page. Now
+it is the checkout's throughout (user's call: *"iku ui/ux checkout bukan storefront"*). Verified: zero
+storefront tokens remain.
+
+**The two payment paths are genuinely different, and the page now says so.**
+- **AutoLaris (VA / QRIS / retail code):** the money has **not moved**. This page *is* the invoice —
+  nothing is emailed (there is no mailer), so the number they must act on is the point of the screen.
+  Rebuilt on one `panel()`/`kv()` shape so a VA number, a payment code and a QR string cannot drift
+  apart line by line, with "Total bayar" and the gateway link below them.
+- **COD:** there is **no payment step at all**, and the page used to say nothing about it — a shopper
+  holding a Rp393.000 order got one line, *"Bayar tunai ke kurir saat paket tiba"*, buried in a footnote
+  next to the shipping address. Rendering "Selesaikan Pembayaran" there would invent a task that does
+  not exist; rendering nothing left the only question they have unanswered. It now gets its own
+  panel: *"Tidak ada pembayaran online untuk pesanan ini"* → **the exact cash amount, set large** →
+  *"Serahkan ke kurir saat paket tiba"*, with the itemised invoice under it. The one thing a COD buyer
+  needs is what to have in hand when the rider knocks, so that is the biggest thing in the box.
+
+Neither footnote repeats its panel any more: COD's reads *"Tidak ada yang perlu dibayar sekarang"* —
+the question a shopper actually stares at a "Pesanan diterima" screen asking — and the gateway's says
+the instruction is on this page and **not** emailed, which is true and was worth saying.
+
+Browser-verified on both paths: order number renders, VA panel shows "Selesaikan Pembayaran — BCA" with
+the real VA, COD panel shows the Rp393.000 cash figure, the invoice totals match on both, the cart is
+cleared, 0 console errors.
+
+
 ### 🧼 Checkout, second pass — clean white, and the exits are chosen rather than absent (user's calls)
 
 - **Neutral surface, scoped to the checkout.** The shop is warm on purpose (`--color-cream` #faf6f2, a tinted paper); a checkout should be the opposite — white, quiet, out of the way, so the only colour left on screen is the merchant's brand on the one button that matters. Cream also made "white form vs recessed panel" a contrast between two nearly identical warm tones. `--co-panel` #f5f5f5 + `--co-line` #e3e3e3, declared in `CheckoutLayout` only: the storefront's cream is the shop's identity and none of this leaks into it. Surface is the platform's; colour stays the merchant's. Verified: header/form/footer `rgb(255,255,255)`, panel `rgb(245,245,245)`. The footer needed an explicit `bg-white` — without it `body { background: cream }` (unoverridable, see the layer note) left a tinted strip under an otherwise neutral page.
