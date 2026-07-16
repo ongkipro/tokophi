@@ -181,7 +181,7 @@ if (rToken) {
     <div id="summary-body" class="hidden pb-5 lg:block lg:pb-0">
       <div id="summary-items" class="space-y-4 pt-4 lg:pt-6"></div>
 
-      <div class="mt-6 space-y-2 border-t border-line pt-4 text-sm">
+      <div class="mt-6 space-y-2 border-t border-[var(--co-line)] pt-4 text-sm">
         <div class="flex items-center justify-between">
           <span class="text-muted">Subtotal</span>
           <span id="summary-subtotal" class="font-medium text-ink tabular-nums">Rp0</span>
@@ -192,30 +192,19 @@ if (rToken) {
         </div>
       </div>
 
-      <div class="mt-4 flex items-center justify-between border-t border-line pt-4">
+      <div class="mt-4 flex items-center justify-between border-t border-[var(--co-line)] pt-4">
         <span class="text-base font-medium text-ink">Total</span>
         <span id="summary-total" class="text-2xl font-semibold text-ink tabular-nums">Rp0</span>
       </div>
     </div>
   </Fragment>
 
-  {/* The one deliberate way back. The logo above it is not a link and there is no nav — this and
-      "Kembali ke keranjang" in the summary are the only exits, and both lead to the cart, not out
-      of the funnel. */}
-  <nav class="text-sm text-muted">
-    <a href="/keranjang" class="hover:text-brand-600">Keranjang</a>
-    <span class="mx-1">/</span>
-    <span class="text-ink">Checkout</span>
-  </nav>
-
-  {/* Sans, not `font-display`. The serif is the SHOP's voice — it belongs on a hero and a product
-      name, where it is doing brand work. A checkout is an instrument panel: every heading here is a
-      label for a task, and the reference does the same (bold sans throughout). */}
-  <h1 class="mt-4 text-2xl font-semibold tracking-tight text-ink">Checkout</h1>
-  <p class="mt-1 text-sm text-muted">
-    Kolom bertanda <span class="text-red-500">*</span> wajib diisi.
-  </p>
-
+  {/* NO breadcrumb and NO "Checkout" title (removed 2026-07-16). The reference has neither, and both
+      were telling the shopper something they already know: the page says Kontak → Alamat → Pengiriman
+      → Pembayaran and the tab says Checkout. The way back is the cart link in the header.
+      The "Kolom bertanda * wajib diisi" line went with them — the asterisks are on the labels, where
+      the shopper actually reads them, and a legend explaining a convention everyone knows is a line
+      of chrome above the first field. */}
   {
     RECOVER && (
       <p class="mt-4 rounded-lg border border-brand-600/30 bg-brand-50 px-4 py-3 text-sm text-ink">
@@ -225,7 +214,7 @@ if (rToken) {
     )
   }
 
-  <div id="checkout-empty" class="mt-10 hidden rounded-lg border border-dashed border-line py-20 text-center">
+  <div id="checkout-empty" class="mt-10 hidden rounded-lg border border-dashed border-[var(--co-line)] py-20 text-center">
     <ShoppingCart class="mx-auto h-10 w-10 text-brand-400" stroke-width={1.5} aria-hidden="true" />
     <h2 class="mt-4 text-xl font-semibold text-ink">Keranjangmu masih kosong</h2>
     <p class="mt-2 text-muted">Tambahkan produk dulu sebelum checkout.</p>
@@ -303,7 +292,7 @@ if (rToken) {
               </div>
               <input type="hidden" name="dest_id" id="dest-id" />
               <input type="hidden" name="dest_text" id="dest-text" />
-              <div id="dest-results" class="mt-1 hidden max-h-48 overflow-y-auto rounded-lg border border-line bg-white shadow-sm"></div>
+              <div id="dest-results" class="mt-1 hidden max-h-48 overflow-y-auto rounded-lg border border-[var(--co-line)] bg-white shadow-sm"></div>
               {/* The old placeholder said "Ketik kecamatan / kota" — the only thing telling a shopper
                   this box is a SEARCH and not a text field. The floating label eats placeholders, so
                   it moves here. Without it the field looks typed-in-freely, and the ongkir quote
@@ -362,7 +351,7 @@ if (rToken) {
                    a shopper types a kecamatan and never sees, in one place, the full address they are
                    shipping to before they pick a courier and pay. It confirms; it is not another
                    field. Hidden until a kecamatan is chosen (nothing to confirm before then). -->
-              <div id="dest-summary" hidden class="sm:col-span-2 rounded-xl border border-line bg-brand-50/40 p-3">
+              <div id="dest-summary" hidden class="sm:col-span-2 rounded-xl border border-[var(--co-line)] bg-brand-50/40 p-3">
                 <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-600">
                   <MapPin class="h-3.5 w-3.5 shrink-0" stroke-width={1.75} aria-hidden="true" />
                   Kirim ke
@@ -377,7 +366,7 @@ if (rToken) {
         <!-- Pengiriman -->
         <fieldset class="min-w-0">
           <legend class="mb-4 text-base font-semibold text-ink">Pengiriman</legend>
-          <p id="ship-hint" class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
+          <p id="ship-hint" class="rounded-xl border border-dashed border-[var(--co-line)] px-4 py-3 text-sm text-muted">
             Pilih <b>kecamatan tujuan</b> di atas untuk melihat ongkir real-time.
           </p>
 
@@ -396,7 +385,7 @@ if (rToken) {
               hidden
               aria-expanded="false"
               aria-controls="ship-more"
-              class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:bg-brand-50 sm:w-auto"
+              class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--co-line)] px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:bg-brand-50 sm:w-auto"
             >
               <Truck class="h-4 w-4 shrink-0 text-brand-600" stroke-width={1.75} aria-hidden="true" />
               <span id="ship-more-label">Pilih ekspedisi lain</span>
@@ -423,7 +412,7 @@ if (rToken) {
                     the group hint already says how you pay; repeating "Bayar via ATM / m-banking"
                     five times is noise a shopper has to read past. */}
                 {group.items.length === 1 ? (
-                  <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
+                  <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--co-line)] px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
                     <input
                       type="radio"
                       name="payment"
@@ -453,7 +442,7 @@ if (rToken) {
                     </div>
                     <div class="space-y-2">
                       {group.items.map((pm) => (
-                        <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-2.5 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
+                        <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--co-line)] px-4 py-2.5 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
                           <input
                             type="radio"
                             name="payment"
@@ -477,7 +466,7 @@ if (rToken) {
                 a COD we would reject has no business being on screen at all. */}
             {COD_ENABLED && (
               <div id="cod-option" hidden>
-                <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
+                <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--co-line)] px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
                   <input
                     type="radio"
                     name="payment"
@@ -538,7 +527,7 @@ if (rToken) {
     width: 100%;
     min-height: 3.5rem;
     border-radius: 0.5rem;
-    border: 1px solid var(--color-line);
+    border: 1px solid var(--co-line);
     background: #fff;
     /* Top padding is the label's room — see .float-label. */
     padding: 1.5rem 0.875rem 0.5rem;
@@ -767,6 +756,24 @@ if (rToken) {
 
     document.getElementById("summary-items").innerHTML = itemsHtml;
     document.getElementById("summary-subtotal").textContent = idr.format(subtotal);
+
+    // ---- Alamat: grow with the address instead of scrolling inside 2 rows ----
+    // An Indonesian address is long — street, number, RT/RW, patokan — and on a phone `rows=2` is a
+    // ~2-line porthole the shopper has to scroll INSIDE while typing, unable to re-read what they
+    // wrote. That is the field a mis-delivery comes from. It grows to fit, capped so it can never
+    // push the pay button off a long page.
+    // (The no-zoom half of "adaptif mobile" is the 16px on `.input-field`: iOS Safari zooms the whole
+    // page when a focused control is under 16px and never zooms back.)
+    (function () {
+      var ta = document.getElementById("f-alamat");
+      if (!ta) return;
+      function grow() {
+        ta.style.height = "auto"; // must reset, or it can only ever get taller
+        ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+      }
+      ta.addEventListener("input", grow);
+      grow(); // a recovery link arrives with the address already filled
+    })();
 
     // ---- Mobile: expand/collapse the order summary (the bar is lg:hidden) ----
     // Starts COLLAPSED on purpose: the total is already on the bar, and the shopper came here to pay,
@@ -1085,7 +1092,7 @@ if (rToken) {
               // data-city / data-province ride along so picking a result can fill the form without a
               // second round-trip. They may be absent (the live-API fallback can't always be parsed),
               // in which case applyArea() leaves those inputs alone rather than blanking them.
-              return '<button type="button" data-id="' + a.id + '" data-text="' + esc(a.text) + '" data-city="' + esc(a.city || "") + '" data-province="' + esc(a.province || "") + '" class="block w-full border-b border-line px-4 py-2 text-left text-sm last:border-0 hover:bg-brand-50">' + esc(a.text) + "</button>";
+              return '<button type="button" data-id="' + a.id + '" data-text="' + esc(a.text) + '" data-city="' + esc(a.city || "") + '" data-province="' + esc(a.province || "") + '" class="block w-full border-b border-[var(--co-line)] px-4 py-2 text-left text-sm last:border-0 hover:bg-brand-50">' + esc(a.text) + "</button>";
             }).join("");
             destResults.classList.remove("hidden");
           }).catch(function () {
@@ -1119,7 +1126,7 @@ if (rToken) {
       var rateItems = cart.map(function (l) { return { handle: l.handle, variant: l.variant, qty: l.qty }; });
       api({ op: "rates", storeSlug: STORE_SLUG, destinationId: Number(destId.value), items: rateItems, itemValue: subtotal }).then(function (res) {
         if (!res.ok || !res.rates.length) {
-          expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">' + esc(res.error || "Tidak ada layanan untuk rute ini.") + "</p>";
+          expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-[var(--co-line)] px-4 py-3 text-sm text-muted">' + esc(res.error || "Tidak ada layanan untuk rute ini.") + "</p>";
           recompute();
           return;
         }
@@ -1154,7 +1161,7 @@ if (rToken) {
           if (s === cheapest) tags += ' <span class="ml-1 rounded bg-brand-100 px-1.5 py-px text-[10px] font-semibold text-brand-700">Termurah</span>';
           if (s === fastest) tags += ' <span class="ml-1 rounded bg-sky-100 px-1.5 py-px text-[10px] font-semibold text-sky-700">Tercepat</span>';
           if (s.cod) tags += ' <span class="ml-1 rounded bg-emerald-100 px-1.5 py-px text-[10px] font-semibold text-emerald-700">COD</span>';
-          return '<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">' +
+          return '<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--co-line)] px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">' +
             '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (checked ? " checked" : "") + ' required class="h-4 w-4 shrink-0 accent-brand-600" />' +
             '<span class="min-w-0 flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + tags + '</span><span class="block text-xs text-muted">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
             '<span class="shrink-0 text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
@@ -1208,7 +1215,7 @@ if (rToken) {
         }
         bindShipping();
       }).catch(function () {
-        expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">Gagal memuat ongkir. Coba lagi.</p>';
+        expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-[var(--co-line)] px-4 py-3 text-sm text-muted">Gagal memuat ongkir. Coba lagi.</p>';
       });
     }
 
