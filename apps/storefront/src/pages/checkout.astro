@@ -403,16 +403,22 @@ if (rToken) {
               it reassures BEFORE the shopper picks a method, not after they already have. */}
           <p class="mb-4 mt-1 text-sm text-muted">Pembayaran diproses aman — disediakan TokoΦ.</p>
 
-          <div class="space-y-4">
+          {/* ONE BOX, hairline-divided rows — the same shape as Pengiriman above and as the reference.
+              This was a stack of floating cards with an inconsistent hierarchy: QRIS was a selectable
+              box, "Transfer Bank" was a HEADER you could not select, its five banks were five more
+              boxes, and COD was another box — so some things in the list were choices and one was a
+              caption, with nothing but font weight to tell them apart. Now every row is a choice and
+              the group caption sits INSIDE the box, visibly not a row. */}
+          <div class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)]">
             {PAY_GROUPS.map((group) => (
-              <div>
+              <div class="divide-y divide-[var(--co-line)]">
                 {/* A group with ONE channel is rendered as a single selectable row, not a header with
                     one item under it: QRIS was appearing twice — once as the group title and once as
                     its only row. And a multi-channel group's rows show only the BANK NAME, because
                     the group hint already says how you pay; repeating "Bayar via ATM / m-banking"
                     five times is noise a shopper has to read past. */}
                 {group.items.length === 1 ? (
-                  <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--co-line)] px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
+                  <label class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-brand-50">
                     <input
                       type="radio"
                       name="payment"
@@ -431,7 +437,9 @@ if (rToken) {
                   </label>
                 ) : (
                   <>
-                    <div class="mb-2 flex items-center gap-3 px-1">
+                    {/* A caption, not a row: no radio, tinted, and it reads as the lid of the rows
+                        under it rather than as a sixth thing you might be able to pick. */}
+                    <div class="flex items-center gap-3 bg-black/[0.02] px-4 py-2.5">
                       <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 ring-1 ring-brand-100">
                         <PayIcon kind={group.kind} />
                       </span>
@@ -440,9 +448,9 @@ if (rToken) {
                         <p class="text-xs text-muted">{group.hint}</p>
                       </div>
                     </div>
-                    <div class="space-y-2">
+                    <div class="divide-y divide-[var(--co-line)]">
                       {group.items.map((pm) => (
-                        <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--co-line)] px-4 py-2.5 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
+                        <label class="flex cursor-pointer items-center gap-3 px-4 py-3 pl-14 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-brand-50">
                           <input
                             type="radio"
                             name="payment"
@@ -466,7 +474,7 @@ if (rToken) {
                 a COD we would reject has no business being on screen at all. */}
             {COD_ENABLED && (
               <div id="cod-option" hidden>
-                <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--co-line)] px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
+                <label class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-brand-50">
                   <input
                     type="radio"
                     name="payment"
@@ -1157,18 +1165,32 @@ if (rToken) {
           // s.cod is the EFFECTIVE flag from the API (KiriminAja capability × platform per-service
           // allowance × this store's cod_enabled) — never the raw courier capability. The regrouping
           // does not touch it: syncCod() still reads data-cod off whichever radio is checked.
+          //
+          // ONE muted tag style, not three colours. This shipped a pink "Termurah", a sky-blue
+          // "Tercepat" and an emerald "COD" — three palettes none of which is the merchant's brand,
+          // on a screen whose whole job is to leave exactly one thing coloured (the pay button).
+          // The words carry the meaning; the colour was carrying nothing but noise.
           var tags = "";
-          if (s === cheapest) tags += ' <span class="ml-1 rounded bg-brand-100 px-1.5 py-px text-[10px] font-semibold text-brand-700">Termurah</span>';
-          if (s === fastest) tags += ' <span class="ml-1 rounded bg-sky-100 px-1.5 py-px text-[10px] font-semibold text-sky-700">Tercepat</span>';
-          if (s.cod) tags += ' <span class="ml-1 rounded bg-emerald-100 px-1.5 py-px text-[10px] font-semibold text-emerald-700">COD</span>';
-          return '<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--co-line)] px-4 py-3 transition-colors hover:border-brand-400 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">' +
+          var tag = function (t) {
+            return ' <span class="ml-1.5 rounded border border-[var(--co-line)] px-1.5 py-px text-[10px] font-medium text-muted">' + t + "</span>";
+          };
+          if (s === cheapest) tags += tag("Termurah");
+          if (s === fastest) tags += tag("Tercepat");
+          if (s.cod) tags += tag("COD");
+          // A ROW, not a card: the border/rounding live on the container, and rows are separated by a
+          // hairline. 14 individually-bordered boxes is what made this read as a wall.
+          return '<label class="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-brand-50">' +
             '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (checked ? " checked" : "") + ' required class="h-4 w-4 shrink-0 accent-brand-600" />' +
             '<span class="min-w-0 flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + tags + '</span><span class="block text-xs text-muted">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
             '<span class="shrink-0 text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
         }
+        /** Wrap rows in the single bordered box they share. */
+        function box(rowsHtml) {
+          return '<div class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)]">' + rowsHtml + "</div>";
+        }
 
         // The default row is the ONLY thing rendered up front.
-        expressBox.innerHTML = row(def, true);
+        expressBox.innerHTML = box(row(def, true));
 
         if (defaultNote) {
           if (preferred) {
@@ -1179,33 +1201,17 @@ if (rToken) {
           }
         }
 
-        // ── THE REST, GROUPED BY KIRIMINAJA'S OWN `group` ─────────────────────────────────────────
-        // GROUPS is exhaustive over what the API returns (regular / economy / next_day / one_day /
-        // cargo), and anything unrecognised lands in "Lainnya" rather than being dropped: a service
-        // KiriminAja prices but the checkout hides is a service the shopper cannot buy.
-        var GROUPS = [
-          { label: "1 Hari", keys: ["next_day", "one_day"] },
-          { label: "Reguler", keys: ["regular"] },
-          { label: "Ekonomi", keys: ["economy"] },
-          { label: "Kargo", keys: ["cargo"] },
-        ];
+        // ── THE REST — ONE FLAT LIST, CHEAPEST FIRST ──────────────────────────────────────────────
+        // It used to be split into "1 Hari / Reguler / Ekonomi / Kargo" headers over individually
+        // bordered cards: 13 services became four titled sections and fourteen boxes, and the shopper
+        // had to parse a taxonomy before they could compare two numbers. KiriminAja's `group` is a
+        // CARRIER's word for its own product line, not a question a shopper is asking — they are
+        // asking "how fast, how much". Both are on every row already.
+        //
+        // Nothing is dropped: every service the API prices is still here, in price order, because a
+        // service KiriminAja quotes but the checkout hides is a service the shopper cannot buy.
         var others = rates.filter(function (s) { return s !== def; });
-        var taken = [];
-        var html = "";
-        GROUPS.forEach(function (g) {
-          var list = others.filter(function (s) { return g.keys.indexOf(String(s.group || "")) >= 0; });
-          list.forEach(function (s) { taken.push(s); });
-          if (!list.length) return; // an empty group is not rendered — no headers over nothing
-          html += '<div><p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">' + esc(g.label) + '</p><div class="space-y-2">' +
-            list.map(function (s) { return row(s, false); }).join("") + "</div></div>";
-        });
-        var rest = others.filter(function (s) { return taken.indexOf(s) < 0; });
-        if (rest.length) {
-          html += '<div><p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Lainnya</p><div class="space-y-2">' +
-            rest.map(function (s) { return row(s, false); }).join("") + "</div></div>";
-        }
-
-        moreBox.innerHTML = html;
+        moreBox.innerHTML = box(others.map(function (s) { return row(s, false); }).join(""));
         moreBox.hidden = true;
         if (moreBtn) {
           moreBtn.hidden = others.length === 0; // one service on the route → nothing to reveal

@@ -9,6 +9,37 @@
 
 ---
 
+## 🧾 Deferred from the 2026-07-16 checkout/storefront polish
+
+Parked deliberately while the checkout page was finished. Each is real, each was measured, and none is
+a guess — the evidence is in `CHANGELOG.md` under the same date.
+
+- **[ ] `byCollection` matches `slugify(products.category)`, not `collection_products`.** So a
+  merchant's **manual collection membership is invisible to the storefront**, and any collection whose
+  handle doesn't equal a product's slugified category text renders empty. It only works for
+  batik-nusantara because its category strings happen to slugify onto its handles. This is the last —
+  and biggest — instance of the family we spent 2026-07-16 killing (demo-shaped assumptions baked into
+  platform code). `apps/storefront/src/data/catalog.ts`.
+- **[ ] `rate.cod` enforcement is committed but NOT exercised end-to-end.** `/api/public/order` now
+  rejects a COD order whose live per-destination rate came back `cod:false`. Reviewed and typechecked
+  only: proving it needs a KiriminAja quote for a district in an allow-listed province where SPX
+  returns `cod:false`, and I did not find one. Until then the guard is untested code on the money path.
+- **[ ] The stock decrement targets EVERY `inventory_levels` row for a variant, with no location
+  filter** — while the check sums across them. Every variant has exactly 1 row today (96/96 verified),
+  so it is correct now; the unique key is `(variant_id, location_id)`, so multi-location is a supported
+  shape, and the day a variant has two rows this subtracts the full qty from each. The real question is
+  *which location ships*, which is a design decision, not a patch.
+- **[ ] Kecamatan search ranks a wrong-island match first.** Typing "Semarang" returns **"Suti
+  Semarang, Kabupaten Bengkayang, Kalimantan Barat"** above Semarang, Jawa Tengah. A shopper who takes
+  the first row gets a 13–21 day cargo quote for a dress and no COD. `searchAreaLocal` orders by
+  nothing meaningful; it should rank exact/prefix district matches, then city, then the rest.
+- **[ ] The Store Builder does not validate section links against live targets.** The demo's
+  `CategoryNav` linked `/kategori/outerwear` after that collection turned out to be `published=false`
+  (fixed in the seed, but only because I knew). `getFooterNav`/`getMainNav` already drop dead links at
+  render; the builder should refuse to save them, or warn.
+
+---
+
 ## 🔴 The five that matter most
 
 Not the biggest, not the newest — the ones where the product is currently **lying, leaking, or
