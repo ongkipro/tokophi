@@ -358,6 +358,13 @@
       "when": 1784109764290,
       "tag": "0050_loose_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1784188221356,
+      "tag": "0051_lonely_vanisher",
+      "breakpoints": true
     }
   ]
 }

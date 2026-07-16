@@ -9,7 +9,7 @@ import { withCurrentTenant, withTenant, type Tx } from "@/lib/tenant";
 import { getCodPolicy } from "@/lib/cod";
 import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
-import { resolveArea, provinceForDistrict } from "@/lib/data/areas";
+import { resolveArea, provinceForDistrict, kelurahanForDistrict } from "@/lib/data/areas";
 
 export type Rate = { service: string; code: string; type: string; cost: number; etd: string; cod: boolean; group: string };
 
@@ -176,6 +176,23 @@ export async function searchArea(q: string): Promise<{ id: number; text: string 
   return resolveArea(q.trim());
 }
 
+/**
+ * Kelurahan of a district, for the pickup-address form.
+ *
+ * `kaCreateOrder` already sends `kelurahan_id` when we have one — a kecamatan can span a large
+ * area, and the courier's pickup rider is dispatched more precisely with the village. The column
+ * (`store_settings.sender_kelurahan_id`) and the booking field both existed; the FORM never asked
+ * for it, so it was NULL for every store and the precision was thrown away.
+ *
+ * Districts with no kelurahan rows (~4% — unmatched against the Kemendagri set) return []; the
+ * caller must let the seller save without one rather than block them on data we do not have.
+ */
+export async function kelurahanOptions(districtId: number): Promise<{ name: string; postcode: string }[]> {
+  if (!(await getSession())) return [];
+  if (!Number.isFinite(districtId) || districtId <= 0) return [];
+  return kelurahanForDistrict(districtId);
+}
+
 // No lat/lng — instant (same-day) couriers were removed and they were the only consumer of the
 // coordinates. `store_settings.sender_lat/sender_lng` still exist in the DB but are DEAD: neither
 // read nor written here. Don't wire them back.
@@ -183,6 +200,7 @@ export type SenderAddress = {
   name: string; phone: string; address: string;
   kecamatanId: number | null; kecamatanName: string;
   kelurahanId: number | null; kelurahanName: string;
+  postcode: string;
 };
 
 export async function getSenderAddress(): Promise<SenderAddress | null> {
@@ -194,17 +212,45 @@ export async function getSenderAddress(): Promise<SenderAddress | null> {
       name: s.senderName ?? "", phone: s.senderPhone ?? "", address: s.senderAddress ?? "",
       kecamatanId: s.senderKecamatanId ?? null, kecamatanName: s.senderKecamatanName ?? "",
       kelurahanId: s.senderKelurahanId ?? null, kelurahanName: s.senderKelurahanName ?? "",
+      postcode: s.senderPostcode ?? "",
     };
   });
+}
+
+/**
+ * The pickup address a courier rider actually reads.
+ *
+ * KiriminAja's `request_pickup` identifies the SENDER by `kecamatan_id` (+ an optional `kelurahan_id`
+ * in THEIR numbering, which we deliberately never send — see kelurahanOptions above) and a free-text
+ * `address`. There is NO sender zipcode field; `destination_zipcode` is the buyer's, not ours. So the
+ * kelurahan and the postcode only reach the rider if they are written INTO that address string — which
+ * is exactly what this does. Without it the kelurahan the seller picks goes nowhere: not as an id, not
+ * in the text, and the precision the field exists for is thrown away.
+ */
+// NOT exported: a "use server" module may only export async functions, and this is a pure local helper.
+function composePickupAddress(s: {
+  senderAddress?: string | null; senderKelurahanName?: string | null; senderPostcode?: string | null;
+}): string {
+  const kel = (s.senderKelurahanName ?? "").trim();
+  return [
+    (s.senderAddress ?? "").trim(),
+    kel ? `Kel. ${kel}` : "",
+    (s.senderPostcode ?? "").trim(),
+  ].filter(Boolean).join(", ");
 }
 
 export async function saveSenderAddress(input: {
   name: string; phone: string; address: string;
   kecamatanId: number | null; kecamatanName: string;
   kelurahanId?: number | null; kelurahanName?: string;
+  postcode?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const { storeId } = await requireCapability("settings:write");
+  // 5 digits or nothing. Normalised, not rejected — an odd postcode must never block saving an
+  // address (same rule as the phone below); it just doesn't get written.
+  const postcode = (input.postcode ?? "").replace(/\D/g, "");
   const values = {
+    senderPostcode: /^\d{5}$/.test(postcode) ? postcode : null,
     senderName: input.name,
     // Canonical `62…` (the shape KiriminAja books `sender.phone` against). Normalised, NOT rejected:
     // if the seller's number cannot be parsed we still save what they typed — refusing to save an
@@ -517,7 +563,10 @@ export async function createShipment(input: {
 
   const r = await kaCreateOrder(
     {
-      name: s.senderName || "Toko", phone: s.senderPhone || "081200000000", address: s.senderAddress || "-",
+      name: s.senderName || "Toko", phone: s.senderPhone || "081200000000",
+      // Kelurahan + postcode ride INSIDE the address — KaSender has no field for either (see
+      // composePickupAddress). Falls back to "-" only when the seller has written nothing at all.
+      address: composePickupAddress(s) || "-",
       kecamatanId: s.senderKecamatanId, kelurahanId: s.senderKelurahanId,
     },
     {

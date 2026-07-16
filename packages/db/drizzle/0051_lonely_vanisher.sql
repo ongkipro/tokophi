@@ -1,0 +1,1 @@
+ALTER TABLE "store_settings" ADD COLUMN "sender_postcode" text;

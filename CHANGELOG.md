@@ -16,6 +16,14 @@ The final split (decided with the user): **platform stays on `tokophi.com`** (la
 
 The Domain card now leads with the **system domain** `<slug>.tokophi.id` — shown read-only with a lock ("Aktif otomatis · diatur sistem, tidak bisa diubah") and a Kunjungi link — because that address is derived from the store slug and a merchant must never be able to change or detach it. Below it, the **custom-domain** flow got a Shopify-style numbered tutorial (add → publish CNAME+TXT → verify → make primary), plus the apex/`www` + "email unaffected" notes. **Security hardening in `lib/actions/domain.ts`:** `addDomain` now refuses **every platform-owned zone** — `tokophi.id`/`tokophi.com`/`tokophi.cc` and any host under them (`PLATFORM_ZONES`, one place) — so a merchant can't squat `app.tokophi.com`, the `cname.tokophi.cc` fallback, or another store's `<slug>.tokophi.id`; and a **per-store cap** (`MAX_DOMAINS_PER_STORE=5`) guards the `UNIQUE(host)` space and the poller. (Ownership was already proven by a real TXT check, writes already gated by RBAC + RLS, and `store_domains.host` is DB-UNIQUE across the platform.)
 
+### 📦 The pickup address the rider actually reads — the kelurahan a seller picked was going nowhere
+
+Pengaturan → Alamat Pengirim gained a kelurahan picker, but the value it captured **never reached the courier**, so the precision the field exists for was still thrown away:
+- `sender_kelurahan_id` is deliberately left NULL (KiriminAja numbers kelurahan in their own scheme; writing our Kemendagri code there would be "wrong data wearing the costume of right data"), so `kelurahan_id` was never sent — correct, and
+- `senderKelurahanName` was **not written into the address** either, despite the comment saying that was the plan. `kaCreateOrder` sent `address: s.senderAddress` raw.
+
+Now `composePickupAddress()` builds the one string the rider reads — `Jl. …, Kel. …, 60281` — and the booking sends that. **Kode pos joins it** (migration `0051` → `store_settings.sender_postcode`): it is **not typed**, it follows the kelurahan the seller picks, is normalised to 5 digits (an odd value is dropped, never blocks the save — same rule as the sender phone), and is shown read-only under the picker. ⚠️ Grounded, not assumed: **`KaSender` has NO zipcode field** — `request_pickup` takes the sender's `kecamatan_id` (+ optional `kelurahan_id`) and a free-text `address`; `destination_zipcode` is the **buyer's** and was already wired from `orders.ship_postcode`. So the postcode only reaches the rider by riding in that address string — which is exactly what gives the new column a reader instead of making it another dead `sender_lat`/`sender_lng`.
+
 ### 🔗 Custom domain: the Shopify primary model + a beginner-proof DNS tutorial + a locked-domain ticket path
 
 Refined the domain flow to the exact model a merchant expects:

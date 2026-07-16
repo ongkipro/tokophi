@@ -852,6 +852,11 @@ export const storeSettings = pgTable("store_settings", {
   senderKecamatanName: text(),
   senderKelurahanId: integer(),
   senderKelurahanName: text(),
+  // Postcode of the chosen kelurahan. KiriminAja's `request_pickup` SENDER has no zipcode field
+  // (only `destination_zipcode`, for the buyer), so this is NOT sent as its own key — it rides in the
+  // written pickup `address` that the rider actually reads, together with the kelurahan name. That is
+  // its reader; without that it would be another dead column like senderLat/senderLng below.
+  senderPostcode: text(),
   // DEAD COLUMNS — instant/same-day delivery (GoSend/Grab) was removed and it was the only feature
   // that needed coordinates. Nothing reads or writes these; kept only to avoid a destructive
   // migration. Do not wire them back up.
