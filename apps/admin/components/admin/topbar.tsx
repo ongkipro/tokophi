@@ -213,12 +213,17 @@ export function Topbar({
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button variant="outline" className="gap-2 font-medium">
-              <span className="flex size-5 items-center justify-center rounded bg-primary/15 text-[10px] font-bold text-primary">
+            <Button variant="outline" className="min-w-0 shrink gap-2 font-medium">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary/15 text-[10px] font-bold text-primary">
                 {store.name.slice(0, 2).toUpperCase()}
               </span>
-              <span className="max-w-[140px] truncate">{store.name}</span>
-              <ChevronDown className="size-4 text-muted-foreground" />
+              {/* Below 360px the name is the only thing here big enough to give up: the row is
+                  px-4 + Menu + switcher + the 116px right cluster, and it overflowed a 320px phone by
+                  40px (audit:responsive). The 2-letter badge still identifies the store, the full name
+                  is one tap away in this same dropdown, and 360px+ — every phone people actually use —
+                  keeps it. `min-w-0` lets it truncate before it pushes, instead of pushing. */}
+              <span className="max-w-[140px] truncate max-[359px]:hidden">{store.name}</span>
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
             </Button>
           }
         />

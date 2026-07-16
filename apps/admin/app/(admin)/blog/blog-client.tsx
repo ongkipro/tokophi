@@ -145,22 +145,28 @@ export function BlogClient({ posts }: { posts: BlogPost[] }) {
 
       {/* Blog filter tabs */}
       <Tabs value={blog} onValueChange={(v) => setBlog(v as string)} className="mb-4">
-        <TabsList>
-          <TabsTrigger value="all">
-            Semua
-            <Badge variant="secondary" className="ml-1 tabular-nums">
-              {num(counts.all)}
-            </Badge>
-          </TabsTrigger>
-          {BLOG_CATEGORIES.map((c) => (
-            <TabsTrigger key={c} value={c}>
-              {c}
+        {/* Category count grows with the data, so this strip has no fixed width — it measured 388px
+            and overflowed 360/390 phones (audit:responsive). It scrolls rather than squeezes: a
+            category label crushed to "Ra…" is not a filter anyone can use. Same rule as the
+            storefront gallery, and why the audit excuses horizontal scrollers. */}
+        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <TabsList className="w-max">
+            <TabsTrigger value="all">
+              Semua
               <Badge variant="secondary" className="ml-1 tabular-nums">
-                {num(counts[c] ?? 0)}
+                {num(counts.all)}
               </Badge>
             </TabsTrigger>
-          ))}
-        </TabsList>
+            {BLOG_CATEGORIES.map((c) => (
+              <TabsTrigger key={c} value={c}>
+                {c}
+                <Badge variant="secondary" className="ml-1 tabular-nums">
+                  {num(counts[c] ?? 0)}
+                </Badge>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
       </Tabs>
 
       {/* Toolbar */}

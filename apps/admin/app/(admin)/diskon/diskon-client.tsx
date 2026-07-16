@@ -262,16 +262,20 @@ export function DiskonClient({ discounts }: { discounts: Discount[] }) {
       </div>
 
       <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
-        <TabsList className="mb-4">
-          {FILTERS.map((f) => (
-            <TabsTrigger key={f.key} value={f.key} className="gap-1.5">
-              {f.label}
-              <span className="rounded bg-foreground/10 px-1 text-xs tabular-nums text-muted-foreground">
-                {num(counts[f.key])}
-              </span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {/* Each filter carries a count, so the strip measured 372px and overflowed a 360px phone —
+            the most common Android (audit:responsive). It scrolls rather than squeezes. */}
+        <div className="-mx-4 mb-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <TabsList className="w-max">
+            {FILTERS.map((f) => (
+              <TabsTrigger key={f.key} value={f.key} className="gap-1.5">
+                {f.label}
+                <span className="rounded bg-foreground/10 px-1 text-xs tabular-nums text-muted-foreground">
+                  {num(counts[f.key])}
+                </span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
         <TabsContent value={filter}>
           <Card className="py-0">

@@ -373,12 +373,19 @@ export function SaldoClient({
           filtered IN SQL. The tab counts are deliberately unfiltered totals — they are landmarks,
           and a landmark that moves when you filter is not a landmark. */}
       <Tabs value={tab} onValueChange={(v) => filter({ tab: String(v) })}>
-        <TabsList>
-          <TabsTrigger value="mutasi">Mutasi ({counts.movements})</TabsTrigger>
-          <TabsTrigger value="proses">Dana dalam proses ({counts.pending})</TabsTrigger>
-          <TabsTrigger value="penarikan">Penarikan ({counts.payouts})</TabsTrigger>
-          <TabsTrigger value="rekening">Rekening</TabsTrigger>
-        </TabsList>
+        {/* These four labels carry counts, so they are ~452px wide and overflowed every real phone
+            (audit:responsive: 360/390/414 by 108/78/54px). Squeezing them would shred the labels; a
+            landmark you cannot read is not a landmark. So the strip SCROLLS instead — the same rule
+            the storefront's gallery uses, and the reason the audit excuses horizontal scrollers.
+            `-mx-4 px-4` lets it bleed to the screen edge on mobile so the scroll reads as intentional. */}
+        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <TabsList className="w-max">
+            <TabsTrigger value="mutasi">Mutasi ({counts.movements})</TabsTrigger>
+            <TabsTrigger value="proses">Dana dalam proses ({counts.pending})</TabsTrigger>
+            <TabsTrigger value="penarikan">Penarikan ({counts.payouts})</TabsTrigger>
+            <TabsTrigger value="rekening">Rekening</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Mutasi — the full book. */}
         <TabsContent value="mutasi">
