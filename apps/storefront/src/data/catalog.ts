@@ -38,7 +38,11 @@ export type Product = {
   description: string;
   sizes: string[];
   badge?: string;
+  /** ⚠️ A merchant FLAG, and it disagrees with the data: the demo flags hijab-voal (321 sold) and
+      not celana-kulot (869). `bestsellers()` no longer reads it — see there. */
   bestseller?: boolean;
+  /** All-time units sold. THE number "Paling Dicari" is a claim about. */
+  unitsSold: number;
   options?: { name: string; values: string[] }[]; // real variant option types (e.g. Warna, Ukuran)
   variants?: VariantRow[]; // one row per option combo (price + stock)
   createdAt: number; // epoch ms — for the "terbaru" Grid Produk mode (ADR 0009)
@@ -190,6 +194,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       sizes: schema.products.sizes,
       badge: schema.products.badge,
       bestseller: schema.products.bestseller,
+      unitsSold: schema.products.unitsSold,
       ratingValue: schema.products.ratingValue,
       ratingCount: schema.products.ratingCount,
       createdAt: schema.products.createdAt,
@@ -288,6 +293,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       sizes: (r.sizes as string[] | null) ?? [],
       badge: r.badge ?? undefined,
       bestseller: r.bestseller,
+      unitsSold: Number(r.unitsSold ?? 0),
       options: options.length ? options : undefined,
       variants: variants.length ? variants : undefined,
       createdAt: r.createdAt.getTime(),
@@ -387,7 +393,19 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       return buckets;
     },
     productReviews: (p) => reviewsByHandle[typeof p === "string" ? p : p.handle] ?? [],
-    bestsellers: (list = products) => list.filter((p) => p.bestseller),
+    // SORTED BY units_sold, not filtered by a flag — so "Paling Dicari" is true by construction and
+    // `limit` means "the top N" instead of "however many happen to be ticked".
+    //
+    // It was `list.filter(p => p.bestseller)`. Two things were wrong at once. The flag CONTRADICTS the
+    // data sitting in the next column: the demo flags `hijab-voal` (321 sold) and `blouse-katun`, and
+    // does NOT flag `celana-kulot` (869) or `kemeja-oversized` (818) — so the shop's "most wanted"
+    // shelf was the merchant's guess, not their sales. And it returned however many were ticked (3),
+    // so a 4-up grid had a hole in it; `keranjang.astro` had already grown a workaround to top the row
+    // up from the rest of the catalogue, which is the symptom of exactly this.
+    //
+    // The registry's own comment on `mode: "terlaris"` claimed it "sorts the whole catalog by all-time
+    // units_sold". It did not. Now it does, and the comment is true.
+    bestsellers: (list = products) => list.slice().sort((a, b) => b.unitsSold - a.unitsSold),
     // The merchant's own membership. A handle with no rows returns [] — NOT "everything whose
     // category text happens to slugify to this", which is how a manual collection used to render
     // somebody else's guess.

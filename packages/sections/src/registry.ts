@@ -233,10 +233,15 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
     ratingText: "",
   },
   "product-grid": {
-    // "Terlaris Minggu Ini" was a claim about a TIME WINDOW we do not compute: `mode: "terlaris"`
-    // sorts the whole catalog by all-time `units_sold`, not by last-7-days sales. The heading now
-    // says only what the section actually does. Do not put a period ("minggu ini", "hari ini",
-    // "bulan ini") back in unless the data layer starts windowing the bestseller query.
+    // "Terlaris Minggu Ini" was a claim about a TIME WINDOW we do not compute. The heading says only
+    // what the section does. Do not put a period ("minggu ini", "hari ini", "bulan ini") back in
+    // unless the data layer starts windowing the query.
+    //
+    // ⚠️ This note used to add that `mode: "terlaris"` "sorts the whole catalog by all-time
+    // units_sold". That was FALSE for as long as it was written: `catalog.bestsellers()` filtered a
+    // `bestseller` BOOLEAN, and the demo's flags contradicted its own sales column (hijab-voal flagged
+    // at 321 sold; celana-kulot unflagged at 869). Fixed 2026-07-16 — it now really does sort by
+    // units_sold, so `limit` means "the top N" and the sentence is finally true. Keep it that way.
     heading: "Produk Terlaris",
     mode: "terlaris",
     collectionHandle: "",

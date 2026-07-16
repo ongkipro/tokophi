@@ -2,6 +2,54 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-07-17
+
+### 🏆 "Paling Dicari" was not the most wanted — the flag contradicted the sales column beside it
+
+`catalog.bestsellers()` was `list.filter(p => p.bestseller)` — a merchant BOOLEAN. The demo flags
+`hijab-voal` (**321** sold) and not `celana-kulot` (**869**) or `kemeja-oversized` (**818**), so the
+shop's "most wanted" shelf was somebody's guess sitting next to the column that disproved it. And it
+returned however many were ticked (3), so a 4-up row had a hole in it — `keranjang.astro` had already
+grown a workaround topping the row up from the rest of the catalogue, which is the symptom of exactly
+this. The registry's own comment claimed `mode:"terlaris"` "sorts the whole catalog by all-time
+units_sold". **It did not.** Now it does: `units_sold` is loaded and `bestsellers()` sorts by it, so
+`limit` means "the top N", the claim is true by construction, and the comment is finally honest. The
+keranjang workaround is deleted — it was treating the symptom.
+
+**The user asked me to flag more bestsellers. I did not**, and that is the point: flagging more would
+have patched the row while leaving the shelf lying. Measured after: Paling Dicari renders
+celana-kulot / kemeja-oversized / dress-midi-bunga / tunik-rayon — 869 / 818 / 652 / 565, the real top
+four.
+
+### 📐 The storefront's 1280 shell was never too wide — it was empty
+
+"Tidak terlalu lebar?" — measured, and no: the shell already caps at 1280 (Shopify Dawn is 1200) at
+every width to 2560. What made it *look* wide was **my own `columns: 3`**: chosen so 3 flagged
+bestsellers filled a row, it produced **400px cards** — a folded hijab rendered 400×530. I optimised
+for "the row isn't ragged" and paid in cards the size of doors. Now the /tema formula: **Paling Dicari
+4×1** and a second grid **Produk Terbaru 4×2** (`terbaru` sorts by createdAt — honest by construction).
+Cards 400 → **296px**, and the shell is full because there is finally enough in it. Narrowing the page
+to hide a thin catalogue would have been fixing the mirror, not the face.
+
+⚠️ **Found, not fixed:** the hero is full-bleed and its source is 1920×1080, so at 2560 it upscales
+**1.33×** and goes soft — on the first thing anyone sees. Needs a larger asset + `srcset`, not a CSS
+change. Also: with 12 active products and 4+8 slots the two grids overlap by two — a demo-catalogue
+size artefact, not a bug.
+
+### 💳 Checkout: payment is hidden until the kecamatan is picked
+
+The same gate Pengiriman already used, one step further on: you cannot choose HOW to pay before anyone
+knows WHAT you pay — ongkir lands only after a district resolves. It matters beyond tidiness: COD's
+availability is decided by the destination, so an unreachable COD row was being offered and then
+withdrawn the moment the shopper picked their kecamatan. Better not to offer it than to take it away.
+
+⚠️ **And it re-armed a trap I had already documented.** The payment radios carried `required`; a
+required control inside a HIDDEN fieldset makes the browser refuse to submit with *"An invalid form
+control with name='payment' is not focusable"* — the form dies with no visible error and the button
+just does nothing. Removed; the submit handler already validates it ("Pilih metode pembayaran.")
+where we can name what is missing. Verified: pressing Bayar with no kecamatan focuses the kecamatan
+field and reports natively — no order posted, nothing silent.
+
 ## 2026-07-16
 
 ### 💰 Keuangan — four pages that complete each other, not four doors onto one room

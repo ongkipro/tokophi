@@ -16,13 +16,11 @@ import Layout from "../layouts/Layout.astro";
 import ProductCard from "../components/ProductCard.astro";
 
 const { store, catalog } = Astro.locals;
-// Bestsellers FIRST, then topped up from the rest of the catalog. `bestsellers()` alone returns only
-// what the merchant flagged — 3 in the seed — which left a hole in the 4-up grid. The strip is a
-// fixed-width row, so it must be filled from the catalog rather than left ragged.
-const recommended = [
-  ...catalog.bestsellers(),
-  ...catalog.products.filter((p) => !p.bestseller),
-].slice(0, 4);
+// The 4 most-sold. The top-up from the rest of the catalogue is GONE: it existed only because
+// `bestsellers()` returned "whatever the merchant flagged" (3 in the seed), leaving a hole in this
+// 4-up row. It now sorts the whole catalogue by units_sold, so the first 4 are always there and are
+// actually the top 4 — the workaround was treating the symptom.
+const recommended = catalog.bestsellers().slice(0, 4);
 ---
 
 <Layout title="Keranjang" description={`Keranjang belanja di ${store.name}.`}>

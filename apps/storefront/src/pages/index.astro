@@ -18,7 +18,9 @@ const { store, catalog } = Astro.locals;
 const COD_ENABLED = await storeCodEnabled(store.id);
 const HOMEPAGE_TEMPLATE = catalog.homepageTemplate;
 
-const best = catalog.bestsellers();
+// `.slice(0, 4)` — bestsellers() now returns the WHOLE catalogue sorted by units_sold, so the
+// fallback homepage must say how many of them it wants. One row of four.
+const best = catalog.bestsellers().slice(0, 4);
 
 // ── FALLBACK HOMEPAGE — the store has not built one in the Store Builder ─────────────────────────
 //

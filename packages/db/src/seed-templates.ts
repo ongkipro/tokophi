@@ -124,15 +124,29 @@ const HOMEPAGE: StoredTemplateData = {
       props: {
         id: "terlaris-batik",
         heading: "Paling Dicari",
-        // `terlaris` is `catalog.bestsellers()` = `filter(p => p.bestseller)` — a BOOLEAN FLAG, with
-        // no sorting despite what the registry comment claims. This store flags 3 of its 14 products,
-        // so `columns: 4` would render a ragged 3-of-4 row (which is exactly what the old hand-built
-        // homepage did). 3 columns gives those 3 real bestsellers one full, clean row. `limit: 8`
-        // is headroom for when the merchant flags more.
+        // 4 × 1 — the /tema formula. `terlaris` now SORTS the catalogue by units_sold (it used to
+        // filter a `bestseller` flag that contradicted the data: the demo flags hijab-voal at 321
+        // sold and not celana-kulot at 869), so `limit: 4` means the real top four and the row is
+        // always full. It was `limit: 8, columns: 3` — three flagged products at 400px each, cards
+        // so large a folded hijab filled a 400×530 frame.
         mode: "terlaris",
-        collectionHandle: "", // empty = whole catalogue; the homepage has no scope of its own
+        collectionHandle: "",
+        limit: 4,
+        columns: 4,
+      },
+    },
+    {
+      type: "product-grid",
+      props: {
+        id: "terbaru-batik",
+        // 4 × 2 — the second grid the /tema formula calls for, and what actually fills a 1280 shell.
+        // "Terbaru" is honest by construction: `recentProducts` sorts by createdAt. The registry caps
+        // a page at 2 Grid Produk sections; this is the second.
+        heading: "Produk Terbaru",
+        mode: "terbaru",
+        collectionHandle: "",
         limit: 8,
-        columns: 3,
+        columns: 4,
       },
     },
     {

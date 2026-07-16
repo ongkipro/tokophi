@@ -407,8 +407,20 @@ if (rToken) {
           </div>
         </fieldset>
 
-        <!-- Pembayaran -->
-        <fieldset class="min-w-0">
+        {/* HIDDEN UNTIL THE KECAMATAN IS PICKED — the same gate Pengiriman above uses, for the same
+            reason one step further on: you cannot choose HOW to pay before anyone knows WHAT you pay.
+            Ongkir lands only after a district resolves, so until then the total is the subtotal and
+            every method on this list is priced against a number that is about to change.
+            It matters beyond tidiness: COD's availability is decided by the destination (the
+            province allow-list and the courier's live per-route flag), so an unreachable COD row was
+            being offered, then withdrawn, the moment the shopper picked their kecamatan. Better to
+            not offer it than to take it away. */}
+        {/* ⚠️ The radios inside carry NO `required`. A required control inside a HIDDEN fieldset makes the
+            browser refuse to submit with "An invalid form control with name='payment' is not
+            focusable" — the form dies with no visible error, and the shopper just watches the button
+            do nothing. Exactly the trap the bank radios already document. The submit handler validates
+            it instead ("Pilih metode pembayaran."), where we can say what is missing. */}
+        <fieldset id="pay-section" class="hidden min-w-0">
           <legend class="text-base font-semibold text-ink">Pembayaran</legend>
           {/* Under the heading, not under the list — the reference's placement, and the better one:
               it reassures BEFORE the shopper picks a method, not after they already have. */}
@@ -435,7 +447,6 @@ if (rToken) {
                       name="payment"
                       value={group.items[0].id}
                       data-label={group.items[0].label}
-                      required
                       class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
                     />
                     <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--co-accent-weak)] text-[var(--co-accent)] ring-1 ring-[var(--co-accent-ring)]">
@@ -468,7 +479,6 @@ if (rToken) {
                         name="payment"
                         value="__va"
                         data-label={group.title}
-                        required
                         class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
                       />
                       <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--co-accent-weak)] text-[var(--co-accent)] ring-1 ring-[var(--co-accent-ring)]">
@@ -1309,6 +1319,10 @@ if (rToken) {
       if (!destId.value) return;
       if (shipHint) shipHint.classList.add("hidden");
       expressGroup.classList.remove("hidden");
+      // Pembayaran rides the SAME gate as Pengiriman — one district pick reveals both, so the two
+      // cannot drift into a state where you can pick a method for an order with no price.
+      var paySection = document.getElementById("pay-section");
+      if (paySection) paySection.classList.remove("hidden");
       expressBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Menghitung ongkir…</p>';
       // The cart lines go to the server and the SERVER weighs them (Σ product_variants.weight_grams).
       // This used to post `weight: totalQty * 500` — a fabricated 500 g per item that quoted a 670 g
