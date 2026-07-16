@@ -237,51 +237,55 @@ if (rToken) {
         <!-- Kontak -->
         <fieldset class="min-w-0">
           <legend class="mb-4 text-base font-semibold text-ink">Kontak</legend>
-          <label class="block">
-            <span class="text-sm font-medium text-ink">Email <span class="font-normal text-muted">(opsional)</span></span>
-            {/* `input-field` like every other control. This one carried a hand-rolled COPY of those
-                styles that had drifted: bg-cream instead of white, 14px instead of 16px, a different
-                focus colour. So the first field a shopper meets was the one that looked unlike all
-                the others — and it was the 14px case iOS zooms on and never zooms back. */}
-            <input
-              type="email"
-              name="email"
-              placeholder="nama@email.com"
-              autocomplete="email"
-              class="input-field"
-            />
-            {/* There is NO mailer AND no order-notification of any kind in this codebase. So neither
-                email nor WhatsApp may be promised as the confirmation channel. The email is collected
-                for a future account / promo use only. Do NOT re-add "kami kirim struk ke email" or
-                "konfirmasi dikirim lewat WhatsApp" unless something actually sends them. */}
-            <span class="mt-1.5 block text-xs text-muted">
-              {/* An HTML comment here would SHIP to the browser — use a JSX comment.
-                  The old copy promised, in bold, that an order confirmation is sent over WhatsApp.
-                  Nothing sends it: /api/public/order dispatches no notification of any kind, and the
-                  only WhatsApp code in the repo is a MERCHANT-initiated wa.me link for abandoned
-                  carts. It was the last thing a shopper read before paying — they paid, then waited
-                  for a message that never came. */}
-              Untuk info promo &amp; kalau kami perlu menghubungimu soal pesanan ini.
-            </span>
-          </label>
+          {/* `input-field` like every other control. This one carried a hand-rolled COPY of those
+              styles that had drifted: bg-cream instead of white, 14px instead of 16px, a different
+              focus colour. So the first field a shopper meets was the one that looked unlike all
+              the others — and it was the 14px case iOS zooms on and never zooms back. */}
+          <div class="field">
+            <input type="email" name="email" id="f-email" placeholder=" " autocomplete="email" class="input-field" />
+            <label for="f-email" class="float-label">Email (opsional)</label>
+          </div>
+          {/* There is NO mailer AND no order-notification of any kind in this codebase. So neither
+              email nor WhatsApp may be promised as the confirmation channel. The email is collected
+              for a future account / promo use only. Do NOT re-add "kami kirim struk ke email" or
+              "konfirmasi dikirim lewat WhatsApp" unless something actually sends them.
+              The old copy promised, in bold, that an order confirmation is sent over WhatsApp.
+              Nothing sends it — it was the last thing a shopper read before paying, and they then
+              waited for a message that never came. */}
+          <p class="mt-1.5 text-xs text-muted">
+            Untuk info promo &amp; kalau kami perlu menghubungimu soal pesanan ini.
+          </p>
         </fieldset>
 
         <!-- Alamat pengiriman -->
         <fieldset class="min-w-0">
           <legend class="mb-4 text-base font-semibold text-ink">Alamat Pengiriman</legend>
           <div class="grid gap-4 sm:grid-cols-2">
-            <label class="block">
-              <span class="text-sm font-medium text-ink">Nama Lengkap <span class="text-red-500" aria-hidden="true">*</span></span>
-              <input type="text" name="nama" required autocomplete="name" class="input-field" />
-            </label>
-            <label class="block">
-              <span class="text-sm font-medium text-ink">No. WhatsApp <span class="text-red-500" aria-hidden="true">*</span></span>
-              <input type="tel" name="whatsapp" required inputmode="tel" placeholder="08xxxxxxxxxx" autocomplete="tel" class="input-field" />
-            </label>
-            <label class="block sm:col-span-2">
-              <span class="text-sm font-medium text-ink">Alamat Lengkap <span class="text-red-500" aria-hidden="true">*</span></span>
-              <textarea name="alamat" required rows="2" placeholder="Nama jalan, no. rumah, RT/RW, patokan" class="input-field resize-none"></textarea>
-            </label>
+            <div class="field">
+              <input type="text" name="nama" id="f-nama" required autocomplete="name" placeholder=" " class="input-field" />
+              <label for="f-nama" class="float-label">Nama Lengkap <span class="text-red-500">*</span></label>
+            </div>
+            <div>
+              <div class="field">
+                <input type="tel" name="whatsapp" id="f-wa" required inputmode="tel" autocomplete="tel" placeholder=" " class="input-field" />
+                <label for="f-wa" class="float-label">No. WhatsApp <span class="text-red-500">*</span></label>
+              </div>
+              {/* The old placeholder "08xxxxxxxxxx" was a FORMAT hint, and the floating label eats
+                  placeholders — so it moves here rather than disappearing. Kept factual: normalizePhone
+                  accepts 0812…/812…/+62…/62… with any separators, so this is an example, not a rule.
+                  Do NOT turn it into "nomor aktif untuk konfirmasi pesanan" — nothing notifies anyone. */}
+              <p class="mt-1.5 text-xs text-muted">Contoh: 0812 3456 7890</p>
+            </div>
+            <div class="sm:col-span-2">
+              <div class="field">
+                <textarea name="alamat" id="f-alamat" required rows="2" placeholder=" " class="input-field resize-none"></textarea>
+                <label for="f-alamat" class="float-label">Alamat Lengkap <span class="text-red-500">*</span></label>
+              </div>
+              {/* This hint is the field's whole job — an Indonesian address without RT/RW or a patokan
+                  is a parcel the rider phones about. The reference has no equivalent because a UK
+                  address does not need one; copying it exactly would have deleted this. */}
+              <p class="mt-1.5 text-xs text-muted">Nama jalan, no. rumah, RT/RW, dan patokan terdekat.</p>
+            </div>
             <!-- Kecamatan comes FIRST, and it drives Kota + Provinsi.
                  Before: the shopper typed Kota, Provinsi and Kode Pos by hand AND then separately
                  searched a kecamatan for the ongkir quote — re-keying an address the aggregator
@@ -291,15 +295,20 @@ if (rToken) {
                  the province from the district id when gating COD. Deriving the visible fields from
                  the same id means the form can no longer disagree with what ships. -->
             <div class="sm:col-span-2">
-              <label class="block">
-                <span class="text-sm font-medium text-ink">
-                  Kecamatan Tujuan <span class="text-red-500" aria-hidden="true">*</span>
-                </span>
-                <input type="text" id="dest-search" autocomplete="off" placeholder="Ketik kecamatan / kota, mis. Semarang" class="input-field" />
-                <input type="hidden" name="dest_id" id="dest-id" />
-                <input type="hidden" name="dest_text" id="dest-text" />
-                <div id="dest-results" class="mt-1 hidden max-h-48 overflow-y-auto rounded-xl border border-line bg-white shadow-sm"></div>
-              </label>
+              <div class="field">
+                <input type="text" id="dest-search" autocomplete="off" placeholder=" " class="input-field" />
+                <label for="dest-search" class="float-label">
+                  Kecamatan Tujuan <span class="text-red-500">*</span>
+                </label>
+              </div>
+              <input type="hidden" name="dest_id" id="dest-id" />
+              <input type="hidden" name="dest_text" id="dest-text" />
+              <div id="dest-results" class="mt-1 hidden max-h-48 overflow-y-auto rounded-lg border border-line bg-white shadow-sm"></div>
+              {/* The old placeholder said "Ketik kecamatan / kota" — the only thing telling a shopper
+                  this box is a SEARCH and not a text field. The floating label eats placeholders, so
+                  it moves here. Without it the field looks typed-in-freely, and the ongkir quote
+                  depends on them picking a row (dest_id), not on what they typed. */}
+              <p class="mt-1.5 text-xs text-muted">Ketik untuk mencari, lalu pilih dari daftar. Mis. Semarang Tengah.</p>
 
               <!-- KOTA + PROVINSI ARE DERIVED, SO THEY ARE SHOWN, NOT ASKED.
                    They used to be two readonly boxes the shopper could not fill in anyway — two more
@@ -328,19 +337,19 @@ if (rToken) {
                  kelurahan row stays hidden, Kode Pos widens to the full row and is TYPED — that path
                  must never block the order. See packages/db/scripts/build-kelurahan.mjs. -->
             <div class="grid gap-4 sm:col-span-2 sm:grid-cols-2">
-              <label id="kel-wrap" hidden class="block">
-                <span class="text-sm font-medium text-ink">
-                  Kelurahan / Desa <span class="font-normal text-muted">(opsional)</span>
-                </span>
+              {/* `field-select`: a <select> always has a value, so `:placeholder-shown` never matches
+                  and the label would sit on top of the current selection. It is parked raised. */}
+              <div id="kel-wrap" hidden class="field field-select">
                 <select name="kelurahan" id="kel-select" class="input-field">
                   <option value="">Pilih kelurahan…</option>
                 </select>
-              </label>
+                <label for="kel-select" class="float-label">Kelurahan / Desa (opsional)</label>
+              </div>
 
-              <label id="kodepos-wrap" class="block sm:col-span-2">
-                <span class="text-sm font-medium text-ink">Kode Pos <span class="font-normal text-muted">(opsional)</span></span>
-                <input type="text" name="kodepos" id="kodepos" inputmode="numeric" autocomplete="postal-code" placeholder="mis. 50241" class="input-field" />
-              </label>
+              <div id="kodepos-wrap" class="field sm:col-span-2">
+                <input type="text" name="kodepos" id="kodepos" inputmode="numeric" autocomplete="postal-code" placeholder=" " class="input-field" />
+                <label for="kodepos" class="float-label">Kode Pos (opsional)</label>
+              </div>
 
               <!-- Shown ONLY for the 18% of districts that really do span several postcodes: there the
                    kelurahan is the question, so say why we are asking it. -->
@@ -400,7 +409,10 @@ if (rToken) {
 
         <!-- Pembayaran -->
         <fieldset class="min-w-0">
-          <legend class="mb-4 text-base font-semibold text-ink">Pembayaran</legend>
+          <legend class="text-base font-semibold text-ink">Pembayaran</legend>
+          {/* Under the heading, not under the list — the reference's placement, and the better one:
+              it reassures BEFORE the shopper picks a method, not after they already have. */}
+          <p class="mb-4 mt-1 text-sm text-muted">Pembayaran diproses aman — disediakan TokoΦ.</p>
 
           <div class="space-y-4">
             {PAY_GROUPS.map((group) => (
@@ -486,7 +498,6 @@ if (rToken) {
             )}
           </div>
 
-          <p class="mt-4 text-xs text-muted">Pembayaran diproses aman — disediakan TokoΦ.</p>
         </fieldset>
 
         <!-- PAY — the bottom of the LEFT column, directly under Pembayaran, on every breakpoint.
@@ -524,20 +535,63 @@ if (rToken) {
      and never zooms back (see global.css). Setting it here means the checkout is correct on its own
      terms rather than relying on that rescue rule. */
   .input-field {
-    margin-top: 0.375rem;
     width: 100%;
-    min-height: 3.25rem;
+    min-height: 3.5rem;
     border-radius: 0.5rem;
     border: 1px solid var(--color-line);
     background: #fff;
-    padding: 0.75rem 0.875rem;
+    /* Top padding is the label's room — see .float-label. */
+    padding: 1.5rem 0.875rem 0.5rem;
     font-size: 1rem;
+    line-height: 1.25rem;
     color: var(--color-ink);
     outline: none;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .input-field::placeholder {
+
+  /* ── FLOATING LABEL ────────────────────────────────────────────────────────────────────────────
+     The reference's signature: the label lives INSIDE the box. Empty and unfocused it reads as the
+     placeholder; on focus or content it shrinks up into the top padding — so the field never loses
+     its name the way a bare placeholder does the moment you start typing.
+
+     Every control therefore carries `placeholder=" "` (one space, NOT empty): `:placeholder-shown`
+     is what detects "still empty", and it does not match when the attribute is absent. The label
+     must come AFTER the input in the DOM for the sibling selector to reach it.
+
+     ⚠️ Where a placeholder carried REAL information — "Nama jalan, no. rumah, RT/RW, patokan",
+     "Ketik kecamatan / kota" — it moved to helper text under the field, it was NOT dropped. Copying
+     the reference exactly would have deleted hints an Indonesian address needs and a UK one does not.
+     A label names the field; a hint teaches it. They are not the same job. */
+  .field {
+    position: relative;
+  }
+  .float-label {
+    position: absolute;
+    left: 0.9375rem; /* 1px border + 0.875rem padding */
+    top: 1.0625rem;
+    transform-origin: left top;
+    font-size: 1rem;
+    line-height: 1.25rem;
     color: var(--color-muted);
+    pointer-events: none; /* the click must reach the input under it */
+    transition: transform 0.15s ease, color 0.15s ease;
+  }
+  .input-field:focus ~ .float-label,
+  .input-field:not(:placeholder-shown) ~ .float-label {
+    transform: translateY(-0.625rem) scale(0.75);
+  }
+  .input-field:focus ~ .float-label {
+    color: var(--color-brand-600);
+  }
+  /* A <select> always has a value, so "empty" never applies — its label is parked in the raised
+     position permanently rather than sitting on top of the current selection. */
+  .field-select .float-label {
+    transform: translateY(-0.625rem) scale(0.75);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .float-label {
+      transition: none;
+    }
   }
   /* Focus = a brand-coloured border PLUS a 1px inner ring, which is how the reference marks the
      active field. A colour change alone is too quiet on a hairline border, and `outline: none`

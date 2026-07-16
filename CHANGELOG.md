@@ -4,6 +4,19 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-16
 
+### ✍️ Checkout: floating labels — the last visual delta to the Shopify reference
+
+The label now lives **inside** the box: empty and unfocused it reads as the placeholder; on focus or content it shrinks up into the top padding. That is the reference's signature, and it is not only cosmetic — a bare placeholder disappears the moment you start typing, so a shopper reviewing a filled form has to infer what each box was for. Every control carries `placeholder=" "` (one space, **not** empty — `:placeholder-shown` does not match an absent attribute), and the label sits after the input so the sibling selector reaches it. A `<select>` always has a value, so its label is parked raised permanently (`.field-select`) rather than sitting on top of the current selection. Browser-verified with the transition settled: label rises 10px and shrinks 20px→15px on focus, **stays up** when filled and blurred, never overlaps the typed value, no overflow, no console errors, and the mobile bar/toggle/totals/sukses regression all still pass.
+
+⚠️ **Where a placeholder carried REAL information it became helper text — it was NOT dropped.** Copying the reference exactly would have deleted hints an Indonesian address needs and a UK one does not:
+- **"Nama jalan, no. rumah, RT/RW, patokan"** → helper under Alamat. An Indonesian address without RT/RW or a patokan is a parcel the rider phones about.
+- **"Ketik kecamatan / kota"** → helper under Kecamatan. It was the *only* thing telling a shopper that box is a **search**; the ongkir quote depends on them picking a row (`dest_id`), not on what they typed.
+- **"08xxxxxxxxxx"** → "Contoh: 0812 3456 7890". Kept as an example, not a rule — `normalizePhone` accepts `0812…`/`812…`/`+62…`/`62…` with any separators. Deliberately **not** "nomor aktif untuk konfirmasi pesanan": nothing in this codebase notifies anyone.
+
+A label names a field; a hint teaches it. They are not the same job, and the floating label only does the first.
+
+Also moved "Pembayaran diproses aman" from under the payment list to under the **heading** — the reference's placement, and the better one: it reassures before the shopper picks a method rather than after they already have.
+
 ### 🛡️ `/api/public/order` — three holes where the boundary was not actually the boundary
 
 The file's own comment states the doctrine: *"Hiding the option at checkout is UX; this is the boundary."* Three things were not honouring it. All found by audit, all confirmed in the code, and the first two **exercised against the live endpoint** (`orders` count 700 → 700 across four POSTs — every rejection path writes nothing).
