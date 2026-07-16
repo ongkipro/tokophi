@@ -9,6 +9,31 @@
 
 ---
 
+## 🚚 Shipping: Proses → auto-book → courier-driven status — DECIDED, PART-BUILT (2026-07-16)
+
+> **Decided with the user 2026-07-16. The DATA foundation is shipped; the flow is not built.**
+> Read this before touching the order state machine or the booking UI.
+
+**Where it actually stands, measured, not assumed:**
+- **0 AWBs** in local *and* production. `kaCreateOrder` **has never once succeeded** — the booking chain has never run end-to-end. Everything below is built on a step that is still unproven.
+- 14 production orders claim `status='dikirim'` **with no AWB and no courier**. Demo seed, but the demo lies about shipping.
+- ⚠️ **`KIRIMINAJA_ENV=sandbox` in production.** The user's call is to treat sandbox as real while building (the API is identical; going live is one env flip). **Recorded here because it is the one thing that must not be forgotten at launch:** a sandbox AWB is *not* a real waybill, so a seller would print a fake resi and stick it on a real parcel. Flip `KIRIMINAJA_ENV=production` before any real seller ships.
+
+**Decisions (user, 2026-07-16):**
+1. **"Proses pesanan" auto-books.** One button: confirm → book the service the **shopper already paid for** → show the resi. No asking the seller which service — the order knows.
+2. **The resi is NOT synchronous, and the UI must not pretend it is.** KiriminAja returns `awb: null` until a courier *accepts the pickup* (already documented at `order-detail.tsx:220`, and the existing manual flow already says so honestly). A spinner "until the resi appears" would hang on something we do not control. Correct: book → *"Dibooking. Resi menyusul setelah kurir menerima."* → poll (`trackShipment` exists) → resi lands → `Cetak resi` enables.
+3. **Status follows the COURIER, not the seller's clicks** — the user's framing, and it is the better one. Booking → `diproses` (booked, awaiting pickup); the parcel becomes `dikirim` when the courier actually accepts — *which is the same moment the AWB appears*. Then the timeline/history is built from **KiriminAja tracking events**, not hand-set states. ⚠️ This **changes the order state machine**: `createShipment` currently jumps straight to `dikirim` on booking, which makes the timeline claim "in transit" while the parcel is still on the seller's shelf. That change touches the existing manual booking path too — it is why "Diproses" currently means nothing.
+4. **The seller may change the courier** in the order detail — **except COD, which is locked to SPX** (`lib/cod.ts`: SPX is the only courier with `codAllowed`; production already agrees, all 4 COD orders are spx). **A unilateral courier change is the SELLER's cost:** the buyer paid `orders.shipping_idr` for the service they picked; if the seller moves to a pricier courier the difference is the seller's, and the buyer's number must not be rewritten.
+5. **Proses *is* "cetak resi"** — one action, not two. The marketplace shape the user wants: **print status per order (`sudah dicetak` / `belum dicetak`) + a filter on it**, exactly like Shopee/Tokopedia. **Cancelling stays possible from the order detail even AFTER the label is printed** — a printed label is paper, not a commitment; `cancelShipment` already exists.
+   ⚠️ **`orders.label_printed_at` does not exist** — there is no print state anywhere in the schema today (grep found only comments about printing). It needs a column before the status or its filter can be anything but invented. It is also the honest anchor for **Pengiriman Massal**'s "sudah/belum dicetak" filter.
+   ⚠️ Note the ordering trap: printing requires a **real AWB** (`buildLabelHtml` refuses without one — deliberately), and the AWB is not synchronous (decision 2). So "Proses = cetak resi" cannot literally print on click for every order: it books, and the label becomes printable when the courier issues the waybill. The UI must say that rather than show a print button that silently does nothing.
+
+**Shipped foundation (migration `0053`):** `orders.service_type` — `courier` alone was ambiguous (SPX Standard type `1` = `regular` vs SPX Economy type `3` = `economy`: different products, different prices), so auto-booking would have been a coin flip on the buyer's money. Checkout now records `rate.type` beside `rate.code`. This is also the join key to `platform_couriers.services[].group`, i.e. **the `1 day / reguler / ekonomi / cargo` filter the user wants for Pengiriman Massal is now buildable** — it was not before.
+
+**Still to build:** the auto-book button (2 + 3), the tracking poller + history, the courier-change control (4), and only then **Pengiriman Massal / bulk label print** — which has nothing to print until a booking succeeds. See also the `Pengiriman Massal` + returns-IA notes: those menus were deliberately left out of `lib/nav.ts` because *"a nav row that opens onto nothing is worse than a nav row that isn't there"*, and that still holds.
+
+---
+
 ## 📱 UI/UX mobile & admin — DECIDED IN PRINCIPLE, PARKED (2026-07-16)
 
 > **Status: agreed, not started. Do not build without re-confirming — the last open decision is below.**
