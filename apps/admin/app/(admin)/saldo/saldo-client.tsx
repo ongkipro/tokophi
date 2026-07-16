@@ -321,26 +321,30 @@ export function SaldoClient({
             </p>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="jumlah">Jumlah penarikan</Label>
+          {/* Was a 3-column grid with the input at col-span-2: on this full-width card that gave a
+              rupiah field ~1000px of runway, and the button — aligned `items-end` against a cell that
+              also held the "Tersedia" helper — sat BELOW the input instead of beside it. A money input
+              does not get wider because the page is; it gets as wide as the biggest number it takes.
+              Label on top, input+button on one line (input capped), helper under BOTH — so nothing
+              needs an alignment hack to line up. */}
+          <div>
+            <Label htmlFor="jumlah">Jumlah penarikan</Label>
+            <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
               <Input
                 id="jumlah"
                 inputMode="numeric"
                 placeholder="0"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))}
-                className="tabular-nums"
+                className="tabular-nums sm:max-w-[15rem]"
                 disabled={!canWrite || !hasBank}
               />
-              <p className="text-xs text-muted-foreground">Tersedia {IDR(balance.available)}.</p>
-            </div>
-            <div className="flex items-end">
+            <div className="shrink-0">
               <Dialog>
                 <DialogTrigger
                   render={
                     <Button
-                      className="w-full gap-1.5"
+                      className="w-full gap-1.5 sm:w-auto"
                       disabled={!canWrite || !hasBank || busy || !amount || Number(amount) <= 0}
                     >
                       <ArrowDownToLine className="size-4" /> Tarik
@@ -364,6 +368,10 @@ export function SaldoClient({
                 </DialogContent>
               </Dialog>
             </div>
+          </div>
+            {/* Under BOTH controls now, not inside the input's old grid cell — that placement is what
+                dragged the button's `items-end` baseline down past the input. */}
+            <p className="mt-1.5 text-xs text-muted-foreground">Tersedia {IDR(balance.available)}.</p>
           </div>
         </CardContent>
       </Card>
