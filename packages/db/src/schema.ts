@@ -484,6 +484,12 @@ export const orders = pgTable("orders", {
   // KiriminAja shipment (set when "Buat Pengiriman" succeeds)
   awb: text(),
   courier: text(),
+  // WHICH service of that courier the shopper bought — "spx" alone is ambiguous (SPX Standard type 1
+  // = `regular`, SPX Economy type 3 = `economy`: different products, different prices). Recorded by
+  // /api/public/order from the fresh quote it already matched on. Joins to
+  // platform_couriers.services[].type, which is what carries `group` (1 day / reguler / ekonomi /
+  // cargo). Rows created before 0053 were backfilled with DUMMY values — see that migration.
+  serviceType: text(),
   kaOrderId: text(),
   placedAt: createdAt(),
 });

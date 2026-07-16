@@ -199,6 +199,20 @@ The final split (decided with the user): **platform stays on `tokophi.com`** (la
 
 The Domain card now leads with the **system domain** `<slug>.tokophi.id` — shown read-only with a lock ("Aktif otomatis · diatur sistem, tidak bisa diubah") and a Kunjungi link — because that address is derived from the store slug and a merchant must never be able to change or detach it. Below it, the **custom-domain** flow got a Shopify-style numbered tutorial (add → publish CNAME+TXT → verify → make primary), plus the apex/`www` + "email unaffected" notes. **Security hardening in `lib/actions/domain.ts`:** `addDomain` now refuses **every platform-owned zone** — `tokophi.id`/`tokophi.com`/`tokophi.cc` and any host under them (`PLATFORM_ZONES`, one place) — so a merchant can't squat `app.tokophi.com`, the `cname.tokophi.cc` fallback, or another store's `<slug>.tokophi.id`; and a **per-store cap** (`MAX_DOMAINS_PER_STORE=5`) guards the `UNIQUE(host)` space and the poller. (Ownership was already proven by a real TXT check, writes already gated by RBAC + RLS, and `store_domains.host` is DB-UNIQUE across the platform.)
 
+### 🚚 Orders remember WHICH service was bought — `courier` alone was a coin flip on the buyer's money
+
+`orders.courier` said `spx`. It did not say **which** spx: SPX Standard (type `1`, group `regular`) and SPX Economy (type `3`, group `economy`) are different products at different prices. `/api/public/order` **already knew** — it matches the fresh quote on `courier`+`service_type` — and then threw the type away. The same omission `courier` itself had until `d562ee2`, one level down.
+
+Two things were blocked on it, both of which the user asked for:
+- **Auto-booking from the admin** cannot pick the service the *shopper paid for* while it only knows the courier — with two spx services it would be a coin flip on someone else's money.
+- **The "1 day / reguler / ekonomi / cargo" filter** is `platform_couriers.services[].group`, reachable only via the service type. Unjoinable before this, so the filter could not exist at all.
+
+Migration **`0053`** adds `orders.service_type`, and checkout now records `rate.type` beside `rate.code`.
+
+**The backfill is DUMMY data, deliberately and temporarily.** 67 of 71 production orders carried **no courier at all** — they are seed fiction either way, and nothing is public yet (0 AWBs, no courier ever booked, no buyer holds a number), so giving them a plausible courier+service makes the demo coherent and gives the new filter something to filter. It obeys the platform's own COD rule (`lib/cod.ts`): COD may only ride **SPX**, the single courier with `codAllowed` — and production already agreed, all 4 COD orders were spx. Everything else is spread deterministically by order number across the enabled non-COD services. ⚠️ Safe **only** pre-launch: once a shopper picks a service, inventing one is fabricating what they chose — the same class of lie as the hardcoded `badge: "7"`. Never rerun on live data.
+
+Rehearsed locally first: 700 orders, **0 NULL**, spread across `one_day`/`regular`/`economy`/`cargo`, and the `group` join resolves.
+
 ### 🏷️ One order prefix: `PHI-` — three generators were minting three, and one of them collided with invoices
 
 Every order on the platform now reads `PHI-…`. It was minted by **three** generators with three prefixes for the **same entity**: `WEB-` (`/api/public/order`), `INV-` (seed, the demo store) and `ORD-` (seed, the other stores). A seller's list showed all three and nothing explained why.

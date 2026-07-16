@@ -395,6 +395,13 @@ async function handle(req: Request) {
     // here is what makes the per-courier COD return-rate report a `group by courier` instead of an
     // impossibility: without it a regular checkout booked no courier and orders.courier stayed NULL.
     courier: rate.code,
+    // …and WHICH of that courier's services. `courier` alone is ambiguous — SPX Standard (type 1) and
+    // SPX Economy (type 3) are different products at different prices, and we already matched the
+    // shopper's pick on courier+type in the fresh quote above, so throwing the type away here is
+    // throwing away the only record of what they actually bought. The admin needs it to auto-book the
+    // right service, and it is the join key to platform_couriers.services[].group (1 day / reguler /
+    // ekonomi / cargo). Same omission `courier` itself had until d562ee2.
+    serviceType: rate.type,
     city: kota, province: provinsi,
 
     // SNAPSHOT the shipping address onto the order (0042). It is deliberately NOT a lookup back to
