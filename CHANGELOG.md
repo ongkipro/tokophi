@@ -168,6 +168,19 @@ The final split (decided with the user): **platform stays on `tokophi.com`** (la
 
 The Domain card now leads with the **system domain** `<slug>.tokophi.id` — shown read-only with a lock ("Aktif otomatis · diatur sistem, tidak bisa diubah") and a Kunjungi link — because that address is derived from the store slug and a merchant must never be able to change or detach it. Below it, the **custom-domain** flow got a Shopify-style numbered tutorial (add → publish CNAME+TXT → verify → make primary), plus the apex/`www` + "email unaffected" notes. **Security hardening in `lib/actions/domain.ts`:** `addDomain` now refuses **every platform-owned zone** — `tokophi.id`/`tokophi.com`/`tokophi.cc` and any host under them (`PLATFORM_ZONES`, one place) — so a merchant can't squat `app.tokophi.com`, the `cname.tokophi.cc` fallback, or another store's `<slug>.tokophi.id`; and a **per-store cap** (`MAX_DOMAINS_PER_STORE=5`) guards the `UNIQUE(host)` space and the poller. (Ownership was already proven by a real TXT check, writes already gated by RBAC + RLS, and `store_domains.host` is DB-UNIQUE across the platform.)
 
+### 🔢 The sidebar's Pesanan badge counted nothing — it was the string `"7"`
+
+`lib/nav.ts` carried `badge: "7"` as a **literal**. It had never counted anything, it was wrong for every store on the platform, and it would have stayed wrong forever — the exact shape of honesty debt this repo keeps digging out: a number that promises a fact it never checked. Ground truth on the demo store was **25**.
+
+- **`getPerluDikirimCount()`** (`lib/data/orders.ts`) — a real `count(*)`, tenant-scoped, using **the same predicate as the `perlu_dikirim` tab** (`status in ('baru','diproses') and financial_status = 'dibayar'`) so the badge and the list it opens can never disagree.
+- **`badge: "7"` → `badgeKey: "perluDikirim"`**; the count is fetched **once** in the admin layout and handed to both chrome surfaces (sidebar + the mobile drawer's `NavLinks`) — two copies of the query would be two chances to drift. `NavLinks` stays a client component and never reaches for data itself.
+- **The nav item now links to `/pesanan?tab=perlu_dikirim`**, not the full list: a badge that says 25 and then shows you 700 orders is a broken promise the seller has to resolve by hand. "Pesanan Saya" (everything) is still one row below.
+- **Hidden at zero** — a badge means "there is work here"; a grey `0` is noise that teaches the eye to skip the row.
+
+Why *paid + unshipped* and not literally "unprocessed": `status in ('baru','diproses')` also contains the **unpaid** ones (the `belum_bayar` tab), and those are not the seller's move — they are waiting on the buyer. A badge counting work you cannot do is a badge that teaches people to ignore badges.
+
+⚠️ **A vocabulary collision this exposed, left alone deliberately:** the Dashboard splits the same 25 into "Perlu dikirim" **15** (confirmed, awaiting shipment) + "Pesanan baru" **10** (unconfirmed), while the *tab* named `perlu_dikirim` means both (25). Same words, two meanings, in one product. The badge follows the **tab**, because that is where it lands — and it cross-checks against the Dashboard's own banner ("Rp 9.048.000 tertahan di **25** pesanan yang belum dikirim"). Renaming one of them is a product decision, not a fix to smuggle in here.
+
 ### 🧾 Pesanan on a phone: a table nobody could read → one card per order (`ResponsiveTable`)
 
 A table is a desktop instrument — it trades width for the ability to compare rows down a column, and a phone has no width to trade. Ours degraded by **hiding** the trade rather than making one: the row ran off the right edge inside a scroller, so `audit:responsive` correctly excused it (overflow inside a horizontal scroller is clipped by its box, not the page) while a seller on a 390px screen saw `Pembeli: Thobr…` and a **Total column that was simply not there**. Passing the audit and being unusable are not the same thing.

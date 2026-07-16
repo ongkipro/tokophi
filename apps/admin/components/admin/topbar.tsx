@@ -14,7 +14,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@tokophi/ui/dropdown-menu";
-import { NavLinks } from "./nav-links";
+import { NavLinks, type NavCounts } from "./nav-links";
 import { Brand } from "./brand";
 import { signOut } from "@/lib/actions/auth";
 import { STORES } from "@/lib/nav";
@@ -183,12 +183,15 @@ export function Topbar({
   searchIndex = [],
   balance,
   notifs = [],
+  navCounts,
 }: {
   user?: { name: string; email: string; role?: string };
   storeName?: string;
   searchIndex?: SearchItem[];
   balance?: TopbarData["balance"];
   notifs?: TopbarData["notifs"];
+  /** Live nav badge counts — this is a client component, so the layout fetches and hands them in. */
+  navCounts?: NavCounts;
 }) {
   // Current store reflects the session (so an impersonated store shows its own name, not a hardcode).
   const [store, setStore] = useState(storeName ? { id: "current", name: storeName, plan: STORES[0]?.plan ?? "Bisnis" } : STORES[0]);
@@ -210,7 +213,7 @@ export function Topbar({
         <SheetContent side="left" className="w-72 p-0">
           <SheetTitle className="sr-only">Menu navigasi</SheetTitle>
           <div className="flex h-16 items-center border-b px-5"><Brand /></div>
-          <div className="py-4"><NavLinks /></div>
+          <div className="py-4"><NavLinks counts={navCounts} /></div>
         </SheetContent>
       </Sheet>
 

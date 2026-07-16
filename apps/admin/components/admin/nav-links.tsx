@@ -3,7 +3,8 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
-import { NAV_GROUPS, type NavItem } from "@/lib/nav";
+import { NAV_GROUPS, type NavItem, type NavBadgeKey } from "@/lib/nav";
+import { num } from "@tokophi/lib/format";
 import { cn } from "@tokophi/ui/lib/utils";
 import { Badge } from "@tokophi/ui/badge";
 import { useStoreHref } from "@/components/admin/store-context";
@@ -45,13 +46,14 @@ function stripStore(pathname: string): string {
   return pathname.replace(/^\/store\/[^/]+/, "") || "/";
 }
 
-function Item({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
+function Item({ item, onNavigate, counts }: { item: NavItem; onNavigate?: () => void; counts?: NavCounts }) {
   const storeHref = useStoreHref();
   const pathname = stripStore(usePathname());
   const search = useSearchParams();
   const active = isSectionActive(pathname, item.href);
   const [open, setOpen] = React.useState<boolean | null>(null);
   const expanded = item.children ? (open ?? active) : false;
+  const badgeCount = item.badgeKey ? (counts?.[item.badgeKey] ?? 0) : 0;
 
   const rowLink = (
     <Link
@@ -64,7 +66,13 @@ function Item({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) 
     >
       <item.icon className={cn("size-[18px] shrink-0", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
       <span className="flex-1">{item.label}</span>
-      {item.badge && <Badge variant={active ? "default" : "secondary"} className="h-5 px-1.5 text-[11px]">{item.badge}</Badge>}
+      {/* Real count, server-fetched (was the literal string "7"). Hidden at zero: a badge means
+          "there is work here" — a grey 0 is noise that trains the eye to skip the row. */}
+      {badgeCount ? (
+        <Badge variant={active ? "default" : "secondary"} className="h-5 px-1.5 text-[11px] tabular-nums">
+          {num(badgeCount)}
+        </Badge>
+      ) : null}
     </Link>
   );
 
@@ -108,7 +116,11 @@ function Item({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) 
   );
 }
 
-export function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+/** Live counts for nav badges, fetched on the server and handed in — NavLinks is a client component
+ *  and must never reach for data itself. */
+export type NavCounts = Partial<Record<NavBadgeKey, number>>;
+
+export function NavLinks({ onNavigate, counts }: { onNavigate?: () => void; counts?: NavCounts }) {
   return (
     <nav className="flex flex-col gap-4 px-3">
       {NAV_GROUPS.map((group, gi) => (
@@ -117,7 +129,7 @@ export function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</p>
           )}
           {group.items.map((item) => (
-            <Item key={item.href} item={item} onNavigate={onNavigate} />
+            <Item counts={counts} key={item.href} item={item} onNavigate={onNavigate} />
           ))}
         </div>
       ))}

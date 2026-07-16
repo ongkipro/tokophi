@@ -318,3 +318,27 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
     };
   });
 }
+
+/**
+ * The sidebar's Pesanan badge: orders the seller must ACT on right now.
+ *
+ * Deliberately the SAME predicate as the `perlu_dikirim` tab (`TAB_WHERE` above) — paid, not yet
+ * shipped — so the badge and the list it links to can never disagree. Before this it was the literal
+ * string `badge: "7"` in `lib/nav.ts`: a number that had never counted anything and was wrong for
+ * every store on the platform, forever.
+ *
+ * Why "paid + unshipped" and not every unprocessed order: `status in ('baru','diproses')` also
+ * contains the UNPAID ones (the `belum_bayar` tab), and those are not the seller's move — they are
+ * waiting on the buyer. A badge that counts work you cannot do is a badge that teaches people to
+ * ignore badges.
+ */
+export async function getPerluDikirimCount(): Promise<number> {
+  return withCurrentTenant(async (db) => {
+    const [row] = (await db.execute(sql`
+      select count(*)::int as n
+      from orders o
+      where o.status in ('baru','diproses') and o.financial_status = 'dibayar'
+    `)) as unknown as { n: number }[];
+    return row?.n ?? 0;
+  });
+}

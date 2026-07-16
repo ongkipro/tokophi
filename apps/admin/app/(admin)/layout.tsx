@@ -8,21 +8,26 @@ import { PermissionsProvider } from "@/components/admin/permissions";
 import { StoreProvider } from "@/components/admin/store-context";
 import { getBilling } from "@/lib/data/billing";
 import { getTopbarData } from "@/lib/data/topbar";
+import { getPerluDikirimCount } from "@/lib/data/orders";
 import { IDR } from "@tokophi/lib/format";
 import Link from "next/link";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   const user = session ? { name: session.name, email: session.email, role: session.role } : undefined;
-  const [storeName, storeSlug, searchIndex, bill, topbar] = session
+  // Fetched ONCE here and handed to both chrome surfaces — the sidebar and the mobile drawer
+  // render the same nav, and two copies of this query would be two chances to disagree.
+  const [storeName, storeSlug, searchIndex, bill, topbar, perluDikirim] = session
     ? await Promise.all([
         getStoreName(session.storeId),
         getStoreSlug(session.storeId),
         getSearchIndex(),
         getBilling(),
         getTopbarData(),
+        getPerluDikirimCount(),
       ])
-    : [null, null, [], null, null];
+    : [null, null, [], null, null, 0];
+  const navCounts = { perluDikirim: perluDikirim ?? 0 };
   const billingBanner = bill && (bill.status === "past_due" || bill.status === "suspended") && (
     <Link
       href="/akun/langganan"
@@ -37,7 +42,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <PermissionsProvider role={session?.role}>
       <StoreProvider name={storeName ?? "Toko"} slug={storeSlug ?? ""}>
         <AdminChrome
-          sidebar={<Sidebar />}
+          sidebar={<Sidebar navCounts={navCounts} />}
           topbar={
             <Topbar
               user={user}
@@ -45,6 +50,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               searchIndex={searchIndex}
               balance={topbar?.balance}
               notifs={topbar?.notifs}
+              navCounts={navCounts}
             />
           }
           billingBanner={billingBanner}

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { NavLinks } from "./nav-links";
+import { NavLinks, type NavCounts } from "./nav-links";
 import { Brand } from "./brand";
 import { Sparkles } from "lucide-react";
 import { getBilling } from "@/lib/data/billing";
@@ -11,7 +11,7 @@ const STATUS_UI: Record<string, { label: string; dot: string; accent: string }> 
   suspended: { label: "Ditangguhkan", dot: "bg-destructive", accent: "border-destructive/40 bg-destructive/5" },
 };
 
-export async function Sidebar() {
+export async function Sidebar({ navCounts }: { navCounts?: NavCounts }) {
   const bill = await getBilling();
   const ui = STATUS_UI[bill?.status ?? "active"];
   const label = bill?.comped ? "VIP · gratis" : ui.label;
@@ -35,7 +35,7 @@ export async function Sidebar() {
         </Link>
       </div>
       <div className="flex-1 overflow-y-auto py-4">
-        <NavLinks />
+        <NavLinks counts={navCounts} />
       </div>
     </aside>
   );

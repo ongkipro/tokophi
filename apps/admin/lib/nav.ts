@@ -1,7 +1,12 @@
 import { LayoutDashboard, ShoppingBag, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessageSquare, MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon } from "lucide-react";
 
 export type NavChild = { label: string; href: string };
-export type NavItem = { label: string; href: string; icon: LucideIcon; badge?: string; children?: NavChild[] };
+
+/** Counts the nav can show. A key, never a literal: `badge: "7"` used to live here — a hardcoded
+ *  string that had counted nothing, was wrong for every store, and would have stayed wrong forever.
+ *  The value is fetched server-side and passed into <NavLinks counts=… />. */
+export type NavBadgeKey = "perluDikirim";
+export type NavItem = { label: string; href: string; icon: LucideIcon; badgeKey?: NavBadgeKey; children?: NavChild[] };
 export type NavGroup = { label?: string; items: NavItem[] };
 
 // Shopify-core IA minus Themes & Apps/Plugins; Produk & Pelanggan have submenus.
@@ -15,7 +20,10 @@ export const NAV_GROUPS: NavGroup[] = [
       // views a seller actually lives in, as saved links onto the real list: the queue of parcels
       // to pack, and the pile of orders that went wrong.
       {
-        label: "Pesanan", href: "/pesanan", icon: ShoppingBag, badge: "7",
+          // href lands on the tab the BADGE counts, not on the full list: a badge that says "12"
+          // and then shows you 685 orders is a broken promise — the seller still has to find the
+          // twelve. The whole list is one row below ("Pesanan Saya"), so nothing is lost.
+          label: "Pesanan", href: "/pesanan?tab=perlu_dikirim", icon: ShoppingBag, badgeKey: "perluDikirim",
         children: [
           { label: "Pesanan Saya", href: "/pesanan" },
           { label: "Perlu Dikirim", href: "/pesanan?tab=perlu_dikirim" },
