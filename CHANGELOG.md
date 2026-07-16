@@ -50,6 +50,41 @@ just does nothing. Removed; the submit handler already validates it ("Pilih meto
 where we can name what is missing. Verified: pressing Bayar with no kecamatan focuses the kecamatan
 field and reports natively — no order posted, nothing silent.
 
+## 2026-07-17
+
+### 📊 Keuangan gets real charts — and the charts immediately caught two lies
+
+Charts were deliberately absent (CSS bars in a list). Adding them surfaced **two defects that only a
+chart can expose**, both now fixed:
+
+**1. `getEarnings` omitted empty days.** `group by day` emits only days that HAVE orders — harmless
+in a list (each row names its date), a **lie in a chart**: Recharts joins 25 Juni straight to 28 Juni
+as though adjacent, so a shop closed for three days renders as an unbroken trend. **The zero days ARE
+the information.** Now zero-filled with `generate_series`, verified against Postgres: 30 rows,
+15 genuinely empty. Bars, not an area line — an area chart *interpolates between* days and would draw
+revenue at 3am Tuesday that never existed.
+
+**2. Two pages in one menu disagreed about "Omzet 30 hari".** Ringkasan said **Rp 34.350.000 / 91
+pesanan**; Penghasilan said **Rp 32.474.000 / 86**. The summary used a rolling `now() - 30 days`
+(a **720-hour** window); the chart used 30 **calendar** days in Asia/Jakarta. Both queries were
+"correct" and the section still lied — the rolling window reached into a partial 17 Juni the other
+excluded. A merchant reconciling the two pages is exactly who finds this. **`WIN()`/`PREV_WIN()` now
+define the window once**; calendar days win, because a seller thinks in days that start at midnight
+WIB, not in 720-hour spans that slide with the clock. Both pages now read **Rp 32.474.000** — matched
+to SQL, and matched *per tenant*: RLS correctly hides `kopi-senja` + `hijab-amara` (the raw table
+totals 33.224.000 across all stores).
+
+**Added:** `EarningsChart` (stacked omzet+ongkir, hari nol visible), `getChannelMix` → the existing
+`ChannelChart` donut — attribution counted from `orders.channel`, never an invented weight vector.
+
+**⚠️ The chart now draws a cliff to zero, and the cliff is REAL.** The seed's last order is
+**2026-07-02**; today is **2026-07-17**. So the "7 hari" tab is legitimately **empty** and 30 hari is
+half blank — the seed is anchored to `TODAY=2026-06-30` and real time has walked 17 days past it.
+**The code is right; the seed is stale.** A real shop with no sales in 7 days *must* see empty — do
+not patch the code to hide it. The page states its own coverage ("15 dari 30 hari ada penjualan.
+Sisanya benar-benar kosong — bukan data yang hilang"). Re-seeding is a **shared-DB** action: announce
+it first.
+
 ## 2026-07-16
 
 ### 💰 Keuangan — four pages that complete each other, not four doors onto one room

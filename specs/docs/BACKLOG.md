@@ -97,6 +97,18 @@ The menu deliberately points at **four different pages, not four tabs onto `/sal
 - If you want these pages to *demo* well, fix the **seed** — not the page. A finance screen that
   invents a figure is worse than one that doesn't exist, because the merchant will believe it.
 
+**⚠️ THE SEED IS 15 DAYS STALE — this is why the charts look dead (2026-07-17).**
+Last order in the DB is **2026-07-02**; today is **2026-07-17**. The seed is anchored to
+`TODAY=2026-06-30` (CLAUDE.md) and wall-clock time has walked past it. Consequences on screen:
+- `/keuangan/penghasilan?hari=7` → **completely empty**, correctly.
+- 30 hari → only **15 of 30** days have sales; the chart draws a cliff to zero.
+- The **"−42% vs 30 hari sebelumnya"** is NOT a business trend — the comparison period has 30 full
+  days of data and the current one has 15. The delta is measuring the seed running out.
+**Do not "fix" this in the page.** A real shop with no sales in 7 days must see an empty chart; that
+is the feature. The fix is the SEED (re-anchor it to `now()`), and `SEED_FORCE=1 npm run seed`
+**truncates the shared DB** — announce before running it. Until then the charts are honest about
+thin data, and the page says so itself.
+
 **Still to build (system):**
 - [ ] **Held → released is not a real transition.** `pending` vs `available` is seeded, not earned:
       nothing flips a ledger entry when an order reaches `selesai`. Penghasilan *explains* a rule

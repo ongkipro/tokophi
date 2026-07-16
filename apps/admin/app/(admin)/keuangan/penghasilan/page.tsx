@@ -3,9 +3,11 @@ import { ArrowRight, Clock, CheckCircle2 } from "lucide-react";
 import { Card } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
-import { getFinanceSummary, getEarnings, type Period } from "@/lib/data/finance";
+import { getFinanceSummary, getEarnings, getChannelMix, type Period } from "@/lib/data/finance";
 import { IDR, num } from "@tokophi/lib/format";
 import { PeriodTabs } from "./period-tabs";
+import { EarningsChart } from "@/components/admin/keuangan/earnings-chart";
+import { ChannelChart } from "@/components/admin/channel-chart";
 
 // Penghasilan — "what did I earn, and why is it not cash yet?"
 //
@@ -26,11 +28,17 @@ export default async function PenghasilanPage({
   const raw = Number(sp.hari);
   const days: Period = (PERIODS as number[]).includes(raw) ? (raw as Period) : 30;
 
-  const [f, rows] = await Promise.all([getFinanceSummary(days), getEarnings(days)]);
+  const [f, rows, channels] = await Promise.all([
+    getFinanceSummary(days),
+    getEarnings(days),
+    getChannelMix(days),
+  ]);
   const gross = rows.reduce((a, r) => a + r.gross, 0);
   const shipping = rows.reduce((a, r) => a + r.shipping, 0);
   const orders = rows.reduce((a, r) => a + r.orders, 0);
-  const peak = Math.max(1, ...rows.map((r) => r.gross));
+  // `rows` now spans EVERY day in the window (zero-filled for the chart), so "how many days did I
+  // actually sell?" is a real question its length can no longer answer.
+  const activeDays = rows.filter((r) => r.orders > 0).length;
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
@@ -79,31 +87,43 @@ export default async function PenghasilanPage({
       </div>
 
       <Card className="p-5">
-        <p className="mb-3 text-sm font-medium">Penghasilan harian</p>
-        {rows.length === 0 ? (
+        <p className="text-sm font-medium">Penghasilan harian</p>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Omzet dan ongkir per hari. Hari tanpa penjualan tetap ditampilkan sebagai kosong — itu juga
+          informasi.
+        </p>
+        {activeDays === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
             Belum ada penjualan pada periode ini.
           </p>
         ) : (
-          // Deliberately bars-in-a-list, not a chart library: this is a magnitude comparison over a
-          // handful of days, and every row states its own number. A chart that needs a tooltip to be
-          // read is worse than a list that does not.
-          <ul className="space-y-1.5">
-            {rows.map((r) => (
-              <li key={r.day} className="flex items-center gap-3 text-sm">
-                <span className="w-24 shrink-0 text-xs tabular-nums text-muted-foreground">{r.day}</span>
-                <span className="h-2 shrink-0 rounded-full bg-primary/70" style={{ width: `${Math.max(2, (r.gross / peak) * 100)}%` }} />
-                <span className="ml-auto shrink-0 tabular-nums">{IDR(r.gross)}</span>
-                <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{num(r.orders)} pesanan</span>
-              </li>
-            ))}
-          </ul>
+          <EarningsChart rows={rows} />
         )}
-        <p className="mt-3 border-t pt-3 text-xs text-muted-foreground">
-          Pesanan <span className="font-medium text-foreground">batal</span> dan{" "}
-          <span className="font-medium text-foreground">retur</span> tidak dihitung — itu bukan penjualan.
-        </p>
+        <div className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
+          <p>
+            Pesanan <span className="font-medium text-foreground">batal</span> dan{" "}
+            <span className="font-medium text-foreground">retur</span> tidak dihitung — itu bukan penjualan.
+          </p>
+          {/* Say it on the page, not just in a commit: a merchant reading a 30-day chart where 15 days
+              are empty deserves to know whether that is their business or our data. */}
+          {activeDays > 0 && activeDays < rows.length && (
+            <p>
+              <span className="font-medium text-foreground">{num(activeDays)} dari {num(rows.length)} hari</span>{" "}
+              ada penjualan. Sisanya benar-benar kosong — bukan data yang hilang.
+            </p>
+          )}
+        </div>
       </Card>
+
+      {channels.length > 0 && (
+        <Card className="p-5">
+          <p className="text-sm font-medium">Sumber penjualan</p>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Dari mana pesanan datang, dihitung per pesanan — bukan perkiraan.
+          </p>
+          <ChannelChart data={channels} />
+        </Card>
+      )}
     </div>
   );
 }

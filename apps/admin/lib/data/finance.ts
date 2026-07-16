@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { withCurrentTenant } from "@/lib/tenant";
 import { getBalance, type Balance } from "@/lib/data/ledger";
 import { getBilling } from "@/lib/data/billing";
+import type { ChannelSlice } from "@/lib/data/dashboard";
 import type { BillingState } from "@tokophi/lib/billing";
 
 // Keuangan — the summary page's numbers, and Penghasilan's breakdown.
@@ -52,19 +53,38 @@ export type EarningRow = {
  *  own bank statement is exactly who would catch it. */
 const SALES = sql`o.status not in ('batal','retur')`;
 
+/** THE window definition — one place, because two pages in this menu label a number "Omzet 30 hari"
+ *  and a merchant reconciles them against each other.
+ *
+ *  It shipped broken: the summary used a rolling `now() - 30 days` (a 720-HOUR window) while the
+ *  daily chart used 30 CALENDAR days in Asia/Jakarta. They disagreed by Rp 1.876.000 and 5 orders on
+ *  the same store on the same afternoon, because the rolling window reached back into a partial
+ *  17 Juni that the calendar one excluded. Both queries were "correct"; the section was still lying.
+ *
+ *  Calendar days win: a seller thinks in days that start at midnight WIB, not in 720-hour spans that
+ *  slide with the clock. `days` counts today INCLUSIVE — 30 hari = today + the 29 before it, exactly
+ *  the span generate_series draws. */
+const WIN = (days: number) => sql`
+  (o.placed_at at time zone 'Asia/Jakarta')::date
+    >= (now() at time zone 'Asia/Jakarta')::date - ((${days} - 1) || ' days')::interval`;
+
+/** The period immediately BEFORE `WIN(days)`, same length, no gap and no overlap. */
+const PREV_WIN = (days: number) => sql`
+  (o.placed_at at time zone 'Asia/Jakarta')::date
+      >= (now() at time zone 'Asia/Jakarta')::date - ((${days * 2} - 1) || ' days')::interval
+  and (o.placed_at at time zone 'Asia/Jakarta')::date
+      <  (now() at time zone 'Asia/Jakarta')::date - ((${days} - 1) || ' days')::interval`;
+
 export async function getFinanceSummary(days: Period = 30): Promise<FinanceSummary> {
   const [balance, billing] = await Promise.all([getBalance(), getBilling()]);
   const agg = await withCurrentTenant(async (db) => {
     const [row] = (await db.execute(sql`
       select
-        coalesce(sum(o.total_idr)    filter (where o.placed_at >= now() - (${days} || ' days')::interval), 0)::bigint as "revenue",
-        coalesce(sum(o.shipping_idr) filter (where o.placed_at >= now() - (${days} || ' days')::interval), 0)::bigint as "shippingIn",
-        count(*)                     filter (where o.placed_at >= now() - (${days} || ' days')::interval)::int        as "orders",
-        count(*)                     filter (where o.status in ('baru','diproses','dikirim'))::int                    as "heldOrders",
-        coalesce(sum(o.total_idr)    filter (
-          where o.placed_at >= now() - (${days * 2} || ' days')::interval
-            and o.placed_at <  now() - (${days} || ' days')::interval
-        ), 0)::bigint as "prevRevenue"
+        coalesce(sum(o.total_idr)    filter (where ${WIN(days)}), 0)::bigint as "revenue",
+        coalesce(sum(o.shipping_idr) filter (where ${WIN(days)}), 0)::bigint as "shippingIn",
+        count(*)                     filter (where ${WIN(days)})::int        as "orders",
+        count(*)                     filter (where o.status in ('baru','diproses','dikirim'))::int as "heldOrders",
+        coalesce(sum(o.total_idr)    filter (where ${PREV_WIN(days)}), 0)::bigint as "prevRevenue"
       from orders o
       where ${SALES}
     `)) as unknown as Record<string, string | number>[];
@@ -80,17 +100,33 @@ export async function getFinanceSummary(days: Period = 30): Promise<FinanceSumma
 }
 
 /** Daily earnings for the window. Grouped in Asia/Jakarta, not UTC: a seller's "today" ends at
- *  midnight WIB, and a chart that disagrees with their own day is a chart they cannot reconcile. */
+ *  midnight WIB, and a chart that disagrees with their own day is a chart they cannot reconcile.
+ *
+ *  EVERY day in the window is returned, including the ones with no sales at all. `group by` alone
+ *  emits only days that HAVE orders, which is harmless in a list (each row names its own date) and a
+ *  lie in a chart: the line would join 25 Juni straight to 28 Juni as though they were adjacent, and
+ *  a shop that closed for three days would render as an unbroken trend. The zero days ARE the
+ *  information. Hence the generate_series left join. */
 export async function getEarnings(days: Period = 30): Promise<EarningRow[]> {
   return withCurrentTenant(async (db) => {
     const rows = (await db.execute(sql`
-      select to_char((o.placed_at at time zone 'Asia/Jakarta')::date, 'YYYY-MM-DD') as day,
-             coalesce(sum(o.total_idr), 0)::bigint    as gross,
-             coalesce(sum(o.shipping_idr), 0)::bigint as shipping,
-             count(*)::int                            as orders
-      from orders o
-      where ${SALES} and o.placed_at >= now() - (${days} || ' days')::interval
-      group by 1 order by 1
+      with span as (
+        select generate_series(
+          (now() at time zone 'Asia/Jakarta')::date - (${days - 1} || ' days')::interval,
+          (now() at time zone 'Asia/Jakarta')::date,
+          '1 day'
+        )::date as day
+      )
+      select to_char(s.day, 'YYYY-MM-DD')              as day,
+             coalesce(sum(o.total_idr), 0)::bigint     as gross,
+             coalesce(sum(o.shipping_idr), 0)::bigint  as shipping,
+             count(o.id)::int                          as orders
+      from span s
+      left join orders o
+        on (o.placed_at at time zone 'Asia/Jakarta')::date = s.day
+       and ${SALES}
+      group by s.day
+      order by s.day
     `)) as unknown as Record<string, string | number>[];
     return rows.map((r) => ({
       day: String(r.day),
@@ -100,3 +136,29 @@ export async function getEarnings(days: Period = 30): Promise<EarningRow[]> {
     }));
   });
 }
+
+/** Where the money came from, by attribution channel — the one dimension of these orders that is
+ *  both populated and genuinely analysable (organic / other / google_ads / meta_ads / tiktok_ads).
+ *  Counted from `orders.channel`, never from an invented weight vector — the dashboard's channel mix
+ *  used to multiply the period total by a hard-coded 34%/24%/… identical for every store, which is
+ *  the same class of lie as inventing a rupiah figure. */
+export async function getChannelMix(days: Period = 30): Promise<ChannelSlice[]> {
+  return withCurrentTenant(async (db) => {
+    const rows = (await db.execute(sql`
+      select o.channel::text as channel, coalesce(sum(o.total_idr), 0)::bigint as value
+      from orders o
+      where ${SALES} and ${WIN(days)}
+      group by 1 having sum(o.total_idr) > 0 order by 2 desc
+    `)) as unknown as Record<string, string | number>[];
+    return rows.map((r) => ({ channel: CHANNEL_LABEL[String(r.channel)] ?? String(r.channel), value: Number(r.value ?? 0) }));
+  });
+}
+
+/** The enum is a machine value; a seller reads Bahasa. */
+const CHANNEL_LABEL: Record<string, string> = {
+  organic: "Organik",
+  google_ads: "Google Ads",
+  meta_ads: "Meta Ads",
+  tiktok_ads: "TikTok Ads",
+  other: "Lainnya",
+};
