@@ -64,39 +64,79 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
     <style set:html={`:root { ${Object.entries(BRAND_SHADES).map(([shade, hex]) => `--color-brand-${shade}: ${hex};`).join(" ")} }`} />
     <Analytics />
   </head>
-  <body class="min-h-screen bg-cream text-ink antialiased">
+  <!-- No `bg-white` on <body> — it would be a DEAD CLASS. global.css sets `body { background: cream }`
+       unlayered, and Tailwind v4 emits utilities inside `@layer utilities`; an unlayered rule beats
+       every layered one regardless of specificity, so the utility loses silently. The column
+       backgrounds are set on <main>/<aside> instead, which nothing unlayered targets.
+       (This note is an HTML comment on purpose: a `{/* … */}` JSX comment placed between </head> and
+       <body> is NOT a comment — Astro renders it as text, straight onto the top of the page.) -->
+  <body class="min-h-screen text-ink antialiased">
+    <!-- TWO COLUMNS, the way Shopify's checkout is built: a WHITE form column and a RECESSED summary
+         panel that bleeds to the right edge of the viewport and runs the full height. The panel is
+         not a card — it is the page. That single relationship (form bright, summary quiet, a hairline
+         between them) is most of what reads as "clean"; our version had every section in its own
+         rounded card floating on cream, which is six competing rectangles instead of two zones.
+         Each column keeps its content in an inner max-width box aligned to the centre gutter, so the
+         two meet in the middle rather than drifting apart on a wide screen. -->
+
     <!-- The logo is NOT a link. On the storefront it goes home; here home is an exit, and this bar
          exists to say "you are still in the right shop", not to offer a way out. -->
-    <header class="border-b border-line bg-white/60">
-      <div class="mx-auto flex max-w-6xl items-center gap-3 px-4 py-4 sm:px-6">
-        {
-          LOGO ? (
-            <img src={LOGO} alt={store.name} class="h-9 w-auto max-w-[12rem] object-contain sm:h-10" />
-          ) : (
-            <span class="font-display text-xl font-semibold tracking-tight text-ink sm:text-2xl">
-              {store.name}
+    <header class="border-b border-line bg-white">
+      <div class="lg:grid lg:grid-cols-2">
+        <div class="lg:flex lg:justify-end">
+          <div class="flex w-full items-center gap-3 px-4 py-4 sm:px-6 lg:max-w-xl lg:pr-10">
+            {
+              LOGO ? (
+                <img src={LOGO} alt={store.name} class="h-9 w-auto max-w-[12rem] object-contain sm:h-10" />
+              ) : (
+                <span class="font-display text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+                  {store.name}
+                </span>
+              )
+            }
+            <span class="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-muted">
+              <svg viewBox="0 0 24 24" class="h-4 w-4 shrink-0 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
+                <path d="M12 3l7 3v5.5c0 4.2-2.9 7.9-7 9-4.1-1.1-7-4.8-7-9V6l7-3Z" stroke-linejoin="round" />
+                <path d="M9 12.2l2.1 2.1L15 10.5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              Pembayaran aman
             </span>
-          )
-        }
-        <span class="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-muted">
-          <svg viewBox="0 0 24 24" class="h-4 w-4 shrink-0 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
-            <path d="M12 3l7 3v5.5c0 4.2-2.9 7.9-7 9-4.1-1.1-7-4.8-7-9V6l7-3Z" stroke-linejoin="round" />
-            <path d="M9 12.2l2.1 2.1L15 10.5" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          Pembayaran aman
-        </span>
+          </div>
+        </div>
       </div>
     </header>
 
-    <main>
-      <slot />
-    </main>
+    {/* No `items-start`: the cells must STRETCH so the white form column and the recessed panel both
+         run the full height of the row. With items-start each cell shrank to its content and the two
+         zones stopped being zones. */}
+    <div class="lg:grid lg:grid-cols-2">
+      {/* SUMMARY. `order-first` on mobile keeps the collapsed total bar at the very top (the phone
+          pattern); on desktop it is the right column. Explicit col/row placement rather than source
+          order, because the two must not fight over which cell they land in. */}
+      <aside class="order-first border-b border-line bg-cream lg:order-none lg:col-start-2 lg:row-start-1 lg:min-h-[calc(100vh-4.5rem)] lg:border-b-0 lg:border-l">
+        <div class="w-full px-4 sm:px-6 lg:sticky lg:top-0 lg:max-w-md lg:px-10 lg:py-10">
+          <slot name="summary" />
+        </div>
+      </aside>
+
+      {/* The BRIGHT zone. White against the panel's cream is the whole contrast the reference is
+           built on — on cream-vs-cream the hairline divider was carrying it alone, and losing. */}
+      <main class="bg-white lg:col-start-1 lg:row-start-1 lg:flex lg:justify-end">
+        <div class="w-full px-4 py-8 sm:px-6 lg:max-w-xl lg:py-10 lg:pr-10">
+          <slot />
+        </div>
+      </main>
+    </div>
 
     <!-- Minimal by intent: no policy links invented here. If the merchant has such pages they belong
          in the storefront footer, not fabricated into the checkout. -->
     <footer class="border-t border-line">
-      <div class="mx-auto max-w-6xl px-4 py-6 text-center text-xs text-muted sm:px-6">
-        {store.name} — Ditenagai TokoΦ
+      <div class="lg:grid lg:grid-cols-2">
+        <div class="lg:flex lg:justify-end">
+          <div class="w-full px-4 py-6 text-xs text-muted sm:px-6 lg:max-w-xl lg:pr-10">
+            {store.name} — Ditenagai TokoΦ
+          </div>
+        </div>
       </div>
     </footer>
   </body>

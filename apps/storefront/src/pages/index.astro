@@ -7,7 +7,7 @@ import Layout from "../layouts/Layout.astro";
 import ProductCard from "../components/ProductCard.astro";
 import SectionRenderer from "../components/sections/SectionRenderer.astro";
 import Hero from "../components/sections/Hero.astro";
-import { SECTION_DEFAULTS } from "@tokophi/sections";
+import type { HeroConfig } from "@tokophi/sections";
 import { storeCodEnabled } from "../data/catalog";
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
@@ -20,10 +20,45 @@ const HOMEPAGE_TEMPLATE = catalog.homepageTemplate;
 
 const best = catalog.bestsellers();
 
-// Fallback (non-Store-Builder) homepage: it renders the SAME registry `hero` section the builder
-// places, seeded with SECTION_DEFAULTS — so the hero has exactly one implementation and a store
-// that has not built a homepage yet still gets the carousel.
-const HERO = SECTION_DEFAULTS.hero;
+// ── FALLBACK HOMEPAGE — the store has not built one in the Store Builder ─────────────────────────
+//
+// THE RULE: every word below is either a NEUTRAL PLATFORM VERB or a value the MERCHANT wrote
+// (stores.name, stores.tagline). Nothing may be invented on their behalf. This file used to seed the
+// hero from `SECTION_DEFAULTS.hero`, which conflated two different jobs:
+//   · the BUILDER SEED — placeholder copy a merchant sees after dragging a Hero onto the canvas and
+//     is about to edit. Batik-flavoured copy is harmless there.
+//   · THIS — what a real SHOPPER sees on a store that never opened the builder.
+// Nothing distinguished them, so every store on the platform served Batik Nusantara's homepage
+// wearing its own name: "Gadget Murah ID" (electronics, Jakarta) rendered a photo of a woman in
+// batik, the headline "Batik Modern untuk Hari-Harimu", a "Lihat Koleksi Dress" button pointing at a
+// /kategori/dress it does not have — and a brand story in quote marks SIGNED "Gadget Murah ID —
+// Jakarta". That last one is the reason this is a bug and not a matter of taste: we were putting
+// words into a real merchant's mouth about a business that is not theirs.
+//
+// No image on purpose. The merchant has given us no hero photo, and a 600×600 product shot stretched
+// across a 42rem full-bleed frame is not a hero — it is a crop of a garment on a backdrop. An empty
+// imageUrl now renders the brand-tinted panel (Hero.astro), so the fallback is at least THEIR colour.
+const HERO: HeroConfig = {
+  slides: [
+    {
+      imageUrl: "",
+      heading: store.name,
+      subheading: store.tagline ?? "",
+      ctaLabel: "Mulai belanja",
+      ctaHref: "/kategori/semua", // a VIRTUAL collection every store always has — never /kategori/dress
+      focal: "center",
+    },
+  ],
+  intervalMs: 0, // one slide → no autoplay, no dots (Hero drops the carousel chrome below 2 slides)
+  heading: store.name,
+  subheading: store.tagline ?? "",
+  imageUrl: "",
+  ctaLabel: "Mulai belanja",
+  ctaHref: "/kategori/semua",
+  align: "left",
+  badge: "", // no invented "Koleksi 2026" — we do not know that they have one
+  ratingText: "",
+};
 
 const collections = catalog.collections.map((c) => {
   const items = catalog.byCollection(c.handle);
@@ -70,12 +105,17 @@ const collections = catalog.collections.map((c) => {
     </div>
   </section>
 
-  <!-- Collections -->
+  <!-- Categories. RENDERED ONLY IF THERE ARE ANY: a store with no categories used to get the heading
+       "Jelajahi Koleksi", the line "Temukan gaya yang paling kamu banget", and then nothing at all —
+       a titled, empty room. An empty section is not a section; it is a bug with a headline. -->
+  {collections.length > 0 && (
   <section id="koleksi" class="mx-auto max-w-7xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20">
     <div class="mx-auto max-w-2xl text-center">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Koleksi</p>
-      <h2 class="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">Jelajahi Koleksi</h2>
-      <p class="mt-3 text-muted">Temukan gaya yang paling kamu banget.</p>
+      {/* "Kategori", not "Koleksi"/"gaya" — this container serves a coffee roaster and a phone shop
+          as well as a fashion label. Say what the links ARE. */}
+      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Kategori</p>
+      <h2 class="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">Belanja per Kategori</h2>
+      <p class="mt-3 text-muted">Pilih kategori yang kamu cari.</p>
     </div>
     <div class="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3">
       {
@@ -104,26 +144,28 @@ const collections = catalog.collections.map((c) => {
       }
     </div>
   </section>
+  )}
 
-  <!-- Brand story -->
-  <section class="bg-ink">
-    <div class="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6 sm:py-20">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-200">Cerita Kami</p>
-      <blockquote class="mt-5 font-display text-2xl font-medium leading-snug text-cream sm:text-3xl">
-        “Setiap helai kami rancang untuk perempuan Indonesia — memadukan warisan batik
-        dengan siluet masa kini, agar kamu tampil anggun tanpa kehilangan kenyamanan.”
-      </blockquote>
-      <p class="mt-6 text-sm text-white/70">{store.name} — {store.city}</p>
-    </div>
-  </section>
+  {/* DELETED: the "Cerita Kami" brand story — a quote about designing batik for Indonesian women,
+      rendered in quote marks and SIGNED "{store.name} — {store.city}". On every store on the
+      platform. A brand story is the one thing a platform can never write for a merchant: it is a
+      first-person claim about who they are, attributed to them by name, and it was false for six of
+      the seven stores in the database. There is no honest neutral version of it either ("we care
+      about quality" signed by a real business is still us speaking as them), so it does not come
+      back with softer words — it comes back when the merchant WRITES one, as a rich-text section in
+      the Store Builder, which already exists. */}
 
-  <!-- Bestsellers -->
+  <!-- Bestsellers. Same guard as the categories above — no products, no titled empty room. -->
+  {best.length > 0 && (
   <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
     <div class="flex items-end justify-between gap-4">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Favorit</p>
         <h2 class="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">Paling Dicari</h2>
-        <p class="mt-2 text-muted">Favorit pelanggan minggu ini.</p>
+        {/* NOT "minggu ini". `bestsellers()` sorts the whole catalog by ALL-TIME units_sold — it does
+            not window by date. The registry already carries this exact warning for the Grid Produk
+            heading; the fallback homepage was making the claim anyway. Say only what the data does. */}
+        <p class="mt-2 text-muted">Produk yang paling banyak dibeli.</p>
       </div>
       {/* NOT /kategori/dress. One container serves every store (ADR 0009) and `dress` is just one
           merchant's category — on a store that has no such category the handle does not resolve and
@@ -146,14 +188,17 @@ const collections = catalog.collections.map((c) => {
       </a>
     </div>
   </section>
+  )}
 
-  <!-- Closing CTA -->
+  <!-- Closing CTA. Was "Siap tampil anggun setiap hari?" / "temukan busana yang membuatmu percaya
+       diri" — an outfit promise on a phone shop. Neutral, and it is the one section that stays even
+       on an empty catalogue, because it is the way OUT of a thin page. -->
   <section class="mx-auto max-w-7xl px-4 py-16 text-center sm:px-6 sm:py-24">
     <h2 class="mx-auto max-w-2xl font-display text-3xl font-semibold text-ink sm:text-4xl">
-      Siap tampil anggun setiap hari?
+      Belanja di {store.name}
     </h2>
     <p class="mx-auto mt-4 max-w-lg text-muted">
-      Jelajahi koleksi {store.name} dan temukan busana yang membuatmu percaya diri.
+      Lihat seluruh produk yang tersedia, kirim ke seluruh Indonesia.
     </p>
     <a
       href="/kategori/semua"

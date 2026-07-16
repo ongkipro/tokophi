@@ -56,9 +56,19 @@ const centered = align === "center";
           ]}
         />
       ) : (
+        /* No image → the BRAND-TINTED PANEL the registry has always promised ("empty = brand-tinted
+           gradient panel"). It did not exist: this div carried no background at all, so an image-less
+           hero fell through to the section's flat `bg-ink` — a generic dark slab identical on every
+           store. That is the hero a merchant who has not built a homepage yet actually gets, so it is
+           worth being their colour rather than nobody's.
+           `brand-700 → ink` (not a pale shade): the copy on top is white, and the scrim below only
+           DARKENS. A merchant with a pale brand hex must still get legible white text. */
         <div
           data-hero-img
-          class:list={["absolute inset-0 -z-10", i === 0 ? "opacity-100" : "opacity-0"]}
+          class:list={[
+            "absolute inset-0 -z-10 bg-gradient-to-br from-brand-700 via-brand-600 to-ink",
+            i === 0 ? "opacity-100" : "opacity-0",
+          ]}
         />
       ),
     )

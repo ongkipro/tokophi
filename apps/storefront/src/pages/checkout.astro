@@ -140,50 +140,115 @@ if (rToken) {
 ---
 
 <CheckoutLayout title="Checkout" description={`Selesaikan pesananmu di ${store.name}.`}>
-  <section class="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-    {/* The one deliberate way back. The logo above it is not a link and there is no nav — this and
-        "Kembali ke keranjang" in the summary are the only exits, and both lead to the cart, not out
-        of the funnel. */}
-    <nav class="text-sm text-muted">
-      <a href="/keranjang" class="hover:text-brand-600">Keranjang</a>
-      <span class="mx-1">/</span>
-      <span class="text-ink">Checkout</span>
-    </nav>
+  {/* The layout owns the columns now (form left, recessed summary panel right) — this page just
+      hands it two pieces of content. The summary lives OUTSIDE the <form>: it holds no inputs since
+      the pay button moved to the bottom of the form column, and the script reaches every element in
+      it by getElementById, never through `form.querySelector`. */}
+  <Fragment slot="summary">
+    {/* Mobile: a COLLAPSED BAR with the total always readable. Desktop: the panel content, no card —
+        `lg:hidden` on the bar, `lg:block` on the body.
+        `type="button"` is load-bearing even here: the summary is outside the <form> today, but a
+        bare <button> is type="submit" and one refactor that moves this back inside would turn "lihat
+        ringkasan" into "pay". */}
+    <button
+      type="button"
+      id="summary-toggle"
+      aria-expanded="false"
+      aria-controls="summary-body"
+      class="-mx-4 flex w-[calc(100%+2rem)] items-center gap-2 px-4 py-4 text-left sm:-mx-6 sm:w-[calc(100%+3rem)] sm:px-6 lg:hidden"
+    >
+      {/* "Lihat"/"Tutup" — same length on purpose. "Tampilkan"/"Sembunyikan ringkasan pesanan"
+          wrapped to two lines at 390px, which shoved the caret against the total and changed the
+          bar's height on every toggle. `whitespace-nowrap` keeps that from creeping back. */}
+      <span id="summary-toggle-label" class="whitespace-nowrap text-sm font-medium text-brand-600">
+        Lihat ringkasan pesanan
+      </span>
+      <ChevronDown
+        id="summary-caret"
+        class="h-4 w-4 shrink-0 text-brand-600 transition-transform"
+        stroke-width={2}
+        aria-hidden="true"
+      />
+      <span id="summary-total-bar" class="ml-auto text-lg font-semibold text-ink tabular-nums">Rp0</span>
+    </button>
 
-    <h1 class="mt-4 font-display text-3xl font-semibold text-ink">Checkout</h1>
-    <p class="mt-1 text-sm text-muted">
-      Kolom bertanda <span class="text-red-500">*</span> wajib diisi.
-    </p>
+    <h2 class="hidden text-base font-semibold text-ink lg:block">Ringkasan Pesanan</h2>
 
-    {
-      RECOVER && (
-        <p class="mt-4 rounded-xl border border-brand-600/30 bg-brand-50 px-4 py-3 text-sm text-ink">
-          Selamat datang kembali{RECOVER.name ? `, ${RECOVER.name.split(" ")[0]}` : ""}! Keranjang dan datamu sudah
-          kami simpan — tinggal lanjut bayar.
-        </p>
-      )
-    }
+    {/* `hidden` as a CLASS, not the attribute: Tailwind v4's preflight declares
+        `[hidden] { display: none !important }`, which `lg:block` could not beat — the summary would
+        have stayed invisible on desktop. The class version loses to `lg:block` at lg exactly as
+        intended, and JS toggles it on mobile. */}
+    <div id="summary-body" class="hidden pb-5 lg:block lg:pb-0">
+      <div id="summary-items" class="space-y-4 pt-4 lg:pt-6"></div>
 
-    <div id="checkout-empty" class="mt-10 hidden rounded-2xl border border-dashed border-line bg-white py-20 text-center">
-      <ShoppingCart class="mx-auto h-10 w-10 text-brand-400" stroke-width={1.5} aria-hidden="true" />
-      <h2 class="mt-4 font-display text-2xl font-semibold text-ink">Keranjangmu masih kosong</h2>
-      <p class="mt-2 text-muted">Tambahkan produk dulu sebelum checkout.</p>
-      <a href="/" class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700">Mulai Belanja</a>
+      <div class="mt-6 space-y-2 border-t border-line pt-4 text-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-muted">Subtotal</span>
+          <span id="summary-subtotal" class="font-medium text-ink tabular-nums">Rp0</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-muted">Ongkir</span>
+          <span id="summary-shipping" class="font-medium text-ink tabular-nums">Rp0</span>
+        </div>
+      </div>
+
+      <div class="mt-4 flex items-center justify-between border-t border-line pt-4">
+        <span class="text-base font-medium text-ink">Total</span>
+        <span id="summary-total" class="text-2xl font-semibold text-ink tabular-nums">Rp0</span>
+      </div>
     </div>
+  </Fragment>
 
-    <form id="checkout-form" class="mt-8 grid gap-8 lg:grid-cols-[1.4fr_1fr] lg:items-start">
-      <!-- LEFT: form -->
-      <div class="space-y-8">
+  {/* The one deliberate way back. The logo above it is not a link and there is no nav — this and
+      "Kembali ke keranjang" in the summary are the only exits, and both lead to the cart, not out
+      of the funnel. */}
+  <nav class="text-sm text-muted">
+    <a href="/keranjang" class="hover:text-brand-600">Keranjang</a>
+    <span class="mx-1">/</span>
+    <span class="text-ink">Checkout</span>
+  </nav>
+
+  {/* Sans, not `font-display`. The serif is the SHOP's voice — it belongs on a hero and a product
+      name, where it is doing brand work. A checkout is an instrument panel: every heading here is a
+      label for a task, and the reference does the same (bold sans throughout). */}
+  <h1 class="mt-4 text-2xl font-semibold tracking-tight text-ink">Checkout</h1>
+  <p class="mt-1 text-sm text-muted">
+    Kolom bertanda <span class="text-red-500">*</span> wajib diisi.
+  </p>
+
+  {
+    RECOVER && (
+      <p class="mt-4 rounded-lg border border-brand-600/30 bg-brand-50 px-4 py-3 text-sm text-ink">
+        Selamat datang kembali{RECOVER.name ? `, ${RECOVER.name.split(" ")[0]}` : ""}! Keranjang dan datamu sudah
+        kami simpan — tinggal lanjut bayar.
+      </p>
+    )
+  }
+
+  <div id="checkout-empty" class="mt-10 hidden rounded-lg border border-dashed border-line py-20 text-center">
+    <ShoppingCart class="mx-auto h-10 w-10 text-brand-400" stroke-width={1.5} aria-hidden="true" />
+    <h2 class="mt-4 text-xl font-semibold text-ink">Keranjangmu masih kosong</h2>
+    <p class="mt-2 text-muted">Tambahkan produk dulu sebelum checkout.</p>
+    <a href="/" class="mt-6 inline-block rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700">Mulai Belanja</a>
+  </div>
+
+  <form id="checkout-form" class="mt-8">
+    <div class="space-y-10">
         <!-- Kontak -->
-        <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
-          <legend class="px-2 font-display text-lg font-semibold text-ink">Kontak</legend>
+        <fieldset class="min-w-0">
+          <legend class="mb-4 text-base font-semibold text-ink">Kontak</legend>
           <label class="block">
             <span class="text-sm font-medium text-ink">Email <span class="font-normal text-muted">(opsional)</span></span>
+            {/* `input-field` like every other control. This one carried a hand-rolled COPY of those
+                styles that had drifted: bg-cream instead of white, 14px instead of 16px, a different
+                focus colour. So the first field a shopper meets was the one that looked unlike all
+                the others — and it was the 14px case iOS zooms on and never zooms back. */}
             <input
               type="email"
               name="email"
               placeholder="nama@email.com"
-              class="mt-1.5 w-full rounded-lg border border-line bg-cream px-3.5 py-2.5 text-sm text-ink outline-none transition-colors focus:border-brand-400 focus:bg-white"
+              autocomplete="email"
+              class="input-field"
             />
             {/* There is NO mailer AND no order-notification of any kind in this codebase. So neither
                 email nor WhatsApp may be promised as the confirmation channel. The email is collected
@@ -202,8 +267,8 @@ if (rToken) {
         </fieldset>
 
         <!-- Alamat pengiriman -->
-        <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
-          <legend class="px-2 font-display text-lg font-semibold text-ink">Alamat Pengiriman</legend>
+        <fieldset class="min-w-0">
+          <legend class="mb-4 text-base font-semibold text-ink">Alamat Pengiriman</legend>
           <div class="grid gap-4 sm:grid-cols-2">
             <label class="block">
               <span class="text-sm font-medium text-ink">Nama Lengkap <span class="text-red-500" aria-hidden="true">*</span></span>
@@ -301,8 +366,8 @@ if (rToken) {
         </fieldset>
 
         <!-- Pengiriman -->
-        <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
-          <legend class="px-2 font-display text-lg font-semibold text-ink">Pengiriman</legend>
+        <fieldset class="min-w-0">
+          <legend class="mb-4 text-base font-semibold text-ink">Pengiriman</legend>
           <p id="ship-hint" class="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
             Pilih <b>kecamatan tujuan</b> di atas untuk melihat ongkir real-time.
           </p>
@@ -334,8 +399,8 @@ if (rToken) {
         </fieldset>
 
         <!-- Pembayaran -->
-        <fieldset class="rounded-2xl border border-line bg-white p-5 sm:p-6">
-          <legend class="px-2 font-display text-lg font-semibold text-ink">Pembayaran</legend>
+        <fieldset class="min-w-0">
+          <legend class="mb-4 text-base font-semibold text-ink">Pembayaran</legend>
 
           <div class="space-y-4">
             {PAY_GROUPS.map((group) => (
@@ -431,10 +496,14 @@ if (rToken) {
              sits at the TOP on a phone, so a pay button living inside it would have landed ABOVE the
              empty form. -->
         <div>
+          {/* `rounded-lg`, not a pill, and no drop shadow. A pill with a coloured glow is a
+              marketing button — it belongs on the hero CTA where it is competing for attention. The
+              pay button is not competing with anything: it is the only action on the screen, so it
+              only has to be unmissable and calm. The reference lands on the same shape. */}
           <button
             type="submit"
             id="pay-btn"
-            class="w-full rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-200/50 transition-colors hover:bg-brand-700"
+            class="w-full rounded-lg bg-brand-600 px-6 py-4 text-base font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
           >
             Bayar Sekarang
           </button>
@@ -443,92 +512,39 @@ if (rToken) {
         </div>
       </div>
 
-      <!-- ORDER SUMMARY — desktop: a sticky panel in the right column. Mobile: a COLLAPSED BAR AT THE
-           TOP (`order-first`), which is the Shopify pattern and the whole point of this block.
-           Before, the summary stacked LAST on a phone: the total and the pay button sat ~1.800px down
-           a 2.200px page, so the shopper typed their name, address and kecamatan having never once
-           seen what they were about to pay. The total is the one fact they want confirmed BEFORE
-           typing — so the bar shows it while collapsed, and expanding reveals the line items.
-
-           `top-8`, not `top-24`: the old offset cleared Layout.astro's STICKY header, which checkout
-           no longer has (CheckoutLayout's bar scrolls away). -->
-      <aside class="order-first lg:order-none lg:sticky lg:top-8">
-        <div class="rounded-2xl border border-line bg-white">
-          {/* Mobile only. `type="button"` matters: a bare <button> inside a <form> defaults to
-              type="submit" — tapping "lihat ringkasan" would have tried to pay. */}
-          <button
-            type="button"
-            id="summary-toggle"
-            aria-expanded="false"
-            aria-controls="summary-body"
-            class="flex w-full items-center gap-2 px-5 py-4 text-left lg:hidden"
-          >
-            {/* "Lihat"/"Tutup" — same length on purpose. "Tampilkan"/"Sembunyikan ringkasan pesanan"
-                wrapped to two lines at 390px, which shoved the caret against the total and changed the
-                bar's height on every toggle. `whitespace-nowrap` keeps that from creeping back. */}
-            <span id="summary-toggle-label" class="whitespace-nowrap text-sm font-medium text-brand-600">
-              Lihat ringkasan pesanan
-            </span>
-            <ChevronDown
-              id="summary-caret"
-              class="h-4 w-4 shrink-0 text-brand-600 transition-transform"
-              stroke-width={2}
-              aria-hidden="true"
-            />
-            <span id="summary-total-bar" class="ml-auto font-display text-lg font-semibold text-ink tabular-nums">
-              Rp0
-            </span>
-          </button>
-
-          <h2 class="hidden px-5 pt-5 font-display text-lg font-semibold text-ink sm:px-6 sm:pt-6 lg:block">
-            Ringkasan Pesanan
-          </h2>
-
-          {/* `hidden` as a CLASS, not the attribute: Tailwind v4's preflight declares
-              `[hidden] { display: none !important }`, which `lg:block` could not beat — the summary
-              would have stayed invisible on desktop. The class version loses to `lg:block` at lg
-              exactly as intended, and JS toggles it on mobile. */}
-          <div id="summary-body" class="hidden px-5 pb-5 sm:px-6 sm:pb-6 lg:block">
-            <div id="summary-items" class="mt-4 space-y-4"></div>
-
-            <div class="mt-6 space-y-2 border-t border-line pt-4 text-sm">
-              <div class="flex items-center justify-between">
-                <span class="text-muted">Subtotal</span>
-                <span id="summary-subtotal" class="font-medium text-ink tabular-nums">Rp0</span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-muted">Ongkir</span>
-                <span id="summary-shipping" class="font-medium text-ink tabular-nums">Rp0</span>
-              </div>
-            </div>
-
-            <div class="mt-4 flex items-center justify-between border-t border-line pt-4">
-              <span class="text-base font-medium text-ink">Total</span>
-              <span id="summary-total" class="font-display text-2xl font-semibold text-ink tabular-nums">Rp0</span>
-            </div>
-          </div>
-        </div>
-      </aside>
-    </form>
-  </section>
+  </form>
 </CheckoutLayout>
 
 <style is:global>
+  /* One class, eight fields — the whole input language of the checkout lives here.
+     Sized off the reference: a tall (3.25rem), quiet, WHITE box with a hairline border, not the
+     14px cream-filled box we had. Cream-on-cream gave the field no edge against the page; white on
+     the form column is what makes the input read as somewhere to type.
+     `font-size: 1rem` is not taste — iOS Safari zooms the page when a focused control is under 16px
+     and never zooms back (see global.css). Setting it here means the checkout is correct on its own
+     terms rather than relying on that rescue rule. */
   .input-field {
     margin-top: 0.375rem;
     width: 100%;
+    min-height: 3.25rem;
     border-radius: 0.5rem;
     border: 1px solid var(--color-line);
-    background: var(--color-cream);
-    padding: 0.625rem 0.875rem;
-    font-size: 0.875rem;
+    background: #fff;
+    padding: 0.75rem 0.875rem;
+    font-size: 1rem;
     color: var(--color-ink);
     outline: none;
-    transition: border-color 0.15s, background 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
+  .input-field::placeholder {
+    color: var(--color-muted);
+  }
+  /* Focus = a brand-coloured border PLUS a 1px inner ring, which is how the reference marks the
+     active field. A colour change alone is too quiet on a hairline border, and `outline: none`
+     without a visible replacement would leave keyboard users with no focus indicator at all. */
   .input-field:focus {
-    border-color: var(--color-brand-400);
-    background: #fff;
+    border-color: var(--color-brand-600);
+    box-shadow: 0 0 0 1px var(--color-brand-600);
   }
 </style>
 
