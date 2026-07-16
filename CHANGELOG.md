@@ -199,6 +199,23 @@ The final split (decided with the user): **platform stays on `tokophi.com`** (la
 
 The Domain card now leads with the **system domain** `<slug>.tokophi.id` — shown read-only with a lock ("Aktif otomatis · diatur sistem, tidak bisa diubah") and a Kunjungi link — because that address is derived from the store slug and a merchant must never be able to change or detach it. Below it, the **custom-domain** flow got a Shopify-style numbered tutorial (add → publish CNAME+TXT → verify → make primary), plus the apex/`www` + "email unaffected" notes. **Security hardening in `lib/actions/domain.ts`:** `addDomain` now refuses **every platform-owned zone** — `tokophi.id`/`tokophi.com`/`tokophi.cc` and any host under them (`PLATFORM_ZONES`, one place) — so a merchant can't squat `app.tokophi.com`, the `cname.tokophi.cc` fallback, or another store's `<slug>.tokophi.id`; and a **per-store cap** (`MAX_DOMAINS_PER_STORE=5`) guards the `UNIQUE(host)` space and the poller. (Ownership was already proven by a real TXT check, writes already gated by RBAC + RLS, and `store_domains.host` is DB-UNIQUE across the platform.)
 
+### 💰 A **Keuangan** menu — reversing "money is not a place you navigate to"
+
+`lib/nav.ts` carried a deliberate rule: *"Saldo is **deliberately NOT** in the sidebar. Shopify's restraint: the nav is for the WORK, and money is not a place you navigate to — it is a thing you glance at."* That reasoning is sound **for Shopify's market**. It is wrong for this one: **Shopee, Tokopedia and TikTok Shop Seller all put Keuangan in the sidebar**, so an Indonesian seller looks for it there and finds nothing. Reversed, and the reversal is written into the nav so it is not "fixed" back.
+
+The topbar chip **stays** — the two do different jobs: the chip is the *glance*, the menu is the *work* (withdraw, see what is still held, fix the bank account).
+
+```
+Keuangan → /saldo
+  ├ Saldo Saya          → /saldo            ├ Rekening Bank       → /saldo?tab=rekening
+  ├ Dana Dalam Proses   → /saldo?tab=proses └ Tagihan & Langganan → /akun/langganan
+  └ Penarikan Dana      → /saldo?tab=penarikan
+```
+
+**Every row opens a view that exists** — the rule that kept "Pengiriman Massal" and "Serah Terima" out of the nav until they were built. Verified per row, not assumed: each link lands on its **own** tab (`Mutasi (642)` / `Dana dalam proses (47)` / `Penarikan (0)` / `Rekening`), none silently falling back to the default. `Tagihan & Langganan` is a genuinely separate page **and a different kind of money** — what the seller *pays us*, not what they earn.
+
+**Why this is not the "Perlu Dikirim" mistake** (removed in the same session): that one was a saved link to a tab **the parent row also pointed at** — three doors onto one room. Here the parent opens Mutasi and each child opens a *different* tab.
+
 ### 📦 Pengiriman Massal — bulk book, fetch the resi, print thermal labels (and "Perlu Dikirim" retires)
 
 `/pesanan/massal`. Three verbs, in the order physics forces:

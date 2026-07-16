@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingBag, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessageSquare, MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Wallet, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessageSquare, MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon } from "lucide-react";
 
 export type NavChild = { label: string; href: string };
 
@@ -33,11 +33,29 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Pengembalian/Pembatalan", href: "/pesanan?tab=pengembalian" },
         ],
       },
-      // Saldo is deliberately NOT in the sidebar. Shopify's restraint: the nav is for the WORK,
-      // and money is not a place you navigate to — it is a thing you glance at. It lives in the
-      // topbar chip (always visible, next to the avatar, the way every Indonesian seller tool does
-      // it), and the chip opens onto /saldo. Another sidebar row would just be one more thing to
-      // scan past.
+      // Keuangan. This REVERSES the old "Saldo is deliberately not in the sidebar" rule (Shopify's
+      // restraint: money is a thing you glance at, not a place you navigate to). That reasoning is
+      // sound — for Shopify's market. It is wrong for this one: Shopee, Tokopedia and TikTok Shop
+      // Seller all put **Keuangan** in the sidebar, so an Indonesian seller looks for it there and
+      // finds nothing. The topbar chip stays — the two do different jobs: the chip is the glance,
+      // this is the work (withdraw, check what is still held, fix the bank account).
+      //
+      // Every row points at a view that EXISTS — the nav rule that killed "Pengiriman Massal" and
+      // "Serah Terima" until they were built. The children are saved links to /saldo's OWN tabs, and
+      // that is NOT the "Perlu Dikirim" mistake: that one was removed because the PARENT pointed at
+      // the same tab (three doors, one room). Here the parent opens Mutasi and each child opens a
+      // DIFFERENT tab. Tagihan is a genuinely separate page — and a different KIND of money: what the
+      // seller PAYS us, not what they earn.
+      {
+        label: "Keuangan", href: "/saldo", icon: Wallet,
+        children: [
+          { label: "Saldo Saya", href: "/saldo" },
+          { label: "Dana Dalam Proses", href: "/saldo?tab=proses" },
+          { label: "Penarikan Dana", href: "/saldo?tab=penarikan" },
+          { label: "Rekening Bank", href: "/saldo?tab=rekening" },
+          { label: "Tagihan & Langganan", href: "/akun/langganan" },
+        ],
+      },
       {
         label: "Produk", href: "/produk", icon: Package,
         children: [
