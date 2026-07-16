@@ -263,7 +263,7 @@ export function PesananClient({
                   <DataCard
                     key={o.id}
                     href={`/pesanan/${o.number}`}
-                    title={o.id}
+                    title={<span className="truncate font-mono text-sm font-medium">{o.id}</span>}
                     meta={timeAgo(o.minutesAgo)}
                     badge={<OrderStatusBadge status={o.status} />}
                     actions={<RowAction o={o} canWrite={canWrite} pending={pending} onAdvance={advance} />}

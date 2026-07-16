@@ -23,6 +23,7 @@ import { Input } from "@tokophi/ui/input";
 import { Checkbox } from "@tokophi/ui/checkbox";
 import { Separator } from "@tokophi/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
+import { ResponsiveTable, DataCard, DataRow } from "@/components/admin/responsive-table";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator,
@@ -337,50 +338,87 @@ export function ProdukClient({ products }: { products: Product[] }) {
         </div>
       ) : (
         <Card className="overflow-hidden py-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Pilih semua" /></TableHead>
-                <TableHead>Produk</TableHead>
-                <TableHead className="hidden md:table-cell">Kategori</TableHead>
-                <TableHead className="text-right">Harga</TableHead>
-                <TableHead>Stok</TableHead>
-                <TableHead className="hidden text-right sm:table-cell">Terjual</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden lg:table-cell">Ditambahkan</TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((p) => {
-                const isSel = selected.has(p.id);
-                return (
-                  <TableRow key={p.id} data-state={isSel ? "selected" : undefined} className="cursor-pointer" onClick={() => router.push(`/produk/${p.id}`)}>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Checkbox checked={isSel} onCheckedChange={() => toggle(p.id)} aria-label={`Pilih ${p.name}`} />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9" />
-                        <div className="min-w-0">
-                          <p className="truncate font-medium">{p.name}</p>
-                          <p className="text-xs text-muted-foreground md:hidden">{p.category}</p>
-                          {p.weightMissing && <WeightWarning />}
+        <ResponsiveTable
+          table={
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Pilih semua" /></TableHead>
+                  <TableHead>Produk</TableHead>
+                  <TableHead className="hidden md:table-cell">Kategori</TableHead>
+                  <TableHead className="text-right">Harga</TableHead>
+                  <TableHead>Stok</TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">Terjual</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="hidden lg:table-cell">Ditambahkan</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((p) => {
+                  const isSel = selected.has(p.id);
+                  return (
+                    <TableRow key={p.id} data-state={isSel ? "selected" : undefined} className="cursor-pointer" onClick={() => router.push(`/produk/${p.id}`)}>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox checked={isSel} onCheckedChange={() => toggle(p.id)} aria-label={`Pilih ${p.name}`} />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9" />
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{p.name}</p>
+                            <p className="text-xs text-muted-foreground md:hidden">{p.category}</p>
+                            {p.weightMissing && <WeightWarning />}
+                          </div>
                         </div>
+                      </TableCell>
+                      <TableCell className="hidden text-sm text-muted-foreground md:table-cell">{p.category}</TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">{IDR(p.price)}</TableCell>
+                      <TableCell><StockBadge stock={p.stock} /></TableCell>
+                      <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">{num(p.unitsSold)}</TableCell>
+                      <TableCell><StatusBadge status={p.status} /></TableCell>
+                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground tabular-nums whitespace-nowrap">{dateTimeShort(p.addedTs)}</TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}><RowActions id={p.id} /></TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          }
+          cards={
+              filtered.map((p) => (
+                <DataCard
+                  key={p.id}
+                  href={`/produk/${p.id}`}
+                  lead={
+                    <Checkbox
+                      checked={selected.has(p.id)}
+                      onCheckedChange={() => toggle(p.id)}
+                      aria-label={`Pilih ${p.name}`}
+                    />
+                  }
+                  title={
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{p.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{p.category}</p>
                       </div>
-                    </TableCell>
-                    <TableCell className="hidden text-sm text-muted-foreground md:table-cell">{p.category}</TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">{IDR(p.price)}</TableCell>
-                    <TableCell><StockBadge stock={p.stock} /></TableCell>
-                    <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">{num(p.unitsSold)}</TableCell>
-                    <TableCell><StatusBadge status={p.status} /></TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm text-muted-foreground tabular-nums whitespace-nowrap">{dateTimeShort(p.addedTs)}</TableCell>
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}><RowActions id={p.id} /></TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                    </div>
+                  }
+                  badge={<StatusBadge status={p.status} />}
+                  actions={<RowActions id={p.id} />}
+                >
+                  <DataRow label="Harga" strong>{IDR(p.price)}</DataRow>
+                  <DataRow label="Stok"><StockBadge stock={p.stock} /></DataRow>
+                  <DataRow label="Terjual">{num(p.unitsSold)}</DataRow>
+                  {p.weightMissing ? (
+                    <DataRow label="Berat"><WeightWarning /></DataRow>
+                  ) : null}
+                </DataCard>
+              ))
+          }
+        />
         </Card>
       )}
     </div>

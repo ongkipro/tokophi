@@ -47,6 +47,7 @@ export function ResponsiveTable({ table, cards }: { table: React.ReactNode; card
  */
 export function DataCard({
   href,
+  lead,
   title,
   meta,
   badge,
@@ -56,6 +57,12 @@ export function DataCard({
   className,
 }: {
   href?: string;
+  /** Sits left of the title, OUTSIDE the link — a bulk-select checkbox belongs here, since nesting it
+   *  in the anchor means every tap to select navigates instead. */
+  lead?: React.ReactNode;
+  /** Any node: the caller styles it, because the lead line differs per screen — a mono order number on
+   *  Pesanan, a thumbnail + product name on Produk. Forcing one look here made the component fit the
+   *  first screen that used it and fight the second. */
   title: React.ReactNode;
   meta?: React.ReactNode;
   badge?: React.ReactNode;
@@ -68,7 +75,7 @@ export function DataCard({
 }) {
   const head = (
     <div className="flex min-w-0 items-center gap-2">
-      <span className="truncate font-mono text-sm font-medium">{title}</span>
+      <div className="min-w-0 flex-1">{title}</div>
       {meta && <span className="shrink-0 text-xs text-muted-foreground">{meta}</span>}
     </div>
   );
@@ -76,8 +83,9 @@ export function DataCard({
   return (
     <div className={cn("px-4 py-3.5", className)}>
       <div className="mb-2 flex items-start justify-between gap-2">
-        {/* The heading is the link; the actions menu is NOT nested inside it — a dropdown inside an
-            anchor swallows its own clicks and navigates instead of opening. */}
+        {/* `lead` and the actions stay OUTSIDE the link: a checkbox or a dropdown nested in an anchor
+            swallows its own clicks and navigates instead of doing its job. */}
+        {lead && <div className="shrink-0 pt-0.5">{lead}</div>}
         {href ? (
           <Link href={href} className="min-w-0 flex-1 hover:underline">
             {head}
