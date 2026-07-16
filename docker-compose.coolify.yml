@@ -29,10 +29,18 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:-tokophi}@postgres:5432/tokophi
+    # `seed.ts` is a NO-OP on a live DB — it counts `stores` and skips when any exist, so a redeploy
+    # never touches real orders/invoices/uploads. `seed-templates.ts` has the same shape (it inserts
+    # only when the store has no homepage template) and has to be here for a reason worth stating:
+    # the demo's batik homepage now lives in `page_templates` as SELLER data, not hard-coded in the
+    # platform. Without this line a deploy would serve batik-nusantara the NEUTRAL fallback — correct
+    # for a store that has built nothing, wrong for the one that has. Both are idempotent, so ordering
+    # after `seed.ts` just means the store exists before we look for its template.
     command: >
       sh -c "cd packages/db &&
       npx drizzle-kit migrate &&
       npx tsx src/seed.ts &&
+      (npx tsx src/seed-templates.ts || echo 'templates seed skipped') &&
       (npx tsx src/seed-areas.ts || echo 'areas seed skipped')"
 
   admin:
