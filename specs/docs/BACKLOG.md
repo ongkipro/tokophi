@@ -14,10 +14,34 @@
 > **Decided with the user 2026-07-16. The DATA foundation is shipped; the flow is not built.**
 > Read this before touching the order state machine or the booking UI.
 
-**Where it actually stands, measured, not assumed:**
-- **0 AWBs** in local *and* production. `kaCreateOrder` **has never once succeeded** — the booking chain has never run end-to-end. Everything below is built on a step that is still unproven.
-- 14 production orders claim `status='dikirim'` **with no AWB and no courier**. Demo seed, but the demo lies about shipping.
-- ⚠️ **`KIRIMINAJA_ENV=sandbox` in production.** The user's call is to treat sandbox as real while building (the API is identical; going live is one env flip). **Recorded here because it is the one thing that must not be forgotten at launch:** a sandbox AWB is *not* a real waybill, so a seller would print a fake resi and stick it on a real parcel. Flip `KIRIMINAJA_ENV=production` before any real seller ships.
+**Where it stands — UPDATED 2026-07-16 after the chain ran end-to-end for the first time.**
+
+✅ **BOOKING WORKS. Proven, not assumed** (sandbox `request_pickup`, real order data):
+```
+status: true · pickup_number: XID-4775140108 · service SPX / type 1 · awb: null
+```
+Three things that were only ever *comments in the code* are now measured facts:
+- **`composePickupAddress` is accepted by KiriminAja** — `"Jl. Raya Gubeng No. 42, Kel. Gubeng, 60281"` went through. The kelurahan+kodepos work (0051) was build-green but unproven; it is proven now.
+- **`awb` comes back `null`** — the waybill does **not** exist until a courier accepts the pickup. This is why the UI must say *"resi menyusul"* and poll; a spinner "until the resi appears" would hang on a **successful** booking. Decision 2 is validated by reality, not taste.
+- **`service_type` (0053) immediately paid off** — SPX Standard was selected exactly, no coin flip.
+
+The seller's UI flow works too: **Cek Ongkir → pick → Buat** produced 2 booked orders (`ka_order_id` set). The reason production had 0 AWBs was never a bug — **that flow had simply never been run**. "Proses pesanan" does not book (it only sets status), which is the whole point of decision 1.
+
+⚠️ **CORRECTION, recorded so nobody re-derives the wrong lesson:** a first probe failed with *"Prefix packages.0.order_id tidak sesuai dengan yang anda daftarkan"* and was mis-diagnosed as the root cause of the 0 AWBs. It was not. Production's `KIRIMINAJA_ORDER_PREFIX` was **always correct (`5758`)**; the probe had hardcoded the code's default (`TOKOPHI`) and then diagnosed its own error. The registered prefix is **`5758`** — if `request_pickup` ever 400s on the prefix again, that is the value.
+
+🐛 **A bug that could only surface after the first successful booking** (fixed + migration `0054`): `createShipment` wrote `courier: input.serviceName`, so booking replaced the code (`spx`) with a display name (`"SPX Standard"`). `orders.courier` is a **join key** — to `platform_couriers` (`codAllowed` for the COD policy, and `group` for the 1 day/reguler/ekonomi/cargo filter) and to the per-courier COD return report — so every booked order silently dropped out of all of them, and one row ended up incoherent (courier `"SAP Satria Reg"` carrying JNE's `REG23`). **The lesson worth keeping: this was invisible until a booking succeeded, because a booked order is the one you stop looking at.**
+
+- 14 production orders still claim `status='dikirim'` **with no AWB and no courier**. Demo seed, but the demo lies about shipping.
+- ⚠️ **`KIRIMINAJA_ENV=sandbox` in production.** The user's call is to treat sandbox as real while building (the API is identical; going live is one env flip). **The one thing that must not be forgotten at launch:** a sandbox AWB is *not* a real waybill, so a seller would print a fake resi and stick it on a real parcel. Flip `KIRIMINAJA_ENV=production` before any real seller ships.
+
+### ▶ NEXT — the task list for this workflow (nothing below is built)
+
+1. **[ ] Tracking poller + `orders.awb` fill.** The booking succeeds with `awb: null`; something must fetch the waybill when the courier issues it. `kaTrack` / `trackShipment` already exist — no new API. This is the **prerequisite for everything else**: no AWB → no label → no bulk print.
+2. **[ ] Status follows the courier (decision 3).** `createShipment` still hardcodes `status: "dikirim"` on booking — the timeline claims "in transit" while the parcel is on the seller's shelf. Should be `diproses` on booking, `dikirim` when the courier accepts (the same moment the AWB appears). ⚠️ Touches the order state machine and the existing manual path.
+3. **[ ] Auto-book on "Proses pesanan" (decisions 1 + 5).** One button: confirm → book the service the shopper paid for (`courier`+`service_type`, both now recorded) → honest result (resi, or "dibooking, resi menyusul"). Old orders backfilled by 0053 can auto-book too.
+4. **[ ] `orders.label_printed_at` + printed/not-printed filter.** Does not exist. Needed for the marketplace-style status and for Pengiriman Massal's filter. Cancelling must stay possible after printing.
+5. **[ ] Courier change by the seller** — except COD (SPX-locked). Seller pays the difference; do **not** rewrite the buyer's `shipping_idr`.
+6. **[ ] Pengiriman Massal / bulk label print.** Last, not first: it has nothing to print until (1) lands. The `1 day / reguler / ekonomi / cargo` filter is now buildable via `platform_couriers.services[].group` ⋈ `orders.service_type`.
 
 **Decisions (user, 2026-07-16):**
 1. **"Proses pesanan" auto-books.** One button: confirm → book the service the **shopper already paid for** → show the resi. No asking the seller which service — the order knows.
