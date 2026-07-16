@@ -158,7 +158,19 @@ is the feature. The fix is the SEED (re-anchor it to `now()`), and `SEED_FORCE=1
 **truncates the shared DB** — announce before running it. Until then the charts are honest about
 thin data, and the page says so itself.
 
+**✅ DONE 2026-07-17 — the demo no longer rots: `npm run seed:recent -w @tokophi/db`.**
+Additive, idempotent, one store. Fills only days with zero orders, samples real destinations/couriers,
+derives the ledger from `payments`. Run it whenever the charts look dead — **never** `SEED_FORCE=1`,
+which truncates the shared DB and evicts every other agent. Ongkir/withdrawn/returned are now real.
+
 **Still to build (system):**
+- [ ] **`seed.ts` never writes `shipping_idr`** (`subtotal = total`, line ~60). That is the root cause
+      of "Ongkir dibayar pembeli Rp 0", and `seed:recent` only fixes it going forward — the 685 old
+      orders still carry 0, visible as bars with no ongkir cap before 3 Juli. **Do not backfill them
+      naively:** `payments.amount` and the entire ledger derive from `total`, so adding ongkir to old
+      rows either breaks `total = subtotal + shipping` or desyncs a Rp 203 juta balance. Fix it in the
+      seed (write shipping, include it in total, let payments/ledger follow) — then a full re-seed is
+      correct everywhere at once.
 - [ ] **Held → released is not a real transition.** `pending` vs `available` is seeded, not earned:
       nothing flips a ledger entry when an order reaches `selesai`. Penghasilan *explains* a rule
       ("ditahan sampai pesanan selesai") that no code currently enforces. Build the transition, or

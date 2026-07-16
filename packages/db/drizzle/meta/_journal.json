@@ -393,6 +393,13 @@
       "when": 1784188221360,
       "tag": "0055_label_printed_at",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1784188221361,
+      "tag": "0056_repair_ledger_note_number",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,232 @@
+// Seed RECENT orders — a targeted top-up that fills the gap between the main seed's fixed anchor and
+// today, for ONE store (batik-nusantara).
+//
+// WHY THIS EXISTS
+// `seed.ts` anchors every date to `TODAY = 2026-06-30`. Wall-clock time does not stop, so the demo
+// rots a day per day: by 2026-07-17 the last order was 15 days old, `/keuangan/penghasilan?hari=7`
+// was legitimately EMPTY, the 30-day chart drew a cliff to zero, and "-42% vs 30 hari sebelumnya"
+// was measuring the seed running out rather than a business trend. The pages were honest; the data
+// was stale.
+//
+// The blunt fix is `SEED_FORCE=1 npm run seed`. Do NOT reach for it: it TRUNCATES the whole database
+// and hands out new store_ids, so every other agent mid-verification silently loses their data and
+// their logged-in session. This script is the targeted alternative — it only ever INSERTS, it never
+// truncates, and it touches exactly one store.
+//
+//   npm run seed:recent -w @tokophi/db
+//
+// IDEMPOTENT BY CONSTRUCTION: it fills only days that currently have ZERO orders for this store.
+// Run it twice and the second run inserts nothing. Run it next week and it fills just the new gap.
+//
+// HONESTY RULES BAKED IN
+// - Destinations, couriers and service types are SAMPLED FROM REAL ROWS already in `orders`, never
+//   invented — a made-up ship_district_id would not resolve in `kiriminaja_areas` and the order could
+//   never actually be booked. Dummy data that cannot travel the real code path is a trap, not a demo.
+// - `shipping_idr` is populated. The main seed writes `subtotal = total` and leaves shipping at 0,
+//   which is why "Ongkir dibayar pembeli" reads Rp 0 across 96 orders. These rows carry a real ongkir
+//   so the number means something.
+// - The ledger is DERIVED from `payments`, using the same SQL shape as seed.ts. It is never written
+//   beside the orders: two sources for one balance is two versions of the truth about money.
+// - Deterministic (mulberry32, never Math.random) so the same gap always produces the same orders.
+import { db, client } from "./client";
+import { sql } from "drizzle-orm";
+
+const SLUG = "batik-nusantara";
+
+function mulberry32(seed: number) {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+type Row = Record<string, string | number | null>;
+const q = async (s: ReturnType<typeof sql>) => (await db.execute(s)) as unknown as Row[];
+
+async function main() {
+  const [store] = await q(sql`select id, name from stores where slug = ${SLUG}`);
+  if (!store) throw new Error(`Store ${SLUG} not found — nothing to top up.`);
+  const storeId = String(store.id);
+
+  // Gap = every calendar day (Asia/Jakarta) in the last 30 that has no order at all for this store.
+  // Bounded to 30 days on purpose: this tops the demo up, it does not rewrite history.
+  const gap = await q(sql`
+    with span as (
+      select generate_series(
+        (now() at time zone 'Asia/Jakarta')::date - interval '29 days',
+        (now() at time zone 'Asia/Jakarta')::date,
+        '1 day'
+      )::date as day
+    )
+    select to_char(s.day, 'YYYY-MM-DD') as day
+    from span s
+    where not exists (
+      select 1 from orders o
+      where o.store_id = ${storeId}
+        and (o.placed_at at time zone 'Asia/Jakarta')::date = s.day
+    )
+    order by s.day
+  `);
+  if (!gap.length) {
+    console.log("✓ Tidak ada hari kosong dalam 30 hari terakhir — tidak ada yang perlu ditambahkan.");
+    return;
+  }
+
+  const customers = await q(sql`select id, name, phone from customers where store_id = ${storeId}`);
+  const variants = await q(sql`
+    select v.id, p.title as title, v.price_idr as price
+    from product_variants v
+    join products p on p.id = v.product_id
+    where p.store_id = ${storeId} and p.archived_at is null
+  `);
+  // Real destinations + real courier/service pairs, lifted from orders that already exist.
+  const dests = await q(sql`
+    select distinct on (ship_district_id, courier)
+           ship_recipient, ship_phone, ship_address, ship_district_id, ship_kelurahan_name,
+           ship_postcode, city, province, courier, service_type
+    from orders
+    where store_id = ${storeId} and ship_district_id is not null and courier is not null
+      and service_type is not null
+    limit 40
+  `);
+  if (!customers.length || !variants.length || !dests.length)
+    throw new Error("Store has no customers / variants / shippable orders to sample from.");
+
+  const [maxRow] = await q(sql`
+    select coalesce(max((regexp_replace(number, '\\D', '', 'g'))::int), 5200) as n
+    from orders where store_id = ${storeId}
+  `);
+  let next = Number(maxRow.n) + 1;
+
+  const rnd = mulberry32(0x70b1); // fixed seed → same gap, same orders, every run
+  const pick = <T>(a: T[]) => a[Math.floor(rnd() * a.length)];
+  let made = 0;
+
+  for (const g of gap) {
+    const day = String(g.day);
+    const ageDays = Math.round((Date.now() - Date.parse(`${day}T12:00:00+07:00`)) / 86_400_000);
+    const perDay = 3 + Math.floor(rnd() * 7); // 3–9/day — the density the seed itself produces
+
+    for (let i = 0; i < perDay; i++) {
+      const cust = pick(customers);
+      const dest = pick(dests);
+      const lines = Array.from({ length: 1 + Math.floor(rnd() * 3) }, () => pick(variants));
+      const subtotal = lines.reduce((a, v) => a + Number(v.price), 0);
+      // A real ongkir band for JVA-scale domestic parcels. The main seed leaves this 0.
+      const shipping = 9_000 + Math.floor(rnd() * 27_000);
+
+      // Money is only "available" once the order is `selesai`. Fresh days stay in flight so the
+      // pending balance, the "perlu dikirim" badge and the shipping queue all have something real to
+      // show — the demo should exercise the states, not just the happy ending.
+      const roll = rnd();
+      const status =
+        ageDays <= 2 ? (roll < 0.5 ? "baru" : "diproses")
+        : ageDays <= 5 ? (roll < 0.35 ? "diproses" : roll < 0.8 ? "dikirim" : "selesai")
+        : roll < 0.06 ? "batal"
+        : roll < 0.12 ? "dikirim"
+        : "selesai";
+      const paid = status !== "batal";
+
+      // Spread across the working day in WIB, not at midnight — the hour buckets on other screens
+      // would otherwise show one absurd spike.
+      const at = sql`(${`${day} 09:00:00`}::timestamp at time zone 'Asia/Jakarta') + (${Math.floor(rnd() * 660)} || ' minutes')::interval`;
+      const number = `PHI-${next++}`;
+
+      const [ord] = await q(sql`
+        insert into orders (store_id, number, customer_id, status, financial_status, channel,
+                            subtotal_idr, discount_idr, shipping_idr, tax_idr, total_idr,
+                            city, province, placed_at, courier, service_type,
+                            ship_recipient, ship_phone, ship_address, ship_district_id,
+                            ship_kelurahan_name, ship_postcode)
+        values (${storeId}, ${number}, ${cust.id}, ${status}::order_status,
+                ${paid ? "dibayar" : "pending"}::financial_status,
+                ${pick(["organic", "meta_ads", "tiktok_ads", "google_ads", "other"])}::order_channel,
+                ${subtotal}, 0, ${shipping}, 0, ${subtotal + shipping},
+                ${dest.city}, ${dest.province}, ${at}, ${dest.courier}, ${dest.service_type},
+                ${cust.name}, ${cust.phone}, ${dest.ship_address}, ${dest.ship_district_id},
+                ${dest.ship_kelurahan_name}, ${dest.ship_postcode})
+        returning id
+      `);
+      const orderId = String(ord.id);
+
+      for (const v of lines) {
+        await db.execute(sql`
+          insert into order_line_items (order_id, variant_id, title, qty, price_idr, total_idr)
+          values (${orderId}, ${v.id}, ${v.title}, 1, ${Number(v.price)}, ${Number(v.price)})
+        `);
+      }
+      await db.execute(sql`
+        insert into payments (order_id, store_id, method, amount_idr, status, paid_at)
+        values (${orderId}, ${storeId}, ${pick(["transfer", "qris", "va", "gopay", "cod"])}::payment_method,
+                ${subtotal + shipping}, ${paid ? "berhasil" : "gagal"}::payment_status,
+                ${paid ? at : null})
+      `);
+      made++;
+    }
+  }
+
+  // Ledger — DERIVED from the payments just written, exactly as seed.ts derives it. Only for orders
+  // that have no entry yet, so a re-run cannot double-credit anyone's balance.
+  await db.execute(sql`
+    insert into ledger_entries (store_id, order_id, payment_id, kind, status, amount_idr, note, created_at, available_at)
+    select o.store_id, o.id, p.id, 'sale'::ledger_kind,
+           case when o.status in ('selesai','retur') then 'available' else 'pending' end::ledger_status,
+           p.amount_idr, 'Penjualan ' || o.number, coalesce(p.paid_at, o.placed_at),
+           case when o.status in ('selesai','retur') then coalesce(p.paid_at, o.placed_at) end
+      from payments p
+      join orders o on o.id = p.order_id
+     where o.store_id = ${storeId} and p.status = 'berhasil'
+       and not exists (select 1 from ledger_entries l where l.order_id = o.id and l.kind = 'sale')
+  `);
+
+  // customers.last_order_at is DERIVED, never typed in beside the orders (0044).
+  await db.execute(sql`
+    update customers c set last_order_at = o.last_at
+      from (select customer_id, max(placed_at) as last_at from orders
+             where store_id = ${storeId} and customer_id is not null group by customer_id) o
+     where o.customer_id = c.id
+  `);
+
+  // A withdrawal and a return, so "Sudah ditarik" / "Ditarik kembali" stop reading Rp 0. Both are
+  // NEGATIVE available entries — that is how getBalance() derives them (`-sum(...) filter kind=...`),
+  // and a payout that did not reduce the balance would be a payout that never happened.
+  const [hasPayout] = await q(sql`select count(*)::int as n from payouts where store_id = ${storeId}`);
+  if (Number(hasPayout.n) === 0) {
+    for (const [amount, daysAgo] of [[15_000_000, 12], [8_500_000, 4]] as const) {
+      const [po] = await q(sql`
+        insert into payouts (store_id, amount_idr, status, bank_name, bank_account, bank_holder, requested_at, paid_at)
+        values (${storeId}, ${amount}, 'selesai'::payout_status, 'BCA', '1234567890', 'Ongki Pratama',
+                now() - (${daysAgo} || ' days')::interval, now() - (${daysAgo - 1} || ' days')::interval)
+        returning id
+      `);
+      await db.execute(sql`
+        insert into ledger_entries (store_id, payout_id, kind, status, amount_idr, note, created_at, available_at)
+        values (${storeId}, ${String(po.id)}, 'payout'::ledger_kind, 'available'::ledger_status,
+                ${-amount}, 'Penarikan ke BCA ••••7890', now() - (${daysAgo} || ' days')::interval,
+                now() - (${daysAgo} || ' days')::interval)
+      `);
+    }
+    // One returned parcel, charged back against a real order that actually came back.
+    await db.execute(sql`
+      insert into ledger_entries (store_id, order_id, kind, status, amount_idr, note, created_at, available_at)
+      select o.store_id, o.id, 'retur'::ledger_kind, 'available'::ledger_status,
+             -o.total_idr, 'Retur ' || o.number, now() - interval '6 days', now() - interval '6 days'
+        from orders o
+       where o.store_id = ${storeId} and o.status = 'selesai' and o.total_idr > 0
+         and not exists (select 1 from ledger_entries l where l.order_id = o.id and l.kind = 'retur')
+       order by o.placed_at desc limit 2
+    `);
+  }
+
+  console.log(`✓ ${made} pesanan ditambahkan untuk ${store.name} — mengisi ${gap.length} hari kosong (${gap[0].day} → ${gap[gap.length - 1].day}).`);
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  })
+  .finally(() => client.end());

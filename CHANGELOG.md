@@ -81,6 +81,51 @@ field and reports natively — no order posted, nothing silent.
 
 ## 2026-07-17
 
+### 🧹 Cleanup: 5,4 GB of leaked dev servers, 642 lying ledger notes, and a demo that had gone stale
+
+**⚠️ SHARED DB — 94 orders were ADDED to `batik-nusantara` (PHI-5201…PHI-5294).** Additive only:
+nothing was truncated, no store_id changed, no other store touched. Your session is safe.
+
+**1. 29 storefront dev servers were holding 5,8 GB of RAM.** Ports **4327 → 4355**, sequential, one
+every ~10 minutes, the oldest running **10 hours** — the signature of an agent restarting `astro dev`,
+failing to bind the previous port, and walking up the range. The machine had **2,6 GB free of 15,3 GB**.
+Killed the 28 abandoned ones **by explicit PID** (never `pkill -f`, which would take a colleague's live
+server with it), keeping the newest in case it was in use. **Free RAM went 2,6 GB → 8,1 GB.** This is
+the "everything is slow" everyone has been feeling.
+
+**2. `0056` — 642 ledger notes named an order number that no longer existed.** Migration `0052`
+renamed every order to the PHI- prefix and **did not touch `ledger_entries.note`**, which embeds the
+number as free text ("Penjualan INV-5188" for order PHI-5188). My migration, my omission. The Mutasi
+screen looked fine because it JOINs `o.number` — but the **export** ships `Keterangan: r.note`
+verbatim, so the CSV handed to an accountant named 642 orders that cannot be found. Re-derived from
+`orders.number` rather than string-replacing the prefix, so any stale prefix converges. **642 → 0.**
+The writers were always right (`ledger-credit.ts`, `seed.ts` build the note from `o.number` at insert),
+so this repairs history only.
+
+**3. `npm run seed:recent -w @tokophi/db` — the demo no longer rots.** `seed.ts` anchors to
+`TODAY = 2026-06-30`; wall-clock time does not stop, so by 17 Juli the last order was 15 days old.
+The blunt fix truncates the shared DB and evicts every other agent. This one only INSERTS, touches one
+store, and is **idempotent by construction** (it fills only days with zero orders — the second run
+correctly added nothing). Destinations, couriers and service types are **sampled from real rows**, never
+invented: a made-up `ship_district_id` would not resolve in `kiriminaja_areas`, and dummy data that
+cannot travel the real code path is a trap rather than a demo. The ledger is **derived from `payments`**
+using seed.ts's own SQL — never written beside the orders.
+
+| | before | after |
+|---|---|---|
+| Empty days in 30 | 15 | **0** |
+| `hari=7` tab | **empty page** | 14 bars |
+| Ongkir dibayar pembeli | Rp 0 | **Rp 1.960.424** |
+| Sudah ditarik | Rp 0 | **Rp 23.500.000** |
+| Ditarik kembali | Rp 0 | **Rp 873.513** |
+| Omzet vs prev period | **−42%** (seed running out) | **+5%** (a real comparison) |
+
+**Left deliberately untouched: the 685 old orders still have `shipping_idr = 0`**, visible as bars with
+no teal ongkir cap before 3 Juli. Backfilling them would have been cosmetic vandalism: `seed.ts` writes
+`total = subtotal`, and `payments.amount` + the whole ledger derive from `total`. Adding ongkir to old
+rows would either break `total = subtotal + shipping` or desync a Rp 203 juta balance. **The durable
+fix is `seed.ts` writing shipping in the first place** — tasked, not hacked.
+
 ### 🐛 Tema: the prefix that swallowed its own parent — sidebar gone, seller stranded
 
 Reported as *"masuk editor, pas di back itu error, tampilan berantakan sidebar hilang"*. **It was
