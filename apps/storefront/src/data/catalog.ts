@@ -8,7 +8,7 @@
 // INVARIANT: nothing here runs at module scope / build time — `astro build` must stay DB-FREE
 // (the Docker image is built without DATABASE_URL). All DB access happens inside these functions.
 import { db, schema } from "@tokophi/db";
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { StoredTemplateData } from "@tokophi/sections";
 import { cached } from "./cache";
 import type { StoreInfo } from "./store";
@@ -59,8 +59,8 @@ export type Catalog = {
   templates: StoreTemplates;
   /**
    * Template for /kategori/<handle>: the collection's own `template_id` → the store's default
-   * `category` template → null (= the hand-built category page). Virtual collections
-   * ("semua", "promo-gajian") have no row, so they get the store default.
+   * `category` template → null (= the hand-built category page). `semua` has no row (it is the one
+   * virtual handle left), so it gets the store default.
    */
   categoryTemplate: (handle: string) => StoredTemplateData | null;
   /** Template for /produk/<handle>: the product's `template_id` → store default `product` → null. */
@@ -80,20 +80,20 @@ export type Catalog = {
 };
 
 /**
- * Handles that `pages/kategori/[handle].astro` serves from its own VIRTUAL map — computed views over
- * the store's products, not `collections` rows. Every tenant has them and they always resolve 200.
+ * Handles `pages/kategori/[handle].astro` serves from its own VIRTUAL map — a computed view over the
+ * store's products rather than a `collections` row. Excluded from `catalog.collections` (that list is
+ * the store's REAL categories) and typed against [handle].astro's map so the two cannot drift.
  *
- * They are excluded from `catalog.collections` because that list is "the store's real categories":
- * it drives the homepage grid (which shows a product COUNT via `byCollection`, i.e. a match on
- * `products.category` — a virtual handle never matches, so the tile would read "0 produk" next to a
- * page that renders products) and the nav fallback (which already links "Promo Gajian" itself, so a
- * store with the row would get it twice). `findCollection` is never consulted for them either —
- * VIRTUAL wins ahead of it in [handle].astro.
+ * ⚠️ `promo-gajian` and `produk-terlaris` were on this list and are NOT any more. They are real rows
+ * with real `collection_products` membership (8 and 10 products on the demo) — the only reason they
+ * looked virtual is that `byCollection` could not see membership at all, so they came back empty and
+ * the page invented a substitute. Now that membership is read they resolve like any other collection:
+ * the merchant's curation, not our filter.
  *
- * NOTE this is NOT the old allowlist by another name: it names PLATFORM routes, not one merchant's
- * catalogue. `[handle].astro` types its VIRTUAL map against it, so the two cannot drift.
+ * `semua` is the only one left, and it earns it: no store has such a row, and "everything you sell"
+ * is not a curation a merchant should have to maintain by hand.
  */
-export const VIRTUAL_COLLECTION_HANDLES = ["semua", "promo-gajian", "produk-terlaris"] as const;
+export const VIRTUAL_COLLECTION_HANDLES = ["semua"] as const;
 export type VirtualCollectionHandle = (typeof VIRTUAL_COLLECTION_HANDLES)[number];
 const isVirtualHandle = (h: string): boolean => (VIRTUAL_COLLECTION_HANDLES as readonly string[]).includes(h);
 
@@ -116,6 +116,35 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
   const storeId = store.id;
 
   const colRows = await db.select().from(schema.collections).where(eq(schema.collections.storeId, storeId));
+
+  // ── WHAT IS IN A COLLECTION — read from `collection_products`, never guessed ───────────────────
+  //
+  // `byCollection` used to be `products.filter(p => slugify(p.category) === handle)`: membership
+  // inferred by SLUGIFYING A PRODUCT'S CATEGORY TEXT and hoping it equalled the collection's handle.
+  // `collection_products` — the table the admin's Kategori editor writes, the merchant's actual
+  // curation — was not read at all.
+  //
+  // It only ever worked for the demo, whose category strings happen to slugify onto its handles, and
+  // it was wrong in the way that matters most: **"Promo Gajian" is a MANUAL collection**. The
+  // merchant hand-picked 8 products into it; the storefront rendered
+  // `PRODUCTS.filter(p => p.compareAt || p.bestseller)` — a guess, from a hardcoded VIRTUAL map. A
+  // merchant built a promo and the shop showed different goods.
+  //
+  // Keyed by product HANDLE (not id) because that is what `Product` carries. Intersecting with the
+  // loaded `products` — already filtered to active/non-archived — is what keeps a DRAFT product out:
+  // `promo-gajian` really does list `gamis-syari`, which is a draft.
+  const memberRows = await db
+    .select({ collectionHandle: schema.collections.handle, productHandle: schema.products.handle })
+    .from(schema.collectionProducts)
+    .innerJoin(schema.collections, eq(schema.collections.id, schema.collectionProducts.collectionId))
+    .innerJoin(schema.products, eq(schema.products.id, schema.collectionProducts.productId))
+    .where(eq(schema.collections.storeId, storeId));
+  const membersByHandle = new Map<string, Set<string>>();
+  for (const m of memberRows) {
+    const set = membersByHandle.get(m.collectionHandle) ?? new Set<string>();
+    set.add(m.productHandle);
+    membersByHandle.set(m.collectionHandle, set);
+  }
 
   // The store's OWN categories — derived from its rows, never from a constant.
   //
@@ -178,7 +207,18 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       schema.productMedia,
       and(eq(schema.productMedia.productId, schema.products.id), eq(schema.productMedia.position, 0)),
     )
-    .where(and(eq(schema.products.storeId, storeId), ne(schema.products.status, "archived")))
+    // `= 'active'`, not `!= 'archived'`. The enum is active | draft | archived, and excluding only the
+    // archived left DRAFTS on the shop: the demo publishes `gamis-syari` and `dress-batik` — 2 of its
+    // 14 products — in the grid, on the PDP, and into the cart.
+    //
+    // The teeth were already in place and pointed the other way: `/api/public/order` looks products up
+    // with `eq(status, "active")`, so a draft is NOT buyable. So the shopper could browse it, open it,
+    // add it, fill in their name, address, kecamatan and payment — and only then be told the product
+    // does not exist. The boundary was right; the shopfront was lying to it.
+    //
+    // Same rule the collections above now follow (`published`): the merchant's publication state
+    // decides what a shopper is allowed to see, not us.
+    .where(and(eq(schema.products.storeId, storeId), eq(schema.products.status, "active")))
     .orderBy(asc(schema.products.createdAt));
 
   // real variants: option types + a row per combo (price/stock), keyed by product id
@@ -348,7 +388,14 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
     },
     productReviews: (p) => reviewsByHandle[typeof p === "string" ? p : p.handle] ?? [],
     bestsellers: (list = products) => list.filter((p) => p.bestseller),
-    byCollection: (handle) => products.filter((p) => p.categoryHandle === handle),
+    // The merchant's own membership. A handle with no rows returns [] — NOT "everything whose
+    // category text happens to slugify to this", which is how a manual collection used to render
+    // somebody else's guess.
+    byCollection: (handle) => {
+      const members = membersByHandle.get(handle);
+      if (!members) return [];
+      return products.filter((p) => members.has(p.handle));
+    },
     findProduct: (handle) => products.find((p) => p.handle === handle),
     findCollection: (handle) => collections.find((c) => c.handle === handle),
   };

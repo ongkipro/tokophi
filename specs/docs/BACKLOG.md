@@ -9,17 +9,104 @@
 
 ---
 
+## 📱 UI/UX mobile & admin — DECIDED IN PRINCIPLE, PARKED (2026-07-16)
+
+> **Status: agreed, not started. Do not build without re-confirming — the last open decision is below.**
+> Discussed with the user 2026-07-16. Shipped groundwork is listed at the end; this section is the
+> plan for the part that is NOT built.
+
+**The framing that settled it.** "Responsive vs a separate mobile app" is a false choice — UI has three
+layers, and the real question is *which layer may differ*:
+
+| Layer | May it differ on mobile? |
+|---|---|
+| **Navigation / shell** (how you move, what a thumb can reach) | **YES — this is the only layer that should fork** |
+| **Screen layout** (table vs cards) | Responsive only — **already done**, see below |
+| **Content & logic** (data, rules, actions) | **NEVER** — this is where drift is born |
+
+**A separate mobile UI is rejected**, and this session produced the proof rather than the theory:
+`composePickupAddress` existed in two copies and the seller was shown one pickup address while the
+courier was handed another — *silently*. That was **one function**. Sixteen modules × two UIs is that
+failure mode, industrialised. Also rejected: gestures/swipe (fragile, undiscoverable, expensive) and a
+PWA/native shell — the latter only earns its cost if we want **push notifications for new orders**,
+which is a genuine argument, but a separate project.
+
+**Why the nav layer alone deserves the fork.** Navigation today is a hamburger at the **top-left** — the
+hardest point on a 6.5" screen for a thumb. Every move costs a stretch → a drawer → a scan of 16 items.
+Harmless on a desktop; a tax on every step on a phone.
+
+**The seller's actual mobile jobs** (confirmed by the user — *not* my assumption, and the whole design
+rests on it): **cek pesanan masuk · proses kirim · cek saldo · balas chat**. Explicitly **not** global
+setup — that stays desktop work. A menu to reach everything else must still exist. Note the first two
+are the *same screen* (Pesanan), so four jobs = three destinations.
+
+**Proposed shell (below `md` only; desktop untouched):**
+
+| Tab | Why it earns the most expensive space on the screen |
+|---|---|
+| **Beranda** | Antrian Kerja = "what do I have to do" — the real answer to "cek pesanan masuk" |
+| **Pesanan** | where processing + shipping happen. **Badge = new-order count** |
+| **Saldo** | money |
+| **Obrolan** | **Badge = unread** |
+| **Lainnya** | the other 16 menus — opens the **existing** `NavLinks` drawer the hamburger uses today |
+
+**The badges are the point, not the bar.** The #1 job is *"cek"*. If checking requires **opening** a
+screen, the design failed. Badges answer it without opening anything. Beranda and Pesanan only look
+redundant: **Beranda = check, Pesanan = do.**
+
+Cheap and reversible on purpose: "Lainnya" re-opens the drawer that already exists, so this is a
+**relocation, not a rebuild** — zero new screens, zero new logic. The hamburger simply retires below `md`.
+
+**Two traps to handle up front (verify with a screenshot, never assume):**
+1. **The bar covers content** — a "Simpan" button or the last table row buried under it. Content needs
+   bottom padding equal to the bar height.
+2. **iPhone safe area** — without `env(safe-area-inset-bottom)` the bar collides with the home
+   indicator. This is exactly what makes a web app feel *not* like an app.
+
+**⚠️ OPEN DECISION — answer before building:** does **Beranda** stay a tab, or does a phone land
+straight on **Pesanan** after login (freeing the slot for e.g. Produk)? Not decided.
+
+**⚠️ OPEN SYSTEM QUESTION (raised, not decided):** the Pesanan mobile card intentionally **drops the
+`…` dropdown** (Lihat detail / Batalkan) — the whole card is a tap target to the detail page, where the
+full actions live. Consequence: **on a phone a seller cannot cancel an order from the list**; desktop
+still can. That is a product decision, not CSS. Options: (a) leave it — cancel is destructive and the
+detour reduces mis-taps on a small screen (my preference); (b) restore the dropdown for full parity.
+
+**Already shipped (the responsive layer — reusable, adopt as you go):**
+- `components/admin/tab-strip.tsx` — `TabStrip`, used by the 4 counted strips (Pesanan/Saldo/Blog/Diskon).
+- `components/admin/responsive-table.tsx` — `ResponsiveTable` + `DataCard` + `DataRow`. Real `<Table>`
+  from `md` up, cards below. Adopted by **Pesanan** + **Produk** (deliberately different shapes — Produk
+  forced the `lead` checkbox slot and an unstyled `title`, which is how you learn a component is reusable
+  rather than merely fitted to its first screen). It does **not** auto-convert a table: a good card has a
+  hierarchy a table lacks, and only the screen knows which column leads.
+- `scripts/audit-responsive.mjs` — `npm run audit:responsive -w @tokophi/admin`. 21 routes × 11 real
+  device widths, fails on horizontal overflow. Currently **264/264 clean**; keep it that way.
+- ⚠️ **What the audit cannot see:** it proved "nothing scrolls sideways" while Pesanan's tabs were
+  rendering *on top of* the toolbar and Produk's price column was off-screen. **Passing it is not the
+  same as being usable — look at the screens.**
+
+**Not yet adopted:** the tables on Inventori / Pembelian / Pelanggan / CRM / Ulasan etc. Mechanical work;
+the component is proven on two different shapes.
+
+---
+
 ## 🧾 Deferred from the 2026-07-16 checkout/storefront polish
 
 Parked deliberately while the checkout page was finished. Each is real, each was measured, and none is
 a guess — the evidence is in `CHANGELOG.md` under the same date.
 
-- **[ ] `byCollection` matches `slugify(products.category)`, not `collection_products`.** So a
-  merchant's **manual collection membership is invisible to the storefront**, and any collection whose
-  handle doesn't equal a product's slugified category text renders empty. It only works for
-  batik-nusantara because its category strings happen to slugify onto its handles. This is the last —
-  and biggest — instance of the family we spent 2026-07-16 killing (demo-shaped assumptions baked into
-  platform code). `apps/storefront/src/data/catalog.ts`.
+- **[x] `byCollection` reads `collection_products`** (2026-07-16). It inferred membership by
+  slugifying a product's category TEXT and hoping it matched the handle; the table the Kategori editor
+  writes was never read. Worst case found: **"Promo Gajian" is a MANUAL collection** — the merchant
+  hand-picked 8 products and the shop rendered `filter(p => p.compareAt || p.bestseller)` instead, a
+  guess overriding their curation on a page advertising a promo. Now 7 render (the 8 minus a draft),
+  matching the DB exactly. `promo-gajian`/`produk-terlaris` left `VIRTUAL_COLLECTION_HANDLES` — they
+  are real rows and only looked virtual because membership was invisible; `semua` alone remains.
+- **[x] Draft products were on the shop** (2026-07-16, found while fixing the above). The catalog
+  filtered `!= 'archived'`, and the enum is active|draft|archived — so 2 of the demo's 14 products were
+  browsable, openable and cart-able while `/api/public/order` (correctly `= 'active'`) would reject
+  them at the end. The shopper filled in name, address, kecamatan and payment to be told the product
+  does not exist. `semua` 14 → 12.
 - **[ ] `rate.cod` enforcement is committed but NOT exercised end-to-end.** `/api/public/order` now
   rejects a COD order whose live per-destination rate came back `cod:false`. Reviewed and typechecked
   only: proving it needs a KiriminAja quote for a district in an allow-listed province where SPX

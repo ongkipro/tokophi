@@ -27,16 +27,11 @@ const VIRTUAL: Record<VirtualCollectionHandle, ResolvedCollection & { products: 
     blurb: `Semua koleksi ${store.name}`,
     products: PRODUCTS,
   },
-  "promo-gajian": {
-    name: "Promo Gajian",
-    blurb: "Diskon spesial periode gajian",
-    products: PRODUCTS.filter((p) => p.compareAt || p.bestseller),
-  },
-  "produk-terlaris": {
-    name: "Produk Terlaris",
-    blurb: `Paling banyak dibeli di ${store.name}`,
-    products: catalog.bestsellers(),
-  },
+  // `promo-gajian` and `produk-terlaris` USED TO BE HERE, and that was the bug. Both are real
+  // collections with real membership — "Promo Gajian" is a MANUAL one, 8 products the merchant
+  // hand-picked in the Kategori editor. This file rendered `filter(p => p.compareAt || p.bestseller)`
+  // instead: a guess, overriding the merchant's own curation, on a page advertising a promo. They now
+  // resolve from the DB like every other collection (see byCollection in data/catalog.ts).
 };
 
 let collection: ResolvedCollection;

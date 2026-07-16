@@ -54,11 +54,10 @@ function fallbackNav(collections: NavCollection[]): NavItem[] {
       children: collections.map((c) => ({ label: c.name, href: `/kategori/${c.handle}` })),
     });
   }
-  items.push(
-    { label: "Promo Gajian", href: "/kategori/promo-gajian" },
-    { label: "Blog", href: "/blog" },
-    { label: "Kontak", href: "/kontak" },
-  );
+  // NO hardcoded "Promo Gajian" any more: it is a REAL collection (a manual one), so it now arrives
+  // through `collections` above like any other — hardcoding it too listed it twice for the demo, and
+  // for a store that has no such collection it was a link to an empty room.
+  items.push({ label: "Blog", href: "/blog" }, { label: "Kontak", href: "/kontak" });
   return items;
 }
 
