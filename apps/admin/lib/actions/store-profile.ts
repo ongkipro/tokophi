@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 import { withCurrentTenant } from "@/lib/tenant";
+import { saveImage, deleteImageFile, MAX_BYTES } from "@/lib/image-store";
 
 // Store profile — the fields that actually have a column and reach the shopper's storefront:
 // name, tagline (the storefront's meta description + footer line), whatsapp (the CS button).
@@ -17,15 +18,39 @@ import { withCurrentTenant } from "@/lib/tenant";
 // WhatsApp button on its storefront (apps/storefront/src/data/store.ts) rather than a dead one. So
 // clearing the field is a valid action, not an error — the button simply goes away.
 
-export type StoreProfile = { name: string; tagline: string; whatsapp: string };
+export type StoreProfile = {
+  name: string;
+  tagline: string;
+  whatsapp: string;
+  logoUrl: string | null;
+  faviconUrl: string | null;
+};
 
 export async function getStoreProfile(): Promise<StoreProfile> {
-  return withCurrentTenant(async (db) => {
+  return withCurrentTenant(async (db, storeId) => {
     const [row] = await db
-      .select({ name: schema.stores.name, tagline: schema.stores.tagline, whatsapp: schema.stores.whatsapp })
+      .select({
+        name: schema.stores.name,
+        tagline: schema.stores.tagline,
+        whatsapp: schema.stores.whatsapp,
+        logoUrl: schema.stores.logoUrl,
+        faviconUrl: schema.stores.faviconUrl,
+      })
       .from(schema.stores)
+      // Explicit, because RLS does NOT police `stores` (no store_id column, relrowsecurity = false).
+      // Without this, `limit(1)` returned an arbitrary row — this form showed a STRANGER's shop name,
+      // tagline and WhatsApp, and `saveStoreProfile` (which correctly writes `where id = storeId`)
+      // would have written them onto this store the moment "Simpan Perubahan" was pressed. See
+      // lib/tenant.ts.
+      .where(eq(schema.stores.id, storeId))
       .limit(1);
-    return { name: row?.name ?? "", tagline: row?.tagline ?? "", whatsapp: row?.whatsapp ?? "" };
+    return {
+      name: row?.name ?? "",
+      tagline: row?.tagline ?? "",
+      whatsapp: row?.whatsapp ?? "",
+      logoUrl: row?.logoUrl ?? null,
+      faviconUrl: row?.faviconUrl ?? null,
+    };
   });
 }
 
@@ -43,6 +68,8 @@ function normalizeWa(input: string): string | null {
 }
 
 type Result = { ok: true } | { ok: false; error: string };
+/** Upload returns the stored url — the server renames + re-encodes, so only it knows the final name. */
+type BrandingResult = { ok: true; url: string } | { ok: false; error: string };
 
 export async function saveStoreProfile(input: { name: string; tagline: string; whatsapp: string }): Promise<Result> {
   const { storeId } = await requireCapability("settings:write");
@@ -65,4 +92,98 @@ export async function saveStoreProfile(input: { name: string; tagline: string; w
     revalidatePath("/pengaturan");
     return { ok: true };
   });
+}
+
+// ── Branding: logo + favicon ──────────────────────────────────────────────────
+//
+// `stores.logo_url` was a column with READERS and NO WRITER: the storefront has always rendered the
+// merchant's logo (Header.astro), fed it to the OG image (Layout.astro) and pulled it into checkout
+// branding — while nothing, anywhere, could set it. Every shop fell back to a wordmark forever and no
+// screen admitted a logo was even possible. `favicon_url` did not exist at all (0057), so every
+// merchant's storefront served the PLATFORM's icon: a shop on its own domain wearing someone else's
+// favicon reads as "this isn't really my site", which is precisely what a white-label builder is
+// bought to avoid.
+//
+// Both are `settings:write` — only the Owner. Branding is store identity, not day-to-day content, and
+// it lands on every page a shopper sees.
+//
+// The revalidate list is the whole point of the feature: the logo is chrome, so it appears on screens
+// that never mention it. Revalidating only /pengaturan would save the file and leave the old logo on
+// the topbar until something else happened to re-render.
+
+const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
+// No SVG for the favicon: browsers' support is uneven and a broken tab icon is worse than a default
+// one. PNG/WebP only — and it is rendered small, so this is not a real constraint on the merchant.
+const FAVICON_TYPES = ["image/png", "image/x-icon", "image/vnd.microsoft.icon", "image/webp"];
+
+async function setBranding(
+  formData: FormData,
+  field: "logoUrl" | "faviconUrl",
+  allowed: string[],
+  label: string,
+): Promise<BrandingResult> {
+  const { storeId } = await requireCapability("settings:write");
+  const file = formData.get("file");
+  // The boundary, not the form. `accept=` on an <input> is UX — a hand-rolled POST ignores it.
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: `Pilih berkas ${label} dulu.` };
+  if (!allowed.includes(file.type)) return { ok: false, error: `Format ${label} harus ${label === "favicon" ? "PNG, ICO, atau WebP" : "PNG, JPG, WebP, atau SVG"}.` };
+  if (file.size > MAX_BYTES) return { ok: false, error: `Ukuran ${label} maksimal 2 MB.` };
+
+  let saved;
+  try {
+    saved = await saveImage(Buffer.from(await file.arrayBuffer()), file.type, `${field === "logoUrl" ? "logo" : "favicon"}-${storeId}-${Date.now()}`);
+  } catch {
+    // sharp throws on a file that merely CLAIMS to be an image. Report it as the merchant's problem
+    // to fix, never as a crash — and never write the DB row for a file we failed to encode.
+    return { ok: false, error: `Berkas ${label} tidak bisa dibaca. Coba PNG atau JPG.` };
+  }
+
+  return withTenant(storeId, async (db) => {
+    const [prev] = await db
+      .select({ logoUrl: schema.stores.logoUrl, faviconUrl: schema.stores.faviconUrl })
+      .from(schema.stores)
+      .where(eq(schema.stores.id, storeId))
+      .limit(1);
+    await db.update(schema.stores).set({ [field]: saved.url }).where(eq(schema.stores.id, storeId));
+    // Bin the file the row USED to point at — only after the new one is safely committed. Uploading a
+    // logo ten times must not leave ten orphans on disk forever.
+    await deleteImageFile(prev?.[field] ?? null);
+    for (const p of ["/pengaturan", "/", "/akun/profil"]) revalidatePath(p);
+    // Hand back the url the SERVER chose: it renames the file and re-encodes to WebP, so the client
+    // cannot derive it and must not guess.
+    return { ok: true, url: saved.url };
+  });
+}
+
+export async function saveStoreLogo(formData: FormData): Promise<BrandingResult> {
+  return setBranding(formData, "logoUrl", LOGO_TYPES, "logo");
+}
+
+export async function saveStoreFavicon(formData: FormData): Promise<BrandingResult> {
+  return setBranding(formData, "faviconUrl", FAVICON_TYPES, "favicon");
+}
+
+/** Clearing is a real action, not an error: NULL means "not set" and the storefront falls back to the
+ *  wordmark / platform icon — never to a broken image. Same rule as whatsapp/tagline (0049). */
+async function clearBranding(field: "logoUrl" | "faviconUrl"): Promise<Result> {
+  const { storeId } = await requireCapability("settings:write");
+  return withTenant(storeId, async (db) => {
+    const [prev] = await db
+      .select({ logoUrl: schema.stores.logoUrl, faviconUrl: schema.stores.faviconUrl })
+      .from(schema.stores)
+      .where(eq(schema.stores.id, storeId))
+      .limit(1);
+    await db.update(schema.stores).set({ [field]: null }).where(eq(schema.stores.id, storeId));
+    await deleteImageFile(prev?.[field] ?? null);
+    for (const p of ["/pengaturan", "/", "/akun/profil"]) revalidatePath(p);
+    return { ok: true };
+  });
+}
+
+export async function removeStoreLogo(): Promise<Result> {
+  return clearBranding("logoUrl");
+}
+
+export async function removeStoreFavicon(): Promise<Result> {
+  return clearBranding("faviconUrl");
 }

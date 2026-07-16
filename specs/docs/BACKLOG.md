@@ -97,6 +97,30 @@ The menu deliberately points at **four different pages, not four tabs onto `/sal
 - If you want these pages to *demo* well, fix the **seed** — not the page. A finance screen that
   invents a figure is worse than one that doesn't exist, because the merchant will believe it.
 
+### 🔴 RLS has a blind spot: `stores` — and `verify-rls` cannot see it (2026-07-17)
+
+**FIXED, but the CLASS is still open — read before writing any query against `stores`.**
+
+RLS scopes the 36 tables that have a `store_id` column. **`stores` is keyed by `id`, has no
+`store_id`, and `relrowsecurity = false`.** `verify-rls` derives the store-scoped set from the catalog
+*by looking for a `store_id` column* — so **the one table that identifies the tenant is invisible to
+the guard meant to protect tenants.**
+
+Two shipped functions trusted RLS to scope it and silently leaked across tenants (`getStoreProfile`,
+`getBilling` — both `.from(schema.stores).limit(1)` with no WHERE, returning an arbitrary row).
+`withCurrentTenant` now hands the callback its `storeId`, and both filter explicitly.
+
+- [ ] **Make the guard able to see this.** `verify-rls` should treat `stores` (and any other table
+      without a `store_id` that admin code reads) as a **known exception it asserts on**, not a table
+      it never heard of. Today a third instance of this bug would ship green.
+- [ ] **Grep for the pattern, not the symptom:** `.from(schema.stores)` with no `.where` inside
+      `withCurrentTenant`/`withTenant`. Audited 2026-07-17 — the other 12 call sites all filter
+      correctly (`billing.ts:79`, `profile.ts:18`, `theme.ts:144`, `shipping.ts:94`, `store.ts:10/18`,
+      `provision.ts:47`, ongkir/order/pay-callback by slug or id, cron/billing intentionally all-store).
+- [ ] **Consider `stores.id`-based RLS** so the database enforces this rather than 12 authors
+      remembering. Needs the GUC to be readable as the row key — cheap to try, and it would turn a
+      class of leak into a policy.
+
 ### 🎨 Tema / Puck — one fixed, one real-but-dormant (2026-07-17)
 
 **FIXED — full-bleed matched by PREFIX, so `/tema` ate itself.** `admin-chrome.tsx` had

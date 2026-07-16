@@ -106,6 +106,8 @@ export const stores = pgTable("stores", {
   // Branding read-only by the storefront/checkout (ADR 0009 — checkout is locked/uniform,
   // only pulls these tokens; NOT part of the drag-drop Store Builder).
   logoUrl: text(),
+  // Tab icon for the merchant's OWN storefront (0057). Null = fall back to the platform icon.
+  faviconUrl: text(),
   // Brand hex (e.g. "#a85572") the merchant picks in the Store Builder's colour panel; the
   // storefront derives a full 11-shade scale from it (@tokophi/lib/colors). Null = fall back
   // to the default brand hex baked into apps/storefront/src/styles/global.css.

@@ -7,7 +7,7 @@ import { getSession } from "@/lib/auth";
 
 // Current store's subscription state (trial/active/past_due/suspended + countdown + next amount).
 export async function getBilling(): Promise<BillingState | null> {
-  return withCurrentTenant(async (db: Tx) => {
+  return withCurrentTenant(async (db: Tx, storeId) => {
     const [s] = await db
       .select({
         trialEndsAt: schema.stores.trialEndsAt,
@@ -16,6 +16,11 @@ export async function getBilling(): Promise<BillingState | null> {
         comped: schema.stores.comped,
       })
       .from(schema.stores)
+      // Explicit, because RLS does NOT police `stores` (no store_id column, relrowsecurity = false).
+      // Without this, `limit(1)` returned an arbitrary row: Batik Nusantara's owner was shown Kopi
+      // Senja's subscription countdown (11 hari instead of 18), and the past_due/suspended banner
+      // would have fired on a stranger's account. See lib/tenant.ts.
+      .where(eq(schema.stores.id, storeId))
       .limit(1);
     return s ? computeBilling(s) : null;
   });

@@ -22,6 +22,8 @@ export type StoreInfo = {
   whatsapp: string | null;
   city: string;
   logoUrl: string | null;
+  /** `null` = merchant set no favicon → fall back to the platform icon rather than a broken one. */
+  faviconUrl: string | null;
   brandColor: string | null;
   /**
    * The store's PRIMARY custom host, or null. When set, the storefront's canonical/og:url/sitemap use
@@ -111,6 +113,7 @@ const toStoreInfo = (r: typeof schema.stores.$inferSelect): StoreInfo => ({
   whatsapp: r.whatsapp,
   city: r.city ?? "",
   logoUrl: r.logoUrl,
+  faviconUrl: r.faviconUrl,
   brandColor: r.brandColor,
   primaryHost: null, // filled by the caller (getStoreBySlug) — a per-store store_domains lookup
 });

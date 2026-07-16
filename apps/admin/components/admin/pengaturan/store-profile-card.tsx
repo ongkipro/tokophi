@@ -7,7 +7,15 @@ import { Button } from "@tokophi/ui/button";
 import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
 import { useCan } from "@/components/admin/permissions";
-import { getStoreProfile, saveStoreProfile } from "@/lib/actions/store-profile";
+import {
+  getStoreProfile,
+  saveStoreProfile,
+  saveStoreLogo,
+  removeStoreLogo,
+  saveStoreFavicon,
+  removeStoreFavicon,
+} from "@/lib/actions/store-profile";
+import { BrandingUpload } from "@/components/admin/pengaturan/branding-upload";
 
 // Pengaturan → Profil. Only the fields that have a real column AND reach the shopper live here: name,
 // tagline (the storefront meta description + footer line), and the CS WhatsApp number.
@@ -25,6 +33,8 @@ export function StoreProfileCard() {
   const [name, setName] = React.useState("");
   const [tagline, setTagline] = React.useState("");
   const [whatsapp, setWhatsapp] = React.useState("");
+  const [logoUrl, setLogoUrl] = React.useState<string | null>(null);
+  const [faviconUrl, setFaviconUrl] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let alive = true;
@@ -34,6 +44,8 @@ export function StoreProfileCard() {
         setName(p.name);
         setTagline(p.tagline);
         setWhatsapp(p.whatsapp);
+        setLogoUrl(p.logoUrl);
+        setFaviconUrl(p.faviconUrl);
         setLoading(false);
       },
       () => alive && setLoading(false),
@@ -57,7 +69,7 @@ export function StoreProfileCard() {
         <CardTitle className="flex items-center gap-2">
           <Store className="h-5 w-5" /> Profil Toko
         </CardTitle>
-        <CardDescription>Nama, deskripsi singkat, dan nomor WhatsApp — tampil di storefront kamu.</CardDescription>
+        <CardDescription>Logo, nama, deskripsi singkat, dan nomor WhatsApp — tampil di storefront kamu.</CardDescription>
       </CardHeader>
 
       <CardContent className="grid gap-5">
@@ -67,6 +79,48 @@ export function StoreProfileCard() {
           </div>
         ) : (
           <>
+            {/* Branding first: it is the thing a merchant recognises as "my shop", and it lands on
+                every page a shopper sees. `logo_url` had readers in the storefront and no writer
+                anywhere — this form is that missing writer. */}
+            <BrandingUpload
+              label="Logo toko"
+              hint="Tampil di header storefront & checkout. PNG, JPG, WebP, atau SVG — maks. 2 MB. Kosong → nama toko dipakai sebagai wordmark."
+              value={logoUrl}
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              disabled={!canWrite}
+              onUpload={saveStoreLogo}
+              onRemove={removeStoreLogo}
+              onChanged={setLogoUrl}
+              preview={(url) => (
+                // object-contain, never cover: a logo cropped to fill a box is a mangled logo.
+                <div className="grid h-16 w-28 shrink-0 place-items-center rounded-lg border bg-muted/30 p-2">
+                  <img src={url} alt="Logo toko" className="max-h-full max-w-full object-contain" />
+                </div>
+              )}
+            />
+
+            <BrandingUpload
+              label="Favicon"
+              hint="Ikon kecil di tab browser storefront. PNG, ICO, atau WebP — persegi, idealnya 512×512. Kosong → ikon bawaan TokoΦ yang dipakai."
+              value={faviconUrl}
+              accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/webp"
+              disabled={!canWrite}
+              onUpload={saveStoreFavicon}
+              onRemove={removeStoreFavicon}
+              onChanged={setFaviconUrl}
+              preview={(url) => (
+                // Shown at the size it actually ships at (16px) inside a mock tab: a mark that reads
+                // fine at 200px can be an unrecognisable smudge at 16, and the merchant should find
+                // that out here rather than from a shopper.
+                <div className="flex h-16 shrink-0 items-end">
+                  <div className="flex items-center gap-1.5 rounded-t-md border border-b-0 bg-muted/50 px-2.5 py-1.5">
+                    <img src={url} alt="Favicon" className="size-4 rounded-[2px] object-contain" />
+                    <span className="max-w-24 truncate text-xs text-muted-foreground">{name || "Toko"}</span>
+                  </div>
+                </div>
+              )}
+            />
+
             <div className="grid gap-1.5">
               <Label htmlFor="sp-name">Nama toko</Label>
               <Input id="sp-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} disabled={!canWrite} />

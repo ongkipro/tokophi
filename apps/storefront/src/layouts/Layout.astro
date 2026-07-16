@@ -4,6 +4,7 @@ import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import Analytics from "../components/Analytics.astro";
 import Chat from "../components/Chat.astro";
+import { mediaUrl } from "../data/catalog";
 
 interface Props {
   title: string;
@@ -42,6 +43,11 @@ const desc = clamp(description ?? "");
 // leaving it in would splinter one page's ranking signals across dozens of URL variants.
 const canonical = new URL(Astro.url.pathname, origin).href;
 
+// The merchant's favicon (stores.favicon_url, set in Pengaturan → Profil Toko). mediaUrl() rewrites
+// an admin `/api/uploads/…` path to wherever uploads are actually served from — the same treatment
+// the logo already gets in Header.astro. null → the platform icon.
+const favicon = store.faviconUrl ? mediaUrl(store.faviconUrl) : null;
+
 // og:image MUST be absolute — crawlers do not resolve a relative one. Product images are either
 // site-relative (/products/x.webp) or already absolute (mediaUrl() rewrites admin uploads).
 const ogImage = (() => {
@@ -60,7 +66,13 @@ const ogImage = (() => {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    {/* The merchant's own tab icon when they set one (Pengaturan → Profil Toko), else the platform's.
+        A shop on its own domain wearing TokoΦ's favicon reads as "this isn't really my site" — the
+        exact impression a white-label builder is bought to avoid. No `type=`: the upload may be PNG,
+        ICO or WebP, and asserting the wrong one is worse than letting the browser sniff it. */}
+    {favicon
+      ? <link rel="icon" href={favicon} />
+      : <link rel="icon" type="image/svg+xml" href="/favicon.svg" />}
     <title>{fullTitle}</title>
     <meta name="description" content={desc} />
     <link rel="canonical" href={canonical} />

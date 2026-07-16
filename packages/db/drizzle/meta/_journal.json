@@ -400,6 +400,13 @@
       "when": 1784188221361,
       "tag": "0056_repair_ledger_note_number",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1784188221362,
+      "tag": "0057_store_favicon",
+      "breakpoints": true
     }
   ]
 }
