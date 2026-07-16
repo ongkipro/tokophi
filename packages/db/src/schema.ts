@@ -490,6 +490,12 @@ export const orders = pgTable("orders", {
   // platform_couriers.services[].type, which is what carries `group` (1 day / reguler / ekonomi /
   // cargo). Rows created before 0053 were backfilled with DUMMY values — see that migration.
   serviceType: text(),
+  // When the seller printed this order's label. NULL = never printed — the honest default, and the
+  // anchor for the marketplace-style "sudah/belum dicetak" filter (Pengiriman Massal). A timestamp,
+  // not a boolean: "when" answers reprints and cut-off questions that "whether" cannot.
+  // ⚠️ It records that WE RENDERED the label, not that a printer consumed paper — we cannot observe
+  // the printer. Say "ditandai dicetak", never "berhasil dicetak" (cf. the CRM's "WA dibuka").
+  labelPrintedAt: ts(),
   kaOrderId: text(),
   placedAt: createdAt(),
 });

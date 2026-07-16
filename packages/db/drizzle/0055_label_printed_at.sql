@@ -1,0 +1,17 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 0055 — when the seller printed the label.
+--
+-- There was no print state anywhere in the schema: a grep for it found only comments ABOUT printing.
+-- So "sudah dicetak / belum dicetak" — the filter every marketplace seller works from, and the one
+-- Pengiriman Massal is built around — had nothing to stand on and would have been invented.
+--
+-- Nullable on purpose: NULL means "never printed", which is the honest default for the 73 existing
+-- orders. It is a timestamp, not a boolean, because "when" answers questions "whether" cannot —
+-- reprints, disputes, and "did this go out before the cut-off?".
+--
+-- It records that WE rendered the label, not that a printer consumed paper. We cannot observe the
+-- printer, and pretending otherwise would be the same class of lie as "WA terkirim" (which is why
+-- the CRM says "WA dibuka" instead — AGENTS.md). The UI must say "ditandai dicetak", never
+-- "berhasil dicetak".
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE orders ADD COLUMN label_printed_at timestamptz;

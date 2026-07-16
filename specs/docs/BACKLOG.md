@@ -34,14 +34,34 @@ The seller's UI flow works too: **Cek Ongkir → pick → Buat** produced 2 book
 - 14 production orders still claim `status='dikirim'` **with no AWB and no courier**. Demo seed, but the demo lies about shipping.
 - ⚠️ **`KIRIMINAJA_ENV=sandbox` in production.** The user's call is to treat sandbox as real while building (the API is identical; going live is one env flip). **The one thing that must not be forgotten at launch:** a sandbox AWB is *not* a real waybill, so a seller would print a fake resi and stick it on a real parcel. Flip `KIRIMINAJA_ENV=production` before any real seller ships.
 
-### ▶ NEXT — the task list for this workflow (nothing below is built)
+### ✅ BUILT 2026-07-16 — Pengiriman Massal (`/pesanan/massal`)
+
+**How it works** (three verbs, in the order physics forces — see the honesty note below):
+1. **Generate resi** → `bulkGenerateResi` re-quotes each order and books it with the service **the shopper paid for** (`orders.courier` + `service_type`, both now recorded). No rate picker: the order already knows. A service no longer quoted is **rejected**, never silently swapped — re-couriering someone's parcel behind their back is the same lie as re-pricing it.
+2. **Ambil resi** → `bulkFetchResi` polls KiriminAja; `trackShipment` persists the waybill when the courier issues it.
+3. **Cetak resi** → `POST /api/admin/labels` → `getBulkLabels` renders **one document of 100×150mm thermal labels** (`buildLabelHtml` per order, each with its own `@page`) → one print dialog → `markLabelsPrinted` stamps `label_printed_at`.
+
+**Filters (all live, verified against real data):** service group **1 Hari / Reguler / Ekonomi / Cargo / Next Day** (via `platform_couriers.services[].group` ⋈ `orders.service_type` — impossible before 0053), **jasa kirim**, **status cetak** (sudah/belum, via 0055), **isi** (bijian = 1 item / bundling = >1).
+
+**Nav:** the old **"Perlu Dikirim"** sub-item was **removed** — it was a saved link to `?tab=perlu_dikirim`, the same view the list already has a tab for and the parent row now points at (it is what the badge counts). Three doors onto one room. **Pengiriman Massal** takes its place.
+
+**Deliberate choices, so nobody "fixes" them back:**
+- **Sequential, not parallel** — each item is a live call that books a REAL pickup. 50 at once risks rate-limiting mid-run and an unknowable half-state, and a duplicate pickup is not a retry, it is a second parcel.
+- **Partial failure is reported per order**, never summarised into "berhasil". 8 booked / 2 failed must read as exactly that — the seller has to know *which* two.
+- **Orchestration only** — it calls `createShipment`/`trackShipment`, it does not re-implement them. A second copy of the booking logic is how the seller's list and the courier's parcel end up disagreeing (exactly what `composePickupAddress` did when it existed twice).
+- **"Ditandai dicetak", never "berhasil dicetak"** — we render the label; we cannot observe the printer. Same rule as the CRM's "WA dibuka".
+- `getBulkShipping` uses **LEFT JOINs**: an order whose courier no longer resolves must still be LISTED. Dropping it silently from the packing queue is how a parcel goes unsent.
+
+### ▶ STILL TO PERFECT — tasks for this workflow
 
 1. **[ ] Tracking poller + `orders.awb` fill.** The booking succeeds with `awb: null`; something must fetch the waybill when the courier issues it. `kaTrack` / `trackShipment` already exist — no new API. This is the **prerequisite for everything else**: no AWB → no label → no bulk print.
 2. **[ ] Status follows the courier (decision 3).** `createShipment` still hardcodes `status: "dikirim"` on booking — the timeline claims "in transit" while the parcel is on the seller's shelf. Should be `diproses` on booking, `dikirim` when the courier accepts (the same moment the AWB appears). ⚠️ Touches the order state machine and the existing manual path.
 3. **[ ] Auto-book on "Proses pesanan" (decisions 1 + 5).** One button: confirm → book the service the shopper paid for (`courier`+`service_type`, both now recorded) → honest result (resi, or "dibooking, resi menyusul"). Old orders backfilled by 0053 can auto-book too.
 4. **[ ] `orders.label_printed_at` + printed/not-printed filter.** Does not exist. Needed for the marketplace-style status and for Pengiriman Massal's filter. Cancelling must stay possible after printing.
 5. **[ ] Courier change by the seller** — except COD (SPX-locked). Seller pays the difference; do **not** rewrite the buyer's `shipping_idr`.
-6. **[ ] Pengiriman Massal / bulk label print.** Last, not first: it has nothing to print until (1) lands. The `1 day / reguler / ekonomi / cargo` filter is now buildable via `platform_couriers.services[].group` ⋈ `orders.service_type`.
+6. **[~] Pengiriman Massal — BUILT, not yet exercised.** The page, filters, bulk book/fetch/print and the thermal document all work and render (verified at 1400px, 0 page errors, filters showing real counts). **But not one label has been printed yet**, because production has **0 AWBs** — so `Cetak resi` has had nothing to print. Until (1) lands and a waybill actually arrives, this is proven to *compile and render*, not proven to *ship a parcel*. Do not call it done.
+7. **[ ] Exercise the bulk path end-to-end**: select 2 orders → Generate resi → Ambil resi until a waybill lands → Cetak → confirm the thermal document is 100×150mm per label and `label_printed_at` stamps. This is the only thing that turns (6) from "renders" into "works".
+8. **[ ] Print-run honesty**: `getBulkLabels` returns `skipped[]` (orders with no printable AWB) and the API passes it through, but the UI currently ignores it. An order silently missing from a print run is a parcel that silently does not ship — surface it.
 
 **Decisions (user, 2026-07-16):**
 1. **"Proses pesanan" auto-books.** One button: confirm → book the service the **shopper already paid for** → show the resi. No asking the seller which service — the order knows.

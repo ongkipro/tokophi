@@ -26,7 +26,10 @@ export const NAV_GROUPS: NavGroup[] = [
           label: "Pesanan", href: "/pesanan?tab=perlu_dikirim", icon: ShoppingBag, badgeKey: "perluDikirim",
         children: [
           { label: "Pesanan Saya", href: "/pesanan" },
-          { label: "Perlu Dikirim", href: "/pesanan?tab=perlu_dikirim" },
+          // "Perlu Dikirim" used to sit here as a saved link to ?tab=perlu_dikirim. It was removed:
+          // the LIST already has that tab, and the parent row above now points at it too (it is what
+          // the badge counts), so the sub-item was the same view offered three times.
+          { label: "Pengiriman Massal", href: "/pesanan/massal" },
           { label: "Pengembalian/Pembatalan", href: "/pesanan?tab=pengembalian" },
         ],
       },

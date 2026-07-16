@@ -199,6 +199,21 @@ The final split (decided with the user): **platform stays on `tokophi.com`** (la
 
 The Domain card now leads with the **system domain** `<slug>.tokophi.id` — shown read-only with a lock ("Aktif otomatis · diatur sistem, tidak bisa diubah") and a Kunjungi link — because that address is derived from the store slug and a merchant must never be able to change or detach it. Below it, the **custom-domain** flow got a Shopify-style numbered tutorial (add → publish CNAME+TXT → verify → make primary), plus the apex/`www` + "email unaffected" notes. **Security hardening in `lib/actions/domain.ts`:** `addDomain` now refuses **every platform-owned zone** — `tokophi.id`/`tokophi.com`/`tokophi.cc` and any host under them (`PLATFORM_ZONES`, one place) — so a merchant can't squat `app.tokophi.com`, the `cname.tokophi.cc` fallback, or another store's `<slug>.tokophi.id`; and a **per-store cap** (`MAX_DOMAINS_PER_STORE=5`) guards the `UNIQUE(host)` space and the poller. (Ownership was already proven by a real TXT check, writes already gated by RBAC + RLS, and `store_domains.host` is DB-UNIQUE across the platform.)
 
+### 📦 Pengiriman Massal — bulk book, fetch the resi, print thermal labels (and "Perlu Dikirim" retires)
+
+`/pesanan/massal`. Three verbs, in the order physics forces:
+1. **Generate resi** — books each order with the service **the shopper paid for** (`orders.courier` + `service_type`). No rate picker: the order already knows, and asking the seller to re-choose is asking them to guess on someone else's money. A service no longer quoted is **rejected**, never silently swapped.
+2. **Ambil resi** — polls KiriminAja; `trackShipment` persists the waybill once a courier issues it.
+3. **Cetak resi** — one document of **100×150mm thermal labels** (`buildLabelHtml` per order, each carrying its own `@page`), one print dialog, then `label_printed_at` is stamped (migration **`0055`** — no print state existed anywhere before).
+
+**Filters, all live against real data:** service group **1 Hari / Reguler / Ekonomi / Cargo / Next Day** (via `platform_couriers.services[].group` ⋈ `orders.service_type` — impossible before `0053`), **jasa kirim**, **status cetak**, and **isi** (bijian = 1 item / bundling = >1).
+
+**Nav:** the **"Perlu Dikirim"** sub-item is **gone**. It was a saved link to `?tab=perlu_dikirim` — the same view the list already has a tab for, and the same one the parent row now points at (it is what the badge counts). Three doors onto one room; Pengiriman Massal takes the slot.
+
+Deliberate, so nobody "fixes" them back: **sequential, not parallel** (each item books a REAL pickup — 50 at once risks rate-limiting mid-run, and a duplicate pickup is not a retry, it is a second parcel); **partial failure reported per order**, never summarised into "berhasil" (8 booked / 2 failed must say *which* two); **orchestration only** — it calls `createShipment`/`trackShipment` rather than re-implementing them, because a second copy of booking logic is how the seller's list and the courier's parcel end up disagreeing; **"ditandai dicetak", never "berhasil dicetak"** — we render the label, we cannot observe the printer (the CRM's "WA dibuka" rule).
+
+⚠️ **Renders, not yet proven to ship.** Production has **0 AWBs**, so `Cetak resi` has had nothing to print — the page, filters and thermal document are verified (1400px, 0 page errors, real facet counts), the *parcel* is not. The remaining tasks are in `BACKLOG.md`; the honest first one is a real end-to-end run once a waybill lands.
+
 ### 🧭 Booking overwrote `orders.courier` with a display name — found the first time a booking ever succeeded
 
 `createShipment` persisted `courier: input.serviceName`, so booking an order replaced a perfectly good code (`spx`) with a **display string** (`"SPX Standard"`). `orders.courier` is a **join key** — to `platform_couriers` (which carries `codAllowed` for the COD policy and the `group` behind the 1 day/reguler/ekonomi/cargo filter) and to the per-courier COD return report. `"SPX Standard"` matches none of them, so **every booked order silently dropped out of all of them** — corruption that is invisible precisely because a booked order is the one you stop looking at.
