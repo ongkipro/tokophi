@@ -81,6 +81,38 @@ field and reports natively — no order posted, nothing silent.
 
 ## 2026-07-17
 
+### 🐛 Tema: the prefix that swallowed its own parent — sidebar gone, seller stranded
+
+Reported as *"masuk editor, pas di back itu error, tampilan berantakan sidebar hilang"*. **It was
+never about going back.** `/tema` was broken on plain load — the "before" and "after-back"
+screenshots are pixel-identical. The back navigation was innocent; it just happened to be when you
+looked.
+
+`components/admin/admin-chrome.tsx`:
+
+```ts
+const FULL_BLEED_PREFIXES = ["/tema"];                              // ← the bug
+const isFullBleed = PREFIXES.some((p) => pathname?.startsWith(p));  // "/tema".startsWith("/tema") = true
+```
+
+The intent (per its own comment) was the **Store Builder** — Puck needs the whole viewport and its
+toolbar replaces the topbar. But a **prefix always eats its own index page**: the template LIST went
+full-bleed too and lost the sidebar, the topbar and the billing banner. The seller landed on a page
+with **no navigation of any kind** and no exit but the browser's back button — which is exactly why
+it read as "error" rather than "missing sidebar".
+
+Fixed by matching the builder **exactly** — `/^\/tema\/[^/]+$/`, one segment after `/tema`, never
+`/tema` itself. Routes, not prefixes. Verified in a real browser across every path: `/tema` has its
+shell back · the builder is **still** full-bleed (unbroken, all Puck panels render) · **back** →
+shell · **"Kembali ke Daftar Template"** → shell · 0 page errors.
+
+**My first hypothesis was wrong and worth recording:** `builder-client.tsx` does
+`import "@measured/puck/puck.css"`, and that stylesheet genuinely **does** leak — it stays loaded
+after navigating away (2 sheets on `/tema` → 3 after visiting the builder, never released). It looked
+like an obvious culprit. It wasn't causing this: `/tema` was already broken before any Puck CSS
+existed on the page. **The leak is real but currently harmless** — noted in BACKLOG rather than
+"fixed" on suspicion.
+
 ### 🧭 Keuangan menu, checked against the market — and one row removed
 
 Researched the Finance IA of Shopee / Tokopedia / TikTok Shop / Lazada Seller. Most of it **confirmed

@@ -97,6 +97,25 @@ The menu deliberately points at **four different pages, not four tabs onto `/sal
 - If you want these pages to *demo* well, fix the **seed** — not the page. A finance screen that
   invents a figure is worse than one that doesn't exist, because the merchant will believe it.
 
+### 🎨 Tema / Puck — one fixed, one real-but-dormant (2026-07-17)
+
+**FIXED — full-bleed matched by PREFIX, so `/tema` ate itself.** `admin-chrome.tsx` had
+`FULL_BLEED_PREFIXES = ["/tema"]` + `startsWith`, and `"/tema".startsWith("/tema")` is true: the
+template LIST lost sidebar + topbar + billing banner and the seller was stranded with no navigation.
+Now `/^\/tema\/[^/]+$/` — the builder only. **If you add a full-bleed route, add a regex, never a
+prefix: a prefix always swallows its own index page.**
+
+- [ ] **`puck.css` leaks globally and is never released — REAL, currently harmless, do not forget.**
+      `builder-client.tsx` does `import "@measured/puck/puck.css"`. In the App Router a CSS import in
+      a client component is global; measured in a real browser, `/tema` loads **2 stylesheets, and 3
+      after visiting the builder** — Puck's sheet stays attached after you navigate away, for the rest
+      of the session. It does **not** currently break anything (it was my first suspect for the bug
+      above and was innocent — `/tema` was broken before any Puck CSS was on the page). It is a loaded
+      gun: the day Puck's global resets collide with an admin screen, it will present as "random page
+      looks wrong AFTER I visited the theme editor once", which is a horrible bug to chase from a
+      screenshot. Fix by scoping Puck's CSS to the builder subtree (or isolating the builder in an
+      iframe/route segment that owns its own stylesheet), not by deleting the import.
+
 ### 📚 Marketplace IA research — the menu is SETTLED, don't re-litigate it (2026-07-17)
 
 Researched Shopee / Tokopedia / TikTok Shop / Lazada Seller finance menus (sources in the research
