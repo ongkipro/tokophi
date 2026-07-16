@@ -4,6 +4,35 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-16
 
+### 💰 Keuangan — four pages that complete each other, not four doors onto one room
+
+The first cut of this menu pointed **every row at a `/saldo` tab**: four labels, one room. That is the
+anti-pattern "Perlu Dikirim" was deleted for. Each page now answers a question the others cannot —
+**Keuangan** *is my money healthy?* · **Penghasilan** *what did I earn, and why isn't it cash yet?* ·
+**Saldo Saya** *what can I withdraw today?* (its tabs stay inside it) · **Tagihan** *what do I pay TokoΦ?*
+
+Penghasilan-vs-Saldo is the split Shopee and Tokopedia both make, and it is real rather than cosmetic:
+earnings include money the platform still holds; a balance is only what you can take. *"I sold 47
+orders, where is my money?"* is a question for Penghasilan — and *"ditahan sampai pesanan selesai"* is
+the entire reason the page exists.
+
+`lib/data/finance.ts` **reuses `getBalance()` and never re-derives it**: one place sums the ledger, and
+a second copy of that arithmetic is a second version of the truth about someone's money.
+`SALES = status not in ('batal','retur')` — counting a cancelled order as revenue is exactly what a
+merchant reconciling against their bank statement would catch.
+
+**⚠️ The three Rp 0 on this page are HONEST — check the seed, not the page.** Verified against SQL:
+`ledger_entries` contains *only* `pending` (47 rows / 18.436.000) and `available` (209.374.000) — **no
+withdrawal row and no return row exist**, and `orders.shipping_idr` is 0 for all 96 seeded orders. The
+figures match the screen exactly. A finance screen that invents a number is worse than one that does
+not exist, because the merchant will believe it. Where there is no prior period, the delta is **absent**
+rather than "+100%". **UI only — the system (held→released transitions, payout→ledger) is in BACKLOG.**
+
+Fixed alongside, in two places: **`<Card>` is already `flex flex-col`**, so `flex items-center` *on* the
+card centres its contents horizontally (`items-center` is a column's **cross** axis). The row belongs
+**inside** the card. Hit the Langganan card and the Pengiriman Massal bulk-action bar — both measured
+flush-left after the fix. Typechecked green while visibly wrong; only the browser showed it.
+
 ### 📐 Checkout boxed at 1080, tablet rescued, fields tightened
 
 **"Melebar banget"** — measured, and it was. `lg:grid-cols-2` gave each column a share of the

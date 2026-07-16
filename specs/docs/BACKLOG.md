@@ -78,6 +78,43 @@ The seller's UI flow works too: **Cek Ongkir → pick → Buat** produced 2 book
 
 ---
 
+## 💰 Keuangan — UI BUILT, SYSTEM NOT (2026-07-16)
+
+> User: *"isi tampilan dulu, sistem nanti — namun secara ui/ux kamu udah susun dan bangun isinya."*
+> The screens are real and every number on them is a real query. What is **absent** is the machinery
+> that would make those numbers move. Read this before "fixing" a zero on these pages.
+
+**Built** (`6b8f6c3`): `/keuangan` (Ringkasan), `/keuangan/penghasilan` (7/30/90 via URL),
+`lib/data/finance.ts`. `getBalance()` is reused, never re-derived — one place sums the ledger.
+The menu deliberately points at **four different pages, not four tabs onto `/saldo`**.
+
+**⚠️ The zeros on these pages are HONEST — verified against SQL 2026-07-16.** Do not "fix" them:
+- `ledger_entries` holds **only** `pending` (47 rows / 18.436.000) and `available` (209.374.000).
+  There is **no withdrawal row and no return row in existence** → `Sudah ditarik` / `Ditarik kembali`
+  are genuinely Rp 0.
+- `orders.shipping_idr = 0` for **every seeded order** (96/96) → `Ongkir dibayar pembeli` is Rp 0.
+  The seed never populated it; real checkout orders do (PHI-202951778F2Y carries Rp 7.000).
+- If you want these pages to *demo* well, fix the **seed** — not the page. A finance screen that
+  invents a figure is worse than one that doesn't exist, because the merchant will believe it.
+
+**Still to build (system):**
+- [ ] **Held → released is not a real transition.** `pending` vs `available` is seeded, not earned:
+      nothing flips a ledger entry when an order reaches `selesai`. Penghasilan *explains* a rule
+      ("ditahan sampai pesanan selesai") that no code currently enforces. Build the transition, or
+      the explanation becomes a lie the moment a seller watches an order complete.
+- [ ] **Payout scheduling / withdrawal → ledger.** `requestPayout()` exists but writes no
+      `withdrawn` row that these pages would read. Wire it, then `Sudah ditarik` stops being 0.
+- [ ] **Seed the money paths** — at least one withdrawal, one return, and real `shipping_idr` — so
+      the demo exercises the arithmetic instead of rendering three Rp 0 and a −42%.
+- [ ] **Ongkir belongs in a margin, not a stat.** Today it is what the shopper paid. The number a
+      seller actually wants is *paid − actual courier cost*; we only have the first half until the
+      booking flow records what KiriminAja charged. Do not label it "profit" before then.
+- [ ] **Biaya & potongan** — Indonesian marketplaces all show a fee breakdown (biaya layanan, biaya
+      COD). We charge a subscription, not a take rate, so there is **nothing to show yet**. Left out
+      on purpose: an empty "Potongan Rp 0" card invites the question "what fee?" and answers nothing.
+
+---
+
 ## 📱 UI/UX mobile & admin — DECIDED IN PRINCIPLE, PARKED (2026-07-16)
 
 > **Status: agreed, not started. Do not build without re-confirming — the last open decision is below.**
