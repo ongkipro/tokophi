@@ -29,6 +29,7 @@ import { Badge } from "@tokophi/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@tokophi/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
 import { TabStrip } from "@/components/admin/tab-strip";
+import { ResponsiveTable, DataCard, DataRow } from "@/components/admin/responsive-table";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -148,107 +149,156 @@ export function PesananClient({
         />
 
         <div data-pending={pending ? "" : undefined} className="transition-opacity data-pending:opacity-60">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[34%] pl-4">Produk</TableHead>
-                <TableHead>Pembeli</TableHead>
-                <TableHead className="text-right">Dibayar Pembeli</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Jasa Kirim</TableHead>
-                <TableHead className="text-right">Aksi</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length === 0 && (
+          <ResponsiveTable
+            table={
+            <Table>
+              <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={6} className="h-40 whitespace-normal text-center text-muted-foreground">
-                    <EmptyState tab={tab} filtered={Boolean(filters.q || filters.courier || filters.method)} />
-                  </TableCell>
+                  <TableHead className="w-[34%] pl-4">Produk</TableHead>
+                  <TableHead>Pembeli</TableHead>
+                  <TableHead className="text-right">Dibayar Pembeli</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Jasa Kirim</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
-              )}
-              {rows.map((o) => (
-                <TableRow key={o.id} className="align-top">
-                  <TableCell className="py-3 pl-4">
-                    <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-                      <Link href={`/pesanan/${o.number}`} className="font-mono font-medium text-foreground hover:underline">
-                        {o.id}
-                      </Link>
-                      <span aria-hidden>·</span>
-                      <span>{timeAgo(o.minutesAgo)}</span>
-                    </div>
-                    <OrderProductCell lines={o.lines} lineCount={o.lineCount} />
-                  </TableCell>
-
-                  <TableCell className="py-3">
-                    <div className="leading-tight">
-                      <div className="text-sm font-medium">{o.buyer}</div>
-                      <div className="text-xs text-muted-foreground">{o.city || "—"}</div>
-                    </div>
-                  </TableCell>
-
-                  <TableCell className="py-3 text-right">
-                    <div className="text-sm font-medium tabular-nums">{IDR(o.total)}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {o.paymentMethod ? (PAYMENT_METHOD_LABEL[o.paymentMethod] ?? o.paymentMethod) : "Tanpa pembayaran"}
-                    </div>
-                    {!o.paid && (
-                      <Badge variant="secondary" className="mt-1 border-0 bg-amber-500/15 font-medium text-amber-700 dark:text-amber-400">
-                        Belum dibayar
-                      </Badge>
-                    )}
-                  </TableCell>
-
-                  <TableCell className="py-3">
-                    <OrderStatusBadge status={o.status} />
-                  </TableCell>
-
-                  <TableCell className="py-3">
-                    {o.courier ? (
-                      <div className="leading-tight">
-                        <div className="text-sm">{o.courier}</div>
-                        {o.awb && <div className="font-mono text-xs text-muted-foreground">{o.awb}</div>}
+              </TableHeader>
+              <TableBody>
+                {rows.length === 0 && (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={6} className="h-40 whitespace-normal text-center text-muted-foreground">
+                      <EmptyState tab={tab} filtered={Boolean(filters.q || filters.courier || filters.method)} />
+                    </TableCell>
+                  </TableRow>
+                )}
+                {rows.map((o) => (
+                  <TableRow key={o.id} className="align-top">
+                    <TableCell className="py-3 pl-4">
+                      <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                        <Link href={`/pesanan/${o.number}`} className="font-mono font-medium text-foreground hover:underline">
+                          {o.id}
+                        </Link>
+                        <span aria-hidden>·</span>
+                        <span>{timeAgo(o.minutesAgo)}</span>
                       </div>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Belum diatur</span>
-                    )}
-                  </TableCell>
+                      <OrderProductCell lines={o.lines} lineCount={o.lineCount} />
+                    </TableCell>
 
-                  <TableCell className="py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <RowAction o={o} canWrite={canWrite} pending={pending} onAdvance={advance} />
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={
-                            <Button variant="ghost" size="icon-sm" aria-label={`Aksi ${o.id}`}>
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          }
-                        />
-                        <DropdownMenuContent align="end" className="w-44">
-                          <DropdownMenuItem render={<Link href={`/pesanan/${o.number}`} />}>
-                            <Eye className="size-4" /> Lihat detail
-                          </DropdownMenuItem>
-                          {canWrite && o.status !== "batal" && o.status !== "selesai" && o.status !== "retur" && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                variant="destructive"
-                                disabled={pending}
-                                onClick={() => advance(o, "batal", "dibatalkan")}
-                              >
-                                <XCircle className="size-4" /> Batalkan
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                    <TableCell className="py-3">
+                      <div className="leading-tight">
+                        <div className="text-sm font-medium">{o.buyer}</div>
+                        <div className="text-xs text-muted-foreground">{o.city || "—"}</div>
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="py-3 text-right">
+                      <div className="text-sm font-medium tabular-nums">{IDR(o.total)}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {o.paymentMethod ? (PAYMENT_METHOD_LABEL[o.paymentMethod] ?? o.paymentMethod) : "Tanpa pembayaran"}
+                      </div>
+                      {!o.paid && (
+                        <Badge variant="secondary" className="mt-1 border-0 bg-amber-500/15 font-medium text-amber-700 dark:text-amber-400">
+                          Belum dibayar
+                        </Badge>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="py-3">
+                      <OrderStatusBadge status={o.status} />
+                    </TableCell>
+
+                    <TableCell className="py-3">
+                      {o.courier ? (
+                        <div className="leading-tight">
+                          <div className="text-sm">{o.courier}</div>
+                          {o.awb && <div className="font-mono text-xs text-muted-foreground">{o.awb}</div>}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Belum diatur</span>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <RowAction o={o} canWrite={canWrite} pending={pending} onAdvance={advance} />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button variant="ghost" size="icon-sm" aria-label={`Aksi ${o.id}`}>
+                                <MoreHorizontal className="size-4" />
+                              </Button>
+                            }
+                          />
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem render={<Link href={`/pesanan/${o.number}`} />}>
+                              <Eye className="size-4" /> Lihat detail
+                            </DropdownMenuItem>
+                            {canWrite && o.status !== "batal" && o.status !== "selesai" && o.status !== "retur" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  disabled={pending}
+                                  onClick={() => advance(o, "batal", "dibatalkan")}
+                                >
+                                  <XCircle className="size-4" /> Batalkan
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            }
+            cards={
+              rows.length === 0 ? (
+                <div className="px-4 py-12 text-center text-sm text-muted-foreground">
+                  <EmptyState tab={tab} filtered={Boolean(filters.q || filters.courier || filters.method)} />
+                </div>
+              ) : (
+                rows.map((o) => (
+                  <DataCard
+                    key={o.id}
+                    href={`/pesanan/${o.number}`}
+                    title={o.id}
+                    meta={timeAgo(o.minutesAgo)}
+                    badge={<OrderStatusBadge status={o.status} />}
+                    actions={<RowAction o={o} canWrite={canWrite} pending={pending} onAdvance={advance} />}
+                    media={<OrderProductCell lines={o.lines} lineCount={o.lineCount} />}
+                  >
+                    <DataRow label="Pembeli">
+                      {o.buyer}
+                      {o.city ? <span className="text-muted-foreground"> · {o.city}</span> : null}
+                    </DataRow>
+                    <DataRow label="Dibayar" strong>
+                      {IDR(o.total)}
+                      <div className="text-xs font-normal text-muted-foreground">
+                        {o.paymentMethod ? (PAYMENT_METHOD_LABEL[o.paymentMethod] ?? o.paymentMethod) : "Tanpa pembayaran"}
+                      </div>
+                      {!o.paid && (
+                        <Badge variant="secondary" className="mt-1 border-0 bg-amber-500/15 font-medium text-amber-700 dark:text-amber-400">
+                          Belum dibayar
+                        </Badge>
+                      )}
+                    </DataRow>
+                    <DataRow label="Jasa Kirim">
+                      {o.courier ? (
+                        <>
+                          {o.courier}
+                          {o.awb && <div className="font-mono text-xs text-muted-foreground">{o.awb}</div>}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">Belum diatur</span>
+                      )}
+                    </DataRow>
+                  </DataCard>
+                ))
+              )
+            }
+          />
         </div>
 
         {/* footer */}
