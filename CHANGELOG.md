@@ -4,6 +4,20 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-16
 
+### 🛒 Checkout is a tunnel now, not a page of the shop — `CheckoutLayout` (Shopify's model, ADR 0009 §4)
+
+Checkout wore the **same `Layout` as the catalogue**: a mega menu with category links, a cart pill, a footer, and the chat bubble — every one of them an exit, rendered at the most expensive point in the funnel. New `layouts/CheckoutLayout.astro` is the platform's chrome: **merchant logo + "Pembayaran aman", one footer line, nothing else**. The logo is deliberately **not a link** (on the storefront it goes home; here home is an exit). The only ways out are the breadcrumb and "Kembali ke keranjang", and both lead to the cart. `checkout/sukses.astro` moved to it too — for a VA/QRIS order the payment has **not** happened yet and the instruction is on that very page, so a mega menu there invites the shopper away from a number they still have to act on. Chat dropped from checkout (user's call). **Analytics stays** — blinding `/analitik` at the funnel's end would defeat the point. Also `noindex` on the page itself: robots.txt already disallows `/checkout` and stays the primary instruction, but that is a request and this is on the page, for crawlers that fetch anyway.
+
+**The line, written down before it is cheap to lose: layout is the platform's, tokens are the merchant's.** Per-store variance at checkout is **logo + brand colour, and nothing else** — the same boundary Shopify draws with `checkoutBrandingUpsert`. **Checkout must never become a `page_templates` type**; the day it does, the one screen that takes money goes to drag-and-drop, and that cannot be walked back once a merchant uses it.
+
+### 📱 The mobile checkout hid the total behind ~1.800px of scroll
+
+On a 390px phone the summary stacked **last**: the total and the pay button sat near the bottom of a 2.206px page, so the shopper typed name, address and kecamatan having **never seen what they were about to pay**. Now the summary is a **collapsed bar at the top** (`order-first`) with the total always visible and the line items one tap away — Shopify's pattern, and the total is the one fact a shopper wants confirmed *before* typing. The pay button moved to **the bottom of the left column**, under Pembayaran, on every breakpoint: that is where Shopify puts it (reading order — the button is the last thing after the last decision), and it is what makes the top-summary possible at all, since a button living inside that card would have landed above the empty form. Page height 2.206 → 1.984px.
+
+⚠️ **Two traps this hit, for whoever touches it next:** the summary body uses `hidden` as a **class, not the attribute** — Tailwind v4 preflight declares `[hidden] { display:none !important }`, which `lg:block` cannot beat, so the attribute version left the desktop summary permanently invisible. And the mobile bar's total is written **only** in `recompute()`, the same line as `#summary-total` — two totals that can disagree is worse than no total on the bar, because the shopper reads one and is charged the other.
+
+Browser-verified at 1440 + 390 (not just `astro check`, which cannot see inside a `<script>`): chrome gone, desktop summary visible, bar at y=0 on mobile, toggle + aria + label correct, totals agree, no horizontal overflow, order number + VA render on `sukses`.
+
 ### 🌐 Domain topology: storefronts moved to `tokophi.id`, custom domains via Cloudflare-for-SaaS (`cname.tokophi.cc`)
 
 The final split (decided with the user): **platform stays on `tokophi.com`** (landing = apex/www, Seller = `app.`, Super Admin = `rich.`), **every storefront's default address is now `<slug>.tokophi.id`** (the registered store name), and **merchant custom domains** attach through **`cname.tokophi.cc`** (Cloudflare-for-SaaS Custom Hostnames). Shipped end-to-end, browser-verified:

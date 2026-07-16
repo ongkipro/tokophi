@@ -1,0 +1,103 @@
+---
+// CHECKOUT CHROME — the tunnel. Deliberately NOT Layout.astro.
+//
+// ADR 0009 §4: checkout is LOCKED. The layout belongs to the platform; the merchant gets branding
+// TOKENS only (logo + brand colour). This is the Shopify line — `checkoutBrandingUpsert` lets a
+// merchant set a logo and colours and nothing else; the structure is Shopify's. Same here: if this
+// ever becomes a `page_templates` type, we hand the one screen that takes money to drag-and-drop.
+//
+// What Layout.astro renders that this file must NOT:
+//   · Header — mega menu, category links, cart pill. Every one is an exit at the most expensive
+//     point in the funnel. The shopper is 30 seconds from paying; do not offer them "Kategori".
+//   · Footer — a link farm, same reason.
+//   · Chat — dropped from checkout by decision (2026-07-16). It was the one arguable keep (a question
+//     answered is a sale saved), but it is also a conversation that pauses a payment, and there is no
+//     one guaranteed to be on the other end.
+// The only way out is the deliberate one: "Kembali ke keranjang" in the summary.
+//
+// Analytics STAYS. Checkout is the whole point of the funnel — dropping the tracking here would blind
+// /analitik exactly where it matters.
+import "../styles/global.css";
+import Analytics from "../components/Analytics.astro";
+import { mediaUrl } from "../data/catalog";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+// Tenant resolved per-request from the Host header (src/middleware.ts).
+const { store, catalog } = Astro.locals;
+const BRAND_SHADES = catalog.brandShades;
+const { title, description } = Astro.props;
+
+// The merchant's logo, or their name as a wordmark when stores.logo_url is null. This — plus the
+// brand colour below — is the ENTIRE per-store variance of the checkout, by design.
+const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
+---
+
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title} — {store.name}</title>
+    {description && <meta name="description" content={description} />}
+
+    <!-- No canonical, no Open Graph. Nothing links to a checkout and nobody shares one — those tags
+         exist to win a crawl or a WhatsApp preview card, and neither applies here.
+
+         robots.txt already disallows /checkout (src/pages/robots.txt.ts) and that is the primary
+         instruction; Google will not fetch this page and so will never read the tag below. It is here
+         for the crawlers that fetch anyway — robots.txt is a request, this is on the page itself. -->
+    <meta name="robots" content="noindex,nofollow" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- ADR 0009 — the merchant's brand colour. Declared after global.css so these custom properties
+         win the cascade; every bg-brand-*/text-brand-* utility on the page reads them via var(). -->
+    <style set:html={`:root { ${Object.entries(BRAND_SHADES).map(([shade, hex]) => `--color-brand-${shade}: ${hex};`).join(" ")} }`} />
+    <Analytics />
+  </head>
+  <body class="min-h-screen bg-cream text-ink antialiased">
+    <!-- The logo is NOT a link. On the storefront it goes home; here home is an exit, and this bar
+         exists to say "you are still in the right shop", not to offer a way out. -->
+    <header class="border-b border-line bg-white/60">
+      <div class="mx-auto flex max-w-6xl items-center gap-3 px-4 py-4 sm:px-6">
+        {
+          LOGO ? (
+            <img src={LOGO} alt={store.name} class="h-9 w-auto max-w-[12rem] object-contain sm:h-10" />
+          ) : (
+            <span class="font-display text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+              {store.name}
+            </span>
+          )
+        }
+        <span class="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-muted">
+          <svg viewBox="0 0 24 24" class="h-4 w-4 shrink-0 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
+            <path d="M12 3l7 3v5.5c0 4.2-2.9 7.9-7 9-4.1-1.1-7-4.8-7-9V6l7-3Z" stroke-linejoin="round" />
+            <path d="M9 12.2l2.1 2.1L15 10.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          Pembayaran aman
+        </span>
+      </div>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <!-- Minimal by intent: no policy links invented here. If the merchant has such pages they belong
+         in the storefront footer, not fabricated into the checkout. -->
+    <footer class="border-t border-line">
+      <div class="mx-auto max-w-6xl px-4 py-6 text-center text-xs text-muted sm:px-6">
+        {store.name} — Ditenagai TokoΦ
+      </div>
+    </footer>
+  </body>
+</html>

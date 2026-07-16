@@ -1,9 +1,13 @@
 ---
-import Layout from "../../layouts/Layout.astro";
+// CheckoutLayout, not Layout: this is the last screen of the tunnel, and for a VA/QRIS order the
+// payment has NOT happened yet — the instruction (the VA number, the QR) is on this very page. A mega
+// menu here invites the shopper to browse away from a number they still have to act on.
+// The one exit is deliberate and earned: the "Lanjut Belanja" button at the bottom.
+import CheckoutLayout from "../../layouts/CheckoutLayout.astro";
 const store = Astro.locals.store;
 ---
 
-<Layout title="Pesanan Berhasil" description={`Terima kasih telah berbelanja di ${store.name}.`}>
+<CheckoutLayout title="Pesanan Berhasil" description={`Terima kasih telah berbelanja di ${store.name}.`}>
   <section class="mx-auto max-w-2xl px-4 py-16 sm:px-6">
     <!-- Both states of this page are rendered here and one is hidden on arrival. This page is
          reachable by simply typing the URL (and by a refresh long after the order), so it must NOT
@@ -46,7 +50,7 @@ const store = Astro.locals.store;
       </a>
     </div>
   </section>
-</Layout>
+</CheckoutLayout>
 
 <script is:inline>
   (function () {
