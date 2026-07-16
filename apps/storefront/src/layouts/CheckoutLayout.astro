@@ -98,6 +98,10 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
         --co-accent-hover: #1d4ed8;
         --co-accent-weak: #eff6ff;   /* the tint on a selected row */
         --co-accent-ring: #bfdbfe;
+        /* The FIELD frame on focus. Deliberately darker than --co-accent: that blue is the pay
+           button's, and it is tuned to carry white text. Around an input the same value reads as a
+           glow, and it made the field and the button claim one colour for two jobs. */
+        --co-focus: #1d4ed8;
       }
     </style>
     <Analytics />
@@ -136,7 +140,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
           {/* `lg:pl-6` matches the form column's own `sm:px-6`, so the logo starts on the SAME x as
               the first field (measured: both 168px at 1440). Without it the box is flush at 144 and
               the wordmark hangs 24px left of everything under it. */}
-          <div class="flex w-full items-center lg:max-w-xl lg:pl-6 lg:pr-10">
+          <div class="flex w-full items-center lg:max-w-[580px] lg:pl-6 lg:pr-10">
             <a
               href="/"
               class="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--co-accent)] focus-visible:ring-offset-2"
@@ -157,7 +161,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
         {/* Back to the cart they came from — the same destination as "Kembali ke keranjang" in the
             summary. One intent, two places, no third idea. */}
         <div class="ml-auto flex min-w-0 lg:ml-0 lg:justify-start lg:py-4">
-          <div class="flex w-full items-center lg:max-w-md lg:px-10">
+          <div class="flex w-full items-center lg:max-w-[480px] lg:px-10">
             <a
               href="/keranjang"
               class="ml-auto inline-flex shrink-0 items-center gap-2 rounded-md p-1.5 text-sm font-medium text-[var(--co-muted)] transition-colors hover:text-[var(--co-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--co-accent)]"
@@ -214,7 +218,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
           pattern); on desktop it is the right column. Explicit col/row placement rather than source
           order, because the two must not fight over which cell they land in. */}
       <aside class="order-first border-b border-[var(--co-line)] bg-[var(--co-panel)] lg:order-none lg:col-start-2 lg:row-start-1 lg:min-h-[calc(100vh-4.5rem)] lg:border-b-0 lg:border-l">
-        <div class="w-full px-4 sm:px-6 lg:sticky lg:top-0 lg:max-w-md lg:px-10 lg:py-10">
+        <div class="w-full px-4 sm:px-6 lg:sticky lg:top-0 lg:max-w-[480px] lg:px-10 lg:py-10">
           <slot name="summary" />
         </div>
       </aside>
@@ -222,7 +226,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
       {/* The BRIGHT zone. White against the panel's cream is the whole contrast the reference is
            built on — on cream-vs-cream the hairline divider was carrying it alone, and losing. */}
       <main class="bg-white lg:col-start-1 lg:row-start-1 lg:flex lg:justify-end">
-        <div class="w-full px-4 py-8 sm:px-6 lg:max-w-xl lg:py-10 lg:pr-10">
+        <div class="w-full px-4 py-8 sm:px-6 lg:max-w-[580px] lg:py-10 lg:pr-10">
           <slot />
         </div>
       </main>
@@ -236,7 +240,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
     <footer class="border-t border-[var(--co-line)] bg-white">
       <div class="lg:grid lg:grid-cols-2">
         <div class="lg:flex lg:justify-end">
-          <div class="w-full px-4 py-6 text-xs text-[var(--co-muted)] sm:px-6 lg:max-w-xl lg:pr-10">
+          <div class="w-full px-4 py-6 text-xs text-[var(--co-muted)] sm:px-6 lg:max-w-[580px] lg:pr-10">
             {store.name} — Ditenagai TokoΦ
           </div>
         </div>
