@@ -526,12 +526,51 @@ if (rToken) {
 
         </fieldset>
 
+        {/* THE BOTTOM SUMMARY — mobile only, directly above the pay button. The reference has BOTH
+            this and the top bar, and both expand to the same figures.
+            Two summaries on one screen is exactly how two numbers come to disagree, so nothing here
+            computes anything: every figure is written by the same `recompute()` that writes the top
+            bar and the desktop panel. One function, one string, three destinations. */}
+        <div class="lg:hidden">
+          <button
+            type="button"
+            id="summary2-toggle"
+            aria-expanded="false"
+            aria-controls="summary2-body"
+            class="flex w-full items-center gap-3 rounded-lg border border-[var(--co-line)] px-4 py-3 text-left"
+          >
+            <img id="summary2-thumb" alt="" hidden class="h-10 w-9 shrink-0 rounded object-cover" />
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-semibold text-ink">Total</span>
+              <span id="summary2-count" class="block text-xs tabular-nums text-[var(--co-muted)]"></span>
+            </span>
+            <span id="summary2-total" class="shrink-0 text-base font-semibold tabular-nums text-ink">Rp0</span>
+            <ChevronDown
+              id="summary2-caret"
+              class="h-4 w-4 shrink-0 text-[var(--co-muted)] transition-transform"
+              stroke-width={2}
+              aria-hidden="true"
+            />
+          </button>
+          <div id="summary2-body" hidden class="rounded-b-lg border border-t-0 border-[var(--co-line)] px-4 pb-4">
+            <div id="summary2-items" class="space-y-4 pt-4"></div>
+            <div class="mt-4 space-y-2 border-t border-[var(--co-line)] pt-3 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="text-[var(--co-muted)]">Subtotal</span>
+                <span id="summary2-subtotal" class="font-medium tabular-nums text-ink">Rp0</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[var(--co-muted)]">Ongkir</span>
+                <span id="summary2-shipping" class="font-medium tabular-nums text-ink">Rp0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- PAY — the bottom of the LEFT column, directly under Pembayaran, on every breakpoint.
              This is where Shopify puts it, and the reason is the reading order: the button is the last
              thing after the last decision, not a control parked in a side panel the shopper's eye has
-             already left. It also fixes the mobile bug this restructure was for — the summary card now
-             sits at the TOP on a phone, so a pay button living inside it would have landed ABOVE the
-             empty form. -->
+             already left. -->
         <div>
           {/* `rounded-lg`, not a pill, and no drop shadow. A pill with a coloured glow is a
               marketing button — it belongs on the hero CTA where it is competing for attention. The
@@ -796,11 +835,32 @@ if (rToken) {
 
     // "· 3 item" next to Subtotal. UNITS, not lines — the same number the cart badge in the header
     // shows, so two counters on one screen can never disagree.
+    var units = cart.reduce(function (t, i) { return t + (Number(i && i.qty) || 1); }, 0);
     var countEl = document.getElementById("summary-count");
-    if (countEl) {
-      var units = cart.reduce(function (t, i) { return t + (Number(i && i.qty) || 1); }, 0);
-      countEl.textContent = "· " + units + " item";
+    if (countEl) countEl.textContent = "· " + units + " item";
+
+    // ---- The BOTTOM summary (mobile) — same rows, same numbers, written from here ----
+    setText("summary2-subtotal", idr.format(subtotal));
+    setText("summary2-count", units + " item");
+    var s2items = document.getElementById("summary2-items");
+    if (s2items) s2items.innerHTML = itemsHtml; // the SAME string the top summary got
+    var s2thumb = document.getElementById("summary2-thumb");
+    if (s2thumb && cart[0] && cart[0].image) {
+      s2thumb.src = cart[0].image;
+      s2thumb.hidden = false;
     }
+    (function () {
+      var toggle = document.getElementById("summary2-toggle");
+      var body = document.getElementById("summary2-body");
+      var caret = document.getElementById("summary2-caret");
+      if (!toggle || !body) return;
+      toggle.addEventListener("click", function () {
+        var open = body.hidden;
+        body.hidden = !open;
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+        if (caret) caret.style.transform = open ? "rotate(180deg)" : "";
+      });
+    })();
 
     // ---- Payment: the bank list is a DROPDOWN, opened by picking its row ----
     // Inline, never a redirect: Shopify sends the shopper to the gateway's own page ("Mengalihkan
@@ -929,16 +989,25 @@ if (rToken) {
       codOption.hidden = true;
     }
 
+    /** Write `text` into #id if it exists. The summary lives in four places; none may be optional-chained into silence. */
+    function setText(id, text) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = text;
+    }
+
     function recompute() {
       var ship = selectedShipping();
+      var shipText = idr.format(ship);
       var total = idr.format(subtotal + ship);
-      document.getElementById("summary-shipping").textContent = idr.format(ship);
-      document.getElementById("summary-total").textContent = total;
-      // The mobile bar carries the SAME string, written here and nowhere else. Two totals that can
-      // disagree is worse than no total on the bar at all: the shopper reads one and is charged the
-      // other. recompute() is the single funnel — every ongkir change already runs through it.
-      var bar = document.getElementById("summary-total-bar");
-      if (bar) bar.textContent = total;
+      // FOUR destinations, ONE string, computed once. The total is on screen in the desktop panel,
+      // the top mobile bar, the bottom mobile bar and the bottom bar's detail — and two totals that
+      // can disagree is worse than no total at all: the shopper reads one and is charged the other.
+      // recompute() is the single funnel; every ongkir change already runs through it.
+      setText("summary-shipping", shipText);
+      setText("summary-total", total);
+      setText("summary-total-bar", total);
+      setText("summary2-shipping", shipText);
+      setText("summary2-total", total);
       syncCod();
     }
 
