@@ -6,6 +6,8 @@ import Stars from "../../components/Stars.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import { IDR } from "@tokophi/lib/format";
 import { productImages } from "../../data/catalog";
+import Breadcrumb from "../../components/Breadcrumb.astro";
+import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
 
 // SSR: tenant from the Host header (src/middleware.ts), product from the handle param.
 const { store, catalog } = Astro.locals;
@@ -97,19 +99,15 @@ if (rating && rating.count > 0) {
   };
 }
 
-const breadcrumbLd = {
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  itemListElement: [
-    { "@type": "ListItem", position: 1, name: "Beranda", item: abs("/") },
-    { "@type": "ListItem", position: 2, name: product.category, item: abs(`/kategori/${product.categoryHandle}`) },
-    { "@type": "ListItem", position: 3, name: product.name },
-  ],
-};
+// ONE array drives the visible trail AND the schema — they used to be typed out separately, and the
+// schema claimed a third crumb (the product name) that the trail on screen never showed.
+const CRUMBS: Crumb[] = [
+  { name: "Beranda", href: "/" },
+  { name: product.category, href: `/kategori/${product.categoryHandle}` },
+  { name: product.name },
+];
 
-const HEAD = [productLd, breadcrumbLd]
-  .map((ld) => `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>`)
-  .join("");
+const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
 ---
 
 <Layout
@@ -171,11 +169,7 @@ const HEAD = [productLd, breadcrumbLd]
 
       <!-- Info -->
       <div class="md:sticky md:top-24 md:self-start">
-        <nav class="text-sm text-muted">
-          <a href="/" class="transition-colors hover:text-brand-600">Beranda</a>
-          <span class="mx-2 text-line">/</span>
-          <a href={`/kategori/${product.categoryHandle}`} class="transition-colors hover:text-brand-600">{product.category}</a>
-        </nav>
+        <Breadcrumb items={CRUMBS} />
 
         <p class="mt-5 text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">{product.category}</p>
         <h1 class="mt-2 font-display text-3xl font-semibold leading-tight text-ink sm:text-4xl">{product.name}</h1>

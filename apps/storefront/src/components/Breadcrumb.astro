@@ -1,0 +1,54 @@
+---
+// The visible trail. Pair it with `breadcrumbLd()` from the same array so the schema can never drift
+// from what is on screen — see src/lib/breadcrumb.ts.
+//
+// Fixes carried over from the six hand-copied versions this replaces:
+//  · `<nav>` had NO accessible name. A page can hold several navs (header, footer, this) and a screen
+//    reader listing landmarks announced three anonymous "navigation"s.
+//  · The trail was a bare run of <a>/<span>. It is a LIST — an ordered one — so `<ol>` lets a screen
+//    reader say "list, 3 items" and announce the position. That is the whole point of a breadcrumb.
+//  · The "/" separators were real text, so they were read out: "Beranda slash Dress slash". They are
+//    decoration; `aria-hidden` removes them from the accessible name without touching the visual.
+//  · The current page was an unmarked <span>. `aria-current="page"` is what says "you are here".
+//  · No wrapping. A long product name on a 360px phone pushed the trail off the side; `flex-wrap`
+//    lets it fall to a second line.
+import type { Crumb } from "../lib/breadcrumb";
+
+interface Props {
+  items: Crumb[];
+  class?: string;
+}
+
+const { items, class: className } = Astro.props;
+---
+
+<nav aria-label="Breadcrumb" class={className}>
+  <ol class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+    {
+      items.map((crumb, i) => {
+        const isLast = i === items.length - 1;
+        return (
+          <li class="flex items-center gap-2">
+            {i > 0 && (
+              <span aria-hidden="true" class="text-line">
+                /
+              </span>
+            )}
+            {crumb.href && !isLast ? (
+              <a
+                href={crumb.href}
+                class="rounded-sm transition-colors hover:text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              >
+                {crumb.name}
+              </a>
+            ) : (
+              <span class="text-ink" aria-current={isLast ? "page" : undefined}>
+                {crumb.name}
+              </span>
+            )}
+          </li>
+        );
+      })
+    }
+  </ol>
+</nav>

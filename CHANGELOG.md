@@ -4,6 +4,33 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 🧭 Breadcrumbs: one array now drives both the trail and the schema
+
+The task said "add breadcrumbs". **They already existed** — as SIX hand-copied blocks of identical
+markup (kategori, produk, halaman, blog/index, kontak, keranjang) — while `BreadcrumbList` schema
+existed on exactly ONE page (the PDP). That split was the real bug, and it had already produced a
+disagreement: **the PDP's schema claimed three crumbs ending in the product name, while the trail on
+screen stopped at the category.** Schema and UI typed out separately will always drift.
+
+Now `src/lib/breadcrumb.ts` (`Crumb[]` → `breadcrumbLd()`) + `components/Breadcrumb.astro` render from
+**one array per page**. Verified on every page that the emitted JSON-LD and the visible trail are
+character-for-character the same list.
+
+Five a11y defects fixed once, in the shared component, instead of six times:
+- `<nav>` had **no accessible name** — three anonymous "navigation" landmarks per page.
+- The trail was a bare run of `<a>`/`<span>`. It is an ordered list; `<ol>`/`<li>` is what makes a
+  screen reader say "list, 3 items" and announce position — the entire point of a breadcrumb.
+- The `/` separators were real text, so they were **read aloud**: *"Beranda slash Dress slash"*. Now
+  `aria-hidden` — unchanged visually, gone from the accessible name.
+- The current page was an unmarked `<span>`; it now carries `aria-current="page"`.
+- No wrapping: a long product name pushed the trail off the side of a 360px phone. Now `flex-wrap`.
+
+Schema added to kategori, halaman, blog index and kontak (all indexable, all with a complete visible
+trail). Deliberately NOT added to: `/keranjang` (now `noindex` — schema would be pointless), the
+homepage (it is the root), and **the blog article**, which by design shows a topic chip rather than a
+trail — a `BreadcrumbList` there would describe a hierarchy the shopper cannot see, which is the exact
+failure this change exists to end. Logged in BACKLOG rather than quietly bent.
+
 ### 🔎 SEO: every store but the demo published the word "null" — and sold women's fashion
 
 Four defects, all in the highest-visibility text a store has (the SERP snippet + the WhatsApp preview

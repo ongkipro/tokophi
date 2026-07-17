@@ -12,6 +12,8 @@
 // is no free-shipping threshold anywhere in our data (a `gratis_ongkir` discount has no minimum), so
 // the bar would be inventing a promise the checkout would not honour.
 import { ShoppingCart, ShieldCheck, Truck, RotateCcw, ArrowRight, ArrowLeft } from "@lucide/astro";
+import Breadcrumb from "../components/Breadcrumb.astro";
+import { type Crumb } from "../lib/breadcrumb";
 import Layout from "../layouts/Layout.astro";
 import ProductCard from "../components/ProductCard.astro";
 
@@ -21,6 +23,11 @@ const { store, catalog } = Astro.locals;
 // 4-up row. It now sorts the whole catalogue by units_sold, so the first 4 are always there and are
 // actually the top 4 — the workaround was treating the symptom.
 const recommended = catalog.bestsellers().slice(0, 4);
+
+const CRUMBS: Crumb[] = [
+  { name: "Beranda", href: "/" },
+  { name: "Keranjang" },
+];
 ---
 
 <!-- `noindex,follow` — this was asymmetric with /checkout, which has carried it since day one. The cart
@@ -35,11 +42,7 @@ const recommended = catalog.bestsellers().slice(0, 4);
   robots="noindex,follow"
 >
   <section class="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
-    <nav class="text-sm text-muted">
-      <a href="/" class="transition-colors hover:text-brand-600">Beranda</a>
-      <span class="mx-2 text-line">/</span>
-      <span class="text-ink">Keranjang</span>
-    </nav>
+    <Breadcrumb items={CRUMBS} />
 
     <div class="mt-5 flex flex-wrap items-baseline justify-between gap-3">
       <h1 class="font-display text-3xl font-semibold text-ink">Keranjang Belanja</h1>

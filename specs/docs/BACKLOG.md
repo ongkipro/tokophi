@@ -327,6 +327,22 @@ the component is proven on two different shapes.
 
 ## 🧾 Deferred from the 2026-07-16 checkout/storefront polish
 
+- **[ ] 🧭 The blog ARTICLE has no breadcrumb and no `BreadcrumbList`** (2026-07-17, deliberate). Every
+  other indexable page now has both, from one shared array (`src/lib/breadcrumb.ts`). The article was
+  left alone because `blog/[handle].astro` argues explicitly for a **topic chip instead of a trail**
+  ("nothing competes with the text"), and adding schema for a Beranda → Jurnal → Title hierarchy the
+  shopper cannot see is precisely the drift the shared component was built to end. So it is a design
+  decision, not an oversight: **either** give the article a visible trail and then the schema follows,
+  **or** accept it forfeits the breadcrumb line Google shows on mobile SERPs for articles. Do not add
+  the schema alone.
+- **[ ] 🔎 JSON-LD still missing: `Organization`/`WebSite` (home), `BlogPosting` (articles),
+  `ItemList` (category)** (audited 2026-07-17). The PDP's `Product` schema is good and — checked —
+  **not fabricated**: `aggregateRating` is emitted only when `rating.count > 0`, availability comes
+  from real stock, and an `AggregateOffer` appears only when variant prices genuinely differ. Match
+  that bar: `BlogPosting` needs a real author + dates (we have them), `ItemList` needs the real product
+  list. ⚠️ `sku: product.handle` on the PDP is a substitution, not a real SKU. Sitemap has no `lastmod`
+  for products/pages (articles have one).
+
 - **[ ] 🖼️ Images are ~241KB oversized — and the hero needs ART DIRECTION, not a `srcset` width list**
   (measured 2026-07-17, Lighthouse `image-delivery-insight`, mobile, live). Distinct from the
   first-paint waste already fixed in `Hero.astro`. What the numbers actually say:
