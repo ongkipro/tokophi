@@ -27,6 +27,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      # ⚠️ THE SAME VOLUME THE ADMIN SERVES `/api/uploads/` FROM — required, not tidiness.
+      # `seed-journal.ts` writes 15 WebP files AND inserts the `media` rows that point at them. This
+      # container is `restart: "no"`: without the mount it would write those files into its own
+      # ephemeral filesystem, exit, and take them with it — leaving 15 media rows and 15 articles
+      # referencing images that 404 on the storefront, while the deploy log said the journal seeded
+      # fine. A seed that writes FILES must mount the volume those files live on.
+      - tokophi-uploads:/app/apps/admin/public/uploads
     environment:
       DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:-tokophi}@postgres:5432/tokophi
     # `seed.ts` is a NO-OP on a live DB — it counts `stores` and skips when any exist, so a redeploy
@@ -41,6 +49,7 @@ services:
       npx drizzle-kit migrate &&
       npx tsx src/seed.ts &&
       (npx tsx src/seed-templates.ts || echo 'templates seed skipped') &&
+      (npx tsx src/seed-journal.ts || echo 'journal seed skipped') &&
       (npx tsx src/seed-areas.ts || echo 'areas seed skipped')"
 
   admin:

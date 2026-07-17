@@ -18,6 +18,7 @@
     "seed:areas": "dotenv -e ../../.env -- tsx src/seed-areas.ts",
     "seed:reviews": "dotenv -e ../../.env -- tsx src/seed-reviews.ts",
     "seed:templates": "dotenv -e ../../.env -- tsx src/seed-templates.ts",
+    "seed:journal": "dotenv -e ../../.env -- tsx src/seed-journal.ts",
     "verify-rls": "dotenv -e ../../.env -- tsx src/verify-rls.ts",
     "verify-rls-app": "dotenv -e ../../.env -- tsx src/verify-rls-app.ts",
     "seed:recent": "dotenv -e ../../.env -- tsx src/seed-recent.ts"
