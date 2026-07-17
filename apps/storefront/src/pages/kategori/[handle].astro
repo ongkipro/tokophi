@@ -166,7 +166,9 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
         var ib = Number(b.getAttribute("data-index"));
         if (mode === "termurah") return pa - pb;
         if (mode === "termahal") return pb - pa;
-        return ia - ib;
+        // "Terbaru" = newest first. data-index ascends with created_at (list loads oldest-first), so
+        // reverse it — it used to return `ia - ib` and showed the OLDEST products under "Terbaru".
+        return ib - ia;
       });
       items.forEach(function (el) {
         grid.appendChild(el);

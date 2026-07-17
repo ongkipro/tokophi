@@ -730,8 +730,11 @@ export async function getPayoutSummary(): Promise<PayoutSummary> {
 
 // platform_payout is a single-row table that may not have been seeded — fall back to the schema
 // defaults rather than showing the operator an empty policy card.
-export type PayoutPolicy = { releaseOn: "selesai" | "dikirim"; minPayoutIdr: number; autoApprove: boolean };
-export const PAYOUT_POLICY_DEFAULT: PayoutPolicy = { releaseOn: "selesai", minPayoutIdr: 50_000, autoApprove: false };
+// `platform_payout.auto_approve` is intentionally NOT here: nothing writes it (savePayoutPolicy takes
+// only releaseOn + minPayoutIdr) and nothing renders it, so surfacing it was a dead read. Column kept
+// (dropping is a destructive migration); this type just stops pretending it's live.
+export type PayoutPolicy = { releaseOn: "selesai" | "dikirim"; minPayoutIdr: number };
+export const PAYOUT_POLICY_DEFAULT: PayoutPolicy = { releaseOn: "selesai", minPayoutIdr: 50_000 };
 
 export async function getPayoutPolicy(): Promise<PayoutPolicy> {
   const [row] = await db.select().from(schema.platformPayout).limit(1);
@@ -739,7 +742,6 @@ export async function getPayoutPolicy(): Promise<PayoutPolicy> {
   return {
     releaseOn: row.releaseOn === "dikirim" ? "dikirim" : "selesai",
     minPayoutIdr: row.minPayoutIdr,
-    autoApprove: row.autoApprove,
   };
 }
 
