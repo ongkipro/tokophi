@@ -7,6 +7,7 @@ import type { Collection } from "@/lib/mock/store";
 const selectCollection = {
   id: schema.collections.id,
   name: schema.collections.title,
+  handle: schema.collections.handle,
   emoji: schema.collections.emoji,
   type: schema.collections.type,
   published: schema.collections.published,
@@ -14,9 +15,9 @@ const selectCollection = {
 };
 
 function toCollection(r: {
-  id: string; name: string; emoji: string | null; type: "manual" | "otomatis"; published: boolean; products: number;
+  id: string; name: string; handle: string; emoji: string | null; type: "manual" | "otomatis"; published: boolean; products: number;
 }): Collection {
-  return { id: r.id, name: r.name, emoji: r.emoji ?? "📦", products: r.products, type: r.type, published: r.published };
+  return { id: r.id, name: r.name, handle: r.handle, emoji: r.emoji ?? "📦", products: r.products, type: r.type, published: r.published };
 }
 
 export async function getCollections(): Promise<Collection[]> {

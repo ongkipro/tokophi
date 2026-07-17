@@ -320,7 +320,7 @@ export const MENUS: NavMenu[] = [
 // ad-performance fixtures here.
 
 // ---- product sub-modules: collections (Kategori), purchase orders (Pembelian) ----
-export type Collection = { id: string; name: string; emoji: string; products: number; type: "manual" | "otomatis"; published: boolean };
+export type Collection = { id: string; name: string; handle?: string; emoji: string; products: number; type: "manual" | "otomatis"; published: boolean };
 export const COLLECTIONS: Collection[] = [
   { id: "COL-1", name: "Dress", emoji: "👗", products: 4, type: "otomatis", published: true },
   { id: "COL-2", name: "Atasan", emoji: "👚", products: 3, type: "otomatis", published: true },
