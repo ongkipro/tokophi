@@ -10,8 +10,6 @@ import {
   Truck,
   Users,
   Store,
-  UserPlus,
-  Save,
 } from "lucide-react"
 
 import { PageHeader } from "@/components/admin/page-header"
@@ -21,17 +19,10 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-  CardAction,
   CardContent,
   CardFooter,
 } from "@tokophi/ui/card"
-import { Button } from "@tokophi/ui/button"
-import { useCan } from "@/components/admin/permissions"
 import { useStoreName } from "@/components/admin/store-context"
-import { Input } from "@tokophi/ui/input"
-import { Label } from "@tokophi/ui/label"
-import { Textarea } from "@tokophi/ui/textarea"
-import { Switch } from "@tokophi/ui/switch"
 import { Badge } from "@tokophi/ui/badge"
 import { Separator } from "@tokophi/ui/separator"
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar"
@@ -40,6 +31,8 @@ import { JasaKirimCard } from "@/components/admin/pengaturan/jasa-kirim-card"
 import { RekeningCard } from "@/components/admin/pengaturan/rekening-card"
 import { StoreProfileCard } from "@/components/admin/pengaturan/store-profile-card"
 import { DomainCard } from "@/components/admin/pengaturan/domain-card"
+import { PenggunaCard } from "@/components/admin/pengaturan/pengguna-card"
+import { PajakCard } from "@/components/admin/pengaturan/pajak-card"
 
 // NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
 // (super-admin → platform_payment_channels) and flow straight to the shopper's checkout.
@@ -78,41 +71,15 @@ const SECTIONS: {
 ]
 
 
-function Field({
-  label,
-  htmlFor,
-  hint,
-  children,
-}: {
-  label: string
-  htmlFor?: string
-  hint?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor={htmlFor}>{label}</Label>
-      {children}
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  )
-}
 
+// Notifikasi is still a display-only preview: there is no notification system or column for those
+// prefs, so its toggles persist nothing and it keeps this honest footnote rather than a no-op Save
+// button. (Pajak used to be here too, but PPN is now real — tax settings persist to store_settings and
+// the order API prices them; see PajakCard.) The wired sections use their own real save handlers.
 function SaveFooter() {
-  const canSave = useCan("settings:write")
-  if (!canSave)
-    return (
-      <CardFooter className="justify-end">
-        <p className="text-xs text-muted-foreground">Hanya Pemilik yang dapat mengubah pengaturan toko.</p>
-      </CardFooter>
-    )
   return (
-    <CardFooter className="justify-end gap-2">
-      <Button variant="ghost">Batal</Button>
-      <Button>
-        <Save />
-        Simpan Perubahan
-      </Button>
+    <CardFooter className="justify-end">
+      <p className="text-xs text-muted-foreground">Segera hadir — perubahan pada bagian ini belum tersimpan.</p>
     </CardFooter>
   )
 }
@@ -120,13 +87,8 @@ function SaveFooter() {
 export default function Page() {
   // Navigasi
   const [section, setSection] = React.useState<Section>("profil")
-  const canSettings = useCan("settings:write")
   const storeName = useStoreName()
 
-
-  // Pajak
-  const [ppnAktif, setPpnAktif] = React.useState(true)
-  const [ppnInclusive, setPpnInclusive] = React.useState(false)
 
   // Notifikasi
   const [notif, setNotif] = React.useState({
@@ -140,27 +102,6 @@ export default function Page() {
   const setNotifKey = (k: keyof typeof notif) => (v: boolean) =>
     setNotif((s) => ({ ...s, [k]: v }))
 
-
-  const team = [
-    {
-      name: "Ongki",
-      email: "ongki@batiknusantara.id",
-      role: "Pemilik",
-      variant: "default" as const,
-    },
-    {
-      name: "Sari",
-      email: "sari@batiknusantara.id",
-      role: "Admin",
-      variant: "secondary" as const,
-    },
-    {
-      name: "Budi",
-      email: "budi@batiknusantara.id",
-      role: "Staf Gudang",
-      variant: "outline" as const,
-    },
-  ]
 
   return (
     <div>
@@ -242,15 +183,6 @@ export default function Page() {
               <ul className="grid gap-2 text-sm">
                 {/* The active-service count now lives inside JasaKirimCard, which owns that state.
                     Re-deriving it here would mean a second source of truth that can disagree. */}
-                <li className="flex items-center gap-2 text-muted-foreground">
-                  <Receipt className="size-4 shrink-0" />
-                  <span>
-                    PPN{" "}
-                    <span className="font-medium text-foreground">
-                      {ppnAktif ? "11%" : "nonaktif"}
-                    </span>
-                  </span>
-                </li>
               </ul>
             </CardContent>
           </Card>
@@ -299,157 +231,11 @@ export default function Page() {
             </div>
           )}
 
-          {/* PAJAK */}
-          {section === "pajak" && (
-            <Card className="max-w-3xl">
-              <CardHeader>
-                <CardTitle>Pajak</CardTitle>
-                <CardDescription>
-                  Atur penerapan Pajak Pertambahan Nilai (PPN) pada pesanan.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/40 p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">Aktifkan PPN</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Tambahkan PPN pada setiap transaksi pelanggan.
-                    </p>
-                  </div>
-                  <Switch checked={ppnAktif} onCheckedChange={setPpnAktif} />
-                </div>
+          {/* PAJAK — real PPN settings, persisted to store_settings + priced by the order API */}
+          {section === "pajak" && <PajakCard />}
 
-                <Field
-                  label="Tarif PPN (%)"
-                  htmlFor="tarif-ppn"
-                  hint="Tarif PPN umum di Indonesia saat ini 11%."
-                >
-                  <Input
-                    id="tarif-ppn"
-                    className="max-w-40 tabular-nums"
-                    inputMode="numeric"
-                    defaultValue="11"
-                    disabled={!ppnAktif}
-                  />
-                </Field>
-
-                <Field
-                  label="NPWP"
-                  htmlFor="npwp"
-                  hint="Nomor Pokok Wajib Pajak badan usaha Anda."
-                >
-                  <Input
-                    id="npwp"
-                    className="max-w-xs tabular-nums"
-                    inputMode="numeric"
-                    defaultValue="09.254.294.3-541.000"
-                    disabled={!ppnAktif}
-                  />
-                </Field>
-
-                <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/40 p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">Harga sudah termasuk pajak</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Harga produk yang ditampilkan sudah termasuk PPN.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={ppnInclusive}
-                    onCheckedChange={setPpnInclusive}
-                    disabled={!ppnAktif}
-                  />
-                </div>
-
-                <div className="rounded-lg border border-border/60 bg-muted/40 p-3 text-xs text-muted-foreground">
-                  <p>
-                    <span className="font-medium text-foreground">Inclusive</span>{" "}
-                    — PPN sudah termasuk di dalam harga yang ditampilkan (harga
-                    tidak bertambah saat checkout).
-                  </p>
-                  <p className="mt-1.5">
-                    <span className="font-medium text-foreground">Exclusive</span>{" "}
-                    — PPN dihitung terpisah dan ditambahkan pada subtotal saat
-                    checkout.
-                  </p>
-                </div>
-              </CardContent>
-              <SaveFooter />
-            </Card>
-          )}
-
-          {/* PENGGUNA */}
-          {section === "pengguna" && (
-            <Card className="max-w-3xl">
-              <CardHeader>
-                <CardTitle>Pengguna & Peran</CardTitle>
-                <CardDescription>
-                  Kelola anggota tim yang memiliki akses ke dasbor toko.
-                </CardDescription>
-                <CardAction>
-                  <Button size="sm">
-                    <UserPlus />
-                    Undang pengguna
-                  </Button>
-                </CardAction>
-              </CardHeader>
-              <CardContent className="grid gap-2">
-                {team.map((m) => (
-                  <div
-                    key={m.email}
-                    className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/40 p-3"
-                  >
-                    <Avatar>
-                      <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
-                        {m.name.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{m.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {m.email}
-                      </p>
-                    </div>
-                    <Badge variant={m.variant}>{m.role}</Badge>
-                  </div>
-                ))}
-
-                <div className="mt-1 rounded-lg border border-border/60 bg-muted/40 p-3 text-xs text-muted-foreground">
-                  <p className="mb-1.5 font-medium text-foreground">Peran</p>
-                  <ul className="grid gap-1">
-                    <li>
-                      <span className="font-medium text-foreground">Owner</span> —
-                      akses penuh termasuk penagihan & hapus toko.
-                    </li>
-                    <li>
-                      <span className="font-medium text-foreground">Admin</span> —
-                      kelola produk, pesanan, dan pengaturan.
-                    </li>
-                    <li>
-                      <span className="font-medium text-foreground">Staf</span> —
-                      akses terbatas untuk operasional harian.
-                    </li>
-                  </ul>
-                </div>
-              </CardContent>
-              <CardFooter className="justify-end gap-2">
-                <p className="mr-auto text-xs text-muted-foreground">
-                  <span className="tabular-nums">{team.length}</span> anggota tim
-                </p>
-                {canSettings ? (
-                  <>
-                    <Button variant="ghost">Batal</Button>
-                    <Button>
-                      <Save />
-                      Simpan Perubahan
-                    </Button>
-                  </>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Hanya Pemilik yang dapat mengelola pengguna.</p>
-                )}
-              </CardFooter>
-            </Card>
-          )}
+          {/* PENGGUNA — real store_users list + invite/role/remove (lib/actions/users.ts) */}
+          {section === "pengguna" && <PenggunaCard />}
 
           {/* NOTIFIKASI */}
           {section === "notifikasi" && (

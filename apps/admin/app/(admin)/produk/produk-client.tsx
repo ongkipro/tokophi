@@ -14,6 +14,8 @@ import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num, dateTimeShort } from "@tokophi/lib/format";
 import { TODAY, type Product } from "@/lib/mock/store";
 import { cn } from "@tokophi/ui/lib/utils";
+import { toast } from "sonner";
+import { bulkSetProductStatus, bulkDeleteProducts, duplicateProduct, deleteProduct } from "@/lib/actions/products";
 import { useCan } from "@/components/admin/permissions";
 
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -79,6 +81,25 @@ function WeightWarning() {
 
 function RowActions({ id }: { id: string }) {
   const canDelete = useCan("products:delete");
+  const canWrite = useCan("products:write");
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  const dup = () =>
+    start(async () => {
+      const r = await duplicateProduct(id);
+      if (r.ok) { toast.success("Produk diduplikat sebagai draft."); router.refresh(); }
+      else toast.error(r.error ?? "Gagal menduplikat — coba lagi.");
+    });
+  const archive = () =>
+    start(async () => {
+      try {
+        await deleteProduct(id);
+        toast.success("Produk diarsipkan.");
+        router.refresh();
+      } catch {
+        toast.error("Gagal mengarsipkan — coba lagi.");
+      }
+    });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi produk" />}>
@@ -86,9 +107,9 @@ function RowActions({ id }: { id: string }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem render={<Link href={`/produk/${id}`} />}><Pencil /> Edit</DropdownMenuItem>
-        <DropdownMenuItem><Copy /> Duplikat</DropdownMenuItem>
+        {canWrite && <DropdownMenuItem disabled={pending} onClick={dup}><Copy /> Duplikat</DropdownMenuItem>}
         {canDelete && <DropdownMenuSeparator />}
-        {canDelete && <DropdownMenuItem variant="destructive"><Archive /> Arsipkan</DropdownMenuItem>}
+        {canDelete && <DropdownMenuItem variant="destructive" disabled={pending} onClick={archive}><Archive /> Arsipkan</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -162,6 +183,20 @@ export function ProdukClient({ products }: { products: Product[] }) {
   const toggle = (id: string) =>
     setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const clearSel = () => setSelected(new Set());
+  const [bulkPending, startBulk] = React.useTransition();
+  const runBulk = (fn: (ids: string[]) => Promise<{ ok: boolean; count: number }>, verb: string) =>
+    startBulk(async () => {
+      const ids = [...selected];
+      try {
+        const r = await fn(ids);
+        if (!r.ok) throw new Error();
+        toast.success(`${num(r.count)} produk ${verb}.`);
+        clearSel();
+        router.refresh();
+      } catch {
+        toast.error(`Gagal — coba lagi.`);
+      }
+    });
   const visibleIds = filtered.map((p) => p.id);
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(visibleIds));
@@ -287,10 +322,10 @@ export function ProdukClient({ products }: { products: Product[] }) {
           <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Pilih semua" />
           <span className="text-sm font-medium">{num(selected.size)} dipilih</span>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            {canWrite && <Button variant="outline" size="sm" onClick={clearSel}><CircleCheck /> Jadikan Aktif</Button>}
-            {canWrite && <Button variant="outline" size="sm" onClick={clearSel}><FileText /> Jadikan Draft</Button>}
-            {canDelete && <Button variant="outline" size="sm" className="text-destructive" onClick={clearSel}><Trash2 /> Hapus</Button>}
-            <Button variant="ghost" size="sm" onClick={clearSel}>Batal</Button>
+            {canWrite && <Button variant="outline" size="sm" disabled={bulkPending} onClick={() => runBulk((ids) => bulkSetProductStatus(ids, "active"), "diaktifkan")}><CircleCheck /> Jadikan Aktif</Button>}
+            {canWrite && <Button variant="outline" size="sm" disabled={bulkPending} onClick={() => runBulk((ids) => bulkSetProductStatus(ids, "draft"), "dijadikan draft")}><FileText /> Jadikan Draft</Button>}
+            {canDelete && <Button variant="outline" size="sm" className="text-destructive" disabled={bulkPending} onClick={() => runBulk(bulkDeleteProducts, "dihapus")}><Trash2 /> Hapus</Button>}
+            <Button variant="ghost" size="sm" disabled={bulkPending} onClick={clearSel}>Batal</Button>
           </div>
         </div>
       ) : (

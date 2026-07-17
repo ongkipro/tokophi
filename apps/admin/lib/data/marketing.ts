@@ -75,7 +75,7 @@ export async function getAdChannels(): Promise<AdChannelStatus[]> {
     const attributed = (await db.execute(sql`
       select o.channel::text                    as "channel",
              count(*)::int                      as "orders",
-             coalesce(sum(o.total_idr), 0)::bigint as "revenue"
+             coalesce(sum(o.total_idr - o.tax_idr), 0)::bigint as "revenue"
       from orders o
       where o.status <> 'batal'
       group by 1

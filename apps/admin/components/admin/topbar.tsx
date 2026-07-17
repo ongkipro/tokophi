@@ -180,6 +180,7 @@ function SaldoChip({ balance }: { balance: TopbarData["balance"] }) {
 export function Topbar({
   user,
   storeName,
+  storefrontHost,
   searchIndex = [],
   balance,
   notifs = [],
@@ -187,6 +188,8 @@ export function Topbar({
 }: {
   user?: { name: string; email: string; role?: string };
   storeName?: string;
+  /** `<slug>.tokophi.id` — the store's public storefront origin (from the layout). */
+  storefrontHost?: string;
   searchIndex?: SearchItem[];
   balance?: TopbarData["balance"];
   notifs?: TopbarData["notifs"];
@@ -248,7 +251,16 @@ export function Topbar({
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
-          <DropdownMenuItem className="gap-2 text-muted-foreground"><ExternalLink className="size-4" /> Kunjungi storefront</DropdownMenuItem>
+          {storefrontHost ? (
+            <DropdownMenuItem
+              className="gap-2 text-muted-foreground"
+              render={<a href={`https://${storefrontHost}`} target="_blank" rel="noopener noreferrer" />}
+            >
+              <ExternalLink className="size-4" /> Kunjungi storefront
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem disabled className="gap-2 text-muted-foreground opacity-60"><ExternalLink className="size-4" /> Kunjungi storefront</DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

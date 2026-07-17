@@ -323,7 +323,16 @@ export const MENUS: NavMenu[] = [
 // ad-performance fixtures here.
 
 // ---- product sub-modules: collections (Kategori), purchase orders (Pembelian) ----
-export type Collection = { id: string; name: string; emoji: string; products: number; type: "manual" | "otomatis"; published: boolean };
+export type Collection = { id: string; name: string; handle?: string; emoji: string; products: number; type: "manual" | "otomatis"; published: boolean };
+// DB-enum-valued condition (field ∈ tag/title/type/price/stock/category, operator ∈ eq/neq/gt/lt/contains).
+export type CollectionCondition = { field: string; operator: string; value: string };
+// Everything the collection editor loads + saves — the flat Collection lacks description/SEO/members/conditions.
+export type CollectionDetail = {
+  id: string; name: string; handle: string; description: string;
+  type: "manual" | "otomatis"; match: "all" | "any"; published: boolean;
+  seoTitle: string; seoDesc: string; emoji: string;
+  memberIds: string[]; conditions: CollectionCondition[];
+};
 export const COLLECTIONS: Collection[] = [
   { id: "COL-1", name: "Dress", emoji: "👗", products: 4, type: "otomatis", published: true },
   { id: "COL-2", name: "Atasan", emoji: "👚", products: 3, type: "otomatis", published: true },
@@ -358,7 +367,7 @@ export const SEGMENTS: CustSegment[] = [
 ];
 
 export type ReviewStatus = "terbit" | "menunggu";
-export type Review = { id: string; customer: string; product: string; emoji: string; rating: number; text: string; status: ReviewStatus; daysAgo: number };
+export type Review = { id: string; customer: string; product: string; emoji: string; rating: number; text: string; reply?: string; status: ReviewStatus; daysAgo: number };
 export const REVIEWS: Review[] = [
   { id: "RV-1", customer: "Siti Nurhaliza", product: "Kopi Arabika Gayo 250g", emoji: "☕", rating: 5, text: "Kopinya wangi dan segar, pengiriman cepat. Recommended!", status: "terbit", daysAgo: 1 },
   { id: "RV-2", customer: "Budi Santoso", product: "Sepatu Sneakers Lokal", emoji: "👟", rating: 4, text: "Bahan bagus, ukuran pas. Cuma warnanya sedikit beda dari foto.", status: "terbit", daysAgo: 2 },

@@ -6,13 +6,9 @@ import { useRouter } from "next/navigation";
 import {
   Plus,
   Search,
-  ChevronDown,
   MoreHorizontal,
   Pencil,
-  Eye,
-  Copy,
   Trash2,
-  Settings2,
   MessageSquare,
   Newspaper,
 } from "lucide-react";
@@ -20,6 +16,8 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
+import { toast } from "sonner";
+import { deleteArticle } from "@/lib/actions/articles";
 import { BLOG_CATEGORIES, type BlogPost } from "@/lib/mock/store";
 
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -41,7 +39,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@tokophi/ui/dropdown-menu";
 
@@ -56,6 +53,18 @@ function daysAgoLabel(days: number) {
 
 function RowActions({ id }: { id: string }) {
   const canWrite = useCan("content:write");
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  const del = () =>
+    start(async () => {
+      try {
+        await deleteArticle(id);
+        toast.success("Artikel dihapus.");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus — coba lagi.");
+      }
+    });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -68,17 +77,9 @@ function RowActions({ id }: { id: string }) {
           <Pencil />
           Edit
         </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Eye />
-          Lihat
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Copy />
-          Duplikat
-        </DropdownMenuItem>
         {canWrite && <DropdownMenuSeparator />}
         {canWrite && (
-          <DropdownMenuItem variant="destructive">
+          <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}>
             <Trash2 />
             Hapus
           </DropdownMenuItem>
@@ -113,28 +114,10 @@ export function BlogClient({ posts }: { posts: BlogPost[] }) {
 
   return (
     <div>
+      {/* The "Kelola blog" dropdown was removed: it had no backend (this app has ONE blog, not many),
+          its category items duplicated the filter Tabs below, and "Buat blog baru" duplicated "Tambah
+          artikel". Every item in it was a dead no-op. */}
       <PageHeader title="Blog" desc="Tulis artikel dan kelola blog toko Anda.">
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="outline" />}>
-            <Settings2 />
-            Kelola blog
-            <ChevronDown className="text-muted-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuLabel>Blog</DropdownMenuLabel>
-            {BLOG_CATEGORIES.map((c) => (
-              <DropdownMenuItem key={c}>
-                <Newspaper />
-                {c}
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <Plus />
-              Buat blog baru
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
         {canWrite && (
           <Button nativeButton={false} render={<Link href="/blog/baru" />}>
             <Plus />

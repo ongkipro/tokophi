@@ -30,6 +30,8 @@ export type OrderMoney = {
   discount: number;
   shipping: number;
   tax: number;
+  /** True when PPN is already inside `subtotal` (inclusive) — then it must NOT be added to the total. */
+  taxInclusive: boolean;
   /** orders.total_idr */
   total: number;
   /** Σ order_line_items.total_idr — shown next to `subtotal` when they disagree. */
@@ -185,12 +187,19 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
     }));
 
     const lineSum = lines.reduce((s, l) => s + l.total, 0);
-    const computedTotal = o.subtotal - o.discount + o.shipping + o.tax;
+    // Inclusive PPN is already INSIDE the subtotal (it does not add to the total); exclusive PPN adds
+    // on top. There is no stored mode flag, so infer it from the numbers: if the total is explained
+    // WITHOUT adding tax, the tax was inclusive. Otherwise the reconciliation double-counted it and
+    // every inclusive order showed a false "tidak cocok" warning.
+    const base = o.subtotal - o.discount + o.shipping;
+    const taxInclusive = o.tax > 0 && base === o.total;
+    const computedTotal = taxInclusive ? base : base + o.tax;
     const money: OrderMoney = {
       subtotal: o.subtotal,
       discount: o.discount,
       shipping: o.shipping,
       tax: o.tax,
+      taxInclusive,
       total: o.total,
       lineSum,
       computedTotal,

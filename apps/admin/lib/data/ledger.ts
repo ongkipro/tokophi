@@ -327,6 +327,7 @@ export type InvoiceDetail = {
   subtotal: number;
   discount: number;
   shipping: number;
+  tax: number;
   total: number;
   courier: string | null;
   awb: string | null;
@@ -347,7 +348,7 @@ export async function getInvoiceDetail(orderId: string): Promise<InvoiceDetail |
       select
         o.id as "orderId", o.number, o.status::text as "status", o.placed_at as "placedAt",
         o.subtotal_idr as "subtotal", o.discount_idr as "discount", o.shipping_idr as "shipping",
-        o.total_idr as "total", o.courier, o.awb,
+        o.tax_idr as "tax", o.total_idr as "total", o.courier, o.awb,
         c.name as "customer",
         coalesce(a.phone, c.phone) as "phone",
         c.email,
@@ -383,6 +384,7 @@ export async function getInvoiceDetail(orderId: string): Promise<InvoiceDetail |
       subtotal: Number(head.subtotal),
       discount: Number(head.discount),
       shipping: Number(head.shipping),
+      tax: Number(head.tax),
       total: Number(head.total),
       lines: lines.map((l) => ({
         ...l,

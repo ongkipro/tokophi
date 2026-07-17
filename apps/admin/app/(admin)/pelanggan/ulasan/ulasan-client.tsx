@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { setReviewStatus, deleteReview, replyToReview } from "@/lib/actions/reviews";
 import {
   Star,
   MoreHorizontal,
@@ -16,6 +19,12 @@ import { Card } from "@tokophi/ui/card";
 import { Badge } from "@tokophi/ui/badge";
 import { Button } from "@tokophi/ui/button";
 import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
+import { Textarea } from "@tokophi/ui/textarea";
+import {
+  Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from "@tokophi/ui/dialog";
 import { Separator } from "@tokophi/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
 import {
@@ -242,7 +251,7 @@ function ReviewRow({ review: r }: { review: Review }) {
             <span className="hidden text-xs text-muted-foreground tabular-nums sm:inline">
               {num(r.daysAgo)} hari lalu
             </span>
-            <ReviewActions status={r.status} />
+            <ReviewActions id={r.id} status={r.status} reply={r.reply} />
           </div>
         </div>
 
@@ -254,6 +263,13 @@ function ReviewRow({ review: r }: { review: Review }) {
           {r.text}
         </p>
 
+        {r.reply && (
+          <div className="mt-3 rounded-lg border-l-2 border-primary/40 bg-muted/40 px-3 py-2">
+            <p className="text-xs font-medium text-muted-foreground">Balasan Anda</p>
+            <p className="mt-1 text-sm leading-relaxed text-foreground/90">{r.reply}</p>
+          </div>
+        )}
+
         <span className="mt-2 block text-xs text-muted-foreground tabular-nums sm:hidden">
           {num(r.daysAgo)} hari lalu
         </span>
@@ -262,34 +278,92 @@ function ReviewRow({ review: r }: { review: Review }) {
   );
 }
 
-function ReviewActions({ status }: { status: ReviewStatus }) {
+function ReviewActions({ id, status, reply = "" }: { id: string; status: ReviewStatus; reply?: string }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [replyOpen, setReplyOpen] = useState(false);
+  const run = (fn: () => Promise<{ ok: boolean }>, msg: string) =>
+    start(async () => {
+      try {
+        const r = await fn();
+        if (!r.ok) throw new Error();
+        toast.success(msg);
+        router.refresh();
+      } catch {
+        toast.error("Gagal — coba lagi.");
+      }
+    });
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button variant="ghost" size="icon-sm" aria-label="Aksi ulasan">
-            <MoreHorizontal className="size-4" />
-          </Button>
-        }
-      />
-      <DropdownMenuContent align="end">
-        {status === "menunggu" ? (
-          <DropdownMenuItem>
-            <Check className="size-4" /> Terbitkan
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button variant="ghost" size="icon-sm" aria-label="Aksi ulasan">
+              <MoreHorizontal className="size-4" />
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="end">
+          {status === "menunggu" ? (
+            <DropdownMenuItem disabled={pending} onClick={() => run(() => setReviewStatus(id, "terbit"), "Ulasan diterbitkan.")}>
+              <Check className="size-4" /> Terbitkan
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem disabled={pending} onClick={() => run(() => setReviewStatus(id, "menunggu"), "Ulasan disembunyikan.")}>
+              <EyeOff className="size-4" /> Sembunyikan
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onClick={() => setReplyOpen(true)}>
+            <MessageSquare className="size-4" /> {reply ? "Edit balasan" : "Balas"}
           </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem>
-            <EyeOff className="size-4" /> Sembunyikan
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => run(() => deleteReview(id), "Ulasan dihapus.")}>
+            <Trash2 className="size-4" /> Hapus
           </DropdownMenuItem>
-        )}
-        <DropdownMenuItem>
-          <MessageSquare className="size-4" /> Balas
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive">
-          <Trash2 className="size-4" /> Hapus
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {replyOpen && <ReplyDialog id={id} reply={reply} onOpenChange={setReplyOpen} run={run} />}
+    </>
+  );
+}
+
+// Mounted only while open, so the textarea seeds fresh from the saved reply each time.
+function ReplyDialog({
+  id, reply, onOpenChange, run,
+}: {
+  id: string; reply: string; onOpenChange: (o: boolean) => void;
+  run: (fn: () => Promise<{ ok: boolean }>, msg: string) => void;
+}) {
+  const [text, setText] = useState(reply);
+  const save = () => {
+    run(() => replyToReview(id, text), text.trim() ? "Balasan disimpan." : "Balasan dihapus.");
+    onOpenChange(false);
+  };
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Balas ulasan</DialogTitle>
+          <DialogDescription>
+            Balasan tampil publik di halaman produk, di bawah ulasan ini — hanya bila ulasan berstatus terbit.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-2">
+          <Label htmlFor="review-reply">Balasan penjual</Label>
+          <Textarea
+            id="review-reply"
+            className="min-h-28"
+            placeholder="mis. Terima kasih kak atas ulasannya! 🙏"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">Kosongkan lalu simpan untuk menghapus balasan.</p>
+        </div>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline">Tutup</Button>} />
+          <Button onClick={save}>Simpan</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

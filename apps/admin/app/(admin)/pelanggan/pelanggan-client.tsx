@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Users,
   Crown,
@@ -40,10 +41,17 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@tokophi/ui/dropdown-menu";
+import { Label } from "@tokophi/ui/label";
+import {
+  Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from "@tokophi/ui/dialog";
 import { type Segment } from "@/lib/mock/store";
 import type { CustomerRow } from "@/lib/data/customers";
 import { IDR, num } from "@tokophi/lib/format";
 import { exportCsv } from "@/lib/csv";
+import { useCan } from "@/components/admin/permissions";
+import { createCustomer, deleteCustomer } from "@/lib/actions/customers";
 import { cn } from "@tokophi/ui/lib/utils";
 import { SegmentBadge } from "@/components/admin/pelanggan/segment-badge";
 import { AccountBadge } from "@/components/admin/pelanggan/account-badge";
@@ -84,6 +92,108 @@ const SORTS: Record<SortKey, string> = {
 
 // Punya akun / tidak. "Tamu" is the normal case here — checkout never asks for a registration.
 type AccountTab = "semua" | "terdaftar" | "tamu";
+
+function DeleteCustomerItem({ id }: { id: string }) {
+  const canWrite = useCan("customers:write");
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  if (!canWrite) return null;
+  const del = () =>
+    start(async () => {
+      try {
+        await deleteCustomer(id);
+        toast.success("Pelanggan dihapus.");
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Gagal menghapus — coba lagi.");
+      }
+    });
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}>
+        <Trash2 className="size-4" /> Hapus
+      </DropdownMenuItem>
+    </>
+  );
+}
+
+function AddCustomerDialog() {
+  const canWrite = useCan("customers:write");
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [pending, start] = useTransition();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [city, setCity] = useState("");
+  const [province, setProvince] = useState("");
+
+  const save = () =>
+    start(async () => {
+      try {
+        await createCustomer({ name, email, phone, city, province });
+        toast.success("Pelanggan ditambahkan.");
+        setName(""); setEmail(""); setPhone(""); setCity(""); setProvince("");
+        setOpen(false);
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Gagal menambah pelanggan.");
+      }
+    });
+
+  if (!canWrite) return null;
+
+  return (
+    <>
+      <Button className="gap-2" onClick={() => setOpen(true)}>
+        <UserPlus className="size-4" /> Tambah Pelanggan
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Tambah pelanggan</DialogTitle>
+            <DialogDescription>
+              Catat pelanggan dari pesanan WhatsApp atau pembeli langsung. Tanpa akun — seperti tamu biasa.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="cust-nama">Nama</Label>
+              <Input id="cust-nama" placeholder="mis. Rina Wijaya" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="cust-wa">Nomor WhatsApp</Label>
+              <Input id="cust-wa" inputMode="numeric" placeholder="mis. 081234567890" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="cust-email">Email <span className="text-muted-foreground">(opsional)</span></Label>
+              <Input id="cust-email" type="email" placeholder="mis. rina@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="cust-kota">Kota</Label>
+                <Input id="cust-kota" placeholder="mis. Bandung" value={city} onChange={(e) => setCity(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="cust-prov">Provinsi</Label>
+                <Input id="cust-prov" placeholder="mis. Jawa Barat" value={province} onChange={(e) => setProvince(e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline">Tutup</Button>} />
+            <Button disabled={pending || !name.trim()} onClick={save}>
+              {pending ? "Menyimpan…" : "Simpan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 export function PelangganClient({ customers }: { customers: CustomerRow[] }) {
   const router = useRouter();
@@ -198,9 +308,7 @@ export function PelangganClient({ customers }: { customers: CustomerRow[] }) {
         >
           <Download className="size-4" /> Ekspor
         </Button>
-        <Button className="gap-2">
-          <UserPlus className="size-4" /> Tambah Pelanggan
-        </Button>
+        <AddCustomerDialog />
       </PageHeader>
 
       {/* stat cards */}
@@ -396,13 +504,13 @@ export function PelangganClient({ customers }: { customers: CustomerRow[] }) {
                       >
                         <Eye className="size-4" /> Lihat profil
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={!c.phone}
+                        onClick={() => c.phone && window.open(`https://wa.me/${c.phone.replace(/\D/g, "")}`, "_blank", "noopener")}
+                      >
                         <MessageCircle className="size-4" /> Kirim WhatsApp
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem variant="destructive">
-                        <Trash2 className="size-4" /> Hapus
-                      </DropdownMenuItem>
+                      <DeleteCustomerItem id={c.id} />
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

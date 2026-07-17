@@ -3,6 +3,7 @@ import { Topbar } from "@/components/admin/topbar";
 import { AdminChrome } from "@/components/admin/admin-chrome";
 import { getSession } from "@/lib/auth";
 import { getStoreName, getStoreSlug } from "@/lib/data/store";
+import { systemDomainFor } from "@/lib/data/domain";
 import { getSearchIndex } from "@/lib/data/search";
 import { PermissionsProvider } from "@/components/admin/permissions";
 import { StoreProvider } from "@/components/admin/store-context";
@@ -28,6 +29,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       ])
     : [null, null, [], null, null, 0];
   const navCounts = { perluDikirim: perluDikirim ?? 0 };
+  // The store's public storefront origin for "Kunjungi storefront" (same helper as the Domain card).
+  const storefrontHost = storeSlug ? systemDomainFor(storeSlug) : "";
   const billingBanner = bill && (bill.status === "past_due" || bill.status === "suspended") && (
     <Link
       href="/akun/langganan"
@@ -47,6 +50,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Topbar
               user={user}
               storeName={storeName ?? undefined}
+              storefrontHost={storefrontHost}
               searchIndex={searchIndex}
               balance={topbar?.balance}
               notifs={topbar?.notifs}

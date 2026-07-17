@@ -11,6 +11,13 @@ const { store, catalog } = Astro.locals;
 // which is every freshly provisioned one — used to be handed a hardcoded copy of Batik Nusantara's
 // categories, so its header linked to /kategori/dress and 404'd on every page. See data/nav.ts.
 const MAIN_NAV = await getMainNav(store.id, catalog.collections);
+
+// The mega-menu utility bar linked to two hardcoded demo collections (promo-gajian, produk-terlaris)
+// that 404 on any tenant that doesn't have them. Render each link only if THIS store actually has that
+// collection, using its real name — and hide the whole bar when neither exists.
+const promoCol = catalog.findCollection("promo-gajian");
+const terlarisCol = catalog.findCollection("produk-terlaris");
+const showUtilityBar = Boolean(promoCol || terlarisCol);
 // Merchant logo (stores.logo_url) when set, else the store name as a wordmark.
 const logo = store.logoUrl ? mediaUrl(store.logoUrl) : null;
 const pathname = Astro.url.pathname;
@@ -196,25 +203,32 @@ const featured = catalog.bestsellers()[0];
                     )}
                   </div>
 
-                  <!-- Utility bar: the two destinations a category browser most often wants next. -->
+                  <!-- Utility bar: shortcuts to this store's own promo/bestseller collections, shown
+                       only when they exist (they are hardcoded demo handles otherwise). -->
+                  {showUtilityBar && (
                   <div
                     class="flex items-center justify-between gap-4 border-t border-line bg-brand-50/50 px-6 py-3 text-sm"
                   >
+                    {promoCol && (
                     <a
                       href="/kategori/promo-gajian"
                       class="inline-flex items-center gap-2 rounded-sm font-medium text-brand-700 transition-colors hover:text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                     >
                       <Tag class="h-4 w-4 shrink-0" stroke-width={1.75} aria-hidden="true" />
-                      Promo Gajian — diskon periode gajian
+                      {promoCol.name}
                     </a>
+                    )}
+                    {terlarisCol && (
                     <a
                       href="/kategori/produk-terlaris"
-                      class="hidden rounded-sm text-muted transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:block"
+                      class="ml-auto hidden rounded-sm text-muted transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:block"
                     >
-                      Produk terlaris
+                      {terlarisCol.name}
                       <ArrowRight class="ml-1 inline h-3.5 w-3.5" stroke-width={2} aria-hidden="true" />
                     </a>
+                    )}
                   </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -6,8 +6,13 @@ import {
   ShoppingCart, CreditCard, PackageCheck, Star, Repeat, Megaphone,
 } from "lucide-react";
 
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+
 import { PageHeader } from "@/components/admin/page-header";
 import { fillTemplate } from "@tokophi/lib/format";
+import { useCan } from "@/components/admin/permissions";
+import { createWaTemplate, updateWaTemplate, deleteWaTemplate } from "@/lib/actions/crm";
 import { type WaTemplate, type FollowupType } from "@/lib/mock/store";
 
 import { Card } from "@tokophi/ui/card";
@@ -18,7 +23,7 @@ import { Label } from "@tokophi/ui/label";
 import { Textarea } from "@tokophi/ui/textarea";
 import {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle, DialogTrigger,
+  DialogHeader, DialogTitle,
 } from "@tokophi/ui/dialog";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -113,19 +118,50 @@ function renderBody(text: string) {
   });
 }
 
-function CardActions() {
+function CardActions({ t }: { t: WaTemplate }) {
+  const canWrite = useCan("crm:write");
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  const [editOpen, setEditOpen] = React.useState(false);
+
+  const dup = () =>
+    start(async () => {
+      try {
+        await createWaTemplate({ name: `${t.name} (salinan)`, type: t.type, body: t.body });
+        toast.success("Template diduplikat.");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menduplikat — coba lagi.");
+      }
+    });
+  const del = () =>
+    start(async () => {
+      try {
+        await deleteWaTemplate(t.id);
+        toast.success("Template dihapus.");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus — coba lagi.");
+      }
+    });
+
+  if (!canWrite) return null;
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi template" />}>
-        <MoreHorizontal />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem><Pencil /> Edit</DropdownMenuItem>
-        <DropdownMenuItem><Copy /> Duplikat</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive"><Trash2 /> Hapus</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi template" disabled={pending} />}>
+          <MoreHorizontal />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setEditOpen(true)}><Pencil /> Edit</DropdownMenuItem>
+          <DropdownMenuItem onClick={dup}><Copy /> Duplikat</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={del}><Trash2 /> Hapus</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {editOpen && <TemplateDialog initial={t} onOpenChange={setEditOpen} />}
+    </>
   );
 }
 
@@ -138,7 +174,7 @@ function TemplateCard({ t }: { t: WaTemplate }) {
           <p className="truncate font-medium leading-tight">{t.name}</p>
           <TypeBadge type={t.type} />
         </div>
-        <CardActions />
+        <CardActions t={t} />
       </div>
 
       {/* WhatsApp-style chat preview */}
@@ -158,17 +194,38 @@ function TemplateCard({ t }: { t: WaTemplate }) {
   );
 }
 
-function CreateTemplateDialog() {
-  const [jenis, setJenis] = React.useState<TemplType>("keranjang");
+// One dialog serves both create (no `initial`) and edit. Mounted only while open (parents gate on
+// their open flag), so useState seeds fresh from `initial` each time — a cancelled edit never leaks.
+function TemplateDialog({
+  initial, onOpenChange,
+}: { initial?: WaTemplate; onOpenChange: (o: boolean) => void }) {
+  const editing = !!initial;
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  const [name, setName] = React.useState(initial?.name ?? "");
+  const [jenis, setJenis] = React.useState<TemplType>(initial?.type ?? "keranjang");
+  const [body, setBody] = React.useState(initial?.body ?? "");
   const meta = typeMeta[jenis];
   const JenisIcon = meta.icon;
 
+  const save = () =>
+    start(async () => {
+      try {
+        if (editing) await updateWaTemplate(initial!.id, { name, type: jenis, body });
+        else await createWaTemplate({ name, type: jenis, body });
+        toast.success(editing ? "Template diperbarui." : "Template dibuat.");
+        onOpenChange(false);
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Gagal menyimpan template.");
+      }
+    });
+
   return (
-    <Dialog>
-      <DialogTrigger render={<Button><Plus /> Buat template</Button>} />
+    <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Buat template baru</DialogTitle>
+          <DialogTitle>{editing ? "Edit template" : "Buat template baru"}</DialogTitle>
           <DialogDescription>
             Susun pesan siap-pakai. Sisipkan variabel agar tiap pesan terisi otomatis sesuai pelanggan.
           </DialogDescription>
@@ -177,7 +234,7 @@ function CreateTemplateDialog() {
         <div className="grid gap-4 py-1">
           <div className="grid gap-2">
             <Label htmlFor="tpl-nama">Nama template</Label>
-            <Input id="tpl-nama" placeholder="mis. Pengingat pembayaran" autoComplete="off" />
+            <Input id="tpl-nama" placeholder="mis. Pengingat pembayaran" autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
 
           <div className="grid gap-2">
@@ -206,12 +263,13 @@ function CreateTemplateDialog() {
 
           <div className="grid gap-2">
             <Label htmlFor="tpl-isi">Isi pesan</Label>
-            {/* Insert-placeholder chips (decorative) */}
+            {/* Click a token to append it to the message. */}
             <div className="flex flex-wrap gap-1.5">
               {VARIABLES.map((v) => (
                 <button
                   key={v.token}
                   type="button"
+                  onClick={() => setBody((b) => b + v.token)}
                   className="rounded-md border bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
                 >
                   {v.token}
@@ -222,6 +280,8 @@ function CreateTemplateDialog() {
               id="tpl-isi"
               className="min-h-32 font-mono text-sm"
               placeholder="Halo kak {{nama}} 👋, pesanan {{no_pesanan}} sebesar {{total}} menunggu pembayaran… — {{toko}}"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
               Gunakan <span className="font-mono">*teks*</span> untuk menebalkan tulisan seperti di WhatsApp.
@@ -230,11 +290,25 @@ function CreateTemplateDialog() {
         </div>
 
         <DialogFooter>
-          <DialogClose render={<Button variant="outline">Batal</Button>} />
-          <DialogClose render={<Button>Simpan</Button>} />
+          <DialogClose render={<Button variant="outline">Tutup</Button>} />
+          <Button disabled={pending || !name.trim() || !body.trim()} onClick={save}>
+            {pending ? "Menyimpan…" : "Simpan"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function CreateTemplateButton() {
+  const canWrite = useCan("crm:write");
+  const [open, setOpen] = React.useState(false);
+  if (!canWrite) return null;
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}><Plus /> Buat template</Button>
+      {open && <TemplateDialog onOpenChange={setOpen} />}
+    </>
   );
 }
 
@@ -245,7 +319,7 @@ export function TemplateClient({ templates }: { templates: WaTemplate[] }) {
         title="Template WhatsApp"
         desc="Pesan siap-pakai untuk follow-up dan broadcast ke pelanggan."
       >
-        <CreateTemplateDialog />
+        <CreateTemplateButton />
       </PageHeader>
 
       {/* Variabel tersedia helper strip */}

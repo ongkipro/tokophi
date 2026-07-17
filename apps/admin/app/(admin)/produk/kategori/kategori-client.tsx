@@ -11,6 +11,8 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
+import { toast } from "sonner";
+import { deleteCollection } from "@/lib/actions/collections";
 import { type Collection } from "@/lib/mock/store";
 
 import { Card } from "@tokophi/ui/card";
@@ -45,24 +47,47 @@ function StatusBadge({ published }: { published: boolean }) {
   );
 }
 
-function RowActions({ id }: { id: string }) {
+function RowActions({ c, storefrontBase }: { c: Collection; storefrontBase: string }) {
   const canWrite = useCan("content:write");
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  // The live storefront page only resolves for a published category with a handle; a draft would 404.
+  const storeUrl = c.published && c.handle && storefrontBase ? `${storefrontBase}/kategori/${c.handle}` : null;
+  const del = () =>
+    start(async () => {
+      try {
+        await deleteCollection(c.id);
+        toast.success("Kategori dihapus.");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus — coba lagi.");
+      }
+    });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi kategori" />}>
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem render={<Link href={`/produk/kategori/${id}`} />}><Pencil /> Edit</DropdownMenuItem>
-        <DropdownMenuItem><ExternalLink /> Lihat di toko</DropdownMenuItem>
+        <DropdownMenuItem render={<Link href={`/produk/kategori/${c.id}`} />}><Pencil /> Edit</DropdownMenuItem>
+        {storeUrl ? (
+          <DropdownMenuItem render={<a href={storeUrl} target="_blank" rel="noopener noreferrer" />}>
+            <ExternalLink /> Lihat di toko
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem disabled className="opacity-60">
+            <ExternalLink /> Lihat di toko
+            <span className="ml-auto text-[10px] text-muted-foreground">{c.published ? "—" : "draft"}</span>
+          </DropdownMenuItem>
+        )}
         {canWrite && <DropdownMenuSeparator />}
-        {canWrite && <DropdownMenuItem variant="destructive"><Trash2 /> Hapus</DropdownMenuItem>}
+        {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}><Trash2 /> Hapus</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-export function KategoriClient({ collections }: { collections: Collection[] }) {
+export function KategoriClient({ collections, storefrontBase }: { collections: Collection[]; storefrontBase: string }) {
   const router = useRouter();
   const canWrite = useCan("content:write");
   const [search, setSearch] = React.useState("");
@@ -148,7 +173,7 @@ export function KategoriClient({ collections }: { collections: Collection[] }) {
                     className="text-right"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <RowActions id={c.id} />
+                    <RowActions c={c} storefrontBase={storefrontBase} />
                   </TableCell>
                 </TableRow>
               ))}

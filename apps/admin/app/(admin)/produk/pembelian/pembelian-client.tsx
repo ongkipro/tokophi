@@ -120,7 +120,8 @@ function RowActions({ po }: { po: PurchaseOrder }) {
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuItem><Eye /> Lihat</DropdownMenuItem>
+        {/* No PO detail route/query exists — honest disabled rather than a no-op click. */}
+        <DropdownMenuItem disabled className="opacity-60"><Eye /> Lihat<span className="ml-auto text-[10px] text-muted-foreground">segera</span></DropdownMenuItem>
         {canWrite && <DropdownMenuItem disabled={pending || po.status === "diterima"} onClick={receive}><PackageCheck /> Tandai diterima</DropdownMenuItem>}
         {canWrite && <DropdownMenuSeparator />}
         {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={cancel}><XCircle /> Batalkan</DropdownMenuItem>}

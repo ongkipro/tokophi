@@ -134,6 +134,10 @@ const store = Astro.locals.store;
       .join("");
 
     var shipPrice = order.shipping ? order.shipping.price || 0 : 0;
+    var tax = order.tax || 0;
+    // Exclusive PPN adds on top (subtotal + ongkir + tax == total); inclusive PPN is already inside the
+    // subtotal (subtotal + ongkir == total). Adding a PPN row for inclusive would overstate the total.
+    var taxExclusive = tax > 0 && Math.round((order.subtotal || 0) + shipPrice + tax) === Math.round(order.total || 0);
 
     summary.innerHTML =
       '<div class="rounded-lg border border-[var(--co-line)] bg-white p-5 sm:p-6">' +
@@ -142,6 +146,8 @@ const store = Astro.locals.store;
       '<div class="mt-4 space-y-2 border-t border-[var(--co-line)] pt-4 text-sm">' +
       '<div class="flex items-center justify-between"><span class="text-[var(--co-muted)]">Subtotal</span><span class="font-medium text-ink tabular-nums">' + idr.format(order.subtotal || 0) + "</span></div>" +
       '<div class="flex items-center justify-between"><span class="text-[var(--co-muted)]">Ongkir</span><span class="font-medium text-ink tabular-nums">' + idr.format(shipPrice) + "</span></div>" +
+      (taxExclusive ? '<div class="flex items-center justify-between"><span class="text-[var(--co-muted)]">PPN</span><span class="font-medium text-ink tabular-nums">' + idr.format(tax) + "</span></div>" : "") +
+      (tax > 0 && !taxExclusive ? '<div class="flex items-center justify-between text-xs"><span class="text-[var(--co-muted)]">Termasuk PPN</span><span class="text-[var(--co-muted)] tabular-nums">' + idr.format(tax) + "</span></div>" : "") +
       "</div>" +
       '<div class="mt-4 flex items-center justify-between border-t border-[var(--co-line)] pt-4">' +
       '<span class="text-base font-medium text-ink">Total</span>' +

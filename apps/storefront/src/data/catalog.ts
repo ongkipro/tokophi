@@ -50,7 +50,7 @@ export type Product = {
   templateId: string | null;
 };
 export type Rating = { value: number; count: number };
-export type Review = { rating: number; author: string; body: string; daysAgo: number };
+export type Review = { rating: number; author: string; body: string; reply: string | null; daysAgo: number };
 
 /** Everything one store's pages need. Built once per store per TTL, then reused across requests. */
 export type Catalog = {
@@ -319,6 +319,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       productId: schema.reviews.productId,
       rating: schema.reviews.rating,
       body: schema.reviews.body,
+      reply: schema.reviews.reply,
       createdAt: schema.reviews.createdAt,
       author: schema.customers.name,
     })
@@ -349,6 +350,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
         rating: r.rating,
         author: authorName(r.author),
         body: r.body.trim(),
+        reply: r.reply?.trim() || null,
         daysAgo: Math.max(0, Math.floor((nowMs - new Date(r.createdAt).getTime()) / 86_400_000)),
       });
       reviewsByProduct.set(r.productId, rl);
@@ -490,6 +492,23 @@ export async function enabledPaymentChannels(): Promise<{ code: string; label: s
 //   · per-service      — /api/public/ongkir stamps each rate with the EFFECTIVE `cod` flag
 // Every one of these is re-checked by /api/public/order (apps/admin/lib/cod.ts) — THAT is the
 // boundary; this only decides what to render, so a shopper is never offered a COD we would reject.
+// Merchant PPN, read for the checkout display so the shopper sees the same total the order API charges
+// (both use @tokophi/lib computeTax). OFF unless the merchant opted in. /api/public/order re-reads
+// these columns and is the authoritative money — this only decides what the summary shows.
+export type StoreTax = { enabled: boolean; ratePct: number; inclusive: boolean };
+
+export async function storeTaxSettings(storeId: string): Promise<StoreTax> {
+  // NOT cached: the order API reads these columns live, so a cached value here would let the checkout
+  // render one PPN while the order charges another for the length of the TTL right after a merchant
+  // changes the setting. A single PK lookup per checkout SSR is cheap; charging ≠ shown is not.
+  const [ss] = await db
+    .select({ enabled: schema.storeSettings.taxEnabled, ratePct: schema.storeSettings.taxRatePct, inclusive: schema.storeSettings.taxInclusive })
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.storeId, storeId))
+    .limit(1);
+  return { enabled: !!ss?.enabled, ratePct: Number(ss?.ratePct ?? 0), inclusive: !!ss?.inclusive };
+}
+
 export type StoreCodPolicy = { enabled: boolean; maxAmountIdr: number; allowedProvinces: string[] };
 
 export async function storeCodPolicy(storeId: string): Promise<StoreCodPolicy> {
