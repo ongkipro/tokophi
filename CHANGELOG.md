@@ -4,6 +4,48 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### ✅ Seven disabled stubs became real features — the admin no longer lies about what it can do
+
+A frontend audit had turned every button with no backend into an honest disabled "segera hadir" stub
+rather than a no-op that silently does nothing. This closes all seven of them. Each was typechecked +
+linted and exercised at the SQL level (test rows always cleaned up — the shared DB stays honest).
+
+- **CRM lead pipeline** (`cb1fbf2`) — the Kanban could read leads but every write was a stub. Added
+  `createLead` / `setLeadStage` / `deleteLead` (`crm:write`, `withTenant`): "Tambah prospek" saves,
+  the card menu moves a lead to any stage or deletes it. Source arrives display-cased ("WhatsApp") and
+  is lowercased to the pgEnum on insert.
+- **WhatsApp templates** (`6e3e45c`) — `createWaTemplate` / `updateWaTemplate` / `deleteWaTemplate`.
+  One controlled dialog serves create + edit (mounted only while open, so fields seed fresh each time);
+  Duplikat clones a row as "(salinan)"; the variable chips now append their token to the body.
+- **Tambah Pelanggan** (`855f2ec`) — `createCustomer` (`customers:write`): a merchant logs a WA/walk-in
+  buyer by hand. `registeredAt` stays NULL — a hand-added customer is a guest like any other (0044).
+- **Hapus Pelanggan** (`050c00c`) — `deleteCustomer` hard-deletes but catches Postgres 23503 and
+  refuses with "punya riwayat (pesanan/ulasan)". The FK constraints ARE the guard: only a truly
+  unreferenced (just-added) customer deletes; anyone with history is protected by the DB itself.
+- **Balas ulasan** (`b06be61`) — migration **0060** adds `reviews.reply` (nullable). `replyToReview`
+  (`content:write`, empty clears to NULL). The PDP renders a "Balasan penjual" block under the review,
+  **only for `status='terbit'`** — a hidden review's reply never leaks to a shopper.
+- **Kelola pengguna staf** (`a234a86`) — Pengaturan → Pengguna was a mock list of three names. Now it
+  reads real `store_users` (RLS-scoped) and writes: invite (creates the login user if new, scrypt temp
+  password shown ONCE for WhatsApp hand-off — no mailer), change role, remove. Gated on `settings:write`,
+  which **only the owner role has** (`rbac-policy`: admin = all caps minus `settings:write`) — staff can
+  never manage staff. Owner protection: the owner's role can't change, they can't be removed, you can't
+  remove yourself. ⚠️ **Writes use the OWNER connection deliberately** (documented in `lib/actions/users.ts`):
+  `users` is a GLOBAL table (no `store_id`, no RLS) — the same table `auth.ts` and super-admin write on
+  the owner connection; `tokophi_app` has no INSERT grant on it. The tenant boundary is held by scoping
+  every `store_users` row to `session.storeId` from `requireCapability` (never a client value), exactly
+  like super-admin's `createStore`. Verified at SQL level: a new member is visible to its own tenant's
+  RLS read and invisible to another tenant's.
+- **"Lihat di toko"** (`7709041`) — the category page builds the store's public URL server-side
+  (`getStoreSlug(session.storeId)` → `systemDomainFor(slug)` → `https://<slug>.tokophi.id`, the same
+  always-on origin the Domain settings card uses) and passes it to the client; `getCollections` now
+  carries the `handle`. Opens `<base>/kategori/<handle>` in a new tab — but only for a PUBLISHED
+  category (a draft would 404, so it's gated).
+
+**DB CONTRACT:** migration 0060 adds `reviews.reply`. Run `npm run migrate -w @tokophi/db` after
+pulling. RLS unaffected (`reviews` already store-scoped; `verify-rls` green). `leads`, `wa_templates`,
+`reviews` and `store_users` are now WRITE surfaces for the admin.
+
 ### 📰 Jurnal on the homepage — a 9th section, and the merchant's articles finally reach the front page
 
 The merchant writes articles in Dashboard Seller → Blog, and the only way a shopper ever found them
