@@ -4,6 +4,100 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 📰 Jurnal on the homepage — a 9th section, and the merchant's articles finally reach the front page
+
+The merchant writes articles in Dashboard Seller → Blog, and the only way a shopper ever found them
+was to already know `/blog` existed. Now the homepage carries them.
+
+**Built as a SECTION, not as markup in `index.astro`.** ADR 0009's registry has two halves — the
+storefront's `SectionRenderer` and the admin's Puck config, sharing `@tokophi/sections`. Adding it as
+a 9th type means the merchant can move it, retitle it, or remove it in the Store Builder like any
+other. `Config<SectionConfigMap>` made that mandatory rather than optional: the moment `blog` joined
+the map, **TypeScript refused to compile until both halves existed** — the registry is genuinely
+exhaustive, which is the whole point of it.
+
+**The section renders NOTHING until an article is published.** Not an empty state, not a "belum ada
+tulisan" placeholder — this is the shopper's homepage, and an empty husk announcing an empty journal
+is worse for the shop than silence. `/blog` keeps its empty state because a shopper went looking for
+the journal *there*; nobody asked for one here. **Verified, not assumed**: a throwaway homepage
+template on `kopi-senja` (0 published articles) rendered the page at 126 KB with zero trace of the
+section — no heading, no cards, no husk. Template deleted afterwards.
+
+**Position: above the closing CTA, not last.** "Bagian bawah" was the ask and this is it, but ending
+the page on a row of articles sends the shopper off to *read* instead of to buy, and strands the
+closing CTA mid-page where nothing concludes. Journal, then the ask — same reason Dawn does it.
+
+**`ArticleCard.astro` extracted** and now used by BOTH `/blog` and this section (~40 lines of
+duplicated markup deleted). `3ce6d6c` had already found this tile and `ProductCard` "do the same job
+and had different radius, boundary technique and hover lift" and made them identical; two inline
+copies is exactly how that drift restarts. The card takes a `level` prop (2 on `/blog`, under its
+`<h1>`; 3 in this section, under the section's `<h2>`) — hard-coding either would skip a heading level
+in the other, which is the outline a screen-reader user navigates by.
+
+**Config is 3 fields, and two omissions are deliberate.** No `ctaHref` — the destination is always
+`/blog`, which every store has; free-text hrefs are precisely how the defaults ended up pointing at
+`/kategori/dress`, a handle only the demo owns. No article picker — pinned handles rot as the merchant
+publishes, or point at a post they later unpublish. `limit` is a **select (2/3/4)**, not a number: a
+free number invites 7, which is a broken grid discovered by publishing.
+
+⚠️ **`seed-templates.ts`'s header was lying, and it is a dangerous lie.** It said the script "inserts
+only when the store has no homepage template, so it is safe against a live DB and never clobbers what
+a merchant has since edited". That stopped being true at `1c738d4` — **it UPSERTS; an existing
+homepage is REPLACED** (the function body documents this properly; only the header was stale). Anyone
+trusting that header would run `seed:templates` against a live store and wipe the arrangement the
+merchant built. Corrected.
+
+**Driven in a browser, 0 console errors**: homepage section order is now hero → category-nav →
+rich-text → product-grid → product-grid → **Dari Jurnal** → closing CTA; 3 cards, newest first; the
+1 **draft** article does not appear (publishing is a security boundary in `getArticles`, and the
+homepage HTML contains no trace of it); `<h3>` in the section and `<h2>` on `/blog`; no horizontal
+scroll at 390px; `/blog` still lists all 5 published articles after the refactor. `/tema` still loads
+and the builder's sidebar now offers all 9 sections including **Jurnal**, with no React error.
+
+### 🪤 A typo in an OPTIONAL field was holding the checkout hostage — the address went into the email box
+
+Continuing the validation sweep after the language fix, and this one is worse than the language was.
+
+**The shopper types `siti@gmail`** — an ordinary typo, missing `.com`. They click the **Alamat** box
+and type their address. Measured, in a real browser, driving it like a human (click + type, not
+`fill()`):
+
+```
+alamat = ""
+email  = "siti@gmailJl. Melati No. 12 RT 03 RW 05"
+```
+
+**Their address was typed into the email field.** `Tab` was trapped too — focus would not leave email.
+And **`email` is OPTIONAL**: a field nobody is required to fill was holding the entire checkout
+hostage, at the exact moment the shopper was trying to give us their address.
+
+**Cause:** the blur handler called `el.reportValidity()`, and **`reportValidity()` focuses the
+control** — by spec. So leaving a field with a typo dragged the shopper straight back into it. This
+file's own comment already warned that "reportValidity() drags the focus back… a shopper who meant to
+fill it in last gets trapped in it" — it guarded the **empty** case and left the **invalid-format**
+case wide open.
+
+**Fix:** blur now calls `showFieldError()`, which writes an inline `<p data-err="…">` plus
+`aria-invalid` **and never touches focus**. Focus-stealing survives only on **submit**, where it is
+correct: they pressed Bayar, so taking them to the blocking field is the help they asked for.
+
+⚠️ **A test using `page.fill()` cannot see this bug** — `fill()` sets the value directly. It only
+appears when you click and type like a person, and then check *which field the text landed in*. That
+is how it hid.
+
+**Also swept, and the news is good — 40+ cases, all green, in a real browser.** The input rules do NOT
+over-validate, which AGENTS.md calls a bug in its own right:
+- **13 real Indonesian names pass** — `Nur'aini`, `M. Rizky`, `I Gusti Ngurah Rai`,
+  `Abdul Ghofur Al-Rasyid`, `Aisyah Zahra’`, `Anne-Marie Tobing`, `Siti Aisyah binti Abdullah`.
+- **Phone prefixes 0838 / 0881 / 0895 / 0851 pass** and normalise to `62…`. A hard-coded operator list
+  would have refused these — the reason there isn't one.
+- **Emails**: university (`.ac.id`), self-hosted and plus-addressed all pass; no domain allow-list.
+- **Addresses**: `Blok C2/14`, `RT.001/RW.009`, `Dusun Krajan RT 2 RW 1` all pass; only junk is
+  refused (emoji, one repeated char, under 10 chars).
+
+**A real order still completes** — complaint shown, cleared on fix, `checkValidity()` true, POST,
+`/checkout/sukses`, 0 console errors. Test order deleted: back to **794 rows, no orphans**.
+
 ### 🇮🇩 The checkout was scolding Indonesian shoppers in English — and our own Indonesian messages were dead code
 
 `/checkout` still shipped four strings we never wrote: **"Please fill out this field."** (nama,

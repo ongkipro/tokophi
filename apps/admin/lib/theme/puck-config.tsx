@@ -8,6 +8,7 @@ import { ImageText } from "@/components/theme/sections/ImageText";
 import { Marquee } from "@/components/theme/sections/Marquee";
 import { RichText } from "@/components/theme/sections/RichText";
 import { CategoryNav } from "@/components/theme/sections/CategoryNav";
+import { Blog } from "@/components/theme/sections/Blog";
 
 // ADR 0009 — the Puck `Config` is the admin-side half of the section registry
 // (@tokophi/sections/registry.ts is the shared shape; apps/storefront's Astro components are
@@ -218,6 +219,31 @@ export const puckConfig: Config<SectionConfigMap> = {
       },
       defaultProps: SECTION_DEFAULTS["category-nav"],
       render: (props) => <CategoryNav {...props} />,
+    },
+    blog: {
+      // "Jurnal" — the shopper-facing word. `/blog`'s own H1 says Jurnal; the merchant's editor for
+      // the posts is called Blog. The label follows what the storefront shows.
+      label: "Jurnal",
+      fields: {
+        heading: { type: "text", label: "Judul" },
+        // A select, not a number: the layout only has sensible columns for 2–4. A free number field
+        // invites 7, which is a broken grid the merchant has to discover by publishing.
+        limit: {
+          type: "select",
+          label: "Jumlah tulisan",
+          options: [
+            { label: "2 tulisan", value: 2 },
+            { label: "3 tulisan", value: 3 },
+            { label: "4 tulisan", value: 4 },
+          ],
+        },
+        ctaLabel: { type: "text", label: "Teks link ke semua tulisan (kosong = sembunyi)" },
+        // NO link field on purpose: the destination is always /blog, which every store has. The
+        // free-text hrefs elsewhere in this config are how defaults ended up pointing at
+        // /kategori/dress — a handle only the demo store owns. See BlogConfig in @tokophi/sections.
+      },
+      defaultProps: SECTION_DEFAULTS.blog,
+      render: (props) => <Blog {...props} />,
     },
   },
 };

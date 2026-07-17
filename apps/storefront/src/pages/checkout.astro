@@ -1864,6 +1864,42 @@ if (rToken) {
       el.setCustomValidity(msg);
       return msg;
     }
+
+    // ── Inline error slots — built here, not in the markup, so every VALIDATED field gets exactly one
+    // and they cannot drift apart as fields are added. This exists because the native bubble CANNOT be
+    // used on blur: see showFieldError().
+    function errSlot(el) {
+      var host = el.closest(".field") || el;
+      var p = host.parentNode.querySelector('[data-err="' + el.name + '"]');
+      if (!p) {
+        p = document.createElement("p");
+        p.setAttribute("data-err", el.name);
+        p.className = "mt-1.5 text-xs font-medium text-red-600";
+        p.hidden = true;
+        host.insertAdjacentElement("afterend", p);
+      }
+      return p;
+    }
+
+    /**
+     * Show the problem where the problem is — WITHOUT touching focus.
+     *
+     * ⚠️ This must never become `el.reportValidity()`. `reportValidity()` FOCUSES the control, by
+     * spec. On blur that is a trap, and it shipped: a shopper who typed `siti@gmail` (an ordinary
+     * typo — no `.com`) and then clicked the Alamat box was YANKED BACK to email, so their address
+     * was typed into the email field — measured: `alamat=""`,
+     * `email="siti@gmailJl. Melati No. 12 RT 03 RW 05"`. Tab was trapped too. And email is OPTIONAL:
+     * a field nobody has to fill was holding the checkout hostage.
+     * Stealing focus is fine when the shopper presses Bayar — they asked. It is never fine because
+     * they moved on.
+     */
+    function showFieldError(el, msg) {
+      var p = errSlot(el);
+      p.textContent = msg || "";
+      p.hidden = !msg;
+      if (msg) el.setAttribute("aria-invalid", "true");
+      else el.removeAttribute("aria-invalid");
+    }
     VALIDATED.forEach(function (n) {
       var el = form.querySelector('[name="' + n + '"]');
       if (!el) return;
@@ -1874,13 +1910,17 @@ if (rToken) {
         }
         var msg = checkField(el); // always recorded → submit still refuses an empty required field
         // …but only SHOWN when they actually typed something. Popping "Nama wajib diisi" the instant
-        // someone tabs past an empty field is nagging, and reportValidity() drags the focus back —
-        // a shopper who meant to fill it in last gets trapped in it. Empty is not yet a mistake.
-        if (msg && el.value.trim()) el.reportValidity();
+        // someone tabs past an empty field is nagging: empty is not yet a mistake.
+        // Shown INLINE, never via reportValidity() — that focuses the field and traps the shopper in
+        // it (see showFieldError). The bubble belongs to Bayar, not to walking through the form.
+        showFieldError(el, msg && el.value.trim() ? msg : "");
       });
       // Typing again clears the stale message — otherwise the browser keeps refusing a field the
       // shopper has already fixed.
-      el.addEventListener("input", function () { el.setCustomValidity(""); });
+      el.addEventListener("input", function () {
+        el.setCustomValidity("");
+        showFieldError(el, "");
+      });
     });
 
     form.addEventListener("input", captureSoon);
@@ -1915,7 +1955,16 @@ if (rToken) {
       // here so the shopper is not told "something is wrong" by a server round-trip.
       for (var vi = 0; vi < VALIDATED.length; vi++) {
         var vel = form.querySelector('[name="' + VALIDATED[vi] + '"]');
-        if (vel && checkField(vel)) { vel.reportValidity(); vel.focus(); return; }
+        if (!vel) continue;
+        var vmsg = checkField(vel);
+        if (vmsg) {
+          // Inline AND the bubble. Focus-stealing is correct HERE — they pressed Bayar, so taking
+          // them to the field that is stopping them is the help they asked for.
+          showFieldError(vel, vmsg);
+          vel.reportValidity();
+          vel.focus();
+          return;
+        }
       }
       if (!form.checkValidity()) {
         reportFirstInvalid();
