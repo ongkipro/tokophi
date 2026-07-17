@@ -38,7 +38,7 @@ export async function getRegionSales(limit = 6): Promise<RegionSale[]> {
   return withCurrentTenant(async (db: Tx) => {
     const rows = (await db.execute(sql`
       select coalesce(nullif(o.city, ''), 'Tidak diketahui') as "city",
-             sum(o.total_idr)::bigint as "sales"
+             sum(o.total_idr - o.tax_idr)::bigint as "sales"
       from orders o
       where ${NOT_CANCELLED}
       group by 1
@@ -109,7 +109,7 @@ export async function getChannelSalesDaily(): Promise<ChannelDay[]> {
     const rows = (await db.execute(sql`
       select to_char(o.placed_at, 'YYYY-MM-DD') as "date",
              o.channel::text                    as "channel",
-             sum(o.total_idr)::bigint           as "value"
+             sum(o.total_idr - o.tax_idr)::bigint as "value"
       from orders o
       where ${NOT_CANCELLED}
       group by 1, 2
@@ -156,7 +156,7 @@ export async function getOrderStats(): Promise<OrderStats> {
   return withCurrentTenant(async (db: Tx) => {
     const rows = (await db.execute(sql`
       select count(*)::int as "orders",
-             coalesce(sum(o.total_idr), 0)::bigint as "revenue",
+             coalesce(sum(o.total_idr - o.tax_idr), 0)::bigint as "revenue",
              coalesce((
                select sum(li.qty)
                from order_line_items li

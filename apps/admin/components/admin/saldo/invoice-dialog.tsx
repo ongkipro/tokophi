@@ -144,6 +144,14 @@ export function InvoiceDialog({
                 <span>Ongkos kirim</span>
                 <span className="tabular-nums">{data.shipping === 0 ? "Gratis" : IDR(data.shipping)}</span>
               </div>
+              {/* Inclusive PPN is already inside subtotal (base == total) → label "Termasuk"; exclusive
+                  adds on top. Without this the breakdown didn't sum once an order carried PPN. */}
+              {data.tax > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>{data.subtotal - data.discount + data.shipping === data.total ? "Termasuk PPN" : "PPN"}</span>
+                  <span className="tabular-nums">{IDR(data.tax)}</span>
+                </div>
+              )}
               <Separator className="my-1.5" />
               <div className="flex justify-between text-base font-semibold">
                 <span>Total</span>

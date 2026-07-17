@@ -75,16 +75,19 @@ const PREV_WIN = (days: number) => sql`
   and (o.placed_at at time zone 'Asia/Jakarta')::date
       <  (now() at time zone 'Asia/Jakarta')::date - ((${days} - 1) || ' days')::interval`;
 
+// Revenue/earnings sums subtract orders.tax_idr: collected PPN is a liability owed onward to the
+// state, not the merchant's earnings, so counting it would overstate revenue. (tax_idr is 0 on every
+// order until a merchant opts into PPN, so this is a no-op on existing data and correct going forward.)
 export async function getFinanceSummary(days: Period = 30): Promise<FinanceSummary> {
   const [balance, billing] = await Promise.all([getBalance(), getBilling()]);
   const agg = await withCurrentTenant(async (db) => {
     const [row] = (await db.execute(sql`
       select
-        coalesce(sum(o.total_idr)    filter (where ${WIN(days)}), 0)::bigint as "revenue",
+        coalesce(sum(o.total_idr - o.tax_idr) filter (where ${WIN(days)}), 0)::bigint as "revenue",
         coalesce(sum(o.shipping_idr) filter (where ${WIN(days)}), 0)::bigint as "shippingIn",
         count(*)                     filter (where ${WIN(days)})::int        as "orders",
         count(*)                     filter (where o.status in ('baru','diproses','dikirim'))::int as "heldOrders",
-        coalesce(sum(o.total_idr)    filter (where ${PREV_WIN(days)}), 0)::bigint as "prevRevenue"
+        coalesce(sum(o.total_idr - o.tax_idr) filter (where ${PREV_WIN(days)}), 0)::bigint as "prevRevenue"
       from orders o
       where ${SALES}
     `)) as unknown as Record<string, string | number>[];
@@ -118,7 +121,7 @@ export async function getEarnings(days: Period = 30): Promise<EarningRow[]> {
         )::date as day
       )
       select to_char(s.day, 'YYYY-MM-DD')              as day,
-             coalesce(sum(o.total_idr), 0)::bigint     as gross,
+             coalesce(sum(o.total_idr - o.tax_idr), 0)::bigint as gross,
              coalesce(sum(o.shipping_idr), 0)::bigint  as shipping,
              count(o.id)::int                          as orders
       from span s
@@ -145,7 +148,7 @@ export async function getEarnings(days: Period = 30): Promise<EarningRow[]> {
 export async function getChannelMix(days: Period = 30): Promise<ChannelSlice[]> {
   return withCurrentTenant(async (db) => {
     const rows = (await db.execute(sql`
-      select o.channel::text as channel, coalesce(sum(o.total_idr), 0)::bigint as value
+      select o.channel::text as channel, coalesce(sum(o.total_idr - o.tax_idr), 0)::bigint as value
       from orders o
       where ${SALES} and ${WIN(days)}
       group by 1 having sum(o.total_idr) > 0 order by 2 desc
