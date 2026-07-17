@@ -53,9 +53,18 @@ if (virtual) {
 const TEMPLATE = handle ? catalog.categoryTemplate(handle) : null;
 ---
 
+<!-- Was "Koleksi busana wanita di …" — the demo's vertical on every tenant's category page. `blurb` is
+     `description ?? ""` upstream, so interpolating it raw also produced a stray " — . " on any category
+     the merchant left blank. Both gone: the merchant's own blurb when written, the category name when not. -->
 <Layout
   title={collection.name}
-  description={`${collection.name} — ${collection.blurb}. Koleksi busana wanita di ${store.name}.`}
+  description={
+    collection.blurb?.trim()
+      ? // The merchant's blurb is free text and most do not end it with a full stop — "Dress harian
+        // sampai acara spesial" ran straight into "Tersedia di …". Punctuate only when they didn't.
+        `${collection.name} — ${collection.blurb.trim().replace(/[.!?]?$/, ".")} Tersedia di ${store.name}.`
+      : `Koleksi ${collection.name} di ${store.name}.`
+  }
 >
   {
     TEMPLATE ? (

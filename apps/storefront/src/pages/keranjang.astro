@@ -23,7 +23,17 @@ const { store, catalog } = Astro.locals;
 const recommended = catalog.bestsellers().slice(0, 4);
 ---
 
-<Layout title="Keranjang" description={`Keranjang belanja di ${store.name}.`}>
+<!-- `noindex,follow` — this was asymmetric with /checkout, which has carried it since day one. The cart
+     is per-shopper and empty for a crawler: there is nothing here worth a SERP slot. robots.txt already
+     disallows /keranjang, but that is NOT the same guarantee and is in some ways weaker — a disallowed
+     URL can still be indexed URL-only from an inbound link, and the crawler that is forbidden from
+     fetching it can never read the `noindex` that would have kept it out. `follow`, so the links out of
+     an abandoned-cart share still pass to the catalogue. -->
+<Layout
+  title="Keranjang"
+  description={`Keranjang belanja di ${store.name}.`}
+  robots="noindex,follow"
+>
   <section class="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
     <nav class="text-sm text-muted">
       <a href="/" class="transition-colors hover:text-brand-600">Beranda</a>

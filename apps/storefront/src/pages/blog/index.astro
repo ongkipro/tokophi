@@ -10,9 +10,11 @@ const { store } = Astro.locals;
 const articles = await getArticles(store.id);
 ---
 
+<!-- Was "tips fashion, perawatan kain, dan inspirasi gaya busana wanita" — the demo's vertical, shipped
+     to Google by every tenant. A journal is a journal whatever the shop sells; say that and stop. -->
 <Layout
   title="Jurnal"
-  description={`Jurnal ${store.name} — tips fashion, perawatan kain, dan inspirasi gaya busana wanita.`}
+  description={`Artikel, tips, dan kabar terbaru dari ${store.name}.`}
 >
   <section class="bg-brand-50">
     <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-16">

@@ -4,6 +4,38 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 🔎 SEO: every store but the demo published the word "null" — and sold women's fashion
+
+Four defects, all in the highest-visibility text a store has (the SERP snippet + the WhatsApp preview
+card), all found by auditing rather than guessing. **Ground truth from the DB: 6 of the 7 seeded stores
+have `tagline IS NULL`** — so this was the normal case, not an edge case, and two of them
+(`gadget-murah-id`, `kopi-senja`) are a phone shop and a coffee shop.
+
+- **`"null"` in the meta description.** `index.astro` interpolated `${store.tagline}` raw. The field's
+  own type says *"`null` = the merchant has not written one. **Render NOTHING — never a platform
+  default**"* — a documented contract, violated in the one string Google shows. Every store without a
+  tagline published `Kopi Senja — null. …`.
+- **The demo's vertical, hardcoded on every tenant** — `"Belanja dress, atasan, bawahan, busana muslim
+  & outerwear wanita"` (homepage), `"tips fashion, perawatan kain, dan inspirasi gaya busana wanita"`
+  (blog index), `"Koleksi busana wanita di …"` (category). A gadget store told Google it sells dresses.
+  The homepage line now builds itself from the merchant's **own categories** — which is exactly what the
+  hardcoded sentence was imitating. Verified: Batik gets *"Belanja Atasan, Bawahan, Busana Muslim,
+  Dress."*, Kopi Senja gets its own name and no invented catalogue.
+- **`/keranjang` had no `noindex`** while `/checkout` has had one since day one. ⚠️ A robots.txt
+  `Disallow` is **not** the same guarantee and is in one way weaker: a disallowed URL can still be
+  indexed **URL-only** from an inbound link, and the crawler forbidden from fetching it can never read
+  the `noindex` that would have kept it out. `Layout` gained a `robots` prop; it emits nothing at all
+  unless asked, since an absent tag already means `index,follow`.
+- **Blog posts lost their og:image to a comment that had gone stale.** The comment said *"Layout emits
+  no OG/Twitter tags at all today, so an article's imageUrl has nowhere to go"* — false since Layout
+  gained the full og:/twitter: set. The comment outlived the fact and then **justified the gap it
+  described**: every article shared to WhatsApp showed the store logo instead of its own hero photo.
+  Now `image` + `type="article"` (it was defaulting to `website` on an article).
+
+Verified per-tenant against 3 real stores on a dev server, not reasoned about: the `null` path, the
+non-fashion path, `robots` present on /keranjang and **absent** on /, /kategori/* and /blog, and
+og:image resolving absolute to the article's own photo.
+
 ### 🖼️ The hero downloaded every slide at first paint — 212KB of it invisible
 
 `loading="lazy"` was on slides 2..n and **did nothing**, because lazy only defers images **below the

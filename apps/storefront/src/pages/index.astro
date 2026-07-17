@@ -66,12 +66,28 @@ const collections = catalog.collections.map((c) => {
   const items = catalog.byCollection(c.handle);
   return { ...c, image: items[0]?.image, count: items.length };
 });
+
+// The meta description is the highest-visibility text this store has — it IS the SERP snippet — so it
+// must describe THIS store. It used to be hardcoded to the demo's vertical: "Belanja dress, atasan,
+// bawahan, busana muslim & outerwear wanita", which a hardware store also shipped to Google.
+// Now it is built from the merchant's own words and their own categories:
+//   · `tagline` when written. The type says `null` = "Render NOTHING — never a platform default", and
+//     this line was interpolating it raw, so a store without one published the literal string
+//     **"null"** into its snippet and its WhatsApp preview card.
+//   · the store's real category names, which is exactly what the old sentence was faking.
+// Layout clamps to 155 on a word boundary, so the list is capped at 4 to leave room for the tagline.
+const catNames = collections.filter((c) => c.count > 0).map((c) => c.name);
+const SUMMARY = [
+  store.tagline?.trim() ? `${store.name} — ${store.tagline.trim()}` : store.name,
+  catNames.length ? `Belanja ${catNames.slice(0, 4).join(", ")}.` : null,
+  "Kirim ke seluruh Indonesia.",
+]
+  .filter(Boolean)
+  .join(". ")
+  .replace(/\.\s*\./g, ".");
 ---
 
-<Layout
-  title="Beranda"
-  description={`${store.name} — ${store.tagline}. Belanja dress, atasan, bawahan, busana muslim & outerwear wanita. Kirim se-Indonesia.`}
->
+<Layout title="Beranda" description={SUMMARY}>
   {
     HOMEPAGE_TEMPLATE ? (
       <!-- ADR 0009: merchant-built homepage (Store Builder) -->

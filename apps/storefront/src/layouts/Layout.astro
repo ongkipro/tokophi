@@ -15,12 +15,23 @@ interface Props {
   type?: "website" | "product" | "article";
   /** Extra <head> markup (JSON-LD, article:* tags). Rendered raw — pass ONLY server-built strings. */
   head?: string;
+  /**
+   * `<meta name="robots">`. Omit on anything you want indexed — an absent tag already means
+   * "index,follow", so emitting that would be noise.
+   *
+   * Set `"noindex,follow"` on a page that is per-shopper or thin (e.g. /keranjang). ⚠️ Note this is
+   * NOT redundant with a robots.txt `Disallow`, which is the opposite of what it looks like: a
+   * disallowed URL can still be indexed **URL-only** from inbound links, and because the crawler is
+   * forbidden from FETCHING it, it can never read the `noindex` that would have kept it out. The two
+   * mechanisms do different jobs.
+   */
+  robots?: string;
 }
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
 const { store, catalog, origin } = Astro.locals;
 const BRAND_SHADES = catalog.brandShades;
-const { title, description = store.tagline, image, type = "website", head } = Astro.props;
+const { title, description = store.tagline, image, type = "website", head, robots } = Astro.props;
 
 const fullTitle = `${title} — ${store.name}`;
 
@@ -75,6 +86,7 @@ const ogImage = (() => {
       : <link rel="icon" type="image/svg+xml" href="/favicon.svg" />}
     <title>{fullTitle}</title>
     <meta name="description" content={desc} />
+    {robots && <meta name="robots" content={robots} />}
     <link rel="canonical" href={canonical} />
 
     <!-- Open Graph / Twitter. There were NONE — so every product link forwarded to a WhatsApp group
