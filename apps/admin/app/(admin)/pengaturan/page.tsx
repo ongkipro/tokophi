@@ -10,8 +10,6 @@ import {
   Truck,
   Users,
   Store,
-  UserPlus,
-  Save,
 } from "lucide-react"
 
 import { PageHeader } from "@/components/admin/page-header"
@@ -21,16 +19,12 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-  CardAction,
   CardContent,
   CardFooter,
 } from "@tokophi/ui/card"
-import { Button } from "@tokophi/ui/button"
-import { useCan } from "@/components/admin/permissions"
 import { useStoreName } from "@/components/admin/store-context"
 import { Input } from "@tokophi/ui/input"
 import { Label } from "@tokophi/ui/label"
-import { Textarea } from "@tokophi/ui/textarea"
 import { Switch } from "@tokophi/ui/switch"
 import { Badge } from "@tokophi/ui/badge"
 import { Separator } from "@tokophi/ui/separator"
@@ -40,6 +34,7 @@ import { JasaKirimCard } from "@/components/admin/pengaturan/jasa-kirim-card"
 import { RekeningCard } from "@/components/admin/pengaturan/rekening-card"
 import { StoreProfileCard } from "@/components/admin/pengaturan/store-profile-card"
 import { DomainCard } from "@/components/admin/pengaturan/domain-card"
+import { PenggunaCard } from "@/components/admin/pengaturan/pengguna-card"
 
 // NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
 // (super-admin → platform_payment_channels) and flow straight to the shopper's checkout.
@@ -114,7 +109,6 @@ function SaveFooter() {
 export default function Page() {
   // Navigasi
   const [section, setSection] = React.useState<Section>("profil")
-  const canSettings = useCan("settings:write")
   const storeName = useStoreName()
 
 
@@ -134,27 +128,6 @@ export default function Page() {
   const setNotifKey = (k: keyof typeof notif) => (v: boolean) =>
     setNotif((s) => ({ ...s, [k]: v }))
 
-
-  const team = [
-    {
-      name: "Ongki",
-      email: "ongki@batiknusantara.id",
-      role: "Pemilik",
-      variant: "default" as const,
-    },
-    {
-      name: "Sari",
-      email: "sari@batiknusantara.id",
-      role: "Admin",
-      variant: "secondary" as const,
-    },
-    {
-      name: "Budi",
-      email: "budi@batiknusantara.id",
-      role: "Staf Gudang",
-      variant: "outline" as const,
-    },
-  ]
 
   return (
     <div>
@@ -372,70 +345,8 @@ export default function Page() {
             </Card>
           )}
 
-          {/* PENGGUNA */}
-          {section === "pengguna" && (
-            <Card className="max-w-3xl">
-              <CardHeader>
-                <CardTitle>Pengguna & Peran</CardTitle>
-                <CardDescription>
-                  Kelola anggota tim yang memiliki akses ke dasbor toko.
-                </CardDescription>
-                <CardAction>
-                  <Button size="sm" disabled title="Segera hadir">
-                    <UserPlus />
-                    Undang pengguna
-                  </Button>
-                </CardAction>
-              </CardHeader>
-              <CardContent className="grid gap-2">
-                {team.map((m) => (
-                  <div
-                    key={m.email}
-                    className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/40 p-3"
-                  >
-                    <Avatar>
-                      <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
-                        {m.name.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{m.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {m.email}
-                      </p>
-                    </div>
-                    <Badge variant={m.variant}>{m.role}</Badge>
-                  </div>
-                ))}
-
-                <div className="mt-1 rounded-lg border border-border/60 bg-muted/40 p-3 text-xs text-muted-foreground">
-                  <p className="mb-1.5 font-medium text-foreground">Peran</p>
-                  <ul className="grid gap-1">
-                    <li>
-                      <span className="font-medium text-foreground">Owner</span> —
-                      akses penuh termasuk penagihan & hapus toko.
-                    </li>
-                    <li>
-                      <span className="font-medium text-foreground">Admin</span> —
-                      kelola produk, pesanan, dan pengaturan.
-                    </li>
-                    <li>
-                      <span className="font-medium text-foreground">Staf</span> —
-                      akses terbatas untuk operasional harian.
-                    </li>
-                  </ul>
-                </div>
-              </CardContent>
-              {/* Team members + invite are managed by the platform (super-admin), not from this panel —
-                  there is no client-side user write action. So no fake Save/Undang here. */}
-              <CardFooter className="justify-end gap-2">
-                <p className="mr-auto text-xs text-muted-foreground">
-                  <span className="tabular-nums">{team.length}</span> anggota tim
-                </p>
-                <p className="text-xs text-muted-foreground">Kelola anggota lewat dukungan — segera hadir di sini.</p>
-              </CardFooter>
-            </Card>
-          )}
+          {/* PENGGUNA — real store_users list + invite/role/remove (lib/actions/users.ts) */}
+          {section === "pengguna" && <PenggunaCard />}
 
           {/* NOTIFIKASI */}
           {section === "notifikasi" && (
