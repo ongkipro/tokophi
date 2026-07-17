@@ -14,6 +14,8 @@ import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num, dateTimeShort } from "@tokophi/lib/format";
 import { TODAY, type Product } from "@/lib/mock/store";
 import { cn } from "@tokophi/ui/lib/utils";
+import { toast } from "sonner";
+import { bulkSetProductStatus, bulkDeleteProducts } from "@/lib/actions/products";
 import { useCan } from "@/components/admin/permissions";
 
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -162,6 +164,20 @@ export function ProdukClient({ products }: { products: Product[] }) {
   const toggle = (id: string) =>
     setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const clearSel = () => setSelected(new Set());
+  const [bulkPending, startBulk] = React.useTransition();
+  const runBulk = (fn: (ids: string[]) => Promise<{ ok: boolean; count: number }>, verb: string) =>
+    startBulk(async () => {
+      const ids = [...selected];
+      try {
+        const r = await fn(ids);
+        if (!r.ok) throw new Error();
+        toast.success(`${num(r.count)} produk ${verb}.`);
+        clearSel();
+        router.refresh();
+      } catch {
+        toast.error(`Gagal — coba lagi.`);
+      }
+    });
   const visibleIds = filtered.map((p) => p.id);
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(visibleIds));
@@ -287,10 +303,10 @@ export function ProdukClient({ products }: { products: Product[] }) {
           <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Pilih semua" />
           <span className="text-sm font-medium">{num(selected.size)} dipilih</span>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            {canWrite && <Button variant="outline" size="sm" onClick={clearSel}><CircleCheck /> Jadikan Aktif</Button>}
-            {canWrite && <Button variant="outline" size="sm" onClick={clearSel}><FileText /> Jadikan Draft</Button>}
-            {canDelete && <Button variant="outline" size="sm" className="text-destructive" onClick={clearSel}><Trash2 /> Hapus</Button>}
-            <Button variant="ghost" size="sm" onClick={clearSel}>Batal</Button>
+            {canWrite && <Button variant="outline" size="sm" disabled={bulkPending} onClick={() => runBulk((ids) => bulkSetProductStatus(ids, "active"), "diaktifkan")}><CircleCheck /> Jadikan Aktif</Button>}
+            {canWrite && <Button variant="outline" size="sm" disabled={bulkPending} onClick={() => runBulk((ids) => bulkSetProductStatus(ids, "draft"), "dijadikan draft")}><FileText /> Jadikan Draft</Button>}
+            {canDelete && <Button variant="outline" size="sm" className="text-destructive" disabled={bulkPending} onClick={() => runBulk(bulkDeleteProducts, "dihapus")}><Trash2 /> Hapus</Button>}
+            <Button variant="ghost" size="sm" disabled={bulkPending} onClick={clearSel}>Batal</Button>
           </div>
         </div>
       ) : (

@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { setReviewStatus, deleteReview } from "@/lib/actions/reviews";
 import {
   Star,
   MoreHorizontal,
@@ -242,7 +245,7 @@ function ReviewRow({ review: r }: { review: Review }) {
             <span className="hidden text-xs text-muted-foreground tabular-nums sm:inline">
               {num(r.daysAgo)} hari lalu
             </span>
-            <ReviewActions status={r.status} />
+            <ReviewActions id={r.id} status={r.status} />
           </div>
         </div>
 
@@ -262,7 +265,20 @@ function ReviewRow({ review: r }: { review: Review }) {
   );
 }
 
-function ReviewActions({ status }: { status: ReviewStatus }) {
+function ReviewActions({ id, status }: { id: string; status: ReviewStatus }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const run = (fn: () => Promise<{ ok: boolean }>, msg: string) =>
+    start(async () => {
+      try {
+        const r = await fn();
+        if (!r.ok) throw new Error();
+        toast.success(msg);
+        router.refresh();
+      } catch {
+        toast.error("Gagal — coba lagi.");
+      }
+    });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -274,19 +290,21 @@ function ReviewActions({ status }: { status: ReviewStatus }) {
       />
       <DropdownMenuContent align="end">
         {status === "menunggu" ? (
-          <DropdownMenuItem>
+          <DropdownMenuItem disabled={pending} onClick={() => run(() => setReviewStatus(id, "terbit"), "Ulasan diterbitkan.")}>
             <Check className="size-4" /> Terbitkan
           </DropdownMenuItem>
         ) : (
-          <DropdownMenuItem>
+          <DropdownMenuItem disabled={pending} onClick={() => run(() => setReviewStatus(id, "menunggu"), "Ulasan disembunyikan.")}>
             <EyeOff className="size-4" /> Sembunyikan
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem>
+        {/* Balas needs a reply column that doesn't exist yet — honest disabled, not a no-op. */}
+        <DropdownMenuItem disabled className="opacity-60">
           <MessageSquare className="size-4" /> Balas
+          <span className="ml-auto text-[10px] text-muted-foreground">segera hadir</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive">
+        <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => run(() => deleteReview(id), "Ulasan dihapus.")}>
           <Trash2 className="size-4" /> Hapus
         </DropdownMenuItem>
       </DropdownMenuContent>

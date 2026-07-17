@@ -1,6 +1,6 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
@@ -152,4 +152,28 @@ export async function deleteProduct(id: string): Promise<void> {
     db.update(schema.products).set({ status: "archived", archivedAt: new Date() }).where(eq(schema.products.id, id)),
   );
   revalidatePath("/produk");
+}
+
+// ── Bulk actions (the Produk selection bar) ──────────────────────────────────
+// Same store-scoped writes as the single-product ones, just over a set. `inArray` on the store's own
+// tenant connection so RLS still clamps to it — a forged id from another store can't be swept in.
+export async function bulkSetProductStatus(ids: string[], status: "active" | "draft"): Promise<{ ok: boolean; count: number }> {
+  const { storeId: sid } = await requireCapability("products:write");
+  if (!ids.length) return { ok: true, count: 0 };
+  await withTenant(sid, (db) =>
+    db.update(schema.products).set({ status }).where(inArray(schema.products.id, ids)),
+  );
+  revalidatePath("/produk");
+  return { ok: true, count: ids.length };
+}
+
+export async function bulkDeleteProducts(ids: string[]): Promise<{ ok: boolean; count: number }> {
+  const { storeId: sid } = await requireCapability("products:delete");
+  if (!ids.length) return { ok: true, count: 0 };
+  // Delete = archive (products are referenced by order_line_items), same as the single delete.
+  await withTenant(sid, (db) =>
+    db.update(schema.products).set({ status: "archived", archivedAt: new Date() }).where(inArray(schema.products.id, ids)),
+  );
+  revalidatePath("/produk");
+  return { ok: true, count: ids.length };
 }
