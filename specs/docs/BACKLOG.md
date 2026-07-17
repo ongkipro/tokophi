@@ -9,6 +9,48 @@
 
 ---
 
+## 🔴 LIVE runs `KIRIMINAJA_ENV=sandbox` — the courier list on tokophi.com is FICTION (2026-07-17)
+
+**Status:** `[ ]` open · **owner decision, not a code change** · found while investigating "JNE is enabled
+but does not show in checkout".
+
+**The report:** on live `app.tokophi.com`, Batik Nusantara enabled **10 services** and JNE would not
+appear at checkout for **Sukodono, Sidoarjo**. Suspicion was that we filter it out.
+
+**We do not.** Verified end-to-end against the live box, not reasoned about:
+- `store_shipping_methods` on live has `jne:REG23 enabled=t` — the seller's pick is correct.
+- `platform_couriers` has `jne enabled=t` — the platform allows it.
+- Calling KiriminAja **from inside the live admin container** for origin `6138` (Gubeng, Surabaya —
+  the real pickup address) → dest `5642` (Sukodono, Sidoarjo) returns **18 services and NOT ONE `jne`
+  among them.** No `jnt` either; the J&T on that route is `jtcargo:REG`, a different courier, and it
+  **does** show at Rp45.000.
+- The live checkout offers **8 services** = exactly (10 enabled ∩ what the route returns). The
+  platform ∩ store filter is behaving correctly. **There is no bug to fix here.**
+
+**The actual cause:** `KIRIMINAJA_ENV=sandbox` in the live admin container (confirmed by reading the
+env). **Sandbox coverage is arbitrary, not real** — the same sandbox key returns `jne:REG23` happily
+for a *Yogyakarta* origin and nothing for *Surabaya*. JNE obviously serves Surabaya→Sidoarjo in the
+real world. So **every rate on tokophi.com today is fiction**, and no amount of filter work will make
+JNE appear.
+
+**The task:**
+- [ ] Set `KIRIMINAJA_ENV=production` in Coolify (app `l7r4qaqcml4zigw1dc7iptun`), then redeploy.
+- [ ] **Before flipping it**, confirm: the KiriminAja **production API key** is issued and active, and
+      the **order prefix is registered in the production dashboard** (`KIRIMINAJA_ORDER_PREFIX`;
+      sandbox prefix `5758` is proven, production is NOT — `request_pickup` 400s on an unregistered
+      prefix, and that failure lands on a shopper mid-checkout).
+- [ ] Re-verify the courier roster per route after the flip. **`platform_couriers[].codAllowed` was
+      decided against SANDBOX capabilities** — production may report different `cod` flags, and COD is
+      money we hand to a courier. See the COD chain in AGENTS.md.
+- [ ] Re-check `service_type` codes. The merchant's picks are stored as `"<courier>:<service_type>"`;
+      if production names a service differently from sandbox, a seller's saved row silently stops
+      matching and the service vanishes from checkout — the exact symptom reported above, but real.
+
+⚠️ **This is the last step between the demo and real money.** An unset env in production silently
+talks to sandbox — quiet, plausible, and wrong. Flipping it makes rates real AND makes bookings real.
+
+---
+
 ## 🚚 Shipping: Proses → auto-book → courier-driven status — DECIDED, PART-BUILT (2026-07-16)
 
 > **Decided with the user 2026-07-16. The DATA foundation is shipped; the flow is not built.**
