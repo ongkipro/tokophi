@@ -6,11 +6,9 @@ import { useRouter } from "next/navigation";
 import {
   Plus,
   Search,
-  ChevronDown,
   MoreHorizontal,
   Pencil,
   Trash2,
-  Settings2,
   MessageSquare,
   Newspaper,
 } from "lucide-react";
@@ -41,7 +39,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@tokophi/ui/dropdown-menu";
 
@@ -117,28 +114,10 @@ export function BlogClient({ posts }: { posts: BlogPost[] }) {
 
   return (
     <div>
+      {/* The "Kelola blog" dropdown was removed: it had no backend (this app has ONE blog, not many),
+          its category items duplicated the filter Tabs below, and "Buat blog baru" duplicated "Tambah
+          artikel". Every item in it was a dead no-op. */}
       <PageHeader title="Blog" desc="Tulis artikel dan kelola blog toko Anda.">
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="outline" />}>
-            <Settings2 />
-            Kelola blog
-            <ChevronDown className="text-muted-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuLabel>Blog</DropdownMenuLabel>
-            {BLOG_CATEGORIES.map((c) => (
-              <DropdownMenuItem key={c}>
-                <Newspaper />
-                {c}
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <Plus />
-              Buat blog baru
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
         {canWrite && (
           <Button nativeButton={false} render={<Link href="/blog/baru" />}>
             <Plus />

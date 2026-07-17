@@ -8,7 +8,7 @@ import {
 
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { createSegment, deleteSegment } from "@/lib/actions/segments";
+import { createSegment, updateSegment, deleteSegment } from "@/lib/actions/segments";
 import { PageHeader } from "@/components/admin/page-header";
 import { useCan } from "@/components/admin/permissions";
 import { num, pct } from "@tokophi/lib/format";
@@ -45,6 +45,7 @@ function SegmentActions({ segment }: { segment: CustSegment }) {
   const router = useRouter();
   const canWrite = useCan("crm:write");
   const [pending, startTransition] = React.useTransition();
+  const [editOpen, setEditOpen] = React.useState(false);
   const remove = () =>
     startTransition(async () => {
       try {
@@ -56,17 +57,60 @@ function SegmentActions({ segment }: { segment: CustSegment }) {
       }
     });
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi segmen" />}>
-        <MoreHorizontal />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem><Users /> Lihat pelanggan</DropdownMenuItem>
-        {canWrite && <DropdownMenuItem><Sparkles /> Edit</DropdownMenuItem>}
-        {canWrite && <DropdownMenuSeparator />}
-        {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={remove}><TrendingDown /> Hapus</DropdownMenuItem>}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi segmen" />}>
+          <MoreHorizontal />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {/* No segment membership model exists (memberCount is a stored count, not an evaluated rule),
+              so there is nothing to list — honest disabled rather than a no-op. */}
+          <DropdownMenuItem disabled className="opacity-60"><Users /> Lihat pelanggan<span className="ml-auto text-[10px] text-muted-foreground">segera</span></DropdownMenuItem>
+          {canWrite && <DropdownMenuItem onClick={() => setEditOpen(true)}><Sparkles /> Edit</DropdownMenuItem>}
+          {canWrite && <DropdownMenuSeparator />}
+          {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={remove}><TrendingDown /> Hapus</DropdownMenuItem>}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {editOpen && <EditSegmentDialog segment={segment} onOpenChange={setEditOpen} />}
+    </>
+  );
+}
+
+// Mounted only while open, so the fields seed fresh from the segment each time.
+function EditSegmentDialog({ segment, onOpenChange }: { segment: CustSegment; onOpenChange: (o: boolean) => void }) {
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  const [name, setName] = React.useState(segment.name);
+  const [description, setDescription] = React.useState(segment.description);
+  const save = () =>
+    start(async () => {
+      const r = await updateSegment(segment.id, { name, description });
+      if (r.ok) { toast.success("Segmen diperbarui."); onOpenChange(false); router.refresh(); }
+      else toast.error(r.error ?? "Gagal menyimpan.");
+    });
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit segmen</DialogTitle>
+          <DialogDescription>Ubah nama dan deskripsi segmen.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="seg-nama">Nama</Label>
+            <Input id="seg-nama" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="seg-desc">Deskripsi</Label>
+            <Textarea id="seg-desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline">Tutup</Button>} />
+          <Button disabled={pending || !name.trim()} onClick={save}>{pending ? "Menyimpan…" : "Simpan"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
