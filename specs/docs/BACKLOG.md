@@ -327,6 +327,36 @@ the component is proven on two different shapes.
 
 ## 🧾 Deferred from the 2026-07-16 checkout/storefront polish
 
+- **[ ] 🖼️ Images are ~241KB oversized — and the hero needs ART DIRECTION, not a `srcset` width list**
+  (measured 2026-07-17, Lighthouse `image-delivery-insight`, mobile, live). Distinct from the
+  first-paint waste already fixed in `Hero.astro`. What the numbers actually say:
+  - **Hero (144KB of it):** *"larger than it needs to be (869x1080) for its displayed dimensions
+    (910x512)"* on all three slides. Note the shape — it is **not** simply "too wide". A **16:9**
+    source (1920×1080) rendered into a **390×512 portrait** box via `object-cover` has ~50% of its
+    pixels cropped off the sides and thrown away, and at **dpr 3 it is simultaneously UNDER-resolved
+    vertically** (needs 1536px tall, has 1080). A width-based `srcset` cannot express that: phones need
+    a **differently cropped** image, which is `<picture>` + a media query. Getting this wrong in the
+    obvious direction (just serve smaller) makes retina phones blurrier.
+  - **Product cards (~97KB):** `451x600` / `600x600` sources rendered at `243x243` and `80x80`. This
+    one *is* a plain `srcset`/`sizes` job.
+  - ⚠️ **The blocker is the same for both: there is no variant pipeline.** Hero + product images are
+    merchant-uploaded (`mediaUrl`, DB-driven), so nothing can be statically optimised at build time —
+    generating variants means sharp at runtime, or a resize step at upload, or an image CDN. **Decide
+    that before writing any `srcset`**, or it will only ever work for the seeded demo assets in
+    `public/` — which is precisely the demo-shaped-assumption trap this repo keeps falling into.
+- **[ ] ⚡ Static assets are cached for 4 HOURS — 284KB re-downloaded on every repeat visit**
+  (measured 2026-07-17, `cache-insight`). Every `.webp` under `/hero/` and `/products/` comes back with
+  `cacheLifetimeMs: 14400000`. These are content-addressed-ish immutable assets that change only on
+  deploy; 4h means a shopper who browses today and returns tomorrow re-downloads the entire catalogue
+  of images for nothing. Should be ~1y `immutable`, which needs a filename-hash story for the ones that
+  can change. Config (Coolify/Traefik/Cloudflare or Astro headers), not code.
+- **[ ] ⚡ 2,040ms of render-blocking — and `checkout.css` is loading on the HOMEPAGE**
+  (measured 2026-07-17, `render-blocking-insight`). Two parts: the Google Fonts `css2?family=Inter…`
+  request blocks for **852ms** (self-host or `preconnect`), and `checkout.SsN-LqBW.css` (11KB) is
+  render-blocking **on the homepage**, where no checkout exists. ⚠️ **Verify that second one before
+  acting** — if the checkout stylesheet really is on every page, that is a bundling bug worth more than
+  the 11KB, and it may mean `CheckoutLayout`'s tokens are leaking into the storefront's cascade.
+
 - **[ ] 🔴 The apex `tokophi.id` serves a 503 — nothing is routed to it** (found 2026-07-17, while
   measuring a11y on live; **pre-existing, not caused by that deploy**). `*.tokophi.id` is fine —
   `batik-nusantara.tokophi.id` returns 200 — and so are `tokophi.com`, `toko.tokophi.com`,
