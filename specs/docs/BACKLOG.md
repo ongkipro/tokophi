@@ -311,6 +311,18 @@ the component is proven on two different shapes.
 
 ## 🧾 Deferred from the 2026-07-16 checkout/storefront polish
 
+- **[x] Lighthouse `robots-txt` scores 0 — INVESTIGATED, DELIBERATELY NOT FIXED** (2026-07-17). "Unknown
+  directive" at `Content-Signal: search=yes,ai-train=no,use=reference`. **It is not our file**:
+  `robots.txt.ts` emits 9 lines, live serves 70 — Cloudflare's **Managed robots.txt** prepends a Content
+  Signals preamble and an AI-crawler block-list. Two things checked against Google's own spec rather
+  than assumed: unknown lines are *"ignored by the robots.txt parser"* (so nothing is invalid —
+  `Sitemap:` is itself such an extension), and the two `User-agent: *` groups are **merged**, *"all the
+  rules … combined internally into a single group"*, so our `Disallow: /checkout` still applies. The
+  only way to pass the audit is switching Managed robots.txt off in Cloudflare, which deletes an
+  AI-training opt-out the injected text calls an **express reservation of rights under Art. 4 of EU
+  Directive 2019/790**. Not worth 8 points on a linter. Rationale is in `robots.txt.ts` so nobody
+  "fixes" it.
+
 Parked deliberately while the checkout page was finished. Each is real, each was measured, and none is
 a guess — the evidence is in `CHANGELOG.md` under the same date.
 

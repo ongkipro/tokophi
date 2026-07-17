@@ -4,6 +4,28 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 🤖 Lighthouse says robots.txt is invalid. Lighthouse is wrong — investigated, deliberately unchanged
+
+`robots-txt` scores **0** on live: *"Unknown directive"* at `Content-Signal: search=yes,ai-train=no,
+use=reference`. **It is not our file.** `robots.txt.ts` emits 9 lines; live serves **70** — Cloudflare's
+**Managed robots.txt** prepends a Content Signals preamble and an AI-crawler block-list (GPTBot,
+ClaudeBot, CCBot, Google-Extended, Bytespider…). 3.8M+ domains run it.
+
+Two things checked against [Google's own spec](https://developers.google.com/crawling/docs/robots-txt/robots-txt-spec)
+rather than assumed:
+- **Unknown lines do not invalidate anything** — *"Rules other than `allow`, `disallow`, and
+  `user-agent` are ignored by the robots.txt parser."* `Sitemap:` is itself such an extension.
+- **The two `User-agent: *` groups are MERGED**, not first-wins — *"all the rules from the groups
+  applicable to the specific user agent are combined internally into a single group."* This one
+  mattered: had it been first-wins, Cloudflare's `Allow: /` would have **shadowed our
+  `Disallow: /checkout`** and the checkout would be crawlable. It is not.
+
+So the audit is behind the standard, not the file. The only way to pass it is switching Managed
+robots.txt off in Cloudflare — deleting an AI-training opt-out the injected text calls an **express
+reservation of rights under Article 4 of EU Directive 2019/790**. Trading that for 8 points on a linter
+is a bad trade. The reasoning now lives in `robots.txt.ts` so the next person does not "fix" it, and the
+file also warns that what you see at `/robots.txt` is not what that file emits.
+
 ### 📏 PageSpeed, measured on live — and four real failures it found
 
 Google's PSI API was out of anonymous quota (429), so this is Lighthouse 12 against
