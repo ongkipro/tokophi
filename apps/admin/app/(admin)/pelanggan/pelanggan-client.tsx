@@ -198,7 +198,9 @@ export function PelangganClient({ customers }: { customers: CustomerRow[] }) {
         >
           <Download className="size-4" /> Ekspor
         </Button>
-        <Button className="gap-2">
+        {/* No create-customer action yet — customers are created by guest checkout on the storefront.
+            Disabled + labeled rather than a button that silently does nothing. */}
+        <Button className="gap-2" disabled title="Segera hadir">
           <UserPlus className="size-4" /> Tambah Pelanggan
         </Button>
       </PageHeader>
@@ -396,12 +398,17 @@ export function PelangganClient({ customers }: { customers: CustomerRow[] }) {
                       >
                         <Eye className="size-4" /> Lihat profil
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={!c.phone}
+                        onClick={() => c.phone && window.open(`https://wa.me/${c.phone.replace(/\D/g, "")}`, "_blank", "noopener")}
+                      >
                         <MessageCircle className="size-4" /> Kirim WhatsApp
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem variant="destructive">
+                      {/* No customer delete action, and customers are referenced by orders — segera hadir, not a no-op. */}
+                      <DropdownMenuItem variant="destructive" disabled className="opacity-60">
                         <Trash2 className="size-4" /> Hapus
+                        <span className="ml-auto text-[10px] text-muted-foreground">segera</span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

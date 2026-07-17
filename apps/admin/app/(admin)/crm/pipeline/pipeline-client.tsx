@@ -223,11 +223,12 @@ function LeadCard({ lead, waHref }: { lead: Lead; waHref: string }) {
                 </Button>
               }
             />
+            {/* No lead writer exists (crm.ts only has setFollowupStatus) — disabled, not no-op. */}
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>Pindah tahap</DropdownMenuItem>
-              <DropdownMenuItem>Lihat</DropdownMenuItem>
+              <DropdownMenuItem disabled className="opacity-60">Pindah tahap<span className="ml-auto text-[10px]">segera</span></DropdownMenuItem>
+              <DropdownMenuItem disabled className="opacity-60">Lihat</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive">Hapus</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" disabled className="opacity-60">Hapus</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -310,9 +311,10 @@ function AddLeadDialog() {
           </div>
         </div>
 
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline">Batal</Button>} />
-          <Button onClick={() => setOpen(false)}>Simpan</Button>
+        <DialogFooter className="items-center">
+          <span className="mr-auto text-xs text-muted-foreground">Menambah prospek — segera hadir</span>
+          <DialogClose render={<Button variant="outline">Tutup</Button>} />
+          <Button disabled>Simpan</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -11,6 +11,8 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
+import { toast } from "sonner";
+import { deleteCollection } from "@/lib/actions/collections";
 import { type Collection } from "@/lib/mock/store";
 
 import { Card } from "@tokophi/ui/card";
@@ -47,6 +49,18 @@ function StatusBadge({ published }: { published: boolean }) {
 
 function RowActions({ id }: { id: string }) {
   const canWrite = useCan("content:write");
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  const del = () =>
+    start(async () => {
+      try {
+        await deleteCollection(id);
+        toast.success("Kategori dihapus.");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus — coba lagi.");
+      }
+    });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi kategori" />}>
@@ -54,9 +68,10 @@ function RowActions({ id }: { id: string }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem render={<Link href={`/produk/kategori/${id}`} />}><Pencil /> Edit</DropdownMenuItem>
-        <DropdownMenuItem><ExternalLink /> Lihat di toko</DropdownMenuItem>
+        {/* "Lihat di toko" needs the storefront URL (handle + per-store host) — segera hadir, not a no-op. */}
+        <DropdownMenuItem disabled className="opacity-60"><ExternalLink /> Lihat di toko<span className="ml-auto text-[10px] text-muted-foreground">segera</span></DropdownMenuItem>
         {canWrite && <DropdownMenuSeparator />}
-        {canWrite && <DropdownMenuItem variant="destructive"><Trash2 /> Hapus</DropdownMenuItem>}
+        {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}><Trash2 /> Hapus</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -98,21 +98,15 @@ function Field({
   )
 }
 
+// Pajak + Notifikasi are display-only previews: nothing behind their controls persists (order-level
+// PPN is never computed — tax_rate_pct/tax_inclusive are dead columns — and there is no notification
+// system or column for those prefs). So there is no "Simpan Perubahan" button to imply otherwise; a
+// button that silently no-ops is the lie the "Pembayaran" tab was deleted for. The wired sections
+// (Pengiriman/Alamat/Rekening/Profil) use their own real save handlers, never this.
 function SaveFooter() {
-  const canSave = useCan("settings:write")
-  if (!canSave)
-    return (
-      <CardFooter className="justify-end">
-        <p className="text-xs text-muted-foreground">Hanya Pemilik yang dapat mengubah pengaturan toko.</p>
-      </CardFooter>
-    )
   return (
-    <CardFooter className="justify-end gap-2">
-      <Button variant="ghost">Batal</Button>
-      <Button>
-        <Save />
-        Simpan Perubahan
-      </Button>
+    <CardFooter className="justify-end">
+      <p className="text-xs text-muted-foreground">Segera hadir — perubahan pada bagian ini belum tersimpan.</p>
     </CardFooter>
   )
 }
@@ -387,7 +381,7 @@ export default function Page() {
                   Kelola anggota tim yang memiliki akses ke dasbor toko.
                 </CardDescription>
                 <CardAction>
-                  <Button size="sm">
+                  <Button size="sm" disabled title="Segera hadir">
                     <UserPlus />
                     Undang pengguna
                   </Button>
@@ -432,21 +426,13 @@ export default function Page() {
                   </ul>
                 </div>
               </CardContent>
+              {/* Team members + invite are managed by the platform (super-admin), not from this panel —
+                  there is no client-side user write action. So no fake Save/Undang here. */}
               <CardFooter className="justify-end gap-2">
                 <p className="mr-auto text-xs text-muted-foreground">
                   <span className="tabular-nums">{team.length}</span> anggota tim
                 </p>
-                {canSettings ? (
-                  <>
-                    <Button variant="ghost">Batal</Button>
-                    <Button>
-                      <Save />
-                      Simpan Perubahan
-                    </Button>
-                  </>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Hanya Pemilik yang dapat mengelola pengguna.</p>
-                )}
+                <p className="text-xs text-muted-foreground">Kelola anggota lewat dukungan — segera hadir di sini.</p>
               </CardFooter>
             </Card>
           )}

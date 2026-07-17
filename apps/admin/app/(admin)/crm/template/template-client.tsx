@@ -119,11 +119,12 @@ function CardActions() {
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi template" />}>
         <MoreHorizontal />
       </DropdownMenuTrigger>
+      {/* wa_templates has no write action yet — disabled, not a no-op. */}
       <DropdownMenuContent align="end">
-        <DropdownMenuItem><Pencil /> Edit</DropdownMenuItem>
-        <DropdownMenuItem><Copy /> Duplikat</DropdownMenuItem>
+        <DropdownMenuItem disabled className="opacity-60"><Pencil /> Edit<span className="ml-auto text-[10px]">segera</span></DropdownMenuItem>
+        <DropdownMenuItem disabled className="opacity-60"><Copy /> Duplikat</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive"><Trash2 /> Hapus</DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" disabled className="opacity-60"><Trash2 /> Hapus</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -229,9 +230,10 @@ function CreateTemplateDialog() {
           </div>
         </div>
 
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline">Batal</Button>} />
-          <DialogClose render={<Button>Simpan</Button>} />
+        <DialogFooter className="items-center">
+          <span className="mr-auto text-xs text-muted-foreground">Membuat template — segera hadir</span>
+          <DialogClose render={<Button variant="outline">Tutup</Button>} />
+          <Button disabled>Simpan</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
