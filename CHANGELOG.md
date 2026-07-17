@@ -4,6 +4,51 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 📦 Pengiriman is ONE focused row — and the cheapest rate is never hidden behind a click
+
+Two changes that pull in opposite directions and only work together.
+
+**The view is now one row.** Pengiriman showed every fast rate: SPX Economy, SPX Standard, JNE Reguler,
+JNE YES — four prices to arbitrate for a decision the shopper has no information to make. It now shows
+the named default (**SPX Standard**, `spx`/type `1`); Economy, JNE and everyone else live in "Pilih
+ekspedisi lain". If the route has no SPX, **JNE becomes the default and the box says so** — a
+substitute in the default slot is what a shopper otherwise discovers when the parcel arrives under
+someone else's label.
+
+**But one row must never be a more expensive row.** Measured on a real route (Depok): the default sat
+on SPX Standard **Rp15.700** while **AnterAja Regular Flat Rp9.000** — 74% cheaper — hid behind the
+disclosure, with "Termurah" suppressed and nothing on screen hinting it existed. On Jayapura the gap
+is **Rp95.932** (Jagopack Rp77.068 under JNE Rp173.000). The full list is now **prefetched in the
+background** the moment the fast quote paints, and when it reveals something genuinely cheaper than
+the default, that rate **earns the second row** and wears the badge. Two rows maximum, `all:true`
+fired exactly once, and the disclosure never opens itself.
+
+⚠️ **"Fetch one courier is lighter" is FALSE — measured, not assumed.** The obvious follow-on was to
+quote `["spx"]` alone. Against the live API:
+
+| scope | 1577→3512 | 1577→4821 | 1577→2145 |
+|---|---|---|---|
+| `["spx"]` | 407ms | 343ms | 119ms — **0 layanan** |
+| `["spx","jne"]` | **264ms** | **220ms** | 203ms — 1 layanan |
+| every courier | 5.106ms | 5.231ms | 5.097ms |
+
+SPX alone is **not faster** (it lost 2 of 3 routes; both are noise around ~0.3s). The 5.5s is the slow
+carriers, not JNE — the API fans out per courier. And on 2145 SPX returns **nothing**, so an spx-only
+quote would need a SECOND call just to find the JNE fallback. Quoting the pair in one call is what
+makes "no SPX here → JNE" free and instant. **`FAST_COURIERS` stays `["spx","jne"]`; what changed is
+what we RENDER.** How many couriers you quote and how many rows you show are separate decisions.
+
+**A bug this introduced, caught in the browser and closed:** the disclosure button did
+`if (moreState === "loading") return`. That was safe when only a click could start a call — the box was
+already open showing "Mengambil…". With a background prefetch, `loading` happens unprompted, so for
+~5s the control was **dead on click**. It now opens and reports progress instead.
+
+**Exercised, not typechecked** (`astro check` was green on all of the above): real browser, cold cache,
+4 routes — Depok, Ngaglik, Wamena, Nambluong/Jayapura. First paint one row; ~5s later the cheaper rate
+promotes itself with no click; substitute note correct where SPX is absent (and correctly hidden where
+SPX serves the route — Wamena does); COD correctly vanishes for Papua; toggle closed/open is instant
+with no refetch; **0 console errors** throughout.
+
 ### 🗂️ The kelurahan index existed only on this laptop — a fresh database shipped without it (0059)
 
 An untracked `0046_good_dust.sql` was sitting in the worktree. It looked like leftover generator junk,
@@ -331,7 +376,7 @@ PDP already wrapped; the card was the odd one out. Now `flex-wrap` with a tight 
 card grows by one line rather than a paragraph. Verified after: `clips: false` at all three widths, and
 the struck price ends at x=112 — inside the box.
 
-### 🤖 Lighthouse says robots.txt is invalid. Lighthouse is wrong — investigated, deliberately unchanged
+### 🔍 Lighthouse says robots.txt is invalid. Lighthouse is wrong — investigated, deliberately unchanged
 
 `robots-txt` scores **0** on live: *"Unknown directive"* at `Content-Signal: search=yes,ai-train=no,
 use=reference`. **It is not our file.** `robots.txt.ts` emits 9 lines; live serves **70** — Cloudflare's
@@ -391,7 +436,7 @@ which the old select's `value` happened to be. The picker holds names now, so it
 and, when a code is ambiguous or absent, leaves the picker blank and keeps the kodepos — the code is
 what ships, and a guessed name beside it only adds a chance to be wrong.
 
-### 🤖 Checkout robots: `noindex,follow`, not `noindex,nofollow`
+### 🔍 Checkout robots: `noindex,follow`, not `noindex,nofollow`
 
 `noindex` is the whole intent — keep a per-shopper page out of the index. `nofollow` is a different
 instruction ("treat every link here as untrusted") and the links are the merchant's own logo, cart and
