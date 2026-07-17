@@ -166,9 +166,25 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
           </div>
         </div>
         {/* Back to the cart they came from — the same destination as "Kembali ke keranjang" in the
-            summary. One intent, two places, no third idea. */}
+            summary. One intent, two places, no third idea.
+
+            RIGHT EDGE = the 1080 box's own boundary (user's call, 2026-07-17), i.e. the same x where
+            the summary panel below stops. It was `lg:px-10`, which parked the cart at 1220 at 1440 —
+            aligned with the "Total" figure in the panel, and symmetric with the logo (both ~40px
+            inside the box). Defensible on paper, but the header bar is FULL-BLEED white while its
+            content is boxed at 1080, so on a wide screen the cart read as stranded mid-canvas rather
+            than as the header's right-hand control — 460px of empty bar to its right at 1920.
+            Trade accepted deliberately: the cart NO LONGER lines up with the Total figure (1260 vs
+            1220). It lines up with the panel's EDGE instead — the layout boundary is the stronger line
+            here because it is the one the eye can actually see.
+
+            ⚠️ `xl:pr-0`, not `lg:pr-0`. Between lg (1024) and 1080 the box is NARROWER than its
+            max-width, so its edge IS the viewport edge — a flush cart would touch the side of the
+            screen with zero gutter. `lg:pr-6` keeps a gutter until `xl`, by which point the box is
+            centred with ≥100px of margin either side and flush is safe. Measured: 1000 @1024,
+            1180 @1280 (= box edge), 1260 @1440 (= box edge). */}
         <div class="ml-auto flex min-w-0 lg:ml-0 lg:justify-start lg:py-4">
-          <div class="flex w-full items-center lg:max-w-[480px] lg:px-10">
+          <div class="flex w-full items-center lg:max-w-[480px] lg:pl-10 lg:pr-6 xl:pr-0">
             <a
               href="/keranjang"
               class="ml-auto inline-flex shrink-0 items-center gap-2 rounded-md p-1.5 text-sm font-medium text-[var(--co-muted)] transition-colors hover:text-[var(--co-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--co-accent)]"

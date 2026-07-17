@@ -4,6 +4,25 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 🛒 /checkout header: the cart now sits on the layout's right boundary
+
+The cart was **40px inside** the 1080 box (`lg:px-10`), which on paper was the defensible choice — at
+1440 it landed on x=1220, exactly where the **"Total" figure** in the summary ends, and symmetric with
+the logo (both ~40px inside the box). Measured, not assumed.
+
+But the header bar is **full-bleed white while its content is boxed at 1080**, so on a wide screen the
+cart read as stranded mid-canvas rather than as the header's right-hand control: **460px of empty bar
+to its right at 1920**. The user called it, and the layout boundary wins — it is the line the eye can
+actually see (it is where the grey summary panel stops), whereas the alignment to the Total figure is
+real but invisible. **Trade accepted deliberately: the cart no longer lines up with Total** (1260 vs
+1220).
+
+⚠️ `xl:pr-0`, **not** `lg:pr-0`. Between lg (1024) and 1080 the box is narrower than its max-width, so
+its edge **is** the viewport edge — a flush cart would touch the side of the screen with zero gutter.
+`lg:pr-6` holds a gutter until `xl`, by which point the box is centred with ≥100px of margin and flush
+is safe. Verified at 11 widths: flush with the box edge at 1280/1440/1920 (1180/1260/1500), a 24px
+gutter from 1024–1279, the page gutter below that, and **no overflow at any width**.
+
 ### ♿ Stock colours: all three failed AA, and only one was findable by an audit
 
 Caught by re-running Lighthouse on the live PDP after the de-carding above — **accessibility had
