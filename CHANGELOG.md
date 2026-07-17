@@ -4,6 +4,16 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 🏷️ The struck-through price was cut off on every phone
+
+`ProductCard`'s price row was `flex items-baseline gap-2` — **`nowrap`**. Measured on live at 360 / 390
+/ 430: the row is 124 / 139 / 159px and the two prices need **176**, so "Rp 249.000" ran to x=208 inside
+a box ending at 156 — **52px of it simply gone**. Not an edge case: a 2-up grid on a phone never gives
+that row enough width, so the compare-at price was clipped on *every* promo card on *every* phone. The
+PDP already wrapped; the card was the odd one out. Now `flex-wrap` with a tight `gap-y-0.5`, so a promo
+card grows by one line rather than a paragraph. Verified after: `clips: false` at all three widths, and
+the struck price ends at x=112 — inside the box.
+
 ### 🤖 Lighthouse says robots.txt is invalid. Lighthouse is wrong — investigated, deliberately unchanged
 
 `robots-txt` scores **0** on live: *"Unknown directive"* at `Content-Signal: search=yes,ai-train=no,
