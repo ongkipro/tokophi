@@ -2061,6 +2061,7 @@ if (rToken) {
         },
         items: cart,
         subtotal: subtotal,
+        tax: 0, // set from the server response below (PPN is priced server-side)
         total: subtotal + ship,
       };
 
@@ -2132,6 +2133,7 @@ if (rToken) {
           // The ongkir + total the SERVER priced (it re-quotes; it does not take ours). The success
           // page must show what the order actually says, not what this tab last calculated.
           if (typeof res.shipping === "number") order.shipping.price = res.shipping;
+          if (typeof res.tax === "number") order.tax = res.tax;
           if (typeof res.total === "number") order.total = res.total;
           if (res.payment) order.payment.instruction = res.payment;
           finish();

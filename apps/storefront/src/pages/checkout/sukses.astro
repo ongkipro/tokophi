@@ -142,6 +142,7 @@ const store = Astro.locals.store;
       '<div class="mt-4 space-y-2 border-t border-[var(--co-line)] pt-4 text-sm">' +
       '<div class="flex items-center justify-between"><span class="text-[var(--co-muted)]">Subtotal</span><span class="font-medium text-ink tabular-nums">' + idr.format(order.subtotal || 0) + "</span></div>" +
       '<div class="flex items-center justify-between"><span class="text-[var(--co-muted)]">Ongkir</span><span class="font-medium text-ink tabular-nums">' + idr.format(shipPrice) + "</span></div>" +
+      (order.tax > 0 ? '<div class="flex items-center justify-between"><span class="text-[var(--co-muted)]">PPN</span><span class="font-medium text-ink tabular-nums">' + idr.format(order.tax) + "</span></div>" : "") +
       "</div>" +
       '<div class="mt-4 flex items-center justify-between border-t border-[var(--co-line)] pt-4">' +
       '<span class="text-base font-medium text-ink">Total</span>' +
