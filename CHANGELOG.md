@@ -189,6 +189,34 @@ field and reports natively — no order posted, nothing silent.
 
 ## 2026-07-17
 
+### ⏱️ The tracking poller was complete and had no trigger — scheduled it
+
+A collaborator (`Admin@Admins-Mac-mini`, `db10557`) shipped the tracking poller — the **#1 blocker in
+the shipping backlog**: `lib/ka-tracking.ts` + `api/cron/tracking`. Good work: forward-only status
+rank (a replayed pull cannot drag a `selesai` order back to `dikirim`), reuses `applyOrderStatusChange`
+so inventory/ledger/COD move exactly as on a manual change, never overwrites a real AWB with our own
+booking ref echoed back, batch-capped at 100, fails closed without `CRON_SECRET`.
+
+**Nothing scheduled it.** Only `cron/billing` has a sidecar; `cron/tracking` had a comment saying
+"schedule it like cron/billing" and no scheduler. A poller that never runs is an AWB that never lands
+— and the whole chain queues behind it, because **Pengiriman Massal has nothing to print until an AWB
+exists**. Added the **`cron-tracking` sidecar, every 15 min** — deliberately its own container rather
+than a second line in `cron`, which sleeps **86400s**: a shopper waiting on a resi cannot wait a day.
+
+Reviewed for the class of bug 0058 was written for: the poller does `where number = …` with no store
+filter, which is **safe** — `orders_number_unique` is UNIQUE **globally**, not per store, so a number
+can only ever name one order. Checked rather than assumed.
+
+⚠️ **Still unexercised.** No AWB has ever landed, so `awbFilled` has only ever been 0, and
+`KIRIMINAJA_ENV` still defaults to **sandbox**. The status-code mapping is read off the docs, not
+observed — tasked.
+
+Also fixed a latent bug in **my own** `seed:recent`: it derived the next number via
+`regexp_replace(number,'\D','','g')::int`, which on a REAL order (`PHI-202951778F2Y`) yields
+2_029_517_782 — inside int4 by ~5%, and a slightly longer number dies with "integer out of range".
+It only survived because this store has no real checkout orders yet. Now matched with
+`number ~ '^PHI-[0-9]{1,6}$'` so seeded numbers stay in the seed's own range.
+
 ### 🛡️ RLS on `stores` (0058) — and the verifier that had been red so long nobody heard it
 
 Follow-up to the cross-tenant leak below. The WHERE clauses fixed the two known callers; **this makes

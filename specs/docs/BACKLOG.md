@@ -54,7 +54,23 @@ The seller's UI flow works too: **Cek Ongkir → pick → Buat** produced 2 book
 
 ### ▶ STILL TO PERFECT — tasks for this workflow
 
-1. **[ ] Tracking poller + `orders.awb` fill.** The booking succeeds with `awb: null`; something must fetch the waybill when the courier issues it. `kaTrack` / `trackShipment` already exist — no new API. This is the **prerequisite for everything else**: no AWB → no label → no bulk print.
+1. **[x] Tracking poller + `orders.awb` fill — BUILT `db10557` (by `Admin@Admins-Mac-mini`), SCHEDULED 2026-07-17.**
+   `lib/ka-tracking.ts` (`syncOrderFromKa`: forward-only via a status RANK, reuses `applyOrderStatusChange`
+   so inventory/ledger/COD move exactly as on a manual change, never overwrites a real AWB with our own
+   booking ref) + `app/api/cron/tracking/route.ts` (batch 100, fails closed without `CRON_SECRET`).
+   **It shipped with nothing scheduling it** — added the `cron-tracking` sidecar (15 min, its own
+   container; the existing `cron` sleeps 86400s and an AWB the shopper is waiting on cannot be a day
+   late). Reviewed: `orders.number` is UNIQUE **globally** (`orders_number_unique`), so the poller's
+   `where number = …` cannot reach another tenant's order — checked, because that is exactly the class
+   of bug 0058 was written for.
+   - [ ] **Not yet exercised end-to-end.** No AWB has ever landed, so `awbFilled` has never been
+         anything but 0 — and `KIRIMINAJA_ENV` still defaults to **sandbox**, so it is tracking sandbox
+         parcels. The mapping in `outcomeFromTrackingCode` (100–105 booked · 106+ shipped · 200
+         delivered · 300 canceled · 301/40x returned · 500/7xx/9xx problem) is **read off the docs, not
+         observed** — verify against a real pull before trusting a status transition that moves money.
+   - [ ] **Unknown code + AWB present ⇒ forced `"shipped"`** (`route.ts:58`, `outcome ?? "shipped"`).
+         Defensible (an AWB means the courier accepted the pickup) but it is an *assumption* firing on
+         an unrecognised status; worth a log line rather than a silent advance.
 2. **[ ] Status follows the courier (decision 3).** `createShipment` still hardcodes `status: "dikirim"` on booking — the timeline claims "in transit" while the parcel is on the seller's shelf. Should be `diproses` on booking, `dikirim` when the courier accepts (the same moment the AWB appears). ⚠️ Touches the order state machine and the existing manual path.
 3. **[ ] Auto-book on "Proses pesanan" (decisions 1 + 5).** One button: confirm → book the service the shopper paid for (`courier`+`service_type`, both now recorded) → honest result (resi, or "dibooking, resi menyusul"). Old orders backfilled by 0053 can auto-book too.
 4. **[ ] `orders.label_printed_at` + printed/not-printed filter.** Does not exist. Needed for the marketplace-style status and for Pengiriman Massal's filter. Cancelling must stay possible after printing.

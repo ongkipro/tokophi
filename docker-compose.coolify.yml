@@ -202,6 +202,31 @@ services:
       timeout: 5s
       retries: 3
 
+  # tracking poller — pulls KiriminAja, fills orders.awb, advances status to match the courier.
+  #
+  # Its OWN sidecar, not another line inside `cron` above: that loop sleeps 86400s, and an AWB the
+  # shopper is waiting on cannot be a day late. The endpoint shipped complete (db10557) with nothing
+  # scheduling it — a poller that never runs is an AWB that never lands, and the rest of the chain
+  # queues behind it (Pengiriman Massal has nothing to print until an AWB exists).
+  #
+  # 15 minutes: a waybill appears when the courier accepts the pickup — minutes to hours, not days.
+  # Faster only spends KiriminAja rate limit on orders that have not moved. The sweep is capped at
+  # 100 and syncOrderFromKa moves an order FORWARD only, so a missed tick costs a delay, never a
+  # wrong state.
+  cron-tracking:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      admin: { condition: service_healthy }
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-}
+    command: ["sh", "-c", "while true; do wget -qO- \"http://admin:3000/api/cron/tracking?secret=$$CRON_SECRET\" >/dev/null 2>&1 || echo 'cron tracking failed'; sleep 900; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   # daily Postgres backup — custom-format dump to a volume, keeps the last 7.
   backup:
     image: postgres:16-alpine

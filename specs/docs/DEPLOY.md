@@ -75,6 +75,28 @@ sync** run via `GET /api/cron/billing?secret=$CRON_SECRET` — schedule it **dai
 - Coolify Scheduled Task (or a host crontab): `curl -s "https://<admin-domain>/api/cron/billing?secret=$CRON_SECRET"` at e.g. `0 2 * * *`.
 - Returns `{stores, statusSynced, invoicesCreated}`. It generates a VA invoice for past-due/suspended stores with no pending subscription invoice; payment callback then extends the period.
 
+## Tracking cron (scheduled — `cron-tracking` in the compose)
+
+`GET /api/cron/tracking?secret=$CRON_SECRET` pulls KiriminAja for orders that are **booked but not
+finished** (`ka_order_id IS NOT NULL` ∧ status ∈ `diproses`/`dikirim`), fills `orders.awb` the moment
+the courier issues it, and advances the order to match the courier. Returns
+`{scanned, advanced, awbFilled, errors}`.
+
+**It has its own sidecar (`cron-tracking`, every 15 min), NOT a second line in the daily `cron`
+container.** A booking returns `awb: null` — the waybill exists only once a courier accepts the
+pickup, which takes minutes to hours. A shopper waiting on a resi cannot wait a day, and the whole
+shipping chain queues behind it: **Pengiriman Massal has nothing to print until an AWB exists**. The
+endpoint shipped complete (`db10557`) with nothing scheduling it; a poller that never runs is an AWB
+that never lands.
+
+Safe to re-run: the sweep is capped at 100 per tick (each item is a live KiriminAja call — a bigger
+sweep risks rate-limiting) and `syncOrderFromKa` moves an order **forward only**, so a missed or
+replayed tick costs a delay, never a wrong state. Fails closed on an unset `CRON_SECRET` in
+production, exactly like billing.
+
+⚠️ `KIRIMINAJA_ENV` still defaults to **sandbox**. The poller will faithfully track sandbox parcels
+and report `awbFilled: 0` forever against real ones.
+
 ## Env to set in Coolify
 
 See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!), `KIRIMINAJA_API_KEY`, `AUTOLARIS_API_KEY`, `AUTOLARIS_CALLBACK_SECRET`. Cross-surface URLs (set AFTER domains assigned): `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API` (⚠️ the storefront reads these at RUNTIME — must be the public admin URL, not localhost, or the kecamatan search / order / payment silently fail). Custom domains: `CUSTOM_DOMAIN_CNAME_TARGET` (default `cname.tokophi.com`).

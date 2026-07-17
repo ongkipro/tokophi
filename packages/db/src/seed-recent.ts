@@ -95,9 +95,19 @@ async function main() {
   if (!customers.length || !variants.length || !dests.length)
     throw new Error("Store has no customers / variants / shippable orders to sample from.");
 
+  // Continue the SEED's own short numbering (PHI-5201, 5202, …) and ignore real checkout orders.
+  //
+  // ⚠️ This filter is load-bearing. A real order is `PHI-<9-digit timestamp><3 base36>` — e.g.
+  // PHI-202951778F2Y — so stripping non-digits yields 2_029_517_782, which is (barely) inside int4
+  // and would make the next seeded order PHI-2029517783. A slightly longer number overflows and the
+  // script dies with "integer out of range". Neither is wanted: seeded rows should look seeded.
+  // `orders.number` is UNIQUE **globally** (orders_number_unique), not per store, so a collision here
+  // is an insert error, not silent corruption — but the range must still not be shared with the live
+  // generator's.
   const [maxRow] = await q(sql`
-    select coalesce(max((regexp_replace(number, '\\D', '', 'g'))::int), 5200) as n
-    from orders where store_id = ${storeId}
+    select coalesce(max(substring(number from 5)::int), 5200) as n
+    from orders
+    where store_id = ${storeId} and number ~ '^PHI-[0-9]{1,6}$'
   `);
   let next = Number(maxRow.n) + 1;
 
