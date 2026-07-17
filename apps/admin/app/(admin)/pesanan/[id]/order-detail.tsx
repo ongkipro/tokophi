@@ -511,7 +511,7 @@ export function OrderDetail({
                 </div>
                 {money.tax > 0 && (
                   <div className="flex justify-between text-muted-foreground">
-                    <span>Pajak</span>
+                    <span>{money.taxInclusive ? "Termasuk PPN" : "PPN"}</span>
                     <span className="tabular-nums">{IDR(money.tax)}</span>
                   </div>
                 )}
@@ -535,7 +535,7 @@ export function OrderDetail({
                       subtotal tersimpan: <span className="tabular-nums text-foreground">{IDR(money.subtotal)}</span>
                     </div>
                     <div>
-                      Subtotal − diskon + ongkir + pajak ={" "}
+                      {money.taxInclusive ? "Subtotal − diskon + ongkir (PPN termasuk)" : "Subtotal − diskon + ongkir + pajak"} ={" "}
                       <span className="tabular-nums text-foreground">{IDR(money.computedTotal)}</span> · total tersimpan:{" "}
                       <span className="tabular-nums text-foreground">{IDR(money.total)}</span>
                     </div>

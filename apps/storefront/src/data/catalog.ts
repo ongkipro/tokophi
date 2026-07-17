@@ -498,14 +498,15 @@ export async function enabledPaymentChannels(): Promise<{ code: string; label: s
 export type StoreTax = { enabled: boolean; ratePct: number; inclusive: boolean };
 
 export async function storeTaxSettings(storeId: string): Promise<StoreTax> {
-  return cached(`store:tax:${storeId}`, async () => {
-    const [ss] = await db
-      .select({ enabled: schema.storeSettings.taxEnabled, ratePct: schema.storeSettings.taxRatePct, inclusive: schema.storeSettings.taxInclusive })
-      .from(schema.storeSettings)
-      .where(eq(schema.storeSettings.storeId, storeId))
-      .limit(1);
-    return { enabled: !!ss?.enabled, ratePct: Number(ss?.ratePct ?? 0), inclusive: !!ss?.inclusive };
-  });
+  // NOT cached: the order API reads these columns live, so a cached value here would let the checkout
+  // render one PPN while the order charges another for the length of the TTL right after a merchant
+  // changes the setting. A single PK lookup per checkout SSR is cheap; charging ≠ shown is not.
+  const [ss] = await db
+    .select({ enabled: schema.storeSettings.taxEnabled, ratePct: schema.storeSettings.taxRatePct, inclusive: schema.storeSettings.taxInclusive })
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.storeId, storeId))
+    .limit(1);
+  return { enabled: !!ss?.enabled, ratePct: Number(ss?.ratePct ?? 0), inclusive: !!ss?.inclusive };
 }
 
 export type StoreCodPolicy = { enabled: boolean; maxAmountIdr: number; allowedProvinces: string[] };
