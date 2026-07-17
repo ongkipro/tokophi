@@ -327,6 +327,21 @@ the component is proven on two different shapes.
 
 ## 🧾 Deferred from the 2026-07-16 checkout/storefront polish
 
+- **[ ] 🎨 Two APIs draw the same line, and `shadow-sm` means three different things** (counted
+  2026-07-17 while de-carding the storefront; the decoration itself is fixed, this is the token layer
+  underneath). Storefront only, checkout excluded — it is its own system.
+  - **`ring-1 ring-line` (11 uses) vs `border border-line` (48 uses)** — same colour token, same visual
+    result, two different mechanisms, picked per-file at random. Note they are NOT interchangeable:
+    `ring` draws outside the box and does not affect layout, `border` occupies space. Any unification
+    has to check each site for the 1px shift rather than sed it.
+  - **`shadow-sm` currently means "static panel", "static slide" AND "a tile that lifts"** — three
+    intents, one value. `rounded-md` (2×) and `shadow-md` (2×) are strays used nowhere else and follow
+    no rule.
+  - Four radii do the card job (`rounded-2xl` 15×, `rounded-xl` 14×, `rounded-lg` 19×, `rounded-md` 2×).
+  - **Decide the rule first, then apply it** (e.g. "ring = non-layout emphasis, border = structural
+    divider; one radius per role"). This is a token decision, and doing it as a find-and-replace is how
+    you get a 1px reflow on 48 surfaces nobody screenshots.
+
 - **[ ] 🧭 The blog ARTICLE has no breadcrumb and no `BreadcrumbList`** (2026-07-17, deliberate). Every
   other indexable page now has both, from one shared array (`src/lib/breadcrumb.ts`). The article was
   left alone because `blog/[handle].astro` argues explicitly for a **topic chip instead of a trail**

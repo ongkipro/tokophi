@@ -39,7 +39,7 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
   <section class="mx-auto max-w-7xl px-4 py-12 sm:px-6">
     {
       articles.length === 0 ? (
-        <p class="rounded-2xl border border-line bg-white p-10 text-center text-muted">
+        <p class="p-10 text-center text-muted">
           Belum ada tulisan yang terbit. Nantikan cerita pertama kami.
         </p>
       ) : (
@@ -48,7 +48,7 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
           {articles.map((a) => (
             <a
               href={`/blog/${a.handle}`}
-              class="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+              class="group flex flex-col overflow-hidden rounded-xl bg-white ring-1 ring-line transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
             >
               {/* 3:2, same lock as the article's feature image — merchant art arrives in every
                   shape, and letting each one set its own ratio makes the Jurnal look broken. An

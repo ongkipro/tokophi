@@ -126,7 +126,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       <!-- Gallery -->
       <div class="flex flex-col gap-4 sm:flex-row-reverse">
         <!-- Main image -->
-        <div class="relative aspect-[3/4] flex-1 overflow-hidden rounded-xl bg-brand-50 ring-1 ring-line">
+        <div class="relative aspect-[3/4] flex-1 overflow-hidden rounded-xl bg-brand-50">
           <img
             id="gallery-main"
             src={gallery[0]}
@@ -314,7 +314,9 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
 
       <div class="mt-8 grid gap-8 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-12">
         <!-- Average -->
-        <div class="flex flex-col items-center rounded-xl bg-white px-8 py-6 text-center ring-1 ring-line">
+        {/* No card. This sits INSIDE the `border-t` reviews section, which already does the
+             separating — a box here is a card inside a card, drawn around one number. */}
+        <div class="flex flex-col items-center px-8 py-6 text-center">
           <span class="font-display text-5xl font-semibold text-ink tabular-nums">{rating.value.toFixed(1)}</span>
           <Stars value={rating.value} size="lg" showValue={false} class="mt-2" />
           <span class="mt-2 text-sm text-muted">{rating.count} ulasan</span>
@@ -346,7 +348,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       {reviews.length > 0 && (
         <ul class="mt-12 grid gap-5 sm:grid-cols-2">
           {reviews.map((rev) => (
-            <li class="rounded-xl bg-white p-5 ring-1 ring-line">
+            <li class="border-t border-line pt-5">
               <div class="flex items-center justify-between gap-3">
                 <span class="font-medium text-ink">{rev.author}</span>
                 <Stars value={rev.rating} size="sm" showValue={false} />

@@ -15,7 +15,10 @@ const rating = Astro.locals.catalog.productRating(product);
   href={`/produk/${product.handle}`}
   class="group block overflow-hidden rounded-xl bg-white ring-1 ring-line transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
 >
-  <div class="relative aspect-[3/4] overflow-hidden rounded-xl bg-brand-50">
+  {/* No `rounded-xl` here. The parent <a> is already `rounded-xl overflow-hidden`, so this inner
+      radius is invisible at the top and fights the parent's clip at the bottom. Same-radius nesting
+      is the textbook overuse tell — the card is one surface, not two. */}
+  <div class="relative aspect-[3/4] overflow-hidden bg-brand-50">
     <img
       src={product.image}
       alt={product.name}

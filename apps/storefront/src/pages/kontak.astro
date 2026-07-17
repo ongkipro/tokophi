@@ -41,7 +41,10 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
     <div class="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-12">
       <!-- Store info -->
       <div class="flex flex-col gap-6">
-        <div class="rounded-2xl border border-line bg-white/70 p-6 shadow-sm">
+        {/* No card. Nothing here is elevated, nothing is clickable, and the two-column grid already
+             separates this from the block beside it — the box was drawn because the content needed a
+             shape, not because it meant anything. Dawn puts this straight on the page. */}
+        <div>
           <h2 class="font-display text-2xl font-semibold text-ink">{store.name}</h2>
           {store.tagline && <p class="mt-1 text-sm text-muted">{store.tagline}</p>}
 
@@ -94,8 +97,8 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
 
           Two channels DO work, and both are already wired: the chat widget (Chat.astro →
           /api/chat/send → support_* tables, which the merchant reads in the admin) and WhatsApp. So
-          this card points at those instead of pretending to be a third one. */}
-      <div class="rounded-2xl border border-line bg-white/70 p-6 shadow-sm">
+          this block points at those instead of pretending to be a third one. */}
+      <div>
         <h2 class="font-display text-2xl font-semibold text-ink">Kirim Pesan</h2>
         <p class="mt-1 text-sm text-muted">
           Balasan tercepat lewat obrolan atau WhatsApp — pesanmu langsung masuk ke tim {store.name}.

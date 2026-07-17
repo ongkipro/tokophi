@@ -4,6 +4,43 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 🃏 Cards: stop drawing a box around everything (Dawn-like restraint)
+
+Audited every card surface in the storefront and asked one question of each: does this box carry
+MEANING (a clickable tile, a real elevated surface, a control) or is it decoration around content that
+would read fine on the page? Dawn's discipline, applied. Checkout is untouched — it is deliberately its
+own design system.
+
+**Removed (decoration):**
+- **`kontak`** — two `rounded-2xl border shadow-sm` cards on a page with exactly two blocks of content:
+  100% card coverage. Nothing was elevated, nothing clickable, and the two-column grid already did the
+  separating.
+- **PDP reviews** — a `ring-1` white box for the average score, plus N more for the review items, all
+  **nested inside the `border-t` reviews section that already delimits them**. Cards inside a card. The
+  reviews are now an editorial list with hairline rules.
+- **PDP hero photo** — `ring-1` around a photograph. A photo's own edge is its boundary.
+- **`ProductCard`** — the image had `rounded-xl` **inside** a parent that is already `rounded-xl
+  overflow-hidden`: invisible at the top, fighting the parent's clip at the bottom. Same-radius nesting
+  is the textbook overuse tell.
+- **`Testimoni`** — `ring-1 shadow-sm` on carousel slides already separated by gap + snap points. The
+  white surface stays; the chrome goes.
+- **Three empty states**, three different treatments (dashed-2xl, dashed-2xl, solid-2xl) each boxing a
+  message with nothing to be separated *from*. All three now plain.
+
+**Kept (meaningful):** `ProductCard`'s tile and the blog tile (clickable), the cart's sticky summary
+(genuinely elevated — Dawn cards this too), Chat/mega-menu/drawer (real overlays where the shadow is
+load-bearing), every form control and selection ring, and the Hero eyebrow pill (a ring earned by
+sitting over photography).
+
+**Consistency:** the blog tile and `ProductCard` do the same job — a clickable tile — and were
+`rounded-2xl`+`border`+`shadow-sm`+`hover:shadow-lg` vs `rounded-xl`+`ring-1`+`hover:shadow-xl`. Now
+identical. ⚠️ The deeper inconsistency is logged, not silently half-fixed: **`ring-1 ring-line` (11×)
+and `border border-line` (48×) do the same job with the same colour via two different APIs**, chosen
+per-file at random, and `shadow-sm` currently means three different things. That is a token decision,
+not a find-and-replace — see BACKLOG.
+
+Verified by screenshot at desktop + 390px, 0 console errors.
+
 ### 🧭 Breadcrumbs: one array now drives both the trail and the schema
 
 The task said "add breadcrumbs". **They already existed** — as SIX hand-copied blocks of identical
