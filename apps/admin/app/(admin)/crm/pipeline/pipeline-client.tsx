@@ -43,10 +43,15 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@tokophi/ui/dropdown-menu";
 import { useStoreName } from "@/components/admin/store-context";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { useCan } from "@/components/admin/permissions";
+import { createLead, setLeadStage, deleteLead } from "@/lib/actions/crm";
 
 // Board columns (kalah is intentionally excluded — still counted for closing rate).
 const COLUMNS: { stage: LeadStage; title: string; accent: string }[] = [
@@ -55,6 +60,12 @@ const COLUMNS: { stage: LeadStage; title: string; accent: string }[] = [
   { stage: "nego", title: "Negosiasi", accent: "bg-amber-500" },
   { stage: "closing", title: "Closing", accent: "bg-violet-500" },
   { stage: "menang", title: "Menang", accent: "bg-emerald-500" },
+];
+
+// All stages a lead can be moved to (COLUMNS + the off-board "kalah").
+const ALL_STAGES: { stage: LeadStage; title: string }[] = [
+  ...COLUMNS.map((c) => ({ stage: c.stage, title: c.title })),
+  { stage: "kalah", title: "Kalah" },
 ];
 
 const SOURCE_META: Record<
@@ -172,6 +183,29 @@ function SummaryStat({ label, value }: { label: string; value: string }) {
 
 function LeadCard({ lead, waHref }: { lead: Lead; waHref: string }) {
   const { icon: SourceIcon, className: sourceClass } = SOURCE_META[lead.source];
+  const canWrite = useCan("crm:write");
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  const move = (stage: LeadStage) =>
+    start(async () => {
+      try {
+        await setLeadStage(lead.id, stage);
+        toast.success(`${lead.name} dipindah ke ${stage}.`);
+        router.refresh();
+      } catch {
+        toast.error("Gagal memindah tahap — coba lagi.");
+      }
+    });
+  const del = () =>
+    start(async () => {
+      try {
+        await deleteLead(lead.id);
+        toast.success("Prospek dihapus.");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus — coba lagi.");
+      }
+    });
   return (
     <Card className="gap-0 py-0 shadow-xs transition-shadow hover:shadow-md">
       <CardContent className="flex flex-col gap-2 p-3">
@@ -215,22 +249,25 @@ function LeadCard({ lead, waHref }: { lead: Lead; waHref: string }) {
             WA
           </Button>
 
+          {canWrite && (
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button variant="ghost" size="icon-xs" aria-label="Aksi prospek">
+                <Button variant="ghost" size="icon-xs" aria-label="Aksi prospek" disabled={pending}>
                   <MoreHorizontal />
                 </Button>
               }
             />
-            {/* No lead writer exists (crm.ts only has setFollowupStatus) — disabled, not no-op. */}
             <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled className="opacity-60">Pindah tahap<span className="ml-auto text-[10px]">segera</span></DropdownMenuItem>
-              <DropdownMenuItem disabled className="opacity-60">Lihat</DropdownMenuItem>
+              <DropdownMenuLabel>Pindah ke tahap</DropdownMenuLabel>
+              {ALL_STAGES.filter((s) => s.stage !== lead.stage).map((s) => (
+                <DropdownMenuItem key={s.stage} onClick={() => move(s.stage)}>{s.title}</DropdownMenuItem>
+              ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" disabled className="opacity-60">Hapus</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onClick={del}>Hapus</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -238,8 +275,36 @@ function LeadCard({ lead, waHref }: { lead: Lead; waHref: string }) {
 }
 
 function AddLeadDialog() {
+  const canWrite = useCan("crm:write");
   const [open, setOpen] = React.useState(false);
   const [source, setSource] = React.useState<LeadSource>("WhatsApp");
+  const [name, setName] = React.useState("");
+  const [phone, setPhone] = React.useState("");
+  const [nilai, setNilai] = React.useState("");
+  const [note, setNote] = React.useState("");
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+
+  const save = () =>
+    start(async () => {
+      try {
+        await createLead({
+          name,
+          phone,
+          source,
+          valueIdr: Number(nilai.replace(/\D/g, "")) || 0,
+          note,
+        });
+        toast.success("Prospek ditambahkan.");
+        setName(""); setPhone(""); setNilai(""); setNote(""); setSource("WhatsApp");
+        setOpen(false);
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Gagal menambah prospek.");
+      }
+    });
+
+  if (!canWrite) return null;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -262,7 +327,7 @@ function AddLeadDialog() {
         <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="lead-nama">Nama</Label>
-            <Input id="lead-nama" placeholder="mis. Rina Wijaya" />
+            <Input id="lead-nama" placeholder="mis. Rina Wijaya" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="lead-wa">Nomor WhatsApp</Label>
@@ -270,6 +335,8 @@ function AddLeadDialog() {
               id="lead-wa"
               inputMode="numeric"
               placeholder="mis. 6281234567890"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
             />
           </div>
           <div className="grid gap-2">
@@ -299,6 +366,8 @@ function AddLeadDialog() {
               id="lead-nilai"
               inputMode="numeric"
               placeholder="mis. 450000"
+              value={nilai}
+              onChange={(e) => setNilai(e.target.value)}
             />
           </div>
           <div className="grid gap-2">
@@ -307,14 +376,17 @@ function AddLeadDialog() {
               id="lead-catatan"
               placeholder="mis. Tanya stok kaos ukuran XL"
               rows={3}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
             />
           </div>
         </div>
 
-        <DialogFooter className="items-center">
-          <span className="mr-auto text-xs text-muted-foreground">Menambah prospek — segera hadir</span>
+        <DialogFooter>
           <DialogClose render={<Button variant="outline">Tutup</Button>} />
-          <Button disabled>Simpan</Button>
+          <Button disabled={pending || !name.trim()} onClick={save}>
+            {pending ? "Menyimpan…" : "Simpan"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
