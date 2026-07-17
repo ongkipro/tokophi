@@ -35,13 +35,22 @@ const centered = align === "center";
   aria-label={isCarousel ? "Sorotan koleksi" : undefined}
 >
   <!-- Background images — full-bleed, cross-faded. A failed/missing image just reveals the `ink`
-       section background, so the copy stays legible instead of landing on a broken frame. -->
+       section background, so the copy stays legible instead of landing on a broken frame.
+
+       ⚠️ ONLY SLIDE 1 GETS A `src`. The rest carry `data-src` and are loaded by the script below,
+       after load, on idle. `loading="lazy"` did NOT do this and cannot: lazy only defers images
+       BELOW THE FOLD, and all the slides are stacked at `inset-0` — dead centre of the viewport. So
+       every slide downloaded during first paint. Measured on live: **278.6KB of hero, of which
+       212.6KB was `opacity: 0`** — invisible for the first several seconds, and competing for
+       bandwidth with the LCP image, which is slide 1. The carousel only advances via JS, so a
+       no-JS visitor could never reach slides 2..n anyway: nothing is lost by letting JS ask for them. -->
   {
     slides.map((slide, i) =>
       slide.imageUrl ? (
         <img
           data-hero-img
-          src={slide.imageUrl}
+          src={i === 0 ? slide.imageUrl : undefined}
+          data-src={i === 0 ? undefined : slide.imageUrl}
           alt=""
           width="1920"
           height="1080"
@@ -184,6 +193,28 @@ const centered = align === "center";
     const dots = [...root.querySelectorAll<HTMLButtonElement>("[data-hero-dot]")];
     if (copies.length < 2) return; // static hero — nothing to drive
 
+    // Promote a deferred slide's `data-src` to `src`. Idempotent — once promoted there is no
+    // `data-src` left, so re-calling it is free. Slide 1 never has one (it ships with a real `src`
+    // so the LCP image is in the HTML, discoverable by the preload scanner, not gated behind JS).
+    const wake = (el: HTMLElement) => {
+      const src = el.dataset.src;
+      if (!src) return;
+      delete el.dataset.src;
+      el.removeAttribute("data-src");
+      (el as HTMLImageElement).src = src;
+    };
+
+    // Fetch the off-screen slides only once the page has finished loading, and then only when the
+    // browser says it is idle. They are needed `interval` ms from now at the earliest (5s+), so
+    // there is no reason for them to race the LCP image for bandwidth. `requestIdleCallback` is
+    // absent on Safari <17 — the timeout fallback keeps the carousel working there rather than
+    // leaving those slides permanently blank.
+    const wakeAll = () => images.forEach(wake);
+    const idle = (window as any).requestIdleCallback as undefined | ((cb: () => void) => void);
+    const preloadRest = () => (idle ? idle(wakeAll) : setTimeout(wakeAll, 400));
+    if (document.readyState === "complete") preloadRest();
+    else window.addEventListener("load", preloadRest, { once: true });
+
     const interval = Number(root.dataset.interval ?? 0);
     let index = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -198,8 +229,15 @@ const centered = align === "center";
       timer = setTimeout(() => show(index + 1), interval);
     };
 
-    const show = (next: number) => {
+    // `prefetchNext` is false for the initial show(0) ONLY. Without that flag the init call would
+    // wake slide 2 on the spot and hand back exactly the bandwidth this deferral just saved.
+    const show = (next: number, prefetchNext = true) => {
       index = (next + copies.length) % copies.length;
+      // Wake the slide we are about to reveal BEFORE fading to it — a dot clicked in the first
+      // moments (or autoplay on a machine that never goes idle) must not cross-fade to a blank
+      // frame. Wake the one after it too, so the following transition has it decoded already.
+      wake(images[index]);
+      if (prefetchNext) wake(images[(index + 1) % images.length]);
       copies.forEach((el, i) => {
         const on = i === index;
         el.classList.toggle("opacity-100", on);
@@ -248,7 +286,7 @@ const centered = align === "center";
     document.addEventListener("visibilitychange", schedule);
     reduced.addEventListener("change", schedule);
 
-    show(0);
+    show(0, false);
   }
 
   document.querySelectorAll<HTMLElement>("[data-hero]").forEach(initHero);

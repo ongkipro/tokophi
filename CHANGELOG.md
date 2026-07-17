@@ -4,6 +4,29 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 🖼️ The hero downloaded every slide at first paint — 212KB of it invisible
+
+`loading="lazy"` was on slides 2..n and **did nothing**, because lazy only defers images **below the
+fold** and every slide is stacked at `inset-0` — dead centre of the viewport. Measured on live:
+**278.6KB of hero on first paint, 212.6KB of it at `opacity: 0`** (hero-2 148KB + hero-3 64KB),
+invisible for the first 5+ seconds and competing for bandwidth with the LCP image — which is slide 1,
+the one image that actually needed the bandwidth. Identical on phone and desktop.
+
+Now only slide 1 ships a `src` (so the LCP image stays in the HTML where the preload scanner finds
+it — it is *not* gated behind JS). The rest carry `data-src` and are promoted on `load` → `requestIdleCallback`.
+`show()` wakes its target before fading, plus the next one, so a dot clicked in the first moments
+never cross-fades to a blank frame; the initial `show(0, false)` skips that prefetch, which would
+otherwise have handed straight back the bandwidth this saves. **No-JS loses nothing** — the carousel
+only ever advanced via JS, so slides 2..n were already unreachable without it.
+
+Exercised in a browser, not just typechecked: at DOMContentLoaded exactly **one** hero request; after
+idle all three present; dot 3 fades in decoded (`naturalWidth: 1920`, not blank); 0 console errors.
+
+⚠️ **The "191KB oversized" framing in the old task was a different bug and is still open** — see
+BACKLOG. Lighthouse wants a **portrait crop** for phones (a 16:9 source rendered into a 390×512 box
+via `object-cover` throws away ~50% of its pixels), which is art direction via `<picture>`, not a
+`srcset` width list — and merchant-uploaded heroes have no variant pipeline to draw on.
+
 ### ♿ Three real accessibility failures — each scored 0 on live, each now measured passing
 
 Unlike the robots.txt audit below, these were **our bugs**, not the linter's:
