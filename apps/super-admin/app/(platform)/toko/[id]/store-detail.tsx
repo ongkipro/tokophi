@@ -85,7 +85,7 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
     if (r.ok) { setInvoiceInfo({ number: r.number!, va: r.virtualAccount, reused: r.reused }); toast.success(r.reused ? "Sudah ada tagihan menunggu." : "Tagihan VA dibuat."); router.refresh(); }
     else toast.error(r.error ?? "Gagal membuat tagihan.");
   });
-  const remind = () => run(() => sendPaymentReminder(store.id), "Pengingat pembayaran dikirim.");
+  const remind = () => run(() => sendPaymentReminder(store.id), "Pengingat dicatat di log aktivitas (belum ada pengiriman otomatis).");
   const giveTrial = () => run(() => extendTrial(store.id, 7), "Trial diperpanjang 7 hari.");
   const revertVip = () => run(() => setStoreComped(store.id, false), "VIP dicabut — kembali berbayar.");
   function confirmVip() {

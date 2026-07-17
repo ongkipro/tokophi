@@ -406,8 +406,10 @@ export async function sendPaymentReminder(storeId: string): Promise<{ ok: boolea
     .from(schema.invoices)
     .where(and(eq(schema.invoices.storeId, storeId), eq(schema.invoices.status, "menunggu")))
     .limit(1);
-  // (comms — email/WA — integrated later; recorded to the store audit for now)
-  await logStore(storeId, pending ? `Pengingat pembayaran dikirim (tagihan ${pending.number})` : "Pengingat pembayaran dikirim ke merchant");
+  // No automated comms yet (email/WA integrated later) — this only records a follow-up marker in the
+  // store audit. Say "dicatat", not "dikirim": nothing is actually sent, and claiming otherwise is the
+  // same trap as showing WA "terkirim" when we can only observe "dibuka".
+  await logStore(storeId, pending ? `Pengingat pembayaran dicatat (tagihan ${pending.number})` : "Pengingat pembayaran dicatat");
   revalidatePath(`/toko/${storeId}`);
   return { ok: true };
 }
