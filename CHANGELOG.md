@@ -4,9 +4,26 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 📏 PageSpeed, measured on live — and four real failures it found
+
+Google's PSI API was out of anonymous quota (429), so this is Lighthouse 12 against
+`batik-nusantara.tokophi.id`, mobile: **Performance 87 · Accessibility 96 · Best Practices 100 ·
+SEO 92**. LCP 3,3s · FCP 3,0s · **TBT 0ms · CLS 0** · SI 3,0s. Nothing blocks and nothing jumps — what
+holds the score down is images, not code.
+
+Four audits score **0**, all filed as tasks with the evidence:
+- **robots.txt is invalid.** Line 30 `Content-Signal: search=yes,ai-train=no,use=reference` → *unknown
+  directive*, so the whole file fails and SEO flags it.
+- **Hero images ship 191KB more than they render** — hero-2 wastes **102KB**, hero-1 45KB, hero-3 44KB:
+  the same 1920×1080 file goes to a 390px phone. The other half of the 2560-upscale finding — one asset
+  for every screen, wrong at both ends.
+- **`<aside role="dialog">`** — that role is not allowed on `<aside>`.
+- **Footer `text-cream/45` = 4,05:1**, below AA. `global.css` already fixed `--color-muted` for exactly
+  this reason; this one slipped through as an *opacity* rather than a colour.
+
 ### 📍 Kelurahan is a searchable list, like kecamatan — and a leftover `kelSelect` had killed the page
 
-It was a native `<select>`; kecamatan is an input with a list that drops below it. Two reasons beyond
+It was a native `<select>`; kecamatan is an input with a list that drops below it — **in flow, pushing the page down**. My first pass made kelurahan a floating `absolute` popup instead, which is a THIRD interaction model on one form: kecamatan pushes, kelurahan overlays. Now both are `position: static` (measured, identical) and opening the list grows the page 1713 → 2053px. Two reasons beyond
 consistency. **A `<select>` on Android/iOS opens a full-screen wheel** — the shopper leaves the page to
 answer an *optional* question, and Semarang Tengah has 11 kelurahan to scroll blind. And it made this
 one field the only control on the checkout with its own interaction model.

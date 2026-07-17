@@ -346,7 +346,7 @@ if (rToken) {
                   fetched it when the district was picked), so opening and filtering it costs zero
                   requests — kecamatan hits the API per keystroke because it is searching 7.030 rows;
                   this is filtering ~11. */}
-              <div id="kel-wrap" hidden class="relative">
+              <div id="kel-wrap" hidden>
                 <div class="field">
                   <input type="text" id="kel-search" autocomplete="off" placeholder=" " class="input-field" />
                   <label for="kel-search" class="float-label">Kelurahan / Desa (opsional)</label>
@@ -355,9 +355,12 @@ if (rToken) {
                     checkout-session capture reads it — but it stays a real field so the payload keeps
                     the shape it always had. */}
                 <input type="hidden" name="kelurahan" id="kel-value" />
+                {/* IN FLOW, not absolute — it PUSHES the page down exactly like #dest-results above.
+                    I first made it a floating popup, which is a third interaction model on one form:
+                    kecamatan pushes, kelurahan overlays. Same question, same answer, same motion. */}
                 <div
                   id="kel-results"
-                  class="absolute inset-x-0 z-20 mt-1 hidden max-h-48 overflow-y-auto rounded-lg border border-[var(--co-line)] bg-white shadow-lg"
+                  class="mt-1 hidden max-h-48 overflow-y-auto rounded-lg border border-[var(--co-line)] bg-white shadow-sm"
                 ></div>
               </div>
 
