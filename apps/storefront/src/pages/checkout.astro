@@ -450,9 +450,23 @@ if (rToken) {
               boxes, and COD was another box — so some things in the list were choices and one was a
               caption, with nothing but font weight to tell them apart. Now every row is a choice and
               the group caption sits INSIDE the box, visibly not a row. */}
-          <div class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)] transition-colors has-[:checked]:border-[var(--co-accent)]">
+          {/* The OUTER box stays neutral. It used to carry `has-[:checked]:border-[var(--co-accent)]`, so
+              picking QRIS turned the border of the WHOLE card blue — the frame said "all of this is
+              selected" when one row was. The active frame belongs on the active choice; see the group
+              wrapper below. */}
+          <div class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)]">
             {PAY_GROUPS.map((group) => (
-              <div class="divide-y divide-[var(--co-line)]">
+              /* THE FRAME LIVES HERE — on the group that is actually chosen, sized to it exactly.
+                 `outline`, not `ring`: an inset ring is painted UNDER this element's own `divide-y`
+                 border-top, so the frame's top edge would come out grey on every row but the first.
+                 An outline paints over the border. `-outline-offset-1` keeps it inside the box, so
+                 nothing reflows when it appears.
+                 For Transfer Bank the frame wraps the parent row AND its open bank list, because that
+                 whole block IS the one payment being chosen — and the chosen bank inside keeps only
+                 its tint, so we never draw a frame inside a frame. Safe against a stale highlight:
+                 the sync() below unchecks `va_bank` whenever the parent is deselected, so a hidden
+                 panel can never keep this lit. */
+              <div class="relative divide-y divide-[var(--co-line)] has-[:checked]:z-10 has-[:checked]:outline-1 has-[:checked]:-outline-offset-1 has-[:checked]:outline-[var(--co-accent)]">
                 {/* A group with ONE channel is rendered as a single selectable row, not a header with
                     one item under it: QRIS was appearing twice — once as the group title and once as
                     its only row. And a multi-channel group's rows show only the BANK NAME, because
@@ -538,7 +552,7 @@ if (rToken) {
                 not typed) must be on the allow-list. A greyed-out row with an excuse would be worse —
                 a COD we would reject has no business being on screen at all. */}
             {COD_ENABLED && (
-              <div id="cod-option" hidden>
+              <div id="cod-option" hidden class="relative has-[:checked]:z-10 has-[:checked]:outline-1 has-[:checked]:-outline-offset-1 has-[:checked]:outline-[var(--co-accent)]">
                 <label class="group flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]">
                   <input
                     type="radio"

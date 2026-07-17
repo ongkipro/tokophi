@@ -4,6 +4,31 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 💳 /checkout: the blue frame now fits the payment you picked, not the whole card
+
+`has-[:checked]:border-[var(--co-accent)]` sat on the **outer** payment box, so choosing QRIS turned
+the border of the entire card blue — a frame saying *"all of this is selected"* when one row was. Same
+for Transfer Bank, e-wallet and COD. The frame moved onto the group that is actually chosen, sized to
+it exactly; the outer box stays neutral grey.
+
+Two details that decided the implementation:
+- **`outline`, not `ring`.** An inset ring is painted **under** the element's own `divide-y`
+  border-top, so the frame's top edge would have come out **grey on every row except the first**.
+  An outline paints over the border. `-outline-offset-1` keeps it inside the box, so nothing reflows
+  when it appears.
+- **For Transfer Bank the frame wraps the parent row AND its open bank list** — that whole block *is*
+  the one payment being chosen. The chosen bank inside keeps only its tint, so we never draw a frame
+  inside a frame (the same restraint as the storefront de-carding above).
+
+No stale highlight is possible: `sync()` already unchecks `va_bank` whenever the parent is deselected,
+so a hidden panel can never keep the group lit.
+
+Exercised in a browser through the real flow (kecamatan → rates → payment), not typechecked: QRIS
+frames one row (65px), Transfer Bank frames parent+banks as **one** frame (290px) and picking a bank
+inside adds **no** second frame, and COD — reached by selecting SPX Standard, the only courier that
+unlocks it — frames its own row (64px). The outer border reads `rgb(227,227,227)` in every state.
+0 console errors.
+
 ### 🛒 /checkout header: the cart now sits on the layout's right boundary
 
 The cart was **40px inside** the 1080 box (`lg:px-10`), which on paper was the defensible choice — at
