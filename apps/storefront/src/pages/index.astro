@@ -185,13 +185,12 @@ const SUMMARY = [
             heading; the fallback homepage was making the claim anyway. Say only what the data does. */}
         <p class="mt-2 text-muted">Produk yang paling banyak dibeli.</p>
       </div>
-      {/* NOT /kategori/dress. One container serves every store (ADR 0009) and `dress` is just one
-          merchant's category — on a store that has no such category the handle does not resolve and
-          `/kategori/[handle]` returns 404, so the homepage's own CTAs would point at a dead page.
-          `produk-terlaris` / `semua` are VIRTUAL collections (kategori/[handle].astro) that every
-          store always has. `produk-terlaris` is also literally the list shown above it. */}
+      {/* /kategori/semua — the ONLY virtual collection (VIRTUAL_COLLECTION_HANDLES = ["semua"]), so it
+          resolves on every tenant. `produk-terlaris` was used here but it is a REAL, demo-only
+          collection (not virtual, despite the old comment): it 404s on any store that lacks that row.
+          "Lihat semua" on a bestsellers strip means "all products" anyway, which is what `semua` is. */}
       <a
-        href="/kategori/produk-terlaris"
+        href="/kategori/semua"
         class="hidden shrink-0 text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 sm:block"
       >
         Lihat semua →
@@ -201,7 +200,7 @@ const SUMMARY = [
       {best.map((p) => <ProductCard product={p} />)}
     </div>
     <div class="mt-8 text-center sm:hidden">
-      <a href="/kategori/produk-terlaris" class="text-sm font-medium text-brand-600 hover:text-brand-700">
+      <a href="/kategori/semua" class="text-sm font-medium text-brand-600 hover:text-brand-700">
         Lihat semua →
       </a>
     </div>

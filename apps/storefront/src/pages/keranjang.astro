@@ -16,8 +16,13 @@ import Breadcrumb from "../components/Breadcrumb.astro";
 import { type Crumb } from "../lib/breadcrumb";
 import Layout from "../layouts/Layout.astro";
 import ProductCard from "../components/ProductCard.astro";
+import { getPages } from "../data/content";
 
 const { store, catalog } = Astro.locals;
+// The return-policy trust line linked to /halaman/kebijakan-pengembalian and asserted "7 hari" — both
+// hardcoded: the link 404s on any store that hasn't published that page, and the store may have no such
+// policy at all. Show the line only when the page is really published, and use its own title.
+const returnPage = (await getPages(store.id)).find((p) => p.handle === "kebijakan-pengembalian");
 // The 4 most-sold. The top-up from the rest of the catalogue is GONE: it existed only because
 // `bestsellers()` returned "whatever the merchant flagged" (3 in the seed), leaving a hole in this
 // 4-up row. It now sorts the whole catalogue by units_sold, so the first 4 are always there and are
@@ -131,18 +136,20 @@ const CRUMBS: Crumb[] = [
             <Truck class="mt-0.5 h-4 w-4 shrink-0 text-brand-500" stroke-width={1.75} aria-hidden="true" />
             <span>Dikirim se-Indonesia lewat kurir terpercaya.</span>
           </li>
+          {returnPage && (
           <li class="flex items-start gap-2">
             <RotateCcw class="mt-0.5 h-4 w-4 shrink-0 text-brand-500" stroke-width={1.75} aria-hidden="true" />
             <span>
+              Pengembalian mudah — lihat{" "}
               <a
                 href="/halaman/kebijakan-pengembalian"
                 class="underline transition-colors hover:text-brand-700"
               >
-                Pengembalian dalam 7 hari
-              </a>
-              bila ada yang tidak sesuai.
+                {returnPage.title}
+              </a>.
             </span>
           </li>
+          )}
         </ul>
       </aside>
     </div>
