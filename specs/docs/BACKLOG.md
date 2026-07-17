@@ -327,6 +327,16 @@ the component is proven on two different shapes.
 
 ## 🧾 Deferred from the 2026-07-16 checkout/storefront polish
 
+- **[ ] 🔴 The apex `tokophi.id` serves a 503 — nothing is routed to it** (found 2026-07-17, while
+  measuring a11y on live; **pre-existing, not caused by that deploy**). `*.tokophi.id` is fine —
+  `batik-nusantara.tokophi.id` returns 200 — and so are `tokophi.com`, `toko.tokophi.com`,
+  `app.tokophi.com`. Only the **bare apex** fails, and the response is a 20-byte `text/plain` 503 from
+  **Traefik**, not from Astro: no route is bound to that host, so the request never reaches the app.
+  Decide what the apex should *be*: sellers live at `<slug>.tokophi.id`, so the apex has no tenant to
+  resolve and never will — it should almost certainly **301 to the `tokophi.com` landing** rather than
+  answer with a proxy error. Anyone typing the bare domain (or any link that drops the subdomain) hits
+  a naked 503 today. Fix is a Coolify/Cloudflare route, not code.
+
 - **[x] Lighthouse `robots-txt` scores 0 — INVESTIGATED, DELIBERATELY NOT FIXED** (2026-07-17). "Unknown
   directive" at `Content-Signal: search=yes,ai-train=no,use=reference`. **It is not our file**:
   `robots.txt.ts` emits 9 lines, live serves 70 — Cloudflare's **Managed robots.txt** prepends a Content
