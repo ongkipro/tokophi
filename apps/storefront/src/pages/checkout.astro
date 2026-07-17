@@ -228,7 +228,19 @@ if (rToken) {
     <a href="/" class="mt-6 inline-block rounded-lg bg-[var(--co-accent)] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--co-accent-hover)]">Mulai Belanja</a>
   </div>
 
-  <form id="checkout-form" class="mt-8">
+  {/* ⚠️ `novalidate` is LOAD-BEARING — it is what makes this checkout speak Indonesian.
+      The browser runs its own constraint check BEFORE the `submit` event and, finding an empty
+      `required` field, blocks the submit and shows ITS OWN bubble. That bubble follows the BROWSER's
+      language, not this page's lang="id" — so an Indonesian shopper on an English phone was told
+      "Please fill out this field." / "Please select one of these options." in an otherwise Indonesian
+      checkout. Our market is Indonesia; those were the only strings on the page we did not write.
+      Worse, the submit handler below never ran, so every Indonesian message it already carried
+      ("Nama lengkap wajib diisi.") was unreachable code.
+      `novalidate` turns off only the automatic pre-submit gate. `checkValidity()` /
+      `reportValidity()` still work when WE call them — which the handler does, after setting our own
+      message. Do not remove this without re-testing on an en-US browser: the page looks perfect on an
+      id-ID one. */}
+  <form id="checkout-form" class="mt-8" novalidate>
     <div class="space-y-10">
         <!-- Kontak -->
         <fieldset class="min-w-0">
@@ -406,15 +418,18 @@ if (rToken) {
               of alternatives, i.e. three floating rectangles for one choice. Now the disclosure is a
               ROW INSIDE the box, exactly like Transfer Bank's parent row opens its banks.
 
-              ⚠️ THE DISCLOSURE NOW FETCHES, and the comment that used to sit here said the opposite —
-              "nothing is fetched on click (a second call would only make the click slower)". That was
-              true about the click and wrong about the shopper. Measured against the live API
-              (2026-07-17, same route): quoting EVERY courier takes **5.50s / 5.45s**, quoting
-              `["spx","jne"]` takes **0.65s / 0.54s** — KiriminAja aggregates per courier and the
-              slowest carrier sets the pace. So the old design made EVERY shopper wait ~5.5s to price
-              carriers they never asked about, to make a click instant for the few who open this. And
-              they paid it every time: each shopper has a unique destination, so the 10-min rate cache
-              is always cold for them. The trade is now the other way round — see loadMore(). */}
+              ⚠️ THE DISCLOSURE USUALLY FETCHES NOTHING — do not "optimise" the click away again. The
+              full list is PREFETCHED in the background as soon as the fast quote paints, so opening
+              this is normally instant; the click only pays for a call if it beats the prefetch home.
+              Measured against the live API (2026-07-17, same route): quoting EVERY courier takes
+              5.50s/5.45s, `["spx","jne"]` takes 0.65s/0.54s — KiriminAja aggregates per courier and
+              the slowest carrier sets the pace. That is why the box paints from the fast pair and the
+              slow call runs off to the side instead of in front of the shopper.
+
+              The middle design — fast list only, rest strictly on click — was abandoned because it
+              quietly cost shoppers money: on a real route the default sat on SPX Standard Rp15.700
+              while AnterAja Rp9.000 hid behind this row, badges suppressed, nothing on screen hinting
+              it existed. Latency was never a good reason to hide the cheapest price. */}
           <div id="ship-express-group" class="hidden">
             <div
               id="ship-box"
@@ -1182,8 +1197,20 @@ if (rToken) {
     }
     if (moreBtn) {
       moreBtn.addEventListener("click", function () {
-        if (moreState === "loading") return;
         if (moreState === "done") { setMoreOpen(moreBox.hidden); return; }
+        // ⚠️ `loading` is now reachable WITHOUT a click — loadRates() prefetches the full list in the
+        // background. This used to `return` on it, which was safe when only a click could start the
+        // call (the box was already open, showing "Mengambil…"). With the prefetch that same line
+        // made the control DEAD for the ~5s it is in flight: pressed, and nothing happens. So toggle
+        // anyway and say we are working; the in-flight fetch renders into this box when it lands.
+        if (moreState === "loading") {
+          var opening = moreBox.hidden;
+          setMoreOpen(opening);
+          if (opening && !moreBox.innerHTML) {
+            moreBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Mengambil ekspedisi lain…</p>';
+          }
+          return;
+        }
         loadMore();
       });
     }
@@ -1436,9 +1463,15 @@ if (rToken) {
     }
 
     // ── RATE STATE ────────────────────────────────────────────────────────────────────────────────
-    // FAST = the SPX/JNE quote every shopper gets (~0.6s). ALL = the full courier list, fetched only
-    // if they open "Pilih ekspedisi lain" (~5.5s). Kept as data, not as DOM, because the badges below
-    // must be recomputed across the UNION the moment the full set arrives.
+    // FAST = the SPX/JNE quote every shopper gets (~0.6s) — this is what paints the box.
+    // ALL  = the full courier list (~5.5s), PREFETCHED in the background the moment FAST lands. It is
+    //        not gated on the disclosure any more: the fast list alone was quietly costing shoppers
+    //        money. Measured on a real route (Depok): the default sat on SPX Standard Rp15.700 while
+    //        AnterAja Regular Flat Rp9.000 — 74% cheaper — was hidden behind a click, with the
+    //        "Termurah" badge suppressed, so NOTHING on screen hinted the cheaper option existed.
+    //        The two-stage quote is a LATENCY fix; it was never meant to be a pricing one.
+    // Kept as data, not as DOM, because the badges must be recomputed across the UNION the moment the
+    // full set arrives.
     var FAST_RATES = null;
     var ALL_RATES = null;
     var keyOf = function (s) { return s.code + "-" + s.type; };
@@ -1485,39 +1518,72 @@ if (rToken) {
     function renderRates() {
       var sel = checkedKey();
       var fast = (FAST_RATES || []).slice().sort(byCost);
+      // Everything we know right now. Before the prefetch lands that is just the fast pair; the box
+      // must render from it either way, so first paint never waits on the 5s call.
+      var universe = ALL_RATES && ALL_RATES.length ? ALL_RATES.slice().sort(byCost) : fast;
 
-      // ── THE DEFAULT IS SPX REGULER ─────────────────────────────────────────────────────────────
-      // Not "whatever is cheapest": the merchant's default courier is a product decision, so it is
-      // named (spx / service_type "1"). If the route does not offer it we fall back to the cheapest
-      // AND SAY SO — a different courier silently in the default slot is the substitution a shopper
-      // only notices when the parcel arrives with someone else's label.
+      // ── THE DEFAULT IS SPX STANDARD ────────────────────────────────────────────────────────────
+      // Not "whatever is cheapest": the default courier is a product decision, so it is named (spx /
+      // service_type "1"). If the route does not offer it we fall back to the cheapest fast rate —
+      // JNE, in practice, which is exactly why the fast quote asks for spx+jne in ONE call. Measured
+      // 2026-07-17: spx alone 407/343/119ms vs spx+jne 264/220/203ms — adding JNE costs NOTHING (the
+      // API fans out per courier and both are fast), and on a route SPX does not serve (2145) the
+      // spx-only call returns ZERO, which would force a second round-trip to find the fallback.
+      // Quoting the pair is how "no SPX here → JNE is the default" stays free and instant.
       var preferred = fast.filter(function (x) { return x.code === "spx" && x.type === "1"; })[0];
-      var def = preferred || fast[0];
+      var def = preferred || fast[0] || universe[0];
+
+      // ── THE DEFAULT VIEW IS ONE ROW ────────────────────────────────────────────────────────────
+      // Focus is the point: one named option, not a wall of prices to arbitrate. SPX Economy and JNE
+      // sit in "Pilih ekspedisi lain" with everyone else.
+      //
+      // ⚠️ WITH ONE EXCEPTION, and it is not decoration. On a real route (Depok) the default is SPX
+      // Standard Rp15.700 while AnterAja Regular Flat is Rp9.000 — 74% cheaper. A focused view that
+      // hides that is not focus, it is a shopper overpaying because we never told them. So when the
+      // prefetch reveals something genuinely cheaper than the default, it earns the second row and
+      // wears the "Termurah" badge. Two rows, maximum. Never zero information.
+      // ⚠️ Gated on ALL_RATES, not on `universe`. Before the prefetch lands "cheapest" only means
+      // "cheapest of SPX+JNE" — which promoted SPX Economy Rp11.100 into the box and made the default
+      // view two SPX rows, exactly the un-focused thing this is meant to avoid. A second row must be
+      // earned against the FULL list or not at all.
+      var visible = [];
+      if (def) visible.push(def);
+      var cheapest = ALL_RATES && ALL_RATES.length ? universe[0] : null;
+      if (def && cheapest && keyOf(cheapest) !== keyOf(def) && cheapest.cost < def.cost) visible.push(cheapest);
+
+      // The shopper's own choice outranks both. If they picked from the disclosure it stays rendered
+      // there (it is in `others`), so only pull it up when it would otherwise vanish entirely.
+      var inVisible = function (k) { return visible.some(function (x) { return keyOf(x) === k; }); };
+      if (sel && !inVisible(sel) && !ALL_RATES) {
+        var picked = universe.filter(function (x) { return keyOf(x) === sel; })[0];
+        if (picked) visible.push(picked);
+      }
+      visible.sort(byCost);
       if (!sel && def) sel = keyOf(def);
 
-      expressBox.innerHTML = fast
+      expressBox.innerHTML = visible
         .map(function (x, i) { return rateRow(x, keyOf(x) === sel, { first: i === 0 }); })
         .join("");
 
       if (defaultNote) {
-        if (preferred || !fast.length) {
+        // The named default is missing for this route → the row on screen is a SUBSTITUTE (JNE), and
+        // a substitute in the default slot is the thing a shopper only discovers when the parcel
+        // arrives with someone else's label. Say it. `!def` = nothing to substitute for yet.
+        if (preferred || !def) {
           defaultNote.hidden = true;
         } else {
-          // NOT "kami pilihkan ongkir termurah" — that was true when every courier was priced up
-          // front and became a LIE the moment the list went lazy: this is the cheapest of SPX+JNE,
-          // and a cheaper carrier may be sitting behind the disclosure unquoted (measured on a real
-          // route: Jagopack Rp13.000 under a selected JNE Reguler Rp21.000). Say what we actually
-          // did, and point at where the rest is.
           defaultNote.textContent = "SPX Reguler tidak tersedia untuk rute ini. Buka “Pilih ekspedisi lain” untuk membandingkan semua kurir.";
           defaultNote.hidden = false;
         }
       }
 
       if (ALL_RATES) {
-        // Everything the API prices that is not already on screen, cheapest first. Nothing is
-        // dropped: a service KiriminAja quotes but the checkout hides is a service nobody can buy.
+        // Everything the API prices that is not already on screen, cheapest first. Keyed off
+        // `visible`, NOT `fast`: the box now shows one row (plus the cheapest), so SPX Economy and
+        // JNE belong DOWN HERE. Keying this off `fast` would drop them from both lists — quoted,
+        // paid for, and unbuyable. Nothing the API prices may fall out of the union.
         var shown = {};
-        fast.forEach(function (x) { shown[keyOf(x)] = 1; });
+        visible.forEach(function (x) { shown[keyOf(x)] = 1; });
         var others = ALL_RATES.filter(function (x) { return !shown[keyOf(x)]; }).sort(byCost);
         moreBox.innerHTML = others.length
           ? others.map(function (x, i) { return rateRow(x, keyOf(x) === sel, { last: i === others.length - 1 }); }).join("")
@@ -1527,28 +1593,56 @@ if (rToken) {
       bindShipping();
     }
 
-    function loadMore() {
+    /**
+     * Fetch the FULL courier list. One path, two callers:
+     *   · loadRates()  — in the BACKGROUND, right after the fast quote paints (`open` false).
+     *   · loadMore()   — the shopper clicked the disclosure (`open` true), so the box must react.
+     * They must stay one function: two copies would be two lists, and the one on screen would be
+     * whichever raced last.
+     *
+     * `destAtCall` guards the response against a shopper who changed kecamatan while the ~5.5s call
+     * was in flight — prices are per-route, so a late reply for the OLD destination must be dropped,
+     * not rendered. Without this the background fetch is a new way to show the wrong price.
+     */
+    function fetchAllRates(open) {
       if (!destId.value) return;
+      if (moreState === "loading" || moreState === "done") return; // already in flight or landed
+      var destAtCall = destId.value;
       moreState = "loading";
-      setMoreOpen(true);
-      moreBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Mengambil ekspedisi lain…</p>';
+      if (open) {
+        setMoreOpen(true);
+        moreBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Mengambil ekspedisi lain…</p>';
+      }
       var rateItems = cart.map(function (l) { return { handle: l.handle, variant: l.variant, qty: l.qty }; });
-      api({ op: "rates", storeSlug: STORE_SLUG, destinationId: Number(destId.value), items: rateItems, itemValue: subtotal, all: true })
+      api({ op: "rates", storeSlug: STORE_SLUG, destinationId: Number(destAtCall), items: rateItems, itemValue: subtotal, all: true })
         .then(function (res) {
+          if (destAtCall !== destId.value) return; // stale route — the shopper moved on
           if (!res.ok || !res.rates || !res.rates.length) {
             moreState = "idle"; // let the next click retry rather than leave a dead control
-            moreBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">' + esc(res.error || "Tidak ada ekspedisi lain untuk rute ini.") + "</p>";
+            if (open) moreBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">' + esc(res.error || "Tidak ada ekspedisi lain untuk rute ini.") + "</p>";
             return;
           }
           moreState = "done";
           ALL_RATES = res.rates;
-          renderRates(); // re-renders the fast rows too — the badges are only honest now
-          setMoreOpen(true);
+          // Re-renders the fast rows too: only now are the badges honest and the cheapest promoted
+          // into the visible box. A background arrival must NOT open the disclosure — the shopper
+          // did not ask for it, and a section unfolding under a cursor is how a misclick happens.
+          renderRates();
+          if (open) setMoreOpen(true);
         })
         .catch(function () {
+          if (destAtCall !== destId.value) return;
           moreState = "idle";
-          moreBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Gagal memuat ekspedisi lain. Coba lagi.</p>';
+          // A failed BACKGROUND prefetch is invisible on purpose: the fast list still works and the
+          // shopper never asked for this call. Clicking the disclosure retries and can then say so.
+          if (open) moreBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Gagal memuat ekspedisi lain. Coba lagi.</p>';
         });
+    }
+
+    function loadMore() {
+      // Already prefetched → just open. The click costs nothing; that is the point of the prefetch.
+      if (moreState === "done" && ALL_RATES) { setMoreOpen(true); return; }
+      fetchAllRates(true);
     }
 
     function loadRates() {
@@ -1592,6 +1686,11 @@ if (rToken) {
           return;
         }
         renderRates();
+        // The fast list is on screen and selectable — NOW go get the rest, in the background, without
+        // opening anything. The shopper is still typing their name; by the time they reach Pengiriman
+        // the badges are honest and the cheapest carrier has promoted itself into the box. This is
+        // what keeps the 5.5s off the critical path WITHOUT keeping the cheapest rate off the screen.
+        fetchAllRates(false);
       }).catch(function () {
         expressBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Gagal memuat ongkir. Coba lagi.</p>';
       });
@@ -1698,6 +1797,61 @@ if (rToken) {
       capture(false);
     }
 
+    // ---- Every message the shopper can see is OURS, in Indonesian ----
+    // `fieldError()` above already names the text fields. This covers what it does not: controls the
+    // browser would otherwise complain about in the BROWSER's language (see the `novalidate` note on
+    // the <form>). Keyed by `name` so a new required control gets a sentence, not a fallback.
+    var MISSING = {
+      nama: "Nama lengkap wajib diisi.",
+      whatsapp: "Nomor WhatsApp wajib diisi.",
+      alamat: "Alamat lengkap wajib diisi.",
+      shipping: "Pilih ekspedisi pengiriman dulu.",
+      va_bank: "Pilih bank tujuan transfer.",
+      payment: "Pilih metode pembayaran dulu.",
+    };
+
+    /** Clear a custom message across a whole group — a radio group's message lives on ONE element. */
+    function clearValidity(name) {
+      var els = form.querySelectorAll('[name="' + name + '"]');
+      for (var i = 0; i < els.length; i++) if (els[i].setCustomValidity) els[i].setCustomValidity("");
+    }
+
+    /**
+     * Report the FIRST invalid control, in our words, and put the cursor in it.
+     * ⚠️ `setCustomValidity(msg)` makes a control invalid until the string is cleared — so every
+     * message set here MUST be cleared when the shopper acts (see the input/change handlers below).
+     * Forgetting that is how a field the shopper has already fixed keeps refusing to submit.
+     */
+    /**
+     * Put OUR sentence on every empty control. Separate from reporting on purpose: the submit handler
+     * bails at the first bad field, so a label-as-you-report design would leave every LATER field
+     * still holding the browser's English — invisible today, and one stray reportValidity() away from
+     * being shown. Label everything first, then report.
+     * A valid control is never touched: setCustomValidity(non-empty) would itself invalidate it.
+     */
+    function labelMissing() {
+      var els = form.querySelectorAll("input, textarea, select");
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.willValidate && el.validity.valueMissing) {
+          el.setCustomValidity(MISSING[el.name] || "Bagian ini wajib diisi.");
+        }
+      }
+    }
+
+    function reportFirstInvalid() {
+      labelMissing();
+      var els = form.querySelectorAll("input, textarea, select");
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (!el.willValidate || el.validity.valid) continue;
+        el.reportValidity();
+        if (el.focus) el.focus();
+        return true;
+      }
+      return false;
+    }
+
     // ---- Field-level feedback: show the problem where the problem is ----
     // On blur, not on keystroke: telling someone their email is invalid while they are still typing
     // the "@" is nagging, not help. The WhatsApp number is also REWRITTEN to what we will actually
@@ -1732,6 +1886,9 @@ if (rToken) {
     form.addEventListener("input", captureSoon);
     form.addEventListener("change", function (e) {
       var t = e.target;
+      // The shopper just answered the thing we complained about → drop the complaint. Without this
+      // the custom string outlives the problem and the control stays invalid forever.
+      if (t && t.name) clearValidity(t.name);
       if (t && t.name === "payment") paymentTouched = true;
       captureNow(); // a radio/step change is a decision, not a keystroke → flush immediately
     });
@@ -1749,6 +1906,10 @@ if (rToken) {
       e.preventDefault();
       var err = document.getElementById("form-error");
 
+      // Label every empty control in Indonesian BEFORE anything reports — the loop below returns at
+      // the first bad field, so labelling lazily would leave the rest in the browser's English.
+      labelMissing();
+
       // Our own rules run BEFORE checkValidity(), so the message the browser shows is ours (nama /
       // whatsapp / email / alamat / kodepos). The API re-checks all of them anyway — this is only
       // here so the shopper is not told "something is wrong" by a server round-trip.
@@ -1757,7 +1918,7 @@ if (rToken) {
         if (vel && checkField(vel)) { vel.reportValidity(); vel.focus(); return; }
       }
       if (!form.checkValidity()) {
-        form.reportValidity();
+        reportFirstInvalid();
         return;
       }
       // Kota/Provinsi are readonly, and a readonly input is BARRED from constraint validation — so
