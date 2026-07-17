@@ -12,6 +12,15 @@
 import { db, schema } from "@tokophi/db";
 import { and, desc, eq } from "drizzle-orm";
 import { cached } from "./cache";
+import { mediaUrl } from "./catalog";
+
+// A merchant's featured image is an UPLOAD (`/api/uploads/<name>`), served by the ADMIN app — the
+// storefront is a different origin, so the raw path 404s here. Absolutised ONCE, in the read layer,
+// rather than at each of the four render sites (the Jurnal card, /blog, the article page, and its
+// og:image): a rule applied per call site is a rule that is one new call site from being forgotten.
+// Seeded `/products/*.webp` paths are untouched — `mediaUrl` only rewrites `/api/uploads/`.
+// og:image needs an absolute URL anyway, so this is the only place that can be right for all four.
+const absMedia = <T extends { imageUrl: string | null }>(r: T): T => ({ ...r, imageUrl: r.imageUrl ? mediaUrl(r.imageUrl) : null });
 
 export type ArticleCard = {
   handle: string;
@@ -74,7 +83,7 @@ export async function getArticles(storeId: string): Promise<ArticleCard[]> {
       .leftJoin(schema.blogs, eq(schema.blogs.id, schema.articles.blogId))
       .where(and(eq(schema.articles.storeId, storeId), eq(schema.articles.status, "terbit")))
       .orderBy(desc(schema.articles.publishedAt));
-    return rows.map((r) => ({ ...r, excerpt: r.excerpt ?? "" }));
+    return rows.map((r) => absMedia({ ...r, excerpt: r.excerpt ?? "" }));
   });
 }
 
@@ -103,7 +112,7 @@ export async function getArticle(storeId: string, handle: string): Promise<Artic
         ),
       )
       .limit(1);
-    return row ? { ...row, excerpt: row.excerpt ?? "", body: row.body ?? "" } : null;
+    return row ? absMedia({ ...row, excerpt: row.excerpt ?? "", body: row.body ?? "" }) : null;
   });
 }
 

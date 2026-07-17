@@ -9,6 +9,47 @@
 
 ---
 
+## ▶ NEXT UP — picked up here (handoff 2026-07-17, end of session)
+
+**Merge PR #7 first.** `8c56003` is committed, verified and NOT deployed. It carries the blog image
+feature AND the fix for a **body-deleting save** (see STATUS §0). It also mounts `tokophi-uploads` on
+the `migrate` service — **the journal seed is in the deploy chain now, and without that mount
+production gets 15 media rows pointing at 404s while the log says success.** Merge = deploy.
+
+- [ ] **Product images into Files — DECISION NEEDED, this is the open question.**
+      `media` holds the 15 journal images and **zero product images**; the 70 catalogue photos live as
+      static `/products/*.webp` in both apps' `public/`. Two ways, and they are not equivalent:
+      1. **Move them properly** — run each through `saveImage` into `uploads/`, insert `media` rows,
+         then **repoint `products.image` + `product_media.url`** (70 products × up to 5 media each).
+         Clean and consistent: Files then really is the store's library. Risk: it rewrites catalogue
+         data, and the storefront's `mediaUrl()`/`catalog.ts:434` has a sibling-image rule that keys
+         off `/api/uploads/` vs relative paths — read it before touching this.
+      2. **Register only** — insert `media` rows pointing at `/products/*.webp`. Cheap, non-destructive,
+         shows up in Files. ⚠️ But **Delete in Files would then remove the row and NOT the file**:
+         `deleteImageFile` is regex-guarded to `/api/uploads/<name>` on purpose (a DB column is still
+         input; `../../` must never reach `fs.unlink`). That is safe but it is a **half-working
+         control**, i.e. the exact thing this repo keeps getting burned by. If you pick this, the
+         Delete button must say so or be hidden for those rows.
+- [ ] **`/tema` polish** — explicitly deferred by the owner. Also: the Puck canvas rendered **blank**
+      in a headless screenshot while the Outline listed every section. Blank for sections nobody
+      touched too, so **not** a regression from the Jurnal section — but unverified either way. Reproduce
+      with a real browser before believing it. (The `puck.css` global leak below is a separate, known thing.)
+- [ ] **A merchant cannot pick an existing image from Files** — the Blog editor and the product editor
+      both upload a NEW file every time. There is no picker. So the library fills up with duplicates of
+      the same photo, and "reuse the image I already uploaded" is impossible. The library exists; the
+      picker does not.
+- [ ] **`seed.ts` still seeds 6 articles that `seed-journal.ts` immediately deletes.** Harmless because
+      the deploy chain orders them, but it is two seeds owning one table. Remove the `ARTICLES` block
+      from `seed.ts` and let `seed-journal` own the journal outright, the way `seed-templates` owns the
+      homepage.
+
+**Environment note, not a bug:** the local `next dev` admin does **not hydrate** — `/files` renders but
+every button is dead (Turbopack HMR websocket fails). The same page hydrates correctly on live and on a
+local `next build && next start`. **Do not diagnose admin interactivity from `next dev`** — it will tell
+you a working feature is broken. Verified 2026-07-17 by testing the same page three ways.
+
+---
+
 ## 🔴 LIVE runs `KIRIMINAJA_ENV=sandbox` — the courier list on tokophi.com is FICTION (2026-07-17)
 
 **Status:** `[ ]` open · **owner decision, not a code change** · found while investigating "JNE is enabled

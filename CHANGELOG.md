@@ -2,7 +2,82 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-07-18
+
+### 🖼️ The Jurnal's images are editorial now — topic-true photos, not reused product crops
+
+`seed-journal.ts` illustrated every article by cropping the store's catalogue shots
+(`apps/admin/public/products/*.webp`) to the card's 3:2. That was honest-ish for a batik store but
+literally wrong per article: **"Cara Mencuci Batik" showed a model wearing a dress**, "Baju Rajut
+Melar?" showed a cardigan on a hanger. A journal illustrated by whatever product was nearest reads as
+a placeholder.
+
+Replaced with **15 dedicated editorial header images**, one per published article, committed at
+`apps/admin/public/journal/<handle>.webp` (900×600 WebP q82, 28–80 KB, 670 KB total). Each matches its
+topic — hands waxing batik with a canting, a batik cloth hand-washed in a basin, an office-batik
+flatlay, knitwear folded flat on a shelf, a wrapped parcel for the shipping post. `makeImage` now
+sources from `journal/<handle>.webp` instead of `products/`; the rest of the pipeline is unchanged
+(same 3:2 crop, WebP q82, `media` row, `/api/uploads/` path — so the images still land in the Files
+library exactly as a merchant upload would). The draft stays imageless (brand-tint fallback).
+
+Verified: `seed:journal` re-runs clean (16 articles, 15 images, 45 KB avg), every `jurnal-*.webp`
+serves `200 image/webp`, `/blog` renders all 15. Content is unchanged — it was already good.
+
 ## 2026-07-17
+
+### 🖼️ The Blog editor's image control was a dead button — and it was hiding a bug that DELETED merchant text
+
+Asked to fill the demo's journal with images, and found the feature it would have been faking.
+
+**The "Gambar unggulan" card was a `<button>` with no `onClick`, no input and no handler.** Pure
+decoration wearing a control's clothes. It also lied about the limit: *"PNG, JPG, atau WEBP hingga
+5 MB"* while the server's cap is **2 MB** (`image-store.ts` `MAX_BYTES`). `ArticleInput` had no
+`imageUrl` field at all, so `articles.image_url` could only ever be set by the seed — **no merchant
+could give an article a picture, ever.**
+
+**Worse, underneath it: opening an article and pressing Simpan DELETED its body.** `lib/data/articles.ts`
+never selected `body`, so the editor fabricated one — `${post.excerpt}\n\n${post.title}` — and every
+save writes the whole input back. The demo's `cara-merawat-rajut` holds **908 characters** the merchant
+wrote; one click would have left ~60. A read layer that under-selects is not "missing a field", it is
+a **silent delete on the next save**.
+
+Both fixed: `sel` now takes `body` + `imageUrl`, the editor renders the real text, and the image card
+uploads through **`uploadMedia` — the same action the Files library uses**, so one pipeline owns WebP
+conversion, the 2 MB gate and the media row. The size hint now states the server's number.
+
+**The storefront half.** Uploads are served by the ADMIN app; the storefront is a different origin, so
+a raw `/api/uploads/…` path 404s there. `mediaUrl()` existed for products and the logo but not
+articles. Applied **once, in the read layer** (`content.ts`) rather than at the four render sites (the
+Jurnal card, `/blog`, the article page, its `og:image`) — a rule applied per call site is one new call
+site from being forgotten, and `og:image` needs the absolute URL anyway.
+
+**The demo's journal: 16 articles (15 published + 1 draft), 15 images, 228 KB total — 15 KB each.**
+New `seed-journal.ts` puts every image **through the upload pipeline** (3:2 crop to the card's lock,
+WebP q82, `media` row) instead of pointing at static `/products/*.webp` as the old 6 did. The demo is
+now reproducible by hand: a merchant can rebuild every row with the editor. The draft is deliberate —
+publishing is a security boundary and nothing else exercises it — and it has **no image**, because the
+brand-tint fallback is a real state too.
+
+⚠️ **A deploy break caught before shipping.** The `migrate` service does **not** mount
+`tokophi-uploads`; only `admin` does. `seed-journal` writes FILES, so in production it would have
+written 15 WebPs into an ephemeral container, exited, and left 15 media rows and 15 articles pointing
+at images that 404 — while the deploy log said the journal seeded fine. The volume is now mounted on
+`migrate` too.
+
+**Verified end-to-end** (`astro check`/`tsc`/eslint all clean, then driven in a browser — and the dev
+server lied first: `/files` was dead there, but hydrates correctly on **live**, so that was Turbopack
+HMR, not a product bug):
+- **Upload rules, against the real `image-store.ts`**: WebP 41 KB → 41 KB **byte-identical**; PNG
+  325 KB → **40 KB**; JPG 67 KB → 40 KB; SVG passes through as SVG; WebP 2600px → resized 2000×2000
+  q92; **PNG 25.79 MB rejected** (`file too large`); `.txt` rejected (`not an image`).
+- **The editor, on a production build**: the real 889-char body loads (not the fabrication), the
+  featured image shows, "Ganti" uploads a **PNG → WebP**, Simpan persists it, and **`media` went
+  15 → 16** — it lands in Files like any other upload. Body still 889 after the save: lossless.
+- **Storefront**: homepage Jurnal renders 3 uploaded images (naturalWidth 900), `/blog` lists 15, the
+  **draft never appears in the HTML**, `og:image` is absolute, **zero 4xx** on `/api/uploads`, 0
+  console errors. `RevealGrid` now actually runs on `/blog` for the first time (5 articles never
+  exceeded its 9-item first page): "Menampilkan 9 dari 15 tulisan" → "Muat lebih banyak" → all 15,
+  no broken images.
 
 ### ✅ Seven disabled stubs became real features — the admin no longer lies about what it can do
 

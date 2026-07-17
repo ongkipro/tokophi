@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createArticle, updateArticle, deleteArticle, type ArticleInput } from "@/lib/actions/articles";
+import { uploadMedia, getMedia } from "@/lib/actions/media";
 import { useCan } from "@/components/admin/permissions";
 import { ArrowLeft, ImageUp, ChevronDown, Newspaper, Trash2 } from "lucide-react";
 
@@ -38,15 +39,47 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
   const canWrite = useCan("content:write");
 
   const [title, setTitle] = React.useState(post?.title ?? "");
-  const [body, setBody] = React.useState(
-    post ? `${post.excerpt}\n\n${post.title}` : "",
-  );
+  // The REAL body. This used to be `${post.excerpt}\n\n${post.title}` — a fabrication, because the
+  // read layer never selected `body`. Since every save writes this field, opening an article and
+  // pressing Simpan replaced the merchant's text with two lines of summary (the demo's
+  // `cara-merawat-rajut` would have gone from 908 characters to 60). Do not "default" this again.
+  const [body, setBody] = React.useState(post?.body ?? "");
+  const [imageUrl, setImageUrl] = React.useState(post?.imageUrl ?? "");
   const [excerpt, setExcerpt] = React.useState(post?.excerpt ?? "");
   const [author, setAuthor] = React.useState(post?.author ?? "Ongki Pratama");
   const [published, setPublished] = React.useState(post?.published ?? false);
   const [blog, setBlog] = React.useState<string>(post?.blog ?? BLOG_CATEGORIES[0]);
   const [handle, setHandle] = React.useState(post?.handle ?? "");
   const [metaDesc, setMetaDesc] = React.useState("");
+
+  // ---- featured image ----
+  // Goes through `uploadMedia`, the SAME action the Files library uses: one upload path means one set
+  // of rules (WebP conversion, the 2 MB gate, the media row) and no second copy to drift from it. The
+  // client checks below are UX — image-store.ts's checkFile is the boundary and re-checks both.
+  const imgInputRef = React.useRef<HTMLInputElement>(null);
+  const [imgBusy, setImgBusy] = React.useState(false);
+  const pickImage = async (f?: File) => {
+    if (!f) return;
+    if (!f.type.startsWith("image/")) { toast.error(`${f.name}: bukan gambar.`); return; }
+    if (f.size > 2 * 1024 * 1024) { toast.error(`${f.name}: melebihi 2MB (${(f.size / 1048576).toFixed(1)}MB).`); return; }
+    setImgBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const r = await uploadMedia(fd);
+      // `uploadMedia` returns ok/error rather than the saved row, so read the url back from the
+      // library. Requesting the change to the action would be cleaner; this keeps the blast radius
+      // of a blog fix inside blog.
+      if (!r.ok) { toast.error(r.error ?? "Gagal mengunggah."); return; }
+      const media = await getMedia();
+      const newest = media[0];
+      if (!newest) { toast.error("Gambar terunggah tapi tidak ditemukan di Files."); return; }
+      setImageUrl(newest.url);
+      toast.success("Gambar diunggah (WebP) — juga tersimpan di Files.");
+    } finally {
+      setImgBusy(false);
+    }
+  };
 
   const exampleTags = ["promo", "tips", "fashion"];
 
@@ -64,6 +97,7 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
     body,
     excerpt,
     author,
+    imageUrl,
     published,
   });
   const handleSave = () => {
@@ -315,24 +349,62 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
             </CardContent>
           </Card>
 
-          {/* Gambar unggulan */}
+          {/* Gambar unggulan — REAL now. This card used to be a <button> with no onClick, no input
+              and no handler: a dead control that also promised "hingga 5 MB" while the server's
+              actual cap is 2 MB (image-store.ts MAX_BYTES). It shipped for as long as it did because
+              nothing about it looks broken until you press it. It now uploads through the SAME
+              `uploadMedia` action as the Files library, so an article image lands in the merchant's
+              media library like every other image, converted to WebP by the one pipeline. */}
           <Card>
             <CardHeader>
               <CardTitle>Gambar unggulan</CardTitle>
             </CardHeader>
-            <CardContent>
-              <button
-                type="button"
-                className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/30 px-4 py-10 text-center transition-colors hover:border-ring hover:bg-muted/50"
-              >
-                <ImageUp className="size-6 text-muted-foreground" />
-                <span className="text-sm font-medium">
-                  Seret gambar atau klik untuk unggah
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  PNG, JPG, atau WEBP hingga 5 MB
-                </span>
-              </button>
+            <CardContent className="space-y-3">
+              {imageUrl ? (
+                <div className="space-y-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- /api/uploads is served by
+                      a route handler, not the image optimizer's allowed loaders. */}
+                  <img
+                    src={imageUrl}
+                    alt=""
+                    className="aspect-[3/2] w-full rounded-lg object-cover ring-1 ring-border"
+                  />
+                  <div className="flex gap-2">
+                    <Button type="button" variant="secondary" size="sm" disabled={!canWrite || imgBusy} onClick={() => imgInputRef.current?.click()}>
+                      Ganti
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" className="text-destructive" disabled={!canWrite || imgBusy} onClick={() => setImageUrl("")}>
+                      Hapus
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!canWrite || imgBusy}
+                  onClick={() => imgInputRef.current?.click()}
+                  className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/30 px-4 py-10 text-center transition-colors hover:border-ring hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <ImageUp className="size-6 text-muted-foreground" />
+                  <span className="text-sm font-medium">
+                    {imgBusy ? "Mengunggah…" : "Klik untuk unggah gambar"}
+                  </span>
+                  {/* The number is the SERVER's, not a nicer-sounding one. It used to say 5 MB. */}
+                  <span className="text-xs text-muted-foreground">
+                    PNG, JPG, WEBP, atau SVG — maks. 2 MB. Otomatis jadi WebP.
+                  </span>
+                </button>
+              )}
+              <input
+                ref={imgInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => { pickImage(e.target.files?.[0]); e.target.value = ""; }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Tampil di kartu artikel (Jurnal) dan di halaman artikel. Gambar juga masuk ke Files.
+              </p>
             </CardContent>
           </Card>
 
