@@ -11,6 +11,7 @@
     "./cache": "./src/cache.ts",
     "./couriers": "./src/couriers.ts",
     "./billing": "./src/billing.ts",
+    "./tax": "./src/tax.ts",
     "./totp": "./src/totp.ts",
     "./integration-status": "./src/integration-status.ts",
     "./payment-fees": "./src/payment-fees.ts",

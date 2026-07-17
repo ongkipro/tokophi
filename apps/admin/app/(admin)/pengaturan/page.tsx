@@ -23,9 +23,6 @@ import {
   CardFooter,
 } from "@tokophi/ui/card"
 import { useStoreName } from "@/components/admin/store-context"
-import { Input } from "@tokophi/ui/input"
-import { Label } from "@tokophi/ui/label"
-import { Switch } from "@tokophi/ui/switch"
 import { Badge } from "@tokophi/ui/badge"
 import { Separator } from "@tokophi/ui/separator"
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar"
@@ -35,6 +32,7 @@ import { RekeningCard } from "@/components/admin/pengaturan/rekening-card"
 import { StoreProfileCard } from "@/components/admin/pengaturan/store-profile-card"
 import { DomainCard } from "@/components/admin/pengaturan/domain-card"
 import { PenggunaCard } from "@/components/admin/pengaturan/pengguna-card"
+import { PajakCard } from "@/components/admin/pengaturan/pajak-card"
 
 // NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
 // (super-admin → platform_payment_channels) and flow straight to the shopper's checkout.
@@ -73,31 +71,11 @@ const SECTIONS: {
 ]
 
 
-function Field({
-  label,
-  htmlFor,
-  hint,
-  children,
-}: {
-  label: string
-  htmlFor?: string
-  hint?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor={htmlFor}>{label}</Label>
-      {children}
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  )
-}
 
-// Pajak + Notifikasi are display-only previews: nothing behind their controls persists (order-level
-// PPN is never computed — tax_rate_pct/tax_inclusive are dead columns — and there is no notification
-// system or column for those prefs). So there is no "Simpan Perubahan" button to imply otherwise; a
-// button that silently no-ops is the lie the "Pembayaran" tab was deleted for. The wired sections
-// (Pengiriman/Alamat/Rekening/Profil) use their own real save handlers, never this.
+// Notifikasi is still a display-only preview: there is no notification system or column for those
+// prefs, so its toggles persist nothing and it keeps this honest footnote rather than a no-op Save
+// button. (Pajak used to be here too, but PPN is now real — tax settings persist to store_settings and
+// the order API prices them; see PajakCard.) The wired sections use their own real save handlers.
 function SaveFooter() {
   return (
     <CardFooter className="justify-end">
@@ -111,10 +89,6 @@ export default function Page() {
   const [section, setSection] = React.useState<Section>("profil")
   const storeName = useStoreName()
 
-
-  // Pajak
-  const [ppnAktif, setPpnAktif] = React.useState(true)
-  const [ppnInclusive, setPpnInclusive] = React.useState(false)
 
   // Notifikasi
   const [notif, setNotif] = React.useState({
@@ -209,15 +183,6 @@ export default function Page() {
               <ul className="grid gap-2 text-sm">
                 {/* The active-service count now lives inside JasaKirimCard, which owns that state.
                     Re-deriving it here would mean a second source of truth that can disagree. */}
-                <li className="flex items-center gap-2 text-muted-foreground">
-                  <Receipt className="size-4 shrink-0" />
-                  <span>
-                    PPN{" "}
-                    <span className="font-medium text-foreground">
-                      {ppnAktif ? "11%" : "nonaktif"}
-                    </span>
-                  </span>
-                </li>
               </ul>
             </CardContent>
           </Card>
@@ -266,84 +231,8 @@ export default function Page() {
             </div>
           )}
 
-          {/* PAJAK */}
-          {section === "pajak" && (
-            <Card className="max-w-3xl">
-              <CardHeader>
-                <CardTitle>Pajak</CardTitle>
-                <CardDescription>
-                  Atur penerapan Pajak Pertambahan Nilai (PPN) pada pesanan.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/40 p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">Aktifkan PPN</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Tambahkan PPN pada setiap transaksi pelanggan.
-                    </p>
-                  </div>
-                  <Switch checked={ppnAktif} onCheckedChange={setPpnAktif} />
-                </div>
-
-                <Field
-                  label="Tarif PPN (%)"
-                  htmlFor="tarif-ppn"
-                  hint="Tarif PPN umum di Indonesia saat ini 11%."
-                >
-                  <Input
-                    id="tarif-ppn"
-                    className="max-w-40 tabular-nums"
-                    inputMode="numeric"
-                    defaultValue="11"
-                    disabled={!ppnAktif}
-                  />
-                </Field>
-
-                <Field
-                  label="NPWP"
-                  htmlFor="npwp"
-                  hint="Nomor Pokok Wajib Pajak badan usaha Anda."
-                >
-                  <Input
-                    id="npwp"
-                    className="max-w-xs tabular-nums"
-                    inputMode="numeric"
-                    defaultValue="09.254.294.3-541.000"
-                    disabled={!ppnAktif}
-                  />
-                </Field>
-
-                <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/40 p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">Harga sudah termasuk pajak</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Harga produk yang ditampilkan sudah termasuk PPN.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={ppnInclusive}
-                    onCheckedChange={setPpnInclusive}
-                    disabled={!ppnAktif}
-                  />
-                </div>
-
-                <div className="rounded-lg border border-border/60 bg-muted/40 p-3 text-xs text-muted-foreground">
-                  <p>
-                    <span className="font-medium text-foreground">Inclusive</span>{" "}
-                    — PPN sudah termasuk di dalam harga yang ditampilkan (harga
-                    tidak bertambah saat checkout).
-                  </p>
-                  <p className="mt-1.5">
-                    <span className="font-medium text-foreground">Exclusive</span>{" "}
-                    — PPN dihitung terpisah dan ditambahkan pada subtotal saat
-                    checkout.
-                  </p>
-                </div>
-              </CardContent>
-              <SaveFooter />
-            </Card>
-          )}
+          {/* PAJAK — real PPN settings, persisted to store_settings + priced by the order API */}
+          {section === "pajak" && <PajakCard />}
 
           {/* PENGGUNA — real store_users list + invite/role/remove (lib/actions/users.ts) */}
           {section === "pengguna" && <PenggunaCard />}

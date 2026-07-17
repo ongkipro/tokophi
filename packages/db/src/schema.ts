@@ -853,6 +853,9 @@ export const platformPayout = pgTable("platform_payout", {
 
 export const storeSettings = pgTable("store_settings", {
   storeId: uuid().primaryKey().references(() => stores.id),
+  // PPN on storefront sales. OFF by default — opt-in, so no existing store starts charging tax; the
+  // order API only applies it (orders.tax_idr) when tax_enabled=true. Rate is the merchant's PPN %.
+  taxEnabled: boolean().notNull().default(false),
   taxRatePct: integer().notNull().default(11),
   taxInclusive: boolean().notNull().default(false),
   // Where a payout is sent. Nothing can be withdrawn until these are filled in.

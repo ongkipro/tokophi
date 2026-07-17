@@ -492,6 +492,22 @@ export async function enabledPaymentChannels(): Promise<{ code: string; label: s
 //   · per-service      — /api/public/ongkir stamps each rate with the EFFECTIVE `cod` flag
 // Every one of these is re-checked by /api/public/order (apps/admin/lib/cod.ts) — THAT is the
 // boundary; this only decides what to render, so a shopper is never offered a COD we would reject.
+// Merchant PPN, read for the checkout display so the shopper sees the same total the order API charges
+// (both use @tokophi/lib computeTax). OFF unless the merchant opted in. /api/public/order re-reads
+// these columns and is the authoritative money — this only decides what the summary shows.
+export type StoreTax = { enabled: boolean; ratePct: number; inclusive: boolean };
+
+export async function storeTaxSettings(storeId: string): Promise<StoreTax> {
+  return cached(`store:tax:${storeId}`, async () => {
+    const [ss] = await db
+      .select({ enabled: schema.storeSettings.taxEnabled, ratePct: schema.storeSettings.taxRatePct, inclusive: schema.storeSettings.taxInclusive })
+      .from(schema.storeSettings)
+      .where(eq(schema.storeSettings.storeId, storeId))
+      .limit(1);
+    return { enabled: !!ss?.enabled, ratePct: Number(ss?.ratePct ?? 0), inclusive: !!ss?.inclusive };
+  });
+}
+
 export type StoreCodPolicy = { enabled: boolean; maxAmountIdr: number; allowedProvinces: string[] };
 
 export async function storeCodPolicy(storeId: string): Promise<StoreCodPolicy> {

@@ -2,7 +2,7 @@
 import { ShoppingCart, Banknote, MapPin, Truck, ChevronDown } from "@lucide/astro";
 import PayIcon from "../components/PayIcon.astro";
 import CheckoutLayout from "../layouts/CheckoutLayout.astro";
-import { enabledPaymentChannels, storeCodPolicy } from "../data/catalog";
+import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings } from "../data/catalog";
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { verifyRecoveryToken } from "../lib/recovery";
@@ -77,6 +77,12 @@ const PAY_GROUPS = KIND_ORDER.map((kind) => ({
 // this is UX, that is the boundary (apps/admin/lib/cod.ts).
 const COD = await storeCodPolicy(store.id);
 const COD_ENABLED = COD.enabled;
+
+// Merchant PPN — handed to the client so the summary shows exactly what the order API will charge.
+const TAX = await storeTaxSettings(store.id);
+const TAX_ENABLED = TAX.enabled;
+const TAX_RATE = TAX.ratePct;
+const TAX_INCLUSIVE = TAX.inclusive;
 const COD_MAX = COD.maxAmountIdr; // 0 = no cap
 const COD_PROVINCES = COD.allowedProvinces; // [] = every province
 
@@ -196,6 +202,10 @@ if (rToken) {
         <div class="flex items-center justify-between">
           <span class="text-[var(--co-muted)]">Ongkir</span>
           <span id="summary-shipping" class="font-medium text-ink tabular-nums">Rp0</span>
+        </div>
+        <div id="summary-ppn-row" class="flex items-center justify-between" hidden>
+          <span id="summary-ppn-label" class="text-[var(--co-muted)]">PPN</span>
+          <span id="summary-ppn" class="font-medium text-ink tabular-nums">Rp0</span>
         </div>
       </div>
 
@@ -667,6 +677,10 @@ if (rToken) {
                 <span class="text-[var(--co-muted)]">Ongkir</span>
                 <span id="summary2-shipping" class="font-medium tabular-nums text-ink">Rp0</span>
               </div>
+              <div id="summary2-ppn-row" class="flex items-center justify-between" hidden>
+                <span id="summary2-ppn-label" class="text-[var(--co-muted)]">PPN</span>
+                <span id="summary2-ppn" class="font-medium tabular-nums text-ink">Rp0</span>
+              </div>
             </div>
           </div>
         </div>
@@ -784,7 +798,7 @@ if (rToken) {
   }
 </style>
 
-<script is:inline define:vars={{ ONGKIR_API, ORDER_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, RECOVER }}>
+<script is:inline define:vars={{ ONGKIR_API, ORDER_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, TAX_ENABLED, TAX_RATE, TAX_INCLUSIVE, RECOVER }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -1107,10 +1121,17 @@ if (rToken) {
       return COD_PROVINCES.some(function (x) { return normProvince(x) === p; });
     }
 
+    // PPN added to the total, mirroring @tokophi/lib computeTax's `addToTotal`: only exclusive PPN
+    // increases the amount charged (inclusive is already inside the prices). The order API recomputes
+    // this authoritatively — this keeps the displayed total equal to what the shopper pays.
+    function ppnAdd(sub) {
+      return (TAX_ENABLED && !TAX_INCLUSIVE && TAX_RATE > 0) ? Math.round(sub * TAX_RATE / 100) : 0;
+    }
+
     function syncCod() {
       if (!codOption || !codRadio) return;
       var shipEl = form.querySelector('input[name="shipping"]:checked');
-      var total = subtotal + selectedShipping();
+      var total = subtotal + selectedShipping() + ppnAdd(subtotal);
       var allowed =
         !!COD_ENABLED &&
         !!shipEl &&
@@ -1140,7 +1161,13 @@ if (rToken) {
     function recompute() {
       var ship = selectedShipping();
       var shipText = idr.format(ship);
-      var total = idr.format(subtotal + ship);
+      var ppn = ppnAdd(subtotal);
+      var total = idr.format(subtotal + ship + ppn);
+      // The PPN row shows only when exclusive PPN adds to the bill (ppn > 0). Inclusive PPN doesn't
+      // change the total, so no row — the price already contains it.
+      var ppnText = idr.format(ppn);
+      togglePpn("summary-ppn-row", "summary-ppn", ppn > 0, ppnText);
+      togglePpn("summary2-ppn-row", "summary2-ppn", ppn > 0, ppnText);
       // FOUR destinations, ONE string, computed once. The total is on screen in the desktop panel,
       // the top mobile bar, the bottom mobile bar and the bottom bar's detail — and two totals that
       // can disagree is worse than no total at all: the shopper reads one and is charged the other.
@@ -1151,6 +1178,12 @@ if (rToken) {
       setText("summary2-shipping", shipText);
       setText("summary2-total", total);
       syncCod();
+    }
+
+    function togglePpn(rowId, valueId, show, text) {
+      var row = document.getElementById(rowId);
+      if (row) row.hidden = !show;
+      if (show) setText(valueId, text);
     }
 
     // NOTE: the province is no longer typed (it is a hidden, derived field), so there is nothing to

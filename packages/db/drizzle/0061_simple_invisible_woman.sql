@@ -1,0 +1,1 @@
+ALTER TABLE "store_settings" ADD COLUMN "tax_enabled" boolean DEFAULT false NOT NULL;

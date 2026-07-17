@@ -19,6 +19,7 @@ import { areaById } from "@/lib/data/areas";
 import { rateLimited } from "@/lib/public-guard";
 import { getCodPolicy } from "@/lib/cod";
 import { quoteShipping, findRate } from "@/lib/shipping-quote";
+import { computeTax } from "@tokophi/lib/tax";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the
@@ -256,6 +257,21 @@ async function handle(req: Request) {
   }
   const subtotal = resolved.reduce((a, r) => a + r.price * r.qty, 0);
 
+  // ── PPN: server-priced, like everything else here ─────────────────────────────────────────────
+  // Read the store's tax settings and compute PPN on the goods subtotal (NOT ongkir — shipping is a
+  // pass-through). Off unless the merchant opted in (tax_enabled). computeTax is the SAME helper the
+  // checkout display uses, so the shopper is charged exactly what they were shown.
+  const [taxCfg] = await db
+    .select({ enabled: schema.storeSettings.taxEnabled, ratePct: schema.storeSettings.taxRatePct, inclusive: schema.storeSettings.taxInclusive })
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.storeId, store.id))
+    .limit(1);
+  const tax = computeTax(subtotal, {
+    enabled: taxCfg?.enabled ?? false,
+    ratePct: taxCfg?.ratePct ?? 0,
+    inclusive: taxCfg?.inclusive ?? false,
+  });
+
   // ── ONGKIR: RE-QUOTED HERE. `body.shipping.cost` is never read ────────────────────────────────
   // The weight fix closed lying about the INPUT; this closes lying about the OUTPUT. The order used
   // to store whatever the browser posted, so `shipping: { cost: 0 }` bought free shipping and the
@@ -300,7 +316,9 @@ async function handle(req: Request) {
     return bad("Layanan pengiriman yang dipilih tidak tersedia lagi. Muat ulang halaman checkout.", "shipping");
   }
   const shippingCost = Math.round(rate.cost);
-  const total = subtotal + shippingCost;
+  // Exclusive PPN adds on top; inclusive PPN is already inside `subtotal` (addToTotal = 0). Either way
+  // the COD-cap check below and the payment amount both see the real amount the shopper pays.
+  const total = subtotal + shippingCost + tax.addToTotal;
 
   // ── COD is a MONEY decision, so it is enforced here, not in the storefront UI ──────────────────
   // All five switches must agree (lib/cod.ts): platform on, merchant on, total ≤ the platform cap,
@@ -404,7 +422,7 @@ async function handle(req: Request) {
         Math.floor(Math.random() * 46656).toString(36).toUpperCase().padStart(3, "0");
       const [ord] = await tx.insert(schema.orders).values({
     storeId: store.id, number, customerId: cid, status: "baru", financialStatus: "pending", channel: "organic",
-    subtotalIdr: subtotal, shippingIdr: shippingCost, totalIdr: total,
+    subtotalIdr: subtotal, shippingIdr: shippingCost, taxIdr: tax.taxIdr, totalIdr: total,
     // The courier the shopper actually picked — `rate.code`, i.e. the courier of the fresh server-side
     // quote we matched (svcCode === rate.code by findRate), never the client's raw claim. Recording it
     // here is what makes the per-courier COD return-rate report a `group by courier` instead of an
@@ -495,7 +513,7 @@ async function handle(req: Request) {
       orderId: order.id, storeId: store.id, method: "cod", amountIdr: total, status: "menunggu",
       provider: "cod", reffId: order.number, channelCode: "COD", total,
     });
-    return NextResponse.json({ ok: true, orderNumber: order.number, cod: true, shipping: shippingCost, total }, { headers: CORS });
+    return NextResponse.json({ ok: true, orderNumber: order.number, cod: true, shipping: shippingCost, tax: tax.taxIdr, total }, { headers: CORS });
   }
 
   // create the AutoLaris payment + link it to the order
@@ -545,7 +563,7 @@ async function handle(req: Request) {
     ok: true, orderNumber: order.number,
     // The ongkir + total the SERVER decided, echoed back so a stale quote in the browser cannot leave
     // the shopper believing a number the order does not contain.
-    shipping: shippingCost, total,
+    shipping: shippingCost, tax: tax.taxIdr, total,
     payment: {
       channel: { code: channel.code, label: channel.label, kind: channel.kind },
       virtualAccount: pay.virtualAccount, qr: pay.qr, paymentCode: pay.paymentCode, url: pay.url,
