@@ -57,3 +57,35 @@ export async function deleteLead(id: string): Promise<void> {
   revalidatePath("/crm/pipeline");
   revalidatePath("/crm");
 }
+
+// wa_templates.type is free text (a FollowupType | "broadcast" tag); name + body are required.
+export async function createWaTemplate(input: { name: string; type: string; body: string }): Promise<void> {
+  const { storeId: sid } = await requireCapability("crm:write");
+  const name = input.name.trim();
+  const body = input.body.trim();
+  if (!name || !body) throw new Error("Nama dan isi template wajib diisi.");
+  await withTenant(sid, (db) =>
+    db.insert(schema.waTemplates).values({ storeId: sid, name, type: input.type || null, body }),
+  );
+  revalidatePath("/crm/template");
+  revalidatePath("/crm");
+}
+
+export async function updateWaTemplate(id: string, input: { name: string; type: string; body: string }): Promise<void> {
+  const { storeId: sid } = await requireCapability("crm:write");
+  const name = input.name.trim();
+  const body = input.body.trim();
+  if (!name || !body) throw new Error("Nama dan isi template wajib diisi.");
+  await withTenant(sid, (db) =>
+    db.update(schema.waTemplates).set({ name, type: input.type || null, body }).where(eq(schema.waTemplates.id, id)),
+  );
+  revalidatePath("/crm/template");
+  revalidatePath("/crm");
+}
+
+export async function deleteWaTemplate(id: string): Promise<void> {
+  const { storeId: sid } = await requireCapability("crm:write");
+  await withTenant(sid, (db) => db.delete(schema.waTemplates).where(eq(schema.waTemplates.id, id)));
+  revalidatePath("/crm/template");
+  revalidatePath("/crm");
+}
