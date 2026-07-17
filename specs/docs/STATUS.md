@@ -39,21 +39,32 @@ in this section — that is why it is stated separately from "it builds".
   prefixes `0838/0881/0895/0851` (normalising to `62…`), university/self-hosted/plus-addressed emails,
   `Blok C2/14` and `RT.001/RW.009` addresses.
 
-### 🔴 FIXED IN `6f95ac0` BUT **NOT DEPLOYED** — this bug is LIVE right now (PR #6, draft)
+- **The focus trap is FIXED and LIVE** (`6f95ac0`, merged in PR #6, deployed 2026-07-17). It was: a
+  typo in the **optional** email field (`siti@gmail`) dragged focus back on blur, so the shopper's
+  address was typed into the email box (`alamat=""`,
+  `email="siti@gmailJl. Melati No. 12 RT 03 RW 05"`) and `Tab` was trapped. `reportValidity()`
+  **focuses** the control, by spec — it is now inline `<p data-err>` + `aria-invalid`, and blur never
+  touches focus. **Never call `reportValidity()` on blur here again** (AGENTS.md).
+- **Jurnal section on the homepage** (`233370b`, live): the 9th section type, above the closing CTA.
+  Renders **nothing** until an article is published — verified against a store with zero.
 
-**A typo in the OPTIONAL email field traps the shopper and eats their address.** Type `siti@gmail`
-(no `.com`), click **Alamat**, type the address → measured:
+### 🔴 NOT DEPLOYED — sitting in PR #7 (`8c56003`, draft)
 
-```
-alamat = ""
-email  = "siti@gmailJl. Melati No. 12 RT 03 RW 05"
-```
+**Blog featured images as a real feature.** Everything below is committed, verified, and NOT on
+production yet:
 
-`reportValidity()` on blur **focuses** the control, by spec, so leaving the field drags the shopper
-back into it. `Tab` is trapped too. **A field nobody is required to fill is holding the checkout
-hostage — on production, today.** The fix (inline `<p data-err>` + `aria-invalid`, never touching
-focus) is committed and reviewed but **awaiting a merge decision**. Until PR #6 lands, this is the
-single worst thing on the storefront.
+- The editor's "Gambar unggulan" card was a **dead `<button>`** (no handler) that also lied — *"hingga
+  5 MB"* against a 2 MB server cap. `ArticleInput` had no `imageUrl`, so **no merchant could ever give
+  an article a picture**; only the seed could.
+- Underneath it: `lib/data/articles.ts` never selected `body`, so the editor fabricated
+  `${excerpt}\n\n${title}` and **every Simpan deleted the article's real text** (908 chars → ~60 on the
+  demo). ⚠️ **This delete is still live until PR #7 lands** — but it is only reachable by a merchant
+  who opens an article and saves it, which is why it is here and not above.
+- Demo journal reseeded: **16 articles (15 published + 1 draft), 15 images, 228 KB / 15 KB each**, all
+  through the upload pipeline and into Files.
+- ⚠️ PR #7 also mounts `tokophi-uploads` on the **`migrate`** service. Without it, `seed-journal`
+  writes 15 WebPs into an ephemeral container and production gets 15 media rows pointing at 404s —
+  while the deploy log says success. **Do not deploy `seed-journal` without that mount.**
 
 ### 🟡 KNOWN AND DELIBERATE — not defects, do not "fix" them
 
