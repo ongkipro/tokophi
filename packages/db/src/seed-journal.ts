@@ -13,9 +13,12 @@
 // and points the article at the resulting `/api/uploads/<name>` path. The demo is then reachable by
 // hand: a merchant can reproduce every row here with the editor.
 //
-// The source photos are the store's own AI-generated catalogue shots (`apps/admin/public/products/`).
-// A journal about batik illustrated with the batik it sells is honest; stock photos of someone else's
-// clothes would not be.
+// The source photos are dedicated editorial header images, one per article, committed at
+// `apps/admin/public/journal/<handle>.webp` (900x600 WebP, each generated to match its article's
+// topic — hands waxing batik with a canting, a batik cloth hand-washed in a basin, an office-batik
+// flatlay, knitwear folded flat, a wrapped parcel). Topic-true imagery, not reused catalogue crops:
+// the old build illustrated "Cara Mencuci Batik" with a model wearing a dress. Every file is a real
+// asset the merchant could have uploaded, and it goes through the same pipeline below.
 //
 // ⚠️ UPSERT-BY-REPLACE, same as seed-templates.ts and for the same reason: hardcoded to
 // `batik-nusantara`, cannot reach a merchant, and an insert-if-absent guard would pin the demo to
@@ -35,7 +38,7 @@ const TODAY = new Date("2026-06-30T00:00:00Z");
 // would refuse to load outside Next) and lives in another workspace. The rules that matter are
 // duplicated deliberately and narrowly — 3:2 for the card, WebP q82, the same output directory — and
 // the encoder settings are the ones a real upload would apply to the same file.
-const PRODUCTS_DIR = path.join(process.cwd(), "..", "..", "apps", "admin", "public", "products");
+const JOURNAL_DIR = path.join(process.cwd(), "..", "..", "apps", "admin", "public", "journal");
 const UPLOAD_DIR = path.join(process.cwd(), "..", "..", "apps", "admin", "public", "uploads");
 const CARD_W = 900;
 const CARD_H = 600; // 3:2 — the lock ArticleCard.astro renders at
@@ -48,7 +51,9 @@ type Draft = {
   daysAgo: number;
   published: boolean;
   excerpt: string;
-  /** file in apps/admin/public/products/ */
+  /** Presence flag for a featured image. "" = no image (a real state the storefront renders as a
+   *  brand tint, e.g. the draft). Non-empty = this article has a committed header at
+   *  apps/admin/public/journal/<handle>.webp. */
   src: string;
   body: string;
 };
@@ -374,7 +379,7 @@ Ekspedisi yang tersedia berbeda-beda per daerah, karena tidak semua kurir menjan
 ];
 
 async function makeImage(d: Draft, storeId: string): Promise<string> {
-  const src = path.join(PRODUCTS_DIR, d.src);
+  const src = path.join(JOURNAL_DIR, `${d.handle}.webp`);
   const input = await fs.readFile(src);
   // Crop to the card's 3:2 rather than letterboxing: ArticleCard locks aspect-[3/2] and
   // object-cover, so anything else would be cropped by CSS anyway — better to do it once, here,

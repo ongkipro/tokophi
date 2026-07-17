@@ -2,6 +2,27 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-07-18
+
+### 🖼️ The Jurnal's images are editorial now — topic-true photos, not reused product crops
+
+`seed-journal.ts` illustrated every article by cropping the store's catalogue shots
+(`apps/admin/public/products/*.webp`) to the card's 3:2. That was honest-ish for a batik store but
+literally wrong per article: **"Cara Mencuci Batik" showed a model wearing a dress**, "Baju Rajut
+Melar?" showed a cardigan on a hanger. A journal illustrated by whatever product was nearest reads as
+a placeholder.
+
+Replaced with **15 dedicated editorial header images**, one per published article, committed at
+`apps/admin/public/journal/<handle>.webp` (900×600 WebP q82, 28–80 KB, 670 KB total). Each matches its
+topic — hands waxing batik with a canting, a batik cloth hand-washed in a basin, an office-batik
+flatlay, knitwear folded flat on a shelf, a wrapped parcel for the shipping post. `makeImage` now
+sources from `journal/<handle>.webp` instead of `products/`; the rest of the pipeline is unchanged
+(same 3:2 crop, WebP q82, `media` row, `/api/uploads/` path — so the images still land in the Files
+library exactly as a merchant upload would). The draft stays imageless (brand-tint fallback).
+
+Verified: `seed:journal` re-runs clean (16 articles, 15 images, 45 KB avg), every `jurnal-*.webp`
+serves `200 image/webp`, `/blog` renders all 15. Content is unchanged — it was already good.
+
 ## 2026-07-17
 
 ### 🖼️ The Blog editor's image control was a dead button — and it was hiding a bug that DELETED merchant text
