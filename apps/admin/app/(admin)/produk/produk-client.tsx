@@ -15,7 +15,7 @@ import { IDR, num, dateTimeShort } from "@tokophi/lib/format";
 import { TODAY, type Product } from "@/lib/mock/store";
 import { cn } from "@tokophi/ui/lib/utils";
 import { toast } from "sonner";
-import { bulkSetProductStatus, bulkDeleteProducts } from "@/lib/actions/products";
+import { bulkSetProductStatus, bulkDeleteProducts, duplicateProduct, deleteProduct } from "@/lib/actions/products";
 import { useCan } from "@/components/admin/permissions";
 
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -81,6 +81,25 @@ function WeightWarning() {
 
 function RowActions({ id }: { id: string }) {
   const canDelete = useCan("products:delete");
+  const canWrite = useCan("products:write");
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  const dup = () =>
+    start(async () => {
+      const r = await duplicateProduct(id);
+      if (r.ok) { toast.success("Produk diduplikat sebagai draft."); router.refresh(); }
+      else toast.error(r.error ?? "Gagal menduplikat — coba lagi.");
+    });
+  const archive = () =>
+    start(async () => {
+      try {
+        await deleteProduct(id);
+        toast.success("Produk diarsipkan.");
+        router.refresh();
+      } catch {
+        toast.error("Gagal mengarsipkan — coba lagi.");
+      }
+    });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi produk" />}>
@@ -88,9 +107,9 @@ function RowActions({ id }: { id: string }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem render={<Link href={`/produk/${id}`} />}><Pencil /> Edit</DropdownMenuItem>
-        <DropdownMenuItem><Copy /> Duplikat</DropdownMenuItem>
+        {canWrite && <DropdownMenuItem disabled={pending} onClick={dup}><Copy /> Duplikat</DropdownMenuItem>}
         {canDelete && <DropdownMenuSeparator />}
-        {canDelete && <DropdownMenuItem variant="destructive"><Archive /> Arsipkan</DropdownMenuItem>}
+        {canDelete && <DropdownMenuItem variant="destructive" disabled={pending} onClick={archive}><Archive /> Arsipkan</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   );

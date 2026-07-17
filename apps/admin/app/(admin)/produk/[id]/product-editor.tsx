@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createProduct, updateProduct, deleteProduct, type ProductInput } from "@/lib/actions/products";
+import { createProduct, updateProduct, deleteProduct, duplicateProduct, type ProductInput } from "@/lib/actions/products";
 import { uploadProductImage, deleteProductImage } from "@/lib/actions/media";
 import {
   ChevronLeft,
@@ -262,11 +262,23 @@ export function ProductEditor({ product }: { product?: Product }) {
     startTransition(async () => {
       try {
         await deleteProduct(product.id);
-        toast.success("Produk dihapus");
+        toast.success("Produk diarsipkan");
         router.push("/produk");
         router.refresh();
       } catch {
-        toast.error("Gagal menghapus produk");
+        toast.error("Gagal mengarsipkan produk");
+      }
+    });
+  };
+  const handleDuplicate = () => {
+    if (!product) return;
+    startTransition(async () => {
+      const r = await duplicateProduct(product.id);
+      if (r.ok && r.id) {
+        toast.success("Produk diduplikat sebagai draft.");
+        router.push(`/produk/${r.id}`);
+      } else {
+        toast.error(r.error ?? "Gagal menduplikat produk");
       }
     });
   };
@@ -411,10 +423,10 @@ export function ProductEditor({ product }: { product?: Product }) {
                   <ShoppingCart /> Buat pesanan pembelian
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem disabled={pending} onClick={handleDuplicate}>
                   <Copy /> Duplikat
                 </DropdownMenuItem>
-                <DropdownMenuItem variant="destructive">
+                <DropdownMenuItem variant="destructive" disabled={pending} onClick={handleDelete}>
                   <Archive /> Arsipkan
                 </DropdownMenuItem>
               </DropdownMenuContent>
