@@ -9,13 +9,26 @@
 
 ---
 
-## ▶ NEXT UP — picked up here (handoff 2026-07-17, end of session)
+## ▶ NEXT UP — picked up here (handoff 2026-07-18)
 
-**Merge PR #7 first.** `8c56003` is committed, verified and NOT deployed. It carries the blog image
-feature AND the fix for a **body-deleting save** (see STATUS §0). It also mounts `tokophi-uploads` on
-the `migrate` service — **the journal seed is in the deploy chain now, and without that mount
-production gets 15 media rows pointing at 404s while the log says success.** Merge = deploy.
+**PR #7 is MERGED to `main` (`dfe1631`) and DEPLOYING.** It carries the blog featured-image feature
+(`8c56003`, incl. the body-deleting-save fix, STATUS §0) AND **15 editorial Jurnal images** (`ace867e`):
+`seed-journal.ts` no longer crops catalogue photos — each published article now has a topic-true header
+committed at `apps/admin/public/journal/<handle>.webp` (900×600 WebP q82; "Cara Mencuci Batik" used to
+show a model in a dress). The `migrate` service runs `seed-journal` + mounts `tokophi-uploads`, so the
+images seed to production automatically (Merge = deploy). Verified locally: 15 `media` rows (Files),
+`og:image` absolute per article (+ `twitter:image`), `/blog` renders all 15, admin+super-admin+storefront
+builds green.
 
+- [ ] **Confirm the production deploy landed** (Coolify app `l7r4qaqcml4zigw1dc7iptun`, deploy triggered
+      by the PR-#7 merge webhook on 2026-07-18). Check `https://batik-nusantara.tokophi.id/blog` shows the
+      15 editorial images (**hard-refresh** — see cache note), Files shows 15 `media` rows, `og:image`
+      resolves, and there are **no `/api/uploads` 404s**.
+- [ ] **Journal images do not cache-bust on re-seed.** `/api/uploads` sends `Cache-Control: immutable`
+      (correct for unique upload names). But `seed-journal` reuses `jurnal-<handle>.webp`, so a returning
+      visitor keeps the OLD image for a year after any art change. If journal art is ever expected to
+      change again, give the files a content hash in the name (like real uploads) so the URL changes with
+      the bytes. Not urgent — production seeds fresh, so first-time visitors are fine.
 - [ ] **Product images into Files — DECISION NEEDED, this is the open question.**
       `media` holds the 15 journal images and **zero product images**; the 70 catalogue photos live as
       static `/products/*.webp` in both apps' `public/`. Two ways, and they are not equivalent:
