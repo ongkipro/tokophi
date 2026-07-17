@@ -51,7 +51,7 @@ import type { CustomerRow } from "@/lib/data/customers";
 import { IDR, num } from "@tokophi/lib/format";
 import { exportCsv } from "@/lib/csv";
 import { useCan } from "@/components/admin/permissions";
-import { createCustomer } from "@/lib/actions/customers";
+import { createCustomer, deleteCustomer } from "@/lib/actions/customers";
 import { cn } from "@tokophi/ui/lib/utils";
 import { SegmentBadge } from "@/components/admin/pelanggan/segment-badge";
 import { AccountBadge } from "@/components/admin/pelanggan/account-badge";
@@ -92,6 +92,31 @@ const SORTS: Record<SortKey, string> = {
 
 // Punya akun / tidak. "Tamu" is the normal case here — checkout never asks for a registration.
 type AccountTab = "semua" | "terdaftar" | "tamu";
+
+function DeleteCustomerItem({ id }: { id: string }) {
+  const canWrite = useCan("customers:write");
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  if (!canWrite) return null;
+  const del = () =>
+    start(async () => {
+      try {
+        await deleteCustomer(id);
+        toast.success("Pelanggan dihapus.");
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Gagal menghapus — coba lagi.");
+      }
+    });
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}>
+        <Trash2 className="size-4" /> Hapus
+      </DropdownMenuItem>
+    </>
+  );
+}
 
 function AddCustomerDialog() {
   const canWrite = useCan("customers:write");
@@ -485,12 +510,7 @@ export function PelangganClient({ customers }: { customers: CustomerRow[] }) {
                       >
                         <MessageCircle className="size-4" /> Kirim WhatsApp
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      {/* No customer delete action, and customers are referenced by orders — segera hadir, not a no-op. */}
-                      <DropdownMenuItem variant="destructive" disabled className="opacity-60">
-                        <Trash2 className="size-4" /> Hapus
-                        <span className="ml-auto text-[10px] text-muted-foreground">segera</span>
-                      </DropdownMenuItem>
+                      <DeleteCustomerItem id={c.id} />
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

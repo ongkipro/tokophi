@@ -32,6 +32,22 @@ export async function createCustomer(input: {
   revalidatePath("/pelanggan");
 }
 
+// Hard delete, but customers are referenced by orders/reviews/followups/checkout_sessions/support.
+// Let the FK constraints be the guard: a 23503 means the customer has history — refuse with a clear
+// message instead of a raw DB error. Succeeds only for an unreferenced (e.g. just-added) customer.
+export async function deleteCustomer(id: string): Promise<void> {
+  const { storeId: sid } = await requireCapability("customers:write");
+  try {
+    await withTenant(sid, (db) => db.delete(schema.customers).where(eq(schema.customers.id, id)));
+  } catch (e) {
+    if (e && typeof e === "object" && "code" in e && (e as { code?: string }).code === "23503") {
+      throw new Error("Pelanggan punya riwayat (pesanan/ulasan) — tidak bisa dihapus.");
+    }
+    throw e;
+  }
+  revalidatePath("/pelanggan");
+}
+
 export async function updateCustomer(id: string, input: { tags: string[]; notes: string }): Promise<void> {
   const { storeId: sid } = await requireCapability("customers:write");
   await withTenant(sid, (db) =>
