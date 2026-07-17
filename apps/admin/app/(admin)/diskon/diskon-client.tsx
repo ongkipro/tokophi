@@ -20,6 +20,8 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { IDR, num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
+import { toast } from "sonner";
+import { deleteDiscount } from "@/lib/actions/discounts";
 import { type Discount, type DiscountType } from "@/lib/mock/store";
 
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -169,6 +171,18 @@ function UsageCell({ used, limit }: { used: number; limit: number }) {
 
 function RowActions({ id }: { id: string }) {
   const canWrite = useCan("discounts:write");
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  const del = () =>
+    start(async () => {
+      try {
+        await deleteDiscount(id);
+        toast.success("Diskon dihapus.");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus — coba lagi.");
+      }
+    });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -183,15 +197,18 @@ function RowActions({ id }: { id: string }) {
           <Pencil />
           Edit
         </DropdownMenuItem>
+        {/* Nonaktifkan: the list's status is derived from the dates, not the DB status column, so
+            setting status='nonaktif' would be invisible — needs read-layer + storefront work first. */}
         {canWrite && (
-          <DropdownMenuItem>
+          <DropdownMenuItem disabled className="opacity-60">
             <PauseCircle />
             Nonaktifkan
+            <span className="ml-auto text-[10px] text-muted-foreground">segera</span>
           </DropdownMenuItem>
         )}
         {canWrite && <DropdownMenuSeparator />}
         {canWrite && (
-          <DropdownMenuItem variant="destructive">
+          <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}>
             <Trash2 />
             Hapus
           </DropdownMenuItem>

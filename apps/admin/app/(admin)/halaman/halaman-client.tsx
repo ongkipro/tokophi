@@ -9,8 +9,6 @@ import {
   ChevronDown,
   MoreHorizontal,
   Pencil,
-  ExternalLink,
-  Copy,
   Trash2,
   FileText,
 } from "lucide-react";
@@ -19,6 +17,8 @@ import { PageHeader } from "@/components/admin/page-header";
 import { PageStatusBadge } from "@/components/admin/halaman/status-badge";
 import { num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
+import { toast } from "sonner";
+import { deletePage } from "@/lib/actions/pages";
 import { type CmsPage } from "@/lib/mock/store";
 
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -58,6 +58,18 @@ function daysAgoLabel(days: number): string {
 
 function RowActions({ id }: { id: string }) {
   const canWrite = useCan("content:write");
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  const del = () =>
+    start(async () => {
+      try {
+        await deletePage(id);
+        toast.success("Halaman dihapus.");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus — coba lagi.");
+      }
+    });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -72,17 +84,9 @@ function RowActions({ id }: { id: string }) {
           <Pencil />
           Edit
         </DropdownMenuItem>
-        <DropdownMenuItem>
-          <ExternalLink />
-          Lihat di toko
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Copy />
-          Duplikat
-        </DropdownMenuItem>
         {canWrite && <DropdownMenuSeparator />}
         {canWrite && (
-          <DropdownMenuItem variant="destructive">
+          <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}>
             <Trash2 />
             Hapus
           </DropdownMenuItem>

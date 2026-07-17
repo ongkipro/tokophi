@@ -9,8 +9,6 @@ import {
   ChevronDown,
   MoreHorizontal,
   Pencil,
-  Eye,
-  Copy,
   Trash2,
   Settings2,
   MessageSquare,
@@ -20,6 +18,8 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
+import { toast } from "sonner";
+import { deleteArticle } from "@/lib/actions/articles";
 import { BLOG_CATEGORIES, type BlogPost } from "@/lib/mock/store";
 
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -56,6 +56,18 @@ function daysAgoLabel(days: number) {
 
 function RowActions({ id }: { id: string }) {
   const canWrite = useCan("content:write");
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  const del = () =>
+    start(async () => {
+      try {
+        await deleteArticle(id);
+        toast.success("Artikel dihapus.");
+        router.refresh();
+      } catch {
+        toast.error("Gagal menghapus — coba lagi.");
+      }
+    });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -68,17 +80,9 @@ function RowActions({ id }: { id: string }) {
           <Pencil />
           Edit
         </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Eye />
-          Lihat
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Copy />
-          Duplikat
-        </DropdownMenuItem>
         {canWrite && <DropdownMenuSeparator />}
         {canWrite && (
-          <DropdownMenuItem variant="destructive">
+          <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}>
             <Trash2 />
             Hapus
           </DropdownMenuItem>
