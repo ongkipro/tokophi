@@ -4,6 +4,33 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### ♿ Stock colours: all three failed AA, and only one was findable by an audit
+
+Caught by re-running Lighthouse on the live PDP after the de-carding above — **accessibility had
+dropped to 96**, and one of the two failures was **mine**: removing the white card from under the
+reviews put `text-muted/70` onto the cream page at **2.84:1**. Exactly the footer trap again — an
+**opacity, not a colour**, invisible to any palette audit. Now plain `text-muted` = 5.09:1.
+
+The second failure was pre-existing and led somewhere worse. `#pdp-stock` was `text-emerald-600` on
+cream = **3.40:1**. Checking its siblings rather than just the one Lighthouse named:
+
+| state | was | ratio | now | ratio |
+|---|---|---|---|---|
+| in stock | `emerald-600` | 3.40 | `emerald-700` | **4.99** ✅ |
+| low stock | `amber-600` | **2.98** | `amber-700` | **4.68** ✅ |
+| out of stock | `red-600` | 4.44 | `red-700` | 5.97 (computed) |
+
+⚠️ **Lighthouse could only ever see the emerald one.** These classes are applied **from JS**, and only
+the in-stock branch runs on an in-stock product — the other two need a low/out-of-stock variant
+selected. No page-load audit reaches them. The worst of the three was the amber at **2.98:1**: *"Sisa 3
+— segera habis"* is the most urgent line on the page and was the least readable thing on it. Found by
+computing the palette against the page background, not by re-running the tool.
+
+Verified by driving **every colour × size combination** in a browser until each branch actually ran:
+emerald 4.99, amber 4.68, 0 console errors. The red branch is **not** exercised and is honestly marked
+as computed-only — **the seed contains no zero-stock variant anywhere**, so that state is currently
+unreachable on this data.
+
 ### 🃏 Cards: stop drawing a box around everything (Dawn-like restraint)
 
 Audited every card surface in the storefront and asked one question of each: does this box carry
