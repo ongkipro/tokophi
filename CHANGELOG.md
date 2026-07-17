@@ -4,6 +4,39 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 🗂️ The kelurahan index existed only on this laptop — a fresh database shipped without it (0059)
+
+An untracked `0046_good_dust.sql` was sitting in the worktree. It looked like leftover generator junk,
+but it was the **only** place `kelurahan_district_idx` was defined — hand-written into a generated file,
+given a number `0046_silky_king_cobra` already owned, and **never registered in `_journal.json`**. So
+`npm run migrate` had never once applied it. The index was on this machine because someone had also
+created it by hand; **any fresh database — including production — built the checkout without it.**
+
+Measured on the dev DB, the query `kelurahanForDistrict()` runs on every kecamatan selection
+(`apps/admin/lib/data/areas.ts:153`, called from `checkout.astro:1309`):
+
+| | plan | time |
+|---|---|---|
+| with the index | Bitmap Index Scan | **0.25ms** |
+| without it | Seq Scan, 78.744 rows discarded | **25.4ms** |
+
+~100x, on a table of 78k rows, on the checkout's hot path. The index is now declared in `schema.ts`
+where it belongs, so the generator owns it, and `0059` builds it. The stray file is deleted.
+
+⚠️ **The generator's first output would have broken a fresh database.** `generate` also emitted
+`ADD COLUMN` for `orders.service_type`, `orders.label_printed_at` and `stores.favicon_url` — columns
+`0053`, `0055` and `0057` already create. The **meta snapshots had drifted**: they never recorded those
+migrations, so drizzle-kit believed the columns were missing and cheerfully re-added them. On a fresh
+DB that is `0053` adding the column and `0059` dying on the duplicate. This is almost certainly *why*
+the index was hand-written in the first place — the generator's output was untrustworthy, so someone
+routed around it and the migration silently never ran. The redundant ALTERs are dropped from `0059`;
+`0059_snapshot.json` now records the true shape, and a follow-up `generate` reports **"No schema
+changes"** — the drift is repaired, not worked around.
+
+**Proven, not typechecked:** all 59 migrations replayed from zero into a throwaway database
+(`tokophi_migtest`, dropped after) — applied clean, `kelurahan_district_idx` present, and all three
+columns from 0053/0055/0057 still there. The shared `tokophi` DB was never touched.
+
 ### 🚚 Ongkir was 5.5s for every shopper. It is now ~0.6s — and Pengiriman is one box like Pembayaran
 
 **The user was right and my first hypothesis was wrong.** Cold rate loads clustered at 5.29–5.43s
