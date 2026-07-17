@@ -465,8 +465,20 @@ if (rToken) {
                  whole block IS the one payment being chosen — and the chosen bank inside keeps only
                  its tint, so we never draw a frame inside a frame. Safe against a stale highlight:
                  the sync() below unchecks `va_bank` whenever the parent is deselected, so a hidden
-                 panel can never keep this lit. */
-              <div class="relative divide-y divide-[var(--co-line)] has-[:checked]:z-10 has-[:checked]:outline-1 has-[:checked]:-outline-offset-1 has-[:checked]:outline-[var(--co-accent)]">
+                 panel can never keep this lit.
+
+                 THE CORNERS. An outline traces its own element's `border-radius`, and these rows had
+                 none — so the frame met the card's rounded corner with a square one. **7px, not 8**:
+                 the card is `rounded-lg` (8px) but that is its OUTER radius, and these rows sit inside
+                 its 1px border, where the radius is 8-1. `rounded-lg` here would bulge past the arc.
+
+                 ⚠️ `has-[+#cod-option[hidden]]:rounded-b-[7px]` is not decoration — `last:` is
+                 `:last-child` in the DOM, and `#cod-option` STAYS in the DOM while hidden. So with COD
+                 merely unavailable (the normal case until an SPX courier is picked) `last:` targets COD
+                 and the row the shopper actually sees at the bottom keeps square corners. This says
+                 "I am last because the thing after me is hidden". `last:` still covers the store that
+                 has COD switched off entirely, where the element is never rendered at all. */
+              <div class="relative divide-y divide-[var(--co-line)] first:rounded-t-[7px] last:rounded-b-[7px] has-[+#cod-option[hidden]]:rounded-b-[7px] has-[:checked]:z-10 has-[:checked]:outline-1 has-[:checked]:-outline-offset-1 has-[:checked]:outline-[var(--co-accent)]">
                 {/* A group with ONE channel is rendered as a single selectable row, not a header with
                     one item under it: QRIS was appearing twice — once as the group title and once as
                     its only row. And a multi-channel group's rows show only the BANK NAME, because
@@ -552,7 +564,7 @@ if (rToken) {
                 not typed) must be on the allow-list. A greyed-out row with an excuse would be worse —
                 a COD we would reject has no business being on screen at all. */}
             {COD_ENABLED && (
-              <div id="cod-option" hidden class="relative has-[:checked]:z-10 has-[:checked]:outline-1 has-[:checked]:-outline-offset-1 has-[:checked]:outline-[var(--co-accent)]">
+              <div id="cod-option" hidden class="relative rounded-b-[7px] has-[:checked]:z-10 has-[:checked]:outline-1 has-[:checked]:-outline-offset-1 has-[:checked]:outline-[var(--co-accent)]">
                 <label class="group flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]">
                   <input
                     type="radio"

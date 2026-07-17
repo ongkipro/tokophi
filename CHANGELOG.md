@@ -29,6 +29,23 @@ inside adds **no** second frame, and COD — reached by selecting SPX Standard, 
 unlocks it — frames its own row (64px). The outer border reads `rgb(227,227,227)` in every state.
 0 console errors.
 
+**The corners (follow-up).** An outline traces its own element's `border-radius`, and these rows had
+none — so the frame met the card's rounded corner with a **square** one. Measured: card `8px`, row
+`0px`. Now `7px`, **not 8**: `rounded-lg` is the card's OUTER radius and these rows sit inside its 1px
+border, where the arc is 8−1; `rounded-lg` here would bulge past it.
+
+⚠️ **`last:` is a trap here and `has-[+#cod-option[hidden]]:rounded-b-[7px]` is the fix.** `last:` means
+`:last-child` **in the DOM**, and `#cod-option` stays in the DOM while hidden — so in the normal case
+(COD unavailable until an SPX courier is picked) `last:` targets COD and the row the shopper actually
+sees at the bottom keeps square corners. The `:has()` rule says *"I am last because the thing after me
+is hidden"*, and it re-evaluates live. Verified by forcing a **non-SPX** courier: COD hides → Transfer
+Bank takes the rounded bottom (7px); pick SPX → COD appears, Transfer Bank hands it back (0px) and COD
+takes it. No JS involved. `last:` still covers the store with COD switched off, where it never renders.
+
+⚠️ **The first probe was wrong and said everything passed.** Checkout auto-selects the first rate, which
+is SPX Standard — so COD was *already visible* in both of my "before/after" runs and the hidden case was
+never tested at all. The bug it was meant to catch would have shipped.
+
 ### 🛒 /checkout header: the cart now sits on the layout's right boundary
 
 The cart was **40px inside** the 1080 box (`lg:px-10`), which on paper was the defensible choice — at
