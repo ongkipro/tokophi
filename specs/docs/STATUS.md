@@ -17,6 +17,56 @@
 
 ---
 
+## 0. Storefront `/checkout` — state as of 2026-07-17 (read before touching it)
+
+**Everything below was driven in a real browser, not typechecked.** `astro check` is green on every bug
+in this section — that is why it is stated separately from "it builds".
+
+### 🟢 SHIPPED AND LIVE on `tokophi.com` (verified in the deployed HTML, not from a status field)
+
+- **Pengiriman is ONE focused row** — the named default `spx`/type `1` (SPX Standard). SPX Economy, JNE
+  and everyone else sit in "Pilih ekspedisi lain". **No SPX on the route → JNE takes the default slot
+  and the box says so.**
+- **The cheapest rate is never hidden.** The full list is prefetched in the background once the fast
+  quote paints; anything genuinely cheaper than the default is promoted to a **second row** with a
+  "Termurah" badge. Two rows max, `all:true` fires once, the disclosure never opens itself.
+  · Verified live on **Sukodono/Sidoarjo**: 1 row (SPX Standard Rp7.000) → SPX Economy Rp5.600 promoted
+  with no click; "Pilih ekspedisi lain (6)"; 8 services total; 0 console errors.
+- **`<form novalidate>` + Indonesian validation messages.** The browser's native bubble follows the
+  BROWSER's language, not `lang="id"` — an Indonesian on an English phone was told *"Please fill out
+  this field."* Verified live: all messages are ours.
+- **The input rules do NOT over-validate** — 40+ cases, all green: 13 real Indonesian names, phone
+  prefixes `0838/0881/0895/0851` (normalising to `62…`), university/self-hosted/plus-addressed emails,
+  `Blok C2/14` and `RT.001/RW.009` addresses.
+
+### 🔴 FIXED IN `6f95ac0` BUT **NOT DEPLOYED** — this bug is LIVE right now (PR #6, draft)
+
+**A typo in the OPTIONAL email field traps the shopper and eats their address.** Type `siti@gmail`
+(no `.com`), click **Alamat**, type the address → measured:
+
+```
+alamat = ""
+email  = "siti@gmailJl. Melati No. 12 RT 03 RW 05"
+```
+
+`reportValidity()` on blur **focuses** the control, by spec, so leaving the field drags the shopper
+back into it. `Tab` is trapped too. **A field nobody is required to fill is holding the checkout
+hostage — on production, today.** The fix (inline `<p data-err>` + `aria-invalid`, never touching
+focus) is committed and reviewed but **awaiting a merge decision**. Until PR #6 lands, this is the
+single worst thing on the storefront.
+
+### 🟡 KNOWN AND DELIBERATE — not defects, do not "fix" them
+
+- **`KIRIMINAJA_ENV=sandbox` on live → every rate on `tokophi.com` is FICTION.** Sandbox courier
+  coverage is arbitrary: the same key returns `jne:REG23` for a Yogyakarta origin and **no JNE at all**
+  for Surabaya. This is why "JNE is enabled in the dashboard but never shows" was reported — the
+  platform ∩ store filter is correct (live offers exactly 10 enabled ∩ what the route returns = 8).
+  **Owner decision, tracked in `BACKLOG.md` §🔴.** Flipping it makes rates AND bookings real.
+- **COD vanishing outside the 6 allow-listed provinces is correct** (verified: Papua shows no COD).
+- **Guest checkout with no account is the normal case**, not a defect.
+
+---
+
 ## 1. 🟢 REAL
 
 | Thing | Evidence |
