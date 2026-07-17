@@ -140,6 +140,27 @@ export interface CategoryNavConfig {
   items: CategoryNavItem[];
 }
 
+/**
+ * Jurnal — the merchant's newest PUBLISHED articles, read live from the DB.
+ *
+ * Config is deliberately three fields. Two things it does NOT have, on purpose:
+ *
+ * · **No `ctaHref`.** Every other section that links takes free text, and that is exactly how the
+ *   defaults ended up pointing at `/kategori/dress` — a handle only the demo store owns, 404 on
+ *   everyone else. This section has ONE destination, `/blog`, which exists for every store. A field
+ *   whose only correct value is a constant is a field that can only be filled in wrong.
+ * · **No article picker.** The section shows the newest N. Letting a merchant pin specific posts
+ *   means a template that silently rots as they publish — the pinned handles keep pointing at last
+ *   year's article, or at one they later unpublish.
+ */
+export interface BlogConfig {
+  heading: string;
+  /** How many of the newest published articles to show. */
+  limit: 2 | 3 | 4;
+  /** Text of the link to /blog. Empty = no link. */
+  ctaLabel: string;
+}
+
 export type SectionConfigMap = {
   hero: HeroConfig;
   "product-grid": ProductGridConfig;
@@ -149,6 +170,7 @@ export type SectionConfigMap = {
   marquee: MarqueeConfig;
   "rich-text": RichTextConfig;
   "category-nav": CategoryNavConfig;
+  blog: BlogConfig;
 };
 
 export type SectionType = keyof SectionConfigMap;
@@ -176,6 +198,7 @@ export const SECTION_TYPES: SectionType[] = [
   "banner-promo",
   "marquee",
   "testimoni",
+  "blog",
   "rich-text",
 ];
 
@@ -188,6 +211,9 @@ export const SECTION_LABELS: Record<SectionType, string> = {
   marquee: "Teks Berjalan",
   "rich-text": "Teks & Pernyataan",
   "category-nav": "Navigasi Kategori",
+  // "Jurnal", not "Blog": it is what the storefront already calls this everywhere the shopper can
+  // see it (/blog's own H1 is "Jurnal"). The TYPE stays `blog` — that is the DB's word.
+  blog: "Jurnal",
 };
 
 /** Seed config used when a merchant drags a fresh instance of this section onto the canvas. */
@@ -322,5 +348,15 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
       { label: "Atasan", imageUrl: "", href: "/kategori/atasan" },
       { label: "Bawahan", imageUrl: "", href: "/kategori/bawahan" },
     ],
+  },
+  blog: {
+    // Safe to ship as FINISHED copy, unlike every prompt above — and the reason is worth stating,
+    // because the rule here is "defaults are prompts, never claims". These three strings assert
+    // nothing about the merchant's goods, their prices, or their promises: they are a label for a
+    // list the DB fills in, pointing at /blog, which every store has. There is nothing here for a
+    // merchant to accidentally publish about themselves.
+    heading: "Dari Jurnal",
+    limit: 3,
+    ctaLabel: "Lihat semua tulisan",
   },
 };

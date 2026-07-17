@@ -4,6 +4,56 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 📰 Jurnal on the homepage — a 9th section, and the merchant's articles finally reach the front page
+
+The merchant writes articles in Dashboard Seller → Blog, and the only way a shopper ever found them
+was to already know `/blog` existed. Now the homepage carries them.
+
+**Built as a SECTION, not as markup in `index.astro`.** ADR 0009's registry has two halves — the
+storefront's `SectionRenderer` and the admin's Puck config, sharing `@tokophi/sections`. Adding it as
+a 9th type means the merchant can move it, retitle it, or remove it in the Store Builder like any
+other. `Config<SectionConfigMap>` made that mandatory rather than optional: the moment `blog` joined
+the map, **TypeScript refused to compile until both halves existed** — the registry is genuinely
+exhaustive, which is the whole point of it.
+
+**The section renders NOTHING until an article is published.** Not an empty state, not a "belum ada
+tulisan" placeholder — this is the shopper's homepage, and an empty husk announcing an empty journal
+is worse for the shop than silence. `/blog` keeps its empty state because a shopper went looking for
+the journal *there*; nobody asked for one here. **Verified, not assumed**: a throwaway homepage
+template on `kopi-senja` (0 published articles) rendered the page at 126 KB with zero trace of the
+section — no heading, no cards, no husk. Template deleted afterwards.
+
+**Position: above the closing CTA, not last.** "Bagian bawah" was the ask and this is it, but ending
+the page on a row of articles sends the shopper off to *read* instead of to buy, and strands the
+closing CTA mid-page where nothing concludes. Journal, then the ask — same reason Dawn does it.
+
+**`ArticleCard.astro` extracted** and now used by BOTH `/blog` and this section (~40 lines of
+duplicated markup deleted). `3ce6d6c` had already found this tile and `ProductCard` "do the same job
+and had different radius, boundary technique and hover lift" and made them identical; two inline
+copies is exactly how that drift restarts. The card takes a `level` prop (2 on `/blog`, under its
+`<h1>`; 3 in this section, under the section's `<h2>`) — hard-coding either would skip a heading level
+in the other, which is the outline a screen-reader user navigates by.
+
+**Config is 3 fields, and two omissions are deliberate.** No `ctaHref` — the destination is always
+`/blog`, which every store has; free-text hrefs are precisely how the defaults ended up pointing at
+`/kategori/dress`, a handle only the demo owns. No article picker — pinned handles rot as the merchant
+publishes, or point at a post they later unpublish. `limit` is a **select (2/3/4)**, not a number: a
+free number invites 7, which is a broken grid discovered by publishing.
+
+⚠️ **`seed-templates.ts`'s header was lying, and it is a dangerous lie.** It said the script "inserts
+only when the store has no homepage template, so it is safe against a live DB and never clobbers what
+a merchant has since edited". That stopped being true at `1c738d4` — **it UPSERTS; an existing
+homepage is REPLACED** (the function body documents this properly; only the header was stale). Anyone
+trusting that header would run `seed:templates` against a live store and wipe the arrangement the
+merchant built. Corrected.
+
+**Driven in a browser, 0 console errors**: homepage section order is now hero → category-nav →
+rich-text → product-grid → product-grid → **Dari Jurnal** → closing CTA; 3 cards, newest first; the
+1 **draft** article does not appear (publishing is a security boundary in `getArticles`, and the
+homepage HTML contains no trace of it); `<h3>` in the section and `<h2>` on `/blog`; no horizontal
+scroll at 390px; `/blog` still lists all 5 published articles after the refactor. `/tema` still loads
+and the builder's sidebar now offers all 9 sections including **Jurnal**, with no React error.
+
 ### 🪤 A typo in an OPTIONAL field was holding the checkout hostage — the address went into the email box
 
 Continuing the validation sweep after the language fix, and this one is worse than the language was.

@@ -1,0 +1,72 @@
+---
+// One article tile — used by BOTH /blog and the homepage's Jurnal section.
+//
+// Extracted rather than copied. `3ce6d6c` audited every card surface and found the blog tile and
+// ProductCard "do the same job and had different radius, boundary technique and hover lift", then
+// made them identical. Two inline copies of this markup is how that drift starts again: the next
+// person restyles the one they are looking at. The box is KEPT (that audit's own conclusion) because
+// this tile is clickable — the boundary carries meaning here, it is not decoration.
+import { formatDate } from "../data/content";
+import type { ArticleCard } from "../data/content";
+
+interface Props {
+  article: ArticleCard;
+  /**
+   * Heading level for the title, because the right one depends on where the card sits:
+   * · /blog — the page's <h1> is "Cerita & Inspirasi", so each tile is an <h2>.
+   * · homepage Jurnal section — the section already owns the <h2>, so each tile is an <h3>.
+   * Hard-coding either would skip a level in the other, which is exactly the outline a screen-reader
+   * user navigates by. Same markup, correct outline in both.
+   */
+  level?: 2 | 3;
+}
+
+const { article, level = 3 } = Astro.props;
+const Title = `h${level}` as "h2" | "h3";
+---
+
+<a
+  href={`/blog/${article.handle}`}
+  class="group flex flex-col overflow-hidden rounded-xl bg-white ring-1 ring-line transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+>
+  {/* 3:2, the same lock as the article's feature image. Merchant art arrives in every shape, and
+      letting each one set its own ratio makes the grid look broken. No `rounded-*` here: the parent
+      is already rounded + overflow-hidden, so an inner radius is invisible at the top and fights the
+      clip at the bottom (same note as ProductCard). An article with no image keeps the brand tint
+      rather than a broken frame. */}
+  <div class="aspect-[3/2] overflow-hidden bg-brand-50">
+    {
+      article.imageUrl && (
+        <img
+          src={article.imageUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+      )
+    }
+  </div>
+  <div class="flex flex-1 flex-col p-5">
+    <p class="text-xs font-medium uppercase tracking-[0.15em] text-brand-500">
+      {formatDate(article.publishedAt)}
+    </p>
+    <Title
+      class="mt-2 font-display text-xl font-semibold leading-snug text-ink transition-colors group-hover:text-brand-700"
+    >
+      {article.title}
+    </Title>
+    <p class="mt-2 flex-1 text-sm leading-relaxed text-muted">{article.excerpt}</p>
+    <span class="mt-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700">
+      Baca selengkapnya
+      <svg
+        viewBox="0 0 24 24"
+        class="h-4 w-4 fill-none stroke-current transition-transform group-hover:translate-x-0.5"
+        stroke-width="2"
+        aria-hidden="true"
+      >
+        <path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+    </span>
+  </div>
+</a>

@@ -19,6 +19,7 @@ import ImageText from "./ImageText.astro";
 import Marquee from "./Marquee.astro";
 import RichText from "./RichText.astro";
 import CategoryNav from "./CategoryNav.astro";
+import Blog from "./Blog.astro";
 
 interface Props {
   data: StoredTemplateData;
@@ -47,6 +48,8 @@ const { data, context = HOMEPAGE_CONTEXT } = Astro.props;
         return <RichText {...item.props} />;
       case "category-nav":
         return <CategoryNav {...item.props} />;
+      case "blog":
+        return <Blog {...item.props} />;
     }
   })
 }

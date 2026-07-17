@@ -6,7 +6,8 @@ import Layout from "../../layouts/Layout.astro";
 import Breadcrumb from "../../components/Breadcrumb.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
 import RevealGrid from "../../components/RevealGrid.astro";
-import { getArticles, formatDate } from "../../data/content";
+import ArticleCard from "../../components/ArticleCard.astro";
+import { getArticles } from "../../data/content";
 
 const { store } = Astro.locals;
 const articles = await getArticles(store.id);
@@ -45,45 +46,12 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
       ) : (
         <RevealGrid rows={3} unit="tulisan">
         <div data-reveal-grid class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {/* The tile lives in ArticleCard.astro — the homepage's Jurnal section renders the same
+              one. It used to be 40 lines of markup inline here, which is how this tile and
+              ProductCard drifted apart the first time (see 3ce6d6c). `level={2}`: this page's <h1>
+              is above, so each tile is an <h2>. */}
           {articles.map((a) => (
-            <a
-              href={`/blog/${a.handle}`}
-              class="group flex flex-col overflow-hidden rounded-xl bg-white ring-1 ring-line transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
-            >
-              {/* 3:2, same lock as the article's feature image — merchant art arrives in every
-                  shape, and letting each one set its own ratio makes the Jurnal look broken. An
-                  article with no image keeps the brand tint instead of a broken frame. */}
-              <div class="aspect-[3/2] overflow-hidden bg-brand-50">
-                {a.imageUrl && (
-                  <img
-                    src={a.imageUrl}
-                    alt=""
-                    loading="lazy"
-                    class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                )}
-              </div>
-              <div class="flex flex-1 flex-col p-5">
-                <p class="text-xs font-medium uppercase tracking-[0.15em] text-brand-500">
-                  {formatDate(a.publishedAt)}
-                </p>
-                <h2 class="mt-2 font-display text-xl font-semibold leading-snug text-ink transition-colors group-hover:text-brand-700">
-                  {a.title}
-                </h2>
-                <p class="mt-2 flex-1 text-sm leading-relaxed text-muted">{a.excerpt}</p>
-                <span class="mt-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700">
-                  Baca selengkapnya
-                  <svg
-                    viewBox="0 0 24 24"
-                    class="h-4 w-4 fill-none stroke-current transition-transform group-hover:translate-x-0.5"
-                    stroke-width="2"
-                    aria-hidden="true"
-                  >
-                    <path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </span>
-              </div>
-            </a>
+            <ArticleCard article={a} level={2} />
           ))}
         </div>
         </RevealGrid>

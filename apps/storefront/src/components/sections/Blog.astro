@@ -1,0 +1,76 @@
+---
+// Jurnal — the merchant's newest PUBLISHED articles, on the homepage.
+//
+// Reads the DB directly rather than through `Astro.locals.catalog`: content.ts is deliberately NOT
+// part of the catalog bundle ("blog posts have no business being pulled in on a product page"), and
+// this is the only section that wants them. `getArticles` is itself short-TTL cached and hard-filters
+// `status='terbit'` — publishing is a security boundary there, not a nicety, so an unpublished draft
+// cannot surface here even by mistake.
+import type { BlogConfig } from "@tokophi/sections";
+import ArticleCard from "../ArticleCard.astro";
+
+type Props = BlogConfig;
+const { heading, limit, ctaLabel } = Astro.props;
+
+const { store } = Astro.locals;
+const articles = (await getArticlesSafe(store.id)).slice(0, limit);
+
+// A homepage must not die because the Jurnal query did. Every other section on this page is static
+// config; this one is the only one that touches the DB on render, so it is the only one that can
+// take the page down with it. Nothing to show = show nothing (below) — that is already the empty
+// path, so a failure lands somewhere the design has thought about.
+async function getArticlesSafe(storeId: string) {
+  try {
+    const { getArticles } = await import("../../data/content");
+    return await getArticles(storeId);
+  } catch (err) {
+    console.error("[section:blog] getArticles failed:", err);
+    return [];
+  }
+}
+
+// The grid tracks the count so two articles read as a deliberate pair, not as a 3-up with a hole in
+// it. `limit` is a ceiling, never a promise: a merchant who set 4 and has published 2 gets 2.
+const COLS = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-2 lg:grid-cols-4" };
+const colsClass = COLS[articles.length >= limit ? limit : (Math.min(articles.length, 4) as 2 | 3 | 4)] ?? COLS[3];
+---
+
+{
+  /* NOTHING PUBLISHED = NOTHING RENDERED. Not an empty state, not a "belum ada tulisan" placeholder
+     — this section is on the SHOPPER's homepage, and an empty husk announcing an empty journal is
+     worse for the shop than silence. /blog has an empty state because a shopper went looking for the
+     journal there; nobody asked for one here. The merchant sees the section in the Store Builder
+     canvas either way, which is where "why is it blank?" gets answered. */
+  articles.length > 0 && (
+    <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
+      {/* Heading left, link right, baseline-aligned — the same relationship the rest of the page
+          uses. The link is the section's only control, so it is not repeated per card: every tile is
+          already a link, and "Baca selengkapnya" inside each one says so. */}
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <h2 class="font-display text-3xl font-semibold text-ink sm:text-4xl">{heading}</h2>
+        {ctaLabel && (
+          <a
+            href="/blog"
+            class="group inline-flex shrink-0 items-center gap-1 text-sm font-medium text-brand-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+          >
+            {ctaLabel}
+            <svg
+              viewBox="0 0 24 24"
+              class="h-4 w-4 fill-none stroke-current transition-transform group-hover:translate-x-0.5"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </a>
+        )}
+      </div>
+
+      <div class:list={["mt-10 grid grid-cols-1 gap-6", colsClass]}>
+        {articles.map((a) => (
+          <ArticleCard article={a} />
+        ))}
+      </div>
+    </section>
+  )
+}

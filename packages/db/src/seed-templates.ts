@@ -12,9 +12,15 @@
 // bypassing it — there were zero rows in this table, so the storefront's template renderer had never
 // run against real data.
 //
-// Standalone (not part of the big `seed.ts`) and idempotent, same as seed-reviews.ts: it inserts only
-// when the store has no homepage template, so it is safe against a live DB and never clobbers what a
-// merchant has since edited in the builder.
+// Standalone (not part of the big `seed.ts`).
+//
+// ⚠️ THIS HEADER USED TO SAY it "inserts only when the store has no homepage template, so it is safe
+// against a live DB and never clobbers what a merchant has since edited". That stopped being true at
+// `1c738d4` and the sentence stayed — a comment promising the exact safety the code had just given
+// up. **It UPSERTS: an existing homepage is REPLACED** (the log says `REPLACED`, which is the only
+// reason it was caught). Safe here ONLY because the file is hardcoded to `batik-nusantara`. Read the
+// full reasoning — and the cost — at the upsert itself in main(). If you ever point this at a real
+// store, restore the guard first.
 //   npm run seed:templates -w @tokophi/db
 import { db, client, schema } from "./client";
 import { and, eq } from "drizzle-orm";
@@ -147,6 +153,25 @@ const HOMEPAGE: StoredTemplateData = {
         collectionHandle: "",
         limit: 8,
         columns: 4,
+      },
+    },
+    {
+      // ── Jurnal, near the bottom but ABOVE the closing CTA ────────────────────────────────────
+      // "Bagian bawah" was the ask, and this is it — but not the LAST thing. The rich-text below is
+      // the page's closing call to action; ending the homepage on a row of articles would send the
+      // shopper off to read instead of to buy, and leave the CTA stranded mid-page where nothing
+      // concludes. Journal, then the ask. (Dawn puts its blog above the closing block for the same
+      // reason.)
+      //
+      // Renders NOTHING until an article is published — see Blog.astro. The demo has published
+      // articles, so it shows here; a fresh store's homepage simply has one less section until they
+      // write something, which is the correct silence.
+      type: "blog",
+      props: {
+        id: "jurnal-batik",
+        heading: "Dari Jurnal",
+        limit: 3,
+        ctaLabel: "Lihat semua tulisan",
       },
     },
     {
