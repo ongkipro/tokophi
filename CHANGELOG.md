@@ -4,6 +4,34 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### ♿ Three real accessibility failures — each scored 0 on live, each now measured passing
+
+Unlike the robots.txt audit below, these were **our bugs**, not the linter's:
+
+- **`<aside id="mobile-drawer" role="dialog">`** — `aria-allowed-role` = 0. `<aside>` carries an
+  implicit `complementary` role and ARIA forbids overriding it with `dialog`, so a screen reader was
+  handed a contradiction: landmark or modal? Now a `<div>`, which has no implicit role and is
+  therefore the right element to give one to. Nothing visual changed; the `aside` was only ever
+  *looking* semantic. The JS finds it by `getElementById`, so the tag swap touches nothing — verified
+  anyway in a real browser: opens, closes on Escape, 0 console errors.
+- **Footer copyright `text-cream/45` = 4.05:1** — below AA. `global.css` already fixed `--color-muted`
+  for exactly this reason; this one slipped through because it is an **opacity, not a colour**, so no
+  palette audit could ever have seen it. Now `/70` = **7.7:1**. While there, measured *every* text node
+  in the footer by compositing the alpha in-browser: all 23 pass (the `/50` labels sit at 4.63 — thin,
+  but above the line, so left alone).
+- **Cart link `aria-label="Keranjang"` vs visible "Keranjang 0"** — `label-content-name-mismatch` = 0.
+  A voice-control user says *"click Keranjang"* and nothing happens: the name they can **see** is not
+  the name the browser matched on. The `aria-label` is gone, so the name is now computed from the
+  content — the visible text by definition, and the two can never drift apart again. The word itself
+  moved from `hidden` to `sr-only` below `sm`: `hidden` removed it from the accessible name too,
+  leaving every phone user a link named just **"0"**. Measured on a 390px viewport: `"Keranjang 0 item"`.
+
+⚠️ **Method note.** The first contrast number this produced was **1.28:1** — nonsense. The computed
+colour is `oklab(0.975 0.0026 0.0063 / 0.7)` and a regex pulling "RGB" out of that reads the *oklab*
+components as channels. Contrast must be measured by letting the **browser** composite the alpha
+(paint bg then fg on a canvas, read the pixel), never by parsing the string. `astro check` was clean
+throughout all three, as it was for the `queueSave` outage.
+
 ### 🏷️ The struck-through price was cut off on every phone
 
 `ProductCard`'s price row was `flex items-baseline gap-2` — **`nowrap`**. Measured on live at 360 / 390
