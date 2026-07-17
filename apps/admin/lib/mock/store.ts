@@ -355,7 +355,7 @@ export const SEGMENTS: CustSegment[] = [
 ];
 
 export type ReviewStatus = "terbit" | "menunggu";
-export type Review = { id: string; customer: string; product: string; emoji: string; rating: number; text: string; status: ReviewStatus; daysAgo: number };
+export type Review = { id: string; customer: string; product: string; emoji: string; rating: number; text: string; reply?: string; status: ReviewStatus; daysAgo: number };
 export const REVIEWS: Review[] = [
   { id: "RV-1", customer: "Siti Nurhaliza", product: "Kopi Arabika Gayo 250g", emoji: "☕", rating: 5, text: "Kopinya wangi dan segar, pengiriman cepat. Recommended!", status: "terbit", daysAgo: 1 },
   { id: "RV-2", customer: "Budi Santoso", product: "Sepatu Sneakers Lokal", emoji: "👟", rating: 4, text: "Bahan bagus, ukuran pas. Cuma warnanya sedikit beda dari foto.", status: "terbit", daysAgo: 2 },

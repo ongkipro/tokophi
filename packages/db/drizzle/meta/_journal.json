@@ -421,6 +421,13 @@
       "when": 1784276013130,
       "tag": "0059_aspiring_smiling_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1784286633256,
+      "tag": "0060_mixed_reptil",
+      "breakpoints": true
     }
   ]
 }

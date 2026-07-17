@@ -50,7 +50,7 @@ export type Product = {
   templateId: string | null;
 };
 export type Rating = { value: number; count: number };
-export type Review = { rating: number; author: string; body: string; daysAgo: number };
+export type Review = { rating: number; author: string; body: string; reply: string | null; daysAgo: number };
 
 /** Everything one store's pages need. Built once per store per TTL, then reused across requests. */
 export type Catalog = {
@@ -319,6 +319,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       productId: schema.reviews.productId,
       rating: schema.reviews.rating,
       body: schema.reviews.body,
+      reply: schema.reviews.reply,
       createdAt: schema.reviews.createdAt,
       author: schema.customers.name,
     })
@@ -349,6 +350,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
         rating: r.rating,
         author: authorName(r.author),
         body: r.body.trim(),
+        reply: r.reply?.trim() || null,
         daysAgo: Math.max(0, Math.floor((nowMs - new Date(r.createdAt).getTime()) / 86_400_000)),
       });
       reviewsByProduct.set(r.productId, rl);

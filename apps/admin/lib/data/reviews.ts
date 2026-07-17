@@ -16,6 +16,7 @@ export async function getReviews(): Promise<Review[]> {
         emoji: schema.reviews.emoji,
         rating: schema.reviews.rating,
         body: schema.reviews.body,
+        reply: schema.reviews.reply,
         status: schema.reviews.status,
         createdAt: schema.reviews.createdAt,
       })
@@ -29,6 +30,7 @@ export async function getReviews(): Promise<Review[]> {
       emoji: r.emoji ?? "⭐",
       rating: r.rating,
       text: r.body ?? "",
+      reply: r.reply ?? "",
       status: r.status,
       daysAgo: Math.round((ADMIN_TODAY.getTime() - r.createdAt.getTime()) / 86_400_000),
     }));

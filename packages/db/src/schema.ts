@@ -578,6 +578,7 @@ export const reviews = pgTable("reviews", {
   emoji: text(),
   rating: integer().notNull().default(5),
   body: text(),
+  reply: text(), // the seller's public reply, shown on the PDP under the review; NULL = not replied
   status: reviewStatus().notNull().default("menunggu"),
   createdAt: createdAt(),
 });
