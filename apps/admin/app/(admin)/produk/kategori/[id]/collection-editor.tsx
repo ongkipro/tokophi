@@ -20,10 +20,9 @@ import {
   Search,
   Hand,
   Zap,
-  GripVertical,
 } from "lucide-react";
 
-import { type Collection, PRODUCTS } from "@/lib/mock/store";
+import { type CollectionDetail, type Product } from "@/lib/mock/store";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num } from "@tokophi/lib/format";
 import { cn } from "@tokophi/ui/lib/utils";
@@ -53,44 +52,51 @@ const slugify = (s: string) =>
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
 
-const CONDITION_FIELDS = [
-  "Tag produk",
-  "Judul produk",
-  "Tipe produk",
-  "Harga",
-  "Stok",
-  "Kategori",
-] as const;
+// UI label ↔ DB enum (condition_field / condition_operator). The editor speaks Indonesian; the DB
+// speaks enums — map at the boundary (on load and on save) so a saved rule round-trips exactly.
+const FIELD_ENUM: Record<string, string> = {
+  "Tag produk": "tag", "Judul produk": "title", "Tipe produk": "type",
+  "Harga": "price", "Stok": "stock", "Kategori": "category",
+};
+const OP_ENUM: Record<string, string> = {
+  "sama dengan": "eq", "tidak sama dengan": "neq", "lebih dari": "gt",
+  "kurang dari": "lt", "mengandung": "contains",
+};
+const FIELD_LABEL = Object.fromEntries(Object.entries(FIELD_ENUM).map(([k, v]) => [v, k]));
+const OP_LABEL = Object.fromEntries(Object.entries(OP_ENUM).map(([k, v]) => [v, k]));
 
-const CONDITION_OPS = [
-  "sama dengan",
-  "tidak sama dengan",
-  "lebih dari",
-  "kurang dari",
-  "mengandung",
-] as const;
+const CONDITION_FIELDS = Object.keys(FIELD_ENUM) as readonly string[];
+const CONDITION_OPS = Object.keys(OP_ENUM) as readonly string[];
 
 const TEMPLATES = ["collection", "collection.full-width"] as const;
 
 type Condition = { id: number; field: string; op: string; value: string };
 
-export function CollectionEditor({ collection }: { collection?: Collection }) {
+export function CollectionEditor({ collection, products }: { collection?: CollectionDetail; products: Product[] }) {
   const isEdit = Boolean(collection);
   const canWrite = useCan("content:write");
+  const byId = React.useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
-  // ---- form state ----
+  // ---- form state (seeded from the loaded collection, or blank for a new one) ----
   const [name, setName] = React.useState(collection?.name ?? "");
-  const [description, setDescription] = React.useState("");
-  const [type, setType] = React.useState<Collection["type"]>(
-    collection?.type ?? "manual"
-  );
+  const [description, setDescription] = React.useState(collection?.description ?? "");
+  const [type, setType] = React.useState<CollectionDetail["type"]>(collection?.type ?? "manual");
 
-  // Conditions builder (Otomatis)
-  const [match, setMatch] = React.useState<"semua" | "salah satu">("semua");
-  const [conditions, setConditions] = React.useState<Condition[]>([
-    { id: 1, field: "Tag produk", op: "sama dengan", value: "" },
-  ]);
-  const nextCondId = React.useRef(2);
+  // Conditions builder (Otomatis) — loaded rows mapped enum→label, else one empty row to start from.
+  const [match, setMatch] = React.useState<"semua" | "salah satu">(collection?.match === "any" ? "salah satu" : "semua");
+  // Row keys only. Initial rows get 1..n; new rows count up from 1000 (an event-time counter, never
+  // read during render) so the two never collide.
+  const nextCondId = React.useRef(1000);
+  const [conditions, setConditions] = React.useState<Condition[]>(() => {
+    const loaded = collection?.conditions ?? [];
+    if (!loaded.length) return [{ id: 1, field: "Tag produk", op: "sama dengan", value: "" }];
+    return loaded.map((c, i) => ({
+      id: i + 1,
+      field: FIELD_LABEL[c.field] ?? "Tag produk",
+      op: OP_LABEL[c.operator] ?? "sama dengan",
+      value: c.value,
+    }));
+  });
   const addCondition = () =>
     setConditions((cs) => [
       ...cs,
@@ -101,10 +107,19 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
   const patchCondition = (id: number, patch: Partial<Condition>) =>
     setConditions((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
 
-  // Manual products in collection (seed with first few).
-  const [members, setMembers] = React.useState(() => PRODUCTS.slice(0, 5));
-  const removeMember = (id: string) =>
-    setMembers((m) => m.filter((p) => p.id !== id));
+  // Manual membership — real products, loaded from the collection's memberIds (order preserved).
+  const [members, setMembers] = React.useState<Product[]>(
+    () => (collection?.memberIds ?? []).map((id) => byId.get(id)).filter((p): p is Product => Boolean(p)),
+  );
+  const removeMember = (id: string) => setMembers((m) => m.filter((p) => p.id !== id));
+  const addMember = (p: Product) => setMembers((m) => (m.some((x) => x.id === p.id) ? m : [...m, p]));
+  const [productQuery, setProductQuery] = React.useState("");
+  const searchResults = React.useMemo(() => {
+    const q = productQuery.trim().toLowerCase();
+    if (!q) return [];
+    const chosen = new Set(members.map((p) => p.id));
+    return products.filter((p) => !chosen.has(p.id) && p.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [productQuery, products, members]);
 
   // Publikasikan
   const [published, setPublished] = React.useState(collection?.published ?? false);
@@ -113,15 +128,22 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
   // Template tema
   const [template, setTemplate] = React.useState<string>(TEMPLATES[0]);
 
-  // ---- persist (core collection fields; member/condition management is separate) ----
+  // ---- persist ----
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const buildInput = (): CollectionInput => ({
     name: name.trim(),
     description,
+    handle: handle.trim() || undefined,
     type,
     match: match === "semua" ? "all" : "any",
     published,
+    seoTitle,
+    seoDesc: metaDesc,
+    memberIds: members.map((p) => p.id),
+    conditions: conditions
+      .filter((c) => c.value.trim())
+      .map((c) => ({ field: FIELD_ENUM[c.field], operator: OP_ENUM[c.op], value: c.value })),
   });
   const handleSave = () => {
     if (!canWrite) {
@@ -162,23 +184,17 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
     });
   };
 
-  // SEO
-  const [seoTitle, setSeoTitle] = React.useState("");
-  const [metaDesc, setMetaDesc] = React.useState("");
-  const [handle, setHandle] = React.useState(
-    collection ? slugify(collection.name) : ""
-  );
-  const [handleEdited, setHandleEdited] = React.useState(false);
-
-  // Keep handle synced to the title until edited.
-  React.useEffect(() => {
-    if (!handleEdited) setHandle(slugify(name));
-  }, [name, handleEdited]);
+  // SEO — loaded from the collection; handle keeps its real saved value.
+  const [seoTitle, setSeoTitle] = React.useState(collection?.seoTitle ?? "");
+  const [metaDesc, setMetaDesc] = React.useState(collection?.seoDesc ?? "");
+  // On EDIT the handle is real and typed-only; a NEW collection derives it from the title until the
+  // merchant edits it (no effect — the value is derived, which is what the linter wants).
+  const [handleEdited, setHandleEdited] = React.useState(isEdit);
+  const [handleRaw, setHandleRaw] = React.useState(collection?.handle ?? "");
+  const handle = handleEdited ? handleRaw : slugify(name);
 
   // ---- derived ----
   const title = isEdit ? name || "Tanpa judul" : "Buat koleksi";
-  const autoCount = collection?.products ?? 6;
-  const preview = PRODUCTS.slice(0, 4);
 
   const seoTitleText = seoTitle || name || "Judul koleksi";
   const seoDescText =
@@ -480,9 +496,27 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
                   <div className="relative">
                     <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
+                      value={productQuery}
+                      onChange={(e) => setProductQuery(e.target.value)}
                       placeholder="Cari produk untuk ditambahkan"
                       className="pl-8"
                     />
+                    {searchResults.length > 0 && (
+                      <div className="absolute z-10 mt-1 flex w-full flex-col overflow-hidden rounded-lg border bg-popover shadow-md">
+                        {searchResults.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => { addMember(p); setProductQuery(""); }}
+                            className="flex items-center gap-3 border-b px-3 py-2 text-left last:border-b-0 hover:bg-muted/60"
+                          >
+                            <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-8" />
+                            <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
+                            <Plus className="size-4 shrink-0 text-muted-foreground" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col overflow-hidden rounded-lg border">
                     {members.map((p) => (
@@ -490,7 +524,6 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
                         key={p.id}
                         className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0"
                       >
-                        <GripVertical className="size-4 shrink-0 text-muted-foreground/50" />
                         <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">{p.name}</p>
@@ -512,43 +545,18 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
                     ))}
                     {members.length === 0 && (
                       <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                        Belum ada produk dalam koleksi ini.
+                        Belum ada produk. Cari di atas untuk menambahkan.
                       </p>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed py-2.5 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                  >
-                    <Plus className="size-4" /> Tambah produk
-                  </button>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground tabular-nums">{num(members.length)}</span> produk dalam koleksi ini
+                  </p>
                 </>
               ) : (
-                <>
-                  <p className="text-sm text-muted-foreground">
-                    ≈{" "}
-                    <span className="font-medium text-foreground tabular-nums">
-                      {num(autoCount)}
-                    </span>{" "}
-                    produk cocok dengan kondisi ini
-                  </p>
-                  <div className="flex flex-col overflow-hidden rounded-lg border">
-                    {preview.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0"
-                      >
-                        <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9" />
-                        <p className="min-w-0 flex-1 truncate text-sm font-medium">
-                          {p.name}
-                        </p>
-                        <span className="shrink-0 text-sm tabular-nums">
-                          {IDR(p.price)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </>
+                <p className="rounded-lg border bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
+                  Produk yang cocok dengan kondisi di atas ditambahkan otomatis di toko.
+                </p>
               )}
             </CardContent>
           </Card>
@@ -627,7 +635,7 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
                     value={handle}
                     onChange={(e) => {
                       setHandleEdited(true);
-                      setHandle(e.target.value);
+                      setHandleRaw(e.target.value);
                     }}
                     placeholder="handle-koleksi"
                     className="rounded-none border-0 focus-visible:ring-0"

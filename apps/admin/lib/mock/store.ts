@@ -321,6 +321,15 @@ export const MENUS: NavMenu[] = [
 
 // ---- product sub-modules: collections (Kategori), purchase orders (Pembelian) ----
 export type Collection = { id: string; name: string; handle?: string; emoji: string; products: number; type: "manual" | "otomatis"; published: boolean };
+// DB-enum-valued condition (field ∈ tag/title/type/price/stock/category, operator ∈ eq/neq/gt/lt/contains).
+export type CollectionCondition = { field: string; operator: string; value: string };
+// Everything the collection editor loads + saves — the flat Collection lacks description/SEO/members/conditions.
+export type CollectionDetail = {
+  id: string; name: string; handle: string; description: string;
+  type: "manual" | "otomatis"; match: "all" | "any"; published: boolean;
+  seoTitle: string; seoDesc: string; emoji: string;
+  memberIds: string[]; conditions: CollectionCondition[];
+};
 export const COLLECTIONS: Collection[] = [
   { id: "COL-1", name: "Dress", emoji: "👗", products: 4, type: "otomatis", published: true },
   { id: "COL-2", name: "Atasan", emoji: "👚", products: 3, type: "otomatis", published: true },
