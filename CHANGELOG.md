@@ -4,6 +4,37 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 🇮🇩 The checkout was scolding Indonesian shoppers in English — and our own Indonesian messages were dead code
+
+`/checkout` still shipped four strings we never wrote: **"Please fill out this field."** (nama,
+whatsapp, alamat) and **"Please select one of these options."** (ekspedisi). They are the **browser's**
+native validation bubbles, and they follow the **browser's** language — `lang="id"` on the page does
+nothing for them. An Indonesian shopper on an English-locale phone met English in an otherwise
+Indonesian checkout, at the exact moment they were being told they had made a mistake. Our market is
+Indonesia.
+
+**The cause was worse than a missing translation.** The browser runs its constraint check **before**
+the `submit` event: it found the empty `required` field, blocked the submit, and showed its own
+bubble — so `form.addEventListener("submit")` **never ran**. Every Indonesian message that handler
+already carried (`"Nama lengkap wajib diisi."`, written long ago) was **unreachable code**. The fix is
+`<form novalidate>`: it disables only the automatic pre-submit gate, so our handler runs and
+`checkValidity()`/`reportValidity()` still work when *we* call them.
+
+- `labelMissing()` stamps our sentence on **every** empty control (`MISSING`, keyed by `name`) *before*
+  anything reports. Labelling only the field being reported looks identical on screen and leaves every
+  later field holding English — invisible until some other `reportValidity()` shows it.
+- ⚠️ `setCustomValidity(msg)` keeps a control **invalid until cleared**, so `change`/`input` call
+  `clearValidity(name)`. Without it, a field the shopper had already fixed would refuse to submit
+  forever — a dead checkout, which is why the happy path below was driven end to end and not assumed.
+
+**Proven on an `en-US` browser** (on an id-ID one the page looks perfect and the bug is invisible —
+that is how it shipped): all four messages now read *"Nama lengkap wajib diisi."*, *"Nomor WhatsApp
+wajib diisi."*, *"Alamat lengkap wajib diisi."*, *"Pilih ekspedisi pengiriman dulu."*, and **a real
+order still completes** — complaint shown, complaint cleared on fix, `checkValidity()` true, POST to
+`/api/public/order`, `/checkout/sukses`, 0 console errors. The order stored `courier=spx`,
+`service_type=1`, `shipping_idr=14000` — matching the Rp14.000 on screen to the rupiah — and the phone
+landed canonical as `628123456789`. Test order deleted afterwards: back to **794 rows, no orphans**.
+
 ### 📦 Pengiriman is ONE focused row — and the cheapest rate is never hidden behind a click
 
 Two changes that pull in opposite directions and only work together.

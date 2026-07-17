@@ -228,7 +228,19 @@ if (rToken) {
     <a href="/" class="mt-6 inline-block rounded-lg bg-[var(--co-accent)] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--co-accent-hover)]">Mulai Belanja</a>
   </div>
 
-  <form id="checkout-form" class="mt-8">
+  {/* ⚠️ `novalidate` is LOAD-BEARING — it is what makes this checkout speak Indonesian.
+      The browser runs its own constraint check BEFORE the `submit` event and, finding an empty
+      `required` field, blocks the submit and shows ITS OWN bubble. That bubble follows the BROWSER's
+      language, not this page's lang="id" — so an Indonesian shopper on an English phone was told
+      "Please fill out this field." / "Please select one of these options." in an otherwise Indonesian
+      checkout. Our market is Indonesia; those were the only strings on the page we did not write.
+      Worse, the submit handler below never ran, so every Indonesian message it already carried
+      ("Nama lengkap wajib diisi.") was unreachable code.
+      `novalidate` turns off only the automatic pre-submit gate. `checkValidity()` /
+      `reportValidity()` still work when WE call them — which the handler does, after setting our own
+      message. Do not remove this without re-testing on an en-US browser: the page looks perfect on an
+      id-ID one. */}
+  <form id="checkout-form" class="mt-8" novalidate>
     <div class="space-y-10">
         <!-- Kontak -->
         <fieldset class="min-w-0">
@@ -1785,6 +1797,61 @@ if (rToken) {
       capture(false);
     }
 
+    // ---- Every message the shopper can see is OURS, in Indonesian ----
+    // `fieldError()` above already names the text fields. This covers what it does not: controls the
+    // browser would otherwise complain about in the BROWSER's language (see the `novalidate` note on
+    // the <form>). Keyed by `name` so a new required control gets a sentence, not a fallback.
+    var MISSING = {
+      nama: "Nama lengkap wajib diisi.",
+      whatsapp: "Nomor WhatsApp wajib diisi.",
+      alamat: "Alamat lengkap wajib diisi.",
+      shipping: "Pilih ekspedisi pengiriman dulu.",
+      va_bank: "Pilih bank tujuan transfer.",
+      payment: "Pilih metode pembayaran dulu.",
+    };
+
+    /** Clear a custom message across a whole group — a radio group's message lives on ONE element. */
+    function clearValidity(name) {
+      var els = form.querySelectorAll('[name="' + name + '"]');
+      for (var i = 0; i < els.length; i++) if (els[i].setCustomValidity) els[i].setCustomValidity("");
+    }
+
+    /**
+     * Report the FIRST invalid control, in our words, and put the cursor in it.
+     * ⚠️ `setCustomValidity(msg)` makes a control invalid until the string is cleared — so every
+     * message set here MUST be cleared when the shopper acts (see the input/change handlers below).
+     * Forgetting that is how a field the shopper has already fixed keeps refusing to submit.
+     */
+    /**
+     * Put OUR sentence on every empty control. Separate from reporting on purpose: the submit handler
+     * bails at the first bad field, so a label-as-you-report design would leave every LATER field
+     * still holding the browser's English — invisible today, and one stray reportValidity() away from
+     * being shown. Label everything first, then report.
+     * A valid control is never touched: setCustomValidity(non-empty) would itself invalidate it.
+     */
+    function labelMissing() {
+      var els = form.querySelectorAll("input, textarea, select");
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.willValidate && el.validity.valueMissing) {
+          el.setCustomValidity(MISSING[el.name] || "Bagian ini wajib diisi.");
+        }
+      }
+    }
+
+    function reportFirstInvalid() {
+      labelMissing();
+      var els = form.querySelectorAll("input, textarea, select");
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (!el.willValidate || el.validity.valid) continue;
+        el.reportValidity();
+        if (el.focus) el.focus();
+        return true;
+      }
+      return false;
+    }
+
     // ---- Field-level feedback: show the problem where the problem is ----
     // On blur, not on keystroke: telling someone their email is invalid while they are still typing
     // the "@" is nagging, not help. The WhatsApp number is also REWRITTEN to what we will actually
@@ -1819,6 +1886,9 @@ if (rToken) {
     form.addEventListener("input", captureSoon);
     form.addEventListener("change", function (e) {
       var t = e.target;
+      // The shopper just answered the thing we complained about → drop the complaint. Without this
+      // the custom string outlives the problem and the control stays invalid forever.
+      if (t && t.name) clearValidity(t.name);
       if (t && t.name === "payment") paymentTouched = true;
       captureNow(); // a radio/step change is a decision, not a keystroke → flush immediately
     });
@@ -1836,6 +1906,10 @@ if (rToken) {
       e.preventDefault();
       var err = document.getElementById("form-error");
 
+      // Label every empty control in Indonesian BEFORE anything reports — the loop below returns at
+      // the first bad field, so labelling lazily would leave the rest in the browser's English.
+      labelMissing();
+
       // Our own rules run BEFORE checkValidity(), so the message the browser shows is ours (nama /
       // whatsapp / email / alamat / kodepos). The API re-checks all of them anyway — this is only
       // here so the shopper is not told "something is wrong" by a server round-trip.
@@ -1844,7 +1918,7 @@ if (rToken) {
         if (vel && checkField(vel)) { vel.reportValidity(); vel.focus(); return; }
       }
       if (!form.checkValidity()) {
-        form.reportValidity();
+        reportFirstInvalid();
         return;
       }
       // Kota/Provinsi are readonly, and a readonly input is BARRED from constraint validation — so
