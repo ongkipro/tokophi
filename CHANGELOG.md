@@ -4,6 +4,55 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-17
 
+### 🚚 Ongkir was 5.5s for every shopper. It is now ~0.6s — and Pengiriman is one box like Pembayaran
+
+**The user was right and my first hypothesis was wrong.** Cold rate loads clustered at 5.29–5.43s
+across four different destinations, which looked like a fixed cost or a timeout — so I assumed
+filtering couriers could not help. Measured against the live KiriminAja API instead, same route:
+
+| | every courier | `["spx","jne"]` |
+|---|---|---|
+| dest 3512 | **5.50s** (16 services) | **0.65s** (3 services) |
+| dest 4821 | **5.45s** (14 services) | **0.54s** (3 services) |
+
+**~10x.** KiriminAja aggregates **per courier** and the slowest carrier sets the pace, so every shopper
+waited ~5.5s to price carriers they never asked about. And they paid it *every time*: each shopper has
+a unique destination, so the 10-min rate cache is always cold for them — the ~120ms I kept seeing while
+testing one address was a mirage.
+
+**The checkout now quotes SPX+JNE up front and fetches the rest only when "Pilih ekspedisi lain" is
+opened.** SPX because it is the only courier COD is allowed on (dropping it would silently take COD off
+the default view); JNE for reach. Measured after: fast rates on screen in **2.3s** end-to-end (one
+`all:false` call), the disclosure costing **5.2s** and firing exactly one `all:true` call, once.
+
+⚠️ **The trap that would have killed the checkout.** `/api/public/order` re-quotes and **REJECTS** a
+service missing from the fresh quote. Re-quoting with the checkout's fast scope would therefore reject
+every SiCepat/AnterAja/J&T order — on a checkout that had just offered that courier. Re-quoting
+unscoped would pay the full 5.5s *after* the shopper presses Bayar. It now scopes to **the one courier
+they picked**: fast, and by construction always in the answer. Proved end-to-end by ordering
+`lion-JAGOPACK` — a non-fast courier — and reading the row back: `courier=lion, ongkir=13000`, matching
+the Rp13.000 on screen to the rupiah. (Test order deleted; 794 rows, no orphans.)
+
+**Two lies the lazy load introduced, both caught by looking at the screen:**
+- **"Termurah"/"Tercepat" badges** cannot be claimed while eight couriers sit unquoted — the badge
+  would visibly jump the moment the list expanded. They are now suppressed until the full set is known
+  (COD still shows immediately: it is a fact about that service, not a ranking). The old code's own
+  comment had warned about exactly this.
+- **"kami pilihkan ongkir termurah"** became false: it is the cheapest of *SPX+JNE*. Measured on a real
+  route — Jagopack **Rp13.000** sitting behind the disclosure under a selected JNE Reguler **Rp21.000**.
+  The note now says what we actually did and points at the rest.
+
+**UI:** Pengiriman is now ONE box with hairline-divided rows — the same object as Pembayaran, which it
+always should have been (same question: "pick one of these"). It was a bordered card for the default, a
+separate bordered button, and a third bordered box of alternatives: three rectangles for one choice.
+"Pilih ekspedisi lain" is now a row *inside* the box that opens its list, exactly like Transfer Bank
+opens its banks, framed as one block when the chosen rate lives inside it.
+
+Also: the disclosure's hint listed "JNE, SiCepat, AnterAja, J&T" — a hardcoded courier roster that
+named JNE while JNE was already visible above it, and asserted couriers we had not quoted for that
+route. Now neutral. And if SPX+JNE price nothing for a route, the full list loads automatically rather
+than showing an empty box — slow beats broken.
+
 ### 💳 /checkout: the blue frame now fits the payment you picked, not the whole card
 
 `has-[:checked]:border-[var(--co-accent)]` sat on the **outer** payment box, so choosing QRIS turned

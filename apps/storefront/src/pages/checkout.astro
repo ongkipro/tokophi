@@ -399,29 +399,56 @@ if (rToken) {
             Pilih <b>kecamatan tujuan</b> di atas untuk melihat ongkir real-time.
           </p>
 
-          <!-- PROGRESSIVE DISCLOSURE (user's design). One `op=rates` call already prices EVERY service
-               in one round-trip, so the shopper sees the sensible default (SPX Reguler) immediately and
-               the other ~8-19 rows stay behind "Pilih ekspedisi lain" — grouped by KiriminAja's own
-               `group` field, never by guessing at names. Revealing them is instant: nothing is fetched
-               on click (a second call would only make the click slower). -->
+          {/* ONE BOX, hairline-divided rows — the SAME shape as Pembayaran below, which is what the
+              user asked for and what the two sections always should have shared: they are the same
+              question ("pick one of these"), so they had no business being two different objects. It
+              was a bordered card for the default + a separate bordered button + a third bordered box
+              of alternatives, i.e. three floating rectangles for one choice. Now the disclosure is a
+              ROW INSIDE the box, exactly like Transfer Bank's parent row opens its banks.
+
+              ⚠️ THE DISCLOSURE NOW FETCHES, and the comment that used to sit here said the opposite —
+              "nothing is fetched on click (a second call would only make the click slower)". That was
+              true about the click and wrong about the shopper. Measured against the live API
+              (2026-07-17, same route): quoting EVERY courier takes **5.50s / 5.45s**, quoting
+              `["spx","jne"]` takes **0.65s / 0.54s** — KiriminAja aggregates per courier and the
+              slowest carrier sets the pace. So the old design made EVERY shopper wait ~5.5s to price
+              carriers they never asked about, to make a click instant for the few who open this. And
+              they paid it every time: each shopper has a unique destination, so the 10-min rate cache
+              is always cold for them. The trade is now the other way round — see loadMore(). */}
           <div id="ship-express-group" class="hidden">
-            <div id="ship-express" class="space-y-2"></div>
-            <p id="ship-default-note" hidden class="mt-2 text-xs text-[var(--co-muted)]"></p>
-
-            <button
-              type="button"
-              id="ship-more-btn"
-              hidden
-              aria-expanded="false"
-              aria-controls="ship-more"
-              class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--co-line)] px-4 py-3 text-sm font-medium text-ink transition-colors hover:bg-black/[0.02]"
+            <div
+              id="ship-box"
+              class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)]"
             >
-              <Truck class="h-4 w-4 shrink-0 text-[var(--co-accent)]" stroke-width={1.75} aria-hidden="true" />
-              <span id="ship-more-label">Pilih ekspedisi lain</span>
-              <ChevronDown id="ship-more-caret" class="h-4 w-4 shrink-0 transition-transform" stroke-width={2} aria-hidden="true" />
-            </button>
+              {/* The fast rates (SPX/JNE). JS writes the rows and owns their corner radii — it is the
+                  only thing that knows which row is first and which is visually last. */}
+              <div id="ship-express" class="divide-y divide-[var(--co-line)]"></div>
 
-            <div id="ship-more" hidden class="mt-4 space-y-5"></div>
+              {/* The disclosure: a row in the same box, not a button floating under it. Framed as ONE
+                  block when the chosen rate lives inside it — same rule as Transfer Bank. */}
+              <div
+                id="ship-more-group"
+                hidden
+                class="relative has-[:checked]:z-10 has-[:checked]:outline-1 has-[:checked]:-outline-offset-1 has-[:checked]:outline-[var(--co-accent)]"
+              >
+                <button
+                  type="button"
+                  id="ship-more-btn"
+                  aria-expanded="false"
+                  aria-controls="ship-more"
+                  class="flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-black/[0.02]"
+                >
+                  <Truck class="h-5 w-5 shrink-0 text-[var(--co-muted)]" stroke-width={1.75} aria-hidden="true" />
+                  <span class="min-w-0 flex-1">
+                    <span id="ship-more-label" class="block text-sm font-medium text-ink">Pilih ekspedisi lain</span>
+                    <span id="ship-more-hint" class="block text-xs text-[var(--co-muted)]">Bandingkan semua kurir untuk rute ini</span>
+                  </span>
+                  <ChevronDown id="ship-more-caret" class="h-4 w-4 shrink-0 text-[var(--co-muted)] transition-transform" stroke-width={2} aria-hidden="true" />
+                </button>
+                <div id="ship-more" hidden class="divide-y divide-[var(--co-line)] bg-black/[0.02]"></div>
+              </div>
+            </div>
+            <p id="ship-default-note" hidden class="mt-2 text-xs text-[var(--co-muted)]"></p>
           </div>
         </fieldset>
 
@@ -1134,21 +1161,30 @@ if (rToken) {
     var defaultNote = document.getElementById("ship-default-note");
     var moreBox = document.getElementById("ship-more");
     var moreBtn = document.getElementById("ship-more-btn");
+    var moreGroup = document.getElementById("ship-more-group");
     var moreLabel = document.getElementById("ship-more-label");
     var moreCaret = document.getElementById("ship-more-caret");
 
-    // Reveal, do not re-fetch: every service is already in the DOM (one `op=rates` call prices them
-    // all). Clicking this is instant.
+    // ── THE DISCLOSURE FETCHES, ON DEMAND, ONCE ───────────────────────────────────────────────────
+    // The fast quote (SPX+JNE) is already on screen in ~0.6s; the rest of the couriers cost ~5.5s to
+    // price and are asked for only when the shopper actually opens this. Measured, 2026-07-17, live
+    // API, same route: all couriers 5.50s / 5.45s vs ["spx","jne"] 0.65s / 0.54s. Paying 5.5s on
+    // every checkout to make this click instant was the wrong trade — almost nobody opens it, and
+    // everybody waited.
+    //
+    // `moreState` guards the network, not the UI: once loaded, toggling is instant forever. A failed
+    // fetch resets to "idle" so the next click retries instead of leaving a dead control.
+    var moreState = "idle"; // idle → loading → done
+    function setMoreOpen(open) {
+      moreBox.hidden = !open;
+      moreBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      if (moreCaret) moreCaret.classList.toggle("rotate-180", open);
+    }
     if (moreBtn) {
       moreBtn.addEventListener("click", function () {
-        var open = moreBox.hidden;
-        moreBox.hidden = !open;
-        moreBtn.setAttribute("aria-expanded", open ? "true" : "false");
-        if (moreCaret) moreCaret.classList.toggle("rotate-180", open);
-        if (moreLabel) {
-          var n = moreBox.querySelectorAll('input[name="shipping"]').length;
-          moreLabel.textContent = open ? "Tutup pilihan lain" : "Pilih ekspedisi lain (" + n + ")";
-        }
+        if (moreState === "loading") return;
+        if (moreState === "done") { setMoreOpen(moreBox.hidden); return; }
+        loadMore();
       });
     }
 
@@ -1399,6 +1435,122 @@ if (rToken) {
       });
     }
 
+    // ── RATE STATE ────────────────────────────────────────────────────────────────────────────────
+    // FAST = the SPX/JNE quote every shopper gets (~0.6s). ALL = the full courier list, fetched only
+    // if they open "Pilih ekspedisi lain" (~5.5s). Kept as data, not as DOM, because the badges below
+    // must be recomputed across the UNION the moment the full set arrives.
+    var FAST_RATES = null;
+    var ALL_RATES = null;
+    var keyOf = function (s) { return s.code + "-" + s.type; };
+    var byCost = function (a, b) { return a.cost - b.cost; };
+
+    function checkedKey() {
+      var el = form.querySelector('input[name="shipping"]:checked');
+      return el ? el.value : null;
+    }
+
+    function rateRow(s, checked, opts) {
+      opts = opts || {};
+      // ⚠️ BADGES ONLY WHEN THE FULL SET IS KNOWN. "Termurah" ranked against the two fast couriers is
+      // a LIE the moment the shopper opens the rest and finds something cheaper — and this file
+      // already carried that warning before the lazy fetch existed, back when one call priced
+      // everything. So they stay off until ALL_RATES lands, then every row is re-rendered with them.
+      // `COD` is not a ranking — it is a fact about this one service — so it shows immediately.
+      var tags = "";
+      var tag = function (t) {
+        return ' <span class="ml-1.5 rounded border border-[var(--co-line)] px-1.5 py-px text-[10px] font-medium text-[var(--co-muted)]">' + t + "</span>";
+      };
+      if (ALL_RATES) {
+        var universe = ALL_RATES;
+        var cheapest = universe.slice().sort(byCost)[0];
+        var etdMin = function (e) { var m = String(e || "").match(/\d+/); return m ? Number(m[0]) : 99; };
+        var fastest = universe.reduce(function (best, x) { return etdMin(x.etd) < etdMin(best.etd) ? x : best; }, universe[0]);
+        if (keyOf(s) === keyOf(cheapest)) tags += tag("Termurah");
+        if (keyOf(s) === keyOf(fastest)) tags += tag("Tercepat");
+      }
+      if (s.cod) tags += tag("COD");
+
+      // A ROW inside the shared box — the same object as a Pembayaran row, because it answers the
+      // same question. The FRAME is on the row that is chosen (outline, never ring: an inset ring is
+      // painted under this row's own divide-y border-top and the top edge would come out grey).
+      var radius = (opts.first ? " rounded-t-[7px]" : "") + (opts.last ? " rounded-b-[7px]" : "");
+      return '<label class="group relative flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)] has-[:checked]:z-10 has-[:checked]:outline-1 has-[:checked]:-outline-offset-1 has-[:checked]:outline-[var(--co-accent)]' + radius + '">' +
+        '<input type="radio" name="shipping" value="' + esc(keyOf(s)) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (checked ? " checked" : "") + ' required class="h-4 w-4 shrink-0 accent-[var(--co-accent)]" />' +
+        '<span class="min-w-0 flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + tags + '</span><span class="block text-xs text-[var(--co-muted)]">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
+        '<span class="shrink-0 text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
+    }
+
+    // Render BOTH lists from current state. Called again when ALL_RATES arrives, so the badges and
+    // the alternatives appear together and the selection survives (it is restored by value).
+    function renderRates() {
+      var sel = checkedKey();
+      var fast = (FAST_RATES || []).slice().sort(byCost);
+
+      // ── THE DEFAULT IS SPX REGULER ─────────────────────────────────────────────────────────────
+      // Not "whatever is cheapest": the merchant's default courier is a product decision, so it is
+      // named (spx / service_type "1"). If the route does not offer it we fall back to the cheapest
+      // AND SAY SO — a different courier silently in the default slot is the substitution a shopper
+      // only notices when the parcel arrives with someone else's label.
+      var preferred = fast.filter(function (x) { return x.code === "spx" && x.type === "1"; })[0];
+      var def = preferred || fast[0];
+      if (!sel && def) sel = keyOf(def);
+
+      expressBox.innerHTML = fast
+        .map(function (x, i) { return rateRow(x, keyOf(x) === sel, { first: i === 0 }); })
+        .join("");
+
+      if (defaultNote) {
+        if (preferred || !fast.length) {
+          defaultNote.hidden = true;
+        } else {
+          // NOT "kami pilihkan ongkir termurah" — that was true when every courier was priced up
+          // front and became a LIE the moment the list went lazy: this is the cheapest of SPX+JNE,
+          // and a cheaper carrier may be sitting behind the disclosure unquoted (measured on a real
+          // route: Jagopack Rp13.000 under a selected JNE Reguler Rp21.000). Say what we actually
+          // did, and point at where the rest is.
+          defaultNote.textContent = "SPX Reguler tidak tersedia untuk rute ini. Buka “Pilih ekspedisi lain” untuk membandingkan semua kurir.";
+          defaultNote.hidden = false;
+        }
+      }
+
+      if (ALL_RATES) {
+        // Everything the API prices that is not already on screen, cheapest first. Nothing is
+        // dropped: a service KiriminAja quotes but the checkout hides is a service nobody can buy.
+        var shown = {};
+        fast.forEach(function (x) { shown[keyOf(x)] = 1; });
+        var others = ALL_RATES.filter(function (x) { return !shown[keyOf(x)]; }).sort(byCost);
+        moreBox.innerHTML = others.length
+          ? others.map(function (x, i) { return rateRow(x, keyOf(x) === sel, { last: i === others.length - 1 }); }).join("")
+          : '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Tidak ada ekspedisi lain untuk rute ini.</p>';
+        if (moreLabel) moreLabel.textContent = "Pilih ekspedisi lain (" + others.length + ")";
+      }
+      bindShipping();
+    }
+
+    function loadMore() {
+      if (!destId.value) return;
+      moreState = "loading";
+      setMoreOpen(true);
+      moreBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Mengambil ekspedisi lain…</p>';
+      var rateItems = cart.map(function (l) { return { handle: l.handle, variant: l.variant, qty: l.qty }; });
+      api({ op: "rates", storeSlug: STORE_SLUG, destinationId: Number(destId.value), items: rateItems, itemValue: subtotal, all: true })
+        .then(function (res) {
+          if (!res.ok || !res.rates || !res.rates.length) {
+            moreState = "idle"; // let the next click retry rather than leave a dead control
+            moreBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">' + esc(res.error || "Tidak ada ekspedisi lain untuk rute ini.") + "</p>";
+            return;
+          }
+          moreState = "done";
+          ALL_RATES = res.rates;
+          renderRates(); // re-renders the fast rows too — the badges are only honest now
+          setMoreOpen(true);
+        })
+        .catch(function () {
+          moreState = "idle";
+          moreBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Gagal memuat ekspedisi lain. Coba lagi.</p>';
+        });
+    }
+
     function loadRates() {
       if (!destId.value) return;
       if (shipHint) shipHint.classList.add("hidden");
@@ -1407,110 +1559,41 @@ if (rToken) {
       // cannot drift into a state where you can pick a method for an order with no price.
       var paySection = document.getElementById("pay-section");
       if (paySection) paySection.classList.remove("hidden");
+      // A fresh destination invalidates BOTH sets and the disclosure's memory: prices are per-route.
+      FAST_RATES = null;
+      ALL_RATES = null;
+      moreState = "idle";
+      setMoreOpen(false);
+      moreBox.innerHTML = "";
+      if (moreLabel) moreLabel.textContent = "Pilih ekspedisi lain";
+      if (moreGroup) moreGroup.hidden = true;
       expressBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Menghitung ongkir…</p>';
       // The cart lines go to the server and the SERVER weighs them (Σ product_variants.weight_grams).
       // This used to post `weight: totalQty * 500` — a fabricated 500 g per item that quoted a 670 g
       // apparel cart as 1.500 g, i.e. 3x the true postage. A weight is a price input: the client does
       // not get to state it.
       var rateItems = cart.map(function (l) { return { handle: l.handle, variant: l.variant, qty: l.qty }; });
+      // No `all` flag = the fast couriers only (see the server: FAST_COURIERS).
       api({ op: "rates", storeSlug: STORE_SLUG, destinationId: Number(destId.value), items: rateItems, itemValue: subtotal }).then(function (res) {
-        if (!res.ok || !res.rates.length) {
-          expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-[var(--co-line)] px-4 py-3 text-sm text-[var(--co-muted)]">' + esc(res.error || "Tidak ada layanan untuk rute ini.") + "</p>";
+        if (!res.ok) {
+          expressBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">' + esc(res.error || "Tidak ada layanan untuk rute ini.") + "</p>";
           recompute();
           return;
         }
-        // SORT BY PRICE. The API returns whatever order KiriminAja felt like, and the old code both
-        // rendered that order AND auto-checked `i === 0` — so a shopper's DEFAULT ongkir was
-        // "whichever service happened to come back first", which on this route was Rp26.000 sitting
-        // above a Rp9.000 one.
-        var rates = res.rates.slice().sort(function (a, b) { return a.cost - b.cost; });
-
-        // "Tercepat" = the smallest number in the ETD string ("1-2" → 1, "2-4" → 2). Ties go to the
-        // cheaper one, which is already first after the sort. Both badges are computed across ALL
-        // rates, not just the visible one — a "Termurah" badge that only ranks what you can see is a
-        // lie the moment the list expands.
-        var etdMin = function (e) { var m = String(e || "").match(/\d+/); return m ? Number(m[0]) : 99; };
-        var cheapest = rates[0];
-        var fastest = rates.reduce(function (best, s) { return etdMin(s.etd) < etdMin(best.etd) ? s : best; }, rates[0]);
-
-        // ── THE DEFAULT IS SPX REGULER ─────────────────────────────────────────────────────────────
-        // Not "whatever is cheapest": the merchant's own default courier is a product decision, so it
-        // is named (spx / service_type "1" — "SPX Standard"). If the route does not offer it, or the
-        // seller switched it off, we fall back to the cheapest AND SAY SO — a different courier
-        // silently sitting in the default slot is exactly the substitution the shopper would not
-        // notice until the parcel arrives with someone else's label.
-        var preferred = rates.filter(function (s) { return s.code === "spx" && s.type === "1"; })[0];
-        var def = preferred || cheapest;
-
-        function row(s, checked) {
-          // s.cod is the EFFECTIVE flag from the API (KiriminAja capability × platform per-service
-          // allowance × this store's cod_enabled) — never the raw courier capability. The regrouping
-          // does not touch it: syncCod() still reads data-cod off whichever radio is checked.
-          //
-          // ONE muted tag style, not three colours. This shipped a pink "Termurah", a sky-blue
-          // "Tercepat" and an emerald "COD" — three palettes none of which is the merchant's brand,
-          // on a screen whose whole job is to leave exactly one thing coloured (the pay button).
-          // The words carry the meaning; the colour was carrying nothing but noise.
-          var tags = "";
-          var tag = function (t) {
-            return ' <span class="ml-1.5 rounded border border-[var(--co-line)] px-1.5 py-px text-[10px] font-medium text-[var(--co-muted)]">' + t + "</span>";
-          };
-          if (s === cheapest) tags += tag("Termurah");
-          if (s === fastest) tags += tag("Tercepat");
-          if (s.cod) tags += tag("COD");
-          // A ROW, not a card: the border/rounding live on the container, and rows are separated by a
-          // hairline. 14 individually-bordered boxes is what made this read as a wall.
-          return '<label class="group flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]">' +
-            '<input type="radio" name="shipping" value="' + esc(s.code + "-" + s.type) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (checked ? " checked" : "") + ' required class="h-4 w-4 shrink-0 accent-[var(--co-accent)]" />' +
-            '<span class="min-w-0 flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + tags + '</span><span class="block text-xs text-[var(--co-muted)]">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
-            '<span class="shrink-0 text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
+        FAST_RATES = res.rates || [];
+        if (moreGroup) moreGroup.hidden = false;
+        // NO fast rate — the merchant switched SPX and JNE off, or the route has neither. Do NOT sit
+        // there showing an empty box with a disclosure the shopper has to guess at: fetch the full
+        // list immediately. It costs the 5.5s, but a checkout with no shipping option is not a
+        // checkout, and this is the one case where the slow call is the only honest answer.
+        if (!FAST_RATES.length) {
+          expressBox.innerHTML = "";
+          loadMore();
+          return;
         }
-        /**
-         * Wrap rows in the single bordered box they share.
-         *
-         * `has-[:checked]` puts the brand border on the BOX, not just a tint on the row — the
-         * reference's signature: the container carrying a selection announces itself, so "which of
-         * these two lists am I actually buying from" is answerable at a glance instead of by hunting
-         * for a filled radio. With the default in one box and the alternatives in another, exactly
-         * one of them is ever lit.
-         */
-        function box(rowsHtml) {
-          return '<div class="divide-y divide-[var(--co-line)] overflow-hidden rounded-lg border border-[var(--co-line)] transition-colors has-[:checked]:border-[var(--co-accent)]">' + rowsHtml + "</div>";
-        }
-
-        // The default row is the ONLY thing rendered up front.
-        expressBox.innerHTML = box(row(def, true));
-
-        if (defaultNote) {
-          if (preferred) {
-            defaultNote.hidden = true;
-          } else {
-            defaultNote.textContent = "SPX Reguler tidak tersedia untuk rute ini — kami pilihkan ongkir termurah.";
-            defaultNote.hidden = false;
-          }
-        }
-
-        // ── THE REST — ONE FLAT LIST, CHEAPEST FIRST ──────────────────────────────────────────────
-        // It used to be split into "1 Hari / Reguler / Ekonomi / Kargo" headers over individually
-        // bordered cards: 13 services became four titled sections and fourteen boxes, and the shopper
-        // had to parse a taxonomy before they could compare two numbers. KiriminAja's `group` is a
-        // CARRIER's word for its own product line, not a question a shopper is asking — they are
-        // asking "how fast, how much". Both are on every row already.
-        //
-        // Nothing is dropped: every service the API prices is still here, in price order, because a
-        // service KiriminAja quotes but the checkout hides is a service the shopper cannot buy.
-        var others = rates.filter(function (s) { return s !== def; });
-        moreBox.innerHTML = box(others.map(function (s) { return row(s, false); }).join(""));
-        moreBox.hidden = true;
-        if (moreBtn) {
-          moreBtn.hidden = others.length === 0; // one service on the route → nothing to reveal
-          moreBtn.setAttribute("aria-expanded", "false");
-          if (moreLabel) moreLabel.textContent = "Pilih ekspedisi lain (" + others.length + ")";
-          if (moreCaret) moreCaret.classList.remove("rotate-180");
-        }
-        bindShipping();
+        renderRates();
       }).catch(function () {
-        expressBox.innerHTML = '<p class="rounded-xl border border-dashed border-[var(--co-line)] px-4 py-3 text-sm text-[var(--co-muted)]">Gagal memuat ongkir. Coba lagi.</p>';
+        expressBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Gagal memuat ongkir. Coba lagi.</p>';
       });
     }
 

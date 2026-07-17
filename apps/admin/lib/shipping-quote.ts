@@ -63,7 +63,37 @@ export type QuoteInput = {
   items: CartItemRef[];
   /** declared goods value, for insurance. Comes from the SERVER-priced subtotal in the order API. */
   itemValue?: number;
+  /**
+   * Narrow the KiriminAja call to these courier codes. **This is a LATENCY control, not a policy
+   * one** — platform ∩ store scope is still applied to whatever comes back, so passing a courier the
+   * merchant switched off still yields nothing. Omit = every courier.
+   *
+   * Why it exists (measured against the live API, same route, 2026-07-17):
+   *   · every courier → **5.50s / 5.45s** (16 / 14 services)
+   *   · `["spx","jne"]` → **0.65s / 0.54s** (3 services)
+   * KiriminAja aggregates per courier and the slowest carrier sets the pace, so the shopper waits
+   * ~5.5s for carriers they did not ask about. ~10x, and it is the FIRST quote every shopper pays:
+   * each has a unique destination, so the 10-min cache is always cold for them.
+   *
+   * ⚠️ The order API MUST scope this to the courier the shopper actually picked. `/api/public/order`
+   * re-quotes and REJECTS a service missing from the fresh quote (see route.ts), so re-quoting with
+   * the checkout's fast default while the shopper chose SiCepat would reject every such order — a
+   * dead checkout, not a slow one.
+   */
+  couriers?: string[];
 };
+
+/**
+ * The couriers the checkout quotes UP FRONT. Everything else is one click away ("Pilih ekspedisi
+ * lain"), which fires a second, unfiltered quote and pays the 5.5s only for shoppers who ask.
+ *
+ * SPX and JNE, because that pair is not arbitrary: **SPX is the only courier COD is allowed on**
+ * (platform_couriers[].codAllowed — see AGENTS.md), so dropping it would silently take COD off the
+ * default view, and JNE is the widest-reaching regular service. A merchant who has switched both off
+ * still gets a correct (empty) fast list and their real options behind the disclosure — no rates are
+ * hidden by policy here, only deferred.
+ */
+export const FAST_COURIERS = ["spx", "jne"] as const;
 
 /** Find the rate the shopper picked inside a fresh quote. Courier + service_type — a label cannot. */
 export function findRate(rates: QuotedRate[], code?: string | null, type?: string | null): QuotedRate | null {
@@ -135,6 +165,8 @@ export async function quoteShipping(input: QuoteInput): Promise<Quote> {
     weight: pkg.billableGrams,
     itemValue: input.itemValue || 0,
     insurance: 0,
+    // Latency scope only — the platform ∩ store filter below still decides what a shopper may pick.
+    ...(input.couriers?.length ? { couriers: input.couriers } : {}),
   });
   if (!r.ok) return { ok: false, error: r.error ?? "Gagal mengambil tarif." };
 

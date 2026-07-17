@@ -276,6 +276,21 @@ async function handle(req: Request) {
     destinationId: destId,
     items: resolved.map((r) => ({ variantId: r.variantId, handle: r.handle, qty: r.qty })),
     itemValue: subtotal, // the SERVER-priced goods value (insurance) — not the cart's claim
+    // ⚠️ SCOPED TO THE COURIER THEY PICKED — and this line is load-bearing in BOTH directions.
+    //
+    // It must not be the checkout's fast default (`FAST_COURIERS`): the shopper may have opened
+    // "Pilih ekspedisi lain" and chosen SiCepat, and `findRate` below REJECTS a service missing from
+    // this quote — so every non-SPX/JNE order would die at the last step, on a checkout that had just
+    // offered that very courier. A dead checkout, not a slow one.
+    //
+    // It must not be UNSCOPED either: that is the 5.5s call (measured), paid at the worst possible
+    // moment — after the shopper presses Bayar. We only need the price of the ONE service they chose,
+    // so ask for that courier alone: 0.5s, and it is by construction always in the answer.
+    //
+    // This narrows LATENCY, never POLICY: platform ∩ store scope is still applied inside
+    // quoteShipping, so naming a courier the merchant disabled still yields no rate and still 400s.
+    // `svcCode` IS the courier code (findRate matches rate.code === svcCode).
+    couriers: [svcCode],
   });
   // A quote we cannot produce is a parcel we cannot price. Failing the order is the honest outcome:
   // the alternative is falling back to the client's number, which is the bug being closed.

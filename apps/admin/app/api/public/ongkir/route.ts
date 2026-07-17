@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { resolveArea, kelurahanForDistrict } from "@/lib/data/areas";
 import { rateLimited } from "@/lib/public-guard";
-import { quoteShipping } from "@/lib/shipping-quote";
+import { quoteShipping, FAST_COURIERS } from "@/lib/shipping-quote";
 
 // Public (no-auth) storefront-facing shipping endpoint. The storefront checkout calls this to
 // (a) search a destination area and (b) get live KiriminAja rates. Shipping is platform-managed
@@ -43,7 +43,7 @@ async function handle(req: Request) {
   if (!kiriminajaConfigured()) {
     return NextResponse.json({ ok: false, error: "Shipping belum dikonfigurasi." }, { status: 200, headers: CORS });
   }
-  let body: { op?: string; q?: string; destinationId?: number; items?: { handle?: string; variant?: string; variantId?: string; qty?: number }[]; itemValue?: number; storeSlug?: string };
+  let body: { op?: string; q?: string; destinationId?: number; items?: { handle?: string; variant?: string; variantId?: string; qty?: number }[]; itemValue?: number; storeSlug?: string; all?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -84,12 +84,26 @@ async function handle(req: Request) {
       .limit(1);
     if (!store) return NextResponse.json({ ok: false, error: "Toko tidak ditemukan." }, { headers: CORS });
 
+    // TWO-STAGE QUOTE. `all: true` = the shopper opened "Pilih ekspedisi lain"; otherwise quote only
+    // the fast couriers.
+    //
+    // Measured against the live API (same route, 2026-07-17): every courier **5.50s / 5.45s**, vs
+    // `["spx","jne"]` **0.65s / 0.54s** — ~10x. KiriminAja aggregates per courier and the slowest
+    // carrier sets the pace, so the shopper was waiting ~5.5s for carriers they never asked about.
+    // And they pay it EVERY time: each shopper has a unique destination, so the 10-min rate cache is
+    // always cold for them — the sub-second numbers seen while testing one address are a mirage.
+    //
+    // Nothing is hidden by policy: the full list is one click away and quoted on demand. The client
+    // chooses the SCOPE, never the price, the origin, or which couriers are allowed — platform ∩
+    // store filtering happens inside quoteShipping either way, so `all: true` from a hostile caller
+    // buys them a slower query and nothing else.
     const q = await quoteShipping({
       storeId: store.id,
       storeCity: store.city,
       destinationId: Number(body.destinationId),
       items: body.items ?? [],
       itemValue: body.itemValue || 0,
+      couriers: body.all === true ? undefined : [...FAST_COURIERS],
     });
     if (!q.ok) return NextResponse.json({ ok: false, error: q.error }, { headers: CORS });
 
