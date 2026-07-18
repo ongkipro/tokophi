@@ -4,6 +4,63 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-18
 
+### 🔍 Deep audit — money / order-state / shipping / security correctness (10 fixes)
+
+A four-front deep audit (money+ledger, shipping+tracking+COD, inventory+fulfilment, auth+RBAC+RLS)
+hunting LOGIC bugs and half-complete flows, not dead UI. Everything below is committed, and every
+money/state path is left with a test or a rolled-back SQL check. Ordered by severity.
+
+**Security / cross-tenant**
+- `e61df25` — `updateProduct` / `updateCollection` / `deleteCollection` rewrote child tables that have
+  NO `store_id` and NO RLS (`product_options`/`variants`/`inventory_levels`,
+  `collection_products`/`conditions`) keyed on the client id, while the parent UPDATE silently no-op'd
+  under RLS. A merchant could pass another store's id and delete/rewrite its options, variants,
+  inventory, category membership. Each now reads the parent under RLS first and bails if it isn't ours
+  (the guard `duplicateProduct` already used).
+- `cb17372` — `/impersonate` accepted ANY session-shaped JWT signed with AUTH_SECRET (a stolen 7-day
+  admin session could be exchanged for a fresh session). The impersonation token now carries a distinct
+  audience (`tokophi:impersonate`) that `/impersonate` requires; `algorithms:["HS256"]` pinned on every
+  `jwtVerify`. (Adding an audience to the long-lived SESSION tokens is deferred — it forces a mass
+  re-login and wants a deliberate rollout.)
+- `7cc1ecc` — `/api/public/order` + `/ongkir` resolved the tenant with `storeSlug || "batik-nusantara"`,
+  silently attributing a slug-less request to the demo store. Both now fail closed.
+
+**Money / order state**
+- `9772246` — order status changes had no row lock and a weak guard: concurrent changes double-restored
+  stock, `batal`↔`retur` restored twice, and a paid-then-cancelled order NEVER reversed its ledger
+  credit (withdrawable money for a refunded order). Now `FOR UPDATE` + same-status/terminal guards, and
+  `batal` reverses the credit like `retur` (reusing the one-reversal-per-order index). +3 ledger tests.
+- `5f61034` — COD orders never reached `financial_status='dibayar'`, so the Perlu Dikirim tab + bulk
+  shipping queue excluded them entirely — COD (the dominant channel) could not be shipped at all. The
+  queues now treat COD as ready-to-ship (it's pay-on-delivery), and delivery marks it paid. +1 test.
+- `521861d` — the `payments` row was inserted AFTER the order txn committed, so a DB blip left an order
+  with no payment (COD uncollectable; AutoLaris untrackable → shopper retries → double bill). It is now
+  created INSIDE the order transaction (AutoLaris enriched with gateway VA/trxId afterward).
+- `9dc99bf` — the subscription auto-renewal cron billed the ex-PPN base while the manual path billed
+  base + 11% PPN — under-collecting VAT on every automatic renewal. Aligned.
+
+**Shipping / tracking**
+- `ee8a458` — the tracking poller force-collapsed any unmapped status to "shipped", pinning a delivered
+  parcel at `dikirim` forever (COD never collected/credited); it also read `status` as a number when
+  KiriminAja may send text. Now unmapped → AWB-only (no forced status), text is accepted but can never
+  auto-yield a money-moving outcome (delivered/returned) — those need the numeric code or a manual
+  click. `createShipment` books at `diproses` (not `dikirim` before the AWB); `cancelShipment` resets
+  status; `problem` parcels are logged + counted.
+
+**Inventory**
+- `b1f3603` — stock decrement/restore updated every location row of a variant (N× under multi-warehouse
+  — a latent landmine); both now target the default-location row. Cancelling a *received* PO (which had
+  already added stock) is now refused instead of silently deleting the record and stranding the stock.
+- `bc2ebfd` — the bulk stock editor was last-write-wins on an absolute value, clobbering a sale that
+  landed between page-load and save (resurrected sold units → oversell). Now optimistic: the client
+  sends the loaded value, the server locks the row and skips it if it changed, and reports skips.
+
+**Deferred (needs a product decision or a subsystem, not a drive-by):** promo-code discounts
+(`discount_idr` is authored but never applied — a whole feature; the total stays internally
+consistent); the fuzzy origin fallback when no pickup address is set (documented behaviour — the fix
+is requiring a pickup address / rejecting orders, which could block checkout); session-token audience
+(mass re-login); a merchant-facing `problem`-parcel flag (needs an `orders` column — logged for now).
+
 ### 🖼️ The Jurnal's images are editorial now — topic-true photos, not reused product crops
 
 `seed-journal.ts` illustrated every article by cropping the store's catalogue shots
