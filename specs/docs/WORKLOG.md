@@ -30,7 +30,17 @@
   content-hash the filenames if journal art is ever expected to change again.
 - **Images are AI-generated** (editorial, brand-consistent — not stock of someone else's clothes). Files
   live in git; the pipeline is the merchant's own upload path.
-- Docs: CHANGELOG (shipped in PR #7), BACKLOG NEXT-UP + two follow-ups (`4473cc0`, PR #8), this entry.
+- 🚨 **PROD INCIDENT (fixed same session).** Post-deploy health check found the storefront **503 for ~2h**
+  (admin/super-admin/landing 200). Root cause was **not** the blog change: the **VPS disk was 100% full**
+  (Coolify keeps every per-deploy image — 204 images / ~129 GB), so **Postgres crash-looped** on its
+  end-of-recovery checkpoint (`No space left on device` → PANIC → reinit → `database system is in recovery
+  mode`), and the SSR storefront 503'd because it reads Postgres every request. **Fix:** `docker builder
+  prune -af` + `docker image prune -af` → freed ~130 GB (100% → 14%); Postgres finished its checkpoint and
+  came up **on its own, no restart, no data loss**. **Prevention:** added `ops/tokophi-docker-cleanup.sh`
+  + a daily cron (`/etc/cron.d/tokophi-docker-cleanup`, 03:30 UTC) — see DEPLOY.md "L1b disk-cleanup
+  safety-net". This is the exact L2/L3 gap the watchdog names (running-but-unhealthy, not created/exited).
+- Docs: CHANGELOG (shipped in PR #7), BACKLOG NEXT-UP + follow-ups (`4473cc0`, PR #8), DEPLOY.md L1b +
+  `ops/tokophi-docker-cleanup.sh` (incident), this entry.
 
 ## 2026-07-16 — Session: domain topology → storefronts on `tokophi.id`, custom domains via `cname.tokophi.cc` (CF for SaaS) ✅ **DEPLOYED** `c4fc901` `5efc44b` `5d33130` on main
 
