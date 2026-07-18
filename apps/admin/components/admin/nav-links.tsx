@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
-import { NAV_GROUPS, type NavItem, type NavBadgeKey } from "@/lib/nav";
+import { NAV_GROUPS, type NavItem, type NavChild, type NavBadgeKey } from "@/lib/nav";
 import { num } from "@tokophi/lib/format";
 import { cn } from "@tokophi/ui/lib/utils";
 import { Badge } from "@tokophi/ui/badge";
@@ -11,34 +11,58 @@ import { useStoreHref } from "@/components/admin/store-context";
 
 
 /**
- * Child links may differ ONLY by query string — /pesanan, /pesanan?tab=perlu_dikirim,
- * /pesanan?tab=pengembalian are three saved views onto one route. Comparing `pathname` alone (which
- * is what this did) makes the first child win on every one of them: click "Perlu Dikirim" and
- * "Pesanan Saya" stays lit. The nav then lies about where you are, which is worse than no highlight
- * at all — you stop trusting it.
+ * Exactly ONE child lights up — the MOST SPECIFIC match for the current URL. Two rules compose:
  *
- * So compare the path AND the params the link actually carries. A link with no params is active only
- * when the URL carries none of the params its siblings use — otherwise "Pesanan Saya" would also
- * light up while you are looking at ?tab=pengembalian.
+ *  1. Path specificity. The child whose path is the longest prefix of `pathname` wins. Evaluating each
+ *     child in isolation (the old `isChildActive`) is what lit two at once: on `/pesanan/massal` the
+ *     index child `/pesanan` also passes `startsWith("/pesanan/")`, so "Pesanan Saya" AND "Pengiriman
+ *     Massal" were both highlighted. A nav that says you are in two places is worse than no highlight —
+ *     you stop trusting it. Same shape under Keuangan (`/keuangan` + `/keuangan/penghasilan`).
+ *
+ *  2. Query views. `/pesanan`, `/pesanan?tab=perlu_dikirim`, `/pesanan?tab=pengembalian` are saved views
+ *     onto one route. A link's params must match the URL's, and the plain (no-param) sibling is NOT the
+ *     answer when the URL carries a discriminating tab a sibling owns — else "Pesanan Saya" lights on
+ *     `?tab=pengembalian`. A matching query breaks ties toward the more specific view of the same route.
+ *
+ * Returns the winning child's href (compare by identity), or null when none match.
  */
-function isChildActive(pathname: string, search: URLSearchParams, href: string): boolean {
-  const [path, query = ""] = href.split("?");
-  if (pathname !== path && !pathname.startsWith(path + "/")) return false;
+function activeChildHref(pathname: string, search: URLSearchParams, children: NavChild[]): string | null {
+  let bestHref: string | null = null;
+  let bestScore = -1;
+  for (const child of children) {
+    const [path, query = ""] = child.href.split("?");
+    if (pathname !== path && !pathname.startsWith(path + "/")) continue;
 
-  const want = new URLSearchParams(query);
-  if ([...want.keys()].length === 0) {
-    // the "plain" sibling: active only when no sibling's discriminating param is present
-    return !search.get("tab");
+    const want = new URLSearchParams(query);
+    const wantKeys = [...want.keys()];
+    let queryScore = 0;
+    if (wantKeys.length === 0) {
+      // the plain sibling: skip it only when a discriminating tab (a sibling's) is on this exact path
+      if (search.get("tab") && pathname === path) continue;
+    } else {
+      let ok = true;
+      for (const [k, v] of want) {
+        if (search.get(k) !== v) { ok = false; break; }
+      }
+      if (!ok) continue;
+      queryScore = wantKeys.length;
+    }
+    // longest path wins (×100 dominates); a matching query breaks ties on the same route
+    const score = path.length * 100 + queryScore;
+    if (score > bestScore) {
+      bestScore = score;
+      bestHref = child.href;
+    }
   }
-  for (const [k, v] of want) {
-    if (search.get(k) !== v) return false;
-  }
-  return true;
+  return bestHref;
 }
 
 function isSectionActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(href + "/");
+  // A section may carry a default tab (Pesanan → "/pesanan?tab=perlu_dikirim"). Compare the PATH only:
+  // otherwise the parent never highlights and its submenu never auto-expands on "/pesanan/massal".
+  const path = href.split("?")[0];
+  if (path === "/") return pathname === "/";
+  return pathname === path || pathname.startsWith(path + "/");
 }
 
 // strip the Shopify-style /store/{slug} prefix so active-state compares against the internal route
@@ -78,6 +102,8 @@ function Item({ item, onNavigate, counts }: { item: NavItem; onNavigate?: () => 
 
   if (!item.children) return rowLink;
 
+  const activeChild = activeChildHref(pathname, search, item.children);
+
   return (
     <div>
       <div className="flex items-center">
@@ -95,7 +121,7 @@ function Item({ item, onNavigate, counts }: { item: NavItem; onNavigate?: () => 
       {expanded && (
         <div className="mt-0.5 ml-[26px] flex flex-col gap-0.5 border-l pl-3">
           {item.children.map((c) => {
-            const cActive = isChildActive(pathname, search, c.href);
+            const cActive = c.href === activeChild;
             return (
               <Link
                 key={c.href}
