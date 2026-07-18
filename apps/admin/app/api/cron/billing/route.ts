@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
-import { computeBilling, quote } from "@tokophi/lib/billing";
+import { computeBilling, quote, withPpn } from "@tokophi/lib/billing";
 import { alCreatePayment, autolarisConfigured } from "@tokophi/lib/autolaris";
 
 // Daily billing job (schedule via Coolify Scheduled Task / external cron → GET with the secret):
@@ -68,11 +68,14 @@ export async function GET(req: NextRequest) {
         .limit(1);
       if (!pending) {
         const q = quote("monthly", s.firstInvoicePaid);
+        // base + 11% PPN — MUST match createSubscriptionPayment (the manual path), or automatic
+        // renewals under-collect the VAT the Langganan page prints as "termasuk PPN 11%".
+        const amount = withPpn(q.amount).total;
         const reffId = `SUB-${s.slug}-${Date.now().toString().slice(-8)}`;
         const r = await alCreatePayment({
           reffId,
           channelCode: "VABCA",
-          amount: q.amount,
+          amount,
           customerId: s.id,
           customerName: "Merchant",
           customerPhone: "081200000000",
@@ -85,7 +88,7 @@ export async function GET(req: NextRequest) {
             accountId: s.accountId,
             storeId: s.id,
             planKey: "bisnis",
-            amountIdr: q.amount,
+            amountIdr: amount,
             status: "menunggu",
             kind: "subscription",
             cycle: q.cycle,
