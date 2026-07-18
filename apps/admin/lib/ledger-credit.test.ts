@@ -248,6 +248,30 @@ suite("settleOrderLedger — the book moves with the order status", () => {
       expect(returns).toHaveLength(1);
     });
   });
+
+  it("batal reverses a PREPAID sale — cancelling after payment claws the credit back (not just retur)", async () => {
+    await inTxn(async (tx) => {
+      const storeId = await mkStore(tx);
+      const orderId = await mkOrder(tx, storeId, "diproses"); // prepaid, credited pending, not yet shipped
+      await creditSaleForPayment(tx, await mkPayment(tx, { orderId, storeId, amount: 100_000, status: "berhasil" }));
+      await tx.execute(sql`update orders set status = 'batal' where id = ${orderId}`);
+      await settleOrderLedger(tx, { storeId, orderId, status: "batal", prevStatus: "diproses" });
+      const l = await ledgerOf(tx, orderId);
+      const rev = l.find((r) => r.kind === "retur")!; // reuses the reversal kind (one-per-order index)
+      expect(rev).toBeTruthy();
+      expect(Number(rev.amount)).toBe(-100_000);
+      expect(l.reduce((s, r) => s + Number(r.amount), 0)).toBe(0); // sale + reversal net to zero
+    });
+  });
+
+  it("batal on an UNPAID order books nothing — there is no sale to reverse", async () => {
+    await inTxn(async (tx) => {
+      const storeId = await mkStore(tx);
+      const orderId = await mkOrder(tx, storeId, "baru");
+      await settleOrderLedger(tx, { storeId, orderId, status: "batal", prevStatus: "baru" });
+      expect(await ledgerOf(tx, orderId)).toHaveLength(0);
+    });
+  });
 });
 
 // ── The order state machine's STOCK side — inventory restore on batal/retur ──────────────────────────
@@ -305,6 +329,20 @@ suite("applyOrderStatusChange — the stock returns to the shelf on batal AND re
       expect(await stockOf(tx, variantId)).toBe(15);
       // setOrderStatus re-reads the order, so the second call sees status already 'batal' → no restore.
       await applyOrderStatusChange(tx, { storeId, order: { id: orderId, status: "batal" }, status: "batal" });
+      expect(await stockOf(tx, variantId)).toBe(15); // still 15, not 20
+    });
+  });
+
+  it("terminal guard: batal → retur cannot double-restore (a cancelled order is done)", async () => {
+    await inTxn(async (tx) => {
+      const storeId = await mkStore(tx);
+      const variantId = await mkVariantWithStock(tx, storeId, 10);
+      const orderId = await mkOrder(tx, storeId, "dikirim");
+      await mkLineItem(tx, orderId, variantId, 5);
+      await applyOrderStatusChange(tx, { storeId, order: { id: orderId, status: "dikirim" }, status: "batal" });
+      expect(await stockOf(tx, variantId)).toBe(15);
+      // Different DESTINATION status but the source is terminal → must NOT restore a second time.
+      await applyOrderStatusChange(tx, { storeId, order: { id: orderId, status: "batal" }, status: "retur" });
       expect(await stockOf(tx, variantId)).toBe(15); // still 15, not 20
     });
   });

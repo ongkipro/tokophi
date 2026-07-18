@@ -17,12 +17,23 @@ export async function applyOrderStatusChange(
 ): Promise<void> {
   const { storeId, order, status, returnReason } = args;
 
+  // Idempotent + terminal-safe. A repeat or concurrent call with the SAME status is a no-op, and a
+  // TERMINAL order (batal/retur) accepts no further transition. This is what stops:
+  //   · batal↔retur — each restores stock, so allowing the second would double-restore (phantom stock)
+  //   · batal/retur → active — reactivating a cancelled order whose stock was already put back, giving
+  //     an active order with nothing decremented (oversell)
+  // The FOR UPDATE lock in setOrderStatus serializes concurrent calls, so the second one reads the
+  // already-updated status and lands on one of these guards instead of re-running the restore.
+  if (order.status === status) return;
+  if (order.status === "batal" || order.status === "retur") return;
+
   // Cancelling OR returning a live order → put the stock back. `batal` never shipped; `retur` shipped
   // and came back — but in BOTH cases the goods are on the merchant's shelf again, so both must restore
   // inventory. Missing the `retur` case would quietly shrink real stock on every refused COD parcel.
-  // Guarded on the previous status so a repeat click can't double-restore.
+  // (The same-status / terminal guards above already ensure we only reach here on the FIRST transition
+  // into batal/retur, so this can't double-restore.)
   const restores = status === "batal" || status === "retur";
-  if (restores && order.status !== status) {
+  if (restores) {
     const lines = await db
       .select({ variantId: schema.orderLineItems.variantId, qty: schema.orderLineItems.qty })
       .from(schema.orderLineItems)

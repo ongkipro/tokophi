@@ -18,10 +18,15 @@ export async function setOrderStatus(orderId: string, status: OrderStatus, retur
   const { storeId: sid } = await requireCapability("orders:write");
   const number = orderId.replace(/^#/, ""); // order.id is "#INV-4819"
   await withTenant(sid, async (db) => {
+    // FOR UPDATE: two concurrent status changes on the same order (double-click, or the list + detail
+    // views both firing) must serialize, or both read the same prevStatus and both run the inventory
+    // restore → phantom stock. The loser now blocks here, then reads the already-updated status and
+    // the guards in applyOrderStatusChange make it a no-op. Same discipline as the create path's lock.
     const [order] = await db
       .select({ id: schema.orders.id, status: schema.orders.status })
       .from(schema.orders)
       .where(eq(schema.orders.number, number))
+      .for("update")
       .limit(1);
     if (!order) return;
 

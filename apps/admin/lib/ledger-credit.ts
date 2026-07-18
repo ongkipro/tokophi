@@ -138,21 +138,23 @@ export async function settleOrderLedger(
     `);
   }
 
-  // A return claws the credit back. Written as an OPPOSING entry, never by editing the sale: the
-  // book stays append-only, so it can always be replayed and audited. The partial unique index
-  // (ledger_one_retur_per_order) makes a double-click physically unable to double-refund — the
+  // A return OR a cancellation claws the credit back. Written as an OPPOSING entry, never by editing
+  // the sale: the book stays append-only, so it can always be replayed and audited. The partial unique
+  // index (ledger_one_retur_per_order) makes a double-click physically unable to double-refund — the
   // guarantee lives in the DB, not in the hope that the UI behaves.
   //
-  // The claw-back carries the SAME status as the sale it reverses. A parcel can be returned straight
-  // from `dikirim`, where the sale is still `pending` — reversing that out of `available` (as this
-  // used to, unconditionally) would drive the withdrawable balance NEGATIVE while the held pool
-  // still showed the money. Reverse a pending sale out of pending, a released one out of available;
-  // either way the pair nets to zero.
-  if (status === "retur" && prevStatus !== "retur") {
+  // `batal` needs this too, not just `retur`: a PREPAID order (AutoLaris) is credited the moment its
+  // payment lands, so cancelling it after payment must reverse that credit — otherwise the merchant
+  // could withdraw money for an order they refunded. An UNPAID cancel has no `sale` row, so the SELECT
+  // finds nothing and inserts nothing (correct). Both reversal kinds are mutually exclusive and
+  // terminal, so "one reversal per order" (the retur index) is exactly the right guarantee; only the
+  // note differs. The claw-back carries the SAME status as the sale it reverses (pending-out-of-
+  // pending, available-out-of-available) so the pair nets to zero without driving a pool negative.
+  if ((status === "retur" || status === "batal") && prevStatus !== status) {
     await db.execute(sql`
       insert into ledger_entries (store_id, order_id, kind, status, amount_idr, note, available_at)
       select ${storeId}, ${orderId}, 'retur', l.status, -l.amount_idr,
-             'Retur ' || o.number,
+             (case when ${status} = 'batal' then 'Pembatalan ' else 'Retur ' end) || o.number,
              case when l.status = 'available' then now() end
         from ledger_entries l
         join orders o on o.id = l.order_id
