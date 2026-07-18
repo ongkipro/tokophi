@@ -78,6 +78,10 @@ export async function createCollection(input: CollectionInput): Promise<string> 
 export async function updateCollection(id: string, input: CollectionInput): Promise<void> {
   const { storeId: sid } = await requireCapability("content:write");
   await withTenant(sid, async (db) => {
+    // collection_products / collection_conditions have no store_id/RLS, so confirm the parent is ours
+    // under RLS before syncChildren rewrites them by raw id — else a foreign id corrupts another store.
+    const [owned] = await db.select({ id: schema.collections.id }).from(schema.collections).where(eq(schema.collections.id, id)).limit(1);
+    if (!owned) return;
     await db.update(schema.collections).set(fields(input)).where(eq(schema.collections.id, id));
     await syncChildren(db, id, input);
   });
@@ -88,6 +92,9 @@ export async function updateCollection(id: string, input: CollectionInput): Prom
 export async function deleteCollection(id: string): Promise<void> {
   const { storeId: sid } = await requireCapability("content:write");
   await withTenant(sid, async (db) => {
+    // Confirm ownership under RLS before deleting the un-RLS'd child rows by raw id.
+    const [owned] = await db.select({ id: schema.collections.id }).from(schema.collections).where(eq(schema.collections.id, id)).limit(1);
+    if (!owned) return;
     await db.delete(schema.collectionProducts).where(eq(schema.collectionProducts.collectionId, id));
     await db.delete(schema.collectionConditions).where(eq(schema.collectionConditions.collectionId, id));
     await db.delete(schema.collections).where(eq(schema.collections.id, id));

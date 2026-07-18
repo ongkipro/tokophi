@@ -90,6 +90,13 @@ export async function createProduct(input: ProductInput): Promise<string> {
 export async function updateProduct(id: string, input: ProductInput): Promise<void> {
   const { storeId: sid } = await requireCapability("products:write");
   await withTenant(sid, async (db) => {
+    // Verify the product belongs to THIS store BEFORE touching its children. product_options /
+    // product_variants / inventory_levels have no store_id and no RLS, so a foreign id would let this
+    // action delete+rewrite another store's rows — the `products` UPDATE below silently no-ops under
+    // RLS but the child writes are keyed on the raw id. Read the parent under RLS first and bail if it
+    // isn't ours (the pattern duplicateProduct already uses).
+    const [owned] = await db.select({ id: schema.products.id }).from(schema.products).where(eq(schema.products.id, id)).limit(1);
+    if (!owned) return;
     await db.update(schema.products).set({ ...productFields(input), hasVariants: usesVariants(input) }).where(eq(schema.products.id, id));
     const [loc] = await db.select({ id: schema.locations.id }).from(schema.locations).where(eq(schema.locations.storeId, sid)).limit(1);
 
