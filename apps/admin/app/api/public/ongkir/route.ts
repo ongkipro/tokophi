@@ -77,10 +77,13 @@ async function handle(req: Request) {
   // logic would be two prices, and the one the order keeps is the one that decides what the merchant
   // gets paid.
   if (body.op === "rates") {
+    // Fail closed on a missing slug rather than defaulting to a hardcoded demo store (see order route).
+    const slug = (body.storeSlug ?? "").trim();
+    if (!slug) return NextResponse.json({ ok: false, error: "Toko tidak dikenali." }, { headers: CORS });
     const [store] = await db
       .select({ id: schema.stores.id, city: schema.stores.city })
       .from(schema.stores)
-      .where(eq(schema.stores.slug, body.storeSlug || "batik-nusantara"))
+      .where(eq(schema.stores.slug, slug))
       .limit(1);
     if (!store) return NextResponse.json({ ok: false, error: "Toko tidak ditemukan." }, { headers: CORS });
 

@@ -139,11 +139,15 @@ async function handle(req: Request) {
     payChannel = { code: ch.channel, label: ch.label, kind: ch.kind };
   }
 
-  // resolve store (per-client storefront → one store)
+  // resolve store (per-client storefront → one store). Fail CLOSED on a missing slug — the storefront
+  // always sends STORE_SLUG, so an absent one is a misconfigured/stray request; defaulting it to a
+  // hardcoded demo store (the old `|| "batik-nusantara"`) silently attributed such orders to that shop.
+  const slug = (body.storeSlug ?? "").trim();
+  if (!slug) return bad("Toko tidak dikenali.");
   const [store] = await db
     .select({ id: schema.stores.id, city: schema.stores.city })
     .from(schema.stores)
-    .where(eq(schema.stores.slug, body.storeSlug || "batik-nusantara"))
+    .where(eq(schema.stores.slug, slug))
     .limit(1);
   if (!store) return bad("Toko tidak ditemukan.");
 
