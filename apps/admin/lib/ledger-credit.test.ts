@@ -161,6 +161,17 @@ suite("collectCodOnDelivery — cash exists only at the door", () => {
       expect(await collectCodOnDelivery(tx, orderId)).toHaveLength(0); // already berhasil
     });
   });
+
+  it("marks the order financial_status='dibayar' once the COD cash is collected", async () => {
+    await inTxn(async (tx) => {
+      const storeId = await mkStore(tx);
+      const orderId = await mkOrder(tx, storeId, "dikirim"); // mkOrder defaults financial_status pending
+      await mkPayment(tx, { orderId, storeId, method: "cod", amount: 100_000, status: "menunggu" });
+      await collectCodOnDelivery(tx, orderId);
+      const [o] = await rows(tx, sql`select financial_status as "fs" from orders where id = ${orderId}`);
+      expect(o.fs).toBe("dibayar"); // delivered COD is no longer "Belum Bayar"
+    });
+  });
 });
 
 suite("settleOrderLedger — the book moves with the order status", () => {

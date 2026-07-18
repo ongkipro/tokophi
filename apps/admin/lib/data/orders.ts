@@ -123,10 +123,16 @@ export type OrderListParams = {
   pageSize?: number;
 };
 
+// A COD order is "ready to ship" the moment it is placed — the cash is collected on delivery, not
+// before — so it belongs in Perlu Dikirim, not Belum Bayar, even though financial_status is still
+// pending until delivery. Without this carve-out COD orders (the dominant channel) never appeared in
+// the shipping queue at all. Identified by the COD payment row.
+const IS_COD = sql`exists (select 1 from payments p where p.order_id = o.id and p.method = 'cod')`;
+
 const TAB_WHERE: Record<OrderTab, SQL | null> = {
   semua: null,
-  belum_bayar: sql`o.status in ('baru','diproses') and o.financial_status <> 'dibayar'`,
-  perlu_dikirim: sql`o.status in ('baru','diproses') and o.financial_status = 'dibayar'`,
+  belum_bayar: sql`o.status in ('baru','diproses') and o.financial_status <> 'dibayar' and not ${IS_COD}`,
+  perlu_dikirim: sql`o.status in ('baru','diproses') and (o.financial_status = 'dibayar' or ${IS_COD})`,
   dikirim: sql`o.status = 'dikirim'`,
   selesai: sql`o.status = 'selesai'`,
   pengembalian: sql`o.status in ('batal','retur')`,
@@ -176,8 +182,8 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
     const [countRow] = (await db.execute(sql`
       select
         count(*)::int                                                                                          as "semua",
-        count(*) filter (where o.status in ('baru','diproses') and o.financial_status <> 'dibayar')::int       as "belum_bayar",
-        count(*) filter (where o.status in ('baru','diproses') and o.financial_status  = 'dibayar')::int       as "perlu_dikirim",
+        count(*) filter (where o.status in ('baru','diproses') and o.financial_status <> 'dibayar' and not ${IS_COD})::int as "belum_bayar",
+        count(*) filter (where o.status in ('baru','diproses') and (o.financial_status = 'dibayar' or ${IS_COD}))::int    as "perlu_dikirim",
         count(*) filter (where o.status = 'dikirim')::int                                                      as "dikirim",
         count(*) filter (where o.status = 'selesai')::int                                                      as "selesai",
         count(*) filter (where o.status in ('batal','retur'))::int                                             as "pengembalian"
@@ -337,7 +343,7 @@ export async function getPerluDikirimCount(): Promise<number> {
     const [row] = (await db.execute(sql`
       select count(*)::int as n
       from orders o
-      where o.status in ('baru','diproses') and o.financial_status = 'dibayar'
+      where o.status in ('baru','diproses') and (o.financial_status = 'dibayar' or ${IS_COD})
     `)) as unknown as { n: number }[];
     return row?.n ?? 0;
   });

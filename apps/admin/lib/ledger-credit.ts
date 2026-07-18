@@ -75,6 +75,14 @@ export async function collectCodOnDelivery(db: Db, orderId: string): Promise<str
      where order_id = ${orderId} and method = 'cod' and status = 'menunggu'
     returning id
   `)) as unknown as { id: string }[];
+  // Cash is now in hand → the order is paid. Mark financial_status so the order list stops showing a
+  // delivered COD order as "Belum Bayar". Guarded on the collected payment + not-already-paid, so it
+  // is idempotent and never marks a prepaid-but-unpaid order paid by accident.
+  await db.execute(sql`
+    update orders set financial_status = 'dibayar'
+     where id = ${orderId} and financial_status <> 'dibayar'
+       and exists (select 1 from payments p where p.order_id = orders.id and p.method = 'cod' and p.status = 'berhasil')
+  `);
   return rows.map((r) => r.id);
 }
 

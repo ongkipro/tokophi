@@ -56,7 +56,10 @@ export async function getBulkShipping(f: BulkFilters = {}): Promise<BulkShipping
   return withCurrentTenant(async (db) => {
     // The shared scope. Kept as one fragment so the rows, the counts and the facet counts below can
     // never drift apart — a facet that promises rows the list does not have is worse than no facet.
-    const scope = sql`o.status in ('baru','diproses') and o.financial_status = 'dibayar'`;
+    // COD orders ship before payment (cash on delivery), so they belong in the queue while still
+    // financial_status='pending' — same carve-out as the Perlu Dikirim tab. Without it COD parcels
+    // could never be bulk-booked.
+    const scope = sql`o.status in ('baru','diproses') and (o.financial_status = 'dibayar' or exists (select 1 from payments p where p.order_id = o.id and p.method = 'cod'))`;
 
     const conds = [scope];
     if (f.group) conds.push(sql`s->>'group' = ${f.group}`);
