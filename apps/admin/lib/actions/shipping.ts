@@ -601,7 +601,11 @@ export async function createShipment(input: {
         courier: input.service,
         serviceType: input.serviceType,
         kaOrderId: r.kaOrderId,
-        status: "dikirim",
+        // `diproses`, NOT `dikirim`: a booking is not yet shipped — the AWB is still null and the
+        // courier hasn't accepted pickup. Status follows the courier (ka-tracking's documented model),
+        // so the poller advances this to `dikirim` the moment tracking shows pickup. Jumping to
+        // `dikirim` here told every buyer "Dikirim" with no resi and no movement.
+        status: "diproses",
       })
       .where(eq(schema.orders.number, input.orderNumber)),
   );
@@ -634,7 +638,11 @@ export async function cancelShipment(orderNumber: string, reason = "Dibatalkan o
   const r = await kaCancelShipment(ref, reason);
   if (!r.ok) return { ok: false, error: `KiriminAja menolak pembatalan: ${r.error ?? "gagal"}. Pengiriman masih terdaftar di kurir.` };
   await withTenant(storeId, (db) =>
-    db.update(schema.orders).set({ awb: null, courier: null, kaOrderId: null }).where(eq(schema.orders.number, orderNumber)),
+    // Reset status too: clearing awb/courier/kaOrderId but leaving status='dikirim' left the order
+    // labelled "Dikirim" with no shipment, and the poller (kaOrderId now null) could never move it.
+    // Back to `diproses` = "needs (re)booking". This voids the courier booking, NOT the order (that is
+    // setOrderStatus→batal), so no inventory/ledger movement — just the shipment label.
+    db.update(schema.orders).set({ awb: null, courier: null, kaOrderId: null, status: "diproses" }).where(eq(schema.orders.number, orderNumber)),
   );
   revalidatePath(`/pesanan/${orderNumber}`);
   return { ok: true };

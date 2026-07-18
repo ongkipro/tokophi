@@ -20,18 +20,37 @@ import { applyOrderStatusChange, type OrderStatus } from "./order-status";
 export type KaOutcome = "booked" | "shipped" | "delivered" | "returned" | "canceled" | "problem";
 
 /**
- * Tracking status code → outcome (docs: important-notes/status-mapping). KiriminAja's detailed codes:
- * 100–105 entry/processing, 106+ in transit, 200 delivered, 300 canceled, 301/40x returned, 500/7xx/9xx
- * problem. Read off the numeric `status` of a tracking pull.
+ * Tracking status → outcome. KiriminAja's `status` field arrives as either a numeric code OR free
+ * text (the response shape is best-effort; both have been observed), so this accepts both.
+ *
+ * Numeric codes are the documented contract: 100–105 entry/processing, 106+ in transit, 200 delivered,
+ * 300 canceled, 301/40x returned, 500/7xx/9xx problem.
+ *
+ * Text is treated CONSERVATIVELY: it can only move an order forward to at most `shipped` (in transit).
+ * We never infer a money-moving outcome (delivered/returned/canceled/problem) from free text — "sampai
+ * di kota tujuan" is not "delivered", and a false `selesai` would collect COD cash and credit the
+ * ledger prematurely. Delivery/return/cancel require the numeric code or a manual status change.
+ * Anything unrecognised → null (fill the AWB, change nothing).
  */
-export function outcomeFromTrackingCode(code: number): KaOutcome | null {
-  if (!Number.isFinite(code)) return null;
-  if (code === 200) return "delivered";
-  if (code === 300) return "canceled";
-  if (code === 301 || (code >= 400 && code <= 406)) return "returned";
-  if (code === 500 || (code >= 700 && code <= 905)) return "problem";
-  if (code >= 106 && code < 200) return "shipped";   // picked up / in transit / re-delivery
-  if (code >= 100 && code <= 105) return "booked";   // created / at DC / awaiting AWB
+export function outcomeFromTrackingCode(raw: number | string | null | undefined): KaOutcome | null {
+  if (raw === null || raw === undefined) return null;
+  const str = String(raw).trim();
+  if (str === "") return null;
+  if (/^\d+$/.test(str)) {
+    const code = Number(str);
+    if (code === 200) return "delivered";
+    if (code === 300) return "canceled";
+    if (code === 301 || (code >= 400 && code <= 406)) return "returned";
+    if (code === 500 || (code >= 700 && code <= 905)) return "problem";
+    if (code >= 106 && code < 200) return "shipped";   // picked up / in transit / re-delivery
+    if (code >= 100 && code <= 105) return "booked";   // created / at DC / awaiting AWB
+    return null;
+  }
+  const s = str.toLowerCase();
+  // "pickup"/"pick up" is ambiguous ("menunggu pickup" = awaiting = booked), so it lives in booked, not
+  // shipped. Only unmistakable in-transit wording advances to shipped.
+  if (/(transit|perjalanan|dikirim|dijemput|di jemput|out for delivery|dalam pengiriman)/.test(s)) return "shipped";
+  if (/(diproses|dibuat|created|pending|menunggu|booking|pick ?up)/.test(s)) return "booked";
   return null;
 }
 
@@ -58,7 +77,7 @@ export type KaSyncResult = { ok: boolean; changed: string[]; error?: string };
  * and COD move exactly as they would on a manual status change. Fills the AWB the instant the courier
  * issues it. Advances state FORWARD only.
  */
-export async function syncOrderFromKa(orderNumber: string, outcome: KaOutcome, awb?: string | null): Promise<KaSyncResult> {
+export async function syncOrderFromKa(orderNumber: string, outcome: KaOutcome | null, awb?: string | null): Promise<KaSyncResult> {
   const [order] = await db
     .select({ id: schema.orders.id, storeId: schema.orders.storeId, status: schema.orders.status, awb: schema.orders.awb })
     .from(schema.orders)
@@ -75,7 +94,7 @@ export async function syncOrderFromKa(orderNumber: string, outcome: KaOutcome, a
       changed.push(`awb:${awb}`);
     }
     const cur = order.status as OrderStatus;
-    const target = OUTCOME_STATUS[outcome];
+    const target = outcome ? OUTCOME_STATUS[outcome] : null;
     if (target && RANK[target] > RANK[cur]) {
       // The drizzle tx has the same query surface as the root db the state machine is typed against
       // (Tx === Db === typeof rootDb) — withTenant casts the same way. So the whole change (inventory,

@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
 
   let advanced = 0;
   let awbFilled = 0;
+  let problems = 0;
   const errors: string[] = [];
   for (const o of orders) {
     const ref = o.kaOrderId ?? o.awb;
@@ -52,10 +53,20 @@ export async function GET(req: NextRequest) {
     const data = (r.data ?? {}) as { awb?: string; waybill?: string; status?: string | number };
     // A waybill is only real if it isn't our own booking ref echoed back.
     const realAwb = [data.awb, data.waybill].find((x) => !!x && x !== ref) ?? null;
-    const outcome = outcomeFromTrackingCode(Number(data.status));
+    // Pass the raw status (number OR text); an unmapped status is `null`, which fills the AWB and
+    // changes nothing. It is NOT forced to "shipped" — doing that pinned a delivered parcel at
+    // `dikirim` forever, so COD was never collected and the merchant never credited.
+    const outcome = outcomeFromTrackingCode(data.status);
     if (!realAwb && !outcome) continue;
+    // A stuck/problem parcel is not a state change but it IS something a merchant must act on — the
+    // poller can't stay silent about it. Surface it in the run summary + logs (a merchant-facing flag
+    // needs an orders column — tracked as follow-up).
+    if (outcome === "problem") {
+      problems++;
+      console.warn("[cron/tracking] problem parcel", o.number, "status", data.status);
+    }
     try {
-      const s = await syncOrderFromKa(o.number, outcome ?? "shipped", realAwb);
+      const s = await syncOrderFromKa(o.number, outcome, realAwb);
       if (s.changed.some((c) => c.startsWith("awb"))) awbFilled++;
       if (s.changed.some((c) => c.startsWith("status"))) advanced++;
     } catch (err) {
@@ -64,5 +75,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, scanned: orders.length, advanced, awbFilled, errors: errors.length });
+  return NextResponse.json({ ok: true, scanned: orders.length, advanced, awbFilled, problems, errors: errors.length });
 }
