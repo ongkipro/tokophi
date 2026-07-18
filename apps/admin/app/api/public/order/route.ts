@@ -359,6 +359,10 @@ async function handle(req: Request) {
   //
   // The external calls stay OUTSIDE: AutoLaris is a network round-trip and must never hold a database
   // transaction open.
+  // Payment channel is known before the write; the row is created INSIDE the txn (below) so an order
+  // can never commit without one.
+  const payMethod = channelCode === "QRIS" ? "qris" : channelCode === "DANA" ? "dana" : "va";
+  const alConfigured = autolarisConfigured();
   let customerId: string;
   let order: { id: string; number: string };
   try {
@@ -475,6 +479,23 @@ async function handle(req: Request) {
           )`);
       }
 
+      // Payment row, ATOMIC with the order. Previously both inserts ran AFTER this txn committed, so a
+      // DB blip left a committed order with NO payment: a COD order collectCodOnDelivery can never find,
+      // or an AutoLaris order the callback can't match (and the shopper retries → a second order+bill).
+      // AutoLaris is a pending shell here; its gateway VA/trxId are filled in after the txn. (An
+      // unconfigured-AutoLaris dev store inserts nothing and is handled below.)
+      if (isCod) {
+        await tx.insert(schema.payments).values({
+          orderId: ord.id, storeId: store.id, method: "cod", amountIdr: total, status: "menunggu",
+          provider: "cod", reffId: ord.number, channelCode: "COD", total,
+        });
+      } else if (alConfigured) {
+        await tx.insert(schema.payments).values({
+          orderId: ord.id, storeId: store.id, method: payMethod, amountIdr: total, status: "menunggu",
+          provider: "autolaris", reffId: ord.number, channelCode, total,
+        });
+      }
+
       return { customerId: cid, order: ord };
     }));
   } catch (err) {
@@ -517,17 +538,14 @@ async function handle(req: Request) {
   // is now always shipped by the seller from Pesanan → Buat pengiriman (regular expedition couriers).
   // Orders booked as instant BEFORE the removal keep their courier/awb text and render unchanged.
 
-  // COD → order created; record a COD payment (collected on delivery), no gateway bill
+  // COD → the payment row was already written inside the order txn (collected on delivery, no gateway).
   if (isCod) {
-    await db.insert(schema.payments).values({
-      orderId: order.id, storeId: store.id, method: "cod", amountIdr: total, status: "menunggu",
-      provider: "cod", reffId: order.number, channelCode: "COD", total,
-    });
     return NextResponse.json({ ok: true, orderNumber: order.number, cod: true, shipping: shippingCost, tax: tax.taxIdr, total }, { headers: CORS });
   }
 
-  // create the AutoLaris payment + link it to the order
-  if (!autolarisConfigured()) {
+  // AutoLaris: the pending payment row already exists (written in the txn); the gateway call below
+  // enriches it. If AutoLaris isn't configured, no row was written and there is nothing to enrich.
+  if (!alConfigured) {
     return NextResponse.json({ ok: true, orderNumber: order.number, error: "Pembayaran belum dikonfigurasi." }, { headers: CORS });
   }
   // THIS is where the double charge came from. `alCreatePayment` does an unguarded `await res.json()`
@@ -555,13 +573,13 @@ async function handle(req: Request) {
   if (!pay.ok) {
     return NextResponse.json({ ok: true, orderNumber: order.number, payError: pay.error }, { headers: CORS });
   }
-  const method = channelCode === "QRIS" ? "qris" : channelCode === "DANA" ? "dana" : "va";
-  await db.insert(schema.payments).values({
-    orderId: order.id, storeId: store.id, method, amountIdr: total, status: "menunggu",
-    provider: "autolaris", reffId: order.number, trxId: pay.trxId, channelCode,
-    adminFee: pay.admin ?? 0, total: pay.total ?? total,
+  // Enrich the pending payment row (created atomically in the txn) with the gateway's VA/trxId/fees.
+  // If this UPDATE were to fail, the order still has its payment row (pending) and the callback can
+  // still match it by reffId — no orphaned order, no double bill on retry.
+  await db.update(schema.payments).set({
+    trxId: pay.trxId, adminFee: pay.admin ?? 0, total: pay.total ?? total,
     virtualAccount: pay.virtualAccount, qr: pay.qr, url: pay.url, paymentCode: pay.paymentCode,
-  });
+  }).where(eq(schema.payments.orderId, order.id));
   // `payChannel` is set by the gate above for every non-COD order, and the COD path returned long
   // before here — so the `??` is unreachable. It exists because this line runs AFTER the payment was
   // created, and it must not be the thing that throws. It used to be
