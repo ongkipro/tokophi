@@ -40,10 +40,18 @@ export async function applyOrderStatusChange(
       .where(eq(schema.orderLineItems.orderId, order.id));
     for (const l of lines) {
       if (!l.variantId) continue;
+      // Restore to ONE row (the default location), mirroring the create-path decrement — a bare
+      // `where variant_id = X` adds qty to EVERY location row, inflating stock N× under multi-location.
       await db
         .update(schema.inventoryLevels)
         .set({ available: sql`${schema.inventoryLevels.available} + ${l.qty}` })
-        .where(eq(schema.inventoryLevels.variantId, l.variantId));
+        .where(sql`${schema.inventoryLevels.id} = (
+          select il.id from inventory_levels il
+          join locations loc on loc.id = il.location_id
+          where il.variant_id = ${l.variantId}
+          order by loc.is_default desc, il.id
+          limit 1
+        )`);
     }
 
     // fail any still-pending payment so a cancelled/returned order can't be marked paid later. For a

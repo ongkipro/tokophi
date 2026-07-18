@@ -460,9 +460,19 @@ async function handle(req: Request) {
         });
         // No GREATEST clamp — the rows are locked and re-checked above, so this cannot go negative.
         // Flooring it at 0 is what made an oversell indistinguishable from an honest sell-out.
+        // Target ONE row (the default location), not `where variant_id = X`: the latter subtracts qty
+        // from EVERY location row of the variant, so the day a variant has stock at two warehouses each
+        // sale over-decrements N×. Single-location today, but this is the landmine the schema's
+        // unique(variant,location) is built to allow. Real cross-warehouse fulfilment is a later feature.
         await tx.update(schema.inventoryLevels)
           .set({ available: sql`${schema.inventoryLevels.available} - ${r.qty}` })
-          .where(eq(schema.inventoryLevels.variantId, r.variantId));
+          .where(sql`${schema.inventoryLevels.id} = (
+            select il.id from inventory_levels il
+            join locations loc on loc.id = il.location_id
+            where il.variant_id = ${r.variantId}
+            order by loc.is_default desc, il.id
+            limit 1
+          )`);
       }
 
       return { customerId: cid, order: ord };

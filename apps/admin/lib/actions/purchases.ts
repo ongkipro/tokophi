@@ -63,8 +63,15 @@ export async function receivePurchaseOrder(code: string): Promise<void> {
 export async function cancelPurchaseOrder(code: string): Promise<void> {
   const { storeId: sid } = await requireCapability("purchases:write");
   await withTenant(sid, async (db) => {
-    const [po] = await db.select({ id: schema.purchaseOrders.id }).from(schema.purchaseOrders).where(and(eq(schema.purchaseOrders.code, code))).limit(1);
+    const [po] = await db.select({ id: schema.purchaseOrders.id, status: schema.purchaseOrders.status }).from(schema.purchaseOrders).where(and(eq(schema.purchaseOrders.code, code))).limit(1);
     if (!po) return;
+    // A RECEIVED PO already added its qty to inventory. Deleting it here left that stock on the shelf
+    // with no PO backing it — counts and records permanently disagree, unreconcilable. Cancel is for
+    // POs whose goods have NOT arrived; once received it is terminal (undo = a separate stock
+    // adjustment, which does not silently erase the receipt trail).
+    if (po.status === "diterima") {
+      throw new Error("Pesanan pembelian yang sudah diterima tidak bisa dibatalkan.");
+    }
     await db.delete(schema.purchaseOrderItems).where(eq(schema.purchaseOrderItems.purchaseOrderId, po.id));
     await db.delete(schema.purchaseOrders).where(eq(schema.purchaseOrders.id, po.id));
   });
