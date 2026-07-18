@@ -89,8 +89,14 @@ export function InventoriClient({ products }: { products: Product[] }) {
     if (!changed.length) return;
     startTransition(async () => {
       try {
-        await updateStock(changed.map((p) => ({ productId: p.id, available: qty[p.id] ?? 0 })));
-        toast.success(`Stok ${changed.length} produk diperbarui`);
+        // Send the loaded value as `expected` so the server can skip rows a sale/PO changed since the
+        // page opened, instead of overwriting them back up.
+        const res = await updateStock(changed.map((p) => ({ productId: p.id, available: qty[p.id] ?? 0, expected: p.stock })));
+        if (res.skipped > 0) {
+          toast.warning(`${res.updated} stok diperbarui; ${res.skipped} dilewati karena berubah sejak halaman dibuka. Memuat ulang…`);
+        } else {
+          toast.success(`Stok ${res.updated} produk diperbarui`);
+        }
         router.refresh();
       } catch {
         toast.error("Gagal memperbarui stok");
