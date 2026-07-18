@@ -24,7 +24,10 @@ export async function GET(req: NextRequest) {
   const dest = slug ? `/store/${slug}` : "/";
   if (!token) return redirectTo("/login");
   try {
-    const { payload } = await jwtVerify(token, secret());
+    // Require the impersonation audience + pin the algorithm: a normal admin/platform session JWT
+    // (same secret, no `aud`) must NOT be exchangeable here for a fresh session. Kept as a literal to
+    // match super-admin's signImpersonation IMPERSONATION_AUD (cross-app; can't share the constant).
+    const { payload } = await jwtVerify(token, secret(), { audience: "tokophi:impersonate", algorithms: ["HS256"] });
     const s = payload as unknown as Session;
     if (!s.userId || !s.storeId) throw new Error("bad payload");
     // re-sign a full-length admin session (the incoming token is intentionally short-lived)

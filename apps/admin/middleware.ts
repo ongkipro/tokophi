@@ -20,7 +20,7 @@ export async function middleware(req: NextRequest) {
   let valid = false;
   if (token) {
     try {
-      await jwtVerify(token, secret());
+      await jwtVerify(token, secret(), { algorithms: ["HS256"] });
       valid = true;
     } catch {
       valid = false;

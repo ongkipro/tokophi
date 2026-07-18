@@ -21,6 +21,11 @@ export async function signSession(s: Session): Promise<string> {
 // /impersonate route, which verifies it and mints the real session cookie on the admin domain.
 // Prod admin/super-admin live on different subdomains → cookies aren't shared, so we can't set
 // the cookie here directly.
+// The impersonation exchange token carries a distinct audience so the admin /impersonate route can
+// require it — otherwise ANY session-shaped JWT signed with AUTH_SECRET (e.g. a stolen 7-day admin
+// session) would be accepted there and exchanged for a fresh session. Ephemeral (2m, consumed on the
+// redirect), so adding the claim strands nothing.
+export const IMPERSONATION_AUD = "tokophi:impersonate";
 export async function signImpersonation(s: Session): Promise<string> {
-  return new SignJWT({ ...s }).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("2m").sign(secret());
+  return new SignJWT({ ...s }).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setAudience(IMPERSONATION_AUD).setExpirationTime("2m").sign(secret());
 }

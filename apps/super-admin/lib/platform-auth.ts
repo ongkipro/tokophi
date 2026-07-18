@@ -48,7 +48,7 @@ export async function getPlatformSession(): Promise<PlatformSession | null> {
   const token = (await cookies()).get(PLATFORM_COOKIE)?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, secret());
+    const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
     return payload as unknown as PlatformSession;
   } catch {
     return null;
