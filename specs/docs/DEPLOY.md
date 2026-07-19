@@ -66,6 +66,38 @@ on — nothing started them, nothing told us. The watchdog is the automatic reco
 - **Still open:** L2 (off-box probe incl. a DB-touching endpoint) + L3 (Coolify deploy-failure alarm) +
   an alert channel — see BACKLOG P1.8. They are blocked on the user's alert-channel decision (Telegram/SMTP).
 
+## L1b disk-cleanup safety-net (LIVE since 2026-07-18)
+
+On 2026-07-18 the storefront 503'd for ~2h while admin/super-admin/landing stayed up. Root cause was
+**not** a bad deploy: **the disk hit 100%** (Coolify keeps every per-deploy image — 204 images / ~129 GB),
+so **Postgres crash-looped** — WAL recovery finished but the end-of-recovery checkpoint could not write
+(`PANIC: could not write to file "pg_logical/replorigin_checkpoint.tmp": No space left on device`),
+Postgres reinitialised, and every query returned `the database system is in recovery mode`. The
+storefront reads Postgres on every request, so it went `Up (unhealthy)` → 503. The Coolify API itself
+500'd (it could not write either). **This is exactly the L2/L3 gap the watchdog names: a
+running-but-unhealthy container, not a `created`/`exited` one — the watchdog cannot heal it.**
+
+- **Fix that day:** `docker builder prune -af` + `docker image prune -af` (freed ~130 GB, 100% → 14%).
+  **Postgres completed its checkpoint the instant space appeared and came up on its own — no restart, no
+  data loss** (WAL replay is idempotent; the PANIC was *before* the write). ⚠️ **Never prune volumes** —
+  the Postgres data lives there (`docker builder/image prune` never touch volumes; `system prune --volumes` would).
+- **When it 503s and the containers show `Up (unhealthy)`, check DISK FIRST:** `ssh root@<box> 'df -h /'`
+  + `docker logs <postgres> --tail 20`. Full disk + "in recovery mode" ⇒ free space (prune), **do NOT
+  redeploy** — a redeploy has to BUILD, which needs the disk it does not have.
+- **Prevention (installed):** `ops/tokophi-docker-cleanup.sh` → `/usr/local/bin/tokophi-docker-cleanup.sh`,
+  run daily 03:30 UTC by `/etc/cron.d/tokophi-docker-cleanup`. Conservative: prunes build cache + UNUSED
+  images **older than 48h** (keeps 48h of rollback history); if disk is already **≥80%** it prunes
+  aggressively (all unused). Never touches volumes or images attached to a container. Logs to
+  `/var/log/tokophi-docker-cleanup.log`.
+  ```bash
+  scp ops/tokophi-docker-cleanup.sh root@<box>:/usr/local/bin/tokophi-docker-cleanup.sh
+  ssh root@<box> 'chmod 755 /usr/local/bin/tokophi-docker-cleanup.sh
+    printf "%s\n" "30 3 * * * root /usr/local/bin/tokophi-docker-cleanup.sh" > /etc/cron.d/tokophi-docker-cleanup
+    chmod 644 /etc/cron.d/tokophi-docker-cleanup'
+  ```
+- **Better long-term:** enable Coolify's own "Docker Cleanup" (threshold-based) in instance settings so
+  the platform owns this; the cron is the belt-and-braces until then.
+
 ## Billing cron (schedule this)
 
 Subscription enforcement is real-time (`computeBilling` in `requireCapability` → suspended stores
