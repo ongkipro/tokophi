@@ -101,9 +101,13 @@ export function StoreProfileCard() {
 
             <BrandingUpload
               label="Favicon"
-              hint="Ikon kecil di tab browser storefront. PNG, ICO, atau WebP — persegi, idealnya 512×512. Kosong → ikon bawaan TokoΦ yang dipakai."
+              hint="Ikon kecil di tab browser storefront. PNG atau WebP — persegi, idealnya 512×512. Kosong → ikon bawaan TokoΦ yang dipakai."
               value={faviconUrl}
-              accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/webp"
+              // No .ico here, and do not add it: saveImage encodes via sharp, which has no ICO decoder,
+              // so every .ico upload can only end in "tidak bisa dibaca". This `accept` and the hint
+              // above must match FAVICON_TYPES in lib/actions/store-profile.ts — offering a format the
+              // server cannot read is a promise the picker makes and the upload breaks.
+              accept="image/png,image/webp"
               disabled={!canWrite}
               onUpload={saveStoreFavicon}
               onRemove={removeStoreFavicon}

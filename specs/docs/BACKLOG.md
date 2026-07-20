@@ -63,6 +63,39 @@ you a working feature is broken. Verified 2026-07-17 by testing the same page th
 
 ---
 
+## 🖼️ IMAGE UPLOADS — audited 2026-07-20, every control checked in code and in a browser
+
+The assumption going in was "drag works, add click". **The truth was the opposite**: click worked almost
+everywhere, drag existed on exactly ONE surface (Files), and two controls were dead while promising both.
+Fixed this pass: `8efe404` (Kategori uploader was a dead button promising click AND drag; `image_url`
+existed in the schema and was never read or written; storefront now renders the cover), `376c908` (dead
+new-product tiles, a video card advertising 50 MB with no pipeline behind it, drag + true multi-file
+upload), `132e1d1` (favicon offered ICO, which sharp cannot decode), `fe46df0` (WebP shrink-if-smaller,
+Files busy state).
+
+**Settled, do not re-litigate:** the ORIGINAL upload is never written to disk — conversion happens in
+memory and only the `.webp` (or passthrough `.svg`) is written. There is no original to delete. SVG is
+deliberately not converted (rasterising a vector makes it bigger *and* blurry). 2 MB is the server cap
+(`MAX_BYTES`), and every visible hint now derives from or matches it.
+
+- [ ] **A merchant still cannot PICK an image they already uploaded.** Every editor uploads a NEW file
+      every time — the library fills with duplicates of the same photo and "reuse the one I uploaded" is
+      impossible. The library exists (`/files`); the picker does not. This is the single biggest remaining
+      gap in the image story and it affects produk, kategori and blog equally.
+- [ ] **Puck / Tema image fields are raw text inputs** (`lib/theme/puck-config.tsx`) — the merchant hand-types
+      `/hero/hero-1.webp` with no picker and no bridge to Files. Same missing picker, worse surface.
+- [ ] **Drag-and-drop is still absent on blog, logo and favicon.** Click works on all three and no copy
+      promises drag, so nothing lies — but Files and now produk/kategori have it, and the inconsistency is
+      the kind a merchant reads as "broken here".
+- [ ] **`getBulkLabels`-style honesty for uploads:** the product editor's failure toast is generic
+      ("Gagal mengunggah gambar (maks 2MB, format gambar)") regardless of the real cause. The server knows
+      which rule was broken; the merchant is told to guess.
+- [ ] **GIF is accepted but silently flattened to one frame** by sharp. Deliberately left off the visible
+      format list rather than advertised with a caveat — decide whether to reject it outright instead, so
+      an animated GIF does not become a still without explanation.
+
+---
+
 ## 🔴 RESI (AWB) CHAIN — scanned end-to-end 2026-07-20, against KiriminAja's own published docs
 
 Booking is solid and honest (`awb: null` is never back-filled with a booking ref). **Everything

@@ -13,8 +13,6 @@ import {
   Link2,
   ImagePlus,
   Plus,
-  Film,
-  Play,
   Trash2,
   ChevronDown,
   X,
@@ -246,11 +244,16 @@ export function ProductEditor({ product }: { product?: Product }) {
         if (isEdit && product) {
           await updateProduct(product.id, buildInput());
           toast.success("Perubahan produk disimpan");
+          router.push("/produk");
         } else {
-          await createProduct(buildInput());
-          toast.success("Produk baru disimpan");
+          // Land on the NEW product's own page, not the list. The Media card can only upload once a
+          // product row exists (see the note there), so it tells the merchant to save first — and a
+          // bounce to /produk would make them hunt for the product they just created to act on that
+          // instruction. `createProduct` already returned this id; it was being thrown away.
+          const id = await createProduct(buildInput());
+          toast.success("Produk baru disimpan — foto bisa ditambahkan sekarang");
+          router.push(`/produk/${id}`);
         }
-        router.push("/produk");
         router.refresh();
       } catch {
         toast.error("Gagal menyimpan produk");
@@ -286,25 +289,53 @@ export function ProductEditor({ product }: { product?: Product }) {
   // ---- media upload/delete (local storage → product_media) ----
   const fileRef = React.useRef<HTMLInputElement>(null);
   const [uploading, startUpload] = React.useTransition();
+  const [dragOver, setDragOver] = React.useState(false);
   const MAX_UPLOAD = 2 * 1024 * 1024; // 2MB — converted to WebP on the server
-  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-picking the same file
-    if (!file || !product) return;
-    if (!file.type.startsWith("image/")) return toast.error("File harus berupa gambar.");
-    if (file.size > MAX_UPLOAD) return toast.error(`Ukuran maksimal 2MB (file ini ${(file.size / 1048576).toFixed(1)}MB).`);
-    const fd = new FormData();
-    fd.append("file", file);
+  // ONE upload path for both the click-to-pick input and the drag-and-drop zone. They used to be
+  // click-only; a merchant dragging a photo onto the grid dropped it on the page and navigated the
+  // browser away from the unsaved editor. Both entry points must stay on this function — the checks
+  // below (image?, 2MB?) mirror the server's `checkFile` and drifting copies is how a client says
+  // "ok" to a file the boundary then rejects.
+  // `uploadProductImage` takes ONE file per call, so several files upload SEQUENTIALLY — awaited one
+  // after another, with a single router.refresh() at the end. Not concurrently: N parallel actions
+  // race the same refresh, and `position` is computed server-side as max(position)+1, so concurrent
+  // inserts would read the same max and collide on the photo order the merchant just chose.
+  // And not "take the first and ignore the rest" — a seller dragging five product photos means five.
+  const uploadFiles = (files: File[]) => {
+    if (!product || files.length === 0) return;
+    // Mirror the server's `checkFile` so we reject locally rather than round-trip. Rejected files are
+    // NAMED: a silent skip in a multi-file drop is how a merchant ends up with four photos and no idea
+    // which one is missing.
+    const ok: File[] = [];
+    for (const f of files) {
+      if (!f.type.startsWith("image/")) toast.error(`${f.name}: harus berupa gambar.`);
+      else if (f.size > MAX_UPLOAD) toast.error(`${f.name}: melebihi 2MB (${(f.size / 1048576).toFixed(1)}MB).`);
+      else ok.push(f);
+    }
+    if (!ok.length) return;
     startUpload(async () => {
-      try {
-        await uploadProductImage(product.id, fd);
-        toast.success("Gambar diunggah (dikonversi ke WebP).");
-        router.refresh();
-      } catch {
-        toast.error("Gagal mengunggah gambar (maks 2MB, format gambar).");
+      let done = 0;
+      for (const f of ok) {
+        const fd = new FormData();
+        fd.append("file", f);
+        try {
+          await uploadProductImage(product.id, fd);
+          done++;
+        } catch {
+          toast.error(`${f.name}: gagal diunggah.`);
+        }
       }
+      // Report what actually landed, not what was attempted.
+      if (done) toast.success(done === 1 ? "Gambar diunggah (dikonversi ke WebP)." : `${done} gambar diunggah (dikonversi ke WebP).`);
+      router.refresh();
     });
   };
+  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = ""; // allow re-picking the same file
+    uploadFiles(files);
+  };
+  const onDropFiles = (files: FileList) => uploadFiles(Array.from(files));
   const removeImage = (mediaId: string) => {
     if (!product) return;
     startUpload(async () => {
@@ -512,7 +543,12 @@ export function ProductEditor({ product }: { product?: Product }) {
               <p className="text-xs text-muted-foreground">Maks <span className="font-medium text-foreground">2MB</span> per gambar · otomatis dikonversi ke WebP.</p>
               {/* Image grid */}
               {isEdit ? (
-                <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
+                <div
+                  onDragOver={(e) => { e.preventDefault(); if (canMedia) setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={(e) => { e.preventDefault(); setDragOver(false); if (canMedia) onDropFiles(e.dataTransfer.files); }}
+                  className={`grid grid-cols-4 gap-3 rounded-lg transition-colors sm:grid-cols-5 ${dragOver ? "bg-primary/5 ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+                >
                   {(product!.media ?? []).map((m, i) => (
                     <div key={m.id} className="group relative aspect-square overflow-hidden rounded-lg border bg-muted">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -543,69 +579,53 @@ export function ProductEditor({ product }: { product?: Product }) {
                       className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
                     >
                       {uploading ? <span className="text-[10px]">Mengunggah…</span> : (<><ImagePlus className="size-5" /><span className="text-[10px]">Unggah</span></>)}
+                      <span className="sr-only">Klik untuk memilih gambar, atau seret gambar ke area ini</span>
                     </button>
                   )}
                   <input ref={fileRef} type="file" accept="image/*" onChange={onPickFile} className="hidden" />
                 </div>
               ) : (
-                <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
-                  <button
-                    type="button"
-                    className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                  >
-                    <ImagePlus className="size-5" />
-                    <span className="text-xs">Foto</span>
-                  </button>
-                  {[0, 1, 2].map((i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      className="flex aspect-square cursor-pointer items-center justify-center rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                    >
-                      <Plus className="size-5" />
-                    </button>
-                  ))}
+                /* NEW-PRODUCT MODE: honestly unavailable, not a live-looking dead control.
+                   This used to render a "Foto" button and three "+" tiles pixel-identical to the
+                   working edit-mode uploader, with ZERO onClick and no file input — a merchant
+                   creating a product clicked them and nothing happened, with nothing to explain why.
+                   The blocker is real: `uploadProductImage(productId, …)` writes a `product_media`
+                   row FK'd to a product that does not exist until Simpan. Wiring it would mean
+                   holding files in browser memory and replaying them after create — which invents a
+                   half-saved state (product written, photos failed) that nothing in this editor can
+                   report or retry. So: state the constraint, and make the path short — handleSave
+                   now lands a new product on its OWN edit page, where the uploader above is live. */
+                <div className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 px-4 py-8 text-center">
+                  <ImagePlus className="size-5 text-muted-foreground" />
+                  <p className="text-sm font-medium text-muted-foreground">Foto belum bisa ditambahkan</p>
+                  <p className="text-xs text-muted-foreground">
+                    Simpan produk dulu, lalu tambahkan foto di halaman produk ini.
+                  </p>
                 </div>
               )}
 
               {/* The number is the SERVER's (MAX_BYTES = 2 MB in lib/image-store.ts), not a
                   nicer-sounding one. It said 5 MB — so a merchant uploading a 4 MB photo was told it
                   was fine and then rejected. The card above already said 2 MB: the same card
-                  contradicted itself. */}
+                  contradicted itself.
+                  The FORMAT list is the server's too. It said "JPG/PNG" while the input accepts
+                  `image/*` and `saveImage` handles WebP (re-encoded only when that measurably wins)
+                  and SVG (stored untouched) — under-promising sends a merchant off to convert a file
+                  that would have worked. GIF goes through the sharp branch to WebP, so it is a still
+                  frame, not an animation: say that rather than list it as if it survives. */}
               <p className="text-xs text-muted-foreground">
-                Foto pertama jadi gambar utama. Format JPG/PNG, maks 2 MB.
+                Foto pertama jadi gambar utama. Format JPG, PNG, WebP, atau SVG — maks 2 MB.
+                Selain SVG, semua dikonversi ke WebP.
               </p>
 
-              {/* Video slot */}
-              <div className="flex flex-col gap-2 border-t pt-4">
-                <p className="text-sm font-medium">
-                  Video produk{" "}
-                  <span className="font-normal text-muted-foreground">
-                    (opsional)
-                  </span>
-                </p>
-                {isEdit ? (
-                  <button
-                    type="button"
-                    className="group relative flex aspect-video max-w-[220px] cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-muted"
-                  >
-                    <span className="flex size-10 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm transition-transform group-hover:scale-105">
-                      <Play className="size-5 translate-x-px" />
-                    </span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="flex aspect-video max-w-[220px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                  >
-                    <Film className="size-5" />
-                    <span className="text-sm">Tambah video</span>
-                  </button>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  1 video · MP4/MOV maks 50 MB
-                </p>
-              </div>
+              {/* The "Video produk" card was REMOVED (2026-07-20), not disabled. It advertised
+                  "1 video · MP4/MOV maks 50 MB" on two <button>s with no onClick, no input and no
+                  handler — and there is no video pipeline anywhere in this repo to wire them to:
+                  `lib/image-store.ts` `checkFile` throws "not an image" on anything that is not
+                  `image/*`, and its MAX_BYTES is 2 MB — 1/25th of the 50 MB the card promised. A
+                  "segera hadir" placeholder was the other option and was rejected: nothing is
+                  scheduled, so it would be the same promise in a quieter font. Bring the card back
+                  in the same commit that brings a video pipeline. */}
             </CardContent>
           </Card>
 
