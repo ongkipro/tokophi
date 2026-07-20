@@ -6,7 +6,7 @@ import { Check, ImageOff } from "@lucide/astro";
 import Stars from "../../components/Stars.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import { IDR } from "@tokophi/lib/format";
-import { imageSrcSet, productImages } from "../../data/catalog";
+import { imageSrcSet, productImages, type Product } from "../../data/catalog";
 import Breadcrumb from "../../components/Breadcrumb.astro";
 import ShareBar from "../../components/ShareBar.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
@@ -17,12 +17,36 @@ const { handle } = Astro.params;
 const product = handle ? catalog.findProduct(handle) : undefined;
 if (!product) return new Response(null, { status: 404, statusText: "Not Found" });
 
+// The related row is not "whatever the DB returned first". Rank the category's other products so the
+// four shown are the four worth showing: in-stock first (a sold-out recommendation wastes the slot),
+// then the best-sellers by real units sold. `relatedInStock` uses the SAME test the buy box uses below
+// (`inStock`) — a product with no variant rows counts as available. Fewer than 4 in the category is
+// fine; 0 omits the whole section (guarded at render). Selection only; catalog.ts is untouched.
+const relatedInStock = (p: Product) =>
+  (p.variants ?? []).some((v) => v.stock > 0) || !p.variants?.length;
 const related = catalog.byCollection(product.categoryHandle)
   .filter((p) => p.handle !== product.handle)
+  .sort((a, b) => Number(relatedInStock(b)) - Number(relatedInStock(a)) || b.unitsSold - a.unitsSold)
   .slice(0, 4);
 
+// `price === 0` in this data means "belum diberi harga / tanya penjual", NOT free — so IDR(0) → "Rp0"
+// reads as broken on a fashion product. An unpriced product shows "Hubungi untuk harga" and does NOT
+// offer the cart: the cart is client-side and adding a Rp0 line would let it be "bought" for nothing
+// (only the order API re-prices, and if the variant is unpriced too there is nothing to re-price to).
+// It routes to the merchant instead — which is what "Hubungi untuk harga" promises.
+// lazy: the real backstop is server-side — /api/public/order should reject a 0-priced line item;
+// tracked as a checkout follow-up, out of scope for this display fix.
+const unpriced = product.price <= 0;
+// Where "Tanya Harga" goes: the store's WhatsApp when set (the channel these shops actually sell on),
+// else the /kontak page which always exists. Matches Chat.astro's wa.me shape.
+const askHref = store.whatsapp
+  ? `https://wa.me/${store.whatsapp}?text=${encodeURIComponent(`Halo ${store.name}, saya mau tanya harga ${product.name}.`)}`
+  : "/kontak";
+
+// A price cut is nonsense on an unpriced product (compareAt over a 0 base computes a bogus -100%), so
+// the struck price + discount badge only exist when there IS a price.
 const discount =
-  product.compareAt && product.compareAt > product.price
+  !unpriced && product.compareAt && product.compareAt > product.price
     ? Math.round(((product.compareAt - product.price) / product.compareAt) * 100)
     : 0;
 
@@ -105,11 +129,19 @@ const offers =
         url: abs(`/produk/${product.handle}`),
       };
 
+// A description-less product must not feed an empty string to <meta name="description"> or the JSON-LD
+// `description` — an empty meta description is worse than a generated one. When the merchant wrote none
+// (`description` is `?? ""` upstream), build a sentence from what the page HAS (name + category +
+// store), matching the voice /kategori/[handle] uses for a blank blurb ("Koleksi <name> di <store>.").
+// The VISIBLE <p> below stays empty-guarded — this fallback is for the crawler, not the shopper.
+const metaDescription =
+  product.description.trim() || `${product.name} — ${product.category} di ${store.name}.`;
+
 const productLd: Record<string, unknown> = {
   "@context": "https://schema.org",
   "@type": "Product",
   name: product.name,
-  description: product.description,
+  description: metaDescription,
   image: gallery.map(abs),
   sku: product.handle,
   brand: { "@type": "Brand", name: store.name },
@@ -139,7 +171,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
 
 <Layout
   title={product.name}
-  description={product.description}
+  description={metaDescription}
   image={product.image}
   type="product"
   head={HEAD}
@@ -237,9 +269,11 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
              line, and together they exceed the 288px of content a 320px phone has. Without wrapping,
              the badge pushed the page sideways. -->
         <div class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <span id="pdp-price" class="text-2xl font-semibold text-ink tabular-nums sm:text-3xl">{IDR(product.price)}</span>
+          {/* Unpriced → "Hubungi untuk harga" (not "Rp0"). NOT `tabular-nums`/`text-3xl` here since it
+              is a phrase, not a figure. The variant-picker JS keeps this honest too — see below. */}
+          <span id="pdp-price" class:list={["font-semibold text-ink", unpriced ? "text-xl sm:text-2xl" : "text-2xl tabular-nums sm:text-3xl"]}>{unpriced ? "Hubungi untuk harga" : IDR(product.price)}</span>
           {
-            product.compareAt && (
+            !unpriced && product.compareAt && (
               <span class="text-lg text-muted line-through tabular-nums">{IDR(product.compareAt)}</span>
             )
           }
@@ -253,7 +287,12 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         </div>
         <p id="pdp-stock" class="mt-2 text-sm text-muted"></p>
 
-        <p class="mt-6 leading-relaxed text-muted">{product.description}</p>
+        {/* Render the description block ONLY when the merchant wrote one. `description` is `?? ""`
+            upstream, so an unconditional <p> showed an empty paragraph (with its top margin) on a
+            description-less product. The crawler still gets a real sentence — see `metaDescription`. */}
+        {product.description.trim() && (
+          <p class="mt-6 leading-relaxed text-muted">{product.description}</p>
+        )}
 
         <!-- Variant picker (real product_variants: Warna, Ukuran) -->
         {
@@ -319,7 +358,21 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           </div>
         </div>
 
-        <!-- Actions -->
+        <!-- Actions. An unpriced product does NOT get "Tambah ke Keranjang"/"Beli Sekarang" at all —
+             see the `unpriced` note above: there is no price to cart, so it routes to the merchant
+             ("Tanya Harga") instead, which is what "Hubungi untuk harga" promised. -->
+        {unpriced ? (
+          <div class="mt-8">
+            <a
+              href={askHref}
+              target={store.whatsapp ? "_blank" : undefined}
+              rel={store.whatsapp ? "noopener" : undefined}
+              class="inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-200/50 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream sm:w-auto"
+            >
+              Tanya Harga
+            </a>
+          </div>
+        ) : (
         <div class="mt-8 flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
@@ -344,6 +397,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             Beli Sekarang
           </button>
         </div>
+        )}
 
         <p id="cart-toast" class="mt-4 hidden rounded-lg bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
           <Check class="inline h-4 w-4" stroke-width={2.5} aria-hidden="true" /> Ditambahkan ke keranjang.
@@ -541,7 +595,9 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     function updateVariant() {
       var v = resolveVariant();
       if (!v) return;
-      if (priceEl) priceEl.textContent = fmt(v.price);
+      // Mirror the server-side truth: a 0-priced variant is "not priced yet", never "Rp0". Keeps the
+      // JS-driven price in step with the static "Hubungi untuk harga" the frontmatter renders.
+      if (priceEl) priceEl.textContent = v.price > 0 ? fmt(v.price) : "Hubungi untuk harga";
       var stock = v.stock || 0;
       if (stockEl) {
         // -600 → -700 on all THREE states. Measured against the cream page (#faf6f2): emerald-600 was

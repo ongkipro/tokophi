@@ -681,6 +681,19 @@ async function main() {
     // handle, and it does — no number means no button, rather than a button that goes nowhere.
     whatsapp: "6281234500999",
     tagline: "Busana wanita modern — batik & ready-to-wear",
+    // Public shop identity (0063) — set ONLY on the primary demo store, and this is the point of it:
+    // the storefront footer's FILLED state is what a prospective merchant sees when they look at the
+    // demo, so the demo has to show it. The 6 other stores leave all of these NULL (same as whatsapp
+    // above), which is what exercises the empty-state gating that must never render an orphan row.
+    // ⚠️ `address` is the PUBLIC shop address, NOT the courier pickup (store_settings.sender_address) —
+    // see the schema note on stores.address. Handles are usernames, no @, no URL.
+    address: "Jl. Malioboro No. 52\nKel. Sosromenduran, Gedongtengen\nYogyakarta 55271",
+    phone: "0274-551234",
+    socialInstagram: "batiknusantara",
+    socialTiktok: "batik.nusantara",
+    socialFacebook: "batiknusantara.id",
+    socialPinterest: "batiknusantara",
+    socialX: "batiknusantara",
     plan: STORE.plan,
     status: STORE.status,
     // billing: active, first month paid → recurring Rp275rb; ~20 days left in the current period
