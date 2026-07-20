@@ -82,6 +82,58 @@ export async function saveImage(input: Buffer, mime: string, baseName: string): 
   return { url: `/api/uploads/${name}`, mime: "image/webp", size: out.length, width: fin.width ?? null, height: fin.height ?? null };
 }
 
+/** The favicon's rendered size. 512 is the largest any consumer asks for (PWA manifests, Android
+ *  home-screen); the browser tab uses 16–32. One square source covers all of them. */
+const FAVICON_PX = 512;
+
+/**
+ * A favicon is NOT a photo, so it does not go through `saveImage`.
+ *
+ * Two things are different and both matter:
+ *
+ * 1. **It is written as PNG, not WebP.** `saveImage` converts everything to WebP, and the favicon was
+ *    going through it — so a merchant who uploaded a PNG got a `.webp` favicon. PNG is universally
+ *    supported as a tab icon; WebP's support as a *favicon* (as opposed to as an image) is not
+ *    something worth betting a merchant's tab icon on. The file is a few KB and cached indefinitely,
+ *    so WebP buys nothing here, and being wrong costs a missing icon. `store-profile.ts` has argued
+ *    "a PNG favicon is universally supported" in a comment for a while — the pipeline just wasn't
+ *    doing it.
+ * 2. **It is squared and padded, not cropped.** A tab icon is square; a rectangular upload had to
+ *    become square somewhere, and letting the browser do it stretches the merchant's mark. `contain`
+ *    + a transparent background preserves the artwork and centres it.
+ *
+ * Accepts ANY raster format sharp can decode (PNG, JPG, WebP, GIF, AVIF, TIFF, HEIF) — the merchant
+ * should not have to convert anything by hand. SVG stays out: see the note in store-profile.ts.
+ */
+export async function saveFavicon(input: Buffer, baseName: string): Promise<SavedImage> {
+  await fs.mkdir(UPLOAD_DIR, { recursive: true });
+  const out = await sharp(input)
+    // ⚠️ NO `withoutEnlargement`, and this is deliberate — I tried it and it is a REGRESSION.
+    // With `fit: "contain"` the canvas is 512×512 either way; `withoutEnlargement` only stops the
+    // CONTENT growing. So a 64px mark would sit centred in a 512px canvas filling 12% of it, and in a
+    // 16px browser tab the mark would render about 2px wide, surrounded by transparency. Upscaling
+    // costs nothing here precisely because the icon is ALWAYS displayed smaller than 512 — going
+    // 64 → 512 → 16 lands in the same place as 64 → 16. Fill the icon.
+    .resize(FAVICON_PX, FAVICON_PX, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    // `palette` shrinks a flat icon dramatically (a logo mark is usually a handful of colours) with no
+    // visible loss; `compressionLevel: 9` is free at this size — it is encoded once, ever.
+    .png({ palette: true, compressionLevel: 9 })
+    .toBuffer();
+  const name = `${baseName}.png`;
+  await fs.writeFile(path.join(UPLOAD_DIR, name), out);
+  // Real dimensions, read back from the encoded file — not the constant we asked for. With
+  // `withoutEnlargement` those differ for any source under 512px, and a `media` row that lies about
+  // its own size is the kind of small untruth that later gets trusted.
+  const fin = await sharp(out).metadata();
+  return {
+    url: `/api/uploads/${name}`,
+    mime: "image/png",
+    size: out.length,
+    width: fin.width ?? null,
+    height: fin.height ?? null,
+  };
+}
+
 /** The server-side gate on an upload. The client's `accept=` attribute is UX; this is the boundary —
  *  a hand-rolled POST does not honour an HTML attribute. */
 export function checkFile(file: FormDataEntryValue | null): asserts file is File {
