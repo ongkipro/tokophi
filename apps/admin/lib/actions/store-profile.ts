@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 import { withCurrentTenant } from "@/lib/tenant";
-import { saveImage, deleteImageFile, MAX_BYTES } from "@/lib/image-store";
+import { saveImage, saveFavicon, deleteImageFile, MAX_BYTES } from "@/lib/image-store";
 
 // Store profile — the fields that actually have a column and reach the shopper's storefront:
 // name, tagline (the storefront's meta description + footer line), whatsapp (the CS button).
@@ -122,7 +122,15 @@ const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
 // PNG-in-ICO container throws "Input buffer contains unsupported image format"). So an .ico upload
 // could only ever end at the catch below — a format we advertised in two places and rejected in a
 // third. A PNG favicon is universally supported by browsers; ICO is legacy. Offer what works.
-const FAVICON_TYPES = ["image/png", "image/webp"];
+// Every raster format sharp can decode. A merchant should never have to convert a file by hand to
+// give their shop a tab icon — whatever they have (a JPG from a designer, a PNG export, an AVIF off a
+// phone) is squared to 512 and re-encoded as PNG by `saveFavicon`. That is the whole point: accept
+// broadly, normalise once, serve one format.
+// Verified against sharp 0.34.5's declared input formats — do not add a type sharp cannot decode, or
+// it lands in the catch below as "tidak bisa dibaca" after we advertised it.
+const FAVICON_TYPES = [
+  "image/png", "image/jpeg", "image/webp", "image/gif", "image/avif", "image/tiff", "image/heic", "image/heif",
+];
 
 /** The human-readable format list, derived from the allow-list so the message can never advertise a
  *  format the gate refuses. The two drifting apart is exactly how the ICO bug survived. */
@@ -155,7 +163,11 @@ async function setBranding(
 
   let saved;
   try {
-    saved = await saveImage(Buffer.from(await file.arrayBuffer()), file.type, `${field === "logoUrl" ? "logo" : "favicon"}-${storeId}-${Date.now()}`);
+    const buf = Buffer.from(await file.arrayBuffer());
+    const base = `${field === "logoUrl" ? "logo" : "favicon"}-${storeId}-${Date.now()}`;
+    // The favicon takes its own path: squared to 512 and written as PNG, because a tab icon is square
+    // and PNG is the format every browser reads. `saveImage` would have made it a rectangular WebP.
+    saved = field === "faviconUrl" ? await saveFavicon(buf, base) : await saveImage(buf, file.type, base);
   } catch {
     // sharp throws on a file that merely CLAIMS to be an image (a renamed .ico, a truncated PNG).
     // Report it as the merchant's problem to fix, never as a crash — and never write the DB row for a

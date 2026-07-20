@@ -8,6 +8,7 @@ import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import { IDR } from "@tokophi/lib/format";
 import { productImages } from "../../data/catalog";
 import Breadcrumb from "../../components/Breadcrumb.astro";
+import ShareBar from "../../components/ShareBar.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
 
 // SSR: tenant from the Host header (src/middleware.ts), product from the handle param.
@@ -57,6 +58,7 @@ const TEMPLATE = catalog.productTemplate(product);
 // a product whose variants differ in price), and availability from real stock — never a guess.
 const ORIGIN = Astro.locals.origin;
 const abs = (u: string) => new URL(u, ORIGIN).href;
+const PAGE_URL = abs(`/produk/${product.handle}`);
 
 const variantPrices = (product.variants ?? []).map((v) => v.price).filter((n) => n > 0);
 const inStock = (product.variants ?? []).some((v) => v.stock > 0) || !product.variants?.length;
@@ -320,6 +322,21 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           <Check class="inline h-4 w-4" stroke-width={2.5} aria-hidden="true" /> Ditambahkan ke keranjang.
           <a href="/keranjang" class="ml-1 underline">Lihat keranjang</a>
         </p>
+
+        <!-- Share. This bar existed ONLY on the blog, which was exactly the wrong way round:
+             forwarding a dress into a WhatsApp group is how these shops actually get customers, and a
+             shopper who wants a second opinion before buying had nothing to tap but the address bar.
+             Below the buy buttons on purpose — it is the second thing you might do here, never the
+             first. Pinterest gets the main gallery image (absolute, as it requires); a product with
+             no photo passes none and the Pinterest button is simply not rendered. -->
+        <div class="mt-8 flex items-center gap-2 border-t border-line pt-6">
+          <span class="text-sm text-muted">Bagikan</span>
+          <ShareBar
+            url={PAGE_URL}
+            title={product.name}
+            image={gallery.length > 0 ? abs(gallery[0]) : undefined}
+          />
+        </div>
       </div>
     </div>
 

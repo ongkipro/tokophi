@@ -18,6 +18,9 @@ import Layout from "../../layouts/Layout.astro";
 import Prose from "../../components/Prose.astro";
 import ProductCard from "../../components/ProductCard.astro";
 import SectionHeading from "../../components/SectionHeading.astro";
+import Breadcrumb from "../../components/Breadcrumb.astro";
+import ShareBar from "../../components/ShareBar.astro";
+import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
 import { getArticle, getArticles, formatDate, readMinutes } from "../../data/content";
 
 const { store, catalog } = Astro.locals;
@@ -42,6 +45,52 @@ const promoted = [...pool.slice(start), ...pool.slice(0, start)].slice(0, 4);
 // No author avatars exist (articles.author is a bare text name), so we draw an initial instead of
 // shipping a broken <img> or a stock silhouette.
 const initial = (article.author ?? store.name).trim().charAt(0).toUpperCase();
+
+// ── SEO ──────────────────────────────────────────────────────────────────────────────────────────
+// This was the ONLY content page with neither structured data nor a breadcrumb: the PDP emits
+// Product + BreadcrumbList and /kategori emits BreadcrumbList, so Google saw a hierarchy everywhere
+// except the one page type built to be linked to from outside.
+const ORIGIN = Astro.locals.origin;
+const abs = (u: string) => new URL(u, ORIGIN).href;
+const PAGE_URL = abs(`/blog/${article.handle}`);
+
+// ONE array drives the visible trail AND the schema — the same rule as produk/[handle], which had
+// them typed out separately until the schema started claiming a crumb the screen never showed.
+const CRUMBS: Crumb[] = [
+  { name: "Beranda", href: "/" },
+  { name: "Jurnal", href: "/blog" },
+  { name: article.title },
+];
+
+// EVERY field below is a value this page ALREADY has and already renders. Nothing is manufactured:
+//  · `author` is emitted ONLY when articles.author is set. A merchant who left it blank does not get
+//    the shop name pushed in as a person — that is inventing a byline, and the visible author row is
+//    conditional for exactly the same reason.
+//  · `datePublished` only when published_at exists. A fabricated date is worse than no date: it is
+//    the field Google uses to decide how stale the piece is.
+//  · `image` only when the article has a cover. `description`/`articleSection` likewise.
+// DELIBERATELY ABSENT: `dateModified` (the read layer loads no updated_at — see data/content.ts),
+// `commentCount`/`interactionStatistic` (articles.comments is seeded but there IS no comment system,
+// so the count describes nothing), and `wordCount` (derivable, but nothing on the page states it).
+const articleLd: Record<string, unknown> = {
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  headline: article.title,
+  url: PAGE_URL,
+  mainEntityOfPage: { "@type": "WebPage", "@id": PAGE_URL },
+  publisher: {
+    "@type": "Organization",
+    name: store.name,
+    ...(store.logoUrl ? { logo: { "@type": "ImageObject", url: abs(store.logoUrl) } } : {}),
+  },
+};
+if (article.excerpt.trim()) articleLd.description = article.excerpt.trim();
+if (article.imageUrl) articleLd.image = [abs(article.imageUrl)];
+if (article.publishedAt) articleLd.datePublished = article.publishedAt.toISOString();
+if (article.author) articleLd.author = { "@type": "Person", name: article.author };
+if (article.blog) articleLd.articleSection = article.blog;
+
+const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
 ---
 
 <!-- ⚠️ The comment that used to sit here said "Layout emits no OG/Twitter tags at all today, so an
@@ -55,8 +104,11 @@ const initial = (article.author ?? store.name).trim().charAt(0).toUpperCase();
   description={article.seoDesc || article.excerpt}
   image={article.imageUrl ?? undefined}
   type="article"
+  head={HEAD}
 >
   <article class="mx-auto max-w-2xl px-4 pb-4 pt-10 sm:px-6 sm:pt-14">
+    <Breadcrumb items={CRUMBS} class="mb-6" />
+
     <!-- Topic chip. Medium shows several tags; we have exactly one axis that is real — the blog the
          article belongs to (Berita Toko / Tips & Panduan). -->
     <div class="flex flex-wrap items-center gap-2 text-sm">
@@ -107,87 +159,18 @@ const initial = (article.author ?? store.name).trim().charAt(0).toUpperCase();
       </div>
     </div>
 
-    <!-- Action bar. Hairline top + bottom, exactly where Medium puts the clap/share row. -->
+    <!-- Action bar. Hairline top + bottom, exactly where Medium puts the clap/share row.
+         The left slot used to hold a "← Jurnal" back-link; the breadcrumb at the top of the page now
+         does that job, and the slot is a label instead. That is not cosmetic: the share buttons grew
+         from 36px to 44px tap targets, and back-link + five 44px targets overflowed a 320px viewport.
+         Share markup itself lives in components/ShareBar.astro — the PDP renders the same one. -->
     <div class="mt-8 flex items-center justify-between border-y border-line py-2.5">
-      <a
-        href="/blog"
-        class="inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm text-muted transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-      >
-        <svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current" stroke-width="2" aria-hidden="true">
-          <path d="M19 12H5M11 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        Jurnal
-      </a>
-
-      <!-- Share only. Medium's clap / comment / bookmark / listen / repost controls all sit on
-           product we do not have (no engagement, no comment system, no shopper account, no TTS) —
-           rendering them would be chrome that promises features that don't exist.
-           Instagram is absent because it HAS no web share intent: a button for it could not work.
-           `data-image` feeds Pinterest, which requires an absolute media URL. -->
-      <div class="flex items-center gap-0.5" data-share data-image={article.imageUrl ?? ""}>
-        <a
-          data-share-fb
-          href="#"
-          target="_blank"
-          rel="noopener"
-          title="Bagikan ke Facebook"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-        >
-          <span class="sr-only">Bagikan ke Facebook</span>
-          <svg viewBox="0 0 24 24" class="h-[18px] w-[18px] fill-current" aria-hidden="true">
-            <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.9h2.54V9.85c0-2.52 1.5-3.91 3.77-3.91 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56v1.88h2.78l-.44 2.9h-2.34V22c4.78-.76 8.44-4.92 8.44-9.94Z" />
-          </svg>
-        </a>
-        <a
-          data-share-x
-          href="#"
-          target="_blank"
-          rel="noopener"
-          title="Bagikan ke X"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-        >
-          <span class="sr-only">Bagikan ke X</span>
-          <svg viewBox="0 0 24 24" class="h-[15px] w-[15px] fill-current" aria-hidden="true">
-            <path d="M18.9 2H22l-6.77 7.73L23.2 22h-6.24l-4.88-6.38L6.5 22H3.4l7.24-8.27L2.8 2h6.4l4.41 5.83L18.9 2Zm-1.09 18.14h1.72L8.27 3.77H6.42l11.39 16.37Z" />
-          </svg>
-        </a>
-        <a
-          data-share-pin
-          href="#"
-          target="_blank"
-          rel="noopener"
-          title="Simpan ke Pinterest"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-        >
-          <span class="sr-only">Simpan ke Pinterest</span>
-          <svg viewBox="0 0 24 24" class="h-[18px] w-[18px] fill-current" aria-hidden="true">
-            <path d="M12 2C6.48 2 2 6.48 2 12c0 4.24 2.64 7.86 6.36 9.32-.09-.79-.17-2.01.03-2.88.18-.78 1.17-4.97 1.17-4.97s-.3-.6-.3-1.48c0-1.39.81-2.43 1.81-2.43.85 0 1.26.64 1.26 1.41 0 .86-.55 2.14-.83 3.33-.24 1 .5 1.81 1.48 1.81 1.78 0 3.15-1.88 3.15-4.58 0-2.4-1.72-4.07-4.18-4.07-2.85 0-4.52 2.13-4.52 4.34 0 .86.33 1.78.74 2.28.08.1.09.19.07.29-.08.33-.26 1-.29 1.14-.05.19-.15.23-.35.14-1.3-.61-2.11-2.5-2.11-4.03 0-3.28 2.38-6.29 6.87-6.29 3.61 0 6.41 2.57 6.41 6.01 0 3.58-2.26 6.47-5.4 6.47-1.05 0-2.04-.55-2.38-1.2l-.65 2.47c-.23.9-.86 2.03-1.29 2.72.97.3 2 .46 3.07.46 5.52 0 10-4.48 10-10S17.52 2 12 2Z" />
-          </svg>
-        </a>
-        <button
-          type="button"
-          data-share-copy
-          title="Salin tautan"
-          class="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-        >
-          <span class="sr-only">Salin tautan</span>
-          <svg viewBox="0 0 24 24" class="h-[18px] w-[18px] fill-none stroke-current" stroke-width="2" aria-hidden="true">
-            <path
-              d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <span
-            data-share-copied
-            hidden
-            role="status"
-            class="absolute -top-9 right-0 whitespace-nowrap rounded-md bg-ink px-2.5 py-1 text-xs font-medium text-cream"
-          >
-            Tautan disalin
-          </span>
-        </button>
-      </div>
+      <span class="text-sm text-muted">Bagikan</span>
+      <ShareBar
+        url={PAGE_URL}
+        title={article.title}
+        image={article.imageUrl ? abs(article.imageUrl) : undefined}
+      />
     </div>
   </article>
 
@@ -304,55 +287,3 @@ const initial = (article.author ?? store.name).trim().charAt(0).toUpperCase();
   }
 </Layout>
 
-<script is:inline>
-  // Share targets are built on the client: the canonical URL depends on the host the shopper
-  // actually landed on (a merchant custom domain, a <slug>.tokophi.com subdomain, or localhost), and
-  // the storefront is one deploy serving every store — so there is no correct URL to bake in at SSR.
-  (function () {
-    var root = document.querySelector("[data-share]");
-    if (!root) return;
-
-    var url = window.location.href;
-    var title = document.title;
-    var enc = encodeURIComponent;
-
-    var set = function (sel, href) {
-      var el = root.querySelector(sel);
-      if (el) el.href = href;
-    };
-    set("[data-share-fb]", "https://www.facebook.com/sharer/sharer.php?u=" + enc(url));
-    set("[data-share-x]", "https://twitter.com/intent/tweet?url=" + enc(url) + "&text=" + enc(title));
-
-    // Pinterest needs an ABSOLUTE media URL. `imageUrl` is a site-relative path (/products/x.webp),
-    // so resolve it against the current origin — the only place the real host is known.
-    var img = root.getAttribute("data-image");
-    var media = img ? new URL(img, window.location.origin).href : "";
-    set(
-      "[data-share-pin]",
-      "https://pinterest.com/pin/create/button/?url=" + enc(url) + "&media=" + enc(media) + "&description=" + enc(title),
-    );
-
-    var copy = root.querySelector("[data-share-copy]");
-    if (!copy) return;
-    copy.addEventListener("click", function () {
-      // On a phone the native share sheet is strictly better than a clipboard copy. On desktop,
-      // clipboard. Neither is guaranteed — a non-HTTPS origin exposes NO clipboard API at all — so
-      // both paths fail silently instead of throwing at the shopper.
-      if (navigator.share) {
-        navigator.share({ title: title, url: url }).catch(function () {});
-        return;
-      }
-      if (!navigator.clipboard) return;
-      navigator.clipboard.writeText(url).then(function () {
-        // Visible confirmation: a `title` tooltip would never be seen on touch, and a copy with no
-        // feedback reads as a dead button.
-        var done = copy.querySelector("[data-share-copied]");
-        if (!done) return;
-        done.hidden = false;
-        setTimeout(function () {
-          done.hidden = true;
-        }, 1600);
-      }, function () {});
-    });
-  })();
-</script>

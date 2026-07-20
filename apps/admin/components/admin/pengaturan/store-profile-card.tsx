@@ -84,7 +84,14 @@ export function StoreProfileCard() {
                 anywhere — this form is that missing writer. */}
             <BrandingUpload
               label="Logo toko"
-              hint="Tampil di header storefront & checkout. PNG, JPG, WebP, atau SVG — maks. 2 MB. Kosong → nama toko dipakai sebagai wordmark."
+              // The numbers are MEASURED off the storefront, not rounded to something that sounds
+              // tidy. Header.astro renders the logo at `h-9 sm:h-10 w-auto max-w-[11rem]` — 40px tall
+              // at most, clamped to 176px wide — and the mobile menu at `h-8 max-w-[9rem]`. So:
+              //  · 120px tall = 3x the largest render, which is what a modern phone screen wants.
+              //  · Wider than ~4:1 hits `max-w-[11rem]` FIRST and is then rendered SHORTER than 40px.
+              //    That is the invisible reason a merchant's wide logo looks small, so we say it.
+              // If these classes change, change this line.
+              hint="Tampil di header storefront & checkout. Terbaik: SVG (tajam di semua layar) atau PNG transparan, tinggi minimal 120 px — misalnya 480 × 120. Logo yang lebih lebar dari rasio 4:1 akan otomatis dikecilkan agar muat. Maks. 2 MB. Kosong → nama toko dipakai sebagai wordmark."
               value={logoUrl}
               accept="image/png,image/jpeg,image/webp,image/svg+xml"
               disabled={!canWrite}
@@ -101,13 +108,16 @@ export function StoreProfileCard() {
 
             <BrandingUpload
               label="Favicon"
-              hint="Ikon kecil di tab browser storefront. PNG atau WebP — persegi, idealnya 512×512. Kosong → ikon bawaan TokoΦ yang dipakai."
+              hint="Ikon kecil di tab browser storefront. Unggah format gambar apa pun — otomatis dijadikan PNG persegi 512 × 512. Paling rapi kalau gambarnya sudah persegi; yang tidak persegi diberi ruang kosong, bukan dipotong. Maks. 2 MB. Kosong → ikon bawaan TokoΦ yang dipakai."
               value={faviconUrl}
-              // No .ico here, and do not add it: saveImage encodes via sharp, which has no ICO decoder,
-              // so every .ico upload can only end in "tidak bisa dibaca". This `accept` and the hint
-              // above must match FAVICON_TYPES in lib/actions/store-profile.ts — offering a format the
-              // server cannot read is a promise the picker makes and the upload breaks.
-              accept="image/png,image/webp"
+              // Every raster format sharp can decode — the merchant converts nothing by hand;
+              // `saveFavicon` squares it to 512 and writes PNG. This `accept` must stay in step with
+              // FAVICON_TYPES in lib/actions/store-profile.ts: offering a format the server cannot read
+              // is a promise the picker makes and the upload breaks.
+              // ⚠️ NO .ico, and do not add it back — sharp has no ICO decoder (verified on 0.34.5), so
+              // every .ico upload can only end in "tidak bisa dibaca". NO .svg either: see the note on
+              // FAVICON_TYPES. Everything else raster is fine.
+              accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/tiff,image/heic,image/heif"
               disabled={!canWrite}
               onUpload={saveStoreFavicon}
               onRemove={removeStoreFavicon}

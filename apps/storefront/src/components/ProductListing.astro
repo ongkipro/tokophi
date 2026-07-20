@@ -6,11 +6,16 @@
 // empty state for products on this storefront; a fork is how the "Terbaru shows the oldest products"
 // bug would have survived in one of two places after being fixed in the other.
 //
+// The empty state moved OUT of here into EmptyState.astro (same markup, byte for byte) so /blog can
+// render the same one instead of the bare centred <p> it had — design audit #16. Same reasoning as
+// the extraction above: one shape, one file.
+//
 // The sort is client-side and deliberately dumb: the whole list is already in the DOM (these are
 // merchant catalogues, not marketplaces), so re-ordering nodes beats a round trip. `data-index`
 // ascends with created_at because the list arrives oldest-first — "Terbaru" therefore REVERSES it.
 import ProductCard from "./ProductCard.astro";
 import RevealGrid from "./RevealGrid.astro";
+import EmptyState from "./EmptyState.astro";
 import { PackageOpen } from "@lucide/astro";
 import type { Product } from "../data/catalog";
 
@@ -60,19 +65,13 @@ const {
         </RevealGrid>
       </Fragment>
     ) : (
-      <div class="py-20 text-center">
-        <PackageOpen class="mx-auto h-10 w-10 text-brand-400" stroke-width={1.5} aria-hidden="true" />
-        {/* Not a SectionHeading: this is an empty state, and its heading is centred under an icon
-            rather than opening a block of content. Same size, different role. */}
-        <h2 class="mt-4 font-display text-2xl font-semibold text-ink">Belum ada produk</h2>
-        <p class="mt-2 text-muted">{emptyText}</p>
-        <a
-          href="/"
-          class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
-        >
-          Kembali ke Beranda
-        </a>
-      </div>
+      <EmptyState
+        icon={PackageOpen}
+        title="Belum ada produk"
+        body={emptyText}
+        ctaHref="/"
+        ctaLabel="Kembali ke Beranda"
+      />
     )
   }
 </section>

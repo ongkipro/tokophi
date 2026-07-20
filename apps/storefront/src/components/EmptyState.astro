@@ -1,0 +1,45 @@
+---
+// EMPTY STATE — icon · heading · one line of copy · one way out.
+//
+// Extracted from ProductListing.astro (design audit #16). The product listing had a real empty state
+// and the Jurnal had a bare centred `<p>` — two listing pages, two treatments, because the treatment
+// lived inside one of them. Same reason PageHeader / SectionHeading / ProductListing were pulled out:
+// a shape that exists in only one file is a shape the next page will re-invent worse.
+//
+// The CTA is optional but should almost always be passed. An empty state with no exit is a dead end,
+// and the shopper's next move is the whole point of showing one instead of nothing.
+import type { AstroComponent } from "@lucide/astro";
+
+interface Props {
+  /** A lucide icon component, e.g. `PackageOpen`. Rendered at 40px, brand-400, decorative. */
+  icon: AstroComponent;
+  /** Short and factual — "Belum ada produk". Not an apology. */
+  title: string;
+  /** One line. Says what happened and, ideally, that it is temporary. */
+  body: string;
+  /** Both or neither — a labelless link renders nothing. */
+  ctaHref?: string;
+  ctaLabel?: string;
+  class?: string;
+}
+
+const { icon: Icon, title, body, ctaHref, ctaLabel, class: className } = Astro.props;
+---
+
+<div class:list={["py-20 text-center", className]}>
+  <Icon class="mx-auto h-10 w-10 text-brand-400" stroke-width={1.5} aria-hidden="true" />
+  {/* Not a SectionHeading: this heading is centred under an icon rather than opening a block of
+      content. Same size, different role. */}
+  <h2 class="mt-4 font-display text-2xl font-semibold text-ink">{title}</h2>
+  <p class="mt-2 text-muted">{body}</p>
+  {
+    ctaHref && ctaLabel && (
+      <a
+        href={ctaHref}
+        class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+      >
+        {ctaLabel}
+      </a>
+    )
+  }
+</div>

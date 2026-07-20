@@ -7,6 +7,8 @@ import PageHeader from "../../components/PageHeader.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
 import RevealGrid from "../../components/RevealGrid.astro";
 import ArticleCard from "../../components/ArticleCard.astro";
+import EmptyState from "../../components/EmptyState.astro";
+import { Newspaper } from "@lucide/astro";
 import { getArticles } from "../../data/content";
 
 const { store } = Astro.locals;
@@ -17,6 +19,13 @@ const CRUMBS: Crumb[] = [
   { name: "Jurnal" },
 ];
 const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
+
+// og:image — the newest article that HAS a cover (getArticles is ordered published_at desc). This
+// page passed none, so every /blog link shared to WhatsApp fell back to the store logo: a grey tile
+// where the merchant's own editorial photo was sitting one field away. No article has a cover → no
+// image → Layout falls back to the logo exactly as before. Layout absolutises it (`new URL(src,
+// origin)`), same as produk/[handle] passing `product.image` — nothing is made absolute here.
+const OG_IMAGE = articles.find((a) => a.imageUrl)?.imageUrl ?? undefined;
 ---
 
 <!-- Was "tips fashion, perawatan kain, dan inspirasi gaya busana wanita" — the demo's vertical, shipped
@@ -25,6 +34,7 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
   head={HEAD}
   title="Jurnal"
   description={`Artikel, tips, dan kabar terbaru dari ${store.name}.`}
+  image={OG_IMAGE}
 >
   <PageHeader
     crumbs={CRUMBS}
@@ -36,9 +46,16 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
   <section class="mx-auto max-w-7xl px-4 py-12 sm:px-6">
     {
       articles.length === 0 ? (
-        <p class="p-10 text-center text-muted">
-          Belum ada tulisan yang terbit. Nantikan cerita pertama kami.
-        </p>
+        // Was a bare centred <p> while the product listing next door had icon + heading + copy + CTA.
+        // Same component now — and the CTA points at /produk, not the homepage: a shopper who came
+        // looking for reading and found none is still a shopper.
+        <EmptyState
+          icon={Newspaper}
+          title="Belum ada tulisan"
+          body="Cerita pertama dari kami sedang disiapkan. Sementara itu, lihat-lihat koleksinya dulu, yuk."
+          ctaHref="/produk"
+          ctaLabel="Lihat koleksi"
+        />
       ) : (
         <RevealGrid rows={3} unit="tulisan">
         <div data-reveal-grid class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
