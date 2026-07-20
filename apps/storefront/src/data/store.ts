@@ -21,6 +21,25 @@ export type StoreInfo = {
   /** `null` = no CS WhatsApp set. Render NO WhatsApp button at all. */
   whatsapp: string | null;
   city: string;
+  /**
+   * PUBLIC shop address, free text, 2–4 lines (a textarea in the seller's Pengaturan). `null`/blank =
+   * the merchant has not published one → render NOTHING. ⚠️ This is NOT `store_settings.sender_address`
+   * (the courier PICKUP point) — most sellers here ship from home, and publishing that would put a
+   * private home address on every page of a public website without anyone asking.
+   */
+  address: string | null;
+  /** Public phone (may be a landline). `null` = no phone published → render no phone row. */
+  phone: string | null;
+  /**
+   * Social handles — the USERNAME only (no `@`, no URL); the storefront builds the profile link.
+   * `null` for every one is the NORMAL state today: the whole social row disappears, it does not
+   * render as an empty strip.
+   */
+  socialInstagram: string | null;
+  socialTiktok: string | null;
+  socialFacebook: string | null;
+  socialPinterest: string | null;
+  socialX: string | null;
   logoUrl: string | null;
   /** `null` = merchant set no favicon → fall back to the platform icon rather than a broken one. */
   faviconUrl: string | null;
@@ -112,6 +131,13 @@ const toStoreInfo = (r: typeof schema.stores.$inferSelect): StoreInfo => ({
   tagline: r.tagline,
   whatsapp: r.whatsapp,
   city: r.city ?? "",
+  address: r.address,
+  phone: r.phone,
+  socialInstagram: r.socialInstagram,
+  socialTiktok: r.socialTiktok,
+  socialFacebook: r.socialFacebook,
+  socialPinterest: r.socialPinterest,
+  socialX: r.socialX,
   logoUrl: r.logoUrl,
   faviconUrl: r.faviconUrl,
   brandColor: r.brandColor,
