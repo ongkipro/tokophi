@@ -123,6 +123,26 @@ export const stores = pgTable("stores", {
   // NO tagline, rather than a placeholder. A missing channel is honest; a dead one is not.
   whatsapp: text(), // digits only, country code first: "628123456789"
   tagline: text(),
+  // Public shop identity (0063) — what a shopper is allowed to see in the storefront footer.
+  //
+  // ⚠️ `address` is NOT `store_settings.sender_address`. That one is the SHIPPING PICKUP point: it
+  // prices ongkir and it is where the courier physically collects. Conflating them is wrong twice —
+  // a merchant may ship from a warehouse while the shop is elsewhere, and most sellers here start
+  // from HOME, so publishing the pickup address would put a private home address on every page of a
+  // public website without ever asking. This field is entered deliberately, and empty is normal.
+  address: text(),
+  // Public phone. Separate from `store_settings.sender_phone` (the courier's contact for pickup) for
+  // the same reason, and separate from `whatsapp` because plenty of shops publish a landline they do
+  // not run WhatsApp on.
+  phone: text(),
+  // Social handles — the USERNAME only, no @ and no URL. The storefront builds the link. Storing a
+  // full URL invites pasting anything (someone else's profile, or a `javascript:` scheme) and turns
+  // validation into URL parsing instead of the much narrower username problem.
+  socialInstagram: text(),
+  socialTiktok: text(),
+  socialFacebook: text(),
+  socialPinterest: text(),
+  socialX: text(),
   createdAt: createdAt(),
 });
 
