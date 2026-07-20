@@ -142,13 +142,29 @@ export function checkFile(file: FormDataEntryValue | null): asserts file is File
   if (file.size > MAX_BYTES) throw new Error("file too large");
 }
 
-/** Delete a file previously written by saveImage. Tolerates an already-missing file: a merchant
- *  replacing a logo must not be blocked because the old one vanished from disk. Refuses anything that
- *  is not one of our own `/api/uploads/<name>` urls — a path from a DB column is still input, and
- *  `../../` in a filename must not reach fs.unlink. */
+/** Where `app/api/uploads/[name]/route.ts` caches its `?w=` renditions. Named here so the delete
+ *  path below can sweep them — a derivative that outlives its original is a file nothing will ever
+ *  serve or clean up again. */
+const RESIZE_CACHE_DIR = path.join(UPLOAD_DIR, ".resized");
+
+/** Delete a file previously written by saveImage, plus any resized renditions the uploads route
+ *  cached from it. Tolerates an already-missing file: a merchant replacing a logo must not be
+ *  blocked because the old one vanished from disk. Refuses anything that is not one of our own
+ *  `/api/uploads/<name>` urls — a path from a DB column is still input, and `../../` in a filename
+ *  must not reach fs.unlink. */
 export async function deleteImageFile(url: string | null | undefined): Promise<void> {
   if (!url) return;
   const m = /^\/api\/uploads\/([A-Za-z0-9._-]+)$/.exec(url);
   if (!m) return;
-  await fs.unlink(path.join(UPLOAD_DIR, m[1])).catch(() => {});
+  const name = m[1];
+  await fs.unlink(path.join(UPLOAD_DIR, name)).catch(() => {});
+  // Renditions are `<name>.w<width>.webp`. Listing and filtering (rather than looping the width
+  // list) keeps this correct if the route's allow-list ever changes — the cleanup must not need a
+  // matching edit in two files to stay honest.
+  const derived = await fs.readdir(RESIZE_CACHE_DIR).catch(() => [] as string[]);
+  await Promise.all(
+    derived
+      .filter((f) => f.startsWith(`${name}.w`))
+      .map((f) => fs.unlink(path.join(RESIZE_CACHE_DIR, f)).catch(() => {})),
+  );
 }
