@@ -1,6 +1,6 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { and, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
@@ -50,7 +50,15 @@ export async function receivePurchaseOrder(code: string): Promise<void> {
     for (const it of items) {
       const add = it.qty - it.receivedQty;
       if (it.variantId && add > 0) {
-        const [inv] = await db.select().from(schema.inventoryLevels).where(eq(schema.inventoryLevels.variantId, it.variantId)).limit(1);
+        // Target the default-location row explicitly: unordered limit(1) picks an ARBITRARY location
+        // once a store has more than one, so the receipt would land in a warehouse nobody stocked.
+        const [inv] = await db
+          .select({ id: schema.inventoryLevels.id, available: schema.inventoryLevels.available })
+          .from(schema.inventoryLevels)
+          .innerJoin(schema.locations, eq(schema.locations.id, schema.inventoryLevels.locationId))
+          .where(eq(schema.inventoryLevels.variantId, it.variantId))
+          .orderBy(desc(schema.locations.isDefault), asc(schema.inventoryLevels.id))
+          .limit(1);
         if (inv) await db.update(schema.inventoryLevels).set({ available: inv.available + add }).where(eq(schema.inventoryLevels.id, inv.id));
       }
       await db.update(schema.purchaseOrderItems).set({ receivedQty: it.qty }).where(eq(schema.purchaseOrderItems.id, it.id));
