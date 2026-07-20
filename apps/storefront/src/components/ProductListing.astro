@@ -7,12 +7,14 @@
 // bug would have survived in one of two places after being fixed in the other.
 //
 // The empty state moved OUT of here into EmptyState.astro (same markup, byte for byte) so /blog can
-// render the same one instead of the bare centred <p> it had — design audit #16. Same reasoning as
-// the extraction above: one shape, one file.
+// render the same one instead of the bare centred <p> it had — design audit #16.
 //
-// The sort is client-side and deliberately dumb: the whole list is already in the DOM (these are
-// merchant catalogues, not marketplaces), so re-ordering nodes beats a round trip. `data-index`
-// ascends with created_at because the list arrives oldest-first — "Terbaru" therefore REVERSES it.
+// SORT IS NOW SERVER-SIDE AND URL-DRIVEN (`?sort=`). It used to be a client-side DOM reorder, which
+// had three problems the audit named: the order was not in the URL (unshareable, lost on the back
+// button), and the reorder re-fired RevealGrid's MutationObserver. Worse and quieter: the dropdown
+// DEFAULTED to "Terbaru" while the initial render showed the prop's oldest-first order — the control
+// contradicted the page. Sorting on the server by the same `sort` the control reflects makes the two
+// agree, and the whole thing works with JS disabled (it is a GET form).
 import ProductCard from "./ProductCard.astro";
 import RevealGrid from "./RevealGrid.astro";
 import EmptyState from "./EmptyState.astro";
@@ -31,33 +33,60 @@ const {
   emptyText = "Koleksi ini sedang dalam perjalanan. Cek koleksi lainnya, yuk.",
   class: className,
 } = Astro.props;
+
+const SORTS = { terbaru: "Terbaru", termurah: "Harga terendah", termahal: "Harga tertinggi" } as const;
+type SortKey = keyof typeof SORTS;
+const sort: SortKey = (Astro.url.searchParams.get("sort") as SortKey) in SORTS
+  ? (Astro.url.searchParams.get("sort") as SortKey)
+  : "terbaru";
+
+// Sort a COPY — never mutate the prop, which a caller may still be reading. `terbaru` = newest first
+// (createdAt is epoch ms), so it is the reverse of the oldest-first order the list arrives in.
+const sorted = [...products].sort((a, b) =>
+  sort === "termurah" ? a.price - b.price
+  : sort === "termahal" ? b.price - a.price
+  : b.createdAt - a.createdAt,
+);
+
+// The sort form submits back to THIS page and must carry every OTHER query param — most importantly
+// `q` on /cari, which sorting would otherwise drop, turning "urutkan search results" into "throw the
+// search away". Everything except `sort` is re-emitted as a hidden field.
+const carryParams = [...Astro.url.searchParams.entries()].filter(([k]) => k !== "sort");
 ---
 
 <section class:list={["mx-auto max-w-7xl px-4 py-12 sm:px-6", className]}>
   {
-    products.length > 0 ? (
+    sorted.length > 0 ? (
       <Fragment>
         <div class="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-5">
           <p class="text-sm text-muted">
-            <span class="font-medium text-ink tabular-nums">{products.length}</span> produk
+            <span class="font-medium text-ink tabular-nums">{sorted.length}</span> produk
           </p>
-          <label class="flex items-center gap-2 text-sm text-muted">
-            <span class="hidden sm:inline">Urutkan</span>
-            <select
-              id="sort-select"
-              class="rounded-full border border-line bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-            >
-              <option value="terbaru">Terbaru</option>
-              <option value="termurah">Harga terendah</option>
-              <option value="termahal">Harga tertinggi</option>
-            </select>
-          </label>
+          <form method="get" action={Astro.url.pathname} class="flex items-center gap-2 text-sm text-muted">
+            {carryParams.map(([k, v]) => <input type="hidden" name={k} value={v} />)}
+            <label class="flex items-center gap-2">
+              <span class="hidden sm:inline">Urutkan</span>
+              <select
+                id="sort-select"
+                name="sort"
+                class="min-h-11 rounded-full border border-line bg-white px-4 text-sm font-medium text-ink transition-colors hover:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+              >
+                {Object.entries(SORTS).map(([k, label]) => (
+                  <option value={k} selected={k === sort}>{label}</option>
+                ))}
+              </select>
+            </label>
+            {/* No-JS fallback: without the change-listener below, this button submits the form. */}
+            <noscript>
+              <button type="submit" class="min-h-11 rounded-full bg-brand-600 px-4 text-sm font-semibold text-white">Urutkan</button>
+            </noscript>
+          </form>
         </div>
 
         <RevealGrid rows={3} unit="produk">
           <div id="product-grid" data-reveal-grid class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {products.map((p, i) => (
-              <div class="product-item" data-price={p.price} data-index={i}>
+            {sorted.map((p) => (
+              <div class="product-item">
                 <ProductCard product={p} />
               </div>
             ))}
@@ -77,27 +106,14 @@ const {
 </section>
 
 <script is:inline>
+  // Progressive enhancement: submit the GET form the moment the select changes, so a mouse user gets
+  // the old instant feel without the <noscript> button. A change-LISTENER, not an inline onchange
+  // attribute, to stay clear of any inline-handler CSP. The <noscript> button covers JS-off.
   (function () {
     var select = document.getElementById("sort-select");
-    var grid = document.getElementById("product-grid");
-    if (!select || !grid) return;
+    if (!select || !select.form) return;
     select.addEventListener("change", function () {
-      var mode = select.value;
-      var items = Array.prototype.slice.call(grid.querySelectorAll(".product-item"));
-      items.sort(function (a, b) {
-        var pa = Number(a.getAttribute("data-price"));
-        var pb = Number(b.getAttribute("data-price"));
-        var ia = Number(a.getAttribute("data-index"));
-        var ib = Number(b.getAttribute("data-index"));
-        if (mode === "termurah") return pa - pb;
-        if (mode === "termahal") return pb - pa;
-        // "Terbaru" = newest first. data-index ascends with created_at (list loads oldest-first), so
-        // reverse it — it used to return `ia - ib` and showed the OLDEST products under "Terbaru".
-        return ib - ia;
-      });
-      items.forEach(function (el) {
-        grid.appendChild(el);
-      });
+      select.form.submit();
     });
   })();
 </script>
