@@ -1,0 +1,67 @@
+---
+// /cari — product search. The design audit (#16) named search "the biggest single functional hole":
+// a fashion catalogue with no way to look for a garment by name. This is that page.
+//
+// The query is a URL param (`?q=`), never client state — so a result page is shareable, survives the
+// back button, and works with JS disabled (the header's search box is a plain GET form). Tenant + the
+// catalogue come from Astro.locals (Host header, src/middleware.ts); `q` is the ONLY thing read from
+// the URL. Search itself is a filter over the products already loaded per request — no extra DB query
+// (see catalog.search).
+import Layout from "../layouts/Layout.astro";
+import PageHeader from "../components/PageHeader.astro";
+import ProductListing from "../components/ProductListing.astro";
+import EmptyState from "../components/EmptyState.astro";
+import { SearchX } from "@lucide/astro";
+import type { Crumb } from "../lib/breadcrumb";
+
+const { store, catalog } = Astro.locals;
+
+// Trim, then cap at 100 chars — it is a search string, not a form field: normalise generously, reject
+// nothing (AGENTS.md over-validation note). "batik tulis", "M. Rizky", a diacritic name all pass; the
+// only guard is a sane length so a pathological URL can't blow up the match loop.
+const q = (Astro.url.searchParams.get("q") ?? "").trim().slice(0, 100);
+
+const results = q ? catalog.search(q) : [];
+// No-query state surfaces bestsellers so the page is a starting point, not a blank prompt.
+const suggestions = q ? [] : catalog.bestsellers().slice(0, 8);
+
+const CRUMBS: Crumb[] = [{ name: "Beranda", href: "/" }, { name: "Cari" }];
+
+// SEO: a search-results URL is infinite and thin — noindex,follow (keep crawling the products it
+// links to, don't index the query permutations themselves). Real, query-specific <title>.
+const TITLE = q ? `Hasil pencarian: ${q}` : "Cari produk";
+const DEK = q
+  ? results.length > 0
+    ? `${results.length} hasil untuk «${q}»`
+    : `Tidak ada hasil untuk «${q}»`
+  : `Cari produk di ${store.name} berdasarkan nama atau kategori.`;
+---
+
+<Layout title={TITLE} description={DEK} robots="noindex,follow">
+  <PageHeader crumbs={CRUMBS} eyebrow="Pencarian" title={q ? "Hasil pencarian" : "Cari produk"} dek={DEK} />
+
+  {
+    q && results.length === 0 ? (
+      <section class="mx-auto max-w-7xl px-4 sm:px-6">
+        <EmptyState
+          icon={SearchX}
+          title="Produk tidak ditemukan"
+          body="Coba kata kunci lain, atau telusuri seluruh koleksi kami."
+          ctaHref="/produk"
+          ctaLabel="Lihat semua produk"
+        />
+      </section>
+    ) : q ? (
+      <ProductListing products={results} />
+    ) : (
+      <Fragment>
+        <p class="mx-auto max-w-7xl px-4 pt-12 text-sm text-muted sm:px-6">Paling dicari</p>
+        <ProductListing
+          products={suggestions}
+          class="pt-6"
+          emptyText="Katalog belum diisi. Cek lagi sebentar lagi, ya."
+        />
+      </Fragment>
+    )
+  }
+</Layout>

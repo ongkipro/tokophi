@@ -17,6 +17,13 @@ import { brandShadesFor, getStoreTemplates, resolveTemplate, type StoreTemplates
 const slugify = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
+// Accent-folded, lower-cased text for SUBSTRING matching (search). Same NFKD normalize `slugify` uses,
+// but it keeps spaces and letters instead of collapsing everything to hyphens — so "M. Rizky" and
+// "batik tulis" still match on their words. Strips only the combining diacritics NFKD splits out, so a
+// shopper typing "gamis" finds "Gamis" and "kaftan" finds "Kaftán".
+const foldText = (s: string) =>
+  s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+
 export type Collection = {
   handle: string;
   name: string;
@@ -81,6 +88,13 @@ export type Catalog = {
   productReviews: (p: Product | string) => Review[];
   bestsellers: (list?: Product[]) => Product[];
   byCollection: (handle: string) => Product[];
+  /**
+   * Free-text product search over the in-memory catalog — NO extra DB round-trip (the products are
+   * already loaded per request). Accent-insensitive, case-insensitive. Ranked: name-starts-with >
+   * name-contains > category-contains, so "dress" returns dresses before a top merely tagged "dress".
+   * Empty/blank query → []. Same `Product[]` shape the grids consume, so /cari reuses ProductListing.
+   */
+  search: (query: string) => Product[];
   findProduct: (handle: string) => Product | undefined;
   findCollection: (handle: string) => Collection | undefined;
 };
@@ -454,6 +468,24 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       const members = membersByHandle.get(handle);
       if (!members) return [];
       return products.filter((p) => members.has(p.handle));
+    },
+    // A filter over the products ALREADY in memory — never a new query. Rank each hit (0 = name
+    // starts with the query, 1 = name contains it, 2 = only the category contains it) and drop the
+    // misses. Array.sort is stable in every engine we ship to, so within a rank the products keep the
+    // catalog's oldest-first order. `q` is trimmed+folded here; the page trims+caps it before calling.
+    search: (query) => {
+      const q = foldText(query.trim());
+      if (!q) return [];
+      const scored: { p: Product; rank: number }[] = [];
+      for (const p of products) {
+        const name = foldText(p.name);
+        let rank = -1;
+        if (name.startsWith(q)) rank = 0;
+        else if (name.includes(q)) rank = 1;
+        else if (foldText(p.category).includes(q)) rank = 2;
+        if (rank >= 0) scored.push({ p, rank });
+      }
+      return scored.sort((a, b) => a.rank - b.rank).map((s) => s.p);
     },
     findProduct: (handle) => products.find((p) => p.handle === handle),
     findCollection: (handle) => collections.find((c) => c.handle === handle),

@@ -1,5 +1,5 @@
 ---
-import { ShoppingBag, Tag, ArrowRight } from "@lucide/astro";
+import { ShoppingBag, Tag, ArrowRight, Search } from "@lucide/astro";
 import { IDR } from "@tokophi/lib/format";
 import { mediaUrl } from "../data/catalog";
 import { getMainNav, type NavItem } from "../data/nav";
@@ -21,6 +21,9 @@ const showUtilityBar = Boolean(promoCol || terlarisCol);
 // Merchant logo (stores.logo_url) when set, else the store name as a wordmark.
 const logo = store.logoUrl ? mediaUrl(store.logoUrl) : null;
 const pathname = Astro.url.pathname;
+// Prefill the search box on /cari so a shopper refining a search doesn't start from blank. `q` is the
+// ONLY thing we read from the URL, and only here — trimmed + capped exactly like the /cari page does.
+const searchQuery = pathname === "/cari" ? (Astro.url.searchParams.get("q") ?? "").trim().slice(0, 100) : "";
 const isActive = (href: string) =>
   href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
@@ -258,6 +261,33 @@ const featured = catalog.bestsellers()[0];
           form that discards it. There are no shopper accounts by design (buying never requires one —
           see AGENTS.md), so there is nothing for this link to point at. */}
 
+      {/* Search — a plain GET form to /cari: it works with JS disabled and the result URL is shareable
+          (?q=…). Desktop only; the phone gets one inside the drawer. `type="search"` gives a native
+          clear button; the query is capped at 100 (a search string, not a validated field). */}
+      <form action="/cari" method="get" role="search" class="hidden lg:block">
+        <label for="site-search" class="sr-only">Cari produk</label>
+        <div class="relative flex items-center">
+          <input
+            id="site-search"
+            type="search"
+            name="q"
+            value={searchQuery}
+            maxlength="100"
+            placeholder="Cari produk…"
+            autocomplete="off"
+            enterkeyhint="search"
+            class="min-h-11 w-52 rounded-full border border-line bg-white pl-4 pr-11 text-sm text-ink placeholder:text-muted transition-colors hover:border-brand-400 focus-visible:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+          />
+          <button
+            type="submit"
+            aria-label="Cari"
+            class="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-full text-brand-600 transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+          >
+            <Search class="h-4 w-4" stroke-width={1.8} aria-hidden="true" />
+          </button>
+        </div>
+      </form>
+
       {/* NO aria-label on this link. It said "Keranjang" while the visible text reads "Keranjang 0",
           so Lighthouse `label-content-name-mismatch` scored 0 — a voice-control user says "click
           Keranjang" and nothing happens, because the name they can SEE is not the name the browser
@@ -335,6 +365,33 @@ const featured = catalog.bestsellers()[0];
     </div>
 
     <nav aria-label="Navigasi seluler" class="flex-1 overflow-y-auto px-3 py-4">
+      {/* Search lives at the TOP of the drawer — a phone is where most Indonesian shoppers browse, so
+          it belongs where the thumb lands first, not buried under the category list. Same GET form as
+          desktop; submitting reloads the page, which closes the drawer for free. */}
+      <form action="/cari" method="get" role="search" class="mb-4 px-1">
+        <label for="mobile-search" class="sr-only">Cari produk</label>
+        <div class="relative flex items-center">
+          <input
+            id="mobile-search"
+            type="search"
+            name="q"
+            value={searchQuery}
+            maxlength="100"
+            placeholder="Cari produk…"
+            autocomplete="off"
+            enterkeyhint="search"
+            class="min-h-11 w-full rounded-full border border-line bg-white pl-4 pr-11 text-base text-ink placeholder:text-muted focus-visible:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          />
+          <button
+            type="submit"
+            aria-label="Cari"
+            class="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-full text-brand-600 transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+          >
+            <Search class="h-5 w-5" stroke-width={1.8} aria-hidden="true" />
+          </button>
+        </div>
+      </form>
+
       <ul class="flex flex-col gap-1">
         {
           MAIN_NAV.map((item) =>
