@@ -63,6 +63,64 @@ you a working feature is broken. Verified 2026-07-17 by testing the same page th
 
 ---
 
+## 🔴 RESI (AWB) CHAIN — scanned end-to-end 2026-07-20, against KiriminAja's own published docs
+
+Booking is solid and honest (`awb: null` is never back-filled with a booking ref). **Everything
+downstream of it rests on a `/api/mitra/tracking` response shape nobody has ever seen succeed**, because
+`KIRIMINAJA_ENV` defaults to `sandbox` in both compose files and every `.env.example`, and sandbox never
+issues an AWB. `awbFilled` has never been observed non-zero. Fixed this pass: `8cc7080` (partial print
+runs marked un-labelled parcels printed; AWB-less orders vanished from the only screen that could fix
+them) and `3eefe02` (one bad gateway reply killed the whole sweep; poller starvation; summary to
+`/dev/null`; three comments describing things that do not exist).
+
+- [ ] **🔎 FIRST THING TO TEST IN PRODUCTION — we may be tracking with the wrong id.** `request_pickup`
+      registers our own `order_id` as `` `${KA_ORDER_PREFIX}-${orderRef}` `` (default prefix `TOKOPHI`),
+      but `kaTrack` queries `/api/mitra/tracking` with the **`kj_order_id`** KiriminAja returned, passed
+      under the key `order_id`. Their tracking doc documents that field as `order_id string(max:20)` —
+      and `TOKOPHI-<ref>` can exceed 20 chars. Nothing in the repo has ever confirmed which id that
+      endpoint wants. **This is the cheapest available explanation for why the AWB has never landed**,
+      and it costs one real booking to settle. Try both ids and record the raw response.
+- [ ] **🔴 THE STATUS CODE SCALES DISAGREE — and this one moves money.** KiriminAja's **webhook** doc
+      says `105` AWB created · `200` **shipped/picked up** · `300` **delivered** · `400` returned · `500`
+      problem · `900` canceled. Their **tracking** doc says `200` = **Delivered**. The same number means
+      different things depending on the source. Our `outcomeFromTrackingCode` maps `200` → delivered. If
+      the tracking endpoint ever answers on the webhook scale, a parcel that was merely **picked up**
+      would be read as delivered — which **collects the COD cash and credits the ledger for a parcel
+      still in transit.** The BACKLOG already admitted this table was "read off the docs, never
+      observed"; the point now is that **reading the docs more carefully cannot save us, because the
+      vendor's own docs are inconsistent.** Only a captured real payload settles it. Log the raw
+      `status` of every pull for a week before trusting any money-moving transition.
+- [ ] **Adopt the webhook — but never as an authority.** KiriminAja documents `processed_packages`,
+      which fires exactly when the AWB is created: the right mechanism for an asynchronous waybill, and
+      it would remove the polling window entirely. ⚠️ **Their setup doc specifies NO signature, NO HMAC
+      and NO IP allowlist, and their official PHP SDK ships no verification helper.** One callback URL
+      per account. In this system a `finished_packages` event **collects COD cash and credits the
+      ledger** — so an unsigned public endpoint would let anyone who learns the URL mint money in our
+      books. The only safe shape: treat the callback as an **untrusted hint that triggers a verified
+      pull** of the tracking endpoint, and move money only on what our own pull returns. (Ask them in
+      writing whether a signing secret exists — the docs may simply be incomplete.)
+- [ ] **A stuck parcel still never reaches the merchant.** `outcome === "problem"` increments a counter
+      and `console.warn`s. There is no `orders` column, no badge, no screen. `3eefe02` at least made the
+      run summary land in `docker logs cron-tracking` instead of `/dev/null`, but a log nobody reads is
+      not a notification.
+- [ ] **The poller has no retry, no backoff and no give-up.** A failed pull waits 15 minutes for the
+      next tick. An order booked six weeks ago with no AWB is polled forever with the same priority as
+      one booked this morning (it is now at least polled *first* — `3eefe02` — but nothing ages it out
+      or escalates it). No attempt counter, no first-booked timestamp, no alert.
+- [ ] **No pacing, no 429 handling.** `BATCH = 100` bounds a sweep; the loop still fires up to 100
+      requests back-to-back and `ka()` does not inspect HTTP status for rate-limit responses.
+- [ ] **`skipped` cannot distinguish "no resi yet" from "AWB we could not encode".** `getBulkLabels`
+      returns bare order numbers for both, plus for numbers that resolved to no row at all (RLS-scoped
+      away). The toast therefore says "resi belum terbit", which is true for the common case and a small
+      lie for the rare one. Fix by returning `{number, reason}` objects.
+- [ ] **The shopper has no tracking surface at all.** `grep -r 'awb\|resi' apps/storefront/src` returns
+      nothing. The buyer cannot see a waybill anywhere, so "resi" exists only for the merchant.
+- [ ] **In sandbox a booked shipment can never be cancelled** (verified, not inferred):
+      `cancel_shipment` answers `{"status":false,"text":"Paket tidak ditemukan"}` for a booking
+      reference — it wants a courier AWB, which sandbox never issues.
+
+---
+
 ## 🔴 LEFT OPEN BY THE 2026-07-18 DEEP AUDIT — found 2026-07-20 reconciling the docs against the commits
 
 The audit fixed 10 real bugs. Reconciling STATUS.md against the actual diffs turned up what it did **not**

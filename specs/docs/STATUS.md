@@ -266,6 +266,38 @@ Stated as unverified rather than guessed.
     hand** to `/usr/local/bin` + `/etc/cron.d`. Nothing in CI reinstalls it, and unlike the watchdog it writes
     **no heartbeat** — a silently-removed cron is indistinguishable from a healthy one.
 
+### 4c. 🔴 The resi (AWB) chain — scanned end-to-end 2026-07-20
+
+**Booking is real and honest.** `request_pickup` works, and `awb: null` is never back-filled with a
+booking reference. **Everything after booking is unproven.** `KIRIMINAJA_ENV` defaults to `sandbox` in
+both compose files and every `.env.example`, sandbox never issues an AWB, and so the entire path from
+`kaTrack` onward — the response shape, the numeric status table, the echo guard — **is inference nobody
+has ever seen execute successfully.** `awbFilled` has never been observed non-zero.
+
+Two things that must be settled before anyone claims the resi flow works, both in BACKLOG:
+
+1. **We may be tracking with the wrong id.** We register our own `order_id` as `TOKOPHI-<ref>` at
+   booking, then track using KiriminAja's `kj_order_id` passed under the key `order_id` — while their
+   doc describes that field as `order_id string(max:20)`. Nothing has ever confirmed which one the
+   endpoint wants. Cheapest available explanation for the AWB never landing; one real booking settles it.
+2. **The vendor's two status scales contradict each other, and it is a money path.** Their webhook doc:
+   `200` = picked up, `300` = delivered. Their tracking doc: `200` = Delivered. We map `200` → delivered.
+   On the webhook scale that reads a merely-collected parcel as delivered — **collecting COD cash and
+   crediting the ledger for goods still in transit.** Reading the docs harder cannot fix this; only a
+   captured real payload can.
+
+**There is no webhook** — no callback route, nothing calls their set-callback endpoint. Their
+`processed_packages` event is the right mechanism for an async waybill, but the setup docs specify **no
+signature, no HMAC, no IP allowlist**, so it may only ever be an *untrusted hint that triggers a verified
+pull* — never an authority that moves money on an unsigned body.
+
+Fixed this pass: `8cc7080` (a partial print run stamped un-labelled parcels as printed — they silently
+never shipped; AWB-less orders vanished from the only screen that could recover them) and `3eefe02` (a
+single non-JSON gateway reply aborted the whole sweep; the poller could starve orders forever; the run
+summary went to `/dev/null`; three comments described a webhook, a poll and a rate limiter that do not
+exist). Still open: no merchant-facing stuck-parcel flag, no retry/backoff/give-up/ageing, no pacing or
+429 handling, and the shopper has no tracking surface at all.
+
 ### 4b. Found while reconciling this doc against the audit commits — six FIXED same day, three still open
 
 These were not "could not verify". They were verified broken, in code, on 2026-07-20 at `d48413c` — and
