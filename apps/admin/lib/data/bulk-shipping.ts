@@ -4,9 +4,11 @@ import { withCurrentTenant } from "@/lib/tenant";
 
 // Pengiriman Massal — the queue a seller packs from.
 //
-// Scope: orders that are PAID and NOT yet shipped — the same predicate as the `perlu_dikirim` tab and
-// the sidebar badge (lib/data/orders.ts), deliberately, so three surfaces can never disagree about
-// what "needs shipping" means. Unpaid orders are excluded: they are the buyer's move, not the seller's.
+// Scope: orders that are PAID (or COD) and still need a seller action on the parcel. That is the
+// `perlu_dikirim` predicate (lib/data/orders.ts — tab + sidebar badge) PLUS orders already flipped to
+// `dikirim` that have no AWB yet; see the scope fragment below for why. Unpaid orders are excluded:
+// they are the buyer's move, not the seller's. This queue is therefore a SUPERSET of `perlu_dikirim`
+// — if you change one predicate, read the other; they are relatives, not clones.
 //
 // Every row carries the three facts the bulk actions branch on, and the UI must never guess them:
 //   · booked   — `ka_order_id` exists: KiriminAja has the pickup. Booking again would duplicate it.
@@ -59,7 +61,24 @@ export async function getBulkShipping(f: BulkFilters = {}): Promise<BulkShipping
     // COD orders ship before payment (cash on delivery), so they belong in the queue while still
     // financial_status='pending' — same carve-out as the Perlu Dikirim tab. Without it COD parcels
     // could never be bulk-booked.
-    const scope = sql`o.status in ('baru','diproses') and (o.financial_status = 'dibayar' or exists (select 1 from payments p where p.order_id = o.id and p.method = 'cod'))`;
+    //
+    // ⚠️ `dikirim` WITH NO AWB IS IN SCOPE ON PURPOSE — do NOT "tidy" this back to two statuses.
+    // The waybill is issued asynchronously: booking returns awb:null and the tracking poller fills it
+    // later. That poller can advance the STATUS without an AWB (cron/tracking guards on
+    // `if (!realAwb && !outcome) continue`, so syncOrderFromKa(number,"shipped",null) is reachable).
+    // With the old scope such an order dropped out of Pengiriman Massal the instant it flipped to
+    // `dikirim` — and this is the ONLY screen carrying "Ambil resi" and bulk "Cetak resi", so the
+    // seller was left with an order marked Dikirim, no resi, no label and no way to fetch one.
+    // No AWB = unfinished work = still in the queue. It leaves the moment a real resi lands.
+    // Terminal statuses (selesai/batal/retur) stay out regardless — nothing left to print there.
+    //
+    // `ka_order_id is not null` is part of the condition, not decoration: it means the parcel was
+    // actually BOOKED through KiriminAja and a waybill is genuinely pending. An order shipped outside
+    // the aggregator has no resi coming, and the screen's own gate is `canFetch = kaOrderId && !awb`,
+    // so listing it would add a row with every button disabled — noise that teaches sellers to ignore
+    // this queue. Without this clause the demo seed (which books nothing) dumped all 39 `dikirim`
+    // orders in here and the screen looked broken.
+    const scope = sql`(o.status in ('baru','diproses') or (o.status = 'dikirim' and o.awb is null and o.ka_order_id is not null)) and (o.financial_status = 'dibayar' or exists (select 1 from payments p where p.order_id = o.id and p.method = 'cod'))`;
 
     const conds = [scope];
     if (f.group) conds.push(sql`s->>'group' = ${f.group}`);

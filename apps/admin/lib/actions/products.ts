@@ -1,6 +1,6 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
@@ -63,7 +63,8 @@ export async function createProduct(input: ProductInput): Promise<string> {
   const { storeId: sid } = await requireCapability("products:write");
   const id = await withTenant(sid, async (db) => {
     const [p] = await db.insert(schema.products).values({ storeId: sid, hasVariants: usesVariants(input), ...productFields(input) }).returning();
-    const [loc] = await db.select({ id: schema.locations.id }).from(schema.locations).where(eq(schema.locations.storeId, sid)).limit(1);
+    // Default location, not just any: new inventory rows must land where the merchant actually stocks.
+    const [loc] = await db.select({ id: schema.locations.id }).from(schema.locations).where(eq(schema.locations.storeId, sid)).orderBy(desc(schema.locations.isDefault), asc(schema.locations.id)).limit(1);
 
     if (usesVariants(input)) {
       await db.insert(schema.productOptions).values(input.options!.map((o, i) => ({ productId: p.id, name: o.name, position: i })));
@@ -98,7 +99,8 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
     const [owned] = await db.select({ id: schema.products.id }).from(schema.products).where(eq(schema.products.id, id)).limit(1);
     if (!owned) return;
     await db.update(schema.products).set({ ...productFields(input), hasVariants: usesVariants(input) }).where(eq(schema.products.id, id));
-    const [loc] = await db.select({ id: schema.locations.id }).from(schema.locations).where(eq(schema.locations.storeId, sid)).limit(1);
+    // Default location, not just any: new inventory rows must land where the merchant actually stocks.
+    const [loc] = await db.select({ id: schema.locations.id }).from(schema.locations).where(eq(schema.locations.storeId, sid)).orderBy(desc(schema.locations.isDefault), asc(schema.locations.id)).limit(1);
 
     // rebuild option definitions (no FK dependents)
     await db.delete(schema.productOptions).where(eq(schema.productOptions.productId, id));
@@ -118,7 +120,15 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
       return !!r;
     };
     const setInventory = async (variantId: string, available: number) => {
-      const [inv] = await db.select({ id: schema.inventoryLevels.id }).from(schema.inventoryLevels).where(eq(schema.inventoryLevels.variantId, variantId)).limit(1);
+      // Default-location row, explicitly: an unordered limit(1) writes the editor's stock number into
+      // an ARBITRARY warehouse once a store has more than one location.
+      const [inv] = await db
+        .select({ id: schema.inventoryLevels.id })
+        .from(schema.inventoryLevels)
+        .innerJoin(schema.locations, eq(schema.locations.id, schema.inventoryLevels.locationId))
+        .where(eq(schema.inventoryLevels.variantId, variantId))
+        .orderBy(desc(schema.locations.isDefault), asc(schema.inventoryLevels.id))
+        .limit(1);
       if (inv) await db.update(schema.inventoryLevels).set({ available }).where(eq(schema.inventoryLevels.id, inv.id));
       else if (loc) await db.insert(schema.inventoryLevels).values({ variantId, locationId: loc.id, available });
     };

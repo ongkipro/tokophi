@@ -20,10 +20,10 @@ images seed to production automatically (Merge = deploy). Verified locally: 15 `
 `og:image` absolute per article (+ `twitter:image`), `/blog` renders all 15, admin+super-admin+storefront
 builds green.
 
-- [ ] **Confirm the production deploy landed** (Coolify app `l7r4qaqcml4zigw1dc7iptun`, deploy triggered
-      by the PR-#7 merge webhook on 2026-07-18). Check `https://batik-nusantara.tokophi.id/blog` shows the
-      15 editorial images (**hard-refresh** — see cache note), Files shows 15 `media` rows, `og:image`
-      resolves, and there are **no `/api/uploads` 404s**.
+- [x] **Confirm the production deploy landed** — **DONE, verified live** and recorded in `WORKLOG.md`
+      (`1810d8f`): 15 editorial images on `https://batik-nusantara.tokophi.id/blog`,
+      `/api/uploads/jurnal-*.webp` → 200 `image/webp`, absolute `og:image`, 15 `media` rows, migrations
+      0058–0061 applied on prod, no `/api/uploads` 404s.
 - [ ] **Journal images do not cache-bust on re-seed.** `/api/uploads` sends `Cache-Control: immutable`
       (correct for unique upload names). But `seed-journal` reuses `jurnal-<handle>.webp`, so a returning
       visitor keeps the OLD image for a year after any art change. If journal art is ever expected to
@@ -60,6 +60,154 @@ builds green.
 every button is dead (Turbopack HMR websocket fails). The same page hydrates correctly on live and on a
 local `next build && next start`. **Do not diagnose admin interactivity from `next dev`** — it will tell
 you a working feature is broken. Verified 2026-07-17 by testing the same page three ways.
+
+---
+
+## 🔴 RESI (AWB) CHAIN — scanned end-to-end 2026-07-20, against KiriminAja's own published docs
+
+Booking is solid and honest (`awb: null` is never back-filled with a booking ref). **Everything
+downstream of it rests on a `/api/mitra/tracking` response shape nobody has ever seen succeed**, because
+`KIRIMINAJA_ENV` defaults to `sandbox` in both compose files and every `.env.example`, and sandbox never
+issues an AWB. `awbFilled` has never been observed non-zero. Fixed this pass: `8cc7080` (partial print
+runs marked un-labelled parcels printed; AWB-less orders vanished from the only screen that could fix
+them) and `3eefe02` (one bad gateway reply killed the whole sweep; poller starvation; summary to
+`/dev/null`; three comments describing things that do not exist).
+
+- [ ] **🔎 FIRST THING TO TEST IN PRODUCTION — we may be tracking with the wrong id.** `request_pickup`
+      registers our own `order_id` as `` `${KA_ORDER_PREFIX}-${orderRef}` `` (default prefix `TOKOPHI`),
+      but `kaTrack` queries `/api/mitra/tracking` with the **`kj_order_id`** KiriminAja returned, passed
+      under the key `order_id`. Their tracking doc documents that field as `order_id string(max:20)` —
+      and `TOKOPHI-<ref>` can exceed 20 chars. Nothing in the repo has ever confirmed which id that
+      endpoint wants. **This is the cheapest available explanation for why the AWB has never landed**,
+      and it costs one real booking to settle. Try both ids and record the raw response.
+- [ ] **🔴 THE STATUS CODE SCALES DISAGREE — and this one moves money.** KiriminAja's **webhook** doc
+      says `105` AWB created · `200` **shipped/picked up** · `300` **delivered** · `400` returned · `500`
+      problem · `900` canceled. Their **tracking** doc says `200` = **Delivered**. The same number means
+      different things depending on the source. Our `outcomeFromTrackingCode` maps `200` → delivered. If
+      the tracking endpoint ever answers on the webhook scale, a parcel that was merely **picked up**
+      would be read as delivered — which **collects the COD cash and credits the ledger for a parcel
+      still in transit.** The BACKLOG already admitted this table was "read off the docs, never
+      observed"; the point now is that **reading the docs more carefully cannot save us, because the
+      vendor's own docs are inconsistent.** Only a captured real payload settles it. Log the raw
+      `status` of every pull for a week before trusting any money-moving transition.
+- [ ] **Adopt the webhook — but never as an authority.** KiriminAja documents `processed_packages`,
+      which fires exactly when the AWB is created: the right mechanism for an asynchronous waybill, and
+      it would remove the polling window entirely. ⚠️ **Their setup doc specifies NO signature, NO HMAC
+      and NO IP allowlist, and their official PHP SDK ships no verification helper.** One callback URL
+      per account. In this system a `finished_packages` event **collects COD cash and credits the
+      ledger** — so an unsigned public endpoint would let anyone who learns the URL mint money in our
+      books. The only safe shape: treat the callback as an **untrusted hint that triggers a verified
+      pull** of the tracking endpoint, and move money only on what our own pull returns. (Ask them in
+      writing whether a signing secret exists — the docs may simply be incomplete.)
+- [ ] **A stuck parcel still never reaches the merchant.** `outcome === "problem"` increments a counter
+      and `console.warn`s. There is no `orders` column, no badge, no screen. `3eefe02` at least made the
+      run summary land in `docker logs cron-tracking` instead of `/dev/null`, but a log nobody reads is
+      not a notification.
+- [ ] **The poller has no retry, no backoff and no give-up.** A failed pull waits 15 minutes for the
+      next tick. An order booked six weeks ago with no AWB is polled forever with the same priority as
+      one booked this morning (it is now at least polled *first* — `3eefe02` — but nothing ages it out
+      or escalates it). No attempt counter, no first-booked timestamp, no alert.
+- [ ] **No pacing, no 429 handling.** `BATCH = 100` bounds a sweep; the loop still fires up to 100
+      requests back-to-back and `ka()` does not inspect HTTP status for rate-limit responses.
+- [ ] **`skipped` cannot distinguish "no resi yet" from "AWB we could not encode".** `getBulkLabels`
+      returns bare order numbers for both, plus for numbers that resolved to no row at all (RLS-scoped
+      away). The toast therefore says "resi belum terbit", which is true for the common case and a small
+      lie for the rare one. Fix by returning `{number, reason}` objects.
+- [ ] **The shopper has no tracking surface at all.** `grep -r 'awb\|resi' apps/storefront/src` returns
+      nothing. The buyer cannot see a waybill anywhere, so "resi" exists only for the merchant.
+- [ ] **In sandbox a booked shipment can never be cancelled** (verified, not inferred):
+      `cancel_shipment` answers `{"status":false,"text":"Paket tidak ditemukan"}` for a booking
+      reference — it wants a courier AWB, which sandbox never issues.
+
+---
+
+## 🔴 LEFT OPEN BY THE 2026-07-18 DEEP AUDIT — found 2026-07-20 reconciling the docs against the commits
+
+The audit fixed 10 real bugs. Reconciling STATUS.md against the actual diffs turned up what it did **not**
+close. Two of these are the same defect as a fix that shipped, in a file the audit never opened — which is
+the point: **hand-fixing the instances you found is not a strategy.**
+
+- [x] **🔴 `lib/actions/media.ts` cross-tenant hole — FIXED `e9656fd`.** `product_media` has no `store_id`
+      and `relrowsecurity = f` (verified in `pg_class`), and `deleteProductImage` never joined `products`,
+      so `media:write` could delete another store's product image. Both writers now read the parent under
+      RLS first; `saveImage` moved inside the guard so a rejected upload leaves no orphan file either.
+- [x] **Enumerate every remaining writer of a table with no `store_id` — DONE 2026-07-20, and it found
+      three MORE live holes** (all fixed in `30a3c71`): `deleteDiscount` (blind-fire cross-tenant delete of
+      another store's `discount_usages` — capped only because the table is empty today),
+      `createPurchaseOrder` (client `variantId` written as an FK; "Terima barang" would then add stock to
+      the victim's shelf), `syncChildren` (foreign `productId` into `collection_products`, safe only by an
+      accident two files away in the storefront's owner-connection read). **The rule is now in AGENTS.md**,
+      with the full 11-table list. `e61df25` patched the instances it found; the class had seven.
+- [x] **`jwtVerify` algorithm pins — FIXED `cae0deb`** on `apps/super-admin/middleware.ts:24` and
+      `apps/storefront/src/lib/chat.ts:63`. `apps/admin/lib/google.ts` is left unpinned deliberately
+      (remote JWKS, asymmetric, issuer+audience constrained — pinning RS256 would turn a Google key
+      rotation into a silent total login outage).
+- [x] **`shipping.ts` raw `orders.status` writes — HOLE CLOSED `d07aa1e`, DOOR STILL THERE.**
+      `cancelShipment` and `createShipment` now refuse on `selesai`/`batal`/`retur`, and the cancel path
+      re-reads the status under `FOR UPDATE` after the KiriminAja round-trip (the poller writes the same
+      row while we are on the network). If the order went terminal meanwhile, the shipment fields are still
+      cleared — the booking IS void at the courier — but `status` is left alone.
+- [ ] **Route the two shipping status writes through `applyOrderStatusChange`.** `d07aa1e` + `dde9c09`
+      guard the side door; they do not remove it. There should be ONE writer of `orders.status`, not a
+      state machine plus two guarded raw updates that must be kept in sync by hand.
+- [x] **`ka-tracking.ts` read `orders.status` with no `FOR UPDATE` — FIXED `dde9c09`.** The read now lives
+      inside the transaction with `FOR UPDATE`, matching `setOrderStatus`. The cron does its KiriminAja
+      pull *before* calling `syncOrderFromKa`, so no lock is held across the wire — now documented on the
+      function, because that ordering became load-bearing. Same commit fixed `createShipment`, whose
+      terminal guard ran against a **pre-network** read: the poller could advance the order to
+      `selesai`/`retur` mid-flight and the write walked it back to `diproses`.
+- [x] **Two stock writers were location-blind — FIXED `b37e762`.** `receivePurchaseOrder` and
+      `updateProduct`'s `setInventory` now join `locations` and order by `(is_default desc, id asc)`,
+      matching `bc2ebfd`. The `loc` lookups in `createProduct`/`updateProduct` got the same treatment —
+      fixing only the update path would have left the CREATE path seeding rows into an arbitrary warehouse.
+      ⚠️ **That `locations` join is now also the tenant boundary** for the un-RLS'd `inventory_levels`, and
+      is commented as such: a later "simplification" back to `where variant_id = …` reopens a cross-tenant
+      stock write.
+- [x] **`api/public/order/route.ts` checked stock across ALL locations and decremented ONE — FIXED
+      `80fb83b`.** The `sum(available)` pre-check and the `FOR UPDATE` re-read both aggregated every
+      location while the decrement (`b1f3603`) targeted the default row: under multi-location a variant
+      with 0 at the default and 5 at warehouse B passed the check and drove the default row **negative**
+      while B's units were never consumed — **and the totals still reconciled, which is exactly why it
+      would have been slow to notice.** All three sites now share one `defaultLocationRow(variantId)`
+      expression, lifted verbatim from `b1f3603`. Behaviour identical on single-location data; both
+      empty-inventory edge cases checked rather than assumed.
+- [x] **`receivePurchaseOrder` was a read-then-write with no `FOR UPDATE` — FIXED `80fb83b`.** It read
+      `inv.available` and wrote back a computed absolute, so a sale between the read and the write was
+      silently overwritten (the last-write-wins class `bc2ebfd` closed in the bulk editor). Now a relative
+      SQL write (`available + $add`), evaluated under the UPDATE's own row lock — no `FOR UPDATE` needed.
+- [ ] **Cancelling a received PO is refused, and there is no undo path at all.** `b1f3603` correctly stopped
+      the silent corruption, but the "undo = a separate stock adjustment" it points at **does not exist in
+      the UI**. A merchant who receives a PO by mistake is now stuck with the phantom stock *and* the record
+      — a silent corruption traded for a dead end.
+- [ ] **Back-fill the ledger for orders cancelled after payment BEFORE `9772246`.** The `batal` reversal
+      fires going forward; every prepaid order already cancelled in production still carries a withdrawable
+      `sale` credit for a refunded order. Count them (`status='batal'` ∧ a `berhasil` payment ∧ no reversal)
+      and decide: reverse, or accept and document. The one-reversal-per-order index makes a back-fill safe
+      to re-run.
+- [ ] **Audit the remaining `financial_status = 'dibayar'` gates for the COD carve-out.** `5f61034` taught
+      Perlu Dikirim, the tab counts and bulk shipping that a COD order ships while `pending`. Any **other**
+      screen still gating on `= 'dibayar'` (dashboard cards, Keuangan, exports, the ledger release rule) now
+      disagrees with the shipping queue about the same order. Also: `bulk-shipping.ts` **duplicates** the COD
+      predicate as an inline literal instead of importing `IS_COD` — the two will drift.
+- [ ] **Browser-exercise the COD + AutoLaris checkout happy paths before prod.** `521861d` moved the payment
+      insert **inside** the order transaction — the most important money change of the audit — and its own
+      commit message asks for this. It has only been typechecked, which this repo's rules say is not verified.
+- [ ] **Session-token audience rollout** (deferred in `cb17372`). `/impersonate` is pinned to
+      `aud: tokophi:impersonate`, but the long-lived admin + platform SESSION tokens still carry no audience,
+      so they remain mutually substitutable at any verifier that doesn't check `aud`. Correct hardening —
+      but it invalidates every outstanding cookie, so it needs a window and a "you will be logged out" note.
+      ⚠️ The `aud` literal is **hand-copied across two apps** with no shared import.
+- [ ] **Merchant-facing `problem`-parcel flag** (deferred in `ee8a458`). The poller logs and counts them;
+      nothing reaches the seller. Needs an `orders` column and a place on the order detail — until then a
+      stuck parcel is a line in a container log nobody reads.
+- [ ] **Confirm every caller sends `storeSlug`.** `7cc1ecc` made a missing slug fatal (correctly — it used to
+      default to the demo store). But that converts a silent mis-attribution into a **dead checkout** if any
+      caller omits it: checkout, the abandoned-cart beacons, recovery links, any dev/preview build where
+      `STORE_SLUG` is unset.
+- [ ] **The optimistic bulk-stock skip path is unexercised** (`bc2ebfd`). No concurrent sale has raced a save.
+      Reproduce deliberately (open the editor, order in another tab, save) before trusting the merchant sees
+      a warning rather than a silent no-op. Note `expected` is typed **optional** — any future caller that
+      omits it silently reverts to last-write-wins.
 
 ---
 
@@ -164,12 +312,29 @@ The seller's UI flow works too: **Cek Ongkir → pick → Buat** produced 2 book
          parcels. The mapping in `outcomeFromTrackingCode` (100–105 booked · 106+ shipped · 200
          delivered · 300 canceled · 301/40x returned · 500/7xx/9xx problem) is **read off the docs, not
          observed** — verify against a real pull before trusting a status transition that moves money.
-   - [ ] **Unknown code + AWB present ⇒ forced `"shipped"`** (`route.ts:58`, `outcome ?? "shipped"`).
-         Defensible (an AWB means the courier accepted the pickup) but it is an *assumption* firing on
-         an unrecognised status; worth a log line rather than a silent advance.
-2. **[ ] Status follows the courier (decision 3).** `createShipment` still hardcodes `status: "dikirim"` on booking — the timeline claims "in transit" while the parcel is on the seller's shelf. Should be `diproses` on booking, `dikirim` when the courier accepts (the same moment the AWB appears). ⚠️ Touches the order state machine and the existing manual path.
+   - [x] **Unknown code + AWB present ⇒ forced `"shipped"`** — **CLOSED `ee8a458`**, and it went further
+         than this item asked. It was not merely an untidy assumption: a **delivered** parcel reporting an
+         off-map code pinned at `dikirim` **forever → COD never collected, merchant never credited**. The
+         forced advance is gone entirely (unmapped → `null`: fill the AWB, change nothing), not replaced
+         with a log line. `problem` parcels are logged + counted.
+   - [ ] **The mapping now also accepts TEXT, and that branch is a guess.** `ee8a458` added
+         Indonesian/English regexes because KiriminAja's `status` "has been observed" as text — **no real
+         payload was ever captured**. Text is deliberately capped at `shipped`/`booked` and can never yield
+         delivered/returned/canceled (a text-inferred `selesai` would collect COD cash and credit the ledger
+         on a guess). Log the raw `status` of every pull for a week, then rewrite the map from what arrives.
+2. **[x] Status follows the courier (decision 3) — CLOSED `ee8a458`.** `createShipment` books at `diproses`;
+   the poller advances to `dikirim` on pickup. `cancelShipment` also stopped leaving a permanent "shipped
+   with no shipment" (it nulled `kaOrderId` but left `status:'dikirim'`, which the poller could never move).
+   ⚠️ **The other half of decision 3 — the timeline built from KiriminAja tracking events — is NOT done**
+   (see `:181`). And both writes are **raw `db.update` on `orders.status`, bypassing the state machine** —
+   `cancelShipment` has no status precondition, so it can walk a `selesai` order backward to `diproses`,
+   straight through the terminal guard `9772246` added. New item below.
 3. **[ ] Auto-book on "Proses pesanan" (decisions 1 + 5).** One button: confirm → book the service the shopper paid for (`courier`+`service_type`, both now recorded) → honest result (resi, or "dibooking, resi menyusul"). Old orders backfilled by 0053 can auto-book too.
-4. **[ ] `orders.label_printed_at` + printed/not-printed filter.** Does not exist. Needed for the marketplace-style status and for Pengiriman Massal's filter. Cancelling must stay possible after printing.
+4. **[x] `orders.label_printed_at` + printed/not-printed filter — ALREADY EXISTS.** This item said "does not
+   exist" long after it shipped: `schema.ts:500 labelPrintedAt`, migration `0055_label_printed_at.sql`, and
+   `bulk-shipping.ts:67-68,116` filter and count on it. This section's own prose at `:140` already cited
+   "status cetak (sudah/belum, via 0055)" — **the section contradicted itself and nobody read it twice.**
+   Cancelling after printing stays possible, as decided.
 5. **[ ] Courier change by the seller** — except COD (SPX-locked). Seller pays the difference; do **not** rewrite the buyer's `shipping_idr`.
 6. **[~] Pengiriman Massal — BUILT, not yet exercised.** The page, filters, bulk book/fetch/print and the thermal document all work and render (verified at 1400px, 0 page errors, filters showing real counts). **But not one label has been printed yet**, because production has **0 AWBs** — so `Cetak resi` has had nothing to print. Until (1) lands and a waybill actually arrives, this is proven to *compile and render*, not proven to *ship a parcel*. Do not call it done.
 7. **[ ] Exercise the bulk path end-to-end**: select 2 orders → Generate resi → Ambil resi until a waybill lands → Cetak → confirm the thermal document is 100×150mm per label and `label_printed_at` stamps. This is the only thing that turns (6) from "renders" into "works".
@@ -178,7 +343,7 @@ The seller's UI flow works too: **Cek Ongkir → pick → Buat** produced 2 book
 **Decisions (user, 2026-07-16):**
 1. **"Proses pesanan" auto-books.** One button: confirm → book the service the **shopper already paid for** → show the resi. No asking the seller which service — the order knows.
 2. **The resi is NOT synchronous, and the UI must not pretend it is.** KiriminAja returns `awb: null` until a courier *accepts the pickup* (already documented at `order-detail.tsx:220`, and the existing manual flow already says so honestly). A spinner "until the resi appears" would hang on something we do not control. Correct: book → *"Dibooking. Resi menyusul setelah kurir menerima."* → poll (`trackShipment` exists) → resi lands → `Cetak resi` enables.
-3. **Status follows the COURIER, not the seller's clicks** — the user's framing, and it is the better one. Booking → `diproses` (booked, awaiting pickup); the parcel becomes `dikirim` when the courier actually accepts — *which is the same moment the AWB appears*. Then the timeline/history is built from **KiriminAja tracking events**, not hand-set states. ⚠️ This **changes the order state machine**: `createShipment` currently jumps straight to `dikirim` on booking, which makes the timeline claim "in transit" while the parcel is still on the seller's shelf. That change touches the existing manual booking path too — it is why "Diproses" currently means nothing.
+3. **Status follows the COURIER, not the seller's clicks** — the user's framing, and it is the better one. Booking → `diproses` (booked, awaiting pickup); the parcel becomes `dikirim` when the courier actually accepts — *which is the same moment the AWB appears*. Then the timeline/history is built from **KiriminAja tracking events**, not hand-set states. ⚠️ This **changed the order state machine** — **done in `ee8a458` (2026-07-18)**: `createShipment` used to jump straight to `dikirim` on booking, making the timeline claim "in transit" while the parcel sat on the seller's shelf. It now books at `diproses`. *(Kept in past tense on purpose: as written, this paragraph would send the next reader to "fix" already-correct code.)* The tracking-event timeline is still to build.
 4. **The seller may change the courier** in the order detail — **except COD, which is locked to SPX** (`lib/cod.ts`: SPX is the only courier with `codAllowed`; production already agrees, all 4 COD orders are spx). **A unilateral courier change is the SELLER's cost:** the buyer paid `orders.shipping_idr` for the service they picked; if the seller moves to a pricier courier the difference is the seller's, and the buyer's number must not be rewritten.
 5. **Proses *is* "cetak resi"** — one action, not two. The marketplace shape the user wants: **print status per order (`sudah dicetak` / `belum dicetak`) + a filter on it**, exactly like Shopee/Tokopedia. **Cancelling stays possible from the order detail even AFTER the label is printed** — a printed label is paper, not a commitment; `cancelShipment` already exists.
    ⚠️ **`orders.label_printed_at` does not exist** — there is no print state anywhere in the schema today (grep found only comments about printing). It needs a column before the status or its filter can be anything but invented. It is also the honest anchor for **Pengiriman Massal**'s "sudah/belum dicetak" filter.
@@ -601,7 +766,12 @@ unmeasurable**. Ordered.
    `requireCapability("settings:write", { allowSuspended: true })` as their first statement (was
    `getSession()` alone). `allowSuspended` is deliberate: a suspended store must still be able to pay its
    way back in — refusing that payment would lock a paying merchant out permanently.
-5. **[x] Tests for the money/checkout paths — DONE** (2026-07-15). **63 tests, all green** (was 1 file).
+5. **[~] Tests for the money/checkout paths — WRITTEN, but the money half does not run by default**
+   (2026-07-15/18; re-measured 2026-07-20). **72 tests across 6 files** (was 1 file), and they caught three
+   of the deep-audit bugs. But `npm test` reports **52 passed / 20 skipped**: `ledger-credit.test.ts` needs
+   `TEST_DATABASE_URL` (a throwaway DB — **never the shared dev DB**) and **skips rather than fails**
+   without it. Deliberate and well-documented in the file's own header. ⚠️ Still: the suite guarding the
+   ledger is the one least likely to run, and the run says green either way. **There is no CI.**
    - **Pure-logic** (`packages/lib`): `validate.test.ts` (checkout input boundary — phone normalisation
      incl. the no-operator-prefix rule, name/email/address/kodepos/dest_id) + `billing.test.ts` (PPN
      round-trip, promo + annual-bonus quote, the trial→active→past_due→suspended lifecycle).
@@ -628,8 +798,8 @@ unmeasurable**. Ordered.
 
 ## P0 — Foundation
 
-- [x] **Backend** — local PostgreSQL 16 + Drizzle (`@tokophi/db`): **70 tables, 51 migrations
-  (`0000`–`0050`), RLS on 45**. All four surfaces read; all admin editors write; local auth (jose JWT) +
+- [x] **Backend** — local PostgreSQL 16 + Drizzle (`@tokophi/db`): **70 tables, 62 migrations
+  (`0000`–`0061`), RLS on 46** (re-counted 2026-07-20; this line said 51/`0050`/45). All four surfaces read; all admin editors write; local auth (jose JWT) +
   RBAC + **RLS enforcing at runtime** under the non-owner `tokophi_app` role.
 - [x] **Data-layer seam on every screen** — reads via `lib/data/*`, writes via `lib/actions/*`.
 - [x] **Auth + real multi-tenancy** — the tenancy boundary is the database, not application code.
@@ -926,17 +1096,22 @@ unmeasurable**. Ordered.
   list now warns on the missing ones; a HARD server reject on save is deliberately NOT added (it would
   refuse legacy/CSV imports — same "over-validation is a bug" rule). The warning is the honest surfacing.
 
-## 🟡 P1.8 — Healthcheck & watchdog (L1 BUILT + LIVE 2026-07-15; L2/L3/alerts still open)
+## 🟡 P1.8 — Healthcheck & watchdog (L1 + L1b BUILT + LIVE; L2/L3/alerts still open)
 > **Why this is here:** on 2026-07-14 production went down **three times** and every deploy failed **silently for an hour** — and *every single one* was found only because someone happened to look. Nothing told us. That is the gap: not the bugs, the **absence of a witness**.
 >
-> **The three failure shapes seen (design against these, not against a generic "is it up?"):**
+> **The FOUR failure shapes seen (design against these, not against a generic "is it up?"):**
 > 1. **Containers created but never started.** Coolify built `admin`/`super-admin`/`storefront`, left them in `created` (exit 0, no logs, disk fine), and moved on. The site 503'd; `landing` stayed up (it has no deps — that design held). Recovery was a plain `docker start`.
 > 2. **Deploy failing while the API answers "queued".** `npm ci` refused to run (lockfile out of sync — `playwright` in `package.json`, absent from the lock), so **every** build died at `RUN npm ci` for an hour. `POST /api/v1/deploy` kept returning `deployment queued`. Coolify's own `application_deployment_queues` table said `failed` the whole time — nobody was reading it.
 > 3. **A migration that never applied.** The journal referenced `0046_good_dust` whose `.sql` was never committed → `drizzle-kit migrate` died → the `kelurahan` table never existed → `/api/public/ongkir op=kelurahan` 500'd on every checkout. **And the 500 surfaced in the browser as a CORS error** (an uncaught throw returns Next's own 500, which carries no CORS headers), so the message pointed at the wrong layer for hours.
+> 4. **Disk full → Postgres crash-loop → a container that is `Up (unhealthy)` and 503ing** (2026-07-18, `e84449e`). Coolify retains **every per-deploy image**: 204 images / ~129 GB filled the VPS. Postgres hit `No space left on device` during its end-of-recovery checkpoint → PANIC → crash-loop ("database system is in recovery mode"). The SSR storefront **503'd for ~2h**. Freed ~130 GB, Postgres recovered on its own, no data loss. ⚠️ **L1 explicitly cannot heal this** — the container was never `created`/`exited`, it was `Up (unhealthy)`. The broom shipped; **the witness did not**.
 >
 > **Design (3 layers — one is not enough, each catches what the others cannot):**
-> - **L1 — self-healing watchdog ON the box** (cron, 1 min): any of the 4 app containers in `created`/`exited` → `docker start` it. Fixes shape #1 with no human awake. **Needs no credentials — can be built today.**
-> - **L2 — external probe** (must NOT run on the box; a watchdog on a dead box is worthless): the 5 public hosts **plus one endpoint that actually touches Postgres** — a container can be `healthy` while the DB is gone, so a static page proving 200 proves nothing. Suggested: `POST /api/public/ongkir {op:"search"}` (hits `kiriminaja_areas`).
+> - **L1 — self-healing watchdog ON the box** (cron, 1 min): any of the 4 app containers in `created`/`exited` → `docker start` it. Fixes shape #1 with no human awake. **Needs no credentials — can be built today.** ⚠️ Does **not** touch shape #4: `Up (unhealthy)` is neither `created` nor `exited`.
+> - **L1b — disk-cleanup safety-net** (BUILT, `e84449e`): `ops/tokophi-docker-cleanup.sh` prunes build cache + *unused* images, daily 03:30 UTC via `/etc/cron.d/tokophi-docker-cleanup`; DEPLOY.md §L1b. **Prevention only.** Keep it conservative — never `docker system prune -a` while containers are down, which would delete the running images.
+>   - [ ] **It is installed BY HAND** and nothing in CI reinstalls it, so a VPS rebuild silently loses the protection. Add it to the DEPLOY.md re-install checklist.
+>   - [ ] **It writes no heartbeat.** The watchdog writes `/var/run/tokophi-watchdog.last`; the cleanup writes nothing, so a silently-removed cron is indistinguishable from a healthy one.
+>   - [ ] **Cap Coolify's per-deploy image retention at the source** — 204 images / 129 GB is the actual bug; the broom only sweeps after it.
+> - **L2 — external probe** (must NOT run on the box; a watchdog on a dead box is worthless): the 5 public hosts **plus one endpoint that actually touches Postgres** — a container can be `healthy` while the DB is gone, so a static page proving 200 proves nothing. Suggested: `POST /api/public/ongkir {op:"search"}` (hits `kiriminaja_areas`). **Shape #4 raised its priority: it must also probe DISK %**, and it is now the *only* layer that would have caught a 2-hour outage. ⚠️ Note `7cc1ecc` made a missing `storeSlug` fatal — write the probe payload so it does not 400 on tenant resolution and read as "down".
 > - **L3 — deploy-failure alarm** (shape #2): read Coolify's `application_deployment_queues` for `status='failed'`. Do not trust the deploy API's response.
 >
 > **Blocked on ONE decision from the user: where do alerts go?** Telegram (fastest to a phone; needs a @BotFather bot token + chat id in `~/.config/ai-local/secrets.env`), or email/SMTP. Until that exists, L1 can still ship (self-heal + `/var/log/tokophi-watchdog.log`) — it just heals in silence.

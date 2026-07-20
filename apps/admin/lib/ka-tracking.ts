@@ -73,20 +73,38 @@ export type KaSyncResult = { ok: boolean; changed: string[]; error?: string };
 
 /**
  * Apply ONE KiriminAja update to ONE order. Runs on the OWNER connection (the poller/webhook have no
- * merchant session) inside a transaction, and reuses `applyOrderStatusChange` so inventory, the ledger
- * and COD move exactly as they would on a manual status change. Fills the AWB the instant the courier
- * issues it. Advances state FORWARD only.
+ * merchant session) inside ONE transaction that locks the order row FOR UPDATE, and reuses
+ * `applyOrderStatusChange` so inventory, the ledger and COD move exactly as they would on a manual
+ * status change — and serialize against one. Fills the AWB the instant the courier issues it.
+ * Advances state FORWARD only.
+ *
+ * ⚠️ Callers must do their tracking fetch BEFORE calling this. The lock is held for the whole call, so
+ * a network round-trip inside it would hold a row lock across the internet.
  */
 export async function syncOrderFromKa(orderNumber: string, outcome: KaOutcome | null, awb?: string | null): Promise<KaSyncResult> {
-  const [order] = await db
-    .select({ id: schema.orders.id, storeId: schema.orders.storeId, status: schema.orders.status, awb: schema.orders.awb })
-    .from(schema.orders)
-    .where(eq(schema.orders.number, orderNumber))
-    .limit(1);
-  if (!order) return { ok: false, changed: [], error: `order ${orderNumber} not found` };
-
   const changed: string[] = [];
+  let found = true;
   await db.transaction(async (tx) => {
+    // FOR UPDATE, and the read lives INSIDE the transaction — same discipline as setOrderStatus
+    // (9772246). The status read and the transition it decides must be one atomic step: this read used
+    // to sit outside any lock, so the poller and a manual change (or two overlapping cron runs) could
+    // both see `dikirim` and both transition — dikirim→selesai racing dikirim→retur, one crediting the
+    // ledger while the other restored stock and reversed it. The loser now blocks here, re-reads the
+    // already-updated status, and falls on the forward-only RANK check or applyOrderStatusChange's
+    // same-status/terminal guards. Safe to hold: there is NO network call in this function — the cron
+    // route finishes its KiriminAja pull (kaTrack) before calling us, so the txn only ever spans local
+    // queries. Never move an HTTP call between this read and the write.
+    const [order] = await tx
+      .select({ id: schema.orders.id, storeId: schema.orders.storeId, status: schema.orders.status, awb: schema.orders.awb })
+      .from(schema.orders)
+      .where(eq(schema.orders.number, orderNumber))
+      .for("update")
+      .limit(1);
+    if (!order) {
+      found = false;
+      return;
+    }
+
     // AWB: a booking returns awb: null; the waybill exists only once a courier accepts the pickup.
     // Never overwrite a real waybill with our own booking ref echoed back.
     if (awb && awb !== order.awb) {
@@ -107,5 +125,6 @@ export async function syncOrderFromKa(orderNumber: string, outcome: KaOutcome | 
       changed.push(`status:${cur}→${target}`);
     }
   });
+  if (!found) return { ok: false, changed: [], error: `order ${orderNumber} not found` };
   return { ok: true, changed };
 }

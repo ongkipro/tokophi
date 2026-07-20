@@ -139,6 +139,54 @@ async function main() {
   const [{ count: ownerSees }] = await client<{ count: number }[]>`SELECT count(*)::int AS count FROM stores`;
   assert(`owner still sees all stores (${ownerSees}) — provision/cron depend on it`, ownerSees > 1);
 
+  // 5c. THE CHILD-TABLE BLIND SPOT — the class this verifier structurally cannot police.
+  //
+  //     Check 5 derives its table list from tables that HAVE a `store_id` column. A table without one
+  //     is therefore invisible to it — and those tables are not safe, they are simply unreachable by
+  //     this check. They carry no RLS, `tokophi_app` holds full DML on them, and their ONLY tenant
+  //     boundary is the application reading their RLS-protected parent first (AGENTS.md, "THE
+  //     CHILD-TABLE RULE"). That rule has been broken SEVEN times and shipped every time: e61df25
+  //     fixed three call sites, and auditing the class on 2026-07-20 found four more —
+  //     media.ts/product_media, deleteDiscount, createPurchaseOrder, syncChildren. One of them
+  //     (deleteDiscount) was a live cross-tenant DELETE, harmless only because the table was empty.
+  //
+  //     We cannot assert an app-layer guard from SQL. What we CAN do is refuse to let this class grow
+  //     silently: every un-RLS'd, store-scoped child table must be on the reviewed list below. A NEW
+  //     one appearing means somebody added a table whose writers nobody has audited — which is exactly
+  //     how all seven got in. Adding a name here is cheap; it is meant to force the reading of the rule.
+  const REVIEWED_CHILD_TABLES = [
+    "collection_conditions", "collection_products", "customer_addresses", "discount_usages",
+    "fulfillments", "inventory_levels", "menu_items", "order_line_items", "product_media",
+    "product_options", "purchase_order_items",
+  ];
+  // Platform/global tables: no tenant to scope to, absence of store_id is correct by design.
+  const GLOBAL_TABLES = [
+    "plans", "platform_admins", "platform_cod", "platform_couriers", "platform_payment_channels",
+    "platform_payment_gateways", "platform_payout", "shipping_aggregator", "kiriminaja_areas",
+    "kelurahan", "accounts", "users", "stores",
+  ];
+  const noStoreId = await client<{ relname: string }[]>`
+    SELECT c.relname FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind = 'r'
+      AND NOT c.relrowsecurity
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_attribute a
+        WHERE a.attrelid = c.oid AND a.attname = 'store_id' AND a.attnum > 0 AND NOT a.attisdropped
+      )
+    ORDER BY 1`;
+  const unreviewed = noStoreId
+    .map((t) => t.relname)
+    .filter((t) => !REVIEWED_CHILD_TABLES.includes(t) && !GLOBAL_TABLES.includes(t) && !t.startsWith("__drizzle"));
+  assert(
+    unreviewed.length
+      ? `UNREVIEWED table with no store_id and no RLS: ${unreviewed.join(", ")} — audit every writer ` +
+        `against AGENTS.md "THE CHILD-TABLE RULE", then add it to REVIEWED_CHILD_TABLES or GLOBAL_TABLES`
+      : `child-table blind spot: ${REVIEWED_CHILD_TABLES.length} un-RLS'd child tables, all reviewed ` +
+        `(their ONLY boundary is the app reading the parent under RLS — this check cannot prove that)`,
+    unreviewed.length === 0,
+  );
+
   // 6. support_tickets / support_messages (RLS retrofitted in 0035) isolate like the rest.
   const [{ count: ticketsOwner }] = await client<{ count: number }[]>`SELECT count(*)::int AS count FROM support_tickets WHERE store_id = ${store.id}`;
   const support = await client.begin(async (tx) => {

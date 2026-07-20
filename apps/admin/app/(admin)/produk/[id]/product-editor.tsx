@@ -568,8 +568,12 @@ export function ProductEditor({ product }: { product?: Product }) {
                 </div>
               )}
 
+              {/* The number is the SERVER's (MAX_BYTES = 2 MB in lib/image-store.ts), not a
+                  nicer-sounding one. It said 5 MB — so a merchant uploading a 4 MB photo was told it
+                  was fine and then rejected. The card above already said 2 MB: the same card
+                  contradicted itself. */}
               <p className="text-xs text-muted-foreground">
-                Foto pertama jadi gambar utama. Format JPG/PNG, maks 5 MB.
+                Foto pertama jadi gambar utama. Format JPG/PNG, maks 2 MB.
               </p>
 
               {/* Video slot */}

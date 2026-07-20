@@ -13,6 +13,14 @@ export const KA_ORDER_PREFIX = process.env.KIRIMINAJA_ORDER_PREFIX ?? "TOKOPHI";
 
 export const kiriminajaConfigured = () => isConfigured(KEY);
 
+/** A KiriminAja reply that was not JSON at all — a gateway HTML page, an empty 502, a proxy timeout. */
+export class KaTransportError extends Error {
+  constructor(readonly path: string, readonly httpStatus: number, readonly snippet: string) {
+    super(`KiriminAja ${path} → HTTP ${httpStatus}, non-JSON body: ${snippet}`);
+    this.name = "KaTransportError";
+  }
+}
+
 async function ka<T = Record<string, unknown>>(path: string, body: unknown = {}, method: "POST" | "GET" = "POST"): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method,
@@ -20,7 +28,23 @@ async function ka<T = Record<string, unknown>>(path: string, body: unknown = {},
     body: method === "GET" ? undefined : JSON.stringify(body),
     cache: "no-store",
   });
-  return (await res.json()) as T;
+  // This was a bare `await res.json()`, which never looked at the HTTP status. An HTML 502/504 from
+  // KiriminAja's gateway therefore threw a raw JSON parse error ("Unexpected token <") from deep
+  // inside the client — unattributable, and in the tracking cron it killed the WHOLE sweep because
+  // that call sits outside the per-order try. A transport failure is now its own named error
+  // carrying the path, the HTTP status and what actually came back, so a caller can decide whether
+  // to skip one order or give up.
+  //
+  // ⚠️ A JSON body is still RETURNED even on a 4xx/5xx, deliberately: KiriminAja signals business
+  // failures as `{status:false, text:"…"}` with assorted HTTP codes, and callers already read that
+  // `status`/`text` pair to surface the courier's own message. Throwing on those would turn an
+  // actionable rejection ("sudah melewati jam cut-off") into a generic crash.
+  const raw = await res.text();
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new KaTransportError(path, res.status, raw.slice(0, 200).replace(/\s+/g, " ").trim() || "(empty)");
+  }
 }
 
 // area search: name → { id (kecamatan/district), text } — used to resolve origin/destination for pricing

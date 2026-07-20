@@ -578,7 +578,9 @@ export function CollectionEditor({ collection, products }: { collection?: Collec
               >
                 <ImageUp className="size-6" />
                 <span className="text-sm">Seret gambar atau klik untuk unggah</span>
-                <span className="text-xs text-muted-foreground">PNG/JPG hingga 5 MB</span>
+                {/* The SERVER's number (MAX_BYTES = 2 MB, lib/image-store.ts) — not a nicer-sounding
+                    one. It said 5 MB, which rejects a 4 MB photo after promising it would fit. */}
+                <span className="text-xs text-muted-foreground">PNG/JPG maks. 2 MB</span>
               </button>
             </CardContent>
           </Card>

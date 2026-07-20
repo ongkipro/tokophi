@@ -17,7 +17,10 @@ import { bulkGenerateResi, bulkFetchResi, markLabelsPrinted } from "@/lib/action
 
 // Pengiriman Massal. Three verbs, in the order physics forces:
 //   Generate resi → book the pickup KiriminAja (awb comes back NULL — normal)
-//   Ambil resi    → poll until the courier issues the waybill
+//   Ambil resi    → ONE tracking pull per click. It is NOT a poll — this said "poll until the courier
+//                   issues the waybill", which promises a loop that does not exist: click once, get one
+//                   answer, and if the courier hasn't issued the AWB yet nothing happens and the
+//                   merchant must click again. The 15-min cron is the only actual loop.
 //   Cetak         → 100×150mm thermal labels, one @page each (buildLabelHtml)
 // The buttons are gated on the row's real state, never on hope: you cannot print what has no AWB,
 // because buildLabelHtml refuses — correctly — to invent one.
@@ -76,14 +79,33 @@ export function MassalClient({ data, filters }: { data: BulkShippingResult; filt
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ numbers: canPrint.map((r) => r.number) }),
       });
-      const { html, error } = await res.json();
-      if (!html) { toast.error(error ?? "Gagal menyiapkan label."); return; }
+      // `skipped` MUST be read. The server prints only orders with a real AWB and names the rest here;
+      // stamping the whole selection as printed would hide those orders behind the "Belum dicetak"
+      // filter — a parcel that silently never ships. Only what actually got a label gets stamped.
+      const { html, error, skipped } = (await res.json()) as { html?: string | null; error?: string; skipped?: string[] };
+      const missed = new Set(skipped ?? []);
+      const printedNumbers = canPrint.map((r) => r.number).filter((n) => !missed.has(n));
+
+      if (!html || !printedNumbers.length) {
+        // Nothing was printable: no print window, no stamp, and say exactly why.
+        toast.error(
+          error ?? `Tidak ada label yang bisa dicetak dari ${canPrint.length} pesanan terpilih.`,
+          { description: "Resi belum terbit untuk pesanan ini. Klik “Ambil resi” dulu — label baru bisa dicetak setelah nomor resi asli terbit.", duration: 9000 },
+        );
+        return;
+      }
+
       const w = window.open("", "_blank", "width=420,height=640");
       if (!w) { toast.error("Popup diblokir browser — izinkan popup untuk mencetak."); return; }
       w.document.write(html); w.document.close(); w.focus(); w.print();
       // "Ditandai dicetak", not "berhasil dicetak": we opened the dialog, we cannot see the printer.
-      await markLabelsPrinted(canPrint.map((r) => r.number));
-      toast.success(`${canPrint.length} label ditandai dicetak.`);
+      await markLabelsPrinted(printedNumbers);
+      toast.success(`${printedNumbers.length} label ditandai dicetak.`);
+      if (missed.size)
+        toast.warning(`${missed.size} pesanan dilewati — resi belum terbit`, {
+          description: `Tidak ikut tercetak dan TIDAK ditandai dicetak: ${[...missed].slice(0, 5).join(", ")}${missed.size > 5 ? `, +${missed.size - 5} lagi` : ""}. Klik “Ambil resi” dulu, lalu cetak ulang pesanan tersebut.`,
+          duration: 12000,
+        });
       router.refresh();
     } finally { setBusy(null); }
   };
