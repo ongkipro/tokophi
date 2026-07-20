@@ -294,7 +294,14 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       compareAt: r.compareAt ?? undefined,
       category: r.category ?? "",
       categoryHandle: slugify(r.category ?? ""),
-      image: mediaUrl(r.image ?? `/products/${r.handle}.webp`),
+      // "" = this product has no photo. It used to GUESS a filename from the handle
+      // (`/products/${r.handle}.webp`), which is a convention only the SEED follows: `r.image` comes
+      // from the product_media join, so a merchant who creates a product and does not upload a photo
+      // has no row, the guess points at a file that was never written, and every card in every grid
+      // renders the browser's broken-image glyph. Latent on the demo store (all 14 products have
+      // media and the guessed files happen to exist) and guaranteed on the first real merchant.
+      // Callers render a placeholder instead — never fabricate a URL you have not been given.
+      image: r.image ? mediaUrl(r.image) : "",
       description: r.description ?? "",
       sizes: (r.sizes as string[] | null) ?? [],
       badge: r.badge ?? undefined,
@@ -441,9 +448,13 @@ export async function getCatalog(store: StoreInfo): Promise<Catalog> {
 // Seeded products have a 5-image gallery by convention (base + -2..-5). Merchant-uploaded images
 // (absolute /api/uploads/) have no such siblings, so show just the primary.
 export const productImages = (p: Product): string[] =>
-  p.image.includes("/products/")
-    ? [p.image, ...[2, 3, 4, 5].map((n) => p.image.replace(/\.webp$/, `-${n}.webp`))]
-    : [p.image];
+  // No photo at all → no gallery. Returning [""] would render <img src=""> which the browser
+  // resolves against the PAGE url, downloads the HTML, and shows as a broken image.
+  !p.image
+    ? []
+    : p.image.includes("/products/")
+      ? [p.image, ...[2, 3, 4, 5].map((n) => p.image.replace(/\.webp$/, `-${n}.webp`))]
+      : [p.image];
 
 // Newest first — for the Grid Produk "terbaru" mode.
 export const recentProducts = (list: Product[]) => [...list].sort((a, b) => b.createdAt - a.createdAt);
