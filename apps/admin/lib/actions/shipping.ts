@@ -443,7 +443,7 @@ export async function createShipment(input: {
       .select({
         id: schema.orders.id,
         number: schema.orders.number, city: schema.orders.city, province: schema.orders.province, awb: schema.orders.awb,
-        kaOrderId: schema.orders.kaOrderId,
+        kaOrderId: schema.orders.kaOrderId, status: schema.orders.status,
         subtotal: schema.orders.subtotalIdr, total: schema.orders.totalIdr,
         // Address SNAPSHOT (migration 0042) — where THIS parcel goes. See the note below.
         shipRecipient: schema.orders.shipRecipient, shipPhone: schema.orders.shipPhone,
@@ -465,6 +465,13 @@ export async function createShipment(input: {
   if (!o) return { ok: false, error: "Pesanan tidak ditemukan." };
   if (o.awb) return { ok: false, error: `Pesanan sudah punya resi (${o.awb}).` };
   if (o.kaOrderId) return { ok: false, error: `Pesanan sudah dibooking ke kurir (${o.kaOrderId}).` };
+  // A terminal order cannot be booked. This write sets `status:'diproses'` with a RAW db.update, so
+  // without this guard booking a shipment for a delivered or cancelled order would walk it backwards
+  // past `applyOrderStatusChange`'s terminal guard (9772246) — and for a `selesai` COD order that
+  // means un-completing a sale whose cash is already collected and credited to the ledger.
+  if (o.status === "selesai" || o.status === "batal" || o.status === "retur") {
+    return { ok: false, error: `Pesanan sudah ${o.status} — tidak bisa dibuatkan pengiriman.` };
+  }
 
   // The sender address is the pickup origin. KiriminAja rejects request_pickup without a
   // kecamatan_id, and the phone/name/address ride on the physical label the driver reads — a
@@ -628,22 +635,47 @@ export async function createShipment(input: {
 // pickup nobody knows about.
 export async function cancelShipment(orderNumber: string, reason = "Dibatalkan oleh penjual"): Promise<{ ok: boolean; error?: string }> {
   const { storeId } = await requireCapability("orders:write");
-  const ref = await withTenant(storeId, async (db) => {
-    const [o] = await db
-      .select({ awb: schema.orders.awb, kaOrderId: schema.orders.kaOrderId })
+  const o = await withTenant(storeId, async (db) => {
+    const [row] = await db
+      .select({ awb: schema.orders.awb, kaOrderId: schema.orders.kaOrderId, status: schema.orders.status })
       .from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1);
-    return o?.awb ?? o?.kaOrderId ?? null;
+    return row ?? null;
   });
+  const ref = o?.awb ?? o?.kaOrderId ?? null;
   if (!ref) return { ok: false, error: "Pesanan ini belum punya pengiriman." };
+  // TERMINAL ORDERS ARE NOT RE-BOOKABLE, so they must not be walked back to `diproses`. `selesai` means
+  // delivered — and for COD, cash collected and the ledger credited; `batal`/`retur` are terminal by
+  // `applyOrderStatusChange`'s own guard (9772246). Writing `status:'diproses'` here bypassed that guard
+  // entirely — this action does a RAW `db.update`, not a state-machine transition — so voiding the
+  // booking on a delivered order silently un-completed it. Refuse before calling KiriminAja: there is
+  // nothing to cancel on a parcel that already arrived, and a courier-side cancel we then refuse to
+  // record is worse than not asking.
+  if (o.status === "selesai" || o.status === "batal" || o.status === "retur") {
+    return { ok: false, error: `Pesanan sudah ${o.status} — pengirimannya tidak bisa dibatalkan lagi.` };
+  }
   const r = await kaCancelShipment(ref, reason);
   if (!r.ok) return { ok: false, error: `KiriminAja menolak pembatalan: ${r.error ?? "gagal"}. Pengiriman masih terdaftar di kurir.` };
-  await withTenant(storeId, (db) =>
-    // Reset status too: clearing awb/courier/kaOrderId but leaving status='dikirim' left the order
-    // labelled "Dikirim" with no shipment, and the poller (kaOrderId now null) could never move it.
+  await withTenant(storeId, async (db) => {
+    // Re-read UNDER LOCK: the tracking poller may have advanced this order while we were on the network
+    // (that call is not instant, and ka-tracking writes the same row). Without the lock this is the
+    // read-then-write race 9772246 closed in setOrderStatus, reopened one file over.
+    const [cur] = await db
+      .select({ status: schema.orders.status })
+      .from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1).for("update");
+    // The booking IS void at the courier now, so the shipment fields must be cleared either way —
+    // showing a resi that no longer exists is the worse lie. But if the order went terminal while we
+    // were away, leave `status` alone: the parcel's fate is no longer ours to assert.
+    const terminal = cur?.status === "selesai" || cur?.status === "batal" || cur?.status === "retur";
     // Back to `diproses` = "needs (re)booking". This voids the courier booking, NOT the order (that is
-    // setOrderStatus→batal), so no inventory/ledger movement — just the shipment label.
-    db.update(schema.orders).set({ awb: null, courier: null, kaOrderId: null, status: "diproses" }).where(eq(schema.orders.number, orderNumber)),
-  );
+    // setOrderStatus→batal), so no inventory/ledger movement — just the shipment label. Clearing
+    // awb/courier/kaOrderId while leaving status='dikirim' used to leave the order labelled "Dikirim"
+    // with no shipment, and the poller (kaOrderId now null) could never move it.
+    await db.update(schema.orders)
+      .set(terminal
+        ? { awb: null, courier: null, kaOrderId: null }
+        : { awb: null, courier: null, kaOrderId: null, status: "diproses" })
+      .where(eq(schema.orders.number, orderNumber));
+  });
   revalidatePath(`/pesanan/${orderNumber}`);
   return { ok: true };
 }
