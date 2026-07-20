@@ -66,8 +66,13 @@ const rating = Astro.locals.catalog.productRating(product);
 // The discount was computed on the PDP and NOWHERE on the card, so a shopper scanning a promo grid
 // saw a struck-through price and had to do the arithmetic themselves. Same formula as
 // produk/[handle].astro so the two can never disagree.
+// `price === 0` means "belum diberi harga / tanya penjual" in this data, NOT free — so the card shows
+// "Hubungi untuk harga" instead of "Rp0", which reads as broken. The PDP (produk/[handle].astro) makes
+// the same call and drops it into the contact flow; here the card just links to the PDP as always.
+const unpriced = product.price <= 0;
+// `&& !unpriced`: a compareAt over a 0 base computes a bogus −100% badge — no price cut without a price.
 const discount =
-  product.compareAt && product.compareAt > product.price
+  !unpriced && product.compareAt && product.compareAt > product.price
     ? Math.round(((product.compareAt - product.price) / product.compareAt) * 100)
     : 0;
 ---
@@ -146,9 +151,10 @@ const discount =
         The PDP already wraps (`flex-wrap` at produk/[handle].astro) — the card was the odd one out.
         `gap-y-0.5` keeps the second line tight so a promo card grows by a line, not a paragraph. */}
     <div class="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-      <span class="font-semibold text-ink tabular-nums">{IDR(product.price)}</span>
+      {/* Unpriced → phrase, not a figure (no `tabular-nums`), and no struck price beside it. */}
+      <span class:list={["font-semibold text-ink", unpriced ? "text-sm" : "tabular-nums"]}>{unpriced ? "Hubungi untuk harga" : IDR(product.price)}</span>
       {
-        product.compareAt && (
+        !unpriced && product.compareAt && (
           <span class="text-sm text-muted line-through tabular-nums">{IDR(product.compareAt)}</span>
         )
       }
