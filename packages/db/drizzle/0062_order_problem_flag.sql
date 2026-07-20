@@ -1,0 +1,26 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 0062 — the courier flagged this parcel, and the merchant must hear about it.
+--
+-- The tracking poller already recognised `problem` outcomes (status 500 / 7xx–9xx): it incremented a
+-- counter and `console.warn`ed. There was no column, no badge, no screen — so the only person who
+-- ever learned a parcel was stuck was the BUYER, and the seller learned it from the complaint.
+--
+-- `problem` is deliberately NOT an order_status. A stuck parcel is neither delivered nor returned;
+-- forcing it into the status enum would either move money (selesai collects COD) or fake a terminal
+-- state. It is a FLAG that rides alongside the status — the order stays `dikirim`, which is true.
+--
+-- A timestamp, not a boolean, for the same reason as 0055 label_printed_at: "when" answers questions
+-- "whether" cannot — how long has it been stuck, did it clear on its own, is this the third time.
+-- `problem_at` holds the FIRST poll that saw the obstacle and is not re-stamped while it persists,
+-- so it reads as "stuck since", not "last polled".
+--
+-- ⚠️ Both columns CLEAR (back to NULL) the moment a later poll shows the parcel moving again. That is
+-- the whole design: a flag that only ever accumulates becomes wallpaper, and this repo has already
+-- paid for that lesson twice (verify-rls red for weeks; the seed's rotting date anchor). A problem
+-- that resolved is not a problem.
+--
+-- `problem_note` is the courier's reason in merchant-facing Indonesian, written by the poller. It is
+-- a short sentence, not a payload dump — the raw response goes to the log, never to this column.
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE orders ADD COLUMN problem_at timestamptz;
+ALTER TABLE orders ADD COLUMN problem_note text;

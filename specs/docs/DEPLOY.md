@@ -98,6 +98,78 @@ running-but-unhealthy container, not a `created`/`exited` one — the watchdog c
 - **Better long-term:** enable Coolify's own "Docker Cleanup" (threshold-based) in instance settings so
   the platform owns this; the cron is the belt-and-braces until then.
 
+## L2 — external probe (BUILT 2026-07-20; **not installed anywhere yet — no alert channel**)
+
+L1 restarts `created`/`exited` containers. L1b sweeps the disk. Neither is a **witness**: on 2026-07-18
+the storefront 503'd for ~2h while its container reported `Up (unhealthy)` — a state L1 deliberately
+ignores — and the only reason anyone found out is that a human happened to look. `ops/tokophi-probe.sh`
+is that witness.
+
+- **It must run OFF the box.** A watchdog on a dead box is worthless; the box itself was the failure
+  last time. Run it from a laptop, a second cheap VPS, or a CI runner — anywhere with `curl` + `ssh`.
+  **Do not install it on `volumdev`.**
+- **Four checks, one per observed failure shape:**
+  1. **The 5 public surfaces** — `tokophi.com`, `app.tokophi.com/login`, `rich.tokophi.com`,
+     `toko.tokophi.com`, `batik-nusantara.tokophi.id`. ⚠️ `rich.` answers **307** (middleware redirect
+     to `/login`) and that is **healthy** — a probe demanding 200 there would be red forever and
+     everyone would learn to ignore it. Redirects are not followed: the 307 *is* the evidence.
+  2. **`POST /api/public/ongkir {"op":"search","q":"Semarang"}`** — the only check that proves
+     **Postgres** is alive. It runs `resolveArea()` → an ILIKE over `kiriminaja_areas`; if the DB is
+     in recovery the query throws and the route returns 500. A static 200 from a `healthy` container
+     proves nothing — that is exactly what was true for two hours. ⚠️ Uses `op:"search"`, **not**
+     `op:"rates"`: `7cc1ecc` made a missing `storeSlug` fatal on `rates`, which would 400 on tenant
+     resolution and be misread as "down". `search` takes no slug. The check judges the **body**
+     (`ok:true` + rows), because an unset `KIRIMINAJA_API_KEY` returns HTTP **200** with
+     `{ok:false,"Shipping belum dikonfigurasi."}` — a different problem with a different runbook, and
+     the message says which.
+  3. **Disk % + free GB over ssh** — the actual leading indicator of 2026-07-18, which nothing watched.
+     Alerts at **≥80% used OR <15 GB free**. 80% is the same number `tokophi-docker-cleanup.sh` uses to
+     switch into aggressive pruning, so crossing it means **the broom has already gone to its strongest
+     setting and is still losing**. 15 GB is roughly one clean deploy (images are ~1.7 GB each, gotcha
+     #8) — below that the box has quietly lost the ability to build its own repair, and remember you
+     **cannot redeploy your way out of a full disk**.
+  4. **L1 heartbeat freshness** — `/var/run/tokophi-watchdog.last`, stale >10 min (10 missed cron ticks)
+     ⇒ the watchdog itself is dead. Unhealthy containers are collected from `docker ps` as *context*
+     attached to other alerts, never as an alert of their own (a container is briefly unhealthy on
+     every deploy).
+- **It alerts only after 3 consecutive failing passes** (`TOKOPHI_PROBE_FAIL_THRESHOLD`). At a 5-minute
+  cron that is ~15 min of sustained failure before anyone is woken — deliberate. **A probe that cries
+  wolf gets ignored:** `verify-rls` was red for weeks, everyone scrolled past it, and two real tenant
+  leaks shipped through an alarm that was technically on. Every failing pass still prints immediately;
+  only the *page* waits. Recovery after an alert is announced too — silence is indistinguishable from a
+  dead probe.
+- **Exit code:** `0` = everything healthy, `1` = something is failing (usable as a CI/uptime check).
+
+```bash
+# On the OFF-BOX machine — every 5 minutes:
+scp ops/tokophi-probe.sh <probe-host>:/usr/local/bin/tokophi-probe.sh
+chmod 755 /usr/local/bin/tokophi-probe.sh
+printf '%s\n' '*/5 * * * * root . /root/.config/tokophi-probe.env; /usr/local/bin/tokophi-probe.sh >> /var/log/tokophi-probe.log 2>&1' \
+  > /etc/cron.d/tokophi-probe && chmod 644 /etc/cron.d/tokophi-probe
+
+# Manual run (HTTP-only, no ssh key on this machine):
+TOKOPHI_PROBE_SKIP_SSH=1 ops/tokophi-probe.sh
+```
+
+Env (all optional, all with defaults; the alert-channel secrets belong in that sourced env file or
+`~/.config/ai-local/secrets.env` — **never in the repo**): `TOKOPHI_SSH_TARGET`, `TOKOPHI_SSH_KEY`,
+`TOKOPHI_PROBE_STATE`, `TOKOPHI_PROBE_FAIL_THRESHOLD`, `TOKOPHI_PROBE_DISK_PCT`,
+`TOKOPHI_PROBE_DISK_FREE_GB`, `TOKOPHI_PROBE_HEARTBEAT_AGE`, `TOKOPHI_PROBE_SKIP_SSH`,
+`TOKOPHI_ALERT_CHANNEL`.
+
+- ⚠️ **`notify()` IS STILL A STUB — this probe cannot page anybody yet.** The alert channel is an
+  unmade decision (BACKLOG P1.8): Telegram (fastest to a phone; `@BotFather` token + chat id) or
+  email/SMTP. Both are sketched in commented-out code in the script; pick one, uncomment it, set
+  `TOKOPHI_ALERT_CHANNEL` plus its secrets in the environment. **Until then the probe writes to stdout
+  and the log only** — it is a witness that cannot shout, which is still strictly better than the
+  nothing that was there before, and strictly worse than a witness.
+- **Verified 2026-07-20:** one full pass against live production — all 5 surfaces + the DB endpoint +
+  ssh + disk (20% used, 129 GB free, i.e. L1b's cleanup is holding) + the L1 heartbeat (35 s old), exit
+  0. The failure/threshold/recovery path was exercised separately against a dead port, which is how the
+  two bugs in it were found: `bash -n` and a single green production pass both said it was fine while
+  every check was writing to its **neighbour's** counter, so nothing could ever reach the threshold.
+  Same lesson as `queueSave` — **exercise it, do not typecheck it.**
+
 ## Billing cron (schedule this)
 
 Subscription enforcement is real-time (`computeBilling` in `requireCapability` → suspended stores
@@ -128,6 +200,36 @@ production, exactly like billing.
 
 ⚠️ `KIRIMINAJA_ENV` still defaults to **sandbox**. The poller will faithfully track sandbox parcels
 and report `awbFilled: 0` forever against real ones.
+
+## ⚠️ How to verify a deploy ACTUALLY landed (read before reporting one as done)
+
+**Merging to `main` triggers Coolify via webhook. The merge is not the deploy** — the build takes
+several minutes, and during that whole window the OLD containers are still up, still `healthy`, and
+still serving 200s. Every signal you would naturally check says "fine" while the new code is nowhere
+near production.
+
+**Do not verify with container health or HTTP status. Verify that the ARTEFACT CHANGED.**
+
+```bash
+# BEFORE merging — record the running container id
+ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 "docker ps -q --filter name=admin- | head -1"
+
+# AFTER — the deploy has landed only when that id is REPLACED
+ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 \
+  "docker ps --format '{{.Names}}\t{{.RunningFor}}' | grep -E 'admin-|storefront-|super-admin-'"
+```
+
+`RunningFor` is the honest signal: "11 minutes ago" means you are still looking at the *previous*
+deploy. Only once the id changes are HTTP checks meaningful.
+
+**This is not hypothetical — it fooled a check on 2026-07-20.** A watcher matched `Up N (seconds|minute)`
+against `Up 10 minutes`, declared "containers rebuilt + healthy", and confirmed 200s from
+`app.tokophi.com` — all of it true, all of it about the *previous* build. The deploy under test had not
+started. **A false green costs exactly as much trust as a false red.** If a check can pass while the
+thing it tests has not happened, it is not a check.
+
+Corollary: `docker ps` during a build shows an extra short-lived Coolify container (a random-looking
+name, `Up N seconds`). That is the build running — its presence means the deploy is *in flight*, not done.
 
 ## Env to set in Coolify
 

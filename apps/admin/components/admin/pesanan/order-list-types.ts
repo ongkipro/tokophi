@@ -49,6 +49,11 @@ export type OrderListRow = {
   status: "baru" | "diproses" | "dikirim" | "selesai" | "batal" | "retur";
   courier: string | null;
   awb: string | null;
+  // The courier flagged this parcel (orders.problem_at, 0062). NULL = nothing known to be wrong.
+  // Set by the tracking poller and cleared again as soon as the parcel moves, so a badge built on it
+  // means "stuck NOW", not "was ever stuck". Not a status: the order is still `dikirim`.
+  problem: boolean;
+  problemNote: string | null;
   minutesAgo: number;            // computed on the server — no clock in the render path
   lines: OrderListLine[];        // first 2, for the product-led row
   lineCount: number;

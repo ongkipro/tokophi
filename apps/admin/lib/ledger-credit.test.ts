@@ -358,6 +358,54 @@ suite("applyOrderStatusChange — the stock returns to the shelf on batal AND re
     });
   });
 
+  // ── The two properties `lib/actions/shipping.ts` now depends on ────────────────────────────────
+  // createShipment/cancelShipment used to write `orders.status` with a raw `db.update`, each carrying
+  // its own hand-copied terminal check. They now route the write through this machine, so there is
+  // ONE status writer. That refactor is only safe because of the first test below, and it still needs
+  // its own (wider) refusal because of the second.
+
+  it("→ diproses (a shipment booking or void) moves NO stock, NO payment and NO money", async () => {
+    await inTxn(async (tx) => {
+      const storeId = await mkStore(tx);
+      const variantId = await mkVariantWithStock(tx, storeId, 10);
+      const orderId = await mkOrder(tx, storeId, "dikirim");
+      await mkLineItem(tx, orderId, variantId, 3);
+      // a collected prepaid sale already sitting in the book…
+      await creditSaleForPayment(tx, await mkPayment(tx, { orderId, storeId, amount: 100_000, status: "berhasil" }));
+      // …and an uncollected COD row that a batal/retur WOULD fail
+      const cod = await mkPayment(tx, { orderId, storeId, method: "cod", status: "menunggu" });
+
+      // cancelShipment on a shipped order resets it to "needs (re)booking"
+      await applyOrderStatusChange(tx, { storeId, order: { id: orderId, status: "dikirim" }, status: "diproses" });
+
+      const [o] = await rows(tx, sql`select status from orders where id = ${orderId}`);
+      expect(o.status).toBe("diproses"); // the status DID move…
+      expect(await stockOf(tx, variantId)).toBe(10); // …and nothing else did: no phantom restore
+      const l = await ledgerOf(tx, orderId);
+      expect(l).toHaveLength(1);
+      expect(l[0].kind).toBe("sale");
+      expect(l[0].status).toBe("pending"); // neither released nor clawed back
+      const [p] = await rows(tx, sql`select status from payments where id = ${cod}`);
+      expect(p.status).toBe("menunggu"); // COD cash still uncollected, still collectable
+    });
+  });
+
+  it("selesai is NOT terminal here — selesai → retur stays legal (a delivered parcel refused later)", async () => {
+    await inTxn(async (tx) => {
+      const storeId = await mkStore(tx);
+      const variantId = await mkVariantWithStock(tx, storeId, 10);
+      const orderId = await mkOrder(tx, storeId, "selesai");
+      await mkLineItem(tx, orderId, variantId, 2);
+      await applyOrderStatusChange(tx, { storeId, order: { id: orderId, status: "selesai" }, status: "retur" });
+      expect(await stockOf(tx, variantId)).toBe(12); // back on the shelf
+      const [o] = await rows(tx, sql`select status from orders where id = ${orderId}`);
+      expect(o.status).toBe("retur");
+      // ⚠️ This is why `shipmentLocked` in lib/actions/shipping.ts refuses `selesai` even though this
+      // machine does not. Do NOT "simplify" by adding `selesai` to the terminal guard above — it would
+      // make this transition, and the ledger claw-back that rides on it, unreachable.
+    });
+  });
+
   it("fails a still-pending payment so a cancelled order can't be marked paid later", async () => {
     await inTxn(async (tx) => {
       const storeId = await mkStore(tx);

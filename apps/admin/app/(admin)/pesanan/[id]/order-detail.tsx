@@ -392,6 +392,18 @@ export function OrderDetail({
             <div className="flex items-center gap-2.5">
               <h1 className="truncate font-mono text-xl font-bold tracking-tight">{order.id}</h1>
               <OrderStatusBadge status={order.status} />
+              {/* ALONGSIDE the status, never instead of it: the order really is still `dikirim` —
+                  the parcel is out, it just is not moving. The detail (kurir's reason + since when)
+                  lives in the Pengiriman card; this is the "something is wrong here" marker you see
+                  before you read anything else. */}
+              {shipment.problemAt && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-md bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400"
+                  title={shipment.problemNote ?? "Kurir melaporkan kendala pengiriman."}
+                >
+                  <AlertTriangle className="size-3.5" /> Kendala pengiriman
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -661,6 +673,27 @@ export function OrderDetail({
               <CardTitle>Pengiriman</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
+              {/* THE STUCK PARCEL, at the top of the card the seller opens to answer "where is it?".
+                  Set by the tracking poller (orders.problem_at, migration 0062) and cleared by the
+                  same poller the moment the courier reports movement again — so if this is on the
+                  screen, it is true RIGHT NOW. It is not dismissable by hand on purpose: a seller
+                  clicking it away would not unstick the parcel, it would only unstick the warning. */}
+              {shipment.problemAt && (
+                <div className="space-y-1 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+                  <div className="flex items-center gap-2 text-xs font-medium text-red-700 dark:text-red-400">
+                    <AlertTriangle className="size-4 shrink-0" /> Kendala pengiriman
+                  </div>
+                  <p className="text-[11px] leading-snug text-foreground">
+                    {shipment.problemNote ?? "Kurir melaporkan kendala pengiriman."}
+                  </p>
+                  {shipment.problemAtLabel && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Dilaporkan kurir sejak {shipment.problemAtLabel}. Tanda ini hilang sendiri
+                      begitu paket bergerak lagi.
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <Truck className="size-4" /> Kurir

@@ -81,7 +81,13 @@ export type KaSyncResult = { ok: boolean; changed: string[]; error?: string };
  * ⚠️ Callers must do their tracking fetch BEFORE calling this. The lock is held for the whole call, so
  * a network round-trip inside it would hold a row lock across the internet.
  */
-export async function syncOrderFromKa(orderNumber: string, outcome: KaOutcome | null, awb?: string | null): Promise<KaSyncResult> {
+export async function syncOrderFromKa(
+  orderNumber: string,
+  outcome: KaOutcome | null,
+  awb?: string | null,
+  /** Merchant-facing Indonesian reason, stored on `orders.problem_note` when outcome is `problem`. */
+  problemNote?: string | null,
+): Promise<KaSyncResult> {
   const changed: string[] = [];
   let found = true;
   await db.transaction(async (tx) => {
@@ -95,7 +101,13 @@ export async function syncOrderFromKa(orderNumber: string, outcome: KaOutcome | 
     // route finishes its KiriminAja pull (kaTrack) before calling us, so the txn only ever spans local
     // queries. Never move an HTTP call between this read and the write.
     const [order] = await tx
-      .select({ id: schema.orders.id, storeId: schema.orders.storeId, status: schema.orders.status, awb: schema.orders.awb })
+      .select({
+        id: schema.orders.id,
+        storeId: schema.orders.storeId,
+        status: schema.orders.status,
+        awb: schema.orders.awb,
+        problemAt: schema.orders.problemAt,
+      })
       .from(schema.orders)
       .where(eq(schema.orders.number, orderNumber))
       .for("update")
@@ -111,6 +123,38 @@ export async function syncOrderFromKa(orderNumber: string, outcome: KaOutcome | 
       await tx.update(schema.orders).set({ awb }).where(eq(schema.orders.id, order.id));
       changed.push(`awb:${awb}`);
     }
+    // ── The problem flag (0062) ────────────────────────────────────────────────────────────────
+    // `problem` maps to NO status change (OUTCOME_STATUS.problem === null) — it is a flag, and this
+    // is the only place that raises or lowers it.
+    //
+    // ⚠️ The `outcome === null` case is deliberately absent from both branches. An unmapped status
+    // means we do not know what the courier said (ee8a458): it fills the AWB and changes NOTHING.
+    // Treating "unrecognised" as "moving again" would silently clear a real obstacle, and treating
+    // it as a problem would flag every parcel whose status string we have not seen before.
+    if (outcome === "problem") {
+      // Do NOT re-stamp an obstacle that is already flagged. `problem_at` answers "macet sejak
+      // kapan" — the seller's actual question — and re-stamping it every poll would reset the age
+      // to zero every 15 minutes, so a parcel stuck for four days would forever read "baru saja".
+      // The note is still refreshed: the courier may have a more specific reason now.
+      await tx
+        .update(schema.orders)
+        .set({
+          problemAt: order.problemAt ?? new Date(),
+          problemNote: problemNote ?? "Kurir melaporkan kendala pengiriman.",
+        })
+        .where(eq(schema.orders.id, order.id));
+      if (!order.problemAt) changed.push("problem:set");
+    } else if (outcome && order.problemAt) {
+      // The parcel is moving again (booked/shipped/delivered/returned/canceled all mean the courier
+      // reported real progress). Clear it. A flag that only ever accumulates becomes noise nobody
+      // reads — and an alarm that is always on is an alarm that is off.
+      await tx
+        .update(schema.orders)
+        .set({ problemAt: null, problemNote: null })
+        .where(eq(schema.orders.id, order.id));
+      changed.push("problem:cleared");
+    }
+
     const cur = order.status as OrderStatus;
     const target = outcome ? OUTCOME_STATUS[outcome] : null;
     if (target && RANK[target] > RANK[cur]) {

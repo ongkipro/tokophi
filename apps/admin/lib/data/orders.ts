@@ -219,6 +219,8 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
         (o.financial_status = 'dibayar')                        as "paid",
         o.courier                                               as "courier",
         o.awb                                                   as "awb",
+        (o.problem_at is not null)                              as "problem",
+        o.problem_note                                          as "problemNote",
         o.placed_at                                             as "placedAt",
         (select p.method::text from payments p where p.order_id = o.id
          order by p.paid_at desc nulls last limit 1)            as "paymentMethod"
@@ -230,7 +232,8 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
     `)) as unknown as {
       id: string; number: string; buyer: string; city: string; address: string | null;
       total: string | number; status: Order["status"]; paid: boolean; courier: string | null;
-      awb: string | null; placedAt: Date; paymentMethod: string | null;
+      awb: string | null; problem: boolean; problemNote: string | null;
+      placedAt: Date; paymentMethod: string | null;
     }[];
 
     // 3) their line items (product-led row: photo + name + variant + qty)
@@ -302,6 +305,8 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
           status: r.status,
           courier: r.courier,
           awb: r.awb,
+          problem: Boolean(r.problem),
+          problemNote: r.problemNote,
           minutesAgo: Math.round((TODAY.getTime() - new Date(r.placedAt).getTime()) / 60_000),
           lines: lines.slice(0, 2).map((l) => ({
             title: l.title,
