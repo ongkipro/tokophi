@@ -8,7 +8,10 @@ import RevealGrid from "../../components/RevealGrid.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import type { Product, VirtualCollectionHandle } from "../../data/catalog";
 
-type ResolvedCollection = { name: string; blurb: string };
+// `imageUrl` is optional because the VIRTUAL collections (Terlaris, Baru, …) are computed lists with
+// no row behind them — there is nothing for a merchant to upload a cover to. Real collections carry
+// whatever they set in the Kategori editor; "" means they set nothing.
+type ResolvedCollection = { name: string; blurb: string; imageUrl?: string };
 
 // SSR: tenant from the Host header (src/middleware.ts), collection from the handle param.
 const { store, catalog } = Astro.locals;
@@ -45,7 +48,7 @@ if (virtual) {
 } else {
   const real = handle ? catalog.findCollection(handle) : undefined;
   if (!real) return new Response(null, { status: 404, statusText: "Not Found" });
-  collection = { name: real.name, blurb: real.blurb };
+  collection = { name: real.name, blurb: real.blurb, imageUrl: real.imageUrl };
   products = catalog.byCollection(real.handle);
 }
 
@@ -88,11 +91,28 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
   <section class="bg-brand-50">
     <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-16">
       <Breadcrumb items={CRUMBS} />
-      <p class="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Koleksi</p>
-      <h1 class="mt-2 font-display text-4xl font-semibold text-ink">
-        {collection.name}
-      </h1>
-      <p class="mt-3 max-w-xl leading-relaxed text-muted">{collection.blurb}</p>
+      <div class="mt-6 flex flex-col gap-6 sm:flex-row sm:items-center">
+        {/* The merchant's uploaded cover, if they set one in Kategori. Rendered only when present —
+            the layout is unchanged for the (currently normal) case of no cover, so this cannot make
+            an existing category page worse. `imageUrl` is already absolute (mediaUrl). */}
+        {collection.imageUrl && (
+          <img
+            src={collection.imageUrl}
+            alt={`Koleksi ${collection.name}`}
+            width="160"
+            height="160"
+            loading="eager"
+            class="size-28 shrink-0 rounded-2xl object-cover shadow-sm sm:size-40"
+          />
+        )}
+        <div class="min-w-0">
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Koleksi</p>
+          <h1 class="mt-2 font-display text-4xl font-semibold text-ink">
+            {collection.name}
+          </h1>
+          <p class="mt-3 max-w-xl leading-relaxed text-muted">{collection.blurb}</p>
+        </div>
+      </div>
     </div>
   </section>
 

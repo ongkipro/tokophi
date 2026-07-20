@@ -331,6 +331,8 @@ export type CollectionDetail = {
   id: string; name: string; handle: string; description: string;
   type: "manual" | "otomatis"; match: "all" | "any"; published: boolean;
   seoTitle: string; seoDesc: string; emoji: string;
+  /** Uploaded cover image (`collections.image_url`). "" = none → fall back to `emoji`. */
+  imageUrl: string;
   memberIds: string[]; conditions: CollectionCondition[];
 };
 export const COLLECTIONS: Collection[] = [

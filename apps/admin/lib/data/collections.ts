@@ -60,6 +60,7 @@ export async function getCollectionDetail(id: string): Promise<CollectionDetail 
         seoTitle: schema.collections.seoTitle,
         seoDesc: schema.collections.seoDesc,
         emoji: schema.collections.emoji,
+        imageUrl: schema.collections.imageUrl,
       })
       .from(schema.collections)
       .where(eq(schema.collections.id, id))
@@ -89,6 +90,7 @@ export async function getCollectionDetail(id: string): Promise<CollectionDetail 
       seoTitle: c.seoTitle ?? "",
       seoDesc: c.seoDesc ?? "",
       emoji: c.emoji ?? "📦",
+      imageUrl: c.imageUrl ?? "",
       memberIds: members.map((m) => m.productId),
       conditions: conds.map((x) => ({ field: x.field, operator: x.operator, value: x.value })),
     };

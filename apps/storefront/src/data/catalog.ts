@@ -22,6 +22,8 @@ export type Collection = {
   name: string;
   emoji: string;
   blurb: string;
+  /** Merchant-uploaded cover, already absolute via `mediaUrl` ("" = none, fall back to the emoji). */
+  imageUrl: string;
   /** ADR 0009 — the named `category` template this collection renders with (null = store default). */
   templateId: string | null;
 };
@@ -176,6 +178,10 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       name: c.title,
       emoji: c.emoji ?? "",
       blurb: c.description ?? "",
+      // The Kategori editor writes `collections.image_url`. Until now nothing read it, so a merchant
+      // could upload a cover, see it saved in the admin, and never see it on their own shop — the
+      // column was half-wired. `mediaUrl` makes the admin-served /api/uploads/ path absolute.
+      imageUrl: c.imageUrl ? mediaUrl(c.imageUrl) : "",
       templateId: c.templateId,
     }))
     .sort((a, b) => a.name.localeCompare(b.name, "id-ID"));

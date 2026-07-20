@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createCollection, updateCollection, deleteCollection, type CollectionInput } from "@/lib/actions/collections";
+import { uploadMedia, getMedia } from "@/lib/actions/media";
 import { useCan } from "@/components/admin/permissions";
 import {
   ChevronLeft,
@@ -128,6 +129,44 @@ export function CollectionEditor({ collection, products }: { collection?: Collec
   // Template tema
   const [template, setTemplate] = React.useState<string>(TEMPLATES[0]);
 
+  // ---- Gambar koleksi ----
+  // This card used to be a bare <button> with no onClick, no <input type="file"> and no drop handler,
+  // under copy promising "Seret gambar atau klik untuk unggah" — it delivered NEITHER. Same bug class
+  // as the blog editor's "Gambar unggulan", fixed the same way and through the SAME `uploadMedia`
+  // action the Files library uses, so one upload path keeps one set of rules (WebP conversion, the
+  // 2 MB gate, the media row). The url is held in state and persisted by the normal Simpan — nothing
+  // is written to the collection until the merchant saves, which is what every other field here does.
+  const imgInputRef = React.useRef<HTMLInputElement>(null);
+  const [imgBusy, setImgBusy] = React.useState(false);
+  const [drag, setDrag] = React.useState(false);
+  const [imageUrl, setImageUrl] = React.useState(collection?.imageUrl ?? "");
+  const pickImage = async (f?: File) => {
+    if (!f) return;
+    if (!canWrite) { toast.error("Akses ditolak — peran Anda tidak bisa mengubah koleksi"); return; }
+    // Client-side checks are UX only; image-store.ts's checkFile is the boundary and re-checks both.
+    if (!f.type.startsWith("image/")) { toast.error(`${f.name}: bukan gambar.`); return; }
+    if (f.size > 2 * 1024 * 1024) { toast.error(`${f.name}: melebihi 2MB (${(f.size / 1048576).toFixed(1)}MB).`); return; }
+    setImgBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const r = await uploadMedia(fd);
+      // `uploadMedia` returns ok/error rather than the saved row, so read the url back from the
+      // library (the blog editor does the same — changing the action's return type is a wider change
+      // than this fix warrants).
+      if (!r.ok) { toast.error(r.error ?? "Gagal mengunggah."); return; }
+      const media = await getMedia();
+      const newest = media[0];
+      if (!newest) { toast.error("Gambar terunggah tapi tidak ditemukan di Files."); return; }
+      setImageUrl(newest.url);
+      toast.success("Gambar diunggah (WebP) — tekan Simpan untuk menyimpannya ke koleksi.");
+    } catch {
+      toast.error("Gagal mengunggah gambar.");
+    } finally {
+      setImgBusy(false);
+    }
+  };
+
   // ---- persist ----
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
@@ -140,6 +179,7 @@ export function CollectionEditor({ collection, products }: { collection?: Collec
     published,
     seoTitle,
     seoDesc: metaDesc,
+    imageUrl,
     memberIds: members.map((p) => p.id),
     conditions: conditions
       .filter((c) => c.value.trim())
@@ -567,21 +607,76 @@ export function CollectionEditor({ collection, products }: { collection?: Collec
               <CardTitle>Gambar koleksi</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {isEdit && (
-                <div className="flex size-24 items-center justify-center rounded-xl bg-muted text-5xl ring-1 ring-foreground/10">
-                  {collection?.emoji}
+              {imageUrl ? (
+                <div className="flex flex-col gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- /api/uploads is served by
+                      a route handler, not the image optimizer's allowed loaders. */}
+                  <img
+                    src={imageUrl}
+                    alt=""
+                    className="aspect-[3/2] w-full rounded-lg object-cover ring-1 ring-border"
+                  />
+                  {canWrite && (
+                    <div className="flex gap-2">
+                      <Button type="button" variant="secondary" size="sm" disabled={imgBusy} onClick={() => imgInputRef.current?.click()}>
+                        {imgBusy ? "Mengunggah…" : "Ganti"}
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" className="text-destructive" disabled={imgBusy} onClick={() => setImageUrl("")}>
+                        Hapus
+                      </Button>
+                    </div>
+                  )}
                 </div>
+              ) : (
+                <>
+                  {isEdit && collection?.emoji && (
+                    <div className="flex size-24 items-center justify-center rounded-xl bg-muted text-5xl ring-1 ring-foreground/10">
+                      {collection.emoji}
+                    </div>
+                  )}
+                  {/* Both halves of the promise are real now: the button opens the hidden file input,
+                      and the wrapper's onDragOver/onDrop take a dropped file (the Files library's
+                      pattern — preventDefault, then read e.dataTransfer.files). */}
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); if (canWrite && !imgBusy) setDrag(true); }}
+                    onDragLeave={() => setDrag(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDrag(false);
+                      if (!canWrite || imgBusy) return;
+                      void pickImage(e.dataTransfer.files?.[0]);
+                    }}
+                    className={cn("rounded-xl transition-colors", drag && "bg-primary/5 ring-2 ring-primary")}
+                  >
+                    <button
+                      type="button"
+                      disabled={!canWrite || imgBusy}
+                      onClick={() => imgInputRef.current?.click()}
+                      className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-10 text-center text-muted-foreground transition-colors hover:border-primary hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <ImageUp className="size-6" />
+                      <span className="text-sm">
+                        {imgBusy ? "Mengunggah…" : "Seret gambar atau klik untuk unggah"}
+                      </span>
+                      {/* The SERVER's number (MAX_BYTES = 2 MB, lib/image-store.ts) — not a nicer-sounding
+                          one. It said 5 MB, which rejects a 4 MB photo after promising it would fit. */}
+                      <span className="text-xs text-muted-foreground">
+                        PNG, JPG, WEBP, atau SVG — maks. 2 MB. Otomatis jadi WebP.
+                      </span>
+                    </button>
+                  </div>
+                </>
               )}
-              <button
-                type="button"
-                className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-10 text-center text-muted-foreground transition-colors hover:border-primary hover:bg-muted/40 hover:text-foreground"
-              >
-                <ImageUp className="size-6" />
-                <span className="text-sm">Seret gambar atau klik untuk unggah</span>
-                {/* The SERVER's number (MAX_BYTES = 2 MB, lib/image-store.ts) — not a nicer-sounding
-                    one. It said 5 MB, which rejects a 4 MB photo after promising it would fit. */}
-                <span className="text-xs text-muted-foreground">PNG/JPG maks. 2 MB</span>
-              </button>
+              <input
+                ref={imgInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => { void pickImage(e.target.files?.[0]); e.target.value = ""; }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Gambar juga masuk ke Files. Tekan Simpan untuk menerapkannya ke koleksi.
+              </p>
             </CardContent>
           </Card>
 

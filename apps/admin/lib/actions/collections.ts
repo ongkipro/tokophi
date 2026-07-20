@@ -18,6 +18,8 @@ export type CollectionInput = {
   published: boolean;
   seoTitle?: string;
   seoDesc?: string;
+  /** Cover image url from `uploadMedia` (`/api/uploads/<name>`). "" clears it. */
+  imageUrl?: string;
   memberIds?: string[];
   conditions?: CollectionCondition[];
 };
@@ -30,6 +32,9 @@ const fields = (i: CollectionInput) => ({
   // A merchant-typed handle wins (re-slugified for safety); fall back to the title.
   handle: (i.handle?.trim() && slugify(i.handle)) || slugify(i.name),
   description: i.description?.trim() || null,
+  // The editor always sends the current value (uploaded url or ""), so a save round-trips the image
+  // instead of blanking it — same shape as articles' `imageUrl`. "" → NULL = the merchant removed it.
+  imageUrl: i.imageUrl?.trim() || null,
   type: i.type,
   match: i.match,
   published: i.published,
