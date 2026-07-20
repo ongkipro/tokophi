@@ -37,6 +37,22 @@ const VIRTUAL: Record<VirtualCollectionHandle, ResolvedCollection & { products: 
   // resolve from the DB like every other collection (see byCollection in data/catalog.ts).
 };
 
+// `/kategori/semua` is PERMANENTLY MOVED to `/produk`, not merely de-indexed.
+//
+// It first shipped as `noindex,follow`, which was the cautious call and the weaker one: noindex stops
+// a URL being indexed but ABANDONS whatever authority it already earned, while a 301 hands that
+// authority to the page that replaces it. Same duplicate solved; one keeps the equity, one throws it
+// away. There is no case where noindex is the better SEO answer for a URL that has a true successor.
+//
+// The reason it was not a 301 on day one was a real risk, since removed: `/kategori/semua` renders
+// the merchant's DEFAULT CATEGORY template, and `/produk` did not — so redirecting would have
+// silently replaced a merchant's designed layout with a plain grid. `/produk` now resolves the same
+// `categoryTemplate("semua")`, so the two render identically and the redirect costs nothing.
+//
+// 301 and not 302: this is permanent, and only a 301 consolidates. Merchant-built menu items pointing
+// here keep working — the shopper is simply moved, mid-journey, to the canonical URL.
+if (handle === "semua") return Astro.redirect("/produk", 301);
+
 let collection: ResolvedCollection;
 let products: Product[];
 const virtual = handle ? (VIRTUAL as Record<string, (typeof VIRTUAL)[VirtualCollectionHandle]>)[handle] : undefined;
