@@ -127,8 +127,16 @@ const ogImage = (() => {
     <Analytics />
   </head>
   <body class="min-h-screen bg-cream text-ink antialiased">
+    {/* Skip link (WCAG 2.4.1) — a keyboard/screen-reader shopper lands on the header nav every page and
+        had to tab through all of it to reach the products. `sr-only` until focused, then it shows. */}
+    <a
+      href="#main"
+      class="sr-only rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+    >
+      Lewati ke konten
+    </a>
     <Header />
-    <main>
+    <main id="main">
       <slot />
     </main>
     <Footer />
