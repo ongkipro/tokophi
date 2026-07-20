@@ -88,7 +88,7 @@ applied on prod). **Kept for the reasoning, not the status** — the ⚠️ abou
 
 | Thing | Evidence |
 |---|---|
-| **Multi-tenant isolation** — ⚠️ *partial, and this row used to overstate it* | 46 tables `relrowsecurity = true`; non-owner role `tokophi_app`; `platform_activity` is the only `store_id` table without a policy, deliberately. No tenant context ⇒ **0 rows**. **But counting RLS'd tables does not prove isolation.** The other 24 tables are the risk: `product_options`, `inventory_levels`, `collection_products`, `collection_conditions`, `order_line_items`, `product_media` carry **no `store_id` and RLS `f`** (verified in `pg_class`, not assumed). **Fixed `e61df25`** for `updateProduct`/`updateCollection`/`deleteCollection`, which deleted-and-rewrote those children keyed on a **client-supplied parent id** — RLS silently no-op'd the parent UPDATE while the child writes went through, so `products:write` was enough to wipe another store's variants and inventory. Each now reads its parent under RLS first and bails. ⚠️ **`lib/actions/media.ts` is the same hole, still open** — see §4 |
+| **Multi-tenant isolation** — ⚠️ *partial, and this row used to overstate it* | 46 tables `relrowsecurity = true`; non-owner role `tokophi_app`; `platform_activity` is the only `store_id` table without a policy, deliberately. No tenant context ⇒ **0 rows**. **But counting RLS'd tables does not prove isolation.** The other 24 tables are the risk: `product_options`, `inventory_levels`, `collection_products`, `collection_conditions`, `order_line_items`, `product_media` carry **no `store_id` and RLS `f`** (verified in `pg_class`, not assumed). **Fixed `e61df25`** for `updateProduct`/`updateCollection`/`deleteCollection`, which deleted-and-rewrote those children keyed on a **client-supplied parent id** — RLS silently no-op'd the parent UPDATE while the child writes went through, so `products:write` was enough to wipe another store's variants and inventory. Each now reads its parent under RLS first and bails. ⚠️ **`e61df25` fixed the instances it found, not the class** — auditing every writer of an un-RLS'd table on 2026-07-20 turned up **four more of the same bug**, all shipped: `media.ts` (`e9656fd`), `deleteDiscount`, `createPurchaseOrder`, `syncChildren` (`30a3c71`). **The rule now lives in AGENTS.md** with the full 11-table list. See §4b |
 | **The ledger** | 642 entries live. Balance **derived** (`Σ amount_idr` by status), book **append-only**, 3 partial unique indexes make double-credit a DB impossibility |
 | **Sale credited on collection** | `creditSaleForPayment` fires only when a `payments` row reaches `berhasil`, and credits `amount_idr` — never `total`, which adds the gateway's fee |
 | **COD booked at the door** | `collectCodOnDelivery` flips the payment at `selesai` **and** sets `financial_status='dibayar'` (cash in hand); `batal`/`retur` **fail** the pending payment, so cash never collected is never booked. **Fixed `5f61034`** — the door was previously unreachable: every order is created `pending`, only the AutoLaris callback flips it, **COD has no callback**, and Perlu Dikirim + the tab counts + bulk shipping all gated on `= 'dibayar'`. **COD — the dominant channel — never entered the shipping queue at all** and showed permanently "Belum Bayar". Readiness is now derived from `payments.method='cod'`, never from `financial_status` |
@@ -266,28 +266,38 @@ Stated as unverified rather than guessed.
     hand** to `/usr/local/bin` + `/etc/cron.d`. Nothing in CI reinstalls it, and unlike the watchdog it writes
     **no heartbeat** — a silently-removed cron is indistinguishable from a healthy one.
 
-### 4b. 🔴 Found while reconciling this doc against the audit commits — OPEN, not fixed
+### 4b. Found while reconciling this doc against the audit commits — six FIXED same day, three still open
 
-These are not "could not verify". They are verified broken, in code, today (2026-07-20, `d48413c`).
+These were not "could not verify". They were verified broken, in code, on 2026-07-20 at `d48413c` — and
+then fixed the same session (`e9656fd`, `cae0deb`, `b37e762`, `d07aa1e`, `30a3c71`). Kept in full because
+**how they were found is the reusable part**: `e61df25` patched three call sites it happened to find, and
+auditing the *class* instead of the instances turned up four more of the same bug, one of which
+(`deleteDiscount`) is a live cross-tenant DELETE that is harmless today only because the table is empty.
 
-1. **`lib/actions/media.ts` has the un-RLS'd child-table hole `e61df25` just closed elsewhere.**
+✅ **FIXED** — 1, 2, 3, 5, 6 below, plus three more the class-audit found: `deleteDiscount`,
+`createPurchaseOrder`, `syncChildren` (`30a3c71`). The rule is now in AGENTS.md with the 11-table list.
+🔴 **STILL OPEN** — 4 (`ka-tracking` unlocked read), 7 (no PO undo path), 8 (ledger back-fill), plus the
+`api/public/order` check-all-locations/decrement-one mismatch and routing the shipping status writes
+through `applyOrderStatusChange`. All carried in BACKLOG.
+
+1. ✅ **FIXED `e9656fd` — `lib/actions/media.ts` had the un-RLS'd child-table hole `e61df25` closed elsewhere.**
    `product_media` has **no `store_id`** and **`relrowsecurity = f`** (checked in `pg_class`, not assumed).
    `uploadProductImage` INSERTs keyed on a client `productId`; `deleteProductImage` matches
    `(mediaId, productId)` against `product_media` **alone — it never joins `products`**. So a merchant with
    `media:write` can delete another store's product image. `e61df25` fixed three actions by hand and
    `media.ts` was not among them. **Apply the same guard: read the parent under RLS first, bail if absent.**
-2. **Nobody has enumerated the remaining writers of un-RLS'd tables.** `verify-rls` structurally cannot see
+2. ✅ **DONE `30a3c71` — the writers of un-RLS'd tables are now enumerated, and the audit found three MORE live holes** (`deleteDiscount`, `createPurchaseOrder`, `syncChildren`).** `verify-rls` structurally cannot see
    them (it derives coverage *from `store_id` columns* — the same blind spot that hid `stores` until `0058`).
    This needs a written list of child tables + their writers, not three more hand-fixes.
-3. **`apps/super-admin/middleware.ts:24` — `jwtVerify` with no `algorithms` pin**, on the highest-privilege
+3. ✅ **FIXED `cae0deb` — `apps/super-admin/middleware.ts:24` had `jwtVerify` with no `algorithms` pin**, on the highest-privilege
    gate in the repo. `cb17372` claimed "every `jwtVerify`"; it missed this one and `storefront/lib/chat.ts:63`.
 4. **`ka-tracking.ts:81` reads `orders.status` with no `FOR UPDATE`**, so the tracking poller is not
    serialized against a manual status change — `9772246`'s lock is in `setOrderStatus` only.
-5. **`shipping.ts` writes `orders.status` with a raw `db.update`, bypassing the state machine.**
+5. ✅ **HOLE CLOSED `d07aa1e` (the side door remains) — `shipping.ts` wrote `orders.status` with a raw `db.update`, bypassing the state machine.**
    `cancelShipment` (line 645) sets `status:"diproses"` with **no status precondition** — on a `selesai`
    order (COD collected, ledger credited) or a `batal`/`retur` one it walks the status **backward**, straight
    through the terminal guard `9772246` just added. `createShipment` does the same unguarded write.
-6. **Two inventory writers are still location-blind** — `purchases.ts` (`receivePurchaseOrder`) and
+6. ✅ **FIXED `b37e762` — two inventory writers were location-blind** — `purchases.ts` (`receivePurchaseOrder`) and
    `products.ts` (`setInventory`) both pick a row with `limit(1)` and **no `is_default` ordering**. Same
    latent multi-location landmine `b1f3603` fixed on the other two paths, same one-line fix. Worse: the
    availability checks in `api/public/order/route.ts` still `sum(available)` **across all locations** while

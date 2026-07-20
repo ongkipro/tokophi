@@ -69,36 +69,47 @@ The audit fixed 10 real bugs. Reconciling STATUS.md against the actual diffs tur
 close. Two of these are the same defect as a fix that shipped, in a file the audit never opened — which is
 the point: **hand-fixing the instances you found is not a strategy.**
 
-- [ ] **🔴 `lib/actions/media.ts` has the exact cross-tenant hole `e61df25` closed elsewhere.** Verified in
-      `pg_class`, not assumed: `product_media` has **no `store_id`** and **`relrowsecurity = f`**.
-      `uploadProductImage` INSERTs keyed on a client-supplied `productId`; `deleteProductImage` matches
-      `(mediaId, productId)` against `product_media` **alone — it never joins `products`**. A merchant with
-      `media:write` can delete another store's product image. Apply `e61df25`'s guard: read the parent under
-      RLS first, bail if it isn't ours.
-- [ ] **Enumerate every remaining writer of a table with no `store_id`.** `e61df25` fixed three actions by
-      hand and missed `media.ts`. `verify-rls` **structurally cannot see these tables** — it derives coverage
-      *from `store_id` columns*, the same blind spot that hid `stores` until `0058`. Today's un-RLS'd set:
-      `product_options`, `inventory_levels`, `collection_products`, `collection_conditions`,
-      `order_line_items`, `product_media`, `purchase_order_items`. Write the list of writers once, and make
-      the rule explicit: **any write keyed on a client id must first read its parent under RLS.**
-- [ ] **`apps/super-admin/middleware.ts:24` — `jwtVerify` with no `algorithms` pin**, on the gate to the
-      highest-privilege surface in the repo. `cb17372`'s message claims "every `jwtVerify`"; it missed this
-      and `apps/storefront/src/lib/chat.ts:63`. Low practical risk with a symmetric key — listed because the
-      **commit message is wrong and the next reader will trust it**.
-- [ ] **`shipping.ts` writes `orders.status` with a raw `db.update`, bypassing the state machine.**
-      `cancelShipment` (line 645) sets `status:"diproses"` with **no status precondition** — on a `selesai`
-      order (COD collected, ledger credited) or a `batal`/`retur` one it walks the status **backward**,
-      through the terminal guard `9772246` just added. `createShipment` does the same. Route both through
-      `applyOrderStatusChange`. A state machine with a side door is not a state machine.
+- [x] **🔴 `lib/actions/media.ts` cross-tenant hole — FIXED `e9656fd`.** `product_media` has no `store_id`
+      and `relrowsecurity = f` (verified in `pg_class`), and `deleteProductImage` never joined `products`,
+      so `media:write` could delete another store's product image. Both writers now read the parent under
+      RLS first; `saveImage` moved inside the guard so a rejected upload leaves no orphan file either.
+- [x] **Enumerate every remaining writer of a table with no `store_id` — DONE 2026-07-20, and it found
+      three MORE live holes** (all fixed in `30a3c71`): `deleteDiscount` (blind-fire cross-tenant delete of
+      another store's `discount_usages` — capped only because the table is empty today),
+      `createPurchaseOrder` (client `variantId` written as an FK; "Terima barang" would then add stock to
+      the victim's shelf), `syncChildren` (foreign `productId` into `collection_products`, safe only by an
+      accident two files away in the storefront's owner-connection read). **The rule is now in AGENTS.md**,
+      with the full 11-table list. `e61df25` patched the instances it found; the class had seven.
+- [x] **`jwtVerify` algorithm pins — FIXED `cae0deb`** on `apps/super-admin/middleware.ts:24` and
+      `apps/storefront/src/lib/chat.ts:63`. `apps/admin/lib/google.ts` is left unpinned deliberately
+      (remote JWKS, asymmetric, issuer+audience constrained — pinning RS256 would turn a Google key
+      rotation into a silent total login outage).
+- [x] **`shipping.ts` raw `orders.status` writes — HOLE CLOSED `d07aa1e`, DOOR STILL THERE.**
+      `cancelShipment` and `createShipment` now refuse on `selesai`/`batal`/`retur`, and the cancel path
+      re-reads the status under `FOR UPDATE` after the KiriminAja round-trip (the poller writes the same
+      row while we are on the network). If the order went terminal meanwhile, the shipment fields are still
+      cleared — the booking IS void at the courier — but `status` is left alone.
+- [ ] **Route the two shipping status writes through `applyOrderStatusChange`.** `d07aa1e` guards the side
+      door; it does not remove it. There should be ONE writer of `orders.status`, not a state machine plus
+      two guarded raw updates that must be kept in sync by hand.
 - [ ] **`ka-tracking.ts:81` reads `orders.status` with no `FOR UPDATE`.** `9772246`'s lock is in
       `setOrderStatus` only, so the tracking poller is not serialized against a manual change: `dikirim→selesai`
       racing `dikirim→retur` runs both (one credits, the other restores stock and reverses).
-- [ ] **Two stock writers are still location-blind.** `b1f3603` fixed the order decrement/restore and
-      `bc2ebfd` the bulk editor, but `receivePurchaseOrder` (`purchases.ts`) and `updateProduct`'s
-      `setInventory` (`products.ts`) still do `limit(1)` with **no `locations.is_default` ordering** — an
-      arbitrary row. Same latent multi-location landmine, same one-line fix. Worse: the availability checks
-      in `api/public/order/route.ts` still `sum(available)` **across all locations** while the decrement now
-      targets one — under multi-location the check passes on the total and drives the default row negative.
+- [x] **Two stock writers were location-blind — FIXED `b37e762`.** `receivePurchaseOrder` and
+      `updateProduct`'s `setInventory` now join `locations` and order by `(is_default desc, id asc)`,
+      matching `bc2ebfd`. The `loc` lookups in `createProduct`/`updateProduct` got the same treatment —
+      fixing only the update path would have left the CREATE path seeding rows into an arbitrary warehouse.
+      ⚠️ **That `locations` join is now also the tenant boundary** for the un-RLS'd `inventory_levels`, and
+      is commented as such: a later "simplification" back to `where variant_id = …` reopens a cross-tenant
+      stock write.
+- [ ] **`api/public/order/route.ts` checks stock across ALL locations and decrements ONE.** The
+      `sum(available)` check and the `FOR UPDATE` re-read both aggregate every location, while the decrement
+      (`b1f3603`) targets the default row. Under multi-location a variant with 0 at the default and 5 at
+      warehouse B passes the check and drives the default row **negative** while B's units are never
+      consumed. **The totals still reconcile — which is exactly why this would be slow to notice.**
+- [ ] **`receivePurchaseOrder` is a read-then-write with no `FOR UPDATE`.** It reads `inv.available` and
+      writes `available + add` — the same last-write-wins class `bc2ebfd` closed in the bulk editor. Should
+      be a relative SQL write (`available = available + $add`), which needs no lock at all.
 - [ ] **Cancelling a received PO is refused, and there is no undo path at all.** `b1f3603` correctly stopped
       the silent corruption, but the "undo = a separate stock adjustment" it points at **does not exist in
       the UI**. A merchant who receives a PO by mistake is now stuck with the phantom stock *and* the record
