@@ -1,6 +1,18 @@
 ---
 // Tenant resolved per-request from the Host header (src/middleware.ts).
-import { MapPin } from "@lucide/astro";
+//
+// ── EVERY MERCHANT FIELD BELOW IS OPTIONAL, AND TODAY THEY ARE ALL EMPTY ────────────────────────
+// `address`, `phone` and the five social usernames landed with migration 0063; the seller form that
+// fills them is still being built, so the state you can actually SEE right now is "merchant filled in
+// nothing". That is the state this footer is designed for first: each block is computed above and
+// rendered only when it holds real content, so an unfilled shop gets a shorter footer — never an
+// empty social strip, never a "Hubungi kami" heading with nothing under it, never an address box
+// containing one blank line.
+//
+// This is the same failure the platform already shipped once: `wa.me/6281234567890` (the canonical
+// Indonesian dummy number) went out as a live WhatsApp button on every page of every store because a
+// missing value fell back to a placeholder. A missing channel is honest; a dead one is a lie.
+import { MapPin, Phone } from "@lucide/astro";
 import { getFooterNav } from "../data/nav";
 
 const { store, catalog } = Astro.locals;
@@ -11,8 +23,55 @@ const COLLECTIONS = catalog.collections;
 // every page of the shop. See getFooterNav().
 const PAGES = await getFooterNav(store.id);
 
+// A merchant can save a field and later blank it out; `""` must behave exactly like `null` or the
+// truthiness checks below would render an empty row. Trim once, here, and use these everywhere.
+const clean = (v: string | null | undefined) => {
+  const t = (v ?? "").trim();
+  return t.length > 0 ? t : null;
+};
+
 // null = no CS number on this store → no WhatsApp button anywhere in the footer.
-const waHref = store.whatsapp ? `https://wa.me/${store.whatsapp}` : null;
+const waHref = clean(store.whatsapp) ? `https://wa.me/${clean(store.whatsapp)}` : null;
+
+// The public phone is free text ("(0274) 123456", "0812-3456-7890") because that is how a shop writes
+// it on its own signage. Only the `tel:` href is normalised — the label stays exactly as typed.
+const phone = clean(store.phone);
+const telHref = phone ? `tel:${phone.replace(/[^\d+]/g, "")}` : null;
+
+// The address is a textarea: 2–4 lines, and merchants leave blank lines in the middle. Split, trim,
+// drop the empties — an address block whose only content is a blank line must not render at all.
+const addressLines = (clean(store.address) ?? "")
+  .split(/\r?\n/)
+  .map((l) => l.trim())
+  .filter(Boolean);
+
+// Location line: the merchant's published address when there is one, otherwise the store's registered
+// city (always present) so the shop is never anonymous about where it is.
+const city = clean(store.city);
+
+// Username → profile URL. The DB stores the USERNAME only (no `@`, no URL, schema 0063) precisely so
+// this file — not merchant input — decides the origin: a stored full URL is a place to paste someone
+// else's profile, or a `javascript:` scheme. A leading `@` is stripped anyway because it is the single
+// most likely thing a merchant types into a field labelled "username".
+const handle = (v: string | null) => clean(v)?.replace(/^@+/, "") ?? null;
+const SOCIALS = [
+  { key: "instagram", label: "Instagram", user: handle(store.socialInstagram), url: (u: string) => `https://instagram.com/${u}` },
+  { key: "tiktok", label: "TikTok", user: handle(store.socialTiktok), url: (u: string) => `https://tiktok.com/@${u}` },
+  { key: "facebook", label: "Facebook", user: handle(store.socialFacebook), url: (u: string) => `https://facebook.com/${u}` },
+  { key: "pinterest", label: "Pinterest", user: handle(store.socialPinterest), url: (u: string) => `https://pinterest.com/${u}` },
+  { key: "x", label: "X", user: handle(store.socialX), url: (u: string) => `https://x.com/${u}` },
+].filter((s): s is typeof s & { user: string } => Boolean(s.user));
+
+// Does the "Hubungi kami" heading have anything to head? If not, neither the heading nor its list
+// exists. A heading is a promise that something follows it.
+const hasContact = Boolean(waHref || telHref);
+
+// Shared classes. Tap targets are ≥44px (design audit #16 — the share buttons were raised from 36 to
+// 44 for the same reason), and every transition carries a `motion-reduce:` escape.
+const LINK =
+  "inline-flex min-h-11 items-center rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none";
+// `text-cream/70` measures 7.7:1 on ink (composited, not guessed) — see the note on the copyright bar.
+const HEADING = "font-display text-xs font-semibold uppercase tracking-widest text-cream/70";
 ---
 
 <footer class="mt-24 bg-ink text-cream/85">
@@ -21,79 +80,171 @@ const waHref = store.whatsapp ? `https://wa.me/${store.whatsapp}` : null;
       There is no mailer and no list to join, so the button did literally nothing on every page of
       every store. Wiring it to an INSERT would not fix it: it would still promise an email nothing
       can send. (JSX comment, not HTML — an HTML comment ships to the browser.) */}
-  <div class="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 md:grid-cols-2 lg:grid-cols-4">
-    <div class="md:col-span-1">
-      <p class="font-display text-2xl font-semibold text-cream">{store.name}</p>
-      {store.tagline && <p class="mt-3 max-w-xs text-sm leading-relaxed text-cream/60">{store.tagline}</p>}
-      {waHref && (
-      <a
-        href={waHref}
-        target="_blank"
-        rel="noopener"
-        class="mt-6 inline-flex items-center gap-2 rounded-full bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-      >
-        <svg viewBox="0 0 24 24" class="h-4 w-4 fill-current" aria-hidden="true">
-          <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2Zm0 18.02h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.37c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.83 2.42a8.19 8.19 0 0 1 2.41 5.83c0 4.54-3.7 8.4-8.28 8.4Z" />
-        </svg>
-        Hubungi via WhatsApp
-      </a>
-      )}
+  <div class="mx-auto grid max-w-7xl gap-x-10 gap-y-12 px-4 py-16 sm:px-6 md:grid-cols-2 lg:grid-cols-4">
+    {/* ── Identity: who this shop is, and every way to reach it ────────────────────────────────── */}
+    <div class="md:col-span-2 lg:col-span-1">
+      {
+        store.logoUrl ? (
+          <img src={store.logoUrl} alt={store.name} width="160" height="48" class="h-10 w-auto object-contain object-left" />
+        ) : (
+          <p class="font-display text-2xl font-semibold text-cream">{store.name}</p>
+        )
+      }
+
+      {store.tagline && <p class="mt-3 max-w-xs text-sm leading-relaxed text-cream/70">{store.tagline}</p>}
+
+      {
+        SOCIALS.length > 0 && (
+          <ul class="mt-5 -ml-2.5 flex flex-wrap items-center">
+            {SOCIALS.map((s) => (
+              <li>
+                <a
+                  href={s.url(s.user)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${s.label} ${store.name}`}
+                  class="inline-flex h-11 w-11 items-center justify-center rounded-full text-cream/75 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+                >
+                  {/* Hand-written brand marks: lucide dropped brand icons on purpose, so there is no
+                      icon package to reach for here. 24×24, `currentColor`, decorative — the
+                      accessible name lives on the link. */}
+                  {s.key === "instagram" && (
+                    <svg viewBox="0 0 24 24" class="h-5 w-5 fill-current" aria-hidden="true">
+                      <path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41-.56-.22-.96-.48-1.38-.9-.42-.42-.68-.82-.9-1.38-.16-.42-.36-1.06-.41-2.23C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16M12 0C8.74 0 8.33.01 7.05.07 5.78.13 4.9.33 4.14.63c-.79.3-1.46.72-2.13 1.38C1.35 2.68.94 3.35.63 4.14.33 4.9.13 5.78.07 7.05.01 8.33 0 8.74 0 12s.01 3.67.07 4.95c.06 1.27.26 2.15.56 2.91.3.79.72 1.46 1.38 2.13.67.67 1.34 1.08 2.13 1.38.76.3 1.64.5 2.91.56C8.33 23.99 8.74 24 12 24s3.67-.01 4.95-.07c1.27-.06 2.15-.26 2.91-.56.79-.3 1.46-.71 2.13-1.38.67-.67 1.08-1.34 1.38-2.13.3-.76.5-1.64.56-2.91.06-1.28.07-1.69.07-4.95s-.01-3.67-.07-4.95c-.06-1.27-.26-2.15-.56-2.91-.3-.79-.71-1.46-1.38-2.13C21.32 1.35 20.65.94 19.86.63c-.76-.3-1.64-.5-2.91-.56C15.67.01 15.26 0 12 0Z" />
+                      <path d="M12 5.84A6.16 6.16 0 1 0 18.16 12 6.16 6.16 0 0 0 12 5.84Zm0 10.16A4 4 0 1 1 16 12a4 4 0 0 1-4 4Z" />
+                      <circle cx="18.41" cy="5.59" r="1.44" />
+                    </svg>
+                  )}
+                  {s.key === "tiktok" && (
+                    <svg viewBox="0 0 24 24" class="h-5 w-5 fill-current" aria-hidden="true">
+                      <path d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.59 2.59 0 1 1 .77-5.06V9.68a5.67 5.67 0 0 0-.77-.05A5.69 5.69 0 1 0 15.54 15.3V8.9a7.35 7.35 0 0 0 4.29 1.38V7.19a4.29 4.29 0 0 1-3.23-1.37Z" />
+                    </svg>
+                  )}
+                  {s.key === "facebook" && (
+                    <svg viewBox="0 0 24 24" class="h-5 w-5 fill-current" aria-hidden="true">
+                      <path d="M24 12.07C24 5.44 18.63.07 12 .07S0 5.44 0 12.07c0 5.99 4.39 10.95 10.13 11.86v-8.39H7.08v-3.47h3.05V9.43c0-3.01 1.79-4.67 4.53-4.67 1.31 0 2.69.24 2.69.24v2.95h-1.51c-1.49 0-1.96.93-1.96 1.87v2.25h3.33l-.53 3.47h-2.8v8.39C19.61 23.02 24 18.06 24 12.07Z" />
+                    </svg>
+                  )}
+                  {s.key === "pinterest" && (
+                    <svg viewBox="0 0 24 24" class="h-5 w-5 fill-current" aria-hidden="true">
+                      <path d="M12 0a12 12 0 0 0-4.37 23.18 11.5 11.5 0 0 1 .04-3.44c.22-.93 1.4-5.95 1.4-5.95a4.3 4.3 0 0 1-.36-1.78c0-1.66.97-2.9 2.17-2.9 1.02 0 1.51.77 1.51 1.69 0 1.03-.65 2.56-.99 3.99-.28 1.19.6 2.16 1.78 2.16 2.13 0 3.76-2.24 3.76-5.48 0-2.87-2.06-4.87-5-4.87-3.41 0-5.41 2.56-5.41 5.2 0 1.03.4 2.14.89 2.74.1.12.11.22.08.34-.09.38-.29 1.2-.33 1.37-.05.22-.17.27-.4.16-1.5-.7-2.43-2.88-2.43-4.65 0-3.78 2.75-7.25 7.92-7.25 4.16 0 7.39 2.96 7.39 6.92 0 4.13-2.6 7.46-6.23 7.46-1.21 0-2.35-.63-2.75-1.38l-.75 2.85c-.27 1.04-1 2.35-1.5 3.15A12 12 0 1 0 12 0Z" />
+                    </svg>
+                  )}
+                  {s.key === "x" && (
+                    <svg viewBox="0 0 24 24" class="h-5 w-5 fill-current" aria-hidden="true">
+                      <path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.66l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23 5.45-6.23Zm-1.16 17.52h1.83L7.08 4.13H5.12l11.96 15.64Z" />
+                    </svg>
+                  )}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+
+      {
+        hasContact && (
+          <div class:list={["mt-6", SOCIALS.length > 0 && "mt-5"]}>
+            <h2 class={HEADING}>Hubungi kami</h2>
+            <ul class="mt-2 space-y-1 text-sm text-cream/75">
+              {waHref && (
+                <li>
+                  {/* hover was `bg-brand-500`: white on #c4708a measures 3.48:1, so the button FAILED
+                      AA the moment a pointer touched it — a state no page-load audit ever samples.
+                      brand-700 = 6.85:1 (brand-600 at rest = 4.99:1). */}
+                  <a
+                    href={waHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex min-h-11 items-center gap-2 rounded-full bg-brand-600 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+                  >
+                    <svg viewBox="0 0 24 24" class="h-4 w-4 fill-current" aria-hidden="true">
+                      <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2Zm0 18.02h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.37c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.83 2.42a8.19 8.19 0 0 1 2.41 5.83c0 4.54-3.7 8.4-8.28 8.4Z" />
+                    </svg>
+                    Hubungi via WhatsApp
+                  </a>
+                </li>
+              )}
+              {telHref && phone && (
+                <li>
+                  <a href={telHref} class={`${LINK} gap-2`}>
+                    <Phone class="h-4 w-4 shrink-0" stroke-width={1.75} aria-hidden="true" />
+                    <span class="tabular-nums">{phone}</span>
+                  </a>
+                </li>
+              )}
+            </ul>
+          </div>
+        )
+      }
+
+      {/* Address, or — when the merchant has published none — the store's registered city, so the shop
+          still says where it is. Neither renders as an empty line: `addressLines` has already dropped
+          the blanks a textarea leaves behind, and `city` is trimmed to null. */}
+      {
+        addressLines.length > 0 ? (
+          <address class="mt-6 flex gap-2 text-sm not-italic leading-relaxed text-cream/70">
+            <MapPin class="mt-0.5 h-4 w-4 shrink-0" stroke-width={1.75} aria-hidden="true" />
+            <span>
+              {addressLines.map((line) => (
+                <span class="block">{line}</span>
+              ))}
+            </span>
+          </address>
+        ) : (
+          city && (
+            <p class="mt-6 flex items-center gap-2 text-sm text-cream/70">
+              <MapPin class="h-4 w-4 shrink-0" stroke-width={1.75} aria-hidden="true" />
+              {city}, Indonesia
+            </p>
+          )
+        )
+      }
     </div>
 
+    {/* ── Shop navigation ──────────────────────────────────────────────────────────────────────── */}
+    {
+      COLLECTIONS.length > 0 && (
+        <div>
+          <h2 class={HEADING}>Koleksi</h2>
+          <ul class="mt-3 grid grid-cols-2 gap-x-4 text-sm text-cream/75">
+            {COLLECTIONS.map((c) => (
+              <li>
+                <a href={`/kategori/${c.handle}`} class={LINK}>
+                  {c.name}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )
+    }
+
     <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-cream/50">Koleksi</p>
-      <ul class="mt-5 grid grid-cols-2 gap-y-3 text-sm text-cream/75">
+      <h2 class={HEADING}>Belanja</h2>
+      <ul class="mt-3 text-sm text-cream/75">
+        <li><a href="/" class={LINK}>Beranda</a></li>
+        <li><a href="/keranjang" class={LINK}>Keranjang</a></li>
         {
-          COLLECTIONS.map((c) => (
+          waHref && (
             <li>
-              <a
-                href={`/kategori/${c.handle}`}
-                class="rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-              >
-                {c.name}
+              <a href={waHref} target="_blank" rel="noopener noreferrer" class={LINK}>
+                Customer Service
               </a>
             </li>
-          ))
+          )
         }
       </ul>
     </div>
 
     <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-cream/50">Belanja</p>
-      <ul class="mt-5 space-y-3 text-sm text-cream/75">
-        <li>
-          <a href="/" class="rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">Beranda</a>
-        </li>
-        <li>
-          <a href="/keranjang" class="rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">Keranjang</a>
-        </li>
-        {waHref && (
-        <li>
-          <a href={waHref} target="_blank" rel="noopener" class="rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">
-            Customer Service
-          </a>
-        </li>
-        )}
-        <li class="flex items-center gap-2 pt-1 text-cream/50">
-          <MapPin class="h-3.5 w-3.5 shrink-0" stroke-width={1.75} aria-hidden="true" />
-          {store.city}, Indonesia
-        </li>
-      </ul>
-    </div>
-
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-cream/50">Informasi</p>
-      <ul class="mt-5 space-y-3 text-sm text-cream/75">
-        <li>
-          <a href="/blog" class="rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">Jurnal</a>
-        </li>
+      <h2 class={HEADING}>Informasi</h2>
+      <ul class="mt-3 text-sm text-cream/75">
+        <li><a href="/blog" class={LINK}>Jurnal</a></li>
         {
           PAGES.map((p) => (
             <li>
-              <a
-                href={p.href}
-                class="rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-              >
+              <a href={p.href} class={LINK}>
                 {p.label}
               </a>
             </li>

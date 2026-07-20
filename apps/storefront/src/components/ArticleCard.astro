@@ -7,10 +7,27 @@
 // person restyles the one they are looking at. The box is KEPT (that audit's own conclusion) because
 // this tile is clickable — the boundary carries meaning here, it is not decoration.
 import { formatDate } from "../data/content";
+import { imageSrcSet } from "../data/catalog";
 import type { ArticleCard } from "../data/content";
+
+// The grid this tile sits in, so `sizes` can be right. A WRONG `sizes` is worse than no srcset — the
+// browser picks a candidate for a width that does not exist. Enumerated rather than passed as a raw
+// string so a call site cannot invent one that disagrees with its own CSS (same reasoning as
+// ProductCard's `grid` prop). All of these sit in `max-w-7xl px-4 sm:px-6` with `gap-6`.
+type ArticleGrid = "1-2-3" | "1-2" | "1-3" | "1-2-4";
+const SIZES: Record<ArticleGrid, string> = {
+  // /blog: grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
+  "1-2-3": "(min-width:1280px) 395px, (min-width:1024px) calc(33.3vw - 32px), (min-width:640px) calc(50vw - 36px), calc(100vw - 2rem)",
+  // homepage Jurnal, columns=2 / 3 / 4 (components/sections/Blog.astro COLS)
+  "1-2": "(min-width:1280px) 604px, (min-width:640px) calc(50vw - 36px), calc(100vw - 2rem)",
+  "1-3": "(min-width:1280px) 395px, (min-width:640px) calc(33.3vw - 32px), calc(100vw - 2rem)",
+  "1-2-4": "(min-width:1280px) 290px, (min-width:1024px) calc(25vw - 30px), (min-width:640px) calc(50vw - 36px), calc(100vw - 2rem)",
+};
 
 interface Props {
   article: ArticleCard;
+  /** Which grid this tile is rendered into — drives `sizes`. See SIZES above. */
+  grid?: ArticleGrid;
   /**
    * Heading level for the title, because the right one depends on where the card sits:
    * · /blog — the page's <h1> is "Cerita & Inspirasi", so each tile is an <h2>.
@@ -21,7 +38,7 @@ interface Props {
   level?: 2 | 3;
 }
 
-const { article, level = 3 } = Astro.props;
+const { article, level = 3, grid = "1-2-3" } = Astro.props;
 const Title = `h${level}` as "h2" | "h3";
 ---
 
@@ -39,6 +56,8 @@ const Title = `h${level}` as "h2" | "h3";
       article.imageUrl && (
         <img
           src={article.imageUrl}
+          srcset={imageSrcSet(article.imageUrl)}
+          sizes={imageSrcSet(article.imageUrl) ? SIZES[grid] : undefined}
           alt=""
           loading="lazy"
           decoding="async"

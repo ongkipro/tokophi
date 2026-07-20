@@ -33,8 +33,22 @@
 // `noindex,follow`: a soft-404 that Google indexes is worse than the 404 itself. `follow` because
 // every link on this page is a real page of the shop.
 import Layout from "../layouts/Layout.astro";
+import ProductCard from "../components/ProductCard.astro";
+import SectionHeading from "../components/SectionHeading.astro";
 
 const storeName = Astro.locals.store?.name ?? "Toko";
+
+// A 404 IN A SHOP SHOULD RECOVER THE SALE, not just apologise politely. A shopper who mistyped a URL
+// or followed a dead link still came here to buy something; three navigation links and a full stop
+// asks them to start over, and most will simply leave. Four real products turn the dead end into a
+// browse — and they cost nothing, because the catalog is already loaded for this request.
+//
+// ⚠️ EVERYTHING HERE IS OPTIONAL-CHAINED. This page also renders on the RETRY path Astro takes when
+// the error page itself throws, and on that path the middleware is NOT re-run, so `Astro.locals` is
+// empty. A 404 page that throws downgrades the shopper to the bare blank response this file exists to
+// remove — so it must survive having no store and no catalog. Never make these reads non-optional.
+const catalog = Astro.locals.catalog;
+const picks = catalog?.bestsellers?.().slice(0, 4) ?? [];
 ---
 
 <Layout
@@ -42,7 +56,9 @@ const storeName = Astro.locals.store?.name ?? "Toko";
   description={`Halaman yang kamu cari tidak ada di ${storeName}.`}
   robots="noindex,follow"
 >
-  <section class="mx-auto flex max-w-2xl flex-col items-center px-4 py-24 text-center sm:px-6 sm:py-32">
+  {/* py-24 -> py-20, and the tail block below fills what used to be a gulf of empty cream between the
+      links and the footer. The old page put a small centred block in a tall viewport and stopped. */}
+  <section class="mx-auto flex max-w-2xl flex-col items-center px-4 py-20 text-center sm:px-6 sm:py-24">
     <p class="font-display text-6xl font-semibold text-brand-600 tabular-nums sm:text-7xl">404</p>
     <h1 class="mt-4 font-display text-3xl font-semibold text-balance text-ink sm:text-4xl">
       Halaman tidak ditemukan
@@ -75,4 +91,26 @@ const storeName = Astro.locals.store?.name ?? "Toko";
       <a href="/kontak" class="text-brand-700 underline-offset-4 hover:underline">Kontak</a>
     </nav>
   </section>
+
+  {
+    picks.length > 0 && (
+      <section class="border-t border-line bg-white/60">
+        <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-16">
+          {/* `level={2}` — this page's h1 is "Halaman tidak ditemukan", so the strip's heading is the
+              section under it and the cards inside are h3. Without the prop ProductCard defaults to
+              h3 anyway, which is right here. */}
+          <SectionHeading
+            eyebrow="Mungkin ini yang kamu cari"
+            title="Produk paling dicari"
+            align="center"
+          />
+          <div class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {picks.map((p) => (
+              <ProductCard product={p} />
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
 </Layout>
