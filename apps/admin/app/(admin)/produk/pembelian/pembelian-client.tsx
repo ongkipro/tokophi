@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import {
-  Plus, MoreHorizontal, Eye, PackageCheck, XCircle,
+  Plus, MoreHorizontal, Eye, PackageCheck, XCircle, Undo2,
   ClipboardList, Wallet, Truck, PackageOpen, ChevronDown, Trash2,
 } from "lucide-react";
 
@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { IDR, num } from "@tokophi/lib/format";
 import { type PurchaseOrder, type POStatus } from "@/lib/mock/store";
 import { type POProduct } from "@/lib/data/purchases";
-import { createPurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder } from "@/lib/actions/purchases";
+import { createPurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder, unreceivePurchaseOrder } from "@/lib/actions/purchases";
 import { useCan } from "@/components/admin/permissions";
 import { cn } from "@tokophi/ui/lib/utils";
 
@@ -104,6 +104,26 @@ function RowActions({ po }: { po: PurchaseOrder }) {
         toast.error("Gagal menerima pesanan");
       }
     });
+  // Diterima karena salah klik: kembalikan stok yang sempat ditambahkan, PO kembali ke "Dipesan".
+  // No confirm dialog on purpose — the action is symmetric ("Tandai diterima" re-applies it) and a
+  // Base UI Dialog opened from inside a DropdownMenu unmounts with the menu. The toast is the record.
+  const unreceive = () =>
+    startTransition(async () => {
+      const r = await unreceivePurchaseOrder(po.id).catch(() => null);
+      if (!r) { toast.error("Gagal membatalkan penerimaan"); return; }
+      if (!r.ok) { toast.error(r.error); return; }
+      if (r.negatives.length) {
+        // Stok minus = barangnya sudah terjual padahal tidak pernah datang. Jangan disembunyikan.
+        toast.warning(
+          `Penerimaan ${po.id} dibatalkan, tetapi stok ${r.negatives.length} produk menjadi minus ` +
+            `(${r.negatives.map((n) => `${n.title} ${n.available}`).join(", ")}). Periksa Inventori.`,
+          { duration: 10_000 },
+        );
+      } else {
+        toast.success(`Penerimaan ${po.id} dibatalkan — stok dikembalikan`);
+      }
+      router.refresh();
+    });
   const cancel = () =>
     startTransition(async () => {
       try {
@@ -114,17 +134,27 @@ function RowActions({ po }: { po: PurchaseOrder }) {
         toast.error("Gagal membatalkan pesanan");
       }
     });
+  const received = po.status === "diterima";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi pesanan" />}>
         <MoreHorizontal />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
+      <DropdownMenuContent align="end" className="w-56">
         {/* No PO detail route/query exists — honest disabled rather than a no-op click. */}
         <DropdownMenuItem disabled className="opacity-60"><Eye /> Lihat<span className="ml-auto text-[10px] text-muted-foreground">segera</span></DropdownMenuItem>
-        {canWrite && <DropdownMenuItem disabled={pending || po.status === "diterima"} onClick={receive}><PackageCheck /> Tandai diterima</DropdownMenuItem>}
+        {canWrite && <DropdownMenuItem disabled={pending || received} onClick={receive}><PackageCheck /> Tandai diterima</DropdownMenuItem>}
+        {canWrite && received && <DropdownMenuItem disabled={pending} onClick={unreceive}><Undo2 /> Batalkan penerimaan</DropdownMenuItem>}
         {canWrite && <DropdownMenuSeparator />}
-        {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={cancel}><XCircle /> Batalkan</DropdownMenuItem>}
+        {/* A received PO cannot be cancelled — the server refuses it (deleting it would strand the
+            stock the receipt added). Show that as a disabled item with the way out, instead of an
+            enabled button whose only outcome is "Gagal membatalkan pesanan". */}
+        {canWrite && (
+          <DropdownMenuItem variant="destructive" disabled={pending || received} onClick={cancel}>
+            <XCircle /> Batalkan
+            {received && <span className="ml-auto text-[10px] font-normal text-muted-foreground">sudah diterima</span>}
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
