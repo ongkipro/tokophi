@@ -5,6 +5,7 @@
 import { Truck, Banknote, ShieldCheck, QrCode } from "@lucide/astro";
 import Layout from "../layouts/Layout.astro";
 import ProductCard from "../components/ProductCard.astro";
+import SectionHeading from "../components/SectionHeading.astro";
 import SectionRenderer from "../components/sections/SectionRenderer.astro";
 import Hero from "../components/sections/Hero.astro";
 import type { HeroConfig } from "@tokophi/sections";
@@ -47,7 +48,7 @@ const HERO: HeroConfig = {
       heading: store.name,
       subheading: store.tagline ?? "",
       ctaLabel: "Mulai belanja",
-      ctaHref: "/kategori/semua", // a VIRTUAL collection every store always has — never /kategori/dress
+      ctaHref: "/produk", // the real product listing every store always has — never /kategori/dress
       focal: "center",
     },
   ],
@@ -56,7 +57,7 @@ const HERO: HeroConfig = {
   subheading: store.tagline ?? "",
   imageUrl: "",
   ctaLabel: "Mulai belanja",
-  ctaHref: "/kategori/semua",
+  ctaHref: "/produk",
   align: "left",
   badge: "", // no invented "Koleksi 2026" — we do not know that they have one
   ratingText: "",
@@ -128,13 +129,14 @@ const SUMMARY = [
        a titled, empty room. An empty section is not a section; it is a bug with a headline. -->
   {collections.length > 0 && (
   <section id="koleksi" class="mx-auto max-w-7xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20">
-    <div class="mx-auto max-w-2xl text-center">
-      {/* "Kategori", not "Koleksi"/"gaya" — this container serves a coffee roaster and a phone shop
-          as well as a fashion label. Say what the links ARE. */}
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Kategori</p>
-      <h2 class="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">Belanja per Kategori</h2>
-      <p class="mt-3 text-muted">Pilih kategori yang kamu cari.</p>
-    </div>
+    {/* "Kategori", not "Koleksi"/"gaya" — this container serves a coffee roaster and a phone shop
+        as well as a fashion label. Say what the links ARE. */}
+    <SectionHeading
+      align="center"
+      eyebrow="Kategori"
+      title="Belanja per Kategori"
+      dek="Pilih kategori yang kamu cari."
+    />
     <div class="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3">
       {
         collections.map((c) => (
@@ -177,20 +179,16 @@ const SUMMARY = [
   {best.length > 0 && (
   <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
     <div class="flex items-end justify-between gap-4">
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Favorit</p>
-        <h2 class="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">Paling Dicari</h2>
-        {/* NOT "minggu ini". `bestsellers()` sorts the whole catalog by ALL-TIME units_sold — it does
-            not window by date. The registry already carries this exact warning for the Grid Produk
-            heading; the fallback homepage was making the claim anyway. Say only what the data does. */}
-        <p class="mt-2 text-muted">Produk yang paling banyak dibeli.</p>
-      </div>
-      {/* /kategori/semua — the ONLY virtual collection (VIRTUAL_COLLECTION_HANDLES = ["semua"]), so it
-          resolves on every tenant. `produk-terlaris` was used here but it is a REAL, demo-only
-          collection (not virtual, despite the old comment): it 404s on any store that lacks that row.
-          "Lihat semua" on a bestsellers strip means "all products" anyway, which is what `semua` is. */}
+      {/* Dek is NOT "minggu ini". `bestsellers()` sorts the whole catalog by ALL-TIME units_sold — it
+          does not window by date. The registry already carries this exact warning for the Grid Produk
+          heading; the fallback homepage was making the claim anyway. Say only what the data does. */}
+      <SectionHeading eyebrow="Favorit" title="Paling Dicari" dek="Produk yang paling banyak dibeli." />
+      {/* /produk — the real product listing (pages/produk/index.astro), which every tenant resolves.
+          This used to point at `/kategori/semua`, a VIRTUAL collection standing in for a listing page
+          that did not exist; before that it pointed at `produk-terlaris`, a REAL but demo-only
+          collection that 404s on any store lacking that row. "Lihat semua" means all products. */}
       <a
-        href="/kategori/semua"
+        href="/produk"
         class="hidden shrink-0 text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 sm:block"
       >
         Lihat semua →
@@ -200,7 +198,7 @@ const SUMMARY = [
       {best.map((p) => <ProductCard product={p} />)}
     </div>
     <div class="mt-8 text-center sm:hidden">
-      <a href="/kategori/semua" class="text-sm font-medium text-brand-600 hover:text-brand-700">
+      <a href="/produk" class="text-sm font-medium text-brand-600 hover:text-brand-700">
         Lihat semua →
       </a>
     </div>
@@ -210,19 +208,19 @@ const SUMMARY = [
   <!-- Closing CTA. Was "Siap tampil anggun setiap hari?" / "temukan busana yang membuatmu percaya
        diri" — an outfit promise on a phone shop. Neutral, and it is the one section that stays even
        on an empty catalogue, because it is the way OUT of a thin page. -->
-  <section class="mx-auto max-w-7xl px-4 py-16 text-center sm:px-6 sm:py-24">
-    <h2 class="mx-auto max-w-2xl font-display text-3xl font-semibold text-ink sm:text-4xl">
-      Belanja di {store.name}
-    </h2>
-    <p class="mx-auto mt-4 max-w-lg text-muted">
-      Lihat seluruh produk yang tersedia, kirim ke seluruh Indonesia.
-    </p>
-    <a
-      href="/kategori/semua"
-      class="mt-8 inline-block rounded-full bg-brand-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-200/60 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+  <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24">
+    <SectionHeading
+      align="center"
+      title={`Belanja di ${store.name}`}
+      dek="Lihat seluruh produk yang tersedia, kirim ke seluruh Indonesia."
     >
-      Mulai Belanja
-    </a>
+      <a
+        href="/produk"
+        class="mt-8 inline-block rounded-full bg-brand-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-200/60 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+      >
+        Mulai Belanja
+      </a>
+    </SectionHeading>
   </section>
       </Fragment>
     )

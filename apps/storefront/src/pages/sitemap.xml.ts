@@ -27,9 +27,14 @@ export const GET: APIRoute = async ({ locals }) => {
 
   const entries: Entry[] = [
     { path: "/", priority: "1.0", changefreq: "daily" },
-    // Every category the shop actually renders, including the virtual ones the nav links to — a URL
-    // that 404s in a sitemap is a negative signal, so only list what /kategori/[handle] resolves.
-    { path: "/kategori/semua", priority: "0.8", changefreq: "daily" },
+    // The two index pages. `/produk` is the canonical product listing — it replaced `/kategori/semua`
+    // here, which is the same list served from a URL claiming to be one category. `/kategori/semua`
+    // still RESOLVES (merchant-built menus point at it) but it is `noindex` and deliberately absent
+    // from this file: two indexable URLs for one list is a duplicate we would be reporting ourselves.
+    { path: "/produk", priority: "0.9", changefreq: "daily" },
+    { path: "/kategori", priority: "0.7", changefreq: "weekly" },
+    // Every category the shop actually renders — a URL that 404s in a sitemap is a negative signal,
+    // so only list what /kategori/[handle] resolves.
     ...catalog.collections.map((c) => ({
       path: `/kategori/${c.handle}`,
       priority: "0.8",

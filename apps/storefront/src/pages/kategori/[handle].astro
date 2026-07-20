@@ -1,10 +1,8 @@
 ---
 import Layout from "../../layouts/Layout.astro";
-import Breadcrumb from "../../components/Breadcrumb.astro";
+import PageHeader from "../../components/PageHeader.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
-import { PackageOpen } from "@lucide/astro";
-import ProductCard from "../../components/ProductCard.astro";
-import RevealGrid from "../../components/RevealGrid.astro";
+import ProductListing from "../../components/ProductListing.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import type { Product, VirtualCollectionHandle } from "../../data/catalog";
 
@@ -64,6 +62,16 @@ const CRUMBS: Crumb[] = [
 // BreadcrumbList existed on the PDP only, so Google saw a hierarchy for products and a flat site for
 // every category above them. Built from CRUMBS — the same array the visible trail renders.
 const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
+
+// A VIRTUAL collection is not a category — it is a computed view with no row behind it, and `semua`
+// in particular renders the SAME list as `/produk`, which is now the real product listing page. Two
+// indexable URLs for one list is a duplicate that splits the ranking signals of the store's most
+// valuable page between them, and the one Google would pick is the one whose path is a lie.
+//
+// So: the route keeps working (merchant-built menus already point at it, and 404-ing a live menu item
+// is worse than a duplicate), but it tells crawlers not to index it. `follow` — every product link on
+// it is real.
+const NOINDEX = virtual ? "noindex,follow" : undefined;
 ---
 
 <!-- Was "Koleksi busana wanita di …" — the demo's vertical on every tenant's category page. `blurb` is
@@ -71,6 +79,7 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
      the merchant left blank. Both gone: the merchant's own blurb when written, the category name when not. -->
 <Layout
   head={HEAD}
+  robots={NOINDEX}
   title={collection.name}
   description={
     collection.blurb?.trim()
@@ -88,111 +97,21 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
       />
     ) : (
       <Fragment>
-  <section class="bg-brand-50">
-    <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-16">
-      <Breadcrumb items={CRUMBS} />
-      <div class="mt-6 flex flex-col gap-6 sm:flex-row sm:items-center">
-        {/* The merchant's uploaded cover, if they set one in Kategori. Rendered only when present —
-            the layout is unchanged for the (currently normal) case of no cover, so this cannot make
-            an existing category page worse. `imageUrl` is already absolute (mediaUrl). */}
-        {collection.imageUrl && (
-          <img
-            src={collection.imageUrl}
-            alt={`Koleksi ${collection.name}`}
-            width="160"
-            height="160"
-            loading="eager"
-            class="size-28 shrink-0 rounded-2xl object-cover shadow-sm sm:size-40"
-          />
-        )}
-        <div class="min-w-0">
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Koleksi</p>
-          <h1 class="mt-2 font-display text-4xl font-semibold text-ink">
-            {collection.name}
-          </h1>
-          <p class="mt-3 max-w-xl leading-relaxed text-muted">{collection.blurb}</p>
-        </div>
-      </div>
-    </div>
-  </section>
+  {/* The merchant's uploaded cover, if they set one in Kategori, is passed straight through —
+      PageHeader renders it only when present, so the layout is unchanged for the (currently normal)
+      case of no cover. `imageUrl` is already absolute (mediaUrl). */}
+  <PageHeader
+    crumbs={CRUMBS}
+    eyebrow="Koleksi"
+    title={collection.name}
+    dek={collection.blurb}
+    imageUrl={collection.imageUrl}
+    imageAlt={`Koleksi ${collection.name}`}
+  />
 
-  <section class="mx-auto max-w-7xl px-4 py-12 sm:px-6">
-    {
-      products.length > 0 ? (
-        <>
-          <div class="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-5">
-            <p class="text-sm text-muted">
-              <span class="font-medium text-ink tabular-nums">{products.length}</span> produk
-            </p>
-            <label class="flex items-center gap-2 text-sm text-muted">
-              <span class="hidden sm:inline">Urutkan</span>
-              <select
-                id="sort-select"
-                class="rounded-full border border-line bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-              >
-                <option value="terbaru">Terbaru</option>
-                <option value="termurah">Harga terendah</option>
-                <option value="termahal">Harga tertinggi</option>
-              </select>
-            </label>
-          </div>
+  <ProductListing products={products} />
 
-          <RevealGrid rows={3} unit="produk">
-            <div
-              id="product-grid"
-              data-reveal-grid
-              class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"
-            >
-              {products.map((p, i) => (
-                <div class="product-item" data-price={p.price} data-index={i}>
-                  <ProductCard product={p} />
-                </div>
-              ))}
-            </div>
-          </RevealGrid>
-        </>
-      ) : (
-        <div class="py-20 text-center">
-          <PackageOpen class="mx-auto h-10 w-10 text-brand-400" stroke-width={1.5} aria-hidden="true" />
-          <h2 class="mt-4 font-display text-2xl font-semibold text-ink">Belum ada produk</h2>
-          <p class="mt-2 text-muted">Koleksi ini sedang dalam perjalanan. Cek koleksi lainnya, yuk.</p>
-          <a
-            href="/"
-            class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
-          >
-            Kembali ke Beranda
-          </a>
-        </div>
-      )
-    }
-  </section>
       </Fragment>
     )
   }
 </Layout>
-
-<script is:inline>
-  (function () {
-    var select = document.getElementById("sort-select");
-    var grid = document.getElementById("product-grid");
-    if (!select || !grid) return;
-    select.addEventListener("change", function () {
-      var mode = select.value;
-      var items = Array.prototype.slice.call(grid.querySelectorAll(".product-item"));
-      items.sort(function (a, b) {
-        var pa = Number(a.getAttribute("data-price"));
-        var pb = Number(b.getAttribute("data-price"));
-        var ia = Number(a.getAttribute("data-index"));
-        var ib = Number(b.getAttribute("data-index"));
-        if (mode === "termurah") return pa - pb;
-        if (mode === "termahal") return pb - pa;
-        // "Terbaru" = newest first. data-index ascends with created_at (list loads oldest-first), so
-        // reverse it — it used to return `ia - ib` and showed the OLDEST products under "Terbaru".
-        return ib - ia;
-      });
-      items.forEach(function (el) {
-        grid.appendChild(el);
-      });
-    });
-  })();
-</script>

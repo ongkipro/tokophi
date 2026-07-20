@@ -45,7 +45,10 @@ export type NavCollection = { handle: string; name: string };
 function fallbackNav(collections: NavCollection[]): NavItem[] {
   const items: NavItem[] = [
     { label: "Beranda", href: "/" },
-    { label: "Semua Produk", href: "/kategori/semua" },
+    // `/produk`, not `/kategori/semua`: the real listing page exists now (pages/produk/index.astro).
+    // The virtual collection was standing in for it and is kept only so merchant-built menus that
+    // already point at it keep resolving.
+    { label: "Semua Produk", href: "/produk" },
   ];
   if (collections.length > 0) {
     items.push({
