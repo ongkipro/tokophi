@@ -1,8 +1,14 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **Refreshed 2026-07-20** against the source tree at `d48413c` (origin/main, PR #8 merged) and the live
-> database (`docker exec tokophi-db psql -U tokophi -d tokophi`) — **70 tables, 62 migrations (0000–0061),
+> **Refreshed 2026-07-21** against the source tree and the live database
+> (`docker exec tokophi-db psql -U tokophi -d tokophi`) — **72 tables, 64 migrations (0000–0063),
 > RLS on 46** (0058 added `stores`, which is keyed by `id` and which `verify-rls` structurally cannot see).
+> 0062 adds `orders.problem_at`/`problem_note` (stuck-parcel flag); 0063 adds `stores` public address +
+> phone + 5 social handles (footer). Front-end shipped this pass: product search (`/cari`), responsive
+> `srcset` with an allow-listed on-demand resizer, a sale-recovering 404, URL-driven sort, the social
+> footer, and a11y (skip link, reduced-motion, 44px targets). Core Web Vitals measured excellent on prod
+> mobile 3× (LCP 348–552ms, CLS 0). ⚠️ The #15 local-`main` divergence is RESOLVED as superseded — see
+> BACKLOG; do not resurrect those 25 commits.
 > ⚠️ The local DB reports **68** applied migrations against 62 files on this branch: the Postgres container is
 > **shared with other worktrees** that carry their own migrations. Count files on your branch, not rows in `drizzle`.
 > Not against the older docs in this folder, which have been wrong three times in ways that mattered.

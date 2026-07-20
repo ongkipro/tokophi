@@ -244,6 +244,33 @@ the point: **hand-fixing the instances you found is not a strategy.**
 
 ---
 
+## ✅ RESOLVED 2026-07-21 — the local-`main` divergence (25 commits) is SUPERSEDED, do not resurrect it
+
+The checkout at `/home/fantastico/projects/tokophi` (branch `main`) sat **25 commits ahead / 211 behind**
+`origin/main`, unpushed, and was flagged (GitHub #15) as "two versions of truth about couriers coexist."
+Investigated read-only 2026-07-21; the ambiguity is not real, and the 25 commits are entirely superseded:
+
+- **Kelurahan-precise shipping** (its main value — ~10 of the commits): **already on `origin/main`** — 58
+  files reference `kelurahan`, migration `0049` is present, `kelurahan_id` in 45 files. It landed
+  independently. Dead as salvage.
+- **The ongkir perf fix** (5.5s → 0.6s): landed on `origin/main` as **`231e4e7`** ("quote SPX+JNE first").
+  Dead as salvage.
+- **The courier CURATION** (`BASELINE_SERVICES` lock + per-origin coverage probe + "TIKI exists"): the
+  only genuinely-unique part — `git grep BASELINE_SERVICES origin/main` = **0 files**. But it is a
+  DIFFERENT PHILOSOPHY that `origin/main` deliberately did not take: `origin/main` treats **the live
+  KiriminAja API as the roster** (whatever it returns for the route), and its own docs say TIKI/Pos are
+  fiction the API does not return. `origin/main` is self-consistent — it makes NO `BASELINE_SERVICES`
+  claim. The "two truths" only ever existed inside the stale, unpushed local-`main`.
+
+**Resolution:** abandon the local-`main` divergence. **Do NOT push or rebase those 25 commits** — nothing
+of value is unique to them, and the one thing that is (curation) would REVERSE a shipped direction. The
+local-`main` checkout is shared by other agents, so it was left untouched (no reset, no rebase — the
+stash and working tree there are not ours to move; AGENTS.md). If the seller-facing courier curation
+(SPX+JNE baseline + a coverage probe) is wanted as a FUTURE feature, re-derive it cleanly against current
+`origin/main` — that is a product decision to reverse "the live API is the roster", not a mechanical merge.
+
+---
+
 ## 🔴 LIVE runs `KIRIMINAJA_ENV=sandbox` — the courier list on tokophi.com is FICTION (2026-07-17)
 
 **Status:** `[ ]` open · **owner decision, not a code change** · found while investigating "JNE is enabled
