@@ -1,31 +1,64 @@
 ---
 import { IDR } from "@tokophi/lib/format";
+import { ImageOff } from "@lucide/astro";
 import type { Product } from "../data/catalog";
 import Stars from "./Stars.astro";
 
 interface Props {
   product: Product;
+  /** Heading level for the product name. See the note below — this is not cosmetic. */
+  level?: 2 | 3 | 4;
 }
 
-const { product } = Astro.props;
+// The card's title is a heading, and its correct level depends on the page. On a listing page the
+// card sits directly under the page `h1` with nothing between, so a hardcoded `h3` SKIPS h2 on every
+// listing surface in the shop. ArticleCard solved exactly this with a `level` prop; the product card
+// was still hardcoded. Default stays `h3` — correct under a section heading, which is the commonest
+// placement (homepage sections, "Kamu mungkin suka").
+const { product, level = 3 } = Astro.props;
+const Heading = `h${level}` as "h2" | "h3" | "h4";
 const rating = Astro.locals.catalog.productRating(product);
+
+// The discount was computed on the PDP and NOWHERE on the card, so a shopper scanning a promo grid
+// saw a struck-through price and had to do the arithmetic themselves. Same formula as
+// produk/[handle].astro so the two can never disagree.
+const discount =
+  product.compareAt && product.compareAt > product.price
+    ? Math.round(((product.compareAt - product.price) / product.compareAt) * 100)
+    : 0;
 ---
 
+<!-- `focus-visible:ring-offset-2 ring-offset-cream` is not polish. The card already carries
+     `ring-1 ring-line`, so without an offset the focus ring draws flush on top of the border ring and
+     is all but invisible — on the most-used interactive element in the whole shop. ArticleCard already
+     had the offset; the product card was the odd one out. -->
 <a
   href={`/produk/${product.handle}`}
-  class="group block overflow-hidden rounded-xl bg-white ring-1 ring-line transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+  class="group block overflow-hidden rounded-xl bg-white ring-1 ring-line transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none motion-reduce:hover:translate-y-0"
 >
   {/* No `rounded-xl` here. The parent <a> is already `rounded-xl overflow-hidden`, so this inner
       radius is invisible at the top and fights the parent's clip at the bottom. Same-radius nesting
       is the textbook overuse tell — the card is one surface, not two. */}
   <div class="relative aspect-[3/4] overflow-hidden bg-brand-50">
-    <img
-      src={product.image}
-      alt={product.name}
-      loading="lazy"
-      decoding="async"
-      class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-    />
+    {/* A product with NO photo renders the tinted frame, never a broken image. `catalog.ts` used to
+        guess `/products/<handle>.webp` — a seed-only convention — so any merchant-created product
+        without an upload showed the browser's broken-image glyph on every card. ArticleCard has
+        guarded this from the start; this is the product card catching up.
+        `alt=""` on purpose: the name is in the <h3> inside the SAME <a>, so a real alt makes a screen
+        reader read every product twice. */}
+    {product.image ? (
+      <img
+        src={product.image}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+      />
+    ) : (
+      <div class="flex h-full w-full items-center justify-center" aria-hidden="true">
+        <ImageOff class="size-8 text-brand-300" stroke-width={1.5} />
+      </div>
+    )}
     {
       product.badge && (
         <span class="absolute left-3 top-3 rounded-full bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
@@ -33,6 +66,14 @@ const rating = Astro.locals.catalog.productRating(product);
         </span>
       )
     }
+    {/* Discount sits TOP-RIGHT so it can coexist with the merchant's own badge on the left — they
+        used to be mutually exclusive because only one slot existed. Red, not brand pink: a price cut
+        is the one thing on this card allowed to shout. */}
+    {discount > 0 && (
+      <span class="absolute right-3 top-3 rounded-full bg-red-600 px-2.5 py-1 text-xs font-bold text-white shadow-sm tabular-nums">
+        −{discount}%
+      </span>
+    )}
 
     {/* REMOVED: a heart in a white circle, top-right of the image, fading in on hover — exactly where
         Tokopedia and Shopee put "save to wishlist". It had no handler and there is no wishlist; it was
@@ -40,11 +81,15 @@ const rating = Astro.locals.catalog.productRating(product);
         control's clothes. */}
   </div>
 
-  <div class="p-4">
+  <div class="flex flex-1 flex-col p-4">
     <p class="text-[0.65rem] font-medium uppercase tracking-widest text-muted">{product.category}</p>
-    <h3 class="mt-1 truncate font-medium text-ink transition-colors group-hover:text-brand-700">
+    {/* `line-clamp-2`, not `truncate`. At 360px in a 2-up grid the title box is ~124px, and Indonesian
+        product names are long AND front-loaded with the same words — so `truncate` clipped adjacent
+        cards to the IDENTICAL string ("Dress Batik Par…", "Dress Batik Par…"). `min-h` keeps the price
+        rows aligned across a row when one title wraps and its neighbour does not. */}
+    <Heading class="mt-1 line-clamp-2 min-h-[2.75rem] font-medium text-ink transition-colors group-hover:text-brand-700">
       {product.name}
-    </h3>
+    </Heading>
     {/* No published reviews → NO stars. Not "0 ulasan · ☆☆☆☆☆", which reads as a bad product rather
         than a new one — and not an invented 4.5, which is what this used to show. */}
     {rating && <Stars value={rating.value} count={rating.count} class="mt-1.5" />}
