@@ -276,9 +276,24 @@ auditing the *class* instead of the instances turned up four more of the same bu
 
 ✅ **FIXED** — 1, 2, 3, 5, 6 below, plus three more the class-audit found: `deleteDiscount`,
 `createPurchaseOrder`, `syncChildren` (`30a3c71`). The rule is now in AGENTS.md with the 11-table list.
-🔴 **STILL OPEN** — 4 (`ka-tracking` unlocked read), 7 (no PO undo path), 8 (ledger back-fill), plus the
-`api/public/order` check-all-locations/decrement-one mismatch and routing the shipping status writes
-through `applyOrderStatusChange`. All carried in BACKLOG.
+✅ **ALSO FIXED, later the same day** — 4 (`ka-tracking`'s unlocked read → `dde9c09`, which also caught
+`createShipment` checking terminal against a **pre-network** read) and the `api/public/order`
+check-all-locations/decrement-one mismatch (`80fb83b`, plus `receivePurchaseOrder`'s read-then-write).
+🔴 **STILL OPEN** — 7 (no PO undo path), 8 (ledger back-fill), and routing the two shipping status writes
+through `applyOrderStatusChange` so there is one status writer rather than a state machine plus two
+guarded raw updates. All carried in BACKLOG.
+
+🛡️ **The verifier can now see this class.** `verify-rls` check **5c** (`b7cc5fd`) fails if a table with no
+`store_id` and no RLS appears that is on neither the reviewed child-table list (11 today) nor the
+platform/global list. It cannot prove an app-layer guard from SQL — nothing can — but it stops the class
+growing silently, which is how all seven got in. **Its failure path was exercised, not assumed.**
+
+🧪 **Exercised in a browser, not typechecked** (2026-07-20): production build, real Chromium, `en-US`
+locale, admin on an isolated port. Login + Pesanan + Pembelian + Diskon + Kategori + Produk detail all
+render with **0 console errors**; the Media card loads its 5 images, so the `media.ts` guard did not break
+reads. The cross-tenant half was proved where it actually lives — under RLS in SQL: **96 own variants
+visible, a foreign store's variant 0**. The shared demo DB was left byte-identical (row counts re-checked
+against the baseline).
 
 1. ✅ **FIXED `e9656fd` — `lib/actions/media.ts` had the un-RLS'd child-table hole `e61df25` closed elsewhere.**
    `product_media` has **no `store_id`** and **`relrowsecurity = f`** (checked in `pg_class`, not assumed).

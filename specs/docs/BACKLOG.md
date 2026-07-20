@@ -89,12 +89,15 @@ the point: **hand-fixing the instances you found is not a strategy.**
       re-reads the status under `FOR UPDATE` after the KiriminAja round-trip (the poller writes the same
       row while we are on the network). If the order went terminal meanwhile, the shipment fields are still
       cleared — the booking IS void at the courier — but `status` is left alone.
-- [ ] **Route the two shipping status writes through `applyOrderStatusChange`.** `d07aa1e` guards the side
-      door; it does not remove it. There should be ONE writer of `orders.status`, not a state machine plus
-      two guarded raw updates that must be kept in sync by hand.
-- [ ] **`ka-tracking.ts:81` reads `orders.status` with no `FOR UPDATE`.** `9772246`'s lock is in
-      `setOrderStatus` only, so the tracking poller is not serialized against a manual change: `dikirim→selesai`
-      racing `dikirim→retur` runs both (one credits, the other restores stock and reverses).
+- [ ] **Route the two shipping status writes through `applyOrderStatusChange`.** `d07aa1e` + `dde9c09`
+      guard the side door; they do not remove it. There should be ONE writer of `orders.status`, not a
+      state machine plus two guarded raw updates that must be kept in sync by hand.
+- [x] **`ka-tracking.ts` read `orders.status` with no `FOR UPDATE` — FIXED `dde9c09`.** The read now lives
+      inside the transaction with `FOR UPDATE`, matching `setOrderStatus`. The cron does its KiriminAja
+      pull *before* calling `syncOrderFromKa`, so no lock is held across the wire — now documented on the
+      function, because that ordering became load-bearing. Same commit fixed `createShipment`, whose
+      terminal guard ran against a **pre-network** read: the poller could advance the order to
+      `selesai`/`retur` mid-flight and the write walked it back to `diproses`.
 - [x] **Two stock writers were location-blind — FIXED `b37e762`.** `receivePurchaseOrder` and
       `updateProduct`'s `setInventory` now join `locations` and order by `(is_default desc, id asc)`,
       matching `bc2ebfd`. The `loc` lookups in `createProduct`/`updateProduct` got the same treatment —
@@ -102,14 +105,18 @@ the point: **hand-fixing the instances you found is not a strategy.**
       ⚠️ **That `locations` join is now also the tenant boundary** for the un-RLS'd `inventory_levels`, and
       is commented as such: a later "simplification" back to `where variant_id = …` reopens a cross-tenant
       stock write.
-- [ ] **`api/public/order/route.ts` checks stock across ALL locations and decrements ONE.** The
-      `sum(available)` check and the `FOR UPDATE` re-read both aggregate every location, while the decrement
-      (`b1f3603`) targets the default row. Under multi-location a variant with 0 at the default and 5 at
-      warehouse B passes the check and drives the default row **negative** while B's units are never
-      consumed. **The totals still reconcile — which is exactly why this would be slow to notice.**
-- [ ] **`receivePurchaseOrder` is a read-then-write with no `FOR UPDATE`.** It reads `inv.available` and
-      writes `available + add` — the same last-write-wins class `bc2ebfd` closed in the bulk editor. Should
-      be a relative SQL write (`available = available + $add`), which needs no lock at all.
+- [x] **`api/public/order/route.ts` checked stock across ALL locations and decremented ONE — FIXED
+      `80fb83b`.** The `sum(available)` pre-check and the `FOR UPDATE` re-read both aggregated every
+      location while the decrement (`b1f3603`) targeted the default row: under multi-location a variant
+      with 0 at the default and 5 at warehouse B passed the check and drove the default row **negative**
+      while B's units were never consumed — **and the totals still reconciled, which is exactly why it
+      would have been slow to notice.** All three sites now share one `defaultLocationRow(variantId)`
+      expression, lifted verbatim from `b1f3603`. Behaviour identical on single-location data; both
+      empty-inventory edge cases checked rather than assumed.
+- [x] **`receivePurchaseOrder` was a read-then-write with no `FOR UPDATE` — FIXED `80fb83b`.** It read
+      `inv.available` and wrote back a computed absolute, so a sale between the read and the write was
+      silently overwritten (the last-write-wins class `bc2ebfd` closed in the bulk editor). Now a relative
+      SQL write (`available + $add`), evaluated under the UPDATE's own row lock — no `FOR UPDATE` needed.
 - [ ] **Cancelling a received PO is refused, and there is no undo path at all.** `b1f3603` correctly stopped
       the silent corruption, but the "undo = a separate stock adjustment" it points at **does not exist in
       the UI**. A merchant who receives a PO by mistake is now stuck with the phantom stock *and* the record
