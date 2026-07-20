@@ -35,16 +35,31 @@ export const timeAgo = (minutes: number) => {
   return `${Math.floor(h / 24)} hari lalu`;
 };
 
-// Date + time, id-ID, e.g. "1 Jul 2026, 14.30".
+// ⚠️ `timeZone` is LOAD-BEARING on both of these — do not drop it to "simplify".
+// Without it `Intl` uses the RUNTIME's zone, which is not the same runtime twice: the containers
+// set no TZ so Node renders UTC, while the merchant's browser renders Asia/Jakarta (UTC+7). These
+// run inside "use client" components, so the string is produced ONCE on the server and AGAIN in the
+// browser — and the two disagreed by 7 hours, which is React error #418 ("text content does not
+// match server-rendered HTML") on /produk in production. It is not merely a hydration warning:
+// the shifted rows also crossed midnight, so a product added 21 Jun 17.49 WIB was filed under
+// 22 Jun for anyone reading the SSR HTML. The seller's day ends at Jakarta midnight (the same
+// boundary lib/data/ledger.ts + lib/data/finance.ts already anchor to), so that is the zone
+// these must format in — on the server and in the browser alike.
+const TZ = "Asia/Jakarta";
+
+// Date + time, id-ID WIB, e.g. "1 Jul 2026, 14.30".
 export function dateTimeShort(ts: number): string {
   return new Intl.DateTimeFormat("id-ID", {
     day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+    timeZone: TZ,
   }).format(new Date(ts));
 }
 
-// Date only, id-ID, e.g. "1 Jul 2026".
+// Date only, id-ID WIB, e.g. "1 Jul 2026".
 export function dateShort(ts: number): string {
-  return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(new Date(ts));
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric", month: "short", year: "numeric", timeZone: TZ,
+  }).format(new Date(ts));
 }
 
 // Build a wa.me deep link from an Indonesian phone + optional prefilled message.

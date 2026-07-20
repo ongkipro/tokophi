@@ -13,7 +13,10 @@ import { useCan } from "@/components/admin/permissions";
 import { TicketStatus } from "../ticket-status";
 import { cn } from "@tokophi/ui/lib/utils";
 
-const time = (d: Date) => new Date(d).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+// `timeZone` is load-bearing: this is a "use client" component, so the string is formatted on the
+// server (containers set no TZ → UTC) AND again in the browser (Asia/Jakarta) — a 7-hour disagreement
+// is React error #418, the same bug that hit /produk. Pin the zone; do not drop it.
+const time = (d: Date) => new Date(d).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
 
 export function ThreadClient({ ticket }: { ticket: TicketDetail }) {
   const router = useRouter();
