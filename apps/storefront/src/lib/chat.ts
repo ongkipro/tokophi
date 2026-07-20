@@ -60,7 +60,7 @@ export async function readVisitorToken(ctx: APIContext, storeId: string): Promis
   const raw = ctx.cookies.get(CHAT_COOKIE)?.value;
   if (!raw) return null;
   try {
-    const { payload } = await jwtVerify(raw, secret(), { audience: AUD });
+    const { payload } = await jwtVerify(raw, secret(), { audience: AUD, algorithms: ["HS256"] });
     const { vid, sid } = payload as { vid?: string; sid?: string };
     if (!vid || !sid || sid !== storeId) return null;
     return { vid, sid };
