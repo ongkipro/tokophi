@@ -8,6 +8,7 @@
 // cannot surface here even by mistake.
 import type { BlogConfig } from "@tokophi/sections";
 import ArticleCard from "../ArticleCard.astro";
+import SectionHeading from "../SectionHeading.astro";
 
 type Props = BlogConfig;
 const { heading, limit, ctaLabel } = Astro.props;
@@ -47,7 +48,7 @@ const colsClass = COLS[articles.length >= limit ? limit : (Math.min(articles.len
           uses. The link is the section's only control, so it is not repeated per card: every tile is
           already a link, and "Baca selengkapnya" inside each one says so. */}
       <div class="flex flex-wrap items-end justify-between gap-4">
-        <h2 class="font-display text-3xl font-semibold text-ink sm:text-4xl">{heading}</h2>
+        <SectionHeading title={heading} />
         {ctaLabel && (
           <a
             href="/blog"

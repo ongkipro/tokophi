@@ -1,0 +1,104 @@
+---
+// PRODUCT LISTING — count + sort control + reveal grid + empty state.
+//
+// Extracted from kategori/[handle].astro so /produk (the real product index) can BE the same listing
+// rather than a second implementation of it. There is exactly one grid, one sort control and one
+// empty state for products on this storefront; a fork is how the "Terbaru shows the oldest products"
+// bug would have survived in one of two places after being fixed in the other.
+//
+// The sort is client-side and deliberately dumb: the whole list is already in the DOM (these are
+// merchant catalogues, not marketplaces), so re-ordering nodes beats a round trip. `data-index`
+// ascends with created_at because the list arrives oldest-first — "Terbaru" therefore REVERSES it.
+import ProductCard from "./ProductCard.astro";
+import RevealGrid from "./RevealGrid.astro";
+import { PackageOpen } from "@lucide/astro";
+import type { Product } from "../data/catalog";
+
+interface Props {
+  products: Product[];
+  /** Empty-state body. Defaults to the category wording; /produk passes its own. */
+  emptyText?: string;
+  class?: string;
+}
+
+const {
+  products,
+  emptyText = "Koleksi ini sedang dalam perjalanan. Cek koleksi lainnya, yuk.",
+  class: className,
+} = Astro.props;
+---
+
+<section class:list={["mx-auto max-w-7xl px-4 py-12 sm:px-6", className]}>
+  {
+    products.length > 0 ? (
+      <Fragment>
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-5">
+          <p class="text-sm text-muted">
+            <span class="font-medium text-ink tabular-nums">{products.length}</span> produk
+          </p>
+          <label class="flex items-center gap-2 text-sm text-muted">
+            <span class="hidden sm:inline">Urutkan</span>
+            <select
+              id="sort-select"
+              class="rounded-full border border-line bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+            >
+              <option value="terbaru">Terbaru</option>
+              <option value="termurah">Harga terendah</option>
+              <option value="termahal">Harga tertinggi</option>
+            </select>
+          </label>
+        </div>
+
+        <RevealGrid rows={3} unit="produk">
+          <div id="product-grid" data-reveal-grid class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {products.map((p, i) => (
+              <div class="product-item" data-price={p.price} data-index={i}>
+                <ProductCard product={p} />
+              </div>
+            ))}
+          </div>
+        </RevealGrid>
+      </Fragment>
+    ) : (
+      <div class="py-20 text-center">
+        <PackageOpen class="mx-auto h-10 w-10 text-brand-400" stroke-width={1.5} aria-hidden="true" />
+        {/* Not a SectionHeading: this is an empty state, and its heading is centred under an icon
+            rather than opening a block of content. Same size, different role. */}
+        <h2 class="mt-4 font-display text-2xl font-semibold text-ink">Belum ada produk</h2>
+        <p class="mt-2 text-muted">{emptyText}</p>
+        <a
+          href="/"
+          class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+        >
+          Kembali ke Beranda
+        </a>
+      </div>
+    )
+  }
+</section>
+
+<script is:inline>
+  (function () {
+    var select = document.getElementById("sort-select");
+    var grid = document.getElementById("product-grid");
+    if (!select || !grid) return;
+    select.addEventListener("change", function () {
+      var mode = select.value;
+      var items = Array.prototype.slice.call(grid.querySelectorAll(".product-item"));
+      items.sort(function (a, b) {
+        var pa = Number(a.getAttribute("data-price"));
+        var pb = Number(b.getAttribute("data-price"));
+        var ia = Number(a.getAttribute("data-index"));
+        var ib = Number(b.getAttribute("data-index"));
+        if (mode === "termurah") return pa - pb;
+        if (mode === "termahal") return pb - pa;
+        // "Terbaru" = newest first. data-index ascends with created_at (list loads oldest-first), so
+        // reverse it — it used to return `ia - ib` and showed the OLDEST products under "Terbaru".
+        return ib - ia;
+      });
+      items.forEach(function (el) {
+        grid.appendChild(el);
+      });
+    });
+  })();
+</script>

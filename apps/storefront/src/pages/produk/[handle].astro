@@ -1,6 +1,7 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import ProductCard from "../../components/ProductCard.astro";
+import SectionHeading from "../../components/SectionHeading.astro";
 import { Check, ImageOff } from "@lucide/astro";
 import Stars from "../../components/Stars.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
@@ -328,8 +329,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
          shows no review section — a new product is not a badly-reviewed one. -->
     {rating && (
     <div id="ulasan" class="mt-20 scroll-mt-24 border-t border-line pt-14">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Ulasan Pembeli</p>
-      <h2 class="mt-2 font-display text-2xl font-semibold text-ink sm:text-3xl">Apa kata pelanggan</h2>
+      <SectionHeading eyebrow="Ulasan Pembeli" title="Apa kata pelanggan" />
 
       <div class="mt-8 grid gap-8 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-12">
         <!-- Average -->
@@ -398,8 +398,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     {
       !TEMPLATE && related.length > 0 && (
         <div class="mt-20 border-t border-line pt-14">
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Rekomendasi</p>
-          <h2 class="mt-2 font-display text-2xl font-semibold text-ink sm:text-3xl">Kamu mungkin suka</h2>
+          <SectionHeading eyebrow="Rekomendasi" title="Kamu mungkin suka" />
           <div class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {related.map((p) => (
               <ProductCard product={p} />

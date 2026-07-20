@@ -17,6 +17,7 @@
 import Layout from "../../layouts/Layout.astro";
 import Prose from "../../components/Prose.astro";
 import ProductCard from "../../components/ProductCard.astro";
+import SectionHeading from "../../components/SectionHeading.astro";
 import { getArticle, getArticles, formatDate, readMinutes } from "../../data/content";
 
 const { store, catalog } = Astro.locals;
@@ -234,16 +235,9 @@ const initial = (article.author ?? store.name).trim().charAt(0).toUpperCase();
       <section class="border-t border-line">
         <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-14">
           <div class="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">
-                Dari koleksi kami
-              </p>
-              <h2 class="mt-2 font-display text-2xl font-semibold text-ink">
-                Mungkin kamu suka ini
-              </h2>
-            </div>
+            <SectionHeading eyebrow="Dari koleksi kami" title="Mungkin kamu suka ini" />
             <a
-              href="/kategori/semua"
+              href="/produk"
               class="inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
             >
               Lihat semua produk
@@ -272,7 +266,7 @@ const initial = (article.author ?? store.name).trim().charAt(0).toUpperCase();
     others.length > 0 && (
       <section class="border-t border-line bg-white/60">
         <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6">
-          <h2 class="font-display text-2xl font-semibold text-ink">Baca juga</h2>
+          <SectionHeading title="Baca juga" />
           <div class="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-3">
             {others.map((a) => (
               <!-- Editorial, not card-chrome: the same restraint as the feature image (flat, barely

@@ -1,0 +1,64 @@
+---
+// SECTION HEADING — the eyebrow + h2 pair that opens a block inside a page.
+//
+// ── THE SIZE: `text-2xl sm:text-3xl`. One size, and here is why it is that one. ──────────────────
+// The same role was being rendered at SIX sizes across five files: `text-3xl sm:text-4xl` (the
+// fallback homepage, sections/Blog, sections/ProductGrid, sections/ImageText), `text-2xl sm:text-3xl`
+// (produk/[handle]) and `text-2xl` flat (blog/[handle]).
+//
+// `text-2xl sm:text-3xl` wins on two counts:
+//
+//  1. IT IS THE ONLY ONE THAT KEEPS THE OUTLINE VISIBLE. PageHeader.astro sets every page's <h1> at
+//     `text-3xl sm:text-4xl`. An <h2> at the same `text-3xl sm:text-4xl` renders a subheading that is
+//     pixel-identical to the heading above it — the document says "level 2", the page says "level 1",
+//     and on a page that shows both (a category with an empty state, /produk, a PDP) the hierarchy is
+//     simply not there to see. One step down is the smallest change that restores it.
+//     Note the winner is exactly the size produk/[handle] already used — the one file where an h1 and
+//     an h2 sit in the same column, i.e. the one place the step was ever actually designed.
+//  2. It has a responsive step, which the flat `text-2xl` in blog/[handle] lacks. Same reason as the
+//     h1: a merchant-written heading is arbitrary-length Indonesian and 360px is the real viewport.
+//
+// ⚠️ `text-brand-600`, never `brand-500`. Measured on cream: 600 = 4.64:1 (AA), 500 = 3.24:1 (fails).
+// ⚠️ `font-display` is deliberately IDENTICAL to `font-sans` today (both Inter — global.css keeps the
+//    token as a seam for a future per-store font picker). Do NOT add tracking/weight tweaks here to
+//    "compensate" for a serif; there is no serif.
+//
+// ── THE EYEBROW ─────────────────────────────────────────────────────────────────────────────────
+// Two dialects were in use for this role: `text-xs font-semibold uppercase tracking-[0.2em]
+// text-brand-600` (most places) and `text-xs font-medium uppercase tracking-[0.15em] text-brand-600`
+// (ArticleCard's date line, and the copy of it in blog/[handle]'s "Baca juga" tiles). The first is
+// the section eyebrow and is what this component emits.
+//
+// ProductCard's `text-[0.65rem] font-medium uppercase tracking-widest text-muted` is NOT this
+// component and must not be folded into it: that is a card META line (the product's category), it is
+// muted on purpose so it recedes behind the product name, and it is a different role entirely.
+
+interface Props {
+  /** Small brand-coloured kicker above the title ("Favorit", "Rekomendasi", "Ulasan Pembeli"). */
+  eyebrow?: string;
+  title: string;
+  /** One line of supporting copy under the title. */
+  dek?: string;
+  /**
+   * Heading level. The right one depends on where the block sits: `2` under a page <h1> (the normal
+   * case), `3` when it is nested inside a section that already owns an <h2>. Hard-coding one skips a
+   * level in the other, and that outline is what a screen-reader user navigates by.
+   */
+  level?: 2 | 3;
+  /** `center` also constrains the column to `max-w-2xl` — the centred treatment the homepage uses. */
+  align?: "left" | "center";
+  class?: string;
+}
+
+const { eyebrow, title, dek, level = 2, align = "left", class: className } = Astro.props;
+const Title = `h${level}` as "h2" | "h3";
+---
+
+<div class:list={[align === "center" && "mx-auto max-w-2xl text-center", className]}>
+  {eyebrow && <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{eyebrow}</p>}
+  <Title class:list={["font-display text-2xl font-semibold text-balance text-ink sm:text-3xl", eyebrow && "mt-2"]}>
+    {title}
+  </Title>
+  {dek && <p class:list={["mt-3 text-muted", align === "left" && "max-w-xl"]}>{dek}</p>}
+  <slot />
+</div>

@@ -1,0 +1,75 @@
+---
+// PAGE HEADER — the `bg-brand-50` band at the top of a non-homepage route.
+//
+// It existed as hand-copied markup in kategori/[handle], blog/index and kontak (and, minus the
+// eyebrow, halaman/[handle]). That is the shape the design audit (#16) flagged: the storefront has no
+// shared primitives, so "make the h1 smaller on phones" was five edits and got done in two of them.
+//
+// ⚠️ THE H1 SIZE WAS THE INCONSISTENCY, and it is fixed here rather than preserved. The copies used
+// `text-4xl` FLAT — no responsive step — so a long Indonesian category name ("Busana Muslim &
+// Outerwear") wrapped to three lines inside a 360px viewport and shoved the dek below the fold.
+// produk/[handle] already used `text-3xl sm:text-4xl`, which is the right shape: identical on a
+// laptop, one step calmer on a phone. That is now the only shape.
+//
+// `text-balance` comes from halaman/[handle] — with a heading this size it is the difference between
+// a tidy two-line title and a two-word orphan on line three.
+import Breadcrumb from "./Breadcrumb.astro";
+import type { Crumb } from "../lib/breadcrumb";
+
+interface Props {
+  /** The visible trail. Build it from the SAME array you hand to `breadcrumbLd()` — see lib/breadcrumb.ts. */
+  crumbs?: Crumb[];
+  /** Small brand-coloured kicker above the title ("Koleksi", "Jurnal", "Kontak"). */
+  eyebrow?: string;
+  title: string;
+  /** One-line standfirst under the title. */
+  dek?: string;
+  /**
+   * Optional cover, shown beside the text on ≥sm. Real collections carry whatever the merchant
+   * uploaded in the Kategori editor; virtual collections and most other pages have none, and the
+   * layout is byte-identical to the no-image case when it is absent.
+   * Must already be absolute (`mediaUrl()`).
+   */
+  imageUrl?: string;
+  /** Alt text for `imageUrl`. Decorative covers should pass `""`. */
+  imageAlt?: string;
+  /**
+   * `narrow` (max-w-3xl) for a page whose body is a single reading column — the CMS Halaman pages —
+   * so the band lines up with the prose beneath it instead of overhanging it by four columns.
+   * `wide` (max-w-7xl, the default) for anything sitting above a grid.
+   */
+  width?: "wide" | "narrow";
+  class?: string;
+}
+
+const { crumbs, eyebrow, title, dek, imageUrl, imageAlt = "", width = "wide", class: className } = Astro.props;
+const hasCrumbs = !!crumbs?.length;
+---
+
+<section class:list={["bg-brand-50", className]}>
+  <div class:list={["mx-auto px-4 py-14 sm:px-6 sm:py-16", width === "narrow" ? "max-w-3xl" : "max-w-7xl"]}>
+    {hasCrumbs && <Breadcrumb items={crumbs!} />}
+    <div class:list={["flex flex-col gap-6 sm:flex-row sm:items-center", hasCrumbs && "mt-6"]}>
+      {
+        imageUrl && (
+          <img
+            src={imageUrl}
+            alt={imageAlt}
+            width="160"
+            height="160"
+            loading="eager"
+            class="size-28 shrink-0 rounded-2xl object-cover shadow-sm sm:size-40"
+          />
+        )
+      }
+      <div class="min-w-0">
+        {eyebrow && <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{eyebrow}</p>}
+        <h1 class:list={["font-display text-3xl font-semibold text-balance text-ink sm:text-4xl", eyebrow && "mt-2"]}>
+          {title}
+        </h1>
+        {dek && <p class="mt-3 max-w-xl leading-relaxed text-muted">{dek}</p>}
+        <slot />
+      </div>
+    </div>
+  </div>
+</section>

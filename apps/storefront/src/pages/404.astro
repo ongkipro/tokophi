@@ -1,0 +1,78 @@
+---
+// 404 — a branded, Indonesian dead end with a way out.
+//
+// ── HOW IT GETS REACHED (verified against astro@5.18.2 / @astrojs/node@9.5.5, not assumed) ────────
+//
+// 1. UNMATCHED URL. `createAppHandler` (node/dist/serve-app.js) finds no route, and with no `next`
+//    (standalone mode always calls the app handler as the static handler's fallthrough) it calls
+//    `app.render`. `App#render` (astro/dist/core/app/index.js) falls back to
+//    `routes.find(r => r.component === "404.astro")` and renders THIS file, with the status forced to
+//    404 by `#getDefaultStatusCode` ("if (route.endsWith('/404')) return 404").
+//
+// 2. `return new Response(null, { status: 404 })` FROM A MATCHED PAGE — what produk/[handle],
+//    kategori/[handle] and halaman/[handle] do for a handle that does not resolve. This DOES reach
+//    here, and the mechanism is specific enough to be worth writing down, because it is the whole
+//    reason those returns did not need rewriting:
+//
+//        if (REROUTABLE_STATUS_CODES.includes(response.status)   // [404, 500]
+//            && response.body === null                            // ← THE BODY-LESS PART IS LOAD-BEARING
+//            && response.headers.get(REROUTE_DIRECTIVE_HEADER) !== "no") { … #renderError … }
+//
+//    ⚠️ `response.body === null` is the condition. A body-less 404 is Astro's signal "I don't handle
+//    this, show the error page"; the moment a route returns 404 WITH a body, Astro takes that as the
+//    page handling its own 404 and this file is skipped. So do NOT "improve" those routes by giving
+//    their 404 responses a body — that is precisely what would disconnect them from this page. Before
+//    this file existed the reroute still happened, found no `/404` route, and fell through to a bare
+//    `new Response(null, { status })` — which is why a shopper got a blank white screen.
+//
+//    `#renderError` re-runs the middleware (it only passes NOOP_MIDDLEWARE_FN on a retry after this
+//    page itself throws), so `Astro.locals.store` IS populated here and the page renders in the
+//    merchant's brand. The guard below matters anyway: on that retry path locals would be empty, and
+//    a second throw downgrades the shopper to the bare blank response we are removing.
+//
+// `noindex,follow`: a soft-404 that Google indexes is worse than the 404 itself. `follow` because
+// every link on this page is a real page of the shop.
+import Layout from "../layouts/Layout.astro";
+
+const storeName = Astro.locals.store?.name ?? "Toko";
+---
+
+<Layout
+  title="Halaman tidak ditemukan"
+  description={`Halaman yang kamu cari tidak ada di ${storeName}.`}
+  robots="noindex,follow"
+>
+  <section class="mx-auto flex max-w-2xl flex-col items-center px-4 py-24 text-center sm:px-6 sm:py-32">
+    <p class="font-display text-6xl font-semibold text-brand-600 tabular-nums sm:text-7xl">404</p>
+    <h1 class="mt-4 font-display text-3xl font-semibold text-balance text-ink sm:text-4xl">
+      Halaman tidak ditemukan
+    </h1>
+    <p class="mt-4 max-w-md leading-relaxed text-muted">
+      Mungkin alamatnya salah ketik, atau halamannya sudah dipindahkan. Yuk, lanjut belanja dari sini.
+    </p>
+
+    <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+      <a
+        href="/produk"
+        class="inline-block rounded-full bg-brand-600 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-200/60 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      >
+        Lihat Semua Produk
+      </a>
+      <a
+        href="/"
+        class="inline-block rounded-full border border-line bg-white px-7 py-3 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+      >
+        Kembali ke Beranda
+      </a>
+    </div>
+
+    {/* Not a search box: the storefront has no search. Offering one that does nothing on the page a
+        lost shopper lands on would be the second dead end in a row. These are the three lists the
+        shop actually has. */}
+    <nav aria-label="Halaman lain" class="mt-10 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm">
+      <a href="/kategori" class="text-brand-700 underline-offset-4 hover:underline">Kategori</a>
+      <a href="/blog" class="text-brand-700 underline-offset-4 hover:underline">Jurnal</a>
+      <a href="/kontak" class="text-brand-700 underline-offset-4 hover:underline">Kontak</a>
+    </nav>
+  </section>
+</Layout>

@@ -1,0 +1,59 @@
+---
+// /produk — THE product listing. It did not exist: only `produk/[handle].astro` did, so a shopper who
+// truncated a PDP URL (people do this constantly — it is how you get "up a level") and any nav or
+// footer link labelled "Produk" landed on a 404.
+//
+// The catalogue was reachable only at `/kategori/semua`, a VIRTUAL collection: a list of EVERY
+// product served from a URL that says "this is one category". That is bad IA (there is no such
+// category; the merchant cannot see it, edit it or delete it) and bad SEO (the store's single most
+// important listing page ranks under a path that describes it wrongly, and it competes with the real
+// categories that sit beside it).
+//
+// `/kategori/semua` still RESOLVES — merchant-built menus point at it and breaking those would 404 a
+// shopper mid-journey — but it is now `noindex,follow` and out of the sitemap, and every internal
+// link points here instead. One list, one canonical URL.
+//
+// The listing itself is components/ProductListing.astro, the exact component /kategori/[handle]
+// renders: same grid, same sort control, same empty state. Forking it was the thing to avoid.
+import Layout from "../../layouts/Layout.astro";
+import PageHeader from "../../components/PageHeader.astro";
+import ProductListing from "../../components/ProductListing.astro";
+import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
+
+// SSR: tenant from the Host header (src/middleware.ts) — never a query param.
+const { store, catalog } = Astro.locals;
+const products = catalog.products;
+
+const CRUMBS: Crumb[] = [
+  { name: "Beranda", href: "/" },
+  { name: "Produk" },
+];
+const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
+
+// Built from the merchant's own data, never from the demo's vertical: the store name, the real
+// product count, and their real category names. Layout clamps to 155 chars on a word boundary.
+const catNames = catalog.collections.map((c) => c.name).filter(Boolean);
+const DESCRIPTION = [
+  `Semua produk ${store.name}`,
+  products.length ? `${products.length} produk siap kirim.` : null,
+  catNames.length ? `Kategori: ${catNames.slice(0, 4).join(", ")}.` : null,
+]
+  .filter(Boolean)
+  .join(" — ")
+  .replace(/—\s*$/, "")
+  .trim();
+---
+
+<Layout head={HEAD} title="Semua Produk" description={DESCRIPTION}>
+  <PageHeader
+    crumbs={CRUMBS}
+    eyebrow="Katalog"
+    title="Semua Produk"
+    dek={`Seluruh koleksi ${store.name}, kirim ke seluruh Indonesia.`}
+  />
+
+  <ProductListing
+    products={products}
+    emptyText="Katalog belum diisi. Cek lagi sebentar lagi, ya."
+  />
+</Layout>

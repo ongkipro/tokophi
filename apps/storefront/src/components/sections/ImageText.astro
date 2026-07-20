@@ -1,5 +1,6 @@
 ---
 import type { ImageTextConfig } from "@tokophi/sections";
+import SectionHeading from "../SectionHeading.astro";
 
 type Props = ImageTextConfig;
 const { heading, body, imageUrl, imageSide, eyebrow } = Astro.props;
@@ -11,8 +12,7 @@ const { heading, body, imageUrl, imageSide, eyebrow } = Astro.props;
       {imageUrl && <img src={imageUrl} alt="" class="h-full w-full object-cover" />}
     </div>
     <div>
-      {eyebrow && <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{eyebrow}</p>}
-      <h2 class="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">{heading}</h2>
+      <SectionHeading eyebrow={eyebrow} title={heading} />
       <p class="mt-4 max-w-md text-muted">{body}</p>
     </div>
   </div>

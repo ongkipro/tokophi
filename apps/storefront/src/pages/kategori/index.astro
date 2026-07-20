@@ -1,0 +1,97 @@
+---
+// /kategori — the category index. It 404'd, which mattered more than "one missing URL":
+//
+// The fallback homepage renders a "Belanja per Kategori" grid, but that whole block is SKIPPED when
+// the store has built a homepage in the Store Builder (ADR 0009) — and a merchant who has built one
+// is exactly the merchant most likely to have real categories. On those stores there was NO page
+// anywhere on the storefront that listed the categories. The only way in was the header dropdown,
+// which is invisible to a crawler's link graph and awkward on a phone.
+//
+// Deliberately NOT a product grid: /produk is the list of products. This page's job is the shape of
+// the shop.
+import Layout from "../../layouts/Layout.astro";
+import PageHeader from "../../components/PageHeader.astro";
+import RevealGrid from "../../components/RevealGrid.astro";
+import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
+
+// SSR: tenant from the Host header (src/middleware.ts) — never a query param.
+const { store, catalog } = Astro.locals;
+
+// `catalog.collections` is already published-only, and it excludes the virtual handles (there is no
+// "Semua Produk" row for a merchant to have made) — so this lists exactly what they built. The cover
+// falls back to the first product's image, the same trick the homepage grid uses, because most
+// merchants never upload a category cover.
+const collections = catalog.collections.map((c) => {
+  const items = catalog.byCollection(c.handle);
+  return { ...c, image: c.imageUrl || items[0]?.image, count: items.length };
+});
+
+const CRUMBS: Crumb[] = [
+  { name: "Beranda", href: "/" },
+  { name: "Kategori" },
+];
+const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
+
+const names = collections.map((c) => c.name);
+const DESCRIPTION = names.length
+  ? `Semua kategori ${store.name}: ${names.slice(0, 6).join(", ")}.`
+  : `Kategori produk di ${store.name}.`;
+---
+
+<Layout head={HEAD} title="Kategori" description={DESCRIPTION}>
+  <PageHeader
+    crumbs={CRUMBS}
+    eyebrow="Kategori"
+    title="Belanja per Kategori"
+    dek={`Pilih kategori yang kamu cari di ${store.name}.`}
+  />
+
+  <section class="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+    {
+      collections.length > 0 ? (
+        <RevealGrid rows={2} unit="kategori">
+          <div data-reveal-grid class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {collections.map((c) => (
+              <a
+                href={`/kategori/${c.handle}`}
+                class="group relative block aspect-[4/5] overflow-hidden rounded-2xl bg-brand-100 ring-1 ring-line transition-all hover:shadow-xl hover:shadow-brand-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              >
+                {c.image ? (
+                  <img
+                    src={c.image}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  />
+                ) : (
+                  <span class="flex h-full w-full items-center justify-center text-5xl" aria-hidden="true">
+                    {c.emoji}
+                  </span>
+                )}
+                <div class="absolute inset-0 bg-gradient-to-t from-ink/75 via-ink/20 to-transparent" />
+                <div class="absolute inset-x-0 bottom-0 p-4 sm:p-5">
+                  <h2 class="font-display text-lg font-semibold text-white sm:text-xl">{c.name}</h2>
+                  <p class="mt-0.5 text-xs text-white/80">{c.count} produk</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </RevealGrid>
+      ) : (
+        /* No categories is a normal state for a young shop — send them to the products rather than
+           to an apology. */
+        <div class="py-20 text-center">
+          <h2 class="font-display text-2xl font-semibold text-ink">Belum ada kategori</h2>
+          <p class="mt-2 text-muted">Semua produk masih dalam satu daftar.</p>
+          <a
+            href="/produk"
+            class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+          >
+            Lihat Semua Produk
+          </a>
+        </div>
+      )
+    }
+  </section>
+</Layout>
