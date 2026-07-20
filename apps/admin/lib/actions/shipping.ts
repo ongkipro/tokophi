@@ -593,8 +593,24 @@ export async function createShipment(input: {
 
   // Only a waybill KiriminAja actually returned lands in `awb`. Nothing is substituted for it.
   const awb = r.awb ?? null;
-  await withTenant(storeId, (db) =>
-    db.update(schema.orders)
+  await withTenant(storeId, async (db) => {
+    // Re-read UNDER LOCK. The terminal guard above ran against a read taken BEFORE the KiriminAja
+    // round-trip, and the tracking poller writes this same row — it can advance the order to
+    // `selesai`/`retur` while we are on the wire, and this write would then walk it back to
+    // `diproses`. Same defect cancelShipment had; the booking window is merely narrower, which is the
+    // only reason it is rarer rather than safer. The booking DID happen, so awb/courier/kaOrderId are
+    // recorded either way — but a terminal order's status is no longer ours to assert.
+    const [cur] = await db
+      .select({ status: schema.orders.status })
+      .from(schema.orders).where(eq(schema.orders.number, input.orderNumber)).limit(1).for("update");
+    const terminal = cur?.status === "selesai" || cur?.status === "batal" || cur?.status === "retur";
+    const shipmentFields = {
+      awb,
+      courier: input.service,
+      serviceType: input.serviceType,
+      kaOrderId: r.kaOrderId,
+    };
+    await db.update(schema.orders)
       // `courier` takes the CODE (`spx`), never `serviceName` ("SPX Standard"). It held the display
       // name until 2026-07-16 and that quietly corrupted every booked order: `orders.courier` is a
       // JOIN KEY — to platform_couriers (which carries `codAllowed` and the `group` behind the
@@ -603,19 +619,13 @@ export async function createShipment(input: {
       // `serviceType` moves with it: the seller may book a DIFFERENT service than the shopper picked,
       // and leaving the old type behind pairs one courier with another's service — production had
       // exactly that (courier "SAP Satria Reg" carrying JNE's REG23).
-      .set({
-        awb,
-        courier: input.service,
-        serviceType: input.serviceType,
-        kaOrderId: r.kaOrderId,
-        // `diproses`, NOT `dikirim`: a booking is not yet shipped — the AWB is still null and the
-        // courier hasn't accepted pickup. Status follows the courier (ka-tracking's documented model),
-        // so the poller advances this to `dikirim` the moment tracking shows pickup. Jumping to
-        // `dikirim` here told every buyer "Dikirim" with no resi and no movement.
-        status: "diproses",
-      })
-      .where(eq(schema.orders.number, input.orderNumber)),
-  );
+      // `diproses`, NOT `dikirim`: a booking is not yet shipped — the AWB is still null and the
+      // courier hasn't accepted pickup. Status follows the courier (ka-tracking's documented model),
+      // so the poller advances this to `dikirim` the moment tracking shows pickup. Jumping to
+      // `dikirim` here told every buyer "Dikirim" with no resi and no movement.
+      .set(terminal ? shipmentFields : { ...shipmentFields, status: "diproses" })
+      .where(eq(schema.orders.number, input.orderNumber));
+  });
   revalidatePath(`/pesanan/${input.orderNumber}`);
   return { ok: true, awb, kaOrderId: r.kaOrderId, pickupNumber: r.pickupNumber, awbPending: !awb };
 }
