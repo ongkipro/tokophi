@@ -1,6 +1,6 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
@@ -44,7 +44,19 @@ type Tx = Parameters<Parameters<typeof withTenant>[1]>[0];
 // values survive (a bad field/operator would violate the pgEnum and fail the whole save).
 async function syncChildren(db: Tx, collectionId: string, input: CollectionInput) {
   await db.delete(schema.collectionProducts).where(eq(schema.collectionProducts.collectionId, collectionId));
-  const ids = input.type === "manual" ? [...new Set(input.memberIds ?? [])] : [];
+  const wanted = input.type === "manual" ? [...new Set(input.memberIds ?? [])] : [];
+  // `memberIds` is CLIENT INPUT, and `collection_products` has no store_id / no RLS. e61df25 guarded
+  // the collection id but not these child ids, so a foreign productId still landed in the row. It is
+  // currently harmless only by accident: the storefront read (catalog.ts) runs on the OWNER connection
+  // and its `products` join is not store-filtered — the foreign product survives that far and drops out
+  // only because the result is later intersected with the store's own handles. Do not rely on an
+  // accident two files away. Keep only products this tenant can actually see (`products` IS RLS'd).
+  // Filter `wanted` rather than mapping the query result: `position` is the merchant's manual ordering,
+  // so the input order is meaningful and must survive the check.
+  const ours = wanted.length
+    ? new Set((await db.select({ id: schema.products.id }).from(schema.products).where(inArray(schema.products.id, wanted))).map((p) => p.id))
+    : new Set<string>();
+  const ids = wanted.filter((id) => ours.has(id));
   if (ids.length) {
     await db.insert(schema.collectionProducts).values(ids.map((productId, i) => ({ collectionId, productId, position: i })));
   }

@@ -54,6 +54,12 @@ export async function updateDiscount(id: string, input: DiscountInput): Promise<
 export async function deleteDiscount(id: string): Promise<void> {
   const { storeId: sid } = await requireCapability("discounts:write");
   await withTenant(sid, async (db) => {
+    // `discount_usages` has no store_id and no RLS, so this DELETE is NOT scoped by the tenant —
+    // only the parent read is. Without it, `discounts` (RLS'd) silently no-ops on a foreign id while
+    // the usages delete lands anyway: a blind-fire cross-tenant wipe of another store's redemption
+    // trail, returning no error either way. Same shape as e61df25; this call site was missed by it.
+    const [owned] = await db.select({ id: schema.discounts.id }).from(schema.discounts).where(eq(schema.discounts.id, id)).limit(1);
+    if (!owned) return;
     await db.delete(schema.discountUsages).where(eq(schema.discountUsages.discountId, id));
     await db.delete(schema.discounts).where(eq(schema.discounts.id, id));
   });

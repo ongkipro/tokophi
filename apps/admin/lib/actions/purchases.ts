@@ -1,6 +1,6 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
@@ -32,8 +32,17 @@ export async function createPurchaseOrder(input: {
       .insert(schema.purchaseOrders)
       .values({ storeId: sid, supplierId, code, status: "dipesan", totalIdr: total, etaDate: input.etaDate || null, note: input.note || null })
       .returning();
+    // `l.variantId` is CLIENT INPUT and `purchase_order_items` has no store_id / no RLS, so nothing
+    // downstream re-checks it. Read the variants back under RLS (`product_variants` IS policed) and
+    // keep only ours: a foreign id here writes an FK to another store's variant, and "Terima barang"
+    // would then add stock to THEIR shelf. Unknown ids become null rather than failing the whole PO —
+    // a line can legitimately be free-text (no variant), which is why the column is nullable.
+    const wanted = [...new Set(lines.map((l) => l.variantId).filter(Boolean))] as string[];
+    const ours = wanted.length
+      ? new Set((await db.select({ id: schema.productVariants.id }).from(schema.productVariants).where(inArray(schema.productVariants.id, wanted))).map((v) => v.id))
+      : new Set<string>();
     await db.insert(schema.purchaseOrderItems).values(
-      lines.map((l) => ({ purchaseOrderId: po.id, variantId: l.variantId, qty: l.qty, costIdr: l.cost, receivedQty: 0 })),
+      lines.map((l) => ({ purchaseOrderId: po.id, variantId: l.variantId && ours.has(l.variantId) ? l.variantId : null, qty: l.qty, costIdr: l.cost, receivedQty: 0 })),
     );
   });
   revalidate();
@@ -52,6 +61,10 @@ export async function receivePurchaseOrder(code: string): Promise<void> {
       if (it.variantId && add > 0) {
         // Target the default-location row explicitly: unordered limit(1) picks an ARBITRARY location
         // once a store has more than one, so the receipt would land in a warehouse nobody stocked.
+        // ⚠️ THE `locations` JOIN IS ALSO THE TENANT BOUNDARY, not just an ordering device.
+        // `inventory_levels` has no store_id and no RLS; `locations` does. Replace this join with a
+        // cheaper `where variant_id = …` and a PO line carrying another store's variantId would add
+        // stock to THEIR shelf. createPurchaseOrder now filters variantIds too — belt AND braces.
         const [inv] = await db
           .select({ id: schema.inventoryLevels.id, available: schema.inventoryLevels.available })
           .from(schema.inventoryLevels)
