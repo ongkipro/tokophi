@@ -229,7 +229,11 @@ services:
       admin: { condition: service_healthy }
     environment:
       CRON_SECRET: ${CRON_SECRET:-}
-    command: ["sh", "-c", "while true; do wget -qO- \"http://admin:3000/api/cron/tracking?secret=$$CRON_SECRET\" >/dev/null 2>&1 || echo 'cron tracking failed'; sleep 900; done"]
+    # The response body goes to STDOUT, not /dev/null. It used to be discarded, which meant the run
+    # summary the endpoint carefully builds — {scanned, advanced, awbFilled, problems, errors} — was
+    # unobservable in production: nobody, human or machine, could tell a healthy sweep from one where
+    # `awbFilled` had been 0 for a week. `docker logs cron-tracking` is now the record.
+    command: ["sh", "-c", "while true; do echo \"[cron-tracking] $$(date -Iseconds)\"; wget -qO- \"http://admin:3000/api/cron/tracking?secret=$$CRON_SECRET\" || echo 'cron tracking failed'; echo; sleep 900; done"]
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1 || exit 1"]
       interval: 30s
