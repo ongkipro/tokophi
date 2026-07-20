@@ -36,7 +36,7 @@ const { icon: Icon, title, body, ctaHref, ctaLabel, class: className } = Astro.p
     ctaHref && ctaLabel && (
       <a
         href={ctaHref}
-        class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+        class="mt-6 inline-flex min-h-11 items-center rounded-full bg-brand-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none"
       >
         {ctaLabel}
       </a>
