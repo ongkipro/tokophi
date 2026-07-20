@@ -9,20 +9,33 @@
 // important listing page ranks under a path that describes it wrongly, and it competes with the real
 // categories that sit beside it).
 //
-// `/kategori/semua` still RESOLVES — merchant-built menus point at it and breaking those would 404 a
-// shopper mid-journey — but it is now `noindex,follow` and out of the sitemap, and every internal
-// link points here instead. One list, one canonical URL.
+// `/kategori/semua` now **301s here**. It shipped as `noindex,follow` for one commit — the cautious
+// call, and the weaker one: noindex stops a URL being indexed but ABANDONS the authority it already
+// earned, while a 301 hands that authority to its successor. What made the 301 unsafe at first was
+// that `/kategori/semua` rendered the merchant's default CATEGORY TEMPLATE and this page did not, so
+// redirecting would have silently swapped a merchant's designed layout for a plain grid. This page
+// now resolves the same `categoryTemplate("semua")`, so the two render identically and the redirect
+// costs nothing. Merchant-built menu items pointing at the old URL keep working.
+// One list, one canonical URL, and the equity follows it.
 //
 // The listing itself is components/ProductListing.astro, the exact component /kategori/[handle]
 // renders: same grid, same sort control, same empty state. Forking it was the thing to avoid.
 import Layout from "../../layouts/Layout.astro";
 import PageHeader from "../../components/PageHeader.astro";
 import ProductListing from "../../components/ProductListing.astro";
+import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
 
 // SSR: tenant from the Host header (src/middleware.ts) — never a query param.
 const { store, catalog } = Astro.locals;
 const products = catalog.products;
+
+// ADR 0009 — this page honours the merchant's DEFAULT CATEGORY template, exactly as
+// `/kategori/semua` did. That is not a nicety, it is what makes the 301 below safe: a merchant who
+// designed a category layout would otherwise have watched it disappear the moment their "Semua
+// Produk" link started redirecting here. Resolved through the same `categoryTemplate("semua")` path,
+// so the two routes cannot drift into rendering the store differently.
+const TEMPLATE = catalog.categoryTemplate("semua");
 
 const CRUMBS: Crumb[] = [
   { name: "Beranda", href: "/" },
@@ -52,8 +65,17 @@ const DESCRIPTION = [
     dek={`Seluruh koleksi ${store.name}, kirim ke seluruh Indonesia.`}
   />
 
-  <ProductListing
-    products={products}
-    emptyText="Katalog belum diisi. Cek lagi sebentar lagi, ya."
-  />
+  {
+    TEMPLATE ? (
+      <SectionRenderer
+        data={TEMPLATE}
+        context={{ kind: "category", collectionHandle: "semua", collectionName: "Semua Produk" }}
+      />
+    ) : (
+      <ProductListing
+        products={products}
+        emptyText="Katalog belum diisi. Cek lagi sebentar lagi, ya."
+      />
+    )
+  }
 </Layout>
