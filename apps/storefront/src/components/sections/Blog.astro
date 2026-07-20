@@ -33,7 +33,12 @@ async function getArticlesSafe(storeId: string) {
 // The grid tracks the count so two articles read as a deliberate pair, not as a 3-up with a hole in
 // it. `limit` is a ceiling, never a promise: a merchant who set 4 and has published 2 gets 2.
 const COLS = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-2 lg:grid-cols-4" };
-const colsClass = COLS[articles.length >= limit ? limit : (Math.min(articles.length, 4) as 2 | 3 | 4)] ?? COLS[3];
+const cols = articles.length >= limit ? limit : (Math.min(articles.length, 4) as 2 | 3 | 4);
+const colsClass = COLS[cols] ?? COLS[3];
+// `sizes` must follow the column count the section ACTUALLY renders, not a fixed guess: a tile in a
+// 2-column grid is ~604px at desktop and one in a 4-column grid is ~290px. Telling the browser the
+// wrong number makes srcset worse than none — it would upscale a 400w rendition into a 604px slot.
+const cardGrid = ({ 2: "1-2", 3: "1-3", 4: "1-2-4" } as const)[cols] ?? "1-3";
 ---
 
 {
@@ -69,7 +74,7 @@ const colsClass = COLS[articles.length >= limit ? limit : (Math.min(articles.len
 
       <div class:list={["mt-10 grid grid-cols-1 gap-6", colsClass]}>
         {articles.map((a) => (
-          <ArticleCard article={a} />
+          <ArticleCard article={a} grid={cardGrid} />
         ))}
       </div>
     </section>
