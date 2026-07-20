@@ -1,7 +1,10 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **Refreshed 2026-07-14** against the source tree and the live database
-> (`docker exec tokophi-db psql -U tokophi -d tokophi`) — **70 tables, 51 migrations (0000–0050), RLS on 45**.
+> **Refreshed 2026-07-20** against the source tree at `d48413c` (origin/main, PR #8 merged) and the live
+> database (`docker exec tokophi-db psql -U tokophi -d tokophi`) — **70 tables, 62 migrations (0000–0061),
+> RLS on 46** (0058 added `stores`, which is keyed by `id` and which `verify-rls` structurally cannot see).
+> ⚠️ The local DB reports **68** applied migrations against 62 files on this branch: the Postgres container is
+> **shared with other worktrees** that carry their own migrations. Count files on your branch, not rows in `drizzle`.
 > Not against the older docs in this folder, which have been wrong three times in ways that mattered.
 >
 > **The rule: verify, or say you did not.** This project has shipped a fee-bearer feature that was never
@@ -48,10 +51,13 @@ in this section — that is why it is stated separately from "it builds".
 - **Jurnal section on the homepage** (`233370b`, live): the 9th section type, above the closing CTA.
   Renders **nothing** until an article is published — verified against a store with zero.
 
-### 🔴 NOT DEPLOYED — sitting in PR #7 (`8c56003`, draft)
+### ✅ DEPLOYED — PR #7 merged (`dfe1631`, 2026-07-18) and verified live
 
-**Blog featured images as a real feature.** Everything below is committed, verified, and NOT on
-production yet:
+**Blog featured images as a real feature.** This section was written while the PR was a draft; it landed
+and `1810d8f` records the production check (15 articles on `batik-nusantara.tokophi.id/blog`,
+`/api/uploads/jurnal-*.webp` → 200 `image/webp`, absolute `og:image`, 15 `media` rows, migrations 0058–0061
+applied on prod). **Kept for the reasoning, not the status** — the ⚠️ about `tokophi-uploads` mounting on the
+`migrate` service is a standing deploy rule, not a PR note. What it fixed:
 
 - The editor's "Gambar unggulan" card was a **dead `<button>`** (no handler) that also lied — *"hingga
   5 MB"* against a 2 MB server cap. `ArticleInput` had no `imageUrl`, so **no merchant could ever give
@@ -82,21 +88,28 @@ production yet:
 
 | Thing | Evidence |
 |---|---|
-| **Multi-tenant isolation** | 45 tables `relrowsecurity = true`; non-owner role `tokophi_app`; `platform_activity` is the only `store_id` table without a policy, deliberately. No tenant context ⇒ **0 rows** |
+| **Multi-tenant isolation** — ⚠️ *partial, and this row used to overstate it* | 46 tables `relrowsecurity = true`; non-owner role `tokophi_app`; `platform_activity` is the only `store_id` table without a policy, deliberately. No tenant context ⇒ **0 rows**. **But counting RLS'd tables does not prove isolation.** The other 24 tables are the risk: `product_options`, `inventory_levels`, `collection_products`, `collection_conditions`, `order_line_items`, `product_media` carry **no `store_id` and RLS `f`** (verified in `pg_class`, not assumed). **Fixed `e61df25`** for `updateProduct`/`updateCollection`/`deleteCollection`, which deleted-and-rewrote those children keyed on a **client-supplied parent id** — RLS silently no-op'd the parent UPDATE while the child writes went through, so `products:write` was enough to wipe another store's variants and inventory. Each now reads its parent under RLS first and bails. ⚠️ **`lib/actions/media.ts` is the same hole, still open** — see §4 |
 | **The ledger** | 642 entries live. Balance **derived** (`Σ amount_idr` by status), book **append-only**, 3 partial unique indexes make double-credit a DB impossibility |
 | **Sale credited on collection** | `creditSaleForPayment` fires only when a `payments` row reaches `berhasil`, and credits `amount_idr` — never `total`, which adds the gateway's fee |
-| **COD booked at the door** | `collectCodOnDelivery` flips the payment at `selesai`; `batal`/`retur` **fail** the pending payment, so cash never collected is never booked |
+| **COD booked at the door** | `collectCodOnDelivery` flips the payment at `selesai` **and** sets `financial_status='dibayar'` (cash in hand); `batal`/`retur` **fail** the pending payment, so cash never collected is never booked. **Fixed `5f61034`** — the door was previously unreachable: every order is created `pending`, only the AutoLaris callback flips it, **COD has no callback**, and Perlu Dikirim + the tab counts + bulk shipping all gated on `= 'dibayar'`. **COD — the dominant channel — never entered the shipping queue at all** and showed permanently "Belum Bayar". Readiness is now derived from `payments.method='cod'`, never from `financial_status` |
 | **The release rule is read** | `settleOrderLedger` reads `platform_payout.release_on` (default `selesai`). **Fixed `0776e99`** — it was hardcoded, so the super-admin toggle saved a value and changed nothing |
 | **Payout request race closed** | `pg_advisory_xact_lock(hashtext(store_id))` inside the txn. (It was `FOR UPDATE` over an aggregate, which Postgres rejects outright — **every withdrawal threw**) |
 | **Payout rejection is exact** | the opposing `adjustment` is computed from `Σ ledger_entries WHERE payout_id = ?`, never from `payouts.amount_idr` — so it cannot over- or under-refund |
-| **Order lifecycle → inventory** | `batal` **and** `retur` both restore stock, guarded on the previous status so a repeat click cannot double-restore |
-| **Order lifecycle → ledger** | release only at `selesai`; the `retur` claw-back **carries the status of the sale it reverses**, so returning a still-pending sale cannot drive the balance negative |
+| **Order lifecycle → inventory** | `batal` **and** `retur` both restore stock. **Fixed `9772246`** — the old guard was `prevStatus !== status`, which stopped only an identical repeat: `batal`→`retur` restored a **second** time, `batal`→`diproses` revived a cancelled order with nothing decremented, and `prevStatus` was read with a plain `SELECT`, so two concurrent changes both restored. Now `FOR UPDATE`, same-status is a no-op, and `batal`/`retur` are **terminal**. ⚠️ The lock is in `setOrderStatus` **only** — `ka-tracking.ts:81` (the poller) still reads the status unlocked, so poller-vs-manual is not serialized |
+| **Order lifecycle → ledger** | release only at `selesai`; the claw-back **carries the status of the sale it reverses**, so returning a still-pending sale cannot drive the balance negative. **Fixed `9772246`** — `batal` reversed **nothing**, so a prepaid order cancelled after its payment had credited the sale left **withdrawable money in the book for a refunded order**. `batal` now reverses too, sharing `retur`'s one-reversal-per-order index |
 | **COD five-condition gate** | server-side in `/api/public/order`, **before any row is written**. Province resolved from the KiriminAja district id, never from the typed address. Fail-closed 403 |
-| **COD is ON, end to end** | Three switches agree: `platform_cod.enabled` (cap **Rp2.000.000**, **6** allow-listed provinces) · `platform_couriers.services[].codAllowed` = **SPX only** (SPX Standard `type=1` + SPX Economy `type=3`; every other courier is `codAllowed=false` **even where KiriminAja reports `cod=true`**) · `store_settings.cod_enabled = true` for batik-nusantara (default **false** — the merchant opts in). Seller switch: Pengaturan → Pengiriman → "Bayar di Tempat (COD)", with a green **COD** badge on the two SPX rows in Jasa Kirim. **Driven end-to-end in a real browser** (0 console errors): 10 shipping options, the COD badge on the two SPX ones only; AnterAja → no COD payment option; SPX → "COD (Bayar di Tempat)" appears. The `cod` flag on a rate is the **effective** one (KiriminAja capability × platform per-service allowance × the store's `cod_enabled`), never the raw courier capability |
+| **COD is ON, end to end** | Three switches agree: `platform_cod.enabled` (cap **Rp2.000.000**, **6** allow-listed provinces) · `platform_couriers.services[].codAllowed` = **SPX only** (SPX Standard `type=1` + SPX Economy `type=3`; every other courier is `codAllowed=false` **even where KiriminAja reports `cod=true`**) · `store_settings.cod_enabled = true` for batik-nusantara (default **false** — the merchant opts in). Seller switch: Pengaturan → Pengiriman → "Bayar di Tempat (COD)", with a green **COD** badge on the two SPX rows in Jasa Kirim. **Driven end-to-end in a real browser** (0 console errors): 10 shipping options, the COD badge on the two SPX ones only; AnterAja → no COD payment option; SPX → "COD (Bayar di Tempat)" appears. The `cod` flag on a rate is the **effective** one (KiriminAja capability × platform per-service allowance × the store's `cod_enabled`), never the raw courier capability. ⚠️ **"End to end" is an overstatement and it cost us three bugs.** The browser run covered **rate display → payment-option picker** and stopped at the Bayar button. Everything downstream was unverified, and all of it was broken: `5f61034` (COD never entered the shipping queue), `521861d` (the order could commit with **no payment row** — the exact row `collectCodOnDelivery` looks for). **A COD path is not verified until a parcel is booked, delivered and the cash collected** |
 | **Checkout offers exactly the services the seller picked** | **Fixed `35b88a4`** — `/api/public/ongkir` filtered on `store_settings.couriers` (the COURIER list) while the Jasa Kirim card promises *"Pilih layanan yang ditawarkan ke pembeli saat checkout"* and writes to **`store_shipping_methods`** (per service). So **every service the seller switched OFF was still offered**: 14 rates came back for Batik Nusantara's 11 picks, 4 of them never enabled (Jagopack, Sicepat CARGO, BIGPACK, SAP One Day). Now **(platform-enabled couriers) ∩ (merchant's per-service picks)**, keyed `"<courier>:<service_type>"` → **10**. No rows = the merchant never opened the card → fall back to courier-level, never a checkout with zero shipping options |
 | **Money endpoints fail CLOSED** | `/api/public/pay/callback` **and** `/api/cron/billing` both 401 in production when their secret is unset. **The cron was fixed `0776e99`** — it read `if (secret && provided !== secret)`, so no secret meant *no gate*, on a route excluded from auth that bills every store on the platform |
+| **Auto-renewal and manual renewal charge the same price** | **Fixed `9dc99bf`** — the billing cron billed the bare `quote().amount` (Rp275.000) for both the gateway amount and the stored invoice, while the interactive path billed `withPpn(q.amount).total` (Rp305.250) — and the Langganan page printed *"termasuk PPN 11%"* over both. **Every automatic renewal under-collected the 11%.** All three invoice-creating paths now agree (`lib/actions/billing.ts:83`, `super-admin/lib/actions.ts:385`, `cron/billing/route.ts:73`). Invariant: `subscription_payments.amount_idr` and every gateway amount are **PPN-inclusive** — never bill or persist `q.amount` raw |
+| **An order and its payment row are written together** | **Fixed `521861d`** — both payment inserts ran **after** the order txn committed, so a blip left a committed order (line items written, stock decremented) with **no payment row**: a COD order `collectCodOnDelivery` can never find, or an AutoLaris order whose gateway bill has no row for the callback to match → **the shopper retries and buys the cart twice**. The row is now inserted inside `tx` (COD full; AutoLaris a pending shell enriched after). ⚠️ **Typechecked, not browser-exercised** — the commit itself asks for that before prod. See §4 |
+| **Public API fails closed on tenant resolution** | **Fixed `7cc1ecc`** — `/api/public/order` and `/ongkir` resolved the tenant with `body.storeSlug \|\| "batik-nusantara"`, silently attributing a slug-less request to the **demo store**. Both now return "Toko tidak dikenali.". This is #29 (`/api/public/*` runs on the owner connection, outside RLS) **no longer hypothetical** — it is exactly "application code passed the wrong `store_id`", shipped and live. ⚠️ The flip side: a caller that ever omits the slug now gets a **dead checkout** instead of a wrong one — verify every caller sets it |
+| **Shipment status follows the courier, and only the courier's contract code moves money** | **Fixed `ee8a458`** — the poller collapsed **any** unmapped status to `"shipped"`, so a delivered parcel reporting an off-map code pinned at `dikirim` **forever → COD never collected, merchant never credited**. Unmapped is now `null` (fill the AWB, change nothing). `outcomeFromTrackingCode` also accepts **text** (KiriminAja may send it) but text can advance no further than `shipped` — never delivered/returned, because a text-inferred `selesai` would collect COD cash and credit the ledger **on a guess**. `createShipment` books at `diproses` (a booking is not a shipment; it used to write `dikirim` with a null AWB, so the buyer saw "Dikirim" with no resi); `cancelShipment` resets to `diproses` instead of leaving a permanent "shipped with no shipment" |
+| **Stock writes target one location** | **Fixed `b1f3603`** — the create-path decrement and the `batal`/`retur` restore both did `where variant_id = X`, hitting **every** `inventory_levels` row of the variant; the schema's `unique(variant, location)` is built for many, so the first second warehouse makes every sale subtract N×. Both now resolve one row by `locations.is_default desc, id`. `cancelPurchaseOrder` also refuses to cancel a **`diterima`** PO (it had already added the stock; deleting it stranded that stock with no PO behind it). ⚠️ **Two writers still location-blind** — see §4 |
+| **The bulk stock editor cannot clobber a concurrent sale** | **Fixed `bc2ebfd`** — `updateStock` wrote an **absolute** value captured at page load, so any sale or PO receipt between load and save was silently overwritten back up, **resurrecting sold units into oversell**. Now optimistic: client sends `expected`, server locks the default-location row `FOR UPDATE`, skips on mismatch and returns `{updated, skipped}` so the editor warns + refreshes. ⚠️ `expected` is typed **optional** and the guard is `typeof === "number"` — any future caller that omits it silently reverts to last-write-wins |
 | **Platform operator roles enforced** | `requirePlatformAdmin(min)` ranks `support` 1 < `admin` 2 < `owner` 3. **Fixed `0776e99`** — the role was carried in the JWT and never read |
-| **Impersonation is `owner`-only and audited** | `impersonateStore` writes `platform_activity`. **Fixed `571ed17`** — it previously required only "logged in" and left **no trace at all** |
+| **Impersonation is `owner`-only and audited** | `impersonateStore` writes `platform_activity`. **Fixed `571ed17`** — it previously required only "logged in" and left **no trace at all**. **Fixed again `cb17372`** — `571ed17` hardened the *front door* and the **exchange** was still open: `/impersonate` verified the handed-off token with a bare `jwtVerify`, and the token carried no `aud`, so **any session-shaped JWT signed with `AUTH_SECRET` — e.g. a stolen 7-day merchant cookie — could be redeemed for a fresh session.** Now `aud: tokophi:impersonate`, required by the route. ⚠️ The `aud` literal in `apps/admin/app/impersonate/route.ts` and `IMPERSONATION_AUD` in `apps/super-admin/lib/session.ts` are **two hand-copied strings across apps with no shared import** — nothing makes them drift loudly |
+| **Every `jwtVerify` pins `algorithms`** — ❌ **NOT TRUE, do not believe this** | `cb17372`'s message claims it; **two calls were missed** and I checked all 9 by grep: `apps/super-admin/middleware.ts:24` (`jwtVerify(token, secret())`, **no pin — and it is the gate on the highest-privilege surface in the repo**) and `apps/storefront/src/lib/chat.ts:63` (audience set, no pin). Low practical risk with a symmetric key; listed because **the commit message is wrong and the next reader will trust it** |
 | **Auth** | scrypt + `timingSafeEqual`; jose HS256; **two separate cookies** (`session` / `platform_session`) — a merchant login can never reach the control plane |
 | **RBAC** | `requireCapability` is the first statement of every mutating admin action (18 of 24 files — billing.ts joined 2026-07-15). `settings:write` is owner-only ⇒ **only an owner can withdraw money** |
 | **Suspension** | a past-due store goes read-only; `support:write` opts out, so it can still tell us why |
@@ -207,8 +220,9 @@ Honest arithmetic over demo rows. These are **not** lies — but do not quote th
 | 36 | **The seed has no `retur` orders and no `cod` payments** | so the **two most expensive code paths in the product have no demo data** and cannot be exercised by clicking around |
 | 37 | **`payouts` is 0 rows** | the payout and adjustment paths likewise have no demo data |
 | 38 | **`apps/admin/lib/mock/store.ts` still exists**, with 6 `mulberry32` generators | imported by ~10 client components — almost entirely for its **TypeScript types**, plus the constants `TODAY` / `PRODUCTS` / `BLOG_CATEGORIES`. A loaded gun on the shelf: one careless import from putting invented data back on a screen |
-| 39 | 🔴 **One test file in the entire repo** | `packages/lib/src/integration-status.test.ts`. **Nothing automatically tests the ledger, the COD gate, or the order state machine** |
+| 39 | 🟡 **Six test files, 72 tests — but a plain `npm test` runs only 52** (this row said "one test file" until 2026-07-20; it was already false when written) | Measured, not counted by hand: `npm test` → **52 passed, 20 skipped**. The 20 skipped are `ledger-credit.test.ts` — **the money tests** — which need `TEST_DATABASE_URL` pointing at a throwaway DB (never the shared one) and **skip rather than fail without it**. That is a deliberate, well-documented choice so `vitest run` stays green on a machine with no test DB. ⚠️ **The consequence is the house pattern from AGENTS.md**: the suite guarding the ledger is the one least likely to ever run, and the run says "green" either way. Nothing in CI runs it — **there is no CI**. Run it explicitly: `TEST_DATABASE_URL=…/tokophi_test npx vitest run apps/admin/lib/ledger-credit.test.ts`. **Still untested at all: shipping/tracking state, public-API tenant resolution, inventory concurrency** |
 | 40 | **`stores.plan` / `plans` / `plan_key` are legacy** | the product has **one** plan; the enum still defaults to `'pemula'` |
+| 45 | 🔴 **Production went down hard on 2026-07-18 — and the watchdog could not see it** | The VPS disk hit **100%** (Coolify retains every per-deploy image: **204 images / ~129 GB**), Postgres **crash-looped** on its end-of-recovery checkpoint (`No space left on device` → PANIC), and the SSR storefront **503'd for ~2h while the container reported `Up (unhealthy)`**. Freed ~130 GB, Postgres recovered on its own, no data loss. Prevention shipped (`e84449e`): `ops/tokophi-docker-cleanup.sh` + a daily 03:30 UTC cron, DEPLOY.md "L1b". **The gap the incident actually exposed is NOT fixed:** L1 restarts a *dead* container and does nothing for an `Up (unhealthy)` one, and nothing watches **disk %** — the broom is installed, the witness is not. Cap Coolify's image retention at the source |
 
 ### 3.7 Abandoned-cart capture — what is NOT there yet (`d7fc92f`, `9206220`)
 
@@ -216,7 +230,7 @@ The capture itself is 🟢 (§1). These are its known gaps, stated rather than l
 
 | # | Item | Detail |
 |---|---|---|
-| 41 | 🔴 **Production has none of this** | both commits sit on `worktree-super-admin-overhaul` and are **not merged to main**, so Coolify has shipped nothing. **The live product still records zero abandoned carts** |
+| 41 | 🟡 **Merged and deployed** (this row said "production has none of this" until 2026-07-20 — stale) | `9206220` + `d7fc92f` are on `main`. **Not the same as working:** every count in §1/§2 is still local, and production went down hard on 2026-07-18 (#45). Re-verify against prod that rows are actually landing before calling it real |
 | 42 | **The ageing sweep is OPPORTUNISTIC** | it piggybacks on storefront traffic (at most once a minute per SSR process, on the store being written). **A store with no visitors never ages its own carts.** Acceptable now; on the VPS this is a cron, or the read layer derives `ditinggal` on the fly |
 | 43 | **The capture rate limiter is in-process memory** | 60/min/IP, per SSR process — the same known gap as `/api/track` (#32). Multi-instance needs a Cloudflare rule |
 | 44 | **`CHECKOUT_RECOVERY_SECRET` falls back to `AUTH_SECRET`** | which works — but it means **rotating the auth secret silently invalidates every outstanding recovery link**. Set it explicitly in production |
@@ -238,6 +252,53 @@ Stated as unverified rather than guessed.
 6. **Whether the production database matches this local one.** Every count here is local.
 7. **Chat (migration 0043).** The schema is in the database; the application code was **uncommitted and
    in flight** while this was written. Not exercised.
+8. **The COD + AutoLaris money paths after `521861d`.** The payment insert moved inside the order txn and
+   the AutoLaris branch now writes a pending shell that a later UPDATE enriches. **Typechecked only** —
+   and this repo's own rule is that money paths must be exercised in a browser, not typechecked.
+9. **The text branch of `outcomeFromTrackingCode`** (`ee8a458`). The Indonesian/English regexes were written
+   because KiriminAja's `status` "has been observed" as text — **no real payload was captured**. Log the raw
+   `status` of every pull for a week, then rewrite the map from what actually arrives. Getting it wrong only
+   ever strands a parcel (text cannot move money, by design) — which is exactly why nobody will notice.
+10. **The optimistic bulk-stock skip path** (`bc2ebfd`). No concurrent sale has ever raced a save. Reproduce
+    it deliberately (open the editor, order in another tab, save) before trusting the merchant sees a warning
+    rather than a silent no-op.
+11. **`ops/tokophi-docker-cleanup.sh` on the box** (`e84449e`). Committed and documented, but installed **by
+    hand** to `/usr/local/bin` + `/etc/cron.d`. Nothing in CI reinstalls it, and unlike the watchdog it writes
+    **no heartbeat** — a silently-removed cron is indistinguishable from a healthy one.
+
+### 4b. 🔴 Found while reconciling this doc against the audit commits — OPEN, not fixed
+
+These are not "could not verify". They are verified broken, in code, today (2026-07-20, `d48413c`).
+
+1. **`lib/actions/media.ts` has the un-RLS'd child-table hole `e61df25` just closed elsewhere.**
+   `product_media` has **no `store_id`** and **`relrowsecurity = f`** (checked in `pg_class`, not assumed).
+   `uploadProductImage` INSERTs keyed on a client `productId`; `deleteProductImage` matches
+   `(mediaId, productId)` against `product_media` **alone — it never joins `products`**. So a merchant with
+   `media:write` can delete another store's product image. `e61df25` fixed three actions by hand and
+   `media.ts` was not among them. **Apply the same guard: read the parent under RLS first, bail if absent.**
+2. **Nobody has enumerated the remaining writers of un-RLS'd tables.** `verify-rls` structurally cannot see
+   them (it derives coverage *from `store_id` columns* — the same blind spot that hid `stores` until `0058`).
+   This needs a written list of child tables + their writers, not three more hand-fixes.
+3. **`apps/super-admin/middleware.ts:24` — `jwtVerify` with no `algorithms` pin**, on the highest-privilege
+   gate in the repo. `cb17372` claimed "every `jwtVerify`"; it missed this one and `storefront/lib/chat.ts:63`.
+4. **`ka-tracking.ts:81` reads `orders.status` with no `FOR UPDATE`**, so the tracking poller is not
+   serialized against a manual status change — `9772246`'s lock is in `setOrderStatus` only.
+5. **`shipping.ts` writes `orders.status` with a raw `db.update`, bypassing the state machine.**
+   `cancelShipment` (line 645) sets `status:"diproses"` with **no status precondition** — on a `selesai`
+   order (COD collected, ledger credited) or a `batal`/`retur` one it walks the status **backward**, straight
+   through the terminal guard `9772246` just added. `createShipment` does the same unguarded write.
+6. **Two inventory writers are still location-blind** — `purchases.ts` (`receivePurchaseOrder`) and
+   `products.ts` (`setInventory`) both pick a row with `limit(1)` and **no `is_default` ordering**. Same
+   latent multi-location landmine `b1f3603` fixed on the other two paths, same one-line fix. Worse: the
+   availability checks in `api/public/order/route.ts` still `sum(available)` **across all locations** while
+   the decrement now touches one — under multi-location the check passes on the total and drives the default
+   row negative.
+7. **Cancelling a received PO is now refused and there is no undo path at all.** `b1f3603` correctly stopped
+   the silent corruption, but the "undo = a separate stock adjustment" it points at **does not exist in the
+   UI**. A merchant who receives a PO by mistake is now stuck with both the phantom stock and the record.
+8. **The ledger back-fill nobody has run.** `batal` reverses going forward (`9772246`), but every prepaid
+   order **already** cancelled in production still carries a withdrawable `sale` credit for a refunded order.
+   Count them and decide. The one-reversal-per-order index makes a back-fill safe to re-run.
 
 ---
 
@@ -253,7 +314,24 @@ Ordered by what is currently **lying, leaking, or unmeasurable** — not by effo
    logged. (Was: an `admin` could mint an `owner`, unlogged.)
 4. ✅ **`billing.ts` gated** (#5, 2026-07-15). Both money actions now call `requireCapability`; a
    `gudang` user can no longer raise or void the subscription invoices.
-5. **Tests for the ledger, the COD gate and the state machine** (#39). `select sum(…) for update` — which
+5. 🟡 **Tests for the ledger, the COD gate and the state machine — WRITTEN, and the ledger half does not
+   run by default** (#39). 6 files / 72 tests, and they earned their keep: they caught three of the
+   2026-07-18 audit bugs. But `npm test` executes **52 and skips the 20 ledger tests** unless
+   `TEST_DATABASE_URL` is set. **Make the money tests run in a way somebody will notice** — a documented
+   one-liner in the run docs at minimum, a CI job if one ever exists. The reasoning below is why, and it
+   still stands.
+6. **Close `media.ts`'s cross-tenant hole and enumerate the rest** (§4b.1–2). `e61df25` fixed three
+   actions by hand; `product_media` (no `store_id`, RLS `f`) was missed and is writable by parent id
+   from the client. Hand-fixing found bugs is not a strategy — **`verify-rls` cannot see these tables
+   at all**, so the list has to be written by a human once.
+7. **Browser-exercise the COD + AutoLaris money paths** (§4.8). `521861d` moved the payment
+   insert inside the order txn — the single most important money change of the audit — and it has only
+   been typechecked. By this document's own rule that is not verified.
+8. **Stop `shipping.ts` writing `orders.status` raw** (§4b.5). `cancelShipment` can walk a `selesai`
+   order backward to `diproses`, straight through the terminal guard `9772246` just added. A state
+   machine with a side door is not a state machine.
+
+Original reasoning for #5, kept because it is the house rule: `select sum(…) for update` — which
    Postgres rejects outright, so **every withdrawal threw** — shipped because `tsc` cannot see inside a
    SQL string. The same family, one week later: a `ReferenceError: queueSave is not defined` inside a
    client `<script>` in `checkout.astro` blocked the **entire rate load** — no rates → no COD → **no
