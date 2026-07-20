@@ -170,7 +170,17 @@ export function StoreProfileCard() {
             </div>
 
             <div className="grid gap-1.5">
-              <Label htmlFor="sp-tagline">Deskripsi singkat</Label>
+              <div className="flex items-baseline justify-between">
+                <Label htmlFor="sp-tagline">Deskripsi singkat</Label>
+                {/* A visible counter. Without it the 160-char cap truncated SILENTLY, mid-word — a
+                    merchant typed a full description and the field ate the tail with no signal, so the
+                    storefront footer showed "…masing-masing da". The cap stays 160 (this doubles as the
+                    SEO meta description, which Google truncates near there anyway); the fix is that the
+                    limit is now SEEN. Turns amber as it approaches so the cut is never a surprise. */}
+                <span className={`text-xs tabular-nums ${tagline.length >= 160 ? "text-amber-600" : tagline.length >= 140 ? "text-amber-500" : "text-muted-foreground"}`}>
+                  {tagline.length}/160
+                </span>
+              </div>
               <Input
                 id="sp-tagline"
                 value={tagline}
@@ -179,7 +189,7 @@ export function StoreProfileCard() {
                 placeholder="mis. Busana wanita modern — batik & ready-to-wear"
                 disabled={!canWrite}
               />
-              <p className="text-xs text-muted-foreground">Muncul sebagai deskripsi toko di hasil pencarian & footer. Kosongkan jika belum.</p>
+              <p className="text-xs text-muted-foreground">Muncul sebagai deskripsi toko di hasil pencarian &amp; footer. Kosongkan jika belum.</p>
             </div>
 
             <div className="grid gap-1.5">
