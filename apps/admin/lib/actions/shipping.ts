@@ -11,8 +11,30 @@ import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kiriminajaCo
 import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, provinceForDistrict, kelurahanForDistrict } from "@/lib/data/areas";
 import { composePickupAddress } from "@/lib/pickup-address";
+import { applyOrderStatusChange, type OrderStatus } from "@/lib/order-status";
 
 export type Rate = { service: string; code: string; type: string; cost: number; etd: string; cod: boolean; group: string };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ONE definition of "this order's status is no longer a shipment's to move".
+//
+// Both shipment actions below used to write `orders.status` with a RAW `db.update`, making them the
+// 2nd and 3rd writers of a column the state machine owns — and each carried its OWN hand-copied
+// terminal check, in four places, that had to be kept in sync with `applyOrderStatusChange` by hand.
+// The status WRITE now goes through `applyOrderStatusChange` (see the call sites); this predicate is
+// the part that genuinely cannot.
+//
+// ⚠️ THIS IS NOT THE SAME SET AS THE STATE MACHINE'S TERMINAL GUARD, AND MUST NOT BE FOLDED INTO IT.
+// `applyOrderStatusChange` treats only `batal`/`retur` as terminal, on purpose: `selesai → retur` has
+// to stay legal (a delivered parcel refused/returned afterwards — that transition is what fires the
+// ledger claw-back, and ledger-credit.test.ts asserts it). A SHIPMENT operation must refuse `selesai`
+// on top of that: booking or voiding a courier label is not a reason to un-complete a delivered sale
+// whose COD cash is already collected and whose ledger credit is already `available`.
+// Widening the machine's guard to include `selesai` would silently kill the return path; narrowing
+// this one to match the machine would re-open the un-completion hole. The difference is deliberate —
+// so it lives in ONE helper with this note, not copied into four `if`s.
+const shipmentLocked = (status: string | null | undefined): boolean =>
+  status === "selesai" || status === "batal" || status === "retur";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The SAME two-level filter the storefront applies (/api/public/ongkir): the platform (super-admin)
@@ -465,11 +487,12 @@ export async function createShipment(input: {
   if (!o) return { ok: false, error: "Pesanan tidak ditemukan." };
   if (o.awb) return { ok: false, error: `Pesanan sudah punya resi (${o.awb}).` };
   if (o.kaOrderId) return { ok: false, error: `Pesanan sudah dibooking ke kurir (${o.kaOrderId}).` };
-  // A terminal order cannot be booked. This write sets `status:'diproses'` with a RAW db.update, so
-  // without this guard booking a shipment for a delivered or cancelled order would walk it backwards
-  // past `applyOrderStatusChange`'s terminal guard (9772246) — and for a `selesai` COD order that
-  // means un-completing a sale whose cash is already collected and credited to the ledger.
-  if (o.status === "selesai" || o.status === "batal" || o.status === "retur") {
+  // A terminal order cannot be booked — refuse BEFORE calling KiriminAja, so we never create a real
+  // courier booking for an order we would then decline to record a status for. `batal`/`retur` the
+  // state machine would refuse anyway; `selesai` it would NOT (see shipmentLocked), and for a
+  // `selesai` COD order accepting this would mean un-completing a sale whose cash is already
+  // collected and credited to the ledger.
+  if (shipmentLocked(o.status)) {
     return { ok: false, error: `Pesanan sudah ${o.status} — tidak bisa dibuatkan pengiriman.` };
   }
 
@@ -593,38 +616,58 @@ export async function createShipment(input: {
 
   // Only a waybill KiriminAja actually returned lands in `awb`. Nothing is substituted for it.
   const awb = r.awb ?? null;
+  // ⚠️ The KiriminAja call above is OUTSIDE this transaction, and must stay there — never hold a row
+  // lock across the network (the invariant ka-tracking.ts spells out).
   await withTenant(storeId, async (db) => {
-    // Re-read UNDER LOCK. The terminal guard above ran against a read taken BEFORE the KiriminAja
+    // Re-read UNDER LOCK. The guard before the booking ran against a read taken BEFORE the KiriminAja
     // round-trip, and the tracking poller writes this same row — it can advance the order to
     // `selesai`/`retur` while we are on the wire, and this write would then walk it back to
     // `diproses`. Same defect cancelShipment had; the booking window is merely narrower, which is the
-    // only reason it is rarer rather than safer. The booking DID happen, so awb/courier/kaOrderId are
-    // recorded either way — but a terminal order's status is no longer ours to assert.
+    // only reason it is rarer rather than safer.
     const [cur] = await db
-      .select({ status: schema.orders.status })
+      .select({ id: schema.orders.id, status: schema.orders.status })
       .from(schema.orders).where(eq(schema.orders.number, input.orderNumber)).limit(1).for("update");
-    const terminal = cur?.status === "selesai" || cur?.status === "batal" || cur?.status === "retur";
-    const shipmentFields = {
-      awb,
-      courier: input.service,
-      serviceType: input.serviceType,
-      kaOrderId: r.kaOrderId,
-    };
+    if (!cur) return;
+
+    // ── 1. The SHIPMENT fields. Not status, not the state machine's business — and written
+    // UNCONDITIONALLY, because the booking DID happen at the courier no matter what the order's
+    // status did while we were on the wire. Losing the reference here would strand a real pickup.
+    //
+    // `courier` takes the CODE (`spx`), never `serviceName` ("SPX Standard"). It held the display
+    // name until 2026-07-16 and that quietly corrupted every booked order: `orders.courier` is a
+    // JOIN KEY — to platform_couriers (which carries `codAllowed` and the `group` behind the
+    // 1 day/reguler/ekonomi/cargo filter) and to the per-courier COD return report. "SPX Standard"
+    // matches nothing, so a booked order silently vanished from all of them.
+    // `serviceType` moves with it: the seller may book a DIFFERENT service than the shopper picked,
+    // and leaving the old type behind pairs one courier with another's service — production had
+    // exactly that (courier "SAP Satria Reg" carrying JNE's REG23).
     await db.update(schema.orders)
-      // `courier` takes the CODE (`spx`), never `serviceName` ("SPX Standard"). It held the display
-      // name until 2026-07-16 and that quietly corrupted every booked order: `orders.courier` is a
-      // JOIN KEY — to platform_couriers (which carries `codAllowed` and the `group` behind the
-      // 1 day/reguler/ekonomi/cargo filter) and to the per-courier COD return report. "SPX Standard"
-      // matches nothing, so a booked order silently vanished from all of them.
-      // `serviceType` moves with it: the seller may book a DIFFERENT service than the shopper picked,
-      // and leaving the old type behind pairs one courier with another's service — production had
-      // exactly that (courier "SAP Satria Reg" carrying JNE's REG23).
-      // `diproses`, NOT `dikirim`: a booking is not yet shipped — the AWB is still null and the
-      // courier hasn't accepted pickup. Status follows the courier (ka-tracking's documented model),
-      // so the poller advances this to `dikirim` the moment tracking shows pickup. Jumping to
-      // `dikirim` here told every buyer "Dikirim" with no resi and no movement.
-      .set(terminal ? shipmentFields : { ...shipmentFields, status: "diproses" })
-      .where(eq(schema.orders.number, input.orderNumber));
+      .set({ awb, courier: input.service, serviceType: input.serviceType, kaOrderId: r.kaOrderId })
+      .where(eq(schema.orders.id, cur.id));
+
+    // ── 2. The STATUS, through the ONE writer that owns it. A terminal order's status is no longer
+    // ours to assert, so we do not even ask (shipmentLocked covers `selesai`, which the machine
+    // itself would allow — that is the whole reason the predicate exists).
+    //
+    // `diproses`, NOT `dikirim`: a booking is not yet shipped — the AWB is still null and the courier
+    // hasn't accepted pickup. Status follows the courier (ka-tracking's documented model), so the
+    // poller advances this to `dikirim` the moment tracking shows pickup. Jumping to `dikirim` here
+    // told every buyer "Dikirim" with no resi and no movement.
+    //
+    // Routing this through the state machine fires NO side effects, and that is a property of the
+    // code rather than a hope: `restores` is `batal||retur` only, so no inventory is put back and no
+    // pending payment is failed; and `settleOrderLedger` for `diproses` matches none of its three
+    // branches — not `selesai` (no COD collection, no sale booked), not `releaseOn` (which is only
+    // ever `selesai`|`dikirim`), not `retur`/`batal` (no claw-back). What we gain is its guards: a
+    // re-booked order already at `diproses` is a no-op, and `batal`/`retur` are refused in the same
+    // one place every other status change is refused.
+    if (!shipmentLocked(cur.status)) {
+      await applyOrderStatusChange(db, {
+        storeId,
+        order: { id: cur.id, status: cur.status as OrderStatus },
+        status: "diproses",
+      });
+    }
   });
   revalidatePath(`/pesanan/${input.orderNumber}`);
   return { ok: true, awb, kaOrderId: r.kaOrderId, pickupNumber: r.pickupNumber, awbPending: !awb };
@@ -653,16 +696,15 @@ export async function cancelShipment(orderNumber: string, reason = "Dibatalkan o
   });
   const ref = o?.awb ?? o?.kaOrderId ?? null;
   if (!ref) return { ok: false, error: "Pesanan ini belum punya pengiriman." };
-  // TERMINAL ORDERS ARE NOT RE-BOOKABLE, so they must not be walked back to `diproses`. `selesai` means
-  // delivered — and for COD, cash collected and the ledger credited; `batal`/`retur` are terminal by
-  // `applyOrderStatusChange`'s own guard (9772246). Writing `status:'diproses'` here bypassed that guard
-  // entirely — this action does a RAW `db.update`, not a state-machine transition — so voiding the
-  // booking on a delivered order silently un-completed it. Refuse before calling KiriminAja: there is
-  // nothing to cancel on a parcel that already arrived, and a courier-side cancel we then refuse to
-  // record is worse than not asking.
-  if (o.status === "selesai" || o.status === "batal" || o.status === "retur") {
+  // TERMINAL ORDERS ARE NOT RE-BOOKABLE, so they must not be walked back to `diproses`. `selesai`
+  // means delivered — and for COD, cash collected and the ledger credited; `batal`/`retur` the state
+  // machine refuses on its own. Refuse before calling KiriminAja: there is nothing to cancel on a
+  // parcel that already arrived, and a courier-side cancel we then refuse to record is worse than
+  // not asking.
+  if (shipmentLocked(o.status)) {
     return { ok: false, error: `Pesanan sudah ${o.status} — pengirimannya tidak bisa dibatalkan lagi.` };
   }
+  // ⚠️ OUTSIDE any transaction, and it must stay that way — no row lock across the network.
   const r = await kaCancelShipment(ref, reason);
   if (!r.ok) return { ok: false, error: `KiriminAja menolak pembatalan: ${r.error ?? "gagal"}. Pengiriman masih terdaftar di kurir.` };
   await withTenant(storeId, async (db) => {
@@ -670,21 +712,34 @@ export async function cancelShipment(orderNumber: string, reason = "Dibatalkan o
     // (that call is not instant, and ka-tracking writes the same row). Without the lock this is the
     // read-then-write race 9772246 closed in setOrderStatus, reopened one file over.
     const [cur] = await db
-      .select({ status: schema.orders.status })
+      .select({ id: schema.orders.id, status: schema.orders.status })
       .from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1).for("update");
-    // The booking IS void at the courier now, so the shipment fields must be cleared either way —
-    // showing a resi that no longer exists is the worse lie. But if the order went terminal while we
-    // were away, leave `status` alone: the parcel's fate is no longer ours to assert.
-    const terminal = cur?.status === "selesai" || cur?.status === "batal" || cur?.status === "retur";
-    // Back to `diproses` = "needs (re)booking". This voids the courier booking, NOT the order (that is
-    // setOrderStatus→batal), so no inventory/ledger movement — just the shipment label. Clearing
-    // awb/courier/kaOrderId while leaving status='dikirim' used to leave the order labelled "Dikirim"
-    // with no shipment, and the poller (kaOrderId now null) could never move it.
+    if (!cur) return;
+
+    // The booking IS void at the courier now, so the shipment fields are cleared EITHER WAY — showing
+    // a resi that no longer exists is the worse lie. These are not status and not the state machine's
+    // business.
     await db.update(schema.orders)
-      .set(terminal
-        ? { awb: null, courier: null, kaOrderId: null }
-        : { awb: null, courier: null, kaOrderId: null, status: "diproses" })
-      .where(eq(schema.orders.number, orderNumber));
+      .set({ awb: null, courier: null, kaOrderId: null })
+      .where(eq(schema.orders.id, cur.id));
+
+    // Status goes through the ONE writer. If the order went terminal while we were away, leave it
+    // alone entirely: the parcel's fate is no longer ours to assert.
+    //
+    // Back to `diproses` = "needs (re)booking". This voids the courier booking, NOT the order (that
+    // is setOrderStatus→batal), so no inventory or ledger movement must occur — and via
+    // `applyOrderStatusChange` that is now enforced by the machine rather than asserted by this
+    // comment: `diproses` triggers neither the restore (batal/retur only) nor any branch of
+    // settleOrderLedger. Clearing awb/courier/kaOrderId while leaving status='dikirim' used to leave
+    // the order labelled "Dikirim" with no shipment, and the poller (kaOrderId now null) could never
+    // move it.
+    if (!shipmentLocked(cur.status)) {
+      await applyOrderStatusChange(db, {
+        storeId,
+        order: { id: cur.id, status: cur.status as OrderStatus },
+        status: "diproses",
+      });
+    }
   });
   revalidatePath(`/pesanan/${orderNumber}`);
   return { ok: true };
