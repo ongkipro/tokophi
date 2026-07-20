@@ -46,11 +46,23 @@ export function FilesClient({ media }: { media: MediaItem[] }) {
           onDrop={(e) => { e.preventDefault(); setDrag(false); upload(e.dataTransfer.files); }}
           className={`flex flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors ${drag ? "border-primary bg-primary/5" : "border-border"}`}
         >
-          <UploadCloud className="size-8 text-muted-foreground" />
+          {/* The busy state matters more here than anywhere else in the app: this is the only dropzone,
+              it takes MULTIPLE files, and the conversion runs server-side. Without it a merchant drops
+              five photos, sees the page sit still, and drops them again. */}
+          <UploadCloud className={`size-8 text-muted-foreground ${pending ? "animate-pulse" : ""}`} />
           <div className="text-sm">
-            <button type="button" className="font-medium text-primary hover:underline" onClick={() => inputRef.current?.click()}>Pilih gambar</button>{" "}atau seret ke sini
+            {pending ? (
+              <span className="font-medium text-muted-foreground">Mengunggah…</span>
+            ) : (
+              <>
+                <button type="button" className="font-medium text-primary hover:underline" onClick={() => inputRef.current?.click()}>Pilih gambar</button>{" "}atau seret ke sini
+              </>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground">JPG, PNG, WebP, SVG · <span className="font-medium">maks 2MB</span> · dikonversi ke WebP otomatis</p>
+          {/* "dikonversi ke WebP" is the honest description: PNG/JPG/GIF become WebP, an oversized or
+              wastefully-encoded WebP is re-encoded only when that genuinely makes it smaller, and SVG is
+              stored untouched (rasterising a vector would make it bigger AND blurry). */}
+          <p className="text-xs text-muted-foreground">JPG, PNG, WebP, SVG · <span className="font-medium">maks 2MB</span> · dikonversi ke WebP otomatis (SVG tetap SVG)</p>
           <input ref={inputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
         </div>
       )}
