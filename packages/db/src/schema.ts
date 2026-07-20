@@ -498,6 +498,18 @@ export const orders = pgTable("orders", {
   // ⚠️ It records that WE RENDERED the label, not that a printer consumed paper — we cannot observe
   // the printer. Say "ditandai dicetak", never "berhasil dicetak" (cf. the CRM's "WA dibuka").
   labelPrintedAt: ts(),
+  // The courier has flagged this parcel (tracking status 500 / 7xx–9xx → outcome `problem`).
+  // NOT an order_status: a stuck parcel is neither delivered nor returned, and forcing it into the
+  // enum would move money (`selesai` collects COD) or fake a terminal state. The order stays
+  // `dikirim` — which is true — and this flag rides alongside it.
+  // `problem_at` is the FIRST poll that saw the obstacle and is not re-stamped while it persists,
+  // so it reads "macet sejak", not "terakhir dicek".
+  // ⚠️ BOTH clear back to NULL the moment a later poll shows the parcel moving again (ka-tracking.ts).
+  // A flag that never clears becomes wallpaper; a problem that resolved is not a problem.
+  problemAt: ts(),
+  // The courier's reason, already in merchant-facing Indonesian. A short sentence, never a payload
+  // dump — the raw tracking response goes to the cron log, never into this column.
+  problemNote: text(),
   kaOrderId: text(),
   placedAt: createdAt(),
 });

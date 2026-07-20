@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Download, MoreHorizontal, PackageCheck, Eye, XCircle, CheckCircle2, Info } from "lucide-react";
+import { Download, MoreHorizontal, PackageCheck, Eye, XCircle, CheckCircle2, Info, AlertTriangle } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { OrderStatusBadge } from "@/components/admin/order-status";
@@ -215,6 +215,7 @@ export function PesananClient({
                       ) : (
                         <span className="text-sm text-muted-foreground">Belum diatur</span>
                       )}
+                      <ProblemBadge o={o} />
                     </TableCell>
 
                     <TableCell className="py-3">
@@ -293,6 +294,7 @@ export function PesananClient({
                       ) : (
                         <span className="text-muted-foreground">Belum diatur</span>
                       )}
+                      <ProblemBadge o={o} />
                     </DataRow>
                   </DataCard>
                 ))
@@ -357,6 +359,29 @@ export function PesananClient({
           Shown on the tab where it is the question being asked. */}
       {tab === "pengembalian" && <ReturnSummary rows={returns} />}
     </div>
+  );
+}
+
+// "Kurir melaporkan kendala" — the tracking poller's `problem` outcome, made visible.
+//
+// It sits in the Jasa Kirim column rather than the Status column because it is NOT a status: the
+// order is still `dikirim` and that badge stays correct. This is a fact about the PARCEL.
+//
+// The poller clears the flag as soon as the courier reports movement again, so a badge on screen
+// means the parcel is stuck NOW — which is the only reason it earns a red. The full reason and the
+// "sejak" date are on the order detail; here it is one glanceable word so a seller scanning the list
+// can find the rows that need a phone call. `title` carries the note for a hover without spending a
+// second line on every row.
+function ProblemBadge({ o }: { o: OrderListRow }) {
+  if (!o.problem) return null;
+  return (
+    <Badge
+      variant="secondary"
+      className="mt-1 border-0 bg-red-500/15 font-medium text-red-700 dark:text-red-400"
+      title={o.problemNote ?? "Kurir melaporkan kendala pengiriman."}
+    >
+      <AlertTriangle className="size-3" /> Kendala
+    </Badge>
   );
 }
 

@@ -56,6 +56,19 @@ export type OrderShipment = {
   kaOrderId: string | null;
   city: string | null;
   province: string | null;
+  /**
+   * The courier has flagged this parcel (`orders.problem_at`, migration 0062) — set by the tracking
+   * poller on a `problem` outcome and CLEARED again the moment the parcel moves. NULL = no known
+   * obstacle, which is also what an unmapped tracking status leaves it as: we only flag what the
+   * courier actually told us.
+   *
+   * It is deliberately NOT a status. The order stays `dikirim` — the parcel really is out — so the
+   * page renders this alongside the status badge, never instead of it.
+   */
+  problemAt: Date | null;
+  problemAtLabel: string | null;
+  /** The courier's reason in merchant-facing Indonesian, as written by the poller. */
+  problemNote: string | null;
 };
 
 export type OrderBuyer = {
@@ -142,6 +155,8 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
         courier: schema.orders.courier,
         awb: schema.orders.awb,
         kaOrderId: schema.orders.kaOrderId,
+        problemAt: schema.orders.problemAt,
+        problemNote: schema.orders.problemNote,
         // Address SNAPSHOT (migration 0042) — the address this parcel was BOUGHT with.
         shipRecipient: schema.orders.shipRecipient,
         shipPhone: schema.orders.shipPhone,
@@ -309,6 +324,11 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
         kaOrderId: o.kaOrderId ?? null,
         city: o.city ?? null,
         province: o.province ?? null,
+        problemAt: o.problemAt ?? null,
+        // "macet sejak <tanggal>" — the age is the seller's actual question, so the label is
+        // formatted here (server, id-ID, Asia/Jakarta) rather than in a render path.
+        problemAtLabel: o.problemAt ? FMT.format(o.problemAt) : null,
+        problemNote: o.problemNote ?? null,
       },
       buyer,
       address,
