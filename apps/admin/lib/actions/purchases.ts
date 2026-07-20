@@ -1,6 +1,6 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
@@ -65,14 +65,25 @@ export async function receivePurchaseOrder(code: string): Promise<void> {
         // `inventory_levels` has no store_id and no RLS; `locations` does. Replace this join with a
         // cheaper `where variant_id = …` and a PO line carrying another store's variantId would add
         // stock to THEIR shelf. createPurchaseOrder now filters variantIds too — belt AND braces.
+        //
+        // The select resolves WHICH row (and whose store); it deliberately does NOT read `available`.
+        // It used to: `set({ available: inv.available + add })` was a read-then-write with no lock, so a
+        // sale that decremented between the read and the write — or a second receipt — was silently
+        // overwritten by a stale absolute value (same last-write-wins class as bc2ebfd in the bulk
+        // editor). The UPDATE below is RELATIVE, evaluated by Postgres against the row's current value
+        // under the update's own row lock, so it needs no FOR UPDATE and cannot lose a concurrent write.
         const [inv] = await db
-          .select({ id: schema.inventoryLevels.id, available: schema.inventoryLevels.available })
+          .select({ id: schema.inventoryLevels.id })
           .from(schema.inventoryLevels)
           .innerJoin(schema.locations, eq(schema.locations.id, schema.inventoryLevels.locationId))
           .where(eq(schema.inventoryLevels.variantId, it.variantId))
           .orderBy(desc(schema.locations.isDefault), asc(schema.inventoryLevels.id))
           .limit(1);
-        if (inv) await db.update(schema.inventoryLevels).set({ available: inv.available + add }).where(eq(schema.inventoryLevels.id, inv.id));
+        if (inv)
+          await db
+            .update(schema.inventoryLevels)
+            .set({ available: sql`${schema.inventoryLevels.available} + ${add}` })
+            .where(eq(schema.inventoryLevels.id, inv.id));
       }
       await db.update(schema.purchaseOrderItems).set({ receivedQty: it.qty }).where(eq(schema.purchaseOrderItems.id, it.id));
     }

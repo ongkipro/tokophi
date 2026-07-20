@@ -52,6 +52,31 @@ type Item = { handle?: string; name?: string; price?: number; variant?: string; 
 const bad = (error: string, field?: string, status = 400) =>
   NextResponse.json({ ok: false, error, field }, { status, headers: CORS });
 
+/**
+ * The ONE `inventory_levels` row a sale touches: the variant's row at the DEFAULT location.
+ *
+ * ⚠️ This must stay the single definition, used by the availability pre-check, the `FOR UPDATE`
+ * re-check AND the decrement. b1f3603 narrowed only the DECREMENT to this row (a `where variant_id
+ * = X` update hit every location row, over-decrementing N× once a variant lives in two warehouses)
+ * — but both checks kept aggregating `sum(available)` across ALL locations. That is a read/write
+ * mismatch: a variant with 0 at the default location and 5 at warehouse B passes both checks, the
+ * decrement drives the DEFAULT row negative, and B's 5 units are never consumed. The cross-location
+ * TOTAL stays arithmetically right, which is exactly why it would be slow to notice — the totals
+ * reconcile while the per-location ledger is fiction, and the negative row (deliberately unclamped,
+ * see the decrement) fires as an oversell alarm on a variant that was never oversold.
+ *
+ * Identical on today's data: every store has exactly one location, so this row IS the whole sum.
+ * Real cross-warehouse fulfilment (pick the location, split the shipment) is a later feature; until
+ * then the rule is simply that what we check is what we write.
+ */
+const defaultLocationRow = (variantId: string) => sql`${schema.inventoryLevels.id} = (
+  select il.id from inventory_levels il
+  join locations loc on loc.id = il.location_id
+  where il.variant_id = ${variantId}
+  order by loc.is_default desc, il.id
+  limit 1
+)`;
+
 /** Thrown inside the write transaction when a variant sold out between the pre-check and the lock. */
 class OutOfStock extends Error {
   constructor(public product: string, public available: number) {
@@ -243,10 +268,12 @@ async function handle(req: Request) {
       );
     }
 
+    // The row the decrement will actually touch — NOT `sum(available)` across locations (see
+    // defaultLocationRow). No row at all → 0, same answer the old `coalesce(sum(…), 0)` gave.
     const [inv] = await db
-      .select({ available: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)` })
+      .select({ available: schema.inventoryLevels.available })
       .from(schema.inventoryLevels)
-      .where(eq(schema.inventoryLevels.variantId, match.id));
+      .where(defaultLocationRow(match.id));
     const available = Number(inv?.available ?? 0);
     if (available < qty) return bad(`Stok "${prod.title}" tidak mencukupi (sisa ${available}).`, "items");
 
@@ -404,13 +431,18 @@ async function handle(req: Request) {
       // `FOR UPDATE` serialises concurrent orders for the same variant: the second waits, re-reads the
       // decremented figure, and loses honestly. No clamp — if this arithmetic can go negative the
       // lock is not doing its job, and silently flooring it is how we stopped finding out.
+      //
+      // It locks (and reads) THE ROW THE DECREMENT WILL WRITE — the same `defaultLocationRow`
+      // expression, so check and write can never disagree about which stock is being spent. It used
+      // to lock every location row and sum them, which is a total, not the figure being decremented.
       for (const r of resolved) {
         const locked = await tx
           .select({ id: schema.inventoryLevels.id, available: schema.inventoryLevels.available })
           .from(schema.inventoryLevels)
-          .where(eq(schema.inventoryLevels.variantId, r.variantId))
+          .where(defaultLocationRow(r.variantId))
           .for("update");
-        const have = locked.reduce((n, l) => n + Number(l.available ?? 0), 0);
+        // At most one row by construction; a missing row is 0 available, exactly as before.
+        const have = Number(locked[0]?.available ?? 0);
         if (have < r.qty) throw new OutOfStock(r.title, have);
       }
 
@@ -472,15 +504,10 @@ async function handle(req: Request) {
         // from EVERY location row of the variant, so the day a variant has stock at two warehouses each
         // sale over-decrements N×. Single-location today, but this is the landmine the schema's
         // unique(variant,location) is built to allow. Real cross-warehouse fulfilment is a later feature.
+        // Same expression as both checks above — that shared definition is the point.
         await tx.update(schema.inventoryLevels)
           .set({ available: sql`${schema.inventoryLevels.available} - ${r.qty}` })
-          .where(sql`${schema.inventoryLevels.id} = (
-            select il.id from inventory_levels il
-            join locations loc on loc.id = il.location_id
-            where il.variant_id = ${r.variantId}
-            order by loc.is_default desc, il.id
-            limit 1
-          )`);
+          .where(defaultLocationRow(r.variantId));
       }
 
       // Payment row, ATOMIC with the order. Previously both inserts ran AFTER this txn committed, so a
