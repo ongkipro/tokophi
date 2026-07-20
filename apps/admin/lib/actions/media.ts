@@ -12,9 +12,14 @@ export async function uploadProductImage(productId: string, formData: FormData):
   const { storeId: sid } = await requireCapability("media:write");
   const file = formData.get("file");
   checkFile(file);
-  const saved = await saveImage(Buffer.from(await file.arrayBuffer()), file.type, `${productId}-${Date.now()}`);
 
   await withTenant(sid, async (db) => {
+    // product_media has no store_id and no RLS, so the parent read is the ONLY tenant boundary here —
+    // a foreign productId would otherwise attach an image to another store's product. Guard before
+    // saveImage too, so a rejected upload never leaves an orphan file on disk.
+    const [owned] = await db.select({ id: schema.products.id }).from(schema.products).where(eq(schema.products.id, productId)).limit(1);
+    if (!owned) return;
+    const saved = await saveImage(Buffer.from(await file.arrayBuffer()), file.type, `${productId}-${Date.now()}`);
     const [{ max }] = await db
       .select({ max: sql<number>`coalesce(max(${schema.productMedia.position}), -1)`.mapWith(Number) })
       .from(schema.productMedia)
@@ -30,7 +35,12 @@ export async function uploadProductImage(productId: string, formData: FormData):
 
 export async function deleteProductImage(mediaId: string, productId: string): Promise<void> {
   const { storeId: sid } = await requireCapability("media:write");
-  const url = await withTenant(sid, async (db) => {
+  // (no binding: the returned url is deliberately unused — the file + library entry stay, see below)
+  await withTenant(sid, async (db) => {
+    // product_media is un-RLS'd, so matching (mediaId, productId) proves nothing about the tenant —
+    // confirm the parent product is ours under RLS first, else any store's image is deletable.
+    const [owned] = await db.select({ id: schema.products.id }).from(schema.products).where(eq(schema.products.id, productId)).limit(1);
+    if (!owned) return null;
     const [row] = await db.select({ url: schema.productMedia.url }).from(schema.productMedia).where(and(eq(schema.productMedia.id, mediaId), eq(schema.productMedia.productId, productId))).limit(1);
     if (!row) return null;
     await db.delete(schema.productMedia).where(eq(schema.productMedia.id, mediaId));
