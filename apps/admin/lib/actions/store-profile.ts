@@ -114,7 +114,31 @@ export async function saveStoreProfile(input: { name: string; tagline: string; w
 const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
 // No SVG for the favicon: browsers' support is uneven and a broken tab icon is worse than a default
 // one. PNG/WebP only — and it is rendered small, so this is not a real constraint on the merchant.
-const FAVICON_TYPES = ["image/png", "image/x-icon", "image/vnd.microsoft.icon", "image/webp"];
+//
+// ⚠️ NO ICO, and do not add it back without adding a decoder first. This list used to include
+// "image/x-icon"/"image/vnd.microsoft.icon" and the file picker offered `.ico` to match — but every
+// non-SVG upload goes through `saveImage`, which hands the bytes to **sharp, and sharp has no ICO
+// decoder** (verified on 0.34.5: input formats are jpeg/png/webp/tiff/gif/svg/heif/vips/raw; even a
+// PNG-in-ICO container throws "Input buffer contains unsupported image format"). So an .ico upload
+// could only ever end at the catch below — a format we advertised in two places and rejected in a
+// third. A PNG favicon is universally supported by browsers; ICO is legacy. Offer what works.
+const FAVICON_TYPES = ["image/png", "image/webp"];
+
+/** The human-readable format list, derived from the allow-list so the message can never advertise a
+ *  format the gate refuses. The two drifting apart is exactly how the ICO bug survived. */
+const TYPE_LABELS: Record<string, string> = {
+  "image/png": "PNG",
+  "image/jpeg": "JPG",
+  "image/webp": "WebP",
+  "image/svg+xml": "SVG",
+};
+function formatList(allowed: string[]): string {
+  const names = allowed.map((t) => TYPE_LABELS[t] ?? t);
+  if (names.length <= 1) return names.join("");
+  // Two items take no comma in Indonesian — "PNG atau WebP", never "PNG, atau WebP".
+  if (names.length === 2) return `${names[0]} atau ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, atau ${names[names.length - 1]}`;
+}
 
 async function setBranding(
   formData: FormData,
@@ -126,16 +150,18 @@ async function setBranding(
   const file = formData.get("file");
   // The boundary, not the form. `accept=` on an <input> is UX — a hand-rolled POST ignores it.
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: `Pilih berkas ${label} dulu.` };
-  if (!allowed.includes(file.type)) return { ok: false, error: `Format ${label} harus ${label === "favicon" ? "PNG, ICO, atau WebP" : "PNG, JPG, WebP, atau SVG"}.` };
+  if (!allowed.includes(file.type)) return { ok: false, error: `Format ${label} harus ${formatList(allowed)}.` };
   if (file.size > MAX_BYTES) return { ok: false, error: `Ukuran ${label} maksimal 2 MB.` };
 
   let saved;
   try {
     saved = await saveImage(Buffer.from(await file.arrayBuffer()), file.type, `${field === "logoUrl" ? "logo" : "favicon"}-${storeId}-${Date.now()}`);
   } catch {
-    // sharp throws on a file that merely CLAIMS to be an image. Report it as the merchant's problem
-    // to fix, never as a crash — and never write the DB row for a file we failed to encode.
-    return { ok: false, error: `Berkas ${label} tidak bisa dibaca. Coba PNG atau JPG.` };
+    // sharp throws on a file that merely CLAIMS to be an image (a renamed .ico, a truncated PNG).
+    // Report it as the merchant's problem to fix, never as a crash — and never write the DB row for a
+    // file we failed to encode. The suggested formats come from the SAME allow-list that let the file
+    // in, so this can never tell a merchant to retry with something we would also reject.
+    return { ok: false, error: `Berkas ${label} tidak bisa dibaca. Coba ${formatList(allowed)}.` };
   }
 
   return withTenant(storeId, async (db) => {
