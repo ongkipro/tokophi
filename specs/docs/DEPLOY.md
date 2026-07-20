@@ -129,6 +129,36 @@ production, exactly like billing.
 ⚠️ `KIRIMINAJA_ENV` still defaults to **sandbox**. The poller will faithfully track sandbox parcels
 and report `awbFilled: 0` forever against real ones.
 
+## ⚠️ How to verify a deploy ACTUALLY landed (read before reporting one as done)
+
+**Merging to `main` triggers Coolify via webhook. The merge is not the deploy** — the build takes
+several minutes, and during that whole window the OLD containers are still up, still `healthy`, and
+still serving 200s. Every signal you would naturally check says "fine" while the new code is nowhere
+near production.
+
+**Do not verify with container health or HTTP status. Verify that the ARTEFACT CHANGED.**
+
+```bash
+# BEFORE merging — record the running container id
+ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 "docker ps -q --filter name=admin- | head -1"
+
+# AFTER — the deploy has landed only when that id is REPLACED
+ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 \
+  "docker ps --format '{{.Names}}\t{{.RunningFor}}' | grep -E 'admin-|storefront-|super-admin-'"
+```
+
+`RunningFor` is the honest signal: "11 minutes ago" means you are still looking at the *previous*
+deploy. Only once the id changes are HTTP checks meaningful.
+
+**This is not hypothetical — it fooled a check on 2026-07-20.** A watcher matched `Up N (seconds|minute)`
+against `Up 10 minutes`, declared "containers rebuilt + healthy", and confirmed 200s from
+`app.tokophi.com` — all of it true, all of it about the *previous* build. The deploy under test had not
+started. **A false green costs exactly as much trust as a false red.** If a check can pass while the
+thing it tests has not happened, it is not a check.
+
+Corollary: `docker ps` during a build shows an extra short-lived Coolify container (a random-looking
+name, `Up N seconds`). That is the build running — its presence means the deploy is *in flight*, not done.
+
 ## Env to set in Coolify
 
 See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!), `KIRIMINAJA_API_KEY`, `AUTOLARIS_API_KEY`, `AUTOLARIS_CALLBACK_SECRET`. Cross-surface URLs (set AFTER domains assigned): `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API` (⚠️ the storefront reads these at RUNTIME — must be the public admin URL, not localhost, or the kecamatan search / order / payment silently fail). Custom domains: `CUSTOM_DOMAIN_CNAME_TARGET` (default `cname.tokophi.com`).
