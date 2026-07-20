@@ -39,8 +39,12 @@
   --color-brand-700: #8a445d;
 }
 
-html {
-  scroll-behavior: smooth;
+/* Smooth scroll only for shoppers who haven't asked for less motion (WCAG 2.3.3). An unguarded
+   `scroll-behavior: smooth` animates every in-page jump for a user with a vestibular disorder. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 body {
   background: var(--color-cream);

@@ -137,7 +137,10 @@ const SUMMARY = [
       title="Belanja per Kategori"
       dek="Pilih kategori yang kamu cari."
     />
-    <div class="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3">
+    {/* `lg:grid-cols-4` to match the product grid below it. Without it the category tiles maxed at 3
+        columns while the products went to 4, so two adjacent grids rendered at visibly different
+        scales — the tiles ballooned to ~440px at desktop. Same max column count = one rhythm. */}
+    <div class="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
       {
         collections.map((c) => (
           <a
