@@ -6,7 +6,7 @@ import { Check, ImageOff } from "@lucide/astro";
 import Stars from "../../components/Stars.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import { IDR } from "@tokophi/lib/format";
-import { productImages } from "../../data/catalog";
+import { imageSrcSet, productImages } from "../../data/catalog";
 import Breadcrumb from "../../components/Breadcrumb.astro";
 import ShareBar from "../../components/ShareBar.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
@@ -27,6 +27,30 @@ const discount =
     : 0;
 
 const gallery = productImages(product);
+
+// ── `sizes` for the main gallery image — derived from the real classes ────────────────────────────
+//
+// This is the LCP element of the most important page in the shop, and it is the one image where the
+// full 2000px upload was most obviously wasted. Layout, reading outward from the <img>:
+//
+//   wrapper  `flex flex-col gap-4 sm:flex-row-reverse` — below sm the main image is the FULL column;
+//            from sm a 5rem (w-20) thumbnail rail + gap-4 (16px) sits beside it, so subtract 96px.
+//   column   `grid grid-cols-1 gap-10 md:grid-cols-2 lg:gap-14` — one column below md, two above.
+//   section  `mx-auto max-w-7xl px-4 sm:px-6` — 32px padding below sm, 48px above; capped at 1280.
+//
+//   <640      100vw - 32                                    = calc(100vw - 2rem)
+//   640-767   100vw - 48 - 96                               = calc(100vw - 9rem)
+//   768-1023  (100vw - 48 - 40)/2 - 96      [gap-10 = 40]   = calc(50vw - 140px)
+//   1024-1279 (100vw - 48 - 56)/2 - 96      [gap-14 = 56]   = calc(50vw - 148px)
+//   >=1280    (1280 - 48 - 56)/2 - 96                       = 492px
+//
+// The 768-1023 and 1024-1279 rows differ by 8px — inside the noise of a 4-step width ladder — so
+// they are collapsed into the tighter (larger-subtraction) of the two, which never over-claims.
+const GALLERY_SIZES =
+  "(min-width: 1280px) 492px, (min-width: 768px) calc(50vw - 148px), (min-width: 640px) calc(100vw - 9rem), calc(100vw - 2rem)";
+// `undefined` for seeded /products/*.webp and impossible to reach when the gallery is empty — the
+// no-photo branch below renders the tinted ImageOff frame and no <img> at all.
+const mainSrcSet = gallery.length > 0 ? imageSrcSet(gallery[0]) : undefined;
 
 // `null` = no published reviews. The page then shows no stars and no review block at all — see
 // data/catalog.ts: the old code invented "4.8 · 187 ulasan" on a catalog holding 5 published reviews.
@@ -142,6 +166,8 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             <img
               id="gallery-main"
               src={gallery[0]}
+              srcset={mainSrcSet}
+              sizes={mainSrcSet ? GALLERY_SIZES : undefined}
               alt={product.name}
               width="900"
               height="1200"
@@ -175,6 +201,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                 type="button"
                 data-thumb={i}
                 data-src={src}
+                data-srcset={imageSrcSet(src)}
                 aria-label={`Gambar ${i + 1}`}
                 aria-pressed={i === 0 ? "true" : "false"}
                 class:list={[
@@ -444,7 +471,14 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         if (!btn) return;
         main.style.opacity = "0";
         var src = btn.getAttribute("data-src");
+        // The srcset MUST be swapped alongside the src, not left behind. A stale srcset WINS over a
+        // freshly-set src — the browser re-runs candidate selection against the old list and keeps
+        // showing the previous photo, so clicking a thumbnail would appear to do nothing at all.
+        // Absent (seeded/static image) → remove the attribute rather than set it to "".
+        var srcset = btn.getAttribute("data-srcset");
         setTimeout(function () {
+          if (srcset) main.setAttribute("srcset", srcset);
+          else main.removeAttribute("srcset");
           main.src = src;
           main.style.opacity = "1";
         }, 120);

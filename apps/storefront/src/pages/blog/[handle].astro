@@ -235,9 +235,11 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             </a>
           </div>
 
+          {/* `grid="2-4"`: this grid skips the 3-col sm tier, so a card is HALF the viewport from
+              640-1023 where the default shape assumes a third. Must match the classes above. */}
           <div class="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {promoted.map((p) => (
-              <ProductCard product={p} />
+              <ProductCard product={p} grid="2-4" />
             ))}
           </div>
         </div>

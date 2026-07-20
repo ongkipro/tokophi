@@ -26,11 +26,15 @@ if (ctx.kind === "product") pool = pool.filter((p) => p.handle !== ctx.product.h
 const MODE_FN = { terlaris: catalog.bestsellers, terbaru: recentProducts, acak: randomProducts };
 const products = MODE_FN[mode](pool).slice(0, limit);
 const colsClass = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-3 lg:grid-cols-4" }[columns];
+// The card's `sizes` has to describe the SAME grid these classes build — this is merchant-chosen, so
+// it is the one place where hardcoding a single shape would be wrong for two thirds of the options.
+// A 2-col section renders a 608px card at desktop; told it was 296px, it would upscale a 400w file.
+const gridShape = ({ 2: "2-2", 3: "2-3", 4: "2-3-4" } as const)[columns];
 ---
 
 <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
   <SectionHeading align="center" title={heading} />
   <div class:list={["mt-10 grid grid-cols-2 gap-4", colsClass]}>
-    {products.map((p) => <ProductCard product={p} />)}
+    {products.map((p) => <ProductCard product={p} grid={gridShape} />)}
   </div>
 </section>

@@ -115,8 +115,34 @@ const ADMIN_BASE = (() => {
     return "";
   }
 })();
+const UPLOAD_PATH = "/api/uploads/";
 /** Absolute-ize an admin-served upload path (product media + the store logo). */
-export const mediaUrl = (u: string) => (u.startsWith("/api/uploads/") ? ADMIN_BASE + u : u);
+export const mediaUrl = (u: string) => (u.startsWith(UPLOAD_PATH) ? ADMIN_BASE + u : u);
+
+// ── RESPONSIVE IMAGES ─────────────────────────────────────────────────────────────────────────────
+//
+// ⚠️ ONLY merchant uploads can be resized. `/api/uploads/*` is served by the ADMIN app, whose route
+// understands `?w=`; seeded `/products/*.webp` are static files served by the STOREFRONT container,
+// where `?w=` is a meaningless query string on the same full-size bytes — a srcset there would tell
+// the browser four renditions exist, get four identical downloads' worth of nothing, and let it pick
+// a "200w" candidate that is really 1000px. Worse than no srcset. The distinction is exactly the one
+// `mediaUrl` already makes, so it is made ONCE, here — not re-derived per component.
+const isUploadUrl = (u: string) =>
+  u.startsWith(UPLOAD_PATH) || (!!ADMIN_BASE && u.startsWith(ADMIN_BASE + UPLOAD_PATH));
+
+/** Must match WIDTHS in `apps/admin/app/api/uploads/[name]/route.ts` — that route REJECTS (400) any
+ *  width not on its allow-list, so a value added here and not there is a broken candidate. */
+const WIDTHS = [200, 400, 800, 1200];
+
+/**
+ * A `srcset` for a merchant upload, or `undefined` for anything else (seeded static images, and the
+ * empty string a product with no photo carries). `undefined` is deliberate: Astro omits the
+ * attribute entirely, so the no-image and seed paths render byte-identically to before.
+ *
+ * Takes a URL that has ALREADY been through `mediaUrl` — that is what the catalog hands out.
+ */
+export const imageSrcSet = (u: string): string | undefined =>
+  u && isUploadUrl(u) ? WIDTHS.map((w) => `${u}?w=${w} ${w}w`).join(", ") : undefined;
 
 async function loadCatalog(store: StoreInfo): Promise<Catalog> {
   const storeId = store.id;

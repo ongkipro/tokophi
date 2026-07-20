@@ -162,9 +162,10 @@ const CRUMBS: Crumb[] = [
       <section class="border-t border-line">
         <div class="mx-auto max-w-6xl px-4 py-12 sm:px-6">
           <h2 class="font-display text-2xl font-semibold text-ink">Produk terlaris</h2>
+          {/* `grid="2-4"`: no 3-col sm tier here either — see the note in ProductCard. */}
           <div class="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {recommended.map((p) => (
-              <ProductCard product={p} />
+              <ProductCard product={p} grid="2-4" />
             ))}
           </div>
         </div>

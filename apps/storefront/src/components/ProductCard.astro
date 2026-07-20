@@ -1,13 +1,16 @@
 ---
 import { IDR } from "@tokophi/lib/format";
 import { ImageOff } from "@lucide/astro";
-import type { Product } from "../data/catalog";
+import { imageSrcSet, type Product } from "../data/catalog";
 import Stars from "./Stars.astro";
 
 interface Props {
   product: Product;
   /** Heading level for the product name. See the note below — this is not cosmetic. */
   level?: 2 | 3 | 4;
+  /** Which grid this card sits in — picks the matching `sizes`. See SIZES below; this is a named
+   *  layout rather than a raw string so a call site cannot invent one that does not match its CSS. */
+  grid?: GridShape;
 }
 
 // The card's title is a heading, and its correct level depends on the page. On a listing page the
@@ -15,8 +18,49 @@ interface Props {
 // listing surface in the shop. ArticleCard solved exactly this with a `level` prop; the product card
 // was still hardcoded. Default stays `h3` — correct under a section heading, which is the commonest
 // placement (homepage sections, "Kamu mungkin suka").
-const { product, level = 3 } = Astro.props;
+// ── `sizes` — DERIVED FROM THE GRID, NOT GUESSED ──────────────────────────────────────────────────
+//
+// A wrong `sizes` is worse than no srcset: the browser trusts it completely and picks a candidate
+// from it before layout exists. Too big and every phone downloads the 1200w; too small and a wide
+// card renders a blurry 200w. So this is arithmetic on the real Tailwind classes, not a vibe.
+//
+// Every product grid in the shop lives in `mx-auto max-w-7xl px-4 sm:px-6` with `gap-4`, and always
+// starts at `grid-cols-2` on phones. Constants: gap-4 = 16px, px-4 = 32px total, px-6 = 48px total,
+// max-w-7xl = 1280px. Column width = (container - padding - gaps) / cols.
+//
+// The four shapes that actually exist, named by their column counts at base/sm/lg:
+//
+//  "2-3-4"  ProductListing, index "Paling Dicari", PDP "produk serupa", ProductGrid columns=4
+//           `grid-cols-2 sm:grid-cols-3 lg:grid-cols-4`
+//             <640      (100vw - 32 - 16)/2   = 50vw - 24px      (360px → 156px ✓)
+//             640-1023  (100vw - 48 - 32)/3   = 33.3vw - 27px
+//             1024-1279 (100vw - 48 - 48)/4   = 25vw - 24px
+//             >=1280    (1280 - 48 - 48)/4    = 296px            (✓)
+//  "2-4"    blog/[handle] + keranjang "kamu mungkin suka" — `grid-cols-2 lg:grid-cols-4`, i.e. it
+//           SKIPS the 3-col tier, so 640-1023 is (100vw - 48 - 16)/2 = 50vw - 32px, not 33vw.
+//  "2-3"    ProductGrid columns=3 — `grid-cols-2 sm:grid-cols-3`; >=1280 → (1280-48-32)/3 = 400px.
+//  "2-2"    ProductGrid columns=2 — `grid-cols-2 sm:grid-cols-2`; >=1280 → (1280-48-16)/2 = 608px.
+//           This one is why the shapes are enumerated at all: served the "2-3-4" string, a 608px
+//           card would claim to be 296px and render the 400w rendition upscaled.
+//
+// Widest a card ever gets is 608px, so 1200w covers it at DPR 2 — which is where the route's
+// allow-list stops.
+type GridShape = "2-3-4" | "2-4" | "2-3" | "2-2";
+const SIZES: Record<GridShape, string> = {
+  "2-3-4":
+    "(min-width: 1280px) 296px, (min-width: 1024px) calc(25vw - 24px), (min-width: 640px) calc(33.3vw - 27px), calc(50vw - 24px)",
+  "2-4":
+    "(min-width: 1280px) 296px, (min-width: 1024px) calc(25vw - 24px), (min-width: 640px) calc(50vw - 32px), calc(50vw - 24px)",
+  "2-3": "(min-width: 1280px) 400px, (min-width: 640px) calc(33.3vw - 27px), calc(50vw - 24px)",
+  "2-2": "(min-width: 1280px) 608px, (min-width: 640px) calc(50vw - 32px), calc(50vw - 24px)",
+};
+
+const { product, level = 3, grid = "2-3-4" } = Astro.props;
+const sizes = SIZES[grid];
 const Heading = `h${level}` as "h2" | "h3" | "h4";
+// `undefined` for seeded /products/*.webp and for the no-image case — Astro then omits both
+// attributes and the markup is exactly what it was before.
+const srcset = imageSrcSet(product.image);
 const rating = Astro.locals.catalog.productRating(product);
 
 // The discount was computed on the PDP and NOWHERE on the card, so a shopper scanning a promo grid
@@ -49,6 +93,8 @@ const discount =
     {product.image ? (
       <img
         src={product.image}
+        srcset={srcset}
+        sizes={srcset ? sizes : undefined}
         alt=""
         loading="lazy"
         decoding="async"
