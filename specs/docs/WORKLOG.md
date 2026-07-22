@@ -7,6 +7,59 @@
 
 
 
+## 2026-07-20/21 — Session: docs reconciled, seven cross-tenant holes closed, and the whole front-end pass ✅ **10 PRs (#9–#26), ~10 verified deploys**, `main` at `036f05e`
+
+Started as "reconcile the analysis docs against what is on GitHub" and became a correctness pass, because
+the docs turned out to be wrong in ways that mattered.
+
+**The method that made the difference — verify the ARTEFACT, not the status.** A watcher reported
+"containers rebuilt + healthy" and 200s from `app.tokophi.com`; all of it was true and all of it was about
+the PREVIOUS build. Every deploy since is verified by recording the container ID first and only trusting a
+deploy once that ID is REPLACED — then reading the shipped HTML or the DB columns. Written up in DEPLOY.md
+("How to verify a deploy ACTUALLY landed"). A false green costs exactly as much trust as a false red.
+
+**Five 🟢 REAL rows in STATUS.md were broken when they were written**, and every one failed the same way:
+the check stopped one layer short of the seam. Counting RLS'd tables cannot see un-RLS'd children. A COD
+browser test that stops at the Bayar button cannot see that COD never entered the shipping queue. Auditing
+impersonation's front door cannot see that the token *exchange* accepted any session JWT.
+
+**Security — audit the CLASS, not the instances.** `e61df25` had patched the three cross-tenant call sites
+it happened to find. Auditing every writer of a table with no `store_id` found **four more**, all shipped:
+`media.ts` (`media:write` could delete another store's product image), `deleteDiscount` (a blind-fire
+cross-tenant DELETE, harmless only because the table is empty), `createPurchaseOrder` (a client `variantId`
+written as an FK — "Terima barang" would add stock to the victim's shelf), and `syncChildren`. The rule now
+lives in AGENTS.md, and `verify-rls` gained check **5c** so the class cannot grow silently — its failure
+path was exercised, not assumed.
+
+**Order state / resi.** One writer for `orders.status` — and "route it through the state machine" was NOT
+sufficient: the machine treats only `batal`/`retur` as terminal *on purpose* (so `selesai → retur` stays
+legal for the ledger claw-back), which means it would happily execute `selesai → diproses` and un-complete
+a delivered, cash-collected COD sale. The shipment refusal set is permanently wider; two tests pin it.
+Also: a partial print run stamped un-labelled parcels as printed (they left the queue and silently never
+shipped), one bad gateway reply killed the entire tracking sweep, and the poller could starve orders
+forever. Migration 0062 adds a merchant-facing stuck-parcel flag; the poller now logs the raw KiriminAja
+payload so #12 becomes answerable from one real booking.
+
+**Front-end (the phase the owner asked for).** Product search `/cari` (the audit's biggest gap), responsive
+`srcset` served by an on-demand resizer with an **allow-listed** `?w=` — the allow-list is the security
+boundary, since `?w=1` ignored is still a cacheable URL, and a first pass using `Number(raw)` smuggled the
+unbounded key space back in via `400.0`/`4e2`/`0400`. A 404 that recovers the sale. URL-driven sort
+(shareable, back-safe; the form carries `q` so sorting `/cari` doesn't throw the search away). Social
+profiles + a redesigned footer whose EMPTY state was verified first, because that is what every store shows
+until a merchant fills it. Favicon accepts any raster format and becomes a real PNG — and
+`withoutEnlargement` was tried and **reverted**: measured, a 64px mark filled 1.6% of the icon instead of
+100%. Timezone bug: dates rendered in the runtime's zone, so Node said UTC and the browser said WIB — a
+7-hour gap that also filed products under the wrong DAY in the server HTML.
+
+**Measured, then left alone.** Core Web Vitals on prod mobile 3×: **LCP 348–552ms, CLS 0, TTFB ~150ms** —
+5–7× better than the "good" bar. Nothing to optimise; chasing 552→500ms is the 0ms-impact work to skip.
+
+**#15 closed as superseded.** The 25 stale local-`main` commits: kelurahan and the ongkir perf fix had
+already landed independently; the only unique part (courier curation) is a philosophy `origin/main`
+deliberately rejected. The shared checkout was left untouched — no reset, no rebase.
+
+**Next:** the only open task is **#12**, blocked on one real production booking. See BACKLOG "NEXT UP".
+
 ## 2026-07-18 — Session: Jurnal blog gets editorial, topic-true images ✅ **DEPLOYED** `dfe1631` (PR #7) on main, verified live
 
 - **The demo Jurnal was illustrated by product-photo crops** — `seed-journal.ts` cropped catalogue shots
