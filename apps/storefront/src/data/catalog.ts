@@ -58,6 +58,27 @@ export type Product = {
   /** ADR 0009 — the named `product` template this product renders with (null = store default). */
   templateId: string | null;
 };
+/**
+ * CAN A SHOPPER BUY THIS RIGHT NOW? The ONE answer — used by the card, the PDP's buy box, its
+ * schema.org `availability`, and the ranking of "produk serupa".
+ *
+ * It lived as two identical copies inside `produk/[handle].astro`, and the card was about to become a
+ * third. Three copies of an availability test is how a grid ends up advertising something the order
+ * endpoint will refuse — the failure this repo keeps paying for.
+ *
+ * **No variant rows at all = AVAILABLE, not sold out.** A product a merchant just created has no
+ * variants yet, and treating that as "habis" would hide brand-new stock from the shop the day it goes
+ * up. Sold out means "we have variants and every one of them is empty".
+ *
+ * ⚠️ It must keep agreeing with `/api/public/order`, which is the actual authority: that endpoint
+ * rejects `available < qty` and counts a MISSING `inventory_levels` row as 0. `catalog.ts` maps the
+ * same missing row to `stock: 0` (leftJoin, `?? 0`), so the two agree by construction. A card that
+ * says "habis" where the order would succeed — or worse, invites a sale the API will refuse — is
+ * more expensive than no badge at all.
+ */
+export const inStock = (p: Pick<Product, "variants">): boolean =>
+  !p.variants?.length || p.variants.some((v) => v.stock > 0);
+
 export type Rating = { value: number; count: number };
 export type Review = { rating: number; author: string; body: string; reply: string | null; daysAgo: number };
 

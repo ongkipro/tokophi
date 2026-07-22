@@ -1,7 +1,7 @@
 ---
 import { IDR } from "@tokophi/lib/format";
 import { ImageOff } from "@lucide/astro";
-import { imageSrcSet, type Product } from "../data/catalog";
+import { imageSrcSet, inStock, type Product } from "../data/catalog";
 import Stars from "./Stars.astro";
 
 interface Props {
@@ -71,8 +71,10 @@ const rating = Astro.locals.catalog.productRating(product);
 // the same call and drops it into the contact flow; here the card just links to the PDP as always.
 const unpriced = product.price <= 0;
 // `&& !unpriced`: a compareAt over a 0 base computes a bogus −100% badge — no price cut without a price.
+// `&& available`: a price cut on something nobody can buy is not information, it is bait — see below.
+const soldOut = !inStock(product);
 const discount =
-  !unpriced && product.compareAt && product.compareAt > product.price
+  !unpriced && !soldOut && product.compareAt && product.compareAt > product.price
     ? Math.round(((product.compareAt - product.price) / product.compareAt) * 100)
     : 0;
 ---
@@ -124,6 +126,29 @@ const discount =
       <span class="absolute right-3 top-3 rounded-full bg-red-600 px-2.5 py-1 text-xs font-bold text-white shadow-sm tabular-nums">
         −{discount}%
       </span>
+    )}
+
+    {/* SOLD OUT — audit #16 finding 4, the half that had not landed. A shopper could not tell a
+        sold-out product apart in the grid and only found out after clicking: a wasted click, and in a
+        promo grid it looked like an offer they could still take.
+
+        An OVERLAY, not a third corner pill. The two corners are taken (merchant badge left, discount
+        right), and more importantly this is not a label alongside the others — it changes what the
+        whole card MEANS, so it reads across the card rather than decorating one corner of it. The
+        image is dimmed with it, so the state is legible while scrolling past at arm's length and not
+        only to someone who stops to read.
+
+        Real text in the DOM, never `aria-hidden`: to a screen-reader user the price and the name are
+        identical to a card they can buy from. The scrim is the decoration; the sentence is the fact.
+
+        The card still LINKS to the PDP. The product page explains which variants are gone and keeps
+        whatever ranking the URL has earned — de-linking it would throw both away to save one click. */}
+    {soldOut && (
+      <div class="absolute inset-0 flex items-center justify-center bg-cream/65">
+        <span class="rounded-full bg-ink/85 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-cream shadow-sm">
+          Stok habis
+        </span>
+      </div>
     )}
 
     {/* REMOVED: a heart in a white circle, top-right of the image, fading in on hover — exactly where

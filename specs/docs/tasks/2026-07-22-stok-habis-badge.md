@@ -53,11 +53,38 @@ Ini juga **prasyarat filter ukuran yang jujur**: begitu ketersediaan varian terb
 
 ## Rencana
 
-- [ ] 1. Ekspor `inStock()` dari `data/catalog.ts`; ganti 2 salinan di `produk/[handle].astro`
-- [ ] 2. Badge + peredupan di `ProductCard.astro`; sembunyikan badge diskon saat habis
-- [ ] 3. Verifikasi: build + `astro check` + **browser sungguhan** (bukan build hijau saja)
-- [ ] 4. `npm run audit:responsive` (sekarang gerbangnya hidup — jaga tetap 132/132)
+- [x] 1. Ekspor `inStock()` dari `data/catalog.ts`; ganti 2 salinan di `produk/[handle].astro`
+- [x] 2. Badge + peredupan di `ProductCard.astro`; sembunyikan badge diskon saat habis
+- [x] 3. Verifikasi: build ✅ · `astro check` **0 error** ✅ · browser sungguhan ✅
+- [~] 4. `npm run audit:responsive` — sedang jalan **selagi stok nol**, supaya sweep melihat kartu habis
 - [ ] 5. Commit + tutup file ini + ringkas ke CHANGELOG/WORKLOG + komentar di #16
+
+## Yang diverifikasi (diukur di browser, bukan diasumsikan)
+
+| Diuji | Hasil |
+|---|---|
+| `/produk` dengan 2 produk dikosongkan | tepat **2 kartu** beroverlay "Stok habis", 10 lainnya bersih |
+| Label "Stok habis" | teks asli di DOM, **bukan** di bawah `aria-hidden`, terbaca screen reader |
+| `dress-midi-bunga` (satu-satunya produk diskon) | badge `−24%` **hilang** saat habis; harga coret & harga tetap tampil |
+| Badge merchant "Promo" | **tetap** tampil (diredupkan) — itu data merchant, bukan klaim kita |
+| Tautan ke PDP | tetap ada di kartu habis |
+| PDP produk habis | tombol "Tambah ke Keranjang" **disabled**, `schema.org` → `OutOfStock` |
+| PDP produk berstok | `schema.org` → `InStock` (kontrol — memastikan bukan konstanta) |
+| 360px | overflow horizontal **0** |
+| Console | 0 error baru (sisanya artefak lingkungan: logo `localhost:3000`, `celana-kulot.webp`) |
+
+**Satu jebakan yang hampir lolos:** setelah `inStock` jadi **fungsi** yang diimpor, dua baris JSON-LD
+di PDP masih berbunyi `${inStock ? "InStock" : "OutOfStock"}` — sebuah fungsi **selalu truthy**, jadi
+markup Google akan selamanya bilang "InStock", termasuk untuk barang yang habis. Ketahuan karena
+variabel lokalnya diganti nama jadi `available` (kalau namanya dibiarkan sama, ia justru *shadowing*
+dan bugnya diam). Sekarang keduanya memakai `available`, dan diuji dua arah.
+
+**Bonus temuan — bukan dari task ini, tapi dari task sebelumnya:** komentar penjelas perbaikan header
+1024px ternyata saya tulis **di dalam daftar atribut `<input>`**. `astro build` menerimanya dan
+produksi memang mengirim markup yang benar, tapi `astro check` melaporkan **24 error**. Lolos karena
+setelah mengedit header saya menjalankan audit responsif + browser, **tapi tidak mengulang typecheck**
+— browser membuktikan perbaikannya bekerja, ia tak bisa membuktikan berkasnya well-formed. Dua
+pertanyaan berbeda. Sudah diperbaiki, `astro check` kembali **0 error**.
 
 ## ⚠️ Manipulasi data sementara — WAJIB dikembalikan
 
