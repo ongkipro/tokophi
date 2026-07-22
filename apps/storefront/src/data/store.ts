@@ -31,7 +31,7 @@ export type StoreInfo = {
   /** Public phone (may be a landline). `null` = no phone published → render no phone row. */
   phone: string | null;
   /**
-   * PUBLIC shop email — correspondence a shopper may write to (migration 0064). `null`/blank = not
+   * PUBLIC shop email — correspondence a shopper may write to (migration 0070). `null`/blank = not
    * published → render no email row. ⚠️ NEVER `users.email`: that one is a LOGIN CREDENTIAL, unique
    * across the platform, and putting it in a public footer would publish a sign-in identifier.
    */

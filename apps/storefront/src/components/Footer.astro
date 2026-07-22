@@ -44,7 +44,7 @@ const clean = (v: string | null | undefined) => {
 // The public phone is free text ("(0274) 123456", "0812-3456-7890") because that is how a shop writes
 // it on its own signage. Only the `tel:` href is normalised — the label stays exactly as typed.
 const phone = clean(store.phone);
-// PUBLIC shop email (migration 0064) — correspondence, never `users.email`, which is a login.
+// PUBLIC shop email (migration 0070) — correspondence, never `users.email`, which is a login.
 const email = clean(store.email);
 const telHref = phone ? `tel:${phone.replace(/[^\d+]/g, "")}` : null;
 

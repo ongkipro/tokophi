@@ -1,3 +1,6 @@
+-- (Renumbered 0064 → 0070 when this branch merged main: another branch had landed 0064–0069 in the
+--  meantime, so the original number collided. The `when` stays above production's highest.)
+--
 -- The shop's PUBLIC email — the one a shopper may write to, shown in the storefront footer.
 --
 -- ⚠️ It is NOT the owner's login. `users.email` is a credential: it identifies the person who signs

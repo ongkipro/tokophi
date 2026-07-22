@@ -245,7 +245,7 @@ export function StoreProfileCard() {
               />
               {/* ⚠️ Says out loud that this is NOT the login. A merchant who assumes it is "the email
                   you already know" would publish the address they sign in with on every page of a
-                  public website. Two fields, two jobs — see migration 0064. */}
+                  public website. Two fields, two jobs — see migration 0070. */}
               <p className="text-xs text-muted-foreground">
                 Alamat email untuk <span className="font-medium">dihubungi pembeli</span>, ditampilkan di storefront. Bukan email login akun kamu. Kosongkan jika tidak ingin ditampilkan.
               </p>
