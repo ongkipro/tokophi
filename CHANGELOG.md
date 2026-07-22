@@ -4,6 +4,17 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## Unreleased — Landing Page (single-page COD, standalone + AI copy)
 
+### 🎚️ Order-form field toggles (form_config)
+Per-landing control over which OPTIONAL order-form elements show — **Email** (optional input →
+customer.email), **Jumlah** (qty stepper, subtotal/ongkir/order all follow the qty), **Badge
+Kepercayaan**, **Ringkasan Pesanan** — via a shared "Field Form" card in both editors (product-promo
+and custom-HTML). The 4 core COD fields (Nama · WhatsApp · Alamat · Kecamatan) are always shown — hiding
+them would break a COD order. Stored as `form_config` jsonb on both tables (migration 0069), resolved
+against defaults by `@tokophi/lib/form-config` so an empty {} behaves exactly like the original fixed
+form. The OrderFunnel renders the toggled fields and its script is null-safe when a section is hidden.
+Verified in-browser: qty stepper updates the summary (Sage/M ×3 → Rp375.000), email field renders,
+console clean.
+
 ### 🧩 Custom-HTML landing (`/lp/<slug>`) — paste your own design
 A second landing kind: the merchant pastes their OWN full landing HTML (Seller → Landing Page → Landing
 HTML Custom → Buat baru) and picks ONE product; the storefront renders the HTML verbatim, then

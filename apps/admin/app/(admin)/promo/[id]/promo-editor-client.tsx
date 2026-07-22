@@ -8,8 +8,10 @@ import { toast } from "sonner";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { useCan } from "@/components/admin/permissions";
+import { FormFieldsCard } from "@/components/admin/form-fields-card";
 import { savePromoPage, generatePromoContent } from "@/lib/actions/promo";
 import type { PromoConfig, PromoContent, PromoEditor } from "@/lib/data/promo";
+import type { FormConfig } from "@tokophi/lib/form-config";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
@@ -29,6 +31,7 @@ export function PromoEditorClient({ editor }: { editor: PromoEditor }) {
   const set = <K extends keyof PromoConfig>(k: K, v: PromoConfig[K]) => setCfg((c) => ({ ...c, [k]: v }));
   const setContent = <K extends keyof PromoContent>(k: K, v: PromoContent[K]) =>
     setCfg((c) => ({ ...c, content: { ...c.content, [k]: v } }));
+  const setFC = (k: keyof FormConfig, v: boolean) => setCfg((c) => ({ ...c, formConfig: { ...c.formConfig, [k]: v } }));
 
   function generate() {
     startGenerate(async () => {
@@ -359,6 +362,9 @@ export function PromoEditorClient({ editor }: { editor: PromoEditor }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Field Form */}
+      <FormFieldsCard value={cfg.formConfig} onChange={setFC} disabled={!canWrite} />
 
       {/* Urgensi */}
       <Card>

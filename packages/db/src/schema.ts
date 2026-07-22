@@ -355,6 +355,9 @@ export const promoPages = pgTable(
     content: jsonb().notNull().default({}),
     countdownMinutes: integer().notNull().default(0), // 0 = no countdown
     showScarcity: boolean().notNull().default(true),
+    // Which optional order-form elements to show. `FormConfig` in lib/form-config: { email, quantity,
+    // trustBadges, summary }. The 4 core COD fields (nama/wa/alamat/kecamatan) are always shown.
+    formConfig: jsonb().notNull().default({}),
     createdAt: createdAt(),
     updatedAt: createdAt(),
   },
@@ -377,6 +380,7 @@ export const landingPages = pgTable(
     enabled: boolean().notNull().default(false),
     countdownMinutes: integer().notNull().default(0),
     showScarcity: boolean().notNull().default(true),
+    formConfig: jsonb().notNull().default({}), // see promo_pages.formConfig
     createdAt: createdAt(),
     updatedAt: createdAt(),
   },

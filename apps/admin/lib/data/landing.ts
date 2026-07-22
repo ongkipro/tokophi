@@ -2,6 +2,7 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { BASE_DOMAIN } from "@/lib/data/domain";
+import { resolveFormConfig, type FormConfig } from "@tokophi/lib/form-config";
 import { and, asc, eq } from "drizzle-orm";
 
 // Custom-HTML landings (/lp/<slug>) for the Seller editor. Tenant-scoped reads (withCurrentTenant).
@@ -24,6 +25,7 @@ export type LandingEditor = {
   enabled: boolean;
   countdownMinutes: number;
   showScarcity: boolean;
+  formConfig: FormConfig;
   products: { id: string; name: string }[]; // picker options
   shareUrl: string | null;
 };
@@ -67,7 +69,7 @@ export async function getLandingEditor(id: string): Promise<LandingEditor | null
     if (id === "baru") {
       return {
         id: null, slug: "", title: "", html: "", productId: products[0]?.id ?? "",
-        enabled: false, countdownMinutes: 0, showScarcity: true, products, shareUrl: null,
+        enabled: false, countdownMinutes: 0, showScarcity: true, formConfig: resolveFormConfig({}), products, shareUrl: null,
       };
     }
     const [row] = await db.select().from(schema.landingPages).where(eq(schema.landingPages.id, id)).limit(1);
@@ -82,6 +84,7 @@ export async function getLandingEditor(id: string): Promise<LandingEditor | null
       enabled: row.enabled,
       countdownMinutes: row.countdownMinutes,
       showScarcity: row.showScarcity,
+      formConfig: resolveFormConfig(row.formConfig),
       products,
       shareUrl: shareUrl(slug, row.slug),
     };

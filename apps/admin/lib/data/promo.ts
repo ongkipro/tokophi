@@ -2,6 +2,7 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { BASE_DOMAIN } from "@/lib/data/domain";
+import { resolveFormConfig, type FormConfig } from "@tokophi/lib/form-config";
 import { and, asc, eq } from "drizzle-orm";
 
 // The shareable landing URL a merchant copies into an ad — the store's system storefront domain
@@ -36,6 +37,7 @@ export type PromoConfig = {
   content: PromoContent;
   countdownMinutes: number;
   showScarcity: boolean;
+  formConfig: FormConfig;
 };
 
 export type PromoListRow = {
@@ -61,6 +63,7 @@ export type PromoEditor = {
 const EMPTY: PromoConfig = {
   enabled: false, headline: "", subheadline: "", badge: "",
   benefits: [], idealFor: [], content: {}, countdownMinutes: 20, showScarcity: true,
+  formConfig: resolveFormConfig({}),
 };
 
 function toConfig(row: typeof schema.promoPages.$inferSelect | undefined): PromoConfig {
@@ -75,6 +78,7 @@ function toConfig(row: typeof schema.promoPages.$inferSelect | undefined): Promo
     content: (row.content && typeof row.content === "object" ? row.content : {}) as PromoContent,
     countdownMinutes: row.countdownMinutes,
     showScarcity: row.showScarcity,
+    formConfig: resolveFormConfig(row.formConfig),
   };
 }
 

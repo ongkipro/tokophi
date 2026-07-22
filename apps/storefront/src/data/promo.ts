@@ -23,6 +23,7 @@ export type StorePromo = {
   content: PromoContent;
   countdownMinutes: number;
   showScarcity: boolean;
+  formConfig: unknown; // resolved by the OrderFunnel via @tokophi/lib/form-config
 };
 
 export async function getPromoConfig(storeId: string, handle: string): Promise<StorePromo | null> {
@@ -37,6 +38,7 @@ export async function getPromoConfig(storeId: string, handle: string): Promise<S
       content: schema.promoPages.content,
       countdownMinutes: schema.promoPages.countdownMinutes,
       showScarcity: schema.promoPages.showScarcity,
+      formConfig: schema.promoPages.formConfig,
     })
     .from(schema.promoPages)
     .innerJoin(schema.products, eq(schema.products.id, schema.promoPages.productId))

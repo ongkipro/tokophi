@@ -8,8 +8,10 @@ import { toast } from "sonner";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { useCan } from "@/components/admin/permissions";
+import { FormFieldsCard } from "@/components/admin/form-fields-card";
 import { saveLanding, deleteLanding } from "@/lib/actions/landing";
 import type { LandingEditor } from "@/lib/data/landing";
+import type { FormConfig } from "@tokophi/lib/form-config";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
@@ -33,8 +35,10 @@ export function LandingEditorClient({ editor }: { editor: LandingEditor }) {
     enabled: editor.enabled,
     countdownMinutes: editor.countdownMinutes,
     showScarcity: editor.showScarcity,
+    formConfig: editor.formConfig,
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((s) => ({ ...s, [k]: v }));
+  const setFC = (k: keyof FormConfig, v: boolean) => setF((s) => ({ ...s, formConfig: { ...s.formConfig, [k]: v } }));
 
   function save() {
     startSave(async () => {
@@ -180,6 +184,8 @@ export function LandingEditorClient({ editor }: { editor: LandingEditor }) {
           </p>
         </CardContent>
       </Card>
+
+      <FormFieldsCard value={f.formConfig} onChange={setFC} disabled={!canWrite} />
 
       <div className="flex items-center justify-between gap-2">
         {editor.id ? (

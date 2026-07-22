@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant, withCurrentTenant } from "@/lib/tenant";
 import type { PromoConfig, PromoContent } from "@/lib/data/promo";
+import { resolveFormConfig } from "@tokophi/lib/form-config";
 import { generateLandingCopy } from "@/lib/promo-ai";
 
 // Clean a bullet/chip list: trim, drop blanks, cap the count and each length so a runaway paste can't
@@ -46,6 +47,7 @@ export async function savePromoPage(productId: string, input: PromoConfig): Prom
     benefits: cleanList(input.benefits, 8, 120),
     idealFor: cleanList(input.idealFor, 12, 40),
     content: cleanContent(input.content),
+    formConfig: resolveFormConfig(input.formConfig),
     // clamp 0..180 min; 0 = no countdown
     countdownMinutes: Math.max(0, Math.min(180, Math.round(Number(input.countdownMinutes) || 0))),
     showScarcity: !!input.showScarcity,

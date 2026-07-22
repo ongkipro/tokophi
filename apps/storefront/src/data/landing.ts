@@ -10,6 +10,7 @@ export type StoreLanding = {
   productHandle: string;
   countdownMinutes: number;
   showScarcity: boolean;
+  formConfig: unknown;
 };
 
 export async function getLandingPage(storeId: string, slug: string): Promise<StoreLanding | null> {
@@ -20,6 +21,7 @@ export async function getLandingPage(storeId: string, slug: string): Promise<Sto
       productHandle: schema.products.handle,
       countdownMinutes: schema.landingPages.countdownMinutes,
       showScarcity: schema.landingPages.showScarcity,
+      formConfig: schema.landingPages.formConfig,
     })
     .from(schema.landingPages)
     .innerJoin(schema.products, eq(schema.products.id, schema.landingPages.productId))

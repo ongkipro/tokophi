@@ -484,6 +484,13 @@
 			"when": 1784707098596,
 			"tag": "0068_landing_pages_rls",
 			"breakpoints": true
+		},
+		{
+			"idx": 69,
+			"version": "7",
+			"when": 1784707098597,
+			"tag": "0069_form_config",
+			"breakpoints": true
 		}
 	]
 }

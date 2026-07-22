@@ -4,6 +4,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
+import { resolveFormConfig, type FormConfig } from "@tokophi/lib/form-config";
 
 export type LandingInput = {
   id?: string | null;
@@ -14,6 +15,7 @@ export type LandingInput = {
   enabled: boolean;
   countdownMinutes: number;
   showScarcity: boolean;
+  formConfig: FormConfig;
 };
 
 const slugify = (s: string) =>
@@ -41,6 +43,7 @@ export async function saveLanding(input: LandingInput): Promise<{ ok: boolean; e
     enabled: !!input.enabled,
     countdownMinutes: Math.max(0, Math.min(180, Math.round(Number(input.countdownMinutes) || 0))),
     showScarcity: !!input.showScarcity,
+    formConfig: resolveFormConfig(input.formConfig),
   };
 
   const res = await withTenant(storeId, async (db) => {

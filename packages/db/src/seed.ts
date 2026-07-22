@@ -964,6 +964,7 @@ async function main() {
       enabled: true,
       countdownMinutes: 15,
       showScarcity: true,
+      formConfig: { email: false, quantity: true, trustBadges: true, summary: true }, // demo: qty stepper on
       // A COMPLETE example landing (hero → problem → solution → benefits grid → testimonials →
       // guarantee), pure inline styles + one <style> block so it renders anywhere the merchant pastes
       // it. The OrderFunnel is auto-appended by /lp/[slug].astro.
