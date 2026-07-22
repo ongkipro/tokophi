@@ -7,6 +7,44 @@
 
 
 
+## 2026-07-22 — Session: listing filter + pagination (audit #16 closed out), and a safety gate that had been crashing
+
+Picked up after a laptop died mid-session. The first thing done was to establish that **nothing was
+half-finished** — the previous session had merged PR #27 sixty minutes earlier and left a clean tree —
+rather than assume a dead machine meant lost work.
+
+**New convention, applied from this session on:** a task gets its own committed `.md` in
+`specs/docs/tasks/<date>-<slug>.md` **before the first line of code**, updated as it goes, with an
+explicit **NEXT** at the bottom. Session-level handoffs (BACKLOG/WORKLOG/CHANGELOG) survive because
+they are committed; anything living only in a chat window does not. One file per task, never a shared
+`TASK.md` — several agents work this repo at once.
+
+**What shipped:** `?kategori=` / `?min=` / `?max=` / `?promo=` / `?page=` on the one shared
+`ProductListing.astro`, so `/produk`, `/kategori/<handle>` and `/cari` all gained them at once. Full
+reasoning in `CHANGELOG.md`; the parts that will otherwise be re-broken:
+
+- **A control renders only when it can act, and a param whose control is absent is IGNORED.** The
+  alternative is `?kategori=x` on a single-category page emptying the grid with no visible way back.
+- **`form.submit()` does not fire the `submit` event.** The sort auto-submit path had to call the
+  URL-cleaner by hand; wiring it to the event alone silently shipped `?min=&max=&sort=terbaru`.
+- **No size filter** — `products.sizes` is a label list, stock is per variant. A filter that ignores
+  variant stock claims sizes we may not have.
+
+**The lesson worth more than the feature: a gate nobody watches is not a gate.**
+`npm run audit:responsive` had not completed since **2026-07-15**, when the demo store got an active
+primary custom domain — middleware 301s every other host to a name no dev machine resolves, so the
+sweep died on its first navigation. It never reported "0 breaks"; it printed a stack trace nobody
+read. Repaired (it now probes for the redirect and maps that host back to the dev port in-browser,
+touching no shared DB row) — and it went red on the very first honest run: **11/132**, a 4–6px header
+overflow at exactly `lg` (1024px), reproducing on `/kontak`, a page with no listing at all. Fixed.
+Same shape as `verify-rls` being red for weeks: **an alarm that cannot ring is an alarm that is off.**
+
+**Verified in a browser, not by a green build** (12 → 13–14 of 14 across a clicked page link, filter
+counts reconciled against SQL, sort order correct across the page boundary, `q` preserved when
+filtering search results, 0 overflow at 360px, no pagination control under 44px). The demo store has
+exactly **12 active products against a 12-per-page listing**, so two drafts were temporarily activated
+to make it paginate at all, then set back — a shared database must be left in the state it was found.
+
 ## 2026-07-20/21 — Session: docs reconciled, seven cross-tenant holes closed, and the whole front-end pass ✅ **10 PRs (#9–#26), ~10 verified deploys**, `main` at `036f05e`
 
 Started as "reconcile the analysis docs against what is on GitHub" and became a correctness pass, because
