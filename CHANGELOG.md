@@ -2,6 +2,39 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-07-22
+
+### 🔎 Storefront listing: filter + pagination — the last two items of audit #16
+The product listing rendered **every** product, every time, and offered no way to narrow it. Both gaps
+close in `ProductListing.astro`, so `/produk`, `/kategori/<handle>` and `/cari` get them from one edit.
+- **Pagination**, 12 per page (12 divides the 2/3/4-column grid exactly, so no page ends on a ragged
+  row). Real `<a>` links, `?page=` in the URL, page 1 is the bare URL, out-of-range is **clamped** to
+  the last real page rather than 404'd or blank.
+- **Filter**: `?kategori=`, `?min=`/`?max=`, `?promo=1` — each control rendered **only when it can do
+  something** (category picker only if the products span >1 category, promo toggle only if something
+  is discounted, price range only if there is a spread), and **a param whose control is not rendered
+  is ignored, not applied** — otherwise `?kategori=x` empties a grid with no visible way back.
+- **`RevealGrid` removed from this listing** (it still serves `/blog` + `/kategori`): stacked on real
+  paging, a phone showed both "Muat lebih banyak" and "Halaman 2" — two lookalike controls, one of
+  which cannot be linked to.
+- **The filtered-empty state is not the empty-catalogue one** — "Belum ada produk" under someone's own
+  filter blames the shop for the shopper's choice. The way out is Reset, not Beranda.
+- ⚠️ **No size filter, deliberately.** `products.sizes` is a label list; stock lives per variant in
+  `product_variants.stock`. "Punya ukuran L" that ignores variant stock claims a size we may not have.
+- ⚠️ **`form.submit()` does not fire the `submit` event.** A GET form posts every named control, so a
+  shared URL read `?kategori=dress&min=&max=&sort=terbaru`. `dropEmpties()` disables the empties first
+  — and the sort auto-submit path calls it by hand, because the event never reaches it.
+
+### 🔴 `audit:responsive` had been CRASHING, not passing
+Since the demo store got an active primary custom domain (`store_domains` → `toko-demo.test`,
+2026-07-15), middleware 301s every other host to it — a name no dev machine resolves — so the sweep died
+on the first `page.goto` with `ERR_NAME_NOT_RESOLVED`. It never said "0 breaks"; it printed a stack
+trace, in a script nothing runs on a schedule. **The storefront shipped for weeks with its responsive
+gate face-down** — the same shape as `verify-rls` being red for weeks. The script now probes for the
+redirect and maps that hostname back to the dev port inside the browser (`--host-resolver-rules`),
+touching no DB row, and is a no-op where no custom domain is configured. Two listing routes added to
+the sweep, including the filter bar in its most-populated state.
+
 ## 2026-07-20 / 21 — PRs #9–#26, ~10 verified production deploys (`main` → `036f05e`)
 
 ### 🔐 Security — four MORE cross-tenant holes, found by auditing the class

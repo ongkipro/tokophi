@@ -65,7 +65,9 @@ Satu edit, bukan tiga.
 - [x] 3. Komponen `Pagination.astro` (prev/next + nomor, `aria-current`, tap target ≥44px)
 - [x] 4. Empty state berfilter (bedakan dari katalog kosong)
 - [x] 5. Verifikasi: build ✅ · `astro check` 0 error ✅ · **browser sungguhan** ✅ (hasil di bawah)
-- [~] 6. `npm run audit:responsive` — **gerbangnya ternyata sudah mati sebelum task ini** (lihat bawah), sudah diperbaiki, sweep sedang jalan
+- [x] 6. `npm run audit:responsive` — gerbangnya **sudah mati sebelum task ini**, diperbaiki, lalu langsung
+      merah: 11/132 break, semuanya header @1024px (termasuk `/kontak` yang tak punya listing sama sekali).
+      Diperbaiki juga (`30b13a1`). Sweep rute listing: **0/55**. Sweep penuh sedang berjalan ulang.
 - [ ] 7. Commit + PR + tutup file ini (status DONE + hash), ringkas ke CHANGELOG/WORKLOG, komentar di #16
 
 ## Yang sudah diverifikasi (diukur, bukan diasumsikan)
@@ -103,9 +105,13 @@ me-*disable* field kosong + sort default sebelum submit. ⚠️ `form.submit()` 
    melaporkan "0 break", ia *crash* — dan karena tak ada yang menjalankannya terjadwal, storefront
    berminggu-minggu tanpa gerbang responsif. Diperbaiki di sini: script menanyakan lokasi kanonik ke
    server lalu memetakan nama itu balik ke port dev (`--host-resolver-rules`), tanpa menyentuh DB.
-2. `product_media` `celana-kulot` posisi 0 menunjuk `/products/celana-kulot.webp` yang **tak ada di
+2. 🔴 **Header meluber 4–6px di 1024px pas** — baris desktop menyala di `lg` (1024) dan isinya (logo +
+   7 item nav + kolom cari 208px + pil keranjang) butuh lebih lebar dari ruang yang ada. Reproduksi di
+   `/kontak`, halaman tanpa listing — jadi jelas bukan dari task ini; ia tak terlihat karena gerbang
+   yang seharusnya menangkapnya sedang crash. Diperbaiki (`w-40` → `xl:w-52` di kolom cari).
+3. `product_media` `celana-kulot` posisi 0 menunjuk `/products/celana-kulot.webp` yang **tak ada di
    `public/`** (varian `-2`..`-5` ada) → 404 gambar. Data/aset, bukan kode. Task terpisah.
-3. Logo toko diminta dari `localhost:3000/api/uploads/…` — server admin memang tidak jalan saat audit
+4. Logo toko diminta dari `localhost:3000/api/uploads/…` — server admin memang tidak jalan saat audit
    storefront. Artefak lingkungan.
 
 ## Cara verifikasi (perintah persis)
