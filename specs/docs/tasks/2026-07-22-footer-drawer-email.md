@@ -130,3 +130,14 @@ peluncur chat mengambang sudah ada di setiap halaman.
 kategori terlihat langsung **7 tautan / 5 berfoto** · kontak di dasar **2** · `<details>` tersisa **0** ·
 isi **608/800** · tombol tutup **44×44** · Tab ×14 **terperangkap** · 0 error.
 Telepon & email diisi sementara untuk mengujinya, lalu **dikembalikan ke NULL**.
+
+
+### Ronde 2 — ter-deploy & diverifikasi di produksi
+
+PR **#42** → `main` `6e5102f` · container storefront `dc4a6de2b979` → **`2cdbb3b62a6c`**.
+
+Drawer **dioperasikan langsung di situs live** (390px): kategori **7 tautan / 5 berfoto** ·
+`<details>` tersisa **0** · isi panel **654 / 800px** · tombol tutup **44×44** · fokus masuk ke
+`#menu-close` · latar **0→0** saat digulir 700px · Tab ×14 **terperangkap** · Esc mengembalikan fokus
+ke burger dan melepas kunci gulir · **0 console error**. Kolom kontak di dasar terisi dari data toko
+sungguhan, bukan dari contoh.
