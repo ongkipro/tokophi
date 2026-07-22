@@ -1,11 +1,13 @@
 # TASK — Listing: filter + pagination (GitHub #16, sisa terakhir)
 
-> **Status: 🟡 IN PROGRESS** · dibuka 2026-07-22 · branch `worktree-super-admin-overhaul`
-> · commit awal `0f61e98` (= `origin/main`, tree bersih)
+> **Status: ✅ DONE** — 2026-07-22 · branch `worktree-super-admin-overhaul` · `0f61e98` → `5d7eb11`
+> · commit inti `6f90ec7` (listing) + `3321266` (gerbang responsif) + `30b13a1` (header 1024px)
+>
+> `npm run audit:responsive`: **132/132 hijau, 0 overflow** — untuk pertama kalinya sejak 2026-07-15.
+> Dua produk yang dinyalakan sementara **sudah dikembalikan ke `draft`** (12 aktif, seperti semula).
 >
 > File ini ditulis **sebelum** koding dan diperbarui **tiap langkah selesai**, supaya sesi yang mati
-> mendadak (laptop mati 2026-07-22) bisa dilanjut presisi, bukan ditebak. Baca bagian
-> **NEXT** paling bawah lebih dulu.
+> mendadak (laptop mati 2026-07-22) bisa dilanjut presisi, bukan ditebak.
 
 ## Kenapa task ini
 
@@ -68,7 +70,7 @@ Satu edit, bukan tiga.
 - [x] 6. `npm run audit:responsive` — gerbangnya **sudah mati sebelum task ini**, diperbaiki, lalu langsung
       merah: 11/132 break, semuanya header @1024px (termasuk `/kontak` yang tak punya listing sama sekali).
       Diperbaiki juga (`30b13a1`). Sweep rute listing: **0/55**. Sweep penuh sedang berjalan ulang.
-- [ ] 7. Commit + PR + tutup file ini (status DONE + hash), ringkas ke CHANGELOG/WORKLOG, komentar di #16
+- [x] 7. Commit + PR + tutup file ini (status DONE + hash), ringkas ke CHANGELOG/WORKLOG, komentar di #16
 
 ## Yang sudah diverifikasi (diukur, bukan diasumsikan)
 
@@ -134,11 +136,16 @@ npm run dev -w @tokophi/storefront            # catat PID-nya sendiri, JANGAN pk
 
 ---
 
-## NEXT
+## NEXT — sesudah task ini (bukan bagian darinya)
 
-1. Tunggu `npm run audit:responsive -w @tokophi/storefront` selesai (12 rute × 11 lebar) — harus 0 break.
-2. **Kembalikan 2 produk ke `draft`** (perintah SQL-nya ada di atas) — jangan tinggalkan DB bersama
-   dalam keadaan yang bukan aslinya.
-3. Hapus `apps/storefront/scripts/.tmp-browser-check.mjs` (skrip sementara, jangan ikut di-commit).
-4. Commit (pathspec eksplisit — agen lain punya file staged), buka PR, tutup file ini jadi **DONE**,
-   lalu ringkas ke `CHANGELOG.md` + `WORKLOG.md` dan komentari GitHub #16.
+Semua langkah task ini selesai; yang di bawah adalah pekerjaan berikutnya yang task ini *pantaskan*
+untuk dibuka, bukan sisa yang tertinggal.
+
+1. **Badge "Stok habis" di kartu produk** — temuan #4 audit yang belum mendarat. Ini juga prasyarat
+   filter ukuran yang jujur: begitu stok per-varian terbaca di listing, "punya ukuran L" jadi bisa
+   dibangun tanpa berbohong.
+2. **`/products/celana-kulot.webp` hilang** padahal ada baris `product_media` yang menunjuknya
+   (varian `-2`..`-5` ada). Aset, bukan kode.
+3. **Tidak ada yang menjalankan `audit:responsive` secara otomatis.** Task ini membuktikan biayanya:
+   gerbang itu diam selama ~5 minggu dan diamnya terbaca seperti lulus. Sudah tercatat di BACKLOG
+   bersama `verify-rls` — dua alarm dengan penyakit yang sama.
