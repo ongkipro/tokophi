@@ -21,7 +21,8 @@
     "seed:journal": "dotenv -e ../../.env -- tsx src/seed-journal.ts",
     "verify-rls": "dotenv -e ../../.env -- tsx src/verify-rls.ts",
     "verify-rls-app": "dotenv -e ../../.env -- tsx src/verify-rls-app.ts",
-    "seed:recent": "dotenv -e ../../.env -- tsx src/seed-recent.ts"
+    "seed:recent": "dotenv -e ../../.env -- tsx src/seed-recent.ts",
+    "verify-migrations": "dotenv -e ../../.env -- tsx src/verify-migrations.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.36.4",
