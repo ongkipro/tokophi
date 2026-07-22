@@ -1,0 +1,302 @@
+---
+// SEARCH PALETTE — the ⌘K overlay the header's magnifier opens.
+//
+// ── IT IS A NATIVE <dialog>, and that is most of the design ──────────────────────────────────────
+// `showModal()` gives us, for free and correctly: a focus trap, Esc to close, inert background,
+// top-layer stacking (no z-index war with the sticky header), and a styleable `::backdrop`. A
+// hand-rolled div would be ~150 lines of focus management to arrive at something worse. Rung 4 of
+// the ladder in CLAUDE.md: use the platform.
+//
+// ── IT IS AN ENHANCEMENT, NOT THE ONLY DOOR ─────────────────────────────────────────────────────
+// The header trigger is a real `<a href="/cari">`. With JS off — or before this script runs — it
+// simply navigates to the search page, which now carries its own input. Nothing about finding a
+// product depends on this file loading. That is why the trigger must never become a `<button>`:
+// a button with no JS is a dead control on every page of the shop.
+//
+// ── WHAT IT SHOWS ───────────────────────────────────────────────────────────────────────────────
+// Empty query → the store's real best-sellers, so opening it offers somewhere to go instead of an
+// empty box. Typing → products (thumbnail, price, sold-out state) and matching categories, from
+// /api/search, which is a projection of the SAME `catalog.search()` /cari renders. The palette and
+// the results page cannot disagree about what matches.
+//
+// Every state is written, not just the happy one: idle, loading, empty, error. A palette that shows
+// nothing while a request is in flight reads as broken.
+import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
+---
+
+{/* `data-search-dialog` is what the header's trigger looks for. One palette per page, mounted by
+    Layout.astro so every route has it. */}
+<dialog
+  id="search-palette"
+  data-search-dialog
+  aria-label="Cari produk"
+  class="w-[min(40rem,calc(100vw-2rem))] rounded-2xl border border-line bg-cream p-0 text-ink shadow-2xl backdrop:bg-ink/50 backdrop:backdrop-blur-sm open:mt-[10vh] open:mx-auto"
+>
+  <form method="dialog" class="sr-only"><button aria-label="Tutup pencarian">Tutup</button></form>
+
+  <div class="flex items-center gap-3 border-b border-line px-4">
+    <Search class="size-5 shrink-0 text-muted" stroke-width={1.8} aria-hidden="true" />
+    {/* `type="search"` for the native clear affordance; `enterkeyhint` so a phone keyboard says
+        "cari" rather than "go". No `autofocus` attribute — `showModal()` focuses it in script, which
+        also works when the dialog is re-opened. */}
+    <input
+      id="search-palette-input"
+      type="search"
+      autocomplete="off"
+      enterkeyhint="search"
+      placeholder="Cari produk atau kategori…"
+      aria-controls="search-palette-results"
+      class="min-h-14 w-full border-0 bg-transparent text-base text-ink placeholder:text-muted focus:outline-none"
+    />
+    <button
+      type="button"
+      data-search-close
+      aria-label="Tutup"
+      class="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-brand-50 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+    >
+      <X class="size-4" stroke-width={2} aria-hidden="true" />
+    </button>
+  </div>
+
+  {/* `aria-live="polite"` so a screen-reader user is told the results changed — without it the list
+      updates silently and only sighted users learn anything happened. `max-h` + scroll keeps a long
+      result list inside the dialog instead of pushing it past the viewport on a phone. */}
+  <div
+    id="search-palette-results"
+    role="listbox"
+    aria-live="polite"
+    aria-busy="false"
+    class="max-h-[min(60vh,28rem)] overflow-y-auto overscroll-contain p-2"
+  >
+  </div>
+
+  <div class="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5 text-xs text-muted">
+    <span class="hidden items-center gap-1.5 sm:flex">
+      <kbd class="rounded border border-line bg-white px-1.5 py-0.5 font-sans">↑</kbd>
+      <kbd class="rounded border border-line bg-white px-1.5 py-0.5 font-sans">↓</kbd>
+      untuk memilih
+      <kbd class="ml-2 inline-flex items-center rounded border border-line bg-white px-1.5 py-0.5 font-sans">
+        <CornerDownLeft class="size-3" stroke-width={2} aria-hidden="true" />
+      </kbd>
+      untuk membuka
+      <kbd class="ml-2 rounded border border-line bg-white px-1.5 py-0.5 font-sans">Esc</kbd>
+      untuk menutup
+    </span>
+    <a
+      data-search-all
+      href="/cari"
+      class="ml-auto inline-flex min-h-11 items-center font-medium text-brand-700 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+    >
+      Lihat semua hasil
+    </a>
+  </div>
+</dialog>
+
+{/* Icon markup the script clones into results. Rendering lucide components here — rather than
+    hand-writing their paths in a JS string — keeps one source for each icon. */}
+<template id="search-icon-product"><Package class="size-4 text-brand-500" stroke-width={1.75} /></template>
+<template id="search-icon-category"><Tag class="size-4 text-brand-500" stroke-width={1.75} /></template>
+
+<style>
+  /* Chromium draws its own ✕ inside `input[type=search]`, and it landed directly beside our close
+     button: two identical glyphs, one labelled and 36px, one unlabelled and ~14px. Ours stays (it
+     has an accessible name and a real tap target); the browser's is hidden. Esc also clears by
+     closing, and re-opening always starts empty, so nothing is lost. */
+  #search-palette-input::-webkit-search-cancel-button,
+  #search-palette-input::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    var dialog = document.getElementById("search-palette");
+    var input = document.getElementById("search-palette-input");
+    var results = document.getElementById("search-palette-results");
+    var seeAll = document.querySelector("[data-search-all]");
+    if (!dialog || !input || !results || !dialog.showModal) return; // no <dialog> support → the <a> still navigates
+
+    var iconProduct = (document.getElementById("search-icon-product") || {}).innerHTML || "";
+    var iconCategory = (document.getElementById("search-icon-category") || {}).innerHTML || "";
+
+    var IDR = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
+    var esc = function (s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    };
+
+    var items = [];   // the currently rendered <a>s, in visual order — what ↑↓ walks
+    var active = -1;
+    // Every fetch gets a number; only the newest one is allowed to paint. Without this, a slow
+    // response for "dr" can land after "dress" and overwrite the newer results with older ones.
+    var seq = 0;
+
+    function setActive(i) {
+      if (!items.length) return;
+      active = (i + items.length) % items.length;
+      items.forEach(function (el, n) {
+        var on = n === active;
+        el.setAttribute("aria-selected", on ? "true" : "false");
+        el.classList.toggle("bg-brand-50", on);
+        if (on) el.scrollIntoView({ block: "nearest" });
+      });
+    }
+
+    function row(href, icon, title, meta, right, dim) {
+      return (
+        '<a href="' + esc(href) + '" role="option" aria-selected="false" ' +
+        'class="flex min-h-14 items-center gap-3 rounded-xl px-3 text-sm transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none' +
+        (dim ? " opacity-60" : "") + '">' +
+        '<span class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-50">' + icon + "</span>" +
+        '<span class="min-w-0 flex-1"><span class="block truncate font-medium text-ink">' + esc(title) + "</span>" +
+        (meta ? '<span class="block truncate text-xs text-muted">' + esc(meta) + "</span>" : "") +
+        "</span>" +
+        (right ? '<span class="shrink-0 text-sm font-semibold tabular-nums text-ink">' + right + "</span>" : "") +
+        "</a>"
+      );
+    }
+
+    function heading(text) {
+      return '<p class="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-widest text-muted">' + esc(text) + "</p>";
+    }
+
+    function message(text) {
+      return '<p class="px-3 py-10 text-center text-sm text-muted">' + esc(text) + "</p>";
+    }
+
+    function render(data, q) {
+      var html = "";
+      if (data.categories && data.categories.length) {
+        html += heading("Kategori");
+        html += data.categories
+          .map(function (c) {
+            return row("/kategori/" + c.handle, iconCategory, c.name, "Lihat koleksi", "", false);
+          })
+          .join("");
+      }
+      if (data.products && data.products.length) {
+        html += heading(q ? "Produk" : "Paling dicari");
+        html += data.products
+          .map(function (p) {
+            // A product with no photo gets the same tinted placeholder ProductCard uses — never a
+            // filename guessed from the handle, which is how broken images got into every grid.
+            var thumb = p.image
+              ? '<img src="' + esc(p.image) + '" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />'
+              : iconProduct;
+            var price = p.soldOut
+              ? '<span class="text-xs font-semibold uppercase tracking-wide text-muted">Habis</span>'
+              : p.price > 0
+                ? esc(IDR.format(p.price))
+                : '<span class="text-xs font-medium text-muted">Tanya harga</span>';
+            return row("/produk/" + p.handle, thumb, p.name, p.category, price, p.soldOut);
+          })
+          .join("");
+      }
+      if (!html) html = message(q ? 'Tidak ada hasil untuk "' + q + '". Coba kata lain.' : "Katalog belum diisi.");
+
+      results.innerHTML = html;
+      items = Array.prototype.slice.call(results.querySelectorAll("a[role='option']"));
+      active = -1;
+      if (items.length) setActive(0);
+    }
+
+    function search(q) {
+      var mine = ++seq;
+      results.setAttribute("aria-busy", "true");
+      fetch("/api/search?q=" + encodeURIComponent(q), { headers: { accept: "application/json" } })
+        .then(function (r) {
+          if (!r.ok) throw new Error(String(r.status));
+          return r.json();
+        })
+        .then(function (data) {
+          if (mine !== seq) return; // a newer keystroke already won
+          results.setAttribute("aria-busy", "false");
+          render(data, q);
+        })
+        .catch(function () {
+          if (mine !== seq) return;
+          results.setAttribute("aria-busy", "false");
+          // Say what happened AND leave a way out — the results page does not depend on this endpoint.
+          results.innerHTML =
+            message("Pencarian sedang bermasalah.") +
+            '<p class="pb-6 text-center"><a class="text-sm font-medium text-brand-700 underline underline-offset-4" href="/cari?q=' +
+            encodeURIComponent(q) + '">Buka halaman pencarian</a></p>';
+          items = [];
+        });
+    }
+
+    var timer = null;
+    input.addEventListener("input", function () {
+      var q = input.value.trim();
+      if (seeAll) seeAll.href = q ? "/cari?q=" + encodeURIComponent(q) : "/cari";
+      clearTimeout(timer);
+      // 150ms: long enough that a fast typist sends one request instead of eight, short enough that
+      // the list feels like it is keeping up.
+      timer = setTimeout(function () {
+        search(q);
+      }, 150);
+    });
+
+    input.addEventListener("keydown", function (e) {
+      // ⚠️ ESC HAS TO BE HANDLED HERE, even though <dialog> closes on Esc by itself. Inside an
+      // `<input type="search">` the browser spends the FIRST Escape clearing the field and stops
+      // there — so the palette stayed open and the shopper's only visible feedback was their query
+      // vanishing. Measured in Chromium, not assumed. Esc always closes; the palette resets its
+      // input on open anyway, so nothing is lost by skipping the clear.
+      if (e.key === "Escape") { e.preventDefault(); dialog.close(); return; }
+      if (e.key === "ArrowDown") { e.preventDefault(); setActive(active + 1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); setActive(active - 1); }
+      else if (e.key === "Enter") {
+        e.preventDefault();
+        // Enter on a highlighted row opens it; Enter with nothing highlighted goes to the full
+        // results page, which is what a shopper who ignored the list means by pressing it.
+        if (active >= 0 && items[active]) items[active].click();
+        else if (seeAll) seeAll.click();
+      }
+    });
+
+    function open() {
+      if (dialog.open) return;
+      dialog.showModal();
+      input.value = "";
+      if (seeAll) seeAll.href = "/cari";
+      results.innerHTML = message("Memuat…");
+      input.focus();
+      search("");
+    }
+
+    document.querySelectorAll("[data-search-open]").forEach(function (el) {
+      el.addEventListener("click", function (e) {
+        e.preventDefault(); // the <a href="/cari"> is the no-JS fallback; with JS we open the palette
+        open();
+      });
+    });
+    dialog.querySelectorAll("[data-search-close]").forEach(function (el) {
+      el.addEventListener("click", function () { dialog.close(); });
+    });
+
+    // Click on the backdrop closes. The dialog element's own box covers the panel, so compare the
+    // pointer against its rect rather than trusting `e.target` — a click on padding is still "inside".
+    dialog.addEventListener("click", function (e) {
+      var r = dialog.getBoundingClientRect();
+      var outside = e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+      if (outside) dialog.close();
+    });
+
+    document.addEventListener("keydown", function (e) {
+      var k = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && k === "k") { e.preventDefault(); open(); return; }
+      // `/` is a shortcut only when the shopper is not already typing. Without this guard, typing
+      // "Jl. Melati" into the checkout address opens the palette mid-address.
+      if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        var t = e.target;
+        var tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+        if (tag === "input" || tag === "textarea" || tag === "select" || (t && t.isContentEditable)) return;
+        e.preventDefault();
+        open();
+      }
+    });
+  })();
+</script>

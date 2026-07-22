@@ -4,6 +4,40 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 
 ## 2026-07-22
 
+### 🛍️ Front-end pass: sold-out badge · footer that belongs to the merchant · icon header + ⌘K palette
+
+**"Stok habis" on the product card** (audit #16 finding 4, the half that never landed). The rule was
+not rewritten — `inStock` already existed as two copies inside `produk/[handle].astro` and the card
+was about to be a third; it now lives in `data/catalog.ts` and all three read it. It agrees with
+`/api/public/order` by construction (both count a missing `inventory_levels` row as 0), and a product
+with NO variant rows still counts as available — a merchant's brand-new product must not read "habis".
+An overlay rather than a third corner pill, because it changes what the whole card means; the −%
+badge is suppressed with it (a price cut on something nobody can buy is bait), while the merchant's
+own badge stays — that is their data, not our claim.
+⚠️ The refactor nearly shipped a silent SEO lie: with `inStock` now a FUNCTION, two JSON-LD lines
+still using it as a boolean would have told Google every sold-out product was `InStock` forever.
+
+**Footer: both nav columns are the merchant's now.** "Koleksi" (auto-derived, unorderable) and a
+hardcoded "Belanja" were platform content living in a tenant's shop — the pattern `data/nav.ts`
+keeps fixing. Column 2 is `getMainNav()`, column 3 `getFooterNav()`; neither can point at a 404
+(unpublished categories and draft pages are already dropped). Contact, address and social icons move
+into column 4; `SocialLinks.astro` is split out. A dropdown parent renders as a LABEL — its href is
+stripped upstream, so linking it would emit `href="undefined"`.
+
+**Header is icons; the magnifier opens a ⌘K palette.** Native `<dialog>` + `showModal()` for the
+focus trap, Esc, inert background and `::backdrop`. Grouped results (Kategori + Produk with
+thumbnail, price, sold-out) from `/api/search`, which projects the SAME `catalog.search()` `/cari`
+renders — the two cannot disagree. Not rate-limited, deliberately: it reads a catalogue already
+public on `/produk` and in `sitemap.xml`.
+⚠️ **`/cari` had no search box of its own** — it leaned on the header form. Adding one there is a
+precondition of the icon header, not a nicety: without it a JS-less visitor has nowhere to type and
+a results page cannot be re-queried. The trigger stays an `<a href="/cari">` for the same reason.
+**No account icon** — there are no shopper accounts by design, and the "Akun" pill was removed once
+already for pointing at a fake login. The honest version is a "Lacak Pesanan" page, tracked separately.
+Three browser-found defects fixed: Esc was eaten by the search input's native clear; the native ✕ sat
+beside ours; and the cart badge, `hidden` at zero, could never appear because the counter script only
+set `textContent`.
+
 ### 🔎 Storefront listing: filter + pagination — the last two items of audit #16
 The product listing rendered **every** product, every time, and offered no way to narrow it. Both gaps
 close in `ProductListing.astro`, so `/produk`, `/kategori/<handle>` and `/cari` get them from one edit.

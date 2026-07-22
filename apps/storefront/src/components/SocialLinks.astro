@@ -1,0 +1,69 @@
+---
+// SOCIAL ICONS — presentation only. The list arrives as a prop; deciding WHICH profiles exist stays
+// in Footer.astro, which also needs that answer to know whether its contact column has anything in it.
+//
+// Lifted out of Footer.astro when the footer went to four columns: ~50 lines of hand-drawn brand
+// marks were burying the file's structure under their own path data. Behaviour is unchanged.
+//
+// Hand-written marks because lucide dropped brand icons on purpose — there is no icon package to
+// reach for. 24×24, `currentColor`, decorative: the accessible name lives on the link.
+export type Social = { key: string; label: string; user: string; url: (u: string) => string };
+
+interface Props {
+  socials: Social[];
+  /** Used in each link's accessible name — "Instagram <store name>". */
+  storeName: string;
+  class?: string;
+}
+
+const { socials, storeName, class: className } = Astro.props;
+---
+
+{
+  socials.length > 0 && (
+    <ul class:list={["-ml-2.5 flex flex-wrap items-center", className]}>
+      {socials.map((s) => (
+        <li>
+          <a
+            href={s.url(s.user)}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`${s.label} ${storeName}`}
+            class="inline-flex h-11 w-11 items-center justify-center rounded-full text-cream/75 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+          >
+            {/* Hand-written brand marks: lucide dropped brand icons on purpose, so there is no
+                icon package to reach for here. 24×24, `currentColor`, decorative — the
+                accessible name lives on the link. */}
+            {s.key === "instagram" && (
+              <svg viewBox="0 0 24 24" class="h-5 w-5 fill-current" aria-hidden="true">
+                <path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41-.56-.22-.96-.48-1.38-.9-.42-.42-.68-.82-.9-1.38-.16-.42-.36-1.06-.41-2.23C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16M12 0C8.74 0 8.33.01 7.05.07 5.78.13 4.9.33 4.14.63c-.79.3-1.46.72-2.13 1.38C1.35 2.68.94 3.35.63 4.14.33 4.9.13 5.78.07 7.05.01 8.33 0 8.74 0 12s.01 3.67.07 4.95c.06 1.27.26 2.15.56 2.91.3.79.72 1.46 1.38 2.13.67.67 1.34 1.08 2.13 1.38.76.3 1.64.5 2.91.56C8.33 23.99 8.74 24 12 24s3.67-.01 4.95-.07c1.27-.06 2.15-.26 2.91-.56.79-.3 1.46-.71 2.13-1.38.67-.67 1.08-1.34 1.38-2.13.3-.76.5-1.64.56-2.91.06-1.28.07-1.69.07-4.95s-.01-3.67-.07-4.95c-.06-1.27-.26-2.15-.56-2.91-.3-.79-.71-1.46-1.38-2.13C21.32 1.35 20.65.94 19.86.63c-.76-.3-1.64-.5-2.91-.56C15.67.01 15.26 0 12 0Z" />
+                <path d="M12 5.84A6.16 6.16 0 1 0 18.16 12 6.16 6.16 0 0 0 12 5.84Zm0 10.16A4 4 0 1 1 16 12a4 4 0 0 1-4 4Z" />
+                <circle cx="18.41" cy="5.59" r="1.44" />
+              </svg>
+            )}
+            {s.key === "tiktok" && (
+              <svg viewBox="0 0 24 24" class="h-5 w-5 fill-current" aria-hidden="true">
+                <path d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.59 2.59 0 1 1 .77-5.06V9.68a5.67 5.67 0 0 0-.77-.05A5.69 5.69 0 1 0 15.54 15.3V8.9a7.35 7.35 0 0 0 4.29 1.38V7.19a4.29 4.29 0 0 1-3.23-1.37Z" />
+              </svg>
+            )}
+            {s.key === "facebook" && (
+              <svg viewBox="0 0 24 24" class="h-5 w-5 fill-current" aria-hidden="true">
+                <path d="M24 12.07C24 5.44 18.63.07 12 .07S0 5.44 0 12.07c0 5.99 4.39 10.95 10.13 11.86v-8.39H7.08v-3.47h3.05V9.43c0-3.01 1.79-4.67 4.53-4.67 1.31 0 2.69.24 2.69.24v2.95h-1.51c-1.49 0-1.96.93-1.96 1.87v2.25h3.33l-.53 3.47h-2.8v8.39C19.61 23.02 24 18.06 24 12.07Z" />
+              </svg>
+            )}
+            {s.key === "pinterest" && (
+              <svg viewBox="0 0 24 24" class="h-5 w-5 fill-current" aria-hidden="true">
+                <path d="M12 0a12 12 0 0 0-4.37 23.18 11.5 11.5 0 0 1 .04-3.44c.22-.93 1.4-5.95 1.4-5.95a4.3 4.3 0 0 1-.36-1.78c0-1.66.97-2.9 2.17-2.9 1.02 0 1.51.77 1.51 1.69 0 1.03-.65 2.56-.99 3.99-.28 1.19.6 2.16 1.78 2.16 2.13 0 3.76-2.24 3.76-5.48 0-2.87-2.06-4.87-5-4.87-3.41 0-5.41 2.56-5.41 5.2 0 1.03.4 2.14.89 2.74.1.12.11.22.08.34-.09.38-.29 1.2-.33 1.37-.05.22-.17.27-.4.16-1.5-.7-2.43-2.88-2.43-4.65 0-3.78 2.75-7.25 7.92-7.25 4.16 0 7.39 2.96 7.39 6.92 0 4.13-2.6 7.46-6.23 7.46-1.21 0-2.35-.63-2.75-1.38l-.75 2.85c-.27 1.04-1 2.35-1.5 3.15A12 12 0 1 0 12 0Z" />
+              </svg>
+            )}
+            {s.key === "x" && (
+              <svg viewBox="0 0 24 24" class="h-5 w-5 fill-current" aria-hidden="true">
+                <path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.66l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23 5.45-6.23Zm-1.16 17.52h1.83L7.08 4.13H5.12l11.96 15.64Z" />
+              </svg>
+            )}
+          </a>
+        </li>
+      ))}
+    </ul>
+  )
+}
