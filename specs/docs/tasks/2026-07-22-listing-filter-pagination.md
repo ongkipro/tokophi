@@ -3,12 +3,29 @@
 > **Status: ✅ DONE** — 2026-07-22 · branch `worktree-super-admin-overhaul` · `0f61e98` → `5d7eb11`
 > · commit inti `6f90ec7` (listing) + `3321266` (gerbang responsif) + `30b13a1` (header 1024px)
 >
-> ⚠️ **BELUM ADA PR, `main` SENGAJA TIDAK DISENTUH** (masih `0f61e98`). Branch sudah di-push ke
-> `origin/worktree-super-admin-overhaul` supaya kerjanya aman, tapi di repo ini merge ke `main` =
-> **deploy produksi**, dan itu keputusan pemilik. Jangan buka+merge PR tanpa diminta.
+> **PR #28 di-merge ke `main` (`da1da19`) atas perintah pemilik → deploy produksi.** (Catatan
+> sebelumnya di baris ini berbunyi "jangan buka PR" — itu benar sampai pemilik bilang lanjut, dan
+> sudah usang; handoff yang basi lebih berbahaya daripada tidak ada.) Verifikasi deploy di bawah.
 >
 > `npm run audit:responsive`: **132/132 hijau, 0 overflow** — untuk pertama kalinya sejak 2026-07-15.
 > Dua produk yang dinyalakan sementara **sudah dikembalikan ke `draft`** (12 aktif, seperti semula).
+
+## Deploy produksi — diverifikasi lewat ARTEFAK
+
+Container storefront **`525c237eb64e` → `89ce9f047897`** (healthy), bukan cuma "healthy" dan 200.
+Lalu HTML yang **benar-benar terkirim** dari `batik-nusantara.tokophi.id` dibaca: bar filter ada,
+input harga ada, toggle promo ada, skrip `dropEmpties` ada, perbaikan header `w-40 … xl:w-52` ada,
+dan `data-reveal-grid` **sudah hilang** dari listing. Filter dijalankan langsung di produksi:
+`?kategori=dress`→2 · `?promo=1`→1 · `?min=100000&max=150000`→4 · `?min=abc`→diabaikan (12) ·
+`?min=999999999`→"Tidak ada yang cocok" · `?page=5`→di-clamp. Empat surface hidup
+(`app.`/`rich.` 307 ke login, `tokophi.com` + storefront 200).
+
+⚠️ **Lubang di skrip verifikasi saya sendiri, layak diingat.** Loop tunggu pertama berbunyi
+`until [ "$(docker ps -q --filter name=storefront-)" != "<id lama>" ]` — dan **lolos saat container
+sedang hilang** di tengah recreate, karena string kosong juga "≠ id lama". Ia melapor "ID BERGANTI"
+padahal belum ada apa-apa. Persis keluarga yang sama dengan false green 2026-07-20: *kalau sebuah
+cek bisa lulus sementara hal yang diceknya belum terjadi, itu bukan cek.* Syarat yang benar:
+**ada DAN berbeda** (`-n "$id" && "$id" != "$lama"`).
 >
 > File ini ditulis **sebelum** koding dan diperbarui **tiap langkah selesai**, supaya sesi yang mati
 > mendadak (laptop mati 2026-07-22) bisa dilanjut presisi, bukan ditebak.

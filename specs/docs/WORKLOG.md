@@ -7,7 +7,20 @@
 
 
 
-## 2026-07-22 — Session: listing filter + pagination (audit #16 closed out), and a safety gate that had been crashing
+## 2026-07-22 — Session: listing filter + pagination (audit #16 closed out), and a safety gate that had been crashing ✅ **PR #28 merged (`da1da19`), DEPLOYED + verified live**
+
+**Deploy verified by the artefact:** storefront container `525c237eb64e` → `89ce9f047897`, then the
+shipped HTML on `batik-nusantara.tokophi.id` read back — filter bar, price inputs, promo toggle,
+`dropEmpties`, the `xl:w-52` header fix, and **no** `data-reveal-grid`. Filters exercised on prod:
+`?kategori=dress`→2, `?promo=1`→1, `?min=100000&max=150000`→4, `?min=abc` ignored, `?page=5` clamped.
+
+⚠️ **The wait-loop that watched for it was itself unsound the first time**, and this is the lesson to
+keep: `until [ "$(docker ps -q --filter name=storefront-)" != "<old id>" ]` **passes while the
+container is momentarily GONE** mid-recreate — empty is also "not the old id". It announced the swap
+before anything had happened. Same family as the 2026-07-20 false green. The condition must be
+**present AND different**. A check that can pass while the thing it checks has not happened is not a
+check — including when we are the one who just wrote it.
+
 
 Picked up after a laptop died mid-session. The first thing done was to establish that **nothing was
 half-finished** — the previous session had merged PR #27 sixty minutes earlier and left a clean tree —
