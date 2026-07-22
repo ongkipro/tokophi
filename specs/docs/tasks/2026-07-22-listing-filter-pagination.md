@@ -60,13 +60,53 @@ Satu edit, bukan tiga.
 ## Rencana
 
 - [x] Baca kode + data, tetapkan scope (file ini)
-- [ ] 1. `ProductListing.astro`: filter → sort → paginate, satu form GET, `carryParams` diperluas
-- [ ] 2. Kontrol filter (kategori / harga / promo) + tombol Reset, hanya dirender kalau relevan
-- [ ] 3. Komponen `Pagination.astro` (prev/next + nomor, `aria-current`, tap target ≥44px)
-- [ ] 4. Empty state berfilter (bedakan dari katalog kosong)
-- [ ] 5. Verifikasi: `npm run build -w @tokophi/storefront` + **browser sungguhan** (bukan cuma build hijau)
-- [ ] 6. `npm run audit:responsive -w @tokophi/storefront` (gerbang responsif, 10 rute × 11 lebar)
+- [x] 1. `ProductListing.astro`: filter → sort → paginate, satu form GET, `carryParams` diperluas
+- [x] 2. Kontrol filter (kategori / harga / promo) + tombol Reset, hanya dirender kalau relevan
+- [x] 3. Komponen `Pagination.astro` (prev/next + nomor, `aria-current`, tap target ≥44px)
+- [x] 4. Empty state berfilter (bedakan dari katalog kosong)
+- [x] 5. Verifikasi: build ✅ · `astro check` 0 error ✅ · **browser sungguhan** ✅ (hasil di bawah)
+- [~] 6. `npm run audit:responsive` — **gerbangnya ternyata sudah mati sebelum task ini** (lihat bawah), sudah diperbaiki, sweep sedang jalan
 - [ ] 7. Commit + PR + tutup file ini (status DONE + hash), ringkas ke CHANGELOG/WORKLOG, komentar di #16
+
+## Yang sudah diverifikasi (diukur, bukan diasumsikan)
+
+Toko demo cuma punya **12 produk aktif** (2 lagi `draft`) = pas satu halaman, jadi pagination tak akan
+pernah muncul. Supaya benar-benar teruji, `gamis-syari` + `dress-batik` **dinyalakan sementara**
+(`update products set status='active' …`) → 14 produk / 2 halaman, lalu **dikembalikan ke `draft`**.
+⚠️ Kalau sesi ini mati sebelum langkah itu, jalankan:
+`docker exec tokophi-db psql -U tokophi -d tokophi -c "update products set status='draft' where handle in ('gamis-syari','dress-batik');"`
+
+| Diuji | Hasil |
+|---|---|
+| `/produk` | "Menampilkan 1–12 dari 14", 12 kartu, nav halaman aktif=1 |
+| Klik "Berikutnya" | `?page=2` → "13–14 dari 14", 2 kartu |
+| `?page=99` / `?kategori=dress&page=9` | di-clamp ke halaman terakhir, bukan grid kosong |
+| `?kategori=dress` · `?promo=1` · `?min=100000&max=150000` | 3 · 2 · 4 produk — cocok dengan SQL |
+| `?min=abc` · `?kategori=ngawur` | **diabaikan**, katalog penuh (bukan grid kosong) |
+| Ganti sort saat di halaman 2 | `page` hilang → balik ke halaman 1 |
+| Urutan `termurah` / `termahal` | 45rb→75rb→89rb / 245rb→215rb→199rb ✅ dan tetap benar lintas halaman |
+| `/cari?q=an&kategori=atasan` | 3 dari 11 — **`q` tidak hilang**, Reset kembali ke `/cari?q=an` |
+| `/cari?q=an&kategori=dress` | diabaikan — hasil "an" tak memuat kategori Dress, jadi kontrolnya memang tak dirender |
+| Empty state berfilter | "Tidak ada yang cocok" + Reset (bukan "Belum ada produk") |
+| 360px | overflow horizontal **0px**, 0 kontrol paginasi di bawah 44px |
+
+**Satu bug ditemukan browser, sudah diperbaiki:** form GET mengirim SEMUA field, jadi URL yang dibagikan
+jadi `?kategori=dress&min=150000&max=&sort=terbaru` — dua pernyataan kosong. Handler `dropEmpties()`
+me-*disable* field kosong + sort default sebelum submit. ⚠️ `form.submit()` **tidak** memicu event
+`submit`, jadi jalur auto-submit sort memanggilnya manual — kalau tidak, URL diam-diam tetap kotor.
+
+## Temuan sampingan (BUKAN dari perubahan ini — jangan dikira regresi)
+
+1. 🔴 **`npm run audit:responsive` sudah rusak sejak toko demo punya domain kustom** (`store_domains`
+   → `toko-demo.test`, aktif+primary, 2026-07-15). Middleware 301-kan semua host lain ke sana, dan
+   nama itu tak resolve di mesin dev → **setiap rute mati `ERR_NAME_NOT_RESOLVED`**. Gerbangnya tidak
+   melaporkan "0 break", ia *crash* — dan karena tak ada yang menjalankannya terjadwal, storefront
+   berminggu-minggu tanpa gerbang responsif. Diperbaiki di sini: script menanyakan lokasi kanonik ke
+   server lalu memetakan nama itu balik ke port dev (`--host-resolver-rules`), tanpa menyentuh DB.
+2. `product_media` `celana-kulot` posisi 0 menunjuk `/products/celana-kulot.webp` yang **tak ada di
+   `public/`** (varian `-2`..`-5` ada) → 404 gambar. Data/aset, bukan kode. Task terpisah.
+3. Logo toko diminta dari `localhost:3000/api/uploads/…` — server admin memang tidak jalan saat audit
+   storefront. Artefak lingkungan.
 
 ## Cara verifikasi (perintah persis)
 
@@ -90,5 +130,9 @@ npm run dev -w @tokophi/storefront            # catat PID-nya sendiri, JANGAN pk
 
 ## NEXT
 
-**Langkah 1** — mulai dari `apps/storefront/src/components/ProductListing.astro`: pindahkan urutan
-kerjanya jadi *filter → sort → paginate* di frontmatter, sebelum menyentuh markup.
+1. Tunggu `npm run audit:responsive -w @tokophi/storefront` selesai (12 rute × 11 lebar) — harus 0 break.
+2. **Kembalikan 2 produk ke `draft`** (perintah SQL-nya ada di atas) — jangan tinggalkan DB bersama
+   dalam keadaan yang bukan aslinya.
+3. Hapus `apps/storefront/scripts/.tmp-browser-check.mjs` (skrip sementara, jangan ikut di-commit).
+4. Commit (pathspec eksplisit — agen lain punya file staged), buka PR, tutup file ini jadi **DONE**,
+   lalu ringkas ke `CHANGELOG.md` + `WORKLOG.md` dan komentari GitHub #16.
