@@ -26,60 +26,52 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
 
 {/* One palette per page, mounted by Layout.astro so every route has it.
 
-    ── PHONE: A FULL-HEIGHT SHEET, NOT A FLOATING CARD ─────────────────────────────────────────
-    A centred card wastes the edges of a small screen and wobbles the moment the keyboard comes up.
-    Edge to edge with `100dvh` (NOT `100vh` — the URL bar makes that taller than the screen), the
-    input pinned at the top, the results taking whatever is left. From `sm` it becomes the card
-    again, where a card is the right shape.
+    ── ONE FULL SCREEN, AT EVERY WIDTH ─────────────────────────────────────────────────────────
+    Phone, tablet and desktop all get the whole viewport. Searching is a mode, not a side panel: the
+    shop behind it is not something you are meant to be reading while you type.
 
-    ── WHAT WAS REMOVED, AND WHY ───────────────────────────────────────────────────────────────
-    The footer strip of ⌘K-style key hints (↑ ↓ ⏎ Esc) is gone. Those keys still work; they are
-    simply no longer advertised. Advertising them is what made this read as a developer console
-    dropped into a clothes shop — and on a phone, which is most of this shop's traffic, that strip
-    was unusable furniture eating the one dimension a phone has none of. */}
+    Width is spent on BREATHING ROOM, not on stretching. The content sits in a centred `max-w-2xl`
+    column — on a 1920px screen an input 1900px wide is not "using the space", it is losing the eye
+    between the magnifier and the caret. The surface goes edge to edge; the reading measure does not.
+
+    `100dvh`, never `100vh` — the phone URL bar makes `vh` taller than the screen. */}
 <dialog
   id="search-palette"
   data-search-dialog
   aria-label="Cari produk"
-  {/* ⚠️ `sm:bottom-auto` is not cosmetic. A <dialog>'s UA style is `position:fixed; inset:0;
-       margin:auto` — and `m-0` (needed for the phone sheet) removes the auto margins, so with all
-       four insets still at 0 the box STRETCHES to the full inset area and `h-auto` resolves to the
-       max-height. Measured: three results rendered in a 704px card with a field of empty cream under
-       them. Releasing the bottom edge lets the card hug its contents again. */}
-  class="m-0 h-[100dvh] max-h-none w-screen max-w-none border-0 bg-cream p-0 text-ink backdrop:bg-ink/40 sm:inset-x-0 sm:bottom-auto sm:top-[8vh] sm:mx-auto sm:h-auto sm:max-h-[min(80dvh,44rem)] sm:w-[min(38rem,calc(100vw-2rem))] sm:rounded-2xl sm:shadow-[0_24px_60px_-12px_rgb(43_35_38/0.35)] sm:ring-1 sm:ring-line"
+  class="m-0 h-[100dvh] max-h-none w-screen max-w-none rounded-none border-0 bg-cream p-0 text-ink"
 >
-  {/* `flex-col` + `min-h-0` on the scroller is what makes the phone keyboard behave: the results
-      area SHRINKS, instead of pushing the input off the top of the screen. */}
-  {/* `h-full` is for the PHONE sheet, which must fill the screen. On the desktop card it has to be
-      `h-auto` or the panel stretches to its max-height and leaves a field of empty cream under three
-      results — the box must hug what is in it. */}
-  <div class="flex h-full flex-col sm:h-auto sm:max-h-[inherit]">
-    <div class="flex shrink-0 items-center gap-3 border-b border-line px-4">
-      <Search class="size-5 shrink-0 text-muted" stroke-width={1.8} aria-hidden="true" />
-      {/* `text-base` is not a style choice: below 16px iOS Safari zooms the page on focus and never
-          zooms back (see global.css). Do not shrink this for looks. */}
-      <input
-        id="search-palette-input"
-        type="search"
-        autocomplete="off"
-        enterkeyhint="search"
-        placeholder="Cari produk atau kategori…"
-        aria-controls="search-palette-results"
-        class="min-h-14 w-full border-0 bg-transparent text-base text-ink placeholder:text-muted focus:outline-none"
-      />
-      {/* A word, not a glyph. "Batal" is a bigger target than a 14px ✕ and says what it does; the
-          desktop card keeps the same control because two different close affordances for one
-          component is one more thing to learn. */}
-      <button
-        type="button"
-        data-search-close
-        class="-mr-1 shrink-0 rounded-full px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-brand-50 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
-      >
-        Batal
-      </button>
+  {/* `min-h-0` on the scroller is what makes the phone keyboard behave: the results area SHRINKS
+      instead of pushing the input off the top of the screen. */}
+  <div class="flex h-full flex-col">
+    <div class="shrink-0 border-b border-line">
+      <div class="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 sm:px-6">
+        <Search class="size-5 shrink-0 text-muted" stroke-width={1.8} aria-hidden="true" />
+        {/* `text-base` is not a style choice: below 16px iOS Safari zooms the page on focus and never
+            zooms back (see global.css). Do not shrink this for looks. */}
+        <input
+          id="search-palette-input"
+          type="search"
+          autocomplete="off"
+          enterkeyhint="search"
+          placeholder="Cari produk atau kategori…"
+          aria-controls="search-palette-results"
+          class="min-h-16 w-full border-0 bg-transparent text-base text-ink placeholder:text-muted focus:outline-none sm:min-h-20 sm:text-lg"
+        />
+        {/* A word, not a glyph: a bigger target than a 14px ✕, and it says what it does. */}
+        <button
+          type="button"
+          data-search-close
+          class="-mr-2 shrink-0 rounded-full px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-brand-50 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+        >
+          Batal
+        </button>
+      </div>
     </div>
 
-    {/* `aria-live="polite"` so a screen-reader user is told the results changed; without it the list
+    {/* The SCROLLER is full width so its scrollbar sits at the screen edge where a scrollbar belongs;
+        the column inside it stays at reading measure.
+        `aria-live="polite"` so a screen-reader user is told the results changed — without it the list
         updates silently and only sighted users learn anything happened.
         `pb-[env(safe-area-inset-bottom)]` keeps the last row clear of the home indicator. */}
     <div
@@ -87,7 +79,7 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
       role="listbox"
       aria-live="polite"
       aria-busy="false"
-      class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1"
+      class="min-h-0 flex-1 overflow-y-auto overscroll-contain"
     >
     </div>
   </div>
@@ -99,34 +91,17 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
 <template id="search-icon-category"><Tag class="size-4 text-brand-500" stroke-width={1.75} /></template>
 
 <style>
-  /* ONE entrance, not a pile of effects: the sheet rises from the bottom edge on a phone (the
-     direction it will be dismissed in), the card settles down a few pixels on desktop. Both are
-     ~180ms — long enough to read as motion, short enough that a shopper who opens this fifty times
-     a session never waits for it. */
+  /* ONE entrance. The surface is opaque and covers the viewport, so there is no backdrop to fade and
+     no card to scale — a short rise and fade is the whole gesture, at every width. ~180ms: long
+     enough to read as motion, short enough that opening this fifty times a session never costs a wait. */
   @media (prefers-reduced-motion: no-preference) {
     #search-palette[open] {
-      animation: palette-sheet 0.18s ease-out both;
-    }
-    #search-palette[open]::backdrop {
-      animation: palette-fade 0.18s ease-out both;
-    }
-    @media (min-width: 640px) {
-      #search-palette[open] {
-        animation-name: palette-card;
-      }
+      animation: palette-in 0.18s ease-out both;
     }
   }
-  @keyframes palette-sheet {
-    from { transform: translateY(1.5rem); opacity: 0; }
+  @keyframes palette-in {
+    from { transform: translateY(0.75rem); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
-  }
-  @keyframes palette-card {
-    from { transform: translateY(-0.5rem) scale(0.985); opacity: 0; }
-    to { transform: translateY(0) scale(1); opacity: 1; }
-  }
-  @keyframes palette-fade {
-    from { opacity: 0; }
-    to { opacity: 1; }
   }
 
   /* Chromium draws its own ✕ inside `input[type=search]`, and it landed directly beside our close
@@ -188,7 +163,7 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
           : '<span class="text-xs font-medium text-muted">Tanya harga</span>';
       return (
         '<a href="/produk/' + esc(p.handle) + '" role="option" aria-selected="false" ' +
-        'class="flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none' +
+        'class="mx-auto flex w-full max-w-2xl items-center gap-3 rounded-xl p-2 transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none' +
         (p.soldOut ? " opacity-60" : "") + '">' +
           '<span class="h-14 w-[2.625rem] shrink-0 overflow-hidden rounded-lg bg-brand-50">' + thumb + "</span>" +
           '<span class="min-w-0 flex-1">' +
@@ -204,7 +179,7 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
     // fluently, and three rows become one line on a screen with no vertical room to spare.
     function categoryPills(list) {
       return (
-        '<div class="flex flex-wrap gap-2 px-2 pb-1 pt-2">' +
+        '<div class="mx-auto flex w-full max-w-2xl flex-wrap gap-2 px-3 pb-1 pt-4 sm:px-5">' +
         list
           .map(function (c) {
             return (
@@ -221,13 +196,13 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
     // A label carrying its count is information; "PRODUK" in grey caps was decoration.
     function heading(text, count) {
       return (
-        '<p class="px-3 pb-1 pt-3 text-xs font-medium text-muted">' + esc(text) +
+        '<p class="mx-auto w-full max-w-2xl px-4 pb-1 pt-4 text-xs font-medium text-muted sm:px-6">' + esc(text) +
         (count ? ' <span class="tabular-nums">· ' + count + "</span>" : "") + "</p>"
       );
     }
 
     function message(text) {
-      return '<p class="px-4 py-12 text-center text-sm text-muted">' + esc(text) + "</p>";
+      return '<p class="mx-auto w-full max-w-2xl px-4 py-16 text-center text-sm text-muted">' + esc(text) + "</p>";
     }
 
     // The way OUT sits at the END of the list, full width — where a thumb already is after scrolling
@@ -236,7 +211,7 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
     function seeAllRow(q) {
       return (
         '<a href="/cari?q=' + encodeURIComponent(q) + '" role="option" aria-selected="false" ' +
-        'class="mt-1 flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-line px-4 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none">' +
+        'class="mx-auto mt-2 mb-[max(1rem,env(safe-area-inset-bottom))] flex w-full max-w-2xl min-h-12 items-center justify-center gap-1.5 rounded-xl border border-line px-4 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none">' +
         "Lihat semua hasil untuk «" + esc(q) + "»</a>"
       );
     }
@@ -320,8 +295,32 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
       }
     });
 
+    // LOCK THE PAGE BEHIND IT. `showModal()` makes the rest of the document *inert* — it cannot be
+    // clicked or tabbed into — but scrolling is not an interaction with an element, and it leaks:
+    // measured in Chromium at both 1280 and 390, the wheel moved the page from scrollY 0 to 600 with
+    // the palette open. So the lock is ours to apply.
+    //
+    // Hiding the scrollbar also takes its WIDTH away, which shifts the whole layout left. Invisible
+    // while the opaque palette covers it, and a visible jump the moment it closes — so the width is
+    // handed back as padding. (0 on overlay-scrollbar platforms, ~15px on a classic desktop one.)
+    function lockScroll() {
+      var root = document.documentElement;
+      var gap = window.innerWidth - root.clientWidth;
+      root.style.overflow = "hidden";
+      if (gap > 0) root.style.paddingRight = gap + "px";
+    }
+    function unlockScroll() {
+      var root = document.documentElement;
+      root.style.overflow = "";
+      root.style.paddingRight = "";
+    }
+    // ⚠️ On the `close` EVENT, not inside the close button's handler: Escape closes a <dialog>
+    // natively and never runs our button code. Hooking the button alone locks the page forever.
+    dialog.addEventListener("close", unlockScroll);
+
     function open() {
       if (dialog.open) return;
+      lockScroll();
       dialog.showModal();
       input.value = "";
       results.innerHTML = message("Memuat…");

@@ -15,6 +15,7 @@
 import { MapPin, Phone } from "@lucide/astro";
 import { getFooterNav, getMainNav } from "../data/nav";
 import SocialLinks from "./SocialLinks.astro";
+import { clamp } from "../lib/text";
 
 const { store, catalog } = Astro.locals;
 
@@ -30,6 +31,7 @@ const { store, catalog } = Astro.locals;
 // the merchant's FOOTER menu. Both already drop dead links — unpublished categories in `getMainNav`,
 // draft pages in `getFooterNav` — so neither column can point at a 404.
 const MENU = await getMainNav(store.id, catalog.collections);
+const tagline = clamp(store.tagline, 120);
 const PAGES = await getFooterNav(store.id);
 
 // A merchant can save a field and later blank it out; `""` must behave exactly like `null` or the
@@ -98,7 +100,10 @@ const HEADING = "font-display text-xs font-semibold uppercase tracking-widest te
           <p class="font-display text-2xl font-semibold text-cream">{store.name}</p>
         )
       }
-      {store.tagline && <p class="mt-4 max-w-xs text-sm leading-relaxed text-cream/70">{store.tagline}</p>}
+      {/* CLAMPED ON A WORD. The Seller's "Deskripsi singkat" caps at 160 characters, so a merchant who
+          writes to the cap stores a sentence ending mid-word — the demo's reads "…dari masing-masing
+          da". 120 is the length that fills this column without turning a footer into a paragraph. */}
+      {tagline && <p class="mt-4 text-sm leading-relaxed text-cream/70">{tagline}</p>}
     </div>
 
     {/* ── 2. The MERCHANT'S main menu — the same tree the header renders ───────────────────────── */}
@@ -114,7 +119,10 @@ const HEADING = "font-display text-xs font-semibold uppercase tracking-widest te
                    nowhere in the footer of every page; it is a group label with its items under it. */
                 <li class="mt-3 first:mt-0">
                   <p class="text-xs font-medium uppercase tracking-wide text-cream/70">{item.label}</p>
-                  <ul class="mt-1 border-l border-white/10 pl-3">
+                  {/* TWO COLUMNS. The categories are the only nested list here, and at one per row they made the
+                       Menu column eleven rows tall beside neighbours of four — the footer read as one long
+                       column with three short ones parked next to it. */}
+                  <ul class="mt-1 grid grid-cols-2 gap-x-3 border-l border-white/10 pl-3">
                     {item.children.map((c) => (
                       <li>
                         <a href={c.href} class={LINK}>
