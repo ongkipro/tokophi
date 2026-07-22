@@ -377,11 +377,16 @@ const featured = catalog.bestsellers()[0];
           icon covers both paths: with JS it opens the palette, without JS it is a link to /cari,
           which carries its own input for exactly this reason. */}
 
-      <ul class="flex flex-col gap-1">
+      {/* TWO COLUMNS. The drawer is 85% of a phone (~306px at 360), and a one-per-row list pushed
+          "Kontak" below the fold on every phone — a shopper had to scroll a MENU. Paired up, the
+          whole thing fits in one screen, which is the only length a navigation menu should ever be.
+          A parent with children spans both columns: it opens a panel, and a panel that starts
+          half-way across the drawer has nowhere to put its thumbnails. */}
+      <ul class="grid grid-cols-2 gap-1.5">
         {
           MAIN_NAV.map((item) =>
             item.children ? (
-              <li data-accordion>
+              <li data-accordion class="col-span-2">
                 <button
                   type="button"
                   class:list={[
@@ -454,7 +459,10 @@ const featured = catalog.bestsellers()[0];
                   href={item.href}
                   aria-current={isActive(item.href!) ? "page" : undefined}
                   class:list={[
-                    "block rounded-xl px-4 py-3 text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+                    /* `flex items-center` + a floor height, not `block`: in a 2-up grid the cells in
+                       a row stretch to match, so a label that wraps ("Semua Produk" at 138px) left
+                       its one-line neighbour pinned to the top of a taller box. */
+                    "flex min-h-12 items-center rounded-xl px-4 py-2.5 text-[0.95rem] leading-snug transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
                     isActive(item.href!)
                       ? "bg-brand-50 font-medium text-brand-700"
                       : "text-ink hover:bg-brand-50/60 hover:text-brand-700",
@@ -533,29 +541,20 @@ const featured = catalog.bestsellers()[0];
 </script>
 
 <style>
-  /* Desktop mega menu: open on hover / keyboard focus-within, or when JS marks it open */
-  .dropdown:hover > .dropdown-panel,
-  .dropdown:focus-within > .dropdown-panel,
+  /* Desktop mega menu: opens on CLICK only — `.is-open` is the whole state.
+     It used to open on `:hover` and `:focus-within` too, and that was the source of every workaround
+     that used to live here and in the script below: a `.is-closed` class whose only job was to beat
+     the `:hover` rule, plus a `dd.matches(":hover")` test, because clicking to close under a resting
+     pointer left the panel on screen and the button felt dead.
+     Hover is also the wrong verb on a touch screen — a tap has to mean one thing, and on a hybrid
+     laptop the panel opened at every pointer that merely crossed the word on its way somewhere else. */
   .dropdown.is-open > .dropdown-panel {
     visibility: visible;
     opacity: 1;
     transform: translateY(0);
   }
-  .dropdown:hover .dropdown-chevron,
-  .dropdown:focus-within .dropdown-chevron,
   .dropdown.is-open .dropdown-chevron {
     transform: rotate(180deg);
-  }
-
-  /* Click-to-close was broken: the `:hover` rule above kept the panel visible while the pointer sat
-     on the trigger, so removing `.is-open` did nothing and the click looked dead. `.is-closed` is
-     the explicit override — set on click-close, cleared on mouseleave so hover works again after. */
-  .dropdown.is-closed > .dropdown-panel {
-    visibility: hidden;
-    opacity: 0;
-  }
-  .dropdown.is-closed .dropdown-chevron {
-    transform: none;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -568,63 +567,56 @@ const featured = catalog.bestsellers()[0];
 
 <script is:inline>
   (function () {
-    // --- Desktop dropdown (hover via CSS; click + keyboard + outside-click here) ---
+    // --- Desktop mega menu: CLICK to open, click again / outside / Escape to close ---
+    //
+    // No hover. The whole state is one class, so there is nothing to keep in sync and no rule to
+    // out-specify. `aria-expanded` is on the trigger (a real <button>), so a screen reader and the
+    // panel can never disagree about whether it is open.
     var dropdowns = Array.prototype.slice.call(document.querySelectorAll("[data-dropdown]"));
+
+    function closeAll(except) {
+      dropdowns.forEach(function (dd) {
+        if (dd === except) return;
+        dd.classList.remove("is-open");
+        var t = dd.querySelector(".dropdown-trigger");
+        if (t) t.setAttribute("aria-expanded", "false");
+      });
+    }
+
     dropdowns.forEach(function (dd) {
       var trigger = dd.querySelector(".dropdown-trigger");
       if (!trigger) return;
 
-      function openDD() {
-        dd.classList.add("is-open");
-        dd.classList.remove("is-closed");
-        trigger.setAttribute("aria-expanded", "true");
-      }
-      function closeDD() {
-        dd.classList.remove("is-open");
-        // `.is-closed` beats the CSS `:hover` rule — without it, a click-to-close under a resting
-        // pointer leaves the panel on screen and the button feels broken.
-        dd.classList.add("is-closed");
-        trigger.setAttribute("aria-expanded", "false");
-      }
-
       trigger.addEventListener("click", function (e) {
         e.preventDefault();
-        // Toggle on what the shopper actually SEES, not on `.is-open`. Hover opens the panel purely
-        // in CSS without ever setting that class — so a class-only check made the first click on a
-        // hovered (visible) panel "open" it again, i.e. do nothing.
-        var visible =
-          !dd.classList.contains("is-closed") &&
-          (dd.classList.contains("is-open") || dd.matches(":hover") || dd.contains(document.activeElement));
-        if (visible) closeDD();
-        else openDD();
+        var open = dd.classList.contains("is-open");
+        // Only one panel at a time: two mega panels overlapping is not a state anyone chose.
+        closeAll(dd);
+        dd.classList.toggle("is-open", !open);
+        trigger.setAttribute("aria-expanded", String(!open));
       });
-      // keep aria in sync when hovering opens it
-      dd.addEventListener("mouseenter", function () {
-        if (!dd.classList.contains("is-closed")) trigger.setAttribute("aria-expanded", "true");
-      });
-      dd.addEventListener("mouseleave", function () {
-        // Leaving resets the click-suppression, so hover opens it again next time.
-        dd.classList.remove("is-closed");
-        if (!dd.classList.contains("is-open")) trigger.setAttribute("aria-expanded", "false");
-      });
-      dd.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") {
-          closeDD();
-          trigger.focus();
-        }
-      });
-      // Navigating away from an open panel should not leave it hanging if the browser restores the
-      // page from bfcache.
+
+      // Following a link should not leave the panel hanging if the browser restores this page from
+      // bfcache — the shopper would come back to a menu they never reopened.
       dd.querySelectorAll("a[href]").forEach(function (a) {
-        a.addEventListener("click", closeDD);
+        a.addEventListener("click", function () { closeAll(); });
       });
-      dd.__closeDD = closeDD;
     });
 
     document.addEventListener("click", function (e) {
-      dropdowns.forEach(function (dd) {
-        if (!dd.contains(e.target) && dd.__closeDD) dd.__closeDD();
-      });
+      var inside = dropdowns.some(function (dd) { return dd.contains(e.target); });
+      if (!inside) closeAll();
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      var open = dropdowns.filter(function (dd) { return dd.classList.contains("is-open"); });
+      if (!open.length) return;
+      // Return focus to the control that opened it, or the keyboard user is dropped at the top of
+      // the document with no idea where they were.
+      var t = open[0].querySelector(".dropdown-trigger");
+      closeAll();
+      if (t) t.focus();
     });
 
     // --- Mobile accordion (parent expand/collapse) ---

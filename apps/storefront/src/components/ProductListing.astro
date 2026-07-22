@@ -16,34 +16,29 @@
 // contradicted the page. Sorting on the server by the same `sort` the control reflects makes the two
 // agree, and the whole thing works with JS disabled (it is a GET form).
 //
-// ── FILTER + PAGINATION (audit #16, the last two items) ──────────────────────────────────────────
+// ── PAGINATION, AND THE FILTER THAT WAS REMOVED ─────────────────────────────────────────────────
 //
-// The listing used to render EVERY product, every time. Invisible on a 14-product demo store; on a
-// real merchant with 300 products it is one page carrying 300 images.
+// The listing used to render EVERY product, every time — invisible on a 14-product demo store, one
+// page carrying 300 images on a real merchant. `?page=` fixes that: 12 per page (12 divides the
+// 2/3/4-column grid exactly, so no page ends on a ragged half-row), real `<a>` links, out-of-range
+// CLAMPED to the last page rather than 404'd or blank.
 //
-// **RevealGrid is deliberately GONE from this listing.** It is a client-side "Muat lebih banyak"
-// that reveals 3 rows at a time. Stacked on top of real pagination a phone would show BOTH a "Muat
-// lebih banyak" button and a "Halaman 2" link — two controls that look alike and mean different
-// things, one of which cannot be linked to. Server paging wins because it is addressable. RevealGrid
+// **RevealGrid is deliberately GONE from this listing.** It is a client-side "Muat lebih banyak" that
+// reveals 3 rows at a time. Stacked on real paging a phone showed BOTH it and "Halaman 2" — two
+// controls that look alike, mean different things, and only one of which can be linked to. RevealGrid
 // still serves /blog and /kategori, which are single-page lists.
 //
-// **Every control renders only when it can do something.** The category picker appears only if the
-// products passed in span more than one category (so it is absent on /kategori/<handle>, present on
-// /produk and /cari); the promo toggle only if something is actually discounted; the price range only
-// if there is a spread. A filter whose every option returns the same list is furniture.
-//
-// **A param whose control is not rendered is IGNORED, not applied.** Otherwise `?kategori=dress` on a
-// single-category page empties the grid with no visible control to undo it — a dead end the shopper
-// can only escape by editing the URL.
-//
-// **NOT built here, on purpose: a size filter.** `products.sizes` is a LABEL LIST, not availability —
-// real stock lives per variant in `product_variants.stock`. "Punya ukuran L" that ignores variant
-// stock tells a shopper we have a size we do not, which is worse than no filter at all. Build it from
-// variants + stock or not at all. (The demo data also carries `"115x115 cm"` as a hijab "size".)
+// ⚠️ **A category / price / promo FILTER BAR lived here and was REMOVED by the owner** (2026-07-22):
+// on a category page it collapsed to "Filter · Harga [min]–[max] · Terapkan", a form-shaped band
+// above every grid, earning far less than the weight it added. The params went with the controls —
+// leaving `?kategori=`/`?min=`/`?max=`/`?promo=` parsed but unrenderable would be exactly the
+// half-working control this repo keeps paying for. If filtering comes back, it should come back as
+// something a phone can use with one thumb, not as a desktop form row.
+
 import ProductCard from "./ProductCard.astro";
 import EmptyState from "./EmptyState.astro";
 import Pagination from "./Pagination.astro";
-import { PackageOpen, SlidersHorizontal } from "@lucide/astro";
+import { PackageOpen } from "@lucide/astro";
 import { num } from "@tokophi/lib/format";
 import type { Product } from "../data/catalog";
 
@@ -69,62 +64,13 @@ const PER_PAGE = 12;
 
 const params = Astro.url.searchParams;
 
-// Same rule as ProductCard's −% badge, and it must stay the same rule: a `compareAt` over a price of
-// 0 is not a discount, it is missing data.
-const isDiscounted = (p: Product) => p.price > 0 && !!p.compareAt && p.compareAt > p.price;
-
-// ── which controls are worth rendering, decided from the DATA that arrived ────────────────────────
-const categories = [
-  ...new Map(products.filter((p) => p.categoryHandle).map((p) => [p.categoryHandle, p.category])).entries(),
-].sort((a, b) => a[1].localeCompare(b[1], "id"));
-const showCategory = categories.length > 1;
-
-const showPromo = products.some(isDiscounted);
-
-const priced = products.filter((p) => p.price > 0).map((p) => p.price);
-const floor = priced.length ? Math.min(...priced) : 0;
-const ceiling = priced.length ? Math.max(...priced) : 0;
-const showPrice = floor < ceiling;
-
-const hasFilterBar = showCategory || showPromo || showPrice;
-
-// ── read the params (normalise generously, reject narrowly — AGENTS.md) ───────────────────────────
-// A price that is not a non-negative number is treated as absent, never as 0: `?min=abc` must show
-// the catalogue, not an empty grid.
-const money = (raw: string | null) => {
-  if (raw === null || raw.trim() === "") return null;
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
-};
-
-const catParam = params.get("kategori") ?? "";
-const activeCat = showCategory && categories.some(([handle]) => handle === catParam) ? catParam : "";
-const activePromo = showPromo && params.get("promo") === "1";
-const min = showPrice ? money(params.get("min")) : null;
-const max = showPrice ? money(params.get("max")) : null;
-const priceActive = min !== null || max !== null;
-const anyFilter = !!activeCat || activePromo || priceActive;
-
-const filtered = products.filter((p) => {
-  if (activeCat && p.categoryHandle !== activeCat) return false;
-  if (activePromo && !isDiscounted(p)) return false;
-  // An unpriced product ("Hubungi untuk harga") cannot satisfy a range — it is excluded the moment a
-  // bound is set, rather than passed through as if it were free.
-  if (priceActive) {
-    if (p.price <= 0) return false;
-    if (min !== null && p.price < min) return false;
-    if (max !== null && p.price > max) return false;
-  }
-  return true;
-});
-
 const SORTS = { terbaru: "Terbaru", termurah: "Harga terendah", termahal: "Harga tertinggi" } as const;
 type SortKey = keyof typeof SORTS;
 const sort: SortKey = (params.get("sort") as SortKey) in SORTS ? (params.get("sort") as SortKey) : "terbaru";
 
 // Sort a COPY — never mutate the prop, which a caller may still be reading. `terbaru` = newest first
 // (createdAt is epoch ms), so it is the reverse of the oldest-first order the list arrives in.
-const sorted = [...filtered].sort((a, b) =>
+const sorted = [...products].sort((a, b) =>
   sort === "termurah" ? a.price - b.price
   : sort === "termahal" ? b.price - a.price
   : b.createdAt - a.createdAt,
@@ -139,16 +85,12 @@ const page = Number.isInteger(requested) && requested >= 1 ? Math.min(requested,
 const from = (page - 1) * PER_PAGE;
 const visible = sorted.slice(from, from + PER_PAGE);
 
-// The form owns `kategori`, `min`, `max`, `promo` and `sort` as real fields, and must re-emit
-// everything else as hidden — above all `q` on /cari, which filtering would otherwise drop, turning
-// "persempit hasil pencarian" into "buang pencarian saya".
-// `page` is deliberately NOT carried: changing a filter or the sort returns you to page 1, because
-// page 7 of the old list is a different set of products from page 7 of the new one.
-const OWNED = new Set(["kategori", "min", "max", "promo", "sort", "page"]);
+// The sort form must re-emit every OTHER query param as a hidden field — above all `q` on /cari,
+// which sorting would otherwise drop, turning "urutkan hasil pencarian" into "buang pencarian saya".
+// `page` is deliberately NOT carried: changing the order returns you to page 1, because page 7 of the
+// old order is a different set of products from page 7 of the new one.
+const OWNED = new Set(["sort", "page"]);
 const carryParams = [...params.entries()].filter(([k]) => !OWNED.has(k));
-const resetHref = `${Astro.url.pathname}${
-  carryParams.length ? `?${new URLSearchParams(carryParams).toString()}` : ""
-}`;
 
 const FIELD =
   "min-h-11 rounded-full border border-line bg-white px-4 text-sm text-ink transition-colors hover:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none";
@@ -172,96 +114,6 @@ const FIELD =
         <form id="listing-controls" method="get" action={Astro.url.pathname} class="border-b border-line pb-5">
           {carryParams.map(([k, v]) => <input type="hidden" name={k} value={v} />)}
 
-          {hasFilterBar && (
-            <div class="flex flex-wrap items-end gap-3 pb-5">
-              <p class="flex w-full items-center gap-2 text-sm font-medium text-ink sm:w-auto">
-                <SlidersHorizontal class="size-4 text-muted" stroke-width={1.75} aria-hidden="true" />
-                Filter
-              </p>
-
-              {showCategory && (
-                <label class="flex flex-col gap-1 text-xs text-muted">
-                  <span>Kategori</span>
-                  <select name="kategori" class={FIELD}>
-                    <option value="">Semua kategori</option>
-                    {categories.map(([handle, name]) => (
-                      <option value={handle} selected={handle === activeCat}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-
-              {/* A <div> + per-input `aria-label`, not <fieldset>/<legend>: the legend is laid out as
-                  part of the fieldset's own box and fights the flex row for no semantic gain once
-                  each input already names itself. */}
-              {showPrice && (
-                <div class="flex flex-col gap-1 text-xs text-muted">
-                  <span>Harga (Rp)</span>
-                  <div class="flex items-center gap-2">
-                    {/* `inputmode="numeric"` gives a phone the number pad; `type="number"` alone does
-                        not on every Android keyboard. `min`/`step` keep the spinners sane. */}
-                    <input
-                      type="number"
-                      name="min"
-                      value={min ?? ""}
-                      min="0"
-                      step="1000"
-                      inputmode="numeric"
-                      placeholder={String(floor)}
-                      aria-label="Harga terendah"
-                      class:list={[FIELD, "w-28 tabular-nums"]}
-                    />
-                    <span aria-hidden="true">–</span>
-                    <input
-                      type="number"
-                      name="max"
-                      value={max ?? ""}
-                      min="0"
-                      step="1000"
-                      inputmode="numeric"
-                      placeholder={String(ceiling)}
-                      aria-label="Harga tertinggi"
-                      class:list={[FIELD, "w-28 tabular-nums"]}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {showPromo && (
-                <label class="flex min-h-11 items-center gap-2 rounded-full border border-line bg-white px-4 text-sm text-ink">
-                  <input
-                    type="checkbox"
-                    name="promo"
-                    value="1"
-                    checked={activePromo}
-                    class="size-4 accent-brand-600"
-                  />
-                  Sedang diskon
-                </label>
-              )}
-
-              {/* Always visible, never a <noscript> fallback: the price fields must NOT auto-submit
-                  on every keystroke, so this button is the real way to apply them. */}
-              <button
-                type="submit"
-                class="min-h-11 rounded-full bg-brand-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none"
-              >
-                Terapkan
-              </button>
-
-              {anyFilter && (
-                <a
-                  href={resetHref}
-                  class="inline-flex min-h-11 items-center text-sm font-medium text-brand-700 underline underline-offset-4 hover:text-brand-800"
-                >
-                  Reset filter
-                </a>
-              )}
-            </div>
-          )}
-
           <div class="flex flex-wrap items-center justify-between gap-4">
             {/* The count is the FILTERED total, and the range says which slice is on screen. A bare
                 "14 produk" over a grid of 12 is a page arguing with itself. */}
@@ -274,9 +126,7 @@ const FIELD =
                   </span>{" "}
                   dari <span class="font-medium text-ink tabular-nums">{num(sorted.length)}</span> produk
                 </Fragment>
-              ) : (
-                <Fragment>Tidak ada produk yang cocok</Fragment>
-              )}
+              ) : null}
             </p>
 
             <label class="flex items-center gap-2 text-sm text-muted">
@@ -308,17 +158,7 @@ const FIELD =
               <ProductCard product={p} />
             ))}
           </div>
-        ) : (
-          // A filter that matched nothing is NOT an empty catalogue, and saying "Belum ada produk"
-          // here would blame the shop for the shopper's own filter. The way out is Reset, not Beranda.
-          <EmptyState
-            icon={PackageOpen}
-            title="Tidak ada yang cocok"
-            body="Coba longgarkan filternya — rentang harga yang lebih lebar, atau kategori lain."
-            ctaHref={resetHref}
-            ctaLabel="Reset filter"
-          />
-        )}
+        ) : null}
 
         <Pagination page={page} totalPages={totalPages} />
       </Fragment>
@@ -332,30 +172,22 @@ const FIELD =
     var form = document.getElementById("listing-controls");
     if (!form) return;
 
-    // A GET form submits EVERY named control it owns, so "no minimum price" leaves as `min=` and the
-    // default order as `sort=terbaru`. The shopper then shares `?kategori=dress&min=&max=&sort=terbaru`
-    // — four statements, two of which say nothing, for a view `?kategori=dress` describes exactly.
-    // A DISABLED control is not submitted, and the page navigates away immediately, so nobody ever
-    // sees the controls go grey. With JS off the URL is merely verbose; the results are identical.
-    function dropEmpties() {
-      ["min", "max", "kategori"].forEach(function (name) {
-        var el = form.elements[name];
-        if (el && String(el.value).trim() === "") el.disabled = true;
-      });
+    // A GET form submits every named control it owns, so choosing the default order still writes
+    // `?sort=terbaru` — a statement that says nothing, in a URL a shopper may share. A DISABLED
+    // control is not submitted, and the page navigates away immediately, so nobody sees it go grey.
+    function dropDefaults() {
       var sort = form.elements["sort"];
       if (sort && sort.value === "terbaru") sort.disabled = true; // the default the server falls back to
     }
 
-    form.addEventListener("submit", dropEmpties);
+    form.addEventListener("submit", dropDefaults);
 
-    // SORT applies instantly; the price inputs deliberately do not — submitting those on every
-    // keystroke would reload the page mid-number ("1", "12", "120"…). They have "Terapkan".
-    // ⚠️ `form.submit()` does NOT fire the submit event, so `dropEmpties` has to be called by hand
-    // here. Wiring this to the event alone would silently leave the empty params in the URL.
+    // ⚠️ `form.submit()` does NOT fire the submit event, so `dropDefaults` has to be called by
+    // hand here. Wiring it to the event alone would silently leave `?sort=terbaru` in the URL.
     var select = document.getElementById("sort-select");
     if (select) {
       select.addEventListener("change", function () {
-        dropEmpties();
+        dropDefaults();
         form.submit();
       });
     }
