@@ -7,6 +7,7 @@ import { withTenant } from "@/lib/tenant";
 import { withCurrentTenant } from "@/lib/tenant";
 import { saveImage, saveFavicon, deleteImageFile, MAX_BYTES } from "@/lib/image-store";
 import { extractUsername, normalizePublicPhone, SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social";
+import { emailError } from "@tokophi/lib/validate";
 
 // Store profile — the fields that actually have a column and reach the shopper's storefront:
 // name, tagline (the storefront's meta description + footer line), whatsapp (the CS button).
@@ -40,6 +41,8 @@ export type StoreProfile = {
   whatsapp: string;
   address: string;
   phone: string;
+  /** PUBLIC shop email — correspondence, NOT the owner's login (`users.email`). */
+  email: string;
   social: SocialHandles;
   logoUrl: string | null;
   faviconUrl: string | null;
@@ -63,6 +66,7 @@ export async function getStoreProfile(): Promise<StoreProfile> {
         whatsapp: schema.stores.whatsapp,
         address: schema.stores.address,
         phone: schema.stores.phone,
+        email: schema.stores.email,
         socialInstagram: schema.stores.socialInstagram,
         socialTiktok: schema.stores.socialTiktok,
         socialFacebook: schema.stores.socialFacebook,
@@ -85,6 +89,7 @@ export async function getStoreProfile(): Promise<StoreProfile> {
       whatsapp: row?.whatsapp ?? "",
       address: row?.address ?? "",
       phone: row?.phone ?? "",
+      email: row?.email ?? "",
       // NULL → "" so the inputs stay controlled. Every one of these is legitimately unset: a shop with
       // no TikTok renders no TikTok icon, which is honest — a link to a profile that does not exist is
       // worse than no link.
@@ -120,6 +125,7 @@ export async function saveStoreProfile(input: {
   whatsapp: string;
   address?: string;
   phone?: string;
+  email?: string;
   social?: Partial<SocialHandles>;
 }): Promise<Result> {
   const { storeId } = await requireCapability("settings:write");
@@ -144,6 +150,14 @@ export async function saveStoreProfile(input: {
   const phone = normalizePublicPhone(input.phone ?? "");
   if (phone === "invalid") return { ok: false, error: "Nomor telepon tidak valid." };
 
+  // SHAPE ONLY, and reuse the checkout's rule rather than writing a second one (@tokophi/lib/validate).
+  // No domain allow-list, ever: it would refuse corporate, university and self-hosted addresses —
+  // which are the higher-value ones — and a merchant whose shop email is refused simply never fills
+  // the field in. Empty is valid and is the normal case.
+  const email = (input.email ?? "").trim();
+  const emailProblem = email ? emailError(email) : null;
+  if (emailProblem) return { ok: false, error: emailProblem };
+
   // Usernames only — a pasted profile URL is unpacked rather than refused (lib/social.ts). Nothing
   // beyond that is checked: the platforms' handle rules genuinely differ and a universal regex would
   // silently cost a merchant a channel.
@@ -157,7 +171,7 @@ export async function saveStoreProfile(input: {
       // `where id = storeId` is REQUIRED, not belt-and-braces: `stores` is keyed by `id` and has no
       // `store_id`, so it is invisible to the store_id-based RLS derivation. 0058 put an id-based
       // policy on it, but the WHERE is the rule and the policy is only the net (see AGENTS.md).
-      .set({ name, tagline: tagline || null, whatsapp: wa, address: address || null, phone, ...social })
+      .set({ name, tagline: tagline || null, whatsapp: wa, address: address || null, phone, email: email || null, ...social })
       .where(eq(schema.stores.id, storeId));
     revalidatePath("/pengaturan");
     return { ok: true };

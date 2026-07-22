@@ -1,0 +1,20 @@
+-- (Renumbered 0064 → 0070 when this branch merged main: another branch had landed 0064–0069 in the
+--  meantime, so the original number collided. The `when` stays above production's highest.)
+--
+-- The shop's PUBLIC email — the one a shopper may write to, shown in the storefront footer.
+--
+-- ⚠️ It is NOT the owner's login. `users.email` is a credential: it identifies the person who signs
+-- in to the Seller panel, it is unique across the platform, and publishing it would put a login
+-- identifier on every page of a public website. This one is shop correspondence — `halo@toko.com`,
+-- often a shared inbox, and a merchant may want it published precisely because it is not personal.
+-- Two fields, two jobs; do not "simplify" by rendering `users.email` here.
+--
+-- Nullable, like `address` and `phone` beside it (migration 0063). Empty is the NORMAL case: most
+-- shops here sell on WhatsApp and never publish an address at all. The footer renders each row only
+-- when it holds something, so a shop that fills in nothing gets a shorter footer rather than a
+-- heading with nothing under it.
+--
+-- No format constraint in the DB on purpose. Validation belongs at the boundary that has a person to
+-- talk to (`emailError` in @tokophi/lib/validate — shape only, NO domain whitelist: an allow-list
+-- would refuse corporate, university and self-hosted addresses, which are the higher-value ones).
+ALTER TABLE "stores" ADD COLUMN IF NOT EXISTS "email" text;

@@ -12,7 +12,7 @@
 // This is the same failure the platform already shipped once: `wa.me/6281234567890` (the canonical
 // Indonesian dummy number) went out as a live WhatsApp button on every page of every store because a
 // missing value fell back to a placeholder. A missing channel is honest; a dead one is a lie.
-import { MapPin, Phone } from "@lucide/astro";
+import { Mail, MapPin, Phone } from "@lucide/astro";
 import { getFooterNav, getMainNav } from "../data/nav";
 import SocialLinks from "./SocialLinks.astro";
 import { clamp } from "../lib/text";
@@ -44,6 +44,8 @@ const clean = (v: string | null | undefined) => {
 // The public phone is free text ("(0274) 123456", "0812-3456-7890") because that is how a shop writes
 // it on its own signage. Only the `tel:` href is normalised — the label stays exactly as typed.
 const phone = clean(store.phone);
+// PUBLIC shop email (migration 0070) — correspondence, never `users.email`, which is a login.
+const email = clean(store.email);
 const telHref = phone ? `tel:${phone.replace(/[^\d+]/g, "")}` : null;
 
 // The address is a textarea: 2–4 lines, and merchants leave blank lines in the middle. Split, trim,
@@ -74,7 +76,7 @@ const SOCIALS = [
 // exists. A heading is a promise that something follows it. The store's WhatsApp number is
 // deliberately NOT consulted: the footer no longer carries a WhatsApp button (the chat launcher and
 // /kontak do), so a shop whose only channel is WhatsApp must not be given an empty column heading.
-const hasContact = Boolean(telHref);
+const hasContact = Boolean(telHref || email);
 
 // Shared classes. Tap targets are ≥44px (design audit #16 — the share buttons were raised from 36 to
 // 44 for the same reason), and every transition carries a `motion-reduce:` escape.
@@ -105,13 +107,18 @@ const CAPTION = "text-[0.7rem] font-medium uppercase tracking-[0.12em] text-crea
       There is no mailer and no list to join, so the button did literally nothing on every page of
       every store. Wiring it to an INSERT would not fix it: it would still promise an email nothing
       can send. (JSX comment, not HTML — an HTML comment ships to the browser.) */}
-  {/* A 12-COLUMN TRACK, not four equal quarters. The four blocks do not carry equal weight: the brand
-      needs a measure wide enough to read a sentence in, the menu is the tallest list, and "Informasi"
-      is four short links that do not need the same width as either. Equal columns made that
-      difference look like a mistake instead of a structure. Spans: 4 / 3 / 2 / 3. */}
-  <div class="mx-auto grid max-w-7xl gap-x-10 gap-y-10 px-4 py-14 sm:px-6 md:grid-cols-2 lg:grid-cols-12 lg:gap-x-8 lg:py-16">
+  {/* A TEN-COLUMN TRACK — 3 / 2 / 2 / 3, i.e. 30 / 20 / 20 / 30.
+      Not an arbitrary split: it pairs the two CONTENT blocks at equal weight on the outside (who the
+      shop is, and how to reach it) and sets the two LINK LISTS between them. A symmetric frame reads
+      as a decision; four equal quarters read as a default.
+      The numbers also answer to the content: 30% is 341px at `max-w-7xl`, which fits five 44px social
+      icons on one row and gives the description a readable measure; 20% is 227px, comfortably past
+      the ~155px that "Kebijakan Pengembalian" needs. Ten columns because 30/20/20/30 divides by ten
+      exactly — a twelve-column track would have forced 3.6, and a fraction you have to round is a
+      grid arguing with its own numbers. */}
+  <div class="mx-auto grid max-w-7xl gap-x-10 gap-y-10 px-4 py-14 sm:px-6 md:grid-cols-2 lg:grid-cols-10 lg:gap-x-8 lg:py-16">
     {/* ── 1. Identity — who this shop is, and nothing else ─────────────────────────────────────── */}
-    <div class="lg:col-span-4">
+    <div class="lg:col-span-3">
       {
         store.logoUrl ? (
           <img src={store.logoUrl} alt={store.name} width="160" height="48" class="h-10 w-auto object-contain object-left" />
@@ -128,7 +135,7 @@ const CAPTION = "text-[0.7rem] font-medium uppercase tracking-[0.12em] text-crea
     {/* ── 2. The MERCHANT'S main menu — the same tree the header renders ───────────────────────── */}
     {
       MENU.length > 0 && (
-        <nav aria-label="Menu toko" class="lg:col-span-3">
+        <nav aria-label="Menu toko" class="lg:col-span-2">
           <h2 class={HEADING}>Menu</h2>
           <ul class="mt-3 text-sm">
             {MENU.map((item) =>
@@ -136,24 +143,40 @@ const CAPTION = "text-[0.7rem] font-medium uppercase tracking-[0.12em] text-crea
                 /* A dropdown parent carries NO href — `getMainNav` strips it, because the seed's
                    target for one is literally "#". Rendering it as a link would put a link to
                    nowhere in the footer of every page; it is a group label with its items under it. */
-                <li class="mt-4 first:mt-0">
-                  {/* The `border-l` + indent that used to wrap these is gone. A footer column has one
-                      level of hierarchy to spend; spending it on a rule and a 12px inset made the
-                      categories read as a nested tree inside a flat list. A caption above them says
-                      the same thing and draws nothing. */}
-                  <p class={CAPTION}>{item.label}</p>
-                  {/* TWO COLUMNS. The categories are the only nested list here, and at one per row they made the
-                       Menu column eleven rows tall beside neighbours of four — the footer read as one long
-                       column with three short ones parked next to it. */}
-                  <ul class="mt-1 grid grid-cols-2 gap-x-4">
-                    {item.children.map((c) => (
-                      <li>
-                        <a href={c.href} class={LINK}>
-                          {c.label}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
+                <li class="mt-3 first:mt-0">
+                  {/* A NATIVE <details>, not a scripted accordion. Open/close, the keyboard, the
+                      screen-reader state and the no-JS case all come from the platform — a hand-rolled
+                      one would be a button, an aria-expanded to keep in sync, and a class to toggle,
+                      to arrive at the same thing.
+                      Collapsed by default: five category links were the only reason this column stood
+                      twice as tall as its neighbours. The links stay in the HTML either way, so a
+                      crawler still follows them. */}
+                  <details class="group">
+                    <summary
+                      class={`${CAPTION} flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-sm transition-colors hover:text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none lg:min-h-9 [&::-webkit-details-marker]:hidden`}
+                    >
+                      {item.label}
+                      {/* `size-3` chevron, rotated by the open state. `aria-hidden` because <summary>
+                          already announces expanded/collapsed on its own. */}
+                      <svg
+                        viewBox="0 0 24 24"
+                        class="size-3 fill-none stroke-current transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
+                        stroke-width="2.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
+                      </svg>
+                    </summary>
+                    <ul class="mt-1 grid grid-cols-2 gap-x-4">
+                      {item.children.map((c) => (
+                        <li>
+                          <a href={c.href} class={LINK}>
+                            {c.label}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                 </li>
               ) : (
                 <li>
@@ -196,27 +219,16 @@ const CAPTION = "text-[0.7rem] font-medium uppercase tracking-[0.12em] text-crea
         <div class="lg:col-span-3">
           <h2 class={HEADING}>Hubungi kami</h2>
 
-          {/* ⚠️ The "Hubungi via WhatsApp" button was REMOVED here by the owner (2026-07-22). The
-              footer's contact column is address · phone · social, and a green CTA button was the one
-              thing in it shouting. WhatsApp is NOT gone from the shop — the floating chat launcher
-              and /kontak both still open it, and it remains the channel these merchants actually
-              sell on (see AGENTS.md on cart recovery). This is a layout decision about the footer,
-              not a change of channel: do not "restore" it here. */}
-          {telHref && phone && (
-            <ul class="mt-3 text-sm">
-              <li>
-                <a href={telHref} class={`${LINK} gap-2`}>
-                  <Phone class="size-4 shrink-0" stroke-width={1.75} aria-hidden="true" />
-                  <span class="tabular-nums">{phone}</span>
-                </a>
-              </li>
-            </ul>
-          )}
-
+          {/* ORDER: ADDRESS → CONTACT → SOCIAL. Where the shop IS comes first because it is the
+              slowest thing to establish and the one a shopper checks before trusting an unknown
+              store; the ways to reach it follow; the profiles come last because they lead AWAY from
+              the page. (The "Hubungi via WhatsApp" button that used to open this column was removed
+              2026-07-22 — WhatsApp is still on the floating chat launcher and /kontak, and remains the
+              channel these merchants sell on. A footer layout decision, not a change of channel.) */}
           {
             addressLines.length > 0 ? (
-              <address class="mt-4 flex gap-2 text-sm not-italic leading-relaxed text-cream/70">
-                <MapPin class="mt-0.5 h-4 w-4 shrink-0" stroke-width={1.75} aria-hidden="true" />
+              <address class="mt-3 flex gap-2 text-sm not-italic leading-relaxed text-cream/75">
+                <MapPin class="mt-0.5 size-4 shrink-0 text-cream/60" stroke-width={1.75} aria-hidden="true" />
                 <span>
                   {addressLines.map((line) => (
                     <span class="block">{line}</span>
@@ -225,13 +237,37 @@ const CAPTION = "text-[0.7rem] font-medium uppercase tracking-[0.12em] text-crea
               </address>
             ) : (
               city && (
-                <p class="mt-4 flex items-center gap-2 text-sm text-cream/70">
-                  <MapPin class="h-4 w-4 shrink-0" stroke-width={1.75} aria-hidden="true" />
+                <p class="mt-3 flex items-center gap-2 text-sm text-cream/75">
+                  <MapPin class="size-4 shrink-0 text-cream/60" stroke-width={1.75} aria-hidden="true" />
                   {city}, Indonesia
                 </p>
               )
             )
           }
+
+          {hasContact && (
+            <ul class="mt-3 text-sm">
+              {telHref && phone && (
+                <li>
+                  <a href={telHref} class={`${LINK} gap-2`}>
+                    <Phone class="size-4 shrink-0 text-cream/60" stroke-width={1.75} aria-hidden="true" />
+                    <span class="tabular-nums">{phone}</span>
+                  </a>
+                </li>
+              )}
+              {email && (
+                <li>
+                  {/* `mailto:` and nothing else — no obfuscation. Address-harvesting scrapers parse
+                      the same JS tricks that would break the link for a real shopper, and a merchant
+                      who typed this field wants to be written to. */}
+                  <a href={`mailto:${email}`} class={`${LINK} gap-2`}>
+                    <Mail class="size-4 shrink-0 text-cream/60" stroke-width={1.75} aria-hidden="true" />
+                    <span class="break-all">{email}</span>
+                  </a>
+                </li>
+              )}
+            </ul>
+          )}
 
           <SocialLinks socials={SOCIALS} storeName={store.name} class="mt-4" />
         </div>

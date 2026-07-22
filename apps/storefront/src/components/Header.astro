@@ -362,7 +362,9 @@ const featured = catalog.bestsellers()[0];
         type="button"
         id="menu-close"
         aria-label="Tutup menu"
-        class="inline-flex items-center justify-center rounded-full border border-line p-2 text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        {/* `size-11` = 44px. It measured 38×38 — under the floor design audit #16 set for the whole
+            shop, on the control a shopper reaches for most often in here. */}
+        class="inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-line text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
       >
         <svg viewBox="0 0 24 24" class="h-5 w-5 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
           <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round" />
@@ -386,72 +388,71 @@ const featured = catalog.bestsellers()[0];
         {
           MAIN_NAV.map((item) =>
             item.children ? (
-              <li data-accordion class="col-span-2">
-                <button
-                  type="button"
-                  class:list={[
-                    "accordion-trigger flex w-full items-center justify-between rounded-xl px-4 py-3 text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
-                    isItemActive(item)
-                      ? "bg-brand-50 font-medium text-brand-700"
-                      : "text-ink hover:bg-brand-50/60 hover:text-brand-700",
-                  ]}
-                  aria-expanded={isItemActive(item) ? "true" : "false"}
-                >
-                  <span>{item.label}</span>
-                  <svg
-                    viewBox="0 0 24 24"
-                    class="accordion-chevron h-4 w-4 fill-none stroke-current transition-transform duration-200"
-                    stroke-width="2"
-                    aria-hidden="true"
+              <li class="col-span-2">
+                {/* A NATIVE <details>, like the footer's. Open/close, the keyboard, the
+                    screen-reader's expanded state and the no-JS case all come from the platform —
+                    the hand-rolled version was ~25 lines of script keeping a chevron, a `hidden`
+                    class and an `aria-expanded` in sync with each other. Deleted, not replaced. */}
+                <details class="group" open={isItemActive(item)}>
+                  <summary
+                    class:list={[
+                      "flex min-h-12 cursor-pointer list-none items-center justify-between rounded-xl px-4 py-2.5 text-[0.95rem] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 [&::-webkit-details-marker]:hidden",
+                      isItemActive(item)
+                        ? "bg-brand-50 font-medium text-brand-700"
+                        : "text-ink hover:bg-brand-50/60 hover:text-brand-700",
+                    ]}
                   >
-                    <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </button>
-                <ul
-                  class:list={[
-                    "accordion-panel mt-1 flex flex-col gap-0.5 overflow-hidden pl-3 transition-all",
-                    isItemActive(item) ? "" : "hidden",
-                  ]}
-                >
-                  {/* Same thumbnail + live count as the desktop mega panel. A phone is where most
-                      Indonesian shoppers actually browse — it should not get the stripped version. */}
-                  {item.children.map((child) => {
-                    const meta = categoryMeta(child.href);
-                    return (
-                      <li>
-                        <a
-                          href={child.href}
-                          aria-current={isActive(child.href) ? "page" : undefined}
-                          class:list={[
-                            "flex items-center gap-3 rounded-xl p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
-                            isActive(child.href) ? "bg-brand-50" : "hover:bg-brand-50/60",
-                          ]}
-                        >
-                          <span class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-50 ring-1 ring-line">
-                            {meta?.image ? (
-                              <img src={meta.image} alt="" loading="lazy" class="h-full w-full object-cover" />
-                            ) : (
-                              <ShoppingBag class="h-4 w-4 text-brand-400" stroke-width={1.75} aria-hidden="true" />
-                            )}
-                          </span>
-                          <span class="min-w-0">
-                            <span
-                              class:list={[
-                                "block truncate text-sm",
-                                isActive(child.href) ? "font-medium text-brand-700" : "text-ink",
-                              ]}
-                            >
-                              {child.label}
+                    <span>{item.label}</span>
+                    <svg
+                      viewBox="0 0 24 24"
+                      class="size-4 fill-none stroke-current transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </summary>
+                  <ul class="mt-1 flex flex-col gap-0.5 pl-3">
+                    {/* Same thumbnail + live count as the desktop mega panel. A phone is where most
+                        Indonesian shoppers actually browse — it should not get the stripped version. */}
+                    {item.children.map((child) => {
+                      const meta = categoryMeta(child.href);
+                      return (
+                        <li>
+                          <a
+                            href={child.href}
+                            aria-current={isActive(child.href) ? "page" : undefined}
+                            class:list={[
+                              "flex items-center gap-3 rounded-xl p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+                              isActive(child.href) ? "bg-brand-50" : "hover:bg-brand-50/60",
+                            ]}
+                          >
+                            <span class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-50 ring-1 ring-line">
+                              {meta?.image ? (
+                                <img src={meta.image} alt="" loading="lazy" class="h-full w-full object-cover" />
+                              ) : (
+                                <ShoppingBag class="size-4 text-brand-400" stroke-width={1.75} aria-hidden="true" />
+                              )}
                             </span>
-                            <span class="block text-xs text-muted tabular-nums">
-                              {meta ? (meta.count > 0 ? `${meta.count} produk` : "Segera hadir") : "Lihat koleksi"}
+                            <span class="min-w-0">
+                              <span
+                                class:list={[
+                                  "block truncate text-sm",
+                                  isActive(child.href) ? "font-medium text-brand-700" : "text-ink",
+                                ]}
+                              >
+                                {child.label}
+                              </span>
+                              <span class="block text-xs text-muted tabular-nums">
+                                {meta ? (meta.count > 0 ? `${meta.count} produk` : "Segera hadir") : "Lihat koleksi"}
+                              </span>
                             </span>
-                          </span>
-                        </a>
-                      </li>
-                    );
-                  })}
-                </ul>
+                          </a>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </details>
               </li>
             ) : (
               <li>
@@ -514,24 +515,68 @@ const featured = catalog.bestsellers()[0];
     var drawer = document.getElementById("mobile-drawer");
     if (!openBtn || !drawer || !overlay) return;
 
+    // ── THE DRAWER CLAIMS `aria-modal="true"`, SO IT HAS TO BEHAVE LIKE ONE ──────────────────────
+    // Measured before this was written: on open, focus stayed on the burger OUTSIDE the panel, so a
+    // keyboard or screen-reader user was told "modal dialog" and left standing in the page behind it.
+    // Announcing modality you do not enforce is the half-working control this repo keeps paying for.
+    var FOCUSABLE = 'a[href], button:not([disabled]), summary, input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    function focusables() {
+      return Array.prototype.slice.call(drawer.querySelectorAll(FOCUSABLE)).filter(function (el) {
+        return el.offsetParent !== null; // skip anything inside a collapsed <details>
+      });
+    }
+
     function open() {
       overlay.classList.remove("pointer-events-none", "opacity-0");
       drawer.classList.remove("translate-x-full");
       openBtn.setAttribute("aria-expanded", "true");
-      document.body.style.overflow = "hidden";
+      lockScroll();
+      // Into the panel, not at the top of it: the close button is the one control every shopper
+      // wants within reach, and landing there means Escape is not the only way out.
+      var first = drawer.querySelector("#menu-close") || focusables()[0];
+      if (first) first.focus();
     }
     function close() {
       overlay.classList.add("pointer-events-none", "opacity-0");
       drawer.classList.add("translate-x-full");
       openBtn.setAttribute("aria-expanded", "false");
-      document.body.style.overflow = "";
+      unlockScroll();
+      // Focus goes back to what opened it. Without this a keyboard user is dropped at the top of the
+      // document with no idea where they were.
+      if (drawer.contains(document.activeElement)) openBtn.focus();
+    }
+
+    // Scroll lock on `documentElement`, the same target the search palette uses — one file should not
+    // hold two ideas about what "lock the page" means. The scrollbar's width is handed back as padding
+    // so the layout behind does not shift (0 on a phone's overlay scrollbars, ~15px on a desktop).
+    function lockScroll() {
+      var root = document.documentElement;
+      var gap = window.innerWidth - root.clientWidth;
+      root.style.overflow = "hidden";
+      if (gap > 0) root.style.paddingRight = gap + "px";
+    }
+    function unlockScroll() {
+      document.documentElement.style.overflow = "";
+      document.documentElement.style.paddingRight = "";
     }
 
     openBtn.addEventListener("click", open);
     if (closeBtn) closeBtn.addEventListener("click", close);
     overlay.addEventListener("click", close);
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") close();
+      var isOpen = !drawer.classList.contains("translate-x-full");
+      if (!isOpen) return;
+      if (e.key === "Escape") { close(); return; }
+      if (e.key !== "Tab") return;
+      // Wrap at the ends. Without this, Tab off the last item walks into the page the dialog says is
+      // unavailable, and Shift+Tab off the first walks into the header.
+      var list = focusables();
+      if (!list.length) return;
+      var first = list[0];
+      var last = list[list.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      else if (!drawer.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
     });
     // close after navigating to a link inside the drawer
     drawer.querySelectorAll("a[href]").forEach(function (a) {
@@ -619,26 +664,8 @@ const featured = catalog.bestsellers()[0];
       if (t) t.focus();
     });
 
-    // --- Mobile accordion (parent expand/collapse) ---
-    document.querySelectorAll("[data-accordion]").forEach(function (acc) {
-      var trigger = acc.querySelector(".accordion-trigger");
-      var panel = acc.querySelector(".accordion-panel");
-      var chevron = acc.querySelector(".accordion-chevron");
-      if (!trigger || !panel) return;
-      // sync initial chevron with server-rendered expanded state
-      if (chevron && !panel.classList.contains("hidden")) chevron.style.transform = "rotate(180deg)";
-      trigger.addEventListener("click", function () {
-        var isOpen = !panel.classList.contains("hidden");
-        if (isOpen) {
-          panel.classList.add("hidden");
-          trigger.setAttribute("aria-expanded", "false");
-          if (chevron) chevron.style.transform = "";
-        } else {
-          panel.classList.remove("hidden");
-          trigger.setAttribute("aria-expanded", "true");
-          if (chevron) chevron.style.transform = "rotate(180deg)";
-        }
-      });
-    });
+    // The mobile accordion's script lived here — ~25 lines keeping a chevron transform, a `hidden`
+    // class and an `aria-expanded` in sync. It is a native <details> now, so the platform owns all
+    // three and there is nothing left to keep in sync. Deleted, not replaced.
   })();
 </script>

@@ -23,6 +23,20 @@ are building one product together, not racing. Everything below was learned by b
   paths, and commit with a pathspec: `git commit -- path/to/your/file`.
 - **Files someone is mid-edit on.** Check `git status` before you touch a file. If it is already
   modified and it isn't yours, **leave it and say so** — or wait. Do not "fix" your way through it.
+- **Migration numbers.** Two branches open at once BOTH write `0064_*`, because each one only looked
+  at its own journal. On 2026-07-22 that happened: `feat/cetak-resi-demo` landed `0064`–`0069` while
+  this branch was open with its own `0064`, and the folder drizzle orders by ended up with two.
+  **`git fetch && cat origin/main:packages/db/drizzle/meta/_journal.json | tail` BEFORE you generate
+  one**, and **`npm run verify-migrations -w @tokophi/db`** after — it fails on a duplicate index, on
+  a `when` that does not increase, and on a journal entry with no `.sql` file (or the reverse).
+  Resolving the journal conflict: take **main's file whole** and append your one entry. Never
+  hand-merge the list — it rewrites entries that belong to someone else.
+- **PR numbers.** `gh pr create` prints the number; **use that one**. Guessing "the next number" is
+  how you run `gh pr merge` against a PR that is not yours. It happened on 2026-07-22 and only failed
+  because that PR had already been merged.
+- **Merges are serialised, not parallel.** Two branches merged close together both trigger a Coolify
+  build and the later one wins; and the second author inherits a conflict they did not create. Merge,
+  watch the deploy land, then let the next one go.
 - **The stash. `git stash` is GLOBAL — never use it here.** The stash stack belongs to the repository,
   not to you, and other agents park work-in-progress in it. `git status` shows you a dirty file; nothing
   shows you that `stash@{0}` is someone else's unfinished afternoon. On 2026-07-17 a `stash push` + `pop`
