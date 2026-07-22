@@ -1,6 +1,6 @@
 # TASK — Header ikon-saja + palet pencarian (⌘K) ala Vercel/Coolify
 
-> **Status: 🟡 IN PROGRESS** · dibuka 2026-07-22 · branch `worktree-super-admin-overhaul`
+> **Status: ✅ DONE** · dibuka 2026-07-22 · branch `worktree-super-admin-overhaul`
 >
 > Ditulis **sebelum** koding. Baca **NEXT** paling bawah lebih dulu.
 > Rantai hari ini: [filter+pagination](./2026-07-22-listing-filter-pagination.md) →
@@ -71,13 +71,13 @@ tidak jadi regresi.
 
 ## Rencana
 
-- [ ] 1. `/api/search.ts` — JSON produk + kategori, tenant dari Host, hasil dibatasi
-- [ ] 2. `SearchPalette.astro` — `<dialog>`, input berikon, hasil berkelompok, keyboard, semua keadaan
-- [ ] 3. `Header.astro` — kotak cari → ikon; hapus tambalan `w-40/xl:w-52`; rapikan grup ikon + keranjang
-- [ ] 4. `cari.astro` — kotak cari di halamannya sendiri (syarat, bukan tambahan)
-- [ ] 5. Drawer mobile: search di dalamnya menyesuaikan (jangan ada dua kotak cari)
-- [ ] 6. Verifikasi: build · `astro check` · **browser** (klik, ⌘K, `/`, ↑↓, Esc, tanpa-JS) · 360px
-- [ ] 7. `npm run audit:responsive` tetap hijau · commit · tutup file ini · CHANGELOG/WORKLOG
+- [x] 1. `/api/search.ts` — JSON produk + kategori, tenant dari Host, hasil dibatasi
+- [x] 2. `SearchPalette.astro` — `<dialog>`, input berikon, hasil berkelompok, keyboard, semua keadaan
+- [x] 3. `Header.astro` — kotak cari → ikon; hapus tambalan `w-40/xl:w-52`; rapikan grup ikon + keranjang
+- [x] 4. `cari.astro` — kotak cari di halamannya sendiri (syarat, bukan tambahan)
+- [x] 5. Drawer mobile: search di dalamnya menyesuaikan (jangan ada dua kotak cari)
+- [x] 6. Verifikasi: build · `astro check` · **browser** (klik, ⌘K, `/`, ↑↓, Esc, tanpa-JS) · 360px
+- [x] 7. `npm run audit:responsive` tetap hijau · commit · tutup file ini · CHANGELOG/WORKLOG
 
 ## Yang gampang salah
 
@@ -91,9 +91,44 @@ tidak jadi regresi.
   setelah yang baru dan menimpanya.
 - ⚠️ Jangan pakai `Select` dari shadcn (itu urusan admin/Base UI) — ini Astro, HTML native.
 
+## Yang diverifikasi (browser sungguhan, bukan build hijau)
+
+| Diuji | Hasil |
+|---|---|
+| Klik ikon | palet terbuka, fokus langsung di input |
+| Keadaan idle | "Paling dicari" + 6 produk — bukan kotak kosong |
+| Ketik "dress" | grup **KATEGORI** (Dress) + **PRODUK** (Dress Midi, Jumpsuit Kulot) — sama persis dengan `/cari` |
+| ↑↓ | menyorot baris, `aria-selected` ikut pindah |
+| Enter | membuka baris tersorot; tanpa sorotan → `/cari?q=` |
+| `Ctrl+K` | terbuka |
+| `/` | terbuka — **dan diam** saat fokus di field (diketik "Jl. Melati/12" di checkout, isinya utuh) |
+| `Esc` | menutup (lihat bug di bawah) |
+| 360px | terbuka penuh, overflow **0** |
+| **Tanpa JS** | ikon → `/cari` · halaman itu punya kotak ketik · submit → `/cari?q=dress`, 3 hasil |
+| Latensi `/api/search` | **2 ms** hangat (yang lambat tadi murni *first-compile* dev server) |
+| Nama a11y | ikon cari "Cari produk" · keranjang "Keranjang" saat kosong, "Keranjang 3 item" saat terisi |
+| `astro check` | 0 error |
+
+### Tiga bug ditemukan browser, semuanya diperbaiki
+
+1. **`Esc` tidak menutup palet.** Di dalam `<input type="search">` Chromium memakai Escape pertama
+   untuk **mengosongkan field** dan berhenti di situ — jadi palet tetap terbuka dan satu-satunya
+   umpan balik yang pembeli lihat adalah kata kuncinya lenyap. Sekarang Escape ditangani di input.
+2. **Dua tombol silang.** Tombol bawaan `type="search"` mendarat tepat di sebelah tombol tutup kita:
+   dua glyph identik, satu berlabel 36px, satu tanpa label ~14px. Yang bawaan disembunyikan.
+3. **Badge keranjang tak akan pernah muncul.** Saya menandainya `hidden` (badge "0" itu notifikasi
+   bahwa tidak terjadi apa-apa), tapi skrip penghitungnya hanya mengisi `textContent` — tak pernah
+   melepas `hidden`. Skripnya sekarang memiliki keduanya, dan unit "item" dipisah jadi anak `sr-only`
+   supaya nama aksesibilitasnya berbunyi "Keranjang" saat kosong dan "Keranjang 3 item" saat terisi.
+
+Thumbnail produk juga sempat gepeng (`size-10` di dalam flex) — sekarang `h-full w-full object-cover`.
+
 ---
 
-## NEXT
+## NEXT — sesudah task ini
 
-**Langkah 1** — buat `apps/storefront/src/pages/api/search.ts` mengikuti pola `api/track.ts`
-(tenant dari `Astro.locals`, tak pernah dari client), lalu baru sentuh komponen.
+1. **"Lacak Pesanan"** — versi jujur dari ikon akun. Nomor pesanan **+ nomor HP** (nomor pesanan saja
+   tak boleh cukup) → status & resi. Butuh rate-limit sungguhan, tidak seperti `/api/search`.
+2. Palet ini hanya mencari **produk + kategori**. Halaman (`/halaman/*`) dan artikel jurnal belum
+   ikut; menambahkannya berarti `catalog.search()` harus tetap produk-saja dan endpoint yang
+   menggabungkan — jangan ubah `search()` sendiri, `/cari` merender grid produk.
