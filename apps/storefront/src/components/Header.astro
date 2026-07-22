@@ -266,6 +266,16 @@ const featured = catalog.bestsellers()[0];
           clear button; the query is capped at 100 (a search string, not a validated field). */}
       <form action="/cari" method="get" role="search" class="hidden lg:block">
         <label for="site-search" class="sr-only">Cari produk</label>
+        {/* ⚠️ The search field is `w-40` until `xl`, THEN `w-52`. The desktop nav switches on at `lg`
+            (1024px) — and at exactly 1024 the row (logo + 7 nav items + a 208px search + the cart
+            pill) needs 4–6px more than the 976px the container leaves, so the whole shop scrolled
+            sideways on every iPad in landscape. Nothing in that row may shrink without losing a nav
+            label, so the search field gives up 48px on the one tier where it is tight and takes them
+            back at `xl`. Do not widen it below `xl` without re-running `npm run audit:responsive`.
+
+            (This note sat INSIDE the <input>'s attribute list for one commit. `astro build` accepted
+            it and the page shipped correctly — `astro check` did not, with 24 errors. A comment is
+            not an attribute; markup comments belong between tags.) */}
         <div class="relative flex items-center">
           <input
             id="site-search"
@@ -276,11 +286,6 @@ const featured = catalog.bestsellers()[0];
             placeholder="Cari produk…"
             autocomplete="off"
             enterkeyhint="search"
-            {/* `w-40` until `xl`, THEN `w-52`. The desktop nav switches on at `lg` (1024px) — and at
-                exactly 1024 the row (logo + 7 nav items + 208px search + cart) needs 4–6px more than
-                the 976px the container leaves, so the page scrolled sideways on every iPad in
-                landscape. Nothing in that row may shrink without losing a nav label, so the search
-                field gives up 48px on the one tier where it is tight and takes them back at `xl`. */}
             class="min-h-11 w-40 rounded-full border border-line bg-white pl-4 pr-11 text-sm text-ink placeholder:text-muted transition-colors hover:border-brand-400 focus-visible:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none xl:w-52"
           />
           <button
