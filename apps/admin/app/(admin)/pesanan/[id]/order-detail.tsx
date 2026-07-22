@@ -30,6 +30,7 @@ import {
   createShipment,
   trackShipment,
   cancelShipment,
+  fillDemoResi,
   type Rate,
   type TrackResult,
 } from "@/lib/actions/shipping";
@@ -118,10 +119,12 @@ export function OrderDetail({
   order,
   detail,
   orderReturn,
+  demoAllowed = false,
 }: {
   order: Order;
   detail: OrderDetailData;
   orderReturn: OrderReturn | null;
+  demoAllowed?: boolean;
 }) {
   // Everything below is REAL: `detail` comes from order_line_items / orders / customers /
   // customer_addresses / payments.
@@ -292,6 +295,18 @@ export function OrderDetail({
       if (r.ok && r.awb) router.refresh(); // a resi may have just landed → re-read the order
     });
   };
+
+  // DEMO/SANDBOX ONLY — stamp a placeholder AWB so the label print can be previewed where the courier
+  // never issues a real one. The action refuses in production; the button only renders when allowed.
+  const [demoPending, startDemo] = React.useTransition();
+  const fillDemo = () =>
+    startDemo(async () => {
+      const r = await fillDemoResi(order.id.replace("#", ""));
+      if (r.ok) {
+        toast.success("Resi contoh diisi (DEMO) — sekarang bisa cetak label.");
+        router.refresh();
+      } else toast.error(r.error ?? "Gagal mengisi resi contoh.");
+    });
 
   // Create a real payment bill (VA/QRIS/DANA) for this order via the platform PSP.
   const PAY_CHANNELS = [
@@ -760,6 +775,17 @@ export function OrderDetail({
                       <span className="font-medium text-foreground">Lacak</span> untuk mengambilnya —
                       label baru bisa dicetak setelah resi terbit.
                     </p>
+                  )}
+                  {!hasResi && canWrite && demoAllowed && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={demoPending}
+                      onClick={fillDemo}
+                      className="h-7 self-start px-2 text-[11px] text-muted-foreground"
+                    >
+                      {demoPending ? "Mengisi…" : "Isi resi contoh (demo)"}
+                    </Button>
                   )}
                 </div>
               )}

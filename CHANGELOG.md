@@ -2,6 +2,18 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Cetak resi: sandbox preview
+
+### 🖨️ Demo "Isi resi contoh" to preview label printing
+"Cetak resi" is (correctly) disabled until a courier issues a real AWB — which never happens in
+sandbox, so the print-label flow could never be seen. A sandbox-only **"Isi resi contoh (demo)"** button
+in the shipment card stamps a clearly-marked placeholder AWB (`DEMO<order>`) onto `orders.awb`, enabling
+"Cetak resi" so the thermal label + Code128-B barcode can be previewed. Guarded: `fillDemoResi` REFUSES
+when `KIRIMINAJA_ENV=production` (a fake AWB is a label no courier can scan — the anti-pattern
+`printLabel` guards) and the button only renders when `demoAllowed`. `trackShipment`/the poller overwrite
+the DEMO value with the real waybill the moment KiriminAja returns one. No change to the real booking or
+label logic.
+
 ## Unreleased — Landing Page (single-page COD, standalone + AI copy)
 
 ### 🎚️ Order-form field toggles (form_config)
