@@ -89,3 +89,44 @@ setengah-jadi yang repo ini terus bayar.
 
 - Verifikasi setelah deploy: **kolom `stores.email` benar-benar ada di produksi** — jangan percaya
   laporan migrate, tanyakan ke `information_schema`.
+
+
+---
+
+## Ronde 2 — burger menu: yang saya kirim tadi perilakunya, bukan tampilannya
+
+Pemilik menegur: *"ini burger menu mobile belum"*. Benar, dan saya keliru menyebutnya selesai.
+
+Ronde 1 memperbaiki **perilaku** — tombol 44px, fokus masuk, Tab terperangkap, kunci gulir, `<details>`.
+Semuanya nyata dan perlu, dan **tak satu pun terlihat**. Dilihat dari produksi, drawer-nya masih:
+
+- **dua pertiga kosong** — konten ±200px di panel 800px;
+- **enam tautan teks yang semuanya tampak sama**, tanpa hierarki apa pun;
+- dan isi paling berharga — kategori beserta foto dan jumlah produk — justru **saya sembunyikan**
+  di balik `<details>` yang saya pasang sendiri.
+
+Itu kekeliruan menilai, bukan kekeliruan mengetik: `<details>` benar untuk **footer** (sebuah direktori
+— melipatnya menghemat tinggi kolom) dan salah untuk **menu toko**. Di toko, "apa yang kamu jual"
+*adalah* navigasinya; menyembunyikannya di balik satu ketukan berarti menyembunyikan jawaban yang
+justru dicari orang saat membuka menu.
+
+### Yang berubah
+
+| | Sebelum | Sesudah |
+|---|---|---|
+| Kategori | terlipat di `<details>` | **terlihat langsung** — 5 baris, foto 44px, jumlah produk, chevron |
+| Struktur | satu daftar campur | tautan utilitas 2-up di atas · grup kategori di bawahnya |
+| Dasar drawer | `<div>` **kosong** bergaris — sisa pil "Akun" yang dulu dihapus | telepon + email, hilang total kalau merchant belum mengisinya |
+| Isi panel | ±200 / 800px | **608 / 800px** |
+
+⚠️ Garis pemisah dengan ruang kosong di bawahnya adalah janji yang tidak ditepati panel itu. Ia sudah
+menggantung di sana sejak pil "Akun" dicabut.
+
+**Tanpa tombol WhatsApp di sini** — ia sengaja dikeluarkan dari footer atas permintaan pemilik, dan
+peluncur chat mengambang sudah ada di setiap halaman.
+
+### Diverifikasi (ponsel 390)
+
+kategori terlihat langsung **7 tautan / 5 berfoto** · kontak di dasar **2** · `<details>` tersisa **0** ·
+isi **608/800** · tombol tutup **44×44** · Tab ×14 **terperangkap** · 0 error.
+Telepon & email diisi sementara untuk mengujinya, lalu **dikembalikan ke NULL**.
