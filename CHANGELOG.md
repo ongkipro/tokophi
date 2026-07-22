@@ -2,6 +2,69 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Landing Page (single-page COD, standalone + AI copy)
+
+### 🧩 Custom-HTML landing (`/lp/<slug>`) — paste your own design
+A second landing kind: the merchant pastes their OWN full landing HTML (Seller → Landing Page → Landing
+HTML Custom → Buat baru) and picks ONE product; the storefront renders the HTML verbatim, then
+auto-appends the shared checkout bound to that product, plus a floating "Pesan Sekarang" CTA that scrolls
+to it. Keyed by a merchant-chosen slug (`landing_pages`, migration 0067 + RLS 0068), so one product can
+back several landings. The COD order funnel was extracted from `/promo/<handle>` into a shared
+`OrderFunnel.astro` (+ `lib/packages.ts` for identical pricing) so both landing kinds POST the exact same
+proven `/api/public/ongkir` + `/api/public/order` — no duplicated money path. Pasted `<script>` does not
+execute (set:html / innerHTML semantics) — a conservative default for arbitrary markup. Verified
+in-browser: inline-styled HTML renders, funnel appends, floating CTA works, console clean; `/promo`
+regression-checked after the extraction.
+
+### 🙏 Post-checkout redirect → `/thanks`
+On a confirmed order the funnel now redirects to a standalone **thank-you page** (`/thanks?order=…&name=…
+&total=…&pm=cod&…`) instead of an inline success block — matching the reference funnel. It reads order
+details from the query string (display-only; the order is already committed server-side by
+`/api/public/order`), carries the SERVER-priced `shipping`/`total` (not the tab's last estimate), shows
+the order summary, and offers a prefilled **Konfirmasi via WhatsApp** button (the channel COD actually
+closes on). `noindex,nofollow`. Verified in-browser.
+
+### 🖥️ Standalone full landing (no site chrome) + AI-generated sales copy
+`/promo/<handle>` now renders through `LandingLayout` — **no Header nav, no Footer, no Chat bubble**,
+just a slim link-less store-name strip. A funnel holds attention on one product; the storefront menu is
+the distraction it must not have. The body is now long-form direct-response: hero → **Masalah** (problem
++ agitation, amber card) → **Solusi** (brand card) → Manfaat → Ideal Untuk → Testimoni → **Garansi** →
+order form. These sections come from `promo_pages.content` (jsonb, migration 0066).
+**"Generate dengan AI"** in the editor shells out to the **Claude Code CLI** (`claude -p … --output-format
+json`, via `execFile` — no API key to store, no SDK dep; the CLI carries its own auth) to write
+headline/badge/problem/agitation/solution/benefits/ideal-for/guarantee from the product's own
+name/description/category/price; the draft fills the form, the merchant reviews and Saves (never
+auto-saved). Graceful when `claude` isn't on PATH ("Claude CLI tidak ditemukan"). Verified end-to-end:
+the real prompt returns all 11 fields, parsed clean. Seller nav label is
+now **"Landing Page"**. Verified in-browser: menu gone, all long-form sections render, console clean.
+
+### 🚀 New feature — per-product direct-order landing (`/promo/<handle>`)
+A merchant can turn one product into a single-page COD order funnel (petanisejahtera-style): product
+info + Manfaat/Ideal-Untuk + testimoni + countdown/scarcity + the order form (Nama/WA/Alamat/Kecamatan
+autocomplete) + live ringkasan, all on one page. **It is NOT a second checkout engine** — it POSTs the
+same battle-tested `/api/public/ongkir` (area search + rates) and `/api/public/order` (creates the
+order; RE-PRICES goods/ongkir/PPN and re-validates every field server-side; enforces the COD chain).
+The client helpers (`normalizePhone`, request shapes, `variant = "option1 / option2"`) are ported
+verbatim from `checkout.astro` so the two can't drift. COD-only for v1 (`channelCode:"cod"`); prepaid is
+a payment-picker away. `robots="noindex"` + opt-in: no enabled row → the URL 404s (the product still
+lives at `/produk/<handle>`).
+
+### 🎛️ Seller — "Halaman Promo" editor (Toko Online group)
+`/promo` lists active products with an on/off badge + copyable share link; `/promo/[id]` edits the
+config (enable, headline/subheadline/badge overrides, Manfaat bullets, Ideal-Untuk chips, countdown
+minutes, scarcity toggle). RBAC `content:write`; writes via `savePromoPage` (upsert, child-table rule:
+the product is re-read under RLS before its id is written).
+
+### 🗃️ DB — `promo_pages` (migration 0064 + RLS 0065)
+One row per (store, product): `enabled`, `headline`/`subheadline`/`badge` (null → product fallback),
+`benefits`/`ideal_for` (jsonb string[]), `countdown_minutes`, `show_scarcity`. RLS `tenant_isolation`
+on `store_id`; `verify-rls` green (it now REQUIRES this policy). ⚠️ `generate` re-proposed the already
+-applied 0062/0063 ALTERs (those migrations never refreshed the meta snapshot) — stripped from the
+0064 `.sql`; the 0064 snapshot now carries them so future generates stay clean. Seed enables one demo
+landing (`celana-kulot`). Verified in-browser: overrides + sections render, countdown counts, opt-in
+404 gate holds, console clean. NOT exercised locally: live rates + order submit (needs
+`KIRIMINAJA_API_KEY`, empty on this box — same limit as the cart checkout).
+
 ## 2026-07-20 / 21 — PRs #9–#26, ~10 verified production deploys (`main` → `036f05e`)
 
 ### 🔐 Security — four MORE cross-tenant holes, found by auditing the class

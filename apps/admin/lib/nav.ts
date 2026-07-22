@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingBag, Wallet, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessageSquare, MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Wallet, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessageSquare, MessagesSquare, LifeBuoy, Palette, FolderOpen, Rocket, type LucideIcon } from "lucide-react";
 
 export type NavChild = { label: string; href: string };
 
@@ -107,6 +107,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Tema", href: "/tema", icon: Palette },
       { label: "Halaman", href: "/halaman", icon: FileText },
+      { label: "Landing Page", href: "/promo", icon: Rocket },
       { label: "Blog", href: "/blog", icon: Newspaper },
       { label: "Files", href: "/files", icon: FolderOpen },
       { label: "Navigasi", href: "/navigasi", icon: ListTree },

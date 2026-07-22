@@ -923,6 +923,60 @@ async function main() {
     }
   }
 
+  // Halaman Promo — one demo single-page COD landing (Seller → Halaman Promo → /promo/<handle>).
+  const promoProductId = productIdByName.get("Celana Kulot Wide Leg");
+  if (promoProductId) {
+    await db.insert(schema.promoPages).values({
+      storeId: store.id,
+      productId: promoProductId,
+      enabled: true,
+      headline: "Celana Kulot Wide Leg — Adem & Jatuh Rapi",
+      subheadline: "Kulot wide leg warna netral. Bahan adem, tidak menerawang, cutting tinggi bikin kaki terlihat jenjang.",
+      badge: "PILIHAN UNGGUL",
+      benefits: ["Bahan adem, tidak menerawang", "Cutting pinggang tinggi, kaki terlihat jenjang", "Warna netral, gampang dipadupadan"],
+      idealFor: ["kerja", "kondangan", "santai", "kuliah"],
+      content: {
+        problemTitle: "Celana kerja itu-itu saja bikin penampilan datar",
+        problemBullets: [
+          "Celana lama sudah longgar di lutut dan warnanya pudar",
+          "Bahan panas dan menerawang, tidak nyaman dipakai seharian",
+          "Susah dipadupadan, akhirnya baju bagus jarang kepakai",
+        ],
+        agitation: "Makin ditunda, makin sering merasa kurang percaya diri saat ke kantor atau kondangan.",
+        solutionTitle: "Satu kulot yang menyelesaikan semuanya",
+        solutionBody:
+          "Celana Kulot Wide Leg dari bahan adem yang jatuh rapi, pinggang tinggi yang menutup dengan nyaman, dan warna netral yang cocok dengan hampir semua atasan. Sekali beli, langsung jadi andalan.",
+        guarantee: "Produk original, dijahit rapi, dan dilayani admin resmi. Tukar jika ukuran tidak sesuai.",
+      },
+      countdownMinutes: 20,
+      showScarcity: true,
+    });
+  }
+
+  // Custom-HTML landing (/lp/<slug>) — merchant-pasted markup + a product for checkout.
+  const lpProductId = productIdByName.get("Set Piyama Satin Wanita");
+  if (lpProductId) {
+    await db.insert(schema.landingPages).values({
+      storeId: store.id,
+      slug: "piyama-cantik",
+      title: "Piyama Satin Premium",
+      productId: lpProductId,
+      enabled: true,
+      countdownMinutes: 15,
+      showScarcity: true,
+      // A COMPLETE example landing (hero → problem → solution → benefits grid → testimonials →
+      // guarantee), pure inline styles + one <style> block so it renders anywhere the merchant pastes
+      // it. The OrderFunnel is auto-appended by /lp/[slug].astro.
+      html: `<style>.lp-wrap{font-family:Inter,system-ui,sans-serif;color:#1f2937;}.lp-sec{max-width:640px;margin:0 auto;padding:36px 20px;}.lp-chip{display:inline-block;background:#ecfdf5;color:#047857;font-size:12px;font-weight:700;letter-spacing:.06em;padding:6px 14px;border-radius:999px;}.lp-h{font-size:30px;line-height:1.15;font-weight:800;margin:16px 0 12px;color:#111827;}.lp-hl{background:linear-gradient(transparent 60%,#bbf7d0 60%);padding:0 2px;}.lp-card{border:1px solid #e5e7eb;border-radius:14px;padding:18px 20px;}.lp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}.lp-badge{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;}</style>
+<div class="lp-wrap"><div style="background:linear-gradient(160deg,#052e16,#0b3d24);color:#fff;text-align:center;"><div class="lp-sec" style="padding-top:52px;padding-bottom:52px;"><span class="lp-chip">EDISI TERBATAS · STOK MENIPIS</span><h1 class="lp-h" style="color:#fff;font-size:34px;">Tidur Gerah & Baju Rumahan Kucel? <span style="color:#86efac;text-decoration:underline;">Saatnya Ganti</span> Piyama Satin.</h1><p style="font-size:16px;opacity:.92;margin:0;">Bahan satin premium yang adem, jatuh rapi, dan tetap terlihat anggun — dipakai tidur maupun santai di rumah.</p><div style="margin-top:22px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;font-size:13px;opacity:.95;"><span>✅ Bahan Adem</span><span>🚚 Bisa COD</span><span>🛡️ Garansi Tukar</span><span>⭐ 4.8/5</span></div></div></div>
+<div class="lp-sec" style="padding-top:8px;"><div class="lp-chip" style="background:#fef2f2;color:#b91c1c;">MASALAH YANG SERING DIRASA</div><h2 class="lp-h" style="font-size:24px;">Kenapa Tidur Sering Terasa <span class="lp-hl">Nggak Nyaman?</span></h2><div style="display:flex;flex-direction:column;gap:12px;margin-top:14px;"><div class="lp-card">⚠️ &nbsp;Baju tidur lama sudah melar, bahannya kasar, dan bikin gerah semalaman.</div><div class="lp-card">⚠️ &nbsp;Kaus rumahan seadanya bikin penampilan asal-asalan padahal di rumah paling lama.</div><div class="lp-card">⚠️ &nbsp;Panik kalau ada tamu atau kurir datang — harus lari ganti baju dulu.</div></div></div>
+<div style="background:#f0fdf4;"><div class="lp-sec"><div class="lp-chip">SOLUSINYA</div><h2 class="lp-h" style="font-size:24px;">Satu Set Piyama yang <span class="lp-hl">Menyelesaikan Semuanya</span></h2><p style="color:#374151;font-size:15px;line-height:1.6;">Piyama Satin Premium dari bahan halus yang jatuh rapi, pinggang nyaman, dan warna kalem yang cocok dipakai tidur maupun santai. Sekali beli, langsung jadi andalan.</p></div></div>
+<div class="lp-sec"><h2 class="lp-h" style="font-size:22px;">Kenapa Ribuan Wanita Memilihnya</h2><div class="lp-grid" style="margin-top:12px;"><div class="lp-card"><div class="lp-badge" style="background:#ecfdf5;">🌬️</div><strong style="display:block;margin-top:10px;">Adem Semalaman</strong><span style="color:#6b7280;font-size:13px;">Satin halus, tidak menempel & tidak gerah.</span></div><div class="lp-card"><div class="lp-badge" style="background:#eff6ff;">✨</div><strong style="display:block;margin-top:10px;">Terlihat Mahal</strong><span style="color:#6b7280;font-size:13px;">Warna kalem, bukan warna pasaran.</span></div><div class="lp-card"><div class="lp-badge" style="background:#fef3c7;">🧎‍♀️</div><strong style="display:block;margin-top:10px;">Potongan Longgar</strong><span style="color:#6b7280;font-size:13px;">Bebas bergerak, tidak menekan perut.</span></div><div class="lp-card"><div class="lp-badge" style="background:#fce7f3;">🎁</div><strong style="display:block;margin-top:10px;">Cocok Jadi Hadiah</strong><span style="color:#6b7280;font-size:13px;">Untuk ibu, kakak, adik, atau sahabat.</span></div></div></div>
+<div style="background:#0b3d24;color:#fff;"><div class="lp-sec"><h2 class="lp-h" style="color:#fff;font-size:22px;">Kata Pelanggan</h2><div style="display:flex;flex-direction:column;gap:12px;"><div style="background:rgba(255,255,255,.08);border-radius:12px;padding:16px;"><div style="color:#fde047;">★★★★★</div><p style="margin:8px 0 4px;font-size:14px;">"Bahannya adem banget, jatuhnya rapi. Dipakai video call juga masih pantes."</p><span style="font-size:12px;opacity:.8;">— Rina, Bandung ✔</span></div><div style="background:rgba(255,255,255,.08);border-radius:12px;padding:16px;"><div style="color:#fde047;">★★★★★</div><p style="margin:8px 0 4px;font-size:14px;">"Langsung beli 2 buat aku sama ibu. Nyaman & warnanya cantik."</p><span style="font-size:12px;opacity:.8;">— Dewi, Surabaya ✔</span></div></div></div></div>
+<div class="lp-sec"><div class="lp-card" style="border-color:#bbf7d0;background:#f0fdf4;display:flex;gap:12px;align-items:flex-start;"><span style="font-size:22px;">🛡️</span><div><strong style="display:block;margin-bottom:4px;">Garansi Tukar & Bayar di Tempat</strong><span style="color:#4b5563;font-size:14px;">Cek barang dulu saat kurir datang. Kalau ukuran tidak sesuai, tinggal tukar. Produk original, dijahit rapi, dilayani admin resmi.</span></div></div><p style="text-align:center;color:#6b7280;font-size:14px;margin-top:20px;">Tinggal pilih paket & isi data di bawah — barang dikirim, bayar saat sampai. 👇</p></div></div>`,
+    });
+  }
+
   // Real KiriminAja district ids, one per demo city. The orders snapshot these (0042) so the parcel
   // has an authoritative destination the courier can actually be booked to — a typed city name is a
   // claim; a kecamatan id is what KiriminAja acts on, and it is what the COD province gate trusts.

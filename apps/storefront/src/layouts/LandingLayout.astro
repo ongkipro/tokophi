@@ -1,0 +1,83 @@
+---
+// Standalone FULL landing layout — same <head> (SEO/OG, fonts, brand colours, analytics) as Layout,
+// but NO site chrome: no Header nav, no Footer, no Chat bubble, no skip-link. A direct-order funnel
+// (/promo/<handle>) is meant to hold attention on ONE product and ONE call to action; the storefront
+// menu is exactly the distraction it must not have. Analytics stays — funnel traffic is the whole
+// point of tracking.
+import "../styles/global.css";
+import Analytics from "../components/Analytics.astro";
+import { mediaUrl } from "../data/catalog";
+
+interface Props {
+  title: string;
+  description?: string;
+  image?: string;
+  robots?: string;
+}
+
+const { store, catalog, origin } = Astro.locals;
+const BRAND_SHADES = catalog.brandShades;
+const { title, description = store.tagline, image, robots } = Astro.props;
+
+const fullTitle = `${title} — ${store.name}`;
+
+const clamp = (text: string, max = 155) => {
+  const t = (text ?? "").replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max);
+  return cut.slice(0, cut.lastIndexOf(" ")).trimEnd() + "…";
+};
+const desc = clamp(description ?? "");
+const canonical = new URL(Astro.url.pathname, origin).href;
+const favicon = store.faviconUrl ? mediaUrl(store.faviconUrl) : null;
+const ogImage = (() => {
+  const src = image || store.logoUrl || "";
+  if (!src) return null;
+  try {
+    return new URL(src, origin).href;
+  } catch {
+    return null;
+  }
+})();
+---
+
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {favicon
+      ? <link rel="icon" href={favicon} />
+      : <link rel="icon" type="image/svg+xml" href="/favicon.svg" />}
+    <title>{fullTitle}</title>
+    <meta name="description" content={desc} />
+    {robots && <meta name="robots" content={robots} />}
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="product" />
+    <meta property="og:site_name" content={store.name} />
+    <meta property="og:locale" content="id_ID" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={desc} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content={ogImage ? "summary_large_image" : "summary"} />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={desc} />
+    {
+      ogImage && (
+        <Fragment>
+          <meta property="og:image" content={ogImage} />
+          <meta property="og:image:alt" content={fullTitle} />
+          <meta name="twitter:image" content={ogImage} />
+        </Fragment>
+      )
+    }
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <style set:html={`:root { ${Object.entries(BRAND_SHADES).map(([shade, hex]) => `--color-brand-${shade}: ${hex};`).join(" ")} }`} />
+    <Analytics />
+  </head>
+  <body class="min-h-screen bg-cream text-ink antialiased">
+    <slot />
+  </body>
+</html>

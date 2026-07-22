@@ -1,0 +1,215 @@
+---
+// Single-page direct-order (COD) LANDING — one product, all-on-one-page funnel (info → pilih paket →
+// form → ringkasan → 1 tombol), modelled on the petanisejahtera.com/produk/* style the merchant asked
+// for. This is NOT a second checkout engine: it POSTs the SAME two proven endpoints the cart checkout
+// uses —
+//   · /api/public/ongkir  (op:"search" area autocomplete, op:"rates" live KiriminAja rates)
+//   · /api/public/order   (creates the real order; RE-PRICES goods/ongkir/PPN server-side, re-validates
+//                          every field, and enforces the COD chain — the browser decides nothing).
+// So the money/validation traps documented in CLAUDE.md live in the boundary, not here. The client
+// helpers below (normalizePhone, the request shapes, the variant string = "option1 / option2") are
+// ported verbatim from checkout.astro so the two can never quietly disagree.
+//
+// ponytail: COD-only for v1 (channelCode:"cod"), matching the reference funnel. Prepaid channels
+// (VA/QRIS/e-wallet) are a payment-picker away — add the same `enabledPaymentChannels` list checkout
+// uses when a merchant wants prepaid on a landing. Store COD off → the order API rejects with a clear
+// message; that IS the boundary doing its job.
+import LandingLayout from "../../layouts/LandingLayout.astro";
+import Stars from "../../components/Stars.astro";
+import OrderFunnel from "../../components/OrderFunnel.astro";
+import { ShieldCheck, Truck, ImageOff, Check, AlertTriangle } from "@lucide/astro";
+import { IDR } from "@tokophi/lib/format";
+import { productImages, imageSrcSet } from "../../data/catalog";
+import { getPromoConfig } from "../../data/promo";
+import { buildPackages } from "../../lib/packages";
+
+// SSR: tenant from Host (src/middleware.ts), product from the handle param.
+const { store, catalog } = Astro.locals;
+const { handle } = Astro.params;
+const product = handle ? catalog.findProduct(handle) : undefined;
+if (!product) return new Response(null, { status: 404, statusText: "Not Found" });
+
+// The promo landing is OPT-IN per product (Seller → Halaman Promo). No enabled row → this URL does
+// not exist; the product still lives at /produk/<handle>. 404 keeps the funnel from leaking every
+// product as a COD page the merchant never chose to publish.
+const promo = await getPromoConfig(store.id, handle!); // product guard above implies handle is set
+if (!promo || !promo.enabled) return new Response(null, { status: 404, statusText: "Not Found" });
+
+// Overrides fall back to the product's own fields — a row with only `enabled=true` still renders.
+const headline = promo.headline || product.name;
+const subheadline = promo.subheadline || product.description;
+const badge = promo.badge || product.badge || "";
+const benefits = promo.benefits;
+const idealFor = promo.idealFor;
+const content = promo.content; // long-form AI sections (problem/agitation/solution/guarantee)
+const countdownMinutes = promo.countdownMinutes;
+const showScarcity = promo.showScarcity;
+
+// The purchasable "paket" list (shared builder — /lp/<slug> prices identically).
+const packages = buildPackages(product);
+
+const rating = catalog.productRating(product);
+const reviews = rating ? catalog.productReviews(product) : [];
+const gallery = productImages(product);
+const heroSrcSet = gallery.length ? imageSrcSet(gallery[0]) : undefined;
+---
+
+<LandingLayout title={headline} description={subheadline} robots="noindex,follow">
+  {/* No site nav — a full standalone funnel. Just a slim, link-less store identity for trust. */}
+  <header class="border-b border-line bg-white/80 py-3 text-center text-sm font-semibold text-ink backdrop-blur">
+    {store.name}
+  </header>
+
+  <main class="mx-auto max-w-2xl px-4 py-6 sm:px-6">
+    {/* ── Hero ─────────────────────────────────────────────────────────────────────────────── */}
+    <section class="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
+      <div class="aspect-square w-full bg-stone-50">
+        {gallery.length ? (
+          <img
+            src={gallery[0]}
+            srcset={heroSrcSet}
+            sizes="(min-width: 672px) 640px, 100vw"
+            alt={product.name}
+            class="h-full w-full object-contain"
+            width="640"
+            height="640"
+          />
+        ) : (
+          <div class="flex h-full w-full items-center justify-center text-stone-300">
+            <ImageOff class="h-16 w-16" />
+          </div>
+        )}
+      </div>
+
+      <div class="space-y-3 p-5">
+        <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span class="text-3xl font-extrabold text-brand-700">{IDR(packages[0].price)}</span>
+          {packages[0].compareAt > 0 && (
+            <>
+              <span class="text-base text-stone-400 line-through">{IDR(packages[0].compareAt)}</span>
+              <span class="rounded-md bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">
+                Hemat {Math.round(((packages[0].compareAt - packages[0].price) / packages[0].compareAt) * 100)}%
+              </span>
+            </>
+          )}
+        </div>
+        {badge && (
+          <span class="inline-block rounded-md bg-brand-600/10 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-brand-700">
+            {badge}
+          </span>
+        )}
+        <h1 class="text-2xl font-bold text-ink">{headline}</h1>
+        {subheadline && <p class="text-sm leading-relaxed text-stone-600">{subheadline}</p>}
+        {rating && (
+          <div class="flex items-center gap-2 border-t border-line pt-3 text-sm">
+            <Stars value={rating.value} showValue={false} />
+            <span class="font-semibold text-ink">{rating.value.toFixed(1)}</span>
+            <span class="text-stone-400">·</span>
+            <span class="text-stone-500">{rating.count} penilaian</span>
+            {product.unitsSold > 0 && (
+              <>
+                <span class="text-stone-400">·</span>
+                <span class="text-stone-500">Terjual {product.unitsSold.toLocaleString("id-ID")}</span>
+              </>
+            )}
+          </div>
+        )}
+        <div class="flex items-start gap-2 rounded-xl bg-stone-50 p-3 text-sm text-stone-600">
+          <Truck class="mt-0.5 h-5 w-5 shrink-0 text-brand-600" />
+          <span>Biaya pengiriman dihitung otomatis setelah kecamatan tujuan diisi di form pemesanan.</span>
+        </div>
+      </div>
+    </section>
+
+    {/* ── Masalah (AI: problem) ────────────────────────────────────────────────────────────── */}
+    {content.problemTitle && (content.problemBullets?.length ?? 0) > 0 && (
+      <section class="mt-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-sm">
+        <h2 class="mb-3 text-lg font-bold text-ink">{content.problemTitle}</h2>
+        <ul class="space-y-2.5">
+          {content.problemBullets!.map((b) => (
+            <li class="flex items-start gap-2 text-sm text-stone-700">
+              <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <span>{b}</span>
+            </li>
+          ))}
+        </ul>
+        {content.agitation && (
+          <p class="mt-4 rounded-xl bg-amber-100/70 px-4 py-3 text-sm font-medium text-amber-900">{content.agitation}</p>
+        )}
+      </section>
+    )}
+
+    {/* ── Solusi (AI: solution) ────────────────────────────────────────────────────────────── */}
+    {content.solutionTitle && content.solutionBody && (
+      <section class="mt-4 rounded-2xl border border-brand-200 bg-brand-50/50 p-5 shadow-sm">
+        <h2 class="mb-2 text-lg font-bold text-brand-800">{content.solutionTitle}</h2>
+        <p class="text-sm leading-relaxed text-stone-700">{content.solutionBody}</p>
+      </section>
+    )}
+
+    {/* ── Manfaat Utama + Ideal Untuk (merchant-authored, Seller → Halaman Promo) ──────────── */}
+    {(benefits.length > 0 || idealFor.length > 0) && (
+      <section class="mt-4 rounded-2xl border border-line bg-white p-5 shadow-sm">
+        {benefits.length > 0 && (
+          <>
+            <h2 class="mb-3 text-lg font-bold text-ink">Manfaat Utama</h2>
+            <ul class="space-y-2">
+              {benefits.map((b) => (
+                <li class="flex items-start gap-2 text-sm text-stone-700">
+                  <Check class="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {idealFor.length > 0 && (
+          <div class:list={[benefits.length > 0 && "mt-5 border-t border-line pt-5"]}>
+            <h2 class="mb-3 text-lg font-bold text-ink">Ideal Untuk</h2>
+            <div class="flex flex-wrap gap-2">
+              {idealFor.map((c) => (
+                <span class="rounded-full bg-brand-600/10 px-3 py-1 text-sm font-medium text-brand-700">{c}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+    )}
+
+    {/* ── Testimoni (real buyers who received a completed order — seed-reviews.ts) ──────────── */}
+    {reviews.length > 0 && (
+      <section class="mt-4 rounded-2xl border border-line bg-white p-5 shadow-sm">
+        <h2 class="mb-4 text-lg font-bold text-ink">Penilaian Pelanggan</h2>
+        <div class="space-y-4">
+          {reviews.slice(0, 3).map((r) => (
+            <div class="border-b border-line pb-4 last:border-0 last:pb-0">
+              <div class="flex items-center gap-2">
+                <span class="font-semibold text-ink">{r.author}</span>
+                <Check class="h-4 w-4 text-brand-600" />
+              </div>
+              <div class="mt-1"><Stars value={r.rating} /></div>
+              <p class="mt-2 text-sm leading-relaxed text-stone-600">{r.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
+
+    {/* ── Garansi (AI: guarantee) ──────────────────────────────────────────────────────────── */}
+    {content.guarantee && (
+      <section class="mt-4 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm">
+        <ShieldCheck class="mt-0.5 h-6 w-6 shrink-0 text-emerald-600" />
+        <p class="text-sm font-medium text-emerald-900">{content.guarantee}</p>
+      </section>
+    )}
+
+    {/* ── Order funnel (shared component — same proven money path as the cart checkout) ─────── */}
+    <OrderFunnel
+      packages={packages}
+      storeSlug={store.slug}
+      productHandle={handle!}
+      countdownMinutes={countdownMinutes}
+      showScarcity={showScarcity}
+    />
+  </main>
+</LandingLayout>
