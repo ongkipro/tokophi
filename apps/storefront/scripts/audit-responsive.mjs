@@ -55,7 +55,11 @@ const ROUTES = [
   // controls in the row is the only one worth sweeping.
   "/produk",
   "/produk?kategori=dress&promo=1",
-  "/produk/dress-batik",
+  // The PDP is filled in below from the live listing, NOT named here. It used to read
+  // `/produk/dress-batik`, which is `draft` in the demo store's normal state — so the sweep spent 11
+  // widths measuring the 404 page while believing it was checking the product page whose gallery has
+  // broken the layout twice. A route that silently becomes a different page is worse than a missing one.
+  "__PDP__",
   "/blog",
   "/blog/cara-merawat-rajut",
   "/halaman/tentang-kami",
@@ -68,9 +72,31 @@ const browser = await chromium.launch({ args: resolverArgs });
 const page = await (await browser.newContext()).newPage();
 
 // /keranjang and /checkout only render their real (widest) content with something in the cart.
-await page.goto(`${BASE}/produk/dress-batik`, { waitUntil: "networkidle", timeout: 60_000 });
-await page.locator("button:has-text('Keranjang')").first().click();
-await page.waitForTimeout(300);
+//
+// The product is TAKEN FROM THE LIVE LISTING, never hardcoded. This step used to open
+// `/produk/dress-batik` by name — a handle that is `draft` in the demo store's normal state, so the
+// page 404s, the buy button never appears, and the whole sweep dies on a 30s timeout before checking
+// a single width. It only ever passed while that product happened to be temporarily active. A gate
+// that depends on one row of demo data is a gate that goes dark the moment someone edits it.
+const listing = await page.goto(`${BASE}/produk`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+if (!listing?.ok()) throw new Error(`/produk tidak bisa dibuka (${listing?.status()}) — server dev jalan?`);
+const firstProduct = await page.locator("a[href^='/produk/']").first().getAttribute("href");
+if (!firstProduct) throw new Error("Tidak ada produk di /produk — tidak ada yang bisa dimasukkan ke keranjang.");
+
+await page.goto(BASE + firstProduct, { waitUntil: "networkidle", timeout: 60_000 });
+// A sold-out product's buy button is DISABLED, so clicking it would hang here too. Fall through with
+// an empty cart rather than die: /keranjang and /checkout still render, just narrower — a partial
+// sweep beats no sweep, and the reason is printed rather than left as a silent gap.
+const buy = page.locator("button:has-text('Keranjang')").first();
+if (await buy.isEnabled({ timeout: 10_000 }).catch(() => false)) {
+  await buy.click();
+  await page.waitForTimeout(300);
+} else {
+  console.log(`⚠️  ${firstProduct} tidak bisa dimasukkan ke keranjang (habis / tanpa harga) — /keranjang & /checkout disapu dalam keadaan KOSONG.\n`);
+}
+
+ROUTES[ROUTES.indexOf("__PDP__")] = firstProduct;
+console.log(`PDP yang disapu: ${firstProduct}\n`);
 
 let broken = 0;
 
