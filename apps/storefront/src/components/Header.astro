@@ -276,7 +276,12 @@ const featured = catalog.bestsellers()[0];
             placeholder="Cari produk…"
             autocomplete="off"
             enterkeyhint="search"
-            class="min-h-11 w-52 rounded-full border border-line bg-white pl-4 pr-11 text-sm text-ink placeholder:text-muted transition-colors hover:border-brand-400 focus-visible:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+            {/* `w-40` until `xl`, THEN `w-52`. The desktop nav switches on at `lg` (1024px) — and at
+                exactly 1024 the row (logo + 7 nav items + 208px search + cart) needs 4–6px more than
+                the 976px the container leaves, so the page scrolled sideways on every iPad in
+                landscape. Nothing in that row may shrink without losing a nav label, so the search
+                field gives up 48px on the one tier where it is tight and takes them back at `xl`. */}
+            class="min-h-11 w-40 rounded-full border border-line bg-white pl-4 pr-11 text-sm text-ink placeholder:text-muted transition-colors hover:border-brand-400 focus-visible:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none xl:w-52"
           />
           <button
             type="submit"
