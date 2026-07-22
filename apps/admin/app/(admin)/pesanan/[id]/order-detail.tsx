@@ -296,17 +296,9 @@ export function OrderDetail({
     });
   };
 
-  // DEMO/SANDBOX ONLY — stamp a placeholder AWB so the label print can be previewed where the courier
-  // never issues a real one. The action refuses in production; the button only renders when allowed.
+  // DEMO/SANDBOX ONLY — "Cetak resi" itself stamps a placeholder AWB then prints when there is no real
+  // resi yet (see printLabel). The action refuses in production; the button path only runs when allowed.
   const [demoPending, startDemo] = React.useTransition();
-  const fillDemo = () =>
-    startDemo(async () => {
-      const r = await fillDemoResi(order.id.replace("#", ""));
-      if (r.ok) {
-        toast.success("Resi contoh diisi (DEMO) — sekarang bisa cetak label.");
-        router.refresh();
-      } else toast.error(r.error ?? "Gagal mengisi resi contoh.");
-    });
 
   // Create a real payment bill (VA/QRIS/DANA) for this order via the platform PSP.
   const PAY_CHANNELS = [
@@ -335,16 +327,10 @@ export function OrderDetail({
   // missing we refuse and explain, and the barcode itself is a genuine Code 128-B encoding of that
   // exact AWB (see components/admin/pesanan/shipping-label.ts).
   const storeName = useStoreName();
-  const printLabel = () => {
-    if (!shipment.awb || !shipment.courier) {
-      toast.error("Belum ada nomor resi — label tidak bisa dicetak.", {
-        description: booked
-          ? "Pengiriman sudah dibooking, tapi kurir belum menerbitkan resi. Klik “Lacak” untuk mengambil resi begitu terbit."
-          : "Buat pengiriman dulu lewat “Cek Ongkir” → pilih layanan → Buat.",
-        duration: 8000,
-      });
-      return;
-    }
+
+  // Build the thermal label for a given awb/courier and write it into `win` (an already-open window,
+  // so it survives the popup blocker across an await) or a fresh one.
+  const writeLabel = (awb: string, courier: string, win: Window | null) => {
     // Street only when the saved address actually belongs to this order's city; otherwise the
     // label carries the destination the order recorded and nothing more.
     const dest = usableAddress
@@ -352,12 +338,11 @@ export function OrderDetail({
           .filter(Boolean)
           .join(", ")
       : destination;
-
     let html: string;
     try {
       html = buildLabelHtml({
-        awb: shipment.awb,
-        courier: shipment.courier,
+        awb,
+        courier,
         orderNumber: order.id,
         storeName,
         recipient: usableAddress?.recipient ?? buyer?.name ?? order.customer,
@@ -371,17 +356,54 @@ export function OrderDetail({
         totalQty,
       });
     } catch {
+      if (win) win.close();
       toast.error("Label tidak bisa dibuat — nomor resi tidak valid.");
       return;
     }
-
-    const w = window.open("", "_blank", "width=460,height=700");
+    const w = win ?? window.open("", "_blank", "width=460,height=700");
     if (!w) {
       toast.error("Popup diblokir — izinkan popup untuk mencetak resi.");
       return;
     }
+    w.document.open();
     w.document.write(html);
     w.document.close();
+  };
+
+  const printLabel = () => {
+    // Real resi → print directly.
+    if (shipment.awb && shipment.courier) {
+      writeLabel(shipment.awb, shipment.courier, null);
+      return;
+    }
+    // Sandbox demo → open the window NOW inside the click gesture (so it isn't popup-blocked after the
+    // await), stamp a placeholder resi, then fill that same window with the label.
+    if (demoAllowed) {
+      const w = window.open("", "_blank", "width=460,height=700");
+      if (!w) {
+        toast.error("Popup diblokir — izinkan popup untuk mencetak resi.");
+        return;
+      }
+      w.document.write("<p style='font-family:system-ui,sans-serif;padding:24px;color:#555'>Menyiapkan label…</p>");
+      startDemo(async () => {
+        const r = await fillDemoResi(order.id.replace("#", ""));
+        if (r.ok && r.awb) {
+          writeLabel(r.awb, shipment.courier ?? "spx", w);
+          router.refresh();
+        } else {
+          w.close();
+          toast.error(r.error ?? "Gagal menyiapkan resi contoh.");
+        }
+      });
+      return;
+    }
+    // No resi and not sandbox → explain.
+    toast.error("Belum ada nomor resi — label tidak bisa dicetak.", {
+      description: booked
+        ? "Pengiriman sudah dibooking, tapi kurir belum menerbitkan resi. Klik “Lacak” untuk mengambil resi begitu terbit."
+        : "Buat pengiriman dulu lewat “Cek Ongkir” → pilih layanan → Buat.",
+      duration: 8000,
+    });
   };
 
   return (
@@ -430,16 +452,18 @@ export function OrderDetail({
           <Button
             variant="ghost"
             onClick={printLabel}
-            disabled={!hasResi}
+            disabled={demoPending || (!hasResi && !demoAllowed)}
             title={
               hasResi
                 ? `Cetak label resi ${shipment.awb}`
-                : booked
-                  ? "Pengiriman sudah dibooking, tapi kurir belum menerbitkan nomor resi — klik Lacak"
-                  : "Belum ada resi — buat pengiriman dulu"
+                : demoAllowed
+                  ? "Cetak label dengan resi contoh (mode demo/sandbox)"
+                  : booked
+                    ? "Pengiriman sudah dibooking, tapi kurir belum menerbitkan nomor resi — klik Lacak"
+                    : "Belum ada resi — buat pengiriman dulu"
             }
           >
-            <Printer /> Cetak resi
+            <Printer /> {demoPending ? "Menyiapkan…" : "Cetak resi"}
           </Button>
           {canReturn && canWrite && (
             <Button
@@ -776,16 +800,10 @@ export function OrderDetail({
                       label baru bisa dicetak setelah resi terbit.
                     </p>
                   )}
-                  {!hasResi && canWrite && demoAllowed && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={demoPending}
-                      onClick={fillDemo}
-                      className="h-7 self-start px-2 text-[11px] text-muted-foreground"
-                    >
-                      {demoPending ? "Mengisi…" : "Isi resi contoh (demo)"}
-                    </Button>
+                  {!hasResi && demoAllowed && (
+                    <p className="text-[11px] leading-snug text-emerald-700 dark:text-emerald-400">
+                      Mode demo: klik <span className="font-medium">Cetak resi</span> untuk mengisi resi contoh &amp; melihat labelnya.
+                    </p>
                   )}
                 </div>
               )}
