@@ -3,6 +3,10 @@
 > **Status: ✅ DONE** — 2026-07-22 · branch `worktree-super-admin-overhaul` · `0f61e98` → `5d7eb11`
 > · commit inti `6f90ec7` (listing) + `3321266` (gerbang responsif) + `30b13a1` (header 1024px)
 >
+> ⚠️ **BELUM ADA PR, `main` SENGAJA TIDAK DISENTUH** (masih `0f61e98`). Branch sudah di-push ke
+> `origin/worktree-super-admin-overhaul` supaya kerjanya aman, tapi di repo ini merge ke `main` =
+> **deploy produksi**, dan itu keputusan pemilik. Jangan buka+merge PR tanpa diminta.
+>
 > `npm run audit:responsive`: **132/132 hijau, 0 overflow** — untuk pertama kalinya sejak 2026-07-15.
 > Dua produk yang dinyalakan sementara **sudah dikembalikan ke `draft`** (12 aktif, seperti semula).
 >
