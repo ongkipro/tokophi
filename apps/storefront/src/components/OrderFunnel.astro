@@ -1,0 +1,417 @@
+---
+// The COD order funnel — countdown/scarcity bar + Pilih paket + form + ringkasan + submit — shared by
+// the product landing (/promo/<handle>) and the custom-HTML landing (/lp/<slug>). It is NOT a second
+// checkout: it POSTs the SAME proven /api/public/ongkir + /api/public/order the cart checkout uses, and
+// redirects to /thanks on success. The client logic (normalizePhone, request shapes, variant string)
+// is ported verbatim from checkout.astro. The product handle is a PROP (not derived from the URL) so a
+// custom-slug landing (/lp/anything) still orders the right product.
+//
+// `formConfig` toggles the OPTIONAL fields (email, quantity, trust badges, summary). The 4 core COD
+// fields are always shown — hiding them would break a COD order.
+import { ShieldCheck, Truck, Lock, Minus, Plus } from "@lucide/astro";
+import { IDR } from "@tokophi/lib/format";
+import { resolveFormConfig } from "@tokophi/lib/form-config";
+import type { Pkg } from "../lib/packages";
+
+interface Props {
+  packages: Pkg[];
+  storeSlug: string;
+  productHandle: string;
+  countdownMinutes: number;
+  showScarcity: boolean;
+  formConfig?: unknown;
+}
+const { packages, storeSlug, productHandle, countdownMinutes, showScarcity, formConfig } = Astro.props;
+const fc = resolveFormConfig(formConfig);
+
+const ONGKIR_API = process.env.PUBLIC_ONGKIR_API || "http://localhost:3000/api/public/ongkir";
+const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/public/order";
+---
+
+<section id="order-funnel" class="scroll-mt-4 overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
+  {(countdownMinutes > 0 || showScarcity) && (
+    <div class="flex items-center justify-between gap-4 bg-brand-700 px-5 py-3 text-white">
+      {countdownMinutes > 0 ? (
+        <div>
+          <div class="text-[11px] uppercase tracking-wide text-brand-100">Promo berakhir dalam</div>
+          <div class="font-mono text-xl font-bold tabular-nums"><span id="cd-min">--</span>:<span id="cd-sec">--</span></div>
+        </div>
+      ) : (
+        <div></div>
+      )}
+      {showScarcity && (
+        <div class="text-right">
+          <div class="text-[11px] uppercase tracking-wide text-brand-100">Sisa stok</div>
+          <div class="text-xl font-bold tabular-nums"><span id="scarcity">{packages[0].stock}</span> pcs</div>
+        </div>
+      )}
+    </div>
+  )}
+
+  <form id="order-form" class="space-y-5 p-5" novalidate>
+    <fieldset>
+      <legend class="mb-2 text-sm font-bold text-ink">Pilih paket</legend>
+      <div class="space-y-2" id="pkg-list">
+        {packages.map((p, i) => (
+          <label
+            class="pkg-opt flex cursor-pointer items-center gap-3 rounded-xl border border-line p-3 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-600/5"
+            data-idx={i}
+            data-variant={p.variant}
+            data-price={p.price}
+            data-stock={p.stock}
+          >
+            <input type="radio" name="paket" value={i} checked={i === 0} class="accent-brand-600" disabled={p.stock <= 0} />
+            <span class="flex-1">
+              <span class="block font-semibold text-ink">{p.label}</span>
+              <span class="text-brand-700 font-bold">{IDR(p.price)}</span>
+              {p.compareAt > 0 && <span class="ml-2 text-sm text-stone-400 line-through">{IDR(p.compareAt)}</span>}
+              {p.stock <= 0 && <span class="ml-2 text-sm font-medium text-rose-600">Stok habis</span>}
+            </span>
+            {i === 0 && <span class="rounded bg-rose-500 px-2 py-0.5 text-[11px] font-bold text-white">PALING LARIS</span>}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+
+    {fc.quantity && (
+      <div class="flex items-center justify-between">
+        <label class="text-sm font-medium text-ink">Jumlah</label>
+        <div class="flex items-center gap-3">
+          <button type="button" id="qty-dec" class="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink disabled:opacity-40" aria-label="Kurangi">
+            <Minus class="h-4 w-4" />
+          </button>
+          <span id="qty-val" class="w-8 text-center text-lg font-bold tabular-nums">1</span>
+          <button type="button" id="qty-inc" class="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink" aria-label="Tambah">
+            <Plus class="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    )}
+
+    <div>
+      <label for="f-nama" class="mb-1 block text-sm font-medium text-ink">Nama lengkap <span class="text-rose-500">*</span></label>
+      <input id="f-nama" name="nama" type="text" autocomplete="name" placeholder="Contoh: Pak Budi Santoso"
+        class="w-full rounded-xl border border-line px-3 py-2.5 text-ink outline-none focus:border-brand-600" required />
+      <p class="err mt-1 hidden text-sm text-rose-600" data-err="nama"></p>
+    </div>
+
+    <div>
+      <label for="f-wa" class="mb-1 block text-sm font-medium text-ink">Nomor WhatsApp <span class="text-rose-500">*</span></label>
+      <input id="f-wa" name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel" placeholder="08xxxxxxxxxx / 62xxxxxxxxxx"
+        class="w-full rounded-xl border border-line px-3 py-2.5 text-ink outline-none focus:border-brand-600" required />
+      <p class="mt-1 text-xs text-stone-400">Format nomor otomatis disesuaikan ke 62.</p>
+      <p class="err mt-1 hidden text-sm text-rose-600" data-err="whatsapp"></p>
+    </div>
+
+    {fc.email && (
+      <div>
+        <label for="f-email" class="mb-1 block text-sm font-medium text-ink">Email <span class="text-stone-400">(opsional)</span></label>
+        <input id="f-email" name="email" type="email" autocomplete="email" placeholder="nama@email.com"
+          class="w-full rounded-xl border border-line px-3 py-2.5 text-ink outline-none focus:border-brand-600" />
+        <p class="err mt-1 hidden text-sm text-rose-600" data-err="email"></p>
+      </div>
+    )}
+
+    <div>
+      <label for="f-alamat" class="mb-1 block text-sm font-medium text-ink">Alamat lengkap <span class="text-rose-500">*</span></label>
+      <textarea id="f-alamat" name="alamat" rows="3" autocomplete="street-address" placeholder="Nama jalan, RT/RW, desa, dan patokan…"
+        class="w-full rounded-xl border border-line px-3 py-2.5 text-ink outline-none focus:border-brand-600" required></textarea>
+      <p class="err mt-1 hidden text-sm text-rose-600" data-err="alamat"></p>
+    </div>
+
+    <div>
+      <label for="f-kec" class="mb-1 block text-sm font-medium text-ink">Kecamatan / area <span class="text-rose-500">*</span></label>
+      <input id="f-kec" name="kecamatan" type="text" autocomplete="off" placeholder="Ketik minimal 3 huruf…"
+        class="w-full rounded-xl border border-line px-3 py-2.5 text-ink outline-none focus:border-brand-600" required />
+      <input type="hidden" id="dest-id" name="destId" />
+      <input type="hidden" id="dest-kota" name="kota" />
+      <input type="hidden" id="dest-prov" name="provinsi" />
+      <div id="kec-results" class="mt-1 hidden divide-y divide-line overflow-hidden rounded-xl border border-line bg-white shadow-lg"></div>
+      <p id="kec-hint" class="mt-1 text-xs text-stone-400">Ketik minimal 3 huruf untuk mencari kecamatan.</p>
+      <p class="err mt-1 hidden text-sm text-rose-600" data-err="kecamatan"></p>
+    </div>
+
+    {fc.summary && (
+      <div class="rounded-xl border border-line bg-stone-50 p-4">
+        <h3 class="mb-3 text-sm font-bold text-ink">Ringkasan Pesanan</h3>
+        <dl class="space-y-2 text-sm">
+          <div class="flex justify-between"><dt class="text-stone-500">Produk</dt><dd id="sum-produk" class="font-medium text-ink">{packages[0].label}</dd></div>
+          <div class="flex justify-between"><dt class="text-stone-500">Subtotal</dt><dd id="sum-subtotal" class="font-medium text-ink">{IDR(packages[0].price)}</dd></div>
+          <div class="flex justify-between"><dt class="text-stone-500">Ongkos kirim</dt><dd id="sum-ongkir" class="font-medium text-ink">—</dd></div>
+          <div class="flex justify-between border-t border-line pt-2 text-base">
+            <dt class="font-bold text-ink">Total</dt><dd id="sum-total" class="font-extrabold text-brand-700">{IDR(packages[0].price)}</dd>
+          </div>
+        </dl>
+        <p id="ongkir-note" class="mt-2 text-xs text-stone-400">Ongkir muncul setelah kecamatan dipilih.</p>
+      </div>
+    )}
+    {!fc.summary && <p id="ongkir-note" class="text-xs text-stone-400">Ongkir muncul setelah kecamatan dipilih.</p>}
+
+    <p id="form-error" class="hidden rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
+
+    <button id="submit-btn" type="submit" disabled
+      class="w-full rounded-xl bg-brand-600 px-4 py-3.5 text-center font-bold text-white transition disabled:cursor-not-allowed disabled:bg-stone-300">
+      Lengkapi kecamatan dulu
+    </button>
+
+    {fc.trustBadges && (
+      <div class="grid grid-cols-3 gap-2 border-t border-line pt-4 text-center text-[11px] font-medium text-stone-500">
+        <div class="flex flex-col items-center gap-1"><Lock class="h-4 w-4 text-brand-600" />DATA AMAN</div>
+        <div class="flex flex-col items-center gap-1"><ShieldCheck class="h-4 w-4 text-brand-600" />PRODUK ASLI</div>
+        <div class="flex flex-col items-center gap-1"><Truck class="h-4 w-4 text-brand-600" />BAYAR DI TEMPAT</div>
+      </div>
+    )}
+  </form>
+</section>
+
+<script define:vars={{ ONGKIR_API, ORDER_API, STORE_SLUG: storeSlug, COUNTDOWN_MIN: countdownMinutes, PRODUCT_HANDLE: productHandle }}>
+  (function () {
+    var form = document.getElementById("order-form");
+    if (!form) return;
+    function byId(id) { return document.getElementById(id); }
+    function setText(id, txt) { var el = byId(id); if (el) el.textContent = txt; }
+
+    // ── ported verbatim from checkout.astro — the two must never disagree ─────────────────────
+    function normalizePhone(raw) {
+      var d = String(raw == null ? "" : raw).replace(/\D+/g, "");
+      if (!d) return null;
+      if (d.slice(0, 3) === "620") d = d.slice(3);
+      else if (d.slice(0, 2) === "62") d = d.slice(2);
+      else if (d[0] === "0") d = d.replace(/^0+/, "");
+      if (d[0] !== "8") return null;              // Indonesian mobiles are 8xx — no prefix table
+      if (d.length < 9 || d.length > 12) return null;
+      return "62" + d;
+    }
+    function api(payload) {
+      return fetch(ONGKIR_API, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      }).then(function (r) { return r.json(); });
+    }
+    function fmtIDR(n) { return "Rp" + Number(n || 0).toLocaleString("id-ID"); }
+
+    var HANDLE = PRODUCT_HANDLE;
+    var qty = 1; // stepper (if shown); else fixed 1
+    var sel = { idx: 0, variant: form.querySelector(".pkg-opt").dataset.variant, price: Number(form.querySelector(".pkg-opt").dataset.price), label: "" };
+    var destId = byId("dest-id");
+    var emailEl = byId("f-email");
+    var shipping = null; // { label, cost, service, serviceType }
+
+    function goods() { return sel.price * qty; }
+
+    function selectPkg() {
+      var el = form.querySelector('.pkg-opt[data-idx="' + sel.idx + '"]');
+      sel.variant = el.dataset.variant;
+      sel.price = Number(el.dataset.price);
+      sel.label = el.querySelector(".block").textContent;
+      setText("scarcity", el.dataset.stock);
+      setText("sum-produk", sel.label + (qty > 1 ? " × " + qty : ""));
+      setText("sum-subtotal", fmtIDR(goods()));
+      shipping = null; // price changed → the old quote is stale; re-quote if we already have a dest
+      renderSummary();
+      if (destId.value) fetchRates();
+    }
+    form.querySelectorAll('input[name="paket"]').forEach(function (r) {
+      r.addEventListener("change", function () { if (r.checked) { sel.idx = Number(r.value); selectPkg(); } });
+    });
+
+    // ── quantity stepper (only present if enabled) ────────────────────────────────────────────
+    var qtyVal = byId("qty-val");
+    if (qtyVal) {
+      var setQty = function (n) {
+        qty = Math.max(1, Math.min(99, n));
+        qtyVal.textContent = String(qty);
+        setText("sum-produk", sel.label + (qty > 1 ? " × " + qty : ""));
+        setText("sum-subtotal", fmtIDR(goods()));
+        shipping = null; renderSummary();       // weight/value changed → re-quote
+        if (destId.value) fetchRates();
+      };
+      byId("qty-dec")?.addEventListener("click", function () { setQty(qty - 1); });
+      byId("qty-inc")?.addEventListener("click", function () { setQty(qty + 1); });
+    }
+
+    function renderSummary() {
+      setText("sum-ongkir", shipping ? fmtIDR(shipping.cost) : "—");
+      setText("sum-total", fmtIDR(goods() + (shipping ? shipping.cost : 0)));
+      var btn = byId("submit-btn");
+      if (shipping) { btn.disabled = false; btn.textContent = "Pesan Sekarang (COD) — " + fmtIDR(goods() + shipping.cost); }
+      else { btn.disabled = true; btn.textContent = "Lengkapi kecamatan dulu"; }
+    }
+
+    // ── kecamatan autocomplete ────────────────────────────────────────────────────────────────
+    var kec = byId("f-kec");
+    var results = byId("kec-results");
+    var hint = byId("kec-hint");
+    var timer;
+    kec.addEventListener("input", function () {
+      destId.value = ""; shipping = null; renderSummary();
+      setText("ongkir-note", "Ongkir muncul setelah kecamatan dipilih.");
+      clearValidity("kecamatan");
+      var q = kec.value.trim();
+      clearTimeout(timer);
+      if (q.length < 3) { results.classList.add("hidden"); return; }
+      timer = setTimeout(function () {
+        api({ op: "search", q: q }).then(function (res) {
+          if (!res.ok) {
+            results.innerHTML = '<p class="px-3 py-2 text-sm text-rose-600">' + esc(res.error || "Gagal mencari kecamatan.") + '</p>';
+            results.classList.remove("hidden"); return;
+          }
+          if (!res.results || !res.results.length) {
+            results.innerHTML = '<p class="px-3 py-2 text-sm text-stone-400">Kecamatan tidak ditemukan.</p>';
+            results.classList.remove("hidden"); return;
+          }
+          results.innerHTML = res.results.slice(0, 8).map(function (a) {
+            return '<button type="button" class="kec-pick block w-full px-3 py-2 text-left text-sm hover:bg-stone-50" ' +
+              'data-id="' + a.id + '" data-kota="' + esc(a.city || "") + '" data-prov="' + esc(a.province || "") + '">' +
+              esc(a.text || (a.district + ", " + a.city)) + '</button>';
+          }).join("");
+          results.classList.remove("hidden");
+        }).catch(function () { results.classList.add("hidden"); });
+      }, 300);
+    });
+    results.addEventListener("click", function (e) {
+      var b = e.target.closest(".kec-pick");
+      if (!b) return;
+      kec.value = b.textContent;
+      destId.value = b.dataset.id;
+      byId("dest-kota").value = b.dataset.kota;
+      byId("dest-prov").value = b.dataset.prov;
+      results.classList.add("hidden");
+      setText("ongkir-note", "Menghitung ongkir…");
+      fetchRates();
+    });
+
+    function fetchRates() {
+      if (!destId.value) return;
+      setText("ongkir-note", "Menghitung ongkir…");
+      var d = destId.value;
+      api({
+        op: "rates", storeSlug: STORE_SLUG, destinationId: Number(d),
+        items: [{ handle: HANDLE, variant: sel.variant, qty: qty }], itemValue: goods(),
+      }).then(function (res) {
+        if (destId.value !== d) return;
+        if (!res.ok || !res.rates || !res.rates.length) {
+          setText("ongkir-note", res.error || "Ongkir tidak tersedia untuk area ini.");
+          shipping = null; renderSummary(); return;
+        }
+        var cod = res.rates.filter(function (r) { return r.cod; });
+        if (!cod.length) {
+          setText("ongkir-note", "COD belum tersedia untuk area/produk ini.");
+          shipping = null; renderSummary(); return;
+        }
+        var best = cod.reduce(function (a, b) { return b.cost < a.cost ? b : a; });
+        shipping = { label: best.name || best.code, cost: best.cost, service: best.code, serviceType: best.type };
+        setText("ongkir-note", "Via " + shipping.label + " (bayar di tempat).");
+        renderSummary();
+      }).catch(function () {
+        if (destId.value !== d) return;
+        setText("ongkir-note", "Gagal menghitung ongkir. Coba lagi.");
+        shipping = null; renderSummary();
+      });
+    }
+
+    // ── validation (Bahasa, ours — the API re-checks all of it) ───────────────────────────────
+    function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+    function showErr(name, msg) {
+      var p = form.querySelector('[data-err="' + name + '"]');
+      if (p) { p.textContent = msg; p.classList.toggle("hidden", !msg); }
+    }
+    function clearValidity(name) { showErr(name, ""); }
+    function validate() {
+      var ok = true;
+      var nama = form.nama.value.trim().replace(/\s+/g, " ");
+      if (!nama || nama.length < 2) { showErr("nama", "Nama lengkap wajib diisi."); ok = false; }
+      else if (/\d/.test(nama)) { showErr("nama", "Nama tidak boleh mengandung angka."); ok = false; }
+      else clearValidity("nama");
+      if (!normalizePhone(form.whatsapp.value)) { showErr("whatsapp", "Nomor WhatsApp tidak valid. Contoh: 08123456789."); ok = false; }
+      else clearValidity("whatsapp");
+      // Email is OPTIONAL — only validated (shape) when the field exists AND is non-empty.
+      if (emailEl && emailEl.value.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value.trim())) {
+        showErr("email", "Format email tidak valid."); ok = false;
+      } else if (emailEl) clearValidity("email");
+      if (form.alamat.value.trim().length < 10) { showErr("alamat", "Alamat terlalu pendek — sertakan jalan, RT/RW, dan patokan."); ok = false; }
+      else clearValidity("alamat");
+      if (!destId.value) { showErr("kecamatan", "Pilih kecamatan dari daftar."); ok = false; }
+      else clearValidity("kecamatan");
+      return ok;
+    }
+
+    // ── submit → /api/public/order (channelCode:"cod") ────────────────────────────────────────
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var ferr = byId("form-error");
+      ferr.classList.add("hidden");
+      if (!validate()) return;
+      if (!shipping) { ferr.textContent = "Ongkir belum dihitung."; ferr.classList.remove("hidden"); return; }
+
+      var btn = byId("submit-btn");
+      btn.disabled = true; btn.textContent = "Memproses…";
+
+      fetch(ORDER_API, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeSlug: STORE_SLUG,
+          items: [{ handle: HANDLE, variant: sel.variant, qty: qty }],
+          customer: {
+            name: form.nama.value.trim(),
+            phone: normalizePhone(form.whatsapp.value) || form.whatsapp.value,
+            email: emailEl ? emailEl.value.trim() : undefined,
+          },
+          address: {
+            alamat: form.alamat.value.trim(),
+            kota: byId("dest-kota").value,
+            provinsi: byId("dest-prov").value,
+          },
+          shipping: { label: shipping.label, service: shipping.service, serviceType: shipping.serviceType, destId: Number(destId.value) },
+          destId: Number(destId.value),
+          channelCode: "cod",
+        }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (!res.ok) {
+            ferr.textContent = res.error || "Gagal memproses pesanan.";
+            ferr.classList.remove("hidden");
+            if (res.field) showErr(res.field, res.error || "");
+            btn.disabled = false; renderSummary();
+            return;
+          }
+          var srvShip = typeof res.shipping === "number" ? res.shipping : shipping.cost;
+          var srvTotal = typeof res.total === "number" ? res.total : goods() + shipping.cost;
+          var qs = new URLSearchParams({
+            order: res.orderNumber || "",
+            name: form.nama.value.trim(),
+            phone: normalizePhone(form.whatsapp.value) || form.whatsapp.value,
+            address: form.alamat.value.trim(),
+            variant: sel.label,
+            qty: String(qty),
+            subtotal: String(goods()),
+            shipping: String(srvShip),
+            total: String(srvTotal),
+            pm: "cod",
+            lp: HANDLE,
+          });
+          window.location.href = "/thanks?" + qs.toString();
+        })
+        .catch(function () {
+          ferr.textContent = "Gagal terhubung ke server.";
+          ferr.classList.remove("hidden");
+          btn.disabled = false; renderSummary();
+        });
+    });
+
+    // ── promo countdown (theatrical — a marketing device, not a claim about the DB) ───────────
+    var cdMin = byId("cd-min"), cdSec = byId("cd-sec");
+    if (COUNTDOWN_MIN > 0 && cdMin && cdSec) {
+      var total = COUNTDOWN_MIN * 60;
+      var tick = function () {
+        cdMin.textContent = String(Math.floor(total / 60)).padStart(2, "0");
+        cdSec.textContent = String(total % 60).padStart(2, "0");
+        if (total > 0) total--;
+      };
+      tick();
+      setInterval(tick, 1000);
+    }
+
+    selectPkg();
+  })();
+</script>

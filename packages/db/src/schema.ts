@@ -334,6 +334,59 @@ export const pageTemplates = pgTable("page_templates", {
   updatedAt: createdAt(),
 });
 
+// Single-product direct-order LANDING config (the /promo/<handle> funnel — one row per product the
+// merchant turns into a promo page). Content that has no home on `products`: the marketing headline,
+// the Manfaat/Ideal-Untuk lists, the countdown + scarcity theatrics. Null overrides fall back to the
+// product's own name/description/badge, so a row with only `enabled=true` already renders.
+export const promoPages = pgTable(
+  "promo_pages",
+  {
+    id: pk(),
+    storeId: uuid().notNull().references(() => stores.id),
+    productId: uuid().notNull().references(() => products.id),
+    enabled: boolean().notNull().default(false),
+    headline: text(), // null = use products.title
+    subheadline: text(), // null = use products.description
+    badge: text(), // null = use products.badge
+    benefits: jsonb().notNull().default([]), // string[] — "Manfaat Utama" bullets
+    idealFor: jsonb().notNull().default([]), // string[] — "Ideal Untuk" chips
+    // Long-form AI-generated sales sections (problem → agitation → solution → guarantee). Optional; a
+    // landing renders fine with only the hero fields above. `PromoContent` in lib/data/promo typings.
+    content: jsonb().notNull().default({}),
+    countdownMinutes: integer().notNull().default(0), // 0 = no countdown
+    showScarcity: boolean().notNull().default(true),
+    // Which optional order-form elements to show. `FormConfig` in lib/form-config: { email, quantity,
+    // trustBadges, summary }. The 4 core COD fields (nama/wa/alamat/kecamatan) are always shown.
+    formConfig: jsonb().notNull().default({}),
+    createdAt: createdAt(),
+    updatedAt: createdAt(),
+  },
+  (t) => [unique().on(t.storeId, t.productId)],
+);
+
+// Custom-HTML LANDING page (/lp/<slug>). Unlike promo_pages (auto-built from a product), the merchant
+// pastes their own full landing HTML and picks ONE product to attach the checkout to — the storefront
+// renders the HTML then appends the shared OrderFunnel bound to that product. Keyed by a merchant-chosen
+// slug, not the product handle, so one product can back several landings (different angles/ads).
+export const landingPages = pgTable(
+  "landing_pages",
+  {
+    id: pk(),
+    storeId: uuid().notNull().references(() => stores.id),
+    slug: text().notNull(), // URL segment: /lp/<slug>
+    title: text().notNull(), // <title> / OG
+    html: text().notNull().default(""), // the pasted custom landing markup (body content)
+    productId: uuid().notNull().references(() => products.id), // the product the checkout orders
+    enabled: boolean().notNull().default(false),
+    countdownMinutes: integer().notNull().default(0),
+    showScarcity: boolean().notNull().default(true),
+    formConfig: jsonb().notNull().default({}), // see promo_pages.formConfig
+    createdAt: createdAt(),
+    updatedAt: createdAt(),
+  },
+  (t) => [unique().on(t.storeId, t.slug)],
+);
+
 // ---------- suppliers & purchasing ----------
 export const suppliers = pgTable("suppliers", {
   id: pk(),

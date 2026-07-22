@@ -1,0 +1,70 @@
+---
+// Custom-HTML LANDING (/lp/<slug>). The merchant pastes their own full landing markup (Seller →
+// Landing Page → Landing HTML) and picks ONE product; we render their HTML verbatim, then append the
+// shared OrderFunnel bound to that product, plus a floating "Pesan Sekarang" CTA that scrolls to it.
+// Standalone layout (no site nav), same as the product landing.
+//
+// SECURITY NOTE: the HTML is set:html'd — it is the MERCHANT's own content for their OWN storefront
+// (the same trust level as the Store Builder). Astro renders it into the SSR string; injected <script>
+// tags do NOT execute (innerHTML semantics), so a pasted pixel snippet won't run — a deliberate,
+// conservative default. If a merchant later needs real pixels, that becomes an explicit, reviewed head
+// injection, not arbitrary body script.
+import LandingLayout from "../../layouts/LandingLayout.astro";
+import OrderFunnel from "../../components/OrderFunnel.astro";
+import { ShoppingBag } from "@lucide/astro";
+import { getLandingPage } from "../../data/landing";
+import { buildPackages } from "../../lib/packages";
+
+const { store, catalog } = Astro.locals;
+const { slug } = Astro.params;
+
+const landing = slug ? await getLandingPage(store.id, slug) : null;
+if (!landing) return new Response(null, { status: 404, statusText: "Not Found" });
+
+// The attached product must still exist/be sellable for the checkout to work.
+const product = catalog.findProduct(landing.productHandle);
+if (!product) return new Response(null, { status: 404, statusText: "Not Found" });
+
+const packages = buildPackages(product);
+---
+
+<LandingLayout title={landing.title} robots="noindex,follow">
+  {/* The merchant's own landing markup — rendered verbatim (see security note in frontmatter). */}
+  <div class="landing-html" set:html={landing.html} />
+
+  {/* Checkout — auto-appended below the pasted HTML, bound to the attached product. */}
+  <section class="mx-auto max-w-2xl px-4 pb-28 pt-6 sm:px-6">
+    <OrderFunnel
+      packages={packages}
+      storeSlug={store.slug}
+      productHandle={landing.productHandle}
+      countdownMinutes={landing.countdownMinutes}
+      showScarcity={landing.showScarcity}
+      formConfig={landing.formConfig}
+    />
+  </section>
+
+  {/* Floating CTA → scrolls to the order form. Hidden once the form itself is on screen (JS below). */}
+  <a
+    id="floating-cta"
+    href="#order-funnel"
+    class="fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-2xl items-center justify-center gap-2 bg-brand-600 px-4 py-4 font-bold text-white shadow-[0_-4px_16px_rgba(0,0,0,0.12)] transition sm:bottom-4 sm:mx-auto sm:w-[calc(100%-2rem)] sm:rounded-xl"
+  >
+    <ShoppingBag class="h-5 w-5" /> Pesan Sekarang
+  </a>
+</LandingLayout>
+
+<script>
+  // Hide the floating CTA once the order form is in view (it would just cover the very thing it points
+  // to). No-op if either element is missing.
+  const cta = document.getElementById("floating-cta");
+  const funnel = document.getElementById("order-funnel");
+  if (cta && funnel && "IntersectionObserver" in window) {
+    new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) cta.classList.toggle("translate-y-full", e.isIntersecting);
+      },
+      { threshold: 0.15 },
+    ).observe(funnel);
+  }
+</script>
