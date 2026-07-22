@@ -2,6 +2,57 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-07-20 / 21 — PRs #9–#26, ~10 verified production deploys (`main` → `036f05e`)
+
+### 🔐 Security — four MORE cross-tenant holes, found by auditing the class
+`e61df25` had patched the three call sites it happened to find. Enumerating **every** writer of a table
+with no `store_id` found four more, all shipped: `media.ts` (`e9656fd` — `media:write` could delete
+another store's product image; `product_media` has no `store_id` and `relrowsecurity = f`), plus
+`deleteDiscount`, `createPurchaseOrder` and `syncChildren` (`30a3c71`). Also `cae0deb`: the two
+`jwtVerify` calls `cb17372` claimed to have pinned but missed — including the gate on the platform
+control plane. **The rule is now in AGENTS.md ("THE CHILD-TABLE RULE") and `verify-rls` gained check 5c**
+so the class cannot grow unnoticed — its failure path was exercised, not assumed.
+
+### 📦 Order state, inventory, resi
+- `35db72d` — one writer for `orders.status`. ⚠️ Routing through the state machine was NOT sufficient:
+  it treats only `batal`/`retur` as terminal **on purpose** (`selesai → retur` must stay legal for the
+  ledger claw-back), so it would happily execute `selesai → diproses` and un-complete a delivered,
+  cash-collected COD sale. The shipment refusal set is permanently wider; +2 tests pin exactly this.
+- `dde9c09` — the tracking poller raced manual status changes; `createShipment` checked terminal against
+  a **pre-network** read.
+- `80fb83b` — the checkout checked stock across ALL locations and decremented ONE; `receivePurchaseOrder`
+  was a read-then-write.
+- `8cc7080` — a **partial** print run stamped un-labelled parcels as printed: they left the "belum
+  dicetak" filter and silently never shipped.
+- `3eefe02` — one non-JSON gateway reply aborted the whole tracking sweep; the poller could starve orders
+  forever; the run summary went to `/dev/null`.
+- `0746806` — migration **0062**: `orders.problem_at`/`problem_note`, a merchant-facing stuck-parcel flag.
+  Same commit captures the **raw KiriminAja payload**, which is what makes the two open resi questions
+  (#12) answerable from a single real booking instead of unanswerable forever.
+- `d5fd5d4` — "Batalkan penerimaan": receiving a PO by mistake was a dead end. Guarded by a
+  compare-and-swap, strictly stronger than a read-then-check.
+
+### 🎨 Front-end
+`cd8cefb` product search (`/cari`) · `4ab223c` responsive `srcset` via an on-demand resizer with an
+**allow-listed** `?w=` (the allow-list is the security boundary: `?w=1` merely ignored is still a
+cacheable URL, and a first pass using `Number(raw)` smuggled the unbounded key space back in through
+`400.0`/`4e2`/`0400`) · `cb219f6` a 404 that recovers the sale · `092543a` URL-driven sort (the form
+carries `q`, so sorting `/cari` does not throw the search away) · `3508da0` three primitives + the routes
+`/produk`, `/kategori`, `404.astro` that did not exist · `076be02` + `7dedea8` migration **0063**: public
+address (deliberately NOT the courier pickup address) + 5 social handles, and a redesigned footer whose
+EMPTY state was verified first · `9249824` favicon accepts any raster format and becomes a real PNG ·
+`bef9d75` skip link + reduced-motion · `66683c8` **dates were rendered in the runtime's timezone** — Node
+said UTC, the browser said WIB, and the 7-hour gap also filed products under the wrong DAY in the server
+HTML.
+
+### 📐 Method
+Deploys are verified by recording the container ID and only trusting one once it is **REPLACED**, then
+reading the shipped HTML / DB columns — after a health-only check reported "rebuilt + healthy" about the
+PREVIOUS build (DEPLOY.md). Core Web Vitals measured on prod mobile 3× (**LCP 348–552ms, CLS 0**) and
+deliberately left alone. Five 🟢 REAL rows in STATUS.md were broken when written; each failed the same way
+— the check stopped one layer short of the seam. **#15 closed as superseded**; the shared local-`main`
+checkout was left untouched.
+
 ## 2026-07-18
 
 ### 🔍 Deep audit — money / order-state / shipping / security correctness (10 fixes)

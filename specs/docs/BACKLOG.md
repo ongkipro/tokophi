@@ -9,7 +9,47 @@
 
 ---
 
-## ▶ NEXT UP — picked up here (handoff 2026-07-18)
+## ▶ NEXT UP — handoff 2026-07-21 (session end)
+
+**Nothing is half-finished. Working tree clean, branch synced, `main` at `036f05e` (PR #26).**
+Ten PRs merged this session (#9–#26) across **~10 production deploys, every one verified** by comparing
+the container ID *and then reading the shipped HTML / DB columns* — never by a 200 alone. That method
+exists because a health-only check fooled us once: it reported "rebuilt + healthy" while showing the
+PREVIOUS build (DEPLOY.md, "How to verify a deploy ACTUALLY landed").
+
+**What landed:** seven cross-tenant holes (four found by auditing the *class*, not patching instances —
+`media.ts`, `deleteDiscount`, `createPurchaseOrder`, `syncChildren`), one writer for `orders.status`,
+resi-chain hardening + raw-payload capture, and the whole front-end pass — product search (`/cari`),
+responsive `srcset` with an allow-listed on-demand resizer, a sale-recovering 404, URL-driven sort,
+social profiles + redesigned footer, favicon accepting any format, and a11y (skip link, reduced-motion,
+44px targets). Core Web Vitals measured on prod mobile 3×: **LCP 348–552ms, CLS 0** — nothing left to
+optimise there, so don't.
+
+**THE ONLY OPEN TASK IS BLOCKED ON THE OWNER — GitHub #12.** Two resi questions that code and docs
+cannot answer, only one real production booking can:
+1. **Are we tracking with the wrong id?** Booking registers `TOKOPHI-<ref>`; `kaTrack` queries with
+   `kj_order_id` under key `order_id`, while KiriminAja's doc calls that field `order_id string(max:20)`
+   — and `TOKOPHI-<ref>` can exceed 20.
+2. **Does status `200` mean delivered?** Their webhook doc says 200 = picked up / 300 = delivered; their
+   tracking doc says 200 = Delivered. We map 200 → delivered, which on the webhook scale **collects COD
+   cash and credits the ledger for a parcel still in transit.** The vendor's own docs disagree — only a
+   captured payload settles it.
+   Everything needed is already in place: the poller logs the raw payload
+   (`docker logs cron-tracking | grep ka-raw`, `0746806`), including the two previously-silent cases.
+   ⚠️ **Do not flip `KIRIMINAJA_ENV=production` by accident — it is the last step before real money.**
+
+**Other owner decisions, each a GitHub issue:** #13 alert channel (the L2 probe is built and green but
+cannot page anyone), #14 image picker, #16 the rest of the front-end audit (filter/pagination are
+*projects*, not polish), #21 image-CDN TTL (⚠️ hash the filenames BEFORE lengthening the TTL, or a
+changed photo sticks for a year).
+
+**#15 is CLOSED as superseded** — see the resolved section below. Do not push or rebase the 25 stale
+local-`main` commits.
+
+---
+
+<details>
+<summary>Previous handoff — 2026-07-18 (blog featured images, PR #7)</summary>
 
 **PR #7 is MERGED to `main` (`dfe1631`) and DEPLOYING.** It carries the blog featured-image feature
 (`8c56003`, incl. the body-deleting-save fix, STATUS §0) AND **15 editorial Jurnal images** (`ace867e`):
@@ -60,6 +100,8 @@ builds green.
 every button is dead (Turbopack HMR websocket fails). The same page hydrates correctly on live and on a
 local `next build && next start`. **Do not diagnose admin interactivity from `next dev`** — it will tell
 you a working feature is broken. Verified 2026-07-17 by testing the same page three ways.
+
+</details>
 
 ---
 
