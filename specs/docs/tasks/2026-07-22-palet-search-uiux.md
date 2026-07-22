@@ -1,7 +1,12 @@
 # TASK — Palet pencarian: buang kostum "developer console", maksimalkan di ponsel
 
-> **Status: ✅ DONE** · dibuka 2026-07-22 · branch `worktree-super-admin-overhaul`
-> · commit awal `af8bd2e` (= `origin/main`)
+> **Status: ✅ DONE & DEPLOYED** · 2026-07-22 · PR #34 → `main` `e5a0130`
+> · container storefront `502bdcbcb254` → **`2251dd051cd1`**
+>
+> **Diverifikasi di PRODUKSI dengan mengoperasikannya, bukan cuma membaca HTML-nya:**
+> sheet `360×780 top:0` · pill `Dress` · 2 baris produk · baris "Lihat semua hasil untuk «dress»" ·
+> Esc menutup · drawer `138px 138px` · dropdown **hidden saat hover**, visible saat klik, hidden saat
+> Esc · kartu desktop **225px untuk 1 hasil** (memeluk isi) · **0 console error**.
 >
 > Ditulis **sebelum** koding. Baca **NEXT** paling bawah lebih dulu.
 > Lanjutan dari [header ikon + palet ⌘K](./2026-07-22-header-ikon-palet-search.md).
