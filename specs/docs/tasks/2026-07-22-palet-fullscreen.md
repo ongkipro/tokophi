@@ -1,7 +1,19 @@
 # TASK — Palet pencarian: satu layar penuh di semua perangkat, latar terkunci
 
-> **Status: ✅ DONE** · dibuka 2026-07-22 · branch `worktree-super-admin-overhaul`
-> · commit awal `27b912f` (= `origin/main`)
+> **Status: ✅ DONE & DEPLOYED** · 2026-07-22 · PR #36 → `main` `618a57b`
+> · container storefront `98abe6961e13` → **`89ca1d24eeec`**
+>
+> **Diverifikasi di PRODUKSI dengan mengoperasikannya di empat ukuran:**
+>
+> | | palet | kolom baca | latar | hasil | lepas setelah Esc |
+> |---|---|---|---|---|---|
+> | ponsel 360 | `360×780 @0,0` | 360 | 0→0 ✅ | 4 | ✅ |
+> | tablet 768 | `768×1024 @0,0` | 672 | 0→0 ✅ | 4 | ✅ |
+> | desktop 1280 | `1280×900 @0,0` | 672 | 0→0 ✅ | 4 | ✅ |
+> | lebar 1920 | `1920×1080 @0,0` | 672 | 0→0 ✅ | 4 | ✅ |
+>
+> Footer di produksi: tinggi **546px**, kolom `24..413 / 445..729 / 761..940 / 972..1256`,
+> tepi kanan `1256` = `1280 − 24`, sama persis dengan konten halaman. **0 console error.**
 >
 > Lanjutan langsung dari [palet UI/UX](./2026-07-22-palet-search-uiux.md), yang sudah DONE + deployed.
 
