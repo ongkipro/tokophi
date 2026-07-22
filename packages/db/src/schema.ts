@@ -135,6 +135,10 @@ export const stores = pgTable("stores", {
   // the same reason, and separate from `whatsapp` because plenty of shops publish a landline they do
   // not run WhatsApp on.
   phone: text(),
+  // The shop's PUBLIC email — correspondence a shopper may write to, rendered in the storefront
+  // footer. ⚠️ NOT `users.email`, which is a LOGIN CREDENTIAL: unique across the platform and never
+  // for publication. Two fields, two jobs (migration 0064).
+  email: text(),
   // Social handles — the USERNAME only, no @ and no URL. The storefront builds the link. Storing a
   // full URL invites pasting anything (someone else's profile, or a `javascript:` scheme) and turns
   // validation into URL parsing instead of the much narrower username problem.

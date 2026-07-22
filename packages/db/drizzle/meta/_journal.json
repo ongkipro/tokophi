@@ -449,6 +449,13 @@
       "when": 1784556403703,
       "tag": "0063_store_socials_and_public_address",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1784707158597,
+      "tag": "0064_store_public_email",
+      "breakpoints": true
     }
   ]
 }

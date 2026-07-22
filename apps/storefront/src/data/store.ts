@@ -31,6 +31,12 @@ export type StoreInfo = {
   /** Public phone (may be a landline). `null` = no phone published → render no phone row. */
   phone: string | null;
   /**
+   * PUBLIC shop email — correspondence a shopper may write to (migration 0064). `null`/blank = not
+   * published → render no email row. ⚠️ NEVER `users.email`: that one is a LOGIN CREDENTIAL, unique
+   * across the platform, and putting it in a public footer would publish a sign-in identifier.
+   */
+  email: string | null;
+  /**
    * Social handles — the USERNAME only (no `@`, no URL); the storefront builds the profile link.
    * `null` for every one is the NORMAL state today: the whole social row disappears, it does not
    * render as an empty strip.
@@ -133,6 +139,7 @@ const toStoreInfo = (r: typeof schema.stores.$inferSelect): StoreInfo => ({
   city: r.city ?? "",
   address: r.address,
   phone: r.phone,
+  email: r.email,
   socialInstagram: r.socialInstagram,
   socialTiktok: r.socialTiktok,
   socialFacebook: r.socialFacebook,

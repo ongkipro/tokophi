@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { toast } from "sonner";
-import { Store, Loader2, MessageCircle, MapPin, Phone, Share2 } from "lucide-react";
+import { Store, Loader2, MessageCircle, MapPin, Phone, Share2, Mail } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Input } from "@tokophi/ui/input";
@@ -45,6 +45,7 @@ export function StoreProfileCard() {
   const [whatsapp, setWhatsapp] = React.useState("");
   const [address, setAddress] = React.useState("");
   const [phone, setPhone] = React.useState("");
+  const [email, setEmail] = React.useState("");
   const [social, setSocial] = React.useState<SocialHandles>(
     () => Object.fromEntries(SOCIAL_PLATFORMS.map((p) => [p, ""])) as SocialHandles,
   );
@@ -61,6 +62,7 @@ export function StoreProfileCard() {
         setWhatsapp(p.whatsapp);
         setAddress(p.address);
         setPhone(p.phone);
+        setEmail(p.email);
         setSocial(p.social);
         setLogoUrl(p.logoUrl);
         setFaviconUrl(p.faviconUrl);
@@ -75,7 +77,7 @@ export function StoreProfileCard() {
 
   const save = () => {
     start(async () => {
-      const res = await saveStoreProfile({ name, tagline, whatsapp, address, phone, social });
+      const res = await saveStoreProfile({ name, tagline, whatsapp, address, phone, email, social });
       if (res.ok) {
         toast.success("Profil toko tersimpan.");
         // The server normalises: a pasted profile URL becomes a username, a mobile becomes 62…. Read
@@ -83,6 +85,7 @@ export function StoreProfileCard() {
         // input showing the URL they pasted and discovering the difference on the storefront.
         getStoreProfile().then((p) => {
           setPhone(p.phone);
+          setEmail(p.email);
           setSocial(p.social);
           setAddress(p.address);
         }, () => {});
@@ -223,6 +226,28 @@ export function StoreProfileCard() {
               />
               <p className="text-xs text-muted-foreground">
                 Ditampilkan di storefront sebagai kontak toko. Boleh nomor <span className="font-medium">telepon rumah/kantor</span> — tidak harus nomor WhatsApp di atas. Kosongkan jika tidak ingin ditampilkan.
+              </p>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="sp-email" className="flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5" /> Email publik
+              </Label>
+              <Input
+                id="sp-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                inputMode="email"
+                autoComplete="off"
+                placeholder="mis. halo@namatoko.com"
+                disabled={!canWrite}
+              />
+              {/* ⚠️ Says out loud that this is NOT the login. A merchant who assumes it is "the email
+                  you already know" would publish the address they sign in with on every page of a
+                  public website. Two fields, two jobs — see migration 0064. */}
+              <p className="text-xs text-muted-foreground">
+                Alamat email untuk <span className="font-medium">dihubungi pembeli</span>, ditampilkan di storefront. Bukan email login akun kamu. Kosongkan jika tidak ingin ditampilkan.
               </p>
             </div>
 
