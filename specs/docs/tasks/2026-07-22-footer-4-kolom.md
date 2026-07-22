@@ -1,6 +1,6 @@
 # TASK — Footer 4 kolom: brand · menu utama · menu merchant · kontak
 
-> **Status: 🟡 IN PROGRESS** · dibuka 2026-07-22 · branch `worktree-super-admin-overhaul`
+> **Status: ✅ DONE** · dibuka 2026-07-22 · branch `worktree-super-admin-overhaul`
 >
 > Ditulis **sebelum** koding. Baca **NEXT** di bawah lebih dulu.
 > Rantai task hari ini: [filter+pagination](./2026-07-22-listing-filter-pagination.md) →
@@ -65,13 +65,13 @@ Isi nyata toko demo (diverifikasi via SQL):
 
 ## Rencana
 
-- [ ] 1. `Footer.astro`: susun ulang jadi 4 kolom sesuai di atas; pakai `getMainNav`
-- [ ] 2. Render item dropdown (induk = label, anak menjorok), rapikan hierarki visual
-- [ ] 3. Pindahkan sosmed + kontak + alamat ke kolom 4; ikon seperlunya
-- [ ] 4. Verifikasi: build + `astro check` + **browser** (desktop & 360px) + kontras AA
-- [ ] 5. Uji **toko kosong** — merchant tanpa sosmed/alamat/menu tak boleh dapat heading kosong
-- [ ] 6. `npm run audit:responsive` tetap hijau
-- [ ] 7. Commit + tutup file ini + CHANGELOG/WORKLOG
+- [x] 1. `Footer.astro`: susun ulang jadi 4 kolom sesuai di atas; pakai `getMainNav`
+- [x] 2. Render item dropdown (induk = label, anak menjorok), rapikan hierarki visual
+- [x] 3. Pindahkan sosmed + kontak + alamat ke kolom 4; ikon seperlunya
+- [x] 4. Verifikasi: build + `astro check` + **browser** (desktop & 360px) + kontras AA
+- [x] 5. Uji **toko kosong** — merchant tanpa sosmed/alamat/menu tak boleh dapat heading kosong
+- [x] 6. `npm run audit:responsive` tetap hijau
+- [x] 7. Commit + tutup file ini + CHANGELOG/WORKLOG
 
 ## Yang gampang salah di sini
 
@@ -83,9 +83,28 @@ Isi nyata toko demo (diverifikasi via SQL):
 - ⚠️ Jangan pernah memunculkan nomor/handle placeholder. Platform ini pernah menyiarkan
   `wa.me/6281234567890` di setiap halaman setiap toko. Kanal yang hilang itu jujur; kanal yang mati itu bohong.
 
+## Yang diverifikasi (dibaca dari HTML yang dirender, bukan diasumsikan)
+
+| Diuji | Hasil |
+|---|---|
+| Heading kolom | `Menu` · `Informasi` · `Hubungi kami` — kolom "Koleksi"/"Belanja" hilang |
+| Kolom Menu | Beranda · Semua Produk · **grup "Kategori"** (Dress, Atasan, Bawahan, Busana Muslim, Loungewear) · Promo Gajian · Blog · Kontak |
+| Outerwear | **tidak muncul** — koleksinya `published=false`, dibuang `getMainNav` |
+| Kolom Informasi | 4 halaman terbit; **FAQ tidak muncul** karena halamannya draft |
+| `href="undefined"` | **nihil** — induk dropdown dirender sebagai label, bukan tautan |
+| Kontak | tombol WhatsApp + baris lokasi berikon tampil |
+| Sosmed | 0 ikon saat kosong (benar); diuji dengan `@batiknusantara` sementara → 2 ikon, `@` terkupas untuk Instagram, URL TikTok tetap `@`, nama a11y "Instagram Batik Nusantara". **Dikembalikan ke NULL.** |
+| `astro check` | 0 error |
+
+`SocialLinks.astro` dipisah dari `Footer.astro` — ~50 baris path SVG yang menyembunyikan struktur
+file. Ia **presentasi murni**: daftar profil datang sebagai prop, karena `Footer` tetap butuh jawaban
+"ada sosmed atau tidak" untuk memutuskan apakah kolom 4 punya isi.
+
 ---
 
-## NEXT
+## NEXT — sesudah task ini
 
-**Langkah 1** — `apps/storefront/src/components/Footer.astro`: impor `getMainNav`, ambil
-`catalog.collections` untuk fallback-nya, lalu susun ulang grid-nya sebelum menyentuh gaya.
+- Form Seller untuk mengisi alamat/telepon/sosmed masih dibangun (migrasi 0063 sudah ada kolomnya).
+  Sampai itu jadi, kolom 4 di toko sungguhan hanya menampilkan baris kota.
+- Kalau nanti diminta: footer bisa jadi accordion di ponsel. Sengaja tidak sekarang — 4 kolom yang
+  menumpuk sudah terbaca dan tak menambah JS.
