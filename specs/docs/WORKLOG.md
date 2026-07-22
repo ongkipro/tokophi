@@ -7,6 +7,35 @@
 
 
 
+## 2026-07-22 (lanjutan) — Front-end pass: sold-out badge · merchant-owned footer · icon header + ⌘K palette ✅ **PR #30 (`f43e46a`), DEPLOYED + verified live**
+
+**Deploy verified by the artefact, then by USING it.** Storefront container `8398c2093fd2` →
+`7cf333b4d6e0`; the shipped HTML carries the `<dialog>`, the `<a href="/cari">` trigger, the cart
+badge `hidden` at zero, and no `href="undefined"`, while the old 208px `#site-search` is gone. But a
+shipped `<dialog>` is not proof its script runs — so the palette was **driven on production**: it
+opens, "dress" returns KATEGORI + PRODUK, Esc closes, Ctrl+K reopens, `/api/search` answers in 131ms
+over TLS, `/cari` carries its own input, 0 overflow at 320px, 0 console errors, all four surfaces up.
+
+Three tasks, each with its own committed file in `specs/docs/tasks/`. Full reasoning in CHANGELOG;
+what a future session needs and cannot re-derive:
+
+- **`inStock` is ONE function now** (`data/catalog.ts`), read by the card, the buy box, the schema.org
+  availability and the related-row ranking. It agrees with `/api/public/order` by construction. A
+  product with **no** variant rows is AVAILABLE — do not "fix" that into sold-out.
+- **The footer's nav columns belong to the merchant.** Do not re-add a derived "Koleksi" column or a
+  hardcoded "Belanja"/"Jurnal": that is the platform-default-leaking-into-a-tenant bug `data/nav.ts`
+  keeps fixing.
+- **`/cari` owns a search box now, and that is load-bearing** — the header's magnifier is an
+  `<a href="/cari">`, so a JS-less visitor still has somewhere to type. Never turn it into a `<button>`.
+- **No shopper account icon**, by design and by the owner's decision. The honest version is a
+  "Lacak Pesanan" page keyed on order ref **+ phone** (ref alone would let anyone enumerate orders).
+
+**Four defects only a browser could find — three of them written in this same session.** A green
+build and a clean typecheck proved nothing about any of them: Esc was eaten by the search input's
+native clear; the browser's own ✕ sat beside ours; the cart badge was `hidden` at zero while its
+script only ever set `textContent`, so it could never appear; and the icon row overflowed 320px
+because the logo is *allowed* 176px next to 142px of icons. `audit:responsive` 132/132 after the fixes.
+
 ## 2026-07-22 — Session: listing filter + pagination (audit #16 closed out), and a safety gate that had been crashing ✅ **PR #28 merged (`da1da19`), DEPLOYED + verified live**
 
 **Deploy verified by the artefact:** storefront container `525c237eb64e` → `89ce9f047897`, then the
