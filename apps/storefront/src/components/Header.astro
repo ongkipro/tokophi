@@ -21,9 +21,6 @@ const showUtilityBar = Boolean(promoCol || terlarisCol);
 // Merchant logo (stores.logo_url) when set, else the store name as a wordmark.
 const logo = store.logoUrl ? mediaUrl(store.logoUrl) : null;
 const pathname = Astro.url.pathname;
-// Prefill the search box on /cari so a shopper refining a search doesn't start from blank. `q` is the
-// ONLY thing we read from the URL, and only here — trimmed + capped exactly like the /cari page does.
-const searchQuery = pathname === "/cari" ? (Astro.url.searchParams.get("q") ?? "").trim().slice(0, 100) : "";
 const isActive = (href: string) =>
   href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
@@ -61,14 +58,14 @@ const featured = catalog.bestsellers()[0];
        (left-1/2 + -translate-x-1/2), which centres a 62rem panel on a button sitting far right in
        the nav — so the panel hung off the left edge of the screen. A mega menu belongs to the
        HEADER, not to the word that opens it. -->
-  <div class="relative mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6">
+  <div class="relative mx-auto flex max-w-7xl items-center gap-2 px-4 py-4 sm:gap-4 sm:px-6">
     <a
       href="/"
       class="shrink-0 rounded-md font-display text-xl font-semibold tracking-tight text-ink transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:text-2xl"
     >
       {
         logo ? (
-          <img src={logo} alt={store.name} class="h-9 w-auto max-w-[11rem] object-contain sm:h-10" />
+          <img src={logo} alt={store.name} class="h-9 w-auto max-w-[8.5rem] object-contain sm:h-10 sm:max-w-[11rem]" />
         ) : (
           store.name
         )
@@ -253,7 +250,12 @@ const featured = catalog.bestsellers()[0];
       }
     </nav>
 
-    <div class="ml-auto flex items-center gap-2 lg:ml-0">
+    {/* ⚠️ `gap-0.5` until `sm`, and the logo is capped narrower there too. At 320px this row is
+        search + cart + hamburger = 142px, and the logo is ALLOWED 176px — 318px of content for the
+        288px the padding leaves, so the shop scrolled sideways on the narrowest phones still in use.
+        That is not the demo's broken logo image: it is what the declared max-widths permit. The
+        icons keep their 44px tap targets; only the space BETWEEN them gives way. */}
+      <div class="ml-auto flex items-center gap-0.5 sm:gap-2 lg:ml-0">
       {/* REMOVED: the "Akun" pill. It pointed at /akun, which was a FAKE login page: the form had no
           handler and no endpoint — it swallowed an email and a PASSWORD, called preventDefault(), and
           revealed a div reading "Demo — sistem akun aktif setelah backend terhubung." Shipped demo text
@@ -261,32 +263,25 @@ const featured = catalog.bestsellers()[0];
           form that discards it. There are no shopper accounts by design (buying never requires one —
           see AGENTS.md), so there is nothing for this link to point at. */}
 
-      {/* Search — a plain GET form to /cari: it works with JS disabled and the result URL is shareable
-          (?q=…). Desktop only; the phone gets one inside the drawer. `type="search"` gives a native
-          clear button; the query is capped at 100 (a search string, not a validated field). */}
-      <form action="/cari" method="get" role="search" class="hidden lg:block">
-        <label for="site-search" class="sr-only">Cari produk</label>
-        <div class="relative flex items-center">
-          <input
-            id="site-search"
-            type="search"
-            name="q"
-            value={searchQuery}
-            maxlength="100"
-            placeholder="Cari produk…"
-            autocomplete="off"
-            enterkeyhint="search"
-            class="min-h-11 w-52 rounded-full border border-line bg-white pl-4 pr-11 text-sm text-ink placeholder:text-muted transition-colors hover:border-brand-400 focus-visible:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
-          />
-          <button
-            type="submit"
-            aria-label="Cari"
-            class="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-full text-brand-600 transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
-          >
-            <Search class="h-4 w-4" stroke-width={1.8} aria-hidden="true" />
-          </button>
-        </div>
-      </form>
+      {/* Search — an ICON that opens the ⌘K palette (components/SearchPalette.astro).
+          ⚠️ It is an `<a href="/cari">`, NOT a button, and that is load-bearing. The palette is an
+          enhancement: with JS off, or before its script runs, this link still takes a shopper to the
+          search page — which is why that page had to grow its own input in the same change. A
+          `<button>` here would be a dead control on every page of the shop for anyone without JS.
+
+          The 208px input that used to live here is gone, and with it the `w-40 … xl:w-52` patch that
+          kept the 1024px row from overflowing — there is no field left to shrink. `audit:responsive`
+          re-run after the removal, not assumed. */}
+      <a
+        href="/cari"
+        data-search-open
+        aria-label="Cari produk"
+        aria-keyshortcuts="Control+K Meta+K"
+        title="Cari — tekan ⌘K"
+        class="inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+      >
+        <Search class="size-5" stroke-width={1.8} aria-hidden="true" />
+      </a>
 
       {/* NO aria-label on this link. It said "Keranjang" while the visible text reads "Keranjang 0",
           so Lighthouse `label-content-name-mismatch` scored 0 — a voice-control user says "click
@@ -297,20 +292,31 @@ const featured = catalog.bestsellers()[0];
           the accessible name too, leaving every phone user a link named just "0". */}
       <a
         href="/keranjang"
-        class="relative inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-1.5 text-sm font-medium text-cream transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        class="relative inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
       >
-        <svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
+        <svg viewBox="0 0 24 24" class="size-5 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
           <path d="M2.5 3h1.6l1.5 12.5a1.5 1.5 0 0 0 1.5 1.3h9.3a1.5 1.5 0 0 0 1.47-1.2l1.4-7.3H6" stroke-linecap="round" stroke-linejoin="round" />
           <circle cx="9" cy="20" r="1.2" fill="currentColor" stroke="none" />
           <circle cx="17" cy="20" r="1.2" fill="currentColor" stroke="none" />
         </svg>
-        <span class="sr-only sm:not-sr-only sm:inline">Keranjang</span>
+        {/* The count is a BADGE now, not a word beside the label — but it is still real text inside
+            the link, so the accessible name computes to "Keranjang <n> item". The old note here
+            warned that an `aria-label` saying "Keranjang" beside visible text reading "Keranjang 0"
+            scored 0 on `label-content-name-mismatch`: a voice-control user says "click Keranjang"
+            and nothing happens. There is still no aria-label, for exactly that reason. */}
+        <span class="sr-only">Keranjang</span>
+        {/* Hidden at zero — a badge reading "0" is a notification that nothing happened. The script
+            below owns BOTH the number and the `hidden` attribute; setting only `textContent` (as it
+            used to) would leave a badge that never appears no matter what is in the cart.
+            The unit is a separate sr-only child so the accessible name reads "Keranjang 3 item" when
+            there is a cart and plain "Keranjang" when there is not — and so the script can rewrite
+            the digits without wiping the word. */}
         <span
           id="cart-count"
-          class="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white"
-          >0</span
+          hidden
+          class="absolute -right-0.5 -top-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white tabular-nums"
+          ><span data-cart-n>0</span><span class="sr-only"> item</span></span
         >
-        <span class="sr-only">item</span>
       </a>
 
       <button
@@ -365,32 +371,11 @@ const featured = catalog.bestsellers()[0];
     </div>
 
     <nav aria-label="Navigasi seluler" class="flex-1 overflow-y-auto px-3 py-4">
-      {/* Search lives at the TOP of the drawer — a phone is where most Indonesian shoppers browse, so
-          it belongs where the thumb lands first, not buried under the category list. Same GET form as
-          desktop; submitting reloads the page, which closes the drawer for free. */}
-      <form action="/cari" method="get" role="search" class="mb-4 px-1">
-        <label for="mobile-search" class="sr-only">Cari produk</label>
-        <div class="relative flex items-center">
-          <input
-            id="mobile-search"
-            type="search"
-            name="q"
-            value={searchQuery}
-            maxlength="100"
-            placeholder="Cari produk…"
-            autocomplete="off"
-            enterkeyhint="search"
-            class="min-h-11 w-full rounded-full border border-line bg-white pl-4 pr-11 text-base text-ink placeholder:text-muted focus-visible:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-          />
-          <button
-            type="submit"
-            aria-label="Cari"
-            class="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-full text-brand-600 transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
-          >
-            <Search class="h-5 w-5" stroke-width={1.8} aria-hidden="true" />
-          </button>
-        </div>
-      </form>
+      {/* REMOVED: the drawer's own search form. The magnifier now sits in the header bar at EVERY
+          breakpoint, so a phone had two ways to search — one opening the ⌘K palette, one a plain
+          form — which is two controls that look like the same promise and behave differently. The
+          icon covers both paths: with JS it opens the palette, without JS it is a link to /cari,
+          which carries its own input for exactly this reason. */}
 
       <ul class="flex flex-col gap-1">
         {
@@ -499,7 +484,12 @@ const featured = catalog.bestsellers()[0];
           return n + (i.qty || 1);
         }, 0);
         var el = document.getElementById("cart-count");
-        if (el) el.textContent = String(count);
+        var n = el && el.querySelector("[data-cart-n]");
+        if (!el || !n) return;
+        n.textContent = String(count);
+        // The badge is `hidden` in the markup, so this line is not decoration — without it the count
+        // never becomes visible at all.
+        el.hidden = count < 1;
       } catch (e) {}
     }
     updateBadge();

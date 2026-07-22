@@ -76,6 +76,73 @@ landing (`celana-kulot`). Verified in-browser: overrides + sections render, coun
 404 gate holds, console clean. NOT exercised locally: live rates + order submit (needs
 `KIRIMINAJA_API_KEY`, empty on this box — same limit as the cart checkout).
 
+## 2026-07-22
+
+### 🛍️ Front-end pass: sold-out badge · footer that belongs to the merchant · icon header + ⌘K palette
+
+**"Stok habis" on the product card** (audit #16 finding 4, the half that never landed). The rule was
+not rewritten — `inStock` already existed as two copies inside `produk/[handle].astro` and the card
+was about to be a third; it now lives in `data/catalog.ts` and all three read it. It agrees with
+`/api/public/order` by construction (both count a missing `inventory_levels` row as 0), and a product
+with NO variant rows still counts as available — a merchant's brand-new product must not read "habis".
+An overlay rather than a third corner pill, because it changes what the whole card means; the −%
+badge is suppressed with it (a price cut on something nobody can buy is bait), while the merchant's
+own badge stays — that is their data, not our claim.
+⚠️ The refactor nearly shipped a silent SEO lie: with `inStock` now a FUNCTION, two JSON-LD lines
+still using it as a boolean would have told Google every sold-out product was `InStock` forever.
+
+**Footer: both nav columns are the merchant's now.** "Koleksi" (auto-derived, unorderable) and a
+hardcoded "Belanja" were platform content living in a tenant's shop — the pattern `data/nav.ts`
+keeps fixing. Column 2 is `getMainNav()`, column 3 `getFooterNav()`; neither can point at a 404
+(unpublished categories and draft pages are already dropped). Contact, address and social icons move
+into column 4; `SocialLinks.astro` is split out. A dropdown parent renders as a LABEL — its href is
+stripped upstream, so linking it would emit `href="undefined"`.
+
+**Header is icons; the magnifier opens a ⌘K palette.** Native `<dialog>` + `showModal()` for the
+focus trap, Esc, inert background and `::backdrop`. Grouped results (Kategori + Produk with
+thumbnail, price, sold-out) from `/api/search`, which projects the SAME `catalog.search()` `/cari`
+renders — the two cannot disagree. Not rate-limited, deliberately: it reads a catalogue already
+public on `/produk` and in `sitemap.xml`.
+⚠️ **`/cari` had no search box of its own** — it leaned on the header form. Adding one there is a
+precondition of the icon header, not a nicety: without it a JS-less visitor has nowhere to type and
+a results page cannot be re-queried. The trigger stays an `<a href="/cari">` for the same reason.
+**No account icon** — there are no shopper accounts by design, and the "Akun" pill was removed once
+already for pointing at a fake login. The honest version is a "Lacak Pesanan" page, tracked separately.
+Three browser-found defects fixed: Esc was eaten by the search input's native clear; the native ✕ sat
+beside ours; and the cart badge, `hidden` at zero, could never appear because the counter script only
+set `textContent`.
+
+### 🔎 Storefront listing: filter + pagination — the last two items of audit #16
+The product listing rendered **every** product, every time, and offered no way to narrow it. Both gaps
+close in `ProductListing.astro`, so `/produk`, `/kategori/<handle>` and `/cari` get them from one edit.
+- **Pagination**, 12 per page (12 divides the 2/3/4-column grid exactly, so no page ends on a ragged
+  row). Real `<a>` links, `?page=` in the URL, page 1 is the bare URL, out-of-range is **clamped** to
+  the last real page rather than 404'd or blank.
+- **Filter**: `?kategori=`, `?min=`/`?max=`, `?promo=1` — each control rendered **only when it can do
+  something** (category picker only if the products span >1 category, promo toggle only if something
+  is discounted, price range only if there is a spread), and **a param whose control is not rendered
+  is ignored, not applied** — otherwise `?kategori=x` empties a grid with no visible way back.
+- **`RevealGrid` removed from this listing** (it still serves `/blog` + `/kategori`): stacked on real
+  paging, a phone showed both "Muat lebih banyak" and "Halaman 2" — two lookalike controls, one of
+  which cannot be linked to.
+- **The filtered-empty state is not the empty-catalogue one** — "Belum ada produk" under someone's own
+  filter blames the shop for the shopper's choice. The way out is Reset, not Beranda.
+- ⚠️ **No size filter, deliberately.** `products.sizes` is a label list; stock lives per variant in
+  `product_variants.stock`. "Punya ukuran L" that ignores variant stock claims a size we may not have.
+- ⚠️ **`form.submit()` does not fire the `submit` event.** A GET form posts every named control, so a
+  shared URL read `?kategori=dress&min=&max=&sort=terbaru`. `dropEmpties()` disables the empties first
+  — and the sort auto-submit path calls it by hand, because the event never reaches it.
+
+### 🔴 `audit:responsive` had been CRASHING, not passing
+Since the demo store got an active primary custom domain (`store_domains` → `toko-demo.test`,
+2026-07-15), middleware 301s every other host to it — a name no dev machine resolves — so the sweep died
+on the first `page.goto` with `ERR_NAME_NOT_RESOLVED`. It never said "0 breaks"; it printed a stack
+trace, in a script nothing runs on a schedule. **The storefront shipped for weeks with its responsive
+gate face-down** — the same shape as `verify-rls` being red for weeks. The script now probes for the
+redirect and maps that hostname back to the dev port inside the browser (`--host-resolver-rules`),
+touching no DB row, and is a no-op where no custom domain is configured. Two listing routes added to
+the sweep, including the filter bar in its most-populated state.
+
 ## 2026-07-20 / 21 — PRs #9–#26, ~10 verified production deploys (`main` → `036f05e`)
 
 ### 🔐 Security — four MORE cross-tenant holes, found by auditing the class

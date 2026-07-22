@@ -7,6 +7,86 @@
 
 
 
+## 2026-07-22 (lanjutan) — Front-end pass: sold-out badge · merchant-owned footer · icon header + ⌘K palette ✅ **PR #30 (`f43e46a`), DEPLOYED + verified live**
+
+**Deploy verified by the artefact, then by USING it.** Storefront container `8398c2093fd2` →
+`7cf333b4d6e0`; the shipped HTML carries the `<dialog>`, the `<a href="/cari">` trigger, the cart
+badge `hidden` at zero, and no `href="undefined"`, while the old 208px `#site-search` is gone. But a
+shipped `<dialog>` is not proof its script runs — so the palette was **driven on production**: it
+opens, "dress" returns KATEGORI + PRODUK, Esc closes, Ctrl+K reopens, `/api/search` answers in 131ms
+over TLS, `/cari` carries its own input, 0 overflow at 320px, 0 console errors, all four surfaces up.
+
+Three tasks, each with its own committed file in `specs/docs/tasks/`. Full reasoning in CHANGELOG;
+what a future session needs and cannot re-derive:
+
+- **`inStock` is ONE function now** (`data/catalog.ts`), read by the card, the buy box, the schema.org
+  availability and the related-row ranking. It agrees with `/api/public/order` by construction. A
+  product with **no** variant rows is AVAILABLE — do not "fix" that into sold-out.
+- **The footer's nav columns belong to the merchant.** Do not re-add a derived "Koleksi" column or a
+  hardcoded "Belanja"/"Jurnal": that is the platform-default-leaking-into-a-tenant bug `data/nav.ts`
+  keeps fixing.
+- **`/cari` owns a search box now, and that is load-bearing** — the header's magnifier is an
+  `<a href="/cari">`, so a JS-less visitor still has somewhere to type. Never turn it into a `<button>`.
+- **No shopper account icon**, by design and by the owner's decision. The honest version is a
+  "Lacak Pesanan" page keyed on order ref **+ phone** (ref alone would let anyone enumerate orders).
+
+**Four defects only a browser could find — three of them written in this same session.** A green
+build and a clean typecheck proved nothing about any of them: Esc was eaten by the search input's
+native clear; the browser's own ✕ sat beside ours; the cart badge was `hidden` at zero while its
+script only ever set `textContent`, so it could never appear; and the icon row overflowed 320px
+because the logo is *allowed* 176px next to 142px of icons. `audit:responsive` 132/132 after the fixes.
+
+## 2026-07-22 — Session: listing filter + pagination (audit #16 closed out), and a safety gate that had been crashing ✅ **PR #28 merged (`da1da19`), DEPLOYED + verified live**
+
+**Deploy verified by the artefact:** storefront container `525c237eb64e` → `89ce9f047897`, then the
+shipped HTML on `batik-nusantara.tokophi.id` read back — filter bar, price inputs, promo toggle,
+`dropEmpties`, the `xl:w-52` header fix, and **no** `data-reveal-grid`. Filters exercised on prod:
+`?kategori=dress`→2, `?promo=1`→1, `?min=100000&max=150000`→4, `?min=abc` ignored, `?page=5` clamped.
+
+⚠️ **The wait-loop that watched for it was itself unsound the first time**, and this is the lesson to
+keep: `until [ "$(docker ps -q --filter name=storefront-)" != "<old id>" ]` **passes while the
+container is momentarily GONE** mid-recreate — empty is also "not the old id". It announced the swap
+before anything had happened. Same family as the 2026-07-20 false green. The condition must be
+**present AND different**. A check that can pass while the thing it checks has not happened is not a
+check — including when we are the one who just wrote it.
+
+
+Picked up after a laptop died mid-session. The first thing done was to establish that **nothing was
+half-finished** — the previous session had merged PR #27 sixty minutes earlier and left a clean tree —
+rather than assume a dead machine meant lost work.
+
+**New convention, applied from this session on:** a task gets its own committed `.md` in
+`specs/docs/tasks/<date>-<slug>.md` **before the first line of code**, updated as it goes, with an
+explicit **NEXT** at the bottom. Session-level handoffs (BACKLOG/WORKLOG/CHANGELOG) survive because
+they are committed; anything living only in a chat window does not. One file per task, never a shared
+`TASK.md` — several agents work this repo at once.
+
+**What shipped:** `?kategori=` / `?min=` / `?max=` / `?promo=` / `?page=` on the one shared
+`ProductListing.astro`, so `/produk`, `/kategori/<handle>` and `/cari` all gained them at once. Full
+reasoning in `CHANGELOG.md`; the parts that will otherwise be re-broken:
+
+- **A control renders only when it can act, and a param whose control is absent is IGNORED.** The
+  alternative is `?kategori=x` on a single-category page emptying the grid with no visible way back.
+- **`form.submit()` does not fire the `submit` event.** The sort auto-submit path had to call the
+  URL-cleaner by hand; wiring it to the event alone silently shipped `?min=&max=&sort=terbaru`.
+- **No size filter** — `products.sizes` is a label list, stock is per variant. A filter that ignores
+  variant stock claims sizes we may not have.
+
+**The lesson worth more than the feature: a gate nobody watches is not a gate.**
+`npm run audit:responsive` had not completed since **2026-07-15**, when the demo store got an active
+primary custom domain — middleware 301s every other host to a name no dev machine resolves, so the
+sweep died on its first navigation. It never reported "0 breaks"; it printed a stack trace nobody
+read. Repaired (it now probes for the redirect and maps that host back to the dev port in-browser,
+touching no shared DB row) — and it went red on the very first honest run: **11/132**, a 4–6px header
+overflow at exactly `lg` (1024px), reproducing on `/kontak`, a page with no listing at all. Fixed.
+Same shape as `verify-rls` being red for weeks: **an alarm that cannot ring is an alarm that is off.**
+
+**Verified in a browser, not by a green build** (12 → 13–14 of 14 across a clicked page link, filter
+counts reconciled against SQL, sort order correct across the page boundary, `q` preserved when
+filtering search results, 0 overflow at 360px, no pagination control under 44px). The demo store has
+exactly **12 active products against a 12-per-page listing**, so two drafts were temporarily activated
+to make it paginate at all, then set back — a shared database must be left in the state it was found.
+
 ## 2026-07-20/21 — Session: docs reconciled, seven cross-tenant holes closed, and the whole front-end pass ✅ **10 PRs (#9–#26), ~10 verified deploys**, `main` at `036f05e`
 
 Started as "reconcile the analysis docs against what is on GitHub" and became a correctness pass, because
