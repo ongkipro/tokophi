@@ -1,0 +1,107 @@
+---
+// PAGINATION — real links to real URLs. No client state, no JS required.
+//
+// Every control on this storefront that changes WHAT IS ON SCREEN lives in the URL (`?q=`, `?sort=`,
+// now `?page=`), for the same three reasons each time: the view is shareable, the back button works,
+// and it renders with JS off. An "infinite scroll" would have failed all three — and would have
+// re-fired RevealGrid's MutationObserver, the exact bug that moved sorting to the server.
+//
+// Page 1 is the BARE url — `?page=1` is deleted, not written. One list page, one address: otherwise
+// `/produk` and `/produk?page=1` are two URLs for identical HTML, and every internal link has to
+// remember which one it meant.
+//
+// EVERY OTHER PARAM IS CARRIED. Paging out of a filtered, sorted search result must keep the filter,
+// the sort AND the query — dropping any of them silently throws the shopper back to the full
+// catalogue, which reads as the site losing their place.
+interface Props {
+  /** 1-based, already clamped by the caller. */
+  page: number;
+  totalPages: number;
+  /** What is being paged, for the nav's accessible name. */
+  label?: string;
+}
+
+const { page, totalPages, label = "Halaman produk" } = Astro.props;
+
+const href = (n: number) => {
+  const url = new URL(Astro.url);
+  if (n <= 1) url.searchParams.delete("page");
+  else url.searchParams.set("page", String(n));
+  return `${url.pathname}${url.search}`;
+};
+
+// First, last, and the current page ±1 — everything else collapses into a single ellipsis. At 7 pages
+// or fewer that formula already yields every page, so there is no separate "show them all" branch.
+const WINDOW = 1;
+const slots: (number | "gap")[] = [];
+for (let n = 1; n <= totalPages; n += 1) {
+  if (n === 1 || n === totalPages || Math.abs(n - page) <= WINDOW) slots.push(n);
+  else if (slots[slots.length - 1] !== "gap") slots.push("gap");
+}
+
+// Shared with the number links so a disabled arrow keeps the exact footprint of an enabled one —
+// min-h-11/min-w-11 is the 44px tap target the a11y pass fixed everywhere else.
+const CELL =
+  "inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-3 text-sm font-medium tabular-nums";
+const LINK =
+  "border border-line bg-white text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none";
+// A disabled arrow is a <span>, never an <a>: there is no such thing as a link that goes nowhere, and
+// `aria-disabled` on an anchor still lets a keyboard user follow it.
+const OFF = "border border-line/60 bg-transparent text-muted/60";
+---
+
+{
+  totalPages > 1 && (
+    <nav aria-label={label} class="mx-auto mt-12 flex max-w-7xl items-center justify-center gap-2 px-4 sm:px-6">
+      {page > 1 ? (
+        <a href={href(page - 1)} rel="prev" class:list={[CELL, LINK]}>
+          <span aria-hidden="true">‹</span>
+          <span class="ml-1 hidden sm:inline">Sebelumnya</span>
+          <span class="sr-only sm:hidden">Halaman sebelumnya</span>
+        </a>
+      ) : (
+        <span class:list={[CELL, OFF]} aria-hidden="true">
+          <span>‹</span>
+          <span class="ml-1 hidden sm:inline">Sebelumnya</span>
+        </span>
+      )}
+
+      <ol class="flex items-center gap-1">
+        {slots.map((slot) =>
+          slot === "gap" ? (
+            <li class:list={[CELL, "text-muted"]} aria-hidden="true">
+              …
+            </li>
+          ) : (
+            <li>
+              {slot === page ? (
+                // `aria-current="page"` is what tells a screen reader which one they are ON. Colour
+                // alone would leave that information visible only to people who can see it.
+                <span class:list={[CELL, "bg-brand-600 font-semibold text-white"]} aria-current="page">
+                  {slot}
+                </span>
+              ) : (
+                <a href={href(slot)} class:list={[CELL, LINK]} aria-label={`Halaman ${slot}`}>
+                  {slot}
+                </a>
+              )}
+            </li>
+          ),
+        )}
+      </ol>
+
+      {page < totalPages ? (
+        <a href={href(page + 1)} rel="next" class:list={[CELL, LINK]}>
+          <span class="mr-1 hidden sm:inline">Berikutnya</span>
+          <span class="sr-only sm:hidden">Halaman berikutnya</span>
+          <span aria-hidden="true">›</span>
+        </a>
+      ) : (
+        <span class:list={[CELL, OFF]} aria-hidden="true">
+          <span class="mr-1 hidden sm:inline">Berikutnya</span>
+          <span>›</span>
+        </span>
+      )}
+    </nav>
+  )
+}

@@ -18,7 +18,27 @@
 // Exits non-zero on a break, so it can gate a release.
 import { chromium } from "playwright";
 
-const BASE = process.argv[2] ?? "http://localhost:4327";
+const ORIGIN = process.argv[2] ?? "http://localhost:4327";
+
+// FOLLOW THE STORE'S PRIMARY DOMAIN, or this whole gate silently stops running.
+//
+// A store with an ACTIVE primary custom domain 301s every other host to it (middleware.ts) — and the
+// demo store has had one since 2026-07-15. So `http://localhost:4327/produk` answers
+// `301 → https://toko-demo.test/produk`, a name no dev machine resolves, and every route in the sweep
+// died on ERR_NAME_NOT_RESOLVED. The audit did not report "0 breaks"; it crashed. But it crashed in a
+// script nobody runs on a schedule, so the storefront went weeks with its responsive gate face-down.
+//
+// Fix: ask the server where it wants us, then point that name back at the dev port inside the browser
+// (`--host-resolver-rules`) and browse it over http, so the redirect never fires. No DB row is touched
+// — other agents share this database — and with no custom domain configured this is a no-op.
+const probe = await fetch(`${ORIGIN}/produk`, { redirect: "manual" }).catch(() => null);
+const moved = probe && probe.status >= 300 && probe.status < 400 && probe.headers.get("location");
+const canonical = moved ? new URL(moved) : null;
+const BASE = canonical ? `http://${canonical.host}` : ORIGIN;
+const resolverArgs = canonical
+  ? [`--host-resolver-rules=MAP ${canonical.host}:80 ${new URL(ORIGIN).host}`]
+  : [];
+if (canonical) console.log(`↪ toko ini kanonik di ${canonical.host} — dipetakan ke ${new URL(ORIGIN).host}\n`);
 
 // Real devices, not the breakpoints we happened to pick:
 // 320 = smallest phone still in use · 360 = the most common Android · 390/414 = modern iPhone
@@ -29,6 +49,12 @@ const ROUTES = [
   "/",
   "/kategori/semua",
   "/kategori/dress",
+  // The listing's control bar is the widest non-grid thing on the shop: category picker + a two-input
+  // price range + a toggle + two buttons, all on one row. `?promo=1` forces every one of them to
+  // render, and a filter that is ACTIVE also draws the "Reset filter" link — the state with the most
+  // controls in the row is the only one worth sweeping.
+  "/produk",
+  "/produk?kategori=dress&promo=1",
   "/produk/dress-batik",
   "/blog",
   "/blog/cara-merawat-rajut",
@@ -38,7 +64,7 @@ const ROUTES = [
   "/kontak",
 ];
 
-const browser = await chromium.launch();
+const browser = await chromium.launch({ args: resolverArgs });
 const page = await (await browser.newContext()).newPage();
 
 // /keranjang and /checkout only render their real (widest) content with something in the cart.
