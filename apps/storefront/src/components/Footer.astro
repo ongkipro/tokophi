@@ -15,6 +15,7 @@
 import { MapPin, Phone } from "@lucide/astro";
 import { getFooterNav, getMainNav } from "../data/nav";
 import SocialLinks from "./SocialLinks.astro";
+import { clamp } from "../lib/text";
 
 const { store, catalog } = Astro.locals;
 
@@ -30,6 +31,7 @@ const { store, catalog } = Astro.locals;
 // the merchant's FOOTER menu. Both already drop dead links — unpublished categories in `getMainNav`,
 // draft pages in `getFooterNav` — so neither column can point at a 404.
 const MENU = await getMainNav(store.id, catalog.collections);
+const tagline = clamp(store.tagline, 120);
 const PAGES = await getFooterNav(store.id);
 
 // A merchant can save a field and later blank it out; `""` must behave exactly like `null` or the
@@ -38,9 +40,6 @@ const clean = (v: string | null | undefined) => {
   const t = (v ?? "").trim();
   return t.length > 0 ? t : null;
 };
-
-// null = no CS number on this store → no WhatsApp button anywhere in the footer.
-const waHref = clean(store.whatsapp) ? `https://wa.me/${clean(store.whatsapp)}` : null;
 
 // The public phone is free text ("(0274) 123456", "0812-3456-7890") because that is how a shop writes
 // it on its own signage. Only the `tel:` href is normalised — the label stays exactly as typed.
@@ -72,15 +71,32 @@ const SOCIALS = [
 ].filter((s): s is typeof s & { user: string } => Boolean(s.user));
 
 // Does the "Hubungi kami" heading have anything to head? If not, neither the heading nor its list
-// exists. A heading is a promise that something follows it.
-const hasContact = Boolean(waHref || telHref);
+// exists. A heading is a promise that something follows it. The store's WhatsApp number is
+// deliberately NOT consulted: the footer no longer carries a WhatsApp button (the chat launcher and
+// /kontak do), so a shop whose only channel is WhatsApp must not be given an empty column heading.
+const hasContact = Boolean(telHref);
 
 // Shared classes. Tap targets are ≥44px (design audit #16 — the share buttons were raised from 36 to
 // 44 for the same reason), and every transition carries a `motion-reduce:` escape.
+// ── ONE TYPEFACE, THREE VOICES ───────────────────────────────────────────────────────────────────
+// `global.css` points `--font-display` at `--font-sans` on purpose: a display face is BRAND VOICE and
+// that belongs to the merchant, not to the platform. So the hierarchy here is built from WEIGHT,
+// TRACKING and OPACITY instead of from a second family.
+//
+//   heading  full cream · semibold · widest tracking   — the loudest thing in a column
+//   caption  70% cream  · medium   · tighter tracking  — subordinate, and visibly so
+//   link     75% cream  · regular                      — the mass of the column
+//
+// ⚠️ Nothing here drops below `cream/70`: that measures 7.7:1 on ink, and `/45` — which shipped once —
+// measures 4.05:1 and fails AA. It slipped past a palette audit because it is an OPACITY, not a colour.
+//
+// `min-h-11 lg:min-h-9`: 44px is the touch floor these links were raised to, and it is right for a
+// thumb. On `lg` the pointer is a mouse and 36px is both comfortable and well past the 24px AA
+// minimum — at 44px a nine-item column reads as a loose stack rather than a list.
 const LINK =
-  "inline-flex min-h-11 items-center rounded-sm transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none";
-// `text-cream/70` measures 7.7:1 on ink (composited, not guessed) — see the note on the copyright bar.
-const HEADING = "font-display text-xs font-semibold uppercase tracking-widest text-cream/70";
+  "inline-flex min-h-11 items-center rounded-sm text-cream/75 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none lg:min-h-9";
+const HEADING = "text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-cream";
+const CAPTION = "text-[0.7rem] font-medium uppercase tracking-[0.12em] text-cream/70";
 ---
 
 <footer class="mt-24 bg-ink text-cream/85">
@@ -89,9 +105,13 @@ const HEADING = "font-display text-xs font-semibold uppercase tracking-widest te
       There is no mailer and no list to join, so the button did literally nothing on every page of
       every store. Wiring it to an INSERT would not fix it: it would still promise an email nothing
       can send. (JSX comment, not HTML — an HTML comment ships to the browser.) */}
-  <div class="mx-auto grid max-w-7xl gap-x-10 gap-y-12 px-4 py-16 sm:px-6 md:grid-cols-2 lg:grid-cols-4">
+  {/* A 12-COLUMN TRACK, not four equal quarters. The four blocks do not carry equal weight: the brand
+      needs a measure wide enough to read a sentence in, the menu is the tallest list, and "Informasi"
+      is four short links that do not need the same width as either. Equal columns made that
+      difference look like a mistake instead of a structure. Spans: 4 / 3 / 2 / 3. */}
+  <div class="mx-auto grid max-w-7xl gap-x-10 gap-y-10 px-4 py-14 sm:px-6 md:grid-cols-2 lg:grid-cols-12 lg:gap-x-8 lg:py-16">
     {/* ── 1. Identity — who this shop is, and nothing else ─────────────────────────────────────── */}
-    <div>
+    <div class="lg:col-span-4">
       {
         store.logoUrl ? (
           <img src={store.logoUrl} alt={store.name} width="160" height="48" class="h-10 w-auto object-contain object-left" />
@@ -99,23 +119,33 @@ const HEADING = "font-display text-xs font-semibold uppercase tracking-widest te
           <p class="font-display text-2xl font-semibold text-cream">{store.name}</p>
         )
       }
-      {store.tagline && <p class="mt-4 max-w-xs text-sm leading-relaxed text-cream/70">{store.tagline}</p>}
+      {/* CLAMPED ON A WORD. The Seller's "Deskripsi singkat" caps at 160 characters, so a merchant who
+          writes to the cap stores a sentence ending mid-word — the demo's reads "…dari masing-masing
+          da". 120 is the length that fills this column without turning a footer into a paragraph. */}
+      {tagline && <p class="mt-4 text-sm leading-relaxed text-cream/70">{tagline}</p>}
     </div>
 
     {/* ── 2. The MERCHANT'S main menu — the same tree the header renders ───────────────────────── */}
     {
       MENU.length > 0 && (
-        <nav aria-label="Menu toko">
+        <nav aria-label="Menu toko" class="lg:col-span-3">
           <h2 class={HEADING}>Menu</h2>
-          <ul class="mt-3 text-sm text-cream/75">
+          <ul class="mt-3 text-sm">
             {MENU.map((item) =>
               item.children?.length ? (
                 /* A dropdown parent carries NO href — `getMainNav` strips it, because the seed's
                    target for one is literally "#". Rendering it as a link would put a link to
                    nowhere in the footer of every page; it is a group label with its items under it. */
-                <li class="mt-3 first:mt-0">
-                  <p class="text-xs font-medium uppercase tracking-wide text-cream/70">{item.label}</p>
-                  <ul class="mt-1 border-l border-white/10 pl-3">
+                <li class="mt-4 first:mt-0">
+                  {/* The `border-l` + indent that used to wrap these is gone. A footer column has one
+                      level of hierarchy to spend; spending it on a rule and a 12px inset made the
+                      categories read as a nested tree inside a flat list. A caption above them says
+                      the same thing and draws nothing. */}
+                  <p class={CAPTION}>{item.label}</p>
+                  {/* TWO COLUMNS. The categories are the only nested list here, and at one per row they made the
+                       Menu column eleven rows tall beside neighbours of four — the footer read as one long
+                       column with three short ones parked next to it. */}
+                  <ul class="mt-1 grid grid-cols-2 gap-x-4">
                     {item.children.map((c) => (
                       <li>
                         <a href={c.href} class={LINK}>
@@ -141,9 +171,9 @@ const HEADING = "font-display text-xs font-semibold uppercase tracking-widest te
     {/* ── 3. The MERCHANT'S footer menu (admin → Navigasi), draft pages already dropped ────────── */}
     {
       PAGES.length > 0 && (
-        <nav aria-label="Informasi toko">
+        <nav aria-label="Informasi toko" class="lg:col-span-2">
           <h2 class={HEADING}>Informasi</h2>
-          <ul class="mt-3 text-sm text-cream/75">
+          <ul class="mt-3 text-sm">
             {PAGES.map((p) => (
               <li>
                 <a href={p.href} class={LINK}>
@@ -163,37 +193,23 @@ const HEADING = "font-display text-xs font-semibold uppercase tracking-widest te
         is — but the guard stays, because "in practice" is not a guarantee. */}
     {
       (hasContact || addressLines.length > 0 || city || SOCIALS.length > 0) && (
-        <div>
+        <div class="lg:col-span-3">
           <h2 class={HEADING}>Hubungi kami</h2>
 
-          {hasContact && (
-            <ul class="mt-3 space-y-1 text-sm text-cream/75">
-              {waHref && (
-                <li>
-                  {/* hover was `bg-brand-500`: white on #c4708a measures 3.48:1, so the button FAILED
-                      AA the moment a pointer touched it — a state no page-load audit ever samples.
-                      brand-700 = 6.85:1 (brand-600 at rest = 4.99:1). */}
-                  <a
-                    href={waHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex min-h-11 items-center gap-2 rounded-full bg-brand-600 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
-                  >
-                    <svg viewBox="0 0 24 24" class="h-4 w-4 fill-current" aria-hidden="true">
-                      <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2Zm0 18.02h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.37c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.83 2.42a8.19 8.19 0 0 1 2.41 5.83c0 4.54-3.7 8.4-8.28 8.4Z" />
-                    </svg>
-                    Hubungi via WhatsApp
-                  </a>
-                </li>
-              )}
-              {telHref && phone && (
-                <li>
-                  <a href={telHref} class={`${LINK} gap-2`}>
-                    <Phone class="h-4 w-4 shrink-0" stroke-width={1.75} aria-hidden="true" />
-                    <span class="tabular-nums">{phone}</span>
-                  </a>
-                </li>
-              )}
+          {/* ⚠️ The "Hubungi via WhatsApp" button was REMOVED here by the owner (2026-07-22). The
+              footer's contact column is address · phone · social, and a green CTA button was the one
+              thing in it shouting. WhatsApp is NOT gone from the shop — the floating chat launcher
+              and /kontak both still open it, and it remains the channel these merchants actually
+              sell on (see AGENTS.md on cart recovery). This is a layout decision about the footer,
+              not a change of channel: do not "restore" it here. */}
+          {telHref && phone && (
+            <ul class="mt-3 text-sm">
+              <li>
+                <a href={telHref} class={`${LINK} gap-2`}>
+                  <Phone class="size-4 shrink-0" stroke-width={1.75} aria-hidden="true" />
+                  <span class="tabular-nums">{phone}</span>
+                </a>
+              </li>
             </ul>
           )}
 

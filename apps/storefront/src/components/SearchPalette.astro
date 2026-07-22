@@ -24,71 +24,64 @@
 import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
 ---
 
-{/* `data-search-dialog` is what the header's trigger looks for. One palette per page, mounted by
-    Layout.astro so every route has it. */}
+{/* One palette per page, mounted by Layout.astro so every route has it.
+
+    ── ONE FULL SCREEN, AT EVERY WIDTH ─────────────────────────────────────────────────────────
+    Phone, tablet and desktop all get the whole viewport. Searching is a mode, not a side panel: the
+    shop behind it is not something you are meant to be reading while you type.
+
+    Width is spent on BREATHING ROOM, not on stretching. The content sits in a centred `max-w-2xl`
+    column — on a 1920px screen an input 1900px wide is not "using the space", it is losing the eye
+    between the magnifier and the caret. The surface goes edge to edge; the reading measure does not.
+
+    `100dvh`, never `100vh` — the phone URL bar makes `vh` taller than the screen. */}
 <dialog
   id="search-palette"
   data-search-dialog
   aria-label="Cari produk"
-  class="w-[min(40rem,calc(100vw-2rem))] rounded-2xl border border-line bg-cream p-0 text-ink shadow-2xl backdrop:bg-ink/50 backdrop:backdrop-blur-sm open:mt-[10vh] open:mx-auto"
+  class="m-0 h-[100dvh] max-h-none w-screen max-w-none rounded-none border-0 bg-cream p-0 text-ink"
 >
-  <form method="dialog" class="sr-only"><button aria-label="Tutup pencarian">Tutup</button></form>
+  {/* `min-h-0` on the scroller is what makes the phone keyboard behave: the results area SHRINKS
+      instead of pushing the input off the top of the screen. */}
+  <div class="flex h-full flex-col">
+    <div class="shrink-0 border-b border-line">
+      <div class="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 sm:px-6">
+        <Search class="size-5 shrink-0 text-muted" stroke-width={1.8} aria-hidden="true" />
+        {/* `text-base` is not a style choice: below 16px iOS Safari zooms the page on focus and never
+            zooms back (see global.css). Do not shrink this for looks. */}
+        <input
+          id="search-palette-input"
+          type="search"
+          autocomplete="off"
+          enterkeyhint="search"
+          placeholder="Cari produk atau kategori…"
+          aria-controls="search-palette-results"
+          class="min-h-16 w-full border-0 bg-transparent text-base text-ink placeholder:text-muted focus:outline-none sm:min-h-20 sm:text-lg"
+        />
+        {/* A word, not a glyph: a bigger target than a 14px ✕, and it says what it does. */}
+        <button
+          type="button"
+          data-search-close
+          class="-mr-2 shrink-0 rounded-full px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-brand-50 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+        >
+          Batal
+        </button>
+      </div>
+    </div>
 
-  <div class="flex items-center gap-3 border-b border-line px-4">
-    <Search class="size-5 shrink-0 text-muted" stroke-width={1.8} aria-hidden="true" />
-    {/* `type="search"` for the native clear affordance; `enterkeyhint` so a phone keyboard says
-        "cari" rather than "go". No `autofocus` attribute — `showModal()` focuses it in script, which
-        also works when the dialog is re-opened. */}
-    <input
-      id="search-palette-input"
-      type="search"
-      autocomplete="off"
-      enterkeyhint="search"
-      placeholder="Cari produk atau kategori…"
-      aria-controls="search-palette-results"
-      class="min-h-14 w-full border-0 bg-transparent text-base text-ink placeholder:text-muted focus:outline-none"
-    />
-    <button
-      type="button"
-      data-search-close
-      aria-label="Tutup"
-      class="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-brand-50 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+    {/* The SCROLLER is full width so its scrollbar sits at the screen edge where a scrollbar belongs;
+        the column inside it stays at reading measure.
+        `aria-live="polite"` so a screen-reader user is told the results changed — without it the list
+        updates silently and only sighted users learn anything happened.
+        `pb-[env(safe-area-inset-bottom)]` keeps the last row clear of the home indicator. */}
+    <div
+      id="search-palette-results"
+      role="listbox"
+      aria-live="polite"
+      aria-busy="false"
+      class="min-h-0 flex-1 overflow-y-auto overscroll-contain"
     >
-      <X class="size-4" stroke-width={2} aria-hidden="true" />
-    </button>
-  </div>
-
-  {/* `aria-live="polite"` so a screen-reader user is told the results changed — without it the list
-      updates silently and only sighted users learn anything happened. `max-h` + scroll keeps a long
-      result list inside the dialog instead of pushing it past the viewport on a phone. */}
-  <div
-    id="search-palette-results"
-    role="listbox"
-    aria-live="polite"
-    aria-busy="false"
-    class="max-h-[min(60vh,28rem)] overflow-y-auto overscroll-contain p-2"
-  >
-  </div>
-
-  <div class="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5 text-xs text-muted">
-    <span class="hidden items-center gap-1.5 sm:flex">
-      <kbd class="rounded border border-line bg-white px-1.5 py-0.5 font-sans">↑</kbd>
-      <kbd class="rounded border border-line bg-white px-1.5 py-0.5 font-sans">↓</kbd>
-      untuk memilih
-      <kbd class="ml-2 inline-flex items-center rounded border border-line bg-white px-1.5 py-0.5 font-sans">
-        <CornerDownLeft class="size-3" stroke-width={2} aria-hidden="true" />
-      </kbd>
-      untuk membuka
-      <kbd class="ml-2 rounded border border-line bg-white px-1.5 py-0.5 font-sans">Esc</kbd>
-      untuk menutup
-    </span>
-    <a
-      data-search-all
-      href="/cari"
-      class="ml-auto inline-flex min-h-11 items-center font-medium text-brand-700 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-    >
-      Lihat semua hasil
-    </a>
+    </div>
   </div>
 </dialog>
 
@@ -98,6 +91,19 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
 <template id="search-icon-category"><Tag class="size-4 text-brand-500" stroke-width={1.75} /></template>
 
 <style>
+  /* ONE entrance. The surface is opaque and covers the viewport, so there is no backdrop to fade and
+     no card to scale — a short rise and fade is the whole gesture, at every width. ~180ms: long
+     enough to read as motion, short enough that opening this fifty times a session never costs a wait. */
+  @media (prefers-reduced-motion: no-preference) {
+    #search-palette[open] {
+      animation: palette-in 0.18s ease-out both;
+    }
+  }
+  @keyframes palette-in {
+    from { transform: translateY(0.75rem); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
   /* Chromium draws its own ✕ inside `input[type=search]`, and it landed directly beside our close
      button: two identical glyphs, one labelled and 36px, one unlabelled and ~14px. Ours stays (it
      has an accessible name and a real tap target); the browser's is hidden. Esc also clears by
@@ -114,7 +120,6 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
     var dialog = document.getElementById("search-palette");
     var input = document.getElementById("search-palette-input");
     var results = document.getElementById("search-palette-results");
-    var seeAll = document.querySelector("[data-search-all]");
     if (!dialog || !input || !results || !dialog.showModal) return; // no <dialog> support → the <a> still navigates
 
     var iconProduct = (document.getElementById("search-icon-product") || {}).innerHTML || "";
@@ -144,57 +149,89 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
       });
     }
 
-    function row(href, icon, title, meta, right, dim) {
+    // A PRODUCT ROW, in the shop's own language: a 3:4 portrait thumbnail, because a garment is
+    // recognised by its silhouette and a square crops the silhouette away. Same aspect as
+    // ProductCard, so the palette reads as a miniature of the grid rather than a list of commands.
+    function productRow(p) {
+      var thumb = p.image
+        ? '<img src="' + esc(p.image) + '" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />'
+        : '<span class="flex h-full w-full items-center justify-center">' + iconProduct + "</span>";
+      var price = p.soldOut
+        ? '<span class="text-xs font-medium text-muted">Stok habis</span>'
+        : p.price > 0
+          ? '<span class="text-sm font-semibold tabular-nums text-ink">' + esc(IDR.format(p.price)) + "</span>"
+          : '<span class="text-xs font-medium text-muted">Tanya harga</span>';
       return (
-        '<a href="' + esc(href) + '" role="option" aria-selected="false" ' +
-        'class="flex min-h-14 items-center gap-3 rounded-xl px-3 text-sm transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none' +
-        (dim ? " opacity-60" : "") + '">' +
-        '<span class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-50">' + icon + "</span>" +
-        '<span class="min-w-0 flex-1"><span class="block truncate font-medium text-ink">' + esc(title) + "</span>" +
-        (meta ? '<span class="block truncate text-xs text-muted">' + esc(meta) + "</span>" : "") +
-        "</span>" +
-        (right ? '<span class="shrink-0 text-sm font-semibold tabular-nums text-ink">' + right + "</span>" : "") +
+        '<a href="/produk/' + esc(p.handle) + '" role="option" aria-selected="false" ' +
+        'class="mx-auto flex w-full max-w-2xl items-center gap-3 rounded-xl p-2 transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none' +
+        (p.soldOut ? " opacity-60" : "") + '">' +
+          '<span class="h-14 w-[2.625rem] shrink-0 overflow-hidden rounded-lg bg-brand-50">' + thumb + "</span>" +
+          '<span class="min-w-0 flex-1">' +
+            '<span class="block truncate text-[0.95rem] font-medium leading-snug text-ink">' + esc(p.name) + "</span>" +
+            '<span class="mt-0.5 block truncate text-xs text-muted">' + esc(p.category || "") + "</span>" +
+          "</span>" +
+          '<span class="shrink-0 pl-2 text-right">' + price + "</span>" +
         "</a>"
       );
     }
 
-    function heading(text) {
-      return '<p class="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-widest text-muted">' + esc(text) + "</p>";
+    // CATEGORIES ARE PILLS, not list rows — the shortcut shape an Indonesian shopper already reads
+    // fluently, and three rows become one line on a screen with no vertical room to spare.
+    function categoryPills(list) {
+      return (
+        '<div class="mx-auto flex w-full max-w-2xl flex-wrap gap-2 px-3 pb-1 pt-4 sm:px-5">' +
+        list
+          .map(function (c) {
+            return (
+              '<a href="/kategori/' + esc(c.handle) + '" role="option" aria-selected="false" ' +
+              'class="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-brand-50 px-4 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none">' +
+              iconCategory + esc(c.name) + "</a>"
+            );
+          })
+          .join("") +
+        "</div>"
+      );
+    }
+
+    // A label carrying its count is information; "PRODUK" in grey caps was decoration.
+    function heading(text, count) {
+      return (
+        '<p class="mx-auto w-full max-w-2xl px-4 pb-1 pt-4 text-xs font-medium text-muted sm:px-6">' + esc(text) +
+        (count ? ' <span class="tabular-nums">· ' + count + "</span>" : "") + "</p>"
+      );
     }
 
     function message(text) {
-      return '<p class="px-3 py-10 text-center text-sm text-muted">' + esc(text) + "</p>";
+      return '<p class="mx-auto w-full max-w-2xl px-4 py-16 text-center text-sm text-muted">' + esc(text) + "</p>";
+    }
+
+    // The way OUT sits at the END of the list, full width — where a thumb already is after scrolling
+    // results. It used to be a right-aligned link in a footer bar: the corner of a phone furthest
+    // from anyone's hand.
+    function seeAllRow(q) {
+      return (
+        '<a href="/cari?q=' + encodeURIComponent(q) + '" role="option" aria-selected="false" ' +
+        'class="mx-auto mt-2 mb-[max(1rem,env(safe-area-inset-bottom))] flex w-full max-w-2xl min-h-12 items-center justify-center gap-1.5 rounded-xl border border-line px-4 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none">' +
+        "Lihat semua hasil untuk «" + esc(q) + "»</a>"
+      );
     }
 
     function render(data, q) {
       var html = "";
-      if (data.categories && data.categories.length) {
-        html += heading("Kategori");
-        html += data.categories
-          .map(function (c) {
-            return row("/kategori/" + c.handle, iconCategory, c.name, "Lihat koleksi", "", false);
-          })
-          .join("");
-      }
+      if (data.categories && data.categories.length) html += categoryPills(data.categories);
       if (data.products && data.products.length) {
-        html += heading(q ? "Produk" : "Paling dicari");
-        html += data.products
-          .map(function (p) {
-            // A product with no photo gets the same tinted placeholder ProductCard uses — never a
-            // filename guessed from the handle, which is how broken images got into every grid.
-            var thumb = p.image
-              ? '<img src="' + esc(p.image) + '" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />'
-              : iconProduct;
-            var price = p.soldOut
-              ? '<span class="text-xs font-semibold uppercase tracking-wide text-muted">Habis</span>'
-              : p.price > 0
-                ? esc(IDR.format(p.price))
-                : '<span class="text-xs font-medium text-muted">Tanya harga</span>';
-            return row("/produk/" + p.handle, thumb, p.name, p.category, price, p.soldOut);
-          })
-          .join("");
+        html += heading(q ? "Produk" : "Paling dicari", q ? data.products.length : 0);
+        html += data.products.map(productRow).join("");
       }
-      if (!html) html = message(q ? 'Tidak ada hasil untuk "' + q + '". Coba kata lain.' : "Katalog belum diisi.");
+      if (q) html += seeAllRow(q);
+
+      if (!(data.products || []).length && !(data.categories || []).length) {
+        // An empty result is a moment for direction, not for mood: say what happened, then offer the
+        // one move that always works.
+        html =
+          message("Tidak ada yang cocok dengan «" + q + "».") +
+          '<p class="px-4 pb-8 text-center"><a class="inline-flex min-h-11 items-center rounded-full bg-brand-600 px-5 text-sm font-semibold text-white" href="/produk">Telusuri semua produk</a></p>';
+      }
 
       results.innerHTML = html;
       items = Array.prototype.slice.call(results.querySelectorAll("a[role='option']"));
@@ -219,9 +256,11 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
           if (mine !== seq) return;
           results.setAttribute("aria-busy", "false");
           // Say what happened AND leave a way out — the results page does not depend on this endpoint.
+          // Name what failed and give the door that does not depend on it — /cari renders from the
+          // server and needs nothing from this endpoint.
           results.innerHTML =
             message("Pencarian sedang bermasalah.") +
-            '<p class="pb-6 text-center"><a class="text-sm font-medium text-brand-700 underline underline-offset-4" href="/cari?q=' +
+            '<p class="px-4 pb-8 text-center"><a class="inline-flex min-h-11 items-center rounded-full bg-brand-600 px-5 text-sm font-semibold text-white" href="/cari?q=' +
             encodeURIComponent(q) + '">Buka halaman pencarian</a></p>';
           items = [];
         });
@@ -230,7 +269,6 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
     var timer = null;
     input.addEventListener("input", function () {
       var q = input.value.trim();
-      if (seeAll) seeAll.href = q ? "/cari?q=" + encodeURIComponent(q) : "/cari";
       clearTimeout(timer);
       // 150ms: long enough that a fast typist sends one request instead of eight, short enough that
       // the list feels like it is keeping up.
@@ -250,18 +288,41 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
       else if (e.key === "ArrowUp") { e.preventDefault(); setActive(active - 1); }
       else if (e.key === "Enter") {
         e.preventDefault();
-        // Enter on a highlighted row opens it; Enter with nothing highlighted goes to the full
-        // results page, which is what a shopper who ignored the list means by pressing it.
+        // Enter opens the highlighted row. With nothing highlighted — an empty or failed result —
+        // it falls through to the results page, which is what a shopper who ignored the list means.
         if (active >= 0 && items[active]) items[active].click();
-        else if (seeAll) seeAll.click();
+        else window.location.href = "/cari?q=" + encodeURIComponent(input.value.trim());
       }
     });
 
+    // LOCK THE PAGE BEHIND IT. `showModal()` makes the rest of the document *inert* — it cannot be
+    // clicked or tabbed into — but scrolling is not an interaction with an element, and it leaks:
+    // measured in Chromium at both 1280 and 390, the wheel moved the page from scrollY 0 to 600 with
+    // the palette open. So the lock is ours to apply.
+    //
+    // Hiding the scrollbar also takes its WIDTH away, which shifts the whole layout left. Invisible
+    // while the opaque palette covers it, and a visible jump the moment it closes — so the width is
+    // handed back as padding. (0 on overlay-scrollbar platforms, ~15px on a classic desktop one.)
+    function lockScroll() {
+      var root = document.documentElement;
+      var gap = window.innerWidth - root.clientWidth;
+      root.style.overflow = "hidden";
+      if (gap > 0) root.style.paddingRight = gap + "px";
+    }
+    function unlockScroll() {
+      var root = document.documentElement;
+      root.style.overflow = "";
+      root.style.paddingRight = "";
+    }
+    // ⚠️ On the `close` EVENT, not inside the close button's handler: Escape closes a <dialog>
+    // natively and never runs our button code. Hooking the button alone locks the page forever.
+    dialog.addEventListener("close", unlockScroll);
+
     function open() {
       if (dialog.open) return;
+      lockScroll();
       dialog.showModal();
       input.value = "";
-      if (seeAll) seeAll.href = "/cari";
       results.innerHTML = message("Memuat…");
       input.focus();
       search("");

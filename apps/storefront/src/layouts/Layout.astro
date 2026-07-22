@@ -3,6 +3,7 @@ import "../styles/global.css";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import SearchPalette from "../components/SearchPalette.astro";
+import { clamp } from "../lib/text";
 import Analytics from "../components/Analytics.astro";
 import Chat from "../components/Chat.astro";
 import { mediaUrl } from "../data/catalog";
@@ -37,13 +38,8 @@ const { title, description = store.tagline, image, type = "website", head, robot
 const fullTitle = `${title} — ${store.name}`;
 
 // A meta/OG description longer than ~155 chars is truncated mid-sentence by Google and hard-cut by
-// WhatsApp's preview card. The merchant writes the product copy; clamp it at the boundary, on a word.
-const clamp = (text: string, max = 155) => {
-  const t = (text ?? "").replace(/\s+/g, " ").trim();
-  if (t.length <= max) return t;
-  const cut = t.slice(0, max);
-  return cut.slice(0, cut.lastIndexOf(" ")).trimEnd() + "…";
-};
+// WhatsApp's preview card. `clamp` (src/lib/text.ts) cuts on a word and marks it — the footer needs
+// the same treatment for the same merchant field, so the rule lives in one place.
 const desc = clamp(description ?? "");
 
 // CANONICAL — per request, never baked in. One deploy serves every merchant, so the correct host is
