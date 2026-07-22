@@ -820,3 +820,29 @@ export async function trackShipment(orderNumber: string): Promise<TrackResult> {
         : "Pengiriman terdaftar di KiriminAja — belum ada pergerakan dari kurir.",
   };
 }
+
+// DEMO/SANDBOX ONLY — stamp a clearly-marked placeholder AWB on an order so the "Cetak resi" flow can
+// be previewed where the courier never issues a real waybill (sandbox). REFUSED in production: a fake
+// AWB is a label no courier can scan — the exact anti-pattern `printLabel` guards against. The value is
+// prefixed "DEMO" so it can never be mistaken for a real resi, and `trackShipment` will overwrite it
+// with the real waybill the moment KiriminAja returns one.
+export async function fillDemoResi(orderNumber: string): Promise<{ ok: boolean; error?: string; awb?: string }> {
+  const { storeId } = await requireCapability("orders:write");
+  if ((process.env.KIRIMINAJA_ENV ?? "sandbox") === "production") {
+    return { ok: false, error: "Isi resi contoh hanya untuk demo/sandbox — tidak tersedia di produksi." };
+  }
+  const demoAwb = "DEMO" + orderNumber.replace(/[^A-Za-z0-9]/g, "").slice(-10).toUpperCase();
+  const res = await withTenant(storeId, async (db) => {
+    const [row] = await db
+      .select({ id: schema.orders.id, courier: schema.orders.courier })
+      .from(schema.orders)
+      .where(eq(schema.orders.number, orderNumber))
+      .limit(1);
+    if (!row) return { ok: false as const, error: "Pesanan tidak ditemukan." };
+    await db.update(schema.orders).set({ awb: demoAwb, courier: row.courier ?? "spx" }).where(eq(schema.orders.id, row.id));
+    return { ok: true as const };
+  });
+  if (!res.ok) return res;
+  revalidatePath(`/pesanan/${orderNumber}`);
+  return { ok: true, awb: demoAwb };
+}
