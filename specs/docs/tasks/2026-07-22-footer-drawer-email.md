@@ -1,7 +1,16 @@
 # TASK — Footer 30/20/20/30 · kategori jadi dropdown · email publik · burger menu
 
-> **Status: 🟡 IN PROGRESS** · 2026-07-22/23 · branch `worktree-super-admin-overhaul`
-> · commit awal `463341c` (= `origin/main`)
+> **Status: ✅ DONE & DEPLOYED** · PR **#40** → `main` `f10b6ad`
+> · container storefront `72209853286b` → **`31b3dcd731f6`**
+>
+> **Migrasi diverifikasi di sumbernya, bukan dari laporan `migrate`:**
+> `information_schema` → `stores.email : text` ADA · `__drizzle_migrations` → 71 entri, stempel
+> tertinggi `1784707158597` = persis milik `0070`. Jadi ia benar-benar dijalankan.
+>
+> **UI dioperasikan di produksi:** tombol tutup `44×44` · fokus masuk ke `#menu-close` · latar `0→0`
+> · Tab ×12 terperangkap · Esc mengembalikan fokus ke burger & melepas kunci gulir · footer `450px`
+> dengan kolom `24..371 / 403..624 / 656..877 / 909..1256` · `<details>` kategori tertutup lalu
+> terbuka saat diklik · **0 console error**.
 >
 > Lanjutan dari [palet layar penuh](./2026-07-22-palet-fullscreen.md).
 
