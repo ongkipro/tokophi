@@ -90,3 +90,19 @@ menaruh kata-kata promo di mulut merchant. Dilewati.
 Home transparan @top · solid saat scroll · logo center 512/512·640/640·720/720 · mega buka di bawah
 nav row · halaman produk `sticky` solid (`data-overlay` null) · mobile burger-kiri/logo-tengah/
 cart-kanan, nav row tersembunyi · `astro check` 0 error. Gerbang responsif untuk seluruh batch berikut.
+
+---
+
+## Ter-DEPLOY & diverifikasi di produksi
+
+PR **#44** → `main` `ba6e790` · container storefront `558078b880c5` → **`ca6ed163b000`**.
+
+Dioperasikan di situs live (bukan dibaca HTML):
+- **desktop 1280:** header transparan `data-solid=false` `position:fixed`, logo center **±0px**, overflow
+  **0**, **solid saat scroll** ✅. (Menu produksi = Beranda · Shop▾ · Promo Gajian · Blog — 4 item, muat pas.)
+- **mobile 390:** burger kiri (16px), logo center **±0px**; drawer teks 25.6px, strip 2 kartu, drill →
+  5 kategori, sub-panel tampil; palet search `--sp-h` aktif.
+- **0 pageerror.** `audit:responsive` 132/132 sebelum deploy; scan 8 device presisi (logo ±0px, overflow 0).
+
+**Sisa (ditunda, dicatat):** search "recently viewed" + grid kartu 2-kolom dari referensi ke-2 —
+keluhan inti "kurang full saat ketik" sudah tuntas lewat perbaikan keyboard.
