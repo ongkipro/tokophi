@@ -127,3 +127,30 @@ pemilik akan tetap lega.
 ### Diverifikasi (6 ukuran)
 Satu baris di semua · logo center **±0px** · overflow **0** · tumpang **0px** di setiap lebar ·
 search sebelum cart · mega buka di bawah bar · 0 pageerror.
+
+---
+
+## Ronde 4 — CategoryNav: lingkaran kecil → banner besar + geser (pemilik)
+
+> "di bawah hero itu kategori/collection, design ulang → max 4 banner besar, scroll kanan-kiri jika
+>  lebih dari 4. sesuai area width theme, bukan full width."
+
+`CategoryNav.astro` dulu avatar bulat 20–24px yang wrap dan terpusat. Sekarang **rak banner** ala
+Shopify/Apple:
+- Kartu gambar besar `aspect-[4/5]` + gradient bawah + nama; hover zoom.
+- **≤4 mengisi baris** (`lg:w-[calc(25%-...)]`) dalam **lebar tema `max-w-7xl`** (bukan full-bleed —
+  diukur di 1440: `80..1360`, capped).
+- **>4 → geser** dengan `snap-x snap-mandatory`; kartu berikutnya **mengintip** jadi jelas bisa digeser.
+- **Panah prev/next desktop** (mouse tak bisa swipe) — muncul hanya bila `items>4`, nonaktif di ujung
+  (`disabled:opacity-0`). Ponsel/tablet tanpa panah (swipe).
+- Tanpa jumlah produk (data `CategoryNavItem` = label/imageUrl/href saja — takkan dikarang).
+
+⚠️ Dua jebakan yang diukur & diperbaiki:
+1. `sync()` panah jalan **sebelum layout settle** (inline script saat parse) → prev tak ter-disable.
+   Sekarang di `requestAnimationFrame` + `load` + per-`img load`.
+2. **`scrollLeft` rest di 24px** (bukan 0) karena `px-6` track membuat snap-start menggeser →
+   `scroll-pl-4 sm:scroll-pl-6` (scroll-padding = padding) supaya kartu pertama rest di 0 dan prev
+   ter-disable di awal.
+
+Diverifikasi: 1280 4-up + kartu ke-5 intip, klik next geser 1 kartu, prev disabled di awal / next
+disabled di ujung; mobile peek + tanpa panah; 1440 dalam lebar tema; 0 pageerror; `astro check` 0 error.
