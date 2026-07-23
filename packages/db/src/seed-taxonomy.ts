@@ -10,7 +10,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { isNull, eq, sql } from "drizzle-orm";
 import { db, client, schema } from "./client";
-import { suggestGoogleCategory } from "@tokophi/lib/taxonomy-suggest";
+import { suggestGoogleCategory, suggestGender } from "@tokophi/lib/taxonomy-suggest";
 
 const DATA = path.join(process.cwd(), "data", "google-taxonomy.en-US.txt");
 
@@ -71,6 +71,22 @@ async function main() {
     filled++;
   }
   console.log(`seed-taxonomy: backfill → ${filled}/${unclassified.length} produk tak berkategori diklasifikasi otomatis.`);
+
+  // Feed gender (ADR 0011 Phase 2): fill ONLY where the title confidently names a gender, and only on
+  // NULL rows. No blanket "female"/"adult" default here — that would mis-tag a real merchant's men's or
+  // kids' catalogue. The feed itself derives a fallback at read-time (never persisted), so a null is safe.
+  const noGender = await db
+    .select({ id: schema.products.id, title: schema.products.title })
+    .from(schema.products)
+    .where(isNull(schema.products.gender));
+  let attrs = 0;
+  for (const p of noGender) {
+    const g = suggestGender(p.title);
+    if (!g) continue;
+    await db.update(schema.products).set({ gender: g }).where(eq(schema.products.id, p.id));
+    attrs++;
+  }
+  console.log(`seed-taxonomy: gender feed → ${attrs}/${noGender.length} produk diisi dari judul.`);
   await client.end();
 }
 

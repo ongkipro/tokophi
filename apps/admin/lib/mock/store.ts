@@ -98,6 +98,9 @@ export type Product = {
   seoDesc?: string;
   googleCategoryId?: number | null;
   googleCategoryPath?: string;
+  gender?: string;
+  ageGroup?: string;
+  material?: string;
   compareAt?: number | null;
   cost?: number | null;
   sku?: string;

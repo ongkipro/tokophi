@@ -19,7 +19,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { db, client, schema } from "./client";
 import { and, eq } from "drizzle-orm";
-import { suggestGoogleCategory } from "@tokophi/lib/taxonomy-suggest";
+import { suggestGoogleCategory, suggestGender } from "@tokophi/lib/taxonomy-suggest";
 
 const DEMO_SLUG = "batik-nusantara";
 // Fixed anchor so re-runs are deterministic; small per-item offset so they sort newest-first sensibly.
@@ -213,6 +213,9 @@ async function main() {
         seoDesc: d.seoDesc,
         googleCategoryId: gcat?.id ?? null,
         googleCategoryPath: gcat?.path ?? null,
+        gender: suggestGender(d.title) ?? "female",
+        ageGroup: "adult",
+        material: d.title.match(/katun|rayon|jersey|denim|linen|sutra|wol|twill|toyobo/i)?.[0] ?? null,
         sizes: d.sizes,
         unitsSold: 0,
         lengthCm: 1,

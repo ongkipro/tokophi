@@ -1,6 +1,7 @@
 # ADR 0011 — Standard product taxonomy (Google Product Category), separate from the merchant's own category
 
-**Status:** accepted (2026-07-23) · Phase 1 shipped; attributes + feed are Phase 2/3.
+**Status:** accepted (2026-07-23) · Phase 1 (taxonomy + picker + suggest) shipped · Phase 2 (feed
+attributes) + Phase 3 (Google feed endpoint) shipped 2026-07-24.
 
 ## Context
 

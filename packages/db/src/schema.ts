@@ -217,6 +217,13 @@ export const products = pgTable(
     // `google_category_id` is Google Product Taxonomy's own numeric id; the path is cached for feeds.
     googleCategoryId: integer().references((): AnyPgColumn => productTaxonomy.id),
     googleCategoryPath: text(),
+    // Apparel feed attributes Google/Meta require (ADR 0011 Phase 2). `color`/`size` come from the
+    // variant options (Warna/Ukuran), `brand` from the store, `condition` is always "new" — so only
+    // these three are stored. Nullable; the feed derives sensible fallbacks (gender via the suggester,
+    // age_group "adult") when a merchant hasn't set them.
+    gender: text(), // "female" | "male" | "unisex"
+    ageGroup: text(), // "newborn" | "infant" | "toddler" | "kids" | "adult"
+    material: text(), // free text, e.g. "Katun", "Rayon"
     emoji: text(), // display fallback (mirrors storefront)
     unitsSold: integer().notNull().default(0), // rollup cache (from order_line_items; seeded for demo)
     sizes: jsonb(), // storefront size options e.g. ["S","M","L"] / ["All Size"]

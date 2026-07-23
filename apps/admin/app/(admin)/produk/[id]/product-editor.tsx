@@ -74,6 +74,21 @@ const CATEGORIES = [
   "Aksesoris",
 ];
 
+// Google/Meta feed attribute options (ADR 0011 Phase 2). Values are the Google enum; labels are ID.
+const GENDER_OPTS: { value: string; label: string }[] = [
+  { value: "female", label: "Wanita" },
+  { value: "male", label: "Pria" },
+  { value: "unisex", label: "Unisex" },
+];
+const AGE_OPTS: { value: string; label: string }[] = [
+  { value: "adult", label: "Dewasa" },
+  { value: "kids", label: "Anak" },
+  { value: "toddler", label: "Balita" },
+  { value: "infant", label: "Bayi" },
+  { value: "newborn", label: "Baru lahir" },
+];
+const labelOf = (opts: { value: string; label: string }[], v: string) => opts.find((o) => o.value === v)?.label ?? "";
+
 const LOW_STOCK = 20;
 
 // Char-counter colour: muted normally, amber near the cap, red at the cap — so the hard
@@ -166,6 +181,10 @@ export function ProductEditor({ product }: { product?: Product }) {
   // Standard Google taxonomy (ADR 0011) — separate from the merchant's own `category` above.
   const [gcatId, setGcatId] = React.useState<number | null>(product?.googleCategoryId ?? null);
   const [gcatPath, setGcatPath] = React.useState(product?.googleCategoryPath ?? "");
+  // Feed attributes (ADR 0011 Phase 2) — overrides; the feed derives sensible defaults when blank.
+  const [gender, setGender] = React.useState(product?.gender ?? "");
+  const [ageGroup, setAgeGroup] = React.useState(product?.ageGroup ?? "");
+  const [material, setMaterial] = React.useState(product?.material ?? "");
   const [productType, setProductType] = React.useState(product?.productType ?? "");
   const [vendor, setVendor] = React.useState(product?.vendor || storeName);
   const [tags, setTags] = React.useState("");
@@ -218,6 +237,9 @@ export function ProductEditor({ product }: { product?: Product }) {
       seoDesc: metaDesc.trim() || undefined,
       googleCategoryId: gcatId,
       googleCategoryPath: gcatPath || undefined,
+      gender: gender || undefined,
+      ageGroup: ageGroup || undefined,
+      material: material || undefined,
       handle: handle || slugify(name),
       price: Number(price) || 0,
       compareAt: compareAt ? Number(compareAt) : null,
@@ -1115,6 +1137,46 @@ export function ProductEditor({ product }: { product?: Product }) {
                 category={category}
                 onChange={(id, p) => { setGcatId(id); setGcatPath(p); }}
               />
+
+              {/* Feed attributes (ADR 0011 Phase 2). Optional overrides — the feed derives gender from
+                  the title, defaults usia = Dewasa & kondisi = Baru, and takes warna/ukuran from variants. */}
+              <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
+                <p className="text-xs font-medium text-muted-foreground">Atribut feed iklan <span className="font-normal">(Google/Meta — opsional)</span></p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs">Gender</Label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="w-full justify-between font-normal" />}>
+                        {gender ? labelOf(GENDER_OPTS, gender) : <span className="text-muted-foreground">Pilih</span>}
+                        <ChevronDown className="text-muted-foreground" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-(--anchor-width)">
+                        <DropdownMenuItem onClick={() => setGender("")}>—</DropdownMenuItem>
+                        {GENDER_OPTS.map((o) => <DropdownMenuItem key={o.value} onClick={() => setGender(o.value)}>{o.label}</DropdownMenuItem>)}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs">Usia</Label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="w-full justify-between font-normal" />}>
+                        {ageGroup ? labelOf(AGE_OPTS, ageGroup) : <span className="text-muted-foreground">Dewasa</span>}
+                        <ChevronDown className="text-muted-foreground" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-(--anchor-width)">
+                        <DropdownMenuItem onClick={() => setAgeGroup("")}>—</DropdownMenuItem>
+                        {AGE_OPTS.map((o) => <DropdownMenuItem key={o.value} onClick={() => setAgeGroup(o.value)}>{o.label}</DropdownMenuItem>)}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="p-material" className="text-xs">Bahan / Material</Label>
+                  <Input id="p-material" value={material} onChange={(e) => setMaterial(e.target.value)} placeholder="mis. Katun, Rayon" className="h-9" />
+                </div>
+                <p className="text-[11px] text-muted-foreground">Warna &amp; ukuran diambil otomatis dari varian · brand dari toko · kondisi = Baru.</p>
+              </div>
+
               <div className="grid gap-2">
                 <Label htmlFor="p-tipe">Tipe produk</Label>
                 <Input
