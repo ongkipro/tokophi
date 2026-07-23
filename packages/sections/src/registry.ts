@@ -26,6 +26,18 @@ export interface HeroSlide {
   focal?: "left" | "center" | "right";
 }
 
+/**
+ * One trust badge in the strip along the bottom of the hero (Fast Shipping / Secure Payment / …).
+ * OPTIONAL as a group: a hero with no `features` renders no strip. `icon` is a KEY into a fixed
+ * allow-list the renderer owns (see `HERO_FEATURE_ICONS` in Hero.astro), never a component or a URL —
+ * a merchant picks from known icons, they do not inject markup. An unknown key falls back to a dot.
+ */
+export interface HeroFeature {
+  icon: string;
+  title: string;
+  text: string;
+}
+
 export interface HeroConfig {
   /**
    * The carousel's slides. OPTIONAL on purpose: hero sections saved before the carousel existed
@@ -34,6 +46,12 @@ export interface HeroConfig {
    * directly — call `heroSlides(config)`.
    */
   slides?: HeroSlide[];
+  /**
+   * Trust badges shown as a strip across the bottom of the hero. OPTIONAL and empty by default: a
+   * store that has not set any gets no strip — never an over-promise like "Gratis Ongkir" a store
+   * does not actually offer (the same honesty rule the footer and WhatsApp button follow).
+   */
+  features?: HeroFeature[];
   /** Autoplay interval in ms. Optional; defaults to `HERO_INTERVAL_MS`. 0 = no autoplay. */
   intervalMs?: number;
   /**
@@ -141,6 +159,16 @@ export interface CategoryNavConfig {
 }
 
 /**
+ * Collection bento — a mosaic of the store's collections. Unlike CategoryNav's free-text `items`
+ * (which 404 on any store but the demo), this reads the store's LIVE `collections` at render time,
+ * so it is dynamic and never points at a category a store does not have. The only config is the
+ * heading; there is nothing here for a merchant to mis-type into a broken link.
+ */
+export interface CollectionBentoConfig {
+  heading: string;
+}
+
+/**
  * Jurnal — the merchant's newest PUBLISHED articles, read live from the DB.
  *
  * Config is deliberately three fields. Two things it does NOT have, on purpose:
@@ -170,6 +198,7 @@ export type SectionConfigMap = {
   marquee: MarqueeConfig;
   "rich-text": RichTextConfig;
   "category-nav": CategoryNavConfig;
+  "collection-bento": CollectionBentoConfig;
   blog: BlogConfig;
 };
 
@@ -195,6 +224,7 @@ export const SECTION_TYPES: SectionType[] = [
   "image-text",
   "product-grid",
   "category-nav",
+  "collection-bento",
   "banner-promo",
   "marquee",
   "testimoni",
@@ -208,6 +238,7 @@ export const SECTION_LABELS: Record<SectionType, string> = {
   "banner-promo": "Banner Promo",
   testimoni: "Testimoni",
   "image-text": "Gambar + Teks",
+  "collection-bento": "Bento Koleksi",
   marquee: "Teks Berjalan",
   "rich-text": "Teks & Pernyataan",
   "category-nav": "Navigasi Kategori",
@@ -336,6 +367,9 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
     ctaLabel: "Mulai Belanja",
     ctaHref: "/",
     theme: "terang",
+  },
+  "collection-bento": {
+    heading: "Belanja per Koleksi",
   },
   "category-nav": {
     // ⚠️ NOT a claim, but still wrong for anyone but the demo store: these three handles are the

@@ -1,0 +1,84 @@
+---
+// ADR 0009 — Collection bento. A mosaic of the store's collections, placed from the Tema builder.
+//
+// DYNAMIC, NOT CONFIGURED: it reads the store's LIVE `catalog.collections` at render time, so it can
+// never point at a category a store does not have (the bug CategoryNav's free-text `items` still
+// carries). The only config is the heading.
+//
+// DETERMINISTIC, NOT RANDOM: the owner asked "random collection, gimana menurutmu?" — a layout that
+// reshuffles every load is jarring and, server-rendered, mismatches the client on hydrate. So the
+// arrangement is a FIXED mosaic pattern filled with the collections in their own order: a phone shows
+// a 2-up grid with every third tile full-width; a desktop shows a 4-col grid where each row carries
+// one wide tile, its side alternating — the Shopify "shop by collection" shape.
+import type { CollectionBentoConfig } from "@tokophi/sections";
+import { ArrowUpRight } from "@lucide/astro";
+
+type Props = CollectionBentoConfig;
+const { heading } = Astro.props;
+
+const { catalog } = Astro.locals;
+// Cap at eight — two full desktop rows. A homepage shelf is a teaser, not the category index; more
+// than this and the mosaic stops being a glance and becomes a page. Everything is reachable from the
+// menu and /produk. (Silent cap, but it is a teaser by design, not a claim of completeness.)
+const collections = catalog.collections.filter((c) => c.name).slice(0, 8);
+
+// The span pattern. Mobile (2-col): every third tile spans both → a full-width band between pairs.
+// Desktop (4-col): a six-tile cycle of 1+2+1 then 2+1+1 — each row sums to 4 with one wide tile whose
+// side alternates. Both are pure arithmetic on the index, so the layout is identical on every render.
+const MOBILE = [1, 1, 2];
+const DESKTOP = [1, 2, 1, 2, 1, 1];
+const spanClass = (i: number) => [
+  MOBILE[i % MOBILE.length] === 2 ? "col-span-2" : "col-span-1",
+  DESKTOP[i % DESKTOP.length] === 2 ? "lg:col-span-2" : "lg:col-span-1",
+];
+---
+
+{
+  collections.length > 0 && (
+    <section class="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-16">
+      {heading && <h2 class="mb-6 font-display text-2xl font-semibold text-ink sm:text-3xl">{heading}</h2>}
+
+      {/* Fixed row heights (`auto-rows-*`) so a 1-wide and a 2-wide tile in the same row are the same
+          height — the mosaic reads as one surface, not tiles of drifting sizes. */}
+      <ul class="grid auto-rows-[12rem] grid-cols-2 gap-3 sm:auto-rows-[15rem] sm:gap-4 lg:grid-cols-4 lg:auto-rows-[17rem]">
+        {collections.map((c, i) => (
+          <li class:list={spanClass(i)}>
+            <a
+              href={`/kategori/${c.handle}`}
+              class="group relative block h-full w-full overflow-hidden rounded-2xl bg-brand-100 ring-1 ring-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+            >
+              {c.imageUrl ? (
+                <img
+                  src={c.imageUrl}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 motion-reduce:group-hover:scale-100"
+                />
+              ) : (
+                // No cover uploaded → the collection's emoji on a brand-tinted panel, the same fallback
+                // the category dropdown uses. Never a broken frame.
+                <span class="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-100 to-brand-200 text-5xl" aria-hidden="true">
+                  {c.emoji}
+                </span>
+              )}
+              {/* A subtle wash so the name pill is legible over any photo, without darkening the whole
+                  tile the way a full scrim would. */}
+              <span class="absolute inset-0 bg-gradient-to-t from-ink/25 to-transparent" />
+              {/* The name is a small solid pill bottom-left — the reference's chip, readable on any
+                  image, with an arrow that nudges on hover. */}
+              <span class="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-lg bg-cream/95 px-3 py-1.5 text-sm font-medium text-ink shadow-sm backdrop-blur-sm sm:bottom-4 sm:left-4">
+                {c.name}
+                <ArrowUpRight
+                  class="size-3.5 text-brand-600 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none"
+                  stroke-width={2}
+                  aria-hidden="true"
+                />
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
