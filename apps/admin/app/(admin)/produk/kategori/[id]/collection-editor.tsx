@@ -74,6 +74,14 @@ const TEMPLATES = ["collection", "collection.full-width"] as const;
 
 type Condition = { id: number; field: string; op: string; value: string };
 
+const TITLE_LIMIT = 100;
+const SEO_TITLE_LIMIT = 70;
+const META_LIMIT = 160;
+
+// Char-counter colour: muted normally, amber near the cap, red at the cap.
+const counterClass = (len: number, max: number) =>
+  len >= max ? "text-red-500" : len >= max * 0.9 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground";
+
 export function CollectionEditor({ collection }: { collection?: Collection }) {
   const isEdit = Boolean(collection);
   const canWrite = useCan("content:write");
@@ -254,10 +262,16 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
           <Card>
             <CardContent className="flex flex-col gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="c-judul">Judul</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="c-judul">Judul</Label>
+                  <span className={`text-xs tabular-nums ${counterClass(name.length, TITLE_LIMIT)}`}>
+                    {num(name.length)}/{TITLE_LIMIT}
+                  </span>
+                </div>
                 <Input
                   id="c-judul"
                   value={name}
+                  maxLength={TITLE_LIMIT}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Contoh: Promo Gajian"
                 />
@@ -592,10 +606,16 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="seo-title">Judul SEO</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="seo-title">Judul SEO</Label>
+                  <span className={`text-xs tabular-nums ${counterClass(seoTitle.length, SEO_TITLE_LIMIT)}`}>
+                    {num(seoTitle.length)}/{SEO_TITLE_LIMIT}
+                  </span>
+                </div>
                 <Input
                   id="seo-title"
                   value={seoTitle}
+                  maxLength={SEO_TITLE_LIMIT}
                   onChange={(e) => setSeoTitle(e.target.value)}
                   placeholder={name || "Judul koleksi"}
                 />
@@ -603,14 +623,14 @@ export function CollectionEditor({ collection }: { collection?: Collection }) {
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="seo-desc">Deskripsi meta</Label>
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {num(metaDesc.length)}/160
+                  <span className={`text-xs tabular-nums ${counterClass(metaDesc.length, META_LIMIT)}`}>
+                    {num(metaDesc.length)}/{META_LIMIT}
                   </span>
                 </div>
                 <Textarea
                   id="seo-desc"
                   value={metaDesc}
-                  maxLength={160}
+                  maxLength={META_LIMIT}
                   onChange={(e) => setMetaDesc(e.target.value)}
                   placeholder="Ringkasan singkat untuk hasil pencarian…"
                   className="min-h-20"
