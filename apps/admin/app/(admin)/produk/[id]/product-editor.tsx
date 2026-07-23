@@ -75,6 +75,15 @@ const CATEGORIES = [
 
 const LOW_STOCK = 20;
 
+// Char-counter colour: muted normally, amber near the cap, red at the cap — so the hard
+// maxLength stop is signalled instead of the input silently refusing more keystrokes.
+const counterClass = (len: number, max: number) =>
+  len >= max
+    ? "text-red-500"
+    : len >= max * 0.9
+      ? "text-amber-600 dark:text-amber-400"
+      : "text-muted-foreground";
+
 // Parse a numeric string to a number (strip non-digits).
 const toNum = (s: string) => Number(String(s).replace(/[^\d]/g, "")) || 0;
 
@@ -86,9 +95,6 @@ const slugify = (s: string) =>
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
-
-const DESC_TEMPLATE = (name: string) =>
-  `${name} adalah produk pilihan dengan kualitas terbaik. Dibuat dari bahan premium, cocok untuk pemakaian sehari-hari maupun sebagai hadiah. Tersedia stok terbatas — pesan sekarang selagi ada.`;
 
 // ---- variants ----
 type OptionDef = { name: string; values: string[] }; // chip values (e.g. ["Merah","Biru"])
@@ -108,21 +114,19 @@ export function ProductEditor({ product }: { product?: Product }) {
   const canMedia = useCan("media:write");
   const storeName = useStoreName();
 
-  // Fabricated demo fields (do NOT change the mock Product type).
-  const seedCost = product ? Math.round(product.price * 0.6) : 0;
+  // Cost seeds the Purchase Order dialog fallback — real saved cost, no longer fabricated.
+  const seedCost = product?.cost ?? 0;
 
-  // ---- form state ----
+  // ---- form state (edit: hydrate from the saved product; new: empty) ----
   const [name, setName] = React.useState(product?.name ?? "");
-  const [description, setDescription] = React.useState(
-    product ? DESC_TEMPLATE(product.name) : ""
-  );
+  const [description, setDescription] = React.useState(product?.description ?? "");
 
   const [price, setPrice] = React.useState(String(product?.price ?? ""));
-  const [compareAt, setCompareAt] = React.useState("");
-  const [cost, setCost] = React.useState(seedCost ? String(seedCost) : "");
+  const [compareAt, setCompareAt] = React.useState(product?.compareAt ? String(product.compareAt) : "");
+  const [cost, setCost] = React.useState(product?.cost ? String(product.cost) : "");
 
   const [trackQty, setTrackQty] = React.useState(true);
-  const [sku, setSku] = React.useState(product?.id ?? "");
+  const [sku, setSku] = React.useState(product?.sku ?? "");
   const [barcode, setBarcode] = React.useState("");
   const [qty, setQty] = React.useState(String(product?.stock ?? ""));
 
@@ -158,8 +162,8 @@ export function ProductEditor({ product }: { product?: Product }) {
   const [chOnline, setChOnline] = React.useState(true);
 
   const [category, setCategory] = React.useState(product?.category ?? "Fashion");
-  const [productType, setProductType] = React.useState("");
-  const [vendor, setVendor] = React.useState(storeName);
+  const [productType, setProductType] = React.useState(product?.productType ?? "");
+  const [vendor, setVendor] = React.useState(product?.vendor || storeName);
   const [tags, setTags] = React.useState("");
 
   const [seoTitle, setSeoTitle] = React.useState("");
@@ -493,10 +497,16 @@ export function ProductEditor({ product }: { product?: Product }) {
           <Card>
             <CardContent className="flex flex-col gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="p-judul">Judul</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="p-judul">Judul</Label>
+                  <span className={`text-xs tabular-nums ${counterClass(name.length, 100)}`}>
+                    {num(name.length)}/100
+                  </span>
+                </div>
                 <Input
                   id="p-judul"
                   value={name}
+                  maxLength={100}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Contoh: Kaos Polos Premium Cotton"
                 />
@@ -940,10 +950,16 @@ export function ProductEditor({ product }: { product?: Product }) {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="seo-title">Judul SEO</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="seo-title">Judul SEO</Label>
+                  <span className={`text-xs tabular-nums ${counterClass(seoTitle.length, 70)}`}>
+                    {num(seoTitle.length)}/70
+                  </span>
+                </div>
                 <Input
                   id="seo-title"
                   value={seoTitle}
+                  maxLength={70}
                   onChange={(e) => setSeoTitle(e.target.value)}
                   placeholder={name || "Judul produk"}
                 />
@@ -951,7 +967,7 @@ export function ProductEditor({ product }: { product?: Product }) {
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="seo-desc">Deskripsi meta</Label>
-                  <span className="text-xs text-muted-foreground tabular-nums">
+                  <span className={`text-xs tabular-nums ${counterClass(metaDesc.length, 160)}`}>
                     {num(metaDesc.length)}/160
                   </span>
                 </div>

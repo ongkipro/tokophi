@@ -18,6 +18,13 @@ const selectProduct = {
   price: schema.productVariants.priceIdr,
   stock: schema.inventoryLevels.available,
   image: schema.productMedia.url,
+  // editor read-back: fields the editor writes but used to seed fake defaults on reopen
+  description: schema.products.description,
+  productType: schema.products.productType,
+  vendor: schema.products.vendor,
+  compareAt: schema.productVariants.compareAtIdr,
+  cost: schema.productVariants.costIdr,
+  sku: schema.productVariants.sku,
 };
 
 function base(db: Tx) {
@@ -145,6 +152,13 @@ export async function getProduct(id: string): Promise<Product | null> {
       lengthCm: prod?.lengthCm ?? null,
       widthCm: prod?.widthCm ?? null,
       heightCm: prod?.heightCm ?? null,
+      // real values so the editor stops re-seeding fabricated defaults on reopen
+      description: rows[0].description ?? "",
+      productType: rows[0].productType ?? "",
+      vendor: rows[0].vendor ?? "",
+      compareAt: rows[0].compareAt ?? null,
+      cost: rows[0].cost ?? null,
+      sku: rows[0].sku ?? "",
     };
   });
 }

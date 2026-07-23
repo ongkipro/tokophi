@@ -48,6 +48,14 @@ function seedBody(title: string): string {
   return `Selamat datang di halaman ${title}. Halaman ini berisi informasi lengkap seputar ${title.toLowerCase()} untuk membantu pelanggan memahami toko kami.`;
 }
 
+const TITLE_LIMIT = 100;
+const SEO_TITLE_LIMIT = 70;
+const META_LIMIT = 160; // hard cap; 120–155 is the ideal window (see metaTone below)
+
+// Char-counter colour for the plain title fields: muted, amber near the cap, red at it.
+const counterClass = (len: number, max: number) =>
+  len >= max ? "text-red-500" : len >= max * 0.9 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground";
+
 export function PageEditor({ page }: { page?: CmsPage }) {
   const isEdit = Boolean(page);
   const canWrite = useCan("content:write");
@@ -168,11 +176,17 @@ export function PageEditor({ page }: { page?: CmsPage }) {
           <Card>
             <CardContent className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="judul">Judul</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="judul">Judul</Label>
+                  <span className={`text-xs tabular-nums ${counterClass(title.length, TITLE_LIMIT)}`}>
+                    {title.length}/{TITLE_LIMIT}
+                  </span>
+                </div>
                 <Input
                   id="judul"
                   placeholder="mis. Tentang Kami"
                   value={title}
+                  maxLength={TITLE_LIMIT}
                   onChange={(e) => setTitle(e.target.value)}
                 />
               </div>
@@ -212,11 +226,17 @@ export function PageEditor({ page }: { page?: CmsPage }) {
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="seo-title">Judul halaman (SEO)</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="seo-title">Judul halaman (SEO)</Label>
+                  <span className={`text-xs tabular-nums ${counterClass(seoTitle.length, SEO_TITLE_LIMIT)}`}>
+                    {seoTitle.length}/{SEO_TITLE_LIMIT}
+                  </span>
+                </div>
                 <Input
                   id="seo-title"
                   placeholder={title || "mis. Tentang Kami"}
                   value={seoTitle}
+                  maxLength={SEO_TITLE_LIMIT}
                   onChange={(e) => setSeoTitle(e.target.value)}
                 />
               </div>
@@ -225,7 +245,7 @@ export function PageEditor({ page }: { page?: CmsPage }) {
                 <div className="flex items-center justify-between">
                   <Label htmlFor="seo-desc">Deskripsi meta</Label>
                   <span className={`text-xs tabular-nums ${metaTone}`}>
-                    {metaLen} / 155
+                    {metaLen} / {META_LIMIT}
                   </span>
                 </div>
                 <Textarea
@@ -233,6 +253,7 @@ export function PageEditor({ page }: { page?: CmsPage }) {
                   placeholder="Ringkasan singkat yang muncul di hasil pencarian."
                   className="min-h-20"
                   value={metaDesc}
+                  maxLength={META_LIMIT}
                   onChange={(e) => setMetaDesc(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
