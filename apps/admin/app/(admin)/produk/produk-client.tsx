@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Plus, Upload, Search, LayoutGrid, List, ChevronDown, MoreHorizontal,
   Pencil, Copy, Archive, Package, CheckCircle2, AlertTriangle, Tags, Check,
-  ArrowUpDown, X, Trash2, CircleCheck, FileText, Calendar,
+  ArrowUpDown, X, Trash2, CircleCheck, FileText, Calendar, Sparkles,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
@@ -63,6 +63,23 @@ function StatusBadge({ status }: { status: Product["status"] }) {
   return status === "active"
     ? <Badge variant="secondary">Aktif</Badge>
     : <Badge variant="outline" className="text-muted-foreground">Draft</Badge>;
+}
+
+// Google Product Category on the listing (ADR 0011): the leaf when set, an actionable amber nudge when
+// not — an unclassified product is invisible to Google/Meta/TikTok feeds, so the seller should see it.
+const leafOf = (path?: string) => (path ? path.split(" > ").pop()! : "");
+function GoogleCatBadge({ path }: { path?: string }) {
+  if (path)
+    return (
+      <Badge variant="outline" className="gap-1 font-normal text-muted-foreground" title={path}>
+        <Sparkles className="size-3" /> {leafOf(path)}
+      </Badge>
+    );
+  return (
+    <Badge className="gap-1 border-amber-200 bg-amber-50 font-normal text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-400">
+      <AlertTriangle className="size-3" /> Perlu kategori Google
+    </Badge>
+  );
 }
 
 // A variant with no weight → the checkout prices its parcel with the 500 g fallback, which can be wrong
@@ -143,6 +160,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
   const [tab, setTab] = React.useState<TabKey>("all");
   const [sort, setSort] = React.useState<SortKey>("unggulan");
   const [dateRange, setDateRange] = React.useState<number>(0);
+  const [gcat, setGcat] = React.useState<"all" | "set" | "unset">("all"); // Google-taxonomy filter (feed health)
   const [view, setView] = React.useState<"grid" | "list">("list");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
 
@@ -151,6 +169,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
     active: products.filter((p) => p.status === "active").length,
     draft: products.filter((p) => p.status === "draft").length,
     low: products.filter((p) => p.stock < LOW_STOCK).length,
+    noGcat: products.filter((p) => !p.googleCategoryPath).length,
   }), []);
 
   const filtered = React.useMemo(() => {
@@ -162,6 +181,8 @@ export function ProdukClient({ products }: { products: Product[] }) {
       if (tab === "draft" && p.status !== "draft") return false;
       if (tab === "low" && p.stock >= LOW_STOCK) return false;
       if (dateRange > 0 && p.addedTs < TODAY.getTime() - dateRange * 86_400_000) return false;
+      if (gcat === "set" && !p.googleCategoryPath) return false;
+      if (gcat === "unset" && p.googleCategoryPath) return false;
       return true;
     });
     const sorted = [...arr];
@@ -171,7 +192,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
     else if (sort === "stok-asc") sorted.sort((a, b) => a.stock - b.stock);
     else if (sort === "terlaris") sorted.sort((a, b) => b.unitsSold - a.unitsSold);
     return sorted;
-  }, [search, category, tab, sort, dateRange]);
+  }, [search, category, tab, sort, dateRange, gcat]);
 
   const TABS: { key: TabKey; label: string; count: number }[] = [
     { key: "all", label: "Semua", count: counts.all },
@@ -201,8 +222,8 @@ export function ProdukClient({ products }: { products: Product[] }) {
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(visibleIds));
 
-  const hasFilters = search !== "" || category !== "all" || tab !== "all" || dateRange !== 0;
-  const resetFilters = () => { setSearch(""); setCategory("all"); setTab("all"); setDateRange(0); };
+  const hasFilters = search !== "" || category !== "all" || tab !== "all" || dateRange !== 0 || gcat !== "all";
+  const resetFilters = () => { setSearch(""); setCategory("all"); setTab("all"); setDateRange(0); setGcat("all"); };
 
   return (
     <div>
@@ -281,6 +302,18 @@ export function ProdukClient({ products }: { products: Product[] }) {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+              <Sparkles /> {gcat === "all" ? "Kategori Google" : gcat === "set" ? "Google: diatur" : "Google: belum"} <ChevronDown className="text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Kategori Google (feed)</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => setGcat("all")}>Semua {gcat === "all" && <Check className="ml-auto" />}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGcat("set")}>Sudah diatur {gcat === "set" && <Check className="ml-auto" />}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGcat("unset")}>Belum diatur ({num(counts.noGcat)}) {gcat === "unset" && <Check className="ml-auto" />}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Separator orientation="vertical" className="hidden h-6 sm:block" />
           <div className="flex items-center gap-1 rounded-lg border bg-background p-0.5">
             <Button variant={view === "grid" ? "secondary" : "ghost"} size="icon-sm" aria-label="Tampilan grid" aria-pressed={view === "grid"} onClick={() => setView("grid")}><LayoutGrid /></Button>
@@ -305,6 +338,11 @@ export function ProdukClient({ products }: { products: Product[] }) {
           {dateRange !== 0 && (
             <Badge variant="secondary" className="gap-1 pr-1">{DATE_RANGES.find((d) => d.days === dateRange)!.label}
               <button onClick={() => setDateRange(0)} className="rounded-full p-0.5 hover:bg-foreground/10" aria-label="Hapus filter tanggal"><X className="size-3" /></button>
+            </Badge>
+          )}
+          {gcat !== "all" && (
+            <Badge variant="secondary" className="gap-1 pr-1">Kategori Google: {gcat === "set" ? "diatur" : "belum"}
+              <button onClick={() => setGcat("all")} className="rounded-full p-0.5 hover:bg-foreground/10" aria-label="Hapus filter kategori Google"><X className="size-3" /></button>
             </Badge>
           )}
           {search && (
@@ -365,6 +403,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
                     <span className="text-sm font-semibold tabular-nums">{IDR(p.price)}</span>
                     <StockBadge stock={p.stock} />
                   </div>
+                  <div className="flex"><GoogleCatBadge path={p.googleCategoryPath} /></div>
                   {p.weightMissing && <WeightWarning />}
                 </div>
               </Card>
@@ -403,7 +442,10 @@ export function ProdukClient({ products }: { products: Product[] }) {
                           <div className="min-w-0">
                             <p className="truncate font-medium">{p.name}</p>
                             <p className="text-xs text-muted-foreground md:hidden">{p.category}</p>
-                            {p.weightMissing && <WeightWarning />}
+                            <div className="mt-1 flex flex-wrap items-center gap-1">
+                              <GoogleCatBadge path={p.googleCategoryPath} />
+                              {p.weightMissing && <WeightWarning />}
+                            </div>
                           </div>
                         </div>
                       </TableCell>
