@@ -58,8 +58,13 @@ const featured = catalog.bestsellers()[0];
 // links floating in an empty panel — efficient, and characterless, and two thirds air.
 // So: the plain links stay a compact 2-up block at the top (they are utility), and the categories get
 // the space, with the photo and the live count the desktop mega panel already shows.
-const DRAWER_LINKS = MAIN_NAV.filter((i) => !i.children?.length);
+// The drawer is MINIMALIST now (owner reference, 2026-07-23): large plain-text links, and the
+// categories live behind a "Kategori ›" row that drills into a sub-panel — the Shopify Dawn pattern.
+// So `MAIN_NAV` is rendered whole, in order; parents with children become the drill triggers.
 const DRAWER_GROUPS = MAIN_NAV.filter((i) => i.children?.length);
+// Two bestsellers for the foot strip — real data, server-rendered, no client fetch. The reference
+// shows a product strip at the bottom of the menu; these are it.
+const DRAWER_FEATURED = catalog.bestsellers().slice(0, 2);
 
 // Contact for the drawer's foot. Read straight off the store — no second copy of the footer's
 // normalising, because these two fields need none: `phone` is free text by design (a shop writes its
@@ -368,154 +373,172 @@ const drawerEmail = (store.email ?? "").trim() || null;
     role="dialog"
     aria-modal="true"
     aria-label="Menu navigasi"
-    class="fixed inset-y-0 right-0 z-50 flex w-[85%] max-w-sm translate-x-full flex-col bg-cream shadow-2xl transition-transform duration-300 ease-out"
+    class="fixed inset-y-0 right-0 z-50 flex w-full max-w-[26rem] translate-x-full flex-col bg-cream shadow-2xl transition-transform duration-300 ease-out"
   >
-    <div class="flex items-center justify-between border-b border-line px-5 py-4">
-      <a href="/" class="font-display text-xl font-semibold tracking-tight text-ink">
-        {logo ? <img src={logo} alt={store.name} class="h-8 w-auto max-w-[9rem] object-contain" /> : store.name}
-      </a>
+    {/* X on the LEFT, borderless — the minimalist reference. No logo in the menu header: the menu is
+        the shop's own space and a wordmark repeated from the bar is noise. `size-11` = the 44px floor. */}
+    <div class="flex items-center px-3 py-3">
       <button
         type="button"
         id="menu-close"
         aria-label="Tutup menu"
-        {/* `size-11` = 44px. It measured 38×38 — under the floor design audit #16 set for the whole
-            shop, on the control a shopper reaches for most often in here. */}
-        class="inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-line text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        class="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-ink transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
       >
-        <svg viewBox="0 0 24 24" class="h-5 w-5 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
+        <svg viewBox="0 0 24 24" class="size-6 fill-none stroke-current" stroke-width="1.6" aria-hidden="true">
           <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round" />
         </svg>
       </button>
     </div>
 
-    <nav aria-label="Navigasi seluler" class="flex-1 overflow-y-auto px-3 py-4">
-      {/* REMOVED: the drawer's own search form. The magnifier now sits in the header bar at EVERY
-          breakpoint, so a phone had two ways to search — one opening the ⌘K palette, one a plain
-          form — which is two controls that look like the same promise and behave differently. The
-          icon covers both paths: with JS it opens the palette, without JS it is a link to /cari,
-          which carries its own input for exactly this reason. */}
-
-      {/* TWO COLUMNS. The drawer is 85% of a phone (~306px at 360), and a one-per-row list pushed
-          "Kontak" below the fold on every phone — a shopper had to scroll a MENU. Paired up, the
-          whole thing fits in one screen, which is the only length a navigation menu should ever be.
-          A parent with children spans both columns: it opens a panel, and a panel that starts
-          half-way across the drawer has nowhere to put its thumbnails. */}
-      {/* Utility links, 2-up and quiet. One per row pushed "Kontak" below the fold on every phone —
-          a shopper had to scroll a MENU. */}
-      <ul class="grid grid-cols-2 gap-1.5">
-        {
-          DRAWER_LINKS.map((item) => (
-            <li>
-              <a
-                href={item.href}
-                aria-current={isActive(item.href!) ? "page" : undefined}
-                class:list={[
-                  /* `flex items-center` + a floor height, not `block`: in a 2-up grid the cells in a
-                     row stretch to match, so a label that wraps ("Semua Produk" at 138px) left its
-                     one-line neighbour pinned to the top of a taller box. */
-                  "flex min-h-12 items-center rounded-xl px-4 py-2.5 text-[0.95rem] leading-snug transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
-                  isActive(item.href!)
-                    ? "bg-brand-50 font-medium text-brand-700"
-                    : "text-ink hover:bg-brand-50/60 hover:text-brand-700",
-                ]}
-              >
-                {item.label}
-              </a>
-            </li>
-          ))
-        }
-      </ul>
-
-      {/* CATEGORIES ARE THE MENU, so they are visible — not folded behind a disclosure the way the
-          FOOTER's are. A footer is a directory and folding it saves a column's height; a shop's
-          mobile menu is the shop, and hiding what it sells behind a tap is hiding the answer the
-          shopper opened it for. Photo + live count, the same the desktop mega panel shows: a phone
-          is where most Indonesian shoppers browse and it should not get the stripped version. */}
-      {
-        DRAWER_GROUPS.map((group) => (
-          <div class="mt-6">
-            <p class="px-4 pb-1 text-[0.7rem] font-medium uppercase tracking-[0.12em] text-muted">
-              {group.label}
-            </p>
-            <ul class="flex flex-col gap-0.5">
-              {group.children!.map((child) => {
-                const meta = categoryMeta(child.href);
-                return (
+    {/* TWO PANELS in one drawer: the main list, and a Kategori sub-panel that slides over it — the
+        modern Shopify (Dawn) drill-down. Both live inside the same #mobile-drawer so focus stays
+        trapped in the modal; the script toggles `data-sub` on the wrapper to translate them, and
+        marks the off-screen panel `aria-hidden` so the focus trap skips it. */}
+    <div id="drawer-panels" class="relative flex-1 overflow-hidden">
+      {/* ── MAIN PANEL ─────────────────────────────────────────────────────────────────────────── */}
+      <div data-drawer-panel="main" class="absolute inset-0 flex flex-col overflow-y-auto transition-transform duration-300 ease-out">
+        <nav aria-label="Navigasi seluler" class="flex-1 px-6 pb-4 pt-2">
+          {/* MINIMALIST: large plain-text links, generous line-height, no thumbnails. A parent with
+              children is a button that drills into the Kategori panel — the categories are not shown
+              inline here, they are one tap away, exactly like the reference. */}
+          <ul class="flex flex-col">
+            {
+              MAIN_NAV.map((item) =>
+                item.children?.length ? (
+                  <li>
+                    <button
+                      type="button"
+                      data-drawer-drill
+                      aria-haspopup="true"
+                      aria-expanded="false"
+                      class="flex w-full items-center justify-between gap-4 py-2.5 text-left text-[1.6rem] font-normal leading-tight text-ink transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                    >
+                      {item.label}
+                      <ChevronRight class="size-6 shrink-0 text-muted" stroke-width={1.75} aria-hidden="true" />
+                    </button>
+                  </li>
+                ) : (
                   <li>
                     <a
-                      href={child.href}
-                      aria-current={isActive(child.href) ? "page" : undefined}
+                      href={item.href}
+                      aria-current={isActive(item.href!) ? "page" : undefined}
                       class:list={[
-                        "flex items-center gap-3 rounded-xl p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
-                        isActive(child.href) ? "bg-brand-50" : "hover:bg-brand-50/60",
+                        "block py-2.5 text-[1.6rem] font-normal leading-tight transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+                        isActive(item.href!) ? "text-brand-700" : "text-ink",
                       ]}
                     >
-                      <span class="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-50 ring-1 ring-line">
-                        {meta?.image ? (
-                          <img src={meta.image} alt="" loading="lazy" class="h-full w-full object-cover" />
-                        ) : (
-                          <ShoppingBag class="size-4 text-brand-400" stroke-width={1.75} aria-hidden="true" />
-                        )}
-                      </span>
-                      <span class="min-w-0 flex-1">
-                        <span
-                          class:list={[
-                            "block truncate text-[0.95rem]",
-                            isActive(child.href) ? "font-medium text-brand-700" : "text-ink",
-                          ]}
-                        >
-                          {child.label}
-                        </span>
-                        <span class="block text-xs text-muted tabular-nums">
-                          {meta ? (meta.count > 0 ? `${meta.count} produk` : "Segera hadir") : "Lihat koleksi"}
-                        </span>
-                      </span>
-                      <ChevronRight class="size-4 shrink-0 text-muted" stroke-width={2} aria-hidden="true" />
+                      {item.label}
                     </a>
                   </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))
-      }
-    </nav>
-
-    {/* The foot used to be an EMPTY bordered strip — the leftover of the "Akun" pill that was
-        removed for pointing at a fake login. A rule with nothing under it is a promise the panel does
-        not keep, so it now carries the ways to reach the shop, and disappears entirely when the
-        merchant has published none. (No WhatsApp button: it was deliberately taken out of the footer,
-        and the floating chat launcher already sits on every page.) */}
-    {
-      (drawerPhone || drawerEmail) && (
-        <div class="shrink-0 border-t border-line px-3 py-3">
-          <ul class="flex flex-col gap-0.5 text-sm">
-            {drawerPhone && (
-              <li>
-                <a
-                  href={`tel:${drawerPhone.replace(/[^\d+]/g, "")}`}
-                  class="flex min-h-11 items-center gap-3 rounded-xl px-4 text-ink transition-colors hover:bg-brand-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-                >
-                  <Phone class="size-4 shrink-0 text-muted" stroke-width={1.75} aria-hidden="true" />
-                  <span class="tabular-nums">{drawerPhone}</span>
-                </a>
-              </li>
-            )}
-            {drawerEmail && (
-              <li>
-                <a
-                  href={`mailto:${drawerEmail}`}
-                  class="flex min-h-11 items-center gap-3 rounded-xl px-4 text-ink transition-colors hover:bg-brand-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-                >
-                  <Mail class="size-4 shrink-0 text-muted" stroke-width={1.75} aria-hidden="true" />
-                  <span class="truncate">{drawerEmail}</span>
-                </a>
-              </li>
-            )}
+                ),
+              )
+            }
           </ul>
+        </nav>
+
+        {/* Foot strip: contact (when published) + two bestsellers as product cards — the reference's
+            bottom strip, but real data rather than "recently viewed" placeholders. */}
+        <div class="mt-auto">
+          {
+            (drawerPhone || drawerEmail) && (
+              <ul class="flex flex-col gap-0.5 border-t border-line px-4 py-3 text-sm">
+                {drawerPhone && (
+                  <li>
+                    <a
+                      href={`tel:${drawerPhone.replace(/[^\d+]/g, "")}`}
+                      class="flex min-h-11 items-center gap-3 rounded-xl px-2 text-ink transition-colors hover:bg-brand-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                    >
+                      <Phone class="size-4 shrink-0 text-muted" stroke-width={1.75} aria-hidden="true" />
+                      <span class="tabular-nums">{drawerPhone}</span>
+                    </a>
+                  </li>
+                )}
+                {drawerEmail && (
+                  <li>
+                    <a
+                      href={`mailto:${drawerEmail}`}
+                      class="flex min-h-11 items-center gap-3 rounded-xl px-2 text-ink transition-colors hover:bg-brand-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                    >
+                      <Mail class="size-4 shrink-0 text-muted" stroke-width={1.75} aria-hidden="true" />
+                      <span class="truncate">{drawerEmail}</span>
+                    </a>
+                  </li>
+                )}
+              </ul>
+            )
+          }
+          {
+            DRAWER_FEATURED.length > 0 && (
+              <div class="border-t border-line px-4 py-4">
+                <p class="px-1 pb-2 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-muted">Pilihan untuk kamu</p>
+                <div class="grid grid-cols-2 gap-3">
+                  {DRAWER_FEATURED.map((prod) => (
+                    <a
+                      href={`/produk/${prod.handle}`}
+                      class="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded-lg"
+                    >
+                      <span class="block aspect-[3/4] overflow-hidden rounded-lg bg-brand-50 ring-1 ring-line">
+                        {prod.image ? (
+                          <img src={prod.image} alt="" loading="lazy" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:group-hover:scale-100" />
+                        ) : (
+                          <span class="flex h-full w-full items-center justify-center">
+                            <ShoppingBag class="size-5 text-brand-300" stroke-width={1.5} aria-hidden="true" />
+                          </span>
+                        )}
+                      </span>
+                      <span class="mt-1.5 block truncate text-xs font-medium text-ink">{prod.name}</span>
+                      {prod.price > 0 && <span class="block text-xs tabular-nums text-muted">{IDR(prod.price)}</span>}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )
+          }
         </div>
-      )
-    }
+      </div>
+
+      {/* ── KATEGORI SUB-PANEL — slides over the main list ──────────────────────────────────────── */}
+      <div
+        data-drawer-panel="kategori"
+        aria-hidden="true"
+        class="absolute inset-0 flex translate-x-full flex-col overflow-y-auto bg-cream transition-transform duration-300 ease-out"
+      >
+        <button
+          type="button"
+          data-drawer-back
+          class="flex min-h-12 items-center gap-2 px-5 py-2 text-sm font-medium text-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        >
+          <ChevronRight class="size-4 rotate-180" stroke-width={2} aria-hidden="true" />
+          Kembali
+        </button>
+        <nav aria-label="Kategori" class="px-6 pb-6">
+          {
+            DRAWER_GROUPS.map((group) => (
+              <Fragment>
+                <p class="pb-1 pt-3 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-muted">{group.label}</p>
+                <ul class="flex flex-col">
+                  {group.children!.map((child) => (
+                    <li>
+                      <a
+                        href={child.href}
+                        aria-current={isActive(child.href) ? "page" : undefined}
+                        class:list={[
+                          "block py-2 text-[1.25rem] font-normal leading-snug transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+                          isActive(child.href) ? "text-brand-700" : "text-ink",
+                        ]}
+                      >
+                        {child.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </Fragment>
+            ))
+          }
+        </nav>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -555,17 +578,55 @@ const drawerEmail = (store.email ?? "").trim() || null;
     // keyboard or screen-reader user was told "modal dialog" and left standing in the page behind it.
     // Announcing modality you do not enforce is the half-working control this repo keeps paying for.
     var FOCUSABLE = 'a[href], button:not([disabled]), summary, input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    var panels = drawer.querySelector("#drawer-panels");
+    var mainPanel = drawer.querySelector('[data-drawer-panel="main"]');
+    var subPanel = drawer.querySelector('[data-drawer-panel="kategori"]');
+
     function focusables() {
       return Array.prototype.slice.call(drawer.querySelectorAll(FOCUSABLE)).filter(function (el) {
-        return el.offsetParent !== null; // skip anything inside a collapsed <details>
+        if (el.offsetParent === null) return false; // hidden (collapsed / display:none)
+        // The off-screen drill panel is still laid out (translate, not display:none), so exclude
+        // anything inside a panel currently marked aria-hidden — or Tab walks onto controls the
+        // shopper cannot see.
+        var hidden = el.closest('[aria-hidden="true"]');
+        return !(hidden && drawer.contains(hidden));
       });
     }
+
+    // ── DRILL-DOWN: main list ⇄ Kategori sub-panel ────────────────────────────────────────────
+    function showSub(on) {
+      if (!panels || !subPanel || !mainPanel) return;
+      // Translate both: main slides left, sub slides in from the right.
+      mainPanel.style.transform = on ? "translateX(-100%)" : "";
+      subPanel.style.transform = on ? "translateX(0)" : "";
+      subPanel.inert = !on;
+      mainPanel.inert = on;
+      subPanel.setAttribute("aria-hidden", on ? "false" : "true");
+      mainPanel.setAttribute("aria-hidden", on ? "true" : "false");
+      var drill = drawer.querySelector("[data-drawer-drill]");
+      if (drill) drill.setAttribute("aria-expanded", on ? "true" : "false");
+    }
+    drawer.querySelectorAll("[data-drawer-drill]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        showSub(true);
+        var back = subPanel && subPanel.querySelector("[data-drawer-back]");
+        if (back) back.focus();
+      });
+    });
+    drawer.querySelectorAll("[data-drawer-back]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        showSub(false);
+        var drill = drawer.querySelector("[data-drawer-drill]");
+        if (drill) drill.focus();
+      });
+    });
 
     function open() {
       overlay.classList.remove("pointer-events-none", "opacity-0");
       drawer.classList.remove("translate-x-full");
       openBtn.setAttribute("aria-expanded", "true");
       lockScroll();
+      showSub(false); // always open on the main list, never mid-drill
       // Into the panel, not at the top of it: the close button is the one control every shopper
       // wants within reach, and landing there means Escape is not the only way out.
       var first = drawer.querySelector("#menu-close") || focusables()[0];
@@ -576,6 +637,7 @@ const drawerEmail = (store.email ?? "").trim() || null;
       drawer.classList.add("translate-x-full");
       openBtn.setAttribute("aria-expanded", "false");
       unlockScroll();
+      showSub(false); // reset, so the next open starts on the main list
       // Focus goes back to what opened it. Without this a keyboard user is dropped at the top of the
       // document with no idea where they were.
       if (drawer.contains(document.activeElement)) openBtn.focus();
@@ -601,7 +663,16 @@ const drawerEmail = (store.email ?? "").trim() || null;
     document.addEventListener("keydown", function (e) {
       var isOpen = !drawer.classList.contains("translate-x-full");
       if (!isOpen) return;
-      if (e.key === "Escape") { close(); return; }
+      if (e.key === "Escape") {
+        if (subPanel && subPanel.getAttribute("aria-hidden") === "false") {
+          showSub(false);
+          var drill = drawer.querySelector("[data-drawer-drill]");
+          if (drill) drill.focus();
+        } else {
+          close();
+        }
+        return;
+      }
       if (e.key !== "Tab") return;
       // Wrap at the ends. Without this, Tab off the last item walks into the page the dialog says is
       // unavailable, and Shift+Tab off the first walks into the header.
