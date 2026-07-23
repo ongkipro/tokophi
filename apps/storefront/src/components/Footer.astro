@@ -12,7 +12,7 @@
 // This is the same failure the platform already shipped once: `wa.me/6281234567890` (the canonical
 // Indonesian dummy number) went out as a live WhatsApp button on every page of every store because a
 // missing value fell back to a placeholder. A missing channel is honest; a dead one is a lie.
-import { Mail, MapPin, Minus, Phone, Plus } from "@lucide/astro";
+import { Minus, Plus } from "@lucide/astro";
 import { getFooterNav, getMainNav } from "../data/nav";
 import SocialLinks from "./SocialLinks.astro";
 import { clamp } from "../lib/text";
@@ -106,18 +106,14 @@ const HEADING = "text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-cre
       There is no mailer and no list to join, so the button did literally nothing on every page of
       every store. Wiring it to an INSERT would not fix it: it would still promise an email nothing
       can send. (JSX comment, not HTML — an HTML comment ships to the browser.) */}
-  {/* A TEN-COLUMN TRACK — 3 / 2 / 2 / 3, i.e. 30 / 20 / 20 / 30.
-      Not an arbitrary split: it pairs the two CONTENT blocks at equal weight on the outside (who the
-      shop is, and how to reach it) and sets the two LINK LISTS between them. A symmetric frame reads
-      as a decision; four equal quarters read as a default.
-      The numbers also answer to the content: 30% is 341px at `max-w-7xl`, which fits five 44px social
-      icons on one row and gives the description a readable measure; 20% is 227px, comfortably past
-      the ~155px that "Kebijakan Pengembalian" needs. Ten columns because 30/20/20/30 divides by ten
-      exactly — a twelve-column track would have forced 3.6, and a fraction you have to round is a
-      grid arguing with its own numbers. */}
-  <div class="mx-auto grid max-w-7xl gap-x-10 gap-y-10 px-4 py-14 sm:px-6 md:grid-cols-2 lg:grid-cols-10 lg:gap-x-8 lg:py-16">
-    {/* ── 1. Identity — who this shop is, and nothing else ─────────────────────────────────────── */}
-    <div class="lg:col-span-3">
+  {/* FOUR TRACKS, brand-heavy on the left. The brand block (identity + social) needs the most room and
+      anchors the row; the three list/contact columns share the rest evenly-ish. `1.6 / 1 / 1 / 1.3`:
+      the brand leads, Menu + Informasi are equal narrow lists, and Contact gets a little extra for the
+      address lines. This replaced a 30/20/20/30 track whose 30%-wide Contact column, once social moved
+      under the logo, sat almost empty on the right — a void reads as a mistake, not a decision. */}
+  <div class="mx-auto grid max-w-7xl gap-x-10 gap-y-10 px-4 py-14 sm:px-6 md:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr] lg:gap-x-8 lg:py-16">
+    {/* ── 1. Identity — logo, one line about the shop, and where to follow it ─────────────────────── */}
+    <div>
       {
         store.logoUrl ? (
           <img src={store.logoUrl} alt={store.name} width="160" height="48" class="h-10 w-auto object-contain object-left" />
@@ -128,13 +124,16 @@ const HEADING = "text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-cre
       {/* CLAMPED ON A WORD. The Seller's "Deskripsi singkat" caps at 160 characters, so a merchant who
           writes to the cap stores a sentence ending mid-word — the demo's reads "…dari masing-masing
           da". 120 is the length that fills this column without turning a footer into a paragraph. */}
-      {tagline && <p class="mt-4 text-sm leading-relaxed text-cream/70">{tagline}</p>}
+      {tagline && <p class="mt-4 max-w-xs text-sm leading-relaxed text-cream/70">{tagline}</p>}
+      {/* SOCIAL lives under the brand — where a shopper looks to follow a shop, and (on a phone) near
+          the top of the footer rather than buried under two accordions. Renders only when set. */}
+      <SocialLinks socials={SOCIALS} storeName={store.name} class="mt-6" />
     </div>
 
     {/* ── 2. The MERCHANT'S main menu — the same tree the header renders ───────────────────────── */}
     {
       MENU.length > 0 && (
-        <details class="footer-acc border-t border-white/10 lg:col-span-2 lg:border-0" open>
+        <details class="footer-acc border-t border-white/10 lg:border-0" open>
           <summary class="footer-acc-summary flex list-none items-center justify-between gap-4 py-3.5 lg:py-0">
             <h2 class={HEADING}>Menu</h2>
             <Plus class="footer-acc-plus size-4 shrink-0 text-cream/60 lg:hidden" stroke-width={2} aria-hidden="true" />
@@ -163,7 +162,7 @@ const HEADING = "text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-cre
     {/* ── 3. The MERCHANT'S footer menu (admin → Navigasi), draft pages already dropped ────────── */}
     {
       PAGES.length > 0 && (
-        <details class="footer-acc border-t border-white/10 lg:col-span-2 lg:border-0" open>
+        <details class="footer-acc border-t border-white/10 lg:border-0" open>
           <summary class="footer-acc-summary flex list-none items-center justify-between gap-4 py-3.5 lg:py-0">
             <h2 class={HEADING}>Informasi</h2>
             <Plus class="footer-acc-plus size-4 shrink-0 text-cream/60 lg:hidden" stroke-width={2} aria-hidden="true" />
@@ -184,39 +183,35 @@ const HEADING = "text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-cre
       )
     }
 
-    {/* ── 4. Every way to reach this shop — contact, address, social ───────────────────────────
+    {/* ── 4. How to reach this shop — address then contact ───────────────────────────────────────
         Each row is computed above and rendered only when it holds something real. A merchant who has
         filled in nothing gets a shorter footer, never a "Hubungi kami" heading with nothing under it.
         `city` is the store's registered city, so in practice this column always says where the shop
-        is — but the guard stays, because "in practice" is not a guarantee. */}
+        is — but the guard stays, because "in practice" is not a guarantee. (Social moved under the
+        brand block above — a follow link belongs with the identity, not the mailing address.) */}
     {
-      (hasContact || addressLines.length > 0 || city || SOCIALS.length > 0) && (
-        <div class="lg:col-span-3">
+      (hasContact || addressLines.length > 0 || city) && (
+        <div>
           <h2 class={HEADING}>Hubungi kami</h2>
 
-          {/* ORDER: ADDRESS → CONTACT → SOCIAL. Where the shop IS comes first because it is the
-              slowest thing to establish and the one a shopper checks before trusting an unknown
-              store; the ways to reach it follow; the profiles come last because they lead AWAY from
-              the page. (The "Hubungi via WhatsApp" button that used to open this column was removed
-              2026-07-22 — WhatsApp is still on the floating chat launcher and /kontak, and remains the
-              channel these merchants sell on. A footer layout decision, not a change of channel.) */}
+          {/* ORDER: ADDRESS → CONTACT. Where the shop IS comes first because it is the slowest thing
+              to establish and the one a shopper checks before trusting an unknown store; the ways to
+              reach it follow. (The "Hubungi via WhatsApp" button that used to open this column was
+              removed 2026-07-22 — WhatsApp is still on the floating chat launcher and /kontak, and
+              remains the channel these merchants sell on. A footer layout decision, not a channel one.) */}
+          {/* FLUSH-LEFT, NO LEADING ICONS. Every line — address, phone, email — starts at the same x as
+              the "Hubungi kami" heading, so this column shares the exact left rail as Menu and Informasi
+              beside it. Leading icons pushed the text ~24px in and the column read as misaligned against
+              its own heading. The section heading already labels what these are. */}
           {
             addressLines.length > 0 ? (
-              <address class="mt-3 flex gap-2 text-sm not-italic leading-relaxed text-cream/75">
-                <MapPin class="mt-0.5 size-4 shrink-0 text-cream/60" stroke-width={1.75} aria-hidden="true" />
-                <span>
-                  {addressLines.map((line) => (
-                    <span class="block">{line}</span>
-                  ))}
-                </span>
+              <address class="mt-3 text-sm not-italic leading-relaxed text-cream/75">
+                {addressLines.map((line) => (
+                  <span class="block">{line}</span>
+                ))}
               </address>
             ) : (
-              city && (
-                <p class="mt-3 flex items-center gap-2 text-sm text-cream/75">
-                  <MapPin class="size-4 shrink-0 text-cream/60" stroke-width={1.75} aria-hidden="true" />
-                  {city}, Indonesia
-                </p>
-              )
+              city && <p class="mt-3 text-sm text-cream/75">{city}, Indonesia</p>
             )
           }
 
@@ -224,8 +219,7 @@ const HEADING = "text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-cre
             <ul class="mt-3 text-sm">
               {telHref && phone && (
                 <li>
-                  <a href={telHref} class={`${LINK} gap-2`}>
-                    <Phone class="size-4 shrink-0 text-cream/60" stroke-width={1.75} aria-hidden="true" />
+                  <a href={telHref} class={LINK}>
                     <span class="tabular-nums">{phone}</span>
                   </a>
                 </li>
@@ -235,16 +229,13 @@ const HEADING = "text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-cre
                   {/* `mailto:` and nothing else — no obfuscation. Address-harvesting scrapers parse
                       the same JS tricks that would break the link for a real shopper, and a merchant
                       who typed this field wants to be written to. */}
-                  <a href={`mailto:${email}`} class={`${LINK} gap-2`}>
-                    <Mail class="size-4 shrink-0 text-cream/60" stroke-width={1.75} aria-hidden="true" />
+                  <a href={`mailto:${email}`} class={LINK}>
                     <span class="break-all">{email}</span>
                   </a>
                 </li>
               )}
             </ul>
           )}
-
-          <SocialLinks socials={SOCIALS} storeName={store.name} class="mt-4" />
         </div>
       )
     }
