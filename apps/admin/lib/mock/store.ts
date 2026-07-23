@@ -94,6 +94,8 @@ export type Product = {
   description?: string;
   productType?: string;
   vendor?: string;
+  seoTitle?: string;
+  seoDesc?: string;
   compareAt?: number | null;
   cost?: number | null;
   sku?: string;

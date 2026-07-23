@@ -211,6 +211,8 @@ export const products = pgTable(
     productType: text(),
     vendor: text(),
     category: text(),
+    seoTitle: text(), // ≤70 chars (editor caps it); storefront <title> prefers this over `title`
+    seoDesc: text(), // ≤160 chars; storefront meta description prefers this over `description`
     emoji: text(), // display fallback (mirrors storefront)
     unitsSold: integer().notNull().default(0), // rollup cache (from order_line_items; seeded for demo)
     sizes: jsonb(), // storefront size options e.g. ["S","M","L"] / ["All Size"]
