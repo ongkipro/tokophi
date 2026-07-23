@@ -135,7 +135,9 @@ const offers =
 // store), matching the voice /kategori/[handle] uses for a blank blurb ("Koleksi <name> di <store>.").
 // The VISIBLE <p> below stays empty-guarded — this fallback is for the crawler, not the shopper.
 const metaDescription =
-  product.description.trim() || `${product.name} — ${product.category} di ${store.name}.`;
+  product.seoDesc?.trim() || product.description.trim() || `${product.name} — ${product.category} di ${store.name}.`;
+// SEO title override (merchant-set, ≤70 chars); falls back to the product name.
+const seoTitle = product.seoTitle?.trim() || product.name;
 
 const productLd: Record<string, unknown> = {
   "@context": "https://schema.org",
@@ -170,7 +172,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
 ---
 
 <Layout
-  title={product.name}
+  title={seoTitle}
   description={metaDescription}
   image={product.image}
   type="product"

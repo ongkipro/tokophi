@@ -45,6 +45,8 @@ export type Product = {
   categoryHandle: string;
   image: string;
   description: string;
+  seoTitle?: string; // merchant SEO override; storefront <title> prefers it over `name`
+  seoDesc?: string; // merchant meta-description override; prefers it over `description`
   sizes: string[];
   badge?: string;
   /** ⚠️ A merchant FLAG, and it disagrees with the data: the demo flags hijab-voal (321 sold) and
@@ -257,6 +259,8 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       handle: schema.products.handle,
       name: schema.products.title,
       description: schema.products.description,
+      seoTitle: schema.products.seoTitle,
+      seoDesc: schema.products.seoDesc,
       category: schema.products.category,
       sizes: schema.products.sizes,
       badge: schema.products.badge,
@@ -364,6 +368,8 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       // Callers render a placeholder instead — never fabricate a URL you have not been given.
       image: r.image ? mediaUrl(r.image) : "",
       description: r.description ?? "",
+      seoTitle: r.seoTitle ?? undefined,
+      seoDesc: r.seoDesc ?? undefined,
       sizes: (r.sizes as string[] | null) ?? [],
       badge: r.badge ?? undefined,
       bestseller: r.bestseller,

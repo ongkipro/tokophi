@@ -21,6 +21,8 @@ export type ProductInput = {
   category: string;
   productType?: string;
   vendor?: string;
+  seoTitle?: string;
+  seoDesc?: string;
   handle: string;
   price: number;
   compareAt?: number | null;
@@ -49,6 +51,8 @@ const productFields = (i: ProductInput) => ({
   category: i.category || null,
   productType: i.productType || null,
   vendor: i.vendor || null,
+  seoTitle: i.seoTitle || null,
+  seoDesc: i.seoDesc || null,
   lengthCm: i.lengthCm ?? null,
   widthCm: i.widthCm ?? null,
   heightCm: i.heightCm ?? null,
