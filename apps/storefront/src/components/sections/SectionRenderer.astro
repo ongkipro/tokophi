@@ -19,6 +19,7 @@ import ImageText from "./ImageText.astro";
 import Marquee from "./Marquee.astro";
 import RichText from "./RichText.astro";
 import CategoryNav from "./CategoryNav.astro";
+import CollectionBento from "./CollectionBento.astro";
 import Blog from "./Blog.astro";
 
 interface Props {
@@ -48,6 +49,8 @@ const { data, context = HOMEPAGE_CONTEXT } = Astro.props;
         return <RichText {...item.props} />;
       case "category-nav":
         return <CategoryNav {...item.props} />;
+      case "collection-bento":
+        return <CollectionBento {...item.props} />;
       case "blog":
         return <Blog {...item.props} />;
     }

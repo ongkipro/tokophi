@@ -8,6 +8,7 @@ import { ImageText } from "@/components/theme/sections/ImageText";
 import { Marquee } from "@/components/theme/sections/Marquee";
 import { RichText } from "@/components/theme/sections/RichText";
 import { CategoryNav } from "@/components/theme/sections/CategoryNav";
+import { CollectionBento } from "@/components/theme/sections/CollectionBento";
 import { Blog } from "@/components/theme/sections/Blog";
 
 // ADR 0009 — the Puck `Config` is the admin-side half of the section registry
@@ -219,6 +220,14 @@ export const puckConfig: Config<SectionConfigMap> = {
       },
       defaultProps: SECTION_DEFAULTS["category-nav"],
       render: (props) => <CategoryNav {...props} />,
+    },
+    "collection-bento": {
+      label: "Bento Koleksi",
+      fields: {
+        heading: { type: "text", label: "Judul" },
+      },
+      defaultProps: SECTION_DEFAULTS["collection-bento"],
+      render: (props) => <CollectionBento {...props} />,
     },
     blog: {
       // "Jurnal" — the shopper-facing word. `/blog`'s own H1 says Jurnal; the merchant's editor for

@@ -34,22 +34,24 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
     column — on a 1920px screen an input 1900px wide is not "using the space", it is losing the eye
     between the magnifier and the caret. The surface goes edge to edge; the reading measure does not.
 
-    ⚠️ HEIGHT TRACKS THE *VISUAL* VIEWPORT, NOT `100dvh`. `dvh` accounts for the phone URL bar but
-    NOT the on-screen keyboard — so a `100dvh` sheet stays full height while the keyboard covers the
-    bottom ~40%, and the results below the keyboard line scroll into dead space nobody can reach. The
-    script sets `--sp-h` to `visualViewport.height` and updates it as the keyboard slides in and out,
-    so the whole palette lives in the space that is actually visible and the results scroll ABOVE the
-    keyboard. `100dvh` is the fallback for the (older) browsers without `visualViewport`. */}
+    ⚠️ TWO HEIGHTS, on purpose. The DIALOG is a full-screen opaque sheet (`h-[100dvh]`) so the shop
+    behind it is ALWAYS covered — even the strip the on-screen keyboard will overlay. The INNER column
+    is the one that tracks the *visual* viewport (`--sp-h` = `visualViewport.height`): the input pins to
+    the visible top and the results scroll in exactly the space ABOVE the keyboard. Earlier the DIALOG
+    itself was only `--sp-h` tall, so below it — between the last result and the keyboard — the page
+    bled through and scrolled (seen on a real iPhone, 2026-07-23). Covering the whole screen with the
+    sheet and bounding only the CONTENT means the worst case is "a result sits under the keyboard", never
+    "the store shows through". `100dvh` is the fallback where `visualViewport` is absent. */}
 <dialog
   id="search-palette"
   data-search-dialog
   aria-label="Cari produk"
-  style="height: var(--sp-h, 100dvh);"
-  class="fixed inset-x-0 top-0 m-0 max-h-none w-screen max-w-none overscroll-contain rounded-none border-0 bg-cream p-0 text-ink"
+  class="fixed inset-x-0 top-0 m-0 h-[100dvh] max-h-none w-screen max-w-none overscroll-contain rounded-none border-0 bg-cream p-0 text-ink"
 >
-  {/* `min-h-0` on the scroller is what makes the phone keyboard behave: the results area SHRINKS
-      instead of pushing the input off the top of the screen. */}
-  <div class="flex h-full flex-col">
+  {/* The INNER column is what visualViewport sizes (`--sp-h`) + shifts (`translateY(offsetTop)`); the
+      sheet above stays pinned full-screen. `min-h-0` on the scroller lets the results area SHRINK
+      instead of pushing the input off the top of the screen when the keyboard opens. */}
+  <div data-sp-inner style="height: var(--sp-h, 100dvh);" class="flex flex-col overflow-hidden">
     <div class="shrink-0 border-b border-line">
       <div class="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 sm:px-6">
         <Search class="size-5 shrink-0 text-muted" stroke-width={1.8} aria-hidden="true" />
@@ -330,9 +332,10 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
     }
     // ⚠️ On the `close` EVENT, not inside the close button's handler: Escape closes a <dialog>
     // natively and never runs our button code. Hooking the button alone locks the page forever.
+    var inner = dialog.querySelector("[data-sp-inner]");
     dialog.addEventListener("close", function () {
       unlockScroll();
-      dialog.style.transform = "";
+      if (inner) inner.style.transform = "";
       dialog.style.removeProperty("--sp-h");
     });
 
@@ -345,8 +348,11 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
     var vv = window.visualViewport;
     function syncViewport() {
       if (!vv) return;
+      // `--sp-h` sizes the INNER column (inherited via the CSS var); `offsetTop` shifts it down so the
+      // input stays at the visible top when iOS scrolls the layout viewport under the keyboard. The
+      // full-screen sheet itself never moves — it must keep covering the store behind it.
       dialog.style.setProperty("--sp-h", vv.height + "px");
-      dialog.style.transform = vv.offsetTop ? "translateY(" + vv.offsetTop + "px)" : "";
+      if (inner) inner.style.transform = vv.offsetTop ? "translateY(" + vv.offsetTop + "px)" : "";
     }
     if (vv) {
       vv.addEventListener("resize", syncViewport);
