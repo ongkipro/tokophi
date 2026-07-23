@@ -19,6 +19,7 @@
     "seed:reviews": "dotenv -e ../../.env -- tsx src/seed-reviews.ts",
     "seed:templates": "dotenv -e ../../.env -- tsx src/seed-templates.ts",
     "seed:journal": "dotenv -e ../../.env -- tsx src/seed-journal.ts",
+    "seed:taxonomy": "dotenv -e ../../.env -- tsx src/seed-taxonomy.ts",
     "seed:products": "dotenv -e ../../.env -- tsx src/seed-products.ts",
     "verify-rls": "dotenv -e ../../.env -- tsx src/verify-rls.ts",
     "verify-rls-app": "dotenv -e ../../.env -- tsx src/verify-rls-app.ts",
@@ -26,6 +27,7 @@
     "verify-migrations": "dotenv -e ../../.env -- tsx src/verify-migrations.ts"
   },
   "dependencies": {
+    "@tokophi/lib": "*",
     "drizzle-orm": "^0.36.4",
     "postgres": "^3.4.5"
   },

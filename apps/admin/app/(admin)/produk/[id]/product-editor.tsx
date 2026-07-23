@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { IDR, num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { useStoreName } from "@/components/admin/store-context";
+import { GoogleCategoryField } from "./taxonomy-field";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
@@ -162,6 +163,9 @@ export function ProductEditor({ product }: { product?: Product }) {
   const [chOnline, setChOnline] = React.useState(true);
 
   const [category, setCategory] = React.useState(product?.category ?? "Fashion");
+  // Standard Google taxonomy (ADR 0011) — separate from the merchant's own `category` above.
+  const [gcatId, setGcatId] = React.useState<number | null>(product?.googleCategoryId ?? null);
+  const [gcatPath, setGcatPath] = React.useState(product?.googleCategoryPath ?? "");
   const [productType, setProductType] = React.useState(product?.productType ?? "");
   const [vendor, setVendor] = React.useState(product?.vendor || storeName);
   const [tags, setTags] = React.useState("");
@@ -212,6 +216,8 @@ export function ProductEditor({ product }: { product?: Product }) {
       vendor,
       seoTitle: seoTitle.trim() || undefined,
       seoDesc: metaDesc.trim() || undefined,
+      googleCategoryId: gcatId,
+      googleCategoryPath: gcatPath || undefined,
       handle: handle || slugify(name),
       price: Number(price) || 0,
       compareAt: compareAt ? Number(compareAt) : null,
@@ -1102,6 +1108,13 @@ export function ProductEditor({ product }: { product?: Product }) {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
+              <GoogleCategoryField
+                value={gcatId}
+                path={gcatPath}
+                title={name}
+                category={category}
+                onChange={(id, p) => { setGcatId(id); setGcatPath(p); }}
+              />
               <div className="grid gap-2">
                 <Label htmlFor="p-tipe">Tipe produk</Label>
                 <Input

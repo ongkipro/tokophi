@@ -505,6 +505,13 @@
       "when": 1784804351593,
       "tag": "0071_product_seo",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1784811383281,
+      "tag": "0072_product_taxonomy",
+      "breakpoints": true
     }
   ]
 }

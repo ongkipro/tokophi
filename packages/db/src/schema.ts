@@ -210,9 +210,13 @@ export const products = pgTable(
     status: productStatus().notNull().default("active"),
     productType: text(),
     vendor: text(),
-    category: text(),
+    category: text(), // the MERCHANT's own free-text label (their shelves) — NOT a standard taxonomy
     seoTitle: text(), // ≤70 chars (editor caps it); storefront <title> prefers this over `title`
     seoDesc: text(), // ≤160 chars; storefront meta description prefers this over `description`
+    // Standard taxonomy for Google/Meta/TikTok feeds (ADR 0011) — separate from `category`.
+    // `google_category_id` is Google Product Taxonomy's own numeric id; the path is cached for feeds.
+    googleCategoryId: integer().references((): AnyPgColumn => productTaxonomy.id),
+    googleCategoryPath: text(),
     emoji: text(), // display fallback (mirrors storefront)
     unitsSold: integer().notNull().default(0), // rollup cache (from order_line_items; seeded for demo)
     sizes: jsonb(), // storefront size options e.g. ["S","M","L"] / ["All Size"]
@@ -1023,6 +1027,22 @@ export const kelurahan = pgTable(
   (t) => ({
     districtIdx: index("kelurahan_district_idx").on(t.districtId),
   }),
+);
+
+// Google Product Taxonomy (ADR 0011) — GLOBAL reference data, NOT store-scoped (no RLS, same class
+// as kiriminaja_areas/kelurahan). `id` IS Google's own numeric category id; seeded from the committed
+// packages/db/data/google-taxonomy.en-US.txt via seed-taxonomy.ts. Products reference it by id.
+export const productTaxonomy = pgTable(
+  "product_taxonomy",
+  {
+    id: integer().primaryKey(), // Google's numeric id (e.g. 2271 = Apparel > Clothing > Dresses)
+    path: text().notNull(), // "Apparel & Accessories > Clothing > Dresses"
+    name: text().notNull(), // leaf: "Dresses"
+    parentId: integer(),
+    isLeaf: boolean().notNull().default(true),
+  },
+  // The picker searches by path substring; ILIKE on 5.6k rows is fine but the index keeps it snappy.
+  (t) => ({ pathIdx: index("product_taxonomy_path_idx").on(t.path) }),
 );
 
 export const shippingAggregator = pgTable("shipping_aggregator", {
