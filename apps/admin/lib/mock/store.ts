@@ -96,6 +96,8 @@ export type Product = {
   vendor?: string;
   seoTitle?: string;
   seoDesc?: string;
+  googleCategoryId?: number | null;
+  googleCategoryPath?: string;
   compareAt?: number | null;
   cost?: number | null;
   sku?: string;

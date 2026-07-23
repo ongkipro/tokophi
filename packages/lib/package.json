@@ -10,6 +10,7 @@
     "./autolaris": "./src/autolaris.ts",
     "./cache": "./src/cache.ts",
     "./couriers": "./src/couriers.ts",
+    "./taxonomy-suggest": "./src/taxonomy-suggest.ts",
     "./billing": "./src/billing.ts",
     "./tax": "./src/tax.ts",
     "./form-config": "./src/form-config.ts",
