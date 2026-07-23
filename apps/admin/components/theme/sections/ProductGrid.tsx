@@ -30,12 +30,16 @@ export function ProductGrid({ heading, mode, limit, columns, imageRatio = "3:4" 
               {/* title — two lines (line-clamp-2 min-h on the real card) */}
               <div className="h-3 w-3/4 rounded bg-line" />
               <div className="h-3 w-1/2 rounded bg-line" />
-              {/* compact rating — ONE filled amber star + value + count, not five stars */}
+              {/* rating — five amber stars + value/count, marketplace style (mirrors Stars.astro) */}
               <div className="flex items-center gap-1 pt-0.5">
-                <svg viewBox="0 0 20 20" className="size-3.5 shrink-0 fill-amber-400" aria-hidden="true">
-                  <path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1.99 5.79L10 14.77l-5.2 2.73.99-5.79L1.58 7.62l5.82-.85L10 1.5Z" />
-                </svg>
-                <div className="h-2 w-10 rounded bg-line" />
+                <div className="flex gap-0.5">
+                  {[0, 1, 2, 3, 4].map((s) => (
+                    <svg key={s} viewBox="0 0 20 20" className="size-3.5 shrink-0 fill-amber-400" aria-hidden="true">
+                      <path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1.99 5.79L10 14.77l-5.2 2.73.99-5.79L1.58 7.62l5.82-.85L10 1.5Z" />
+                    </svg>
+                  ))}
+                </div>
+                <div className="h-2 w-8 rounded bg-line" />
               </div>
               {/* price — bolder ink figure */}
               <div className="h-3.5 w-2/5 rounded bg-brand-200" />

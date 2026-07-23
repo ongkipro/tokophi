@@ -2,6 +2,7 @@
 import { IDR } from "@tokophi/lib/format";
 import { ImageOff } from "@lucide/astro";
 import { imageSrcSet, inStock, type Product } from "../data/catalog";
+import Stars from "./Stars.astro";
 
 interface Props {
   product: Product;
@@ -168,25 +169,10 @@ const discount =
     <Heading class="mt-1 line-clamp-2 min-h-[2.5rem] text-sm font-medium leading-snug text-ink transition-colors group-hover:text-brand-700">
       {product.name}
     </Heading>
-    {/* RATING — one filled star + the number + count, not a five-star row. On a flat card the five
-        outlines competed with the price for weight; a single star reads as "rated 4.8" at a glance and
-        keeps the card quiet. No published reviews → NO rating at all (never an invented 4.5, never
-        "0 ulasan · ☆☆☆☆☆", which reads as a bad product rather than a new one). */}
-    {
-      rating && (
-        <div
-          class="mt-1.5 flex items-center gap-1 text-xs"
-          role="img"
-          aria-label={`Rating ${rating.value.toFixed(1)} dari 5${rating.count != null ? `, ${rating.count} ulasan` : ""}`}
-        >
-          <svg viewBox="0 0 20 20" class="size-3.5 shrink-0 fill-amber-400" aria-hidden="true">
-            <path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1.99 5.79L10 14.77l-5.2 2.73.99-5.79L1.58 7.62l5.82-.85L10 1.5Z" />
-          </svg>
-          <span class="font-semibold tabular-nums text-ink" aria-hidden="true">{rating.value.toFixed(1)}</span>
-          {rating.count != null && <span class="text-muted" aria-hidden="true">({rating.count})</span>}
-        </div>
-      )
-    }
+    {/* RATING — the full five-star row a marketplace shopper reads at a glance (★★★★★ 4.8 (3)),
+        with a fractional fill for the partial star. No published reviews → NO rating at all (never an
+        invented 4.5, never "0 ulasan · ☆☆☆☆☆", which reads as a bad product rather than a new one). */}
+    {rating && <Stars value={rating.value} count={rating.count} size="sm" class="mt-1.5" />}
     {/* PRICE — the current price leads in ink; a compare-at follows, smaller and struck. `flex-wrap` so
         a two-price row never clips on a 2-up phone grid (it did, `nowrap`, on every phone: the struck
         price ran past the 124px column). `gap-y-0.5` keeps a wrapped second line tight. Unpriced → a
