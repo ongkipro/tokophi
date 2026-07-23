@@ -154,3 +154,23 @@ Shopify/Apple:
 
 Diverifikasi: 1280 4-up + kartu ke-5 intip, klik next geser 1 kartu, prev disabled di awal / next
 disabled di ujung; mobile peek + tanpa panah; 1440 dalam lebar tema; 0 pageerror; `astro check` 0 error.
+
+---
+
+## Ronde 5 — search full-layar & latar terkunci di iOS (pemilik)
+
+> "ini mobile search icon → samakan dengan sistemnya burger menu. saat ini search belum full, dan
+>  ketika di scroll bg ikut ke scroll."
+
+**Akar masalah:** lock lama = `documentElement { overflow:hidden }`. Itu **diabaikan iOS Safari** untuk
+scroll sentuh — makanya latar tetap ikut jalan di HP saat search terbuka. Drawer memakai lock yang
+sama, jadi ia pun bocor (cuma tak terasa karena isinya pendek).
+
+**Perbaikan (dipasang di search DAN drawer — "samakan sistemnya"):** lock andal `body { position:fixed;
+top:-scrollY; width:100% }`, posisi dipulihkan (`scrollTo`) saat ditutup. Ini metode yang benar-benar
+menahan di setiap engine. Dialog juga dipaku `fixed inset-x-0 top-0` + `overscroll-contain` supaya
+benar-benar full tanpa celah dan scroll di dalam tak merembet.
+
+### Diverifikasi (emulasi mobile 390, digulir dulu ke 600 sebelum buka)
+search buka **390×844@top0** (full) · `body position:fixed top:-600px` · **latar tak bergerak** saat
+digulir · tutup **memulihkan scrollY ke 600** · drawer body-fixed saat buka, reset saat tutup · 0 error.

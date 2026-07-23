@@ -45,7 +45,7 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
   data-search-dialog
   aria-label="Cari produk"
   style="height: var(--sp-h, 100dvh);"
-  class="m-0 max-h-none w-screen max-w-none rounded-none border-0 bg-cream p-0 text-ink"
+  class="fixed inset-x-0 top-0 m-0 max-h-none w-screen max-w-none overscroll-contain rounded-none border-0 bg-cream p-0 text-ink"
 >
   {/* `min-h-0` on the scroller is what makes the phone keyboard behave: the results area SHRINKS
       instead of pushing the input off the top of the screen. */}
@@ -301,24 +301,32 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
       }
     });
 
-    // LOCK THE PAGE BEHIND IT. `showModal()` makes the rest of the document *inert* — it cannot be
-    // clicked or tabbed into — but scrolling is not an interaction with an element, and it leaks:
-    // measured in Chromium at both 1280 and 390, the wheel moved the page from scrollY 0 to 600 with
-    // the palette open. So the lock is ours to apply.
-    //
-    // Hiding the scrollbar also takes its WIDTH away, which shifts the whole layout left. Invisible
-    // while the opaque palette covers it, and a visible jump the moment it closes — so the width is
-    // handed back as padding. (0 on overlay-scrollbar platforms, ~15px on a classic desktop one.)
+    // LOCK THE PAGE BEHIND IT — the iOS-safe way. `overflow:hidden` on <html>/<body> is IGNORED by
+    // iOS Safari for touch scrolling, so the background kept moving behind the open panel. Pinning the
+    // BODY at `position:fixed; top:-scrollY` is the method that actually holds on every engine; the
+    // scroll position is put back on unlock. The desktop scrollbar's width is handed back as padding
+    // so the layout does not jump when it disappears.
+    var _savedScrollY = 0;
     function lockScroll() {
-      var root = document.documentElement;
-      var gap = window.innerWidth - root.clientWidth;
-      root.style.overflow = "hidden";
-      if (gap > 0) root.style.paddingRight = gap + "px";
+      _savedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      var gap = window.innerWidth - document.documentElement.clientWidth;
+      var body = document.body;
+      body.style.position = "fixed";
+      body.style.top = -_savedScrollY + "px";
+      body.style.left = "0";
+      body.style.right = "0";
+      body.style.width = "100%";
+      if (gap > 0) body.style.paddingRight = gap + "px";
     }
     function unlockScroll() {
-      var root = document.documentElement;
-      root.style.overflow = "";
-      root.style.paddingRight = "";
+      var body = document.body;
+      body.style.position = "";
+      body.style.top = "";
+      body.style.left = "";
+      body.style.right = "";
+      body.style.width = "";
+      body.style.paddingRight = "";
+      window.scrollTo(0, _savedScrollY);
     }
     // ⚠️ On the `close` EVENT, not inside the close button's handler: Escape closes a <dialog>
     // natively and never runs our button code. Hooking the button alone locks the page forever.
