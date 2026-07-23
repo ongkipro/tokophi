@@ -166,8 +166,8 @@ export function ProductEditor({ product }: { product?: Product }) {
   const [vendor, setVendor] = React.useState(product?.vendor || storeName);
   const [tags, setTags] = React.useState("");
 
-  const [seoTitle, setSeoTitle] = React.useState("");
-  const [metaDesc, setMetaDesc] = React.useState("");
+  const [seoTitle, setSeoTitle] = React.useState(product?.seoTitle ?? "");
+  const [metaDesc, setMetaDesc] = React.useState(product?.seoDesc ?? "");
   const [handle, setHandle] = React.useState(
     product ? (product.handle ?? slugify(product.name)) : ""
   );
@@ -210,6 +210,8 @@ export function ProductEditor({ product }: { product?: Product }) {
       category,
       productType,
       vendor,
+      seoTitle: seoTitle.trim() || undefined,
+      seoDesc: metaDesc.trim() || undefined,
       handle: handle || slugify(name),
       price: Number(price) || 0,
       compareAt: compareAt ? Number(compareAt) : null,
