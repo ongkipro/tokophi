@@ -4,6 +4,26 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* STOREFRONT DESIGN TOKENS — so the Store Builder section previews render in the SAME palette the
+   storefront uses (a rose/pink brand, warm ink text, cream surface, hairline `line`) instead of the
+   admin's stone. These are the STATIC DEFAULT values from apps/storefront/src/styles/global.css; the
+   storefront overrides `--color-brand-*` per store at runtime, but a template preview should show the
+   default brand. `muted` is deliberately omitted — that name belongs to shadcn here — so the previews
+   use `text-ink/60` for secondary text. Only classes like `bg-brand-100`/`text-ink`/`ring-line` used
+   INSIDE the preview components are affected; the admin chrome keeps its own palette. */
+@theme {
+  --color-cream: #faf6f2;
+  --color-ink: #2b2326;
+  --color-line: #ece3dd;
+  --color-brand-50: #fdf2f5;
+  --color-brand-100: #fbe6ec;
+  --color-brand-200: #f5cdd8;
+  --color-brand-400: #d98aa1;
+  --color-brand-500: #c4708a;
+  --color-brand-600: #a85572;
+  --color-brand-700: #8a445d;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

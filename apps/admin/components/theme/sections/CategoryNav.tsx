@@ -11,14 +11,14 @@ export function CategoryNav({ items }: CategoryNavConfig) {
         {items.map((item, i) => (
           <div
             key={i}
-            className="group relative block aspect-[4/5] overflow-hidden rounded-md bg-gradient-to-br from-stone-300 to-stone-100"
+            className="group relative block aspect-[4/5] overflow-hidden rounded-md bg-gradient-to-br from-brand-100 to-brand-200"
           >
             {item.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element -- editor preview of an arbitrary URL
               <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
             )}
             {/* name over a bottom scrim, white — the same treatment as the storefront banner */}
-            <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+            <span className="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/10 to-transparent" />
             <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-4">
               <span className="text-lg font-semibold text-white drop-shadow-sm">{item.label}</span>
               <svg

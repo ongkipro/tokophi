@@ -13,11 +13,11 @@ export function Testimoni({ heading, items }: TestimoniConfig) {
 
   if (list.length === 0) {
     return (
-      <section className="rounded-2xl bg-stone-50 p-8">
-        <h2 className="mb-6 text-center text-xl font-semibold text-stone-900">{heading}</h2>
-        <div className="rounded-xl border-2 border-dashed border-stone-200 px-6 py-10 text-center">
-          <p className="text-sm font-medium text-stone-700">Belum ada testimoni</p>
-          <p className="mt-1 text-sm text-stone-500">
+      <section className="rounded-2xl bg-brand-50 p-8">
+        <h2 className="mb-6 text-center text-xl font-semibold text-ink">{heading}</h2>
+        <div className="rounded-xl border-2 border-dashed border-line px-6 py-10 text-center">
+          <p className="text-sm font-medium text-ink">Belum ada testimoni</p>
+          <p className="mt-1 text-sm text-ink/60">
             Tambahkan kutipan pelanggan <span className="font-medium">asli</span> di panel kanan.
             Selama kosong, bagian ini tidak tampil di toko.
           </p>
@@ -27,20 +27,20 @@ export function Testimoni({ heading, items }: TestimoniConfig) {
   }
 
   return (
-    <section className="rounded-2xl bg-stone-50 p-8">
-      <h2 className="mb-6 text-center text-xl font-semibold text-stone-900">{heading}</h2>
+    <section className="rounded-2xl bg-brand-50 p-8">
+      <h2 className="mb-6 text-center text-xl font-semibold text-ink">{heading}</h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {list.map((item, i) => (
           <figure key={i} className="rounded-2xl bg-white p-6">
             <div className="mb-2 flex items-center gap-1.5 text-amber-400" aria-hidden="true">
               <span>
                 {"\u2605".repeat(item.rating)}
-                <span className="text-stone-200">{"\u2605".repeat(5 - item.rating)}</span>
+                <span className="text-line">{"\u2605".repeat(5 - item.rating)}</span>
               </span>
-              <span className="text-xs font-medium text-stone-400">{item.rating}/5</span>
+              <span className="text-xs font-medium text-ink/60">{item.rating}/5</span>
             </div>
-            <blockquote className="text-sm text-stone-700">&ldquo;{item.quote}&rdquo;</blockquote>
-            <figcaption className="mt-3 text-sm font-medium text-stone-900">- {item.name}</figcaption>
+            <blockquote className="text-sm text-ink/70">&ldquo;{item.quote}&rdquo;</blockquote>
+            <figcaption className="mt-3 text-sm font-medium text-ink">- {item.name}</figcaption>
           </figure>
         ))}
       </div>

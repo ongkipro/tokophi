@@ -15,26 +15,26 @@ export function Blog({ heading, limit, ctaLabel }: BlogConfig) {
   return (
     <section className="p-6">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
-        <h2 className="text-xl font-semibold text-stone-900">{heading}</h2>
-        {ctaLabel && <span className="text-sm font-medium text-stone-500">{ctaLabel} →</span>}
+        <h2 className="text-xl font-semibold text-ink">{heading}</h2>
+        {ctaLabel && <span className="text-sm font-medium text-brand-600">{ctaLabel} →</span>}
       </div>
       <div className={`grid gap-4 ${cols}`}>
         {tiles.map((_, i) => (
           // FRAMELESS / FLAT — mirrors ArticleCard.astro (owner 2026-07-23): no box, no ring. The image
           // is the surface (thin `rounded-md`, 3:2); text flush beneath, ending in "Baca selengkapnya".
           <div key={i} className="flex flex-col">
-            <div className="aspect-[3/2] overflow-hidden rounded-md bg-stone-100" />
+            <div className="aspect-[3/2] overflow-hidden rounded-md bg-brand-50" />
             <div className="mt-3 flex flex-1 flex-col">
               {/* date kicker */}
-              <div className="h-2 w-1/4 rounded bg-stone-200" />
+              <div className="h-2 w-1/4 rounded bg-line" />
               {/* title — two lines, larger (text-lg font-semibold on the real card) */}
-              <div className="mt-1.5 h-4 w-3/4 rounded bg-stone-300" />
-              <div className="mt-1.5 h-4 w-1/2 rounded bg-stone-300" />
+              <div className="mt-1.5 h-4 w-3/4 rounded bg-brand-200" />
+              <div className="mt-1.5 h-4 w-1/2 rounded bg-brand-200" />
               {/* excerpt — two lines */}
-              <div className="mt-2 h-2.5 w-full rounded bg-stone-200" />
-              <div className="mt-1.5 h-2.5 w-2/3 rounded bg-stone-200" />
+              <div className="mt-2 h-2.5 w-full rounded bg-line" />
+              <div className="mt-1.5 h-2.5 w-2/3 rounded bg-line" />
               {/* "Baca selengkapnya" link pinned to the bottom of the tile */}
-              <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary">
+              <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-brand-600">
                 Baca selengkapnya
                 <svg
                   viewBox="0 0 24 24"
@@ -49,9 +49,9 @@ export function Blog({ heading, limit, ctaLabel }: BlogConfig) {
           </div>
         ))}
       </div>
-      <p className="mt-4 rounded-lg bg-stone-50 px-3 py-2 text-xs leading-relaxed text-stone-500">
+      <p className="mt-4 rounded-lg bg-brand-50 px-3 py-2 text-xs leading-relaxed text-ink/60">
         Menampilkan {limit} tulisan terbaru dari Blog secara otomatis — kamu tidak perlu memilihnya
-        satu per satu. <strong className="font-semibold text-stone-700">Kalau belum ada tulisan yang
+        satu per satu. <strong className="font-semibold text-ink">Kalau belum ada tulisan yang
         terbit, bagian ini tidak muncul di toko</strong> (pengunjung tidak melihat kotak kosong).
       </p>
     </section>
