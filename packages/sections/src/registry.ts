@@ -133,6 +133,10 @@ export interface ImageTextConfig {
   imageSide: "left" | "right";
   /** Optional short label above the heading, e.g. "Kenapa Kami". Empty = hidden. */
   eyebrow: string;
+  /** Optional CTA button under the copy, e.g. "Belanja Koleksi". Empty label = no button. */
+  ctaLabel?: string;
+  /** Where the CTA points (a path or URL). Only used when `ctaLabel` is set. */
+  ctaHref?: string;
 }
 
 export interface MarqueeConfig {
@@ -146,6 +150,8 @@ export interface RichTextConfig {
   ctaLabel: string;
   ctaHref: string;
   theme: "terang" | "gelap";
+  /** Optional small kicker above the statement, e.g. "Cerita Kami". Empty = hidden. */
+  eyebrow?: string;
 }
 
 export interface CategoryNavItem {
@@ -166,6 +172,15 @@ export interface CategoryNavConfig {
  */
 export interface CollectionBentoConfig {
   heading: string;
+}
+
+/** Lookbook — a centred heading + optional description over one wide, full-bleed banner image. */
+export interface LookbookConfig {
+  heading: string;
+  /** Optional line under the heading. Empty = hidden. */
+  description: string;
+  /** Public path or absolute URL of the banner image. Empty = brand-tinted panel, never a broken frame. */
+  imageUrl: string;
 }
 
 /**
@@ -199,6 +214,7 @@ export type SectionConfigMap = {
   "rich-text": RichTextConfig;
   "category-nav": CategoryNavConfig;
   "collection-bento": CollectionBentoConfig;
+  lookbook: LookbookConfig;
   blog: BlogConfig;
 };
 
@@ -225,6 +241,7 @@ export const SECTION_TYPES: SectionType[] = [
   "product-grid",
   "category-nav",
   "collection-bento",
+  "lookbook",
   "banner-promo",
   "marquee",
   "testimoni",
@@ -239,6 +256,7 @@ export const SECTION_LABELS: Record<SectionType, string> = {
   testimoni: "Testimoni",
   "image-text": "Gambar + Teks",
   "collection-bento": "Bento Koleksi",
+  lookbook: "Lookbook",
   marquee: "Teks Berjalan",
   "rich-text": "Teks & Pernyataan",
   "category-nav": "Navigasi Kategori",
@@ -370,6 +388,11 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
   },
   "collection-bento": {
     heading: "Belanja per Koleksi",
+  },
+  lookbook: {
+    heading: "Lookbook",
+    description: "",
+    imageUrl: "",
   },
   "category-nav": {
     // ⚠️ NOT a claim, but still wrong for anyone but the demo store: these three handles are the
