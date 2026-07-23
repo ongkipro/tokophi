@@ -56,7 +56,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const fwdHost = context.request.headers.get("x-forwarded-host")?.split(",")[0].trim();
   const rawHost = fwdHost || context.request.headers.get("host") || context.url.host;
   // localhost has no TLS in dev — emitting https:// there would break every link we print.
-  const scheme = /^(localhost|127\.0\.0\.1)(:|$)/.test(rawHost) ? "http" : proto;
+  const isLocal = /^(localhost|127\.0\.0\.1)(:|$)/.test(rawHost);
+  const scheme = isLocal ? "http" : proto;
 
   // PRIMARY-DOMAIN REDIRECT (the Shopify model the seller picks in Pengaturan → Domain). When a store
   // has an ACTIVE primary custom domain and the shopper landed on a DIFFERENT host that also resolves
@@ -67,10 +68,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
   //   • never `/api/*` — the storefront POSTs to its own API (checkout-session beacons, chat);
   //     redirecting those would silently break capture. A stale page on the old host keeps working.
   // No active custom domain → `primaryHost` is null → this whole block is a no-op (today's state).
+  //   • NEVER from localhost / 127.0.0.1 — that host only exists in local dev, and 301-ing it to the
+  //     store's production canonical makes the site impossible to review locally (you land on the live
+  //     domain). Production requests never arrive with a localhost Host, so skipping it there is a no-op.
   const primaryHost = store.primaryHost ? normalizeHost(store.primaryHost) : null;
   const method = context.request.method;
   if (
     primaryHost &&
+    !isLocal &&
     primaryHost !== normalizeHost(rawHost) &&
     (method === "GET" || method === "HEAD") &&
     !context.url.pathname.startsWith("/api/")
