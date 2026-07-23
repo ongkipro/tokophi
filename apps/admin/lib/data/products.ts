@@ -43,7 +43,7 @@ function base(db: Tx) {
 function toProduct(r: {
   id: string; name: string; handle: string; emoji: string | null; status: "active" | "draft" | "archived";
   category: string | null; unitsSold: number; createdAt: Date; price: number | null; stock: number | null; image: string | null;
-  weightMissing?: boolean;
+  weightMissing?: boolean; googleCategoryPath?: string | null;
 }): Product {
   return {
     id: r.id,
@@ -58,6 +58,7 @@ function toProduct(r: {
     unitsSold: r.unitsSold,
     addedTs: r.createdAt.getTime(),
     weightMissing: !!r.weightMissing,
+    googleCategoryPath: r.googleCategoryPath ?? undefined,
   };
 }
 
@@ -74,6 +75,7 @@ export async function getProducts(): Promise<Product[]> {
         category: schema.products.category,
         unitsSold: schema.products.unitsSold,
         createdAt: schema.products.createdAt,
+        googleCategoryPath: schema.products.googleCategoryPath, // functionally dependent on products.id (grouped) — no aggregate needed
         price: sql<number>`coalesce(min(${schema.productVariants.priceIdr}), 0)`,
         stock: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)`,
         // TRUE if ANY variant has no weight_grams — the checkout then prices that parcel with the 500g
