@@ -56,3 +56,37 @@ Shopify Dawn: link teks besar, parent ber-chevron menggeser ke sub-panel.
 ## NEXT
 Langkah 1 — menu minimalist + drill-down di `Header.astro`. Langkah 2 — recently-viewed (PDP + palet).
 Langkah 3 — grid kartu di `SearchPalette.astro`. Verifikasi tiap langkah di browser 360/768/1280.
+
+---
+
+## Ronde 2 — hero + header ala Casaio (referensi pemilik, 5 gambar)
+
+**Keputusan pemilik (ditanya, dijawab):** ikon kanan = **search + keranjang saja** (tanpa akun/mata
+uang — keduanya kontrol palsu di sini); header transparan **hanya homepage**.
+
+### Header — logo tengah, transparan→solid
+- **Homepage:** `fixed` melayang di atas hero, transparan + teks putih; **solid saat scroll** (>80px)
+  jadi bar cream seperti halaman lain. Halaman lain tetap `sticky` solid.
+- Pembalikan warna lewat **satu `<style is:global>`** ber-kunci `#site-header[data-solid]` — tak ada
+  child yang perlu tahu state-nya (spesifisitas > utility Tailwind yang di-override).
+- ⚠️ **Logo di-center ABSOLUT, dan nav pindah ke BARIS KEDUA.** Grid `1fr auto 1fr` mengikat pusat ke
+  lebar nav, jadi menu 6-item demo mendorong logo lepas dari tengah — dan menu satu-baris kiri
+  (persis referensi 4-item) **menabrak** logo di 1024–1440 (diukur: tumpang −340px di 1024). Menu
+  merchant panjangnya variabel; dua baris (search·logo·cart, lalu nav terpusat) selalu muat dan tetap
+  centered-logo premium. Ini penyimpangan sadar dari tata-letak referensi demi ketahanan multi-tenant.
+- Mega panel kini berlabuh di **baris nav** (`relative`), jatuh di bawahnya — bukan di bawah logo.
+- Mobile: baris 1 saja (hamburger·search · logo · cart); nav ada di drawer.
+
+### Hero
+Sudah full-bleed + overlay + badge pill + headline besar + CTA pill putih — cocok dengan referensi.
+**Badge kepercayaan di dalam hero** (referensi memuat "Fast & Easy Styling / 30 Day Money Back")
+DITUNDA: butuh slot/field di `@tokophi/sections`, dan homepage sudah punya strip fitur (kurir/COD/
+pembayaran) tepat di bawah hero. Bukan kontrol, jadi tak mendesak.
+
+**TANPA announcement bar** (referensi mobile memuatnya): tak ada model data pengumuman; membuatnya =
+menaruh kata-kata promo di mulut merchant. Dilewati.
+
+### Diverifikasi (browser)
+Home transparan @top · solid saat scroll · logo center 512/512·640/640·720/720 · mega buka di bawah
+nav row · halaman produk `sticky` solid (`data-overlay` null) · mobile burger-kiri/logo-tengah/
+cart-kanan, nav row tersembunyi · `astro check` 0 error. Gerbang responsif untuk seluruh batch berikut.
