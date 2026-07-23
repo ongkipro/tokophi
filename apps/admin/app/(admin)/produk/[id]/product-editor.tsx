@@ -540,6 +540,10 @@ export function ProductEditor({ product }: { product?: Product }) {
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Contoh: Kaos Polos Premium Cotton"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Nama yang tampil di kartu &amp; halaman produk. Untuk kata kunci pencarian yang panjang,
+                  isi <span className="font-medium">Judul SEO</span> di bagian SEO — biar halaman tetap rapi.
+                </p>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="p-desc">Deskripsi</Label>

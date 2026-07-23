@@ -255,7 +255,13 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         <Breadcrumb items={CRUMBS} />
 
         <p class="mt-5 text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{product.category}</p>
-        <h1 class="mt-2 font-display text-3xl font-semibold leading-tight text-ink sm:text-4xl">{product.name}</h1>
+        {/* A MARKETPLACE title, not a blog headline. Sellers legitimately stuff the name to the 100-char
+            cap for on-page keywords, and a 36px display heading turned that into a five-line wall that
+            dominated the buy box. A moderate 24/28px + `text-pretty` (no orphan last word) lets a long
+            title wrap into a tidy 2-4 lines while a short one still reads as the page's heading. The
+            FULL name always shows — this is the product's identity, so it is never clamped here (cards
+            and the breadcrumb clamp/truncate; the PDP does not). */}
+        <h1 class="mt-2 font-display text-2xl font-semibold leading-snug text-pretty text-ink sm:text-[1.75rem]">{product.name}</h1>
 
         {
           rating && (
