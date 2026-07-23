@@ -45,6 +45,10 @@ export type Product = {
   categoryHandle: string;
   image: string;
   description: string;
+  googleCategoryPath?: string; // standard Google category (ADR 0011) — for the product feed
+  gender?: string; // feed attribute: "female" | "male" | "unisex"
+  ageGroup?: string; // feed attribute: "adult" | "kids" | …
+  material?: string; // feed attribute
   seoTitle?: string; // merchant SEO override; storefront <title> prefers it over `name`
   seoDesc?: string; // merchant meta-description override; prefers it over `description`
   sizes: string[];
@@ -259,6 +263,10 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       handle: schema.products.handle,
       name: schema.products.title,
       description: schema.products.description,
+      googleCategoryPath: schema.products.googleCategoryPath,
+      gender: schema.products.gender,
+      ageGroup: schema.products.ageGroup,
+      material: schema.products.material,
       seoTitle: schema.products.seoTitle,
       seoDesc: schema.products.seoDesc,
       category: schema.products.category,
@@ -368,6 +376,10 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       // Callers render a placeholder instead — never fabricate a URL you have not been given.
       image: r.image ? mediaUrl(r.image) : "",
       description: r.description ?? "",
+      googleCategoryPath: r.googleCategoryPath ?? undefined,
+      gender: r.gender ?? undefined,
+      ageGroup: r.ageGroup ?? undefined,
+      material: r.material ?? undefined,
       seoTitle: r.seoTitle ?? undefined,
       seoDesc: r.seoDesc ?? undefined,
       sizes: (r.sizes as string[] | null) ?? [],

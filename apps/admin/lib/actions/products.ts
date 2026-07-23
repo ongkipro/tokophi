@@ -25,6 +25,9 @@ export type ProductInput = {
   seoDesc?: string;
   googleCategoryId?: number | null;
   googleCategoryPath?: string | null;
+  gender?: string | null;
+  ageGroup?: string | null;
+  material?: string | null;
   handle: string;
   price: number;
   compareAt?: number | null;
@@ -57,6 +60,9 @@ const productFields = (i: ProductInput) => ({
   seoDesc: i.seoDesc || null,
   googleCategoryId: i.googleCategoryId ?? null,
   googleCategoryPath: i.googleCategoryPath || null,
+  gender: i.gender || null,
+  ageGroup: i.ageGroup || null,
+  material: i.material || null,
   lengthCm: i.lengthCm ?? null,
   widthCm: i.widthCm ?? null,
   heightCm: i.heightCm ?? null,
