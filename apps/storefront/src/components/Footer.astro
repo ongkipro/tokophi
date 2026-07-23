@@ -138,54 +138,18 @@ const CAPTION = "text-[0.7rem] font-medium uppercase tracking-[0.12em] text-crea
         <nav aria-label="Menu toko" class="lg:col-span-2">
           <h2 class={HEADING}>Menu</h2>
           <ul class="mt-3 text-sm">
-            {MENU.map((item) =>
-              item.children?.length ? (
-                /* A dropdown parent carries NO href — `getMainNav` strips it, because the seed's
-                   target for one is literally "#". Rendering it as a link would put a link to
-                   nowhere in the footer of every page; it is a group label with its items under it. */
-                <li class="mt-3 first:mt-0">
-                  {/* A NATIVE <details>, not a scripted accordion. Open/close, the keyboard, the
-                      screen-reader state and the no-JS case all come from the platform — a hand-rolled
-                      one would be a button, an aria-expanded to keep in sync, and a class to toggle,
-                      to arrive at the same thing.
-                      Collapsed by default: five category links were the only reason this column stood
-                      twice as tall as its neighbours. The links stay in the HTML either way, so a
-                      crawler still follows them. */}
-                  <details class="group">
-                    <summary
-                      class={`${CAPTION} flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-sm transition-colors hover:text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none lg:min-h-9 [&::-webkit-details-marker]:hidden`}
-                    >
-                      {item.label}
-                      {/* `size-3` chevron, rotated by the open state. `aria-hidden` because <summary>
-                          already announces expanded/collapsed on its own. */}
-                      <svg
-                        viewBox="0 0 24 24"
-                        class="size-3 fill-none stroke-current transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
-                        stroke-width="2.5"
-                        aria-hidden="true"
-                      >
-                        <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
-                      </svg>
-                    </summary>
-                    <ul class="mt-1 grid grid-cols-2 gap-x-4">
-                      {item.children.map((c) => (
-                        <li>
-                          <a href={c.href} class={LINK}>
-                            {c.label}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                </li>
-              ) : (
-                <li>
-                  <a href={item.href} class={LINK}>
-                    {item.label}
-                  </a>
-                </li>
-              ),
-            )}
+            {MENU.map((item) => (
+              <li>
+                {/* Uniform plain links — a footer is a directory where everything is visible, so the
+                    dropdown parent ("Shop") is NOT a collapsible disclosure here (that read as an odd
+                    "SHOP \u25be" caption among plain siblings). It has no href of its own (`getMainNav`
+                    strips a parent's "#"), so in the footer it points at `/produk` — the real "browse
+                    everything" page every store has. Its categories are one tap away in the header. */}
+                <a href={item.href ?? "/produk"} class={LINK}>
+                  {item.label}
+                </a>
+              </li>
+            ))}
           </ul>
         </nav>
       )

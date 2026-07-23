@@ -174,3 +174,30 @@ benar-benar full tanpa celah dan scroll di dalam tak merembet.
 ### Diverifikasi (emulasi mobile 390, digulir dulu ke 600 sebelum buka)
 search buka **390×844@top0** (full) · `body position:fixed top:-600px` · **latar tak bergerak** saat
 digulir · tutup **memulihkan scrollY ke 600** · drawer body-fixed saat buka, reset saat tutup · 0 error.
+
+---
+
+## Ronde 6 — hover nav (underline animasi), logo tanpa hover, footer seragam (pemilik)
+
+> "header menu hover pakai animasi ringan css underline, jangan block highlight opacity. logo g usah
+>  ada hover/active, cukup link header menu. footer sempurnakan ui/ux, text presisikan."
+
+- **Nav hover → underline animasi**, bukan blok wash. `after:origin-left after:scale-x-0
+  hover:after:scale-x-100 after:bg-current` (tumbuh dari kiri; `bg-current` jadi otomatis putih di
+  header transparan). Link aktif = underline persisten (`after:scale-x-100`) + `font-medium`.
+  Wash putih pada header transparan **hanya untuk ikon** (search/cart/hamburger), tak lagi nav/logo.
+- **Logo tanpa hover/active** — `hover:text-brand-700 transition-colors` dibuang; wash di-scope
+  `a:not([data-logo]):not(nav a):hover`, jadi logo benar-benar polos.
+- **Footer MENU seragam** — parent-dropdown ("Shop") tak lagi `<details>` "SHOP ⌄" yang beda sendiri;
+  kini link biasa ke `/produk` (footer = direktori, semua terlihat, satu gaya). Kategorinya tetap
+  satu tap di header.
+
+⚠️ **Pelajaran:** `)}` ganda tersisa dari blok lama di Footer — **`astro check` LEWAT, `npm run build`
+menangkap** (`Expected ";" but found "{"`). Selalu build, jangan cukup astro check. (Error dev
+`lp/[slug].astro` "Expected > but found title" tadi cuma efek samping build-gagal + quirk scanner Vite;
+file itu milik kolaborator, build produksi & SSR-nya normal — tak disentuh. Audit dijalankan lewat
+`preview` untuk menghindari overlay dev-scanner.)
+
+### Diverifikasi (browser)
+nav non-aktif underline `scale:0 1`→hover `1`; nav aktif persisten `1`; **logo bg tak berubah** saat
+hover; footer menu 6 link seragam, **0 `<details>`**; 0 error.
