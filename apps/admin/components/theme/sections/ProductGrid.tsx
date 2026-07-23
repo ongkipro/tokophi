@@ -18,11 +18,25 @@ export function ProductGrid({ heading, mode, limit, columns }: ProductGridConfig
       </div>
       <div className={`grid gap-4 ${cols}`}>
         {tiles.map((_, i) => (
-          <div key={i} className="overflow-hidden rounded-xl bg-white ring-1 ring-stone-200">
-            <div className="aspect-[3/4] bg-stone-100" />
-            <div className="space-y-1.5 p-3">
+          // FRAMELESS / FLAT — mirrors ProductCard.astro (owner 2026-07-23): no card box, no ring, no
+          // shadow. The image is the one surface (thin `rounded-md`); type sits flush beneath (`mt-3`).
+          <div key={i}>
+            <div className="aspect-[3/4] overflow-hidden rounded-md bg-stone-100" />
+            <div className="mt-3 space-y-1.5">
+              {/* uppercase category kicker */}
+              <div className="h-2 w-1/3 rounded bg-stone-200" />
+              {/* title — two lines (line-clamp-2 min-h on the real card) */}
               <div className="h-3 w-3/4 rounded bg-stone-200" />
               <div className="h-3 w-1/2 rounded bg-stone-200" />
+              {/* compact rating — ONE filled amber star + value + count, not five stars */}
+              <div className="flex items-center gap-1 pt-0.5">
+                <svg viewBox="0 0 20 20" className="size-3.5 shrink-0 fill-amber-400" aria-hidden="true">
+                  <path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1.99 5.79L10 14.77l-5.2 2.73.99-5.79L1.58 7.62l5.82-.85L10 1.5Z" />
+                </svg>
+                <div className="h-2 w-10 rounded bg-stone-200" />
+              </div>
+              {/* price — bolder ink figure */}
+              <div className="h-3.5 w-2/5 rounded bg-stone-300" />
             </div>
           </div>
         ))}

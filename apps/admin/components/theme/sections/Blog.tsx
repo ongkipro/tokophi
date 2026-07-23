@@ -20,12 +20,31 @@ export function Blog({ heading, limit, ctaLabel }: BlogConfig) {
       </div>
       <div className={`grid gap-4 ${cols}`}>
         {tiles.map((_, i) => (
-          <div key={i} className="overflow-hidden rounded-xl bg-white ring-1 ring-stone-200">
-            <div className="aspect-[3/2] bg-stone-100" />
-            <div className="space-y-1.5 p-3">
-              <div className="h-2 w-1/3 rounded bg-stone-200" />
-              <div className="h-3 w-3/4 rounded bg-stone-200" />
-              <div className="h-3 w-1/2 rounded bg-stone-200" />
+          // FRAMELESS / FLAT — mirrors ArticleCard.astro (owner 2026-07-23): no box, no ring. The image
+          // is the surface (thin `rounded-md`, 3:2); text flush beneath, ending in "Baca selengkapnya".
+          <div key={i} className="flex flex-col">
+            <div className="aspect-[3/2] overflow-hidden rounded-md bg-stone-100" />
+            <div className="mt-3 flex flex-1 flex-col">
+              {/* date kicker */}
+              <div className="h-2 w-1/4 rounded bg-stone-200" />
+              {/* title — two lines, larger (text-lg font-semibold on the real card) */}
+              <div className="mt-1.5 h-4 w-3/4 rounded bg-stone-300" />
+              <div className="mt-1.5 h-4 w-1/2 rounded bg-stone-300" />
+              {/* excerpt — two lines */}
+              <div className="mt-2 h-2.5 w-full rounded bg-stone-200" />
+              <div className="mt-1.5 h-2.5 w-2/3 rounded bg-stone-200" />
+              {/* "Baca selengkapnya" link pinned to the bottom of the tile */}
+              <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary">
+                Baca selengkapnya
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4 fill-none stroke-current"
+                  strokeWidth={2}
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
             </div>
           </div>
         ))}

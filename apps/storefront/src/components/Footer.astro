@@ -12,7 +12,7 @@
 // This is the same failure the platform already shipped once: `wa.me/6281234567890` (the canonical
 // Indonesian dummy number) went out as a live WhatsApp button on every page of every store because a
 // missing value fell back to a placeholder. A missing channel is honest; a dead one is a lie.
-import { Minus, Plus } from "@lucide/astro";
+import { ArrowRight, Mail, MapPin, Minus, Phone, Plus } from "@lucide/astro";
 import { getFooterNav, getMainNav } from "../data/nav";
 import SocialLinks from "./SocialLinks.astro";
 import { clamp } from "../lib/text";
@@ -100,7 +100,27 @@ const LINK =
 const HEADING = "text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-cream";
 ---
 
-<footer class="mt-24 bg-ink text-cream/85">
+{/* PRE-FOOTER CTA — a visual band that hands the shopper one last clear action before the footer's
+    directory. Tenant-AWARE (the store's own name) and tenant-SAFE (no invented claim), it flows
+    straight into the ink footer with no cream gap. The arrow-pill matches the hero's CTAs. */}
+<section class="mt-24 border-t border-line bg-brand-50">
+  <div class="mx-auto flex max-w-7xl flex-col items-start gap-6 px-4 py-14 sm:px-6 md:flex-row md:items-center md:justify-between md:py-16">
+    <h2 class="max-w-xl text-balance font-display text-2xl font-semibold leading-tight text-ink sm:text-3xl">
+      Belanja koleksi lengkap {store.name}.
+    </h2>
+    <a
+      href="/kategori/semua"
+      class="group inline-flex shrink-0 items-center gap-3 rounded-full bg-ink py-2 pl-2 pr-6 text-sm font-semibold uppercase tracking-wide text-cream shadow-lg shadow-ink/20 transition-colors hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-50"
+    >
+      <span class="flex size-9 items-center justify-center rounded-full ring-1 ring-cream/25 transition-colors group-hover:bg-cream group-hover:text-ink">
+        <ArrowRight class="size-4" stroke-width={2} aria-hidden="true" />
+      </span>
+      Lihat Semua Produk
+    </a>
+  </div>
+</section>
+
+<footer class="bg-ink text-cream/85">
   {/* REMOVED: the newsletter band. Its form was `onsubmit="return false"` — no handler anywhere, no
       request, no toast, no subscriber table — under copy promising style tips and offers by email.
       There is no mailer and no list to join, so the button did literally nothing on every page of
@@ -199,27 +219,36 @@ const HEADING = "text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-cre
               reach it follow. (The "Hubungi via WhatsApp" button that used to open this column was
               removed 2026-07-22 — WhatsApp is still on the floating chat launcher and /kontak, and
               remains the channel these merchants sell on. A footer layout decision, not a channel one.) */}
-          {/* FLUSH-LEFT, NO LEADING ICONS. Every line — address, phone, email — starts at the same x as
-              the "Hubungi kami" heading, so this column shares the exact left rail as Menu and Informasi
-              beside it. Leading icons pushed the text ~24px in and the column read as misaligned against
-              its own heading. The section heading already labels what these are. */}
+          {/* ICON-LED, ON A FIXED RAIL. Each row leads with a `size-4` glyph in a `w-4` slot, so the icons
+              form one straight column and the text starts at one consistent x — the column reads as a
+              deliberate list, not a ragged stack. (Equal-width columns above removed the old right-side
+              void; that, not the icons themselves, was what made the block look off before.) */}
           {
             addressLines.length > 0 ? (
-              <address class="mt-3 text-sm not-italic leading-relaxed text-cream/75">
-                {addressLines.map((line) => (
-                  <span class="block">{line}</span>
-                ))}
+              <address class="mt-3 flex gap-2.5 text-sm not-italic leading-relaxed text-cream/75">
+                <MapPin class="mt-0.5 size-4 shrink-0 text-cream/55" stroke-width={1.75} aria-hidden="true" />
+                <span>
+                  {addressLines.map((line) => (
+                    <span class="block">{line}</span>
+                  ))}
+                </span>
               </address>
             ) : (
-              city && <p class="mt-3 text-sm text-cream/75">{city}, Indonesia</p>
+              city && (
+                <p class="mt-3 flex items-center gap-2.5 text-sm text-cream/75">
+                  <MapPin class="size-4 shrink-0 text-cream/55" stroke-width={1.75} aria-hidden="true" />
+                  {city}, Indonesia
+                </p>
+              )
             )
           }
 
           {hasContact && (
-            <ul class="mt-3 text-sm">
+            <ul class="mt-2.5 space-y-0.5 text-sm">
               {telHref && phone && (
                 <li>
-                  <a href={telHref} class={LINK}>
+                  <a href={telHref} class={`${LINK} gap-2.5`}>
+                    <Phone class="size-4 shrink-0 text-cream/55" stroke-width={1.75} aria-hidden="true" />
                     <span class="tabular-nums">{phone}</span>
                   </a>
                 </li>
@@ -229,7 +258,8 @@ const HEADING = "text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-cre
                   {/* `mailto:` and nothing else — no obfuscation. Address-harvesting scrapers parse
                       the same JS tricks that would break the link for a real shopper, and a merchant
                       who typed this field wants to be written to. */}
-                  <a href={`mailto:${email}`} class={LINK}>
+                  <a href={`mailto:${email}`} class={`${LINK} gap-2.5`}>
+                    <Mail class="size-4 shrink-0 text-cream/55" stroke-width={1.75} aria-hidden="true" />
                     <span class="break-all">{email}</span>
                   </a>
                 </li>

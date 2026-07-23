@@ -2,7 +2,7 @@ import type { ImageTextConfig } from "@tokophi/sections";
 
 export function ImageText({ heading, body, imageUrl, imageSide, eyebrow }: ImageTextConfig) {
   const image = (
-    <div className="aspect-[4/3] overflow-hidden rounded-2xl bg-gradient-to-br from-stone-300 to-stone-100">
+    <div className="aspect-[4/3] overflow-hidden rounded-3xl bg-gradient-to-br from-stone-300 to-stone-100 ring-1 ring-stone-200">
       {imageUrl && <img src={imageUrl} alt="" className="h-full w-full object-cover" />}
     </div>
   );
