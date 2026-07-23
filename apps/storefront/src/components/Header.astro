@@ -103,84 +103,30 @@ const drawerEmail = (store.email ?? "").trim() || null;
       items) can never collide with the logo the way a single-row left-nav did. On a phone
       there is no row 2 — the nav lives in the drawer. `relative` on the outer wrapper is the
       mega-panel anchor; the nav row is `relative` too so the panel drops beneath IT. */}
-  <div class="relative mx-auto max-w-7xl px-4 sm:px-6">
-    <div class="relative flex items-center justify-between gap-2 py-3.5 sm:gap-4">
-      {/* LEFT — hamburger (mobile) + search */}
-      <div class="flex min-w-0 items-center gap-1 sm:gap-2">
-        <button
-        type="button"
-        id="menu-open"
-        aria-expanded="false"
-        aria-controls="mobile-drawer"
-        aria-label="Buka menu"
-        class="inline-flex items-center justify-center rounded-full border border-line p-2 text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 lg:hidden"
-        >
-        <svg viewBox="0 0 24 24" class="h-5 w-5 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
-        <path d="M3.5 6h17M3.5 12h17M3.5 18h17" stroke-linecap="round" />
-        </svg>
-        </button>
-        <a
-        href="/cari"
-        data-search-open
-        aria-label="Cari produk"
-        aria-keyshortcuts="Control+K Meta+K"
-        title="Cari — tekan ⌘K"
-        class="inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
-        >
-        <Search class="size-5" stroke-width={1.8} aria-hidden="true" />
-        </a>
-      </div>
-
-      <a
-      href="/"
-      data-logo
-      class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 shrink-0 rounded-md font-display text-xl font-semibold tracking-tight text-ink transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:text-2xl"
+  {/* ONE ROW: nav (left) · logo (centre) · search + cart (right). The logo is centred
+      ABSOLUTELY so a longer merchant menu never shoves it off-centre; `relative` on this
+      container anchors the mega panel, which drops from `top-full` below the bar. On a phone
+      the nav is replaced by the hamburger and lives in the drawer. */}
+  <div class="relative mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
+    {/* LEFT — hamburger (mobile) · nav (desktop) */}
+    <div class="flex min-w-0 items-center gap-2">
+      <button
+      type="button"
+      id="menu-open"
+      aria-expanded="false"
+      aria-controls="mobile-drawer"
+      aria-label="Buka menu"
+      class="inline-flex items-center justify-center rounded-full border border-line p-2 text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 xl:hidden"
       >
-      {
-      logo ? (
-      <img src={logo} alt={store.name} class="h-9 w-auto max-w-[8.5rem] object-contain sm:h-10 sm:max-w-[11rem]" />
-      ) : (
-      store.name
-      )
-      }
-      </a>
-
-      {/* RIGHT — cart */}
-      <div class="flex items-center">
-      <a
-      href="/keranjang"
-      class="relative inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
-      >
-      <svg viewBox="0 0 24 24" class="size-5 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
-      <path d="M2.5 3h1.6l1.5 12.5a1.5 1.5 0 0 0 1.5 1.3h9.3a1.5 1.5 0 0 0 1.47-1.2l1.4-7.3H6" stroke-linecap="round" stroke-linejoin="round" />
-      <circle cx="9" cy="20" r="1.2" fill="currentColor" stroke="none" />
-      <circle cx="17" cy="20" r="1.2" fill="currentColor" stroke="none" />
+      <svg viewBox="0 0 24 24" class="h-5 w-5 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
+      <path d="M3.5 6h17M3.5 12h17M3.5 18h17" stroke-linecap="round" />
       </svg>
-      {/* The count is a BADGE now, not a word beside the label — but it is still real text inside
-      the link, so the accessible name computes to "Keranjang <n> item". The old note here
-      warned that an `aria-label` saying "Keranjang" beside visible text reading "Keranjang 0"
-      scored 0 on `label-content-name-mismatch`: a voice-control user says "click Keranjang"
-      and nothing happens. There is still no aria-label, for exactly that reason. */}
-      <span class="sr-only">Keranjang</span>
-      {/* Hidden at zero — a badge reading "0" is a notification that nothing happened. The script
-      below owns BOTH the number and the `hidden` attribute; setting only `textContent` (as it
-      used to) would leave a badge that never appears no matter what is in the cart.
-      The unit is a separate sr-only child so the accessible name reads "Keranjang 3 item" when
-      there is a cart and plain "Keranjang" when there is not — and so the script can rewrite
-      the digits without wiping the word. */}
-      <span
-      id="cart-count"
-      hidden
-      class="absolute -right-0.5 -top-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white tabular-nums"
-      ><span data-cart-n>0</span><span class="sr-only"> item</span></span
-      >
-      </a>
-      </div>
-    </div>
-
-    {/* NAV ROW — desktop only, centred; `relative` so the mega panel anchors here. */}
-    <div class="relative hidden justify-center border-t border-line/60 lg:flex">
-      <nav aria-label="Navigasi utama" class="flex items-center gap-6 py-2.5 text-sm text-muted xl:gap-8">
+      </button>
+      {/* Inline from `xl`, not `lg`: beside a CENTRED logo the left nav must clear the middle, and a
+          merchant menu is variable-length. The demo six-item menu overlaps the logo by 84px at 1024
+          (measured); showing the inline nav only where a long menu fits, and using the drawer at
+          1024-1279, keeps the single row uncollidable on any store. */}
+      <nav aria-label="Navigasi utama" class="hidden items-center gap-5 text-sm text-muted xl:flex xl:gap-7">
       {
       MAIN_NAV.map((item) =>
       item.children ? (
@@ -358,6 +304,64 @@ const drawerEmail = (store.email ?? "").trim() || null;
       }
       </nav>
     </div>
+
+    {/* CENTRE — logo */}
+    <a
+    href="/"
+    data-logo
+    class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 shrink-0 rounded-md font-display text-xl font-semibold tracking-tight text-ink transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:text-2xl"
+    >
+    {
+    logo ? (
+    <img src={logo} alt={store.name} class="h-9 w-auto max-w-[8.5rem] object-contain sm:h-10 sm:max-w-[11rem]" />
+    ) : (
+    store.name
+    )
+    }
+    </a>
+
+    {/* RIGHT — search · cart */}
+    <div class="flex items-center gap-0.5 sm:gap-1">
+      <a
+      href="/cari"
+      data-search-open
+      aria-label="Cari produk"
+      aria-keyshortcuts="Control+K Meta+K"
+      title="Cari — tekan ⌘K"
+      class="inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+      >
+      <Search class="size-5" stroke-width={1.8} aria-hidden="true" />
+      </a>
+      <a
+      href="/keranjang"
+      class="relative inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+      >
+      <svg viewBox="0 0 24 24" class="size-5 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
+      <path d="M2.5 3h1.6l1.5 12.5a1.5 1.5 0 0 0 1.5 1.3h9.3a1.5 1.5 0 0 0 1.47-1.2l1.4-7.3H6" stroke-linecap="round" stroke-linejoin="round" />
+      <circle cx="9" cy="20" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="17" cy="20" r="1.2" fill="currentColor" stroke="none" />
+      </svg>
+      {/* The count is a BADGE now, not a word beside the label — but it is still real text inside
+      the link, so the accessible name computes to "Keranjang <n> item". The old note here
+      warned that an `aria-label` saying "Keranjang" beside visible text reading "Keranjang 0"
+      scored 0 on `label-content-name-mismatch`: a voice-control user says "click Keranjang"
+      and nothing happens. There is still no aria-label, for exactly that reason. */}
+      <span class="sr-only">Keranjang</span>
+      {/* Hidden at zero — a badge reading "0" is a notification that nothing happened. The script
+      below owns BOTH the number and the `hidden` attribute; setting only `textContent` (as it
+      used to) would leave a badge that never appears no matter what is in the cart.
+      The unit is a separate sr-only child so the accessible name reads "Keranjang 3 item" when
+      there is a cart and plain "Keranjang" when there is not — and so the script can rewrite
+      the digits without wiping the word. */}
+      <span
+      id="cart-count"
+      hidden
+      class="absolute -right-0.5 -top-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white tabular-nums"
+      ><span data-cart-n>0</span><span class="sr-only"> item</span></span
+      >
+      </a>
+    </div>
+  </div>
   </div>
   </div>
 </header>
@@ -411,7 +415,7 @@ const drawerEmail = (store.email ?? "").trim() || null;
 </script>
 
 <!-- Mobile drawer -->
-<div id="mobile-menu" class="lg:hidden">
+<div id="mobile-menu" class="xl:hidden">
   <div
     id="menu-overlay"
     class="pointer-events-none fixed inset-0 z-50 bg-ink/40 opacity-0 backdrop-blur-sm transition-opacity duration-300"

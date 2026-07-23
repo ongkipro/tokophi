@@ -1,21 +1,143 @@
 ---
+// ADR 0009 — Category navigation (storefront half). Placed + ordered from the Tema builder.
+//
+// REDESIGN 2026-07-23 (owner): small round avatars → LARGE image banners. Up to four fill the row;
+// more than four turn the row into a horizontal SCROLLER with snap points, so a store with eight
+// categories does not wrap into a ragged second row — it swipes. That is the pattern the owner
+// asked for ("max 4 banner besar, scroll kanan-kiri jika lebih dari 4") and it is how Shopify,
+// Apple and every modern storefront present a category shelf.
+//
+// Why a scroll-snap shelf rather than a wrapping grid:
+//   · a wrapping grid makes row 2 look like leftovers, and its height jumps with the item count;
+//   · a shelf keeps ONE row at any count, signals "there is more" by letting the next card peek,
+//     and is a single control a thumb already knows.
+//
+// Data is `label`, `imageUrl`, `href` only (registry `CategoryNavItem`) — no product count, so none
+// is shown. Never invent one.
 import type { CategoryNavConfig } from "@tokophi/sections";
+import { ArrowRight } from "@lucide/astro";
 
 type Props = CategoryNavConfig;
 const { items } = Astro.props;
+
+// The desktop arrows only earn their place when the shelf actually overflows — i.e. more than four.
+// Rendered always (SSR can't measure widths), but the script hides them when there is nothing to
+// scroll, so a four-item shelf shows no dead controls.
+const overflows = items.length > 4;
 ---
 
-<section class="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-  <div class="flex flex-wrap justify-center gap-6 sm:gap-10">
-    {
-      items.map((item) => (
-        <a href={item.href} class="group flex flex-col items-center gap-2.5">
-          <div class="h-20 w-20 overflow-hidden rounded-full bg-brand-100 ring-1 ring-line transition-transform group-hover:scale-105 sm:h-24 sm:w-24">
-            {item.imageUrl && <img src={item.imageUrl} alt="" class="h-full w-full object-cover" />}
-          </div>
-          <span class="text-sm font-medium text-ink group-hover:text-brand-600">{item.label}</span>
-        </a>
-      ))
-    }
-  </div>
-</section>
+{
+  items.length > 0 && (
+    <section class="mx-auto max-w-7xl px-4 py-12 sm:px-6" data-catnav>
+      <div class="relative">
+        {/* PREV / NEXT — desktop only, and only when the shelf overflows. A mouse cannot swipe, so a
+            horizontal shelf without arrows is unreachable past the fold on desktop. The script
+            enables/disables each at the ends and hides the pair when nothing overflows. */}
+        {overflows && (
+          <button
+            type="button"
+            data-catnav-prev
+            aria-label="Kategori sebelumnya"
+            class="absolute -left-3 top-1/2 z-10 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-cream/95 text-ink shadow-md backdrop-blur transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:pointer-events-none disabled:opacity-0 lg:flex"
+          >
+            <ArrowRight class="size-5 rotate-180" stroke-width={1.75} aria-hidden="true" />
+          </button>
+        )}
+        {overflows && (
+          <button
+            type="button"
+            data-catnav-next
+            aria-label="Kategori berikutnya"
+            class="absolute -right-3 top-1/2 z-10 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-cream/95 text-ink shadow-md backdrop-blur transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:pointer-events-none disabled:opacity-0 lg:flex"
+          >
+            <ArrowRight class="size-5" stroke-width={1.75} aria-hidden="true" />
+          </button>
+        )}
+
+        {/* THE SHELF. `-mx-4 px-4` (and sm) lets the row bleed to the screen edge on a phone so the
+            peek of the next card sits ON the edge, not inside a gutter. Scrollbar hidden (peek +
+            snap already signal it); `snap-x snap-mandatory` clicks each card into place.
+            Card widths: ~82% on a phone (one banner + a clear peek), half on sm (two up), a clean
+            quarter on lg (four up — exactly full when there are four, scrolling when there are more). */}
+        <ul
+          data-catnav-track
+          class="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth scroll-pl-4 -mx-4 px-4 pb-1 sm:scroll-pl-6 sm:-mx-6 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {items.map((item) => (
+            <li class="w-[82%] shrink-0 snap-start xs:w-[70%] sm:w-[calc(50%-0.5rem)] lg:w-[calc(25%-0.75rem)]">
+              <a
+                href={item.href}
+                class="group relative block aspect-[4/5] overflow-hidden rounded-2xl bg-brand-100 ring-1 ring-line transition-shadow hover:shadow-xl hover:shadow-brand-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+              >
+                {item.imageUrl ? (
+                  <img
+                    src={item.imageUrl}
+                    alt=""
+                    loading="lazy"
+                    class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 motion-reduce:group-hover:scale-100"
+                  />
+                ) : (
+                  <span class="block h-full w-full bg-gradient-to-br from-brand-100 to-brand-200" aria-hidden="true" />
+                )}
+                {/* The name is on the photo, so it is white over a bottom scrim — the same treatment as
+                    the hero and the fallback category tiles, so a catalogue gap looks intentional. */}
+                <span class="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/10 via-40% to-transparent" />
+                <span class="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-4 sm:p-5">
+                  <span class="font-display text-lg font-semibold text-white drop-shadow-sm sm:text-xl">{item.label}</span>
+                  <ArrowRight
+                    class="size-5 shrink-0 translate-x-0 text-white/90 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+                    stroke-width={1.75}
+                    aria-hidden="true"
+                  />
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <script is:inline>
+      (function () {
+        document.querySelectorAll("[data-catnav]").forEach(function (root) {
+          var track = root.querySelector("[data-catnav-track]");
+          var prev = root.querySelector("[data-catnav-prev]");
+          var next = root.querySelector("[data-catnav-next]");
+          if (!track) return;
+
+          // How far one click scrolls: the width of the first card plus the gap, so a click advances
+          // by exactly one banner rather than a guessed pixel amount.
+          function step() {
+            var first = track.querySelector("li");
+            if (!first) return track.clientWidth;
+            var gap = parseFloat(getComputedStyle(track).columnGap || "16") || 16;
+            return first.getBoundingClientRect().width + gap;
+          }
+          var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          function scrollBy(dir) {
+            track.scrollBy({ left: dir * step(), behavior: reduce ? "auto" : "smooth" });
+          }
+          if (prev) prev.addEventListener("click", function () { scrollBy(-1); });
+          if (next) next.addEventListener("click", function () { scrollBy(1); });
+
+          // Disable each arrow at its end — a disabled arrow is `opacity-0 pointer-events-none`, so the
+          // prev vanishes at the start and the next at the end. The arrows only exist when there are
+          // more than four items (SSR `overflows`), which at `lg` always overflows the four-up row.
+          function sync() {
+            if (prev) prev.disabled = track.scrollLeft <= 2;
+            if (next) next.disabled = track.scrollLeft >= track.scrollWidth - track.clientWidth - 2;
+          }
+          // ⚠️ Run it AFTER layout settles, not at parse time. An inline script runs while the track
+          // still has no width, so a single early sync() left the prev arrow enabled at scrollLeft 0.
+          requestAnimationFrame(sync);
+          window.addEventListener("load", sync);
+          track.querySelectorAll("img").forEach(function (img) {
+            if (!img.complete) img.addEventListener("load", sync, { once: true });
+          });
+          track.addEventListener("scroll", sync, { passive: true });
+          window.addEventListener("resize", sync);
+        });
+      })();
+    </script>
+  )
+}

@@ -106,3 +106,51 @@ Dioperasikan di situs live (bukan dibaca HTML):
 
 **Sisa (ditunda, dicatat):** search "recently viewed" + grid kartu 2-kolom dari referensi ke-2 —
 keluhan inti "kurang full saat ketik" sudah tuntas lewat perbaikan keyboard.
+
+---
+
+## Ronde 3 — header SATU BARIS (pemilik minta setelah melihat produksi)
+
+> "ini header kan 2 line → buat 1 line aja. kiri menu, tengah text logo/logo, kanan search dan keranjang icon"
+
+Dua-baris ronde 2 dibuat karena menu 6-item demo menabrak logo di satu baris. Tapi **menu produksi
+pemilik cuma 4 item** (Beranda · Shop · Promo Gajian · Blog) — muat pas di satu baris. Jadi kembali ke
+satu baris seperti diminta: **kiri nav · tengah logo · kanan search+keranjang**.
+
+Search pindah dari kiri ke kanan (menyatu dengan keranjang), sesuai permintaan.
+
+⚠️ **Collision tetap dijaga untuk toko manapun:** nav inline hanya dari **`xl` (1280)**, bukan `lg`.
+Diukur: menu 6-item demo menabrak logo **84px di 1024** kalau nav muncul di sana. Jadi 1024–1279 pakai
+drawer (hamburger), nav inline dari 1280 ke atas — di mana bahkan menu panjang muat. Toko 4-item
+pemilik akan tetap lega.
+
+### Diverifikasi (6 ukuran)
+Satu baris di semua · logo center **±0px** · overflow **0** · tumpang **0px** di setiap lebar ·
+search sebelum cart · mega buka di bawah bar · 0 pageerror.
+
+---
+
+## Ronde 4 — CategoryNav: lingkaran kecil → banner besar + geser (pemilik)
+
+> "di bawah hero itu kategori/collection, design ulang → max 4 banner besar, scroll kanan-kiri jika
+>  lebih dari 4. sesuai area width theme, bukan full width."
+
+`CategoryNav.astro` dulu avatar bulat 20–24px yang wrap dan terpusat. Sekarang **rak banner** ala
+Shopify/Apple:
+- Kartu gambar besar `aspect-[4/5]` + gradient bawah + nama; hover zoom.
+- **≤4 mengisi baris** (`lg:w-[calc(25%-...)]`) dalam **lebar tema `max-w-7xl`** (bukan full-bleed —
+  diukur di 1440: `80..1360`, capped).
+- **>4 → geser** dengan `snap-x snap-mandatory`; kartu berikutnya **mengintip** jadi jelas bisa digeser.
+- **Panah prev/next desktop** (mouse tak bisa swipe) — muncul hanya bila `items>4`, nonaktif di ujung
+  (`disabled:opacity-0`). Ponsel/tablet tanpa panah (swipe).
+- Tanpa jumlah produk (data `CategoryNavItem` = label/imageUrl/href saja — takkan dikarang).
+
+⚠️ Dua jebakan yang diukur & diperbaiki:
+1. `sync()` panah jalan **sebelum layout settle** (inline script saat parse) → prev tak ter-disable.
+   Sekarang di `requestAnimationFrame` + `load` + per-`img load`.
+2. **`scrollLeft` rest di 24px** (bukan 0) karena `px-6` track membuat snap-start menggeser →
+   `scroll-pl-4 sm:scroll-pl-6` (scroll-padding = padding) supaya kartu pertama rest di 0 dan prev
+   ter-disable di awal.
+
+Diverifikasi: 1280 4-up + kartu ke-5 intip, klik next geser 1 kartu, prev disabled di awal / next
+disabled di ujung; mobile peek + tanpa panah; 1440 dalam lebar tema; 0 pageerror; `astro check` 0 error.
