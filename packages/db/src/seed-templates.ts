@@ -222,19 +222,9 @@ const HOMEPAGE: StoredTemplateData = {
         ctaLabel: "Lihat semua tulisan",
       },
     },
-    {
-      type: "rich-text",
-      props: {
-        id: "cta-batik",
-        heading: "Siap tampil anggun setiap hari?",
-        body: "Jelajahi koleksi Batik Nusantara dan temukan busana yang membuatmu percaya diri.",
-        ctaLabel: "Mulai Belanja",
-        // `semua` is a VIRTUAL collection kategori/[handle].astro always resolves — 200 on every
-        // store, measured. Not `/kategori/dress`, which only this one has.
-        ctaHref: "/kategori/semua",
-        theme: "terang",
-      },
-    },
+    // REMOVED (owner, 2026-07-24): the closing "Siap tampil anggun setiap hari?" rich-text CTA. The
+    // pre-footer band (Footer.astro) already hands the shopper "Belanja koleksi lengkap …" at the very
+    // bottom, so a second closing CTA right above it was redundant.
   ],
 };
 
