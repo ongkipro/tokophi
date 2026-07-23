@@ -183,7 +183,12 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
        one thing this page exists to get out of the way of. -->
   {
     article.imageUrl && (
-      <figure class="mx-auto mt-8 max-w-2xl px-4 sm:px-6">
+      <figure class="mx-auto mt-8 max-w-4xl px-4 sm:px-6">
+        {/* BREAKOUT — the hero is wider than the 42rem reading column (a `max-w-4xl` centred on the
+            same axis). On a desktop the same-width photo looked undersized against all that margin; a
+            wider feature image gives the article a proper lead without touching the text measure. On a
+            phone it is edge-to-edge either way. Ratio stays a fixed 3:2 (merchant art arrives in every
+            shape); flat, barely-rounded, no shadow — the photo is content, not card chrome. */}
         <img
           src={article.imageUrl}
           alt=""
