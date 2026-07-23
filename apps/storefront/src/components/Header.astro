@@ -701,18 +701,32 @@ const drawerEmail = (store.email ?? "").trim() || null;
       if (drawer.contains(document.activeElement)) openBtn.focus();
     }
 
-    // Scroll lock on `documentElement`, the same target the search palette uses — one file should not
-    // hold two ideas about what "lock the page" means. The scrollbar's width is handed back as padding
-    // so the layout behind does not shift (0 on a phone's overlay scrollbars, ~15px on a desktop).
+    // Scroll lock — the iOS-safe way, identical to the search palette so both panels behave the same. `overflow:hidden` on <html>/<body> is IGNORED by
+    // iOS Safari for touch scrolling, so the background kept moving behind the open panel. Pinning the
+    // BODY at `position:fixed; top:-scrollY` is the method that actually holds on every engine; the
+    // scroll position is put back on unlock. The desktop scrollbar's width is handed back as padding
+    // so the layout does not jump when it disappears.
+    var _savedScrollY = 0;
     function lockScroll() {
-      var root = document.documentElement;
-      var gap = window.innerWidth - root.clientWidth;
-      root.style.overflow = "hidden";
-      if (gap > 0) root.style.paddingRight = gap + "px";
+      _savedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      var gap = window.innerWidth - document.documentElement.clientWidth;
+      var body = document.body;
+      body.style.position = "fixed";
+      body.style.top = -_savedScrollY + "px";
+      body.style.left = "0";
+      body.style.right = "0";
+      body.style.width = "100%";
+      if (gap > 0) body.style.paddingRight = gap + "px";
     }
     function unlockScroll() {
-      document.documentElement.style.overflow = "";
-      document.documentElement.style.paddingRight = "";
+      var body = document.body;
+      body.style.position = "";
+      body.style.top = "";
+      body.style.left = "";
+      body.style.right = "";
+      body.style.width = "";
+      body.style.paddingRight = "";
+      window.scrollTo(0, _savedScrollY);
     }
 
     openBtn.addEventListener("click", open);
