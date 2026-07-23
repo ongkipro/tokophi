@@ -42,3 +42,18 @@ export function suggestGoogleCategory(...texts: Array<string | null | undefined>
   }
   return best ? { id: best.rule.id, path: best.rule.path, name: best.rule.name } : null;
 }
+
+// --- gender (ADR 0011 Phase 2) — Google feed `gender` attribute -------------------------------------
+const FEMALE_KW = ["wanita", "perempuan", "cewek", "gamis", "hijab", "khimar", "kerudung", "jilbab", "gaun", "kebaya", "daster", "bra", "lingerie", "bralette"];
+const MALE_KW = ["pria", "laki-laki", "laki laki", "cowok", "koko"];
+
+/** Guess the Google `gender` from product text. Returns "female"/"male", or null when unclear (the feed
+ *  then omits it or the seller sets it). Longest-match wins so "laki-laki" beats a stray "laki". */
+export function suggestGender(...texts: Array<string | null | undefined>): "female" | "male" | null {
+  const hay = texts.filter(Boolean).join(" ").toLowerCase();
+  if (!hay) return null;
+  let g: { v: "female" | "male"; len: number } | null = null;
+  for (const kw of FEMALE_KW) if (hay.includes(kw) && (!g || kw.length > g.len)) g = { v: "female", len: kw.length };
+  for (const kw of MALE_KW) if (hay.includes(kw) && (!g || kw.length > g.len)) g = { v: "male", len: kw.length };
+  return g?.v ?? null;
+}
