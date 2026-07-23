@@ -2,7 +2,6 @@
 import { IDR } from "@tokophi/lib/format";
 import { ImageOff } from "@lucide/astro";
 import { imageSrcSet, inStock, type Product } from "../data/catalog";
-import Stars from "./Stars.astro";
 
 interface Props {
   product: Product;
@@ -79,18 +78,15 @@ const discount =
     : 0;
 ---
 
-<!-- `focus-visible:ring-offset-2 ring-offset-cream` is not polish. The card already carries
-     `ring-1 ring-line`, so without an offset the focus ring draws flush on top of the border ring and
-     is all but invisible — on the most-used interactive element in the whole shop. ArticleCard already
-     had the offset; the product card was the odd one out. -->
-<a
-  href={`/produk/${product.handle}`}
-  class="group block overflow-hidden rounded-xl bg-white ring-1 ring-line transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none motion-reduce:hover:translate-y-0"
->
-  {/* No `rounded-xl` here. The parent <a> is already `rounded-xl overflow-hidden`, so this inner
-      radius is invisible at the top and fights the parent's clip at the bottom. Same-radius nesting
-      is the textbook overuse tell — the card is one surface, not two. */}
-  <div class="relative aspect-[3/4] overflow-hidden bg-brand-50">
+<!-- FRAMELESS / FLAT (owner, 2026-07-23). No card box — no white fill, no `ring-1 ring-line`, no drop
+     shadow. The product IS the image; the type sits flush beneath it on the page. The only hover is the
+     image easing up in scale and the title warming to brand — nothing lifts or casts a shadow (that was
+     the framed look this replaces). The focus ring hugs the rounded IMAGE, where the eye already is,
+     offset against the cream page so it reads on the shop's most-used control. -->
+<a href={`/produk/${product.handle}`} class="group block focus-visible:outline-none">
+  {/* The image is the card's ONE surface now that there is no outer box, so it carries the radius and
+      the clip (badges, the discount pill and the sold-out scrim all ride inside this rounded frame). */}
+  <div class="relative aspect-[3/4] overflow-hidden rounded-md bg-brand-50 group-focus-visible:ring-2 group-focus-visible:ring-brand-400 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-cream">
     {/* A product with NO photo renders the tinted frame, never a broken image. `catalog.ts` used to
         guess `/products/<handle>.webp` — a seed-only convention — so any merchant-created product
         without an upload showed the browser's broken-image glyph on every card. ArticleCard has
@@ -157,30 +153,45 @@ const discount =
         control's clothes. */}
   </div>
 
-  <div class="flex flex-1 flex-col p-4">
+  <div class="mt-3">
     <p class="text-[0.65rem] font-medium uppercase tracking-widest text-muted">{product.category}</p>
     {/* `line-clamp-2`, not `truncate`. At 360px in a 2-up grid the title box is ~124px, and Indonesian
         product names are long AND front-loaded with the same words — so `truncate` clipped adjacent
-        cards to the IDENTICAL string ("Dress Batik Par…", "Dress Batik Par…"). `min-h` keeps the price
-        rows aligned across a row when one title wraps and its neighbour does not. */}
-    <Heading class="mt-1 line-clamp-2 min-h-[2.75rem] font-medium text-ink transition-colors group-hover:text-brand-700">
+        cards to the IDENTICAL string ("Dress Batik Par…", "Dress Batik Par…"). Capped at TWO lines and
+        `min-h` reserves both, so a 1-line title and a 2-line title still align their prices in a row. */}
+    <Heading class="mt-1 line-clamp-2 min-h-[2.5rem] text-sm font-medium leading-snug text-ink transition-colors group-hover:text-brand-700">
       {product.name}
     </Heading>
-    {/* No published reviews → NO stars. Not "0 ulasan · ☆☆☆☆☆", which reads as a bad product rather
-        than a new one — and not an invented 4.5, which is what this used to show. */}
-    {rating && <Stars value={rating.value} count={rating.count} class="mt-1.5" />}
-    {/* `flex-wrap` — it was `nowrap`, and the struck-through price was CUT OFF ON EVERY PHONE.
-        Measured on live: at 360 the row is 124px and the two prices need 176, so "Rp 249.000" ran to
-        x=208 inside a box ending at 156 — 52px of it simply gone. Same at 390 and 430; a 2-up grid on
-        a phone never gives this row enough width, so it was not an edge case, it was the norm.
-        The PDP already wraps (`flex-wrap` at produk/[handle].astro) — the card was the odd one out.
-        `gap-y-0.5` keeps the second line tight so a promo card grows by a line, not a paragraph. */}
+    {/* RATING — one filled star + the number + count, not a five-star row. On a flat card the five
+        outlines competed with the price for weight; a single star reads as "rated 4.8" at a glance and
+        keeps the card quiet. No published reviews → NO rating at all (never an invented 4.5, never
+        "0 ulasan · ☆☆☆☆☆", which reads as a bad product rather than a new one). */}
+    {
+      rating && (
+        <div
+          class="mt-1.5 flex items-center gap-1 text-xs"
+          role="img"
+          aria-label={`Rating ${rating.value.toFixed(1)} dari 5${rating.count != null ? `, ${rating.count} ulasan` : ""}`}
+        >
+          <svg viewBox="0 0 20 20" class="size-3.5 shrink-0 fill-amber-400" aria-hidden="true">
+            <path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1.99 5.79L10 14.77l-5.2 2.73.99-5.79L1.58 7.62l5.82-.85L10 1.5Z" />
+          </svg>
+          <span class="font-semibold tabular-nums text-ink" aria-hidden="true">{rating.value.toFixed(1)}</span>
+          {rating.count != null && <span class="text-muted" aria-hidden="true">({rating.count})</span>}
+        </div>
+      )
+    }
+    {/* PRICE — the current price leads in ink; a compare-at follows, smaller and struck. `flex-wrap` so
+        a two-price row never clips on a 2-up phone grid (it did, `nowrap`, on every phone: the struck
+        price ran past the 124px column). `gap-y-0.5` keeps a wrapped second line tight. Unpriced → a
+        phrase, no figure, no struck price beside it. */}
     <div class="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-      {/* Unpriced → phrase, not a figure (no `tabular-nums`), and no struck price beside it. */}
-      <span class:list={["font-semibold text-ink", unpriced ? "text-sm" : "tabular-nums"]}>{unpriced ? "Hubungi untuk harga" : IDR(product.price)}</span>
+      <span class:list={["font-semibold text-ink", unpriced ? "text-sm" : "text-[0.95rem] tabular-nums"]}>
+        {unpriced ? "Hubungi untuk harga" : IDR(product.price)}
+      </span>
       {
         !unpriced && product.compareAt && (
-          <span class="text-sm text-muted line-through tabular-nums">{IDR(product.compareAt)}</span>
+          <span class="text-xs text-muted line-through tabular-nums">{IDR(product.compareAt)}</span>
         )
       }
     </div>

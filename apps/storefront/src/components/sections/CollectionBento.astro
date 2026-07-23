@@ -5,11 +5,13 @@
 // never point at a category a store does not have (the bug CategoryNav's free-text `items` still
 // carries). The only config is the heading.
 //
-// DETERMINISTIC, NOT RANDOM: the owner asked "random collection, gimana menurutmu?" — a layout that
-// reshuffles every load is jarring and, server-rendered, mismatches the client on hydrate. So the
-// arrangement is a FIXED mosaic pattern filled with the collections in their own order: a phone shows
-// a 2-up grid with every third tile full-width; a desktop shows a 4-col grid where each row carries
-// one wide tile, its side alternating — the Shopify "shop by collection" shape.
+// TWO ROWS, RANDOM WHEN THERE ARE MORE (owner, 2026-07-23). The mosaic is a fixed shape filled with
+// SIX collections — exactly two desktop rows (4-col grid: 1+2+1 then 2+1+1). When the store has more
+// than six, the six are picked at RANDOM each render, so the homepage teaser rotates which collections
+// it features instead of always the first six. Random is safe here precisely because this component
+// SSR-renders to static HTML and hydrates NOTHING — there is no client re-render to mismatch (the rule
+// against Math.random() in render paths guards hydrated islands, and this is not one). With six or
+// fewer, order is preserved — there is nothing to choose.
 import type { CollectionBentoConfig } from "@tokophi/sections";
 import { ArrowUpRight } from "@lucide/astro";
 
@@ -17,10 +19,20 @@ type Props = CollectionBentoConfig;
 const { heading } = Astro.props;
 
 const { catalog } = Astro.locals;
-// Cap at eight — two full desktop rows. A homepage shelf is a teaser, not the category index; more
-// than this and the mosaic stops being a glance and becomes a page. Everything is reachable from the
-// menu and /produk. (Silent cap, but it is a teaser by design, not a claim of completeness.)
-const collections = catalog.collections.filter((c) => c.name).slice(0, 8);
+const LIMIT = 6; // two desktop rows; see the span pattern below
+const pool = catalog.collections.filter((c) => c.name);
+// Fisher–Yates on a COPY, only when we must drop some — never mutate the shared catalog array.
+const collections =
+  pool.length > LIMIT
+    ? (() => {
+        const a = [...pool];
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a.slice(0, LIMIT);
+      })()
+    : pool.slice(0, LIMIT);
 
 // The span pattern. Mobile (2-col): every third tile spans both → a full-width band between pairs.
 // Desktop (4-col): a six-tile cycle of 1+2+1 then 2+1+1 — each row sums to 4 with one wide tile whose
