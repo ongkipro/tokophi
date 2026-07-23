@@ -6,7 +6,7 @@ import { recentProducts, randomProducts, type Product } from "../../data/catalog
 import { HOMEPAGE_CONTEXT, type SectionContext } from "./context";
 
 type Props = ProductGridConfig & { ctx?: SectionContext };
-const { heading, mode, collectionHandle, limit, columns, ctx = HOMEPAGE_CONTEXT } = Astro.props;
+const { heading, mode, collectionHandle, limit, columns, imageRatio = "3:4", ctx = HOMEPAGE_CONTEXT } = Astro.props;
 
 const catalog = Astro.locals.catalog;
 
@@ -35,6 +35,6 @@ const gridShape = ({ 2: "2-2", 3: "2-3", 4: "2-3-4" } as const)[columns];
 <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
   <SectionHeading align="center" title={heading} />
   <div class:list={["mt-10 grid grid-cols-2 gap-4", colsClass]}>
-    {products.map((p) => <ProductCard product={p} grid={gridShape} />)}
+    {products.map((p) => <ProductCard product={p} grid={gridShape} ratio={imageRatio} />)}
   </div>
 </section>

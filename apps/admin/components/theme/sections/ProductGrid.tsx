@@ -3,9 +3,11 @@ import type { ProductGridConfig } from "@tokophi/sections";
 // Editor preview only — uses placeholder tiles since real product data comes from the
 // store's catalog at storefront render time (apps/storefront/src/components/sections/ProductGrid.astro).
 const MODE_LABEL = { terlaris: "Terlaris", terbaru: "Terbaru", acak: "Acak" };
+const RATIO_ASPECT = { "1:1": "aspect-square", "3:4": "aspect-[3/4]", "4:5": "aspect-[4/5]" } as const;
 
-export function ProductGrid({ heading, mode, limit, columns }: ProductGridConfig) {
+export function ProductGrid({ heading, mode, limit, columns, imageRatio = "3:4" }: ProductGridConfig) {
   const cols = { 2: "grid-cols-2", 3: "grid-cols-3", 4: "grid-cols-4" }[columns] ?? "grid-cols-4";
+  const aspect = RATIO_ASPECT[imageRatio] ?? RATIO_ASPECT["3:4"];
   const tiles = Array.from({ length: Math.min(limit, columns * 2) });
 
   return (
@@ -21,7 +23,7 @@ export function ProductGrid({ heading, mode, limit, columns }: ProductGridConfig
           // FRAMELESS / FLAT — mirrors ProductCard.astro (owner 2026-07-23): no card box, no ring, no
           // shadow. The image is the one surface (thin `rounded-md`); type sits flush beneath (`mt-3`).
           <div key={i}>
-            <div className="aspect-[3/4] overflow-hidden rounded-md bg-brand-50" />
+            <div className={`${aspect} overflow-hidden rounded-md bg-brand-50`} />
             <div className="mt-3 space-y-1.5">
               {/* uppercase category kicker */}
               <div className="h-2 w-1/3 rounded bg-line" />

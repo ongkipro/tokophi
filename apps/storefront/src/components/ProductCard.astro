@@ -10,7 +10,12 @@ interface Props {
   /** Which grid this card sits in — picks the matching `sizes`. See SIZES below; this is a named
    *  layout rather than a raw string so a call site cannot invent one that does not match its CSS. */
   grid?: GridShape;
+  /** Image aspect ratio — the merchant's choice per Grid Produk section. Defaults to `3:4` (clothing).
+   *  Only the HEIGHT changes, so the `sizes`/`srcset` width math above is unaffected. */
+  ratio?: "1:1" | "3:4" | "4:5";
 }
+
+const RATIO_ASPECT = { "1:1": "aspect-square", "3:4": "aspect-[3/4]", "4:5": "aspect-[4/5]" } as const;
 
 // The card's title is a heading, and its correct level depends on the page. On a listing page the
 // card sits directly under the page `h1` with nothing between, so a hardcoded `h3` SKIPS h2 on every
@@ -54,8 +59,9 @@ const SIZES: Record<GridShape, string> = {
   "2-2": "(min-width: 1280px) 608px, (min-width: 640px) calc(50vw - 32px), calc(50vw - 24px)",
 };
 
-const { product, level = 3, grid = "2-3-4" } = Astro.props;
+const { product, level = 3, grid = "2-3-4", ratio = "3:4" } = Astro.props;
 const sizes = SIZES[grid];
+const aspectClass = RATIO_ASPECT[ratio];
 const Heading = `h${level}` as "h2" | "h3" | "h4";
 // `undefined` for seeded /products/*.webp and for the no-image case — Astro then omits both
 // attributes and the markup is exactly what it was before.
@@ -86,7 +92,7 @@ const discount =
 <a href={`/produk/${product.handle}`} class="group block focus-visible:outline-none">
   {/* The image is the card's ONE surface now that there is no outer box, so it carries the radius and
       the clip (badges, the discount pill and the sold-out scrim all ride inside this rounded frame). */}
-  <div class="relative aspect-[3/4] overflow-hidden rounded-md bg-brand-50 group-focus-visible:ring-2 group-focus-visible:ring-brand-400 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-cream">
+  <div class:list={["relative overflow-hidden rounded-md bg-brand-50 group-focus-visible:ring-2 group-focus-visible:ring-brand-400 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-cream", aspectClass]}>
     {/* A product with NO photo renders the tinted frame, never a broken image. `catalog.ts` used to
         guess `/products/<handle>.webp` — a seed-only convention — so any merchant-created product
         without an upload showed the browser's broken-image glyph on every card. ArticleCard has

@@ -108,6 +108,15 @@ export const puckConfig: Config<SectionConfigMap> = {
             { label: "4", value: 4 },
           ],
         },
+        imageRatio: {
+          type: "select",
+          label: "Rasio Gambar",
+          options: [
+            { label: "Potret 3:4 (pakaian)", value: "3:4" },
+            { label: "Potret 4:5", value: "4:5" },
+            { label: "Kotak 1:1", value: "1:1" },
+          ],
+        },
       },
       defaultProps: SECTION_DEFAULTS["product-grid"],
       render: (props) => <ProductGrid {...props} />,
