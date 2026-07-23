@@ -9,12 +9,27 @@
 // Carousel chrome (dots, autoplay) only appears from 2 slides up — a 1-slide hero, which is what
 // every pre-carousel saved template resolves to via `heroSlides()`, stays a plain static hero.
 import { heroSlides, HERO_INTERVAL_MS, type HeroConfig } from "@tokophi/sections";
+import { ArrowLeft, ArrowRight, CreditCard, Headphones, MessageCircle, Package, RotateCcw, ShieldCheck, Truck } from "@lucide/astro";
 
 type Props = HeroConfig;
-const { align, badge, ratingText, intervalMs } = Astro.props;
+const { align, badge, ratingText, intervalMs, features } = Astro.props;
 
 const slides = heroSlides(Astro.props);
 const isCarousel = slides.length > 1;
+
+// TRUST STRIP — only the badges the merchant actually set; an empty list renders no strip (never a
+// "Gratis Ongkir" a store doesn't offer). `icon` is a KEY into this fixed allow-list, so a merchant
+// picks from known glyphs and cannot inject a component or a URL; an unknown key degrades to a dot.
+const HERO_FEATURE_ICONS = {
+  truck: Truck,
+  shield: ShieldCheck,
+  returns: RotateCcw,
+  support: Headphones,
+  payment: CreditCard,
+  package: Package,
+  chat: MessageCircle,
+} as const;
+const featureList = (features ?? []).filter((f) => f.title);
 // 0 (or a nonsense value) = autoplay off; the merchant can park the hero on slide 1.
 const interval = typeof intervalMs === "number" && intervalMs >= 0 ? intervalMs : HERO_INTERVAL_MS;
 
@@ -28,7 +43,7 @@ const centered = align === "center";
 ---
 
 <section
-  class="relative isolate flex min-h-[32rem] items-end overflow-hidden bg-ink md:min-h-[36rem] md:items-center lg:min-h-[42rem]"
+  class="relative isolate flex min-h-[34rem] flex-col overflow-hidden bg-ink md:min-h-[40rem] lg:min-h-[46rem]"
   data-hero
   data-interval={interval}
   aria-roledescription={isCarousel ? "carousel" : undefined}
@@ -98,8 +113,9 @@ const centered = align === "center";
     )
   }
 
-  <div class="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 md:py-24">
-    <div class:list={["max-w-xl", centered && "mx-auto text-center"]}>
+  <div class="relative flex flex-1 items-end md:items-center">
+    <div class="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 md:py-20">
+      <div class:list={["max-w-2xl", centered && "mx-auto text-center"]}>
       {
         badge && (
           <span class="mb-6 inline-flex rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-medium tracking-wide text-white ring-1 ring-white/30 backdrop-blur-sm">
@@ -120,7 +136,7 @@ const centered = align === "center";
                 i === 0 ? "opacity-100" : "pointer-events-none opacity-0",
               ]}
             >
-              <h1 class="font-display text-4xl font-semibold leading-[1.08] text-balance text-white drop-shadow-sm sm:text-5xl md:text-[3.5rem]">
+              <h1 class="font-display text-[2.5rem] font-semibold leading-[1.03] tracking-tight text-balance text-white drop-shadow-sm sm:text-6xl md:text-[4rem] lg:text-[4.75rem]">
                 {slide.heading}
               </h1>
               <p
@@ -132,12 +148,28 @@ const centered = align === "center";
                 {slide.subheading}
               </p>
               {slide.ctaLabel && (
-                <div class:list={["mt-8 flex flex-wrap gap-3", centered && "justify-center"]}>
+                <div class:list={["mt-9 flex flex-wrap items-center gap-3 sm:gap-4", centered && "justify-center"]}>
+                  {/* PRIMARY — the slide's own CTA, as a pill with an arrow in a ring that fills on
+                      hover. `pl-2` so the round icon hugs the left edge the way the reference does. */}
                   <a
                     href={slide.ctaHref}
-                    class="rounded-full bg-white px-7 py-3 text-sm font-semibold text-ink shadow-lg shadow-ink/30 transition-all hover:-translate-y-0.5 hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+                    class="group inline-flex items-center gap-3 rounded-full bg-white py-2 pl-2 pr-6 text-sm font-semibold uppercase tracking-wide text-ink shadow-lg shadow-ink/30 transition-colors hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
                   >
+                    <span class="flex size-9 items-center justify-center rounded-full ring-1 ring-ink/15 transition-colors group-hover:bg-ink group-hover:text-white">
+                      <ArrowRight class="size-4" stroke-width={2} aria-hidden="true" />
+                    </span>
                     {slide.ctaLabel}
+                  </a>
+                  {/* SECONDARY — the universal "browse everything" page every store has (never a
+                      guessed collection). Ghost pill on the photo; a second action, not a second brand. */}
+                  <a
+                    href="/kategori/semua"
+                    class="group inline-flex items-center gap-3 rounded-full border border-white/40 py-2 pl-2 pr-6 text-sm font-semibold uppercase tracking-wide text-white transition-colors hover:border-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+                  >
+                    <span class="flex size-9 items-center justify-center rounded-full ring-1 ring-white/40 transition-colors group-hover:bg-white group-hover:text-ink">
+                      <ArrowRight class="size-4" stroke-width={2} aria-hidden="true" />
+                    </span>
+                    Lihat Semua
                   </a>
                 </div>
               )}
@@ -146,39 +178,90 @@ const centered = align === "center";
         }
       </div>
 
-      <div
-        class:list={[
-          "mt-9 flex flex-wrap items-center gap-x-6 gap-y-3",
-          centered && "justify-center",
-        ]}
-      >
-        {
-          isCarousel && (
-            <div
-              class="flex items-center gap-2"
-              role="tablist"
-              aria-label="Pilih sorotan"
-              data-hero-dots
-            >
-              {slides.map((slide, i) => (
-                <button
-                  type="button"
-                  role="tab"
-                  data-hero-dot
-                  data-index={i}
-                  aria-selected={i === 0 ? "true" : "false"}
-                  aria-label={`Sorotan ${i + 1}: ${slide.heading}`}
-                  tabindex={i === 0 ? 0 : -1}
-                  class="h-1.5 rounded-full bg-white/40 transition-all duration-300 hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink motion-reduce:transition-none aria-selected:w-8 aria-selected:bg-white w-2.5"
-                />
-              ))}
-            </div>
-          )
-        }
-        {ratingText && <p class="text-sm text-white/75">{ratingText}</p>}
+      {
+        isCarousel && (
+          <div
+            class:list={["mt-9 flex items-center gap-2 lg:hidden", centered && "justify-center"]}
+            role="tablist"
+            aria-label="Pilih sorotan"
+            data-hero-dots
+          >
+            {slides.map((slide, i) => (
+              <button
+                type="button"
+                role="tab"
+                data-hero-dot
+                data-index={i}
+                aria-selected={i === 0 ? "true" : "false"}
+                aria-label={`Sorotan ${i + 1}: ${slide.heading}`}
+                tabindex={i === 0 ? 0 : -1}
+                class="h-1.5 rounded-full bg-white/40 transition-all duration-300 hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink motion-reduce:transition-none aria-selected:w-8 aria-selected:bg-white w-2.5"
+              />
+            ))}
+          </div>
+        )
+      }
+        {ratingText && <p class:list={["mt-6 text-sm text-white/75", centered && "text-center"]}>{ratingText}</p>}
       </div>
     </div>
+
+    {/* PREV / NEXT — desktop only (a phone gets the dots above). Anchored to the bottom-right of the
+        content column, sitting just over the trust strip, exactly like the reference. */}
+    {
+      isCarousel && (
+        <div class="pointer-events-none absolute inset-x-0 bottom-5 mx-auto hidden max-w-7xl justify-end px-4 sm:px-6 lg:flex">
+          <div class="pointer-events-auto flex items-center gap-2">
+            <button
+              type="button"
+              data-hero-prev
+              aria-label="Sorotan sebelumnya"
+              class="flex size-12 items-center justify-center rounded-xl border border-white/30 text-white backdrop-blur-sm transition-colors hover:bg-white hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+            >
+              <ArrowLeft class="size-5" stroke-width={1.75} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              data-hero-next
+              aria-label="Sorotan berikutnya"
+              class="flex size-12 items-center justify-center rounded-xl border border-white/30 text-white backdrop-blur-sm transition-colors hover:bg-white hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+            >
+              <ArrowRight class="size-5" stroke-width={1.75} aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )
+    }
   </div>
+
+  {/* TRUST STRIP — a row of merchant badges across the bottom of the hero. Renders only when the
+      merchant set some (empty = nothing). Over the photo it gets a faint dark wash + top hairline so
+      the text stays legible; a phone scrolls it horizontally, a desktop lays it out in four columns. */}
+  {
+    featureList.length > 0 && (
+      <div class="relative z-10 border-t border-white/15 bg-ink/30 backdrop-blur-md">
+        <ul class="mx-auto flex max-w-7xl snap-x gap-5 overflow-x-auto px-4 py-4 sm:px-6 lg:grid lg:grid-cols-4 lg:gap-0 lg:overflow-visible lg:divide-x lg:divide-white/12 lg:py-5">
+          {featureList.map((f) => {
+            const Icon = HERO_FEATURE_ICONS[f.icon as keyof typeof HERO_FEATURE_ICONS];
+            return (
+              <li class="flex min-w-[14rem] shrink-0 snap-start items-center gap-3 lg:min-w-0 lg:px-6 lg:first:pl-0 lg:last:pr-0">
+                <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/20">
+                  {Icon ? (
+                    <Icon class="size-5" stroke-width={1.75} aria-hidden="true" />
+                  ) : (
+                    <span class="size-2 rounded-full bg-white" aria-hidden="true" />
+                  )}
+                </span>
+                <div class="min-w-0">
+                  <p class="text-sm font-semibold leading-tight text-white">{f.title}</p>
+                  {f.text && <p class="mt-0.5 text-xs leading-snug text-white/70">{f.text}</p>}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    )
+  }
 </section>
 
 <script>
@@ -266,6 +349,10 @@ const centered = align === "center";
         dots[index].focus();
       });
     });
+
+    // Desktop prev/next arrows — same `show()` the dots and autoplay use, so every path stays in sync.
+    root.querySelector<HTMLButtonElement>("[data-hero-prev]")?.addEventListener("click", () => show(index - 1));
+    root.querySelector<HTMLButtonElement>("[data-hero-next]")?.addEventListener("click", () => show(index + 1));
 
     root.addEventListener("pointerenter", () => {
       hovered = true;
