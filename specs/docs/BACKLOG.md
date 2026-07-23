@@ -315,6 +315,12 @@ unmeasurable**. Ordered.
   `lib/format`. Super-admin already consumes the shared packages.
 - [ ] **Diskon edit route** `/diskon/[id]` (create-only dialog today).
 - [ ] Tiptap rich text (textarea + a decorative toolbar today) · video slot · MinIO/S3.
+- [ ] **Product editor — wire the dead fields.** After the data-loss read-back fix (deskripsi / harga
+  coret / modal / SKU / tipe / vendor now hydrate from the DB instead of fabricated seeds), three fields
+  are still shown but never persist: **Barcode** (`product_variants.barcode` column exists — no migration,
+  just wire `ProductInput.barcode` → `createProduct`/`updateProduct` + read it back in `getProduct`), and
+  **Tags + SEO title/desc** (no columns on `products` yet — needs a migration adding `tags`,
+  `seo_title`, `seo_desc`; `collections` already has `seo_title`/`seo_desc` for the pattern).
 
 ---
 
