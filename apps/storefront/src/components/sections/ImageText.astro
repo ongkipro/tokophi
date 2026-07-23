@@ -1,19 +1,59 @@
 ---
+// ADR 0009 — Image + text section (storefront half). Placed/edited from the Tema builder.
+//
+// REDESIGN 2026-07-23 (owner reference, Shopify-style): a premium split banner — a large 4:3 image
+// on one side, the copy on the other, generous whitespace and a real type hierarchy. It used to be a
+// bare `aspect-[4/3]` box next to an unstyled heading + one grey paragraph; this is the same data
+// (heading, body, imageUrl, imageSide, eyebrow) given the layout the reference asks for.
+//
+// The BODY is split on blank lines into paragraphs, so a merchant who writes two thoughts gets two
+// blocks with air between them, not one wall — the reference copy is two short paragraphs. Nothing is
+// invented: an empty field renders nothing (no eyebrow rule, no image frame guessing a URL).
 import type { ImageTextConfig } from "@tokophi/sections";
-import SectionHeading from "../SectionHeading.astro";
 
 type Props = ImageTextConfig;
 const { heading, body, imageUrl, imageSide, eyebrow } = Astro.props;
+
+const paragraphs = (body ?? "")
+  .split(/\n{2,}/)
+  .map((p) => p.trim())
+  .filter(Boolean);
 ---
 
-<section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
-  <div class="grid items-center gap-10 md:grid-cols-2 lg:gap-16">
-    <div class:list={["aspect-[4/3] overflow-hidden rounded-2xl bg-brand-100", imageSide === "right" && "md:order-2"]}>
-      {imageUrl && <img src={imageUrl} alt="" class="h-full w-full object-cover" />}
+<section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24">
+  <div class="grid items-center gap-8 md:grid-cols-2 md:gap-12 lg:gap-20">
+    {/* IMAGE — large, 4:3, softly rounded. `imageSide === "right"` reorders it on md+ (it always
+        leads on a phone, where the eye wants the picture first). No image → the brand-tinted panel,
+        never a broken frame or a guessed URL. */}
+    <div
+      class:list={[
+        "relative aspect-[4/3] overflow-hidden rounded-3xl bg-brand-100 ring-1 ring-line",
+        imageSide === "right" && "md:order-2",
+      ]}
+    >
+      {
+        imageUrl ? (
+          <img src={imageUrl} alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />
+        ) : (
+          <span class="block h-full w-full bg-gradient-to-br from-brand-100 to-brand-200" aria-hidden="true" />
+        )
+      }
     </div>
-    <div>
-      <SectionHeading eyebrow={eyebrow} title={heading} />
-      <p class="mt-4 max-w-md text-muted">{body}</p>
+
+    {/* COPY — eyebrow · display heading · body paragraphs. The heading is the loudest thing here, so
+        it carries the display weight and a tight leading; the eyebrow is the reference's small kicker. */}
+    <div class="max-w-xl">
+      {eyebrow && <p class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{eyebrow}</p>}
+      {heading && <h2 class="font-display text-3xl font-semibold leading-tight text-balance text-ink sm:text-4xl">{heading}</h2>}
+      {
+        paragraphs.length > 0 && (
+          <div class="mt-5 space-y-4 text-base leading-relaxed text-muted sm:mt-6">
+            {paragraphs.map((para) => (
+              <p>{para}</p>
+            ))}
+          </div>
+        )
+      }
     </div>
   </div>
 </section>
