@@ -9,12 +9,14 @@ import {
   ArrowUpDown, X, Trash2, CircleCheck, FileText, Calendar,
 } from "lucide-react";
 
+import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/page-header";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num, dateTimeShort } from "@tokophi/lib/format";
 import { TODAY, type Product } from "@/lib/mock/store";
 import { cn } from "@tokophi/ui/lib/utils";
 import { useCan } from "@/components/admin/permissions";
+import { duplicateProduct, deleteProduct } from "@/lib/actions/products";
 
 import { Card, CardContent } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
@@ -62,18 +64,43 @@ function StatusBadge({ status }: { status: Product["status"] }) {
     : <Badge variant="outline" className="text-muted-foreground">Draft</Badge>;
 }
 
-function RowActions({ id }: { id: string }) {
+function RowActions({ id, name }: { id: string; name: string }) {
+  const canWrite = useCan("products:write");
   const canDelete = useCan("products:delete");
+  const router = useRouter();
+  const [pending, startTransition] = React.useTransition();
+
+  const onDuplicate = () =>
+    startTransition(async () => {
+      try {
+        const newId = await duplicateProduct(id);
+        toast.success("Produk diduplikat — membuka salinan");
+        router.push(`/produk/${newId}`);
+      } catch {
+        toast.error("Gagal menduplikat produk");
+      }
+    });
+  const onArchive = () =>
+    startTransition(async () => {
+      try {
+        await deleteProduct(id);
+        toast.success(`"${name}" diarsipkan`);
+        router.refresh();
+      } catch {
+        toast.error("Gagal mengarsipkan produk");
+      }
+    });
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi produk" />}>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi produk" disabled={pending} />}>
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem render={<Link href={`/produk/${id}`} />}><Pencil /> Edit</DropdownMenuItem>
-        <DropdownMenuItem><Copy /> Duplikat</DropdownMenuItem>
+        {canWrite && <DropdownMenuItem onClick={onDuplicate}><Copy /> Duplikat</DropdownMenuItem>}
         {canDelete && <DropdownMenuSeparator />}
-        {canDelete && <DropdownMenuItem variant="destructive"><Archive /> Arsipkan</DropdownMenuItem>}
+        {canDelete && <DropdownMenuItem variant="destructive" onClick={onArchive}><Archive /> Arsipkan</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -305,7 +332,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
                   <div className={cn("absolute left-1.5 top-1.5 z-[2] transition-opacity", isSel ? "opacity-100" : "opacity-0 group-hover:opacity-100")} onClick={(e) => e.stopPropagation()}>
                     <Checkbox checked={isSel} onCheckedChange={() => toggle(p.id)} aria-label={`Pilih ${p.name}`} className="border-2 bg-background/90 shadow-sm" />
                   </div>
-                  <div className="absolute right-1.5 top-1.5 z-[2]"><RowActions id={p.id} /></div>
+                  <div className="absolute right-1.5 top-1.5 z-[2]"><RowActions id={p.id} name={p.name} /></div>
                   {p.status === "draft" && <Badge variant="outline" className="absolute bottom-1.5 left-1.5 z-[2] bg-background/85 text-[10px]">Draft</Badge>}
                 </div>
                 {/* body */}
@@ -359,7 +386,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
                     <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">{num(p.unitsSold)}</TableCell>
                     <TableCell><StatusBadge status={p.status} /></TableCell>
                     <TableCell className="hidden lg:table-cell text-sm text-muted-foreground tabular-nums whitespace-nowrap">{dateTimeShort(p.addedTs)}</TableCell>
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}><RowActions id={p.id} /></TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}><RowActions id={p.id} name={p.name} /></TableCell>
                   </TableRow>
                 );
               })}

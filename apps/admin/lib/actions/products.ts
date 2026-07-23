@@ -1,6 +1,6 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
@@ -142,6 +142,78 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
   });
   revalidatePath("/produk");
   revalidatePath(`/produk/${id}`);
+}
+
+// Duplicate a product into a fresh DRAFT copy — options, variants (with inventory) and media
+// carried over, but performance rollups (unitsSold/rating/bestseller) reset and a unique handle
+// minted. Returns the new product id so the caller can open the copy for editing.
+export async function duplicateProduct(id: string): Promise<string> {
+  const { storeId: sid } = await requireCapability("products:write");
+  const newId = await withTenant(sid, async (db) => {
+    const [src] = await db
+      .select()
+      .from(schema.products)
+      .where(and(eq(schema.products.id, id), eq(schema.products.storeId, sid)))
+      .limit(1);
+    if (!src) throw new Error("Produk tidak ditemukan");
+
+    // unique handle: "<handle>-salinan", then -2, -3… if taken (unique on store_id+handle)
+    const taken = new Set(
+      (await db.select({ handle: schema.products.handle }).from(schema.products).where(eq(schema.products.storeId, sid))).map((r) => r.handle),
+    );
+    let handle = `${src.handle}-salinan`;
+    for (let n = 2; taken.has(handle); n++) handle = `${src.handle}-salinan-${n}`;
+
+    const [p] = await db
+      .insert(schema.products)
+      .values({
+        storeId: sid,
+        title: `${src.title} (Salinan)`,
+        handle,
+        description: src.description,
+        status: "draft",
+        productType: src.productType,
+        vendor: src.vendor,
+        category: src.category,
+        emoji: src.emoji,
+        sizes: src.sizes,
+        badge: src.badge,
+        hasVariants: src.hasVariants,
+        lengthCm: src.lengthCm,
+        widthCm: src.widthCm,
+        heightCm: src.heightCm,
+        templateId: src.templateId,
+      })
+      .returning();
+
+    const opts = await db.select().from(schema.productOptions).where(eq(schema.productOptions.productId, id)).orderBy(schema.productOptions.position);
+    if (opts.length) {
+      await db.insert(schema.productOptions).values(opts.map((o) => ({ productId: p.id, name: o.name, position: o.position })));
+    }
+
+    const [loc] = await db.select({ id: schema.locations.id }).from(schema.locations).where(eq(schema.locations.storeId, sid)).limit(1);
+    const vars = await db.select().from(schema.productVariants).where(eq(schema.productVariants.productId, id)).orderBy(schema.productVariants.position);
+    for (const v of vars) {
+      const [nv] = await db
+        .insert(schema.productVariants)
+        .values({
+          productId: p.id, storeId: sid, title: v.title, sku: v.sku, barcode: v.barcode,
+          priceIdr: v.priceIdr, compareAtIdr: v.compareAtIdr, costIdr: v.costIdr, weightGrams: v.weightGrams,
+          option1: v.option1, option2: v.option2, option3: v.option3, position: v.position,
+        })
+        .returning();
+      const [inv] = await db.select({ available: schema.inventoryLevels.available }).from(schema.inventoryLevels).where(eq(schema.inventoryLevels.variantId, v.id)).limit(1);
+      if (loc) await db.insert(schema.inventoryLevels).values({ variantId: nv.id, locationId: loc.id, available: inv?.available ?? 0 });
+    }
+
+    const media = await db.select().from(schema.productMedia).where(eq(schema.productMedia.productId, id)).orderBy(schema.productMedia.position);
+    if (media.length) {
+      await db.insert(schema.productMedia).values(media.map((m) => ({ productId: p.id, url: m.url, alt: m.alt, position: m.position })));
+    }
+    return p.id;
+  });
+  revalidatePath("/produk");
+  return newId;
 }
 
 // Products may be referenced by historical order line-items, so "delete" = archive

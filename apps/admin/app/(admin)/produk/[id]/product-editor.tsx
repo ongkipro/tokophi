@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createProduct, updateProduct, deleteProduct, type ProductInput } from "@/lib/actions/products";
+import { createProduct, updateProduct, deleteProduct, duplicateProduct, type ProductInput } from "@/lib/actions/products";
 import { uploadProductImage, deleteProductImage } from "@/lib/actions/media";
 import {
   ChevronLeft,
@@ -274,6 +274,18 @@ export function ProductEditor({ product }: { product?: Product }) {
       }
     });
   };
+  const handleDuplicate = () => {
+    if (!product) return;
+    startTransition(async () => {
+      try {
+        const newId = await duplicateProduct(product.id);
+        toast.success("Produk diduplikat — membuka salinan");
+        router.push(`/produk/${newId}`);
+      } catch {
+        toast.error("Gagal menduplikat produk");
+      }
+    });
+  };
 
   // ---- media upload/delete (local storage → product_media) ----
   const fileRef = React.useRef<HTMLInputElement>(null);
@@ -415,12 +427,14 @@ export function ProductEditor({ product }: { product?: Product }) {
                   <ShoppingCart /> Buat pesanan pembelian
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDuplicate}>
                   <Copy /> Duplikat
                 </DropdownMenuItem>
-                <DropdownMenuItem variant="destructive">
-                  <Archive /> Arsipkan
-                </DropdownMenuItem>
+                {canDelete && (
+                  <DropdownMenuItem variant="destructive" onClick={handleDelete}>
+                    <Archive /> Arsipkan
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
