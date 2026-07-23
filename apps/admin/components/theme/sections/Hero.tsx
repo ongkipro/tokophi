@@ -7,7 +7,8 @@ import { heroSlides, type HeroConfig } from "@tokophi/sections";
 // output (own Tailwind palette here, not the storefront's brand tokens — see
 // apps/storefront/src/components/sections/Hero.astro for the real render). Kept visually close on
 // purpose: same full-bleed layout (image as the section background, copy on top of it) so the
-// builder stays WYSIWYG-ish. `stone-900` stands in for the storefront's `ink`.
+// builder stays WYSIWYG-ish, now using the storefront's real `ink`/`brand` tokens (added to the
+// admin's globals.css @theme block).
 //
 // The slides come from `heroSlides()` (@tokophi/sections) — the SAME normaliser the Astro renderer
 // calls, so the editor and the storefront can never disagree about what a saved hero means (a hero
@@ -59,10 +60,10 @@ export function Hero(props: HeroConfig) {
   const centered = align === "center";
 
   return (
-    // `bg-stone-900` is not decoration: the copy is white, so it is what keeps the text legible when
-    // an image 404s or a slide has no imageUrl — which is the COMMON case in here, since hero images
-    // live in the storefront's public dir and usually don't resolve inside the admin.
-    <section className="relative isolate flex min-h-[28rem] flex-col overflow-hidden bg-stone-900">
+    // `bg-ink` is not decoration: the copy is white, so it is what keeps the text legible when an image
+    // 404s or a slide has no imageUrl — which is the COMMON case in here, since hero images live in the
+    // storefront's public dir and usually don't resolve inside the admin. Matches Hero.astro's `bg-ink`.
+    <section className="relative isolate flex min-h-[28rem] flex-col overflow-hidden bg-ink">
       {active.imageUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- editor preview of an arbitrary URL
         <img
@@ -81,9 +82,9 @@ export function Hero(props: HeroConfig) {
           left-aligned so only the text column is darkened. The horizontal wash is desktop-only, and
           narrow viewports drop the copy to the bottom instead — Puck can preview at phone width, so
           the breakpoints have to match the storefront or the builder would lie. */}
-      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-stone-900/90 via-stone-900/55 to-stone-900/30" />
+      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-ink/90 via-ink/55 to-ink/30" />
       {!centered && (
-        <div className="absolute inset-0 -z-10 hidden bg-gradient-to-r from-stone-900/80 via-stone-900/35 to-transparent md:block" />
+        <div className="absolute inset-0 -z-10 hidden bg-gradient-to-r from-ink/80 via-ink/35 to-transparent md:block" />
       )}
 
       {/* Content column — flex-1 so the trust strip can sit as a real flex child at the bottom, exactly
@@ -106,8 +107,8 @@ export function Hero(props: HeroConfig) {
             <div className={`mt-8 flex flex-wrap items-center gap-3 ${centered ? "justify-center" : ""}`}>
               {/* PRIMARY — arrow-in-circle pill (mirrors Hero.astro): a filled pill with a ringed round
                   icon hugging the left edge. */}
-              <span className="inline-flex items-center gap-3 rounded-full bg-white py-2 pl-2 pr-6 text-sm font-semibold uppercase tracking-wide text-stone-900 shadow-lg">
-                <span className="flex size-9 items-center justify-center rounded-full text-stone-900 ring-1 ring-stone-900/15">
+              <span className="inline-flex items-center gap-3 rounded-full bg-white py-2 pl-2 pr-6 text-sm font-semibold uppercase tracking-wide text-ink shadow-lg">
+                <span className="flex size-9 items-center justify-center rounded-full text-ink ring-1 ring-ink/15">
                   <ArrowRightIcon />
                 </span>
                 {active.ctaLabel}
@@ -151,7 +152,7 @@ export function Hero(props: HeroConfig) {
           merchant set `features` (empty = no strip). Mirrors Hero.astro; the real render maps each
           `icon` key to a lucide glyph — the preview shows the badge shape. */}
       {featureList.length > 0 && (
-        <div className="relative z-10 border-t border-white/15 bg-black/30 backdrop-blur-md">
+        <div className="relative z-10 border-t border-white/15 bg-ink/30 backdrop-blur-md">
           <ul className="mx-auto flex max-w-6xl gap-5 overflow-x-auto px-6 py-4">
             {featureList.map((f, i) => (
               <li key={i} className="flex min-w-[12rem] shrink-0 items-center gap-3">

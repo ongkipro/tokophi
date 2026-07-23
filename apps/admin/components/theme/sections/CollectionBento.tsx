@@ -10,7 +10,7 @@ const DESKTOP = [1, 2, 1, 2, 1, 1];
 export function CollectionBento({ heading }: CollectionBentoConfig) {
   return (
     <section className="mx-auto max-w-5xl p-6">
-      {heading ? <h2 className="mb-4 text-2xl font-semibold text-stone-800">{heading}</h2> : null}
+      {heading ? <h2 className="mb-4 text-2xl font-semibold text-ink">{heading}</h2> : null}
       <div className="grid auto-rows-[8rem] grid-cols-4 gap-3">
         {PLACEHOLDER.map((_, i) => (
           <div
@@ -19,16 +19,17 @@ export function CollectionBento({ heading }: CollectionBentoConfig) {
               (DESKTOP[i % DESKTOP.length] === 2 ? "col-span-2 " : "col-span-1 ") +
               // FRAMELESS + thin radius — mirrors CollectionBento.astro (owner 2026-07-23): `rounded-md`,
               // no `ring-1`. Six tiles = the storefront's two desktop rows (1+2+1 then 2+1+1).
-              "relative overflow-hidden rounded-md bg-gradient-to-br from-stone-300 to-stone-100"
+              "relative overflow-hidden rounded-md bg-gradient-to-br from-brand-100 to-brand-200"
             }
           >
-            <span className="absolute bottom-2 left-2 rounded-lg bg-white/90 px-2 py-1 text-xs font-medium text-stone-500">
+            {/* name chip — the storefront's `bg-cream/95` solid pill, ink text */}
+            <span className="absolute bottom-2 left-2 rounded-lg bg-cream/95 px-2 py-1 text-xs font-medium text-ink">
               Koleksi
             </span>
           </div>
         ))}
       </div>
-      <p className="mt-3 text-xs text-stone-400">
+      <p className="mt-3 text-xs text-ink/60">
         Terisi otomatis dari koleksi tokomu (maks. 6) saat tampil di storefront.
       </p>
     </section>

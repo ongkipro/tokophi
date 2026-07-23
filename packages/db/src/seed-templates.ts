@@ -129,18 +129,37 @@ const HOMEPAGE: StoredTemplateData = {
       },
     },
     {
+      // Image + text brand beat (owner reference #11) — a committed banner in public/sections, copy in
+      // the store's voice, a CTA to /kategori/semua (a page every store has, never a guessed handle).
+      type: "image-text",
+      props: {
+        id: "standar-kami",
+        eyebrow: "Standar Kami",
+        heading: "Gaya yang Menemani Setiap Langkah",
+        body: "Kami tidak sekadar membuat pakaian — kami merancang lemari pakaian di sekitar bahan yang paling ikonik.\n\nDari potongan klasik hingga siluet modern, setiap helai dibuat untuk kenyamanan, ketahanan, dan gaya yang tak lekang waktu.",
+        imageUrl: "/sections/denim-standard.webp",
+        imageSide: "left",
+        ctaLabel: "Belanja Koleksi",
+        ctaHref: "/kategori/semua",
+      },
+    },
+    {
       type: "rich-text",
       props: {
         id: "cerita-batik",
+        // Clean centred STATEMENT (owner reference #13): the eyebrow labels it, the story IS the big
+        // line. No button — it is a statement, not a call to action.
+        eyebrow: "Cerita Kami",
         // THE POINT OF THIS FILE. This paragraph was hard-coded into the platform's fallback homepage
         // and rendered, in quote marks, under every store's own name — a first-person claim about
         // batik and Indonesian women, signed "Gadget Murah ID — Jakarta". Here it is what it always
         // should have been: one merchant's words, on one merchant's template, about their own goods.
-        heading: "Cerita Kami",
-        body: "Setiap helai kami rancang untuk perempuan Indonesia — memadukan warisan batik dengan siluet masa kini, agar kamu tampil anggun tanpa kehilangan kenyamanan.",
-        ctaLabel: "", // empty → RichText renders no button
+        heading:
+          "Setiap helai kami rancang untuk perempuan Indonesia — memadukan warisan batik dengan siluet masa kini, agar kamu tampil anggun tanpa kehilangan kenyamanan.",
+        body: "",
+        ctaLabel: "", // empty → RichText renders no link
         ctaHref: "",
-        theme: "gelap",
+        theme: "terang",
       },
     },
     {
@@ -171,6 +190,17 @@ const HOMEPAGE: StoredTemplateData = {
         collectionHandle: "",
         limit: 8,
         columns: 4,
+      },
+    },
+    {
+      // Lookbook (owner reference #12) — a centred heading over one wide committed banner image.
+      // Image-forward and simple; the image lives in apps/storefront/public/sections.
+      type: "lookbook",
+      props: {
+        id: "lookbook-batik",
+        heading: "Lookbook",
+        description: "Inspirasi padu padan dari koleksi terbaru kami.",
+        imageUrl: "/sections/lookbook.webp",
       },
     },
     {

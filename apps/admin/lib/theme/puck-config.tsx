@@ -10,6 +10,7 @@ import { RichText } from "@/components/theme/sections/RichText";
 import { CategoryNav } from "@/components/theme/sections/CategoryNav";
 import { CollectionBento } from "@/components/theme/sections/CollectionBento";
 import { Blog } from "@/components/theme/sections/Blog";
+import { Lookbook } from "@/components/theme/sections/Lookbook";
 
 // ADR 0009 — the Puck `Config` is the admin-side half of the section registry
 // (@tokophi/sections/registry.ts is the shared shape; apps/storefront's Astro components are
@@ -165,6 +166,8 @@ export const puckConfig: Config<SectionConfigMap> = {
             { label: "Kanan", value: "right" },
           ],
         },
+        ctaLabel: { type: "text", label: "Teks Tombol (kosong = sembunyi)" },
+        ctaHref: { type: "text", label: "Link Tombol" },
       },
       defaultProps: SECTION_DEFAULTS["image-text"],
       render: (props) => <ImageText {...props} />,
@@ -189,6 +192,7 @@ export const puckConfig: Config<SectionConfigMap> = {
     "rich-text": {
       label: "Teks & Pernyataan",
       fields: {
+        eyebrow: { type: "text", label: "Label Kecil (kosong = sembunyi)" },
         heading: { type: "text", label: "Judul" },
         body: { type: "textarea", label: "Isi Teks" },
         ctaLabel: { type: "text", label: "Teks Tombol (kosong = sembunyi)" },
@@ -228,6 +232,16 @@ export const puckConfig: Config<SectionConfigMap> = {
       },
       defaultProps: SECTION_DEFAULTS["collection-bento"],
       render: (props) => <CollectionBento {...props} />,
+    },
+    lookbook: {
+      label: "Lookbook",
+      fields: {
+        heading: { type: "text", label: "Judul" },
+        description: { type: "text", label: "Deskripsi (kosong = sembunyi)" },
+        imageUrl: { type: "text", label: "URL Gambar" },
+      },
+      defaultProps: SECTION_DEFAULTS.lookbook,
+      render: (props) => <Lookbook {...props} />,
     },
     blog: {
       // "Jurnal" — the shopper-facing word. `/blog`'s own H1 says Jurnal; the merchant's editor for
