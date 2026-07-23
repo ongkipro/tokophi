@@ -31,6 +31,17 @@ import {
 } from "@tokophi/ui/dropdown-menu";
 
 const META_LIMIT = 160;
+const TITLE_LIMIT = 100;
+const SEO_TITLE_LIMIT = 70;
+
+// Char-counter colour: muted normally, amber near the cap, red at the cap — so the hard
+// maxLength stop is signalled instead of the input silently refusing more keystrokes.
+const counterClass = (len: number, max: number) =>
+  len >= max
+    ? "text-red-500"
+    : len >= max * 0.9
+      ? "text-amber-600 dark:text-amber-400"
+      : "text-muted-foreground";
 
 
 export function ArticleEditor({ post }: { post?: BlogPost }) {
@@ -47,6 +58,7 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
   const [blog, setBlog] = React.useState<string>(post?.blog ?? BLOG_CATEGORIES[0]);
   const [handle, setHandle] = React.useState(post?.handle ?? "");
   const [metaDesc, setMetaDesc] = React.useState("");
+  const [seoTitle, setSeoTitle] = React.useState("");
 
   const exampleTags = ["promo", "tips", "fashion"];
 
@@ -139,10 +151,16 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
           <Card>
             <CardContent className="flex flex-col gap-5">
               <div className="grid gap-2">
-                <Label htmlFor="judul">Judul</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="judul">Judul</Label>
+                  <span className={`text-xs tabular-nums ${counterClass(title.length, TITLE_LIMIT)}`}>
+                    {title.length}/{TITLE_LIMIT}
+                  </span>
+                </div>
                 <Input
                   id="judul"
                   value={title}
+                  maxLength={TITLE_LIMIT}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Contoh: 5 Tips Belanja Online yang Aman"
                   className="md:text-base"
@@ -197,8 +215,19 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="seo-judul">Judul SEO</Label>
-                <Input id="seo-judul" placeholder="Judul untuk mesin pencari" />
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="seo-judul">Judul SEO</Label>
+                  <span className={`text-xs tabular-nums ${counterClass(seoTitle.length, SEO_TITLE_LIMIT)}`}>
+                    {seoTitle.length}/{SEO_TITLE_LIMIT}
+                  </span>
+                </div>
+                <Input
+                  id="seo-judul"
+                  value={seoTitle}
+                  maxLength={SEO_TITLE_LIMIT}
+                  onChange={(e) => setSeoTitle(e.target.value)}
+                  placeholder="Judul untuk mesin pencari"
+                />
               </div>
 
               <div className="grid gap-2">
@@ -211,7 +240,7 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
                   onChange={(e) => setMetaDesc(e.target.value)}
                   placeholder="Ringkasan yang muncul di hasil pencarian…"
                 />
-                <p className="text-right text-xs text-muted-foreground tabular-nums">
+                <p className={`text-right text-xs tabular-nums ${counterClass(metaDesc.length, META_LIMIT)}`}>
                   {metaDesc.length}/{META_LIMIT}
                 </p>
               </div>
