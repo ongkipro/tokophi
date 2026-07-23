@@ -52,6 +52,7 @@ services:
       (npx tsx src/seed-journal.ts || echo 'journal seed skipped') &&
       (npx tsx src/seed-taxonomy.ts || echo 'taxonomy seed skipped') &&
       (npx tsx src/seed-products.ts || echo 'products seed skipped') &&
+      (npx tsx src/seed-demo-ratings.ts || echo 'demo-ratings seed skipped') &&
       (npx tsx src/seed-areas.ts || echo 'areas seed skipped')"
 
   admin:
