@@ -17,7 +17,9 @@ export function CollectionBento({ heading }: CollectionBentoConfig) {
             key={i}
             className={
               (DESKTOP[i % DESKTOP.length] === 2 ? "col-span-2 " : "col-span-1 ") +
-              "relative overflow-hidden rounded-2xl bg-gradient-to-br from-stone-300 to-stone-100 ring-1 ring-stone-200"
+              // FRAMELESS + thin radius — mirrors CollectionBento.astro (owner 2026-07-23): `rounded-md`,
+              // no `ring-1`. Six tiles = the storefront's two desktop rows (1+2+1 then 2+1+1).
+              "relative overflow-hidden rounded-md bg-gradient-to-br from-stone-300 to-stone-100"
             }
           >
             <span className="absolute bottom-2 left-2 rounded-lg bg-white/90 px-2 py-1 text-xs font-medium text-stone-500">
@@ -27,7 +29,7 @@ export function CollectionBento({ heading }: CollectionBentoConfig) {
         ))}
       </div>
       <p className="mt-3 text-xs text-stone-400">
-        Terisi otomatis dari koleksi tokomu (maks. 8) saat tampil di storefront.
+        Terisi otomatis dari koleksi tokomu (maks. 6) saat tampil di storefront.
       </p>
     </section>
   );

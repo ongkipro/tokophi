@@ -16,8 +16,21 @@ import { heroSlides, type HeroConfig } from "@tokophi/sections";
 //
 // NO autoplay in the editor on purpose — a hero that kept rotating while the merchant edits slide 3
 // would be unusable. The dots let them park the preview on the slide they're working on.
+// Small inline arrow — the storefront uses a lucide `ArrowRight`; inlined here to keep the preview
+// dependency-free (this file already avoids importing lucide-react).
+function ArrowRightIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4 fill-none stroke-current" strokeWidth={2} aria-hidden="true">
+      <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function Hero(props: HeroConfig) {
-  const { align, badge, ratingText } = props;
+  const { align, badge, ratingText, features } = props;
+  // TRUST STRIP — only the badges the merchant set; an empty list renders no strip (never an
+  // over-promise). Mirrors `featureList` in Hero.astro.
+  const featureList = (features ?? []).filter((f) => f.title);
   const slides = heroSlides(props);
   const [index, setIndex] = React.useState(0);
   const active = slides[Math.min(index, slides.length - 1)] ?? slides[0];
@@ -49,7 +62,7 @@ export function Hero(props: HeroConfig) {
     // `bg-stone-900` is not decoration: the copy is white, so it is what keeps the text legible when
     // an image 404s or a slide has no imageUrl — which is the COMMON case in here, since hero images
     // live in the storefront's public dir and usually don't resolve inside the admin.
-    <section className="relative isolate flex min-h-[28rem] items-end overflow-hidden bg-stone-900 md:items-center">
+    <section className="relative isolate flex min-h-[28rem] flex-col overflow-hidden bg-stone-900">
       {active.imageUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- editor preview of an arbitrary URL
         <img
@@ -73,7 +86,10 @@ export function Hero(props: HeroConfig) {
         <div className="absolute inset-0 -z-10 hidden bg-gradient-to-r from-stone-900/80 via-stone-900/35 to-transparent md:block" />
       )}
 
-      <div className="mx-auto w-full max-w-6xl px-6 py-14 md:py-16">
+      {/* Content column — flex-1 so the trust strip can sit as a real flex child at the bottom, exactly
+          like Hero.astro (flex-col: content grows, strip pinned under it). */}
+      <div className="relative flex flex-1 items-end md:items-center">
+        <div className="mx-auto w-full max-w-6xl px-6 py-14 md:py-16">
         <div className={`max-w-xl ${centered ? "mx-auto text-center" : "text-left"}`}>
           {badge && (
             <span className="mb-6 inline-flex rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white ring-1 ring-white/30 backdrop-blur-sm">
@@ -87,9 +103,21 @@ export function Hero(props: HeroConfig) {
             {active.subheading}
           </p>
           {active.ctaLabel && (
-            <div className={`mt-8 flex gap-3 ${centered ? "justify-center" : ""}`}>
-              <span className="rounded-full bg-white px-7 py-3 text-sm font-semibold text-stone-900">
+            <div className={`mt-8 flex flex-wrap items-center gap-3 ${centered ? "justify-center" : ""}`}>
+              {/* PRIMARY — arrow-in-circle pill (mirrors Hero.astro): a filled pill with a ringed round
+                  icon hugging the left edge. */}
+              <span className="inline-flex items-center gap-3 rounded-full bg-white py-2 pl-2 pr-6 text-sm font-semibold uppercase tracking-wide text-stone-900 shadow-lg">
+                <span className="flex size-9 items-center justify-center rounded-full text-stone-900 ring-1 ring-stone-900/15">
+                  <ArrowRightIcon />
+                </span>
                 {active.ctaLabel}
+              </span>
+              {/* SECONDARY — the universal "Lihat Semua" browse action, as a ghost arrow-pill. */}
+              <span className="inline-flex items-center gap-3 rounded-full border border-white/40 py-2 pl-2 pr-6 text-sm font-semibold uppercase tracking-wide text-white">
+                <span className="flex size-9 items-center justify-center rounded-full text-white ring-1 ring-white/40">
+                  <ArrowRightIcon />
+                </span>
+                Lihat Semua
               </span>
             </div>
           )}
@@ -116,7 +144,29 @@ export function Hero(props: HeroConfig) {
             {ratingText && <p className="text-sm text-white/75">{ratingText}</p>}
           </div>
         </div>
+        </div>
       </div>
+
+      {/* TRUST STRIP — a row of icon+title+text badges across the bottom, rendered only when the
+          merchant set `features` (empty = no strip). Mirrors Hero.astro; the real render maps each
+          `icon` key to a lucide glyph — the preview shows the badge shape. */}
+      {featureList.length > 0 && (
+        <div className="relative z-10 border-t border-white/15 bg-black/30 backdrop-blur-md">
+          <ul className="mx-auto flex max-w-6xl gap-5 overflow-x-auto px-6 py-4">
+            {featureList.map((f, i) => (
+              <li key={i} className="flex min-w-[12rem] shrink-0 items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/20">
+                  <span className="size-2 rounded-full bg-white" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-tight text-white">{f.title}</p>
+                  {f.text && <p className="mt-0.5 text-xs leading-snug text-white/70">{f.text}</p>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }
