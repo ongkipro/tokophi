@@ -5,8 +5,14 @@
 // Standalone layout (no site nav), same as the product landing.
 //
 // SECURITY NOTE: the HTML is set:html'd — it is the MERCHANT's own content for their OWN storefront
-// (the same trust level as the Store Builder). Astro renders it into the SSR string; injected <script>
-// tags do NOT execute (innerHTML semantics), so a pasted pixel snippet won't run — a deliberate,
+// (the same trust level as the Store Builder). Astro renders it into the SSR string; an injected
+// SCRIPT tag does NOT execute (innerHTML semantics), so a pasted pixel snippet won't run — a deliberate,
+// ⚠️ Do NOT write the literal opening `script` tag with angle brackets in THIS frontmatter comment.
+// Vite's dependency scanner extracts `<script>…</script>` regions from a .astro file with a naive
+// match that does not respect `//` comments — a literal one here made it treat everything down to the
+// real client script's `</script>` (incl. the `<LandingLayout>` template) as one TS script, and
+// esbuild then read `<LandingLayout` as a type cast: "Expected > but found title". It broke every
+// `npm run dev` cold start with a full-screen error overlay while the production build stayed green.
 // conservative default. If a merchant later needs real pixels, that becomes an explicit, reviewed head
 // injection, not arbitrary body script.
 import LandingLayout from "../../layouts/LandingLayout.astro";
