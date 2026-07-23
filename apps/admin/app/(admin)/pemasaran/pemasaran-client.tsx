@@ -32,6 +32,8 @@ import {
   TableHeader,
   TableRow,
 } from "@tokophi/ui/table";
+import { FeedCard } from "./feed-card";
+import type { FeedStatus } from "@/lib/data/feed";
 
 // ---------------------------------------------------------------------------
 // NOTHING on this page may show ad spend, impressions, clicks, ROAS, or a Pixel
@@ -372,7 +374,7 @@ function PelacakanTab({ channels }: { channels: AdChannelStatus[] }) {
 }
 
 // ---- page ----
-export function PemasaranClient({ channels }: { channels: AdChannelStatus[] }) {
+export function PemasaranClient({ channels, feed }: { channels: AdChannelStatus[]; feed: FeedStatus }) {
   const [tab, setTab] = React.useState("saluran");
 
   return (
@@ -400,6 +402,8 @@ export function PemasaranClient({ channels }: { channels: AdChannelStatus[] }) {
           <Download /> Ekspor laporan
         </Button>
       </PageHeader>
+
+      <FeedCard feed={feed} />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as string)}>
         <TabsList className="mb-4">
