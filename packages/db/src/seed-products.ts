@@ -19,6 +19,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { db, client, schema } from "./client";
 import { and, eq } from "drizzle-orm";
+import { suggestGoogleCategory } from "@tokophi/lib/taxonomy-suggest";
 
 const DEMO_SLUG = "batik-nusantara";
 // Fixed anchor so re-runs are deterministic; small per-item offset so they sort newest-first sensibly.
@@ -197,6 +198,7 @@ async function main() {
     }
 
     const imageUrl = await makeImage(d, store.id);
+    const gcat = suggestGoogleCategory(d.title, d.category); // standard taxonomy (ADR 0011)
     const [p] = await db
       .insert(schema.products)
       .values({
@@ -209,6 +211,8 @@ async function main() {
         emoji: d.emoji,
         seoTitle: d.seoTitle,
         seoDesc: d.seoDesc,
+        googleCategoryId: gcat?.id ?? null,
+        googleCategoryPath: gcat?.path ?? null,
         sizes: d.sizes,
         unitsSold: 0,
         lengthCm: 1,

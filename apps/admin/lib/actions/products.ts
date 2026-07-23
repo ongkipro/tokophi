@@ -23,6 +23,8 @@ export type ProductInput = {
   vendor?: string;
   seoTitle?: string;
   seoDesc?: string;
+  googleCategoryId?: number | null;
+  googleCategoryPath?: string | null;
   handle: string;
   price: number;
   compareAt?: number | null;
@@ -53,6 +55,8 @@ const productFields = (i: ProductInput) => ({
   vendor: i.vendor || null,
   seoTitle: i.seoTitle || null,
   seoDesc: i.seoDesc || null,
+  googleCategoryId: i.googleCategoryId ?? null,
+  googleCategoryPath: i.googleCategoryPath || null,
   lengthCm: i.lengthCm ?? null,
   widthCm: i.widthCm ?? null,
   heightCm: i.heightCm ?? null,
