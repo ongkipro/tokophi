@@ -85,6 +85,15 @@ const HOMEPAGE: StoredTemplateData = {
         align: "left",
         badge: "Koleksi 2026",
         ratingText: "",
+        // Trust strip along the bottom of the hero. True platform-level promises (nationwide shipping,
+        // verified payment, guest checkout, WhatsApp help) — never an over-promise a store can't keep.
+        // Lives in the seed so it survives the every-deploy homepage UPSERT (a DB-only edit is wiped).
+        features: [
+          { icon: "truck", title: "Kirim ke Seluruh Indonesia", text: "Lewat kurir pilihanmu, diproses cepat" },
+          { icon: "shield", title: "Pembayaran Aman", text: "Transfer, Virtual Account, & QRIS" },
+          { icon: "returns", title: "Belanja Tanpa Ribet", text: "Checkout cepat tanpa perlu daftar akun" },
+          { icon: "chat", title: "Bantuan via WhatsApp", text: "Tim kami siap bantu pesananmu" },
+        ],
       },
     },
     {
@@ -108,6 +117,15 @@ const HOMEPAGE: StoredTemplateData = {
           { label: "Busana Muslim", imageUrl: "/products/hijab-voal.webp", href: "/kategori/busana-muslim" },
           { label: "Loungewear", imageUrl: "/products/piyama-satin.webp", href: "/kategori/loungewear" },
         ],
+      },
+    },
+    {
+      // "Belanja per Koleksi" — a mosaic of the store's live collections (two rows, random six when
+      // there are more). Config is just the heading; the storefront fills the tiles from the catalogue.
+      type: "collection-bento",
+      props: {
+        id: "bento-koleksi",
+        heading: "Belanja per Koleksi",
       },
     },
     {
