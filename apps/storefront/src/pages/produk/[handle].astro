@@ -2,7 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import ProductCard from "../../components/ProductCard.astro";
 import SectionHeading from "../../components/SectionHeading.astro";
-import { Check, ChevronDown, ImageOff } from "@lucide/astro";
+import { Check, ChevronDown, ImageOff, RotateCcw, Truck } from "@lucide/astro";
 import Stars from "../../components/Stars.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import { IDR } from "@tokophi/lib/format";
@@ -589,14 +589,19 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             short hook by the price is still the above-the-fold summary. */}
         </div>{/* end buy box */}
 
-        {/* Product detail — FRAMELESS (no cards): Deskripsi + Spesifikasi read openly, Pengiriman folds
-            into a lightweight accordion. ONE hairline separates the whole group from the buy box; inside,
-            sections are spaced, never boxed — the "fewer lines" the brief asks for. */}
-        <div class="order-3 space-y-9 border-t border-line pt-8 md:order-none md:mt-10">
+        {/* Product detail — ONE consistent accordion group (the Shopify/#18 shape): every part is a
+            <details> with the same summary + chevron, so Deskripsi, Spesifikasi and Pengiriman read as
+            siblings, not one-off blocks. Deskripsi + Spesifikasi ship OPEN (primary content, and open
+            keeps them visible for SEO — the copy stays in the DOM either way); Pengiriman folds. A single
+            hairline per row is the only rule; nothing is boxed. `pdp-acc` styles the reveal in one place. */}
+        <div class="order-3 border-t border-line md:order-none md:mt-10">
           {product.description.trim() && (
-            <section>
-              <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-ink">Deskripsi</h2>
-              <div class="mt-4 space-y-4 leading-relaxed text-muted">
+            <details open class="pdp-acc group border-b border-line">
+              <summary class="flex cursor-pointer list-none items-center justify-between py-4 text-sm font-semibold uppercase tracking-[0.14em] text-ink transition-colors hover:text-brand-700 [&::-webkit-details-marker]:hidden">
+                Deskripsi
+                <ChevronDown class="size-4 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180" />
+              </summary>
+              <div class="space-y-4 pb-6 leading-relaxed text-muted">
                 {product.description
                   .split(/\n{2,}/)
                   .map((para) => para.trim())
@@ -605,14 +610,17 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                     <p class="whitespace-pre-line">{para}</p>
                   ))}
               </div>
-            </section>
+            </details>
           )}
 
           {specs.length > 0 && (
-            <section>
-              <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-ink">Spesifikasi</h2>
+            <details open class="pdp-acc group border-b border-line">
+              <summary class="flex cursor-pointer list-none items-center justify-between py-4 text-sm font-semibold uppercase tracking-[0.14em] text-ink transition-colors hover:text-brand-700 [&::-webkit-details-marker]:hidden">
+                Spesifikasi
+                <ChevronDown class="size-4 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180" />
+              </summary>
               {/* Zebra rows, no borders — the frameless table in the reference. */}
-              <dl class="mt-4 overflow-hidden rounded-lg text-sm">
+              <dl class="overflow-hidden rounded-lg pb-6 text-sm">
                 {specs.map((s, i) => (
                   <div class:list={["grid grid-cols-[7rem_1fr] gap-4 px-3 py-2.5", i % 2 === 0 && "bg-brand-50/70"]}>
                     <dt class="text-muted">{s.label}</dt>
@@ -620,17 +628,23 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                   </div>
                 ))}
               </dl>
-            </section>
+            </details>
           )}
 
-          <details class="group">
-            <summary class="flex cursor-pointer list-none items-center justify-between text-sm font-semibold uppercase tracking-[0.14em] text-ink [&::-webkit-details-marker]:hidden">
+          <details class="pdp-acc group border-b border-line">
+            <summary class="flex cursor-pointer list-none items-center justify-between py-4 text-sm font-semibold uppercase tracking-[0.14em] text-ink transition-colors hover:text-brand-700 [&::-webkit-details-marker]:hidden">
               Pengiriman &amp; Pengembalian
-              <ChevronDown class="size-4 text-muted transition-transform duration-200 group-open:rotate-180" />
+              <ChevronDown class="size-4 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180" />
             </summary>
-            <div class="mt-4 space-y-2 leading-relaxed text-muted">
-              <p>{store.city ? `Dikirim dari ${store.city}. ` : ""}Ongkir dihitung otomatis saat checkout sesuai alamat dan kurir yang kamu pilih.</p>
-              <p>Untuk penukaran atau pengembalian, hubungi {store.name}{store.whatsapp ? " lewat WhatsApp" : ""}.</p>
+            <div class="space-y-3 pb-6 text-sm leading-relaxed text-muted">
+              <p class="flex gap-2.5">
+                <Truck class="mt-0.5 size-4 shrink-0 text-brand-500" stroke-width={1.75} />
+                <span>{store.city ? `Dikirim dari ${store.city}. ` : ""}Ongkir dihitung otomatis saat checkout sesuai alamat dan kurir yang kamu pilih.</span>
+              </p>
+              <p class="flex gap-2.5">
+                <RotateCcw class="mt-0.5 size-4 shrink-0 text-brand-500" stroke-width={1.75} />
+                <span>Untuk penukaran atau pengembalian, hubungi {store.name}{store.whatsapp ? " lewat WhatsApp" : ""}.</span>
+              </p>
             </div>
           </details>
         </div>
@@ -658,6 +672,34 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     )
   }
 </Layout>
+
+<style is:global>
+  /* Accordion reveal for the product-detail sections. Animates height + fade where the browser can
+     interpolate to `auto` (::details-content + interpolate-size); everywhere else the rule is ignored
+     or block-size:auto simply applies without a tween — the content always shows when open, so this is
+     pure progressive enhancement, never a way to hide copy. */
+  :root {
+    interpolate-size: allow-keywords;
+  }
+  .pdp-acc::details-content {
+    block-size: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+      block-size 0.28s ease,
+      opacity 0.28s ease,
+      content-visibility 0.28s allow-discrete;
+  }
+  .pdp-acc[open]::details-content {
+    block-size: auto;
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pdp-acc::details-content {
+      transition: none;
+    }
+  }
+</style>
 
 <script is:inline>
   (function () {
