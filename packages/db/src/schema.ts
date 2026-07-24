@@ -755,6 +755,36 @@ export const discountUsages = pgTable("discount_usages", {
   usedAt: createdAt(),
 });
 
+// ---------- flash sale (PROMO P3) ----------
+// A time-boxed price drop on chosen products. The window is [startsAt, endsAt); `status` is the merchant's
+// switch (a `nonaktif` sale never runs even inside its window). "Active NOW" = status='aktif' AND now in
+// the window — computed at read time, never stored, so the clock alone flips it on and off.
+export const flashSales = pgTable("flash_sales", {
+  id: pk(),
+  storeId: uuid().notNull().references(() => stores.id),
+  name: text().notNull(),
+  startsAt: ts().notNull(),
+  endsAt: ts().notNull(),
+  status: discountStatus().notNull().default("terjadwal"),
+});
+
+// One row per product in the sale. `salePriceIdr` is the ABSOLUTE promo price and applies to every variant
+// of the product — /api/public/order uses it ONLY when it is below the variant's base price (a sale never
+// raises a price). No `store_id`: tenancy comes from the parent `flash_sales` row (CHILD-TABLE RULE —
+// writes must read the parent inside the same withTenant txn and bail if it is not the tenant's).
+// lazy: per-product flat price — fine while products are single-variant (the demo). Upgrade to per-variant
+// (key on variant_id) when a multi-variant product needs distinct sale prices per size/colour.
+export const flashSaleItems = pgTable(
+  "flash_sale_items",
+  {
+    id: pk(),
+    flashSaleId: uuid().notNull().references(() => flashSales.id, { onDelete: "cascade" }),
+    productId: uuid().notNull().references(() => products.id),
+    salePriceIdr: money().notNull(),
+  },
+  (t) => [unique().on(t.flashSaleId, t.productId)],
+);
+
 // ---------- content (Toko Online) ----------
 export const pages = pgTable(
   "pages",

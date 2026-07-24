@@ -533,6 +533,13 @@
       "when": 1784865264930,
       "tag": "0075_free_shipping",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1784867970925,
+      "tag": "0076_flash_sale",
+      "breakpoints": true
     }
   ]
 }

@@ -8,7 +8,7 @@
 // INVARIANT: nothing here runs at module scope / build time — `astro build` must stay DB-FREE
 // (the Docker image is built without DATABASE_URL). All DB access happens inside these functions.
 import { db, schema } from "@tokophi/db";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { StoredTemplateData } from "@tokophi/sections";
 import { cached } from "./cache";
 import type { StoreInfo } from "./store";
@@ -64,6 +64,9 @@ export type Product = {
   createdAt: number; // epoch ms — for the "terbaru" Grid Produk mode (ADR 0009)
   /** ADR 0009 — the named `product` template this product renders with (null = store default). */
   templateId: string | null;
+  /** PROMO P3 — ISO end of the flash sale this product is in RIGHT NOW (undefined = not on sale). When
+      set, `price` is the sale price and `compareAt` is the original; drives the countdown + sale badge. */
+  flashEndsAt?: string;
 };
 /**
  * CAN A SHOPPER BUY THIS RIGHT NOW? The ONE answer — used by the card, the PDP's buy box, its
@@ -359,14 +362,42 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
     });
   };
 
+  // Flash sale (PROMO P3): productId → { price, endsAt } for sales live RIGHT NOW. Same window rule the
+  // order API applies (status='aktif' AND now ∈ [starts_at, ends_at)), so the price the card advertises
+  // is the price the order will charge. Lower price wins if a product is in two overlapping sales.
+  const flashRows = await db
+    .select({ productId: schema.flashSaleItems.productId, price: schema.flashSaleItems.salePriceIdr, endsAt: schema.flashSales.endsAt })
+    .from(schema.flashSaleItems)
+    .innerJoin(schema.flashSales, eq(schema.flashSales.id, schema.flashSaleItems.flashSaleId))
+    .where(
+      and(
+        eq(schema.flashSales.storeId, storeId),
+        eq(schema.flashSales.status, "aktif"),
+        sql`now() >= ${schema.flashSales.startsAt}`,
+        sql`now() < ${schema.flashSales.endsAt}`,
+      ),
+    );
+  const flashById = new Map<string, { price: number; endsAt: Date }>();
+  for (const f of flashRows) {
+    const prev = flashById.get(f.productId);
+    if (!prev || f.price < prev.price) flashById.set(f.productId, { price: f.price, endsAt: f.endsAt });
+  }
+
   const products: Product[] = rows.map((r) => {
     const options = optionsFor(r.id);
     const variants = variantsById.get(r.id) ?? [];
+    // A live flash sale overrides the display price ONLY downward: `price` becomes the sale, `compareAt`
+    // keeps (or becomes) the original so the card strikes through it. Matches the order's Math.min.
+    const flash = flashById.get(r.id);
+    const onSale = flash != null && flash.price < r.price;
+    const price = onSale ? flash!.price : r.price;
+    const compareAt = onSale ? r.price : (r.compareAt ?? undefined);
     return {
       handle: r.handle,
       name: r.name,
-      price: r.price,
-      compareAt: r.compareAt ?? undefined,
+      price,
+      compareAt,
+      flashEndsAt: onSale ? flash!.endsAt.toISOString() : undefined,
       category: r.category ?? "",
       categoryHandle: slugify(r.category ?? ""),
       // "" = this product has no photo. It used to GUESS a filename from the handle

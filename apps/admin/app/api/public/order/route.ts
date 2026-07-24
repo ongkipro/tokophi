@@ -21,6 +21,7 @@ import { getCodPolicy } from "@/lib/cod";
 import { quoteShipping, findRate } from "@/lib/shipping-quote";
 import { computeTax } from "@tokophi/lib/tax";
 import { applyDiscount } from "@/lib/promo";
+import { activeFlashPrices } from "@/lib/flash";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the
@@ -222,6 +223,11 @@ async function handle(req: Request) {
   // for nothing. Same class of hole as the client-posted ongkir below. Stock is checked BEFORE
   // anything is written, so an out-of-stock cart is rejected cleanly (real oversell prevention).
   const resolved: { variantId: string; title: string; price: number; qty: number; handle: string }[] = [];
+  // Flash sale (PROMO P3): productId → promo price for sales live RIGHT NOW. Applied below per line,
+  // ONLY when it undercuts the variant's base price — the storefront advertised it, so the order must
+  // honour it; this is where that advertised price becomes money.
+  const flash = await activeFlashPrices(store.id);
+
   for (const i of items) {
     const qty = Math.max(1, Math.floor(Number(i.qty) || 1));
     const [prod] = await db
@@ -279,11 +285,16 @@ async function handle(req: Request) {
     const available = Number(inv?.available ?? 0);
     if (available < qty) return bad(`Stok "${prod.title}" tidak mencukupi (sisa ${available}).`, "items");
 
+    // A live flash sale price overrides the base, but only DOWNWARD (never raises it — a misconfigured
+    // sale above list still charges list). Same object the storefront shows as the struck-through deal.
+    const flashPrice = flash.get(prod.id);
+    const unitPrice = flashPrice != null ? Math.min(match.price, flashPrice) : match.price;
+
     resolved.push({
       variantId: match.id,
       // The line-item title comes from the DB too — the client's `name` is decoration.
       title: match.title && match.title !== "Default" ? `${prod.title} — ${match.title}` : prod.title,
-      price: match.price,
+      price: unitPrice,
       qty,
       handle: i.handle!,
     });
