@@ -183,9 +183,17 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
          is an IMPLICIT `auto` track — and an auto track is sized from its CONTENT, so it may exceed
          the container. The gallery's thumbnail strip made it do exactly that and the page scrolled
          sideways on a 320-360px phone. `grid-cols-1` = `1fr`, bounded by the available space. -->
-    <div class="grid grid-cols-1 gap-10 md:grid-cols-2 lg:gap-14">
+    <div class="flex flex-col gap-10 md:grid md:grid-cols-2 md:items-start lg:gap-14">
+      {/* Two columns on md+: LEFT = gallery + reviews, RIGHT = buy box + the long Deskripsi Produk (the
+          reference's shape — reviews under the thumbnail, the description filling the column beside them).
+          `md:items-start` is load-bearing: without it the grid stretched the gallery to match the taller
+          right column, forcing the 3:4 main image to ~1:1.9 (the "memanjang" bug).
+          On MOBILE the columns collapse to a single flow via `contents`, and `order-*` interleaves the
+          four blocks into the right reading order — gallery → buy box → description → reviews — so the buy
+          actions are never buried under the reviews. */}
+      <div class="contents md:flex md:flex-col md:gap-14">
       <!-- Gallery -->
-      <div class="flex flex-col gap-4 sm:flex-row-reverse">
+      <div class="order-1 flex flex-col gap-4 sm:flex-row-reverse md:order-none">
         <!-- Main image -->
         <div class="relative aspect-[3/4] flex-1 overflow-hidden rounded-xl bg-brand-50">
           {/* This is the LCP element of the most important page in the shop and it had no priority
@@ -250,10 +258,96 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         </div>
       </div>
 
-      <!-- Info — no longer sticky: the column now carries the full Deskripsi Produk below the buy box,
-           so it is a tall scrolling column beside the gallery (the 2-column reading the reference asks
-           for), not a short floating card. -->
-      <div class="md:self-start">
+        {/* Ulasan — in the LEFT column beneath the gallery (the reference's shape) so the long Deskripsi
+            Produk fills the right column beside it, instead of the reviews running full-width and leaving
+            the left side blank under a short gallery. Rendered ONLY when real published reviews exist: the
+            score + histogram are COUNTED from verified-purchase reviews (seed-reviews.ts), never fitted to
+            a seed column — a product with no reviews shows no section (a new product is not a bad one). */}
+        {rating && (
+          <div id="ulasan" class="order-4 scroll-mt-24 border-t border-line pt-10 md:order-none">
+            <SectionHeading eyebrow="Ulasan Pembeli" title="Apa kata pelanggan" />
+
+            <div class="mt-8 grid gap-8 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-12">
+              {/* Average — left-aligned Judge.me/Loox shape: a big score with "/ 5,0", the stars, and a
+                  verified-ratings line. No card: it sits inside the section's own border-t. */}
+              <div>
+                <div class="flex items-end gap-2">
+                  <span class="font-display text-5xl font-semibold leading-none text-ink tabular-nums">{rating.value.toFixed(1)}</span>
+                  <span class="pb-1 text-lg text-muted">/ 5,0</span>
+                </div>
+                <Stars value={rating.value} size="md" showValue={false} class="mt-3" />
+                <p class="mt-2 text-xs font-medium uppercase tracking-[0.12em] text-muted">
+                  Dari {rating.count} ulasan terverifikasi
+                </p>
+              </div>
+
+              <div class="space-y-2">
+                {breakdown.map((n, i) => (
+                  <div class="flex items-center gap-3 text-sm">
+                    <span class="flex w-10 shrink-0 items-center gap-1 tabular-nums text-muted">
+                      {5 - i}
+                      <svg viewBox="0 0 20 20" class="h-3 w-3 fill-amber-400">
+                        <path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1.99 5.79L10 14.77l-5.2 2.73.99-5.79L1.58 7.62l5.82-.85L10 1.5Z" />
+                      </svg>
+                    </span>
+                    <div class="h-2 flex-1 overflow-hidden rounded-full bg-brand-50">
+                      <div class="h-full rounded-full bg-amber-400" style={`width:${(n / maxBucket) * 100}%`} />
+                    </div>
+                    <span class="w-10 shrink-0 text-right tabular-nums text-muted">{n}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {reviews.length > 0 && (
+              <ul class="mt-10 divide-y divide-line border-t border-line">
+                {reviews.map((rev) => (
+                  <li class="py-6 first:pt-8">
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="flex min-w-0 items-center gap-3">
+                        <span
+                          class="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-100 font-display text-sm font-semibold text-brand-700"
+                          aria-hidden="true"
+                        >
+                          {rev.author.trim().charAt(0).toUpperCase()}
+                        </span>
+                        <div class="min-w-0">
+                          <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <span class="font-medium text-ink">{rev.author}</span>
+                            <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700">
+                              <svg viewBox="0 0 20 20" class="size-3.5 fill-current" aria-hidden="true">
+                                <path d="M10 1.6a8.4 8.4 0 1 0 0 16.8 8.4 8.4 0 0 0 0-16.8Zm4.1 6.2-4.9 4.9a.9.9 0 0 1-1.3 0L5.9 10.6a.9.9 0 1 1 1.3-1.3l1.4 1.4 4.3-4.3a.9.9 0 1 1 1.3 1.3Z" />
+                              </svg>
+                              Terverifikasi
+                            </span>
+                          </div>
+                          <p class="text-xs text-muted">
+                            {rev.daysAgo === 0 ? "Hari ini" : `${rev.daysAgo} hari lalu`}
+                          </p>
+                        </div>
+                      </div>
+                      <Stars value={rev.rating} size="sm" showValue={false} class="mt-1 shrink-0" />
+                    </div>
+                    <p class="mt-3 text-sm leading-relaxed text-muted">{rev.body}</p>
+                    {rev.reply && (
+                      <div class="mt-3 rounded-lg border-l-2 border-brand-300 bg-brand-50 px-3 py-2">
+                        <p class="text-xs font-semibold text-brand-600">Balasan penjual</p>
+                        <p class="mt-1 text-sm leading-relaxed text-ink">{rev.reply}</p>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* RIGHT COLUMN — buy box + the full Deskripsi Produk below it. `contents md:block`: on md it is a
+          normal block column; on mobile it dissolves so its two children (buy box, description) rejoin the
+          single flow and take their order slots (2 and 3), between the gallery (1) and the reviews (4). */}
+      <div class="contents md:block">
+        <div class="order-2 md:order-none">
         <Breadcrumb items={CRUMBS} />
 
         <p class="mt-5 text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{product.category}</p>
@@ -435,8 +529,10 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             fills the tall right column against the gallery — the two-column layout the reference asks
             for, without the empty right column a short description would leave in a sustained grid. The
             short hook by the price is still the above-the-fold summary. */}
+        </div>{/* end buy box */}
+
         {product.description.trim() && (
-          <div class="mt-10 border-t border-line pt-8">
+          <div class="order-3 border-t border-line pt-8 md:order-none md:mt-10">
             <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-ink">Deskripsi Produk</h2>
             <div class="mt-4 space-y-4 leading-relaxed text-muted">
               {product.description
@@ -451,101 +547,6 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         )}
       </div>
     </div>
-
-    <!-- Ulasan. Rendered ONLY when real published reviews exist. The summary and the histogram used to
-         be manufactured: the score came from a seed column nothing recomputes, and the 5★→1★ bars came
-         from a curve fitted to that score, not from counting anything. A product with no reviews now
-         shows no review section — a new product is not a badly-reviewed one. -->
-    {rating && (
-    <div id="ulasan" class="mt-20 scroll-mt-24 border-t border-line pt-14">
-      <SectionHeading eyebrow="Ulasan Pembeli" title="Apa kata pelanggan" />
-
-      <div class="mt-8 grid gap-8 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-16">
-        <!-- Average — left-aligned, the Judge.me/Loox shape: a big score with "/ 5.0", the stars, and
-             a "verified ratings" line. No card: it sits inside the section's own `border-t`. -->
-        <div>
-          <div class="flex items-end gap-2">
-            <span class="font-display text-5xl font-semibold leading-none text-ink tabular-nums">{rating.value.toFixed(1)}</span>
-            <span class="pb-1 text-lg text-muted">/ 5,0</span>
-          </div>
-          <Stars value={rating.value} size="md" showValue={false} class="mt-3" />
-          {/* "terverifikasi" is honest here: every review counted comes from a buyer who received a
-              `selesai` order for this product (seed-reviews.ts) — never a public form that invites
-              invented ones. That verified-purchase model is the whole trust story, so it is stated. */}
-          <p class="mt-2 text-xs font-medium uppercase tracking-[0.12em] text-muted">
-            Dari {rating.count} ulasan terverifikasi
-          </p>
-        </div>
-
-        <!-- Breakdown -->
-        <div class="space-y-2">
-          {
-            breakdown.map((n, i) => (
-              <div class="flex items-center gap-3 text-sm">
-                <span class="flex w-10 shrink-0 items-center gap-1 tabular-nums text-muted">
-                  {5 - i}
-                  <svg viewBox="0 0 20 20" class="h-3 w-3 fill-amber-400">
-                    <path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1.99 5.79L10 14.77l-5.2 2.73.99-5.79L1.58 7.62l5.82-.85L10 1.5Z" />
-                  </svg>
-                </span>
-                <div class="h-2 flex-1 overflow-hidden rounded-full bg-brand-50">
-                  <div class="h-full rounded-full bg-amber-400" style={`width:${(n / maxBucket) * 100}%`} />
-                </div>
-                <span class="w-10 shrink-0 text-right tabular-nums text-muted">{n}</span>
-              </div>
-            ))
-          }
-        </div>
-      </div>
-
-      <!-- The written testimonials. Each is a real buyer who received a `selesai` order for this
-           product (seed-reviews.ts), so "Pembelian terverifikasi" is honest, not decoration. -->
-      {/* ONE COLUMN, hairline-divided (Judge.me/Loox shape). Each row: an initial avatar, the buyer's
-          name with a green verified-purchase check, the date, the stars on the right, then the body.
-          `text-muted` (never `/70`) for the date — the /70 opacity measured 2.84:1 on the cream page and
-          Lighthouse scored 0 on it; plain `text-muted` is 5.09:1 (the token exists for exactly this). */}
-      {reviews.length > 0 && (
-        <ul class="mt-10 divide-y divide-line border-t border-line">
-          {reviews.map((rev) => (
-            <li class="py-6 first:pt-8">
-              <div class="flex items-start justify-between gap-4">
-                <div class="flex min-w-0 items-center gap-3">
-                  <span
-                    class="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-100 font-display text-sm font-semibold text-brand-700"
-                    aria-hidden="true"
-                  >
-                    {rev.author.trim().charAt(0).toUpperCase()}
-                  </span>
-                  <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span class="font-medium text-ink">{rev.author}</span>
-                      <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700">
-                        <svg viewBox="0 0 20 20" class="size-3.5 fill-current" aria-hidden="true">
-                          <path d="M10 1.6a8.4 8.4 0 1 0 0 16.8 8.4 8.4 0 0 0 0-16.8Zm4.1 6.2-4.9 4.9a.9.9 0 0 1-1.3 0L5.9 10.6a.9.9 0 1 1 1.3-1.3l1.4 1.4 4.3-4.3a.9.9 0 1 1 1.3 1.3Z" />
-                        </svg>
-                        Terverifikasi
-                      </span>
-                    </div>
-                    <p class="text-xs text-muted">
-                      {rev.daysAgo === 0 ? "Hari ini" : `${rev.daysAgo} hari lalu`}
-                    </p>
-                  </div>
-                </div>
-                <Stars value={rev.rating} size="sm" showValue={false} class="mt-1 shrink-0" />
-              </div>
-              <p class="mt-3 text-sm leading-relaxed text-muted">{rev.body}</p>
-              {rev.reply && (
-                <div class="mt-3 rounded-lg border-l-2 border-brand-300 bg-brand-50 px-3 py-2">
-                  <p class="text-xs font-semibold text-brand-600">Balasan penjual</p>
-                  <p class="mt-1 text-sm leading-relaxed text-ink">{rev.reply}</p>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-    )}
 
     <!-- Related — hand-built tail; a product template takes this slot instead (below). -->
     {
