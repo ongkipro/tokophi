@@ -46,10 +46,69 @@ function mulberry32(seed: number) {
 type Row = Record<string, string | number | null>;
 const q = async (s: ReturnType<typeof sql>) => (await db.execute(s)) as unknown as Row[];
 
+// Populate the /promo hub for the demo store: a LIVE flash sale, the hub banner copy, the thematic
+// voucher codes refreshed to a live window, and automatic free ongkir. Every step is idempotent.
+async function seedPromo(storeId: string) {
+  // 1) Flash sale — only create one if none is active right now (re-running never stacks sales).
+  const [live] = await q(sql`
+    select id from flash_sales
+    where store_id = ${storeId} and status = 'aktif' and now() >= starts_at and now() < ends_at
+    limit 1`);
+  if (!live) {
+    const [fs] = await q(sql`
+      insert into flash_sales (store_id, name, starts_at, ends_at, status)
+      values (${storeId}, 'Promo Gajian', now() - interval '1 day', now() + interval '14 days', 'aktif')
+      returning id`);
+    const fsId = String(fs.id);
+    // Top 5 by price, 30% off rounded to the nearest 1rb — a real, believable markdown.
+    const picks = await q(sql`
+      select p.id, v.price_idr as price
+      from products p
+      join product_variants v on v.product_id = p.id and v.position = 0
+      where p.store_id = ${storeId} and p.status = 'active'
+      order by v.price_idr desc
+      limit 5`);
+    for (const p of picks) {
+      const sale = Math.round((Number(p.price) * 0.7) / 1000) * 1000;
+      await q(sql`
+        insert into flash_sale_items (flash_sale_id, product_id, sale_price_idr)
+        values (${fsId}, ${String(p.id)}, ${sale})
+        on conflict do nothing`);
+    }
+    console.log(`✓ Flash sale "Promo Gajian" dibuat (${picks.length} produk, aktif 14 hari).`);
+  } else {
+    console.log("✓ Flash sale aktif sudah ada — dilewati.");
+  }
+
+  // 2) Hub banner copy — fill only if the merchant has not set it (empty/NULL).
+  await q(sql`
+    update store_settings set
+      promo_hub_title = coalesce(nullif(promo_hub_title, ''), 'Promo Gajian'),
+      promo_hub_subtitle = coalesce(nullif(promo_hub_subtitle, ''), 'Flash sale, kode voucher, & gratis ongkir — semuanya di sini.')
+    where store_id = ${storeId}`);
+
+  // 3) Thematic voucher codes → a live window, so they actually show on the hub / work at checkout.
+  await q(sql`
+    update discounts set ends_at = now() + interval '30 days', status = 'aktif'
+    where store_id = ${storeId} and code in ('GAJIAN25', 'ONGKIRGRATIS') and (ends_at is null or ends_at < now())`);
+
+  // 4) Automatic free ongkir for the demo — only flip the untouched default (off / 0), never a merchant's choice.
+  await q(sql`
+    update store_settings set free_ship_enabled = true, free_ship_min_idr = 300000
+    where store_id = ${storeId} and free_ship_enabled = false and free_ship_min_idr = 0`);
+
+  console.log("✓ Halaman promo (/promo) siap: banner, voucher, gratis ongkir.");
+}
+
 async function main() {
   const [store] = await q(sql`select id, name from stores where slug = ${SLUG}`);
   if (!store) throw new Error(`Store ${SLUG} not found — nothing to top up.`);
   const storeId = String(store.id);
+
+  // PROMO demo (PROMO P5) — runs BEFORE the order-gap early-return so the /promo hub is always populated,
+  // even when there are no empty order days. All now()-relative (the anchored main seed can't make a
+  // flash sale that is live TODAY) and idempotent, so it is safe to run on prod without truncating.
+  await seedPromo(storeId);
 
   // Gap = every calendar day (Asia/Jakarta) in the last 30 that has no order at all for this store.
   // Bounded to 30 days on purpose: this tops the demo up, it does not rewrite history.
