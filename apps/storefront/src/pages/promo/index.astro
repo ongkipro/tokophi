@@ -10,7 +10,7 @@
 import Layout from "../../layouts/Layout.astro";
 import ProductListing from "../../components/ProductListing.astro";
 import { IDR } from "@tokophi/lib/format";
-import { activeVouchers, storeFreeShip, type VoucherPromo } from "../../data/catalog";
+import { activeVouchers, storeFreeShip, promoHub, mediaUrl, type VoucherPromo } from "../../data/catalog";
 
 const { store, catalog } = Astro.locals;
 
@@ -24,7 +24,12 @@ const markdownProducts = discounted.filter((p) => !p.flashEndsAt);
 const flashEndsAt =
   flashProducts.reduce<string | null>((min, p) => (!min || p.flashEndsAt! < min ? p.flashEndsAt! : min), null);
 
-const [vouchers, freeShip] = await Promise.all([activeVouchers(store.id), storeFreeShip(store.id)]);
+const [vouchers, freeShip, hub] = await Promise.all([activeVouchers(store.id), storeFreeShip(store.id), promoHub(store.id)]);
+
+// Merchant-configurable banner (P4b), with defaults so the page always reads well.
+const hubTitle = hub.title?.trim() || "Semua Promo, Satu Halaman";
+const hubSubtitle = hub.subtitle?.trim() || `Flash sale, kode voucher, dan gratis ongkir dari ${store.name} — semuanya di sini.`;
+const hubBanner = hub.bannerUrl?.trim() ? mediaUrl(hub.bannerUrl.trim()) : null;
 
 // Human label for a voucher chip. `gratis_ongkir` value is unused; persen is %, nominal is rupiah off.
 function voucherLabel(v: VoucherPromo): string {
@@ -44,14 +49,18 @@ const TITLE = "Promo";
   description={`Flash sale, kode voucher, dan gratis ongkir di ${store.name}. Semua promo dalam satu halaman.`}
   robots="index,follow"
 >
-  <!-- HERO -->
-  <section class="bg-gradient-to-br from-brand-600 to-brand-700 text-white">
-    <div class="mx-auto max-w-6xl px-4 py-12 sm:py-16">
+  <!-- HERO — merchant banner image if set (overlaid), else the brand gradient -->
+  <section class="relative overflow-hidden bg-gradient-to-br from-brand-600 to-brand-700 text-white">
+    {hubBanner && (
+      <>
+        <img src={hubBanner} alt="" class="absolute inset-0 h-full w-full object-cover" />
+        <div class="absolute inset-0 bg-gradient-to-r from-black/70 via-black/45 to-black/20"></div>
+      </>
+    )}
+    <div class="relative mx-auto max-w-6xl px-4 py-12 sm:py-16">
       <p class="text-sm font-semibold uppercase tracking-wide text-brand-100/90">Promo Spesial</p>
-      <h1 class="mt-1 text-3xl font-bold sm:text-4xl">Semua Promo, Satu Halaman</h1>
-      <p class="mt-2 max-w-xl text-brand-50/90">
-        Flash sale, kode voucher, dan gratis ongkir dari {store.name} — semuanya di sini.
-      </p>
+      <h1 class="mt-1 text-3xl font-bold sm:text-4xl">{hubTitle}</h1>
+      <p class="mt-2 max-w-xl text-brand-50/90">{hubSubtitle}</p>
     </div>
   </section>
 
