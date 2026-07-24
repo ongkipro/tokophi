@@ -8,7 +8,10 @@
 //   · free ongkir       → storeFreeShip() (same columns /api/public/order re-reads)
 // lazy: banner copy is defaulted here; the merchant-configurable title/banner lands in P4b (promo_hub).
 import Layout from "../../layouts/Layout.astro";
-import ProductListing from "../../components/ProductListing.astro";
+// Plain ProductCard grids, NOT ProductListing: the hub shows two curated sections, and ProductListing
+// owns the page's `?sort=`/`?page=` URL state + a count/sort toolbar — using it twice would make the two
+// sections fight over one sort param and render two redundant toolbars.
+import ProductCard from "../../components/ProductCard.astro";
 import { IDR } from "@tokophi/lib/format";
 import { activeVouchers, storeFreeShip, promoHub, mediaUrl, type VoucherPromo } from "../../data/catalog";
 
@@ -118,8 +121,8 @@ const TITLE = "Promo";
             </div>
           )}
         </div>
-        <div class="mt-4">
-          <ProductListing products={flashProducts} />
+        <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {flashProducts.map((p) => <ProductCard product={p} />)}
         </div>
       </section>
     )}
@@ -128,8 +131,8 @@ const TITLE = "Promo";
     {markdownProducts.length > 0 && (
       <section>
         <h2 class="text-xl font-bold text-ink">Sedang Diskon</h2>
-        <div class="mt-4">
-          <ProductListing products={markdownProducts} />
+        <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {markdownProducts.map((p) => <ProductCard product={p} />)}
         </div>
       </section>
     )}
