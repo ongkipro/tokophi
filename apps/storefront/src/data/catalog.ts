@@ -696,6 +696,18 @@ export async function activeVouchers(storeId: string): Promise<VoucherPromo[]> {
   }));
 }
 
+// Promo hub (/promo) banner config (PROMO P4b). Null columns fall back to defaults in the page, so the
+// hub always renders. Cheap single-row read at SSR, like storeFreeShip.
+export type PromoHub = { title: string | null; subtitle: string | null; bannerUrl: string | null };
+export async function promoHub(storeId: string): Promise<PromoHub> {
+  const [ss] = await db
+    .select({ title: schema.storeSettings.promoHubTitle, subtitle: schema.storeSettings.promoHubSubtitle, bannerUrl: schema.storeSettings.promoHubBannerUrl })
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.storeId, storeId))
+    .limit(1);
+  return { title: ss?.title ?? null, subtitle: ss?.subtitle ?? null, bannerUrl: ss?.bannerUrl ?? null };
+}
+
 export type StoreCodPolicy = { enabled: boolean; maxAmountIdr: number; allowedProvinces: string[] };
 
 export async function storeCodPolicy(storeId: string): Promise<StoreCodPolicy> {
