@@ -295,11 +295,12 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         </div>
         <p id="pdp-stock" class="mt-2 text-sm text-muted"></p>
 
-        {/* Render the description block ONLY when the merchant wrote one. `description` is `?? ""`
-            upstream, so an unconditional <p> showed an empty paragraph (with its top margin) on a
-            description-less product. The crawler still gets a real sentence — see `metaDescription`. */}
-        {product.description.trim() && (
-          <p class="mt-6 leading-relaxed text-muted">{product.description}</p>
+        {/* SHORT DESCRIPTION — the one-line hook, next to the price and ABOVE the buy actions so they
+            stay high on the page. The FULL story moved to "Deskripsi Produk" below the buy box (a long
+            description used to push Ukuran + Tambah ke Keranjang under the fold). Empty = nothing here;
+            the crawler still gets a real sentence from `metaDescription`. */}
+        {product.shortDescription && (
+          <p class="mt-6 text-base leading-relaxed text-ink/80">{product.shortDescription}</p>
         )}
 
         <!-- Variant picker (real product_variants: Warna, Ukuran) -->
@@ -428,6 +429,27 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         </div>
       </div>
     </div>
+
+    {/* DESKRIPSI PRODUK — the full story, moved BELOW the buy box (owner, 2026-07-24) so a long
+        description no longer pushes Ukuran + Tambah ke Keranjang under the fold. The short hook by the
+        price is the above-the-fold summary; this is the detail a decided shopper scrolls down for.
+        Split on blank lines into paragraphs; `whitespace-pre-line` keeps a merchant's own line breaks. */}
+    {
+      product.description.trim() && (
+        <section class="mt-20 border-t border-line pt-14">
+          <SectionHeading title="Deskripsi Produk" />
+          <div class="mt-6 max-w-2xl space-y-4 leading-relaxed text-muted">
+            {product.description
+              .split(/\n{2,}/)
+              .map((para) => para.trim())
+              .filter(Boolean)
+              .map((para) => (
+                <p class="whitespace-pre-line">{para}</p>
+              ))}
+          </div>
+        </section>
+      )
+    }
 
     <!-- Ulasan. Rendered ONLY when real published reviews exist. The summary and the histogram used to
          be manufactured: the score came from a seed column nothing recomputes, and the 5★→1★ bars came

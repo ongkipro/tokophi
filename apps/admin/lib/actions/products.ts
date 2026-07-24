@@ -17,6 +17,7 @@ export type VariantInput = {
 export type ProductInput = {
   name: string;
   description: string;
+  shortDescription?: string;
   status: "active" | "draft";
   category: string;
   productType?: string;
@@ -52,6 +53,7 @@ const productFields = (i: ProductInput) => ({
   title: i.name,
   handle: i.handle,
   description: i.description || null,
+  shortDescription: i.shortDescription || null,
   status: i.status,
   category: i.category || null,
   productType: i.productType || null,

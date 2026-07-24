@@ -44,7 +44,8 @@ export type Product = {
   category: string;
   categoryHandle: string;
   image: string;
-  description: string;
+  description: string; // the full story — PDP "Deskripsi Produk" section, below the buy box
+  shortDescription?: string; // one-line hook shown next to the price, above the fold
   googleCategoryPath?: string; // standard Google category (ADR 0011) — for the product feed
   gender?: string; // feed attribute: "female" | "male" | "unisex"
   ageGroup?: string; // feed attribute: "adult" | "kids" | …
@@ -263,6 +264,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       handle: schema.products.handle,
       name: schema.products.title,
       description: schema.products.description,
+      shortDescription: schema.products.shortDescription,
       googleCategoryPath: schema.products.googleCategoryPath,
       gender: schema.products.gender,
       ageGroup: schema.products.ageGroup,
@@ -376,6 +378,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       // Callers render a placeholder instead — never fabricate a URL you have not been given.
       image: r.image ? mediaUrl(r.image) : "",
       description: r.description ?? "",
+      shortDescription: r.shortDescription?.trim() || undefined,
       googleCategoryPath: r.googleCategoryPath ?? undefined,
       gender: r.gender ?? undefined,
       ageGroup: r.ageGroup ?? undefined,

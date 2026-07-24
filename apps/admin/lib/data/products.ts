@@ -20,6 +20,7 @@ const selectProduct = {
   image: schema.productMedia.url,
   // editor read-back: fields the editor writes but used to seed fake defaults on reopen
   description: schema.products.description,
+  shortDescription: schema.products.shortDescription,
   productType: schema.products.productType,
   vendor: schema.products.vendor,
   seoTitle: schema.products.seoTitle,
@@ -163,6 +164,7 @@ export async function getProduct(id: string): Promise<Product | null> {
       heightCm: prod?.heightCm ?? null,
       // real values so the editor stops re-seeding fabricated defaults on reopen
       description: rows[0].description ?? "",
+      shortDescription: rows[0].shortDescription ?? "",
       productType: rows[0].productType ?? "",
       vendor: rows[0].vendor ?? "",
       seoTitle: rows[0].seoTitle ?? "",
