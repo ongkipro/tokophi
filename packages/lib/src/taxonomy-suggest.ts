@@ -1,10 +1,11 @@
-// Deterministic Indonesian-fashion → Google Product Category suggester (ADR 0011).
+// Deterministic Indonesian → Google Product Category suggester (ADR 0011).
 //
-// Phase 1 auto-suggest: match garment keywords in a product's title (+ its merchant category) to a
-// Google Product Taxonomy leaf id, so the seller confirms one suggestion instead of hunting a
-// 5,595-node tree. This is a SUGGESTION only — the picker is the source of truth and the seller can
-// always override. Offline, zero-cost, deterministic. A general AI classifier is a clean Phase-2 swap
-// behind this same `suggestGoogleCategory` seam.
+// Auto-suggest: match product keywords in a title (+ its merchant category) to a Google Product Taxonomy
+// leaf id, so the seller confirms one suggestion instead of hunting a 5,595-node tree. Covers the common
+// Indonesian marketplace verticals — fashion, beauty/skincare, electronics, F&B, baby, toys, health,
+// accessories. A SUGGESTION only — the picker is the source of truth and the seller can always override.
+// Offline, zero-cost, deterministic. A general AI classifier is a clean later swap behind this same seam.
+// Extend by adding a { id, path, name, kw } rule; ids are verified against the committed taxonomy file.
 //
 // ⚠️ Keywords are matched as substrings on a lowercased haystack, longest-first, so "celana pendek"
 // (Shorts) beats "celana" (Pants). Keep the more specific term LONGER or listed to win the tie.
@@ -27,6 +28,40 @@ const RULES: Rule[] = [
   { id: 1594, path: "Apparel & Accessories > Clothing > Suits", name: "Suits", kw: ["setelan"] },
   { id: 2271, path: "Apparel & Accessories > Clothing > Dresses", name: "Dresses", kw: ["dress", "gaun", "gamis", "terusan", "midi dress", "maxi dress", "bodycon"] },
   { id: 212, path: "Apparel & Accessories > Clothing > Shirts & Tops", name: "Shirts & Tops", kw: ["blouse", "blus", "atasan", "kemeja", "kaos", "tunik", "tunic", "tank top", "crop top"] },
+
+  // --- Fashion accessories ---
+  { id: 187, path: "Apparel & Accessories > Shoes", name: "Shoes", kw: ["sepatu", "sandal", "sneakers", "heels", "flat shoes", "boots", "wedges", "loafers"] },
+  { id: 3032, path: "Apparel & Accessories > Handbags, Wallets & Cases > Handbags", name: "Handbags", kw: ["tas wanita", "handbag", "tote bag", "sling bag", "clutch", "tas selempang"] },
+  { id: 100, path: "Luggage & Bags > Backpacks", name: "Backpacks", kw: ["ransel", "backpack", "tas punggung", "tas ransel"] },
+  { id: 2668, path: "Apparel & Accessories > Handbags, Wallets & Cases > Wallets & Money Clips", name: "Wallets", kw: ["dompet", "wallet"] },
+  { id: 201, path: "Apparel & Accessories > Jewelry > Watches", name: "Watches", kw: ["jam tangan", "smartwatch", "arloji"] },
+  { id: 178, path: "Apparel & Accessories > Clothing Accessories > Sunglasses", name: "Sunglasses", kw: ["kacamata hitam", "sunglasses"] },
+
+  // --- Beauty & personal care ---
+  { id: 567, path: "Health & Beauty > Personal Care > Cosmetics > Skin Care", name: "Skin Care", kw: ["skincare", "serum", "toner", "moisturizer", "pelembab", "essence", "facial wash", "masker wajah"] },
+  { id: 2844, path: "Health & Beauty > Personal Care > Cosmetics > Skin Care > Sunscreen", name: "Sunscreen", kw: ["sunscreen", "tabir surya", "sunblock"] },
+  { id: 477, path: "Health & Beauty > Personal Care > Cosmetics > Makeup", name: "Makeup", kw: ["makeup", "make up", "lipstik", "lip cream", "bedak", "foundation", "maskara", "eyeliner", "blush on", "concealer", "kutek", "cushion"] },
+  { id: 474, path: "Health & Beauty > Personal Care > Cosmetics > Bath & Body", name: "Bath & Body", kw: ["sabun", "body wash", "body lotion", "lulur", "deodoran", "parfum", "cologne", "body mist"] },
+  { id: 486, path: "Health & Beauty > Personal Care > Hair Care", name: "Hair Care", kw: ["shampoo", "sampo", "kondisioner", "conditioner", "hair tonic", "minyak rambut", "serum rambut"] },
+
+  // --- Health ---
+  // "vitamin" alone is ambiguous — a "Serum Vitamin C" is Skin Care, so match only the supplement forms.
+  { id: 525, path: "Health & Beauty > Health Care > Fitness & Nutrition > Vitamins & Supplements", name: "Vitamins & Supplements", kw: ["suplemen", "multivitamin", "kolagen", "collagen", "vitamin c 1000", "vitamin d3", "kaplet"] },
+
+  // --- Electronics ---
+  { id: 267, path: "Electronics > Communications > Telephony > Mobile Phones", name: "Mobile Phones", kw: ["handphone", "smartphone", "ponsel", "iphone", "hp android"] },
+  { id: 328, path: "Electronics > Computers > Laptops", name: "Laptops", kw: ["laptop", "notebook", "macbook", "ultrabook"] },
+  { id: 543626, path: "Electronics > Audio > Audio Components > Headphones & Headsets > Headphones", name: "Headphones", kw: ["headphone", "headset", "earphone", "earbuds", "handsfree"] },
+
+  // --- Food & beverages ---
+  { id: 1868, path: "Food, Beverages & Tobacco > Beverages > Coffee", name: "Coffee", kw: ["kopi", "coffee", "arabika", "robusta", "espresso"] },
+  { id: 2073, path: "Food, Beverages & Tobacco > Beverages > Tea & Infusions", name: "Tea", kw: ["teh celup", "teh hijau", "green tea", "matcha", "teh herbal"] },
+  { id: 423, path: "Food, Beverages & Tobacco > Food Items > Snack Foods", name: "Snack Foods", kw: ["keripik", "camilan", "kerupuk", "makaroni", "snack"] },
+
+  // --- Baby & kids ---
+  { id: 551, path: "Baby & Toddler > Diapering > Diapers", name: "Diapers", kw: ["popok", "diapers", "pampers"] },
+  { id: 537, path: "Baby & Toddler", name: "Baby & Toddler", kw: ["perlengkapan bayi", "baby", "bayi"] },
+  { id: 1253, path: "Toys & Games > Toys", name: "Toys", kw: ["mainan", "boneka", "lego", "puzzle"] },
 ];
 
 /** Suggest a Google category from any product text (title, then merchant category). Longest keyword
