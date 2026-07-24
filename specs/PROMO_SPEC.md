@@ -132,3 +132,26 @@ store_settings +=
 
 ## 9. Prinsip anti-"fitur mati"
 Tiap fase **di-exercise** (bukan cuma typecheck): checkout benar-benar memotong (browser + SQL), voucher invalid benar-benar ditolak. Kolom yang ditambah **harus dikonsumsi** di fase yang sama (hindari kolom yang tak dibaca — anti-pattern yang berulang di repo ini).
+
+---
+
+## 10. STATUS (per 2026-07-24) — branch `feat/promo-p1`
+
+Built + **browser/SQL-verified** + committed (order of commits):
+- **P0 voucher** — LIVE on `main` (#71). `applyDiscount` (lib/promo.ts) is the one place a code is priced; `/api/public/promo` previews; checkout has the voucher input. Demo codes: `NEWUSER50K` (Rp50rb) + `MEMBERVIP` (Rp100rb) usable; `GAJIAN25`/`ONGKIRGRATIS` expired in seed.
+- **P1 automatic free shipping** — `store_settings.free_ship_enabled/free_ship_min_idr` (migration 0075). Pengaturan → Pengiriman card ("Gratis Ongkir Otomatis"). `/api/public/order` waives ongkir server-side when `subtotal ≥ min`; checkout shows "GRATIS". Voucher `gratis_ongkir` + auto both use `Math.max` (never double). Verified: ON→ongkir GRATIS total Rp349rb; OFF→Rp13.700 total Rp362.700.
+- **P3 flash sale** — `flash_sales` + `flash_sale_items` (migration 0076, RLS on parent; child-table rule for items). `lib/flash.ts activeFlashPrices()` applied in the order re-pricing (Math.min, downward only). `getCatalog` folds the sale into `price`/`compareAt`/`flashEndsAt` → existing strikethrough + −% badge UI. Verified end-to-end: a real COD order for the Rp349rb dress on the live sale was charged **Rp199.000** (order + line item), not 349rb.
+- **P4a /promo hub** — new `apps/storefront/src/pages/promo/index.astro`: hero + free-ongkir strip + copyable voucher chips + flash sale with live countdown + "Sedang Diskon" grid. Reads the same sources the order API prices from. Nav "Promo Gajian" repointed from `/kategori/promo-gajian` (a CATEGORY) to `/promo` (a MENU) in seed + Header + live DB.
+
+**Demo data live in the shared DB** (batik-nusantara, store `908695b5-…`): flash sale "Promo Gajian" (id `ed0e213e-…`), 4 products (dress 199k, jumpsuit 179k, gamis 199k, blazer 149k), window now→+7d, status aktif. `free_ship_enabled=false` (honest default). NOTE: this is SQL-inserted, NOT in the seed (the main seed anchors to a fixed TODAY, so a fixed-date sale would rot) — P5 must add it to `seed:recent` (the now()-relative fresh-data path), not the anchored main seed.
+
+### Remaining
+- **P3c admin flash-sale editor** — list + editor (name, window, status, add products + sale price). RBAC `discounts:write`, `withTenant`, and the CHILD-TABLE RULE for `flash_sale_items` (read parent `flash_sales` in the same txn, bail if not tenant's). ⚠️ Admin `/promo` is TAKEN (landing pages) — put this under `/diskon` or a new `/flash-sale` route, NOT `/promo`.
+- **P4b merchant-configurable hub banner/title** — currently defaulted in the page. Add `promo_hub` (or `store_settings` columns) + a small admin editor; wire into `promo/index.astro` (`TITLE` + hero copy/image).
+- **P2 category/product-scoped vouchers** — DEPRIORITISED (YAGNI): flash sale already delivers "discounted products". Build only if a scoped voucher is actually wanted.
+- **P5** — seed the demo into `seed:recent`; final a11y/empty-state polish; then merge/deploy in stages (P1→P3→P4a), watching each Coolify build land before the next (merge races).
+
+### Gotchas found
+- Storefront local tenant: `batik-nusantara.primaryHost = toko-demo.test`, so localhost redirects. Test with Chromium `--host-resolver-rules="MAP toko-demo.test 127.0.0.1"` + `http://toko-demo.test:4330`.
+- Shared dev DB has migration drift — `npm run migrate` collides; apply new migration SQL directly (idempotent `IF NOT EXISTS`). The committed migration files are correct for main/prod.
+- `Header.astro` shows 8 astro-check false-positives (unterminated-string quirk on `<style is:global>` after a `{/* */}` comment) — pre-existing, site renders fine.
