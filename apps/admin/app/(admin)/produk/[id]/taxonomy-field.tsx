@@ -1,5 +1,8 @@
-// Runs client-side via its only importer, the "use client" product editor — so it needs no "use
-// client" of its own, and omitting it keeps the RSC serialization lint off a plain client callback.
+"use client";
+// ⚠️ "use client" is LOAD-BEARING: this component calls the `searchTaxonomy` SERVER ACTION from a
+// useEffect. Dropping the directive (to silence a benign onChange lint) broke the picker search in
+// production — a hooks + server-action component MUST be a client entry. The lint warning is the lesser
+// evil; do not remove this again.
 // Google Product Category picker + auto-suggest (ADR 0011). Base UI has no Select/Combobox, so this
 // is a Dialog with a debounced search over `searchTaxonomy`. When empty, it offers the deterministic
 // suggestion from the product title — one click to apply — so the seller rarely types.
