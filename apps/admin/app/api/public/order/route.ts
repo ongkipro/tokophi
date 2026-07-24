@@ -20,6 +20,7 @@ import { rateLimited } from "@/lib/public-guard";
 import { getCodPolicy } from "@/lib/cod";
 import { quoteShipping, findRate } from "@/lib/shipping-quote";
 import { computeTax } from "@tokophi/lib/tax";
+import { applyDiscount } from "@/lib/promo";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the
@@ -120,6 +121,7 @@ async function handle(req: Request) {
     shipping?: { label?: string; cost?: number; service?: string; serviceType?: string; destId?: number };
     destId?: number; // KiriminAja district id the ongkir quote was issued for
     channelCode?: string;
+    discountCode?: string; // PROMO P0 — a voucher; validated + priced by lib/promo (never trusted from the body)
   };
   try {
     body = await req.json();
@@ -347,9 +349,24 @@ async function handle(req: Request) {
     return bad("Layanan pengiriman yang dipilih tidak tersedia lagi. Muat ulang halaman checkout.", "shipping");
   }
   const shippingCost = Math.round(rate.cost);
+
+  // ── VOUCHER (PROMO P0) ─────────────────────────────────────────────────────────────────────────
+  // The boundary, same as ongkir/price: the code from the body is a CHOICE, the discount is priced
+  // HERE from the seller's own `discounts` row. An invalid/expired/over-limit/below-minimum code is
+  // REJECTED (not silently ignored), so the shopper is never charged full on a code they believed
+  // applied. `discountIdr` = goods off + shipping off (gratis_ongkir); the order stores it as one line.
+  let discountIdr = 0;
+  let appliedDiscountId: string | null = null;
+  if (body.discountCode) {
+    const dres = await applyDiscount({ storeId: store.id, code: body.discountCode, subtotal, shippingCost });
+    if (!dres.ok) return bad(dres.error, "discount");
+    discountIdr = dres.priceOff + dres.shipOff;
+    appliedDiscountId = dres.discount.id;
+  }
+
   // Exclusive PPN adds on top; inclusive PPN is already inside `subtotal` (addToTotal = 0). Either way
   // the COD-cap check below and the payment amount both see the real amount the shopper pays.
-  const total = subtotal + shippingCost + tax.addToTotal;
+  const total = subtotal + shippingCost + tax.addToTotal - discountIdr;
 
   // ── COD is a MONEY decision, so it is enforced here, not in the storefront UI ──────────────────
   // All five switches must agree (lib/cod.ts): platform on, merchant on, total ≤ the platform cap,
@@ -462,7 +479,7 @@ async function handle(req: Request) {
         Math.floor(Math.random() * 46656).toString(36).toUpperCase().padStart(3, "0");
       const [ord] = await tx.insert(schema.orders).values({
     storeId: store.id, number, customerId: cid, status: "baru", financialStatus: "pending", channel: "organic",
-    subtotalIdr: subtotal, shippingIdr: shippingCost, taxIdr: tax.taxIdr, totalIdr: total,
+    subtotalIdr: subtotal, shippingIdr: shippingCost, taxIdr: tax.taxIdr, discountIdr, totalIdr: total,
     // The courier the shopper actually picked — `rate.code`, i.e. the courier of the fresh server-side
     // quote we matched (svcCode === rate.code by findRate), never the client's raw claim. Recording it
     // here is what makes the per-courier COD return-rate report a `group by courier` instead of an
@@ -527,6 +544,17 @@ async function handle(req: Request) {
         });
       }
 
+      // Record the voucher redemption ATOMIC with the order + bump usedCount so the usage limit is
+      // honoured under races (the row is written only if the whole order commits). `discountUsages` has
+      // no store_id — the discountId came from `applyDiscount` scoped to THIS store, so it is safe.
+      if (appliedDiscountId) {
+        await tx.insert(schema.discountUsages).values({ discountId: appliedDiscountId, orderId: ord.id });
+        await tx
+          .update(schema.discounts)
+          .set({ usedCount: sql`${schema.discounts.usedCount} + 1` })
+          .where(eq(schema.discounts.id, appliedDiscountId));
+      }
+
       return { customerId: cid, order: ord };
     }));
   } catch (err) {
@@ -571,7 +599,7 @@ async function handle(req: Request) {
 
   // COD → the payment row was already written inside the order txn (collected on delivery, no gateway).
   if (isCod) {
-    return NextResponse.json({ ok: true, orderNumber: order.number, cod: true, shipping: shippingCost, tax: tax.taxIdr, total }, { headers: CORS });
+    return NextResponse.json({ ok: true, orderNumber: order.number, cod: true, shipping: shippingCost, tax: tax.taxIdr, discount: discountIdr, total }, { headers: CORS });
   }
 
   // AutoLaris: the pending payment row already exists (written in the txn); the gateway call below
@@ -622,7 +650,7 @@ async function handle(req: Request) {
     ok: true, orderNumber: order.number,
     // The ongkir + total the SERVER decided, echoed back so a stale quote in the browser cannot leave
     // the shopper believing a number the order does not contain.
-    shipping: shippingCost, tax: tax.taxIdr, total,
+    shipping: shippingCost, tax: tax.taxIdr, discount: discountIdr, total,
     payment: {
       channel: { code: channel.code, label: channel.label, kind: channel.kind },
       virtualAccount: pay.virtualAccount, qr: pay.qr, paymentCode: pay.paymentCode, url: pay.url,
