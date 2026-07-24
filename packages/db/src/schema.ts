@@ -112,6 +112,12 @@ export const stores = pgTable("stores", {
   // storefront derives a full 11-shade scale from it (@tokophi/lib/colors). Null = fall back
   // to the default brand hex baked into apps/storefront/src/styles/global.css.
   brandColor: text(),
+  // Product-page gallery layout the merchant picks in the Store Builder (Tema). One of
+  // 'thumbnail-left' (thumbnail rail beside the main image — the default), 'thumbnail-bottom'
+  // (rail under the main image), or 'grid' (a 2-column grid of every image, no main/thumbnail
+  // split). Read by apps/storefront's produk/[handle].astro; a text column (not an enum) to keep
+  // it a cheap additive migration on the shared DB — the storefront clamps unknown values.
+  productGalleryLayout: text().notNull().default("thumbnail-left"),
   // The shop's OWN customer-service WhatsApp and one-line pitch.
   //
   // These did not exist, so `apps/storefront/src/data/store.ts` fell back to platform constants — and

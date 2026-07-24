@@ -52,6 +52,14 @@ const discount =
 
 const gallery = productImages(product);
 
+// Gallery layout is a store-wide Tema setting (stores.product_gallery_layout): the thumbnail rail
+// sits BESIDE the main image ('thumbnail-left'), UNDER it ('thumbnail-bottom'), or every image is laid
+// out in a 2-column grid with no main/thumbnail split ('grid'). The switcher <script> is a no-op in
+// grid mode (there is no #gallery-main / #gallery-thumbs to bind).
+const galleryLayout = store.productGalleryLayout;
+const galleryIsGrid = galleryLayout === "grid";
+const thumbsBeside = galleryLayout === "thumbnail-left"; // vertical rail on sm+ vs. a row underneath
+
 // ── `sizes` for the main gallery image — derived from the real classes ────────────────────────────
 //
 // This is the LCP element of the most important page in the shop, and it is the one image where the
@@ -192,71 +200,106 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           four blocks into the right reading order — gallery → buy box → description → reviews — so the buy
           actions are never buried under the reviews. */}
       <div class="contents md:flex md:flex-col md:gap-14">
-      <!-- Gallery -->
-      <div class="order-1 flex flex-col gap-4 sm:flex-row-reverse md:order-none">
-        <!-- Main image -->
-        <div class="relative aspect-[3/4] flex-1 overflow-hidden rounded-xl bg-brand-50">
-          {/* This is the LCP element of the most important page in the shop and it had no priority
-              hint at all — while the thumbnails BELOW it were `loading="lazy"`, i.e. backwards.
-              `width`/`height` describe the intrinsic ratio; the `aspect-[3/4]` wrapper does the
-              layout, so these prevent nothing from shifting but do let the browser reserve correctly
-              if the CSS is slow.
-              And the gallery can now be EMPTY: `catalog.ts` stopped guessing a filename for products
-              with no media, so a merchant product without a photo gets the tinted frame instead of a
-              broken image. */}
+      <!-- Gallery — layout picked in Tema (thumbnail-left / thumbnail-bottom / grid) -->
+      {galleryIsGrid ? (
+        /* GRID — every image in a 2-column grid, no main/thumbnail split (the reference #17 shape).
+           An empty gallery still shows the one tinted placeholder tile. */
+        <div class="order-1 grid grid-cols-2 gap-3 md:order-none">
           {gallery.length > 0 ? (
-            <img
-              id="gallery-main"
-              src={gallery[0]}
-              srcset={mainSrcSet}
-              sizes={mainSrcSet ? GALLERY_SIZES : undefined}
-              alt={product.name}
-              width="900"
-              height="1200"
-              loading="eager"
-              fetchpriority="high"
-              decoding="async"
-              class="h-full w-full object-cover transition-opacity duration-200"
-            />
+            gallery.map((src, i) => (
+              <div class="relative aspect-[3/4] overflow-hidden rounded-xl bg-brand-50">
+                <img
+                  src={src}
+                  srcset={imageSrcSet(src)}
+                  sizes="(min-width: 768px) 25vw, 45vw"
+                  alt={`${product.name}${i === 0 ? "" : ` — tampilan ${i + 1}`}`}
+                  width="900"
+                  height="1200"
+                  loading={i === 0 ? "eager" : "lazy"}
+                  fetchpriority={i === 0 ? "high" : undefined}
+                  decoding="async"
+                  class="h-full w-full object-cover"
+                />
+                {i === 0 && product.badge && (
+                  <span class="absolute left-4 top-4 rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white">
+                    {product.badge}
+                  </span>
+                )}
+              </div>
+            ))
           ) : (
-            <div class="flex h-full w-full items-center justify-center" aria-hidden="true">
+            <div class="relative col-span-2 flex aspect-[3/2] items-center justify-center rounded-xl bg-brand-50" aria-hidden="true">
               <ImageOff class="size-12 text-brand-300" stroke-width={1.5} />
             </div>
           )}
-          {
-            product.badge && (
-              <span class="absolute left-4 top-4 rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white">
-                {product.badge}
-              </span>
-            )
-          }
         </div>
+      ) : (
+        <div class:list={["order-1 flex flex-col gap-4 md:order-none", thumbsBeside && "sm:flex-row-reverse"]}>
+          <!-- Main image -->
+          <div class="relative aspect-[3/4] flex-1 overflow-hidden rounded-xl bg-brand-50">
+            {/* This is the LCP element of the most important page in the shop and it had no priority
+                hint at all — while the thumbnails BELOW it were `loading="lazy"`, i.e. backwards.
+                `width`/`height` describe the intrinsic ratio; the `aspect-[3/4]` wrapper does the
+                layout, so these prevent nothing from shifting but do let the browser reserve correctly
+                if the CSS is slow.
+                And the gallery can now be EMPTY: `catalog.ts` stopped guessing a filename for products
+                with no media, so a merchant product without a photo gets the tinted frame instead of a
+                broken image. */}
+            {gallery.length > 0 ? (
+              <img
+                id="gallery-main"
+                src={gallery[0]}
+                srcset={mainSrcSet}
+                sizes={mainSrcSet ? GALLERY_SIZES : undefined}
+                alt={product.name}
+                width="900"
+                height="1200"
+                loading="eager"
+                fetchpriority="high"
+                decoding="async"
+                class="h-full w-full object-cover transition-opacity duration-200"
+              />
+            ) : (
+              <div class="flex h-full w-full items-center justify-center" aria-hidden="true">
+                <ImageOff class="size-12 text-brand-300" stroke-width={1.5} />
+              </div>
+            )}
+            {
+              product.badge && (
+                <span class="absolute left-4 top-4 rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white">
+                  {product.badge}
+                </span>
+              )
+            }
+          </div>
 
-        <!-- Thumbnails -->
-        <div
-          id="gallery-thumbs"
-          class="flex gap-3 overflow-x-auto pb-1 sm:w-20 sm:flex-col sm:overflow-visible sm:pb-0"
-        >
-          {
-            gallery.map((src, i) => (
-              <button
-                type="button"
-                data-thumb={i}
-                data-src={src}
-                data-srcset={imageSrcSet(src)}
-                aria-label={`Gambar ${i + 1}`}
-                aria-pressed={i === 0 ? "true" : "false"}
-                class:list={[
-                  "gallery-thumb relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-lg bg-brand-50 ring-2 transition-all sm:w-full",
-                  i === 0 ? "ring-brand-600" : "ring-transparent hover:ring-brand-300",
-                ]}
-              >
-                <img src={src} alt={`${product.name} — tampilan ${i + 1}`} class="h-full w-full object-cover" loading="lazy" />
-              </button>
-            ))
-          }
+          <!-- Thumbnails — a vertical rail beside the image (thumbnail-left) or a scrollable row under it -->
+          <div
+            id="gallery-thumbs"
+            class:list={["flex gap-3 overflow-x-auto pb-1", thumbsBeside && "sm:w-20 sm:flex-col sm:overflow-visible sm:pb-0"]}
+          >
+            {
+              gallery.map((src, i) => (
+                <button
+                  type="button"
+                  data-thumb={i}
+                  data-src={src}
+                  data-srcset={imageSrcSet(src)}
+                  aria-label={`Gambar ${i + 1}`}
+                  aria-pressed={i === 0 ? "true" : "false"}
+                  class:list={[
+                    "gallery-thumb relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-lg bg-brand-50 ring-2 transition-all",
+                    thumbsBeside && "sm:w-full",
+                    i === 0 ? "ring-brand-600" : "ring-transparent hover:ring-brand-300",
+                  ]}
+                >
+                  <img src={src} alt={`${product.name} — tampilan ${i + 1}`} class="h-full w-full object-cover" loading="lazy" />
+                </button>
+              ))
+            }
+          </div>
         </div>
-      </div>
+      )}
 
         {/* Ulasan — in the LEFT column beneath the gallery (the reference's shape) so the long Deskripsi
             Produk fills the right column beside it, instead of the reviews running full-width and leaving

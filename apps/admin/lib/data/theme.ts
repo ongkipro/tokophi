@@ -147,3 +147,16 @@ export async function getBrandColor(storeId: string): Promise<string | null> {
     return row?.brandColor ?? null;
   });
 }
+
+// Product-page gallery layout (stores.product_gallery_layout) — same tenant caveat as getBrandColor:
+// `stores` has no store_id (it IS the tenant), so filter explicitly by session storeId.
+export async function getProductGalleryLayout(storeId: string): Promise<string> {
+  return withTenant(storeId, async (db) => {
+    const [row] = await db
+      .select({ layout: schema.stores.productGalleryLayout })
+      .from(schema.stores)
+      .where(eq(schema.stores.id, storeId))
+      .limit(1);
+    return row?.layout ?? "thumbnail-left";
+  });
+}
