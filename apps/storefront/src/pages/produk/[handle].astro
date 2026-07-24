@@ -459,14 +459,21 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     <div id="ulasan" class="mt-20 scroll-mt-24 border-t border-line pt-14">
       <SectionHeading eyebrow="Ulasan Pembeli" title="Apa kata pelanggan" />
 
-      <div class="mt-8 grid gap-8 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-12">
-        <!-- Average -->
-        {/* No card. This sits INSIDE the `border-t` reviews section, which already does the
-             separating — a box here is a card inside a card, drawn around one number. */}
-        <div class="flex flex-col items-center px-8 py-6 text-center">
-          <span class="font-display text-5xl font-semibold text-ink tabular-nums">{rating.value.toFixed(1)}</span>
-          <Stars value={rating.value} size="lg" showValue={false} class="mt-2" />
-          <span class="mt-2 text-sm text-muted">{rating.count} ulasan</span>
+      <div class="mt-8 grid gap-8 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-16">
+        <!-- Average — left-aligned, the Judge.me/Loox shape: a big score with "/ 5.0", the stars, and
+             a "verified ratings" line. No card: it sits inside the section's own `border-t`. -->
+        <div>
+          <div class="flex items-end gap-2">
+            <span class="font-display text-5xl font-semibold leading-none text-ink tabular-nums">{rating.value.toFixed(1)}</span>
+            <span class="pb-1 text-lg text-muted">/ 5,0</span>
+          </div>
+          <Stars value={rating.value} size="md" showValue={false} class="mt-3" />
+          {/* "terverifikasi" is honest here: every review counted comes from a buyer who received a
+              `selesai` order for this product (seed-reviews.ts) — never a public form that invites
+              invented ones. That verified-purchase model is the whole trust story, so it is stated. */}
+          <p class="mt-2 text-xs font-medium uppercase tracking-[0.12em] text-muted">
+            Dari {rating.count} ulasan terverifikasi
+          </p>
         </div>
 
         <!-- Breakdown -->
@@ -492,13 +499,38 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
 
       <!-- The written testimonials. Each is a real buyer who received a `selesai` order for this
            product (seed-reviews.ts), so "Pembelian terverifikasi" is honest, not decoration. -->
+      {/* ONE COLUMN, hairline-divided (Judge.me/Loox shape). Each row: an initial avatar, the buyer's
+          name with a green verified-purchase check, the date, the stars on the right, then the body.
+          `text-muted` (never `/70`) for the date — the /70 opacity measured 2.84:1 on the cream page and
+          Lighthouse scored 0 on it; plain `text-muted` is 5.09:1 (the token exists for exactly this). */}
       {reviews.length > 0 && (
-        <ul class="mt-12 grid gap-5 sm:grid-cols-2">
+        <ul class="mt-10 divide-y divide-line border-t border-line">
           {reviews.map((rev) => (
-            <li class="border-t border-line pt-5">
-              <div class="flex items-center justify-between gap-3">
-                <span class="font-medium text-ink">{rev.author}</span>
-                <Stars value={rev.rating} size="sm" showValue={false} />
+            <li class="py-6 first:pt-8">
+              <div class="flex items-start justify-between gap-4">
+                <div class="flex min-w-0 items-center gap-3">
+                  <span
+                    class="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-100 font-display text-sm font-semibold text-brand-700"
+                    aria-hidden="true"
+                  >
+                    {rev.author.trim().charAt(0).toUpperCase()}
+                  </span>
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span class="font-medium text-ink">{rev.author}</span>
+                      <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700">
+                        <svg viewBox="0 0 20 20" class="size-3.5 fill-current" aria-hidden="true">
+                          <path d="M10 1.6a8.4 8.4 0 1 0 0 16.8 8.4 8.4 0 0 0 0-16.8Zm4.1 6.2-4.9 4.9a.9.9 0 0 1-1.3 0L5.9 10.6a.9.9 0 1 1 1.3-1.3l1.4 1.4 4.3-4.3a.9.9 0 1 1 1.3 1.3Z" />
+                        </svg>
+                        Terverifikasi
+                      </span>
+                    </div>
+                    <p class="text-xs text-muted">
+                      {rev.daysAgo === 0 ? "Hari ini" : `${rev.daysAgo} hari lalu`}
+                    </p>
+                  </div>
+                </div>
+                <Stars value={rev.rating} size="sm" showValue={false} class="mt-1 shrink-0" />
               </div>
               <p class="mt-3 text-sm leading-relaxed text-muted">{rev.body}</p>
               {rev.reply && (
@@ -507,14 +539,6 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                   <p class="mt-1 text-sm leading-relaxed text-ink">{rev.reply}</p>
                 </div>
               )}
-              {/* `text-muted`, NOT `text-muted/70`. Removing the white card behind these reviews put
-                  this line on the cream page, where the /70 opacity measured **2.84:1** — Lighthouse
-                  color-contrast scored 0 on it. Same trap as the footer: an OPACITY, not a colour, so
-                  the palette is innocent and no token audit can see it. Plain `text-muted` is 5.09:1
-                  (the token was set for exactly this). */}
-              <p class="mt-3 text-xs text-muted">
-                {rev.daysAgo === 0 ? "Hari ini" : `${rev.daysAgo} hari lalu`} · Pembelian terverifikasi
-              </p>
             </li>
           ))}
         </ul>
