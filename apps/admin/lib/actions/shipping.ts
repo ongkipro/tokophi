@@ -405,6 +405,31 @@ export async function setCodEnabled(on: boolean): Promise<{ ok: boolean; error?:
   return { ok: true };
 }
 
+/** Automatic free shipping (PROMO P1, store_settings.free_ship_*). subtotal ≥ minIdr ⇒ ongkir gratis. */
+export async function getFreeShip(): Promise<{ enabled: boolean; minIdr: number }> {
+  if (!(await getSession())) return { enabled: false, minIdr: 0 };
+  return withCurrentTenant(async (db) => {
+    const [s] = await db
+      .select({ enabled: schema.storeSettings.freeShipEnabled, minIdr: schema.storeSettings.freeShipMinIdr })
+      .from(schema.storeSettings)
+      .limit(1);
+    return { enabled: !!s?.enabled, minIdr: s?.minIdr ?? 0 };
+  });
+}
+
+export async function setFreeShip(input: { enabled: boolean; minIdr: number }): Promise<{ ok: boolean }> {
+  const { storeId } = await requireCapability("settings:write");
+  const minIdr = Math.max(0, Math.round(input.minIdr || 0));
+  await withTenant(storeId, (db) =>
+    db
+      .insert(schema.storeSettings)
+      .values({ storeId, freeShipEnabled: input.enabled, freeShipMinIdr: minIdr })
+      .onConflictDoUpdate({ target: schema.storeSettings.storeId, set: { freeShipEnabled: input.enabled, freeShipMinIdr: minIdr } }),
+  );
+  revalidatePath("/pengaturan");
+  return { ok: true };
+}
+
 // ---- Create a KiriminAja shipment for an order ----
 //
 // What KiriminAja actually returns from request_pickup (verified against the sandbox, every

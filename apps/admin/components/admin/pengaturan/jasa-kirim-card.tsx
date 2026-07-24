@@ -5,6 +5,7 @@ import { ChevronDown, Truck, Info, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Switch } from "@tokophi/ui/switch";
+import { Input } from "@tokophi/ui/input";
 import { Badge } from "@tokophi/ui/badge";
 import { cn } from "@tokophi/ui/lib/utils";
 import { useCan } from "@/components/admin/permissions";
@@ -14,6 +15,8 @@ import {
   saveStoreServices,
   getCodEnabled,
   setCodEnabled,
+  getFreeShip,
+  setFreeShip,
   type PlatformService,
 } from "@/lib/actions/shipping";
 import { courierName } from "@tokophi/lib/couriers";
@@ -39,13 +42,17 @@ export function JasaKirimCard() {
   const [services, setServices] = React.useState<PlatformService[]>([]);
   const [on, setOn] = React.useState<Record<string, boolean>>({});
   const [cod, setCod] = React.useState(false);
+  const [freeShip, setFreeShipOn] = React.useState(false); // PROMO P1 — automatic free shipping
+  const [freeShipMin, setFreeShipMin] = React.useState(""); // Rp threshold as a string (input)
   const [open, setOpen] = React.useState<Record<string, boolean>>({});
 
   React.useEffect(() => {
     let alive = true;
     (async () => {
-      const [platform, mine, codOn] = await Promise.all([getPlatformServices(), getStoreServices(), getCodEnabled()]);
+      const [platform, mine, codOn, fs] = await Promise.all([getPlatformServices(), getStoreServices(), getCodEnabled(), getFreeShip()]);
       if (!alive) return;
+      setFreeShipOn(fs.enabled);
+      setFreeShipMin(fs.minIdr ? String(fs.minIdr) : "");
       setServices(platform);
       // First visit (nothing saved yet) → default every platform service ON, so a new store can
       // sell immediately instead of silently having zero shipping options at checkout.
@@ -72,8 +79,12 @@ export function JasaKirimCard() {
         toast.error("Pilih minimal satu layanan — tanpa itu pembeli tidak bisa checkout.");
         return;
       }
-      const [a, b] = await Promise.all([saveStoreServices(picked), setCodEnabled(cod)]);
-      if (a.ok && b.ok) toast.success("Jasa kirim disimpan.");
+      const [a, b, c] = await Promise.all([
+        saveStoreServices(picked),
+        setCodEnabled(cod),
+        setFreeShip({ enabled: freeShip, minIdr: Number((freeShipMin || "").replace(/[^\d]/g, "")) || 0 }),
+      ]);
+      if (a.ok && b.ok && c.ok) toast.success("Jasa kirim disimpan.");
       else toast.error(a.error ?? b.error ?? "Gagal menyimpan.");
     });
 
@@ -124,6 +135,35 @@ export function JasaKirimCard() {
                 COD hanya muncul di checkout untuk layanan berlabel <span className="font-medium text-foreground">COD</span> di bawah.
                 Bila pembeli menolak paket, ongkos retur mengikuti ketentuan kurir — karena itu tidak semua layanan dibuka untuk COD.
               </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Gratis ongkir otomatis (PROMO P1) ───────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Gratis Ongkir Otomatis</CardTitle>
+          <CardDescription>Beri gratis ongkir otomatis saat belanja mencapai batas minimum — tanpa perlu kode voucher.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+            <div className="min-w-0">
+              <div className="text-sm font-medium">Aktifkan gratis ongkir</div>
+              <div className="text-xs text-muted-foreground">Ongkir otomatis Rp0 di checkout saat syarat terpenuhi.</div>
+            </div>
+            <Switch checked={freeShip} onCheckedChange={setFreeShipOn} disabled={!canWrite} />
+          </div>
+          {freeShip && (
+            <div className="grid gap-1.5 rounded-lg border p-3">
+              <label htmlFor="free-ship-min" className="text-sm font-medium">Minimum belanja</label>
+              <div className="relative max-w-48">
+                <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
+                <Input id="free-ship-min" inputMode="numeric" value={freeShipMin}
+                  onChange={(e) => setFreeShipMin(e.target.value.replace(/[^\d]/g, ""))}
+                  placeholder="0" className="pl-8 tabular-nums" disabled={!canWrite} />
+              </div>
+              <p className="text-xs text-muted-foreground">Belanja ≥ nilai ini → ongkir gratis. Kosong/0 = selalu gratis.</p>
             </div>
           )}
         </CardContent>

@@ -998,6 +998,10 @@ export const storeSettings = pgTable("store_settings", {
   // Which SERVICES may carry it is not a merchant choice — KiriminAja reports a per-service `cod`
   // flag (see kaServices()), and the platform narrows that further. See ADR/BACKLOG.
   codEnabled: boolean().notNull().default(false),
+  // Automatic free shipping (PROMO P1) — when enabled, an order whose goods subtotal ≥ free_ship_min_idr
+  // gets its ongkir zeroed by /api/public/order (server-priced, never a client claim). 0 min = always.
+  freeShipEnabled: boolean().notNull().default(false),
+  freeShipMinIdr: money().notNull().default(0),
 });
 
 export const platformPaymentGateways = pgTable("platform_payment_gateways", {

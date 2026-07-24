@@ -2,7 +2,7 @@
 import { ShoppingCart, Banknote, MapPin, Truck, ChevronDown } from "@lucide/astro";
 import PayIcon from "../components/PayIcon.astro";
 import CheckoutLayout from "../layouts/CheckoutLayout.astro";
-import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings } from "../data/catalog";
+import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings, storeFreeShip } from "../data/catalog";
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { verifyRecoveryToken } from "../lib/recovery";
@@ -85,6 +85,12 @@ const TAX = await storeTaxSettings(store.id);
 const TAX_ENABLED = TAX.enabled;
 const TAX_RATE = TAX.ratePct;
 const TAX_INCLUSIVE = TAX.inclusive;
+
+// Automatic free shipping (PROMO P1). The order API is authoritative; this only makes the summary show
+// ongkir GRATIS the moment the threshold is met, matching what will be charged.
+const FS = await storeFreeShip(store.id);
+const FREE_SHIP_ENABLED = FS.enabled;
+const FREE_SHIP_MIN = FS.minIdr;
 const COD_MAX = COD.maxAmountIdr; // 0 = no cap
 const COD_PROVINCES = COD.allowedProvinces; // [] = every province
 
@@ -816,7 +822,7 @@ if (rToken) {
   }
 </style>
 
-<script is:inline define:vars={{ ONGKIR_API, ORDER_API, PROMO_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, TAX_ENABLED, TAX_RATE, TAX_INCLUSIVE, RECOVER }}>
+<script is:inline define:vars={{ ONGKIR_API, ORDER_API, PROMO_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, TAX_ENABLED, TAX_RATE, TAX_INCLUSIVE, FREE_SHIP_ENABLED, FREE_SHIP_MIN, RECOVER }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -1149,7 +1155,7 @@ if (rToken) {
     function syncCod() {
       if (!codOption || !codRadio) return;
       var shipEl = form.querySelector('input[name="shipping"]:checked');
-      var total = subtotal + selectedShipping() + ppnAdd(subtotal) - voucherDisc(selectedShipping());
+      var total = subtotal + selectedShipping() + ppnAdd(subtotal) - totalDisc(selectedShipping());
       var allowed =
         !!COD_ENABLED &&
         !!shipEl &&
@@ -1181,17 +1187,33 @@ if (rToken) {
     var voucherPriceOff = 0;
     var voucherShipOff = 0;
     var voucherCode = "";
-    function voucherDisc(ship) {
-      return voucherPriceOff + Math.min(voucherShipOff, ship);
+    // Automatic free shipping (PROMO P1) — the merchant's threshold. `ship` when the cart qualifies, else 0.
+    // The order API applies the same rule (subtotal ≥ freeShipMinIdr → shipOff = shippingCost) and is
+    // authoritative; this only mirrors it so the summary shows the same number that will be charged.
+    function autoFreeShip(ship) {
+      return (FREE_SHIP_ENABLED && subtotal >= FREE_SHIP_MIN) ? ship : 0;
+    }
+    // Ongkir waived, from EITHER a gratis_ongkir voucher OR auto-free-ship — Math.max so the two never
+    // stack into a double discount (both zero the same ongkir). Capped at the actual ship by construction.
+    function shipWaived(ship) {
+      return Math.max(Math.min(voucherShipOff, ship), autoFreeShip(ship));
+    }
+    // Total money off the bill: the voucher's PRICE cut + whatever waives the ongkir. syncCod re-uses this.
+    function totalDisc(ship) {
+      return voucherPriceOff + shipWaived(ship);
     }
 
     function recompute() {
       var ship = selectedShipping();
-      var shipText = idr.format(ship);
       var ppn = ppnAdd(subtotal);
-      var disc = voucherDisc(ship);
-      var total = idr.format(subtotal + ship + ppn - disc);
-      togglePpn("summary-discount-row", "summary-discount", disc > 0, "−" + idr.format(disc));
+      // When the ongkir is fully waived, the ongkir line reads GRATIS (not a struck price) and the amount
+      // is NOT repeated in the discount row — otherwise the shopper sees the free shipping counted twice.
+      var waived = shipWaived(ship);
+      var shipFree = ship > 0 && waived >= ship;
+      var shipText = shipFree ? "GRATIS" : idr.format(ship);
+      var total = idr.format(subtotal + ship + ppn - totalDisc(ship));
+      // The discount row carries the voucher's PRICE cut only; the ongkir cut shows as GRATIS above.
+      togglePpn("summary-discount-row", "summary-discount", voucherPriceOff > 0, "−" + idr.format(voucherPriceOff));
       // The PPN row shows only when exclusive PPN adds to the bill (ppn > 0). Inclusive PPN doesn't
       // change the total, so no row — the price already contains it.
       var ppnText = idr.format(ppn);

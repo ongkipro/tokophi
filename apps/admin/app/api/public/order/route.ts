@@ -295,7 +295,10 @@ async function handle(req: Request) {
   // pass-through). Off unless the merchant opted in (tax_enabled). computeTax is the SAME helper the
   // checkout display uses, so the shopper is charged exactly what they were shown.
   const [taxCfg] = await db
-    .select({ enabled: schema.storeSettings.taxEnabled, ratePct: schema.storeSettings.taxRatePct, inclusive: schema.storeSettings.taxInclusive })
+    .select({
+      enabled: schema.storeSettings.taxEnabled, ratePct: schema.storeSettings.taxRatePct, inclusive: schema.storeSettings.taxInclusive,
+      freeShipEnabled: schema.storeSettings.freeShipEnabled, freeShipMinIdr: schema.storeSettings.freeShipMinIdr,
+    })
     .from(schema.storeSettings)
     .where(eq(schema.storeSettings.storeId, store.id))
     .limit(1);
@@ -355,14 +358,24 @@ async function handle(req: Request) {
   // HERE from the seller's own `discounts` row. An invalid/expired/over-limit/below-minimum code is
   // REJECTED (not silently ignored), so the shopper is never charged full on a code they believed
   // applied. `discountIdr` = goods off + shipping off (gratis_ongkir); the order stores it as one line.
-  let discountIdr = 0;
+  let voucherPriceOff = 0;
+  let voucherShipOff = 0;
   let appliedDiscountId: string | null = null;
   if (body.discountCode) {
     const dres = await applyDiscount({ storeId: store.id, code: body.discountCode, subtotal, shippingCost });
     if (!dres.ok) return bad(dres.error, "discount");
-    discountIdr = dres.priceOff + dres.shipOff;
+    voucherPriceOff = dres.priceOff;
+    voucherShipOff = dres.shipOff;
     appliedDiscountId = dres.discount.id;
   }
+
+  // ── AUTOMATIC FREE SHIPPING (PROMO P1) ─────────────────────────────────────────────────────────
+  // Store-level: goods subtotal ≥ merchant's threshold ⇒ ongkir free, no code needed. Server-priced,
+  // so a client can't fake the threshold. It and a `gratis_ongkir` VOUCHER both zero the SAME ongkir —
+  // take the LARGER shipping reduction (not the sum), never charging the courier's cost twice.
+  const autoFreeShip = taxCfg?.freeShipEnabled && subtotal >= (taxCfg?.freeShipMinIdr ?? 0) ? shippingCost : 0;
+  const shipOff = Math.max(voucherShipOff, autoFreeShip);
+  const discountIdr = voucherPriceOff + shipOff;
 
   // Exclusive PPN adds on top; inclusive PPN is already inside `subtotal` (addToTotal = 0). Either way
   // the COD-cap check below and the payment amount both see the real amount the shopper pays.

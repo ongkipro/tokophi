@@ -626,6 +626,18 @@ export async function storeTaxSettings(storeId: string): Promise<StoreTax> {
   return { enabled: !!ss?.enabled, ratePct: Number(ss?.ratePct ?? 0), inclusive: !!ss?.inclusive };
 }
 
+// Automatic free shipping (PROMO P1) — the checkout shows ongkir GRATIS when subtotal ≥ minIdr. NOT
+// cached, same reason as tax: /api/public/order re-reads these columns and is the authoritative money.
+export type StoreFreeShip = { enabled: boolean; minIdr: number };
+export async function storeFreeShip(storeId: string): Promise<StoreFreeShip> {
+  const [ss] = await db
+    .select({ enabled: schema.storeSettings.freeShipEnabled, minIdr: schema.storeSettings.freeShipMinIdr })
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.storeId, storeId))
+    .limit(1);
+  return { enabled: !!ss?.enabled, minIdr: Number(ss?.minIdr ?? 0) };
+}
+
 export type StoreCodPolicy = { enabled: boolean; maxAmountIdr: number; allowedProvinces: string[] };
 
 export async function storeCodPolicy(storeId: string): Promise<StoreCodPolicy> {
