@@ -219,7 +219,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         <div class="order-1 grid grid-cols-2 gap-3 md:order-none">
           {gallery.length > 0 ? (
             gallery.map((src, i) => (
-              <div class="relative aspect-[3/4] overflow-hidden rounded-xl bg-brand-50">
+              <div class="relative aspect-[3/4] overflow-hidden rounded-lg bg-brand-50">
                 <img
                   src={src}
                   srcset={imageSrcSet(src)}
@@ -240,7 +240,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
               </div>
             ))
           ) : (
-            <div class="relative col-span-2 flex aspect-[3/2] items-center justify-center rounded-xl bg-brand-50" aria-hidden="true">
+            <div class="relative col-span-2 flex aspect-[3/2] items-center justify-center rounded-lg bg-brand-50" aria-hidden="true">
               <ImageOff class="size-12 text-brand-300" stroke-width={1.5} />
             </div>
           )}
@@ -248,7 +248,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       ) : (
         <div class:list={["order-1 flex flex-col gap-4 md:order-none", thumbsBeside && "sm:flex-row-reverse"]}>
           <!-- Main image -->
-          <div class="relative aspect-[3/4] flex-1 overflow-hidden rounded-xl bg-brand-50">
+          <div class="relative aspect-[3/4] flex-1 overflow-hidden rounded-lg bg-brand-50">
             {/* This is the LCP element of the most important page in the shop and it had no priority
                 hint at all — while the thumbnails BELOW it were `loading="lazy"`, i.e. backwards.
                 `width`/`height` describe the intrinsic ratio; the `aspect-[3/4]` wrapper does the
@@ -300,7 +300,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                   aria-label={`Gambar ${i + 1}`}
                   aria-pressed={i === 0 ? "true" : "false"}
                   class:list={[
-                    "gallery-thumb relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-lg bg-brand-50 ring-2 transition-all",
+                    "gallery-thumb relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-md bg-brand-50 ring-2 transition-all",
                     thumbsBeside && "sm:w-full",
                     i === 0 ? "ring-brand-600" : "ring-transparent hover:ring-brand-300",
                   ]}
@@ -327,7 +327,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                   verified-ratings line. No card: it sits inside the section's own border-t. */}
               <div>
                 <div class="flex items-end gap-2">
-                  <span class="font-display text-5xl font-semibold leading-none text-ink tabular-nums">{rating.value.toFixed(1)}</span>
+                  <span class="font-display text-5xl font-semibold leading-none text-ink tabular-nums">{rating.value.toFixed(1).replace(".", ",")}</span>
                   <span class="pb-1 text-lg text-muted">/ 5,0</span>
                 </div>
                 <Stars value={rating.value} size="md" showValue={false} class="mt-3" />
@@ -407,21 +407,22 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         <div class="order-2 md:order-none">
         <Breadcrumb items={CRUMBS} />
 
-        <p class="mt-5 text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{product.category}</p>
-        {/* A MARKETPLACE title, not a blog headline. Sellers legitimately stuff the name to the 100-char
+        {/* No category eyebrow above the title — the breadcrumb right above already names the category, and
+            stacking a second near-identical label on top of it was pure repetition.
+            A MARKETPLACE title, not a blog headline. Sellers legitimately stuff the name to the 100-char
             cap for on-page keywords, and a 36px display heading turned that into a five-line wall that
             dominated the buy box. A moderate 24/28px + `text-pretty` (no orphan last word) lets a long
             title wrap into a tidy 2-4 lines while a short one still reads as the page's heading. The
             FULL name always shows — this is the product's identity, so it is never clamped here (cards
             and the breadcrumb clamp/truncate; the PDP does not). */}
-        <h1 class="mt-2 font-display text-2xl font-semibold leading-snug text-pretty text-ink sm:text-[1.75rem]">{product.name}</h1>
+        <h1 class="mt-4 font-display text-2xl font-semibold leading-snug text-pretty text-ink sm:text-[1.75rem]">{product.name}</h1>
 
         {
           rating && (
-            <a href="#ulasan" class="mt-3 inline-flex items-center gap-2 text-sm transition-colors hover:text-brand-700">
+            <a href="#ulasan" class="mt-3 inline-flex items-center gap-2 py-0.5 text-sm transition-colors hover:text-brand-700">
               <Stars value={rating.value} size="md" showValue={false} />
-              <span class="font-semibold text-ink tabular-nums">{rating.value.toFixed(1)}</span>
-              <span class="text-muted">· {rating.count} ulasan</span>
+              <span class="font-semibold text-ink tabular-nums">{rating.value.toFixed(1).replace(".", ",")}</span>
+              <span class="text-muted underline decoration-line underline-offset-4">{rating.count} ulasan</span>
             </a>
           )
         }
