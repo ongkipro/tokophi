@@ -250,8 +250,10 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         </div>
       </div>
 
-      <!-- Info -->
-      <div class="md:sticky md:top-24 md:self-start">
+      <!-- Info — no longer sticky: the column now carries the full Deskripsi Produk below the buy box,
+           so it is a tall scrolling column beside the gallery (the 2-column reading the reference asks
+           for), not a short floating card. -->
+      <div class="md:self-start">
         <Breadcrumb items={CRUMBS} />
 
         <p class="mt-5 text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{product.category}</p>
@@ -427,29 +429,28 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             image={gallery.length > 0 ? abs(gallery[0]) : undefined}
           />
         </div>
+
+        {/* DESKRIPSI PRODUK — IN the buy-box column, BELOW the buy actions (the Shopify Dawn shape).
+            After the buttons so it never pushes them under the fold, contextual to the buy box, and it
+            fills the tall right column against the gallery — the two-column layout the reference asks
+            for, without the empty right column a short description would leave in a sustained grid. The
+            short hook by the price is still the above-the-fold summary. */}
+        {product.description.trim() && (
+          <div class="mt-10 border-t border-line pt-8">
+            <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-ink">Deskripsi Produk</h2>
+            <div class="mt-4 space-y-4 leading-relaxed text-muted">
+              {product.description
+                .split(/\n{2,}/)
+                .map((para) => para.trim())
+                .filter(Boolean)
+                .map((para) => (
+                  <p class="whitespace-pre-line">{para}</p>
+                ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
-
-    {/* DESKRIPSI PRODUK — the full story, moved BELOW the buy box (owner, 2026-07-24) so a long
-        description no longer pushes Ukuran + Tambah ke Keranjang under the fold. The short hook by the
-        price is the above-the-fold summary; this is the detail a decided shopper scrolls down for.
-        Split on blank lines into paragraphs; `whitespace-pre-line` keeps a merchant's own line breaks. */}
-    {
-      product.description.trim() && (
-        <section class="mt-20 border-t border-line pt-14">
-          <SectionHeading title="Deskripsi Produk" />
-          <div class="mt-6 max-w-2xl space-y-4 leading-relaxed text-muted">
-            {product.description
-              .split(/\n{2,}/)
-              .map((para) => para.trim())
-              .filter(Boolean)
-              .map((para) => (
-                <p class="whitespace-pre-line">{para}</p>
-              ))}
-          </div>
-        </section>
-      )
-    }
 
     <!-- Ulasan. Rendered ONLY when real published reviews exist. The summary and the histogram used to
          be manufactured: the score came from a seed column nothing recomputes, and the 5★→1★ bars came
