@@ -1,5 +1,6 @@
 ---
-// Reusable star rating. Fractional fill via a width-clipped amber overlay over muted outlines.
+// Reusable star rating. Fractional fill via a width-clipped BRAND-coloured overlay over muted
+// outlines — the rating tracks the store's scheme colour (brand-500), not a fixed gold.
 interface Props {
   value: number;
   count?: number;
@@ -26,7 +27,7 @@ const label = `Rating ${value.toFixed(1)} dari 5${count != null ? `, ${count} ul
         </svg>
       ))}
     </div>
-    <div class="absolute inset-0 flex gap-0.5 overflow-hidden text-amber-400" style={`width:${pct}%`}>
+    <div class="absolute inset-0 flex gap-0.5 overflow-hidden text-brand-500" style={`width:${pct}%`}>
       {stars.map(() => (
         <svg viewBox="0 0 20 20" class:list={[dim, "shrink-0 fill-current"]}>
           <path d={STAR} />
