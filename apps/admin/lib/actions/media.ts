@@ -59,7 +59,7 @@ export async function getMedia(): Promise<MediaItem[]> {
   return db.select().from(schema.media).where(eq(schema.media.storeId, session.storeId)).orderBy(desc(schema.media.createdAt));
 }
 
-export async function uploadMedia(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+export async function uploadMedia(formData: FormData): Promise<{ ok: boolean; url?: string; error?: string }> {
   const { storeId: sid } = await requireCapability("media:write");
   const file = formData.get("file");
   try { checkFile(file); } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "invalid" }; }
@@ -67,7 +67,8 @@ export async function uploadMedia(formData: FormData): Promise<{ ok: boolean; er
   const saved = await saveImage(Buffer.from(await f.arrayBuffer()), f.type, `${sid.slice(0, 8)}-${Date.now()}`);
   await db.insert(schema.media).values({ storeId: sid, url: saved.url, filename: f.name, mime: saved.mime, sizeBytes: saved.size, width: saved.width, height: saved.height });
   revalidatePath("/files");
-  return { ok: true };
+  // `url` lets the Store Builder image picker auto-select a freshly uploaded image; Files ignores it.
+  return { ok: true, url: saved.url };
 }
 
 export async function deleteMedia(id: string): Promise<{ ok: boolean }> {

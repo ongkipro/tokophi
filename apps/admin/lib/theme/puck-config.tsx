@@ -1,5 +1,16 @@
-import type { Config } from "@measured/puck";
+import type { Config, CustomField } from "@measured/puck";
 import { SECTION_DEFAULTS, heroSlides, type SectionConfigMap } from "@tokophi/sections";
+import { ImagePickerField } from "@/components/theme/image-picker";
+
+// Shopify-style image field (upload / library / URL / product / category) in place of a bare URL box.
+// Value stays a plain URL string, so stored templates are untouched.
+const imageField = (label: string): CustomField<string> => ({
+  type: "custom",
+  label,
+  render: ({ value, onChange, field, readOnly }) => (
+    <ImagePickerField value={value ?? ""} onChange={onChange} field={field} readOnly={readOnly} />
+  ),
+});
 import { Hero } from "@/components/theme/sections/Hero";
 import { ProductGrid } from "@/components/theme/sections/ProductGrid";
 import { BannerPromo } from "@/components/theme/sections/BannerPromo";
@@ -36,10 +47,7 @@ export const puckConfig: Config<SectionConfigMap> = {
             focal: "center",
           },
           arrayFields: {
-            imageUrl: {
-              type: "text",
-              label: "URL Gambar (mis. /hero/hero-1.webp — kosong = gradasi warna brand)",
-            },
+            imageUrl: imageField("Gambar Slide (kosong = gradasi warna brand)"),
             heading: { type: "text", label: "Judul" },
             subheading: { type: "textarea", label: "Sub-judul" },
             ctaLabel: { type: "text", label: "Teks Tombol" },
@@ -132,7 +140,7 @@ export const puckConfig: Config<SectionConfigMap> = {
       fields: {
         heading: { type: "text", label: "Judul" },
         subheading: { type: "textarea", label: "Sub-judul" },
-        imageUrl: { type: "text", label: "URL Gambar" },
+        imageUrl: imageField("Gambar"),
         href: { type: "text", label: "Link" },
         badge: { type: "text", label: "Label Badge" },
       },
@@ -166,7 +174,7 @@ export const puckConfig: Config<SectionConfigMap> = {
         eyebrow: { type: "text", label: "Label Kecil (kosong = sembunyi)" },
         heading: { type: "text", label: "Judul" },
         body: { type: "textarea", label: "Isi Teks" },
-        imageUrl: { type: "text", label: "URL Gambar" },
+        imageUrl: imageField("Gambar"),
         imageSide: {
           type: "select",
           label: "Posisi Gambar",
@@ -226,7 +234,7 @@ export const puckConfig: Config<SectionConfigMap> = {
           label: "Kategori",
           arrayFields: {
             label: { type: "text", label: "Nama Kategori" },
-            imageUrl: { type: "text", label: "URL Gambar" },
+            imageUrl: imageField("Gambar"),
             href: { type: "text", label: "Link" },
           },
         },
@@ -247,7 +255,7 @@ export const puckConfig: Config<SectionConfigMap> = {
       fields: {
         heading: { type: "text", label: "Judul" },
         description: { type: "text", label: "Deskripsi (kosong = sembunyi)" },
-        imageUrl: { type: "text", label: "URL Gambar" },
+        imageUrl: imageField("Gambar"),
       },
       defaultProps: SECTION_DEFAULTS.lookbook,
       render: (props) => <Lookbook {...props} />,
