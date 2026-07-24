@@ -147,13 +147,31 @@ sanitisation before considering.
 
 ## 6. P3 — Default templates (Category + Product)
 
-- **Category default:** e.g. `hero` (category banner) → `product-grid` (that collection) → `rich-text`.
-  This is the "bahan custom" starting point.
-- **Product default:** the hand-built PDP already renders when there is no template; a product *template*
-  fills the tail slot (see `[handle].astro`: a template REPLACES the "Rekomendasi" tail). Seed a default
-  that adds e.g. `image-text` (care/sizing) → `product-grid` (related) → `testimoni`.
-- Seed both for the demo store in `seed-templates.ts` alongside the homepage (same UPSERT-safe pattern),
-  `isDefault: true`, one per `type`. Confirm `resolveTemplate` picks them and the storefront renders them.
+**Composition findings (2026-07-25 — read before building):**
+- `ProductGrid.astro` is already **context-aware**: an empty `collectionHandle` on a *category* template
+  lists that category; on a *product* template it lists the product's category minus the current product
+  (`ctx` from `SectionRenderer`). So a grid dropped on a category/product template "just works".
+- **Product template only replaces the PDP TAIL** (`produk/[handle].astro`: `TEMPLATE && SectionRenderer`
+  sits where the hand-built "Rekomendasi" strip was; gallery/buy-box/reviews/description stay). → a
+  product default is **safe + additive**. Seed e.g. `image-text` (perawatan/ukuran) → `product-grid`
+  (produk serupa) → `testimoni`.
+- **Category template replaces the WHOLE body** (`kategori/[handle].astro`: `TEMPLATE ? SectionRenderer :
+  <PageHeader/> + <ProductListing/>`). ⚠️ `ProductListing.astro` is **filter → sort → paginate → grid,
+  URL-driven** (195 lines) — NOT a plain grid. Replacing it with a `product-grid` section silently drops
+  sort + pagination. So a correct category default needs one of:
+  - [ ] **A new `product-listing` section** (P4) that wraps `ProductListing` and is context-aware (uses
+        `ctx.collectionHandle`). Category default = `[product-listing]`, and merchants add hero/rich-text/
+        banner around it. **← recommended.**
+  - and/or change `kategori/[handle].astro` to **always render `PageHeader`** (breadcrumb + title + SEO),
+    with the template as the customisable BODY below it — so a merchant can never accidentally ship a
+    header-less, breadcrumb-less category page.
+- Seed all defaults in `seed-templates.ts` alongside the homepage (same UPSERT-safe pattern),
+  `isDefault: true`, one per `type`. Confirm `resolveTemplate` picks them and the storefront renders them
+  (sort + pagination still work on category).
+
+**Sequencing:** product default can ship now; **category default depends on the `product-listing` section
+(P4)** — do that first, then seed the category default. Don't ship a category default that drops
+sort/pagination.
 
 ---
 
