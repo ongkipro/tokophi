@@ -1,0 +1,268 @@
+"use client";
+// The Store Builder image field — a Shopify-style picker rendered by a Puck `type:"custom"` field.
+// The stored VALUE stays a plain URL string (back-compat: old templates keep working, storefront reads
+// it unchanged). Sources: the store's media library, a fresh upload, a pasted URL, or a product /
+// category's own photo. Everything it reads is already tenant-scoped server-side.
+import * as React from "react";
+import { toast } from "sonner";
+import { UploadCloud, ImageIcon, X, Search, Check, Link2, LayoutGrid, Package, Tag } from "lucide-react";
+import { getMedia, uploadMedia, type MediaItem } from "@/lib/actions/media";
+import { pickerProducts, pickerCategoryImages, type PickerImage } from "@/lib/actions/picker";
+import { useCan } from "@/components/admin/permissions";
+import { cn } from "@tokophi/ui/lib/utils";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@tokophi/ui/dialog";
+
+type TabKey = "galeri" | "upload" | "url" | "produk" | "kategori";
+const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: "galeri", label: "Galeri", icon: LayoutGrid },
+  { key: "upload", label: "Upload", icon: UploadCloud },
+  { key: "url", label: "URL", icon: Link2 },
+  { key: "produk", label: "Produk", icon: Package },
+  { key: "kategori", label: "Kategori", icon: Tag },
+];
+const MAX = 5 * 1024 * 1024;
+
+// A responsive, searchable grid of pickable images (used by Galeri / Produk / Kategori).
+function ImageGrid({
+  items,
+  loading,
+  current,
+  onPick,
+  emptyLabel,
+}: {
+  items: { key: string; url: string; name: string; sub?: string }[];
+  loading: boolean;
+  current: string;
+  onPick: (url: string) => void;
+  emptyLabel: string;
+}) {
+  if (loading) return <p className="py-10 text-center text-sm text-muted-foreground">Memuat…</p>;
+  if (items.length === 0) return <p className="py-10 text-center text-sm text-muted-foreground">{emptyLabel}</p>;
+  return (
+    <div className="grid max-h-[46vh] grid-cols-3 gap-3 overflow-y-auto p-0.5 sm:grid-cols-4">
+      {items.map((it) => (
+        <button
+          key={it.key}
+          type="button"
+          onClick={() => onPick(it.url)}
+          title={it.name}
+          className={cn(
+            "group relative aspect-square overflow-hidden rounded-lg border bg-muted text-left transition-all",
+            current === it.url ? "border-primary ring-2 ring-primary" : "border-border hover:border-primary/50",
+          )}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={it.url} alt={it.name} className="size-full object-cover" loading="lazy" />
+          {current === it.url && (
+            <span className="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <Check className="size-3" />
+            </span>
+          )}
+          <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+            {it.name}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function ImagePickerField({
+  value,
+  onChange,
+  field,
+  readOnly,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  field: { label?: string };
+  readOnly?: boolean;
+}) {
+  const canWrite = useCan("theme:write");
+  const [open, setOpen] = React.useState(false);
+  const [tab, setTab] = React.useState<TabKey>("galeri");
+  const [q, setQ] = React.useState("");
+  const [urlDraft, setUrlDraft] = React.useState("");
+  const [pending, start] = React.useTransition();
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const [media, setMedia] = React.useState<MediaItem[] | null>(null);
+  const [products, setProducts] = React.useState<PickerImage[] | null>(null);
+  const [categories, setCategories] = React.useState<PickerImage[] | null>(null);
+
+  // Lazy-load each source the first time its tab is opened.
+  React.useEffect(() => {
+    if (!open) return;
+    if (tab === "galeri" && media === null) getMedia().then(setMedia).catch(() => setMedia([]));
+    if (tab === "produk" && products === null) pickerProducts().then(setProducts).catch(() => setProducts([]));
+    if (tab === "kategori" && categories === null) pickerCategoryImages().then(setCategories).catch(() => setCategories([]));
+  }, [open, tab, media, products, categories]);
+
+  const pick = (url: string) => {
+    onChange(url);
+    setOpen(false);
+    setQ("");
+  };
+
+  const doUpload = (files: FileList | null) => {
+    const f = files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith("image/")) return toast.error("File bukan gambar.");
+    if (f.size > MAX) return toast.error(`Melebihi 5MB (${(f.size / 1048576).toFixed(1)}MB).`);
+    const fd = new FormData();
+    fd.append("file", f);
+    start(async () => {
+      const r = await uploadMedia(fd);
+      if (r.ok && r.url) {
+        setMedia(null); // force a refresh of the library next time
+        toast.success("Gambar diunggah (WebP).");
+        pick(r.url);
+      } else toast.error(r.error ?? "Gagal mengunggah.");
+    });
+  };
+
+  const match = (s: string) => !q.trim() || s.toLowerCase().includes(q.trim().toLowerCase());
+  const label = field.label ?? "Gambar";
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-muted-foreground">{label}</Label>
+
+      {/* Current state: a thumbnail + change/clear, or an empty tappable frame. */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          disabled={readOnly}
+          onClick={() => setOpen(true)}
+          className={cn(
+            "relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted transition-colors",
+            value ? "border-border" : "border-2 border-dashed border-border hover:border-primary/60",
+          )}
+        >
+          {value ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={value} alt="" className="size-full object-cover" />
+          ) : (
+            <ImageIcon className="size-5 text-muted-foreground" />
+          )}
+        </button>
+        <div className="flex min-w-0 flex-col gap-1">
+          <Button type="button" variant="outline" size="sm" disabled={readOnly} onClick={() => setOpen(true)}>
+            {value ? "Ganti Gambar" : "Pilih Gambar"}
+          </Button>
+          {value ? (
+            <button type="button" disabled={readOnly} onClick={() => onChange("")} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive">
+              <X className="size-3" /> Hapus (pakai gradasi brand)
+            </button>
+          ) : (
+            <span className="truncate text-xs text-muted-foreground">Kosong = gradasi warna brand</span>
+          )}
+        </div>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Pilih Gambar</DialogTitle>
+            <DialogDescription>Dari galeri, unggah baru, tempel URL, atau ambil dari produk / kategori.</DialogDescription>
+          </DialogHeader>
+
+          {/* Tab bar — plain buttons (segmented), no Base UI Tabs needed. */}
+          <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => { setTab(t.key); setQ(""); }}
+                className={cn(
+                  "inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                  tab === t.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <t.icon className="size-4" /> {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Search (galeri/produk/kategori) */}
+          {(tab === "galeri" || tab === "produk" || tab === "kategori") && (
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari…" className="pl-8" />
+            </div>
+          )}
+
+          {tab === "galeri" && (
+            <ImageGrid
+              items={(media ?? []).filter((m) => match(m.filename)).map((m) => ({ key: m.id, url: m.url, name: m.filename }))}
+              loading={media === null}
+              current={value}
+              onPick={pick}
+              emptyLabel="Belum ada gambar di galeri. Unggah lewat tab Upload atau halaman Files."
+            />
+          )}
+
+          {tab === "upload" && (
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); if (canWrite) doUpload(e.dataTransfer.files); }}
+              className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-10 text-center"
+            >
+              <UploadCloud className={cn("size-8 text-muted-foreground", pending && "animate-pulse")} />
+              <div className="text-sm">
+                {pending ? (
+                  <span className="font-medium text-muted-foreground">Mengunggah…</span>
+                ) : canWrite ? (
+                  <><button type="button" className="font-medium text-primary hover:underline" onClick={() => inputRef.current?.click()}>Pilih gambar</button>{" "}atau seret ke sini</>
+                ) : (
+                  <span className="text-muted-foreground">Peran Anda tidak bisa mengunggah.</span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">JPG/PNG/WebP, maks 5MB — dikonversi ke WebP otomatis.</p>
+              <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => doUpload(e.target.files)} />
+            </div>
+          )}
+
+          {tab === "url" && (
+            <div className="space-y-2">
+              <Label className="text-muted-foreground">Tempel URL gambar atau path (mis. /hero/hero-1.webp)</Label>
+              <div className="flex gap-2">
+                <Input value={urlDraft} onChange={(e) => setUrlDraft(e.target.value)} placeholder="https://… atau /path/gambar.webp" />
+                <Button type="button" disabled={!urlDraft.trim()} onClick={() => pick(urlDraft.trim())}>Gunakan</Button>
+              </div>
+            </div>
+          )}
+
+          {tab === "produk" && (
+            <ImageGrid
+              items={(products ?? []).filter((p) => match(p.name)).map((p) => ({ key: p.id, url: p.url, name: p.name, sub: p.sub }))}
+              loading={products === null}
+              current={value}
+              onPick={pick}
+              emptyLabel="Belum ada produk dengan foto terunggah."
+            />
+          )}
+
+          {tab === "kategori" && (
+            <ImageGrid
+              items={(categories ?? []).filter((c) => match(c.name)).map((c) => ({ key: c.id, url: c.url, name: c.name }))}
+              loading={categories === null}
+              current={value}
+              onPick={pick}
+              emptyLabel="Belum ada kategori berisi produk berfoto."
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
