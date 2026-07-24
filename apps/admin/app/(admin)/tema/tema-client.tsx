@@ -18,6 +18,7 @@ import {
 import { Can, useCan } from "@/components/admin/permissions";
 import { PageHeader } from "@/components/admin/page-header";
 import { BrandColorDialog } from "@/components/theme/brand-color-dialog";
+import { GalleryLayoutDialog } from "@/components/theme/gallery-layout-dialog";
 import { Badge } from "@tokophi/ui/badge";
 import { Button } from "@tokophi/ui/button";
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -49,6 +50,7 @@ type Props = {
   collections: TemplateAssignment[];
   products: TemplateAssignment[];
   brandColor: string;
+  galleryLayout: string;
 };
 
 const TABS: { key: TemplateType; label: string; desc: string }[] = [
@@ -71,7 +73,7 @@ const TABS: { key: TemplateType; label: string; desc: string }[] = [
 
 const dateFmt = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" });
 
-export function TemaClient({ templates, collections, products, brandColor }: Props) {
+export function TemaClient({ templates, collections, products, brandColor, galleryLayout }: Props) {
   const canWrite = useCan("theme:write");
   const router = useRouter();
   const [tab, setTab] = React.useState<TemplateType>("homepage");
@@ -113,6 +115,7 @@ export function TemaClient({ templates, collections, products, brandColor }: Pro
         desc="Susun tampilan storefront dengan drag & drop — beranda, kategori, dan produk."
       >
         <BrandColorDialog initialColor={brandColor} />
+        <GalleryLayoutDialog initialLayout={galleryLayout} />
         <Can capability="theme:write">
           <CreateTemplateDialog
             type={tab}

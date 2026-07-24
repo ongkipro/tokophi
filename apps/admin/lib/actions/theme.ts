@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 import type { TemplateType } from "@/lib/data/theme";
+import { GALLERY_LAYOUTS, type GalleryLayout } from "@/lib/gallery-layout";
 
 // ADR 0009 — Store Builder.
 //
@@ -240,6 +241,17 @@ export async function saveBrandColor(hex: string): Promise<void> {
   const { storeId } = await requireCapability("theme:write");
   await withTenant(storeId, async (db) => {
     await db.update(schema.stores).set({ brandColor: hex }).where(eq(schema.stores.id, storeId));
+  });
+  revalidatePath("/tema");
+}
+
+// Product-page gallery layout (Tema panel) — also lives on `stores`, not `page_templates`. The list +
+// type are in a client-safe module (a "use server" file can only export async functions).
+export async function saveProductGalleryLayout(layout: string): Promise<void> {
+  if (!GALLERY_LAYOUTS.includes(layout as GalleryLayout)) throw new Error("Layout galeri tidak dikenal");
+  const { storeId } = await requireCapability("theme:write");
+  await withTenant(storeId, async (db) => {
+    await db.update(schema.stores).set({ productGalleryLayout: layout }).where(eq(schema.stores.id, storeId));
   });
   revalidatePath("/tema");
 }

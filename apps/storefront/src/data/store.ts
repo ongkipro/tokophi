@@ -12,6 +12,13 @@ import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { cached } from "./cache";
 
+/** The three product-gallery layouts a merchant can pick in Tema (mirrors `stores.product_gallery_layout`). */
+export type GalleryLayout = "thumbnail-left" | "thumbnail-bottom" | "grid";
+const GALLERY_LAYOUTS: readonly GalleryLayout[] = ["thumbnail-left", "thumbnail-bottom", "grid"];
+/** Clamp an arbitrary DB string to a known layout — an unrecognised value falls back to the default. */
+export const asGalleryLayout = (v: string | null | undefined): GalleryLayout =>
+  GALLERY_LAYOUTS.includes(v as GalleryLayout) ? (v as GalleryLayout) : "thumbnail-left";
+
 export type StoreInfo = {
   id: string;
   name: string;
@@ -50,6 +57,8 @@ export type StoreInfo = {
   /** `null` = merchant set no favicon → fall back to the platform icon rather than a broken one. */
   faviconUrl: string | null;
   brandColor: string | null;
+  /** Product-page gallery layout the merchant picked in Tema. Unknown DB values clamp to the default. */
+  productGalleryLayout: GalleryLayout;
   /**
    * The store's PRIMARY custom host, or null. When set, the storefront's canonical/og:url/sitemap use
    * `https://<primaryHost>` and every OTHER host 301s to it (CUSTOM_DOMAIN.md §2). null → the
@@ -148,6 +157,7 @@ const toStoreInfo = (r: typeof schema.stores.$inferSelect): StoreInfo => ({
   logoUrl: r.logoUrl,
   faviconUrl: r.faviconUrl,
   brandColor: r.brandColor,
+  productGalleryLayout: asGalleryLayout(r.productGalleryLayout),
   primaryHost: null, // filled by the caller (getStoreBySlug) — a per-store store_domains lookup
 });
 
