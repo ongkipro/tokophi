@@ -92,6 +92,7 @@ export type Product = {
   media?: { id: string; url: string }[]; // real product_media rows (editor)
   // editor read-back fields (persisted, returned by getProduct — not in the list/mock fixtures)
   description?: string;
+  shortDescription?: string;
   productType?: string;
   vendor?: string;
   seoTitle?: string;

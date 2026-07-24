@@ -206,7 +206,11 @@ export const products = pgTable(
     storeId: uuid().notNull().references(() => stores.id),
     title: text().notNull(),
     handle: text().notNull(),
+    // The FULL product story — shown in the "Deskripsi Produk" section BELOW the buy box on the PDP.
     description: text(),
+    // A one-line HOOK shown next to the price, above the fold (≤200 chars, editor caps it). Keeps the
+    // buy actions high on a PDP whose full `description` is long; empty = no hook line.
+    shortDescription: text(),
     status: productStatus().notNull().default("active"),
     productType: text(),
     vendor: text(),

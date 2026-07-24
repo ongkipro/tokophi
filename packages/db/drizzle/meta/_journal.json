@@ -519,6 +519,13 @@
       "when": 1784829628979,
       "tag": "0073_product_feed_attrs",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1784863179038,
+      "tag": "0074_opposite_the_anarchist",
+      "breakpoints": true
     }
   ]
 }

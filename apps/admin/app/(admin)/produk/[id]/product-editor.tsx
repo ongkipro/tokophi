@@ -136,6 +136,7 @@ export function ProductEditor({ product }: { product?: Product }) {
   // ---- form state (edit: hydrate from the saved product; new: empty) ----
   const [name, setName] = React.useState(product?.name ?? "");
   const [description, setDescription] = React.useState(product?.description ?? "");
+  const [shortDescription, setShortDescription] = React.useState(product?.shortDescription ?? "");
 
   const [price, setPrice] = React.useState(String(product?.price ?? ""));
   const [compareAt, setCompareAt] = React.useState(product?.compareAt ? String(product.compareAt) : "");
@@ -229,6 +230,7 @@ export function ProductEditor({ product }: { product?: Product }) {
     return {
       name: name.trim(),
       description,
+      shortDescription: shortDescription.trim() || undefined,
       status: status === "draft" ? "draft" : "active",
       category,
       productType,
@@ -543,6 +545,25 @@ export function ProductEditor({ product }: { product?: Product }) {
                 <p className="text-xs text-muted-foreground">
                   Nama yang tampil di kartu &amp; halaman produk. Untuk kata kunci pencarian yang panjang,
                   isi <span className="font-medium">Judul SEO</span> di bagian SEO — biar halaman tetap rapi.
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="p-short-desc">Deskripsi Singkat</Label>
+                  <span className={`text-xs tabular-nums ${counterClass(shortDescription.length, 200)}`}>
+                    {num(shortDescription.length)}/200
+                  </span>
+                </div>
+                <Textarea
+                  id="p-short-desc"
+                  value={shortDescription}
+                  maxLength={200}
+                  onChange={(e) => setShortDescription(e.target.value)}
+                  placeholder="Satu kalimat pemikat — tampil di dekat harga."
+                  className="min-h-16"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Hook singkat di dekat harga (di atas lipatan). Deskripsi lengkap tetap tampil di bawah tombol beli.
                 </p>
               </div>
               <div className="grid gap-2">
