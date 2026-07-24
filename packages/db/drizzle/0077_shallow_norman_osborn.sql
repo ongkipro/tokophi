@@ -1,1 +1,0 @@
-ALTER TABLE "stores" ADD COLUMN "product_gallery_layout" text DEFAULT 'thumbnail-left' NOT NULL;

@@ -1038,6 +1038,11 @@ export const storeSettings = pgTable("store_settings", {
   // gets its ongkir zeroed by /api/public/order (server-priced, never a client claim). 0 min = always.
   freeShipEnabled: boolean().notNull().default(false),
   freeShipMinIdr: money().notNull().default(0),
+  // Promo hub (/promo) banner copy — merchant-configurable (PROMO P4b). Null → the storefront falls back
+  // to sensible defaults ("Promo" / "Semua Promo, Satu Halaman"), so the page always renders.
+  promoHubTitle: text(),
+  promoHubSubtitle: text(),
+  promoHubBannerUrl: text(),
 });
 
 export const platformPaymentGateways = pgTable("platform_payment_gateways", {

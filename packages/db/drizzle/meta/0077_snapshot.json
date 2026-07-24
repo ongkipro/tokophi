@@ -1,5 +1,5 @@
 {
-  "id": "c0f60d44-cc73-40a7-b862-5dcb38a2e763",
+  "id": "51b5d9e9-5586-420d-b936-ea3726526e5b",
   "prevId": "bf95a999-cab8-4cc9-868c-f57653db74f0",
   "version": "7",
   "dialect": "postgresql",
@@ -5989,6 +5989,24 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "promo_hub_title": {
+          "name": "promo_hub_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "promo_hub_subtitle": {
+          "name": "promo_hub_subtitle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "promo_hub_banner_url": {
+          "name": "promo_hub_banner_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -6358,13 +6376,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "product_gallery_layout": {
-          "name": "product_gallery_layout",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'thumbnail-left'"
         },
         "whatsapp": {
           "name": "whatsapp",
