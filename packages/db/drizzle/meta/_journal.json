@@ -547,6 +547,13 @@
       "when": 1784888987925,
       "tag": "0077_promo_hub",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1784890287358,
+      "tag": "0078_freezing_molly_hayes",
+      "breakpoints": true
     }
   ]
 }
