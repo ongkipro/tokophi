@@ -21,6 +21,7 @@ import { getCodPolicy } from "@/lib/cod";
 import { quoteShipping, findRate } from "@/lib/shipping-quote";
 import { computeTax } from "@tokophi/lib/tax";
 import { applyDiscount } from "@/lib/promo";
+import { activeFlashPrices } from "@/lib/flash";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the
@@ -222,6 +223,11 @@ async function handle(req: Request) {
   // for nothing. Same class of hole as the client-posted ongkir below. Stock is checked BEFORE
   // anything is written, so an out-of-stock cart is rejected cleanly (real oversell prevention).
   const resolved: { variantId: string; title: string; price: number; qty: number; handle: string }[] = [];
+  // Flash sale (PROMO P3): productId → promo price for sales live RIGHT NOW. Applied below per line,
+  // ONLY when it undercuts the variant's base price — the storefront advertised it, so the order must
+  // honour it; this is where that advertised price becomes money.
+  const flash = await activeFlashPrices(store.id);
+
   for (const i of items) {
     const qty = Math.max(1, Math.floor(Number(i.qty) || 1));
     const [prod] = await db
@@ -279,11 +285,16 @@ async function handle(req: Request) {
     const available = Number(inv?.available ?? 0);
     if (available < qty) return bad(`Stok "${prod.title}" tidak mencukupi (sisa ${available}).`, "items");
 
+    // A live flash sale price overrides the base, but only DOWNWARD (never raises it — a misconfigured
+    // sale above list still charges list). Same object the storefront shows as the struck-through deal.
+    const flashPrice = flash.get(prod.id);
+    const unitPrice = flashPrice != null ? Math.min(match.price, flashPrice) : match.price;
+
     resolved.push({
       variantId: match.id,
       // The line-item title comes from the DB too — the client's `name` is decoration.
       title: match.title && match.title !== "Default" ? `${prod.title} — ${match.title}` : prod.title,
-      price: match.price,
+      price: unitPrice,
       qty,
       handle: i.handle!,
     });
@@ -295,7 +306,10 @@ async function handle(req: Request) {
   // pass-through). Off unless the merchant opted in (tax_enabled). computeTax is the SAME helper the
   // checkout display uses, so the shopper is charged exactly what they were shown.
   const [taxCfg] = await db
-    .select({ enabled: schema.storeSettings.taxEnabled, ratePct: schema.storeSettings.taxRatePct, inclusive: schema.storeSettings.taxInclusive })
+    .select({
+      enabled: schema.storeSettings.taxEnabled, ratePct: schema.storeSettings.taxRatePct, inclusive: schema.storeSettings.taxInclusive,
+      freeShipEnabled: schema.storeSettings.freeShipEnabled, freeShipMinIdr: schema.storeSettings.freeShipMinIdr,
+    })
     .from(schema.storeSettings)
     .where(eq(schema.storeSettings.storeId, store.id))
     .limit(1);
@@ -355,14 +369,24 @@ async function handle(req: Request) {
   // HERE from the seller's own `discounts` row. An invalid/expired/over-limit/below-minimum code is
   // REJECTED (not silently ignored), so the shopper is never charged full on a code they believed
   // applied. `discountIdr` = goods off + shipping off (gratis_ongkir); the order stores it as one line.
-  let discountIdr = 0;
+  let voucherPriceOff = 0;
+  let voucherShipOff = 0;
   let appliedDiscountId: string | null = null;
   if (body.discountCode) {
     const dres = await applyDiscount({ storeId: store.id, code: body.discountCode, subtotal, shippingCost });
     if (!dres.ok) return bad(dres.error, "discount");
-    discountIdr = dres.priceOff + dres.shipOff;
+    voucherPriceOff = dres.priceOff;
+    voucherShipOff = dres.shipOff;
     appliedDiscountId = dres.discount.id;
   }
+
+  // ── AUTOMATIC FREE SHIPPING (PROMO P1) ─────────────────────────────────────────────────────────
+  // Store-level: goods subtotal ≥ merchant's threshold ⇒ ongkir free, no code needed. Server-priced,
+  // so a client can't fake the threshold. It and a `gratis_ongkir` VOUCHER both zero the SAME ongkir —
+  // take the LARGER shipping reduction (not the sum), never charging the courier's cost twice.
+  const autoFreeShip = taxCfg?.freeShipEnabled && subtotal >= (taxCfg?.freeShipMinIdr ?? 0) ? shippingCost : 0;
+  const shipOff = Math.max(voucherShipOff, autoFreeShip);
+  const discountIdr = voucherPriceOff + shipOff;
 
   // Exclusive PPN adds on top; inclusive PPN is already inside `subtotal` (addToTotal = 0). Either way
   // the COD-cap check below and the payment amount both see the real amount the shopper pays.

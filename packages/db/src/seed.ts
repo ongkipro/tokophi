@@ -534,7 +534,10 @@ const MAIN_MENU: MItem[] = [
       { label: "Loungewear", type: "koleksi", href: "/kategori/loungewear" },
     ],
   },
-  { label: "Promo Gajian", type: "koleksi", href: "/kategori/promo-gajian" },
+  // A MENU to the unified promo HUB (/promo), not a category — the hub gathers the flash sale, voucher
+  // codes, free ongkir, and every discounted product on one page (PROMO P4). The manual "Promo Gajian"
+  // collection still exists at /kategori/promo-gajian for anyone who links it, but the nav points here.
+  { label: "Promo Gajian", type: "url", href: "/promo" },
   { label: "Blog", type: "blog", href: "/blog" },
   { label: "Kontak", type: "halaman", href: "/kontak" },
 ];
