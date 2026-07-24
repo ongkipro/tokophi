@@ -74,7 +74,12 @@ function Item({ item, onNavigate, counts }: { item: NavItem; onNavigate?: () => 
   const storeHref = useStoreHref();
   const pathname = stripStore(usePathname());
   const search = useSearchParams();
-  const active = isSectionActive(pathname, item.href);
+  // A section is active when its own path matches OR one of its children is the current page. The child
+  // case matters for groups whose children DON'T share the parent's path prefix (Promo → /diskon,
+  // /flash-sale, /promo; Keuangan → /saldo): without it the group stays collapsed and unhighlighted
+  // while you are standing on one of its own pages.
+  const activeChild = item.children ? activeChildHref(pathname, search, item.children) : null;
+  const active = isSectionActive(pathname, item.href) || !!activeChild;
   const [open, setOpen] = React.useState<boolean | null>(null);
   const expanded = item.children ? (open ?? active) : false;
   const badgeCount = item.badgeKey ? (counts?.[item.badgeKey] ?? 0) : 0;
@@ -101,8 +106,6 @@ function Item({ item, onNavigate, counts }: { item: NavItem; onNavigate?: () => 
   );
 
   if (!item.children) return rowLink;
-
-  const activeChild = activeChildHref(pathname, search, item.children);
 
   return (
     <div>
