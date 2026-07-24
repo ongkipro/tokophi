@@ -145,7 +145,11 @@ Built + **browser/SQL-verified** + committed (order of commits):
 
 **Demo data live in the shared DB** (batik-nusantara, store `908695b5-…`): flash sale "Promo Gajian" (id `ed0e213e-…`), 4 products (dress 199k, jumpsuit 179k, gamis 199k, blazer 149k), window now→+7d, status aktif. `free_ship_enabled=false` (honest default). NOTE: this is SQL-inserted, NOT in the seed (the main seed anchors to a fixed TODAY, so a fixed-date sale would rot) — P5 must add it to `seed:recent` (the now()-relative fresh-data path), not the anchored main seed.
 
-### Remaining
+### ✅ ALL STAGES SHIPPED (2026-07-24)
+- **P0** voucher (#71) · **P1** free ongkir + **P3** flash sale + **P4a** hub + **P3c** admin flash editor (#74) · **P4b** hub banner config + **P5** demo seed + polish (#76). Migrations 0075–0077 all live. Deploy #74 verified live (`/promo` 200, checkout voucher input). After #76, run `npm run seed:recent -w @tokophi/db` against **prod** to light up the live hub's flash sale (idempotent, prod-safe — populates 'Promo Gajian' sale + banner + live vouchers + free ongkir for batik-nusantara).
+- ⚠️ Dev-mode admin saves are broken in this worktree (mixed webpack/turbopack `.next` + flaky HMR) — the pre-existing Diskon editor fails too. Verify admin writes via `next build`/`next start`, not `next dev`.
+
+### Remaining (optional / follow-up)
 - ~~**P3c admin flash-sale editor**~~ ✅ DONE (commit `01b3f3c`) — `/flash-sale` list + `/flash-sale/[id]` + `/baru` editor, "Flash Sale" nav next to Diskon. `lib/data/flash.ts` (tenant reads) + `lib/actions/flash.ts` (`discounts:write`, CHILD-TABLE RULE in `writeItems`). Native datetime-local (REAL time, not anchored). ⚠️ Verified against a PRODUCTION build — dev-mode hydration is broken in this worktree (the pre-existing Diskon editor also fails to save in dev; env, not code).
 - **P4b merchant-configurable hub banner/title** — currently defaulted in the page. Add `promo_hub` (or `store_settings` columns) + a small admin editor; wire into `promo/index.astro` (`TITLE` + hero copy/image).
 - **P2 category/product-scoped vouchers** — DEPRIORITISED (YAGNI): flash sale already delivers "discounted products". Build only if a scoped voucher is actually wanted.
