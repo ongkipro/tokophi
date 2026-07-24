@@ -669,6 +669,33 @@ export async function storeFreeShip(storeId: string): Promise<StoreFreeShip> {
   return { enabled: !!ss?.enabled, minIdr: Number(ss?.minIdr ?? 0) };
 }
 
+// Active voucher codes to SHOWCASE on the /promo hub (PROMO P4). A code shows only while it is usable:
+// status='aktif', inside its window, and not exhausted. The order API (lib/promo `applyDiscount`) is
+// still the authority — this only advertises; a code that races to its usage limit fails there cleanly.
+export type VoucherPromo = { code: string; kind: string; value: number; minPurchaseIdr: number; endsAt: string | null };
+export async function activeVouchers(storeId: string): Promise<VoucherPromo[]> {
+  const rows = await db
+    .select({
+      code: schema.discounts.code, kind: schema.discounts.kind, value: schema.discounts.value,
+      minPurchaseIdr: schema.discounts.minPurchaseIdr, endsAt: schema.discounts.endsAt,
+    })
+    .from(schema.discounts)
+    .where(
+      and(
+        eq(schema.discounts.storeId, storeId),
+        eq(schema.discounts.status, "aktif"),
+        sql`(${schema.discounts.startsAt} is null or now() >= ${schema.discounts.startsAt})`,
+        sql`(${schema.discounts.endsAt} is null or now() < ${schema.discounts.endsAt})`,
+        sql`(${schema.discounts.usageLimit} is null or ${schema.discounts.usedCount} < ${schema.discounts.usageLimit})`,
+      ),
+    )
+    .orderBy(asc(schema.discounts.code));
+  return rows.map((r) => ({
+    code: r.code, kind: r.kind, value: r.value, minPurchaseIdr: Number(r.minPurchaseIdr ?? 0),
+    endsAt: r.endsAt ? r.endsAt.toISOString() : null,
+  }));
+}
+
 export type StoreCodPolicy = { enabled: boolean; maxAmountIdr: number; allowedProvinces: string[] };
 
 export async function storeCodPolicy(storeId: string): Promise<StoreCodPolicy> {
