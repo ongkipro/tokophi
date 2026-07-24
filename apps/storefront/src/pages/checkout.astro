@@ -24,6 +24,8 @@ const catalog = Astro.locals.catalog;
 // pattern — src/data/store.ts).
 const ONGKIR_API = process.env.PUBLIC_ONGKIR_API || "http://localhost:3000/api/public/ongkir";
 const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/public/order";
+// PROMO P0 — voucher preview. Derived from the order API base so it needs no new env (same admin host).
+const PROMO_API = ORDER_API.replace(/\/order$/, "/promo");
 const ORIGIN_CITY = store.city || "Yogyakarta";
 const STORE_SLUG = store.slug;
 
@@ -207,6 +209,22 @@ if (rToken) {
           <span id="summary-ppn-label" class="text-[var(--co-muted)]">PPN</span>
           <span id="summary-ppn" class="font-medium text-ink tabular-nums">Rp0</span>
         </div>
+        <div id="summary-discount-row" class="flex items-center justify-between text-emerald-600" hidden>
+          <span id="summary-discount-label">Diskon voucher</span>
+          <span id="summary-discount" class="font-medium tabular-nums">−Rp0</span>
+        </div>
+      </div>
+
+      {/* Voucher (PROMO P0) — preview via /api/public/promo; the order API re-validates at submit. */}
+      <div class="mt-4 border-t border-[var(--co-line)] pt-4">
+        <label for="voucher-input" class="mb-1.5 block text-sm text-[var(--co-muted)]">Punya kode voucher?</label>
+        <div class="flex gap-2">
+          <input id="voucher-input" type="text" autocomplete="off" spellcheck="false" placeholder="mis. GAJIAN25"
+            class="min-w-0 flex-1 rounded-lg border border-[var(--co-line)] bg-white px-3 py-2 text-sm uppercase text-ink outline-none placeholder:normal-case focus:border-[var(--co-accent)]" />
+          <button id="voucher-apply" type="button"
+            class="shrink-0 rounded-lg border border-[var(--co-accent)] px-4 py-2 text-sm font-medium text-[var(--co-accent)] transition-colors hover:bg-[var(--co-accent)]/10 disabled:opacity-50">Terapkan</button>
+        </div>
+        <p id="voucher-msg" class="mt-1.5 text-xs" hidden></p>
       </div>
 
       <div class="mt-4 flex items-center justify-between border-t border-[var(--co-line)] pt-4">
@@ -798,7 +816,7 @@ if (rToken) {
   }
 </style>
 
-<script is:inline define:vars={{ ONGKIR_API, ORDER_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, TAX_ENABLED, TAX_RATE, TAX_INCLUSIVE, RECOVER }}>
+<script is:inline define:vars={{ ONGKIR_API, ORDER_API, PROMO_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, TAX_ENABLED, TAX_RATE, TAX_INCLUSIVE, RECOVER }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -1131,7 +1149,7 @@ if (rToken) {
     function syncCod() {
       if (!codOption || !codRadio) return;
       var shipEl = form.querySelector('input[name="shipping"]:checked');
-      var total = subtotal + selectedShipping() + ppnAdd(subtotal);
+      var total = subtotal + selectedShipping() + ppnAdd(subtotal) - voucherDisc(selectedShipping());
       var allowed =
         !!COD_ENABLED &&
         !!shipEl &&
@@ -1158,11 +1176,22 @@ if (rToken) {
       if (el) el.textContent = text;
     }
 
+    // PROMO P0 voucher state — all 0/"" until a code is applied, so a checkout with no voucher computes
+    // exactly as before (fail-safe additive). `shipOff` is capped at the actual ongkir.
+    var voucherPriceOff = 0;
+    var voucherShipOff = 0;
+    var voucherCode = "";
+    function voucherDisc(ship) {
+      return voucherPriceOff + Math.min(voucherShipOff, ship);
+    }
+
     function recompute() {
       var ship = selectedShipping();
       var shipText = idr.format(ship);
       var ppn = ppnAdd(subtotal);
-      var total = idr.format(subtotal + ship + ppn);
+      var disc = voucherDisc(ship);
+      var total = idr.format(subtotal + ship + ppn - disc);
+      togglePpn("summary-discount-row", "summary-discount", disc > 0, "−" + idr.format(disc));
       // The PPN row shows only when exclusive PPN adds to the bill (ppn > 0). Inclusive PPN doesn't
       // change the total, so no row — the price already contains it.
       var ppnText = idr.format(ppn);
@@ -1196,6 +1225,63 @@ if (rToken) {
       recompute();
     }
     bindShipping();
+
+    // ---- Voucher (PROMO P0) ----
+    // "Terapkan" previews the discount via /api/public/promo; the order API re-validates at submit, so a
+    // stale/forged preview cannot underpay. Fails soft — a broken voucher never blocks the order.
+    (function bindVoucher() {
+      var vInput = document.getElementById("voucher-input");
+      var vBtn = document.getElementById("voucher-apply");
+      var vMsg = document.getElementById("voucher-msg");
+      if (!vInput || !vBtn) return;
+      function showMsg(text, ok) {
+        if (!vMsg) return;
+        vMsg.hidden = false;
+        vMsg.textContent = text;
+        vMsg.className = "mt-1.5 text-xs " + (ok ? "text-emerald-600" : "text-red-600");
+      }
+      function clearVoucher() {
+        voucherCode = "";
+        voucherPriceOff = 0;
+        voucherShipOff = 0;
+        recompute();
+      }
+      vBtn.addEventListener("click", function () {
+        var code = (vInput.value || "").trim();
+        if (!code) return;
+        vBtn.disabled = true;
+        fetch(PROMO_API, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ storeSlug: STORE_SLUG, code: code, subtotal: subtotal, shipping: selectedShipping() }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            vBtn.disabled = false;
+            if (!d || !d.ok) {
+              clearVoucher();
+              showMsg((d && d.error) || "Kode voucher tidak berlaku.", false);
+              return;
+            }
+            voucherCode = code;
+            voucherPriceOff = Math.max(0, Math.round(d.priceOff || 0));
+            voucherShipOff = Math.max(0, Math.round(d.shipOff || 0));
+            recompute();
+            showMsg(d.shipOff > 0 && d.priceOff === 0 ? "Voucher gratis ongkir diterapkan." : "Voucher diterapkan.", true);
+          })
+          .catch(function () {
+            vBtn.disabled = false;
+            showMsg("Gagal memeriksa voucher. Coba lagi.", false);
+          });
+      });
+      // Editing the code after applying clears the preview so a shopper can't submit a stale one.
+      vInput.addEventListener("input", function () {
+        if (voucherCode && vInput.value.trim().toUpperCase() !== voucherCode.toUpperCase()) {
+          clearVoucher();
+          if (vMsg) vMsg.hidden = true;
+        }
+      });
+    })();
 
     // ---- Live KiriminAja ongkir (via platform proxy on the admin) ----
     // ONGKIR_API + ORIGIN_CITY injected via define:vars (env-driven, per-store origin)
@@ -2088,6 +2174,9 @@ if (rToken) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storeSlug: STORE_SLUG,
+          // PROMO P0 — the voucher CODE (a choice); the order API re-validates + re-prices it (lib/promo),
+          // never trusting the client's discount amount. Empty when no voucher applied.
+          discountCode: voucherCode || undefined,
           // The checkout session this order came from → /api/public/order marks it `pulih` with
           // recovered_order_id. "Recovered" = THIS session became THAT order; anything else is a guess.
           sessionId: SESSION_ID,
