@@ -27,38 +27,43 @@ const OPTIONS: { value: GalleryLayout; label: string; desc: string }[] = [
 
 // Tiny flat previews — the picker's whole value is showing the shape at a glance, so it draws the real
 // arrangement (rail beside / rail below / 2-col grid) rather than an icon.
+// Tiny flat previews of the real arrangement. Thumbnails are drawn SQUARE (1:1) to match the storefront,
+// and the FIRST one carries the active brand ring — the same selected look the gallery uses.
 function Preview({ value }: { value: GalleryLayout }) {
-  const cell = "rounded-sm bg-muted-foreground/25";
+  const main = "rounded-sm bg-muted-foreground/25";
+  const thumb = "aspect-square shrink-0 rounded-[3px] bg-muted-foreground/25";
+  const thumbActive = "aspect-square shrink-0 rounded-[3px] bg-muted-foreground/40 ring-1 ring-primary ring-offset-1 ring-offset-background";
   if (value === "thumbnail-left") {
     return (
-      <div className="flex h-16 w-full gap-1">
-        <div className="flex w-4 flex-col gap-1">
-          <div className={cn(cell, "flex-1")} />
-          <div className={cn(cell, "flex-1")} />
-          <div className={cn(cell, "flex-1")} />
+      <div className="flex h-16 w-full gap-1.5">
+        <div className="flex w-3.5 flex-col gap-1">
+          <div className={cn(thumbActive, "w-full")} />
+          <div className={cn(thumb, "w-full")} />
+          <div className={cn(thumb, "w-full")} />
         </div>
-        <div className={cn(cell, "flex-1")} />
+        <div className={cn(main, "flex-1")} />
       </div>
     );
   }
   if (value === "thumbnail-bottom") {
     return (
-      <div className="flex h-16 w-full flex-col gap-1">
-        <div className={cn(cell, "flex-1")} />
-        <div className="flex h-4 gap-1">
-          <div className={cn(cell, "flex-1")} />
-          <div className={cn(cell, "flex-1")} />
-          <div className={cn(cell, "flex-1")} />
+      <div className="flex h-16 w-full flex-col gap-1.5">
+        <div className={cn(main, "flex-1")} />
+        <div className="flex h-3.5 gap-1">
+          <div className={cn(thumbActive, "h-full")} />
+          <div className={cn(thumb, "h-full")} />
+          <div className={cn(thumb, "h-full")} />
+          <div className={cn(thumb, "h-full")} />
         </div>
       </div>
     );
   }
   return (
     <div className="grid h-16 w-full grid-cols-2 grid-rows-2 gap-1">
-      <div className={cell} />
-      <div className={cell} />
-      <div className={cell} />
-      <div className={cell} />
+      <div className={main} />
+      <div className={main} />
+      <div className={main} />
+      <div className={main} />
     </div>
   );
 }
