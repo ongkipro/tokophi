@@ -887,6 +887,30 @@ export const adMetrics = pgTable("ad_metrics", {
   reach: integer().notNull().default(0),
 });
 
+// Per-store marketing-pixel / conversion-tracking config — the REAL setup behind Pemasaran → Pelacakan
+// (which was disabled placeholders). One row per (store, channel). DISTINCT from `ad_channels`, whose
+// pixel/spend columns are seeded DEMO and deliberately unread (see lib/data/marketing.ts) — this table
+// is the merchant's live config that the storefront actually fires from. The pixel/tag id is PUBLIC (it
+// ships in storefront JS) so it is plaintext; `capiTokenCiphertext` is a SECRET → AES-256-GCM, server
+// only, never selected into a client component. RLS by store_id (migration 0079).
+export const storeTrackingChannels = pgTable(
+  "store_tracking_channels",
+  {
+    id: pk(),
+    storeId: uuid().notNull().references(() => stores.id),
+    channel: adChannelKey().notNull(), // meta | google | tiktok
+    enabled: boolean().notNull().default(false), // merchant switched browser tracking on
+    pixelId: text(), // Meta Pixel ID · GA4 Measurement ID (G-XXXX) · TikTok Pixel ID — PUBLIC
+    capiEnabled: boolean().notNull().default(false), // server-side events (CAPI / MP / Events API) on
+    capiTokenCiphertext: text(), // Meta CAPI · GA4 Measurement Protocol · TikTok Events API token — encrypted
+    advancedMatching: boolean().notNull().default(false), // hash + send email/phone with events
+    testEventCode: text(), // optional Meta test_event_code for CAPI debugging
+    createdAt: createdAt(),
+    updatedAt: createdAt(),
+  },
+  (t) => [unique().on(t.storeId, t.channel)],
+);
+
 // Storefront funnel events. `type` is one of: visit | product_view | add_to_cart | checkout_start
 // | purchase. `device` (0037) is what makes the Perangkat breakdown a real COUNT instead of the
 // hardcoded 78/18/4 it used to be. The storefront tracker WRITES here (apps/storefront/src/pages/
