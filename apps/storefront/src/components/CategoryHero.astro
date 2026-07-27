@@ -27,48 +27,47 @@ const { crumbs, eyebrow = "Koleksi", title, dek, imageUrl, imageAlt = "" } = Ast
 const hasCrumbs = !!crumbs?.length;
 ---
 
-<section>
-  {
-    hasCrumbs && (
-      <div class="mx-auto max-w-7xl px-4 pt-6 sm:px-6">
-        <Breadcrumb items={crumbs!} />
-      </div>
-    )
-  }
-
-  {
-    imageUrl ? (
-      /* COVER MODE — full-bleed immersive banner. The image is edge-to-edge; the copy is contained and
-         sits bottom-left over a gradient scrim that keeps white text legible even on a pale photo. */
-      <div class="relative isolate mt-4 overflow-hidden bg-ink sm:mt-6">
-        <img
-          src={imageUrl}
-          alt={imageAlt}
-          width="1920"
-          height="900"
-          loading="eager"
-          fetchpriority="high"
-          decoding="async"
-          class="absolute inset-0 -z-10 h-full w-full object-cover object-center"
-        />
-        <div class="absolute inset-0 -z-10 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
-        <div class="mx-auto flex min-h-[40vh] max-w-7xl flex-col justify-end px-4 py-10 sm:min-h-[48vh] sm:px-6 sm:py-14">
+{
+  imageUrl ? (
+    /* COVER MODE — ONE cohesive banner: the breadcrumb sits IN it (top-left, white) and the title at the
+       bottom-left, over a scrim that darkens top + bottom for legibility. No separate breadcrumb strip
+       above it, and a modest fixed height so the cover does not eat the whole viewport. */
+    <section class="relative isolate overflow-hidden bg-ink">
+      <img
+        src={imageUrl}
+        alt={imageAlt}
+        width="1920"
+        height="720"
+        loading="eager"
+        fetchpriority="high"
+        decoding="async"
+        class="absolute inset-0 -z-10 h-full w-full object-cover object-center"
+      />
+      <div class="absolute inset-0 -z-10 bg-gradient-to-b from-black/40 via-transparent to-black/65" />
+      <div class="mx-auto flex min-h-[240px] max-w-7xl flex-col justify-between px-4 py-6 sm:min-h-[320px] sm:px-6 sm:py-8">
+        {hasCrumbs && <Breadcrumb items={crumbs!} tone="light" />}
+        <div>
           {eyebrow && <p class="text-xs font-semibold uppercase tracking-[0.2em] text-white/80">{eyebrow}</p>}
-          <h1 class="mt-2 font-display text-4xl font-semibold text-balance text-white sm:text-5xl">{title}</h1>
+          <h1 class="mt-2 font-display text-3xl font-semibold text-balance text-white sm:text-4xl">{title}</h1>
           {dek && <p class="mt-3 max-w-xl leading-relaxed text-white/85">{dek}</p>}
         </div>
       </div>
-    ) : (
-      /* MINIMAL MODE — centred editorial header, generous whitespace, hairline rule below. */
-      <div class="border-b border-line">
-        <div class="mx-auto max-w-2xl px-4 pb-12 pt-8 text-center sm:pb-16 sm:pt-10">
-          {eyebrow && <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{eyebrow}</p>}
-          <h1 class:list={["font-display text-3xl font-semibold text-balance text-ink sm:text-4xl", eyebrow && "mt-2"]}>
-            {title}
-          </h1>
-          {dek && <p class="mx-auto mt-4 max-w-xl leading-relaxed text-muted">{dek}</p>}
+    </section>
+  ) : (
+    /* MINIMAL MODE — breadcrumb, then a centred editorial header, hairline rule below. */
+    <section class="border-b border-line">
+      {hasCrumbs && (
+        <div class="mx-auto max-w-7xl px-4 pt-6 sm:px-6">
+          <Breadcrumb items={crumbs!} />
         </div>
+      )}
+      <div class="mx-auto max-w-2xl px-4 pb-12 pt-6 text-center sm:pb-16 sm:pt-8">
+        {eyebrow && <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{eyebrow}</p>}
+        <h1 class:list={["font-display text-3xl font-semibold text-balance text-ink sm:text-4xl", eyebrow && "mt-2"]}>
+          {title}
+        </h1>
+        {dek && <p class="mx-auto mt-4 max-w-xl leading-relaxed text-muted">{dek}</p>}
       </div>
-    )
-  }
-</section>
+    </section>
+  )
+}
