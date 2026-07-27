@@ -1,5 +1,5 @@
 ---
-import { ShoppingCart, Banknote, MapPin, Truck, ChevronDown } from "@lucide/astro";
+import { ShoppingCart, Banknote, MapPin, Truck, ChevronDown, Info } from "@lucide/astro";
 import PayIcon from "../components/PayIcon.astro";
 import CheckoutLayout from "../layouts/CheckoutLayout.astro";
 import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings, storeFreeShip } from "../data/catalog";
@@ -635,10 +635,12 @@ if (rToken) {
               </div>
             ))}
 
-            {/* COD is HIDDEN until it is genuinely available: the chosen courier must support it, the
-                total must sit under the platform cap, and the province (derived from the kecamatan,
-                not typed) must be on the allow-list. A greyed-out row with an excuse would be worse —
-                a COD we would reject has no business being on screen at all. */}
+            {/* COD is HIDDEN until it is genuinely available: the chosen courier must support it (SPX),
+                the total must sit under the platform cap, and the province (derived from the kecamatan,
+                not typed) must be on the allow-list. We do NOT render a greyed-out COD ROW — a payment
+                a shopper can click but we will reject is a lie. But a store that turned COD ON and then
+                sees NOTHING reads it as broken, so instead of pure silence we show a one-line reason
+                BELOW the options (#cod-hint, written by syncCod) — an explanation, not a fake choice. */}
             {COD_ENABLED && (
               <div id="cod-option" hidden class="relative rounded-b-[7px] has-[:checked]:z-10 has-[:checked]:outline-1 has-[:checked]:-outline-offset-1 has-[:checked]:outline-[var(--co-accent)]">
                 <label class="group flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)]">
@@ -661,6 +663,16 @@ if (rToken) {
               </div>
             )}
           </div>
+
+          {/* Why COD isn't shown right now — populated by syncCod() only when the store has COD on but
+              the current courier / destination / amount doesn't qualify. Hidden otherwise (and never
+              shown before a courier is picked — nothing to explain yet). */}
+          {COD_ENABLED && (
+            <p id="cod-hint" hidden class="mt-2.5 flex items-start gap-1.5 px-1 text-xs leading-relaxed text-[var(--co-muted)]">
+              <Info class="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--co-accent)]" stroke-width={1.75} aria-hidden="true" />
+              <span id="cod-hint-text"></span>
+            </p>
+          )}
 
         </fieldset>
 
@@ -1124,6 +1136,8 @@ if (rToken) {
     // the same lie in a nicer font). /api/public/order re-checks all of it regardless — this is UX.
     var codOption = document.getElementById("cod-option");
     var codRadio = codOption ? codOption.querySelector('input[name="payment"]') : null;
+    var codHint = document.getElementById("cod-hint");
+    var codHintText = document.getElementById("cod-hint-text");
     var provinsiEl = form.querySelector('input[name="provinsi"]');
 
     // Must match normProvince() in apps/admin/lib/cod.ts — the buyer TYPES their province (the
@@ -1152,6 +1166,29 @@ if (rToken) {
       return (TAX_ENABLED && !TAX_INCLUSIVE && TAX_RATE > 0) ? Math.round(sub * TAX_RATE / 100) : 0;
     }
 
+    // The ONE unmet COD condition worth telling the shopper, in the order they can act on it. "" = say
+    // nothing (no courier picked yet, or COD is actually available). Mirrors the gate in syncCod exactly.
+    function codReason(shipEl, total) {
+      if (!shipEl) return ""; // no courier chosen yet — nothing to explain
+      if (shipEl.getAttribute("data-cod") !== "1") {
+        // COD rides SPX only. If an SPX rate exists in the list, nudge toward it; if none does, SPX
+        // simply doesn't serve this route — say so rather than tell them to pick something absent.
+        var hasSpx = !!form.querySelector('input[name="shipping"][data-cod="1"]');
+        return hasSpx
+          ? "COD hanya untuk pengiriman SPX — pilih kurir SPX untuk bayar di tempat."
+          : "COD hanya tersedia lewat pengiriman SPX, yang belum melayani rute ini.";
+      }
+      if (!codProvinceOk()) return "COD belum tersedia untuk wilayah tujuan ini.";
+      if (COD_MAX && total > COD_MAX) return "COD hanya untuk pesanan di bawah " + idr.format(COD_MAX) + ".";
+      return "";
+    }
+
+    function showCodHint(text) {
+      if (!codHint || !codHintText) return;
+      if (text) { codHintText.textContent = text; codHint.hidden = false; }
+      else codHint.hidden = true;
+    }
+
     function syncCod() {
       if (!codOption || !codRadio) return;
       var shipEl = form.querySelector('input[name="shipping"]:checked');
@@ -1165,6 +1202,7 @@ if (rToken) {
       if (allowed) {
         codOption.hidden = false;
         codRadio.disabled = false;
+        showCodHint(""); // available → the row IS the message, no hint needed
         return;
       }
       if (codRadio.checked) {
@@ -1174,6 +1212,7 @@ if (rToken) {
       }
       codRadio.disabled = true;
       codOption.hidden = true;
+      showCodHint(codReason(shipEl, total)); // explain the silence instead of leaving it blank
     }
 
     /** Write `text` into #id if it exists. The summary lives in four places; none may be optional-chained into silence. */

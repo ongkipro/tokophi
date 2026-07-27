@@ -2,6 +2,40 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Checkout: explain why COD is hidden
+
+### 💬 COD unavailable → a reason, not silence
+A store that turns COD on and then sees no COD option at checkout read it as broken. COD is genuinely
+hidden until its chain is satisfied (courier = SPX, destination in the 6 allow-listed provinces, total
+≤ Rp2 jt), but hiding it with **zero feedback** made "enabled but invisible" look like a defect. The
+checkout now shows a single helper line (`#cod-hint`, written by `syncCod`) explaining the one unmet
+condition — non-SPX courier ("pilih kurir SPX"), SPX not serving the route ("belum melayani rute ini"),
+province off the allow-list, or over the cap. It is **not** a fake greyed-out COD row (a payment the
+shopper can click but we would reject is still a lie), it never shows before a courier is picked, and it
+disappears the moment COD becomes available. `/api/public/order` stays the boundary — this is UX only.
+This reverses the earlier "hide silently, no excuse" decision at the user's request. Verified in a
+browser against the live ongkir API.
+
+## Unreleased — Admin shell: Promo nav group + mobile menu + ⌘K command palette
+
+### 🧭 Sidebar "Promo" group, mobile drawer fixes, Vercel-style search
+Diskon/Flash Sale/Landing Page collapsed into one **Promo** parent (Voucher · Flash Sale · Landing
+Page); routes unchanged. Mobile drawer now **closes on a nav tap** (was covering the page it navigated
+to) and the `TokoΦ` wordmark's Φ is no longer clipped. Search replaced with a **⌘K command palette**
+(centered Dialog, keyboard-first, searches every admin page + the RLS-scoped pesanan/produk/pelanggan
+index, works on mobile). Nav active-state also fixed for groups whose children don't share the parent's
+path prefix (Promo; Keuangan→/saldo).
+
+## Unreleased — PROMO system (voucher · free ongkir · flash sale · /promo hub)
+
+### 🏷️ Unified promo page + seller tools (P0–P5)
+Vouchers apply at checkout (P0); automatic free shipping by store threshold (P1, migration 0075); flash
+sale with time-boxed price drops honored server-side + storefront strikethrough/countdown (P3, migration
+0076); a unified `/promo` hub gathering banner + vouchers + flash sale + discounted products, with the
+nav "Promo Gajian" repointed from a category to this page (P4a); a Seller flash-sale editor (P3c) and a
+merchant-configurable hub banner (P4b, migration 0077); demo seeded into `seed:recent` (P5). All money
+paths re-priced authoritatively in `/api/public/order`; every stage browser-verified.
+
 ## Unreleased — Cetak resi: sandbox preview
 
 ### 🖨️ Demo "Isi resi contoh" to preview label printing
