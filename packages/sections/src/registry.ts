@@ -14,6 +14,13 @@
 export interface HeroSlide {
   /** Public path or absolute URL. Empty = brand-tinted gradient panel (never a broken image). */
   imageUrl: string;
+  /**
+   * Optional PORTRAIT image for phones (≤640px). A landscape hero cropped into a tall phone viewport
+   * loses most of the frame no matter the `focal`, so a merchant can supply a mobile-shaped shot. Empty
+   * = the desktop `imageUrl` is used everywhere (with `focal`), i.e. today's behaviour. Served via
+   * `<picture>` art direction, so mobile never downloads the heavy desktop file.
+   */
+  mobileImageUrl?: string;
   heading: string;
   subheading: string;
   ctaLabel: string;
