@@ -2,7 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import ProductCard from "../../components/ProductCard.astro";
 import SectionHeading from "../../components/SectionHeading.astro";
-import { Check, ChevronDown, ImageOff, RotateCcw, Truck } from "@lucide/astro";
+import { Check, ChevronDown, ImageOff, RotateCcw, Truck, Zap } from "@lucide/astro";
 import Stars from "../../components/Stars.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import { IDR } from "@tokophi/lib/format";
@@ -300,8 +300,12 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                   aria-label={`Gambar ${i + 1}`}
                   aria-pressed={i === 0 ? "true" : "false"}
                   class:list={[
-                    "gallery-thumb relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-md bg-brand-50 ring-2 transition-all",
-                    thumbsBeside && "sm:w-full",
+                    // Horizontal row (mobile, and thumbnail-bottom on every size): each thumb GROWS to fill
+                    // the width evenly (flex-1 basis-0) so the strip is exactly as wide as the main image —
+                    // no ragged right-hand gap. `max-w` caps a lone/few thumbs so they never blow up.
+                    "gallery-thumb relative aspect-[3/4] min-w-0 flex-1 basis-0 overflow-hidden rounded-md bg-brand-50 ring-2 transition-all max-w-[7rem]",
+                    // thumbnail-left on sm+: back to the fixed vertical rail (fills the w-20 column, no grow).
+                    thumbsBeside && "sm:w-full sm:max-w-none sm:flex-none sm:basis-auto",
                     i === 0 ? "ring-brand-600" : "ring-transparent hover:ring-brand-300",
                   ]}
                 >
@@ -320,12 +324,14 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             a seed column — a product with no reviews shows no section (a new product is not a bad one). */}
         {rating && (
           <div id="ulasan" class="order-4 scroll-mt-24 border-t border-line pt-10 md:order-none">
-            <SectionHeading eyebrow="Ulasan Pembeli" title="Apa kata pelanggan" />
+            {/* Centred on mobile (the review summary reads as a unit under the gallery), left-aligned from
+                sm+ where it sits beside the histogram. */}
+            <SectionHeading eyebrow="Ulasan Pembeli" title="Apa kata pelanggan" align="center" class="sm:mx-0 sm:max-w-none sm:text-left" />
 
             <div class="mt-8 grid gap-8 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-12">
-              {/* Average — left-aligned Judge.me/Loox shape: a big score with "/ 5,0", the stars, and a
-                  verified-ratings line. No card: it sits inside the section's own border-t. */}
-              <div>
+              {/* Average — Judge.me/Loox shape: a big score with "/ 5,0", the stars, and a verified-ratings
+                  line. Centred on mobile, left from sm+. No card: it sits inside the section's own border-t. */}
+              <div class="flex flex-col items-center text-center sm:items-start sm:text-left">
                 <div class="flex items-end gap-2">
                   <span class="font-display text-5xl font-semibold leading-none text-ink tabular-nums">{rating.value.toFixed(1).replace(".", ",")}</span>
                   <span class="pb-1 text-lg text-muted">/ 5,0</span>
@@ -427,10 +433,26 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           )
         }
 
+        {/* FLASH SALE — shown only while a sale is live (catalog sets product.flashEndsAt, and already
+            makes product.price the sale price with compareAt = the original). This banner adds the
+            branding + a live countdown; the price row below shows the numbers. When the timer hits zero
+            the banner hides itself (the server re-checks on the next load / the order API re-prices). */}
+        {product.flashEndsAt && (
+          <div id="flash-banner" class="mt-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg bg-gradient-to-r from-brand-600 to-brand-500 px-4 py-2.5 text-white">
+            <span class="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide">
+              <Zap class="size-4 fill-current" stroke-width={0} /> Flash Sale
+            </span>
+            <span class="inline-flex items-center gap-1.5 text-sm">
+              <span class="text-white/80">Berakhir dalam</span>
+              <span id="flash-countdown" data-ends={product.flashEndsAt} class="rounded bg-white/20 px-1.5 py-0.5 font-semibold tabular-nums">--:--:--</span>
+            </span>
+          </div>
+        )}
+
         <!-- `flex-wrap`: price + struck-through price + the discount badge are three items on one
              line, and together they exceed the 288px of content a 320px phone has. Without wrapping,
              the badge pushed the page sideways. -->
-        <div class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div class:list={["flex flex-wrap items-center gap-x-3 gap-y-2", product.flashEndsAt ? "mt-3" : "mt-5"]}>
           {/* Unpriced → "Hubungi untuk harga" (not "Rp0"). NOT `tabular-nums`/`text-3xl` here since it
               is a phrase, not a figure. The variant-picker JS keeps this honest too — see below. */}
           <span id="pdp-price" class:list={["font-semibold text-ink", unpriced ? "text-xl sm:text-2xl" : "text-2xl tabular-nums sm:text-3xl"]}>{unpriced ? "Hubungi untuk harga" : IDR(product.price)}</span>
@@ -703,6 +725,29 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
 
 <script is:inline>
   (function () {
+    // Flash-sale countdown — ticks to `data-ends` (ISO). Hides the whole banner at zero; the price stays
+    // (server re-prices on the next load, and /api/public/order re-validates).
+    var fc = document.getElementById("flash-countdown");
+    if (fc) {
+      var ends = new Date(fc.getAttribute("data-ends")).getTime();
+      var pad = function (n) { return String(n).padStart(2, "0"); };
+      var tickFlash = function () {
+        var diff = ends - Date.now();
+        if (isNaN(ends) || diff <= 0) {
+          var banner = document.getElementById("flash-banner");
+          if (banner) banner.style.display = "none";
+          return false;
+        }
+        var s = Math.floor(diff / 1000);
+        var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+        fc.textContent = (d > 0 ? d + " hari " : "") + pad(h) + ":" + pad(m) + ":" + pad(sec);
+        return true;
+      };
+      if (tickFlash()) {
+        var flashTimer = setInterval(function () { if (!tickFlash()) clearInterval(flashTimer); }, 1000);
+      }
+    }
+
     // Gallery
     var main = document.getElementById("gallery-main");
     var thumbs = document.getElementById("gallery-thumbs");
