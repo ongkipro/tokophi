@@ -4,6 +4,7 @@
 // withCurrentTenant, getMedia filters by the session store), so there is nothing here to leak.
 import { getProducts } from "@/lib/data/products";
 import { getCollections } from "@/lib/data/collections";
+import { getPages } from "@/lib/data/pages";
 
 export type PickerImage = { id: string; name: string; url: string; sub?: string };
 export type PickerLink = { id: string; name: string; href: string; sub?: string };
@@ -41,4 +42,12 @@ export async function pickerCategoryLinks(): Promise<PickerLink[]> {
   return collections
     .filter((c) => c.published)
     .map((c) => ({ id: c.id, name: c.name, href: `/kategori/${c.handle}`, sub: `${c.products} produk` }));
+}
+
+/** Published CMS pages as LINK targets — /halaman/<handle>. */
+export async function pickerPageLinks(): Promise<PickerLink[]> {
+  const pages = await getPages();
+  return pages
+    .filter((p) => p.published)
+    .map((p) => ({ id: p.id, name: p.title, href: `/halaman/${p.handle}`, sub: "Halaman" }));
 }

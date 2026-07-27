@@ -1,14 +1,25 @@
 import type { Config, CustomField } from "@measured/puck";
 import { SECTION_DEFAULTS, heroSlides, type SectionConfigMap } from "@tokophi/sections";
 import { ImagePickerField } from "@/components/theme/image-picker";
+import { LinkPickerField } from "@/components/theme/link-picker";
 
-// Shopify-style image field (upload / library / URL / product / category) in place of a bare URL box.
-// Value stays a plain URL string, so stored templates are untouched.
-const imageField = (label: string): CustomField<string> => ({
+// Shopify-style image + link fields (upload/library/URL/product/category, and product/category/page/URL)
+// in place of the bare text boxes. Generic in the value type so each infers `string` or `string | undefined`
+// from the field slot it fills (Puck's CustomField is invariant); the stored VALUE stays a plain string,
+// so existing templates and the storefront are untouched.
+const imageField = <V extends string | undefined>(label: string): CustomField<V> => ({
   type: "custom",
   label,
   render: ({ value, onChange, field, readOnly }) => (
-    <ImagePickerField value={value ?? ""} onChange={onChange} field={field} readOnly={readOnly} />
+    <ImagePickerField value={value ?? ""} onChange={onChange as (v: string) => void} field={field} readOnly={readOnly} />
+  ),
+});
+
+const linkField = <V extends string | undefined>(label: string): CustomField<V> => ({
+  type: "custom",
+  label,
+  render: ({ value, onChange, field, readOnly }) => (
+    <LinkPickerField value={value ?? ""} onChange={onChange as (v: string) => void} field={field} readOnly={readOnly} />
   ),
 });
 import { Hero } from "@/components/theme/sections/Hero";
@@ -51,7 +62,7 @@ export const puckConfig: Config<SectionConfigMap> = {
             heading: { type: "text", label: "Judul" },
             subheading: { type: "textarea", label: "Sub-judul" },
             ctaLabel: { type: "text", label: "Teks Tombol" },
-            ctaHref: { type: "text", label: "Link Tombol" },
+            ctaHref: linkField("Link Tombol"),
             focal: {
               type: "select",
               label: "Fokus Gambar (bagian yang dipertahankan saat dipotong)",
@@ -141,7 +152,7 @@ export const puckConfig: Config<SectionConfigMap> = {
         heading: { type: "text", label: "Judul" },
         subheading: { type: "textarea", label: "Sub-judul" },
         imageUrl: imageField("Gambar"),
-        href: { type: "text", label: "Link" },
+        href: linkField("Link"),
         badge: { type: "text", label: "Label Badge" },
       },
       defaultProps: SECTION_DEFAULTS["banner-promo"],
@@ -184,7 +195,7 @@ export const puckConfig: Config<SectionConfigMap> = {
           ],
         },
         ctaLabel: { type: "text", label: "Teks Tombol (kosong = sembunyi)" },
-        ctaHref: { type: "text", label: "Link Tombol" },
+        ctaHref: linkField("Link Tombol"),
       },
       defaultProps: SECTION_DEFAULTS["image-text"],
       render: (props) => <ImageText {...props} />,
@@ -213,7 +224,7 @@ export const puckConfig: Config<SectionConfigMap> = {
         heading: { type: "text", label: "Judul" },
         body: { type: "textarea", label: "Isi Teks" },
         ctaLabel: { type: "text", label: "Teks Tombol (kosong = sembunyi)" },
-        ctaHref: { type: "text", label: "Link Tombol" },
+        ctaHref: linkField("Link Tombol"),
         theme: {
           type: "select",
           label: "Gaya",
@@ -235,7 +246,7 @@ export const puckConfig: Config<SectionConfigMap> = {
           arrayFields: {
             label: { type: "text", label: "Nama Kategori" },
             imageUrl: imageField("Gambar"),
-            href: { type: "text", label: "Link" },
+            href: linkField("Link"),
           },
         },
       },
