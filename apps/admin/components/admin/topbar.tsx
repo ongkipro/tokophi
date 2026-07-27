@@ -1,12 +1,12 @@
 "use client";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { Menu, Search, Bell, Sun, Moon, ChevronDown, Check, ExternalLink, LogOut, User, CreditCard, ShieldCheck, Wallet } from "lucide-react";
+import { Menu, Bell, Sun, Moon, ChevronDown, Check, ExternalLink, LogOut, User, CreditCard, ShieldCheck, Wallet } from "lucide-react";
 import type { SearchItem } from "@/lib/data/search";
 import type { TopbarData } from "@/lib/data/topbar";
 import { IDR } from "@tokophi/lib/format";
 import { Button } from "@tokophi/ui/button";
-import { Input } from "@tokophi/ui/input";
+import { CommandPalette } from "./command-palette";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import { Badge } from "@tokophi/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@tokophi/ui/sheet";
@@ -49,71 +49,6 @@ function ThemeToggle() {
     <Button variant="ghost" size="icon" onClick={toggle} aria-label="Ganti tema">
       {dark ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
     </Button>
-  );
-}
-
-const TYPE_LABEL: Record<SearchItem["type"], string> = { produk: "Produk", pesanan: "Pesanan", pelanggan: "Pelanggan" };
-
-function GlobalSearch({ index }: { index: SearchItem[] }) {
-  const [q, setQ] = useState("");
-  const [open, setOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const boxRef = useRef<HTMLDivElement>(null);
-
-  const results = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return [] as SearchItem[];
-    return index.filter((i) => i.label.toLowerCase().includes(s) || i.sub.toLowerCase().includes(s)).slice(0, 8);
-  }, [q, index]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); inputRef.current?.focus(); setOpen(true); }
-      if (e.key === "Escape") setOpen(false);
-    };
-    const onClick = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("mousedown", onClick);
-    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("mousedown", onClick); };
-  }, []);
-
-  return (
-    <div ref={boxRef} className="relative ml-1 hidden max-w-sm flex-1 md:block">
-      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        ref={inputRef}
-        value={q}
-        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
-        placeholder="Cari pesanan, produk, pelanggan…  ⌘K"
-        className="pl-9"
-      />
-      {open && q.trim() && (
-        <div className="absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-lg border bg-popover shadow-lg">
-          {results.length ? (
-            <ul className="max-h-80 overflow-y-auto py-1">
-              {results.map((r) => (
-                <li key={r.type + r.id}>
-                  <Link
-                    href={r.href}
-                    onClick={() => { setOpen(false); setQ(""); }}
-                    className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-muted"
-                  >
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{TYPE_LABEL[r.type]}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{r.label}</span>
-                      {r.sub && <span className="block truncate text-xs text-muted-foreground">{r.sub}</span>}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="px-3 py-4 text-sm text-muted-foreground">Tidak ada hasil untuk “{q}”.</p>
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -196,6 +131,7 @@ export function Topbar({
   /** Live nav badge counts — this is a client component, so the layout fetches and hands them in. */
   navCounts?: NavCounts;
 }) {
+  const [mobileMenu, setMobileMenu] = useState(false);
   // Current store reflects the session (so an impersonated store shows its own name, not a hardcode).
   const [store, setStore] = useState(storeName ? { id: "current", name: storeName, plan: STORES[0]?.plan ?? "Bisnis" } : STORES[0]);
   const name = user?.name || "Ongki Pratama";
@@ -204,8 +140,10 @@ export function Topbar({
   const initials = name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "OP";
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
-      {/* mobile menu */}
-      <Sheet>
+      {/* mobile menu — CONTROLLED so a nav tap closes the drawer. It was uncontrolled, so tapping a
+          link navigated the page UNDERNEATH but left the drawer covering it: "diklik tidak tampil
+          halaman". onNavigate (fired on every nav Link, not the expand chevron) now closes it. */}
+      <Sheet open={mobileMenu} onOpenChange={setMobileMenu}>
         <SheetTrigger
           render={
             <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Menu">
@@ -213,10 +151,12 @@ export function Topbar({
             </Button>
           }
         />
-        <SheetContent side="left" className="w-72 p-0">
+        <SheetContent side="left" className="flex w-72 flex-col p-0">
           <SheetTitle className="sr-only">Menu navigasi</SheetTitle>
-          <div className="flex h-16 items-center border-b px-5"><Brand /></div>
-          <div className="py-4"><NavLinks counts={navCounts} /></div>
+          <div className="flex h-16 shrink-0 items-center border-b px-5"><Brand /></div>
+          <div className="flex-1 overflow-y-auto py-4">
+            <NavLinks counts={navCounts} onNavigate={() => setMobileMenu(false)} />
+          </div>
         </SheetContent>
       </Sheet>
 
@@ -264,9 +204,8 @@ export function Topbar({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* site-wide search. NB: never begin a comment here with the word "global" — ESLint reads
-          that as its global-variable declaration directive and warns about an unused global. */}
-      <GlobalSearch index={searchIndex} />
+      {/* site-wide ⌘K command palette — pages + pesanan/produk/pelanggan; works on mobile too. */}
+      <CommandPalette index={searchIndex} />
 
       <div className="ml-auto flex items-center gap-1">
         {balance && <SaldoChip balance={balance} />}
