@@ -228,6 +228,45 @@ const HOMEPAGE: StoredTemplateData = {
   ],
 };
 
+// The DEFAULT PRODUCT template — a starting point the merchant controls in Tema. A product template
+// REPLACES only the PDP tail (produk/[handle].astro renders it where the hand-built "Rekomendasi" strip
+// sat; the gallery, buy box, reviews and description are untouched), so this is safe + additive: it turns
+// that tail into an editable section instead of hard-coded markup. Kept to ONE clean, honest section —
+// related products (empty `collectionHandle` → the product's own category via ctx) — so it is a real
+// starter, not filler; the merchant adds rich-text / banners / testimonials from here.
+const PRODUCT_DEFAULT: StoredTemplateData = {
+  content: [
+    {
+      type: "product-grid",
+      props: {
+        id: "produk-serupa",
+        heading: "Kamu Mungkin Suka",
+        // `terlaris` + empty handle → ProductGrid's ctx picks the product's category and drops the
+        // product you are already viewing (see ProductGrid.astro). So this row is always relevant.
+        mode: "terlaris",
+        collectionHandle: "",
+        limit: 4,
+        columns: 4,
+      },
+    },
+  ],
+};
+
+// Seed one template of a given type as the store's default (UPSERT, same rationale as the homepage).
+async function upsertTemplate(storeId: string, type: "homepage" | "product" | "category", name: string, sections: StoredTemplateData) {
+  const [existing] = await db
+    .select({ id: schema.pageTemplates.id })
+    .from(schema.pageTemplates)
+    .where(and(eq(schema.pageTemplates.storeId, storeId), eq(schema.pageTemplates.type, type)))
+    .limit(1);
+  if (existing) {
+    await db.update(schema.pageTemplates).set({ name, isDefault: true, sections, updatedAt: new Date() }).where(eq(schema.pageTemplates.id, existing.id));
+  } else {
+    await db.insert(schema.pageTemplates).values({ storeId, type, name, isDefault: true, sections });
+  }
+  return existing ? "REPLACED" : "created";
+}
+
 async function main() {
   const [store] = await db.select({ id: schema.stores.id, name: schema.stores.name }).from(schema.stores).where(eq(schema.stores.slug, DEMO_SLUG)).limit(1);
   if (!store) {
@@ -250,31 +289,13 @@ async function main() {
   // Store Builder — to show someone the builder — the next deploy reverts it. That is the right
   // trade for a demo whose template lives in this file, and the wrong one for a real store. If this
   // script is ever pointed at a merchant, restore the guard first.
-  const [existing] = await db
-    .select({ id: schema.pageTemplates.id })
-    .from(schema.pageTemplates)
-    .where(and(eq(schema.pageTemplates.storeId, store.id), eq(schema.pageTemplates.type, "homepage")))
-    .limit(1);
+  // `sections` is written EXPLICITLY (inside upsertTemplate). The column defaults to '[]'::jsonb — an
+  // ARRAY, not `{content:[]}` — and the storefront's `withContent()` reads a value with no `.content` as
+  // "no template" and silently falls back to the hand-built page. Omitting it would look like success.
+  const homepageResult = await upsertTemplate(store.id, "homepage", "Beranda", HOMEPAGE);
+  const productResult = await upsertTemplate(store.id, "product", "Halaman Produk", PRODUCT_DEFAULT);
 
-  // `sections` is written EXPLICITLY. The column defaults to '[]'::jsonb — an ARRAY, not
-  // `{content:[]}` — and the storefront's `withContent()` reads a value with no `.content` as "no
-  // template" and silently falls back to the hand-built page. Omitting this would look like success.
-  if (existing) {
-    await db
-      .update(schema.pageTemplates)
-      .set({ name: "Beranda", isDefault: true, sections: HOMEPAGE, updatedAt: new Date() })
-      .where(eq(schema.pageTemplates.id, existing.id));
-  } else {
-    await db.insert(schema.pageTemplates).values({
-      storeId: store.id,
-      type: "homepage",
-      name: "Beranda",
-      isDefault: true,
-      sections: HOMEPAGE,
-    });
-  }
-
-  console.log(`seed-templates: ${store.name} → homepage ${existing ? "REPLACED" : "created"} with ${HOMEPAGE.content.length} sections (${HOMEPAGE.content.map((c) => c.type).join(", ")}).`);
+  console.log(`seed-templates: ${store.name} → homepage ${homepageResult} (${HOMEPAGE.content.length} sections), product ${productResult} (${PRODUCT_DEFAULT.content.length} sections).`);
   await client.end();
 }
 

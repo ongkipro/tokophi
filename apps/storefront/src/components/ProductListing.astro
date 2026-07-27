@@ -38,7 +38,7 @@
 import ProductCard from "./ProductCard.astro";
 import EmptyState from "./EmptyState.astro";
 import Pagination from "./Pagination.astro";
-import { PackageOpen } from "@lucide/astro";
+import { ChevronDown, PackageOpen } from "@lucide/astro";
 import { num } from "@tokophi/lib/format";
 import type { Product } from "../data/catalog";
 
@@ -92,8 +92,10 @@ const visible = sorted.slice(from, from + PER_PAGE);
 const OWNED = new Set(["sort", "page"]);
 const carryParams = [...params.entries()].filter(([k]) => !OWNED.has(k));
 
+// Minimalist sort control (Shopify-clean): a bare select with a CUSTOM chevron — `appearance-none` drops
+// the browser's default arrow so the chevron never doubles up; a light rounded border, not a heavy pill.
 const FIELD =
-  "min-h-11 rounded-full border border-line bg-white px-4 text-sm text-ink transition-colors hover:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none";
+  "min-h-10 cursor-pointer appearance-none rounded-lg border border-line bg-white py-2 pl-3.5 pr-9 text-sm font-medium text-ink transition-colors hover:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none";
 ---
 
 <section class:list={["mx-auto max-w-7xl px-4 py-12 sm:px-6", className]}>
@@ -131,20 +133,23 @@ const FIELD =
 
             <label class="flex items-center gap-2 text-sm text-muted">
               <span class="hidden sm:inline">Urutkan</span>
-              <select id="sort-select" name="sort" class:list={[FIELD, "font-medium"]}>
-                {Object.entries(SORTS).map(([k, label]) => (
-                  <option value={k} selected={k === sort}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+              <div class="relative">
+                <select id="sort-select" name="sort" class={FIELD}>
+                  {Object.entries(SORTS).map(([k, label]) => (
+                    <option value={k} selected={k === sort}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted" stroke-width={2} />
+              </div>
             </label>
             {/* JS off, and no filter bar to borrow a submit button from: without this the sort
                 dropdown is a control that cannot be applied. */}
             <noscript>
               <button
                 type="submit"
-                class="min-h-11 rounded-full bg-brand-600 px-4 text-sm font-semibold text-white"
+                class="min-h-10 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white"
               >
                 Urutkan
               </button>
