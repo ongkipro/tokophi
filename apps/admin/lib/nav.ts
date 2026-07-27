@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingBag, Wallet, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessageSquare, MessagesSquare, LifeBuoy, Palette, FolderOpen, Rocket, Zap, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Wallet, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessageSquare, MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon } from "lucide-react";
 
 export type NavChild = { label: string; href: string };
 
@@ -97,8 +97,20 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Template", href: "/crm/template" },
         ],
       },
-      { label: "Diskon", href: "/diskon", icon: TicketPercent },
-      { label: "Flash Sale", href: "/flash-sale", icon: Zap },
+      // Promo — one parent for every "make people buy now" tool, so the sidebar isn't three near-
+      // identical rows (Diskon, Flash Sale, Landing Page were all top-level). Grouped, not renamed: the
+      // routes (/diskon, /flash-sale, /promo) are unchanged; only the IA is. The parent row lands on
+      // Voucher (the everyday promo tool) and the chevron opens the rest — same pattern as Produk/CRM,
+      // where clicking the section goes to its main page and one child repeats it. Pemasaran/Analitik
+      // stay top-level: they are broader than "a promo".
+      {
+        label: "Promo", href: "/diskon", icon: TicketPercent,
+        children: [
+          { label: "Voucher", href: "/diskon" },
+          { label: "Flash Sale", href: "/flash-sale" },
+          { label: "Landing Page", href: "/promo" },
+        ],
+      },
       { label: "Analitik", href: "/analitik", icon: BarChart3 },
       { label: "Pemasaran", href: "/pemasaran", icon: Megaphone },
     ],
@@ -108,7 +120,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Tema", href: "/tema", icon: Palette },
       { label: "Halaman", href: "/halaman", icon: FileText },
-      { label: "Landing Page", href: "/promo", icon: Rocket },
+      // Landing Page (/promo) moved up into the Promo group — it is a promo funnel, not store chrome.
       { label: "Blog", href: "/blog", icon: Newspaper },
       { label: "Files", href: "/files", icon: FolderOpen },
       { label: "Navigasi", href: "/navigasi", icon: ListTree },
