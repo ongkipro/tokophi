@@ -44,11 +44,13 @@ function voucherLabel(v: VoucherPromo): string {
 }
 
 const hasAnything = discounted.length > 0 || vouchers.length > 0 || freeShip.enabled;
+// Just the page name — Layout appends " — {store.name}" itself (Layout.astro). Passing the store name
+// here too doubled it: "Promo — Batik Nusantara — Batik Nusantara".
 const TITLE = "Promo";
 ---
 
 <Layout
-  title={`${TITLE} — ${store.name}`}
+  title={TITLE}
   description={`Flash sale, kode voucher, dan gratis ongkir di ${store.name}. Semua promo dalam satu halaman.`}
   robots="index,follow"
 >
