@@ -1,6 +1,6 @@
 ---
 import Layout from "../../layouts/Layout.astro";
-import PageHeader from "../../components/PageHeader.astro";
+import CategoryHero from "../../components/CategoryHero.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
 import ProductListing from "../../components/ProductListing.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
@@ -120,10 +120,9 @@ const NOINDEX = virtual ? "noindex,follow" : undefined;
       />
     ) : (
       <Fragment>
-  {/* The merchant's uploaded cover, if they set one in Kategori, is passed straight through —
-      PageHeader renders it only when present, so the layout is unchanged for the (currently normal)
-      case of no cover. `imageUrl` is already absolute (mediaUrl). */}
-  <PageHeader
+  {/* CategoryHero: centred minimal header when there is no cover (the normal case), a full-bleed
+      immersive banner when the merchant uploaded one. `imageUrl` is already absolute (mediaUrl). */}
+  <CategoryHero
     crumbs={CRUMBS}
     eyebrow="Koleksi"
     title={collection.name}
