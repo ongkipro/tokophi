@@ -288,7 +288,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           <!-- Thumbnails — a vertical rail beside the image (thumbnail-left) or a scrollable row under it -->
           <div
             id="gallery-thumbs"
-            class:list={["flex gap-3 overflow-x-auto pb-1", thumbsBeside && "sm:w-20 sm:flex-col sm:overflow-visible sm:pb-0"]}
+            class:list={["flex gap-3 overflow-visible pb-1", thumbsBeside && "sm:w-20 sm:flex-col sm:pb-0"]}
           >
             {
               gallery.map((src, i) => (
@@ -300,13 +300,15 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                   aria-label={`Gambar ${i + 1}`}
                   aria-pressed={i === 0 ? "true" : "false"}
                   class:list={[
-                    // Horizontal row (mobile, and thumbnail-bottom on every size): each thumb GROWS to fill
-                    // the width evenly (flex-1 basis-0) so the strip is exactly as wide as the main image —
-                    // no ragged right-hand gap. `max-w` caps a lone/few thumbs so they never blow up.
-                    "gallery-thumb relative aspect-[3/4] min-w-0 flex-1 basis-0 overflow-hidden rounded-md bg-brand-50 ring-2 transition-all max-w-[7rem]",
-                    // thumbnail-left on sm+: back to the fixed vertical rail (fills the w-20 column, no grow).
+                    // 1:1 SQUARE thumbs for a uniform, precise strip. Horizontal row (mobile, and
+                    // thumbnail-bottom on every size): each GROWS to fill the width evenly (flex-1 basis-0)
+                    // so the strip is exactly as wide as the main image; `max-w` caps a few thumbs.
+                    // Selection state is driven entirely by `aria-pressed` (the switcher JS only flips that):
+                    // clean minimalist — no border at rest, a subtle brand ring on hover, and an offset
+                    // brand ring when active (the Shopify-pro selected look).
+                    "gallery-thumb relative aspect-square min-w-0 flex-1 basis-0 max-w-[7rem] overflow-hidden rounded-md bg-brand-50 ring-1 ring-transparent transition-all aria-[pressed=false]:hover:ring-brand-300 aria-[pressed=true]:ring-2 aria-[pressed=true]:ring-brand-500 aria-[pressed=true]:ring-offset-2 aria-[pressed=true]:ring-offset-cream",
+                    // thumbnail-left on sm+: fixed vertical rail (fills the w-20 column, no grow).
                     thumbsBeside && "sm:w-full sm:max-w-none sm:flex-none sm:basis-auto",
-                    i === 0 ? "ring-brand-600" : "ring-transparent hover:ring-brand-300",
                   ]}
                 >
                   <img src={src} alt={`${product.name} — tampilan ${i + 1}`} class="h-full w-full object-cover" loading="lazy" />
@@ -768,13 +770,10 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           main.src = src;
           main.style.opacity = "1";
         }, 120);
+        // Selection is CSS-driven off aria-pressed (see the thumb class list) — just flip the flag.
         thumbs.querySelectorAll(".gallery-thumb").forEach(function (b) {
-          b.classList.remove("ring-brand-600");
-          b.classList.add("ring-transparent", "hover:ring-brand-300");
           b.setAttribute("aria-pressed", "false");
         });
-        btn.classList.add("ring-brand-600");
-        btn.classList.remove("ring-transparent", "hover:ring-brand-300");
         btn.setAttribute("aria-pressed", "true");
       });
     }
