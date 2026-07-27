@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Download,
   ShoppingCart,
@@ -8,11 +10,17 @@ import {
   Info,
   Plug,
   Ban,
+  Loader2,
+  CheckCircle2,
+  ShieldCheck,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { IDR, num } from "@tokophi/lib/format";
 import type { AdChannelStatus } from "@/lib/data/marketing";
+import type { TrackingConfig, TrackingChannelKey } from "@/lib/data/tracking";
+import { setTrackingChannel } from "@/lib/actions/tracking";
+import { useCan } from "@/components/admin/permissions";
 import { exportCsv } from "@/lib/csv";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
@@ -301,80 +309,131 @@ function SaluranTab({ channels }: { channels: AdChannelStatus[] }) {
   );
 }
 
-// ---- Tab 2: Pelacakan ----
-// No pixel is installed and no credential is stored anywhere, so every field is
-// an empty, disabled placeholder — never a pre-filled ID or a token that implies
-// tracking is live.
-function TrackingCard({ channel }: { channel: AdChannelStatus }) {
+// ---- Tab 2: Pelacakan (REAL — merchant configures pixels + CAPI, persisted to store_tracking_channels) ----
+// Shopify-style: the merchant pastes their own Pixel/Tag ID (public) and optional server-side token
+// (CAPI/Measurement Protocol/Events API, encrypted at rest). The storefront fires from this config.
+const CH_META: Record<TrackingChannelKey, { name: string; brand: string; pixelLabel: string; pixelHint: string; capiName: string; where: string }> = {
+  meta:   { name: "Meta Pixel",          brand: "#0866FF", pixelLabel: "Pixel ID",            pixelHint: "cth. 1023456789012345",       capiName: "Conversions API (CAPI)", where: "Meta Events Manager → Data Sources → Pixel" },
+  google: { name: "Google (GA4 / Ads)",  brand: "#4285F4", pixelLabel: "Measurement / Tag ID", pixelHint: "G-XXXXXXX atau AW-XXXXXXXXX", capiName: "Measurement Protocol",    where: "GA4 Admin → Data Streams (atau Google Ads → Konversi)" },
+  tiktok: { name: "TikTok Pixel",        brand: "#000000", pixelLabel: "Pixel ID",            pixelHint: "cth. C4A7B8C9D0E1F2G3H4",     capiName: "Events API",             where: "TikTok Ads Manager → Aset → Events" },
+};
+
+function TrackingCard({ cfg }: { cfg: TrackingConfig }) {
+  const canWrite = useCan("integrations:write");
+  const router = useRouter();
+  const meta = CH_META[cfg.channel];
+  const [enabled, setEnabled] = React.useState(cfg.enabled);
+  const [pixelId, setPixelId] = React.useState(cfg.pixelId);
+  const [advanced, setAdvanced] = React.useState(cfg.advancedMatching);
+  const [capiEnabled, setCapiEnabled] = React.useState(cfg.capiEnabled);
+  const [capiToken, setCapiToken] = React.useState(""); // blank = leave stored token unchanged
+  const [saving, start] = React.useTransition();
+
+  const save = () =>
+    start(async () => {
+      const r = await setTrackingChannel({
+        channel: cfg.channel,
+        enabled,
+        pixelId,
+        capiEnabled,
+        advancedMatching: advanced,
+        testEventCode: "",
+        capiToken: capiToken.trim() ? capiToken.trim() : undefined,
+      });
+      if (r.ok) { toast.success(`${meta.name} disimpan.`); setCapiToken(""); router.refresh(); }
+      else toast.error(r.error ?? "Gagal menyimpan.");
+    });
+
+  const live = cfg.enabled && cfg.pixelId;
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
-            <BrandSquare channel={channel} />
-            <CardTitle className="text-base">
-              {channel.pixelLabel || channel.name}
-            </CardTitle>
+            <span aria-hidden style={{ background: meta.brand }} className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white">{meta.name.charAt(0)}</span>
+            <div>
+              <CardTitle className="text-base">{meta.name}</CardTitle>
+              <p className="text-xs text-muted-foreground">Dari {meta.where}</p>
+            </div>
           </div>
-          <NotConnectedBadge />
+          {live ? (
+            <Badge className="gap-1 bg-emerald-500/10 text-emerald-600"><CheckCircle2 className="size-3.5" /> Aktif</Badge>
+          ) : (
+            <NotConnectedBadge />
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor={`${channel.key}-pixel`}>ID Pixel / Tag</Label>
-            <Input
-              id={`${channel.key}-pixel`}
-              placeholder="Belum ada — hubungkan saluran"
-              disabled
-            />
+            <Label htmlFor={`${cfg.channel}-pixel`}>{meta.pixelLabel}</Label>
+            <Input id={`${cfg.channel}-pixel`} value={pixelId} onChange={(e) => setPixelId(e.target.value.trim())} placeholder={meta.pixelHint} disabled={!canWrite} />
           </div>
           <div className="flex items-end">
-            <div className="flex w-full items-center justify-between rounded-lg border px-3 py-2 opacity-60">
-              <Label htmlFor={`${channel.key}-active`}>Pelacakan aktif</Label>
-              <Switch id={`${channel.key}-active`} checked={false} disabled />
+            <div className="flex w-full items-center justify-between rounded-lg border px-3 py-2">
+              <Label htmlFor={`${cfg.channel}-active`} className="cursor-pointer">Aktifkan pelacakan</Label>
+              <Switch id={`${cfg.channel}-active`} checked={enabled} onCheckedChange={setEnabled} disabled={!canWrite} />
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs text-muted-foreground">
-            Tidak ada pixel yang terpasang — konversi dari saluran ini tidak
-            terekam.
+
+        {/* Advanced matching */}
+        <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-sm font-medium"><ShieldCheck className="size-4 text-muted-foreground" /> Advanced matching</div>
+            <p className="mt-0.5 text-xs text-muted-foreground">Kirim email/telepon pembeli (di-hash) bersama event agar konversi lebih akurat.</p>
           </div>
-          <Button size="sm" disabled>
-            <Plug /> Hubungkan (belum tersedia)
-          </Button>
+          <Switch checked={advanced} onCheckedChange={setAdvanced} disabled={!canWrite} />
         </div>
+
+        {/* CAPI / server-side */}
+        <div className="space-y-3 rounded-lg border p-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-sm font-medium">{meta.capiName} <span className="font-normal text-muted-foreground">— pelacakan sisi server</span></div>
+              <p className="mt-0.5 text-xs text-muted-foreground">Kirim event dari server TokoΦ (tahan ad-blocker). Butuh token akses.</p>
+            </div>
+            <Switch checked={capiEnabled} onCheckedChange={setCapiEnabled} disabled={!canWrite} />
+          </div>
+          {capiEnabled && (
+            <div className="space-y-1.5">
+              <Label htmlFor={`${cfg.channel}-capi`}>Token akses server</Label>
+              <Input id={`${cfg.channel}-capi`} type="password" value={capiToken} onChange={(e) => setCapiToken(e.target.value)}
+                placeholder={cfg.capiConfigured ? "•••••••• (tersimpan — isi untuk mengganti)" : "Tempel token akses"} disabled={!canWrite} autoComplete="off" />
+              <p className="text-xs text-muted-foreground">Disimpan terenkripsi. {cfg.capiConfigured ? "Token sudah tersimpan." : "Belum ada token."}</p>
+            </div>
+          )}
+        </div>
+
+        {canWrite && (
+          <div className="flex justify-end">
+            <Button size="sm" onClick={save} disabled={saving}>
+              {saving && <Loader2 className="size-4 animate-spin" />} Simpan
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-function PelacakanTab({ channels }: { channels: AdChannelStatus[] }) {
+function PelacakanTab({ tracking }: { tracking: TrackingConfig[] }) {
   return (
     <div className="space-y-4">
       <p className="max-w-3xl text-sm text-muted-foreground">
-        Pixel adalah kode pelacak yang mencatat tindakan pengunjung — melihat
-        produk, menambah ke keranjang, hingga membeli — sehingga konversi dari
-        setiap iklan dapat diukur. TokoΦ{" "}
-        <span className="font-medium text-foreground">
-          belum memasang pixel apa pun
-        </span>{" "}
-        dan belum terhubung ke Meta, Google, atau TikTok, jadi tidak ada konversi
-        iklan yang sedang direkam.
+        Pixel adalah kode pelacak yang mencatat tindakan pengunjung — melihat produk, menambah ke
+        keranjang, hingga membeli — sehingga konversi dari setiap iklan dapat diukur. Tempel ID Pixel/Tag
+        milik Anda, aktifkan, dan TokoΦ memasangnya di storefront otomatis.
       </p>
-
-      <IntegrationNotice />
-
-      {channels.map((c) => (
-        <TrackingCard key={c.key} channel={c} />
+      {tracking.map((t) => (
+        <TrackingCard key={t.channel} cfg={t} />
       ))}
     </div>
   );
 }
 
 // ---- page ----
-export function PemasaranClient({ channels, feed }: { channels: AdChannelStatus[]; feed: FeedStatus }) {
+export function PemasaranClient({ channels, feed, tracking }: { channels: AdChannelStatus[]; feed: FeedStatus; tracking: TrackingConfig[] }) {
   const [tab, setTab] = React.useState("saluran");
 
   return (
@@ -415,7 +474,7 @@ export function PemasaranClient({ channels, feed }: { channels: AdChannelStatus[
           <SaluranTab channels={channels} />
         </TabsContent>
         <TabsContent value="pelacakan">
-          <PelacakanTab channels={channels} />
+          <PelacakanTab tracking={tracking} />
         </TabsContent>
       </Tabs>
     </>
