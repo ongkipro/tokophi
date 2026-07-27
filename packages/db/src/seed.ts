@@ -221,15 +221,19 @@ const DISCOUNTS: Array<{ code: string; kind: "persen" | "nominal" | "gratis_ongk
 ];
 
 // ---- collections (Kategori) — membership seeded so product counts are real ----
-const COLLECTIONS: Array<{ name: string; emoji: string; type: "manual" | "otomatis"; published: boolean; blurb?: string }> = [
-  { name: "Dress", emoji: "👗", type: "otomatis", published: true, blurb: "Dress harian sampai acara spesial" },
-  { name: "Atasan", emoji: "👚", type: "otomatis", published: true, blurb: "Blouse, kemeja, & tunik" },
-  { name: "Bawahan", emoji: "👖", type: "otomatis", published: true, blurb: "Rok & celana kulot" },
-  { name: "Busana Muslim", emoji: "🧕", type: "otomatis", published: true, blurb: "Hijab, khimar, & gamis" },
-  { name: "Promo Gajian", emoji: "🏷️", type: "manual", published: true },
-  { name: "Produk Terlaris", emoji: "🔥", type: "otomatis", published: true },
-  { name: "Loungewear", emoji: "🩱", type: "otomatis", published: true, blurb: "Nyaman untuk di rumah" },
-  { name: "Outerwear", emoji: "🧥", type: "otomatis", published: false, blurb: "Cardigan & blazer" },
+// `imageUrl` = the category COVER. It drives CategoryHero: a cover → the full-bleed banner hero, none →
+// the centred minimal header. Seeded here so the demo's banner hero is the DEFAULT (survives a full
+// reseed); real merchants set their own in the Kategori editor. Uses each category's flagship product
+// photo — a proper landscape banner reads even better, but the merchant chooses that.
+const COLLECTIONS: Array<{ name: string; emoji: string; type: "manual" | "otomatis"; published: boolean; blurb?: string; imageUrl?: string }> = [
+  { name: "Dress", emoji: "👗", type: "otomatis", published: true, blurb: "Dress harian sampai acara spesial", imageUrl: "/products/dress-midi-bunga.webp" },
+  { name: "Atasan", emoji: "👚", type: "otomatis", published: true, blurb: "Blouse, kemeja, & tunik", imageUrl: "/products/blouse-katun.webp" },
+  { name: "Bawahan", emoji: "👖", type: "otomatis", published: true, blurb: "Rok & celana kulot", imageUrl: "/products/celana-kulot.webp" },
+  { name: "Busana Muslim", emoji: "🧕", type: "otomatis", published: true, blurb: "Hijab, khimar, & gamis", imageUrl: "/products/gamis-syari.webp" },
+  { name: "Promo Gajian", emoji: "🏷️", type: "manual", published: true, imageUrl: "/products/hijab-voal.webp" },
+  { name: "Produk Terlaris", emoji: "🔥", type: "otomatis", published: true, imageUrl: "/products/dress-batik.webp" },
+  { name: "Loungewear", emoji: "🩱", type: "otomatis", published: true, blurb: "Nyaman untuk di rumah", imageUrl: "/products/cardigan-rajut.webp" },
+  { name: "Outerwear", emoji: "🧥", type: "otomatis", published: false, blurb: "Cardigan & blazer", imageUrl: "/products/blazer-wanita.webp" },
 ];
 
 // ---- orders (mirror admin mock buildOrders: mulberry32(555)) ----
@@ -912,7 +916,7 @@ async function main() {
 
   // collections + membership (counts become real)
   for (const col of COLLECTIONS) {
-    const [c] = await db.insert(schema.collections).values({ storeId: store.id, title: col.name, handle: slugify(col.name), emoji: col.emoji, description: col.blurb ?? null, type: col.type, published: col.published }).returning();
+    const [c] = await db.insert(schema.collections).values({ storeId: store.id, title: col.name, handle: slugify(col.name), emoji: col.emoji, description: col.blurb ?? null, type: col.type, published: col.published, imageUrl: col.imageUrl ?? null }).returning();
     let members: string[];
     if (col.name === "Produk Terlaris") {
       members = [...seededProducts].sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 10).map((p) => p.id);
