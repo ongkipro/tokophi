@@ -72,6 +72,20 @@
 - [ ] **Subscriptions/billing** · **M** · recurring plan billing (Pemula/Bisnis/Skala); invoices; dunning.
 - [~] **Domains + deploy pipeline** · **M** · custom domain per store — add/verify/resolve + admin UI BUILT (2026-07-15); TLS activation + automated per-client deploy pending.
 
+### Meta Commerce integration (tenant-owned) — **ADR 0012**, epic
+Shopify-style: merchant connects THEIR OWN Meta Business/Dataset/Catalog/Ad Account; TokoΦ automates OAuth, catalog sync, and Conversions API events, all `store_id`-isolated. Full phase checklists + acceptance criteria live in **`specs/decisions/0012-meta-commerce-tenant-owned-integration.md`** (§30). Background work = cron-route + DB-job-table (no worker app, §0.1). Retailer id MUST match the existing `/feed/google.xml` `<g:id>` (§0.2).
+- [ ] **P1 — Domain types + provider boundary** · **M** · normalized catalog/event types, stable retailer-id + event-id generators, payload hashing, `MetaProviderClient` interface + mock, unit tests. *(credential-free)*
+- [ ] **P2 — Schema + migrations** · **L** · `meta_connections/_product_mappings/_event_deliveries/_sync_jobs/_audit_logs` + enums, all with `store_id` + RLS; `verify-rls` green.
+- [ ] **P3 — Token encryption + env** · **S** · versioned AES-256-GCM server-only service (`META_TOKEN_ENCRYPTION_KEY`), redaction helpers, `.env.example`.
+- [ ] **P4 — OAuth + asset selection** · **L** · signed single-use state, server-side code exchange, asset discovery/revalidation, connect/disconnect, `integrations:write` capability.
+- [ ] **P5 — Catalog normalization + sync engine** · **L** · product→catalog-item adapter, payload-hash change detection, upsert/archive, per-item skip reasons, idempotent full sync (drained by `api/cron/meta-catalog-sync`).
+- [ ] **P6 — Transaction-safe sync triggers** · **M** · outbox/committed-event enqueue from product/variant/inventory/media/publish/domain mutations.
+- [ ] **P7 — Storefront tenant Pixel + browser events** · **M** · per-store Pixel bootstrap, normalized browser events, shared `event_id`, consent gating.
+- [ ] **P8 — CAPI event delivery** · **L** · public event-collection endpoint (owner conn + explicit store_id), `api/cron/meta-event-delivery` worker, retry/dead-letter, server Purchase from order state (+ COD trigger config, needs sign-off).
+- [ ] **P9 — Admin + super-admin diagnostics** · **M** · connection/asset/sync/event health cards, manual resync/retry, sanitized super-admin Meta Health.
+- [ ] **P10 — Webhooks + lifecycle hardening** · **M** · signed webhook verify, health-check cron, deletion cleanup, token rotation.
+- [ ] **P11 — Live sandbox verification** · **M** · real Meta app/test assets; documented honestly in WORKLOG (blocked until credentials provided).
+
 ---
 
 ## Suggested order (dependencies)
