@@ -51,6 +51,7 @@ export const puckConfig: Config<SectionConfigMap> = {
           getItemSummary: (slide, i) => slide?.heading || `Slide ${(i ?? 0) + 1}`,
           defaultItemProps: {
             imageUrl: "",
+            mobileImageUrl: "",
             heading: "Judul Slide",
             subheading: "Satu kalimat singkat tentang koleksi ini.",
             ctaLabel: "Belanja Sekarang",
@@ -58,7 +59,8 @@ export const puckConfig: Config<SectionConfigMap> = {
             focal: "center",
           },
           arrayFields: {
-            imageUrl: imageField("Gambar Slide (kosong = gradasi warna brand)"),
+            imageUrl: imageField("Gambar Slide — Desktop (kosong = gradasi warna brand)"),
+            mobileImageUrl: imageField("Gambar Mobile (opsional — kosong = pakai gambar desktop)"),
             heading: { type: "text", label: "Judul" },
             subheading: { type: "textarea", label: "Sub-judul" },
             ctaLabel: { type: "text", label: "Teks Tombol" },

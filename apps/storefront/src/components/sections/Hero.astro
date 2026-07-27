@@ -62,23 +62,36 @@ const centered = align === "center";
   {
     slides.map((slide, i) =>
       slide.imageUrl ? (
-        <img
-          data-hero-img
-          src={i === 0 ? slide.imageUrl : undefined}
-          data-src={i === 0 ? undefined : slide.imageUrl}
-          alt=""
-          width="1920"
-          height="1080"
-          loading={i === 0 ? "eager" : "lazy"}
-          fetchpriority={i === 0 ? "high" : "auto"}
-          decoding={i === 0 ? "sync" : "async"}
-          onerror="this.style.display='none'"
-          class:list={[
-            "absolute inset-0 -z-10 h-full w-full object-cover transition-opacity duration-1000 ease-out motion-reduce:transition-none",
-            focalClass(slide),
-            i === 0 ? "opacity-100" : "opacity-0",
-          ]}
-        />
+        /* `<picture>` art direction: on ≤640px the browser takes the merchant's portrait mobile shot
+           (when they set one) and NEVER downloads the heavy desktop file; everywhere else it uses the
+           landscape `imageUrl` with `focal`. The <source> mirrors the img's lazy pattern — slide 1 ships
+           a real `srcset`, slides 2..n carry `data-srcset` promoted by the same `wake()` as the img. */
+        <picture>
+          {slide.mobileImageUrl && (
+            <source
+              media="(max-width: 640px)"
+              srcset={i === 0 ? slide.mobileImageUrl : undefined}
+              data-srcset={i === 0 ? undefined : slide.mobileImageUrl}
+            />
+          )}
+          <img
+            data-hero-img
+            src={i === 0 ? slide.imageUrl : undefined}
+            data-src={i === 0 ? undefined : slide.imageUrl}
+            alt=""
+            width="1920"
+            height="1080"
+            loading={i === 0 ? "eager" : "lazy"}
+            fetchpriority={i === 0 ? "high" : "auto"}
+            decoding={i === 0 ? "sync" : "async"}
+            onerror="this.style.display='none'"
+            class:list={[
+              "absolute inset-0 -z-10 h-full w-full object-cover transition-opacity duration-1000 ease-out motion-reduce:transition-none",
+              focalClass(slide),
+              i === 0 ? "opacity-100" : "opacity-0",
+            ]}
+          />
+        </picture>
       ) : (
         /* No image → the BRAND-TINTED PANEL the registry has always promised ("empty = brand-tinted
            gradient panel"). It did not exist: this div carried no background at all, so an image-less
@@ -284,6 +297,13 @@ const centered = align === "center";
       if (!src) return;
       delete el.dataset.src;
       el.removeAttribute("data-src");
+      // Promote the mobile <source>'s srcset FIRST (before the img src), so the <picture> picks the
+      // right candidate when the img starts loading. Slide 1 already ships both; this is slides 2..n.
+      const source = el.parentElement?.querySelector<HTMLSourceElement>("source[data-srcset]");
+      if (source?.dataset.srcset) {
+        source.srcset = source.dataset.srcset;
+        source.removeAttribute("data-srcset");
+      }
       (el as HTMLImageElement).src = src;
     };
 
