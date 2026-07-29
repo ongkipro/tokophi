@@ -372,6 +372,16 @@ that never happened. Do NOT read them as live numbers.
 🟢 **`store_tracking_channels` + `tracking_event_deliveries` (0079/0080, ADR 0012) ARE live** — this is
 the real conversion tracking, and it is deliberately SEPARATE from `ad_channels` above.
 
+**Catalog identity (0081, ADR 0013).** `products.number` is a per-store, allocate-once number and
+`product_variants.seq` its per-product counterpart; together they form the catalog id
+(`{number}-{seq}`) that `/feed/google.xml`, `/feed/tiktok.xml` and every conversion `content_ids` use.
+`products.variant_seq_next` is a high-water mark that NEVER decreases — reissuing a deleted variant's
+number would re-point a live Meta/Google catalog item at a different SKU. `store_counters` holds the
+allocation counter (its own table, not a column on `stores`, so a product create does not row-lock the
+row billing and settings also write). `stores.catalog_id_scheme` decides which id a store publishes:
+existing stores stay on the legacy `handle` scheme because switching re-keys an already-ingested
+catalog, which no provider can undo.
+
 `store_tracking_channels` — the merchant's own pixel config, one row per (store, channel):
 
 | Column | Meaning |
@@ -390,7 +400,7 @@ by `apps/admin/lib/tracking-events.ts` after a committed order, drained by
 
 | Column | Meaning |
 |---|---|
-| `event_id` | `purchase:{store_id}:{order_number}` — the SAME string the browser pixel sends as `eventID`. This is the de-duplication (ADR 0012 §14.3) |
+| `event_id` | `purchase:{order_number}` — the SAME string the browser pixel sends as `eventID`. This is the de-duplication (ADR 0012 §14.3). No store id: `orders.number` is already platform-unique, and the tenant key does not belong in three ad platforms' logs |
 | `status` | `queued` → `processing` → `succeeded` \| `failed` (retry) \| `dead_letter` (`tracking_delivery_status`) |
 | `attempt_count` / `next_attempt_at` | attempt² minutes + jitter, 6 attempts, then `dead_letter`. `attempt_count` is incremented BY THE CLAIM, not by the outcome — a tick killed mid-send must still consume an attempt or a poison row loops forever. A **prepaid** order's row is parked at `2126-01-01` (held) until the payment callback releases it |
 | `payload` | commerce facts ONLY (value, currency, contentIds, numItems, orderNumber, occurredAt). **No email, phone or token** — identity is fetched fresh at send time, hashed inside the sender, never persisted (§9.4/§25) |
@@ -544,6 +554,7 @@ carry meaning were named by hand.
 | **0045** | `checkout_abandoned_at` | `checkout_sessions.abandoned_at` + a backfill of every existing `ditinggal` row from `coalesce(updated_at, created_at)`. **Without this column a "recovery rate" is a lie** — see §3.4 |
 | **0079** | `store_tracking_channels` | per-store Meta/Google/TikTok pixel + CAPI config, `unique(store_id, channel)` + RLS (ADR 0012) |
 | **0080** | `tracking_event_deliveries` | the server-side conversion QUEUE + `tracking_delivery_status` enum, `unique(store_id, channel, event_id)`, due/store indexes + RLS (ADR 0012) |
+| **0081** | `product_numbering` | `products.number` (per-store, `unique(store_id,number)`) + `products.variant_seq_next` + `product_variants.seq` (`unique(product_id,seq)`) + `store_counters` (RLS) + `stores.catalog_id_scheme`; deterministic one-shot backfill (ADR 0013) |
 
 ```bash
 docker compose up -d db            # PostgreSQL 16 @ localhost:5433

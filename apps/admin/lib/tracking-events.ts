@@ -1,7 +1,7 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { purchaseEventId, retailerId } from "@tokophi/lib/tracking-ids";
+import { purchaseEventId, retailerId, type CatalogIdScheme } from "@tokophi/lib/tracking-ids";
 
 // Server-side Purchase enqueue (ADR 0012 §14.4, §23) — the ONE place a conversion becomes a job.
 //
@@ -90,6 +90,15 @@ export async function purchaseFacts(storeId: string, orderId: string): Promise<P
     .limit(1);
   if (!order) return null;
 
+  // Which catalog id this store publishes (ADR 0013). It MUST be read here rather than assumed: the
+  // conversion's `content_ids` and the feed's `<g:id>` are the same string or they match nothing.
+  const [st] = await db
+    .select({ scheme: schema.stores.catalogIdScheme })
+    .from(schema.stores)
+    .where(eq(schema.stores.id, storeId))
+    .limit(1);
+  const scheme: CatalogIdScheme = st?.scheme === "number" ? "number" : "handle";
+
   // The order's lines. `order_line_items` has no `store_id` (the CHILD-TABLE class), so it is read
   // ONLY by `orderId` — an id whose ownership was just proven by the store-scoped query above. That
   // proof is the tenant boundary here; do not "simplify" it away.
@@ -105,11 +114,10 @@ export async function purchaseFacts(storeId: string, orderId: string): Promise<P
   // and the provider silently mis-attributes the difference.
   let numItems = 0;
   if (boughtIds.length) {
-    // Catalog ids for the purchased variants. `rank` reproduces the feed's ordinal exactly: variants
-    // ordered by `position` (ties broken by id so the number is stable across runs), 1-based, and only
-    // when the product actually has more than one variant — see @tokophi/lib/tracking-ids. The window
-    // must see EVERY sibling variant of a purchased product (that is what makes `variantCount` right),
-    // so it ranks over the products those variants belong to, then keeps the bought rows.
+    // Catalog ids for the purchased variants. Under the `number` scheme this is a plain join —
+    // `products.number` and `product_variants.seq` ARE the id, so the window functions this used to
+    // need (rank the variant by position, count its siblings) are gone with the instability they
+    // modelled. The legacy `handle` scheme still needs both, so they are computed for that path only.
     const siblingProducts = db
       .select({ pid: schema.productVariants.productId })
       .from(schema.productVariants)
@@ -118,6 +126,8 @@ export async function purchaseFacts(storeId: string, orderId: string): Promise<P
       .select({
         variantId: schema.productVariants.id,
         handle: schema.products.handle,
+        number: schema.products.number,
+        seq: schema.productVariants.seq,
         rank: sql<number>`row_number() over (partition by ${schema.productVariants.productId} order by ${schema.productVariants.position}, ${schema.productVariants.id})`,
         variantCount: sql<number>`count(*) over (partition by ${schema.productVariants.productId})`,
       })
@@ -135,7 +145,9 @@ export async function purchaseFacts(storeId: string, orderId: string): Promise<P
         dropped += 1;
         continue;
       }
-      contentIds.push(retailerId(r.handle, Number(r.rank) - 1, Number(r.variantCount)));
+      contentIds.push(
+        retailerId(scheme, { handle: r.handle, number: r.number }, { seq: r.seq, index: Number(r.rank) - 1, count: Number(r.variantCount) }),
+      );
       numItems += l.qty ?? 0;
     }
     // A dropped line means the conversion under-reports what was actually bought. Silent is how that

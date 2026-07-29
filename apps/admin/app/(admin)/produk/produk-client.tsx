@@ -441,6 +441,9 @@ export function ProdukClient({ products }: { products: Product[] }) {
                           <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9" />
                           <div className="min-w-0">
                             <p className="truncate font-medium">{p.name}</p>
+                            {/* The catalog number (ADR 0013) — the id Google/Meta/TikTok name in a
+                                disapproval, so the merchant can map an error back to a product. */}
+                            {!!p.number && <p className="text-xs text-muted-foreground tabular-nums">#{p.number}</p>}
                             <p className="text-xs text-muted-foreground md:hidden">{p.category}</p>
                             <div className="mt-1 flex flex-wrap items-center gap-1">
                               <GoogleCatBadge path={p.googleCategoryPath} />

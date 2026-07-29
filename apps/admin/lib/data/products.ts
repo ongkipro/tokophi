@@ -10,6 +10,10 @@ const selectProduct = {
   id: schema.products.id,
   name: schema.products.title,
   handle: schema.products.handle,
+  // The merchant-facing catalog number (ADR 0013). This is the id a Merchant Center / Events Manager
+  // error names, so it has to be visible somewhere the merchant can search — otherwise the number is
+  // real but useless to the only person who needs it.
+  number: schema.products.number,
   emoji: schema.products.emoji,
   status: schema.products.status,
   category: schema.products.category,
@@ -45,7 +49,7 @@ function base(db: Tx) {
 }
 
 function toProduct(r: {
-  id: string; name: string; handle: string; emoji: string | null; status: "active" | "draft" | "archived";
+  id: string; name: string; handle: string; number?: number; emoji: string | null; status: "active" | "draft" | "archived";
   category: string | null; unitsSold: number; createdAt: Date; price: number | null; stock: number | null; image: string | null;
   weightMissing?: boolean; googleCategoryPath?: string | null;
 }): Product {
@@ -53,6 +57,7 @@ function toProduct(r: {
     id: r.id,
     name: r.name,
     handle: r.handle,
+    number: r.number ?? 0,
     emoji: r.emoji ?? "📦",
     image: r.image ?? `/products/${r.name}.webp`,
     price: r.price ?? 0,
@@ -74,6 +79,7 @@ export async function getProducts(): Promise<Product[]> {
         id: schema.products.id,
         name: schema.products.title,
         handle: schema.products.handle,
+        number: schema.products.number,
         emoji: schema.products.emoji,
         status: schema.products.status,
         category: schema.products.category,

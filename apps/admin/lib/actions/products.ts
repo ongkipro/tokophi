@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
+import { allocateProductNumber, allocateVariantSeq } from "@/lib/catalog-numbering";
 
 export type VariantInput = {
   option1?: string | null;
@@ -78,7 +79,14 @@ const variantRowsOf = (input: ProductInput): VariantInput[] =>
 export async function createProduct(input: ProductInput): Promise<string> {
   const { storeId: sid } = await requireCapability("products:write");
   const id = await withTenant(sid, async (db) => {
-    const [p] = await db.insert(schema.products).values({ storeId: sid, hasVariants: usesVariants(input), ...productFields(input) }).returning();
+    // The product's permanent catalog number (ADR 0013) — allocated here, never derived from anything
+    // the merchant can later edit.
+    const number = await allocateProductNumber(db, sid);
+    const rows = variantRowsOf(input);
+    const [p] = await db
+      .insert(schema.products)
+      .values({ storeId: sid, hasVariants: usesVariants(input), number, variantSeqNext: rows.length + 1, ...productFields(input) })
+      .returning();
     // Default location, not just any: new inventory rows must land where the merchant actually stocks.
     const [loc] = await db.select({ id: schema.locations.id }).from(schema.locations).where(eq(schema.locations.storeId, sid)).orderBy(desc(schema.locations.isDefault), asc(schema.locations.id)).limit(1);
 
@@ -86,10 +94,13 @@ export async function createProduct(input: ProductInput): Promise<string> {
       await db.insert(schema.productOptions).values(input.options!.map((o, i) => ({ productId: p.id, name: o.name, position: i })));
     }
     let pos = 0;
-    for (const v of variantRowsOf(input)) {
+    for (const v of rows) {
       const [nv] = await db
         .insert(schema.productVariants)
         .values({
+          // `seq` is 1-based and set from the same counter the product was created with, so a brand-new
+          // product's variants are 1..N with no extra round-trip. `position` is display order only.
+          seq: pos + 1,
           productId: p.id, storeId: sid, title: comboTitle(v.option1 ?? null, v.option2 ?? null, v.option3 ?? null), position: pos++,
           option1: v.option1 ?? null, option2: v.option2 ?? null, option3: v.option3 ?? null,
           priceIdr: v.price, sku: v.sku || null, compareAtIdr: input.compareAt ?? null, costIdr: input.cost ?? null, weightGrams: input.weightGrams ?? null,
@@ -97,7 +108,12 @@ export async function createProduct(input: ProductInput): Promise<string> {
         .returning();
       if (loc) await db.insert(schema.inventoryLevels).values({ variantId: nv.id, locationId: loc.id, available: v.stock });
     }
-    await db.insert(schema.productMedia).values({ productId: p.id, url: `/products/${input.handle}.webp`, position: 0 });
+    // NO fabricated media row. This used to insert `/products/<handle>.webp` — a filename the merchant
+    // never uploaded and which only exists for the 12 seeded demo products. Every Seller-created product
+    // therefore carried a 404 as its primary image, the storefront showed a broken frame, and the
+    // product feed published it as `<g:image_link>` (plus four invented `-2..-5` gallery URLs), which is
+    // an automatic disapproval at all three providers. `catalog.ts` already says it: never fabricate a
+    // URL you have not been given. A product with no photo yet simply has none, and the feed skips it.
     return p.id;
   });
   revalidatePath("/produk");
@@ -161,7 +177,16 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
         await db.update(schema.productVariants).set(fields).where(eq(schema.productVariants.id, match.id));
         await setInventory(match.id, v.stock);
       } else {
-        const [nv] = await db.insert(schema.productVariants).values({ productId: id, storeId: sid, ...fields }).returning();
+        // A NEW option combo: take the next never-used seq from the product's high-water mark. The
+        // matched branch above deliberately leaves `seq` alone — that is what keeps a live catalog item
+        // pointing at the same SKU across an edit.
+        // THROW, not return: by this point options have been deleted and rewritten and some variants
+        // updated, so returning from the withTenant callback would COMMIT a half-rewritten product and
+        // show a success toast. Unreachable today (ownership was proven above, same txn) — but the
+        // failure mode of a guard must be "roll back", never "carry on".
+        const seq = await allocateVariantSeq(db, id);
+        if (seq === null) throw new Error(`allocateVariantSeq: product ${id} not in this store`);
+        const [nv] = await db.insert(schema.productVariants).values({ productId: id, storeId: sid, seq, ...fields }).returning();
         await setInventory(nv.id, v.stock);
       }
     }
@@ -213,8 +238,14 @@ export async function duplicateProduct(id: string): Promise<{ ok: boolean; id?: 
       handle = `${orig.handle}-salinan-${n}`;
     }
 
+    // ⚠️ `number` MUST be omitted. This spread deliberately carries every new column automatically —
+    // which is exactly why it would carry the original's catalog number and hit
+    // `products_storeId_number_unique` on every single "Salin produk". A copy is a different product;
+    // it gets its own number. (The variants' `seq` values below are correctly copied: the copy's
+    // variant set is identical, and `variantSeqNext` rides along as the right high-water mark.)
+    const number = await allocateProductNumber(db, sid);
     const [copy] = await db.insert(schema.products)
-      .values({ ...omit(orig, ["id", "createdAt"]), storeId: sid, title: `${orig.title} (Salinan)`, handle, status: "draft", archivedAt: null } as typeof schema.products.$inferInsert)
+      .values({ ...omit(orig, ["id", "createdAt", "number"]), number, storeId: sid, title: `${orig.title} (Salinan)`, handle, status: "draft", archivedAt: null } as typeof schema.products.$inferInsert)
       .returning({ id: schema.products.id });
 
     const options = await db.select().from(schema.productOptions).where(eq(schema.productOptions.productId, id));

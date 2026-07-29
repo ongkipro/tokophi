@@ -117,6 +117,10 @@ export async function provisionStore(input: ProvisionInput): Promise<ProvisionRe
         status: "trial",
         trialEndsAt,
         firstInvoicePaid: false,
+        // ADR 0013 — a NEW store starts on the stable catalog id and therefore never pays the one-way
+        // re-key that switching costs. The column defaults to 'handle' for stores that already exist
+        // and may already have a catalog ingested somewhere; a store created now has none.
+        catalogIdScheme: "number",
       })
       .returning();
     await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: new Date() });

@@ -9,16 +9,19 @@
 //   AddToCart (delegated click on #add-to-cart/#buy-now/[data-track=add_to_cart]) ·
 //   Purchase (/checkout/sukses, once per order, with value + currency IDR + content_ids).
 //
-// IDS — the two rules that make any of this measurable (ADR 0012 §0.2, §14.3):
-//  1. `content_ids` are the SAME strings /feed/google.xml emits as <g:id> — the product handle, or
-//     `handle-{n}` for the n-th variant of a multi-variant product. A browsing shopper has not picked
-//     a variant yet, so ViewContent/AddToCart send the product-level id with `content_type:
-//     "product_group"` when the product has variants (Meta's own grouping) — never a fabricated
-//     variant id. PURCHASE is exact: its ids come from the ORDER, computed server-side.
-//  2. `event_id` on Purchase is issued by the server (`purchase:{storeId}:{orderNumber}`) and sent
-//     with BOTH the browser event and the Conversions API event. Same id = one conversion, not two.
-//     If the server did not return one (an older cached checkout), the browser event is still sent —
-//     under-reporting is recoverable, double-counting a merchant's ROAS is not.
+// IDS — the two rules that make any of this measurable (ADR 0012 §14.3, ADR 0013):
+//  1. `content_ids` are the SAME strings the product feeds emit as <g:id>. This script NEVER derives
+//     them: the id is rendered by the page (`data-catalog-id`) or issued by the order API, both from
+//     the one shared helper. Guessing is worse than sending nothing — a value that is not a real
+//     catalog item matches silently, forever.
+//     A browsing shopper has not picked a variant, so a multi-variant product is reported at GROUP
+//     level with `content_type: "product_group"` (Meta's own grouping) rather than a fabricated
+//     variant id — and the TYPE travels with the id, including into the cart, because a group id
+//     announced as a single product matches nothing. PURCHASE is exact: its ids come from the ORDER.
+//  2. `event_id` on Purchase is issued by the server (`purchase:{orderNumber}`) and sent with BOTH the
+//     browser event and the Conversions API event. Same id = one conversion, not two. If the server
+//     did not return one (an older cached checkout), the browser event is still sent — under-reporting
+//     is recoverable, double-counting a merchant's ROAS is not.
 // Advanced matching (opt-in per channel): on Purchase, hash the order's email/phone (SHA-256) and pass
 // them to the pixel. NOTHING here may throw into the page — a tracking failure must never break checkout.
 import { storeTrackingPixels } from "../data/tracking";
@@ -121,7 +124,7 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           var map = { ViewContent: "ViewContent", AddToCart: "AddToCart", InitiateCheckout: "InitiateCheckout", Purchase: "CompletePayment" };
           if (evt === "PageView") return; // ttq.page() already fired at load
           var name = map[evt]; if (!name) return;
-          var props = { contents: ids.map(function (id) { return { content_id: id, content_type: "product" }; }), quantity: data.numItems || 1, value: data.value || 0, currency: data.currency || "IDR" };
+          var props = { contents: ids.map(function (id) { return { content_id: id, content_type: ctype }; }), quantity: data.numItems || 1, value: data.value || 0, currency: data.currency || "IDR" };
           // ⚠️ `event_id` is TikTok's THIRD argument, not a property of `properties`. Putting it inside
           // the payload — which looks entirely reasonable — means TikTok never sees a de-dup key, so
           // every purchase is counted twice: once by the pixel, once by the Events API.
@@ -148,16 +151,15 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
       // id /feed/google.xml emits as <g:item_group_id>. Inventing `handle-1` here would report a
       // variant they never looked at.
       function productContext() {
-        if (path.indexOf("/produk/") !== 0 || path.length <= "/produk/".length) return null;
-        var handle = null;
-        try { handle = decodeURIComponent(path.slice("/produk/".length)); } catch (e) { handle = null; }
-        if (!handle) return null;
-        var n = 0;
-        try {
-          var picker = document.getElementById("variant-picker");
-          if (picker) n = (JSON.parse(picker.dataset.variants || "[]") || []).length;
-        } catch (e) { n = 0; }
-        return { contentIds: [handle], contentType: n > 1 ? "product_group" : "product" };
+        if (path.indexOf("/produk/") !== 0) return null;
+        // The id is rendered by the PDP (`data-catalog-id` on the buy button), computed server-side by
+        // the SAME helper the feed and the Conversions API use. It is deliberately NOT derived from the
+        // URL any more: since ADR 0013 the catalog id is a number that does not appear in the path, and
+        // a guessed id is worse than none — it matches no catalog item and reports nothing, silently.
+        var el = document.querySelector("[data-catalog-id]");
+        var id = el ? el.getAttribute("data-catalog-id") : null;
+        if (!id) return null;
+        return { contentIds: [id], contentType: el.getAttribute("data-catalog-type") || "product" };
       }
       // Resolved AFTER the DOM exists — see ready(). Everything downstream reads this variable, so it
       // is assigned there and the events that depend on it fire from inside that callback.
@@ -182,9 +184,20 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
 
       // InitiateCheckout — checkout page opened
       if (path === "/checkout") {
-        var cids = [];
-        try { cids = (JSON.parse(localStorage.getItem("cart") || "[]") || []).map(function (i) { return i && i.handle; }).filter(Boolean); } catch (e) {}
-        fire("InitiateCheckout", { contentIds: cids });
+        // `catalogId` is what the PDP stored when the item was added (ADR 0013). A cart written before
+        // that shipped has none — send the event with no ids rather than the handle, which under the
+        // number scheme is not a catalog item at all and would quietly match nothing.
+        var cids = [], ctype = "product";
+        try {
+          var cart = JSON.parse(localStorage.getItem("cart") || "[]") || [];
+          cids = cart.map(function (i) { return i && i.catalogId; }).filter(Boolean);
+          // The id a PDP hands the cart is the GROUP id when the product has variants. Reporting a
+          // group id as `content_type: "product"` matches nothing — the group is not an item id — so
+          // the type the PDP recorded travels with it. Mixed carts fall back to the group form, which
+          // is the one that can describe both.
+          if (cart.some(function (i) { return i && i.catalogType === "product_group"; })) ctype = "product_group";
+        } catch (e) {}
+        fire("InitiateCheckout", { contentIds: cids, contentType: ctype });
       }
       // Purchase — once per order (localStorage guard), with value + content_ids + advanced matching.
       //
@@ -221,12 +234,13 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
             // fallback for an order placed before this shipped — group-level, so they still match a
             // catalog item for single-variant products and the item_group for the rest.
             var tr = order.tracking || {};
-            // Server ids when we have them; the cart's handles only as a floor. They are group-level,
-            // so they still match a catalog item for single-variant products and the item_group for
-            // the rest — never a fabricated variant id.
+            // Server ids when we have them; otherwise the ids the PDP recorded in the cart. NEVER the
+            // handle — under the stable scheme (ADR 0013) a handle appears nowhere in the feed, so it
+            // would report a purchase against an item that does not exist. An old cart with no
+            // `catalogId` yields an empty list, and no ids is better than wrong ids.
             var ids = Array.isArray(tr.contentIds) && tr.contentIds.length
               ? tr.contentIds
-              : items.map(function (i) { return i && i.handle; }).filter(Boolean);
+              : items.map(function (i) { return i && i.catalogId; }).filter(Boolean);
             var qty = items.reduce(function (n, i) { return n + (i && i.qty ? Number(i.qty) : 1); }, 0);
             var data = { value: Number(order.total || 0), currency: "IDR", contentIds: ids, numItems: qty || items.length, orderId: key, eventId: tr.eventId || null };
 

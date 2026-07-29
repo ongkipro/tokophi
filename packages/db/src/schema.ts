@@ -153,6 +153,15 @@ export const stores = pgTable("stores", {
   socialFacebook: text(),
   socialPinterest: text(),
   socialX: text(),
+  // Which identifier this store's product feed and conversion events use (ADR 0013).
+  //   'handle' — the legacy scheme: `handle` / `handle-{ordinal}`. Unstable: renaming a product,
+  //              reordering variants, or ADDING A SECOND VARIANT re-keys it.
+  //   'number' — `{products.number}-{variant.seq}`. System-generated, allocate-once, stable forever.
+  // Existing stores stay on 'handle' and new ones start on 'number', because switching is a ONE-WAY
+  // door: Google overwrites the product and its history, Meta deletes and recreates the catalog item,
+  // and any retargeting audience keyed on the old content_ids goes cold. No provider offers a re-key.
+  // So the merchant chooses the moment, from Pemasaran → Pelacakan, warned in plain Indonesian.
+  catalogIdScheme: text().notNull().default("handle"),
   createdAt: createdAt(),
 });
 
@@ -251,9 +260,39 @@ export const products = pgTable(
     templateId: uuid().references((): AnyPgColumn => pageTemplates.id),
     archivedAt: ts(),
     createdAt: createdAt(),
+
+    // ── Stable catalog identity (ADR 0013, migration 0081) ────────────────────────────────────────
+    // The merchant-facing product NUMBER, allocated per store from `store_counters` and never reused.
+    // It exists because the ad platforms key a catalog item by the id we send, and every id we had was
+    // derived from something the merchant can edit: the handle. Rename a product, reorder its variants
+    // or delete one, and the id changed — which to Google and Meta means "that product was deleted and
+    // a new one appeared", taking its performance history and its retargeting audiences with it.
+    //
+    // Per STORE, not global: each merchant owns their own catalog (ADR 0012), so uniqueness is only
+    // ever needed inside one store — and a platform-wide counter would publish TokoΦ's total product
+    // count on every public `/feed/google.xml`.
+    // NO DEFAULT, deliberately. A default would let a future insert path forget to allocate and quietly
+    // publish catalog id `0-1` to three ad platforms; the second such product in a store then fails on
+    // the unique, naming nothing. Without a default the FIRST offender fails, at the insert, in the
+    // code that forgot.
+    number: integer().notNull(),
+    // High-water mark for this product's variant `seq`. It NEVER decreases: a deleted variant's number
+    // is retired forever, because handing it to the next variant re-points a live catalog item at a
+    // different SKU — a silent mis-attribution, not an error.
+    variantSeqNext: integer().notNull().default(1),
   },
-  (t) => [unique().on(t.storeId, t.handle)],
+  (t) => [unique().on(t.storeId, t.handle), unique().on(t.storeId, t.number)],
 );
+
+// Per-store allocation counters. A table of its own rather than a column on `stores`/`store_settings`
+// because it is a HOT counter: every product create row-locks it, and parking that lock on a row that
+// billing, branding or settings also write is how a save starts waiting on a product insert.
+export const storeCounters = pgTable("store_counters", {
+  storeId: uuid().primaryKey().references(() => stores.id),
+  // Next product number to hand out. Allocation is ONE statement (insert … on conflict do update …
+  // returning), so two concurrent creates in the same store serialise on this row and neither retries.
+  productNext: integer().notNull().default(1001),
+});
 
 export const productMedia = pgTable("product_media", {
   id: pk(),
@@ -284,8 +323,16 @@ export const productVariants = pgTable("product_variants", {
   option1: text(),
   option2: text(),
   option3: text(),
+  // DISPLAY order. It used to be identity too — the feed's `handle-{n}` ordinal was this column's rank
+  // — which meant dragging a variant re-keyed the catalog item. `seq` took that job (ADR 0013); this
+  // is now only what it says it is.
   position: integer().notNull().default(0),
-});
+  // Stable per-product variant number, allocated from `products.variant_seq_next` and NEVER reused.
+  // Deleting the middle of three variants leaves -1 and -3; -2 is retired, because handing it to the
+  // next variant would silently re-point a live Meta/Google catalog item at a different SKU.
+  // No default, same reasoning as `products.number`.
+  seq: integer().notNull(),
+}, (t) => [unique().on(t.productId, t.seq)]);
 
 export const inventoryLevels = pgTable(
   "inventory_levels",
@@ -920,7 +967,7 @@ export const storeTrackingChannels = pgTable(
 // (store_id, channel, event_id) is what makes both true at once — the enqueue is idempotent (an
 // AutoLaris callback retry cannot double-book a Purchase) and the send is resumable.
 //
-// `eventId` is the SHARED browser/server id (`purchase:{storeId}:{orderNumber}`) — the storefront pixel
+// `eventId` is the SHARED browser/server id (`purchase:{orderNumber}`) — the storefront pixel
 // sends the same string as `eventID`, which is how Meta/TikTok de-duplicate the two copies of one sale.
 // Deliberately NO raw identity columns: emails/phones are hashed inside the sender and never persisted
 // here (§9.4 + §25 data minimisation). `payload` holds only commerce facts (value/currency/content ids).

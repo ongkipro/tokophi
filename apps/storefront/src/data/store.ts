@@ -65,6 +65,12 @@ export type StoreInfo = {
    * `<slug>.tokophi.com` subdomain IS the primary, and `primaryOrigin()` returns the request origin.
    */
   primaryHost: string | null;
+  /**
+   * Which identifier this store's product feeds publish (ADR 0013): `"number"` = the stable
+   * `{product.number}-{variant.seq}`, `"handle"` = the legacy handle-derived id. Per store because
+   * switching re-keys an already-ingested catalog, which no provider can undo.
+   */
+  catalogIdScheme: string;
 };
 
 // REMOVED: `DEFAULT_TAGLINE` / `DEFAULT_WHATSAPP`.
@@ -154,6 +160,7 @@ const toStoreInfo = (r: typeof schema.stores.$inferSelect): StoreInfo => ({
   socialFacebook: r.socialFacebook,
   socialPinterest: r.socialPinterest,
   socialX: r.socialX,
+  catalogIdScheme: r.catalogIdScheme,
   logoUrl: r.logoUrl,
   faviconUrl: r.faviconUrl,
   brandColor: r.brandColor,
