@@ -193,6 +193,122 @@ export async function sendMetaPurchase(args: {
   return http;
 }
 
+// ── Credential probes ────────────────────────────────────────────────────────────────────────────
+// "Is this token real, and does it reach THIS pixel?" — answered before a merchant's first sale rather
+// than after their conversions have already been dead-lettering for a week.
+//
+// ⚠️ None of these may create a conversion. In particular a Meta/TikTok event carrying
+// `test_event_code` is NOT a sandbox: Meta documents that such events "are not dropped… and are used
+// for targeting and ads measurement purposes". So the Meta probe sends an EMPTY `data` array, which
+// Graph rejects on auth before it ever looks at the payload.
+
+export type ProbeResult = { ok: boolean; message: string };
+
+/**
+ * Meta: `POST /{pixel_id}/events` with `data: []`. Auth is evaluated first, so the response tells us
+ * about the token and the pixel without submitting anything.
+ *   190              → token invalid / expired / revoked
+ *   100 (subcode 33) → token is fine but cannot see THIS pixel
+ *   200–299          → a required permission was removed
+ */
+export async function probeMeta(pixelId: string, accessToken: string): Promise<ProbeResult> {
+  const res = await post(`https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(pixelId)}/events`, {
+    data: [],
+    access_token: accessToken,
+  });
+  if ("networkError" in res) return { ok: false, message: "Tidak bisa menghubungi Meta. Coba lagi sebentar." };
+  let code: number | undefined;
+  let sub: number | undefined;
+  try {
+    const parsed = JSON.parse(res.text) as { error?: { code?: number; error_subcode?: number } };
+    code = parsed.error?.code;
+    sub = parsed.error?.error_subcode;
+  } catch {
+    /* ignore */
+  }
+  if (code === 190) return { ok: false, message: "Token akses ditolak Meta — kedaluwarsa atau sudah dicabut. Buat token baru di Events Manager." };
+  if (code === 100 && sub === 33) return { ok: false, message: "Token valid, tapi tidak punya akses ke Pixel ID ini. Periksa ID-nya, atau berikan akses ke token tersebut." };
+  if (code !== undefined && code >= 200 && code < 300) return { ok: false, message: "Izin token dicabut di Meta. Buat ulang token dengan akses Conversions API." };
+  if (res.status >= 200 && res.status < 300) return { ok: true, message: "Token valid dan punya akses ke Pixel ini." };
+  // A complaint about the PAYLOAD (we deliberately sent an empty `data` array) means Graph got past
+  // authentication and past the pixel lookup — which is the whole question. Without this branch the
+  // success path is only reachable if Graph happens to answer 2xx to an empty batch, which is
+  // undocumented; a probe that reports failure for a perfectly good token is worse than no probe.
+  if (code === 100 && sub !== 33) return { ok: true, message: "Token valid dan punya akses ke Pixel ini." };
+  // Never the raw provider body (ADR 0012 §20.4) — a code the merchant can quote to support instead.
+  return { ok: false, message: `Meta menolak permintaan${code !== undefined ? ` (kode ${code})` : ""}. Periksa Pixel ID dan token.` };
+}
+
+/**
+ * TikTok: the Events API is the only endpoint we can reach without an advertiser id, so the probe is a
+ * real call whose verdict is read from the body `code`.
+ *   40104/40105/40102 → token empty / invalid-revoked / expired
+ *   40001             → token fine, no permission on this pixel
+ *   0                 → valid and authorized
+ */
+export async function probeTiktok(pixelId: string, accessToken: string): Promise<ProbeResult> {
+  const res = await post(
+    "https://business-api.tiktok.com/open_api/v1.3/event/track/",
+    { event_source: "web", event_source_id: pixelId, data: [] },
+    { "Access-Token": accessToken },
+  );
+  if ("networkError" in res) return { ok: false, message: "Tidak bisa menghubungi TikTok. Coba lagi sebentar." };
+  let code: number | undefined;
+  let message: string | undefined;
+  try {
+    const parsed = JSON.parse(res.text) as { code?: number; message?: string };
+    code = parsed.code;
+    message = parsed.message;
+  } catch {
+    /* ignore */
+  }
+  if (code === 0) return { ok: true, message: "Token valid dan punya akses ke Pixel ini." };
+  if (code === 40104 || code === 40105 || code === 40102)
+    return { ok: false, message: "Token akses ditolak TikTok — kosong, salah, atau kedaluwarsa. Buat ulang di Events Manager." };
+  if (code === 40001) return { ok: false, message: "Token valid, tapi tidak punya izin atas Pixel ID ini." };
+  // A throttle is not a verdict on the credential — say so instead of showing a green tick.
+  if (code !== undefined && TIKTOK_RETRYABLE.has(code))
+    return { ok: false, message: "TikTok sedang membatasi permintaan. Coba uji lagi sebentar lagi." };
+  // Anything else: TikTok evaluates the token BEFORE the payload (proven — a missing token returns
+  // 40104 even with `data: []`), so reaching a non-auth, non-permission, non-throttle code means the
+  // credential authenticated and it is the empty batch being refused. Reported as a pass WITH the
+  // caveat, because TikTok's full code table is not published anywhere we can read.
+  if (code !== undefined)
+    return { ok: true, message: "Token diterima TikTok. Pastikan Pixel ID benar lewat Test Events." };
+  return { ok: false, message: sanitize(message ?? res.text).slice(0, 160) };
+}
+
+/**
+ * Google: **there is no credential validation.** Officially, "the validation server does not validate
+ * the api_secret or measurement_id" — a garbage secret with a valid payload returns no messages, and
+ * `/mp/collect` answers 204 for anything. So this checks the PAYLOAD shape against Google's own debug
+ * endpoint and says exactly that. Never render this as "Terhubung".
+ */
+export async function probeGa4(measurementId: string, apiSecret: string): Promise<ProbeResult> {
+  const url =
+    `https://www.google-analytics.com/debug/mp/collect` +
+    `?measurement_id=${encodeURIComponent(measurementId)}&api_secret=${encodeURIComponent(apiSecret)}`;
+  const res = await post(url, {
+    client_id: "555.555",
+    events: [{ name: "purchase", params: { transaction_id: "TEST", value: 1, currency: "IDR", items: [{ item_id: "TEST" }] } }],
+  });
+  if ("networkError" in res) return { ok: false, message: "Tidak bisa menghubungi Google. Coba lagi sebentar." };
+  try {
+    const parsed = JSON.parse(res.text) as { validationMessages?: { description?: string }[] };
+    const msgs = parsed.validationMessages ?? [];
+    if (msgs.length === 0) {
+      return {
+        ok: true,
+        message:
+          "Format sudah benar. Google TIDAK memvalidasi Measurement ID / API secret, jadi pastikan datanya muncul di GA4 → Realtime sebelum dianggap live.",
+      };
+    }
+    return { ok: false, message: sanitize(msgs.map((m) => m.description).join("; ")).slice(0, 200) };
+  } catch {
+    return { ok: false, message: "Jawaban Google tidak bisa dibaca." };
+  }
+}
+
 // ── GA4 Measurement Protocol ─────────────────────────────────────────────────────────────────────
 // ⚠️ MP answers **204 for everything** — valid payload, malformed body, even no query params at all
 // (probed 2026-07-29). So `ok` here means "accepted", never "correct"; the merchant verifies in GA4
@@ -205,18 +321,12 @@ export async function sendGa4Purchase(args: {
   event: ServerEvent;
 }): Promise<SendResult> {
   const { event } = args;
-  // MP silently DISCARDS events older than 72 hours while still answering 2xx. Sending one anyway would
-  // record `succeeded` for a delivery that never landed — a green health panel describing nothing. A
-  // prepaid order paid four days after checkout hits this every time, so it is not a corner case.
-  const ageHours = (Date.now() / 1000 - event.eventTime) / 3600;
-  if (ageHours > 71) {
-    return {
-      ok: false,
-      retryable: false,
-      errorCode: "too_old",
-      errorMessage: "Google menolak event lebih dari 72 jam; konversi ini terlalu lama untuk dikirim.",
-    };
-  }
+  // Backdating: with the default validation behaviour MP does NOT discard an old event — it ACCEPTS it
+  // and clamps the timestamp to 72 hours ago. An earlier version of this file refused to send past that
+  // window, which permanently dead-lettered conversions GA4 would have recorded (a prepaid order paid
+  // four days after checkout hits it every time). So we send, and let Google clamp; the sale is
+  // reported, dated later than it happened. That trade is deliberate — under-reporting revenue is worse
+  // than mis-dating it — and it is why `timestamp_micros` is still sent rather than omitted.
   const url =
     `https://www.google-analytics.com/mp/collect` +
     `?measurement_id=${encodeURIComponent(args.measurementId)}&api_secret=${encodeURIComponent(args.apiSecret)}`;
@@ -305,17 +415,37 @@ export async function sendTiktokPurchase(args: {
     "Access-Token": args.accessToken,
   });
   if ("networkError" in res) return { ok: false, retryable: true, errorCode: "network", errorMessage: sanitize(res.networkError) };
-  const http = classify(res.status, res.text);
-  if (!http.ok) return http;
-  // 200 + non-zero code = rejected. Parse it, or trust the 200 if the body is not JSON.
+  return tiktokVerdict(res.status, res.text);
+}
+
+/** Codes TikTok's own return-code appendix files under rate limiting / "retry may resolve this". */
+const TIKTOK_RETRYABLE = new Set([40016, 40100, 40132, 40133, 40202]);
+
+/**
+ * TikTok's verdict lives in the BODY, on both 2xx and 4xx.
+ *
+ * ⚠️ This used to return the HTTP verdict whenever the status was not 2xx, so the body was parsed only
+ * on a 200 — and `40132`, the PER-PIXEL QPS limit, arrives with a 4xx. A flash-sale burst therefore
+ * dead-lettered every conversion in the window instead of backing off. The blanket
+ * "40000–49999 = permanent" rule was wrong for the same reason: that range contains TikTok's rate
+ * limits as well as its auth errors.
+ */
+export function tiktokVerdict(status: number, text: string): SendResult {
+  let code: number | undefined;
+  let message: string | undefined;
   try {
-    const parsed = JSON.parse(res.text) as { code?: number; message?: string };
-    if (typeof parsed.code === "number" && parsed.code !== 0) {
-      const permanent = parsed.code >= 40000 && parsed.code < 50000;
-      return { ok: false, retryable: !permanent, errorCode: `ttk_${parsed.code}`, errorMessage: sanitize(parsed.message ?? res.text) };
-    }
+    const parsed = JSON.parse(text) as { code?: number; message?: string };
+    if (typeof parsed.code === "number") code = parsed.code;
+    message = parsed.message;
   } catch {
-    /* non-JSON 2xx — accept it rather than invent a failure */
+    /* non-JSON body — fall back to the HTTP verdict below */
   }
-  return { ok: true, retryable: false };
+  if (code === undefined) return classify(status, text);
+  if (code === 0) return { ok: true, retryable: false };
+  // `|| status === 429 || status >= 500` matters: this function REPLACES classify() whenever a body
+  // code is present, and classify() is where 429 was handled. Without it a throttle carrying a code
+  // outside the allow-list dead-letters — the exact loss this function exists to prevent, reached by a
+  // different route.
+  const retryable = TIKTOK_RETRYABLE.has(code) || status === 429 || status >= 500;
+  return { ok: false, retryable, errorCode: `ttk_${code}`, errorMessage: sanitize(message ?? text) };
 }

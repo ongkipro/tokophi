@@ -10,6 +10,7 @@ import { imageSrcSet, inStock, productImages, type Product } from "../../data/ca
 import Breadcrumb from "../../components/Breadcrumb.astro";
 import ShareBar from "../../components/ShareBar.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
+import { itemGroupId, retailerId, type CatalogIdScheme } from "@tokophi/lib/tracking-ids";
 
 // SSR: tenant from the Host header (src/middleware.ts), product from the handle param.
 const { store, catalog } = Astro.locals;
@@ -127,6 +128,19 @@ const TEMPLATE = catalog.productTemplate(product);
 const ORIGIN = Astro.locals.origin;
 const abs = (u: string) => new URL(u, ORIGIN).href;
 const PAGE_URL = abs(`/produk/${product.handle}`);
+
+// The catalog id this page reports to the merchant's pixels (ADR 0013). Computed HERE, server-side,
+// with the same helper the feed and the Conversions API use — the browser cannot derive it (the id no
+// longer lives in the URL) and must never guess it: a `content_ids` value that is not a real catalog
+// item matches nothing, silently. A shopper who has not chosen a variant is reported at GROUP level,
+// which is what `product_group` means; inventing a variant id would report one they never looked at.
+const catalogScheme: CatalogIdScheme = store.catalogIdScheme === "number" ? "number" : "handle";
+const variantCount = product.variants?.length ?? 1;
+const catalogGroup = itemGroupId(catalogScheme, product, variantCount);
+const catalogId =
+  catalogGroup ??
+  retailerId(catalogScheme, product, { seq: product.variants?.[0]?.seq ?? 1, index: 0, count: variantCount });
+const catalogType = catalogGroup ? "product_group" : "product";
 
 const variantPrices = (product.variants ?? []).map((v) => v.price).filter((n) => n > 0);
 const available = inStock(product);
@@ -560,11 +574,16 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             </a>
           </div>
         ) : (
-        <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+        <!-- The catalog id lives on this container, not only on the buy buttons: a price-on-request
+             product renders no buttons at all, and the pixel would then report no ViewContent for a
+             page a shopper is very much viewing. -->
+        <div class="mt-8 flex flex-col gap-3 sm:flex-row" data-catalog-id={catalogId} data-catalog-type={catalogType}>
           <button
             type="button"
             id="add-to-cart"
             data-handle={product.handle}
+            data-catalog-id={catalogId}
+            data-catalog-type={catalogType}
             data-name={product.name}
             data-price={product.price}
             data-image={product.image}
@@ -576,6 +595,8 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             type="button"
             id="buy-now"
             data-handle={product.handle}
+            data-catalog-id={catalogId}
+            data-catalog-type={catalogType}
             data-name={product.name}
             data-price={product.price}
             data-image={product.image}
@@ -893,7 +914,10 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       var variant = d.variant || selectedSize || "";
       var existing = cart.find(function (i) { return i.handle === d.handle && (i.variant || i.size || "") === variant; });
       if (existing) { existing.qty += qty; }
-      else { cart.push({ handle: d.handle, name: d.name, price: Number(d.price), image: d.image, variant: variant, size: variant, qty: qty }); }
+      // `catalogId` rides along so InitiateCheckout can report real catalog ids (ADR 0013) — the cart's
+      // handle is not one under the number scheme. Carts already in a shopper's localStorage have no
+      // such field; the pixel falls back to sending no ids rather than a value that matches nothing.
+      else { cart.push({ handle: d.handle, catalogId: d.catalogId || "", catalogType: d.catalogType || "product", name: d.name, price: Number(d.price), image: d.image, variant: variant, size: variant, qty: qty }); }
       localStorage.setItem("cart", JSON.stringify(cart));
       window.dispatchEvent(new Event("cart:updated"));
       if (go) { window.location.href = "/checkout"; return; }

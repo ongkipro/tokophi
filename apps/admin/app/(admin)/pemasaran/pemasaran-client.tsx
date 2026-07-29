@@ -19,7 +19,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { IDR, num } from "@tokophi/lib/format";
 import type { AdChannelStatus } from "@/lib/data/marketing";
 import type { TrackingConfig, TrackingChannelKey, TrackingHealth } from "@/lib/data/tracking";
-import { setTrackingChannel, retryTrackingDeliveries } from "@/lib/actions/tracking";
+import { setTrackingChannel, retryTrackingDeliveries, testTrackingConnection, clearTrackingToken } from "@/lib/actions/tracking";
 import { useCan } from "@/components/admin/permissions";
 import { exportCsv } from "@/lib/csv";
 
@@ -330,6 +330,21 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
   const [testCode, setTestCode] = React.useState(cfg.testEventCode);
   const [saving, start] = React.useTransition();
   const [retrying, startRetry] = React.useTransition();
+  const [testing, startTest] = React.useTransition();
+
+  const test = () =>
+    startTest(async () => {
+      const r = await testTrackingConnection(cfg.channel);
+      if (r.ok) toast.success(r.message);
+      else toast.error(r.message);
+    });
+
+  const clearToken = () =>
+    startTest(async () => {
+      const r = await clearTrackingToken(cfg.channel);
+      if (r.ok) { toast.success("Token server dihapus."); router.refresh(); }
+      else toast.error(r.error ?? "Gagal menghapus token.");
+    });
 
   const retry = () =>
     startRetry(async () => {
@@ -418,23 +433,44 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
                 <Label htmlFor={`${cfg.channel}-capi`}>Token akses server</Label>
                 <Input id={`${cfg.channel}-capi`} type="password" value={capiToken} onChange={(e) => setCapiToken(e.target.value)}
                   placeholder={cfg.capiConfigured ? "•••••••• (tersimpan — isi untuk mengganti)" : "Tempel token akses"} disabled={!canWrite} autoComplete="off" />
-                <p className="text-xs text-muted-foreground">Disimpan terenkripsi. {cfg.capiConfigured ? "Token sudah tersimpan." : "Belum ada token."}</p>
+                <p className="text-xs text-muted-foreground">
+                  Disimpan terenkripsi. {cfg.capiConfigured ? "Token sudah tersimpan." : "Belum ada token."}
+                </p>
+                {canWrite && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <Button size="sm" variant="outline" onClick={test} disabled={testing}>
+                      {testing && <Loader2 className="size-4 animate-spin" />} Uji koneksi
+                    </Button>
+                    {cfg.capiConfigured && (
+                      <Button size="sm" variant="ghost" className="text-destructive" onClick={clearToken} disabled={testing}>
+                        Hapus token
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
               {cfg.channel !== "google" && (
                 <div className="space-y-1.5">
                   <Label htmlFor={`${cfg.channel}-testcode`}>Kode uji (opsional)</Label>
                   <Input id={`${cfg.channel}-testcode`} value={testCode} onChange={(e) => setTestCode(e.target.value.trim())}
                     placeholder="cth. TEST12345" disabled={!canWrite} />
+                  {/* Not a sandbox. Meta documents that events carrying a test code still flow into
+                      Events Manager and are used for targeting and measurement — saying otherwise would
+                      invite a merchant to pollute their own dataset while "just testing". */}
                   <p className="text-xs text-muted-foreground">
-                    Untuk menguji di {cfg.channel === "meta" ? "Events Manager → Test Events" : "TikTok Events Manager → Test Event"}. Kosongkan saat sudah live.
+                    Menandai event agar muncul di {cfg.channel === "meta" ? "Events Manager → Test Events" : "TikTok Events Manager → Test Event"}.
+                    Event tetap terkirim dan tetap terhitung — kosongkan saat sudah live.
                   </p>
                 </div>
               )}
             </>
           )}
 
-          {/* Kesehatan pengiriman event 7 hari terakhir — hanya metadata, tak pernah payload provider. */}
-          {cfg.capiEnabled && health && (health.succeeded + health.queued + health.failed + health.deadLetter) > 0 && (
+          {/* Kesehatan pengiriman event 7 hari terakhir — hanya metadata, tak pernah payload provider.
+              Deliberately NOT gated on `capiEnabled`: switching CAPI off is the first thing a merchant
+              tries when something looks broken, and hiding the diagnostics at that exact moment is how
+              a fixable problem becomes a support ticket. */}
+          {health && (health.succeeded + health.queued + health.failed + health.deadLetter) > 0 && (
             <div className="rounded-lg bg-muted/40 p-3">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                 <span className="font-medium">7 hari terakhir:</span>
@@ -472,7 +508,15 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
   );
 }
 
-function PelacakanTab({ tracking, health }: { tracking: TrackingConfig[]; health: Record<TrackingChannelKey, TrackingHealth> }) {
+function PelacakanTab({ tracking, health, mayRead }: { tracking: TrackingConfig[]; health: Record<TrackingChannelKey, TrackingHealth>; mayRead: boolean }) {
+  if (!mayRead) {
+    return (
+      <div className="rounded-lg border p-6 text-sm text-muted-foreground">
+        Pengaturan pelacakan berisi kredensial toko, jadi hanya <span className="font-medium text-foreground">Owner</span> yang
+        bisa melihat dan mengubahnya — sama seperti Pengaturan toko.
+      </div>
+    );
+  }
   return (
     <div className="space-y-4">
       <p className="max-w-3xl text-sm text-muted-foreground">
@@ -488,7 +532,7 @@ function PelacakanTab({ tracking, health }: { tracking: TrackingConfig[]; health
 }
 
 // ---- page ----
-export function PemasaranClient({ channels, feed, tracking, health }: { channels: AdChannelStatus[]; feed: FeedStatus; tracking: TrackingConfig[]; health: Record<TrackingChannelKey, TrackingHealth> }) {
+export function PemasaranClient({ channels, feed, tracking, health, mayReadTracking }: { channels: AdChannelStatus[]; feed: FeedStatus; tracking: TrackingConfig[]; health: Record<TrackingChannelKey, TrackingHealth>; mayReadTracking: boolean }) {
   const [tab, setTab] = React.useState("saluran");
 
   return (
@@ -529,7 +573,7 @@ export function PemasaranClient({ channels, feed, tracking, health }: { channels
           <SaluranTab channels={channels} />
         </TabsContent>
         <TabsContent value="pelacakan">
-          <PelacakanTab tracking={tracking} health={health} />
+          <PelacakanTab tracking={tracking} health={health} mayRead={mayReadTracking} />
         </TabsContent>
       </Tabs>
     </>

@@ -1,6 +1,7 @@
 import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
+import { decryptSecret, secretScope } from "@/lib/crypto";
 import { and, desc, gte, isNotNull, sql } from "drizzle-orm";
 
 // Read the store's marketing-pixel / conversion-tracking config for the Pemasaran → Pelacakan setup.
@@ -22,23 +23,26 @@ export type TrackingConfig = {
 
 const KEYS: TrackingChannelKey[] = ["meta", "google", "tiktok"];
 
+/** What a role without `integrations:write` sees: the three cards, empty. No ids, no token presence. */
+export const emptyTrackingConfig = (): TrackingConfig[] => KEYS.map(empty);
+
 function empty(channel: TrackingChannelKey): TrackingConfig {
   return { channel, enabled: false, pixelId: "", capiEnabled: false, capiConfigured: false, advancedMatching: false, testEventCode: "" };
 }
 
 export async function getTrackingConfig(): Promise<TrackingConfig[]> {
-  return withCurrentTenant(async (db: Tx) => {
-    // PROJECTED on purpose. A bare `select()` would pull `capiTokenCiphertext` into a value that flows
-    // straight into a client component — the mapping below drops it today, and one future `return rows`
-    // would ship the secret to the browser. ADR 0012 §9.2: never select the ciphertext into a component.
+  return withCurrentTenant(async (db: Tx, storeId: string) => {
+    // The ciphertext IS selected here — and goes no further. It is needed to answer "can this token
+    // still be decrypted?", which is the only honest version of `capiConfigured`; the mapping below
+    // reduces it to a boolean and the raw value never leaves this function. ADR 0012 §9.2 forbids the
+    // ciphertext reaching a component, not reading it on the server.
     const rows = await db
       .select({
         channel: schema.storeTrackingChannels.channel,
         enabled: schema.storeTrackingChannels.enabled,
         pixelId: schema.storeTrackingChannels.pixelId,
         capiEnabled: schema.storeTrackingChannels.capiEnabled,
-        // Presence only — `capiConfigured`, never the value.
-        hasToken: sql<boolean>`${schema.storeTrackingChannels.capiTokenCiphertext} is not null`,
+        cipher: schema.storeTrackingChannels.capiTokenCiphertext,
         advancedMatching: schema.storeTrackingChannels.advancedMatching,
         testEventCode: schema.storeTrackingChannels.testEventCode,
       })
@@ -53,7 +57,10 @@ export async function getTrackingConfig(): Promise<TrackingConfig[]> {
         enabled: r.enabled,
         pixelId: r.pixelId ?? "",
         capiEnabled: r.capiEnabled,
-        capiConfigured: !!r.hasToken,
+        // Presence is not enough: after an `INTEGRATION_TOKEN_KEY` rotation the ciphertext is still
+        // there and no longer readable, and the UI would keep saying "Token sudah tersimpan" while
+        // every conversion dead-letters as `not_configured`. Ask whether it can actually be DECRYPTED.
+        capiConfigured: !!r.cipher && decryptSecret(r.cipher, secretScope(storeId, k)) !== null,
         advancedMatching: r.advancedMatching,
         testEventCode: r.testEventCode ?? "",
       };
@@ -76,17 +83,25 @@ export type TrackingHealth = {
   lastError: string | null;
 };
 
+const emptyHealth = (c: TrackingChannelKey): TrackingHealth => ({
+  channel: c,
+  queued: 0,
+  succeeded: 0,
+  failed: 0,
+  deadLetter: 0,
+  lastDeliveredAt: null,
+  lastError: null,
+});
+
+/** Zeroed health, for a role that may not read this store's integration diagnostics. */
+export const emptyTrackingHealth = (): Record<TrackingChannelKey, TrackingHealth> => ({
+  meta: emptyHealth("meta"),
+  google: emptyHealth("google"),
+  tiktok: emptyHealth("tiktok"),
+});
+
 export async function getTrackingHealth(): Promise<Record<TrackingChannelKey, TrackingHealth>> {
-  const empty = (c: TrackingChannelKey): TrackingHealth => ({
-    channel: c,
-    queued: 0,
-    succeeded: 0,
-    failed: 0,
-    deadLetter: 0,
-    lastDeliveredAt: null,
-    lastError: null,
-  });
-  const out = { meta: empty("meta"), google: empty("google"), tiktok: empty("tiktok") };
+  const out = emptyTrackingHealth();
 
   return withCurrentTenant(async (db: Tx) => {
     const since = new Date(Date.now() - 7 * 24 * 3600_000);

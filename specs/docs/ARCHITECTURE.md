@@ -241,12 +241,19 @@ MarketingPixels.astro            diagnostics card
 
 **The three rules that make it measurable:**
 
-1. **One id for the catalog.** `content_ids` are the exact strings `/feed/google.xml` already emits as
-   `<g:id>` — `handle`, or `handle-{n}` for the n-th variant. ONE helper
-   (`@tokophi/lib/tracking-ids` `retailerId`) is called by the feed AND by the conversion payload, so
-   they cannot drift. (ADR 0012 §0.2 overrides the ADR's own `tokophi:{store}:{uuid}` scheme: changing
-   it would orphan every product a merchant already ingested from the feed URL.)
-2. **One id for the sale.** `purchase:{store_id}:{order_number}` is issued by the server, returned to
+1. **One id for the catalog, and it never moves.** `content_ids` are the exact strings the product
+   feeds emit as `<g:id>`. ONE helper (`@tokophi/lib/tracking-ids` `retailerId`) is called by both feeds
+   AND by the conversion payload, so they cannot drift. Since **ADR 0013** the id is
+   `{products.number}-{variant.seq}` — system-generated, allocate-once — because the handle-derived id
+   changed whenever a merchant renamed a product, reordered variants, or simply added a second one, and
+   all three providers read a changed id as "this product was deleted". Existing stores stay on the
+   legacy scheme until they choose to switch (`stores.catalog_id_scheme`); the re-key is one-way.
+
+   **Two feed endpoints, one builder** (`apps/storefront/src/lib/product-feed.ts`): `/feed/google.xml`
+   serves Google Merchant Center **and** Meta Commerce (both ingest RSS 2.0 + the `g:` namespace);
+   `/feed/tiktok.xml` exists because TikTok requires `sku_id` and caps `google_product_category` at
+   three levels, which cannot be satisfied inside Google's feed without degrading Google.
+2. **One id for the sale.** `purchase:{order_number}` is issued by the server, returned to
    the browser in the order response, and sent by BOTH the pixel (`eventID`) and the Conversions API.
    Same id = one conversion, not two.
 3. **Purchase comes from the order row, never the success page.** COD counts at order creation

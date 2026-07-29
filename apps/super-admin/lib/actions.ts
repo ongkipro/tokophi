@@ -106,7 +106,9 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
     const [u] = await tx.insert(schema.users).values({ email, name: ownerName, passwordHash: hashPassword(DEV_PASSWORD) }).returning();
     // new store → 3-day free trial (real clock)
     const trialEndsAt = new Date(Date.now() + 3 * 86_400_000);
-    const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, status: "trial", trialEndsAt, firstInvoicePaid: false, createdAt: ANCHOR }).returning();
+    // `catalogIdScheme: "number"` — ADR 0013: a store created now has no catalog anywhere yet, so it
+    // starts on the stable id and never pays the one-way re-key. Must match lib/provision.ts.
+    const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, status: "trial", trialEndsAt, firstInvoicePaid: false, catalogIdScheme: "number", createdAt: ANCHOR }).returning();
     await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: ANCHOR });
     await tx.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
     await tx.insert(schema.storeSettings).values({ storeId: st.id });

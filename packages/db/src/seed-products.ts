@@ -18,7 +18,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 import { db, client, schema } from "./client";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { suggestGoogleCategory, suggestGender } from "@tokophi/lib/taxonomy-suggest";
 
 const DEMO_SLUG = "batik-nusantara";
@@ -199,9 +199,22 @@ async function main() {
 
     const imageUrl = await makeImage(d, store.id);
     const gcat = suggestGoogleCategory(d.title, d.category); // standard taxonomy (ADR 0011)
+    // Catalog number from the store's counter (ADR 0013) — the SAME atomic allocation the merchant
+    // admin uses, so a script and a human creating products at once cannot collide. This script APPENDS
+    // to a live store, so it must not assume the store is empty.
+    const [ctr] = await db
+      .insert(schema.storeCounters)
+      .values({ storeId: store.id, productNext: 1002 })
+      .onConflictDoUpdate({
+        target: schema.storeCounters.storeId,
+        set: { productNext: sql`${schema.storeCounters.productNext} + 1` },
+      })
+      .returning({ next: schema.storeCounters.productNext });
     const [p] = await db
       .insert(schema.products)
       .values({
+        number: Number(ctr.next) - 1,
+        variantSeqNext: 2, // one variant is created below, taking seq 1
         storeId: store.id,
         title: d.title,
         handle: d.handle,

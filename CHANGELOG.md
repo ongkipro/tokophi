@@ -2,6 +2,59 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Catalog: products get a permanent number (ADR 0013)
+
+### 🔢 Every product now has a system-generated id, and the ad platforms can finally rely on it
+Products get a **per-store number** (`#1001`, `#1002`, …) and variants a per-product `seq`, both
+allocated once and never reused. The catalog identifier becomes `{number}-{seq}` — so
+`<g:id>1042-3</g:id>` in the feed and `content_ids: ["1042-3"]` in every conversion.
+
+**Why it mattered:** the old id was the product HANDLE (`kemeja-linen`, or `kemeja-linen-2` for the
+n-th variant), and Google/Meta/TikTok key a catalog item by the id we send. Renaming a product,
+dragging a variant, deleting a sibling — or just **adding a second variant** — changed it, which all
+three read as "that product was deleted and a new one appeared": performance history reset, retargeting
+audiences cold, and no provider offers a re-key. Deleting the middle of three variants was worse than
+that: the survivor silently inherited the deleted variant's catalog item.
+
+Existing stores keep the old scheme (`stores.catalog_id_scheme`) because switching a live catalog is
+one-way; **new stores start stable and never pay it.** A merchant switches when they choose, warned
+about what resets.
+
+### 📦 The feed itself was rebuilt — several of its defects were silent and expensive
+One shared builder now serves **two endpoints**: `/feed/google.xml` (Google **and** Meta — both ingest
+RSS 2.0 + the `g:` namespace) and a new `/feed/tiktok.xml` (TikTok needs `sku_id` and caps the category
+at 3 levels). Fixed along the way:
+- **A single control character in a product description could reject the ENTIRE feed** — XML 1.0
+  forbids them and we only escaped `&<>"`. One paste out of Word took the whole catalog offline.
+- **Multi-variant products on a flash sale published the wrong price** — the raw variant price while
+  the PDP charged the sale price. Google calls that "Mismatched value (page crawl): price" and
+  disapproves the item. `price` + `sale_price` are now emitted correctly for both discount shapes.
+- **`availability` used `in_stock`**, which only Google documents; Meta and TikTok document `in stock`
+  (with a space). Now the value all three accept.
+- Photo-less products are no longer published as items every provider would reject (`image_link` is
+  required by all three), and the Katalog Iklan card now counts what is actually publishable —
+  previously it included drafts the feed never emitted.
+- Added `sale_price`, `additional_image_link`, `product_type`, `gtin`/`mpn`/`identifier_exists`,
+  option-3 support for `size`/`color`, plain-text descriptions with length caps, and `brand` from the
+  merchant's own `vendor` instead of always the shop name.
+
+### 🔐 Credentials: they can be tested, revoked, and no longer fail silently
+- **"Uji koneksi"** per channel — a real probe that says whether the token is valid *and* reaches that
+  pixel. Meta's uses an empty `data` array (auth is checked first) so it cannot create a conversion.
+  Google's is labelled honestly: Measurement Protocol does **not** validate credentials, so it can only
+  confirm the payload shape.
+- **"Hapus token"** — the clear path existed in the action and was unreachable from the UI, so a
+  merchant could never revoke a token an agency had pasted.
+- `capiConfigured` now means "decryptable", not "a row exists" — after a key rotation the UI used to
+  claim a token was stored while every conversion dead-lettered.
+- Credential changes write an audit entry; retries are rate-limited and no longer requeue failures that
+  can never succeed.
+- **TikTok rate limits are no longer dead-lettered as permanent** (`40100`/`40132` arrive with a 4xx,
+  and the body code was only parsed on 2xx) — a flash-sale burst used to lose every conversion in the
+  window. And GA4 events older than 72 h are sent rather than dropped: Measurement Protocol accepts
+  them and clamps the timestamp, so refusing to send was losing sales we could have reported.
+- The Pelacakan tab is now **owner-only to READ**, not just to write.
+
 ## Unreleased — Conversion tracking: the merchant's OWN pixels, end to end (ADR 0012)
 
 ### 📈 Pemasaran → Pelacakan is real, and the conversions actually leave the building
