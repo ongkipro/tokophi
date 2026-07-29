@@ -329,7 +329,13 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
     .innerJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
     .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.productVariants.id))
     .where(eq(schema.products.storeId, storeId))
-    .orderBy(asc(schema.productVariants.position));
+    // ⚠️ `id` is a TIEBREAKER, not decoration. This array's index becomes the variant's catalog id —
+    // `handle-{i+1}` in /feed/google.xml — and the conversion payload derives the same ordinal with
+    // `row_number() over (order by position, id)`. Nothing prevents two variants sharing a `position`
+    // (the product editor leaves order-referenced variants un-renumbered when a sibling is deleted), and
+    // with an unstable tie the feed and the conversion would disagree about which variant is which —
+    // silently, and only for merchants who edit variants that already have sales.
+    .orderBy(asc(schema.productVariants.position), asc(schema.productVariants.id));
 
   const optNamesById = new Map<string, string[]>();
   for (const o of optRows) {

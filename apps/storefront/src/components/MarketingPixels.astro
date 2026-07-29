@@ -1,0 +1,268 @@
+---
+// Per-store marketing pixels (Meta / Google / TikTok) — the STOREFRONT half of Pemasaran → Pelacakan.
+// Bootstraps only the pixels the merchant enabled (store_tracking_channels, resolved by store_id) and
+// fires the standard commerce funnel. Self-contained (does not touch the first-party Analytics.astro),
+// but uses the same path + de-dupe rules so the two never disagree.
+//
+// Funnel → per-platform event:
+//   PageView (every page) · ViewContent (/produk/<handle>) · InitiateCheckout (/checkout) ·
+//   AddToCart (delegated click on #add-to-cart/#buy-now/[data-track=add_to_cart]) ·
+//   Purchase (/checkout/sukses, once per order, with value + currency IDR + content_ids).
+//
+// IDS — the two rules that make any of this measurable (ADR 0012 §0.2, §14.3):
+//  1. `content_ids` are the SAME strings /feed/google.xml emits as <g:id> — the product handle, or
+//     `handle-{n}` for the n-th variant of a multi-variant product. A browsing shopper has not picked
+//     a variant yet, so ViewContent/AddToCart send the product-level id with `content_type:
+//     "product_group"` when the product has variants (Meta's own grouping) — never a fabricated
+//     variant id. PURCHASE is exact: its ids come from the ORDER, computed server-side.
+//  2. `event_id` on Purchase is issued by the server (`purchase:{storeId}:{orderNumber}`) and sent
+//     with BOTH the browser event and the Conversions API event. Same id = one conversion, not two.
+//     If the server did not return one (an older cached checkout), the browser event is still sent —
+//     under-reporting is recoverable, double-counting a merchant's ROAS is not.
+// Advanced matching (opt-in per channel): on Purchase, hash the order's email/phone (SHA-256) and pass
+// them to the pixel. NOTHING here may throw into the page — a tracking failure must never break checkout.
+import { storeTrackingPixels } from "../data/tracking";
+
+const { store } = Astro.locals;
+let pixels: Awaited<ReturnType<typeof storeTrackingPixels>> = [];
+try {
+  pixels = await storeTrackingPixels(store.id);
+} catch {
+  pixels = []; // a broken read must never break the storefront
+}
+const meta = pixels.find((p) => p.channel === "meta") ?? null;
+const google = pixels.find((p) => p.channel === "google") ?? null;
+const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
+---
+
+{/* Google gtag.js loader — must load for the gtag() calls in the inline script below to reach GA. */}
+{google && <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${google.pixelId}`} />}
+
+{pixels.length > 0 && (
+  <script is:inline define:vars={{ META: meta, GOOGLE: google, TIKTOK: tiktok }}>
+    (function () {
+      // Declared BEFORE the bootstrap: the loaders below are wrapped in it. They are vendor-standard
+      // snippets, but they all run inside one IIFE — an exception in the first would leave the other
+      // two un-bootstrapped and fire nothing at all, which is a silent, total tracking outage.
+      function safe(fn) { try { fn(); } catch (e) {} }
+
+      // ---- bootstrap the enabled pixels ----
+      safe(function () {
+      if (META) {
+        !(function (f, b, e, v, n, t, s) {
+          if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments); };
+          if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = "2.0"; n.queue = [];
+          t = b.createElement(e); t.async = !0; t.src = v; s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s);
+        })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
+        window.fbq("init", META.pixelId);
+      }
+      if (GOOGLE) {
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function () { window.dataLayer.push(arguments); };
+        window.gtag("js", new Date());
+        window.gtag("config", GOOGLE.pixelId); // auto page_view
+      }
+      if (TIKTOK) {
+        !(function (w, d, t) {
+          w.TiktokAnalyticsObject = t; var ttq = (w[t] = w[t] || []);
+          ttq.methods = ["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"];
+          ttq.setAndDefer = function (o, m) { o[m] = function () { o.push([m].concat(Array.prototype.slice.call(arguments, 0))); }; };
+          for (var i = 0; i < ttq.methods.length; i++) ttq.setAndDefer(ttq, ttq.methods[i]);
+          ttq.load = function (id) { var u = "https://analytics.tiktok.com/i18n/pixel/events.js"; ttq._i = ttq._i || {}; ttq._i[id] = []; ttq._i[id]._u = u; ttq._t = ttq._t || {}; ttq._t[id] = +new Date(); ttq._o = ttq._o || {}; ttq._o[id] = {}; var e = d.createElement("script"); e.type = "text/javascript"; e.async = !0; e.src = u + "?sdkid=" + id + "&lib=" + t; var s = d.getElementsByTagName("script")[0]; s.parentNode.insertBefore(e, s); };
+          ttq.load(TIKTOK.pixelId); ttq.page();
+        })(window, document, "ttq");
+      }
+      });
+
+      // ---- helpers ----
+      // Canonical Indonesian phone, the SAME shape the server hashes (`orders.ship_phone`, canonical
+      // `62…` since migration 0048). This reads the RAW value the shopper typed, so `0812…` AND the
+      // bare `812…` both have to become `62812…` — miss either and the browser hashes a different
+      // string from the server, the identities never match, and nothing anywhere reports it.
+      function digits(s) {
+        s = String(s || "").replace(/[^\d]/g, "");
+        if (s.slice(0, 1) === "0") return "62" + s.slice(1);
+        if (s.slice(0, 1) === "8") return "62" + s;
+        return s;
+      }
+      async function sha256(s) {
+        try {
+          var buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s)));
+          return Array.prototype.map.call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+        } catch (e) { return null; }
+      }
+      // This script lives in <head>; the elements it inspects (#variant-picker) live in <body>. Reading
+      // the DOM inline therefore ALWAYS found null — the multi-variant branch below was structurally
+      // unreachable. Everything that touches the DOM goes through here.
+      function ready(fn) {
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn, { once: true });
+        else fn();
+      }
+
+      // Fire ONE funnel event across every enabled pixel.
+      // `data`: {value, currency, contentIds, numItems, contentType, eventId, orderId}.
+      // `eventId` is passed to Meta as `eventID` and to TikTok as `event_id` — the de-dup key the
+      // server-side Conversions API repeats. GA4 de-dupes on `transaction_id` instead.
+      function fire(evt, data) {
+        data = data || {};
+        var ids = data.contentIds || [];
+        var ctype = data.contentType || "product";
+        if (META) safe(function () {
+          var opts = data.eventId ? { eventID: data.eventId } : undefined;
+          if (evt === "PageView") window.fbq("track", "PageView");
+          else if (evt === "ViewContent") window.fbq("track", "ViewContent", { content_ids: ids, content_type: ctype });
+          else if (evt === "AddToCart") window.fbq("track", "AddToCart", { content_ids: ids, content_type: ctype });
+          else if (evt === "InitiateCheckout") window.fbq("track", "InitiateCheckout", { content_ids: ids, content_type: ctype });
+          // No `num_items` on Purchase — Meta documents it as InitiateCheckout-only, and the server
+          // event omits it for the same reason. The two halves must describe the same sale.
+          else if (evt === "Purchase") window.fbq("track", "Purchase", { value: data.value || 0, currency: data.currency || "IDR", content_ids: ids, content_type: "product", order_id: data.orderId }, opts);
+        });
+        if (TIKTOK) safe(function () {
+          var map = { ViewContent: "ViewContent", AddToCart: "AddToCart", InitiateCheckout: "InitiateCheckout", Purchase: "CompletePayment" };
+          if (evt === "PageView") return; // ttq.page() already fired at load
+          var name = map[evt]; if (!name) return;
+          var props = { contents: ids.map(function (id) { return { content_id: id, content_type: "product" }; }), quantity: data.numItems || 1, value: data.value || 0, currency: data.currency || "IDR" };
+          // ⚠️ `event_id` is TikTok's THIRD argument, not a property of `properties`. Putting it inside
+          // the payload — which looks entirely reasonable — means TikTok never sees a de-dup key, so
+          // every purchase is counted twice: once by the pixel, once by the Events API.
+          if (data.eventId) window.ttq.track(name, props, { event_id: data.eventId });
+          else window.ttq.track(name, props);
+        });
+        if (GOOGLE) safe(function () {
+          var map = { ViewContent: "view_item", AddToCart: "add_to_cart", InitiateCheckout: "begin_checkout", Purchase: "purchase" };
+          if (evt === "PageView") return; // config already sent page_view
+          var name = map[evt]; if (!name) return;
+          var payload = { value: data.value || 0, currency: data.currency || "IDR", items: ids.map(function (id) { return { item_id: id }; }) };
+          if (evt === "Purchase" && data.orderId) payload.transaction_id = data.orderId;
+          window.gtag("event", name, payload);
+        });
+      }
+
+      var path = location.pathname.replace(/\/+$/, "") || "/";
+
+      // PageView on every page (fbq/ttq already sent theirs at init; this is the funnel entry point).
+      fire("PageView", {});
+
+      // The catalog id for the product page we are on, and whether it is a variant GROUP. A shopper
+      // browsing has not chosen a variant, so a multi-variant product is reported as its group — the
+      // id /feed/google.xml emits as <g:item_group_id>. Inventing `handle-1` here would report a
+      // variant they never looked at.
+      function productContext() {
+        if (path.indexOf("/produk/") !== 0 || path.length <= "/produk/".length) return null;
+        var handle = null;
+        try { handle = decodeURIComponent(path.slice("/produk/".length)); } catch (e) { handle = null; }
+        if (!handle) return null;
+        var n = 0;
+        try {
+          var picker = document.getElementById("variant-picker");
+          if (picker) n = (JSON.parse(picker.dataset.variants || "[]") || []).length;
+        } catch (e) { n = 0; }
+        return { contentIds: [handle], contentType: n > 1 ? "product_group" : "product" };
+      }
+      // Resolved AFTER the DOM exists — see ready(). Everything downstream reads this variable, so it
+      // is assigned there and the events that depend on it fire from inside that callback.
+      var product = null;
+      ready(function () {
+        product = productContext();
+        // ViewContent — product detail
+        if (product) fire("ViewContent", product);
+
+        // AddToCart — delegated (same selectors Analytics.astro uses), so page scripts stay untouched.
+        // Registered HERE, not synchronously: a click that landed before DOMContentLoaded would fire
+        // with `product` still null and lose its content id.
+        document.addEventListener("click", function (e) {
+          var t = e.target; if (!t || !t.closest) return;
+          var btn = t.closest("#add-to-cart, #buy-now, [data-track='add_to_cart']"); if (!btn || btn.disabled) return;
+          // Off a product page (a quick-add on a listing or the cart drawer) there is no catalog id to
+          // attach — fire the event anyway, without ids. Analytics.astro counts those clicks too, and a
+          // funnel where the two halves silently disagree is worse than one event with thin data.
+          fire("AddToCart", product || {});
+        }, true);
+      });
+
+      // InitiateCheckout — checkout page opened
+      if (path === "/checkout") {
+        var cids = [];
+        try { cids = (JSON.parse(localStorage.getItem("cart") || "[]") || []).map(function (i) { return i && i.handle; }).filter(Boolean); } catch (e) {}
+        fire("InitiateCheckout", { contentIds: cids });
+      }
+      // Purchase — once per order (localStorage guard), with value + content_ids + advanced matching.
+      //
+      // ⚠️ THIS PAGE IS NOT PROOF OF PAYMENT. /checkout/sukses is where an UNPAID virtual account or QR
+      // is displayed — the shopper still has to go and pay it. Firing Purchase here for a prepaid order
+      // would report a conversion for every abandoned VA screen and every failed gateway call, and
+      // inflate the merchant's ROAS with sales that never happened.
+      //
+      // So the SERVER decides, per order, whether this page is a conversion: `tracking.browserPurchase`
+      // is true for COD (payment on delivery — the order IS the sale, signed off 2026-07-29) and false
+      // for prepaid, which is counted instead by the Conversions API when the gateway callback
+      // confirms the money. Same `event_id` on both sides, so nothing is ever counted twice.
+      //
+      // Consequence, stated plainly: a store on prepaid channels with server-side tracking OFF records
+      // no Purchase at all. That is the honest half of the trade — the Seller UI says so on the card.
+      if (path === "/checkout/sukses") {
+        var order = null;
+        try { order = JSON.parse(localStorage.getItem("lastOrder") || "null"); } catch (e) {}
+        // POSITIVE gate: fire only when the server SAID this is a conversion. The negative form
+        // (`=== false`) leaked — if the server's enqueue threw, `tracking` comes back null, the order
+        // has no flag, and a prepaid sale on an unpaid VA page was reported as revenue anyway.
+        // Orders written before this shipped carry no flag either, and they are equally unknowable.
+        if (order && !(order.tracking && order.tracking.browserPurchase === true)) order = null;
+        if (order) {
+          var key = String(order.number || order.createdAt || "");
+          var seen = [];
+          try { seen = JSON.parse(localStorage.getItem("tphi:px:purchased") || "[]"); } catch (e) {}
+          if (!Array.isArray(seen)) seen = [];
+          if (key && seen.indexOf(key) === -1) {
+            seen.push(key);
+            try { localStorage.setItem("tphi:px:purchased", JSON.stringify(seen.slice(-20))); } catch (e) {}
+            var items = Array.isArray(order.items) ? order.items : [];
+            // Ids + de-dup key from the SERVER (order API `tracking`). The cart's handles are the
+            // fallback for an order placed before this shipped — group-level, so they still match a
+            // catalog item for single-variant products and the item_group for the rest.
+            var tr = order.tracking || {};
+            // Server ids when we have them; the cart's handles only as a floor. They are group-level,
+            // so they still match a catalog item for single-variant products and the item_group for
+            // the rest — never a fabricated variant id.
+            var ids = Array.isArray(tr.contentIds) && tr.contentIds.length
+              ? tr.contentIds
+              : items.map(function (i) { return i && i.handle; }).filter(Boolean);
+            var qty = items.reduce(function (n, i) { return n + (i && i.qty ? Number(i.qty) : 1); }, 0);
+            var data = { value: Number(order.total || 0), currency: "IDR", contentIds: ids, numItems: qty || items.length, orderId: key, eventId: tr.eventId || null };
+
+            // Advanced matching (opt-in per channel): hash email/phone, attach, THEN fire Purchase.
+            var email = order.contact && order.contact.email ? String(order.contact.email).trim().toLowerCase() : "";
+            var phone = order.shippingAddress && order.shippingAddress.whatsapp ? digits(order.shippingAddress.whatsapp) : "";
+            var wantAM = (META && META.advancedMatching) || (TIKTOK && TIKTOK.advancedMatching) || (GOOGLE && GOOGLE.advancedMatching);
+            if (wantAM && (email || phone)) {
+              Promise.all([email ? sha256(email) : null, phone ? sha256(phone) : null]).then(function (h) {
+                var em = h[0], ph = h[1];
+                // Only when we actually HAVE a hash. `crypto.subtle` is undefined on an http:// origin,
+                // so both come back null there — re-initing the pixel with `{}` would be a pointless
+                // extra init observed in the browser run of 2026-07-29.
+                // ⚠️ Meta documents advanced matching at the FIRST `init`; re-initing later is what the
+                // community reports as unreliable, and no official answer exists. This is best-effort
+                // for the browser copy — the server event always carries the hashed identity, and that
+                // is the path we rely on.
+                if (META && META.advancedMatching && (em || ph)) safe(function () { var am = {}; if (em) am.em = em; if (ph) am.ph = ph; window.fbq("init", META.pixelId, am); });
+                if (TIKTOK && TIKTOK.advancedMatching && (em || ph)) safe(function () { var id = {}; if (em) id.email = em; if (ph) id.phone_number = ph; window.ttq.identify(id); });
+                // Google: `user_data` is the **Google Ads** enhanced-conversions contract (an `AW-` tag),
+                // and gtag hashes it itself — so it takes the RAW values, unlike the two above. It is a
+                // no-op on a pure GA4 `G-` tag, so we do not hand a shopper's plaintext email and phone
+                // to a script that has no use for them. Phone must be E.164 WITH the `+`, or Google
+                // matches nothing.
+                if (GOOGLE && GOOGLE.advancedMatching && GOOGLE.pixelId.slice(0, 3) === "AW-") safe(function () {
+                  var ud = {}; if (email) ud.email = email; if (phone) ud.phone_number = "+" + phone;
+                  window.gtag("set", "user_data", ud);
+                });
+                fire("Purchase", data);
+              }, function () { fire("Purchase", data); });
+            } else {
+              fire("Purchase", data);
+            }
+          }
+        }
+      }
+    })();
+  </script>
+)}

@@ -208,3 +208,55 @@ The topology that keeps many clients **easy to manage**: one control plane, one 
 3. Deploy one storefront with that store's `STORE_SLUG` + custom domain (Cloudflare — "1 client 1 deploy").
 
 **Why:** patch/ship the admin once for everyone; one DB to migrate & back up; super-admin's cross-tenant view is free; storefronts stay independent (branding/domain/deploy) where it matters. **Trade-off:** RLS correctness is critical (defence-in-depth: also scope in `lib/data`); a client needing hard isolation can be promoted to a dedicated DB (ADR 0003 escape hatch).
+
+---
+
+## 11. Conversion tracking (ADR 0012) — tenant-owned marketing pixels
+
+Every store advertises with **its own** Meta/Google/TikTok assets. TokoΦ automates the plumbing; it
+never owns the merchant's advertising data (that is the whole point of ADR 0012 — no shared platform
+pixel, no cross-tenant audience pooling).
+
+```text
+Seller · Pemasaran → Pelacakan
+   │  pixel id (public) + CAPI token (encrypted)
+   ▼
+store_tracking_channels  ─────────────┐
+   │                                   │
+   │ storefront reads (Host → store_id)│ admin reads (RLS)
+   ▼                                   ▼
+MarketingPixels.astro            diagnostics card
+   fbq / gtag / ttq                (7-day delivery health)
+   PageView · ViewContent · AddToCart · InitiateCheckout · Purchase
+
+/api/public/order  ─(COD: on creation)─┐
+/api/public/pay/callback ─(prepaid: on confirmed payment)─┐
+                                       ▼
+                          tracking_event_deliveries   ← THE QUEUE
+                                       │
+                     cron-tracking-events (60 s sidecar)
+                                       ▼
+                    Meta CAPI · GA4 MP · TikTok Events API
+```
+
+**The three rules that make it measurable:**
+
+1. **One id for the catalog.** `content_ids` are the exact strings `/feed/google.xml` already emits as
+   `<g:id>` — `handle`, or `handle-{n}` for the n-th variant. ONE helper
+   (`@tokophi/lib/tracking-ids` `retailerId`) is called by the feed AND by the conversion payload, so
+   they cannot drift. (ADR 0012 §0.2 overrides the ADR's own `tokophi:{store}:{uuid}` scheme: changing
+   it would orphan every product a merchant already ingested from the feed URL.)
+2. **One id for the sale.** `purchase:{store_id}:{order_number}` is issued by the server, returned to
+   the browser in the order response, and sent by BOTH the pixel (`eventID`) and the Conversions API.
+   Same id = one conversion, not two.
+3. **Purchase comes from the order row, never the success page.** COD counts at order creation
+   (product decision, 2026-07-29); prepaid counts when the gateway callback confirms payment.
+
+**Security boundary:** the CAPI token is AES-256-GCM at rest (`INTEGRATION_TOKEN_KEY`), decrypted only
+inside the cron process, never selected into a client component, and stripped out of every persisted
+error message. The pixel *id* is public by nature — it ships in the storefront's JS — so it is stored
+plaintext, deliberately.
+
+**Not built (deliberately, ADR 0012 §4 + §0.2):** Meta OAuth / asset discovery, catalog PUSH via the
+Meta Catalog API (the existing pull feed covers it), webhooks, and any shared platform pixel. Those are
+the remaining phases in `TASKS.md`, and they need a Meta Developer App that does not exist yet.

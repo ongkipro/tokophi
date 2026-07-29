@@ -2212,6 +2212,18 @@ if (rToken) {
         total: subtotal + ship,
       };
 
+      // The ad platforms' own cookies, read here because this is the only moment they exist on the
+      // shopper's browser: `_fbp`/`_fbc` are Meta's strongest match keys and `_ga` is GA4's real client
+      // id. Without them a server-side conversion is accepted and attributed to nobody, and GA4 mints a
+      // brand-new user per order instead of joining the session the shopper actually browsed in.
+      // Best-effort and never fatal — a blocked cookie jar just means a weaker match.
+      function trackingCookie(name) {
+        try {
+          var m = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]+)"));
+          return m ? decodeURIComponent(m[2]).slice(0, 256) : "";
+        } catch (e) { return ""; }
+      }
+
       function finish() {
         try { localStorage.setItem("lastOrder", JSON.stringify(order)); } catch (e2) {}
         window.location.href = "/checkout/sukses";
@@ -2241,6 +2253,9 @@ if (rToken) {
           // The checkout session this order came from → /api/public/order marks it `pulih` with
           // recovered_order_id. "Recovered" = THIS session became THAT order; anything else is a guess.
           sessionId: SESSION_ID,
+          // Ad-platform match keys (ADR 0012). NOT authorization and NOT priced against — the server
+          // treats them as opaque strings and only forwards them to the merchant's own pixel provider.
+          trackingCookies: { fbp: trackingCookie("_fbp"), fbc: trackingCookie("_fbc"), ga: trackingCookie("_ga") },
           items: cart.map(function (i) { return { handle: i.handle, name: i.name, price: i.price, variant: i.variant || i.size || "", qty: i.qty }; }),
           // The phone goes up CANONICAL (62…) — the API normalises it again regardless; sending the
           // shape we store means the two can never quietly disagree.
@@ -2286,6 +2301,11 @@ if (rToken) {
           if (typeof res.tax === "number") order.tax = res.tax;
           if (typeof res.total === "number") order.total = res.total;
           if (res.payment) order.payment.instruction = res.payment;
+          // Conversion ids the SERVER computed (ADR 0012): the de-dup `event_id` and the catalog
+          // `content_ids`. Carried to /checkout/sukses so the marketing pixel fires the exact same
+          // identifiers the server-side Conversions API sends — that is what stops one sale being
+          // counted twice, and what makes the ids match the merchant's product feed.
+          if (res.tracking) order.tracking = res.tracking;
           finish();
         })
         .catch(function () { fail("Gagal terhubung ke server."); });

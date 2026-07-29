@@ -18,8 +18,8 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { IDR, num } from "@tokophi/lib/format";
 import type { AdChannelStatus } from "@/lib/data/marketing";
-import type { TrackingConfig, TrackingChannelKey } from "@/lib/data/tracking";
-import { setTrackingChannel } from "@/lib/actions/tracking";
+import type { TrackingConfig, TrackingChannelKey, TrackingHealth } from "@/lib/data/tracking";
+import { setTrackingChannel, retryTrackingDeliveries } from "@/lib/actions/tracking";
 import { useCan } from "@/components/admin/permissions";
 import { exportCsv } from "@/lib/csv";
 
@@ -318,7 +318,7 @@ const CH_META: Record<TrackingChannelKey, { name: string; brand: string; pixelLa
   tiktok: { name: "TikTok Pixel",        brand: "#000000", pixelLabel: "Pixel ID",            pixelHint: "cth. C4A7B8C9D0E1F2G3H4",     capiName: "Events API",             where: "TikTok Ads Manager → Aset → Events" },
 };
 
-function TrackingCard({ cfg }: { cfg: TrackingConfig }) {
+function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingHealth }) {
   const canWrite = useCan("integrations:write");
   const router = useRouter();
   const meta = CH_META[cfg.channel];
@@ -327,7 +327,16 @@ function TrackingCard({ cfg }: { cfg: TrackingConfig }) {
   const [advanced, setAdvanced] = React.useState(cfg.advancedMatching);
   const [capiEnabled, setCapiEnabled] = React.useState(cfg.capiEnabled);
   const [capiToken, setCapiToken] = React.useState(""); // blank = leave stored token unchanged
+  const [testCode, setTestCode] = React.useState(cfg.testEventCode);
   const [saving, start] = React.useTransition();
+  const [retrying, startRetry] = React.useTransition();
+
+  const retry = () =>
+    startRetry(async () => {
+      const r = await retryTrackingDeliveries(cfg.channel);
+      if (r.ok) { toast.success(`${r.requeued ?? 0} konversi dimasukkan ke antrean lagi.`); router.refresh(); }
+      else toast.error(r.error ?? "Gagal mengantre ulang.");
+    });
 
   const save = () =>
     start(async () => {
@@ -337,7 +346,7 @@ function TrackingCard({ cfg }: { cfg: TrackingConfig }) {
         pixelId,
         capiEnabled,
         advancedMatching: advanced,
-        testEventCode: "",
+        testEventCode: testCode,
         capiToken: capiToken.trim() ? capiToken.trim() : undefined,
       });
       if (r.ok) { toast.success(`${meta.name} disimpan.`); setCapiToken(""); router.refresh(); }
@@ -380,8 +389,11 @@ function TrackingCard({ cfg }: { cfg: TrackingConfig }) {
         {/* Advanced matching */}
         <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 text-sm font-medium"><ShieldCheck className="size-4 text-muted-foreground" /> Advanced matching</div>
-            <p className="mt-0.5 text-xs text-muted-foreground">Kirim email/telepon pembeli (di-hash) bersama event agar konversi lebih akurat.</p>
+            <div className="flex items-center gap-1.5 text-sm font-medium"><ShieldCheck className="size-4 text-muted-foreground" /> Advanced matching (browser)</div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Kirim email/telepon pembeli (di-hash) dari browser agar konversi lebih akurat. Event sisi
+              server selalu menyertakannya — tanpa itu {meta.name} tidak bisa mencocokkan konversi sama sekali.
+            </p>
           </div>
           <Switch checked={advanced} onCheckedChange={setAdvanced} disabled={!canWrite} />
         </div>
@@ -391,16 +403,59 @@ function TrackingCard({ cfg }: { cfg: TrackingConfig }) {
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <div className="text-sm font-medium">{meta.capiName} <span className="font-normal text-muted-foreground">— pelacakan sisi server</span></div>
-              <p className="mt-0.5 text-xs text-muted-foreground">Kirim event dari server TokoΦ (tahan ad-blocker). Butuh token akses.</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Kirim event dari server TokoΦ (tahan ad-blocker). Butuh token akses.{" "}
+                <span className="text-foreground">Pesanan prabayar (VA/QRIS) hanya terhitung lewat jalur ini</span> —
+                dihitung saat pembayaran terkonfirmasi, bukan saat halaman terima kasih. Pesanan COD
+                terhitung begitu pesanan masuk.
+              </p>
             </div>
             <Switch checked={capiEnabled} onCheckedChange={setCapiEnabled} disabled={!canWrite} />
           </div>
           {capiEnabled && (
-            <div className="space-y-1.5">
-              <Label htmlFor={`${cfg.channel}-capi`}>Token akses server</Label>
-              <Input id={`${cfg.channel}-capi`} type="password" value={capiToken} onChange={(e) => setCapiToken(e.target.value)}
-                placeholder={cfg.capiConfigured ? "•••••••• (tersimpan — isi untuk mengganti)" : "Tempel token akses"} disabled={!canWrite} autoComplete="off" />
-              <p className="text-xs text-muted-foreground">Disimpan terenkripsi. {cfg.capiConfigured ? "Token sudah tersimpan." : "Belum ada token."}</p>
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor={`${cfg.channel}-capi`}>Token akses server</Label>
+                <Input id={`${cfg.channel}-capi`} type="password" value={capiToken} onChange={(e) => setCapiToken(e.target.value)}
+                  placeholder={cfg.capiConfigured ? "•••••••• (tersimpan — isi untuk mengganti)" : "Tempel token akses"} disabled={!canWrite} autoComplete="off" />
+                <p className="text-xs text-muted-foreground">Disimpan terenkripsi. {cfg.capiConfigured ? "Token sudah tersimpan." : "Belum ada token."}</p>
+              </div>
+              {cfg.channel !== "google" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor={`${cfg.channel}-testcode`}>Kode uji (opsional)</Label>
+                  <Input id={`${cfg.channel}-testcode`} value={testCode} onChange={(e) => setTestCode(e.target.value.trim())}
+                    placeholder="cth. TEST12345" disabled={!canWrite} />
+                  <p className="text-xs text-muted-foreground">
+                    Untuk menguji di {cfg.channel === "meta" ? "Events Manager → Test Events" : "TikTok Events Manager → Test Event"}. Kosongkan saat sudah live.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Kesehatan pengiriman event 7 hari terakhir — hanya metadata, tak pernah payload provider. */}
+          {cfg.capiEnabled && health && (health.succeeded + health.queued + health.failed + health.deadLetter) > 0 && (
+            <div className="rounded-lg bg-muted/40 p-3">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                <span className="font-medium">7 hari terakhir:</span>
+                <span className="text-emerald-600">{num(health.succeeded)} terkirim</span>
+                {health.queued > 0 && <span className="text-muted-foreground">{num(health.queued)} antre</span>}
+                {health.failed > 0 && <span className="text-amber-600">{num(health.failed)} dicoba ulang</span>}
+                {health.deadLetter > 0 && <span className="text-destructive">{num(health.deadLetter)} gagal</span>}
+              </div>
+              {health.lastError && (
+                <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">
+                  Kendala terakhir: {health.lastError}
+                </p>
+              )}
+              {/* Without this, a gagal conversion is a one-way door: the merchant fixes the token and
+                  the events from the broken window stay lost. Bounded to 7 hari — older than that and
+                  the ad platforms reject them anyway. */}
+              {health.deadLetter > 0 && canWrite && (
+                <Button size="sm" variant="outline" className="mt-2" onClick={retry} disabled={retrying}>
+                  {retrying && <Loader2 className="size-4 animate-spin" />} Coba kirim ulang
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -417,7 +472,7 @@ function TrackingCard({ cfg }: { cfg: TrackingConfig }) {
   );
 }
 
-function PelacakanTab({ tracking }: { tracking: TrackingConfig[] }) {
+function PelacakanTab({ tracking, health }: { tracking: TrackingConfig[]; health: Record<TrackingChannelKey, TrackingHealth> }) {
   return (
     <div className="space-y-4">
       <p className="max-w-3xl text-sm text-muted-foreground">
@@ -426,14 +481,14 @@ function PelacakanTab({ tracking }: { tracking: TrackingConfig[] }) {
         milik Anda, aktifkan, dan TokoΦ memasangnya di storefront otomatis.
       </p>
       {tracking.map((t) => (
-        <TrackingCard key={t.channel} cfg={t} />
+        <TrackingCard key={t.channel} cfg={t} health={health[t.channel]} />
       ))}
     </div>
   );
 }
 
 // ---- page ----
-export function PemasaranClient({ channels, feed, tracking }: { channels: AdChannelStatus[]; feed: FeedStatus; tracking: TrackingConfig[] }) {
+export function PemasaranClient({ channels, feed, tracking, health }: { channels: AdChannelStatus[]; feed: FeedStatus; tracking: TrackingConfig[]; health: Record<TrackingChannelKey, TrackingHealth> }) {
   const [tab, setTab] = React.useState("saluran");
 
   return (
@@ -474,7 +529,7 @@ export function PemasaranClient({ channels, feed, tracking }: { channels: AdChan
           <SaluranTab channels={channels} />
         </TabsContent>
         <TabsContent value="pelacakan">
-          <PelacakanTab tracking={tracking} />
+          <PelacakanTab tracking={tracking} health={health} />
         </TabsContent>
       </Tabs>
     </>

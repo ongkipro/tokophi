@@ -201,6 +201,37 @@ production, exactly like billing.
 ⚠️ `KIRIMINAJA_ENV` still defaults to **sandbox**. The poller will faithfully track sandbox parcels
 and report `awbFilled: 0` forever against real ones.
 
+## Conversion cron (scheduled — `cron-tracking-events` in the compose) — ADR 0012
+
+`GET /api/cron/tracking-events?secret=$CRON_SECRET` drains `tracking_event_deliveries` into the
+merchant's own Meta Conversions API / GA4 Measurement Protocol / TikTok Events API. Returns
+`{claimed, sent, failed, dead}`.
+
+**Its own sidecar, every 60 s** — not a line in the daily `cron` container. A conversion delivered an
+hour late still counts, but the ad platform's optimisation degrades with delay, and Purchase is a
+low-volume high-value event: a tick with nothing due returns immediately, so the interval costs a query,
+not an API call. Retries carry their own backoff **inside** the endpoint (attempt² minutes + jitter,
+6 attempts, then `dead_letter`), so the loop is never the retry rate. A tick claims at most **50** rows
+(50 × the 10 s per-call timeout ≈ 8 min, comfortably inside the 30-minute stranded-row window — keep
+that inequality true if you change either number).
+
+**Two env vars, both mandatory for this to do anything:**
+- `CRON_SECRET` — same one as billing/tracking; **fails closed in production** when unset.
+- **`INTEGRATION_TOKEN_KEY`** — ≥16 chars, the AES-256-GCM key for `capi_token_ciphertext`
+  (`apps/admin/lib/crypto.ts`). Without it the Seller **cannot save a CAPI token at all** (the action
+  refuses rather than storing plaintext), and any already-stored token becomes undecryptable → those
+  deliveries dead-letter as `not_configured` with a merchant-readable message. **Rotating it** = add a
+  `v2:` branch in `crypto.ts` that decrypts `v1:` with the old key and re-encrypts; there is no
+  in-place rotation, and simply changing the value silently invalidates every stored token.
+
+Safe to re-run: the claim is one atomic `UPDATE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED)`, so two
+overlapping ticks cannot take the same row; the row's `unique(store_id, channel, event_id)` plus the
+provider's own `event_id` de-duplication mean a replayed tick cannot double-count a sale. A `processing`
+row older than 30 min is re-claimed, so a crashed tick does not strand a conversion.
+
+Optional: `META_GRAPH_API_VERSION` (defaults to a pinned version in `lib/capi.ts`) — bump it in ONE
+place when Meta deprecates a version.
+
 ## ⚠️ How to verify a deploy ACTUALLY landed (read before reporting one as done)
 
 **Merging to `main` triggers Coolify via webhook. The merge is not the deploy** — the build takes
@@ -233,7 +264,7 @@ name, `Up N seconds`). That is the build running — its presence means the depl
 
 ## Env to set in Coolify
 
-See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!), `KIRIMINAJA_API_KEY`, `AUTOLARIS_API_KEY`, `AUTOLARIS_CALLBACK_SECRET`. Cross-surface URLs (set AFTER domains assigned): `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API` (⚠️ the storefront reads these at RUNTIME — must be the public admin URL, not localhost, or the kecamatan search / order / payment silently fail). Custom domains: `CUSTOM_DOMAIN_CNAME_TARGET` (default `cname.tokophi.com`).
+See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!), `KIRIMINAJA_API_KEY`, `AUTOLARIS_API_KEY`, `AUTOLARIS_CALLBACK_SECRET`, **`INTEGRATION_TOKEN_KEY`** (≥16 chars — encrypts the merchants' CAPI tokens; see the conversion-cron section, rotation is a code change). Cross-surface URLs (set AFTER domains assigned): `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API` (⚠️ the storefront reads these at RUNTIME — must be the public admin URL, not localhost, or the kecamatan search / order / payment silently fail). Custom domains: `CUSTOM_DOMAIN_CNAME_TARGET` (default `cname.tokophi.com`).
 
 ## ✅ `tokophi.com` is LIVE (cutover done 2026-07-13)
 > The runbook below is kept as the record of HOW it was done. Current live state:

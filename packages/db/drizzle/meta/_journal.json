@@ -561,6 +561,13 @@
       "when": 1785174931228,
       "tag": "0079_store_tracking_channels",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1785291433430,
+      "tag": "0080_tracking_event_deliveries",
+      "breakpoints": true
     }
   ]
 }
