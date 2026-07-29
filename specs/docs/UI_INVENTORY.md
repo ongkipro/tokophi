@@ -74,7 +74,17 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 | `/diskon/baru` | New discount | reuses discount editor | ✅ mock |
 | `/diskon/[id]` | Discount editor (`discount-editor.tsx`) | code/type/value/limits/dates, status | ✅ mock |
 | `/analitik` | Analytics | KPIs, trends, by category/channel, funnel, region, device, ROAS | ✅ mock |
-| `/pemasaran` | Marketing (ads) | Meta/Google/TikTok summary+ROAS, per-channel, **province filter + Performa per Provinsi**, pixel/CAPI/GA4 tracking tab | ✅ mock |
+| `/pemasaran` | Marketing (ads) | Tab **Saluran** = Meta/Google/TikTok summary+ROAS, province filter (🟡 demo data, `ad_channels`) · Tab **Pelacakan** = 🟢 **REAL** per-store pixel setup (ADR 0012) | 🟡 mock + 🟢 real |
+
+**`/pemasaran` → Pelacakan (real, ADR 0012)** — one card per channel (Meta Pixel · Google GA4/Ads ·
+TikTok Pixel), each with: Pixel/Tag ID input + "Aktifkan pelacakan" switch → badge **Aktif** when live;
+"Advanced matching" switch (hashed email/phone); server-side section (Conversions API / Measurement
+Protocol / Events API) with an encrypted access-token field (shows `••••••••` + "Token sudah tersimpan",
+never the value) and an optional test-event code; and a **7-day delivery health strip**
+(`n terkirim / antre / dicoba ulang / gagal` + the last sanitized provider error). Every control is
+gated by `useCan("integrations:write")` — **owner only**, like Pengaturan. Provider names ARE shown
+here on purpose (the assets are the merchant's own — ADR 0012 §0.7 — unlike the white-labelled
+shipping/payment providers of ADR 0004).
 
 ### Online store content (Toko Online)
 | Route | Purpose | Key components / interactions | Status |

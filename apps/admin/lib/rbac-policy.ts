@@ -23,7 +23,8 @@ export type Capability =
   // hiding a nav item is not access control.
   | "chat:read"
   | "chat:write"
-  | "theme:write"; // Store Builder (ADR 0009) — homepage/category/product section templates
+  | "theme:write" // Store Builder (ADR 0009) — homepage/category/product section templates
+  | "integrations:write"; // marketing pixels / CAPI / Meta connection (ADR 0012) — owner-only, like settings
 
 export const ALL_CAPABILITIES: Capability[] = [
   "products:write",
@@ -41,6 +42,7 @@ export const ALL_CAPABILITIES: Capability[] = [
   "chat:read",
   "chat:write",
   "theme:write",
+  "integrations:write",
 ];
 
 // Who can do what.
@@ -53,7 +55,8 @@ export const ALL_CAPABILITIES: Capability[] = [
 // able to ask the platform for help; the tenant boundary is RLS, not the role.
 export const ROLE_CAPS: Record<Role, readonly Capability[]> = {
   owner: ALL_CAPABILITIES,
-  admin: ALL_CAPABILITIES.filter((c) => c !== "settings:write"),
+  // A tracking/Meta connection stores tenant secrets + is a store-level setting → owner-only, like settings.
+  admin: ALL_CAPABILITIES.filter((c) => c !== "settings:write" && c !== "integrations:write"),
   staff: [
     "products:write",
     "discounts:write",

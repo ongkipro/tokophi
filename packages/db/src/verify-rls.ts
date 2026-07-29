@@ -158,12 +158,17 @@ async function main() {
     "collection_conditions", "collection_products", "customer_addresses", "discount_usages",
     "fulfillments", "inventory_levels", "menu_items", "order_line_items", "product_media",
     "product_options", "purchase_order_items",
+    // flash_sale_items (0076): child of flash_sales; every write in lib/actions/flash.ts writeItems()
+    // proves the parent sale AND each product_id belong to the tenant (RLS'd reads) before insert.
+    "flash_sale_items",
   ];
   // Platform/global tables: no tenant to scope to, absence of store_id is correct by design.
   const GLOBAL_TABLES = [
     "plans", "platform_admins", "platform_cod", "platform_couriers", "platform_payment_channels",
     "platform_payment_gateways", "platform_payout", "shipping_aggregator", "kiriminaja_areas",
     "kelurahan", "accounts", "users", "stores",
+    // Google Product Taxonomy (0072, ADR 0011): global reference data, same class as kiriminaja_areas.
+    "product_taxonomy",
   ];
   const noStoreId = await client<{ relname: string }[]>`
     SELECT c.relname FROM pg_class c

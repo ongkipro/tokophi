@@ -7,6 +7,9 @@ import type { APIRoute } from "astro";
 import { getStoreByHost } from "../../data/store";
 import { getCatalog, type Product } from "../../data/catalog";
 import { suggestGender } from "@tokophi/lib/taxonomy-suggest";
+// ONE definition of the catalog item id, shared with the conversion tracking (ADR 0012 §0.2). The
+// feed's <g:id> and the Purchase event's content_ids MUST be the same string or nothing matches.
+import { retailerId } from "@tokophi/lib/tracking-ids";
 
 const xml = (s: string | number | null | undefined) =>
   String(s ?? "")
@@ -35,7 +38,7 @@ function items(p: Product, origin: string, brand: string): string {
 
   return variants
     .map((v, i) => {
-      const id = hasGroup ? `${p.handle}-${i + 1}` : p.handle;
+      const id = retailerId(p.handle, i, variants.length);
       const color = pick(v, colorIdx);
       const size = pick(v, sizeIdx);
       const availability = v.stock > 0 ? "in_stock" : "out_of_stock";

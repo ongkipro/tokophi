@@ -6,6 +6,7 @@ import { rateLimit } from "@tokophi/lib/cache";
 import { addMonths } from "@tokophi/lib/billing";
 import { clientIp } from "@/lib/public-guard";
 import { creditSaleForPayment } from "@/lib/ledger-credit";
+import { releasePurchase } from "@/lib/tracking-events";
 
 // AutoLaris payment callback — POSTed when a bill is paid/expired. Matches by trx_id / reff_id
 // and updates the payment row. Idempotent; always 200 (for authorized callers) so AutoLaris
@@ -65,6 +66,20 @@ export async function POST(req: Request) {
         trx ? eq(schema.payments.trxId, trx) : undefined,
         reff ? eq(schema.payments.reffId, reff) : undefined,
       );
+      // Which orders this callback is ABOUT — read before the transition guard below narrows it to
+      // "what changed". The conversion release (further down) needs this wider set: the guard fires
+      // exactly once per payment, so hanging the release off it would mean one failed attempt loses
+      // that order's conversion permanently, with the retry seeing no transition and doing nothing.
+      const matched = await db
+        .select({ orderId: schema.payments.orderId })
+        .from(schema.payments)
+        .where(
+          or(
+            trx ? eq(schema.payments.trxId, trx) : undefined,
+            reff ? eq(schema.payments.reffId, reff) : undefined,
+          ),
+        );
+
       const rows = await db
         .update(schema.payments)
         // idempotent: don't re-process a payment already in the target state (avoids paidAt churn
@@ -77,6 +92,28 @@ export async function POST(req: Request) {
         const orderIds = rows.map((r) => r.orderId).filter((id): id is string => !!id);
         for (const oid of orderIds) {
           await db.update(schema.orders).set({ financialStatus: "dibayar" }).where(eq(schema.orders.id, oid));
+        }
+        // Conversion tracking (ADR 0012 §14.4): a PREPAID order becomes a Purchase HERE — when the
+        // money is confirmed — not on the browser's success page, which shows an unpaid VA number.
+        // The row itself was created at checkout (that is the only moment the shopper's browser context
+        // exists) and held; this releases it.
+        //
+        // Deliberately over `matched`, NOT `rows`: `rows` is only the state TRANSITION, which happens
+        // once. If the release failed on that one callback, an AutoLaris retry would find nothing to
+        // transition and the conversion would be lost forever. `releasePurchase` is idempotent.
+        // Non-fatal: a marketing row must never fail a payment callback.
+        for (const m of matched) {
+          if (!m.orderId) continue;
+          try {
+            const [o] = await db
+              .select({ storeId: schema.orders.storeId })
+              .from(schema.orders)
+              .where(eq(schema.orders.id, m.orderId))
+              .limit(1);
+            if (o) await releasePurchase(o.storeId, m.orderId);
+          } catch (err) {
+            console.error("[pay/callback] tracking release failed", err);
+          }
         }
         // The money is now actually in hand → book it in the merchant's ledger (migration 0041).
         // Without this the balance stays Rp0 forever no matter how much comes in. AutoLaris retries

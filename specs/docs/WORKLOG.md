@@ -568,3 +568,84 @@ deliberately rejected. The shared checkout was left untouched — no reset, no r
 2. **(later) VPS**: self-hosted Postgres + PostgREST + Storage (MinIO/S3 for the uploads); multi-tenant + per-client storefront `STORE_SLUG`.
 2. **Deploy to VPS**: stand up self-hosted Postgres + PostgREST; wire JWT Auth (login/RBAC via `store_users`) + Storage (media uploads) + enable RLS; then multi-tenant (beyond single-store seed) + per-client storefront via `STORE_SLUG`.
 3. **E1 sisa / E0 de-dup / Turborepo** (unchanged).
+
+---
+
+## 2026-07-29 — Conversion tracking, tenant-owned pixels (ADR 0012)
+
+**Shipped:** the merchant's own Meta/Google/TikTok pixels, end to end — Seller setup (Pemasaran →
+Pelacakan), storefront browser events, and a server-side conversion queue drained by a cron sidecar.
+Scope decision: the **manual-pixel path** (paste your own id + token). Meta OAuth, catalog PUSH and
+webhooks stay deferred — the existing `/feed/google.xml` pull feed already serves the catalog (§0.2),
+and those phases cannot be live-verified without a Meta Developer App.
+
+### Verified (commands run, results as they actually came out)
+
+| Check | Result |
+|---|---|
+| `npm run build:admin` | ✓ compiled + typecheck clean |
+| `cd apps/storefront && npm run build` | ✓ |
+| `npm test` | ✓ 83 passed, 22 skipped |
+| `npm run verify-rls -w @tokophi/db` | ✓ 48/49 (only `platform_activity`, as designed) |
+| `npm run verify-migrations -w @tokophi/db` | ✓ journal sane, 81 entries, last `0080` |
+| Real browser (Playwright, prod builds, `toko-demo.test`) | ✓ no page errors; funnel fires as specified |
+| Feed ↔ conversion id reconciliation | ✓ **86/86 `<g:id>` byte-identical** to the ids the conversion payload computes |
+| SQL ordinal check across the whole catalog | ✓ 106/106 variants agree, 96 multi-variant, 0 duplicate positions |
+
+Browser run, per case: PDP → `ViewContent {content_type: "product_group"}` for a multi-variant product
+(before the fix it was always `"product"` — the head script could not see `#variant-picker`);
+`/checkout` → `InitiateCheckout`; `/checkout/sukses` with a **COD** order → `Purchase` carrying
+`eventID: purchase:PHI-…`; with a **prepaid** order → **no Purchase** (correct: that page shows an
+unpaid VA); with a legacy order that predates this feature → `Purchase` without an `eventID` (fallback).
+
+### ⚠️ NOT verified — do not read the above as "conversions confirmed"
+
+**No live provider call has been made.** There is no real Meta pixel + CAPI token, GA4 property + MP
+secret, or TikTok pixel + Events API token in this environment. Everything above is builds, unit tests,
+RLS, SQL reconciliation and a browser run against stubbed vendor scripts. Three specific things must be
+settled with real credentials before anyone claims this works (ADR 0012 §30 P11):
+
+1. **Meta with `user_data` carrying only ip+user_agent** — the docs require at least one identifier and
+   we now always send several, but Meta's rejection behaviour is undocumented and its troubleshooting
+   page publishes no error codes. Test with `test_event_code`.
+2. **TikTok's error-code ranges** — `40000–49999 = permanent` is INFERRED. TikTok's code table is a
+   client-rendered page with no primary source we could read. If a rate-limit code lives in that range
+   we dead-letter what we should retry.
+3. **TikTok's `user.phone` field name and pre-hash normalization** — plausible and corroborated by
+   third-party SDKs, never confirmed against an official page.
+
+### Decisions worth not re-litigating
+
+- **COD counts at order creation, prepaid at payment confirmation** (signed off by the user 2026-07-29).
+  The browser therefore fires `Purchase` only for COD; `tracking.browserPurchase` from the order API is
+  what tells it. **Consequence, deliberate:** a store on prepaid channels with server-side tracking OFF
+  records no Purchase at all. The Seller card says so.
+- **Prepaid rows are created at checkout and HELD** (`next_attempt_at` in 2126), released by the payment
+  callback. Enqueuing in the callback instead would mean every prepaid conversion travels with no user
+  agent, IP or Meta cookie — the callback is a machine-to-machine request; the shopper's browser is long
+  gone. The release runs over every PAID callback, not only the state transition, because the transition
+  happens once and a failure there would lose the conversion permanently.
+- **`event_id` is `purchase:{order_number}`, with no store id.** ADR §14.3 suggests namespacing by
+  store, but `orders.number` is already platform-unique, and the alternative publishes the tenant UUID
+  into the shopper's browser and three ad platforms' logs. Not a hole — nothing authorizes on it — but
+  an identifier handed to Meta cannot be un-handed.
+- **`value` = `orders.total_idr`**, i.e. it includes ongkir and PPN. Browser and server agree, so
+  nothing double-counts; but ROAS reads higher than a goods-only convention would. Deliberate.
+- **A COD order that is later `batal`/`retur` is NOT retracted.** There is no compensating event. For an
+  SPX-COD store with a real refusal rate this over-reports; the ceiling is known, not accidental.
+- **GA4 `user_data` IS hashed server-side** (`sha256_email_address` / `sha256_phone_number`); the browser
+  leg passes RAW values only to a Google **Ads** (`AW-`) tag, which is gtag's documented contract — and
+  is skipped entirely for a plain `G-` GA4 tag rather than handing it PII it has no use for.
+- **Phone hashing differs per provider on purpose**: Meta wants digits (`628…`), TikTok and GA4 want
+  E.164 (`+628…`). One shared normalizer would silently match nothing on two of the three.
+
+### Known gaps (tracked in TASKS.md, not hidden)
+
+- **No consent mechanism exists anywhere in this repo.** Marketing scripts load for every visitor.
+  ADR §15.7 expects consent gating; building a fake one would be worse than naming the gap.
+- No super-admin cross-tenant health view.
+- No reconciliation sweep: if the enqueue fails after an order commits (process death), that conversion
+  is gone. It is non-fatal by design — a marketing row must never fail an order — so the trade is
+  deliberate.
+- Rotating `INTEGRATION_TOKEN_KEY` invalidates every stored token; the Seller re-enters it and can now
+  press **"Coba kirim ulang"** to requeue the last 7 days of dead-lettered conversions.

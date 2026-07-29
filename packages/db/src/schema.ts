@@ -887,6 +887,85 @@ export const adMetrics = pgTable("ad_metrics", {
   reach: integer().notNull().default(0),
 });
 
+// Per-store marketing-pixel / conversion-tracking config — the REAL setup behind Pemasaran → Pelacakan
+// (which was disabled placeholders). One row per (store, channel). DISTINCT from `ad_channels`, whose
+// pixel/spend columns are seeded DEMO and deliberately unread (see lib/data/marketing.ts) — this table
+// is the merchant's live config that the storefront actually fires from. The pixel/tag id is PUBLIC (it
+// ships in storefront JS) so it is plaintext; `capiTokenCiphertext` is a SECRET → AES-256-GCM, server
+// only, never selected into a client component. RLS by store_id (migration 0079).
+export const storeTrackingChannels = pgTable(
+  "store_tracking_channels",
+  {
+    id: pk(),
+    storeId: uuid().notNull().references(() => stores.id),
+    channel: adChannelKey().notNull(), // meta | google | tiktok
+    enabled: boolean().notNull().default(false), // merchant switched browser tracking on
+    pixelId: text(), // Meta Pixel ID · GA4 Measurement ID (G-XXXX) · TikTok Pixel ID — PUBLIC
+    capiEnabled: boolean().notNull().default(false), // server-side events (CAPI / MP / Events API) on
+    capiTokenCiphertext: text(), // Meta CAPI · GA4 Measurement Protocol · TikTok Events API token — encrypted
+    advancedMatching: boolean().notNull().default(false), // hash + send email/phone with events
+    testEventCode: text(), // optional Meta test_event_code for CAPI debugging
+    createdAt: createdAt(),
+    updatedAt: createdAt(),
+  },
+  (t) => [unique().on(t.storeId, t.channel)],
+);
+
+// Server-side conversion delivery queue (ADR 0012 §9.4/§23, migration 0080). THIS TABLE IS THE QUEUE —
+// TokoΦ has no worker process, so `api/cron/tracking-events` drains it on a schedule, exactly like
+// `api/cron/tracking` drains shipments. One row = one (store, channel, event) we owe a provider.
+//
+// Why a table and not a fire-and-forget POST inside the order path: a conversion that fails because
+// Meta 500'd must be RETRIED, and a conversion sent twice corrupts the merchant's ROAS. The unique
+// (store_id, channel, event_id) is what makes both true at once — the enqueue is idempotent (an
+// AutoLaris callback retry cannot double-book a Purchase) and the send is resumable.
+//
+// `eventId` is the SHARED browser/server id (`purchase:{storeId}:{orderNumber}`) — the storefront pixel
+// sends the same string as `eventID`, which is how Meta/TikTok de-duplicate the two copies of one sale.
+// Deliberately NO raw identity columns: emails/phones are hashed inside the sender and never persisted
+// here (§9.4 + §25 data minimisation). `payload` holds only commerce facts (value/currency/content ids).
+export const trackingDeliveryStatus = pgEnum("tracking_delivery_status", [
+  "queued",
+  "processing",
+  "succeeded",
+  "failed",
+  "dead_letter",
+]);
+
+export const trackingEventDeliveries = pgTable(
+  "tracking_event_deliveries",
+  {
+    id: pk(),
+    storeId: uuid().notNull().references(() => stores.id),
+    channel: adChannelKey().notNull(), // meta | google | tiktok
+    eventName: text().notNull(), // Purchase (MVP) — the normalized name, mapped per provider in the sender
+    // Shared with the browser pixel so the provider de-duplicates instead of double-counting.
+    eventId: text().notNull(),
+    orderId: uuid().references(() => orders.id),
+    status: trackingDeliveryStatus().notNull().default("queued"),
+    attemptCount: integer().notNull().default(0),
+    // Backoff clock. The cron only picks rows whose next attempt is due, so a failing provider does not
+    // starve the batch — it steps aside and the queue keeps moving.
+    nextAttemptAt: createdAt(),
+    deliveredAt: ts(),
+    // Commerce facts only — value/currency/contentIds/numItems/orderNumber, plus the hashed-identity
+    // OPT-IN flag. Never an email, phone, token or provider response body.
+    payload: jsonb().notNull().default({}),
+    lastErrorCode: text(),
+    lastErrorMessage: text(), // sanitized, truncated — never a raw provider payload
+    createdAt: createdAt(),
+    updatedAt: createdAt(),
+  },
+  (t) => [
+    // Idempotency: one delivery per (store, channel, event). The enqueue is ON CONFLICT DO NOTHING.
+    unique().on(t.storeId, t.channel, t.eventId),
+    // The cron's claim query: due rows, oldest first.
+    index("tracking_event_deliveries_due_idx").on(t.status, t.nextAttemptAt),
+    // The Admin diagnostics query.
+    index("tracking_event_deliveries_store_idx").on(t.storeId, t.createdAt),
+  ],
+);
+
 // Storefront funnel events. `type` is one of: visit | product_view | add_to_cart | checkout_start
 // | purchase. `device` (0037) is what makes the Perangkat breakdown a real COUNT instead of the
 // hardcoded 78/18/4 it used to be. The storefront tracker WRITES here (apps/storefront/src/pages/

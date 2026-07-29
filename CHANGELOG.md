@@ -2,6 +2,37 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Conversion tracking: the merchant's OWN pixels, end to end (ADR 0012)
+
+### 📈 Pemasaran → Pelacakan is real, and the conversions actually leave the building
+Pelacakan used to be three disabled placeholder cards. It is now the real setup: the Seller pastes
+**their own** Meta Pixel / GA4 Measurement ID / TikTok Pixel (public ids, plaintext) plus an optional
+server-side token (Conversions API · Measurement Protocol · Events API) which is stored
+**AES-256-GCM-encrypted** (`INTEGRATION_TOKEN_KEY`) and never returned to the browser — the UI only
+learns *that* a token exists. Owner-only (`integrations:write`). The storefront then bootstraps exactly
+those pixels per store (`MarketingPixels.astro`, tenant resolved from the Host) and fires PageView ·
+ViewContent · AddToCart · InitiateCheckout · Purchase.
+
+**Three decisions worth knowing before touching this:**
+- **`content_ids` are the ids the product feed already emits** (`handle`, or `handle-{n}` per variant).
+  ONE helper — `@tokophi/lib/tracking-ids` `retailerId()` — is called by both `/feed/google.xml` and the
+  conversion payload, so a merchant who pasted the feed URL into Meta keeps ONE catalog instead of two.
+- **Purchase comes from the order row, never the success page.** `tracking_event_deliveries` (0080) IS
+  the queue; `api/cron/tracking-events` (new `cron-tracking-events` sidecar, 60 s) drains it with an
+  atomic claim, bounded exponential backoff and a `dead_letter` state. **COD counts at order creation;
+  prepaid counts when the payment callback confirms.**
+- **Browser and server send the SAME `event_id`** (`purchase:{store_id}:{order_number}`, issued by the
+  order API and echoed to the pixel) — that shared id is the only thing standing between one sale and
+  two counted conversions.
+
+Provider error bodies are redacted (`capi-sanitize.ts`) before they are stored or shown, because Meta
+and TikTok echo the request — token included — back on a rejection. `verify-rls` green 48/49.
+
+**Not built, deliberately:** Meta OAuth / asset discovery, catalog PUSH via the Catalog API (the pull
+feed covers it), webhooks, super-admin cross-tenant health, and any consent gate (this repo has no
+consent mechanism at all — see `TASKS.md`). **No live provider call has been made yet** — verification
+so far is builds, unit tests, RLS and review.
+
 ## Unreleased — Checkout: explain why COD is hidden
 
 ### 💬 COD unavailable → a reason, not silence
