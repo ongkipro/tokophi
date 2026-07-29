@@ -8,7 +8,7 @@
 // INVARIANT: nothing here runs at module scope / build time — `astro build` must stay DB-FREE
 // (the Docker image is built without DATABASE_URL). All DB access happens inside these functions.
 import { db, schema } from "@tokophi/db";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import type { StoredTemplateData } from "@tokophi/sections";
 import { cached } from "./cache";
 import type { StoreInfo } from "./store";
@@ -372,7 +372,9 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
     .where(
       and(
         eq(schema.flashSales.storeId, storeId),
-        eq(schema.flashSales.status, "aktif"),
+        // `nonaktif` is OFF; the window below IS the schedule. Requiring `aktif` meant a sale the
+        // editor saved as `terjadwal` never went live — nothing ever promoted the row.
+        ne(schema.flashSales.status, "nonaktif"),
         sql`now() >= ${schema.flashSales.startsAt}`,
         sql`now() < ${schema.flashSales.endsAt}`,
       ),
@@ -385,13 +387,21 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
 
   const products: Product[] = rows.map((r) => {
     const options = optionsFor(r.id);
-    const variants = variantsById.get(r.id) ?? [];
     // A live flash sale overrides the display price ONLY downward: `price` becomes the sale, `compareAt`
     // keeps (or becomes) the original so the card strikes through it. Matches the order's Math.min.
     const flash = flashById.get(r.id);
     const onSale = flash != null && flash.price < r.price;
     const price = onSale ? flash!.price : r.price;
     const compareAt = onSale ? r.price : (r.compareAt ?? undefined);
+    // ⚠️ The sale has to reach the VARIANT rows too, not just the headline price. The PDP's picker
+    // rewrites the price from `variants[]` on load, so a flash product WITH options rendered the
+    // pre-sale price next to its own "-43%" badge while `/api/public/order` charged the sale price
+    // (it does the same `Math.min` server-side). The page contradicted itself and under-sold the cut.
+    // `Math.min` per row, so a variant already cheaper than the sale price is never marked UP.
+    const rawVariants = variantsById.get(r.id) ?? [];
+    const variants = onSale
+      ? rawVariants.map((v) => ({ ...v, price: Math.min(v.price, flash!.price) }))
+      : rawVariants;
     return {
       handle: r.handle,
       name: r.name,
@@ -683,7 +693,10 @@ export async function activeVouchers(storeId: string): Promise<VoucherPromo[]> {
     .where(
       and(
         eq(schema.discounts.storeId, storeId),
-        eq(schema.discounts.status, "aktif"),
+        // `nonaktif` is OFF; the DATES are the schedule. Requiring `aktif` meant a `terjadwal`
+        // voucher whose window had opened was redeemable at checkout (applyDiscount only rejects
+        // `nonaktif`) yet invisible here — three different definitions of "usable" for one row.
+        ne(schema.discounts.status, "nonaktif"),
         sql`(${schema.discounts.startsAt} is null or now() >= ${schema.discounts.startsAt})`,
         sql`(${schema.discounts.endsAt} is null or now() < ${schema.discounts.endsAt})`,
         sql`(${schema.discounts.usageLimit} is null or ${schema.discounts.usedCount} < ${schema.discounts.usageLimit})`,

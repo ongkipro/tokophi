@@ -1,5 +1,5 @@
 import { db, schema } from "@tokophi/db";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 
 // Products on an ACTIVE flash sale RIGHT NOW → productId → sale price (IDR). Owner connection with an
 // EXPLICIT store scope, same as the rest of /api/public/order (the storefront has no session). "Active"
@@ -17,7 +17,9 @@ export async function activeFlashPrices(storeId: string): Promise<Map<string, nu
     .where(
       and(
         eq(schema.flashSales.storeId, storeId),
-        eq(schema.flashSales.status, "aktif"),
+        // `nonaktif` is OFF; the window below IS the schedule. Must match the storefront reader in
+        // apps/storefront/src/data/catalog.ts — the two price the same parcel.
+        ne(schema.flashSales.status, "nonaktif"),
         sql`now() >= ${schema.flashSales.startsAt}`,
         sql`now() < ${schema.flashSales.endsAt}`,
       ),

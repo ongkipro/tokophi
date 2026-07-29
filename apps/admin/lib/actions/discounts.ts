@@ -5,8 +5,6 @@ import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 
-// Anchored to the seed's frame so derived status (getDiscount) round-trips.
-const ADMIN_TODAY = new Date("2026-06-30T00:00:00Z");
 const DAY = 86_400_000;
 const KIND = { persen: "persen", nominal: "nominal", ongkir: "gratis_ongkir" } as const;
 
@@ -20,9 +18,16 @@ export type DiscountInput = {
 };
 
 function fields(i: DiscountInput) {
-  const days = Math.max(1, i.period || 0);
-  const startsAt = i.status === "terjadwal" ? new Date(ADMIN_TODAY.getTime() + 2 * DAY) : new Date(ADMIN_TODAY.getTime() - DAY);
-  const endsAt = new Date(startsAt.getTime() + days * DAY);
+  // ⚠️ This was anchored to the seed's frame (`2026-06-30`) while the clock kept moving, so EVERY
+  // voucher a merchant created was born already expired — and opening an existing one and pressing
+  // Simpan moved its expiry BACKWARDS. The gap widened a day per day. Use the real clock.
+  const now = Date.now();
+  // Blank period = no end date. The editor already promises this ("Kosongkan untuk diskon tanpa
+  // batas waktu"); `Math.max(1, …)` turned that promise into a voucher that died the next day.
+  // `ends_at` is nullable and `applyDiscount` already skips the check when it is null.
+  const days = i.period && i.period > 0 ? i.period : null;
+  const startsAt = i.status === "terjadwal" ? new Date(now + 2 * DAY) : new Date(now - DAY);
+  const endsAt = days ? new Date(startsAt.getTime() + days * DAY) : null;
   return {
     code: i.code.trim().toUpperCase(),
     kind: KIND[i.type],

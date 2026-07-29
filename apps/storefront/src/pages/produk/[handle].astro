@@ -471,7 +471,12 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             )
           }
         </div>
-        <p id="pdp-stock" class="mt-2 text-sm text-muted"></p>
+        {/* Server-rendered, not left to JS. `updateVariant()` is the only thing that ever wrote this
+            line and it is reachable ONLY through #variant-picker — so a product with variants but no
+            `product_options` rows (no picker) showed no availability at all and kept an enabled buy
+            button, letting a shopper add a sold-out item that /api/public/order then refuses. JS now
+            only REFINES this per variant. `role="status"` so a variant change is announced. */}
+        <p id="pdp-stock" role="status" class="mt-2 text-sm text-muted">{available ? "" : "Stok habis"}</p>
 
         {/* SHORT DESCRIPTION — the one-line hook, next to the price and ABOVE the buy actions so they
             stay high on the page. The FULL story moved to "Deskripsi Produk" below the buy box (a long
@@ -564,22 +569,24 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           <button
             type="button"
             id="add-to-cart"
+            disabled={!available}
             data-handle={product.handle}
             data-name={product.name}
             data-price={product.price}
             data-image={product.image}
-            class="flex-1 rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-200/50 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+            class="flex-1 rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-200/50 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-brand-600"
           >
             Tambah ke Keranjang
           </button>
           <button
             type="button"
             id="buy-now"
+            disabled={!available}
             data-handle={product.handle}
             data-name={product.name}
             data-price={product.price}
             data-image={product.image}
-            class="flex-1 rounded-full border border-brand-600 px-6 py-3.5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+            class="flex-1 rounded-full border border-brand-600 px-6 py-3.5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
           >
             Beli Sekarang
           </button>
@@ -782,7 +789,12 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     var buyBtn = document.getElementById("buy-now");
     var priceEl = document.getElementById("pdp-price");
     var stockEl = document.getElementById("pdp-stock");
-    var fmt = function (n) { return "Rp" + Number(n).toLocaleString("id-ID"); };
+    // Must match the server's IDR() (Intl currency, id-ID) EXACTLY — that one emits "Rp 199.000" with
+    // a non-breaking space. Hand-rolling "Rp" + toLocaleString produced "Rp199.000", so the price
+    // silently reflowed the moment JS touched it, right next to a struck compare-at still in the
+    // spaced form. Same formatter, same string.
+    var idrFmt = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
+    var fmt = function (n) { return idrFmt.format(Number(n)); };
 
     // ---- real variant picker (Warna, Ukuran) ----
     var picker = document.getElementById("variant-picker");
@@ -825,7 +837,21 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     function variantLabel() { return selected.filter(Boolean).join(" / "); }
     function updateVariant() {
       var v = resolveVariant();
-      if (!v) return;
+      // ⚠️ A combination with no row used to `return` here — AFTER the click handler had already
+      // flipped aria-pressed and the option label. Price, stock, data-price and data-variant all
+      // stayed on the PREVIOUS variant, so the page said "Beige / L" and the cart line said
+      // "Hitam / L". Sparse grids are ordinary (a merchant deletes one size); the demo is just dense.
+      // Refusing the sale is the only honest answer — never carry a stale variant into the cart.
+      if (!v) {
+        if (stockEl) { stockEl.textContent = "Kombinasi ini tidak tersedia"; stockEl.className = "mt-2 text-sm font-medium text-red-700"; }
+        [addBtn, buyBtn].forEach(function (b) {
+          if (!b) return;
+          b.disabled = true;
+          b.classList.add("opacity-50", "cursor-not-allowed");
+          b.dataset.variant = variantLabel();
+        });
+        return;
+      }
       // Mirror the server-side truth: a 0-priced variant is "not priced yet", never "Rp0". Keeps the
       // JS-driven price in step with the static "Hubungi untuk harga" the frontmatter renders.
       if (priceEl) priceEl.textContent = v.price > 0 ? fmt(v.price) : "Hubungi untuk harga";

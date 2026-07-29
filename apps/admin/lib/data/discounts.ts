@@ -5,17 +5,20 @@ import { asc, eq } from "drizzle-orm";
 import type { Discount } from "@/lib/mock/store";
 
 // Admin display status is derived from the dates (real terjadwal / aktif / kadaluarsa).
-const ADMIN_TODAY = new Date("2026-06-30T00:00:00Z");
 const KIND_TO_TYPE = { persen: "persen", nominal: "nominal", gratis_ongkir: "ongkir" } as const;
 
 function toDiscount(r: {
   id: string; code: string; kind: "persen" | "nominal" | "gratis_ongkir"; value: number;
   usedCount: number; usageLimit: number | null; startsAt: Date | null; endsAt: Date | null;
 }): Discount {
-  const now = ADMIN_TODAY.getTime();
+  // ⚠️ Read the real clock. This was frozen to the seed's TODAY, so an expired voucher still showed
+  // "Aktif" — and `endsInDays` seeds the editor's period field, which the save path then re-anchored,
+  // writing the lie back to the DB. A no-end-date voucher (ends_at NULL) never expires.
+  const now = Date.now();
   const starts = r.startsAt ? r.startsAt.getTime() : now;
-  const ends = r.endsAt ? r.endsAt.getTime() : now;
-  const status: Discount["status"] = now < starts ? "terjadwal" : now > ends ? "kadaluarsa" : "aktif";
+  const ends = r.endsAt ? r.endsAt.getTime() : null;
+  const status: Discount["status"] =
+    now < starts ? "terjadwal" : ends !== null && now > ends ? "kadaluarsa" : "aktif";
   return {
     id: r.id,
     code: r.code,
@@ -24,7 +27,7 @@ function toDiscount(r: {
     status,
     used: r.usedCount,
     limit: r.usageLimit ?? 0,
-    endsInDays: Math.round((ends - now) / 86_400_000),
+    endsInDays: ends === null ? 0 : Math.round((ends - now) / 86_400_000),
   };
 }
 
