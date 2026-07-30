@@ -205,6 +205,34 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
   eligibility, and voucher stacking. `min_purchase_idr` **is** enforced server-side but has no
   field in the editor.
 
+## ⚠️ THE SEED IS NOT A MIGRATION — changing it does NOT change an existing store
+
+`npx tsx src/seed.ts` runs on every deploy, but it does **not** overwrite data a store already has.
+So a change to `packages/db/src/seed.ts` reaches **new** stores only. Production keeps whatever the
+seed wrote the first time.
+
+This cost a live regression on 2026-07-30. The seed's nav item was relabelled to "Promo" → `/promo`
+and the storefront's now-duplicate promo shortcut was deleted in the same change. On the dev DB both
+halves agreed. On **production** the menu row was older — "Promo Gajian" → `/kategori/promo-gajian` —
+so the deploy removed the only link to `/promo` that production had, and the hub went unreachable
+from the shop. Fixed with a one-row `UPDATE` against the prod DB.
+
+**Before shipping a seed change, ask: does an existing store need this too?** If yes, it needs a
+migration or an explicit data fix — and the fix must be stated in the commit body, because nothing
+else will apply it. Check the difference first:
+
+```bash
+ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 \
+  'docker exec -i $(docker ps --format "{{.Names}}" | grep -m1 "^postgres-") psql -U tokophi -d tokophi' <<'SQL'
+select mi.label, mi.target from menu_items mi
+  join menus m on m.id = mi.menu_id join stores s on s.id = m.store_id
+ where s.slug = 'batik-nusantara';
+SQL
+```
+
+⚠️ Resolve the postgres container by PREFIX, never by its full name — the hash suffix changes on
+every deploy, and a hardcoded one fails with "No such container" the moment anything ships.
+
 ## Store Builder / Tema — three page types, three different jobs
 
 `page_templates.type` is `homepage | category | product` and they are **not interchangeable**:
