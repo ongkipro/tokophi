@@ -273,7 +273,7 @@ function SaluranTab({
         <StatCard
           label="Belanja iklan & ROAS"
           value="Tidak tersedia"
-          helper="Butuh integrasi platform iklan — belum terhubung"
+          helper="Hanya ada di platform iklannya — TokoΦ tidak menariknya"
           icon={Ban}
           muted
         />
@@ -289,8 +289,8 @@ function SaluranTab({
         <CardHeader>
           <CardTitle>Penjualan yang diatribusikan per saluran</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Dari pesanan toko Anda — bukan dari platform iklan. Kolom belanja dan
-            ROAS sengaja dikosongkan selama saluran belum terhubung.
+            Dari pesanan toko Anda — bukan dari platform iklan. Belanja dan ROAS
+            tetap kosong: angka itu hanya ada di platform iklannya dan TokoΦ tidak menariknya.
           </p>
         </CardHeader>
         <CardContent>
@@ -319,7 +319,7 @@ function SaluranTab({
                       </span>
                     </TableCell>
                     <TableCell>
-                      <NotConnectedBadge />
+                      <TrackingBadge cfg={byKey.get(c.key as TrackingChannelKey)} />
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {num(c.orders)}

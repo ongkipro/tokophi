@@ -1,6 +1,6 @@
 import "server-only";
 import { schema } from "@tokophi/db";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { withCurrentTenant } from "@/lib/tenant";
 import { getStoreSlug } from "@/lib/data/store";
 import { systemDomainFor } from "@/lib/data/domain";
@@ -26,6 +26,12 @@ export type FeedStatus = {
   total: number;
   classified: number; // has google_category_id — better matching, not a requirement
   withGender: number;
+  /**
+   * Why the REST of the catalogue is not in the feed. "22 produk terbit" on its own is a number a
+   * merchant can read but cannot act on — the useful half is the three that are missing and the reason.
+   */
+  notPublishedDraft: number;
+  notPublishedNoImage: number;
   /** ADR 0013 — which id this store publishes: the stable `number` scheme, or the legacy `handle`. */
   catalogIdScheme: string;
 };
@@ -54,6 +60,20 @@ export async function getFeedStatus(): Promise<FeedStatus> {
         and(eq(schema.productMedia.productId, schema.products.id), eq(schema.productMedia.position, 0)),
       )
       .where(and(eq(schema.products.status, "active"), isNotNull(schema.productMedia.url)));
+
+    // The excluded ones, and which of the two reasons applies. Archived products are not "missing" —
+    // the merchant removed them on purpose — so they are not counted here at all.
+    const [miss] = await db
+      .select({
+        draft: sql<number>`count(*) filter (where ${schema.products.status} = 'draft')::int`,
+        noImage: sql<number>`count(*) filter (where ${schema.products.status} = 'active' and ${schema.productMedia.url} is null)::int`,
+      })
+      .from(schema.products)
+      .leftJoin(
+        schema.productMedia,
+        and(eq(schema.productMedia.productId, schema.products.id), eq(schema.productMedia.position, 0)),
+      )
+      .where(ne(schema.products.status, "archived"));
     return {
       feedUrl,
       tiktokFeedUrl,
@@ -61,6 +81,8 @@ export async function getFeedStatus(): Promise<FeedStatus> {
       classified: r?.classified ?? 0,
       withGender: r?.withGender ?? 0,
       catalogIdScheme: st?.scheme ?? "handle",
+      notPublishedDraft: miss?.draft ?? 0,
+      notPublishedNoImage: miss?.noImage ?? 0,
     };
   });
 }
