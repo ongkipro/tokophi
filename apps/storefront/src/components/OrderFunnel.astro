@@ -10,6 +10,7 @@
 // fields are always shown — hiding them would break a COD order.
 import { ShieldCheck, Truck, Lock, Minus, Plus } from "@lucide/astro";
 import { IDR } from "@tokophi/lib/format";
+import { computeTax } from "@tokophi/lib/tax";
 import { resolveFormConfig } from "@tokophi/lib/form-config";
 import type { Pkg } from "../lib/packages";
 
@@ -20,8 +21,22 @@ interface Props {
   countdownMinutes: number;
   showScarcity: boolean;
   formConfig?: unknown;
+  /**
+   * The SAME two settings `/api/public/order` prices with. Without them this funnel quoted
+   * `goods + ongkir` flat while the endpoint applied automatic free shipping and PPN — so the button
+   * read "Pesan Sekarang (COD) — Rp323.000" and the order was written for Rp300.000. `checkout.astro`
+   * has mirrored both since they shipped; this surface was the only one that had not.
+   * The endpoint stays authoritative — this only makes the quote agree with it.
+   */
+  freeShip?: { enabled: boolean; minIdr: number };
+  tax?: { enabled: boolean; ratePct: number; inclusive: boolean };
 }
-const { packages, storeSlug, productHandle, countdownMinutes, showScarcity, formConfig } = Astro.props;
+const { packages, storeSlug, productHandle, countdownMinutes, showScarcity, formConfig, freeShip, tax } = Astro.props;
+const FREE_SHIP = { enabled: !!freeShip?.enabled, minIdr: freeShip?.minIdr ?? 0 };
+const TAX = { enabled: !!tax?.enabled, ratePct: tax?.ratePct ?? 0, inclusive: !!tax?.inclusive };
+// The opening total already carries PPN — the summary must never start on a number the button will
+// contradict one interaction later.
+const INITIAL_TOTAL = packages[0].price + computeTax(packages[0].price, TAX).addToTotal;
 const fc = resolveFormConfig(formConfig);
 
 const ONGKIR_API = process.env.PUBLIC_ONGKIR_API || "http://localhost:3000/api/public/ongkir";
@@ -138,8 +153,11 @@ const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/pub
           <div class="flex justify-between"><dt class="text-stone-500">Produk</dt><dd id="sum-produk" class="font-medium text-ink">{packages[0].label}</dd></div>
           <div class="flex justify-between"><dt class="text-stone-500">Subtotal</dt><dd id="sum-subtotal" class="font-medium text-ink">{IDR(packages[0].price)}</dd></div>
           <div class="flex justify-between"><dt class="text-stone-500">Ongkos kirim</dt><dd id="sum-ongkir" class="font-medium text-ink">—</dd></div>
+          <div id="sum-ppn-row" class="flex justify-between" style={computeTax(packages[0].price, TAX).addToTotal > 0 ? undefined : "display:none"}>
+            <dt class="text-stone-500">PPN</dt><dd id="sum-ppn" class="font-medium text-ink">{IDR(computeTax(packages[0].price, TAX).addToTotal)}</dd>
+          </div>
           <div class="flex justify-between border-t border-line pt-2 text-base">
-            <dt class="font-bold text-ink">Total</dt><dd id="sum-total" class="font-extrabold text-brand-700">{IDR(packages[0].price)}</dd>
+            <dt class="font-bold text-ink">Total</dt><dd id="sum-total" class="font-extrabold text-brand-700">{IDR(INITIAL_TOTAL)}</dd>
           </div>
         </dl>
         <p id="ongkir-note" class="mt-2 text-xs text-stone-400">Ongkir muncul setelah kecamatan dipilih.</p>
@@ -164,7 +182,7 @@ const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/pub
   </form>
 </section>
 
-<script define:vars={{ ONGKIR_API, ORDER_API, STORE_SLUG: storeSlug, COUNTDOWN_MIN: countdownMinutes, PRODUCT_HANDLE: productHandle }}>
+<script define:vars={{ ONGKIR_API, ORDER_API, STORE_SLUG: storeSlug, COUNTDOWN_MIN: countdownMinutes, PRODUCT_HANDLE: productHandle, FREE_SHIP, TAX }}>
   (function () {
     var form = document.getElementById("order-form");
     if (!form) return;
@@ -229,11 +247,39 @@ const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/pub
       byId("qty-inc")?.addEventListener("click", function () { setQty(qty + 1); });
     }
 
+    // ── THE SAME ARITHMETIC /api/public/order USES ────────────────────────────────────────────
+    // This funnel quoted `goods + ongkir` flat while the endpoint applied automatic free shipping and
+    // PPN, so the button promised one number and the order was written for another — and on COD that
+    // is the cash a courier collects at the door. `checkout.astro` has mirrored both rules since they
+    // shipped. The endpoint remains authoritative; these only make the quote agree with it.
+    //
+    // No voucher branch: this funnel never sends `discountCode`, so auto-free-ship is the only thing
+    // that can waive the ongkir here. Do not add a voucher cut without also sending the code.
+    function autoFreeShip(ship) {
+      return (FREE_SHIP.enabled && goods() >= FREE_SHIP.minIdr) ? ship : 0;
+    }
+    function ppnAdd(sub) {
+      if (!TAX.enabled || TAX.ratePct <= 0 || sub <= 0 || TAX.inclusive) return 0;
+      return Math.round(sub * (TAX.ratePct / 100));
+    }
+    function orderTotal() {
+      var ship = shipping ? shipping.cost : 0;
+      return goods() + ship + ppnAdd(goods()) - autoFreeShip(ship);
+    }
+
     function renderSummary() {
-      setText("sum-ongkir", shipping ? fmtIDR(shipping.cost) : "—");
-      setText("sum-total", fmtIDR(goods() + (shipping ? shipping.cost : 0)));
+      var ship = shipping ? shipping.cost : 0;
+      var waived = autoFreeShip(ship);
+      // "GRATIS", never a struck price that is then ALSO subtracted somewhere else — the shopper must
+      // not be able to read the same waiver twice.
+      setText("sum-ongkir", shipping ? (waived >= ship && ship > 0 ? "GRATIS" : fmtIDR(ship)) : "—");
+      var ppn = ppnAdd(goods());
+      var ppnRow = byId("sum-ppn-row");
+      if (ppnRow) ppnRow.style.display = ppn > 0 ? "" : "none";
+      setText("sum-ppn", fmtIDR(ppn));
+      setText("sum-total", fmtIDR(orderTotal()));
       var btn = byId("submit-btn");
-      if (shipping) { btn.disabled = false; btn.textContent = "Pesan Sekarang (COD) — " + fmtIDR(goods() + shipping.cost); }
+      if (shipping) { btn.disabled = false; btn.textContent = "Pesan Sekarang (COD) — " + fmtIDR(orderTotal()); }
       else { btn.disabled = true; btn.textContent = "Lengkapi kecamatan dulu"; }
     }
 
