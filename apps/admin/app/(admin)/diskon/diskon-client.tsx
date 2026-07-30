@@ -87,18 +87,9 @@ function endsLabel(days: number | null): { text: string; muted: boolean } {
   return { text: "Berakhir", muted: true };
 }
 
-// Fabricated "penghematan pelanggan" estimate per redemption.
-function estimateSaving(d: Discount): number {
-  const AVG_ORDER = 200_000;
-  const AVG_SHIPPING = 22_000;
-  const per =
-    d.type === "persen"
-      ? (AVG_ORDER * d.value) / 100
-      : d.type === "nominal"
-        ? d.value
-        : AVG_SHIPPING;
-  return per * d.used;
-}
+// `estimateSaving()` is GONE. Its own comment said "Fabricated": it multiplied `used_count` by a
+// hardcoded AVG_ORDER = 200.000 and rendered ≈Rp90,3jt for a store whose real `sum(discount_idr)` is
+// **0**, over 0 discounted orders. The number now comes from the orders table (`getDiscountSavings`).
 
 const FILTERS: { key: "semua" | StatusKey; label: string }[] = [
   { key: "semua", label: "Semua" },
@@ -230,7 +221,8 @@ function RowActions({ id }: { id: string }) {
 }
 
 // ---- page ----
-export function DiskonClient({ discounts }: { discounts: Discount[] }) {
+/** `savings` = Σ orders.discount_idr — the real rupiah customers were given, not an estimate. */
+export function DiskonClient({ discounts, savings }: { discounts: Discount[]; savings: number }) {
   const router = useRouter();
   const canWrite = useCan("discounts:write");
   const [filter, setFilter] = React.useState<"semua" | StatusKey>("semua");
@@ -251,10 +243,6 @@ export function DiskonClient({ discounts }: { discounts: Discount[] }) {
   // the table under a "Diskon dihapus." toast, and the three KPI tiles never moved.
   const totalUsed = React.useMemo(
     () => discounts.reduce((s, d) => s + d.used, 0),
-    [discounts],
-  );
-  const totalSaving = React.useMemo(
-    () => discounts.reduce((s, d) => s + estimateSaving(d), 0),
     [discounts],
   );
 
@@ -286,9 +274,9 @@ export function DiskonClient({ discounts }: { discounts: Discount[] }) {
           hint="redemption sepanjang periode"
         />
         <StatCard
-          label="Estimasi Penghematan Pelanggan"
-          value={IDR(totalSaving, { compact: true })}
-          hint="perkiraan nilai diskon yang dinikmati"
+          label="Penghematan Pelanggan"
+          value={IDR(savings, { compact: true })}
+          hint="dari orders.discount_idr — nilai yang benar-benar dipotong"
         />
       </div>
 
