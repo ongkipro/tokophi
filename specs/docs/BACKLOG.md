@@ -897,6 +897,28 @@ unmeasurable**. Ordered.
      `TEST_DATABASE_URL=…/tokophi_test npx vitest run`. All behaviour-identical refactors; `tsc` clean.
 
 
+## 🔴 DEV DB ONLY — the migration ledger is 21 behind its own schema (found 2026-07-30, NOT fixed)
+
+`drizzle.__drizzle_migrations` holds **68 rows** (newest `0061_simple_invisible_woman`) against an
+**83-entry** journal. Migrations `0062`–`0082` are physically applied — they arrived via `push` or by
+hand — but unrecorded, and **6 ledger stamps belong to no journal entry** (branch migrations later
+renumbered or dropped).
+
+Consequence: `npm run migrate -w @tokophi/db` — the command AGENTS.md calls canonical — starts at
+`0062_order_problem_flag` (`ALTER TABLE orders ADD COLUMN problem_at …`, no `IF NOT EXISTS`) and
+**dies**. So nothing in `0062`–`0082` has ever been proven to apply through the migrator on this box,
+which is exactly what the production deploy runs.
+
+**The journal itself is clean** — `verify-migrations` is green: idx 0–82 contiguous, stamps strictly
+increasing across the concurrent `0079`–`0082`, every entry has its `.sql` and vice versa. This is a
+LEDGER problem, not a code one.
+
+Fix (a DB write, so deliberately left for a human to run): insert the 21 missing stamps for what is
+already applied and delete the 6 orphans, so the next `migrate` is a no-op — or rebuild the dev DB
+from migrations and re-seed. **Announce before doing either; the dev DB is shared.**
+
+---
+
 ## 🆕 Opened 2026-07-30 — audited, NOT fixed
 
 Four parallel audits over the storefront + `/tema` + `/promo` produced ~80 findings; that session
