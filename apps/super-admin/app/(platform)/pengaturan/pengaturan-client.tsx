@@ -187,7 +187,14 @@ export function PengaturanClient({
     startTransition(async () => {
       const r = await invitePlatformAdmin({ name: invName, email: invEmail, role: invRole });
       if (r.ok) {
-        toast.success(`Operator ${invEmail} ditambahkan.`);
+        // The password is random and shown ONCE — it is not stored anywhere readable and there is no
+        // "resend". A toast that vanishes would strand the operator, so it stays on screen until
+        // dismissed, exactly like the store-user hand-over.
+        toast.success(`Operator ${invEmail} ditambahkan.`, {
+          description: r.password ? `Password sementara: ${r.password} — salin sekarang, tidak bisa dilihat lagi.` : undefined,
+          duration: Infinity,
+          closeButton: true,
+        });
         setInviteOpen(false);
         setInvName("");
         setInvEmail("");

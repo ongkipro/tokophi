@@ -63,8 +63,10 @@ export async function getPlatformSession(): Promise<PlatformSession | null> {
  *   admin   — the day-to-day operator: payouts, store lifecycle, platform settings.
  *   owner   — everything, including impersonating a merchant and resetting their password.
  */
-export type PlatformRole = "support" | "admin" | "owner";
-const RANK: Record<string, number> = { support: 1, admin: 2, owner: 3 };
+// The ladder itself lives in `platform-rank.ts` — a pure module with no DB import, so the rule that
+// guards every super-admin mutation can actually be tested.
+export type { PlatformRole } from "./platform-rank";
+import { clearsRank, type PlatformRole } from "./platform-rank";
 
 /**
  * Security boundary for every super-admin mutation.
@@ -82,9 +84,7 @@ export async function requirePlatformAdmin(min: PlatformRole = "admin"): Promise
   const s = await getPlatformSession();
   if (!s) throw new Error("Tidak diizinkan — perlu login platform admin.");
 
-  const have = RANK[s.role] ?? 0;
-  const need = RANK[min] ?? RANK.admin;
-  if (have < need) {
+  if (!clearsRank(s.role, min)) {
     throw new Error(`Tidak diizinkan — perlu peran ${min}, akun ini ${s.role || "tanpa peran"}.`);
   }
   return s;
