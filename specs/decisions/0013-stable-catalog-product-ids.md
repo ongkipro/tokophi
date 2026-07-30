@@ -175,8 +175,12 @@ halves of that were wrong:**
 So the PDP now ships each variant's exact catalog id inside the picker payload — computed server-side by
 the same `retailerId()` helper, never composed in the browser — and `updateVariant()` keeps it on the buy
 buttons in step with the selection. AddToCart reads the clicked button, so it reports the variant the
-shopper actually chose, at the quantity they chose. The cart records the id, so InitiateCheckout is exact
-for free. The GROUP id survives as the fallback for the two cases where no variant resolves: a sparse
+shopper actually chose, at the quantity they chose. The cart records the id **and the type** the PDP resolved per line, so InitiateCheckout can be exact —
+but "for free" it was not. The first version partitioned the cart into exact vs group ids and let the
+exact ones win **while summing `num_items` and `value` over ALL lines**: a cart of "Rose/L ×2 @189.000"
+plus one group-level line ×1 @250.000 reported one content id with `num_items: 3` and `value: 628.000` —
+three units of a product the shopper has two of, at a price including an item never named. The money
+must describe the SAME lines as the ids. Fixed 2026-07-30. The GROUP id survives as the fallback for the two cases where no variant resolves: a sparse
 option matrix, and a price-on-request product that renders no buy button.
 
 **Group ids are not gone** — `item_group_id` in the feed is still the product number, shared by every

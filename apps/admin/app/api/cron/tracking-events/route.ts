@@ -113,6 +113,9 @@ export async function GET(req: NextRequest) {
   let released = 0;
   let backfilled = 0;
   try {
+    // `returning` so the count is UNAMBIGUOUS. A bare UPDATE through `db.execute` gives back a
+    // driver-shaped result whose `.length` is not the number of rows it changed — reporting that as
+    // `released` would have been a number that looked like evidence and was not.
     const rel = await db.execute(sql`
       update tracking_event_deliveries d
          set next_attempt_at = now(), updated_at = now()
@@ -122,8 +125,10 @@ export async function GET(req: NextRequest) {
          and d.status = 'queued'
          and d.next_attempt_at > now() + interval '1 day'
          and o.financial_status = 'dibayar'
-         and o.placed_at > now() - interval '7 days'`);
-    released = rel.length ?? 0;
+         and o.placed_at > now() - interval '7 days'
+      returning d.id`);
+    released = Array.isArray(rel) ? rel.length : 0;
+    if (released) console.warn(`[cron/tracking-events] released ${released} held conversion(s) whose order was already paid`);
   } catch (err) {
     console.error("[cron/tracking-events] release sweep failed", err);
   }
@@ -134,6 +139,12 @@ export async function GET(req: NextRequest) {
       select o.id::text as id, o.store_id::text as store_id
         from orders o
        where o.placed_at > now() - interval '3 days'
+         -- A sale that was cancelled or came back is not a conversion. The NORMAL path enqueues a COD
+         -- order at creation, i.e. before either could happen — this sweep only ever fires when that
+         -- enqueue failed, and by then the order may have moved on. financial_status alone does not
+         -- cover it: a cancelled COD order keeps status pending.
+         and o.status not in ('batal', 'retur')
+         and o.financial_status not in ('refund', 'refund_sebagian')
          and not exists (select 1 from tracking_event_deliveries d where d.order_id = o.id)
          and exists (
                select 1 from store_tracking_channels c
@@ -145,13 +156,43 @@ export async function GET(req: NextRequest) {
        order by o.placed_at desc
        limit 20`)) as unknown as { id: string; store_id: string }[];
     for (const m of missing) {
-      // No browser context — it is long gone. A conversion with weaker match keys beats no conversion.
-      const facts = await enqueuePurchase(m.store_id, m.id);
-      if (facts) backfilled++;
+      // Per ORDER, not per sweep. Without this a single deterministically-throwing order sits at the
+      // head of `order by placed_at desc` and blocks every other order's backfill on every tick, for
+      // the whole 3-day window — the claim loop below already wraps each row for exactly this reason.
+      try {
+        // No browser context — it is long gone. A conversion with weaker match keys beats no conversion.
+        const facts = await enqueuePurchase(m.store_id, m.id);
+        if (facts) backfilled++;
+      } catch (err) {
+        console.error(`[cron/tracking-events] backfill failed for order ${m.id}`, err);
+      }
     }
     if (missing.length) console.warn(`[cron/tracking-events] backfilled ${backfilled}/${missing.length} order(s) that had no delivery row`);
   } catch (err) {
     console.error("[cron/tracking-events] backfill sweep failed", err);
+  }
+
+  // ── RETENTION ───────────────────────────────────────────────────────────────────────────────────
+  // A delivery row carries the shopper's IP, user agent and ad cookies — the match keys the providers
+  // need, kept only because the send is asynchronous. Nothing ever deleted one, so the table was a
+  // permanent, growing store of personal data with no policy behind it, and the claim's index scan got
+  // slower every day. 30 days is past every provider's own window (Meta 7 days, GA4 72 h), so a row
+  // older than that can never be delivered — it is only evidence. Bounded per tick so this never
+  // becomes a long lock, and NOT wrapped around the rest of the tick: a failed purge must cost nothing.
+  //
+  // Deliberately UNCONDITIONAL on status. Held rows (an unpaid VA, parked at 2126) carry exactly the
+  // same personal data and, a month on, describe a sale that never happened; dead-lettered rows are
+  // parked a year out but the health panel only ever looks back 7 days. Keeping either forever would be
+  // retention by accident.
+  try {
+    await db.execute(sql`
+      delete from tracking_event_deliveries
+       where ctid in (
+         select ctid from tracking_event_deliveries
+          where created_at < now() - interval '30 days'
+          limit 500)`);
+  } catch (err) {
+    console.error("[cron/tracking-events] retention purge failed", err);
   }
 
   // CLAIM — ONE atomic `UPDATE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED) RETURNING`.

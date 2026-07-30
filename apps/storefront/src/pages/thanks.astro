@@ -191,7 +191,7 @@ const STEPS = [
           </div>
           <ul class="space-y-2.5 text-sm text-stone-700">
             <li class="flex gap-2"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"></span><span>Siapkan uang tunai sesuai total tagihan: <strong class="text-ink">{IDR(total)}</strong>.</span></li>
-            <li class="flex gap-2"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"></span><span>Pastikan nomor WhatsApp<strong class="text-ink" data-val="phone"></strong> tetap aktif untuk konfirmasi admin atau kurir.</span></li>
+            <li class="flex gap-2"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"></span><span>Pastikan nomor WhatsApp <strong class="text-ink" data-val="phone"></strong> tetap aktif untuk konfirmasi admin atau kurir.</span></li>
             <li class="flex gap-2"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"></span><span>Mohon terima paket saat kurir datang. Jika alamat sulit ditemukan, kurir dapat menghubungi nomor tersebut.</span></li>
           </ul>
         </section>
@@ -230,8 +230,15 @@ const STEPS = [
         var raw = sessionStorage.getItem("tphi:thanks");
         if (!raw) return;
         var d = JSON.parse(raw);
-        sessionStorage.removeItem("tphi:thanks");
-        if (!d || d.order !== order) return;
+        if (!d || d.order !== order) {
+          // Belongs to a DIFFERENT order — drop it, it is stale.
+          sessionStorage.removeItem("tphi:thanks");
+          return;
+        }
+        // Kept, not consumed: a reload of this page must still show the shipping confirmation. The
+        // URL-param version survived a refresh and the first sessionStorage version did not, which was a
+        // regression nobody would have noticed until a shopper pulled to refresh. sessionStorage dies
+        // with the tab, so this is not retention — it is the same lifetime the page has.
         ["name", "phone", "address"].forEach(function (k) {
           var v = (d[k] || "").toString().slice(0, 200);
           if (!v) return;

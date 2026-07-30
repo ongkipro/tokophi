@@ -2,6 +2,71 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — The ad funnel recorded nothing, and three numbers were wrong
+
+Five parallel audits of the Meta / Google / TikTok stack — delivery pipeline, provider payloads, catalog
+feeds, storefront pixels, Seller UI — each checked against the live provider spec, the running code and
+a real browser. The short version: **paid traffic was the one kind of traffic we did not measure.**
+
+### 🚨 `/promo`, `/lp` and `/thanks` fired no events at all
+`LandingLayout.astro` never rendered `MarketingPixels`. That is the layout for the direct-order ad
+funnel and its conversion page — the exact pages a merchant buys traffic to. No PageView, no
+ViewContent, no InitiateCheckout, no Purchase, no `ttclid` capture, while build, lint and `astro check`
+stayed green. Same class of miss as the one CheckoutLayout's comment was written to prevent.
+
+Before that could be fixed, the funnel had to stop putting the shopper's **name, WhatsApp number and
+street address in the `/thanks` URL** — Meta prohibits PII in event parameters and reads the full URL as
+`event_source_url`. They travel in `sessionStorage` now, read once and deleted.
+
+### 💸 Conversions that were silently lost
+A prepaid conversion was released only by the AutoLaris webhook: one un-retried delivery, no poll, no
+manual path. And the enqueue runs after the order commits inside a `try/catch`, so one transient DB
+error lost a COD conversion **permanently** — it also suppresses the browser pixel, which gates on it.
+The cron now reconciles on every tick: release held rows whose order has since been paid, and back-fill
+orders with no delivery row at all. Both proven against real rows in a rolled-back transaction.
+
+### 📉 Numbers that were wrong
+- **GA4 revenue was overstated by ongkir + PPN on every order.** GA4 defines `value` as price × quantity
+  *without* shipping and tax, and gives both their own parameters; we sent the order total. Items also
+  carried no price or quantity, which leaves GA4's item-scoped metrics structurally zero.
+- **Google Ads counted every sale twice.** The GA4-shaped gtag event carried no `send_to`, so gtag
+  broadcast it to the default group — including the `AW-` tag on the same page — and only one of the two
+  copies had a `transaction_id`.
+- **TikTok's `contents[].price` was the order total split by quantity**, so it disagreed with the same
+  SKU's price in our own feed on every multi-unit order.
+- **The browser hashed TikTok's phone without the `+`.** TikTok wants E.164; our server already sent the
+  `+` form. Two digests for one person, matching nothing, forever.
+- `age_group` defaulted to `adult` for every product the merchant left blank — a children's-wear shop
+  published as adult apparel.
+
+### 🧾 "Pendapatan dari saluran iklan" was fiction, in both directions
+`orders.channel` had exactly one writer and it hard-coded `"organic"`. So a real store read **Rp0 from
+ads forever**, including one whose pixel was live and converting — while the demo store showed a split
+written by `Math.random()` in the seed. It is now derived at order creation from the shopper's own last
+ad click (`_fbc` / `_gcl_aw` / `ttclid`, most recent wins; `_fbp`/`_ttp` ignored because they are set on
+any visit). Last-click and first-party: it will not match Meta Ads Manager, and it does not claim to.
+
+### 🗂️ Two catalog bugs that take a product off the shop
+Deleting a product's **first** photo never reindexed `position`, and every reader keys on `position = 0`
+— the product vanished from both feeds, the grid and its own PDP, permanently, because uploads land at
+`max + 1`. And removing or renaming a variant that has ever been ordered left two rows at position 0,
+which fans the product out through an INNER JOIN: every `<item>` and `<g:id>` emitted twice, which
+Google rejects outright.
+
+### 🧹 Found while screening
+`astro check` had been reporting 8 errors and typechecking **none** of the storefront's 92 files since
+2026-07-22 (a JSX comment sat between the attributes of `<header>`). And 16 migrations were unapplied on
+the shared dev database: `0062` aborted on a column that had arrived via `push`, and drizzle runs a whole
+pending batch in **one transaction**, so a single "already exists" rolls back every migration behind it.
+
+Also: conversion rows now have a **30-day retention policy** (they carry the shopper's IP, UA and ad
+cookies, and nothing had ever deleted one), and `storeTrackingPixels()` is cached like every other
+storefront read instead of costing a Postgres round-trip on every page render.
+
+**Three owner decisions are recorded in `BACKLOG.md`, not taken here:** there is no consent layer
+anywhere in the repo, the feed price excludes PPN where Google requires it included, and every feed
+image is WebP which Meta and TikTok document as unsupported.
+
 ## Unreleased — Pemasaran → Saluran Iklan stopped contradicting the merchant
 
 Making the **Pelacakan** tab real left the **Saluran Iklan** tab lying. A merchant with Meta's pixel and

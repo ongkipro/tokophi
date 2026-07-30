@@ -255,7 +255,7 @@ services:
   # Events API (ADR 0012 §0.1). The table IS the queue; this sidecar is the only thing that empties it.
   #
   # 60 seconds, not 900: an ad platform's attribution and its optimisation both degrade with delay, and
-  # a purchase is a low-volume, high-value event — the batch is capped at 100 and a tick with nothing due
+  # a purchase is a low-volume, high-value event — the batch is capped at 50 (route.ts BATCH) and a tick with nothing due
   # returns immediately, so a fast interval costs a query, not an API call. Retries carry their own
   # backoff inside the endpoint (~1m → 6h), so this loop never becomes the retry rate.
   #

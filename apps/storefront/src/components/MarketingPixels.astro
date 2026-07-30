@@ -408,6 +408,20 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         try { localStorage.setItem("tphi:ttclid", JSON.stringify({ v: v, t: Date.now() })); } catch (e) {}
       });
 
+      // UTM, captured the same way and for the same reason: it is in the URL of the landing page ONCE,
+      // and by checkout it is gone. It matters more than any cookie here — `utm_medium` is the ONLY
+      // signal that separates a paid Meta click from an organic one. Meta appends `fbclid` to every
+      // outbound link it serves, ads or not (Google's `gclid` and TikTok's `ttclid` really are
+      // paid-only), so without this a shopper tapping the shop's own Instagram bio link would be booked
+      // as ad revenue. 30 days, matching the attribution window on the server.
+      safe(function () {
+        var q = new URLSearchParams(location.search);
+        var src = (q.get("utm_source") || "").slice(0, 64);
+        var med = (q.get("utm_medium") || "").slice(0, 64);
+        if (!src && !med) return;
+        try { localStorage.setItem("tphi:utm", JSON.stringify({ s: src, m: med, t: Date.now() })); } catch (e) {}
+      });
+
       var path = location.pathname.replace(/\/+$/, "") || "/";
 
       // PageView on every page (fbq/ttq already sent theirs at init; this is the funnel entry point).
@@ -480,7 +494,11 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         });
       }
       // see NOTE-20 in the frontmatter above
-      if (path === "/checkout/sukses") {
+      // ⚠️ BOTH conversion pages. `/checkout/sukses` is the storefront checkout's; `/thanks` is the ad
+      // funnel's (/promo, /lp). The funnel's page was omitted, so the one flow a merchant PAYS for
+      // recorded no browser Purchase at all — and the `browserPurchase` gate below is what keeps that
+      // honest either way, because the server decides per order whether the money has actually landed.
+      if (path === "/checkout/sukses" || path === "/thanks") {
         var order = null;
         try { order = JSON.parse(localStorage.getItem("lastOrder") || "null"); } catch (e) {}
         // see NOTE-21 in the frontmatter above
@@ -507,7 +525,11 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
             // order total. Per-line prices only when the ids and the lines line up one-for-one; a
             // mismatch means a line had no resolvable catalog id, and half-mapped items are worse than
             // none.
-            var goods = Number(order.subtotal || 0) || null;
+            // subtotal MINUS discount — byte-identical to the server's `facts.goods`
+            // (lib/tracking-events.ts). `res.subtotal` is the PRE-discount goods total and `res.discount`
+            // was returned and never read, so a voucher made the gtag purchase and the Measurement
+            // Protocol purchase report two different values for one `transaction_id`.
+            var goods = Math.max(0, Number(order.subtotal || 0) - Number(order.discount || 0)) || null;
             var shipCost = Number(order.shipping && order.shipping.price || 0) || null;
             var taxAmt = Number(order.tax || 0) || null;
             var lineItems = ids.length === items.length
@@ -540,7 +562,9 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
                 // to put GA4's `G-…` in "ID Pixel/Tag" and the `AW-…/label` in the separate Ads field —
                 // so testing `pixelId.slice(0,3) === "AW-"` meant enhanced conversions were silently off
                 // for every merchant who wired it the way we documented.
-                if (GOOGLE && GOOGLE.advancedMatching && GOOGLE.adsSendTo) safe(function () {
+                // `adsSendTo` OR a legacy `AW-` in the pixel field. Gating on `adsSendTo` alone fixed the
+                // documented wiring and silently broke the undocumented one that used to work.
+                if (GOOGLE && GOOGLE.advancedMatching && (GOOGLE.adsSendTo || String(GOOGLE.pixelId).slice(0, 3) === "AW-")) safe(function () {
                   var ud = {}; if (email) ud.email = email; if (phoneE164) ud.phone_number = phoneE164;
                   window.gtag("set", "user_data", ud);
                 });

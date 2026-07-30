@@ -48,7 +48,7 @@ tokophi/
 
 | Package | Exports / key modules | Notes |
 |---|---|---|
-| `db` | `db`, `client`, `schema` (**68 tables**), `migrations/` (**0000–0045**), `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
+| `db` | `db`, `client`, `schema` (**68 tables**), `migrations/` (**0000–0083**, 84 files), `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
 | `lib` | `./billing` (pricing, `computeBilling`, `storeSegment`, `withPpn`), `./format` (IDR/num), `./couriers`, `./kiriminaja`, `./autolaris`, `./payment-fees`, `./integration-status`, `./totp`, `./cache`, `./colors` | Pure/shared. `kiriminaja`/`autolaris` are `server-only`. |
 | `ui` | 23 components (`button card dialog dropdown-menu table tabs switch …`) + `lib/utils` (cn) + Tailwind tokens | **shadcn on Base UI** — `render` prop not `asChild`, no `Select`. |
 | `data` | menu helpers | small shared. |
@@ -69,13 +69,13 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 | Pelanggan | `/pelanggan`(+`/[id]`,`/segmen`,`/ulasan`,**`/keranjang`**) | customers (guest vs registered), segments, reviews, **checkout** | `customers.ts`, `segments.ts`, **`checkout.ts`** |
 | CRM | `/crm`(+`/followup`,`/pipeline`,`/template`) | crm | `crm.ts` |
 | Diskon | `/diskon`(+`/baru`,`/[id]`) | discounts | `discounts.ts` |
-| Analitik / Pemasaran | `/analitik`, `/pemasaran` | analytics, marketing | — |
+| Analitik / Pemasaran | `/analitik`, `/pemasaran` | `analytics.ts`, `marketing.ts`, **`tracking.ts`** (`getTrackingStatus` ungated / `getTrackingConfig` + `getTrackingHealth` gated on `integrations:write`), **`feed.ts`** (`getFeedStatus` — the Katalog Iklan card) | **`tracking.ts`** (save pixel/CAPI config, test connection, clear token, switch `catalog_id_scheme`) |
 | Toko Online | `/halaman`,`/blog`,`/navigasi`,**`/files`**,`/tema` | pages, articles, menus, **media**, theme | `pages.ts`,`articles.ts`,`menus.ts`,**`media.ts`**,`theme.ts` |
 | **Akun** | `/akun/{profil,keamanan,langganan}` | billing (`getBilling`,`getMyInvoices`) | `profile.ts`,`security.ts`,`billing.ts` |
 | **Bantuan** | `/bantuan`(+`/[id]`) | — | `support.ts` |
 | Faktur (print) | `/faktur/[number]` (outside `(admin)`) | billing (`getFaktur`) | billing (`getInvoicePayment`) |
 | Pengaturan | `/pengaturan` | shipping/payment-settings reads | `shipping.ts`,`payment-settings.ts` |
-| Uploads serving | `/api/uploads/[name]` (public) · `/api/cron/billing` · `/api/public/pay/callback` · `/impersonate` | — | — |
+| Uploads serving + cron + callbacks | `/api/uploads/[name]` (public) · `/api/cron/billing` (daily) · **`/api/cron/tracking`** (KiriminAja AWB poller, 15 min) · **`/api/cron/tracking-events`** (conversion delivery worker, 60 s) · `/api/public/pay/callback` · `/impersonate` | — | — |
 
 **Auth/RBAC/tenancy:** `lib/auth.ts` (jose JWT session), `lib/rbac.ts` (`requireCapability`) + `lib/rbac-policy.ts` (role→cap matrix, client-safe), `lib/tenant.ts` (`withTenant`/`withCurrentTenant` → `tokophi_app` role + `app.store_id` GUC → RLS). `middleware.ts` = edge JWT gate.
 
@@ -137,6 +137,22 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 
 | Feature | Core files |
 |---|---|
+**Conversion tracking, attribution & catalog feeds (ADR 0011 / 0012 / 0013):**
+`packages/lib/src/tracking-ids.ts` is the **ONE** definition of a catalog id — `retailerId()` /
+`itemGroupId()` / `purchaseEventId()`. The feeds, the storefront pixel and the CAPI sender all call it;
+two copies of this rule is how a merchant's catalog silently splits in half ·
+`apps/admin/lib/tracking-events.ts` (`enqueuePurchase` / `releasePurchase` / `purchaseFacts` — the ONE
+place a conversion becomes a job, built from the COMMITTED ORDER, never from the request) ·
+`apps/admin/lib/capi.ts` (the three provider senders + `sanitize`; Meta Graph, GA4 Measurement Protocol,
+TikTok Events API — hashing rules and the per-provider meaning of `value` live here) ·
+`apps/admin/app/api/cron/tracking-events/route.ts` (the drain: retention → reconcile → claim → send →
+verdict) · `apps/admin/lib/ad-channel.ts` (`adChannel()` → `orders.channel`, called from
+`api/public/order`) · `apps/admin/lib/crypto.ts` (`INTEGRATION_TOKEN_KEY`, AES-256-GCM, AAD-scoped) ·
+`apps/storefront/src/components/MarketingPixels.astro` (the browser half — fbq/gtag/ttq bootstrap + the
+whole funnel; rendered by **Layout, CheckoutLayout AND LandingLayout**: a layout that forgets it is a
+silent outage) · `apps/storefront/src/lib/product-feed.ts` + `src/pages/feed/{google,tiktok}.xml.ts`
+(one builder, two profiles) · `apps/storefront/src/data/tracking.ts` (`storeTrackingPixels`, cached).
+
 | **Single-plan billing + PPN** | `@tokophi/lib/billing` (`computeBilling`,`storeSegment`,`quote`,`withPpn`) · admin `lib/data/billing.ts` + `lib/actions/billing.ts` · `/akun/langganan` + `PaySubscription` + `/faktur/[number]` · cron `/api/cron/billing` |
 | **Store lifecycle segments + VIP** | `stores.comped/compedReason/compedAt` + `store_stats.ship7dAvg` (migr 0026/0027) · super-admin `/toko` tabs + `/toko/[id]` control · `SegmentBadge` |
 | **Two-level courier/payment** | platform_* tables · super-admin Pengaturan · client `payment-methods-card`/shipping · storefront ∩ filter |
@@ -165,6 +181,6 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 
 - **Live:** Vultr Singapore (`45.76.146.40`) + **Coolify v4** (Docker Compose build pack). Domains `admin.`/`super.`/`toko.45.76.146.40.sslip.io`. Deploy = push `main` → Coolify (or API `POST /api/v1/deploy?uuid=…`).
 - **Compose** (`docker-compose.coolify.yml`): `postgres` (volume `tokophi-pgdata`) + one-off `migrate` (drizzle migrate + **idempotent seed**, `SEED_FORCE=1` to force) + `admin` (volume `tokophi-uploads`) + `super-admin` + `storefront` (builds at start) + `cron` (daily billing) + `backup` (daily `pg_dump -Fc` → `tokophi-backups` volume, keeps last 7).
-- **Migrations:** `packages/db/drizzle/` — current head **0033**. `npm run generate` after schema edits; migrate runs on deploy.
+- **Migrations:** `packages/db/drizzle/` — current head **0083**. `npm run generate` after schema edits; migrate runs on deploy. ⚠️ **Write every migration idempotent** (`add column if not exists`, `create index if not exists`, `do $$ … exception when duplicate_object then null; end $$` for enums): drizzle applies the whole pending batch in ONE transaction, so a single "already exists" rolls back every migration behind it — on 2026-07-30 that left 16 unapplied on the shared dev DB and printed nothing anyone noticed.
 - **Env** (Coolify): `DATABASE_URL`, `AUTH_SECRET`, `KIRIMINAJA_*`, `AUTOLARIS_*`, `CRON_SECRET`, `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API`.
 - **Deferred → prod:** uploads → MinIO/S3 (currently container volume, admin-served — storefront can't yet show *uploaded* product images, only seeded `/products/*.webp`) · email/WA comms (tickets/reminders audit-only now) · HTTPS + custom domain (tokophi.com in Cloudflare, DNS not pointed) · Hetzner migration (host-agnostic).

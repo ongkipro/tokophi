@@ -2234,6 +2234,17 @@ if (rToken) {
 
       // TikTok's click id, captured on the landing page by MarketingPixels (it only ever appears in the
       // URL once). Expired past TikTok's own 28-day attribution window rather than sent stale.
+      // UTM captured on the landing page by MarketingPixels. Same 30-day window the server applies —
+      // expired here rather than sent stale, exactly like ttclid below.
+      function utm() {
+        try {
+          var raw = JSON.parse(localStorage.getItem("tphi:utm") || "null");
+          if (!raw) return {};
+          if (Date.now() - Number(raw.t || 0) > 30 * 86400000) return {};
+          return { utmSource: String(raw.s || "").slice(0, 64), utmMedium: String(raw.m || "").slice(0, 64) };
+        } catch (e) { return {}; }
+      }
+
       function ttclid() {
         try {
           var raw = JSON.parse(localStorage.getItem("tphi:ttclid") || "null");
@@ -2276,7 +2287,14 @@ if (rToken) {
           // `_gcl_aw` is what gtag writes when a shopper arrives on a Google Ads click; it carries the
           // click's own timestamp, which is what lets the server pick the MOST RECENT ad click rather
           // than a fixed provider order. Without it, a Google-Ads sale is indistinguishable from organic.
-          trackingCookies: { fbp: trackingCookie("_fbp"), fbc: trackingCookie("_fbc"), ga: trackingCookie("_ga"), gcl: trackingCookie("_gcl_aw"), ttp: trackingCookie("_ttp"), ttclid: ttclid() },
+          trackingCookies: Object.assign(
+            { fbp: trackingCookie("_fbp"), fbc: trackingCookie("_fbc"), ga: trackingCookie("_ga"),
+              // `_gcl_aw` is the gclid cookie; `_gcl_gb`/`_gcl_gs` are Google's iOS fallbacks (gbraid/gs),
+              // without which every iOS Google Ads click is booked organic.
+              gcl: trackingCookie("_gcl_aw") || trackingCookie("_gcl_gb") || trackingCookie("_gcl_gs"),
+              ttp: trackingCookie("_ttp"), ttclid: ttclid() },
+            utm(),
+          ),
           items: cart.map(function (i) { return { handle: i.handle, name: i.name, price: i.price, variant: i.variant || i.size || "", qty: i.qty }; }),
           // The phone goes up CANONICAL (62…) — the API normalises it again regardless; sending the
           // shape we store means the two can never quietly disagree.
@@ -2347,6 +2365,10 @@ if (rToken) {
           // Total built from Rp219.000: arithmetic that does not add up, beside a COD amount the
           // courier really will ask for.
           if (typeof res.subtotal === "number") order.subtotal = res.subtotal;
+          // …and the DISCOUNT. `res.subtotal` is the pre-discount goods total, so without this the
+          // browser's GA4 `value` (goods) is higher than the server's by exactly the voucher — two
+          // different revenue figures for one `transaction_id`.
+          if (typeof res.discount === "number") order.discount = res.discount;
           if (Array.isArray(res.lines) && res.lines.length) {
             order.items = res.lines.map(function (l) {
               // Keep the tab's image/label (the API has no reason to send them back) and take the

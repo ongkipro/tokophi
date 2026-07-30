@@ -24,8 +24,10 @@ import { purchaseEventId, retailerId, type CatalogIdScheme } from "@tokophi/lib/
  * match keys; GA4 needs the real `_ga` client id or every order becomes a brand-new user.
  *
  * ⚠️ These ARE personal-ish data (an IP and a device string). They are stored on the delivery row only
- * because the send is asynchronous, they are never rendered anywhere, and the row is operational — see
- * the retention note in specs/docs/SCHEMA.md. Nothing else about the shopper is persisted here.
+ * because the send is asynchronous, they are never rendered anywhere, and the row is operational. The
+ * retention policy is REAL and lives in the cron (`api/cron/tracking-events`): 30 days, purged every
+ * tick — this comment used to point at a note in SCHEMA.md that did not exist, beside a doc claiming
+ * the payload held no personal data at all. Nothing else about the shopper is persisted here.
  */
 export type ClientContext = {
   userAgent?: string | null;
