@@ -15,6 +15,13 @@ import { Button } from "@tokophi/ui/button";
 import { BrandColorDialog } from "@/components/theme/brand-color-dialog";
 import { generateBrandShades } from "@tokophi/lib/colors";
 
+/** `{50: hex}` → `{"--color-brand-50": hex}` — the names `globals.css` and the storefront both use. */
+function brandVars(hex: string): React.CSSProperties {
+  return Object.fromEntries(
+    Object.entries(generateBrandShades(hex)).map(([shade, value]) => [`--color-brand-${shade}`, value]),
+  ) as React.CSSProperties;
+}
+
 export function BuilderClient({
   templateId,
   templateType,
@@ -64,9 +71,14 @@ export function BuilderClient({
 
   return (
     // The canvas inherits `globals.css`'s PLATFORM rose, so the builder previewed a brand colour the
-    // shop does not use — with the colour picker two pixels away in the same header. The shades are
-    // already computed for the dialog; they were simply never applied to anything.
-    <div className="h-screen w-full" style={generateBrandShades(initialBrandColor) as React.CSSProperties}>
+    // shop does not use — with the colour picker two pixels away in the same header.
+    //
+    // ⚠️ `generateBrandShades` returns `{50: "#…", 100: "#…"}` — NUMERIC keys, not CSS custom property
+    // names. Handing that straight to `style` produces `{50: "#…"}`, which React silently drops: the
+    // first version of this fix changed nothing at all, and a browser check (`--color-brand-600` on
+    // the wrapper → `null`) is the only reason that was caught. Map to the same
+    // `--color-brand-<shade>` names `globals.css` declares and the storefront's Layout emits.
+    <div className="h-screen w-full" style={brandVars(initialBrandColor)}>
       <Puck
         config={config}
         data={initialData}
