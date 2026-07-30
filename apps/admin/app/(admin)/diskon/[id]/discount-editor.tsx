@@ -49,6 +49,10 @@ const STATUS_META: Record<
     label: "Terjadwal",
     className: "bg-blue-500/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400",
   },
+  nonaktif: {
+    label: "Nonaktif",
+    className: "bg-ink/10 text-muted-foreground",
+  },
   kadaluarsa: {
     label: "Kadaluarsa",
     className: "bg-muted text-muted-foreground",
@@ -77,7 +81,11 @@ export function DiscountEditor({ discount }: { discount?: Discount }) {
     discount?.status === "terjadwal" ? "terjadwal" : "aktif",
   );
   const [period, setPeriod] = React.useState(
-    discount ? String(Math.max(0, discount.endsInDays)) : "",
+    // `null` (no end date) seeds an EMPTY field, which round-trips back to `ends_at: NULL`. Seeding
+    // "0" made a never-expiring voucher read as "berakhir dalam 0 hari" and re-saved it as one; and
+    // for an ALREADY-expired voucher (negative days) `Math.max(0, …)` also produced "0", so pressing
+    // Simpan on it wrote `ends_at: NULL` and resurrected it permanently.
+    discount?.endsInDays == null ? "" : String(Math.max(0, discount.endsInDays)),
   );
 
   // Preview status: expired discounts stay expired in the header badge.

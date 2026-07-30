@@ -10,6 +10,7 @@ const KIND_TO_TYPE = { persen: "persen", nominal: "nominal", gratis_ongkir: "ong
 function toDiscount(r: {
   id: string; code: string; kind: "persen" | "nominal" | "gratis_ongkir"; value: number;
   usedCount: number; usageLimit: number | null; startsAt: Date | null; endsAt: Date | null;
+  status: "aktif" | "terjadwal" | "nonaktif";
 }): Discount {
   // ⚠️ Read the real clock. This was frozen to the seed's TODAY, so an expired voucher still showed
   // "Aktif" — and `endsInDays` seeds the editor's period field, which the save path then re-anchored,
@@ -17,8 +18,16 @@ function toDiscount(r: {
   const now = Date.now();
   const starts = r.startsAt ? r.startsAt.getTime() : now;
   const ends = r.endsAt ? r.endsAt.getTime() : null;
+  // `nonaktif` wins over any date arithmetic — it is the merchant's explicit OFF, and deriving a
+  // status purely from the dates is what let the editor resurrect a switched-off voucher.
   const status: Discount["status"] =
-    now < starts ? "terjadwal" : ends !== null && now > ends ? "kadaluarsa" : "aktif";
+    r.status === "nonaktif"
+      ? "nonaktif"
+      : now < starts
+        ? "terjadwal"
+        : ends !== null && now > ends
+          ? "kadaluarsa"
+          : "aktif";
   return {
     id: r.id,
     code: r.code,
@@ -27,7 +36,9 @@ function toDiscount(r: {
     status,
     used: r.usedCount,
     limit: r.usageLimit ?? 0,
-    endsInDays: ends === null ? 0 : Math.round((ends - now) / 86_400_000),
+    // null, never 0: `endsLabel(0)` renders "Berakhir hari ini" and the editor seeds its period field
+    // with it, so a voucher with no end date would both READ as expiring today and be re-saved as one.
+    endsInDays: ends === null ? null : Math.round((ends - now) / 86_400_000),
   };
 }
 

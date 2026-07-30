@@ -14,6 +14,7 @@
 // render context; a handle field here could only ever disagree with the page the shopper is on.
 import ProductListing from "../ProductListing.astro";
 import SectionHeading from "../SectionHeading.astro";
+import { VIRTUAL_COLLECTION_HANDLES } from "../../data/catalog";
 import type { ProductListingConfig } from "@tokophi/sections";
 import type { SectionContext } from "./context";
 
@@ -22,14 +23,32 @@ type Props = ProductListingConfig & { ctx?: SectionContext };
 const { heading, ctx } = Astro.props;
 const catalog = Astro.locals.catalog;
 
-// Category template → that collection. Anywhere else → the whole catalogue (what /produk shows).
+// Category template → that collection. Anywhere else → the whole catalogue.
+//
+// ⚠️ **A VIRTUAL handle has no `collections` row, so `byCollection()` returns `[]` for it.**
+// `/produk` renders this very template with `collectionHandle: "semua"` (produk/index.astro), and
+// `semua` is exactly that: the one virtual handle, deliberately without a row. Resolving it through
+// `byCollection` emptied the store's most important listing page — 22 products rendered as "Belum
+// ada produk" — the moment a default category template existed. Check the list, never the count: an
+// empty category is legitimately empty, and falling back on "0 results" would hide a real miss.
+//
 // A `product` template never offers this section (SECTIONS_BY_TEMPLATE_TYPE), so there is no
 // "listing on a PDP" case to reason about here.
+const isVirtual =
+  ctx?.kind === "category" &&
+  (VIRTUAL_COLLECTION_HANDLES as readonly string[]).includes(ctx.collectionHandle);
 const products =
-  ctx?.kind === "category" ? catalog.byCollection(ctx.collectionHandle) : catalog.products;
+  ctx?.kind === "category" && !isVirtual ? catalog.byCollection(ctx.collectionHandle) : catalog.products;
 ---
 
-<section class="py-4">
-  {heading && <SectionHeading title={heading} />}
-  <ProductListing products={products} />
-</section>
+{/* `ProductListing` owns its own `mx-auto max-w-7xl px-4` container and its own `py-12`, so the
+    heading needs the SAME container or it renders flush against the viewport edge and misaligned
+    with every card beneath it — and an extra `py-*` here would stack 64px of dead space. */}
+{
+  heading && (
+    <div class="mx-auto max-w-7xl px-4 pt-12 sm:px-6">
+      <SectionHeading title={heading} />
+    </div>
+  )
+}
+<ProductListing products={products} />

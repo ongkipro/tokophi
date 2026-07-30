@@ -363,7 +363,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
   };
 
   // Flash sale (PROMO P3): productId → { price, endsAt } for sales live RIGHT NOW. Same window rule the
-  // order API applies (status='aktif' AND now ∈ [starts_at, ends_at)), so the price the card advertises
+  // order API applies (status <> 'nonaktif' AND now ∈ [starts_at, ends_at)), so the price the card advertises
   // is the price the order will charge. Lower price wins if a product is in two overlapping sales.
   const flashRows = await db
     .select({ productId: schema.flashSaleItems.productId, price: schema.flashSaleItems.salePriceIdr, endsAt: schema.flashSales.endsAt })
@@ -680,7 +680,7 @@ export async function storeFreeShip(storeId: string): Promise<StoreFreeShip> {
 }
 
 // Active voucher codes to SHOWCASE on the /promo hub (PROMO P4). A code shows only while it is usable:
-// status='aktif', inside its window, and not exhausted. The order API (lib/promo `applyDiscount`) is
+// not `nonaktif`, inside its window, and not exhausted. The order API (lib/promo `applyDiscount`) is
 // still the authority — this only advertises; a code that races to its usage limit fails there cleanly.
 export type VoucherPromo = { code: string; kind: string; value: number; minPurchaseIdr: number; endsAt: string | null };
 export async function activeVouchers(storeId: string): Promise<VoucherPromo[]> {

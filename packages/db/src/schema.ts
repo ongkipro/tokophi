@@ -763,7 +763,7 @@ export const discountUsages = pgTable("discount_usages", {
 
 // ---------- flash sale (PROMO P3) ----------
 // A time-boxed price drop on chosen products. The window is [startsAt, endsAt); `status` is the merchant's
-// switch (a `nonaktif` sale never runs even inside its window). "Active NOW" = status='aktif' AND now in
+// switch (a `nonaktif` sale never runs even inside its window). "Active NOW" = status <> 'nonaktif' AND now in
 // the window — computed at read time, never stored, so the clock alone flips it on and off.
 export const flashSales = pgTable("flash_sales", {
   id: pk(),

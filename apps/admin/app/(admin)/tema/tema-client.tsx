@@ -231,9 +231,8 @@ function TemplateCard({
             </p>
             {tpl.type === "category" && tpl.sectionCount > 0 && !tpl.hasProductGrid && (
               <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-500">
-                Template ini menggantikan halaman kategori sepenuhnya, tapi belum punya seksi{" "}
-                <strong>Grid Produk</strong> — kategori yang memakainya tidak akan menampilkan produk
-                apa pun.
+                Template ini belum punya seksi <strong>Daftar Produk</strong> — kategori yang
+                memakainya hanya menampilkan judul dan sampulnya, tanpa satu pun produk.
               </p>
             )}
           </div>
