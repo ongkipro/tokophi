@@ -10,6 +10,7 @@
 // blocks with air between them, not one wall — the reference copy is two short paragraphs. Nothing is
 // invented: an empty field renders nothing (no eyebrow rule, no image frame guessing a URL).
 import type { ImageTextConfig } from "@tokophi/sections";
+import { safeHref } from "../../lib/safe-href";
 import { ArrowRight } from "@lucide/astro";
 
 type Props = ImageTextConfig;
@@ -60,7 +61,7 @@ const paragraphs = (body ?? "")
       {
         ctaLabel && (
           <a
-            href={ctaHref || "/kategori/semua"}
+            href={safeHref(ctaHref) ?? "/kategori/semua"}
             class="group mt-8 inline-flex items-center gap-3 rounded-full bg-ink py-2 pl-2 pr-6 text-sm font-semibold uppercase tracking-wide text-cream shadow-lg shadow-ink/20 transition-colors hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
           >
             <span class="flex size-9 items-center justify-center rounded-full ring-1 ring-cream/25 transition-colors group-hover:bg-cream group-hover:text-ink">

@@ -90,7 +90,9 @@ export const HERO_INTERVAL_MS = 6000;
  * Puck editor preview so the two can never disagree about what a saved hero means.
  */
 export function heroSlides(config: HeroConfig): HeroSlide[] {
-  const slides = (config.slides ?? []).filter((s) => s.heading || s.imageUrl);
+  // `Array.isArray`, not `?? []`: this reads stored JSON, and a non-array `slides` (a hand-edited
+  // row, a bad import, an older shape) would make `.filter` throw and take the whole page with it.
+  const slides = (Array.isArray(config.slides) ? config.slides : []).filter((s) => s && (s.heading || s.imageUrl));
   if (slides.length > 0) return slides;
   return [
     {

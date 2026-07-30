@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 import type { TemplateType } from "@/lib/data/theme";
+import { SECTION_TYPES, type SectionType } from "@tokophi/sections";
 import { GALLERY_LAYOUTS, type GalleryLayout } from "@/lib/gallery-layout";
 
 // ADR 0009 — Store Builder.
@@ -161,10 +162,43 @@ export async function setDefaultTemplate(id: string): Promise<ThemeResult> {
   }
 }
 
+// ── THE WRITE IS A BOUNDARY, NOT A TYPE ANNOTATION ────────────────────────────────────────────────
+//
+// `data: Data` is compile-time only. This is a server action: the argument arrives over the wire and
+// the caller is whatever posted it, so the type says nothing about the bytes. The value goes straight
+// into `page_templates.sections` jsonb, which the STOREFRONT then renders for every shopper.
+//
+// The repo already knows the consequence and wrote it down in `seed-templates.ts`: a typo'd `mode`
+// makes `MODE_FN[mode](pool)` throw and 500s the whole storefront — but that guard was added to the
+// seed, not to this path. The renderers are now defensive too (ProductGrid falls back, `heroSlides`
+// checks `Array.isArray`), and BOTH layers are wanted: this one keeps rubbish out of the column, the
+// other keeps a shop online if rubbish ever gets there another way.
+//
+// Deliberately a SHAPE check, not a full schema. Rejecting an unknown section `type` and a non-object
+// `props` removes the class that can crash a render; validating every prop of every section here
+// would be a second copy of the registry, guaranteed to drift from it.
+const KNOWN = new Set<string>(SECTION_TYPES as readonly SectionType[]);
+
+function validateTemplateData(data: Data): void {
+  const content: unknown = (data as { content?: unknown })?.content;
+  if (!Array.isArray(content)) throw new RuleError("Struktur template tidak valid.");
+  for (const item of content) {
+    if (!item || typeof item !== "object") throw new RuleError("Struktur template tidak valid.");
+    const { type, props } = item as { type?: unknown; props?: unknown };
+    if (typeof type !== "string" || !KNOWN.has(type)) {
+      throw new RuleError(`Seksi tidak dikenal: ${String(type)}.`);
+    }
+    if (props !== undefined && (typeof props !== "object" || props === null || Array.isArray(props))) {
+      throw new RuleError(`Isi seksi "${type}" tidak valid.`);
+    }
+  }
+}
+
 // Save the Puck canvas of any template (any type) — the /tema/[id] builder's "Publish".
 export async function saveTemplate(id: string, data: Data): Promise<ThemeResult> {
   const { storeId } = await requireCapability("theme:write");
   try {
+    validateTemplateData(data);
     await withTenant(storeId, async (db) => {
       const rows = await db
         .update(schema.pageTemplates)

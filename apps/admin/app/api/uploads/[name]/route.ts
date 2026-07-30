@@ -50,6 +50,30 @@ const CACHE_DIR = path.join(UPLOAD_DIR, ".resized");
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 
+// ── WHY AN UPLOADED SVG IS A SCRIPT, AND WHAT STOPS IT ────────────────────────────────────────────
+//
+// This route is PUBLIC and serves whatever a merchant uploaded, under `app.tokophi.com`. `saveImage`
+// stores SVG byte-for-byte (deliberately — see the pass-through below), and `checkFile` accepts it
+// because `image/svg+xml` starts with "image/". But an SVG is an XML document: `<svg><script>` runs,
+// on THIS origin, with the admin's cookies in scope, the moment anyone NAVIGATES to the URL.
+//
+// It is not self-XSS. `media:write` is held by `staff` in every tenant, so any store's staff can host
+// a payload on the admin origin and send the link to another store's owner — the link looks like our
+// own domain because it is.
+//
+// `sandbox` (with no `allow-scripts`) is what actually stops execution; `default-src 'none'` stops the
+// document reaching back out for anything. Both are inert for the normal case — an `<img src>` never
+// runs SVG script anyway — so this costs legitimate logos and favicons nothing.
+//
+// ⚠️ Do NOT "fix" this by rejecting SVG at upload instead: logos and favicons are legitimately vector,
+// and rasterising them is the bug `saveImage` already refuses to introduce. The header is the fix.
+const SVG_SANDBOX = "sandbox; default-src 'none'; style-src 'unsafe-inline'";
+
+// `nosniff` on EVERY response, not just the SVG one: without it a browser may ignore our
+// Content-Type and sniff an `application/octet-stream` body (the fallback for an unknown extension)
+// into something executable. The header is the whole mitigation for that class.
+const NOSNIFF = { "X-Content-Type-Options": "nosniff" };
+
 export async function GET(req: Request, { params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
   if (!/^[a-zA-Z0-9._-]+$/.test(name)) return new Response("bad request", { status: 400 }); // no path traversal
@@ -77,7 +101,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ name: st
     if (!width || ext === "svg") {
       const buf = await fs.readFile(path.join(UPLOAD_DIR, name));
       return new Response(new Uint8Array(buf), {
-        headers: { "Content-Type": type, "Cache-Control": IMMUTABLE },
+        headers: {
+          "Content-Type": type,
+          "Cache-Control": IMMUTABLE,
+          ...NOSNIFF,
+          // Only the SVG branch needs the sandbox; a raster body cannot execute.
+          ...(ext === "svg" ? { "Content-Security-Policy": SVG_SANDBOX } : {}),
+        },
       });
     }
 
@@ -85,7 +115,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ name: st
     const hit = await fs.readFile(cached).catch(() => null);
     if (hit) {
       return new Response(new Uint8Array(hit), {
-        headers: { "Content-Type": "image/webp", "Cache-Control": IMMUTABLE },
+        headers: { "Content-Type": "image/webp", "Cache-Control": IMMUTABLE, ...NOSNIFF },
       });
     }
 
@@ -101,7 +131,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ name: st
     // apply, and neither does the option.)
     if ((meta.width ?? 0) <= width) {
       return new Response(new Uint8Array(src), {
-        headers: { "Content-Type": type, "Cache-Control": IMMUTABLE },
+        headers: {
+          "Content-Type": type,
+          "Cache-Control": IMMUTABLE,
+          ...NOSNIFF,
+          // Reachable for an SVG only if a `?w=` slipped through; belt and braces.
+          ...(ext === "svg" ? { "Content-Security-Policy": SVG_SANDBOX } : {}),
+        },
       });
     }
 
@@ -135,7 +171,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ name: st
     }
 
     return new Response(new Uint8Array(out), {
-      headers: { "Content-Type": "image/webp", "Cache-Control": IMMUTABLE },
+      headers: { "Content-Type": "image/webp", "Cache-Control": IMMUTABLE, ...NOSNIFF },
     });
   } catch {
     return new Response("not found", { status: 404 });
