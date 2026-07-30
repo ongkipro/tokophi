@@ -919,6 +919,53 @@ from migrations and re-seed. **Announce before doing either; the dev DB is share
 
 ---
 
+## 🧾 SELLER PROMO SCREENS — audited 2026-07-30; what is LEFT
+
+Fixed in `a6809ad` + the follow-up: the `updateDiscount` interval regression, `nonaktif` in the
+editor, the percentage ceiling, the flash-price ceiling, the exhausted-voucher badge, the stale
+memos, and the landing-HTML claim. What remains:
+
+- [ ] **DECISION (owner): `/lp/<slug>` executes merchant-pasted `<script>`.** `set:html` emits into the
+  SSR response body, so the browser PARSES it — a script tag runs. There is no sanitizer and no CSP.
+  The write needs only `content:write`, which **`staff` holds in every tenant**, and the page carries
+  the COD order form (name, WhatsApp, address). The false "tidak dijalankan" claim is corrected in
+  both the admin caption and the storefront comment, so nothing lies any more — but the exposure is
+  real. Options: narrow the capability to owner, add a real sanitizer (NOT a regex — a half-sanitizer
+  restores exactly the false confidence just removed), or accept it explicitly. **Not decided here.**
+- [ ] **`discounts.code` is unique ACROSS EVERY TENANT** (`discounts_code_unique` on `code` alone,
+  no `store_id`). The first merchant to register `GAJIAN25` permanently blocks all other stores, which
+  also makes the constraint an existence oracle over other tenants' codes — and Indonesian promo codes
+  collide constantly (`GAJIAN`, `DISKON10`, `GRATISONGKIR`). Fix is `unique().on(storeId, code)` plus a
+  migration; reads are already store-scoped so nothing else changes. Left out of this round because a
+  unique-constraint migration wants the ledger drift resolved first.
+- [ ] **"Estimasi Penghematan Pelanggan" is Rp90,3jt of fiction.** `diskon-client.tsx` multiplies
+  `used_count` by a hardcoded `AVG_ORDER = 200.000`. `select sum(discount_idr) from orders` for the
+  demo returns **0**, over 0 discounted orders. The real number is one query away (`orders.discount_idr`
+  + `discount_usages`). Same class `lib/data/marketing.ts` was cleaned for. Fix or delete the tile.
+- [ ] **`flash-sale-client.tsx` calls `Date.now()` in a render path** to decide "Terjadwal" vs
+  "Berakhir" — the MERCHANT'S LAPTOP clock, which nothing disciplines, and a latent hydration mismatch
+  (a direct violation of the determinism rule in AGENTS.md). Pass the booleans down from the server,
+  which already computes them. (The app-container-vs-Postgres skew the earlier note worried about is
+  structurally zero — same host, same kernel clock — so this is the clock that actually diverges.)
+- [ ] **The flash editor's `pct` is computed against the position-0 variant** while the sale price is
+  one flat number applied per variant with `min()`. On a multi-price product the merchant is shown a
+  discount that applies to one variant and never sees the real one. Show the variant range and compute
+  against the MAX. (No multi-price product exists yet — `having min(price) <> max(price)` → 0 rows.)
+- [ ] **Three promo detail routes 500 on a malformed id** (`promo/html/[id]`, `diskon/[id]`,
+  `flash-sale/[id]`) — the raw segment reaches `eq(x.id, id)` → `invalid input syntax for type uuid`.
+  `/promo/[id]` guards with a UUID regex and documents why; lift it into a shared helper.
+- [ ] **`actions/flash.ts` throws plain `Error` for user-facing rules**, which Next MASKS in production
+  — so the merchant sees a digest, not the reason. `theme.ts` was converted to `{ok, error}` for
+  exactly this; flash/promo/landing still throw. Convert the file.
+- [ ] Smaller: an unlimited voucher renders "342 / 0" with a 0% bar; "Nonaktifkan" in the row menu is
+  still disabled on a reason that is no longer true (the list status IS from the DB column now); the
+  landing slug hint keeps showing the un-slugified text after save; `PromoHubCard` never calls
+  `router.refresh()`, so Simpan stays enabled after a successful save; `lib/data/flash.ts` counts
+  `flash_sale_items` through a join whose comment talks about query count, not tenancy (the
+  CHILD-TABLE RULE wants the comment to name it as the boundary).
+
+---
+
 ## 🏷️ FLASH SALE — audited end to end 2026-07-30; these are what is LEFT
 
 The rule itself is sound: `min(variantPrice, flashPrice)` at all five sites, idempotent where applied

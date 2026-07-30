@@ -1,6 +1,6 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
@@ -39,10 +39,36 @@ async function writeItems(db: Tx, saleId: string, ownsSale: boolean, items: Flas
   if (!wanted.length) return;
   const ids = [...new Set(wanted.map((it) => it.productId))];
   const owned = await db
-    .select({ id: schema.products.id })
+    .select({ id: schema.products.id, title: schema.products.title })
     .from(schema.products)
     .where(inArray(schema.products.id, ids)); // RLS scopes this to the tenant
-  const ownedIds = new Set(owned.map((r) => r.id));
+  const ownedIds = new Map(owned.map((r) => [r.id, r.title]));
+
+  // ⚠️ A SALE PRICE AT OR ABOVE THE PRODUCT'S PRICE IS REFUSED.
+  //
+  // Both pricing readers apply `min(variantPrice, salePrice)`, so a sale priced above the goods
+  // discounts NOTHING — while the seller's list badges it "Berlangsung" and the storefront shows no
+  // cut. The merchant runs a campaign that is not running. Only `> 0` was checked, and the editor
+  // renders a "≥ harga normal" warning that its own `validate()` never enforced.
+  //
+  // Compared against the product's MAX variant price, not the position-0 one: `min` is applied per
+  // variant, so the sale is inert unless it undercuts the dearest variant it is meant to discount.
+  const maxPrices = await db
+    .select({ productId: schema.productVariants.productId, maxPrice: sql<number>`max(${schema.productVariants.priceIdr})`.mapWith(Number) })
+    .from(schema.productVariants)
+    .where(inArray(schema.productVariants.productId, [...ownedIds.keys()]))
+    .groupBy(schema.productVariants.productId);
+  const ceiling = new Map(maxPrices.map((r) => [r.productId, r.maxPrice]));
+  for (const it of wanted) {
+    if (!ownedIds.has(it.productId)) continue;
+    const cap = ceiling.get(it.productId);
+    if (cap != null && Math.round(Number(it.salePriceIdr)) >= cap) {
+      throw new Error(
+        `Harga flash untuk "${ownedIds.get(it.productId)}" (${Math.round(Number(it.salePriceIdr))}) tidak boleh sama atau lebih tinggi dari harga produk (${cap}) — promo tidak akan memotong apa pun.`,
+      );
+    }
+  }
+
   const rows = wanted
     .filter((it) => ownedIds.has(it.productId))
     .map((it) => ({ flashSaleId: saleId, productId: it.productId, salePriceIdr: Math.round(Number(it.salePriceIdr)) }));

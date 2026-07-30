@@ -279,7 +279,7 @@ export type Discount = {
   // `nonaktif` is the DB's own OFF switch and must be SURFACED, not derived away: the display status
   // used to be computed from the dates alone, so a switched-off voucher showed as "kadaluarsa" and the
   // editor wrote `aktif` back over it on the next Simpan.
-  status: "aktif" | "terjadwal" | "kadaluarsa" | "nonaktif"; used: number; limit: number;
+  status: "aktif" | "terjadwal" | "kadaluarsa" | "nonaktif" | "habis"; used: number; limit: number;
   /** `null` = no end date (`ends_at IS NULL`). NOT `0` — zero means "ends today". */
   endsInDays: number | null;
 };

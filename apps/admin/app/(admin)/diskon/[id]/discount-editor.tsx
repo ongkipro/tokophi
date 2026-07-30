@@ -34,7 +34,11 @@ const TYPE_OPTIONS: {
   { value: "ongkir", label: "Gratis Ongkir", hint: "Bebas ongkos kirim", icon: Truck },
 ];
 
-type EditableStatus = "aktif" | "terjadwal";
+// `nonaktif` is a THIRD state, not an absence of one. The DB has always had it, `applyDiscount`
+// refuses it and `/promo` hides it — but this editor could only express two, so opening a switched-off
+// voucher showed "Aktif" and one Simpan re-armed it. RAMADHAN15 (15% off, 890/900 used) was one click
+// from being live again, forever.
+type EditableStatus = "aktif" | "terjadwal" | "nonaktif";
 
 const STATUS_META: Record<
   Discount["status"],
@@ -48,6 +52,10 @@ const STATUS_META: Record<
   terjadwal: {
     label: "Terjadwal",
     className: "bg-blue-500/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400",
+  },
+  habis: {
+    label: "Kuota habis",
+    className: "bg-amber-500/10 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
   },
   nonaktif: {
     label: "Nonaktif",
@@ -78,7 +86,9 @@ export function DiscountEditor({ discount }: { discount?: Discount }) {
     discount ? String(discount.limit) : "",
   );
   const [status, setStatus] = React.useState<EditableStatus>(
-    discount?.status === "terjadwal" ? "terjadwal" : "aktif",
+    // Verbatim from the row, never inferred. `kadaluarsa` is DERIVED from the dates (not a stored
+    // value), so it maps to `aktif` — the merchant re-dates it by setting a period.
+    discount?.status === "terjadwal" ? "terjadwal" : discount?.status === "nonaktif" ? "nonaktif" : "aktif",
   );
   const [period, setPeriod] = React.useState(
     // `null` (no end date) seeds an EMPTY field, which round-trips back to `ends_at: NULL`. Seeding
@@ -346,9 +356,22 @@ export function DiscountEditor({ discount }: { discount?: Discount }) {
                 >
                   Terjadwal
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setStatus("nonaktif")}
+                  className={`flex-1 rounded-[6px] px-3 py-1.5 text-sm font-medium transition-colors ${
+                    status === "nonaktif"
+                      ? "bg-ink/10 text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Nonaktif
+                </button>
               </div>
               <p className="text-xs text-muted-foreground">
-                {status === "aktif"
+                {status === "nonaktif"
+                  ? "Dimatikan. Tidak muncul di halaman promo dan ditolak di checkout, apa pun tanggalnya."
+                  : status === "aktif"
                   ? "Langsung dapat digunakan pelanggan setelah disimpan."
                   : "Baru aktif saat periode dimulai."}
               </p>

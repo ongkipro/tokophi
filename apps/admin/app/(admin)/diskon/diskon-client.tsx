@@ -58,6 +58,10 @@ const STATUS_META: Record<StatusKey, { label: string; className: string }> = {
     className:
       "bg-blue-500/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400",
   },
+  habis: {
+    label: "Kuota habis",
+    className: "bg-amber-500/10 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
+  },
   nonaktif: {
     label: "Nonaktif",
     className: "bg-ink/10 text-muted-foreground",
@@ -240,20 +244,23 @@ export function DiskonClient({ discounts }: { discounts: Discount[] }) {
     };
     for (const d of discounts) c[d.status]++;
     return c;
-  }, []);
+  }, [discounts]);
 
+  // ⚠️ `discounts` in EVERY dependency list. It was missing from all four, and `router.refresh()`
+  // re-renders with new props WITHOUT remounting — so nothing recomputed: a deleted voucher stayed in
+  // the table under a "Diskon dihapus." toast, and the three KPI tiles never moved.
   const totalUsed = React.useMemo(
     () => discounts.reduce((s, d) => s + d.used, 0),
-    [],
+    [discounts],
   );
   const totalSaving = React.useMemo(
     () => discounts.reduce((s, d) => s + estimateSaving(d), 0),
-    [],
+    [discounts],
   );
 
   const rows = React.useMemo(
     () => (filter === "semua" ? discounts : discounts.filter((d) => d.status === filter)),
-    [filter],
+    [filter, discounts],
   );
 
   return (
