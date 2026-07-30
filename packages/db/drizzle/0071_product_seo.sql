@@ -1,2 +1,2 @@
-ALTER TABLE "products" ADD COLUMN "seo_title" text;--> statement-breakpoint
-ALTER TABLE "products" ADD COLUMN "seo_desc" text;
+ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "seo_title" text;--> statement-breakpoint
+ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "seo_desc" text;

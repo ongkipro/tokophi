@@ -6,6 +6,7 @@
 // point of tracking.
 import "../styles/global.css";
 import Analytics from "../components/Analytics.astro";
+import MarketingPixels from "../components/MarketingPixels.astro";
 import { mediaUrl } from "../data/catalog";
 
 interface Props {
@@ -76,6 +77,14 @@ const ogImage = (() => {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <style set:html={`:root { ${Object.entries(BRAND_SHADES).map(([shade, hex]) => `--color-brand-${shade}: ${hex};`).join(" ")} }`} />
     <Analytics />
+    {/* ⚠️ THE AD FUNNEL'S OWN LAYOUT MUST CARRY THE AD PIXELS. This was missing, so /promo/<handle>,
+        /lp/<slug> and /thanks — the pages a merchant sends PAID traffic to, and the page where that
+        traffic converts — fired nothing at all: no PageView, no ViewContent, no InitiateCheckout, no
+        Purchase, and no `ttclid` capture (which only happens on a landing page and which the checkout
+        reads back later). A store with no CAPI token recorded ZERO conversions from its ad funnel while
+        build, lint and `astro check` stayed green. Same class of miss as CheckoutLayout's, one layout
+        over: the note there says "every layout a shopper can convert under" — this is one of them. */}
+    <MarketingPixels />
   </head>
   <body class="min-h-screen bg-cream text-ink antialiased">
     <slot />

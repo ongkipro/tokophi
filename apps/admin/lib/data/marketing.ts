@@ -65,9 +65,18 @@ function isConnected(key: AdChannelKey): boolean {
 
 const isAdChannelKey = (k: string): k is AdChannelKey => k in ORDER_CHANNEL;
 
-// Channel list = labels/branding from `ad_channels` + REAL attributed sales from
-// `orders`. The seeded spend/impressions/clicks/conversions/revenue/pixel columns
-// on `ad_channels` are intentionally NOT read.
+// Channel list = labels/branding from `ad_channels` + attributed sales counted from `orders.channel`.
+// The seeded spend/impressions/clicks/conversions/revenue/pixel columns on `ad_channels` are
+// intentionally NOT read.
+//
+// ⚠️ WHAT `orders.channel` ACTUALLY IS. Until 2026-07-30 this comment said "REAL", and it was not: the
+// column's only writer hard-coded `"organic"`, so on a real store every figure here was 0 forever — and
+// the demo store's split came from the seed's `CHANNELS[Math.floor(rnd() * …)]`, i.e. a coin flip
+// presented as attribution. It is now written by `lib/ad-channel.ts` at order creation from the
+// shopper's own last ad click (`_fbc` / `_gcl_aw` / `ttclid`).
+// So it is real, and it is OURS: last-click, first-party, and it will NOT match Meta Ads Manager, which
+// models view-throughs, cross-device and a different window. Orders placed before that date keep
+// whatever the seed wrote. Say "dari pesanan toko Anda", never "menurut Meta".
 export async function getAdChannels(): Promise<AdChannelStatus[]> {
   return withCurrentTenant(async (db: Tx) => {
     const rows = await db.select().from(schema.adChannels);

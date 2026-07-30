@@ -1436,6 +1436,58 @@ production yet.
 
 ---
 
+## Conversion tracking — three OWNER decisions, not engineering gaps
+
+Found by the 2026-07-30 audit. Each is a product/legal call, so none was made unilaterally.
+
+- [ ] **There is no consent layer. Anywhere.** Grepped the whole repo: no banner, no stored preference,
+  no region check, no `gtag("consent", …)`, no Meta `data_processing_options`. `fbq`, `ttq` and `gtag`
+  bootstrap in `<head>` and fire `PageView` on the first byte of every visit, before any interaction.
+  For an Indonesia-only shop under UU PDP that is a defensible business decision — but it does not look
+  like one anybody has *made*. For a single EU/UK visitor it is cookies + personal data (hashed
+  email/phone, IP, UA, click ids) shared with three ad platforms with no lawful basis and no way to
+  withdraw, and by Meta's and Google's own terms **the merchant carries that, not TokoΦ** — while being
+  unable to comply, because we ship the tag. Minimum honest implementation, in order:
+  (a) a per-store "does this shop serve EU/UK traffic?" setting; (b) a banner that stores a preference
+  and **blocks the bootstrap** in `MarketingPixels.astro` until marketing consent exists — no consent,
+  no script, which also covers Google Consent Mode's `denied` case without implementing it; (c) pass the
+  stored preference through to GA4 MP `consent` and Meta `data_processing_options` so the server half
+  agrees with the browser half. Note gtag's Consent Mode defaults to **granted** when never called, so a
+  banner added later without a `consent default` call changes nothing.
+- [ ] **PPN and the feed price.** Google requires tax-INCLUSIVE prices everywhere except US/CA; our feed
+  emits the bare variant price and `/api/public/order` adds PPN on top when a store enables it. Making
+  the feed inclusive fixes the spec and breaks the landing-page match, because the storefront shows the
+  same ex-PPN number — Merchant Center's crawler compares the two. So this is a storefront-display
+  decision first, a feed change second. **Latent today: zero stores have `tax_enabled`.** Nothing warns
+  the merchant when they tick the box in Pengaturan → Pajak; that warning is the cheap half.
+- [ ] **Every feed image is WebP, which Meta and TikTok both document as unsupported** (JPEG/PNG only;
+  Google does accept WebP). `saveImage` converts every upload, the seeded catalog is `.webp`, and the
+  `?w=` rendition route re-encodes to WebP — there is no JPEG rendition to point at. Fixing it means a
+  second rendition format, so it is a storage/CDN decision, not a feed edit. Stated as a documented
+  format mismatch: no rejection has been observed, because no merchant has connected a catalog yet.
+
+Also open, smaller, and ours to do:
+
+- [ ] `MarketingPixels.astro` ships all three vendor bootstraps even when one channel is configured, and
+  ~2 KB of comments crossed back over the fence the file's own frontmatter note draws. The refactor it
+  proposes (JSON data island + one bundled, minified, cacheable script) fixes both.
+- [ ] `storeTrackingPixels()` is the only storefront read not wrapped in `cached()` — one Postgres
+  round-trip on the SSR critical path of every page, including 404s and bots, for a row that changes
+  twice in a store's lifetime.
+- [ ] A refused COD parcel (`retur`) stays a reported Purchase forever. Nothing emits a refund or
+  cancellation event to any provider, so ROAS is structurally overstated by the COD refusal rate. That
+  is consistent with the signed-off "COD = purchase at the thanks page" rule, but it has no
+  compensating half.
+- [ ] `tracking_event_deliveries` keeps the shopper's IP, user agent and ad cookies with **no retention
+  policy** — nothing ever deletes a row, and `SCHEMA.md` claims the payload holds "commerce facts ONLY".
+  Pick a window (30 days covers every provider's own), delete on the cron tick, and fix the doc.
+- [ ] `INTEGRATION_TOKEN_KEY` is absent from `.env.example` and `.env.coolify.example` (and
+  `docker-compose.coolify.yml` forwards `${INTEGRATION_TOKEN_KEY:-}`, i.e. empty). It IS set in Coolify
+  now, so production works — but a by-the-book redeploy from the examples silently disables every
+  server-side conversion, and the merchant-facing error names an internal env var.
+
+---
+
 ## P3 — Polish
 
 - [ ] Loading / skeleton states.

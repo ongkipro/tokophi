@@ -293,6 +293,14 @@ tell you the container is alive; only this tells you it is running **your** code
 
 ## Env to set in Coolify
 
+⚠️ **`INTEGRATION_TOKEN_KEY` IS NOT IN `.env.coolify.example`** (audited 2026-07-30 — this page said it
+was), and `docker-compose.coolify.yml` forwards `${INTEGRATION_TOKEN_KEY:-}`, i.e. empty by default. It
+IS set on the live stack, so production works today. But a by-the-book redeploy from the examples ships
+with it unset, and the failure is silent in the only way that matters: the Seller's Pemasaran → Pelacakan
+save is REFUSED (correctly — it will not store a token in plaintext) with a message naming an internal
+env variable, and by that card's own copy **every prepaid conversion then records nothing at all**. Add
+it to both example files.
+
 See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!), `KIRIMINAJA_API_KEY`, `AUTOLARIS_API_KEY`, `AUTOLARIS_CALLBACK_SECRET`, **`INTEGRATION_TOKEN_KEY`** (≥16 chars — encrypts the merchants' CAPI tokens; see the conversion-cron section, rotation is a code change). Cross-surface URLs (set AFTER domains assigned): `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API` (⚠️ the storefront reads these at RUNTIME — must be the public admin URL, not localhost, or the kecamatan search / order / payment silently fail). Custom domains: `CUSTOM_DOMAIN_CNAME_TARGET` (default `cname.tokophi.com`).
 
 ## ✅ `tokophi.com` is LIVE (cutover done 2026-07-13)

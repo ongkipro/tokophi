@@ -423,11 +423,21 @@ const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/pub
           }
           var srvShip = typeof res.shipping === "number" ? res.shipping : shipping.cost;
           var srvTotal = typeof res.total === "number" ? res.total : goods() + shipping.cost;
+          // ⚠️ NAME / PHONE / ADDRESS GO IN sessionStorage, NEVER IN THE URL. They used to be query
+          // params, which put the shopper's identity and home address into browser history, the server
+          // access log and any forwarded link — and made this funnel's conversion page untrackable,
+          // because Meta prohibits PII in event parameters and reads the full URL as
+          // `event_source_url`. Same tab, same origin, read once and deleted by /thanks.
+          try {
+            sessionStorage.setItem("tphi:thanks", JSON.stringify({
+              order: res.orderNumber || "",
+              name: form.nama.value.trim(),
+              phone: normalizePhone(form.whatsapp.value) || form.whatsapp.value,
+              address: form.alamat.value.trim(),
+            }));
+          } catch (e) {}
           var qs = new URLSearchParams({
             order: res.orderNumber || "",
-            name: form.nama.value.trim(),
-            phone: normalizePhone(form.whatsapp.value) || form.whatsapp.value,
-            address: form.alamat.value.trim(),
             variant: sel.label,
             qty: String(qty),
             subtotal: String(goods()),
