@@ -1613,19 +1613,27 @@ Found by the 2026-07-30 audit. Each is a product/legal call, so none was made un
 
 Also open, smaller, and ours to do:
 
+- [ ] **GA4 item revenue disagrees with purchase revenue by the order-level discount.** `items[].price` is
+  the line price actually charged; `value` is goods AFTER the voucher. GA4 models this with
+  `items[].discount`, but nothing allocates an order-level discount across lines, and inventing an
+  allocation would be worse than the gap. Decide the allocation rule (pro-rata by line value is the
+  obvious one) before wiring it. Meta and TikTok are unaffected — they take the paid total.
+- [ ] **GA4 `items[]` carry `price`/`quantity` on Purchase only.** ViewContent, AddToCart and
+  InitiateCheckout still send bare `item_id`, so item-scoped metrics are populated by purchases alone.
+  The data is on the page for all three; it just is not threaded into `fire()` yet.
+
 - [ ] `MarketingPixels.astro` ships all three vendor bootstraps even when one channel is configured, and
   ~2 KB of comments crossed back over the fence the file's own frontmatter note draws. The refactor it
   proposes (JSON data island + one bundled, minified, cacheable script) fixes both.
-- [ ] `storeTrackingPixels()` is the only storefront read not wrapped in `cached()` — one Postgres
-  round-trip on the SSR critical path of every page, including 404s and bots, for a row that changes
-  twice in a store's lifetime.
+- [x] ~~`storeTrackingPixels()` is the only storefront read not wrapped in `cached()`~~ — done
+  2026-07-31, same 15 s TTL as the catalog.
 - [ ] A refused COD parcel (`retur`) stays a reported Purchase forever. Nothing emits a refund or
   cancellation event to any provider, so ROAS is structurally overstated by the COD refusal rate. That
   is consistent with the signed-off "COD = purchase at the thanks page" rule, but it has no
   compensating half.
-- [ ] `tracking_event_deliveries` keeps the shopper's IP, user agent and ad cookies with **no retention
-  policy** — nothing ever deletes a row, and `SCHEMA.md` claims the payload holds "commerce facts ONLY".
-  Pick a window (30 days covers every provider's own), delete on the cron tick, and fix the doc.
+- [x] ~~`tracking_event_deliveries` keeps the shopper's IP, user agent and ad cookies with no retention
+  policy~~ — done 2026-07-31: 30 days, purged on the cron tick, unconditional on status; `SCHEMA.md`
+  now describes what the payload really holds.
 - [ ] `INTEGRATION_TOKEN_KEY` is absent from `.env.example` and `.env.coolify.example` (and
   `docker-compose.coolify.yml` forwards `${INTEGRATION_TOKEN_KEY:-}`, i.e. empty). It IS set in Coolify
   now, so production works — but a by-the-book redeploy from the examples silently disables every

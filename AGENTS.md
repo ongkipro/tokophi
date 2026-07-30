@@ -31,6 +31,13 @@ are building one product together, not racing. Everything below was learned by b
   a `when` that does not increase, and on a journal entry with no `.sql` file (or the reverse).
   Resolving the journal conflict: take **main's file whole** and append your one entry. Never
   hand-merge the list — it rewrites entries that belong to someone else.
+  ⚠️ **WRITE EVERY MIGRATION IDEMPOTENT** — `add column if not exists`, `create index if not exists`,
+  and `do $$ begin create type … exception when duplicate_object then null; end $$` for enums. Drizzle
+  applies the whole pending batch in **ONE transaction**: a single "already exists" rolls back every
+  migration behind it, and prints nothing you would notice. On 2026-07-30 that left **16 migrations
+  unapplied** on the shared dev DB — `0062` aborted on a column that had arrived earlier via `push`, so
+  `0063`–`0083` never ran, for everyone. Mixing `push` and `migrate` on one database is how the
+  divergence starts; idempotency is what makes it survivable.
 - **PR numbers.** `gh pr create` prints the number; **use that one**. Guessing "the next number" is
   how you run `gh pr merge` against a PR that is not yours. It happened on 2026-07-22 and only failed
   because that PR had already been merged.
@@ -386,5 +393,48 @@ every deploy, and a hardcoded one fails with "No such container" the moment anyt
 3. Register it in `lib/nav.ts` (`NAV_GROUPS`).
 4. Build + verify console clean + screenshot (Playwright renders charts correctly; `chrome --headless --virtual-time-budget` mis-sizes Recharts).
 
-## Docs
-PRD + architecture + data model + decisions live in `~/Documents/Development/tokophi/`. Changelog: `CHANGELOG.md`. `admin/AGENTS.md` = the create-next-app "Next 16 has breaking changes" note.
+## Conversion tracking, attribution & catalog feeds (read before touching a pixel or a feed)
+
+- **`packages/lib/src/tracking-ids.ts` is the ONE definition of a catalog id.** The feeds' `<g:id>`, the
+  storefront pixel's `content_ids` and the CAPI payload all call `retailerId()` with
+  `stores.catalog_id_scheme` as a **parameter, never an `if` at a call site**. Both halves must flip in
+  the same instant for a store: a mismatch does not degrade matching, it **zeroes** it (ADR 0013 §5).
+- **A conversion is built from the ORDER ROW, never from the request that created it**
+  (`lib/tracking-events.ts` → `purchaseFacts`). A success page is not proof that a sale happened.
+- **Browser and server Purchase share `event_id = purchase:{order_number}`.** Change either half's event
+  NAME or id and every sale counts twice — Meta de-duplicates on `event_id`, TikTok on
+  `(event_source_id, event, event_id)`.
+- **`value` is not one number.** Meta/TikTok take the all-in total; GA4 takes goods only
+  (subtotal − discount) with `shipping` and `tax` as their own parameters. Compute goods the same way on
+  both sides or GA4 gets two revenues for one `transaction_id`.
+- **`fbclid` is NOT proof of an ad.** Meta appends it to every outbound link it serves, organic included;
+  only `gclid` and `ttclid` are paid-only. `orders.channel` therefore reads `utm_medium` first and books
+  a bare `_fbc` as `other`. `_fbp`/`_ttp` are attribution for NOTHING — they are set on any visit.
+- **Prepaid ≠ converted.** `/checkout/sukses` displays an UNPAID VA/QR. COD converts there; prepaid is
+  enqueued HELD and released by the payment callback. The SERVER decides per order, via
+  `tracking.browserPurchase` — never the page.
+- **Every layout a shopper can convert under must render `MarketingPixels`.** `CheckoutLayout` was missed
+  once and `LandingLayout` twice; the second time the entire paid-traffic funnel recorded nothing while
+  build, lint and `astro check` stayed green.
+- Say **"dari pesanan toko Anda"**, never "menurut Meta": this is our own last-click model and will not
+  match Ads Manager.
+
+## Docs — they live in `specs/`, in this repo
+
+| Doc | Read it when |
+|---|---|
+| `specs/docs/FLOWS.md` | end-to-end flows. **§5 shipping · §8 ad click → order → conversion.** Read before touching checkout, ongkir, a shipment or a pixel |
+| `specs/docs/CODE_MAP.md` | you need to find where a concern lives |
+| `specs/docs/STATUS.md` | **before you trust a number on a screen** — 🟢 real / 🟡 seeded / 🔴 fake |
+| `specs/docs/SCHEMA.md` | the DB, annotated from the catalog |
+| `specs/docs/BACKLOG.md` | what is actually open |
+| `specs/docs/DEPLOY.md` | ops, env, the cron sidecars, how to verify a deploy really landed |
+| `specs/PRD.md` · `specs/decisions/` | what the product is · ADR 0010 couriers · **0012 conversion tracking · 0013 catalog ids** |
+
+Changelog: `CHANGELOG.md`. `apps/admin/AGENTS.md` = the "Next 16 has breaking changes" note.
+
+⚠️ **Do NOT reach the docs through `~/Documents/Development/tokophi`** — that symlink points at
+`<repo>/specs` in the MAIN checkout, on branch `main`. Editing through it writes into someone else's
+working tree, and your commit will not contain it.
+
+**If a doc disagrees with the code, the code wins — and the doc is a bug. Fix it.**

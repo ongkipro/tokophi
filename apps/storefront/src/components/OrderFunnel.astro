@@ -190,6 +190,33 @@ const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/pub
     function setText(id, txt) { var el = byId(id); if (el) el.textContent = txt; }
 
     // ── ported verbatim from checkout.astro — the two must never disagree ─────────────────────
+    // ⚠️ THE PAID PATH MUST REPORT LIKE THE PAID PATH. This funnel is what a merchant buys ads to, and
+    // it was the ONE order path that sent no tracking context at all — so `adChannel(undefined)` booked
+    // every single one of its orders as `organic`, and the server conversion travelled to Meta/GA4/
+    // TikTok with no match keys whatsoever. The `ttclid` MarketingPixels captures on the landing page
+    // was written and never read back. Same readers as checkout.astro; same 30-day/28-day windows.
+    function trackingCookie(name) {
+      try {
+        var m = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]+)"));
+        return m ? decodeURIComponent(m[2]).slice(0, 256) : "";
+      } catch (e) { return ""; }
+    }
+    function ttclid() {
+      try {
+        var raw = JSON.parse(localStorage.getItem("tphi:ttclid") || "null");
+        if (!raw || !raw.v) return "";
+        return Date.now() - Number(raw.t || 0) > 28 * 86400000 ? "" : String(raw.v).slice(0, 256);
+      } catch (e) { return ""; }
+    }
+    function utm() {
+      try {
+        var raw = JSON.parse(localStorage.getItem("tphi:utm") || "null");
+        if (!raw) return {};
+        if (Date.now() - Number(raw.t || 0) > 30 * 86400000) return {};
+        return { utmSource: String(raw.s || "").slice(0, 64), utmMedium: String(raw.m || "").slice(0, 64) };
+      } catch (e) { return {}; }
+    }
+
     function normalizePhone(raw) {
       var d = String(raw == null ? "" : raw).replace(/\D+/g, "");
       if (!d) return null;
@@ -396,6 +423,12 @@ const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/pub
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storeSlug: STORE_SLUG,
+          trackingCookies: Object.assign(
+            { fbp: trackingCookie("_fbp"), fbc: trackingCookie("_fbc"), ga: trackingCookie("_ga"),
+              gcl: trackingCookie("_gcl_aw") || trackingCookie("_gcl_gb") || trackingCookie("_gcl_gs"),
+              ttp: trackingCookie("_ttp"), ttclid: ttclid() },
+            utm(),
+          ),
           items: [{ handle: HANDLE, variant: sel.variant, qty: qty }],
           customer: {
             name: form.nama.value.trim(),
@@ -434,6 +467,25 @@ const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/pub
               name: form.nama.value.trim(),
               phone: normalizePhone(form.whatsapp.value) || form.whatsapp.value,
               address: form.alamat.value.trim(),
+            }));
+          } catch (e) {}
+          // The conversion itself. `MarketingPixels` fires the browser Purchase from
+          // `localStorage.lastOrder`, and this funnel never wrote one — so its thanks page reported
+          // nothing, and a store running the browser pixel with no CAPI token recorded ZERO sales from
+          // the pages it buys traffic to. Same shape `checkout.astro` writes, so one gate serves both:
+          // `tracking.browserPurchase` is decided by the SERVER (true for COD, false for an unpaid VA).
+          try {
+            localStorage.setItem("lastOrder", JSON.stringify({
+              number: res.orderNumber || "",
+              total: srvTotal,
+              subtotal: typeof res.subtotal === "number" ? res.subtotal : goods(),
+              discount: typeof res.discount === "number" ? res.discount : 0,
+              tax: typeof res.tax === "number" ? res.tax : 0,
+              shipping: { price: srvShip },
+              items: [{ catalogId: (res.tracking && res.tracking.contentIds && res.tracking.contentIds[0]) || "", price: sel.price, qty: qty, name: sel.label }],
+              contact: { email: emailEl && emailEl.value ? emailEl.value.trim() : "" },
+              shippingAddress: { whatsapp: normalizePhone(form.whatsapp.value) || form.whatsapp.value },
+              tracking: res.tracking || null,
             }));
           } catch (e) {}
           var qs = new URLSearchParams({

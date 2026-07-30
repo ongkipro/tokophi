@@ -507,6 +507,13 @@ meta_event_deliveries(
 )
 ```
 
+> ⚠️ **AS SHIPPED (2026-07-30) THIS IS HALF TRUE, DELIBERATELY.** `tracking_event_deliveries` has no
+> `payload_hash`; it stores the commerce facts plus a `client` object — `userAgent`, `ip`, `fbp`, `fbc`,
+> `gaClientId`, `ttp`, `ttclid`, `sourceUrl` — in plaintext. The send is asynchronous and the providers
+> require those match keys, which no longer exist by the time the cron runs; that is why the "explicit
+> retention" half of this rule was **owed, not optional**, and it now exists: 30 days, purged on the cron
+> tick, unconditional on status. No email, phone or token is ever persisted. See `SCHEMA.md`.
+
 Do not store unnecessary raw identity fields in this table. Store a normalized payload hash and operational metadata. If request payload retention is needed for debugging, use a short-lived encrypted store with explicit retention.
 
 ### 9.5 `meta_sync_jobs`
@@ -751,7 +758,7 @@ PageView:           pv:{store_id}:{session_id}:{page_sequence}
 ViewContent:        vc:{store_id}:{session_id}:{retailer_id}:{sequence}
 AddToCart:          atc:{store_id}:{session_id}:{cart_mutation_id}
 InitiateCheckout:   ic:{store_id}:{checkout_id}
-Purchase:           purchase:{store_id}:{order_id}
+Purchase:           purchase:{store_id}:{order_id}` — ⚠️ **SHIPPED AS `purchase:{order_number}`** (`packages/lib/src/tracking-ids.ts`). `orders_number_unique` is platform-wide, so the store namespace adds no collision resistance, and it would hand the tenant's primary key to three ad platforms. An identifier given to Meta cannot be un-given. `
 ```
 
 For Purchase, browser and server MUST both use:

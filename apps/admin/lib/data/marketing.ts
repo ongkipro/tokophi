@@ -7,10 +7,14 @@ import { sql } from "drizzle-orm";
 // /pemasaran data layer — what is REAL and what is NOT.
 //
 // NOT REAL (never served from here again): ad spend, impressions, clicks, ad
-// "conversions", ad revenue, ROAS, campaign lists, Pixel/CAPI ids. There is NO
-// Meta / Google Ads / TikTok integration anywhere in this codebase (the only
-// OAuth we have is Google *Sign-In*, lib/google.ts), so those numbers cannot be
-// fetched or computed from anything. The `ad_channels` / `ad_metrics` tables
+// "conversions", ad revenue, ROAS, campaign lists. We do not pull SPEND from any
+// ad platform and have no plan to, so those columns are structurally empty.
+// ⚠️ This comment used to say "there is NO Meta / Google Ads / TikTok integration
+// anywhere in this codebase". Since ADR 0012/0013 that is false: pixel + CAPI
+// config lives in `store_tracking_channels` (lib/data/tracking.ts), conversions are
+// delivered by lib/capi.ts, and the catalog feeds are always on. What is still
+// absent is an ad-platform REPORTING integration — the credentials here are pasted
+// by the merchant, not OAuthed. The `ad_channels` / `ad_metrics` tables
 // still hold seeded demo values (spend 18,5jt → revenue 78,2jt, ROAS 4,2× …) —
 // pure fabrication. The tables stay (schema is shared), but the UI must never
 // present those columns as fact. A merchant could raise a real ad budget on a
@@ -30,8 +34,6 @@ export type AdChannelStatus = {
   name: string;
   brand: string;
   pixelLabel: string;
-  /** True only when a real integration credential exists. None exists today. */
-  connected: boolean;
   /** REAL — non-cancelled orders whose `orders.channel` points at this channel. */
   orders: number;
   /** REAL — sum of `orders.total_idr` for those orders (IDR). */
@@ -47,21 +49,13 @@ const ORDER_CHANNEL: Record<AdChannelKey, string> = {
   tiktok: "tiktok_ads",
 };
 
-/**
- * The credential store for ad platforms. It is EMPTY and there is no writer: no
- * OAuth flow, no token table, no ad-platform client exists. It is typed as a map
- * so the seam is obvious — when a real integration lands, fill it (from env or a
- * credentials table) and `isConnected` starts returning true on its own.
- *
- * `ad_channels.connected` is deliberately NOT consulted: it is a seeded demo
- * boolean and asserting an integration that does not exist is the whole bug.
- */
-const AD_CREDENTIALS: Partial<Record<AdChannelKey, { accessToken: string }>> = {};
-
-/** A channel counts as connected ONLY when a real integration credential exists. */
-function isConnected(key: AdChannelKey): boolean {
-  return AD_CREDENTIALS[key] != null;
-}
+// ⚠️ `AD_CREDENTIALS` / `isConnected()` / `AdChannelStatus.connected` were DELETED (2026-07-31). The map
+// was empty with no writer, so `connected` was permanently `false` — and it shipped the "Belum
+// terhubung" lie twice: once on the channel cards, once in the CSV export, both on a page rendering
+// "Pixel aktif" from the real config beside it. Whether a channel is tracking is answered by
+// `getTrackingStatus()` in lib/data/tracking.ts, from `store_tracking_channels`. Do not reintroduce a
+// boolean here that nothing true can set: that is the dead-column pattern (`store_settings.
+// payment_channels`) which this codebase has now paid for three times.
 
 const isAdChannelKey = (k: string): k is AdChannelKey => k in ORDER_CHANNEL;
 
@@ -102,7 +96,6 @@ export async function getAdChannels(): Promise<AdChannelStatus[]> {
           name: r.name ?? "",
           brand: r.brand ?? "#666",
           pixelLabel: r.pixelLabel ?? "",
-          connected: isConnected(key),
           orders: hit?.orders ?? 0,
           revenue: Number(hit?.revenue ?? 0),
         };

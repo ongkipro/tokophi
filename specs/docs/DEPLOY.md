@@ -205,7 +205,24 @@ and report `awbFilled: 0` forever against real ones.
 
 `GET /api/cron/tracking-events?secret=$CRON_SECRET` drains `tracking_event_deliveries` into the
 merchant's own Meta Conversions API / GA4 Measurement Protocol / TikTok Events API. Returns
-`{claimed, sent, failed, dead}`.
+`{ok, claimed, sent, failed, dead, released, backfilled}`.
+
+**It PURGES and RECONCILES before it claims, and those last two counters are the ones to watch:**
+- `released` — held rows whose order has since become `financial_status='dibayar'` (≤7 days). A prepaid
+  conversion is parked at `2126-01-01` and released by the AutoLaris webhook, which is a **single
+  un-retried delivery**: get the callback secret wrong on a redeploy and every prepaid Purchase in that
+  window sits parked forever. There is no payment poll and no "mark paid" path in the product.
+- `backfilled` — orders ≤3 days old with **no** delivery row at all, where the store has a usable CAPI
+  config and the order is either paid or COD (cancelled/returned/refunded excluded — this sweep must
+  never invent a conversion). `enqueuePurchase` runs after the order commits inside a try/catch; one
+  transient DB blip and the conversion is lost silently, and the browser pixel is suppressed with it.
+  Capped at 20 per tick, each order in its own try/catch so one bad row cannot block the sweep.
+- Retention: rows older than **30 days are deleted** on every tick, 500 at a time. They carry the
+  shopper's IP, UA and ad cookies, and past every provider's own event window they are only evidence.
+
+A `released` or `backfilled` that is persistently non-zero is **not** "the cron working" — it is the
+payment callback or the checkout enqueue failing upstream. Both sweeps carry `store_id` explicitly on
+every predicate: this route runs on the owner connection, where RLS does not apply.
 
 **Its own sidecar, every 60 s** — not a line in the daily `cron` container. A conversion delivered an
 hour late still counts, but the ad platform's optimisation degrades with delay, and Purchase is a

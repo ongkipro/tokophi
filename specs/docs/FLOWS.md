@@ -484,3 +484,82 @@ number that looks real and is wrong is worse than no number.
 **`phone` is the column this table is paid for.** Recovery in Indonesia travels on WhatsApp, not email,
 so the list ranks carts with a number first and says plainly that the rest (`anonim`) cannot be
 contacted at all — rather than quietly hiding them and implying every cart is actionable.
+
+---
+
+## 8. Ad click → order → conversion at the provider (ADR 0011 / 0012 / 0013)
+
+Two halves of ONE sale. The shopper's browser and our server both report it, and they carry the **same
+`event_id`**, so the provider counts one conversion rather than two. Everything here is per store — the
+pixel id and the CAPI token belong to the merchant, not to TokoΦ (ADR 0012).
+
+### The rules this flow exists to protect
+
+1. **The order row is the evidence, never the request.** `purchaseFacts()` re-reads value, line items,
+   discount, ongkir and PPN from the database (`apps/admin/lib/tracking-events.ts`). A success page is
+   not proof that a sale happened.
+2. **One id helper, or nothing matches.** `<g:id>` in the feed and `content_ids` in every event both come
+   from `retailerId()` (`packages/lib/src/tracking-ids.ts`), with `stores.catalog_id_scheme` as a
+   *parameter*, never an `if` at a call site. A mismatch does not degrade matching — it **zeroes** it.
+3. **Prepaid is not a conversion until the money lands.** COD converts at the thanks page; VA/QRIS is
+   enqueued HELD (parked at `2126-01-01`) and released by the payment callback.
+4. **`value` does not mean the same thing to every provider.** Meta and TikTok take the all-in total;
+   GA4 takes goods only (subtotal − discount), with `shipping` and `tax` as their own parameters. All
+   four numbers ride on the delivery row so the sender chooses, instead of one figure lying to two of
+   them. Browser and server must compute goods **identically** or GA4 receives two revenues for one
+   `transaction_id`.
+5. **Every layout a shopper can convert under must render `MarketingPixels`.** `CheckoutLayout` was
+   missed once and `LandingLayout` twice — the second time it cost the entire paid-traffic funnel, with
+   build, lint and `astro check` all green.
+
+### The path
+
+```
+LANDING (any page)                  MarketingPixels.astro
+  ?fbclid / ?gclid / ?ttclid   →    vendor SDKs write _fbc / _gcl_aw; we persist ttclid (28 d)
+  ?utm_source / ?utm_medium    →    we persist utm (30 d) — the ONLY signal that says "paid"
+  PageView · ViewContent (exact variant id, ADR 0013 §7.2)
+
+CHECKOUT  /checkout  or  /promo/<handle> · /lp/<slug>  (OrderFunnel)
+  InitiateCheckout — exact ids win; value and units describe the SAME lines as the ids
+  POST /api/public/order  { trackingCookies: { fbp, fbc, ga, gcl, ttp, ttclid, utmSource, utmMedium } }
+
+SERVER  api/public/order
+  adChannel(trackingCookies)  →  orders.channel        (lib/ad-channel.ts)
+  enqueuePurchase(store, order, client, { hold: !isCod })
+      → one tracking_event_deliveries row per configured channel
+      → COD: due now.   Prepaid: parked at 2126-01-01 (HELD)
+  responds { tracking: { eventId, contentIds, browserPurchase } }
+
+BROWSER  /checkout/sukses  or  /thanks
+  Purchase, only when the SERVER said browserPurchase === true
+
+PAYMENT  api/public/pay/callback  →  releasePurchase()  →  held rows become due
+
+CRON  api/cron/tracking-events, every 60 s
+  purge (30 d) → reconcile (release paid, back-fill missing) → claim → send → verdict
+```
+
+### 8.1 Facts worth stating once, here
+
+- **`event_id` is `purchase:{order_number}`, the order number alone.** ADR 0012 §14.3 proposed
+  `purchase:{store_id}:{order_id}`; `orders.number` already carries a platform-wide unique constraint, so
+  the store namespace buys no collision resistance and would publish the tenant key into three ad
+  platforms' logs. An identifier handed to Meta cannot be un-handed.
+- **`fbclid` is NOT proof of an ad.** Meta appends it to every outbound Facebook/Instagram/Messenger
+  link, organic included. Google's `gclid` and TikTok's `ttclid` really are paid-only. So `adChannel`
+  reads `utm_medium` first, then the paid-only click ids, and books a bare `_fbc` as `other` — "came
+  from Meta", not "came from a Meta ad". A merchant who tags their ad URLs (`utm_medium=cpc`) gets
+  `meta_ads` properly; one who does not gets an honest `Lainnya` instead of inflated ad revenue.
+- **`send_to` is mandatory on the GA4-shaped gtag event.** Without it gtag broadcasts to the DEFAULT
+  group — including any `AW-` tag configured on the same page — and Google Ads receives two purchases
+  per sale, only one of which carries a `transaction_id`.
+- **The browser Purchase is gated by the server.** `browserPurchase` is true only for COD:
+  `/checkout/sukses` is where an **unpaid** VA/QR is displayed, so firing there for a prepaid order
+  would report a conversion for every abandoned payment screen.
+- **A store with no channel configured pays nothing.** `enqueuePurchase` checks `store_tracking_channels`
+  FIRST, before building the four-query fact set, because it runs inline on the checkout's hot path.
+- **Non-fatal by contract.** Callers wrap `enqueuePurchase` in try/catch — a marketing table must never
+  fail an order. Which is exactly why the cron's back-fill sweep has to exist.
+- **Ops:** sidecar `cron-tracking-events` (`sleep 60`) in `docker-compose.coolify.yml`. Needs
+  `CRON_SECRET` (fail-closed in production) **and** `INTEGRATION_TOKEN_KEY`. See `DEPLOY.md`.
