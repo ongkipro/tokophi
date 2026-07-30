@@ -29,6 +29,14 @@ export const PAYMENT_METHOD_LABEL: Record<string, string> = {
   dana: "DANA", va: "Virtual Account", cod: "COD (Bayar di Tempat)",
 };
 
+/**
+ * The `payment_method` enum's values, derived from the labels above so the two cannot drift.
+ *
+ * Exists because `/pesanan?bayar=<anything>` used to reach `p.method = $1::payment_method` unvalidated
+ * and answer **500** — while `tab` and `field`, the two parameters beside it, were both checked.
+ */
+export const PAYMENT_METHODS = Object.keys(PAYMENT_METHOD_LABEL);
+
 export type OrderListLine = {
   title: string;
   variant: string | null;

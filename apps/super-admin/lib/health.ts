@@ -8,8 +8,14 @@ import type { HealthCheck, HealthVerdict, StoreHealth } from "./health-types";
 // failed invoices), activity (recency of the last order), stock (out-of-stock products), and
 // subscription status. No live pings — this is a single-machine local deployment.
 
-const TODAY = new Date("2026-07-02T00:00:00Z"); // matches the seed anchor
-const daysSince = (d: Date | null) => (d ? Math.round((TODAY.getTime() - d.getTime()) / 86_400_000) : null);
+// ⚠️ THE REAL CLOCK. This was anchored to `2026-07-02` "to match the seed", while the clock kept
+// moving — so a healthcheck is only correct on the day the seed was written. Measured 2026-07-30:
+// Batik Nusantara's last order was 6 days ago and this rendered **−23 hari**; Kopi Senja (30 days
+// dormant) read 1 and passed as "sehat"; Hijab Amara (34 days, past the 30-day FAIL threshold) read
+// 5 and passed as "ok". Both the activity recency and the >14d overdue-invoice check were wrong, and
+// the same store-detail page showed the healthcheck and its stat card disagreeing about one number.
+// `data.ts` was migrated off this anchor for exactly this reason; this file was left behind.
+const daysSince = (d: Date | null) => (d ? Math.round((Date.now() - d.getTime()) / 86_400_000) : null);
 
 const OVERDUE_DAYS = 14; // a "menunggu" invoice older than this is treated as nunggak
 const ACTIVITY_WARN_DAYS = 14;

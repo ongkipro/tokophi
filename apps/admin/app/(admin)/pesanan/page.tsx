@@ -5,6 +5,7 @@ import {
   ORDER_TABS,
   ORDER_SEARCH_FIELDS,
 } from "@/lib/data/orders";
+import { PAYMENT_METHODS } from "@/components/admin/pesanan/order-list-types";
 import { getReturnsByCourier } from "@/lib/data/returns";
 import { PesananClient } from "./pesanan-client";
 
@@ -29,7 +30,12 @@ export default async function PesananPage({ searchParams }: { searchParams: Prom
 
   const q = one(sp.q);
   const courier = one(sp.kurir);
-  const method = one(sp.bayar);
+  // ⚠️ VALIDATED like `tab` and `field` two lines up. It was not, and it reaches
+  // `p.method = ${...}::payment_method` in the data layer — so `/pesanan?bayar=xxx` was a **500**
+  // (`invalid input value for enum payment_method`), reproduced against a running server. A URL
+  // parameter is client input; the two beside it already knew that.
+  const methodParam = one(sp.bayar);
+  const method = methodParam && PAYMENT_METHODS.includes(methodParam) ? methodParam : "";
   const page = Math.max(1, Number(one(sp.page)) || 1);
 
   const [list, returns] = await Promise.all([

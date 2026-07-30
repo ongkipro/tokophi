@@ -68,7 +68,12 @@ export async function bulkGenerateResi(numbers: string[]): Promise<BulkResult> {
         serviceName: rate.service,
         cost: rate.cost,
         insurance: false,
-        cod: !!rate.cod,
+        // ⚠️ NOT `!!rate.cod`. That is the SERVICE's capability — true for every order on an SPX
+        // service in a COD-enabled store — while this queue deliberately holds PREPAID orders too
+        // (`financial_status='dibayar' OR has-cod-payment`). It booked 75 already-paid orders on this
+        // store with `cod = total`, i.e. the courier asking a buyer who has paid to pay again at the
+        // door. `createShipment` now derives COD from `payments.method` itself; omitting it here says
+        // "you decide", which is the only correct answer a bulk loop can give.
       });
       if (!r.ok) {
         failed.push({ number, error: r.error ?? "Gagal membuat pengiriman" });

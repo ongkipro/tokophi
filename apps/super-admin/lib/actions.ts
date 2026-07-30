@@ -342,7 +342,7 @@ export async function testAutolarisConnection(): Promise<{ ok: boolean; message:
  * operator is an owner-level act, the role must be one we recognise, and it is now audited — it was
  * previously unlogged, so a self-promotion would have left no trace whatsoever.
  */
-export async function invitePlatformAdmin(input: { name: string; email: string; role: string }): Promise<{ ok: boolean; error?: string }> {
+export async function invitePlatformAdmin(input: { name: string; email: string; role: string }): Promise<{ ok: boolean; error?: string; password?: string }> {
   const admin = await requirePlatformAdmin("owner");
 
   const email = input.email?.trim().toLowerCase();
@@ -357,10 +357,17 @@ export async function invitePlatformAdmin(input: { name: string; email: string; 
   const [dup] = await db.select({ id: schema.platformAdmins.id }).from(schema.platformAdmins).where(eq(schema.platformAdmins.email, email)).limit(1);
   if (dup) return { ok: false, error: "Email sudah terdaftar sebagai operator." };
 
-  await db.insert(schema.platformAdmins).values({ email, name: input.name?.trim() || null, role, passwordHash: hashPassword(DEV_PASSWORD) });
+  // ⚠️ A RANDOM password, revealed ONCE — not `DEV_PASSWORD`.
+  //
+  // Every operator minted here used to get the fixed `tokophi123`, never revealed and never forced to
+  // change, so an email address plus a well-known default was a working login to the CONTROL PLANE —
+  // the surface that reaches every tenant. The store-user add flow already does it this way; this one
+  // did not. Same helper, same one-time hand-over.
+  const pw = tempPassword();
+  await db.insert(schema.platformAdmins).values({ email, name: input.name?.trim() || null, role, passwordHash: hashPassword(pw) });
   await logPlatform(`Operator ${email} ditambahkan sebagai ${role} oleh ${admin.email}`);
   revalidatePath("/pengaturan");
-  return { ok: true };
+  return { ok: true, password: pw };
 }
 
 // ---- manual billing: create a VA invoice for a store + payment reminder ----
@@ -493,15 +500,34 @@ export async function resetOwnerPassword(storeId: string): Promise<{ ok: boolean
   return { ok: true, password: pw, email: row.email };
 }
 
-// Reset ANY store user's password.
+// Reset a store user's password — scoped to THAT store, and owner-rank if the target is an owner.
+//
+// ⚠️ THIS WAS A FULL MERCHANT-ACCOUNT TAKEOVER, and it made the owner gate above decorative.
+// It ran at the DEFAULT `admin` rank and looked the target up by `userId` ALONE — no join to
+// `store_users`, no `storeId` filter — so a rank-2 operator could reset the password of ANY user row
+// on the platform, including any store's OWNER, and `resetOwnerPassword`'s `requirePlatformAdmin("owner")`
+// was simply routed around. The store-detail UI even renders the reset button on the owner's row
+// (only DELETE is hidden for `role === "owner"`). `storeId` was used for nothing but the log line, so
+// the audit trail could be pointed at a store the victim does not belong to.
+//
+// Two gates now, both necessary:
+//   1. membership — the target must be a member of THIS store, read back through `store_users`.
+//   2. rank — resetting an OWNER needs `owner`, exactly like `resetOwnerPassword`. Handing over a
+//      merchant's account is the same act whichever button reaches it.
 export async function resetStoreUserPassword(storeId: string, userId: string): Promise<{ ok: boolean; password?: string; email?: string }> {
   await requirePlatformAdmin();
-  const [u] = await db.select({ email: schema.users.email }).from(schema.users).where(eq(schema.users.id, userId)).limit(1);
-  if (!u) return { ok: false };
+  const [target] = await db
+    .select({ email: schema.users.email, role: schema.storeUsers.role })
+    .from(schema.storeUsers)
+    .innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
+    .where(and(eq(schema.storeUsers.storeId, storeId), eq(schema.storeUsers.userId, userId)))
+    .limit(1);
+  if (!target) return { ok: false };
+  if (target.role === "owner") await requirePlatformAdmin("owner");
   const pw = tempPassword();
   await db.update(schema.users).set({ passwordHash: hashPassword(pw) }).where(eq(schema.users.id, userId));
-  await logStore(storeId, `Password ${u.email} direset oleh platform`);
-  return { ok: true, password: pw, email: u.email };
+  await logStore(storeId, `Password ${target.email} (${target.role}) direset oleh platform`);
+  return { ok: true, password: pw, email: target.email };
 }
 
 export async function setStoreUserRole(storeId: string, storeUserId: string, role: "owner" | "admin" | "staff" | "gudang"): Promise<{ ok: boolean }> {

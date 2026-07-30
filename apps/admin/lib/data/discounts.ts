@@ -1,7 +1,7 @@
 import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant } from "@/lib/tenant";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import type { Discount } from "@/lib/mock/store";
 
 // Admin display status is derived from the dates (real terjadwal / aktif / kadaluarsa).
@@ -59,5 +59,25 @@ export async function getDiscount(id: string): Promise<Discount | null> {
   return withCurrentTenant(async (db) => {
     const rows = await db.select().from(schema.discounts).where(eq(schema.discounts.id, id)).limit(1);
     return rows[0] ? toDiscount(rows[0]) : null;
+  });
+}
+
+/**
+ * Rupiah customers ACTUALLY saved: `Σ orders.discount_idr`.
+ *
+ * The Diskon dashboard used to render a `estimateSaving()` whose own comment said "Fabricated" — it
+ * multiplied `used_count` by a hardcoded `AVG_ORDER = 200.000` and rendered ≈Rp90,3jt for this store,
+ * while the true figure is **0 over 0 discounted orders**. `orders.discount_idr` has existed all
+ * along. A money tile on a dashboard is read as money, whatever the word "perkiraan" beside it says —
+ * the same class `lib/data/marketing.ts` was cleaned up for ("a merchant could raise a real ad budget
+ * on a return that never happened").
+ */
+export async function getDiscountSavings(): Promise<number> {
+  return withCurrentTenant(async (db, storeId) => {
+    const [row] = await db
+      .select({ total: sql<number>`coalesce(sum(${schema.orders.discountIdr}), 0)`.mapWith(Number) })
+      .from(schema.orders)
+      .where(eq(schema.orders.storeId, storeId));
+    return row?.total ?? 0;
   });
 }

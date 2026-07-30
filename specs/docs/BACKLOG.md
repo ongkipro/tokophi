@@ -222,9 +222,10 @@ the point: **hand-fixing the instances you found is not a strategy.**
       re-reads the status under `FOR UPDATE` after the KiriminAja round-trip (the poller writes the same
       row while we are on the network). If the order went terminal meanwhile, the shipment fields are still
       cleared — the booking IS void at the courier — but `status` is left alone.
-- [ ] **Route the two shipping status writes through `applyOrderStatusChange`.** `d07aa1e` + `dde9c09`
-      guard the side door; they do not remove it. There should be ONE writer of `orders.status`, not a
-      state machine plus two guarded raw updates that must be kept in sync by hand.
+- [x] **Route the two shipping status writes through `applyOrderStatusChange` — DONE, and this line was
+      STALE.** Verified 2026-07-31: both call sites in `shipping.ts` go through the state machine and
+      there is no raw `set({ status })` left in the file. Caught by an audit that trusted the backlog
+      over the code — a ledger that lies about what is done costs a re-audit.
 - [x] **`ka-tracking.ts` read `orders.status` with no `FOR UPDATE` — FIXED `dde9c09`.** The read now lives
       inside the transaction with `FOR UPDATE`, matching `setOrderStatus`. The cron does its KiriminAja
       pull *before* calling `syncOrderFromKa`, so no lock is held across the wire — now documented on the
@@ -916,6 +917,63 @@ LEDGER problem, not a code one.
 Fix (a DB write, so deliberately left for a human to run): insert the 21 missing stamps for what is
 already applied and delete the 6 orphans, so the next `migrate` is a no-op — or rebuild the dev DB
 from migrations and re-seed. **Announce before doing either; the dev DB is shared.**
+
+---
+
+## 📦 ORDER LIFECYCLE — first audit 2026-07-31; what is LEFT
+
+Closed in `8edef84`: the COD-flag derivation (both directions), the `retur` credit hole, the explicit
+transition table, and the `?bayar=` 500. **Confirmed CLEAN with evidence — do not re-audit:** the
+double-restore guard, the three partial unique indexes, the derived balance, seven COD-consistency
+invariants at zero violations, all five AWB writers, `createShipment`'s failure paths,
+`requireCapability` on every mutating action, the CHILD-TABLE RULE on this surface, and the `/pesanan`
+tab partition (`0+75+50+656+45 = 826 = count(*)`). What remains:
+
+- [ ] **`createShipment` books a FUZZY-MATCHED destination with no warning.** `o.shipDistrictId ??
+  resolveArea(o.city)[0].id` — and the comment above it claims the fallback "is flagged as a guess".
+  It is not: `destinationGuessed` **does not exist anywhere in the repo** (grepped). `getShippingRates`
+  does label it ("perkiraan dari nama kota") but `bulkGenerateResi` reads only `q.rates` and discards
+  the destination string, so the bulk path books a guessed kecamatan with nothing on screen — and the
+  COD province gate then resolves the province FROM that guess. SQL: **77 orders** have
+  `ship_district_id IS NULL`, 5 of them live. Fix: return the flag and surface it in the toast and in
+  `BulkResult`.
+- [ ] **`markLabelsPrinted` reports success for rows it never touched** — `return { ok: true, done:
+  numbers.length }` regardless of what the UPDATE matched under RLS, and it stamps `label_printed_at`
+  on orders with no AWB. Fix: `.returning()` and report the real count.
+- [ ] **`createOrderPayment` mints a live VA/QRIS bill for a `batal`/`retur`/`selesai` order** — money
+  then arrives for a cancelled order, the callback stamps `financial_status='dibayar'` and fires a
+  Purchase conversion, while the ledger correctly refuses to credit. Reuse the `shipmentLocked`
+  predicate.
+- [ ] **Two definitions of "the order's payment"**: the list orders by `paid_at desc nulls last`, the
+  detail by `p.id desc`. On an order with more than one payment row they can name different methods —
+  including COD vs VA, the exact fact the booking now hangs on.
+- [ ] `getShippingRates` is gated on a session only, not a capability — a `gudang` user can burn live
+  KiriminAja quota for any order in their store, unrated-limited.
+- [ ] The inventory restore is a **fourth** hand-copy of the default-location-row expression and the
+  only one with no tenant-boundary comment — and it is the copy reachable from `ka-tracking.ts`, which
+  runs on the OWNER connection where the `locations` join gives no protection. AGENTS.md requires the
+  comment.
+- [ ] `resi` search does not escape LIKE wildcards (`?q=%` returns the full set). Cosmetic; the same
+  bug `areas.ts` already fixed.
+
+---
+
+## 🛡️ SUPER ADMIN — first audit 2026-07-31; what is LEFT
+
+Closed in `aa6cfeb`: the owner-password takeover, the frozen healthcheck clock, and the fixed
+`tokophi123` for invited operators. **Confirmed CLEAN:** `requirePlatformAdmin` first in all 27
+mutating actions with correct ranks, impersonation owner-only and audited, every destructive per-store
+action trailed with `store_id`, and the money re-derived from SQL matching the screen (available
+206.376.466 / pending 43.825.981 / GMV 276.825.960 — `store_stats` is genuinely not read). Also
+CORRECTED: the long-standing `invitePlatformAdmin` privilege-escalation entry is **already fixed** —
+it is owner-gated, role-whitelisted and audit-logged. What remains:
+
+- [ ] **DECISION (owner): the impersonation token is replayable and outlives the operator.** It is
+  2 minutes, audience-pinned and store-bound — but NOT single-use, so within that window the URL can
+  be replayed or forwarded to mint several sessions, and it rides in a **query string** (proxy logs,
+  history, `Referer`). The admin `session` it mints is an independent **7-day** cookie, so an
+  impersonation session outlives the operator's own `platform_session` logout. Fix costs a login-flow
+  change (single-use `jti`, or cap the minted session well under 7 days) — not decided here.
 
 ---
 

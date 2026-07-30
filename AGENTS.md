@@ -140,6 +140,26 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
 - **RBAC pattern:** the role→capability matrix is `lib/rbac-policy.ts` (client-safe: `Role`/`Capability`/`ROLE_CAPS`/`can()`). **Server:** every mutating action calls `await requireCapability("<cap>")` (`lib/rbac.ts`) at the top — this is the security boundary (throws `ForbiddenError`) — and store-scoped creates take `store_id` from the returned session. **UI:** wrap controls the role can't use with `useCan("<cap>")`/`<Can capability="…">` (`components/admin/permissions.tsx`; role flows from the session via `PermissionsProvider` in the admin layout). **All admin editors are gated** (Produk, Diskon, Halaman, Blog, Kategori, Pelanggan, CRM, Segmen, Pembelian, Inventori, Navigasi, Pesanan, Pengaturan) — apply the same `useCan` gating to any NEW editor you add. Caps: `products:write`/`products:delete`, `discounts:write`, `content:write` (halaman/blog/kategori/navigasi), `orders:write`, `inventory:write`, `purchases:write`, `customers:write`, `crm:write`, `media:write`, `settings:write`.
 - **Writes pattern (mutations):** `lib/actions/<entity>.ts` with `"use server"` → `const { storeId } = await requireCapability(...)` → `withTenant(storeId, async (db) => { …insert/update… })` → `revalidatePath(...)`; wire the editor's Simpan/Hapus with `useRouter` + `useTransition` (loading state + toast + `router.push`/`refresh`). **Delete = archive** (`status='archived'`) when the row is referenced by history (e.g. products ← `order_line_items`); else hard delete. Filter archived out of the read layer. **Done:** Produk (archive-delete), Diskon, Halaman, Blog, Kategori (hard delete), order-status advance, Inventori bulk stock save, **Navigasi** (menu save = delete+re-insert tree), **Pelanggan** (tags/notes — migration 0010 added `customers.tags`/`notes`), **CRM** (follow-up mark-done → `followups.status`), **Segmen** (create/delete), **Pembelian** (real line-item PO builder → `purchase_orders`+`po_items`; "Terima barang" adds each line's qty to `inventory_levels`; cancel = delete). **All admin editors now persist.**
 
+## Super Admin — the control plane reaches every tenant
+
+- **`requirePlatformAdmin(min)` is the first statement of all 27 mutating actions**, and the rank is
+  `support` 1 < `admin` 2 < `owner` 3. The ladder lives in `platform-rank.ts` — a PURE module, no DB
+  import — because `platform-auth.ts` pulls `@tokophi/db` at module scope, which is why the rule
+  guarding every super-admin mutation had no test until 2026-07-31. An unknown role scores 0: fail
+  closed, so a typo'd or legacy `platform_admins.role` cannot inherit rank.
+- ⚠️ **Handing over a merchant's account is OWNER-rank, whichever button reaches it.**
+  `resetOwnerPassword` was correctly gated; `resetStoreUserPassword` beside it ran at `admin` and
+  looked its target up by `userId` ALONE — no `store_users` join, no `storeId` filter — so a rank-2
+  operator could reset ANY user row on the platform, including any store's owner, and `storeId` was
+  used for nothing but the log line, so the audit trail could be pointed at the wrong store. Both
+  gates now: membership in THIS store, and `owner` rank when the target is an owner.
+- **Never mint a fixed password.** Invited operators used to get `DEV_PASSWORD` (`tokophi123`), never
+  revealed and never forced to change — an email plus a well-known default was a working control-plane
+  login. Random per invite, revealed once.
+- **Never anchor a date to the seed.** `health.ts` measured recency from a frozen `2026-07-02`, so a
+  store 34 days dormant read "5 days, ok" and a live one read **−23 hari**. `data.ts` had already been
+  migrated off that anchor; the healthcheck was missed. Same rule as the discount editor.
+
 ## Billing & super-admin control (single plan)
 - **One plan "TokoΦ"**, all features. `@tokophi/lib/billing`: 3-day trial → **Rp50rb** first month → **Rp275rb/mo** (annual Rp2.7jt). Prices are the **DPP (ex-tax)**; the merchant pays **base + PPN 11%** (`withPpn()`/`baseFromTotal()`) — invoices store the PPN-inclusive total, faktur itemizes DPP+PPN. **Do NOT reintroduce plan tiers** (Pemula/Bisnis/Skala are legacy, unused).
 - **Store lifecycle segments** (`storeSegment()`): `trial → first_month → regular → vip`. **VIP = `stores.comped`** — super-admin bypasses billing (free, always active, never billed/suspended; admin `getBilling` + billing cron honor `comped`). Segments drive the super-admin Toko catalog (4 tabs).
@@ -232,6 +252,40 @@ SQL
 
 ⚠️ Resolve the postgres container by PREFIX, never by its full name — the hash suffix changes on
 every deploy, and a hardcoded one fails with "No such container" the moment anything ships.
+
+## Order lifecycle — COD, the ledger, and the one legal set of transitions
+
+> ### 📦 THE RULE: **COD is a FACT ABOUT THE ORDER (`payments.method`), never a parameter.**
+> `createShipment` derives it and REFUSES a caller that disagrees. `input.cod` is a claim we check,
+> not an instruction we obey. It used to be `input.cod ? total : 0`, and both callers were wrong in
+> opposite directions: the bulk loop passed `!!rate.cod` — the SERVICE's capability, true for every
+> order on an SPX service in a COD-enabled store — over a queue that deliberately holds PREPAID
+> orders (measured: 75 orders, 8 COD, **67 already paid**), so one click told the courier to collect
+> cash again from 67 buyers; and the order detail's checkbox defaulted to `false` and was never
+> seeded, so a real COD parcel was booked collecting **0** and the merchant was then credited the
+> full sale as WITHDRAWABLE for cash nobody took.
+
+- **`orders.status` has ONE writer: `applyOrderStatusChange`.** Both shipping status writes go through
+  it (there is no raw `set({ status })` left in `shipping.ts`). It holds three guards, and all three
+  are load-bearing: same-status is a no-op, `batal`/`retur` are terminal, and an explicit `ALLOWED`
+  table names the only legal moves. The table exists because the first two permit everything they do
+  not refuse — which allowed `selesai → batal` (restores stock **and** claws back an `available` sale
+  on a delivered COD order whose cash is in hand) and `selesai → dikirim` (un-completes a settled
+  order). `setOrderStatus` is a server action taking `status` straight from the client, so the UI
+  hiding a button is not the boundary. `selesai → retur` stays legal: a delivered parcel can still
+  come back, and that path reverses the sale correctly.
+- **`creditSaleForPayment` excludes `batal` AND `retur`.** Dropping `retur` is how a payment landing
+  after a return credited the full sale as immediately withdrawable: the claw-back had already run
+  and found nothing to reverse, the order is terminal so nothing re-runs it, and `pay/callback`
+  transitions on "status differs" — so a `gagal` payment on a still-live VA can reach `berhasil` long
+  after the return. Stock restored **and** the merchant keeps the money.
+- **A double-credit is a DB impossibility, not a code convention** — three partial unique indexes
+  (`ledger_one_sale_per_payment`, `ledger_one_sale_per_order`, `ledger_one_retur_per_order`) plus
+  `on conflict do nothing` on every writer. The balance is DERIVED (`Σ amount_idr` by status); there
+  is no stored-balance column and there must not be.
+- **Validate every URL parameter that reaches an enum cast.** `/pesanan?bayar=<anything>` was a 500
+  (`invalid input value for enum payment_method`) because `bayar` was passed straight through while
+  `tab` and `field` beside it were checked.
 
 ## Landing HTML (`/lp/<slug>`) — raw markup, OWNER-ONLY
 

@@ -27,6 +27,26 @@ export async function applyOrderStatusChange(
   if (order.status === status) return;
   if (order.status === "batal" || order.status === "retur") return;
 
+  // ── AND THE TRANSITION ITSELF MUST BE ONE WE ALLOW ──────────────────────────────────────────────
+  //
+  // The two guards above refuse a REPEAT and refuse leaving a terminal state. They do not say which
+  // moves are legal, so everything else was permitted — including two that cost money out of
+  // `selesai`, which is settled but deliberately NOT terminal (so a return can still be recorded):
+  //   · `selesai → batal` restores stock AND claws back an `available` sale on a delivered COD order
+  //     whose cash the merchant is holding.
+  //   · `selesai → dikirim` silently un-completes a settled order.
+  // `setOrderStatus` is a "use server" action taking `status` straight from the client with no
+  // runtime check, so the UI hiding these is not the boundary — this is.
+  const ALLOWED: Record<string, string[]> = {
+    baru: ["diproses", "dikirim", "batal"],
+    diproses: ["dikirim", "batal"],
+    dikirim: ["selesai", "batal", "retur"],
+    // Settled, but a parcel can still come back. `retur` is the ONLY way out, and it carries its own
+    // claw-back that reverses the sale correctly.
+    selesai: ["retur"],
+  };
+  if (!ALLOWED[order.status]?.includes(status)) return;
+
   // Cancelling OR returning a live order → put the stock back. `batal` never shipped; `retur` shipped
   // and came back — but in BOTH cases the goods are on the merchant's shelf again, so both must restore
   // inventory. Missing the `retur` case would quietly shrink real stock on every refused COD parcel.

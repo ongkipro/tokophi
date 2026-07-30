@@ -52,8 +52,14 @@ export async function creditSaleForPayment(db: Db, paymentId: string): Promise<v
       join orders o on o.id = p.order_id
      where p.id = ${paymentId}
        and p.status = 'berhasil'
-       -- a cancelled order collected nothing; if money did arrive it is refunded, not credited
-       and o.status <> 'batal'
+       -- A cancelled OR RETURNED order collected nothing; money that still arrives is refunded, not
+       -- credited. 'retur' was missing, and it is the worse of the two: the claw-back has ALREADY run
+       -- by then (it found no sale to reverse and inserted nothing), the order is terminal so nothing
+       -- re-runs it, and the status->status mapping books a late payment on a returned order as
+       -- IMMEDIATELY WITHDRAWABLE. Stock restored and the merchant keeps the money.
+       -- Reachable because pay/callback transitions on "status differs", so a failed payment on a
+       -- still-live VA can reach 'berhasil' long after the return.
+       and o.status not in ('batal', 'retur')
        and not exists (
          select 1 from ledger_entries l
           where l.kind = 'sale' and (l.payment_id = p.id or l.order_id = o.id)
