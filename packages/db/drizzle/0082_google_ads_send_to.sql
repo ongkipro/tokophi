@@ -8,4 +8,7 @@
 -- One field for both was therefore not a cosmetic limitation: a merchant running GA4 *and* Google Ads
 -- could only ever have one of them work. Purely additive, nullable — a store that uses neither is
 -- untouched.
-ALTER TABLE "store_tracking_channels" ADD COLUMN "ads_send_to" text;
+-- IF NOT EXISTS, like 0081. This repo's dev database has drifted from the migration ledger before, and
+-- a bare ADD COLUMN then fails the WHOLE chain on the next deploy — every later migration with it. An
+-- additive column has no reason to be the statement that can only ever run once.
+ALTER TABLE "store_tracking_channels" ADD COLUMN IF NOT EXISTS "ads_send_to" text;
