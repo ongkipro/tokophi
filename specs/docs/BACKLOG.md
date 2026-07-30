@@ -1041,31 +1041,67 @@ confirmed by reading the code, running SQL, or driving a real browser — none i
   limit and product/collection eligibility are **not implemented at all** (no columns) — file them,
   do not fake them.
 
-### Storefront honesty / correctness
+### ✅ CLOSED 2026-07-30 (`2cdc07d`) — re-verified against a running server, then fixed
+- [x] **Testimoni's prev/next arrows were dead** — `closest("div")` includes the element itself, so the
+  lookup returned the nav and missed the track (proven in Chromium: `scrollLeft` 0 before and after a
+  click). Track also got `tabindex`/`role`, so testimonials 2..N are keyboard-reachable.
+- [x] **`ProductCard`'s `level` prop was passed by none of its ten call sites** — every listing went
+  `h1 → h3`, measured in the AX tree. Fixed at the shared listing.
+- [x] **The sort control had no accessible name below 640px** (its only label is `hidden sm:inline`).
+- [x] **`<title>` separator** `" — "` → the house `" - "`, all three layouts.
+- [x] **`CategoryNav` could 500 a page** — `items.length` on an undefined prop; the one section left
+  without the `?? []` its four siblings have.
+- [x] **No preconnect to the uploads origin** — photos, logo and favicon all come from the admin app.
+- [x] **NEW, and the two biggest: `mediaUrl()` was missing on paths the demo never exercises.** Every
+  merchant image uploaded in the Store Builder 404'd on their own shop (six section render sites), and
+  every social share of `/`, `/produk`, `/kontak`, `/halaman/*` carried a broken `og:image`. The
+  **footer logo** was raw too — not in the audit, found by counting un-rewritten paths afterwards.
+
+### Storefront honesty / correctness — STILL OPEN (re-verified 2026-07-30, all measured)
 - [ ] **The trust strip advertises "QRIS & E-Wallet"** (`index.astro:111`) while all five
   `kind='ewallet'` rows are `enabled=f, active=f`. The COD badge two lines above **is** data-gated.
 - [ ] **Category-Nav defaults publish three verified 404s** on every non-demo store
   (`registry.ts:417` → `/kategori/dress|atasan|bawahan`). Seed `items: []` and fall back to the
   store's live collections, as CollectionBento already does.
-- [ ] **Testimoni's prev/next arrows are dead** (`Testimoni.astro:67` — `closest("div")` matches the
+- [x] (closed — see above) ~~Testimoni's prev/next arrows are dead~~ (`Testimoni.astro:67` — `closest("div")` matches the
   nav itself, so the track is never found; proven in Chromium). The track is also unreachable by
   keyboard (no `tabindex`).
 - [ ] The image-less hero renders **near-black**: the photo scrims are applied unconditionally over
   the brand gradient (`Hero.astro:122,125`).
 - [ ] `SectionRenderer` has **no error boundary** — one bad section value 500s the page.
 
+### The responsive gate itself is fragile (found 2026-07-30)
+- [ ] `npm run audit:responsive` **takes ~23 minutes and prints nothing until the end**, so it reads as
+  hung. Measured cause: 132 navigations × `waitUntil: "networkidle"` at ~7.9 s each vs ~4.3 s for
+  `domcontentloaded`. The assertion is a LAYOUT measurement, not a network one — dropping to
+  `domcontentloaded` + a short settle roughly halves it without weakening the check.
+- [ ] **Its redirect-following preamble no longer does what its comment says.** It expects
+  `GET /produk` to answer `301 → the primary domain`; `middleware.ts` explicitly skips that redirect
+  for localhost, so with no `STORE_SLUG` the script dies at "server dev jalan?" on a plain 404. It only
+  runs at all if you export `STORE_SLUG`. Document the env or fall back to a `Host` header — the
+  script's own comment warns that "the storefront went weeks with its responsive gate face-down", and
+  it is face-down again for a new reason.
+- Last real run: `OK — 132 route×width combinations, no horizontal overflow.`
+
 ### SEO / a11y / performance
-- [ ] `<title>` separator is `" — "`, not the house `" - "` (`Layout.astro:38`, every page).
+- [x] (closed — see above) ~~`<title>` separator~~ (`Layout.astro:38`, every page).
 - [ ] Canonical **drops `?page`** (`Layout.astro:52`), so page 2 canonicalises to page 1.
 - [ ] **3 × `<h1>`** on the homepage (one per hero slide); a builder homepage with no Hero has **none**.
 - [ ] **Zero JSON-LD on the homepage** — no Organization, no WebSite/SearchAction (`/cari` exists).
 - [ ] The **LCP hero image bypasses `imageSrcSet()`** (`Hero.astro:77`) — full-size original to a
   320px phone. Same for the category cover (`CategoryHero.astro:36`).
-- [ ] Render-blocking Google Fonts stylesheet in `<head>`; header logo has no `width`/`height` (CLS);
-  no preconnect to the uploads origin.
-- [ ] `ProductCard` exposes a `level` prop so a card under a page `<h1>` becomes `<h2>` — **no call
+- [ ] **Render-blocking Google Fonts** — MEASURED on a dev server, throttled 1.6 Mbps / 150 ms at 390px:
+  as-shipped `CLS 0.358`, fonts blocked `CLS 0.182`. Every shift entry named the same node — the hero
+  copy container reflowing when Inter swaps under `text-balance`. Self-host the two woff2 with
+  `font-display: swap` + preload, or add a `size-adjust` fallback. ⚠️ Dev-server numbers: treat the
+  DELTA as the signal; the prod-build measurement has not been taken.
+- [ ] **Header logo has no `width`/`height`** (the footer's does). `media.width/height` is already
+  recorded at upload. Mechanism is clear; the shift was not observed (the logo 404'd during the audit),
+  so do not hardcode a ratio the way `CategoryHero` does — read the real one.
+- [x] (closed) ~~no preconnect to the uploads origin~~
+- [x] (closed — see above) ~~`ProductCard` exposes a `level` prop~~ so a card under a page `<h1>` becomes `<h2>` — **no call
   site passes it**, so every listing goes `h1 → h3`.
-- [ ] The sort control has **no accessible name below 640px** (`ProductListing.astro:135`).
+- [x] (closed — see above) ~~The sort control has no accessible name below 640px~~ (`ProductListing.astro:135`).
 
 ### `/tema` remaining
 - [ ] **No draft/published boundary and no autosave** — `page_templates` has no draft column, the
