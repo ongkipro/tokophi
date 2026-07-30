@@ -8,6 +8,54 @@
 
 
 
+
+## 2026-07-31 — Session: the audits reached the surfaces nobody had looked at, and both were worse than the ones that had ✅ `38958fe` `a16d7f7` `aa6cfeb` `8edef84` (+ docs) — branch `feat/fe-polish`
+> Six parallel audits over two days. The pattern that matters: **every one of the worst findings was
+> unreachable by clicking around the demo store.** Its data happens to avoid them.
+
+- **"Generate resi" would have told the courier to collect cash from 67 already-paid buyers.** COD on
+  a booking was a free parameter (`input.cod ? total : 0`), never derived from `payments.method`. The
+  bulk loop passed `!!rate.cod` — the SERVICE's capability, `true` for every order on an SPX service
+  in a COD-enabled store — over a queue that deliberately holds prepaid orders. Measured: 75 in the
+  queue, 8 COD, **67 already paid**. The opposite face: the order detail's checkbox defaulted to
+  `false` and was never seeded, so a real COD parcel was booked collecting **0** and the merchant was
+  then credited the full sale as WITHDRAWABLE for cash nobody took. Now derived; a caller that
+  disagrees is refused.
+- **An `admin` operator could reset any merchant OWNER's password.** `resetOwnerPassword` was
+  correctly owner-gated; the function beside it ran at `admin` and matched on `userId` alone — no
+  `store_users` join, no `storeId` filter — so it reached ANY user row on the platform, and `storeId`
+  was used for nothing but the log line, so the trail could be pointed at the wrong store.
+- **A payment landing after a `retur` credited the full sale, immediately withdrawable**, with the
+  claw-back already spent and the order terminal. Stock restored AND the money kept.
+- **The order state machine allowed everything it did not explicitly refuse** — including
+  `selesai → batal`, which claws back an `available` sale on a delivered COD order whose cash is in
+  hand. Explicit table now; 21 transitions refused, both money-losing ones among them.
+- **The homepage advertised a payment method the gateway has been measured refusing** ("QRIS &
+  E-Wallet" hardcoded; all five e-wallet rows `enabled=f`), and said nothing about Virtual Account —
+  5 of the 6 channels that work. Derived from the same list checkout offers now: "Transfer Bank & QRIS".
+- **The Diskon dashboard's savings tile was Rp90,3jt of fiction** — its own function was commented
+  "Fabricated". `sum(orders.discount_idr)` is **0**, over 0 discounted orders.
+- **`SECTION_DEFAULTS["category-nav"]` shipped three of the demo's handles** — 200 on the demo, 404 on
+  kopi-senja. The comment defending them ("an empty array renders an empty husk") was false. Now empty,
+  falling back to the store's own live collections.
+- Also: the Store Healthcheck ran on a frozen `2026-07-02` (a 34-day-dormant store read "ok", a live
+  one read **−23 hari**); invited platform operators got the fixed password `tokophi123`;
+  `/pesanan?bayar=xxx` was a 500; landing HTML became owner-only (`landing:html`) after the decision.
+
+**Two things worth keeping.** The audits also stated what is CLEAN with evidence — the three partial
+unique indexes that make a double-credit a DB impossibility, seven COD invariants at zero violations,
+the `/pesanan` tab partition summing to `count(*)`, the super-admin money re-derived from SQL — so
+those do not get re-audited. And one backlog line was **stale**: "route the two shipping status writes
+through `applyOrderStatusChange`" was already done. An audit trusted the ledger over the code and paid
+for it; the ledger is now reconciled.
+
+⏳ **NEXT.** Two owner decisions are open: the impersonation token (replayable inside its 2-minute
+window, rides in a query string, and mints a 7-day session that outlives the operator's own), and
+`discounts.code` being unique ACROSS EVERY TENANT — the first merchant to register `GAJIAN25` blocks
+all others, and the constraint doubles as an existence oracle over their codes. The dev DB's migration
+ledger is still 21 entries behind its own schema, which blocks `npm run migrate` locally and is why
+`/promo/*` and `/lp/*` cannot be rendered on this machine at all.
+
 ## 2026-07-30 — Session: the money paths were quoting one price and charging another; /tema had three page types and one palette ✅ committed `604285a` + this one (worktree `fe-polish`, branch `feat/fe-polish`, **NOT merged → not deployed**)
 > Started as "validate the previous session". The previous session turned out to be TWO: five commits
 > on a **stale local `main`** (418 ahead / 30 behind origin) whose work had already reached
