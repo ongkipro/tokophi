@@ -262,6 +262,35 @@ thing it tests has not happened, it is not a check.
 Corollary: `docker ps` during a build shows an extra short-lived Coolify container (a random-looking
 name, `Up N seconds`). That is the build running — its presence means the deploy is *in flight*, not done.
 
+### Container health is NOT the artefact check either (learned again, 2026-07-30)
+
+`RunningFor` catches the "old containers still serving" case. It does **not** catch these three, all of
+which happened in one afternoon:
+
+1. **A partial swap.** Coolify replaces the services one at a time. A check that waits for the *admin*
+   container to change reports success while the **storefront** is still the old one — and then 503s a
+   minute later when its turn comes. Wait for **every** app container (`admin`, `super-admin`,
+   `storefront`) to be healthy, and require the streak to hold across two polls.
+2. **Overlapping deploys.** Three PRs merged inside 25 minutes queued **four** webhook builds
+   (`select id, status, is_webhook from application_deployment_queues order by id desc`). Each one tears
+   the stack down again, so any single "it's up now" observation is meaningless. CLAUDE.md already says
+   it: **merge, watch the deploy land, then let the next one go.** This is what that costs when ignored.
+3. **A healthy container running the PREVIOUS commit.** Deployment N finishes and everything is green
+   while deployment N+1 — the one carrying your change — is still building.
+
+**So the only honest check is a CONTENT check: ask production for something only the new code can
+produce.** Pick a signal from the diff itself and poll for it:
+
+```bash
+# e.g. after changing the TikTok feed's image shape — 1 element, not 4:
+curl -s https://toko.tokophi.com/feed/tiktok.xml \
+  | python3 -c "import sys,re;m=re.search(r'<item>.*?</item>',sys.stdin.read(),re.S);print(m.group(0).count('<g:additional_image_link>'))"
+```
+
+A migration count (`select count(*) from drizzle.__drizzle_migrations`), a new response header, a new
+field in an API payload, a new route answering 200 — anything the old build cannot emit. Health checks
+tell you the container is alive; only this tells you it is running **your** code.
+
 ## Env to set in Coolify
 
 See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!), `KIRIMINAJA_API_KEY`, `AUTOLARIS_API_KEY`, `AUTOLARIS_CALLBACK_SECRET`, **`INTEGRATION_TOKEN_KEY`** (≥16 chars — encrypts the merchants' CAPI tokens; see the conversion-cron section, rotation is a code change). Cross-surface URLs (set AFTER domains assigned): `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API` (⚠️ the storefront reads these at RUNTIME — must be the public admin URL, not localhost, or the kecamatan search / order / payment silently fail). Custom domains: `CUSTOM_DOMAIN_CNAME_TARGET` (default `cname.tokophi.com`).
