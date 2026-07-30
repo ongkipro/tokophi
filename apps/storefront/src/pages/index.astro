@@ -9,7 +9,7 @@ import SectionHeading from "../components/SectionHeading.astro";
 import SectionRenderer from "../components/sections/SectionRenderer.astro";
 import Hero from "../components/sections/Hero.astro";
 import type { HeroConfig } from "@tokophi/sections";
-import { storeCodEnabled } from "../data/catalog";
+import { storeCodEnabled, enabledPaymentChannels } from "../data/catalog";
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
 const { store, catalog } = Astro.locals;
@@ -17,6 +17,29 @@ const { store, catalog } = Astro.locals;
 // Don't promise COD on a store that has it switched off (store_settings.cod_enabled) — the
 // checkout won't offer it and the order API rejects it, so the badge would be a lie.
 const COD_ENABLED = await storeCodEnabled(store.id);
+
+// ── THE PAYMENT BADGE IS DERIVED, NOT WRITTEN ────────────────────────────────────────────────────
+//
+// It read "QRIS & E-Wallet" as a hardcoded string. Every one of the five `kind='ewallet'` rows is
+// `enabled=f, active=f` — and `enabledPaymentChannels`'s own comment records the live gateway probe
+// that refused them ("rc=07 — DANA, ShopeePay, LinkAja, GoPay"). So the homepage advertised a method
+// the platform has MEASURED being refused, while the COD badge two lines above is properly gated on
+// real data. It was also silent about Virtual Account, which is 5 of the 6 channels that DO work.
+//
+// Derived from the same list checkout offers, so the two can never drift apart.
+const KIND_LABEL: Record<string, string> = {
+  qris: "QRIS",
+  va: "Transfer Bank",
+  ewallet: "E-Wallet",
+  retail: "Gerai Retail",
+};
+const PAY_KINDS = [...new Set((await enabledPaymentChannels()).map((c) => c.kind))]
+  .map((k) => KIND_LABEL[k] ?? null)
+  .filter((l): l is string => !!l);
+// No live channel ⇒ no claim. The badge falls back to the one thing that is true regardless.
+const PAY_BADGE = PAY_KINDS.length
+  ? { Icon: QrCode, title: PAY_KINDS.join(" & "), text: "Bayar praktis, tanpa ribet." }
+  : { Icon: ShieldCheck, title: "Transaksi Aman", text: "Pembayaran lewat kanal resmi." };
 const HOMEPAGE_TEMPLATE = catalog.homepageTemplate;
 
 // `.slice(0, 4)` — bestsellers() now returns the WHOLE catalogue sorted by units_sold, so the
@@ -108,7 +131,7 @@ const SUMMARY = [
           COD_ENABLED
             ? { Icon: Banknote, title: "COD Tersedia", text: "Bayar di tempat, area terpilih." }
             : { Icon: ShieldCheck, title: "Transaksi Aman", text: "Pembayaran lewat kanal resmi." },
-          { Icon: QrCode, title: "QRIS & E-Wallet", text: "Bayar praktis, tanpa ribet." },
+          PAY_BADGE,
         ].map((v) => (
           <div class="flex items-center gap-3">
             <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 ring-1 ring-brand-100">

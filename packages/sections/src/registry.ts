@@ -529,16 +529,16 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
     imageUrl: "",
   },
   "category-nav": {
-    // ⚠️ NOT a claim, but still wrong for anyone but the demo store: these three handles are the
-    // demo catalog's (Dress/Atasan/Bawahan) and 404 on a store that does not have them. The real
-    // fix is a builder-side field that picks from the store's OWN `collections` (an "external"/
-    // select Puck field) instead of a free-text href — see the report/BACKLOG. Left as-is for now
-    // because an empty array renders an empty husk (the array field is the only way to add items).
-    items: [
-      { label: "Dress", imageUrl: "", href: "/kategori/dress" },
-      { label: "Atasan", imageUrl: "", href: "/kategori/atasan" },
-      { label: "Bawahan", imageUrl: "", href: "/kategori/bawahan" },
-    ],
+    // EMPTY, and that is now the useful default. These were the demo catalog's three handles
+    // (Dress/Atasan/Bawahan), verified 404 on every store that does not have them — so dragging this
+    // section on published a shelf of dead links.
+    //
+    // The old comment justified keeping them because "an empty array renders an empty husk". That was
+    // not true: `CategoryNav.astro` wraps the whole section in `items.length > 0 &&`, so an empty
+    // array rendered NOTHING. And it now falls back to the store's OWN live collections when empty —
+    // the same thing CollectionBento has always done — so the section is useful out of the box and
+    // cannot point anywhere the store does not have.
+    items: [],
   },
   blog: {
     // Safe to ship as FINISHED copy, unlike every prompt above — and the reason is worth stating,
