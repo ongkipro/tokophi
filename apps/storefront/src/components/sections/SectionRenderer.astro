@@ -12,7 +12,10 @@
 import type { StoredTemplateData } from "@tokophi/sections";
 import { HOMEPAGE_CONTEXT, type SectionContext } from "./context";
 import Hero from "./Hero.astro";
+import ProductListingSection from "./ProductListingSection.astro";
 import ProductGrid from "./ProductGrid.astro";
+import Multicolumn from "./Multicolumn.astro";
+import Faq from "./Faq.astro";
 import BannerPromo from "./BannerPromo.astro";
 import Testimoni from "./Testimoni.astro";
 import ImageText from "./ImageText.astro";
@@ -36,6 +39,12 @@ const { data, context = HOMEPAGE_CONTEXT } = Astro.props;
     switch (item.type) {
       case "hero":
         return <Hero {...item.props} />;
+      case "product-listing":
+        return <ProductListingSection {...item.props} ctx={context} />;
+      case "multicolumn":
+        return <Multicolumn {...item.props} />;
+      case "faq":
+        return <Faq {...item.props} />;
       case "product-grid":
         return <ProductGrid {...item.props} ctx={context} />;
       case "banner-promo":

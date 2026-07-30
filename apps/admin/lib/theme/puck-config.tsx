@@ -1,5 +1,14 @@
 import type { Config, CustomField } from "@measured/puck";
-import { SECTION_DEFAULTS, heroSlides, type SectionConfigMap } from "@tokophi/sections";
+import {
+  SECTION_DEFAULTS,
+  SECTION_ICON_KEYS,
+  SECTION_ICON_LABELS,
+  SECTION_LABELS,
+  SECTIONS_BY_TEMPLATE_TYPE,
+  heroSlides,
+  type SectionConfigMap,
+  type SectionType,
+} from "@tokophi/sections";
 import { ImagePickerField } from "@/components/theme/image-picker";
 import { LinkPickerField } from "@/components/theme/link-picker";
 
@@ -23,7 +32,10 @@ const linkField = <V extends string | undefined>(label: string): CustomField<V> 
   ),
 });
 import { Hero } from "@/components/theme/sections/Hero";
+import { ProductListing } from "@/components/theme/sections/ProductListing";
 import { ProductGrid } from "@/components/theme/sections/ProductGrid";
+import { Multicolumn } from "@/components/theme/sections/Multicolumn";
+import { Faq } from "@/components/theme/sections/Faq";
 import { BannerPromo } from "@/components/theme/sections/BannerPromo";
 import { Testimoni } from "@/components/theme/sections/Testimoni";
 import { ImageText } from "@/components/theme/sections/ImageText";
@@ -38,10 +50,77 @@ import { Lookbook } from "@/components/theme/sections/Lookbook";
 // (@tokophi/sections/registry.ts is the shared shape; apps/storefront's Astro components are
 // the other half). Puck's component keys must match `SectionType` from the registry so
 // `page_templates.sections[].type` round-trips cleanly between the builder and the renderer.
-export const puckConfig: Config<SectionConfigMap> = {
+// Derived from the shared allow-list so the builder can never offer an icon the renderers do not
+// have. Adding one is a single edit in @tokophi/sections.
+const ICON_OPTIONS = SECTION_ICON_KEYS.map((k) => ({ label: SECTION_ICON_LABELS[k], value: k }));
+
+const fullConfig: Config<SectionConfigMap> = {
   components: {
+    "product-listing": {
+      label: SECTION_LABELS["product-listing"],
+      fields: {
+        heading: { type: "text", label: "Judul (kosong = tanpa judul)" },
+      },
+      defaultProps: SECTION_DEFAULTS["product-listing"],
+      render: (props) => <ProductListing {...props} />,
+    },
+    multicolumn: {
+      label: SECTION_LABELS.multicolumn,
+      fields: {
+        eyebrow: { type: "text", label: "Kicker (kosong = sembunyi)" },
+        heading: { type: "text", label: "Judul" },
+        columns: {
+          type: "select",
+          label: "Kolom",
+          options: [
+            { label: "2", value: 2 },
+            { label: "3", value: 3 },
+            { label: "4", value: 4 },
+          ],
+        },
+        items: {
+          type: "array",
+          label: "Kolom (maks. 8)",
+          max: 8,
+          getItemSummary: (item, i) => item?.title || `Kolom ${(i ?? 0) + 1}`,
+          defaultItemProps: { icon: "truck", title: "Judul singkat", text: "Satu kalimat penjelas." },
+          arrayFields: {
+            // A SELECT over the shared allow-list, never a free-text icon name: a typo would render
+            // a dot on the storefront with nothing telling the merchant why.
+            icon: { type: "select", label: "Ikon", options: ICON_OPTIONS },
+            title: { type: "text", label: "Judul" },
+            text: { type: "textarea", label: "Keterangan" },
+          },
+        },
+      },
+      defaultProps: SECTION_DEFAULTS.multicolumn,
+      render: (props) => <Multicolumn {...props} />,
+    },
+    faq: {
+      label: SECTION_LABELS.faq,
+      fields: {
+        eyebrow: { type: "text", label: "Kicker (kosong = sembunyi)" },
+        heading: { type: "text", label: "Judul" },
+        items: {
+          type: "array",
+          label: "Pertanyaan (maks. 12)",
+          max: 12,
+          getItemSummary: (item, i) => item?.question || `Pertanyaan ${(i ?? 0) + 1}`,
+          defaultItemProps: {
+            question: "Berapa lama pengiriman?",
+            answer: "Tulis jawabannya di sini.",
+          },
+          arrayFields: {
+            question: { type: "text", label: "Pertanyaan" },
+            answer: { type: "textarea", label: "Jawaban" },
+          },
+        },
+      },
+      defaultProps: SECTION_DEFAULTS.faq,
+      render: (props) => <Faq {...props} />,
+    },
     hero: {
-      label: "Hero",
+      label: SECTION_LABELS.hero,
       fields: {
         badge: { type: "text", label: "Label Badge (kosong = sembunyi)" },
         slides: {
@@ -55,7 +134,11 @@ export const puckConfig: Config<SectionConfigMap> = {
             heading: "Judul Slide",
             subheading: "Satu kalimat singkat tentang koleksi ini.",
             ctaLabel: "Belanja Sekarang",
-            ctaHref: "/kategori/dress",
+            // `/kategori/semua` — a VIRTUAL collection every store always has. This said
+            // `/kategori/dress`, a handle only the demo owns: `SECTION_DEFAULTS.hero` was cleaned for
+            // exactly that reason (25-line comment in the registry) and this array's own
+            // `defaultItemProps` was missed, so every slide a merchant ADDED still 404'd.
+            ctaHref: "/kategori/semua",
             focal: "center",
           },
           arrayFields: {
@@ -300,3 +383,33 @@ export const puckConfig: Config<SectionConfigMap> = {
     },
   },
 };
+
+// ── THE PALETTE IS PER PAGE TYPE ───────────────────────────────────────────────────────────────
+//
+// `page_templates.type` has had three values since ADR 0009 (`homepage` / `category` / `product`)
+// and this config was a single static object, so the builder offered the SAME sections to all
+// three — a Hero (with its own `<h1>`) on a product page that already has the product name as its
+// `<h1>`, a Navigasi Kategori under a buy box, a Daftar Produk on a PDP. The registry owns which
+// sections belong where (SECTIONS_BY_TEMPLATE_TYPE); this just narrows Puck's component list to it.
+//
+// Narrowing the PALETTE, never the RENDERER: a template saved earlier that still holds a section no
+// longer offered for its type keeps rendering (the storefront's SectionRenderer switches on every
+// type regardless). Dropping it from the sidebar stops merchants adding more; it does not silently
+// delete work someone already published.
+export type TemplateType = keyof typeof SECTIONS_BY_TEMPLATE_TYPE;
+
+export function puckConfigFor(type: TemplateType): Config<SectionConfigMap> {
+  const allowed = new Set<SectionType>(SECTIONS_BY_TEMPLATE_TYPE[type]);
+  const components = Object.fromEntries(
+    // Object.entries loses the key union, hence the cast — the Set is built from SectionType so the
+    // filter itself is sound.
+    Object.entries(fullConfig.components).filter(([k]) => allowed.has(k as SectionType)),
+  ) as Config<SectionConfigMap>["components"];
+  return { ...fullConfig, components };
+}
+
+/**
+ * @deprecated Use `puckConfigFor(type)` — a builder that does not know which page it is editing
+ * offers sections that page cannot use. Kept only so nothing breaks mid-refactor.
+ */
+export const puckConfig = fullConfig;

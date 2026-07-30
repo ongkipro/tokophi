@@ -896,6 +896,95 @@ unmeasurable**. Ordered.
      `DATABASE_URL=…/tokophi_test npx drizzle-kit migrate` (in `packages/db`) →
      `TEST_DATABASE_URL=…/tokophi_test npx vitest run`. All behaviour-identical refactors; `tsc` clean.
 
+
+## 🆕 Opened 2026-07-30 — audited, NOT fixed
+
+Four parallel audits over the storefront + `/tema` + `/promo` produced ~80 findings; that session
+fixed the money paths and the Store Builder's page-type problem and left these. Every one was
+confirmed by reading the code, running SQL, or driving a real browser — none is speculative.
+
+### Security (do these first)
+- [ ] **The link picker accepts `javascript:`** (`components/theme/link-picker.tsx:160` — `pick()` with
+  no scheme check; `saveTemplate` validates nothing) and it reaches four unsanitised storefront render
+  sites: `Hero.astro:168`, `RichText.astro:55`, `ImageText.astro:63`, `BannerPromo.astro:14`,
+  `CategoryNav.astro:69`. Owner/admin-only today, so it is self-XSS on the merchant's own shop — but
+  it is already a stored-XSS vector against that store's shoppers. Fix: one shared `safeHref()` at the
+  render sites (allow `/ # http: https: mailto: tel:`), not in the picker — the picker is UX.
+- [ ] **SVG upload is stored XSS on the admin origin.** `lib/image-store.ts:139` only checks
+  `type.startsWith("image/")`, `saveImage` writes SVG byte-for-byte, and
+  `app/api/uploads/[name]/route.ts:11` serves it as `image/svg+xml`, `immutable`, **no
+  `Content-Disposition`, no CSP sandbox, no auth**. `media:write` is held by `staff` in every tenant,
+  so any store's staff can host a payload on `app.tokophi.com` and send the link to another owner.
+  Fix: `Content-Security-Policy: sandbox; default-src 'none'` + `X-Content-Type-Options: nosniff` on
+  the SVG branch.
+- [ ] **`saveTemplate` writes unvalidated client JSON into jsonb** (`lib/actions/theme.ts:165`). The
+  repo already documented the consequence in `seed-templates.ts`: a typo'd `mode` makes
+  `MODE_FN[mode](pool)` throw and **500s the whole storefront** — but the guard was added to the seed,
+  not to the write path. Fix: validate `data.content[]` against `SectionConfigMap` before the update,
+  plus a `?? bestsellers` fallback in `ProductGrid.astro:26`.
+
+### `/promo` money path
+- [ ] **`OrderFunnel` quotes a total the server does not charge** (`OrderFunnel.astro:234,236` =
+  `goods + shipping`, full stop) while `/api/public/order` applies automatic free shipping and PPN.
+  Live right now: `free_ship_enabled = t, free_ship_min_idr = 300000` on batik-nusantara.
+- [ ] **`buildPackages` ignores the live flash price** (`lib/packages.ts:10`) — the landing sells at
+  full price, the order charges the sale price, and the COD cash the courier collects differs from the
+  number on the button.
+- [ ] **`/thanks` prints arithmetic that does not add up** — "Subtotal 300.000 + Ongkir 23.000 →
+  Total 300.000". Have the order API return `discount` and render "Gratis".
+- [ ] `min_purchase_idr` is enforced server-side but has **no field in the editor**. Per-customer
+  limit and product/collection eligibility are **not implemented at all** (no columns) — file them,
+  do not fake them.
+
+### Storefront honesty / correctness
+- [ ] **The trust strip advertises "QRIS & E-Wallet"** (`index.astro:111`) while all five
+  `kind='ewallet'` rows are `enabled=f, active=f`. The COD badge two lines above **is** data-gated.
+- [ ] **Category-Nav defaults publish three verified 404s** on every non-demo store
+  (`registry.ts:417` → `/kategori/dress|atasan|bawahan`). Seed `items: []` and fall back to the
+  store's live collections, as CollectionBento already does.
+- [ ] **Testimoni's prev/next arrows are dead** (`Testimoni.astro:67` — `closest("div")` matches the
+  nav itself, so the track is never found; proven in Chromium). The track is also unreachable by
+  keyboard (no `tabindex`).
+- [ ] The image-less hero renders **near-black**: the photo scrims are applied unconditionally over
+  the brand gradient (`Hero.astro:122,125`).
+- [ ] `SectionRenderer` has **no error boundary** — one bad section value 500s the page.
+
+### SEO / a11y / performance
+- [ ] `<title>` separator is `" — "`, not the house `" - "` (`Layout.astro:38`, every page).
+- [ ] Canonical **drops `?page`** (`Layout.astro:52`), so page 2 canonicalises to page 1.
+- [ ] **3 × `<h1>`** on the homepage (one per hero slide); a builder homepage with no Hero has **none**.
+- [ ] **Zero JSON-LD on the homepage** — no Organization, no WebSite/SearchAction (`/cari` exists).
+- [ ] The **LCP hero image bypasses `imageSrcSet()`** (`Hero.astro:77`) — full-size original to a
+  320px phone. Same for the category cover (`CategoryHero.astro:36`).
+- [ ] Render-blocking Google Fonts stylesheet in `<head>`; header logo has no `width`/`height` (CLS);
+  no preconnect to the uploads origin.
+- [ ] `ProductCard` exposes a `level` prop so a card under a page `<h1>` becomes `<h2>` — **no call
+  site passes it**, so every listing goes `h1 → h3`.
+- [ ] The sort control has **no accessible name below 640px** (`ProductListing.astro:135`).
+
+### `/tema` remaining
+- [ ] **No draft/published boundary and no autosave** — `page_templates` has no draft column, the
+  builder wires only `onPublish`, and "Kembali ke Daftar Template" sits next to Publish and discards
+  every unsaved edit with no confirm.
+- [ ] The **Hero trust strip (`features`) is rendered but has no field** in the builder.
+- [ ] Image picker says "maks 5MB"; the server rejects at 2MB (`image-store.ts:31`).
+- [ ] Image picker gates upload on `theme:write`; the action requires `media:write`.
+- [ ] `saveBrandColor` / `saveProductGalleryLayout` validate input **before** `requireCapability`.
+- [ ] Builder chrome is English (Puck's own "Publish"/"Components"/"Outline") inside an Indonesian admin.
+- [ ] The builder canvas cannot show the merchant's brand colour — `globals.css` pins the platform rose.
+
+### `feat/meta-integration` (belongs to whoever owns that branch)
+- [ ] `crypto.ts`: the AES key is an **unsalted single-round SHA-256** of a passphrase (passwords in
+  this repo get salted scrypt); no AAD, so a ciphertext is **portable between tenants**; a missing key
+  is swallowed as "no token" and the UI still reports "tersimpan"; the documented rotation story does
+  not exist; `INTEGRATION_TOKEN_KEY` is in no env example, so every CAPI save fails in production.
+- [ ] `/pemasaran` has **no read gate** — a `gudang` role can read the store's pixel IDs.
+- [ ] Google advanced matching sends **raw email/phone** while Meta/TikTok send SHA-256, and the UI
+  tells the merchant it is hashed.
+- [ ] `InitiateCheckout` + `Purchase` never fire: `CheckoutLayout.astro` renders `<Analytics />` but
+  not `<MarketingPixels />`.
+- [ ] A stored CAPI token **cannot be deleted** from the UI, and nothing sends CAPI events at all.
+
 ---
 
 ## P0 — Foundation

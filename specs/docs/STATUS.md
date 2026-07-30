@@ -90,6 +90,33 @@ applied on prod). **Kept for the reasoning, not the status** — the ⚠️ abou
 
 ---
 
+## ⚠️ CHANGED 2026-07-30 — read this before trusting anything below about promo, the PDP or `/tema`
+
+Four audits (storefront homepage · PDP + kategori · `/promo` · `/tema`) found ~80 defects. The money
+paths and the Store Builder's page-type problem were fixed; the rest are itemised in
+[`BACKLOG.md`](./BACKLOG.md) § "Opened 2026-07-30". What changed here:
+
+| Was | Now |
+|---|---|
+| 🔴 **Every voucher a merchant created was born expired** — the write path anchored `starts_at`/`ends_at` to the seed's `2026-06-30` while the clock moved; re-saving one moved its expiry *backwards* | 🟢 real clock; a blank period writes `ends_at: NULL` |
+| 🔴 **A `terjadwal` flash sale never went live** — both readers demanded `status='aktif'` and nothing ever promoted the row | 🟢 `status <> 'nonaktif'` + the date window. **`nonaktif` = OFF; the DATES are the schedule** |
+| 🔴 **The voucher usage limit was advisory** — read unlocked outside the txn, incremented with a bare `+1`; concurrent orders all drained the last slot (the comment claimed it was race-safe) | 🟢 re-checked in the UPDATE's own WHERE; the loser rolls the order back with a 409 |
+| 🔴 **A flash sale never reached the variant rows** — a flash product with options showed the pre-sale price beside its own "-43%" badge while the order API charged the sale price | 🟢 `Math.min` per variant |
+| 🔴 **A sold-out product with no `product_options` kept an enabled buy button** (5 of the demo's 22 active products); a non-existent option combination kept the *previous* variant, so the page said "Beige / L" and the cart said "Hitam / L" | 🟢 availability server-rendered; an impossible combination refuses the sale |
+| 🔴 **A `category` template REPLACED the whole page** — no `<h1>`, no breadcrumb, no cover, no sort, no pagination, while the BreadcrumbList JSON-LD kept publishing a trail nobody could see | 🟢 `CategoryHero` always renders; the template is the page's **body** |
+| 🔴 **The builder offered the same 11 sections to all three page types** — it never received the type | 🟢 `puckConfigFor(type)` narrows the palette (never the renderer) |
+| 🔴 **`category` was the one template type never seeded** | 🟡 seeded for the demo, matching what Batik Nusantara renders live |
+
+**New sections** — `product-listing` ("Daftar Produk": the real catalogue with server-side sort and
+12-per-page pagination, as opposed to Grid Produk's flat capped slice), plus `faq` and `multicolumn`
+adapted from Shopify Dawn. All three are 🟢 real — driven in a browser. Both new Dawn sections ship
+**empty** and render **nothing** until the merchant adds a row: a trust badge is a promise, and a
+seeded "Gratis Ongkir" would make every new store advertise a service it may not offer.
+**Dawn's Newsletter was deliberately not ported** — there is no mailer in this repo, so the form
+would collect addresses nothing reads.
+
+---
+
 ## 1. 🟢 REAL
 
 | Thing | Evidence |

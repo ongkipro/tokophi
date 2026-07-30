@@ -159,6 +159,67 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
 - **`apps/admin/lib/shipping-quote.ts` is the ONE place a shipping PRICE is produced.** `/api/public/ongkir` quotes the checkout and **`/api/public/order` RE-QUOTES the order before it writes `orders.shipping_idr`** — same function, same origin, same DB weight, same platform∩store service scope. `body.shipping.cost` is **not read** (the storefront no longer sends it): the order stores the price *we* computed for the service the shopper picked (matched on `courier`+`service_type`), and a picked service that is **not in the fresh quote is REJECTED**, never silently re-couriered. Do NOT "validate the client's number against ours" — a tolerance is just a smaller hole. ⚠️ Consequence: a KiriminAja outage now fails the order. Deliberate — a parcel we cannot price is a parcel we cannot ship.
 - **Item prices come from `product_variants`, not from the cart.** `items[].price` used to be summed into `orders.subtotal_idr` + the line items, so `price: 0` bought the goods for nothing. The client says WHAT is in the cart (handle + variant + qty); the server says what it costs, what it weighs, and where it ships from.
 
+## Promo, voucher & flash sale (read before touching a discount)
+
+> ### 🏷️ THE RULE: **`nonaktif` means OFF. The DATES are the schedule.**
+> Both readers filter `status <> 'nonaktif'` **plus** the `starts_at`/`ends_at` window — never
+> `status = 'aktif'`. Requiring `aktif` is what made a `terjadwal` flash sale **never go live**
+> (the editor saved `terjadwal`, both readers demanded `aktif`, and **nothing ever promoted the
+> row**), and what let a `terjadwal` voucher be redeemable at checkout while invisible on `/promo`
+> and labelled "Terjadwal" in the seller list — **three definitions of "usable" for one row**.
+
+- **Never anchor a WRITE to a fixed date.** `lib/actions/discounts.ts` held
+  `ADMIN_TODAY = 2026-06-30` (the seed's frame) and computed `starts_at`/`ends_at` from it, so on
+  2026-07-29 **every voucher a merchant created was born already expired** — and because
+  `endsInDays` seeds the editor's period field, opening a voucher and pressing Simpan wrote the lie
+  back and moved its expiry **backwards**. The gap widened by a day, every day. The seed may be
+  anchored; the app is not. Same rule for `lib/data/discounts.ts`, which derives the display status.
+- **A blank period means NO end date** (`ends_at: NULL`), which is what the editor has always
+  promised ("Kosongkan untuk diskon tanpa batas waktu") and what `applyDiscount` already handles.
+  `Math.max(1, period)` turned that promise into a voucher that died the next day.
+- **The usage limit is enforced in the UPDATE's own WHERE, inside the order txn** — never by the
+  pre-check alone. `applyDiscount` reads `used_count` **outside any transaction, unlocked**, so it
+  is advisory: N concurrent orders on the last slot all pass it. The conditional
+  `UPDATE … WHERE used_count < usage_limit` is the lock; 0 rows updated ⇒ `VoucherExhausted` ⇒ the
+  whole order rolls back with a 409 the shopper can act on. (A comment here claimed this was already
+  race-safe for weeks while the increment was a bare `used_count + 1`.)
+- **A flash sale must reach the VARIANT rows, not just the headline price.** `data/catalog.ts`
+  applies `Math.min(v.price, flash.price)` per variant, because the PDP's picker rewrites the price
+  from `variants[]` on load — so a flash product WITH options rendered the **pre-sale** price next
+  to its own "-43%" badge while `/api/public/order` charged the sale price.
+- **Not implemented, do not pretend otherwise:** per-customer usage limit (no column —
+  `discount_usages` has no `customer_id`, so it is not even derivable), product/collection
+  eligibility, and voucher stacking. `min_purchase_idr` **is** enforced server-side but has no
+  field in the editor.
+
+## Store Builder / Tema — three page types, three different jobs
+
+`page_templates.type` is `homepage | category | product` and they are **not interchangeable**:
+
+| Type | What the template IS | Rendered by |
+|---|---|---|
+| `homepage` | the whole page | `index.astro` |
+| `category` | the **body** under the category's own header | `kategori/[handle].astro` |
+| `product` | the **PDP tail** only (gallery, buy box, reviews, description untouched) | `produk/[handle].astro` |
+
+- ⚠️ **`CategoryHero` is ALWAYS rendered — a template never replaces it.** It used to: building a
+  category template cost the page its `<h1>`, its breadcrumb and its cover, while the BreadcrumbList
+  JSON-LD kept publishing a trail nobody could see. (`produk/index.astro` already worked correctly;
+  the two sibling listing routes had simply diverged.)
+- **`product-listing` ("Daftar Produk") is the catalogue; `product-grid` ("Grid Produk") is a
+  merchandising row.** Daftar Produk wraps the same `ProductListing.astro` the hand-built page uses
+  — server-side sort, 12-per-page pagination, one empty state. Grid Produk is a flat slice capped at
+  `limit` with neither. The builder used to offer only Grid Produk on a category template, so its
+  own hint ("tambahkan Grid Produk") steered merchants into **silently truncating their catalogue
+  and losing sort + paging**.
+- **The palette is per type** — `SECTIONS_BY_TEMPLATE_TYPE` in `@tokophi/sections`, applied by
+  `puckConfigFor(type)`. No `hero` on a category (CategoryHero owns the `<h1>`; a second one is the
+  a11y defect the homepage carousel already has) and none on a product (the product name is the
+  `<h1>`); no navigation furniture under a buy box.
+- **Narrow the PALETTE, never the RENDERER.** `SectionRenderer` still switches on every type, so a
+  template saved earlier holding a section no longer offered for its type keeps rendering. Removing
+  it from the sidebar stops merchants adding more; it must never silently delete published work.
+
 ## Checkout input — normalise generously, reject narrowly (`@tokophi/lib/validate`)
 **The API is the boundary, the form is UX.** `/api/public/order` re-normalises and re-validates every field before it writes a customer or an order; the copies of these rules in `checkout.astro` exist only so the shopper sees the error early. **Over-validation is itself a bug**: a rule that rejects a legitimate Indonesian name, a new carrier prefix or an unusual address costs a sale and nobody ever finds out — the shopper just leaves.
 - **Phone = canonical `62xxx`** (`normalizePhone`). Accept `0812…`/`812…`/`+62 812-…`/`62 812…` with any separators. Validate **structure, not carrier**: after `62` it starts with `8`, national part 9–12 digits. **NEVER hard-code operator prefixes** (811/812/…) — carriers add prefixes and the list would one day refuse a real customer, silently and permanently. Normalise on write from EVERY path (order API, `checkout-session`, chat, seller pickup phone); migration `0048` backfilled the existing rows. `waLink()` normalises too (`wa.me/08…` does not open a chat).

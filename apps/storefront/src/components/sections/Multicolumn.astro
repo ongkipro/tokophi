@@ -1,0 +1,64 @@
+---
+// ADR 0009 — Kolom Ikon (Shopify Dawn's "Multicolumn"): the benefit/trust row.
+//
+// Distinct from the hero's `features` strip, which lives ON the hero photo and therefore only exists
+// on a page that has a hero. This is standalone, so it can sit on a category page or a PDP tail —
+// the two places a shopper actually asks "can I trust this shop?".
+//
+// `icon` is a KEY from the registry's allow-list, never markup: the map below is this renderer's
+// half of it (the Puck editor owns the React half). An unknown key falls back to a neutral dot
+// rather than throwing or rendering a broken glyph — a template saved against a future key must
+// degrade, not 500 the page.
+//
+// Renders NOTHING with no items. A trust badge is a promise; an empty promise row is worse than none.
+import SectionHeading from "../SectionHeading.astro";
+import { Truck, ShieldCheck, RotateCcw, Headphones, CreditCard, Package, MessageCircle } from "@lucide/astro";
+import type { MulticolumnConfig } from "@tokophi/sections";
+
+const ICONS = {
+  truck: Truck,
+  shield: ShieldCheck,
+  returns: RotateCcw,
+  support: Headphones,
+  payment: CreditCard,
+  package: Package,
+  chat: MessageCircle,
+} as const;
+
+type Props = MulticolumnConfig;
+const { heading, eyebrow, columns, items } = Astro.props;
+
+const rows = (items ?? []).filter((i) => i.title?.trim());
+// Explicit class strings — Tailwind scans source text, so a template literal like `grid-cols-${n}`
+// produces a class that was never generated.
+const COLS = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-2 lg:grid-cols-3", 4: "sm:grid-cols-2 lg:grid-cols-4" } as const;
+---
+
+{
+  rows.length > 0 && (
+    <section class="py-16 sm:py-20">
+      <div class="mx-auto max-w-[1200px] px-4 sm:px-6">
+        {heading && <SectionHeading align="center" eyebrow={eyebrow} title={heading} />}
+
+        <ul class:list={["mt-8 grid grid-cols-1 gap-8", COLS[columns] ?? COLS[3]]}>
+          {rows.map((row) => {
+            const Icon = ICONS[row.icon as keyof typeof ICONS];
+            return (
+              <li class="flex flex-col items-center text-center">
+                <span class="mb-4 flex size-12 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+                  {Icon ? (
+                    <Icon class="size-6" stroke-width={1.75} aria-hidden="true" />
+                  ) : (
+                    <span class="size-2 rounded-full bg-current" aria-hidden="true" />
+                  )}
+                </span>
+                <h3 class="font-medium text-ink">{row.title}</h3>
+                {row.text?.trim() && <p class="mt-1.5 text-sm leading-relaxed text-muted">{row.text}</p>}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  )
+}

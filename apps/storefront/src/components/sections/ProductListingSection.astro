@@ -1,0 +1,35 @@
+---
+// ADR 0009 — "Daftar Produk": the REAL catalogue listing as a builder section.
+//
+// WHY THIS EXISTS. A `category` template used to replace the entire category page, and the only
+// product section on offer was Grid Produk — a flat slice capped at `limit`, with no sort control
+// and no pagination. So a merchant who built a category template silently lost sort, paging and
+// (past `limit`) most of their catalogue, and the builder's own hint told them to do exactly that.
+//
+// This wraps the SAME `ProductListing.astro` the hand-built page uses — one grid, one sort control,
+// one empty state, one pagination, on both paths. A fork is how "Terbaru shows the oldest products"
+// would survive in one of two places after being fixed in the other.
+//
+// The products are NOT configurable. On a category template they are that category's, taken from the
+// render context; a handle field here could only ever disagree with the page the shopper is on.
+import ProductListing from "../ProductListing.astro";
+import SectionHeading from "../SectionHeading.astro";
+import type { ProductListingConfig } from "@tokophi/sections";
+import type { SectionContext } from "./context";
+
+type Props = ProductListingConfig & { ctx?: SectionContext };
+
+const { heading, ctx } = Astro.props;
+const catalog = Astro.locals.catalog;
+
+// Category template → that collection. Anywhere else → the whole catalogue (what /produk shows).
+// A `product` template never offers this section (SECTIONS_BY_TEMPLATE_TYPE), so there is no
+// "listing on a PDP" case to reason about here.
+const products =
+  ctx?.kind === "category" ? catalog.byCollection(ctx.collectionHandle) : catalog.products;
+---
+
+<section class="py-4">
+  {heading && <SectionHeading title={heading} />}
+  <ProductListing products={products} />
+</section>

@@ -23,6 +23,10 @@ export default async function TemaBuilderPage({ params }: { params: Promise<{ id
   return (
     <BuilderClient
       templateId={template.id}
+      // The builder needs to know WHICH page it is editing: the three template types render in three
+      // different places (the whole homepage / the body under a category's header / the PDP tail), so
+      // they do not offer the same sections. Without this the palette was identical for all three.
+      templateType={template.type as TemplateType}
       title={`${TEMPLATE_TYPE_LABELS[template.type as TemplateType]} — ${template.name}`}
       initialData={(template.sections as Data | undefined) ?? BLANK_DATA}
       initialBrandColor={brandColor ?? DEFAULT_BRAND_COLOR}
