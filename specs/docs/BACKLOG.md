@@ -919,6 +919,42 @@ from migrations and re-seed. **Announce before doing either; the dev DB is share
 
 ---
 
+## 🏷️ FLASH SALE — audited end to end 2026-07-30; these are what is LEFT
+
+The rule itself is sound: `min(variantPrice, flashPrice)` at all five sites, idempotent where applied
+twice, no percentage anywhere, identical window predicate in both readers. Fixed in `2ee191c` +
+`273b81d`: the PDP price trio, JSON-LD capping + `priceValidUntil`, the expired-tab reload, the
+funnel's per-variant struck price, the sold-out card. What remains:
+
+- [ ] **DECISION (owner, not a bug): a repriced cart is accepted silently.** `/api/public/order`
+  re-prices from the live window and ignores `items[].price`. If a flash lapses between add-to-cart
+  and Bayar, the shopper is charged MORE than the page quoted. `273b81d` makes them SEE the true
+  number on the success page; it does not decide whether they should be STOPPED. The house pattern
+  for the equivalent case exists — a shipping service missing from a fresh quote is REJECTED, never
+  silently substituted — so refusing with "harga berubah, muat ulang keranjang" (409) would be
+  consistent. Refuse-vs-accept costs a sale either way; it is a product call.
+- [ ] **DECISION: a flash sale erases the merchant's own `compare_at_idr` from every surface.** The
+  struck price becomes the pre-sale SELLING price (the defensible base — the blazer shows −32% off
+  219.000, not −48% off its 289.000 list). Consequence: Google sees `g:price` drop 289.000 → 219.000
+  when a sale starts and rise when it ends. Deliberate-looking, undocumented, worth a ruling.
+- [ ] **Overlapping sales race the wrong clock.** `catalog.ts` keeps the lowest-priced row and takes
+  THAT row's `endsAt`. If the cheaper sale ends first while a second, still-discounting sale runs on,
+  the countdown hits zero and the banner vanishes while the product is still on sale. Fix: carry the
+  latest window that still contains the winning price.
+- [ ] **The seller's flash screens anchor on variant 0 and on the app clock.** `flash-editor.tsx`
+  computes `pct` against the position-0 variant's price, so on a multi-price product the merchant is
+  shown a discount that applies to one variant; `data/flash.ts` `isLive` uses Node `Date.now()` while
+  both pricing readers use Postgres `now()` — container clock drift makes the badge and the till
+  disagree.
+- [ ] **Staleness windows, for the record:** the order API flips instantly (uncached, DB clock); every
+  SSR surface is stale up to the 15 s catalog memo; the feed adds `Cache-Control: max-age=3600` on top
+  (mitigated by `sale_price_effective_date`); `localStorage.cart` is stale indefinitely.
+- [ ] **No demo product is both flash-priced and multi-variant** — all four flash products have zero
+  `product_options`, and no product in the store has variants at differing prices. That is why this
+  whole class survived: it is unreachable by clicking around the demo. Worth seeding one.
+
+---
+
 ## 🆕 Opened 2026-07-30 — audited, NOT fixed
 
 Four parallel audits over the storefront + `/tema` + `/promo` produced ~80 findings; that session
