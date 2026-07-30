@@ -243,6 +243,16 @@ async function main() {
       .values({
         productId: p.id,
         storeId: store.id,
+        // `seq` is NOT NULL with NO default (0081 dropped it deliberately), so omitting it is a
+        // RUNTIME failure, not just a type error — and the deploy runs this seeder as
+        // `(… || echo 'products seed skipped')`, so the throw was swallowed and the run "succeeded".
+        // It is not a clean skip either: the loop is unbatched and untransacted, so each attempt had
+        // already written a WebP + a `media` row, bumped `store_counters` and inserted the `products`
+        // row — leaving an orphan active product with a burned catalog number, no variant, no stock
+        // and no media. Invisible on the storefront (the catalog INNER JOINs variant position 0) and
+        // very visible in the Seller's Produk list, with no price.
+        // `1` is exactly what the product two lines up reserved with `variantSeqNext: 2`.
+        seq: 1,
         title: "Default",
         position: 0,
         priceIdr: d.price,

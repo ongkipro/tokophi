@@ -364,7 +364,13 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       // at two warehouses used to appear TWICE in this array. On the storefront that was a duplicate
       // option; in the product feed it is two <item>s with an identical <g:id>, which Google rejects.
       // Single-location today, which is exactly why it was invisible.
-      stock: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)`,
+      // ⚠️ `.mapWith(Number)` is load-bearing, not decoration. postgres.js returns a bigint `sum()`
+      // as a STRING, so `sql<number>` was a lie the compiler could not catch: the served HTML carried
+      // `"stock":"20"`. It is benign only by luck — every consumer today compares or concatenates,
+      // and `"20" <= 5` coerces correctly — but the first one that ADDS gets `"20" + 1 === "201"`,
+      // silently, on a stock number. This became an aggregate in `54c98e5` (ADR 0013); it was a plain
+      // column select before, which is why the type was right until it wasn't.
+      stock: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)`.mapWith(Number),
     })
     .from(schema.productVariants)
     .innerJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))

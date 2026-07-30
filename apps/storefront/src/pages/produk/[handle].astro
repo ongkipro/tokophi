@@ -900,6 +900,10 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           b.dataset.catalogId = GROUP_CATALOG_ID;
           b.dataset.catalogType = GROUP_CATALOG_TYPE;
           b.dataset.variant = variantLabel();
+          // Cleared too, or the button announces the GROUP id at the PREVIOUS variant's price. The
+          // comment above promises "nothing stale is ever reported"; leaving one field behind is one
+          // removed `if (btn.disabled) return` away from making that promise false.
+          b.dataset.price = "";
         });
         return;
       }

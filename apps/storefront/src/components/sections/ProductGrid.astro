@@ -24,7 +24,12 @@ let pool: Product[] = scopedHandle ? catalog.byCollection(scopedHandle) : catalo
 if (ctx.kind === "product") pool = pool.filter((p) => p.handle !== ctx.product.handle);
 
 const MODE_FN = { terlaris: catalog.bestsellers, terbaru: recentProducts, acak: randomProducts };
-const products = MODE_FN[mode](pool).slice(0, limit);
+// `mode` comes out of `page_templates.sections` JSON, so it is only as trustworthy as whatever last
+// wrote that column. An unknown value used to be `undefined(pool)` — a TypeError that takes the WHOLE
+// storefront page down, homepage included. seed-templates.ts documented exactly this hazard and the
+// guard was added to the SEED rather than to the render path. A section falling back to bestsellers
+// is a section showing the wrong products; a throw here is a shop that is offline.
+const products = (MODE_FN[mode] ?? catalog.bestsellers)(pool).slice(0, limit);
 const colsClass = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-3 lg:grid-cols-4" }[columns];
 // The card's `sizes` has to describe the SAME grid these classes build — this is merchant-chosen, so
 // it is the one place where hardcoding a single shape would be wrong for two thirds of the options.

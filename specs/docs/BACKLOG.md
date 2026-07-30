@@ -897,27 +897,49 @@ unmeasurable**. Ordered.
      `TEST_DATABASE_URL=…/tokophi_test npx vitest run`. All behaviour-identical refactors; `tsc` clean.
 
 
+## 🔴 DEV DB ONLY — the migration ledger is 21 behind its own schema (found 2026-07-30, NOT fixed)
+
+`drizzle.__drizzle_migrations` holds **68 rows** (newest `0061_simple_invisible_woman`) against an
+**83-entry** journal. Migrations `0062`–`0082` are physically applied — they arrived via `push` or by
+hand — but unrecorded, and **6 ledger stamps belong to no journal entry** (branch migrations later
+renumbered or dropped).
+
+Consequence: `npm run migrate -w @tokophi/db` — the command AGENTS.md calls canonical — starts at
+`0062_order_problem_flag` (`ALTER TABLE orders ADD COLUMN problem_at …`, no `IF NOT EXISTS`) and
+**dies**. So nothing in `0062`–`0082` has ever been proven to apply through the migrator on this box,
+which is exactly what the production deploy runs.
+
+**The journal itself is clean** — `verify-migrations` is green: idx 0–82 contiguous, stamps strictly
+increasing across the concurrent `0079`–`0082`, every entry has its `.sql` and vice versa. This is a
+LEDGER problem, not a code one.
+
+Fix (a DB write, so deliberately left for a human to run): insert the 21 missing stamps for what is
+already applied and delete the 6 orphans, so the next `migrate` is a no-op — or rebuild the dev DB
+from migrations and re-seed. **Announce before doing either; the dev DB is shared.**
+
+---
+
 ## 🆕 Opened 2026-07-30 — audited, NOT fixed
 
 Four parallel audits over the storefront + `/tema` + `/promo` produced ~80 findings; that session
 fixed the money paths and the Store Builder's page-type problem and left these. Every one was
 confirmed by reading the code, running SQL, or driving a real browser — none is speculative.
 
-### Security (do these first)
-- [ ] **The link picker accepts `javascript:`** (`components/theme/link-picker.tsx:160` — `pick()` with
+### Security — ✅ ALL THREE CLOSED 2026-07-30 (`20ca7cc`)
+- [x] **The link picker accepts `javascript:`** — closed by `safeHref()` at the five render sites (+ 6 hostile-input tests). (`components/theme/link-picker.tsx:160` — `pick()` with
   no scheme check; `saveTemplate` validates nothing) and it reaches four unsanitised storefront render
   sites: `Hero.astro:168`, `RichText.astro:55`, `ImageText.astro:63`, `BannerPromo.astro:14`,
   `CategoryNav.astro:69`. Owner/admin-only today, so it is self-XSS on the merchant's own shop — but
   it is already a stored-XSS vector against that store's shoppers. Fix: one shared `safeHref()` at the
   render sites (allow `/ # http: https: mailto: tel:`), not in the picker — the picker is UX.
-- [ ] **SVG upload is stored XSS on the admin origin.** `lib/image-store.ts:139` only checks
+- [x] **SVG upload is stored XSS on the admin origin.** — closed: `sandbox; default-src 'none'` on the SVG branch, `nosniff` on every response; verified against a running admin. `lib/image-store.ts:139` only checks
   `type.startsWith("image/")`, `saveImage` writes SVG byte-for-byte, and
   `app/api/uploads/[name]/route.ts:11` serves it as `image/svg+xml`, `immutable`, **no
   `Content-Disposition`, no CSP sandbox, no auth**. `media:write` is held by `staff` in every tenant,
   so any store's staff can host a payload on `app.tokophi.com` and send the link to another owner.
   Fix: `Content-Security-Policy: sandbox; default-src 'none'` + `X-Content-Type-Options: nosniff` on
   the SVG branch.
-- [ ] **`saveTemplate` writes unvalidated client JSON into jsonb** (`lib/actions/theme.ts:165`). The
+- [x] **`saveTemplate` writes unvalidated client JSON into jsonb** — closed: shape check at the boundary, plus renderer fallbacks (`MODE_FN[mode] ?? bestsellers`, `Array.isArray(slides)`) so a bad row degrades instead of 500-ing. (`lib/actions/theme.ts:165`). The
   repo already documented the consequence in `seed-templates.ts`: a typo'd `mode` makes
   `MODE_FN[mode](pool)` throw and **500s the whole storefront** — but the guard was added to the seed,
   not to the write path. Fix: validate `data.content[]` against `SectionConfigMap` before the update,

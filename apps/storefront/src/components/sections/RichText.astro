@@ -5,6 +5,7 @@
 // display line as the heading, an optional supporting line, and a quiet underlined text link (not a
 // pill button). The statement carries the weight; everything else stays out of its way.
 import type { RichTextConfig } from "@tokophi/sections";
+import { safeHref } from "../../lib/safe-href";
 
 type Props = RichTextConfig;
 const { heading, body, ctaLabel, ctaHref, theme, eyebrow } = Astro.props;
@@ -52,7 +53,7 @@ const dark = theme === "gelap";
     {
       ctaLabel && (
         <a
-          href={ctaHref}
+          href={safeHref(ctaHref)}
           class:list={[
             "mt-8 inline-block rounded-sm text-sm font-medium underline decoration-1 underline-offset-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
             dark ? "text-cream/90 hover:text-white" : "text-ink/80 hover:text-ink",

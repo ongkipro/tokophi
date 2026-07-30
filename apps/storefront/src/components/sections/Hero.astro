@@ -9,6 +9,7 @@
 // Carousel chrome (dots, autoplay) only appears from 2 slides up — a 1-slide hero, which is what
 // every pre-carousel saved template resolves to via `heroSlides()`, stays a plain static hero.
 import { heroSlides, HERO_INTERVAL_MS, type HeroConfig } from "@tokophi/sections";
+import { safeHref } from "../../lib/safe-href";
 import { ArrowLeft, ArrowRight, CreditCard, Headphones, MessageCircle, Package, RotateCcw, ShieldCheck, Truck } from "@lucide/astro";
 
 type Props = HeroConfig;
@@ -165,7 +166,7 @@ const centered = align === "center";
                   {/* PRIMARY — the slide's own CTA, as a pill with an arrow in a ring that fills on
                       hover. `pl-2` so the round icon hugs the left edge the way the reference does. */}
                   <a
-                    href={slide.ctaHref}
+                    href={safeHref(slide.ctaHref)}
                     class="group inline-flex items-center gap-3 rounded-full bg-white py-2 pl-2 pr-6 text-sm font-semibold uppercase tracking-wide text-ink shadow-lg shadow-ink/30 transition-colors hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
                   >
                     <span class="flex size-9 items-center justify-center rounded-full ring-1 ring-ink/15 transition-colors group-hover:bg-ink group-hover:text-white">

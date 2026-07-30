@@ -20,8 +20,12 @@ import OrderFunnel from "../../components/OrderFunnel.astro";
 import { ShoppingBag } from "@lucide/astro";
 import { getLandingPage } from "../../data/landing";
 import { buildPackages } from "../../lib/packages";
+import { storeFreeShip, storeTaxSettings } from "../../data/catalog";
 
 const { store, catalog } = Astro.locals;
+// The two settings /api/public/order prices with — passed into the funnel so its quoted total
+// cannot disagree with what the shopper is actually charged (on COD, with what the courier collects).
+const [freeShip, taxCfg] = await Promise.all([storeFreeShip(store.id), storeTaxSettings(store.id)]);
 const { slug } = Astro.params;
 
 const landing = slug ? await getLandingPage(store.id, slug) : null;
@@ -47,6 +51,8 @@ const packages = buildPackages(product);
       countdownMinutes={landing.countdownMinutes}
       showScarcity={landing.showScarcity}
       formConfig={landing.formConfig}
+      freeShip={freeShip}
+      tax={taxCfg}
     />
   </section>
 
