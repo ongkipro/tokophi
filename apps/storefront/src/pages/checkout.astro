@@ -2310,6 +2310,21 @@ if (rToken) {
           if (typeof res.shipping === "number") order.shipping.price = res.shipping;
           if (typeof res.tax === "number") order.tax = res.tax;
           if (typeof res.total === "number") order.total = res.total;
+          // ⚠️ The SUBTOTAL and the LINE PRICES too — this comment promised "what the order actually
+          // says, not what this tab last calculated" while leaving the one field that lies. Both came
+          // from `localStorage.cart`, captured at add-to-cart and kept forever, so a flash sale that
+          // lapsed in between left the success page showing "Subtotal Rp149.000 + Ongkir" over a
+          // Total built from Rp219.000: arithmetic that does not add up, beside a COD amount the
+          // courier really will ask for.
+          if (typeof res.subtotal === "number") order.subtotal = res.subtotal;
+          if (Array.isArray(res.lines) && res.lines.length) {
+            order.items = res.lines.map(function (l) {
+              // Keep the tab's image/label (the API has no reason to send them back) and take the
+              // MONEY from the server.
+              var prev = (order.items || []).find(function (i) { return i.handle === l.handle; }) || {};
+              return { ...prev, handle: l.handle, name: prev.name || l.title, qty: l.qty, price: l.price };
+            });
+          }
           if (res.payment) order.payment.instruction = res.payment;
           // Conversion ids the SERVER computed (ADR 0012): the de-dup `event_id` and the catalog
           // `content_ids`. Carried to /checkout/sukses so the marketing pixel fires the exact same

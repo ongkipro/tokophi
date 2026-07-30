@@ -312,6 +312,16 @@ async function handle(req: Request) {
     });
   }
   const subtotal = resolved.reduce((a, r) => a + r.price * r.qty, 0);
+  // ⚠️ RETURNED TO THE BROWSER, and it must be. The success page used to render `subtotal` and the
+  // per-line prices from `localStorage.cart` — captured when the shopper ADDED the item, and kept
+  // forever — beside a `total` this endpoint computed. The two are the same number only until a
+  // price moves. When a flash sale lapses between add-to-cart and Bayar, this endpoint silently
+  // reprices UPWARD (it ignores `items[].price` by design), and the shopper was shown
+  // "Subtotal Rp149.000 + Ongkir" over a Total built from Rp219.000 — arithmetic that does not add
+  // up, no explanation, and on COD it is the cash the courier asks for.
+  // The per-line prices go back too, so the success page can render the lines the ORDER holds
+  // rather than the ones the tab remembered.
+  const lines = resolved.map((r) => ({ handle: r.handle, title: r.title, qty: r.qty, price: r.price }));
 
   // ── PPN: server-priced, like everything else here ─────────────────────────────────────────────
   // Read the store's tax settings and compute PPN on the goods subtotal (NOT ongkir — shipping is a
@@ -674,7 +684,7 @@ async function handle(req: Request) {
 
   // COD → the payment row was already written inside the order txn (collected on delivery, no gateway).
   if (isCod) {
-    return NextResponse.json({ ok: true, orderNumber: order.number, cod: true, shipping: shippingCost, tax: tax.taxIdr, discount: discountIdr, total, tracking }, { headers: CORS });
+    return NextResponse.json({ ok: true, orderNumber: order.number, cod: true, subtotal, lines, shipping: shippingCost, tax: tax.taxIdr, discount: discountIdr, total, tracking }, { headers: CORS });
   }
 
   // AutoLaris: the pending payment row already exists (written in the txn); the gateway call below
@@ -725,7 +735,7 @@ async function handle(req: Request) {
     ok: true, orderNumber: order.number,
     // The ongkir + total the SERVER decided, echoed back so a stale quote in the browser cannot leave
     // the shopper believing a number the order does not contain.
-    shipping: shippingCost, tax: tax.taxIdr, discount: discountIdr, total,
+    subtotal, lines, shipping: shippingCost, tax: tax.taxIdr, discount: discountIdr, total,
     tracking,
     payment: {
       channel: { code: channel.code, label: channel.label, kind: channel.kind },

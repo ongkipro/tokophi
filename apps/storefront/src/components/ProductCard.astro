@@ -181,8 +181,11 @@ const discount =
       <span class:list={["font-semibold text-ink", unpriced ? "text-sm" : "text-[0.95rem] tabular-nums"]}>
         {unpriced ? "Hubungi untuk harga" : IDR(product.price)}
       </span>
+      {/* `!soldOut` matches the discount pill above, which is already gated on it. Without it a
+          sold-out flash product read "Rp149.000 ~~Rp219.000~~" with the "−32%" deliberately
+          suppressed — half a claim, advertising a saving on something nobody can buy. */}
       {
-        !unpriced && product.compareAt && (
+        !unpriced && !soldOut && product.compareAt && (
           <span class="text-xs text-muted line-through tabular-nums">{IDR(product.compareAt)}</span>
         )
       }

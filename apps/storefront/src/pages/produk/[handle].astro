@@ -166,7 +166,14 @@ const variantCatalogIds = (product.variants ?? []).map((v, i) =>
   retailerId(catalogScheme, product, { seq: v.seq, index: i, count: variantCount }),
 );
 
-const variantPrices = (product.variants ?? []).map((v) => v.price).filter((n) => n > 0);
+// ⚠️ CAP against the live flash price. `variants[].price` is capped by `data/catalog.ts` only when
+// `onSale` — i.e. only when the sale beats the POSITION-0 variant — so a flash priced between
+// variant 0 and a dearer one left `highPrice` at the uncapped figure while `/api/public/order`
+// charges the cap. Structured data is the one surface a shopper never sees and Google always does;
+// advertising a price the till will not take is the worst place to be wrong.
+// Every other surface consults `product.flashPrice`; this one did not.
+const capFlash = (n: number) => (product.flashPrice != null ? Math.min(n, product.flashPrice) : n);
+const variantPrices = (product.variants ?? []).map((v) => capFlash(v.price)).filter((n) => n > 0);
 const available = inStock(product);
 const offers =
   variantPrices.length > 1 && Math.min(...variantPrices) !== Math.max(...variantPrices)
@@ -178,6 +185,11 @@ const offers =
         offerCount: variantPrices.length,
         availability: `https://schema.org/${available ? "InStock" : "OutOfStock"}`,
         url: abs(`/produk/${product.handle}`),
+        // When the sale lapses this price stops being true. The feed already says so
+        // (`g:sale_price_effective_date`); without it here, rich results keep advertising the sale
+        // figure indefinitely. Omitted entirely when there is no sale — an invented expiry is worse
+        // than none.
+        ...(product.flashEndsAt ? { priceValidUntil: product.flashEndsAt.slice(0, 10) } : {}),
       }
     : {
         "@type": "Offer",
@@ -185,6 +197,7 @@ const offers =
         price: product.price,
         availability: `https://schema.org/${available ? "InStock" : "OutOfStock"}`,
         url: abs(`/produk/${product.handle}`),
+        ...(product.flashEndsAt ? { priceValidUntil: product.flashEndsAt.slice(0, 10) } : {}),
       };
 
 // A description-less product must not feed an empty string to <meta name="description"> or the JSON-LD
@@ -804,6 +817,12 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         if (isNaN(ends) || diff <= 0) {
           var banner = document.getElementById("flash-banner");
           if (banner) banner.style.display = "none";
+          // ⚠️ Hiding the banner is NOT enough. `FLASH_PRICE` was baked in at SSR, so the picker keeps
+          // capping at the EXPIRED price for the life of this tab, the price row keeps showing the
+          // sale figure, and `/api/public/order` — which reads the live window — will charge the real
+          // one. Re-fetch instead: the server is the only thing that knows whether the sale is over.
+          // Guarded on `isNaN` so a malformed date never puts the page in a reload loop.
+          if (!isNaN(ends)) location.reload();
           return false;
         }
         var s = Math.floor(diff / 1000);
