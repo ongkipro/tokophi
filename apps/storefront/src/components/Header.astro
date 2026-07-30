@@ -1,5 +1,5 @@
 ---
-import { ShoppingBag, Tag, ArrowRight, Search, ChevronRight, Phone, Mail } from "@lucide/astro";
+import { ShoppingBag, ArrowRight, Search, ChevronRight, Phone, Mail } from "@lucide/astro";
 import { IDR } from "@tokophi/lib/format";
 import { mediaUrl } from "../data/catalog";
 import { getMainNav, type NavItem } from "../data/nav";
@@ -12,12 +12,16 @@ const { store, catalog } = Astro.locals;
 // categories, so its header linked to /kategori/dress and 404'd on every page. See data/nav.ts.
 const MAIN_NAV = await getMainNav(store.id, catalog.collections);
 
-// The mega-menu utility bar linked to two hardcoded demo collections (promo-gajian, produk-terlaris)
-// that 404 on any tenant that doesn't have them. Render each link only if THIS store actually has that
-// collection, using its real name — and hide the whole bar when neither exists.
-const promoCol = catalog.findCollection("promo-gajian");
+// The mega-menu utility bar linked to hardcoded demo collections that 404 on any tenant without them.
+// What is left is the bestseller shortcut, rendered only if THIS store actually has that collection.
+//
+// The promo shortcut that used to live here is GONE: it was gated on the store owning a
+// `promo-gajian` collection, yet its href was `/promo` (the hub) and its LABEL was that collection's
+// name — so it promised a category and delivered a different page, and it hid the hub entirely from
+// every store without that one demo handle. `/promo` is now a default MAIN-NAV item instead
+// (data/nav.ts + the seeded menu), which is editable and deletable in Navigasi like any other.
 const terlarisCol = catalog.findCollection("produk-terlaris");
-const showUtilityBar = Boolean(promoCol || terlarisCol);
+const showUtilityBar = Boolean(terlarisCol);
 // Merchant logo (stores.logo_url) when set, else the store name as a wordmark.
 const logo = store.logoUrl ? mediaUrl(store.logoUrl) : null;
 const pathname = Astro.url.pathname;
@@ -255,21 +259,12 @@ const drawerEmail = (store.email ?? "").trim() || null;
       )}
       </div>
 
-      <!-- Utility bar: shortcuts to this store's own promo/bestseller collections, shown
-      only when they exist (they are hardcoded demo handles otherwise). -->
+      <!-- Utility bar: a shortcut to this store's own bestseller collection, shown only when it
+      exists (the handle is a demo one otherwise). The promo shortcut moved to the main nav. -->
       {showUtilityBar && (
       <div
       class="flex items-center justify-between gap-4 border-t border-line bg-brand-50/50 px-6 py-3 text-sm"
       >
-      {promoCol && (
-      <a
-      href="/promo"
-      class="inline-flex items-center gap-2 rounded-sm font-medium text-brand-700 transition-colors hover:text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-      >
-      <Tag class="h-4 w-4 shrink-0" stroke-width={1.75} aria-hidden="true" />
-      {promoCol.name}
-      </a>
-      )}
       {terlarisCol && (
       <a
       href="/kategori/produk-terlaris"

@@ -26,6 +26,21 @@ of "usable" for one row. Both now filter `status <> 'nonaktif'` **plus** the dat
 - The PDP's hand-rolled price formatter emitted `Rp199.000` where the server's `IDR()` emits
   `Rp 199.000` (NBSP), so the price reflowed the moment JS touched it. Same `Intl` formatter now.
 
+### 🏷️ `/promo` is a DEFAULT nav item now
+The only link to the promo hub was inside the mega-menu's utility bar, gated on the store owning a
+`promo-gajian` collection — and its LABEL was that collection's name while its href was `/promo`, so
+it promised a category and delivered a different page. A store with live vouchers and a running flash
+sale published an indexable hub with **zero inbound links**. `/promo` is now:
+- a **seeded main-menu item labelled "Promo"** (was "Promo Gajian" — a collection name on a route), and
+- part of the **fallback nav**, so every store gets it, including freshly provisioned ones.
+
+It is an ordinary menu item: a merchant who does not want it deletes or renames it in Navigasi, and a
+merchant-built menu wins over the fallback entirely. Not gated on "does this store have a promo right
+now" — promos come and go all month, and a menu item that appears and vanishes underneath the merchant
+is worse than one that sometimes leads to the honest empty state `/promo` already renders. The manual
+"Promo Gajian" collection still exists at `/kategori/promo-gajian` and still shows in the collection
+bento; only the nav entry changed. The duplicate utility-bar shortcut is gone.
+
 ### 🎨 Store Builder: three page types, three palettes
 `page_templates.type` has been `homepage | category | product` since ADR 0009 and the builder offered
 **the same eleven sections to all three** — it never received the type. `puckConfigFor(type)` now
