@@ -193,7 +193,17 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
     // drop variants no longer present — but keep any referenced by order history
     for (const ev of existing) {
       if (keptKeys.has(comboKey(ev.o1, ev.o2, ev.o3))) continue;
-      if (await isReferenced(ev.id)) continue;
+      if (await isReferenced(ev.id)) {
+        // ⚠️ It is kept, so it MUST be moved out of the kept variants' numbering. The loop above just
+        // reassigned `position` 0..n-1 to the surviving rows; a retained orphan still sitting at its old
+        // position collides — and two rows at position 0 make `catalog.ts`'s INNER JOIN
+        // (`position = 0`) fan the product out into TWO rows, so every `<item>` and every `<g:id>` in
+        // both feeds is emitted twice. Google rejects duplicate ids outright.
+        // Not an exotic path: reconciliation is by option-value key, so RENAMING an option ("L" →
+        // "Large") is a remove-plus-add, and 93 variants in the demo store are already order-referenced.
+        await db.update(schema.productVariants).set({ position: pos++ }).where(eq(schema.productVariants.id, ev.id));
+        continue;
+      }
       await db.delete(schema.inventoryLevels).where(eq(schema.inventoryLevels.variantId, ev.id));
       await db.delete(schema.productVariants).where(eq(schema.productVariants.id, ev.id));
     }

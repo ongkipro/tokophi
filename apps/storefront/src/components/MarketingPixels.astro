@@ -269,6 +269,12 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
       });
 
       // see NOTE-4 in the frontmatter above
+      // ⚠️ TWO PROVIDERS, TWO FORMATS. Meta wants the digits WITH the country code and WITHOUT a `+`;
+      // TikTok and Google want E.164, i.e. the same digits WITH a `+`. `digits()` returns the Meta
+      // shape, so hashing it for TikTok produced a digest that matches nothing — and disagreed with
+      // our own server, which hashes `+62…` for TikTok (lib/capi.ts). Same trap the server-side file
+      // documents; the browser walked into it.
+      function e164(s) { var d = digits(s); return d ? "+" + d : ""; }
       function digits(s) {
         s = String(s || "").replace(/[^\d]/g, "");
         if (s.slice(0, 1) === "0") return "62" + s.slice(1);
@@ -296,6 +302,9 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         // see NOTE-7 in the frontmatter above
         var perItemQty = ids.length === 1 ? qty : null;
         var val = typeof data.value === "number" && data.value > 0 ? data.value : null;
+        // The GOODS money — price × quantity, no ongkir, no PPN. Only a Purchase can differ from
+        // `value`; on every browsing event `value` already IS the goods total, so it stands in.
+        var goods = typeof data.goods === "number" && data.goods > 0 ? data.goods : evt !== "Purchase" && val !== null ? val : null;
         var cur = data.currency || "IDR";
         if (META) safe(function () {
           var opts = data.eventId ? { eventID: data.eventId } : undefined;
@@ -319,8 +328,12 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
             contents: ids.map(function (id) {
               var c = { content_id: id, content_type: ctype };
               if (perItemQty !== null) c.quantity = perItemQty;
-              // TikTok reads `price` as the PER-ITEM price and `value` as the order total.
-              if (perItemQty !== null && val !== null) c.price = Math.round(val / perItemQty);
+              // TikTok reads `price` as the PER-ITEM price and `value` as the order total. `value` on a
+              // Purchase INCLUDES ongkir and PPN, so `value / quantity` was neither the item's price nor
+              // anything in the catalog — a 2-unit Rp189.000 order with Rp100.000 shipping published
+              // `price: 239.000`, disagreeing with the same SKU in the product feed. Use the goods
+              // subtotal when we have one, and send no price at all rather than an invented one.
+              if (perItemQty !== null && goods !== null) c.price = Math.round(goods / perItemQty);
               return c;
             }),
             quantity: qty,
@@ -339,13 +352,25 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           if (evt === "PageView") return; // config already sent page_view
           var name = map[evt]; if (!name) return;
           // see NOTE-13 in the frontmatter above
-          var payload = { currency: cur, items: ids.map(function (id) {
-            var it = { item_id: id };
-            if (perItemQty !== null) it.quantity = perItemQty;
+          // ⚠️ `send_to` IS REQUIRED HERE. Without it gtag broadcasts the event to the DEFAULT group —
+          // every destination `config`'d on the page, which includes the AW- tag below. One purchase
+          // then reached Google Ads twice (once as this event, once as the remarketing copy), and the
+          // two are not dedupable because only this one carries `transaction_id`.
+          var payload = { send_to: GOOGLE.pixelId, currency: cur, items: (data.lineItems && data.lineItems.length ? data.lineItems : ids.map(function (id) { return { id: id }; })).map(function (li) {
+            var it = { item_id: li.id };
+            if (typeof li.price === "number") it.price = li.price;
+            if (typeof li.qty === "number") it.quantity = li.qty;
+            else if (perItemQty !== null) it.quantity = perItemQty;
             return it;
           }) };
-          if (val !== null) payload.value = val;
-          else if (evt === "Purchase") payload.value = data.value || 0;
+          // GA4 defines purchase `value` as the sum of price × quantity, explicitly WITHOUT shipping and
+          // tax, and gives both their own parameters. We were sending the order total, so GA4 revenue
+          // was overstated by ongkir + PPN on every order and could never be reconciled against the
+          // seller's own Pesanan screen. Meta and TikTok have no such rule — they still get the total.
+          var ga4Value = goods !== null ? goods : evt === "Purchase" ? data.value || 0 : null;
+          if (ga4Value !== null) payload.value = ga4Value;
+          if (typeof data.shipping === "number" && data.shipping > 0) payload.shipping = data.shipping;
+          if (typeof data.tax === "number" && data.tax > 0) payload.tax = data.tax;
           if (evt === "Purchase" && data.orderId) payload.transaction_id = data.orderId;
           window.gtag("event", name, payload);
 
@@ -359,7 +384,11 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
             items: ids.map(function (id) { return { id: id, google_business_vertical: "retail" }; }),
           };
           // Remarketing on every funnel step; the conversion only where money changes hands.
-          window.gtag("event", name === "purchase" ? "purchase" : "view_item", rmk);
+          // `add_to_cart` is one of Google's recognised retail remarketing events, and "added to cart,
+          // did not buy" is the highest-intent audience a shop has — collapsing it into `view_item`
+          // threw that segmentation away. `begin_checkout` is NOT in the retail list, so it stays
+          // `view_item`.
+          window.gtag("event", name === "purchase" ? "purchase" : name === "add_to_cart" ? "add_to_cart" : "view_item", rmk);
           if (evt === "Purchase") {
             window.gtag("event", "conversion", {
               send_to: GOOGLE.adsSendTo,
@@ -424,23 +453,30 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         // see NOTE-19 in the frontmatter above
         var cart = [];
         try { cart = JSON.parse(localStorage.getItem("cart") || "[]") || []; } catch (e) {}
-        var exact = [], groups = [], units = 0, total = 0;
+        // ⚠️ THE MONEY MUST DESCRIBE THE SAME LINES AS THE IDS. This used to partition the cart into
+        // exact vs group ids and let the exact ones win — while summing `units` and `total` over ALL
+        // lines. So a cart of "Rose/L ×2 @189.000" plus one group-level line ×1 @250.000 reported one
+        // content id with num_items 3 and value 628.000: three units of a product the shopper has two
+        // of, at a price that includes an item never named.
+        var exact = [], groups = [], exactUnits = 0, exactTotal = 0, groupUnits = 0, groupTotal = 0;
         cart.forEach(function (i) {
           if (!i || !i.catalogId) return;
           var q = Number(i.qty) || 1;
-          units += q;
-          total += (Number(i.price) || 0) * q;
-          if (i.catalogType === "product_group") groups.push(i.catalogId);
-          else exact.push(i.catalogId);
+          var line = (Number(i.price) || 0) * q;
+          if (i.catalogType === "product_group") { groups.push(i.catalogId); groupUnits += q; groupTotal += line; }
+          else { exact.push(i.catalogId); exactUnits += q; exactTotal += line; }
         });
         var useExact = exact.length > 0;
+        var icUnits = useExact ? exactUnits : groupUnits;
+        var icTotal = useExact ? exactTotal : groupTotal;
         fire("InitiateCheckout", {
           contentIds: useExact ? exact : groups,
           contentType: useExact ? "product" : "product_group",
           // Real numbers, not 1 and 0: `num_items` is the field Meta documents for this event, and a
           // begin_checkout with no value tells GA4 and TikTok nothing about what is at stake.
-          numItems: units || 1,
-          value: total > 0 ? total : undefined,
+          numItems: icUnits || 1,
+          value: icTotal > 0 ? icTotal : undefined,
+          goods: icTotal > 0 ? icTotal : undefined,
         });
       }
       // see NOTE-20 in the frontmatter above
@@ -465,21 +501,47 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
               ? tr.contentIds
               : items.map(function (i) { return i && i.catalogId; }).filter(Boolean);
             var qty = items.reduce(function (n, i) { return n + (i && i.qty ? Number(i.qty) : 1); }, 0);
-            var data = { value: Number(order.total || 0), currency: "IDR", contentIds: ids, numItems: qty || items.length, orderId: key, eventId: tr.eventId || null };
+            // The success page holds what the SERVER priced (checkout.astro overwrites subtotal, tax,
+            // shipping and the line prices from the order response), so GA4 can be given its documented
+            // shape — value excluding ongkir and PPN, with both as their own parameters — instead of the
+            // order total. Per-line prices only when the ids and the lines line up one-for-one; a
+            // mismatch means a line had no resolvable catalog id, and half-mapped items are worse than
+            // none.
+            var goods = Number(order.subtotal || 0) || null;
+            var shipCost = Number(order.shipping && order.shipping.price || 0) || null;
+            var taxAmt = Number(order.tax || 0) || null;
+            var lineItems = ids.length === items.length
+              ? ids.map(function (id, n) {
+                  var it = items[n] || {};
+                  var li = { id: id };
+                  if (Number(it.price) > 0) li.price = Number(it.price);
+                  if (Number(it.qty) > 0) li.qty = Number(it.qty);
+                  return li;
+                })
+              : null;
+            var data = { value: Number(order.total || 0), currency: "IDR", contentIds: ids, numItems: qty || items.length, orderId: key, eventId: tr.eventId || null,
+              goods: goods, shipping: shipCost, tax: taxAmt, lineItems: lineItems };
 
             // Advanced matching (opt-in per channel): hash email/phone, attach, THEN fire Purchase.
             var email = order.contact && order.contact.email ? String(order.contact.email).trim().toLowerCase() : "";
             var phone = order.shippingAddress && order.shippingAddress.whatsapp ? digits(order.shippingAddress.whatsapp) : "";
+            var phoneE164 = order.shippingAddress && order.shippingAddress.whatsapp ? e164(order.shippingAddress.whatsapp) : "";
             var wantAM = (META && META.advancedMatching) || (TIKTOK && TIKTOK.advancedMatching) || (GOOGLE && GOOGLE.advancedMatching);
             if (wantAM && (email || phone)) {
-              Promise.all([email ? sha256(email) : null, phone ? sha256(phone) : null]).then(function (h) {
-                var em = h[0], ph = h[1];
+              // THREE hashes, not two: Meta's phone and TikTok's differ by one character, and one
+              // digest cannot serve both. Google takes the raw values (gtag hashes them itself).
+              Promise.all([email ? sha256(email) : null, phone ? sha256(phone) : null, phoneE164 ? sha256(phoneE164) : null]).then(function (h) {
+                var em = h[0], ph = h[1], phPlus = h[2];
                 // see NOTE-24 in the frontmatter above
                 if (META && META.advancedMatching && (em || ph)) safe(function () { var am = {}; if (em) am.em = em; if (ph) am.ph = ph; window.fbq("init", META.pixelId, am); });
-                if (TIKTOK && TIKTOK.advancedMatching && (em || ph)) safe(function () { var id = {}; if (em) id.email = em; if (ph) id.phone_number = ph; window.ttq.identify(id); });
+                if (TIKTOK && TIKTOK.advancedMatching && (em || phPlus)) safe(function () { var id = {}; if (em) id.email = em; if (phPlus) id.phone_number = phPlus; window.ttq.identify(id); });
                 // see NOTE-25 in the frontmatter above
-                if (GOOGLE && GOOGLE.advancedMatching && GOOGLE.pixelId.slice(0, 3) === "AW-") safe(function () {
-                  var ud = {}; if (email) ud.email = email; if (phone) ud.phone_number = "+" + phone;
+                // Gated on the ADS destination, not on the pixel field. The Seller UI tells the merchant
+                // to put GA4's `G-…` in "ID Pixel/Tag" and the `AW-…/label` in the separate Ads field —
+                // so testing `pixelId.slice(0,3) === "AW-"` meant enhanced conversions were silently off
+                // for every merchant who wired it the way we documented.
+                if (GOOGLE && GOOGLE.advancedMatching && GOOGLE.adsSendTo) safe(function () {
+                  var ud = {}; if (email) ud.email = email; if (phoneE164) ud.phone_number = phoneE164;
                   window.gtag("set", "user_data", ud);
                 });
                 fire("Purchase", data);

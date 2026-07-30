@@ -32,6 +32,42 @@ function empty(channel: TrackingChannelKey): TrackingConfig {
   return { channel, enabled: false, pixelId: "", capiEnabled: false, capiConfigured: false, advancedMatching: false, testEventCode: "", adsSendTo: "" };
 }
 
+/**
+ * Is this channel actually tracking? Two booleans, no ids, no token presence — nothing a role without
+ * `integrations:write` may not see.
+ *
+ * ⚠️ This exists because the badge used to be derived from `getTrackingConfig`, which IS gated. So a
+ * Staf or Admin opening Pemasaran on a store with a live Meta pixel was told "Belum terhubung" on the
+ * card, in the attribution table AND in the banner — then handed an "Atur pelacakan" button leading to
+ * a tab that says only the Pemilik may look. Same lie as the two already fixed, arriving through the
+ * read gate instead of a hard-coded string. Whether a pixel is connected is not a credential; the
+ * pixel id and the token are, and those stay gated.
+ */
+export type TrackingStatus = Record<TrackingChannelKey, { browser: boolean; server: boolean }>;
+
+export async function getTrackingStatus(): Promise<TrackingStatus> {
+  return withCurrentTenant(async (db: Tx) => {
+    const rows = await db
+      .select({
+        channel: schema.storeTrackingChannels.channel,
+        enabled: schema.storeTrackingChannels.enabled,
+        pixelId: schema.storeTrackingChannels.pixelId,
+        capiEnabled: schema.storeTrackingChannels.capiEnabled,
+        // Presence only — never the value, and never returned as its own field.
+        hasToken: sql<boolean>`${schema.storeTrackingChannels.capiTokenCiphertext} is not null`,
+      })
+      .from(schema.storeTrackingChannels);
+    const byKey = new Map(rows.map((r) => [r.channel, r]));
+    return Object.fromEntries(
+      KEYS.map((k) => {
+        const r = byKey.get(k);
+        const hasPixel = !!r?.pixelId?.trim();
+        return [k, { browser: !!r?.enabled && hasPixel, server: !!r?.capiEnabled && !!r?.hasToken && hasPixel }];
+      }),
+    ) as TrackingStatus;
+  });
+}
+
 export async function getTrackingConfig(): Promise<TrackingConfig[]> {
   return withCurrentTenant(async (db: Tx, storeId: string) => {
     // The ciphertext IS selected here — and goes no further. It is needed to answer "can this token
@@ -83,6 +119,8 @@ export type TrackingHealth = {
   succeeded: number;
   failed: number;
   deadLetter: number;
+  /** Prepaid conversions parked until the gateway confirms payment. NOT a queue, and not a failure. */
+  holdingForPayment: number;
   lastDeliveredAt: Date | null;
   lastError: string | null;
 };
@@ -93,6 +131,7 @@ const emptyHealth = (c: TrackingChannelKey): TrackingHealth => ({
   succeeded: 0,
   failed: 0,
   deadLetter: 0,
+  holdingForPayment: 0,
   lastDeliveredAt: null,
   lastError: null,
 });
@@ -130,6 +169,24 @@ export async function getTrackingHealth(): Promise<Record<TrackingChannelKey, Tr
         ),
       )
       .groupBy(schema.trackingEventDeliveries.channel, schema.trackingEventDeliveries.status);
+
+    // …but they are not INVISIBLE either. Counted separately and labelled for what they are, so a
+    // merchant can tell "nothing is queued" from "twelve prepaid orders are waiting on payment" —
+    // which is also the shape a broken payment webhook takes, and used to be shown as a flat "0 antre".
+    const heldRows = await db
+      .select({ channel: schema.trackingEventDeliveries.channel, n: sql<number>`count(*)::int` })
+      .from(schema.trackingEventDeliveries)
+      .where(
+        and(
+          gte(schema.trackingEventDeliveries.createdAt, since),
+          sql`${schema.trackingEventDeliveries.status} = 'queued' and ${schema.trackingEventDeliveries.nextAttemptAt} > now() + interval '1 day'`,
+        ),
+      )
+      .groupBy(schema.trackingEventDeliveries.channel);
+    for (const r of heldRows) {
+      const t = out[r.channel as TrackingChannelKey];
+      if (t) t.holdingForPayment = Number(r.n);
+    }
 
     for (const r of rows) {
       const t = out[r.channel as TrackingChannelKey];

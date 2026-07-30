@@ -2265,7 +2265,10 @@ if (rToken) {
           sessionId: SESSION_ID,
           // Ad-platform match keys (ADR 0012). NOT authorization and NOT priced against — the server
           // treats them as opaque strings and only forwards them to the merchant's own pixel provider.
-          trackingCookies: { fbp: trackingCookie("_fbp"), fbc: trackingCookie("_fbc"), ga: trackingCookie("_ga"), ttp: trackingCookie("_ttp"), ttclid: ttclid() },
+          // `_gcl_aw` is what gtag writes when a shopper arrives on a Google Ads click; it carries the
+          // click's own timestamp, which is what lets the server pick the MOST RECENT ad click rather
+          // than a fixed provider order. Without it, a Google-Ads sale is indistinguishable from organic.
+          trackingCookies: { fbp: trackingCookie("_fbp"), fbc: trackingCookie("_fbc"), ga: trackingCookie("_ga"), gcl: trackingCookie("_gcl_aw"), ttp: trackingCookie("_ttp"), ttclid: ttclid() },
           items: cart.map(function (i) { return { handle: i.handle, name: i.name, price: i.price, variant: i.variant || i.size || "", qty: i.qty }; }),
           // The phone goes up CANONICAL (62…) — the API normalises it again regardless; sending the
           // shape we store means the two can never quietly disagree.

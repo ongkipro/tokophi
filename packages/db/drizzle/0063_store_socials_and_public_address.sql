@@ -11,10 +11,10 @@
 -- Handles are stored WITHOUT the @ and without a URL — just the username. The storefront builds the
 -- link; storing a full URL invites a merchant to paste anything (including someone else's profile,
 -- or a javascript: scheme) and makes validation a URL-parsing problem instead of a username one.
-ALTER TABLE stores ADD COLUMN address text;
-ALTER TABLE stores ADD COLUMN phone text;
-ALTER TABLE stores ADD COLUMN social_instagram text;
-ALTER TABLE stores ADD COLUMN social_tiktok text;
-ALTER TABLE stores ADD COLUMN social_facebook text;
-ALTER TABLE stores ADD COLUMN social_pinterest text;
-ALTER TABLE stores ADD COLUMN social_x text;
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS address text;
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS social_instagram text;
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS social_tiktok text;
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS social_facebook text;
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS social_pinterest text;
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS social_x text;

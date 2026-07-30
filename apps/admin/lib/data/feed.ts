@@ -32,6 +32,12 @@ export type FeedStatus = {
    */
   notPublishedDraft: number;
   notPublishedNoImage: number;
+  /**
+   * How many ITEMS the feed actually publishes. Merchant Center counts variants, not products — 22
+   * products with sizes and colours is 86 items there — so a card that only ever said "22 produk"
+   * left the merchant unable to reconcile our number with the one the platform shows them.
+   */
+  feedItems: number;
   /** ADR 0013 — which id this store publishes: the stable `number` scheme, or the legacy `handle`. */
   catalogIdScheme: string;
 };
@@ -61,6 +67,25 @@ export async function getFeedStatus(): Promise<FeedStatus> {
       )
       .where(and(eq(schema.products.status, "active"), isNotNull(schema.productMedia.url)));
 
+    // One row per VARIANT the feed will emit — the same predicate product-feed.ts applies: the product
+    // is active and has a primary photo, and the variant has a price above zero (a zero-priced variant
+    // is skipped, silently, while its product still counts as published).
+    const [items] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.productVariants)
+      .innerJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
+      .leftJoin(
+        schema.productMedia,
+        and(eq(schema.productMedia.productId, schema.products.id), eq(schema.productMedia.position, 0)),
+      )
+      .where(
+        and(
+          eq(schema.products.status, "active"),
+          isNotNull(schema.productMedia.url),
+          sql`${schema.productVariants.priceIdr} > 0`,
+        ),
+      );
+
     // The excluded ones, and which of the two reasons applies. Archived products are not "missing" —
     // the merchant removed them on purpose — so they are not counted here at all.
     const [miss] = await db
@@ -81,6 +106,7 @@ export async function getFeedStatus(): Promise<FeedStatus> {
       classified: r?.classified ?? 0,
       withGender: r?.withGender ?? 0,
       catalogIdScheme: st?.scheme ?? "handle",
+      feedItems: Number(items?.n ?? 0),
       notPublishedDraft: miss?.draft ?? 0,
       notPublishedNoImage: miss?.noImage ?? 0,
     };

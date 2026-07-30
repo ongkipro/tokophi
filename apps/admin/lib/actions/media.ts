@@ -50,6 +50,19 @@ export async function deleteProductImage(mediaId: string, productId: string): Pr
     const [row] = await db.select({ url: schema.productMedia.url }).from(schema.productMedia).where(and(eq(schema.productMedia.id, mediaId), eq(schema.productMedia.productId, productId))).limit(1);
     if (!row) return null;
     await db.delete(schema.productMedia).where(eq(schema.productMedia.id, mediaId));
+    // ⚠️ REINDEX, or deleting the FIRST photo takes the product off the shop and out of both ad feeds
+    // — permanently. Everything that asks for a product's picture keys on `position = 0`
+    // (storefront/src/data/catalog.ts, admin/lib/data/products.ts, admin/lib/data/feed.ts), and
+    // `uploadProductImage` assigns `max + 1`. So photos at 0,1,2 minus the first left 1,2 with nothing
+    // at 0: no thumbnail in the grid, no `image_link` in the feed, and every later upload landing at 3,
+    // 4, 5 — position 0 unreachable for the life of the product. The merchant sees a product editor
+    // full of photos and a Katalog Iklan card that says "1 tanpa foto".
+    await db.execute(sql`
+      update product_media m
+         set position = t.rn
+        from (select id, (row_number() over (order by position, id) - 1) as rn
+                from product_media where product_id = ${productId}) t
+       where m.id = t.id and m.position <> t.rn`);
     return row.url;
   });
   // (leave the file + library entry — a file can be reused across products; managed from Files)

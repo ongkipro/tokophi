@@ -22,5 +22,8 @@
 -- `problem_note` is the courier's reason in merchant-facing Indonesian, written by the poller. It is
 -- a short sentence, not a payload dump — the raw response goes to the log, never to this column.
 -- ─────────────────────────────────────────────────────────────────────────────
-ALTER TABLE orders ADD COLUMN problem_at timestamptz;
-ALTER TABLE orders ADD COLUMN problem_note text;
+-- IF NOT EXISTS: this column reached the shared dev database through a `push` before the migration
+-- existed, so a bare ADD COLUMN aborted here — and drizzle stops at the first failure, which left 16
+-- LATER migrations unapplied for every agent on that database. Same fix as 0082.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS problem_at timestamptz;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS problem_note text;

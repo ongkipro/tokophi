@@ -1,4 +1,9 @@
-CREATE TYPE "public"."tracking_delivery_status" AS ENUM('queued', 'processing', 'succeeded', 'failed', 'dead_letter');--> statement-breakpoint
+-- Idempotent: this type reached the shared dev database through a `push` before the migration ran, and
+-- drizzle applies a whole pending run in ONE transaction — so a single "already exists" here rolls back
+-- every migration in the batch, not just this one.
+DO $$ BEGIN
+  CREATE TYPE "public"."tracking_delivery_status" AS ENUM('queued', 'processing', 'succeeded', 'failed', 'dead_letter');
+EXCEPTION WHEN duplicate_object THEN null; END $$;--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "tracking_event_deliveries" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"store_id" uuid NOT NULL,

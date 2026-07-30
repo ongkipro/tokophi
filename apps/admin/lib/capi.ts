@@ -36,6 +36,12 @@ export type ServerEvent = {
   numItems: number;
   orderNumber: string;
   sourceUrl?: string;
+  /** Goods subtotal — price × quantity, no ongkir, no PPN. GA4's `value` is defined on this, not the total. */
+  goods?: number;
+  shipping?: number;
+  tax?: number;
+  /** Per-line catalog id, price and quantity. GA4's item-scoped metrics are empty without them. */
+  lineItems?: { id: string; price?: number; qty?: number }[];
   /**
    * Where the sale happened, when the request that created the order did not record an origin (the
    * payment-callback release path). Meta documents `event_source_url` as REQUIRED for website events and
@@ -75,10 +81,24 @@ export type SendResult = {
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
-/** Every provider agrees on email: trim, lowercase, then SHA-256. */
-const hashEmail = (v?: string | null) => {
-  const e = (v ?? "").trim().toLowerCase();
-  return e && e.includes("@") ? sha256(e) : null;
+/**
+ * Email — and the providers do NOT quite agree either.
+ *   • Meta: "trim leading/trailing spaces, lowercase"                                  → as typed
+ *   • Google: additionally "remove all spaces, and remove periods before @ for
+ *     gmail.com / googlemail.com addresses"
+ * In this market Gmail is the dominant address and `budi.santoso@gmail.com` is the dominant SHAPE, so
+ * skipping Google's dot rule silently loses the match for most buyers — a 200 OK and nothing to see.
+ */
+const hashEmail = (v?: string | null, opts?: { googleDots: boolean }) => {
+  let e = (v ?? "").trim().toLowerCase().replace(/\s+/g, "");
+  if (!e || !e.includes("@")) return null;
+  if (opts?.googleDots) {
+    const at = e.lastIndexOf("@");
+    const local = e.slice(0, at);
+    const domain = e.slice(at + 1);
+    if (domain === "gmail.com" || domain === "googlemail.com") e = `${local.replace(/\./g, "")}@${domain}`;
+  }
+  return sha256(e);
 };
 
 /**
@@ -345,7 +365,7 @@ export async function sendGa4Purchase(args: {
   // Hashed user data — MP does have a documented contract for it (top-level `user_data` with
   // `sha256_email_address` / `sha256_phone_number`), contrary to what this file used to claim. Phone
   // must be E.164 **with** the `+` before hashing, or the digest matches nothing.
-  const ga_email = hashEmail(event.identity?.email);
+  const ga_email = hashEmail(event.identity?.email, { googleDots: true });
   const ga_phone = hashPhone(event.identity?.phone, { e164: true });
   const body: Record<string, unknown> = {
     client_id: args.clientId,
@@ -365,9 +385,24 @@ export async function sendGa4Purchase(args: {
         name: "purchase",
         params: {
           transaction_id: event.orderNumber,
-          value: event.value,
+          // ⚠️ GA4 DEFINES `value` AS THE SUM OF price × quantity, WITHOUT shipping and tax — both of
+          // which have their own parameters. We were sending the order total, so GA4 revenue was
+          // overstated by ongkir + PPN on every order and could never be reconciled against the
+          // seller's own Pesanan screen. Meta and TikTok have no such rule and still get the total.
+          // `goods` is absent on rows queued before this shipped; the total is the honest fallback.
+          value: typeof event.goods === "number" && event.goods > 0 ? event.goods : event.value,
           currency: event.currency,
-          items: event.contentIds.map((id) => ({ item_id: id })),
+          ...(typeof event.shipping === "number" && event.shipping > 0 ? { shipping: event.shipping } : {}),
+          ...(typeof event.tax === "number" && event.tax > 0 ? { tax: event.tax } : {}),
+          // Item-scoped price and quantity are what fill GA4's Monetisation → Ecommerce purchases
+          // report; without them "Item revenue" and "Items purchased" are structurally zero.
+          items: event.lineItems?.length
+            ? event.lineItems.map((li) => ({
+                item_id: li.id,
+                ...(typeof li.price === "number" ? { price: li.price } : {}),
+                ...(typeof li.qty === "number" ? { quantity: li.qty } : {}),
+              }))
+            : event.contentIds.map((id) => ({ item_id: id })),
         },
       },
     ],

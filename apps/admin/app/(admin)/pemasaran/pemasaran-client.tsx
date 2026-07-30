@@ -18,7 +18,7 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { IDR, num } from "@tokophi/lib/format";
 import type { AdChannelStatus } from "@/lib/data/marketing";
-import type { TrackingConfig, TrackingChannelKey, TrackingHealth } from "@/lib/data/tracking";
+import type { TrackingConfig, TrackingChannelKey, TrackingHealth, TrackingStatus } from "@/lib/data/tracking";
 import { setTrackingChannel, retryTrackingDeliveries, testTrackingConnection, clearTrackingToken } from "@/lib/actions/tracking";
 import { useCan } from "@/components/admin/permissions";
 import { exportCsv } from "@/lib/csv";
@@ -72,6 +72,14 @@ function BrandSquare({
   );
 }
 
+/** One wording for one state, so the CSV and the badge can never drift apart again. */
+function statusLabel(st?: { browser: boolean; server: boolean }): string {
+  if (st?.browser && st?.server) return "Pelacakan lengkap";
+  if (st?.browser) return "Pixel aktif";
+  if (st?.server) return "Hanya sisi server";
+  return "Belum terhubung";
+}
+
 function NotConnectedBadge() {
   return (
     <Badge variant="outline" className="text-muted-foreground">
@@ -88,9 +96,9 @@ function NotConnectedBadge() {
  * Conversions API live and still be told, on the first tab they open, that nothing is connected. A
  * screen that contradicts the merchant's own configuration is worse than an empty one.
  */
-function TrackingBadge({ cfg }: { cfg?: TrackingConfig }) {
-  const browser = !!cfg?.enabled && !!cfg?.pixelId;
-  const server = !!cfg?.capiEnabled && !!cfg?.capiConfigured;
+function TrackingBadge({ st }: { st?: { browser: boolean; server: boolean } }) {
+  const browser = !!st?.browser;
+  const server = !!st?.server;
   if (browser && server)
     return <Badge className="gap-1 bg-emerald-500/10 text-emerald-600"><CheckCircle2 className="size-3.5" /> Pelacakan lengkap</Badge>;
   if (browser) return <Badge className="gap-1 bg-emerald-500/10 text-emerald-600"><CheckCircle2 className="size-3.5" /> Pixel aktif</Badge>;
@@ -169,8 +177,8 @@ function _IntegrationNoticeEmpty() {
 }
 
 // ---- Tab 1: Saluran Iklan ----
-function ChannelCard({ channel, cfg, onSetup }: { channel: AdChannelStatus; cfg?: TrackingConfig; onSetup: () => void }) {
-  const tracked = (!!cfg?.enabled && !!cfg?.pixelId) || (!!cfg?.capiEnabled && !!cfg?.capiConfigured);
+function ChannelCard({ channel, st, onSetup }: { channel: AdChannelStatus; st?: { browser: boolean; server: boolean }; onSetup: () => void }) {
+  const tracked = !!st?.browser || !!st?.server;
   return (
     <Card className="flex flex-col">
       <CardHeader>
@@ -179,7 +187,7 @@ function ChannelCard({ channel, cfg, onSetup }: { channel: AdChannelStatus; cfg?
             <BrandSquare channel={channel} />
             <CardTitle className="text-base">{channel.name}</CardTitle>
           </div>
-          <TrackingBadge cfg={cfg} />
+          <TrackingBadge st={st} />
         </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">
@@ -239,19 +247,18 @@ function MiniMetric({
 
 function SaluranTab({
   channels,
-  tracking,
+  status,
   onSetup,
 }: {
   channels: AdChannelStatus[];
-  tracking: TrackingConfig[];
+  status: TrackingStatus;
   onSetup: () => void;
 }) {
   const totals = channels.reduce(
     (a, c) => ({ orders: a.orders + c.orders, revenue: a.revenue + c.revenue }),
     { orders: 0, revenue: 0 },
   );
-  const byKey = new Map(tracking.map((t) => [t.channel, t]));
-  const anyTracked = tracking.some((t) => (t.enabled && t.pixelId) || (t.capiEnabled && t.capiConfigured));
+  const anyTracked = Object.values(status).some((s) => s.browser || s.server);
 
   return (
     <div className="space-y-4">
@@ -281,7 +288,7 @@ function SaluranTab({
 
       <div className="grid gap-4 lg:grid-cols-3">
         {channels.map((c) => (
-          <ChannelCard key={c.key} channel={c} cfg={byKey.get(c.key as TrackingChannelKey)} onSetup={onSetup} />
+          <ChannelCard key={c.key} channel={c} st={status[c.key as TrackingChannelKey]} onSetup={onSetup} />
         ))}
       </div>
 
@@ -319,7 +326,7 @@ function SaluranTab({
                       </span>
                     </TableCell>
                     <TableCell>
-                      <TrackingBadge cfg={byKey.get(c.key as TrackingChannelKey)} />
+                      <TrackingBadge st={status[c.key as TrackingChannelKey]} />
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {num(c.orders)}
@@ -393,12 +400,24 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
       else toast.error(r.message);
     });
 
-  const clearToken = () =>
+  // Two-step, because this cannot be undone from inside TokoΦ: the token has to be re-issued at Meta /
+  // TikTok / Google, and by this card's own copy every prepaid conversion stops the moment it is gone.
+  // The far less damaging catalog-id switch on the same page already confirms; this did not.
+  const [confirmClear, setConfirmClear] = React.useState(false);
+  React.useEffect(() => {
+    if (!confirmClear) return;
+    const t = setTimeout(() => setConfirmClear(false), 5000);
+    return () => clearTimeout(t);
+  }, [confirmClear]);
+  const clearToken = () => {
+    if (!confirmClear) { setConfirmClear(true); return; }
+    setConfirmClear(false);
     startTest(async () => {
       const r = await clearTrackingToken(cfg.channel);
       if (r.ok) { toast.success("Token server dihapus."); router.refresh(); }
       else toast.error(r.error ?? "Gagal menghapus token.");
     });
+  };
 
   const retry = () =>
     startRetry(async () => {
@@ -509,13 +528,18 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
                   Disimpan terenkripsi. {cfg.capiConfigured ? "Token sudah tersimpan." : "Belum ada token."}
                 </p>
                 {canWrite && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <Button size="sm" variant="outline" onClick={test} disabled={testing}>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {/* Tests the STORED token, not the one in the box above. It used to be clickable
+                        either way, so the natural first-timer order — paste, test, then save — answered
+                        "Belum ada token akses server untuk diuji." next to a visibly filled field, and
+                        the merchant concluded the token was bad and regenerated it at Meta. */}
+                    <Button size="sm" variant="outline" onClick={test} disabled={testing || !cfg.capiConfigured}>
                       {testing && <Loader2 className="size-4 animate-spin" />} Uji koneksi
                     </Button>
+                    {!cfg.capiConfigured && <span className="text-xs text-muted-foreground">Simpan token dulu, baru bisa diuji.</span>}
                     {cfg.capiConfigured && (
                       <Button size="sm" variant="ghost" className="text-destructive" onClick={clearToken} disabled={testing}>
-                        Hapus token
+                        {confirmClear ? "Yakin hapus?" : "Hapus token"}
                       </Button>
                     )}
                   </div>
@@ -548,6 +572,11 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
                 <span className="font-medium">7 hari terakhir:</span>
                 <span className="text-emerald-600">{num(health.succeeded)} terkirim</span>
                 {health.queued > 0 && <span className="text-muted-foreground">{num(health.queued)} antre</span>}
+                {/* Held rows are not a queue and not a failure — they are prepaid orders waiting on the
+                    gateway. Shown so "0 antre" cannot hide a payment webhook that stopped arriving. */}
+                {health.holdingForPayment > 0 && (
+                  <span className="text-muted-foreground">{num(health.holdingForPayment)} menunggu pembayaran</span>
+                )}
                 {health.failed > 0 && <span className="text-amber-600">{num(health.failed)} dicoba ulang</span>}
                 {health.deadLetter > 0 && <span className="text-destructive">{num(health.deadLetter)} gagal</span>}
               </div>
@@ -584,7 +613,9 @@ function PelacakanTab({ tracking, health, mayRead }: { tracking: TrackingConfig[
   if (!mayRead) {
     return (
       <div className="rounded-lg border p-6 text-sm text-muted-foreground">
-        Pengaturan pelacakan berisi kredensial toko, jadi hanya <span className="font-medium text-foreground">Owner</span> yang
+        {/* "Pemilik" — that is the role's name in Pengaturan → Pengguna, in the topbar and in
+            rbac-policy. A Staf sent to find an "Owner" will not find one. */}
+        Pengaturan pelacakan berisi kredensial toko, jadi hanya <span className="font-medium text-foreground">Pemilik</span> yang
         bisa melihat dan mengubahnya — sama seperti Pengaturan toko.
       </div>
     );
@@ -604,14 +635,16 @@ function PelacakanTab({ tracking, health, mayRead }: { tracking: TrackingConfig[
 }
 
 // ---- page ----
-export function PemasaranClient({ channels, feed, tracking, health, mayReadTracking }: { channels: AdChannelStatus[]; feed: FeedStatus; tracking: TrackingConfig[]; health: Record<TrackingChannelKey, TrackingHealth>; mayReadTracking: boolean }) {
+export function PemasaranClient({ channels, feed, status, tracking, health, mayReadTracking }: { channels: AdChannelStatus[]; feed: FeedStatus; status: TrackingStatus; tracking: TrackingConfig[]; health: Record<TrackingChannelKey, TrackingHealth>; mayReadTracking: boolean }) {
   const [tab, setTab] = React.useState("saluran");
 
   return (
     <>
       <PageHeader
         title="Pemasaran"
-        desc="Status saluran iklan & pelacakan konversi. Belanja dan ROAS baru muncul setelah saluran terhubung."
+        // The page body says three times that we do not pull ad spend; the header used to promise it
+        // would appear "setelah saluran terhubung". It never will — nothing here can read an ad account.
+        desc="Status saluran iklan & pelacakan konversi. Pesanan dan pendapatan dari pesanan toko Anda; belanja iklan tetap di platform iklannya."
       >
         <Button
           variant="outline"
@@ -620,7 +653,10 @@ export function PemasaranClient({ channels, feed, tracking, health, mayReadTrack
               "pemasaran",
               channels.map((c) => ({
                 Saluran: c.name,
-                Status: c.connected ? "Terhubung" : "Belum terhubung",
+                // The SAME predicate the badge uses. This column used to read `c.connected`, which is
+                // fed by an empty `AD_CREDENTIALS` map with no writer — so a merchant exported
+                // "Belum terhubung" for Meta off a page rendering "Pixel aktif" for Meta.
+                Status: statusLabel(status[c.key as TrackingChannelKey]),
                 Pesanan: c.orders,
                 Pendapatan: c.revenue,
                 Belanja: "",
@@ -642,7 +678,7 @@ export function PemasaranClient({ channels, feed, tracking, health, mayReadTrack
         </TabsList>
 
         <TabsContent value="saluran">
-          <SaluranTab channels={channels} tracking={tracking} onSetup={() => setTab("pelacakan")} />
+          <SaluranTab channels={channels} status={status} onSetup={() => setTab("pelacakan")} />
         </TabsContent>
         <TabsContent value="pelacakan">
           <PelacakanTab tracking={tracking} health={health} mayRead={mayReadTracking} />
