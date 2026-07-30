@@ -29,7 +29,14 @@ const MODE_FN = { terlaris: catalog.bestsellers, terbaru: recentProducts, acak: 
 // storefront page down, homepage included. seed-templates.ts documented exactly this hazard and the
 // guard was added to the SEED rather than to the render path. A section falling back to bestsellers
 // is a section showing the wrong products; a throw here is a shop that is offline.
-const products = (MODE_FN[mode] ?? catalog.bestsellers)(pool).slice(0, limit);
+// `limit` is merchant-typed and arrives from jsonb, so it is not a number until proven. Our own Puck
+// override REPLACES Puck's built-in clamp and passes `min`/`max` as HTML attributes only — and
+// `<input type="number" min>` does not stop anyone typing. Measured against this very `.slice`:
+// `0` → the grid renders its heading over zero products; `-5` → `slice(0,-5)` drops the LAST five
+// (a 4-product pool renders empty); clearing the box omits the key entirely → `slice(0, undefined)`
+// → the whole catalogue, unpaginated. Guard here, because this is where every writer ends up.
+const safeLimit = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 24) : 8;
+const products = (MODE_FN[mode] ?? catalog.bestsellers)(pool).slice(0, safeLimit);
 const colsClass = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-3 lg:grid-cols-4" }[columns];
 // The card's `sizes` has to describe the SAME grid these classes build — this is merchant-chosen, so
 // it is the one place where hardcoding a single shape would be wrong for two thirds of the options.

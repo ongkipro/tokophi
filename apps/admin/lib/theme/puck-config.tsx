@@ -63,6 +63,13 @@ const fullConfig: Config<SectionConfigMap> = {
       },
       defaultProps: SECTION_DEFAULTS["product-listing"],
       render: (props) => <ProductListing {...props} />,
+      // ONE per template. Two instances emit two `id="listing-controls"` forms and two
+      // `id="sort-select"` selects, and ProductListing's inline script binds by `getElementById` —
+      // so the SECOND listing's sort dropdown is simply dead, both page off the same `?page=`, and
+      // the document carries duplicate ids. Same extension point Grid Produk uses for its own cap.
+      resolvePermissions: (_data, { appState }) => ({
+        insert: appState.data.content.filter((i) => i.type === "product-listing").length < 1,
+      }),
     },
     multicolumn: {
       label: SECTION_LABELS.multicolumn,
@@ -166,6 +173,22 @@ const fullConfig: Config<SectionConfigMap> = {
           max: 30000,
         },
         ratingText: { type: "text", label: "Teks Rating/Sosial (kosong = sembunyi)" },
+        // The trust strip is rendered by BOTH halves (Hero.astro + the editor preview) and the demo
+        // ships four badges — so a merchant could see them on their own canvas and had no field to
+        // change or remove them. Same icon allow-list as Kolom Ikon; a badge is a PROMISE, so the
+        // default stays empty rather than seeding "Gratis Ongkir" onto a shop that does not offer it.
+        features: {
+          type: "array",
+          label: "Badge Kepercayaan (kosong = tanpa strip)",
+          max: 4,
+          getItemSummary: (f, i) => f?.title || `Badge ${(i ?? 0) + 1}`,
+          defaultItemProps: { icon: "truck", title: "Judul singkat", text: "Satu kalimat penjelas." },
+          arrayFields: {
+            icon: { type: "select", label: "Ikon", options: ICON_OPTIONS },
+            title: { type: "text", label: "Judul" },
+            text: { type: "text", label: "Keterangan" },
+          },
+        },
         align: {
           type: "select",
           label: "Perataan",

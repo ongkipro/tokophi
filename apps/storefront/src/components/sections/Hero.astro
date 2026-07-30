@@ -255,7 +255,7 @@ const centered = align === "center";
       <div class="relative z-10 border-t border-white/15 bg-ink/30 backdrop-blur-md">
         <ul class="mx-auto flex max-w-7xl snap-x gap-5 overflow-x-auto px-4 py-4 sm:px-6 lg:grid lg:grid-cols-4 lg:gap-0 lg:overflow-visible lg:divide-x lg:divide-white/12 lg:py-5">
           {featureList.map((f) => {
-            const Icon = HERO_FEATURE_ICONS[f.icon as keyof typeof HERO_FEATURE_ICONS];
+            const Icon = Object.hasOwn(HERO_FEATURE_ICONS, f.icon) ? HERO_FEATURE_ICONS[f.icon as keyof typeof HERO_FEATURE_ICONS] : null;
             return (
               <li class="flex min-w-[14rem] shrink-0 snap-start items-center gap-3 lg:min-w-0 lg:px-6 lg:first:pl-0 lg:last:pr-0">
                 <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/20">

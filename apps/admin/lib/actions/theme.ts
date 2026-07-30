@@ -270,22 +270,37 @@ const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
 // Store-wide brand colour (ADR 0009 colour panel) — separate save from the templates since it
 // lives on `stores`, not `page_templates` (a theme-wide setting, not per-page content).
-export async function saveBrandColor(hex: string): Promise<void> {
-  if (!HEX_COLOR.test(hex)) throw new Error("Format warna tidak valid — gunakan hex 6 digit, mis. #a85572");
+// ⚠️ `requireCapability` FIRST, like every sibling in this file. It used to run AFTER the format
+// check, so an unauthenticated caller could tell "bad hex" apart from "forbidden" — and, more
+// plainly, work happened before the security boundary. And it `throw`s were user-facing rules, which
+// Next MASKS in production (see this file's header), so the merchant only ever saw the dialog's
+// generic "Gagal menyimpan warna brand" and never the actual reason. Returns `{ok, error}` now.
+export async function saveBrandColor(hex: string): Promise<ThemeResult> {
   const { storeId } = await requireCapability("theme:write");
-  await withTenant(storeId, async (db) => {
-    await db.update(schema.stores).set({ brandColor: hex }).where(eq(schema.stores.id, storeId));
-  });
+  if (!HEX_COLOR.test(hex)) return { ok: false, error: "Format warna tidak valid — gunakan hex 6 digit, mis. #a85572" };
+  try {
+    await withTenant(storeId, async (db) => {
+      await db.update(schema.stores).set({ brandColor: hex }).where(eq(schema.stores.id, storeId));
+    });
+  } catch (e) {
+    return fail(e);
+  }
   revalidatePath("/tema");
+  return { ok: true };
 }
 
 // Product-page gallery layout (Tema panel) — also lives on `stores`, not `page_templates`. The list +
 // type are in a client-safe module (a "use server" file can only export async functions).
-export async function saveProductGalleryLayout(layout: string): Promise<void> {
-  if (!GALLERY_LAYOUTS.includes(layout as GalleryLayout)) throw new Error("Layout galeri tidak dikenal");
+export async function saveProductGalleryLayout(layout: string): Promise<ThemeResult> {
   const { storeId } = await requireCapability("theme:write");
-  await withTenant(storeId, async (db) => {
-    await db.update(schema.stores).set({ productGalleryLayout: layout }).where(eq(schema.stores.id, storeId));
-  });
+  if (!GALLERY_LAYOUTS.includes(layout as GalleryLayout)) return { ok: false, error: "Layout galeri tidak dikenal" };
+  try {
+    await withTenant(storeId, async (db) => {
+      await db.update(schema.stores).set({ productGalleryLayout: layout }).where(eq(schema.stores.id, storeId));
+    });
+  } catch (e) {
+    return fail(e);
+  }
   revalidatePath("/tema");
+  return { ok: true };
 }

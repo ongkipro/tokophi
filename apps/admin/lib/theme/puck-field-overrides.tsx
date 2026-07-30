@@ -42,7 +42,18 @@ export const puckFieldOverrides: Partial<Overrides["fieldTypes"]> = {
         disabled={readOnly}
         min={"min" in field ? field.min : undefined}
         max={"max" in field ? field.max : undefined}
-        onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+        onChange={(e) => {
+          // Clamped HERE because this override replaces Puck's own number field, and Puck's built-in
+          // clamp (`if (numberValue < field.min) return;`) went with it. `min`/`max` below are HTML
+          // attributes only: they colour the box `:invalid` and are never enforced, because no native
+          // form validation runs in this editor. So `0`, `-5` and a cleared box all reached jsonb.
+          if (e.target.value === "") return onChange(undefined);
+          const n = Number(e.target.value);
+          if (!Number.isFinite(n)) return;
+          const lo = "min" in field && typeof field.min === "number" ? field.min : -Infinity;
+          const hi = "max" in field && typeof field.max === "number" ? field.max : Infinity;
+          onChange(Math.min(Math.max(n, lo), hi));
+        }}
       />
     </FieldWrapper>
   ),
