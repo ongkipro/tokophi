@@ -2,6 +2,41 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Audit follow-ups: TikTok click id, lighter storefront, feed shape
+
+### 🎯 TikTok's click id is finally captured
+`ttclid` arrives ONCE, as a URL parameter on the landing page, and was being dropped — it is TikTok's
+strongest match key, the role `_fbc` plays for Meta. It is now persisted on the first page a shopper
+sees (28 days, TikTok's own attribution window), and travels with `_ttp` into the server-side event as
+`user.ttclid` / `user.ttp`. Verified in a browser: `?ttclid=…` is stored and survives navigation.
+
+### 🪶 ~9,8 KB removed from EVERY page of every storefront
+`MarketingPixels` is in the head of both layouts, and an `is:inline` script ships **byte for byte** —
+Astro does not minify it, so the 11,9 KB of explanatory comments inside it were downloaded by every
+shopper on every page. The reasoning moved to the component's frontmatter (where it costs nothing) with
+one-line pointers left in place: **11.885 → 2.086 bytes** of comments in the shipped script. Nothing was
+deleted; the notes this repo depends on are all still there, on the other side of the fence.
+
+The proper fix — a JSON data island plus a Vite-bundled, minified, cacheable script — is written down in
+the frontmatter as its own change, because it is a refactor of a money-adjacent file.
+
+### 📦 TikTok's gallery images were in Google's shape
+TikTok documents `additional_image_link` as ONE field holding a comma-separated list (commas inside a URL
+percent-encoded). We emitted Google's repeated-element form, so TikTok read at most the first image. The
+feed builder now switches on a profile flag, guarded by a test.
+
+### 🔗 Smaller corrections
+- `/produk/<uuid>?tab=media` kept its query string through the canonicalising redirect; it was dropped.
+- The Google Ads destination is validated against Google's documented `AW-…/label` shape on save — a typo
+  there errors nowhere: gtag accepts any string and the conversion simply never appears.
+
+### ⏸️ Left alone deliberately: PPN in the feed price
+Google requires tax-inclusive prices outside the US/CA, and TokoΦ's PPN is **exclusive** by default
+(added on top at checkout) while the storefront displays the ex-PPN price. Making the feed inclusive
+would satisfy the spec and create a landing-page price mismatch; leaving it violates the spec. That is a
+product decision about whether the storefront displays tax-inclusive prices, not a bug to patch quietly.
+**No store in production has PPN enabled**, so it is latent — recorded in the handoff, not guessed at.
+
 ## Unreleased — Google Ads is real, TikTok's purchase event was off-spec
 
 ### 🔴 TikTok's purchase event name was not in TikTok's spec

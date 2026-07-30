@@ -2224,6 +2224,16 @@ if (rToken) {
         } catch (e) { return ""; }
       }
 
+      // TikTok's click id, captured on the landing page by MarketingPixels (it only ever appears in the
+      // URL once). Expired past TikTok's own 28-day attribution window rather than sent stale.
+      function ttclid() {
+        try {
+          var raw = JSON.parse(localStorage.getItem("tphi:ttclid") || "null");
+          if (!raw || !raw.v) return "";
+          return Date.now() - Number(raw.t || 0) > 28 * 86400000 ? "" : String(raw.v).slice(0, 256);
+        } catch (e) { return ""; }
+      }
+
       function finish() {
         try { localStorage.setItem("lastOrder", JSON.stringify(order)); } catch (e2) {}
         window.location.href = "/checkout/sukses";
@@ -2255,7 +2265,7 @@ if (rToken) {
           sessionId: SESSION_ID,
           // Ad-platform match keys (ADR 0012). NOT authorization and NOT priced against — the server
           // treats them as opaque strings and only forwards them to the merchant's own pixel provider.
-          trackingCookies: { fbp: trackingCookie("_fbp"), fbc: trackingCookie("_fbc"), ga: trackingCookie("_ga") },
+          trackingCookies: { fbp: trackingCookie("_fbp"), fbc: trackingCookie("_fbc"), ga: trackingCookie("_ga"), ttp: trackingCookie("_ttp"), ttclid: ttclid() },
           items: cart.map(function (i) { return { handle: i.handle, name: i.name, price: i.price, variant: i.variant || i.size || "", qty: i.qty }; }),
           // The phone goes up CANONICAL (62…) — the API normalises it again regardless; sending the
           // shape we store means the two can never quietly disagree.

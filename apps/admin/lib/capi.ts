@@ -59,6 +59,9 @@ export type ServerEvent = {
     fbc?: string | null;
     /** `_ga` cookie value → GA4's real client id, so the purchase joins the shopper's own session. */
     gaClientId?: string | null;
+    /** TikTok's `_ttp` cookie and `ttclid` click id — its equivalents of `fbp`/`fbc`. */
+    ttp?: string | null;
+    ttclid?: string | null;
   };
 };
 
@@ -401,6 +404,10 @@ export async function sendTiktokPurchase(args: {
   if (ph) user.phone = ph;
   if (event.client?.ip) user.ip = event.client.ip;
   if (event.client?.userAgent) user.user_agent = event.client.userAgent;
+  // TikTok's strongest match keys. `ttclid` is the click id (their `fbc`), `ttp` the first-party cookie
+  // (their `fbp`) — without either, a server event has only a hashed email/phone to match on.
+  if (event.client?.ttclid) user.ttclid = event.client.ttclid;
+  if (event.client?.ttp) user.ttp = event.client.ttp;
   const body: Record<string, unknown> = {
     event_source: "web",
     event_source_id: args.pixelId,

@@ -16,21 +16,35 @@ export const dynamic = "force-dynamic";
 const NUMBER = /^\d+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default async function ProductEditPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProductEditPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id: param } = await params;
+  // Carried across the redirects below: a bookmark like `?tab=media` should survive being canonicalised,
+  // otherwise the redirect quietly drops the merchant back to the default tab.
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) {
+    if (typeof v === "string") sp.set(k, v);
+    else if (Array.isArray(v)) v.forEach((x) => sp.append(k, x));
+  }
+  const qs = sp.toString() ? `?${sp}` : "";
 
   // An old bookmark or a link from before this change. Redirect rather than render both forever —
   // otherwise the UUID URL never dies and the number never becomes the product's identity.
   if (UUID.test(param)) {
     const number = await productNumberById(param);
     if (!number) notFound();
-    redirect(`/produk/${number}`);
+    redirect(`/produk/${number}${qs}`);
   }
 
   if (!NUMBER.test(param)) notFound();
   // `/produk/007` resolves to 7 but is not the canonical URL — one product, one address.
   const n = Number(param);
-  if (String(n) !== param) redirect(`/produk/${n}`);
+  if (String(n) !== param) redirect(`/produk/${n}${qs}`);
   const id = await resolveProductIdByNumber(n);
   if (!id) notFound();
 
