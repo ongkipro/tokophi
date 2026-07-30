@@ -52,7 +52,7 @@ async function seedPromo(storeId: string) {
   // 1) Flash sale — only create one if none is active right now (re-running never stacks sales).
   const [live] = await q(sql`
     select id from flash_sales
-    where store_id = ${storeId} and status = 'aktif' and now() >= starts_at and now() < ends_at
+    where store_id = ${storeId} and status <> 'nonaktif' and now() >= starts_at and now() < ends_at
     limit 1`);
   if (!live) {
     const [fs] = await q(sql`

@@ -1,0 +1,52 @@
+---
+// ADR 0009 — FAQ (Shopify Dawn calls it "Collapsible content").
+//
+// Native `<details>/<summary>`, no JavaScript. The platform already gives us the disclosure widget,
+// its keyboard handling, its screen-reader semantics and its find-in-page behaviour (Chrome/Safari
+// expand a closed <details> when the text inside matches a Ctrl+F). A hand-rolled accordion would be
+// ~60 lines of JS to arrive at something worse, and it would not work before hydration.
+//
+// Deliberately NOT `name="faq"` (the exclusive-accordion attribute): closing the answer a shopper is
+// reading because they opened a second one is a nuisance on a phone, where both may be short.
+//
+// Renders NOTHING when the merchant has added no items — an empty "Pertanyaan yang Sering Ditanya"
+// heading over a blank strip is worse than no section at all.
+import SectionHeading from "../SectionHeading.astro";
+import { ChevronDown } from "@lucide/astro";
+import type { FaqConfig } from "@tokophi/sections";
+
+type Props = FaqConfig;
+const { heading, eyebrow, items } = Astro.props;
+
+// A row needs a question to be worth rendering; an answer-less question is a merchant mid-edit.
+const rows = (items ?? []).filter((i) => i.question?.trim());
+---
+
+{
+  rows.length > 0 && (
+    <section class="py-16 sm:py-20">
+      <div class="mx-auto max-w-[1200px] px-4 sm:px-6">
+        {heading && <SectionHeading align="center" eyebrow={eyebrow} title={heading} />}
+
+        <div class="mx-auto mt-8 max-w-3xl divide-y divide-line border-y border-line">
+          {rows.map((row) => (
+            <details class="group">
+              <summary
+                class="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-left font-medium text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream [&::-webkit-details-marker]:hidden"
+              >
+                <span>{row.question}</span>
+                <ChevronDown
+                  class="size-5 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180"
+                  aria-hidden="true"
+                />
+              </summary>
+              {row.answer?.trim() && (
+                <p class="pb-5 text-sm leading-relaxed whitespace-pre-line text-muted">{row.answer}</p>
+              )}
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}

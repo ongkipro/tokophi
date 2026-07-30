@@ -276,7 +276,12 @@ export const CUSTOMERS: Customer[] = (() => {
 export type DiscountType = "persen" | "nominal" | "ongkir";
 export type Discount = {
   id: string; code: string; type: DiscountType; value: number;
-  status: "aktif" | "terjadwal" | "kadaluarsa"; used: number; limit: number; endsInDays: number;
+  // `nonaktif` is the DB's own OFF switch and must be SURFACED, not derived away: the display status
+  // used to be computed from the dates alone, so a switched-off voucher showed as "kadaluarsa" and the
+  // editor wrote `aktif` back over it on the next Simpan.
+  status: "aktif" | "terjadwal" | "kadaluarsa" | "nonaktif"; used: number; limit: number;
+  /** `null` = no end date (`ends_at IS NULL`). NOT `0` — zero means "ends today". */
+  endsInDays: number | null;
 };
 export const DISCOUNTS: Discount[] = [
   { id: "D1", code: "GAJIAN25", type: "persen", value: 25, status: "aktif", used: 342, limit: 1000, endsInDays: 4 },
@@ -361,7 +366,6 @@ export const COLLECTIONS: Collection[] = [
   { id: "COL-2", name: "Atasan", emoji: "👚", products: 3, type: "otomatis", published: true },
   { id: "COL-3", name: "Bawahan", emoji: "👖", products: 2, type: "otomatis", published: true },
   { id: "COL-4", name: "Busana Muslim", emoji: "🧕", products: 3, type: "otomatis", published: true },
-  { id: "COL-5", name: "Promo Gajian", emoji: "🏷️", products: 8, type: "manual", published: true },
   { id: "COL-6", name: "Produk Terlaris", emoji: "🔥", products: 10, type: "otomatis", published: true },
   { id: "COL-7", name: "Loungewear", emoji: "🩱", products: 1, type: "otomatis", published: true },
   { id: "COL-8", name: "Outerwear", emoji: "🧥", products: 2, type: "otomatis", published: false },

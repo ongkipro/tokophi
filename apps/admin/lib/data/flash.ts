@@ -12,7 +12,7 @@ export type FlashSaleRow = {
   startsAt: string; // ISO
   endsAt: string; // ISO
   itemCount: number;
-  /** status='aktif' AND now inside the window — the ONLY state that actually drops prices. */
+  /** Not `nonaktif` AND now inside the window — the ONLY state that actually drops prices. */
   isLive: boolean;
 };
 
@@ -61,7 +61,10 @@ export async function getFlashSales(): Promise<FlashSaleRow[]> {
       startsAt: s.startsAt.toISOString(),
       endsAt: s.endsAt.toISOString(),
       itemCount: counts.get(s.id) ?? 0,
-      isLive: s.status === "aktif" && s.startsAt.getTime() <= now && now < s.endsAt.getTime(),
+      // `nonaktif` is OFF; the window IS the schedule (AGENTS.md). Demanding `aktif` here — while both
+    // PRICING readers were moved to `<> 'nonaktif'` — made the seller's list badge a live `terjadwal`
+    // sale as "Berakhir" while the till was already discounting it.
+    isLive: s.status !== "nonaktif" && s.startsAt.getTime() <= now && now < s.endsAt.getTime(),
     }));
   });
 }

@@ -87,6 +87,13 @@ class OutOfStock extends Error {
   }
 }
 
+/** Thrown inside the write transaction when the voucher's last slot went to a concurrent order. */
+class VoucherExhausted extends Error {
+  constructor(public code: string) {
+    super("voucher exhausted");
+  }
+}
+
 // The storefront lives on a DIFFERENT origin, so a response without CORS headers is UNREADABLE to
 // it. Every explicit return below carries them — an uncaught throw does not: Next renders its own
 // 500, the browser reports a CORS error, and `checkout.astro`'s `.catch` shows the generic "Gagal
@@ -377,12 +384,14 @@ async function handle(req: Request) {
   let voucherPriceOff = 0;
   let voucherShipOff = 0;
   let appliedDiscountId: string | null = null;
+  let appliedDiscountCode = "";
   if (body.discountCode) {
     const dres = await applyDiscount({ storeId: store.id, code: body.discountCode, subtotal, shippingCost });
     if (!dres.ok) return bad(dres.error, "discount");
     voucherPriceOff = dres.priceOff;
     voucherShipOff = dres.shipOff;
     appliedDiscountId = dres.discount.id;
+    appliedDiscountCode = dres.discount.code;
   }
 
   // ── AUTOMATIC FREE SHIPPING (PROMO P1) ─────────────────────────────────────────────────────────
@@ -573,15 +582,26 @@ async function handle(req: Request) {
         });
       }
 
-      // Record the voucher redemption ATOMIC with the order + bump usedCount so the usage limit is
-      // honoured under races (the row is written only if the whole order commits). `discountUsages` has
-      // no store_id — the discountId came from `applyDiscount` scoped to THIS store, so it is safe.
+      // Record the voucher redemption ATOMIC with the order. `discountUsages` has no store_id — the
+      // discountId came from `applyDiscount` scoped to THIS store, so it is safe.
+      //
+      // ⚠️ The limit is re-checked HERE, in the UPDATE's own WHERE. `applyDiscount` read `usedCount`
+      // outside any transaction, unlocked — so N concurrent orders on the last slot all passed it and
+      // the bare `usedCount + 1` let every one of them through. The conditional update is the lock:
+      // Postgres serialises the row, and whoever loses updates 0 rows and rolls the whole order back.
       if (appliedDiscountId) {
         await tx.insert(schema.discountUsages).values({ discountId: appliedDiscountId, orderId: ord.id });
-        await tx
+        const bumped = await tx
           .update(schema.discounts)
           .set({ usedCount: sql`${schema.discounts.usedCount} + 1` })
-          .where(eq(schema.discounts.id, appliedDiscountId));
+          .where(
+            and(
+              eq(schema.discounts.id, appliedDiscountId),
+              sql`(${schema.discounts.usageLimit} is null or ${schema.discounts.usedCount} < ${schema.discounts.usageLimit})`,
+            ),
+          )
+          .returning({ id: schema.discounts.id });
+        if (!bumped.length) throw new VoucherExhausted(appliedDiscountCode);
       }
 
       return { customerId: cid, order: ord };
@@ -590,6 +610,11 @@ async function handle(req: Request) {
     if (err instanceof OutOfStock) {
       // 409, not 500: nothing was written (the txn rolled back) and the shopper can act on it.
       return bad(`Stok "${err.product}" tidak mencukupi (sisa ${err.available}).`, "items", 409);
+    }
+    if (err instanceof VoucherExhausted) {
+      // Same shape: the txn rolled back, so no order and no redemption were written. Tell the shopper
+      // to drop the code rather than leaving them at a generic failure they cannot act on.
+      return bad(`Kuota voucher "${err.code}" baru saja habis. Hapus kodenya untuk melanjutkan.`, "discount", 409);
     }
     throw err; // → the wrapper above, which answers WITH CORS instead of a bare Next 500
   }

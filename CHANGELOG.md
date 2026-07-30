@@ -176,6 +176,80 @@ feed covers it), webhooks, super-admin cross-tenant health, and any consent gate
 consent mechanism at all — see `TASKS.md`). **No live provider call has been made yet** — verification
 so far is builds, unit tests, RLS and review.
 
+## Unreleased — Promo/PDP money paths + `/tema` per page type
+
+### 🏷️ `nonaktif` = OFF; the DATES are the schedule (contract change)
+Both the voucher and flash-sale readers filtered `status = 'aktif'`, so a `terjadwal` flash sale
+**never went live** (nothing ever promoted the row) and a `terjadwal` voucher was redeemable at
+checkout while invisible on `/promo` and labelled "Terjadwal" in the seller list — three definitions
+of "usable" for one row. Both now filter `status <> 'nonaktif'` **plus** the date window.
+
+### 💸 Six places where the screen and the till disagreed
+- `lib/actions/discounts.ts` anchored `starts_at`/`ends_at` to `ADMIN_TODAY = 2026-06-30`, so **every
+  voucher a merchant created was born already expired**, and re-saving one moved its expiry backwards.
+  Real clock now; a blank period writes `ends_at: NULL` (what the editor always promised).
+- The voucher usage limit is re-checked **inside the order txn**, in the UPDATE's own WHERE. It was a
+  bare `used_count + 1` over an unlocked read, so concurrent orders all drained the last slot; the
+  loser now rolls the whole order back with a 409 (`VoucherExhausted`).
+- A flash sale now reaches the **variant** rows (`Math.min` per row). It only hit the headline price,
+  so a flash product with options showed the pre-sale price next to its own "-43%" badge while the
+  order API charged the sale price.
+- A sold-out product with no `product_options` kept an **enabled buy button** (server-rendered now) —
+  5 of the demo's 22 active products are that shape. A non-existent option combination kept the
+  PREVIOUS variant, so the page said "Beige / L" and the cart line said "Hitam / L".
+- The PDP's hand-rolled price formatter emitted `Rp199.000` where the server's `IDR()` emits
+  `Rp 199.000` (NBSP), so the price reflowed the moment JS touched it. Same `Intl` formatter now.
+
+### 🏷️ `/promo` is a DEFAULT nav item now
+The only link to the promo hub was inside the mega-menu's utility bar, gated on the store owning a
+`promo-gajian` collection — and its LABEL was that collection's name while its href was `/promo`, so
+it promised a category and delivered a different page. A store with live vouchers and a running flash
+sale published an indexable hub with **zero inbound links**. `/promo` is now:
+- a **seeded main-menu item labelled "Promo"** (was "Promo Gajian" — a collection name on a route), and
+- part of the **fallback nav**, so every store gets it, including freshly provisioned ones.
+
+**And the manual "Promo Gajian" COLLECTION is gone.** Its membership was literally
+`seededProducts.slice(0, 8)` — an arbitrary first-eight with no relationship to what was actually
+discounted, so it advertised "Promo" over full-price goods while genuinely reduced products sat
+outside it. `/promo` computes the same idea from the real thing (flash sale ∪ markdowns ∪ vouchers ∪
+free-ongkir) and cannot drift: on the demo it shows **100 product cards, 4 voucher codes and a live
+countdown** where the collection showed 8 hand-picked items. The CAMPAIGN name lives on where it
+belongs — the flash sale is still called "Promo Gajian" and it is the hub's `promo_hub_title`.
+`/kategori/promo-gajian` now 404s.
+
+It is an ordinary menu item: a merchant who does not want it deletes or renames it in Navigasi, and a
+merchant-built menu wins over the fallback entirely. Not gated on "does this store have a promo right
+now" — promos come and go all month, and a menu item that appears and vanishes underneath the merchant
+is worse than one that sometimes leads to the honest empty state `/promo` already renders. The manual
+"Promo Gajian" collection still exists at `/kategori/promo-gajian` and still shows in the collection
+bento; only the nav entry changed. The duplicate utility-bar shortcut is gone.
+
+### 🎨 Store Builder: three page types, three palettes
+`page_templates.type` has been `homepage | category | product` since ADR 0009 and the builder offered
+**the same eleven sections to all three** — it never received the type. `puckConfigFor(type)` now
+narrows the palette from `SECTIONS_BY_TEMPLATE_TYPE`. The **palette** is narrowed, never the renderer,
+so nothing already published disappears.
+- **`CategoryHero` is always rendered.** A category template used to replace the entire page, costing
+  it the `<h1>`, the breadcrumb and the cover while the BreadcrumbList JSON-LD kept publishing a trail
+  nobody could see. The template is the page's **body**.
+- **New: `product-listing` ("Daftar Produk")** — the real catalogue (server-side sort, 12-per-page
+  pagination, one empty state), wrapping the same `ProductListing.astro` the hand-built page uses.
+  The only product section on offer had been Grid Produk, a flat slice capped at `limit`, so building
+  a category template **silently truncated the catalogue** and threw away sort + paging.
+- **New: `faq` + `multicolumn`** — Shopify Dawn's "Collapsible content" and "Multicolumn", adapted.
+  FAQ is native `<details>/<summary>` (no JS; keyboard + screen-reader accessible for free) and
+  answers the questions that decide an Indonesian sale on the PDP tail. Both ship **empty** and render
+  **nothing** until the merchant adds a row. Dawn's Newsletter was deliberately **not** ported: there
+  is no mailer here, so the form would collect addresses nothing reads.
+- `category` was the one template type never seeded — the demo could not show what one looks like
+  while the builder let merchants create one. Seeded now, matching what Batik Nusantara renders live.
+- Icon keys moved to `@tokophi/sections`, so the builder's picker is derived from the same allow-list
+  the renderers use; an unknown key falls back to a neutral dot on both sides.
+- Publish shows "Menyimpan…" (two clicks used to write twice) and Puck `permissions` refuse editing
+  for a role without `theme:write` (it could edit the whole page and only find out at Publish).
+- Hero slide default `ctaHref` was still `/kategori/dress`, a handle only the demo owns → 404 on every
+  other store. Now `/kategori/semua`.
+
 ## Unreleased — Checkout: explain why COD is hidden
 
 ### 💬 COD unavailable → a reason, not silence

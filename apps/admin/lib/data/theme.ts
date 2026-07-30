@@ -21,9 +21,10 @@ export type TemplateSummary = {
   isDefault: boolean;
   sectionCount: number;
   assignedCount: number; // collections (category) / products (product) pointing at it; 0 for homepage
-  // A `category` template with no Grid Produk section lists NOTHING on the storefront — the
-  // template replaces the hand-built category page wholesale, so the product list only exists if
-  // the merchant put one there. Surfaced in /tema as a warning instead of failing silently.
+  // A `category` template with no product section lists NOTHING on the storefront. The template is
+  // the page's BODY (CategoryHero — the h1, breadcrumb and cover — is always rendered by the page),
+  // so the heading survives but the catalogue only exists if the merchant added Daftar Produk.
+  // Surfaced in /tema as a warning instead of failing silently.
   hasProductGrid: boolean;
   updatedAt: Date;
 };
@@ -73,8 +74,12 @@ function sectionCount(sections: unknown): number {
 }
 
 function hasProductGrid(sections: unknown): boolean {
-  const content = (sections as PuckContent)?.content;
-  return Array.isArray(content) && content.some((s) => s?.type === "product-grid");
+  // Either product section counts. `product-listing` ("Daftar Produk") is the CATALOGUE — the one a
+  // category template should actually use — and this checked only `product-grid`, so the seeded
+  // category default tripped its own warning and the hint pointed merchants back at the truncating
+  // section this whole change exists to move them off.
+  const content = (sections as { content?: { type?: string }[] } | null)?.content;
+  return Array.isArray(content) && content.some((s) => s?.type === "product-grid" || s?.type === "product-listing");
 }
 
 // All templates of the store (every type), with the number of collections/products assigned

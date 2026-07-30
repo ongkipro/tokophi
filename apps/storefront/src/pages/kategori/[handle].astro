@@ -30,11 +30,12 @@ const VIRTUAL: Record<VirtualCollectionHandle, ResolvedCollection & { products: 
     blurb: `Semua koleksi ${store.name}`,
     products: PRODUCTS,
   },
-  // `promo-gajian` and `produk-terlaris` USED TO BE HERE, and that was the bug. Both are real
-  // collections with real membership — "Promo Gajian" is a MANUAL one, 8 products the merchant
-  // hand-picked in the Kategori editor. This file rendered `filter(p => p.compareAt || p.bestseller)`
-  // instead: a guess, overriding the merchant's own curation, on a page advertising a promo. They now
-  // resolve from the DB like every other collection (see byCollection in data/catalog.ts).
+  // `promo-gajian` and `produk-terlaris` USED TO BE HERE, and that was the bug. Both were real
+  // collections with real membership — a MANUAL collection is products the merchant hand-picked in
+  // the Kategori editor. This file rendered `filter(p => p.compareAt || p.bestseller)` instead: a
+  // guess, overriding the merchant's own curation, on a page advertising a promo. A real collection
+  // now resolves from the DB like every other (see byCollection in data/catalog.ts).
+  // (`promo-gajian` itself is gone from the seed — the promo surface is `/promo`, not a category.)
 };
 
 // `/kategori/semua` is PERMANENTLY MOVED to `/produk`, not merely de-indexed.
@@ -112,16 +113,14 @@ const NOINDEX = virtual ? "noindex,follow" : undefined;
       : `Koleksi ${collection.name} di ${store.name}.`
   }
 >
-  {
-    TEMPLATE ? (
-      <SectionRenderer
-        data={TEMPLATE}
-        context={{ kind: "category", collectionHandle: handle!, collectionName: collection.name }}
-      />
-    ) : (
-      <Fragment>
   {/* CategoryHero: centred minimal header when there is no cover (the normal case), a full-bleed
-      immersive banner when the merchant uploaded one. `imageUrl` is already absolute (mediaUrl). */}
+      immersive banner when the merchant uploaded one. `imageUrl` is already absolute (mediaUrl).
+
+      ⚠️ ALWAYS RENDERED — including when a template exists. A `category` template used to REPLACE
+      this whole block, so building one cost the page its `<h1>`, its breadcrumb and its cover while
+      the BreadcrumbList JSON-LD above kept publishing a trail nobody could see. The template is the
+      page's BODY, not the page. (`produk/index.astro` already worked this way; the two sibling
+      listing routes had simply diverged.) */}
   <CategoryHero
     crumbs={CRUMBS}
     eyebrow="Koleksi"
@@ -131,9 +130,14 @@ const NOINDEX = virtual ? "noindex,follow" : undefined;
     imageAlt={`Koleksi ${collection.name}`}
   />
 
-  <ProductListing products={products} />
-
-      </Fragment>
+  {
+    TEMPLATE ? (
+      <SectionRenderer
+        data={TEMPLATE}
+        context={{ kind: "category", collectionHandle: handle!, collectionName: collection.name }}
+      />
+    ) : (
+      <ProductListing products={products} />
     )
   }
 </Layout>

@@ -58,6 +58,10 @@ const STATUS_META: Record<StatusKey, { label: string; className: string }> = {
     className:
       "bg-blue-500/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400",
   },
+  nonaktif: {
+    label: "Nonaktif",
+    className: "bg-ink/10 text-muted-foreground",
+  },
   kadaluarsa: {
     label: "Kadaluarsa",
     className: "bg-muted text-muted-foreground",
@@ -70,7 +74,10 @@ function discountValueLabel(d: Discount): string {
   return "Gratis Ongkir";
 }
 
-function endsLabel(days: number): { text: string; muted: boolean } {
+function endsLabel(days: number | null): { text: string; muted: boolean } {
+  // `null` = `ends_at IS NULL` = no end date at all. It is NOT `0`, which means "ends today" — the
+  // two used to collapse, so a voucher that never expires was announced as expiring within the hour.
+  if (days === null) return { text: "Tanpa batas waktu", muted: true };
   if (days > 0) return { text: `${days} hari lagi`, muted: false };
   if (days === 0) return { text: "Berakhir hari ini", muted: false };
   return { text: "Berakhir", muted: true };

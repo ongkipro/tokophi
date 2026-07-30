@@ -252,6 +252,26 @@ const PRODUCT_DEFAULT: StoredTemplateData = {
   ],
 };
 
+// The DEFAULT CATEGORY template. A category template is the page's BODY — `CategoryHero` (the `<h1>`,
+// the breadcrumb, the cover) is rendered by kategori/[handle].astro and is NOT a section, so this
+// starts exactly where the hand-built page starts: with the listing itself.
+//
+// `product-listing`, NOT `product-grid`. That distinction is the whole reason this template did not
+// exist before: the only product section on offer was Grid Produk — a flat slice capped at `limit`,
+// no sort control, no pagination — so building a category template silently truncated the catalogue
+// and threw away sort + paging. Grid Produk is a merchandising ROW ("Kamu Mungkin Suka", 4 cards);
+// Daftar Produk is the catalogue.
+//
+// Heading is empty on purpose: the CategoryHero directly above already carries the collection's name.
+const CATEGORY_DEFAULT: StoredTemplateData = {
+  content: [
+    {
+      type: "product-listing",
+      props: { id: "daftar-produk", heading: "" },
+    },
+  ],
+};
+
 // Seed one template of a given type as the store's default (UPSERT, same rationale as the homepage).
 async function upsertTemplate(storeId: string, type: "homepage" | "product" | "category", name: string, sections: StoredTemplateData) {
   const [existing] = await db
@@ -294,8 +314,15 @@ async function main() {
   // "no template" and silently falls back to the hand-built page. Omitting it would look like success.
   const homepageResult = await upsertTemplate(store.id, "homepage", "Beranda", HOMEPAGE);
   const productResult = await upsertTemplate(store.id, "product", "Halaman Produk", PRODUCT_DEFAULT);
+  // `category` was the one type of the three that was never seeded, so the demo could not show what a
+  // category template even looks like — while the builder happily let a merchant create one.
+  const categoryResult = await upsertTemplate(store.id, "category", "Halaman Kategori", CATEGORY_DEFAULT);
 
-  console.log(`seed-templates: ${store.name} → homepage ${homepageResult} (${HOMEPAGE.content.length} sections), product ${productResult} (${PRODUCT_DEFAULT.content.length} sections).`);
+  console.log(
+    `seed-templates: ${store.name} → homepage ${homepageResult} (${HOMEPAGE.content.length} sections), ` +
+      `category ${categoryResult} (${CATEGORY_DEFAULT.content.length} sections), ` +
+      `product ${productResult} (${PRODUCT_DEFAULT.content.length} sections).`,
+  );
   await client.end();
 }
 

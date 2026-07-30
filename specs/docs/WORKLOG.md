@@ -7,6 +7,105 @@
 
 
 
+
+## 2026-07-30 — Session: the money paths were quoting one price and charging another; /tema had three page types and one palette ✅ committed `604285a` + this one (worktree `fe-polish`, branch `feat/fe-polish`, **NOT merged → not deployed**)
+> Started as "validate the previous session". The previous session turned out to be TWO: five commits
+> on a **stale local `main`** (418 ahead / 30 behind origin) whose work had already reached
+> `origin/main` by another route and in a **better** form — so auditing them was auditing dead code —
+> and an unfinished `feat/meta-integration` in the `promospec` worktree that **a second Claude session
+> was actively writing to while this one ran** (`ps` showed two `claude.exe`; files changed 7s apart).
+> Per AGENTS.md that worktree was left alone; this session took the frontend lane instead.
+
+- **Every voucher a merchant created was born expired.** `lib/actions/discounts.ts` anchored
+  `starts_at`/`ends_at` to `ADMIN_TODAY = 2026-06-30` (the seed's frame) while the clock kept moving.
+  A blank period wrote an `endsAt` **29 days in the past**; the gap widened a day per day. The Diskon
+  list read the same frozen clock, so an expired voucher showed "Aktif" — and since `endsInDays`
+  seeds the editor's period field, opening a voucher and pressing Simpan wrote the lie back and moved
+  its expiry **backwards**.
+- **A scheduled flash sale never went live.** The editor saves `terjadwal`, both readers demanded
+  `status='aktif'`, and **nothing ever promoted the row**. Same shape for `terjadwal` vouchers, which
+  were redeemable at checkout (`applyDiscount` only rejects `nonaktif`) yet invisible on `/promo` and
+  labelled "Terjadwal" in the seller list — three definitions of "usable" for one row. **New contract,
+  now in AGENTS.md: `nonaktif` = OFF; the DATES are the schedule.**
+- **The voucher usage limit was not race-safe** — while a comment claimed it was. `applyDiscount`
+  reads `used_count` outside any txn, unlocked, and the increment was a bare `used_count + 1` with no
+  re-check, so N concurrent orders on the last slot all passed. Now re-checked in the UPDATE's own
+  WHERE; the loser updates 0 rows → `VoucherExhausted` → the whole order rolls back with a 409.
+- **A flash sale never reached the variant rows.** The override hit the headline price only, so a
+  flash product WITH options rendered the pre-sale price next to its own "-43%" badge while
+  `/api/public/order` charged the sale price.
+- **A sold-out product with no `product_options` kept an enabled buy button** and the item went into
+  the cart. `updateVariant()` was the only code that wrote the stock line or disabled the buttons and
+  it is reachable only through `#variant-picker`, which such a product never renders — **5 of the
+  demo's 22 active products are that shape**. Availability is server-rendered now. A non-existent
+  option combination used to keep the PREVIOUS variant, so the page said "Beige / L" and the cart
+  line said "Hitam / L"; it refuses the sale instead.
+
+### `/tema` — three page types, three jobs (was: three page types, ONE palette)
+- `page_templates.type` has been `homepage | category | product` since ADR 0009, and the builder
+  offered **the same eleven sections to all three** — `BuilderClient` never even received the type.
+  Now `puckConfigFor(type)` narrows the palette from `SECTIONS_BY_TEMPLATE_TYPE`. **The palette is
+  narrowed, never the RENDERER**: a template already holding a section no longer offered for its type
+  keeps rendering, so nothing published is silently deleted.
+- **A `category` template used to REPLACE the whole page** — building one cost the page its `<h1>`,
+  its breadcrumb and its cover while the BreadcrumbList JSON-LD kept publishing a trail nobody could
+  see. `CategoryHero` is now **always** rendered; the template is the page's BODY. (`produk/index.astro`
+  already worked this way — the two sibling listing routes had simply diverged.)
+- **New section `product-listing` ("Daftar Produk")** — the real catalogue: server-side sort,
+  12-per-page pagination, one empty state, wrapping the same `ProductListing.astro` the hand-built
+  page uses. It exists because the only product section on offer was Grid Produk — a flat slice
+  capped at `limit` with no sort and no paging — so the builder's own hint steered merchants into
+  **silently truncating their catalogue**. Grid Produk stays what it is: a merchandising row.
+- **`category` was the one type of the three never seeded**, so the demo could not show what a
+  category template even looks like while the builder happily let a merchant create one. Seeded now
+  (`CATEGORY_DEFAULT`), matching what Batik Nusantara renders live.
+- **Two Dawn-shaped sections added**, chosen for what an Indonesian storefront actually needs:
+  **FAQ** (Dawn's "Collapsible content") — native `<details>/<summary>`, no JS, keyboard + SR
+  accessible for free, and it answers the questions that decide the sale ("berapa lama kirim?",
+  "bisa COD?") on the PDP tail before the shopper has to ask WhatsApp — and **Kolom Ikon** (Dawn's
+  "Multicolumn"), the trust row, standalone so it works on a category page or a PDP tail where the
+  hero's own `features` strip cannot reach. Both render **nothing** until the merchant adds a row,
+  and both ship EMPTY: a trust badge is a promise, and seeding "Gratis Ongkir" would make every new
+  store advertise a service it may not offer.
+  - **Dawn's Newsletter was deliberately NOT ported.** There is no mailer in this repo, so the form
+    would collect addresses nothing reads — the exact "screen with nothing behind it" failure
+    STATUS.md exists to police.
+- Icon keys moved to `@tokophi/sections` (`SECTION_ICON_KEYS`) so the Puck picker is derived from the
+  same allow-list the renderers use; an unknown key falls back to a neutral dot on **both** sides.
+- Builder UX: Publish now shows "Menyimpan…" (it never changed during the round-trip, so two clicks
+  wrote twice) and Puck `permissions` refuse editing for a role without `theme:write` (it could drag
+  and edit the whole page and only find out at Publish, with the work already done).
+- Hero slide `defaultItemProps.ctaHref` was still `/kategori/dress` — a handle only the demo owns.
+  `SECTION_DEFAULTS.hero` had been cleaned for exactly that reason and the array default was missed,
+  so every slide a merchant **added** still 404'd. Now `/kategori/semua`.
+
+**Verified, not assumed:** `tsc --noEmit` clean (admin + sections); `astro check` adds no new error
+(the 8 in `Header.astro` are pre-existing); storefront builds; and driven in a real browser against
+the dev DB — price renders `Rp 89.000` with the NBSP the server uses, the flash PDP shows
+Rp 199.000 struck against Rp 349.000, a product flipped to 0 stock rendered "Stok habis" with both
+buttons `disabled`, a category page WITH a template kept its single `<h1>` + breadcrumb + sort
+control + 17 product cards, and the FAQ/Kolom Ikon pair rendered on a PDP tail with the empty
+question dropped and an unknown icon key falling back to a dot. **Every DB row touched for a test was
+restored** (inventory back to 22; the test category template deleted; the product template restored
+byte-for-byte).
+
+⏳ **NEXT — still open, audited but not fixed** (four parallel audits produced ~80 findings; this
+session took the money paths and `/tema`). Ranked:
+1. **`/tema` security:** the link picker accepts `javascript:` and it reaches four storefront
+   `<a href>` render sites unsanitised; SVG upload is served `image/svg+xml` with no CSP/`nosniff` on
+   the admin origin (stored XSS, and `media:write` is held by `staff` in every tenant); `saveTemplate`
+   writes unvalidated client JSON, so one bad `mode` 500s the whole storefront.
+2. **`/promo` money:** `OrderFunnel` totals ignore free shipping + PPN (quotes ≠ charges);
+   `buildPackages` ignores the live flash price; `/thanks` prints arithmetic that does not add up.
+3. **Homepage:** the trust strip advertises E-Wallet while all five e-wallet channels are
+   `enabled=f`; Category-Nav defaults publish three verified 404s on every non-demo store; the
+   Testimoni arrows are dead (proven in Chromium); the image-less hero renders near-black.
+4. **SEO/a11y/perf:** `" — "` title separator vs the house `" - "`; canonical drops `?page`;
+   3 × `<h1>` on the homepage carousel; no JSON-LD on the homepage; the LCP hero bypasses the repo's
+   own `imageSrcSet()`; render-blocking Google Fonts.
+5. **The `feat/meta-integration` audit** (crypto/AAD, `/pemasaran` read gate, raw PII to Google,
+   CAPI token with no sender) is written up and belongs to whoever owns that branch.
+
 ## 2026-07-22 (lanjutan) — Front-end pass: sold-out badge · merchant-owned footer · icon header + ⌘K palette ✅ **PR #30 (`f43e46a`), DEPLOYED + verified live**
 
 **Deploy verified by the artefact, then by USING it.** Storefront container `8398c2093fd2` →

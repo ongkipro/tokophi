@@ -8,7 +8,7 @@
 // INVARIANT: nothing here runs at module scope / build time — `astro build` must stay DB-FREE
 // (the Docker image is built without DATABASE_URL). All DB access happens inside these functions.
 import { db, schema } from "@tokophi/db";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import type { StoredTemplateData } from "@tokophi/sections";
 import { cached } from "./cache";
 import type { StoreInfo } from "./store";
@@ -163,10 +163,11 @@ export type Catalog = {
  * store's products rather than a `collections` row. Excluded from `catalog.collections` (that list is
  * the store's REAL categories) and typed against [handle].astro's map so the two cannot drift.
  *
- * ⚠️ `promo-gajian` and `produk-terlaris` were on this list and are NOT any more. They are real rows
- * with real `collection_products` membership (8 and 10 products on the demo) — the only reason they
- * looked virtual is that `byCollection` could not see membership at all, so they came back empty and
- * the page invented a substitute. Now that membership is read they resolve like any other collection:
+ * ⚠️ `promo-gajian` and `produk-terlaris` were on this list and are NOT any more. They were real rows
+ * with real `collection_products` membership — the only reason they looked virtual is that
+ * `byCollection` could not see membership at all, so they came back empty and the page invented a
+ * substitute. Now that membership is read, a real collection resolves like any other. (`promo-gajian`
+ * has since been dropped from the seed entirely — `/promo` is the promo surface. See seed.ts.)
  * the merchant's curation, not our filter.
  *
  * `semua` is the only one left, and it earns it: no store has such a row, and "everything you sell"
@@ -230,14 +231,14 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
   // curation — was not read at all.
   //
   // It only ever worked for the demo, whose category strings happen to slugify onto its handles, and
-  // it was wrong in the way that matters most: **"Promo Gajian" is a MANUAL collection**. The
-  // merchant hand-picked 8 products into it; the storefront rendered
+  // it was wrong in the way that matters most: a MANUAL collection is the merchant's own curation.
+  // They hand-pick products in the Kategori editor; the storefront rendered
   // `PRODUCTS.filter(p => p.compareAt || p.bestseller)` — a guess, from a hardcoded VIRTUAL map. A
   // merchant built a promo and the shop showed different goods.
   //
   // Keyed by product HANDLE (not id) because that is what `Product` carries. Intersecting with the
-  // loaded `products` — already filtered to active/non-archived — is what keeps a DRAFT product out:
-  // `promo-gajian` really does list `gamis-syari`, which is a draft.
+  // loaded `products` — already filtered to active/non-archived — is what keeps a DRAFT product out
+  // of a collection that lists one.
   const memberRows = await db
     .select({ collectionHandle: schema.collections.handle, productHandle: schema.products.handle })
     .from(schema.collectionProducts)
@@ -410,7 +411,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
   };
 
   // Flash sale (PROMO P3): productId → { price, endsAt } for sales live RIGHT NOW. Same window rule the
-  // order API applies (status='aktif' AND now ∈ [starts_at, ends_at)), so the price the card advertises
+  // order API applies (status <> 'nonaktif' AND now ∈ [starts_at, ends_at)), so the price the card advertises
   // is the price the order will charge. Lower price wins if a product is in two overlapping sales.
   const flashRows = await db
     .select({ productId: schema.flashSaleItems.productId, price: schema.flashSaleItems.salePriceIdr, endsAt: schema.flashSales.endsAt })
@@ -419,7 +420,9 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
     .where(
       and(
         eq(schema.flashSales.storeId, storeId),
-        eq(schema.flashSales.status, "aktif"),
+        // `nonaktif` is OFF; the window below IS the schedule. Requiring `aktif` meant a sale the
+        // editor saved as `terjadwal` never went live — nothing ever promoted the row.
+        ne(schema.flashSales.status, "nonaktif"),
         sql`now() >= ${schema.flashSales.startsAt}`,
         sql`now() < ${schema.flashSales.endsAt}`,
       ),
@@ -432,13 +435,21 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
 
   const products: Product[] = rows.map((r) => {
     const options = optionsFor(r.id);
-    const variants = variantsById.get(r.id) ?? [];
     // A live flash sale overrides the display price ONLY downward: `price` becomes the sale, `compareAt`
     // keeps (or becomes) the original so the card strikes through it. Matches the order's Math.min.
     const flash = flashById.get(r.id);
     const onSale = flash != null && flash.price < r.price;
     const price = onSale ? flash!.price : r.price;
     const compareAt = onSale ? r.price : (r.compareAt ?? undefined);
+    // ⚠️ The sale has to reach the VARIANT rows too, not just the headline price. The PDP's picker
+    // rewrites the price from `variants[]` on load, so a flash product WITH options rendered the
+    // pre-sale price next to its own "-43%" badge while `/api/public/order` charged the sale price
+    // (it does the same `Math.min` server-side). The page contradicted itself and under-sold the cut.
+    // `Math.min` per row, so a variant already cheaper than the sale price is never marked UP.
+    const rawVariants = variantsById.get(r.id) ?? [];
+    const variants = onSale
+      ? rawVariants.map((v) => ({ ...v, price: Math.min(v.price, flash!.price) }))
+      : rawVariants;
     return {
       handle: r.handle,
       number: r.number,
@@ -721,7 +732,7 @@ export async function storeFreeShip(storeId: string): Promise<StoreFreeShip> {
 }
 
 // Active voucher codes to SHOWCASE on the /promo hub (PROMO P4). A code shows only while it is usable:
-// status='aktif', inside its window, and not exhausted. The order API (lib/promo `applyDiscount`) is
+// not `nonaktif`, inside its window, and not exhausted. The order API (lib/promo `applyDiscount`) is
 // still the authority — this only advertises; a code that races to its usage limit fails there cleanly.
 export type VoucherPromo = { code: string; kind: string; value: number; minPurchaseIdr: number; endsAt: string | null };
 export async function activeVouchers(storeId: string): Promise<VoucherPromo[]> {
@@ -734,7 +745,10 @@ export async function activeVouchers(storeId: string): Promise<VoucherPromo[]> {
     .where(
       and(
         eq(schema.discounts.storeId, storeId),
-        eq(schema.discounts.status, "aktif"),
+        // `nonaktif` is OFF; the DATES are the schedule. Requiring `aktif` meant a `terjadwal`
+        // voucher whose window had opened was redeemable at checkout (applyDiscount only rejects
+        // `nonaktif`) yet invisible here — three different definitions of "usable" for one row.
+        ne(schema.discounts.status, "nonaktif"),
         sql`(${schema.discounts.startsAt} is null or now() >= ${schema.discounts.startsAt})`,
         sql`(${schema.discounts.endsAt} is null or now() < ${schema.discounts.endsAt})`,
         sql`(${schema.discounts.usageLimit} is null or ${schema.discounts.usedCount} < ${schema.discounts.usageLimit})`,

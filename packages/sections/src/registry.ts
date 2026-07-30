@@ -217,8 +217,111 @@ export interface BlogConfig {
   ctaLabel: string;
 }
 
+/**
+ * Daftar Produk — the REAL listing: server-side sort, 12-per-page pagination, empty state.
+ *
+ * This exists because a `category` template used to REPLACE the whole category page, and the only
+ * product section available was Grid Produk — a flat, unsortable, unpaginated slice capped at
+ * `limit`. So the builder's own hint ("add a Grid Produk") steered merchants into silently
+ * truncating their catalogue and losing sort + paging. Grid Produk is a *merchandising* row ("Paling
+ * Dicari", 4 cards); this is the catalogue itself.
+ *
+ * Config is deliberately tiny. The products are NOT configurable: on a category template they are
+ * that category's, resolved from the render context — a handle field here could only ever disagree
+ * with the page the shopper is actually on.
+ */
+export interface ProductListingConfig {
+  /** Optional heading above the listing. Empty = no heading (the CategoryHero above already names it). */
+  heading: string;
+}
+
+/**
+ * The ONE allow-list of icon keys a merchant may pick, shared by every section that shows icons.
+ *
+ * A KEY, never a component and never a URL: the merchant chooses from a known set, they do not
+ * inject markup. Each renderer owns its own key→component map (Lucide in Astro, Lucide in React) —
+ * this file must not import a UI library, since the storefront reads it without the editor.
+ * An unknown key falls back to a dot; it never throws and never renders a broken glyph.
+ */
+export const SECTION_ICON_KEYS = [
+  "truck",
+  "shield",
+  "returns",
+  "support",
+  "payment",
+  "package",
+  "chat",
+] as const;
+export type SectionIconKey = (typeof SECTION_ICON_KEYS)[number];
+
+/** Indonesian labels for the icon picker — the builder is a Bahasa Indonesia surface. */
+export const SECTION_ICON_LABELS: Record<SectionIconKey, string> = {
+  truck: "Pengiriman",
+  shield: "Keamanan / Garansi",
+  returns: "Pengembalian",
+  support: "Bantuan / CS",
+  payment: "Pembayaran",
+  package: "Paket / Kemasan",
+  chat: "Chat / WhatsApp",
+};
+
+/** One column of the Multicolumn section: an icon, a short title, a line of copy. */
+export interface MulticolumnItem {
+  /** A key from `SECTION_ICON_KEYS`. Unknown = a neutral dot. */
+  icon: string;
+  title: string;
+  text: string;
+}
+
+/**
+ * Kolom Ikon — Shopify Dawn's "Multicolumn", the benefit/trust row every commerce storefront wants
+ * ("Gratis ongkir", "Garansi tukar", "CS 24 jam").
+ *
+ * Deliberately NOT the hero's `features` strip: that one lives ON the hero photo and only exists on
+ * a page that has a hero. This is a standalone block a merchant can put on a category page or a PDP
+ * tail — the two places a shopper actually asks "can I trust this shop?".
+ *
+ * ⚠️ Empty by default. A trust badge is a PROMISE; seeding "Gratis Ongkir" would make every new
+ * store advertise a service it may not offer — the same honesty rule the footer and the hero strip
+ * already follow.
+ */
+export interface MulticolumnConfig {
+  heading: string;
+  /** Optional kicker above the heading. Empty = hidden. */
+  eyebrow: string;
+  columns: 2 | 3 | 4;
+  items: MulticolumnItem[];
+}
+
+/** One question/answer pair. */
+export interface FaqItem {
+  question: string;
+  answer: string;
+}
+
+/**
+ * FAQ — Shopify Dawn's "Collapsible content".
+ *
+ * The highest-value section we did not have: on an Indonesian storefront the questions that decide
+ * a sale ("berapa lama kirim ke luar Jawa?", "bisa tukar ukuran?", "COD bisa?") are exactly what a
+ * merchant answers over WhatsApp fifty times a day. Put on the PDP tail it answers them before the
+ * shopper has to ask.
+ *
+ * Rendered with native `<details>/<summary>` — no JS, keyboard- and screen-reader-accessible for
+ * free, and it works before hydration. (Rung 4 of the code ladder: the platform already does this.)
+ */
+export interface FaqConfig {
+  heading: string;
+  /** Optional kicker above the heading. Empty = hidden. */
+  eyebrow: string;
+  items: FaqItem[];
+}
+
 export type SectionConfigMap = {
   hero: HeroConfig;
+  "product-listing": ProductListingConfig;
+  multicolumn: MulticolumnConfig;
+  faq: FaqConfig;
   "product-grid": ProductGridConfig;
   "banner-promo": BannerPromoConfig;
   testimoni: TestimoniConfig;
@@ -250,7 +353,9 @@ export type SectionInstance = {
 /** Ordered list of section types offered in the builder sidebar. */
 export const SECTION_TYPES: SectionType[] = [
   "hero",
+  "product-listing",
   "image-text",
+  "multicolumn",
   "product-grid",
   "category-nav",
   "collection-bento",
@@ -260,11 +365,15 @@ export const SECTION_TYPES: SectionType[] = [
   "testimoni",
   "blog",
   "rich-text",
+  "faq",
 ];
 
 export const SECTION_LABELS: Record<SectionType, string> = {
   hero: "Hero",
+  "product-listing": "Daftar Produk",
   "product-grid": "Grid Produk",
+  multicolumn: "Kolom Ikon",
+  faq: "FAQ",
   "banner-promo": "Banner Promo",
   testimoni: "Testimoni",
   "image-text": "Gambar + Teks",
@@ -280,6 +389,15 @@ export const SECTION_LABELS: Record<SectionType, string> = {
 
 /** Seed config used when a merchant drags a fresh instance of this section onto the canvas. */
 export const SECTION_DEFAULTS: SectionConfigMap = {
+  // No heading by default: on a category page the CategoryHero directly above already carries the
+  // collection's name as the <h1>, and a second title under it just repeats it.
+  "product-listing": { heading: "" },
+  // Both EMPTY by default. A trust badge and an FAQ answer are both PROMISES about this specific
+  // shop — seeding "Gratis ongkir ke seluruh Indonesia" would make every new store advertise a
+  // service it may not offer, which is precisely the class of default that put /kategori/dress on
+  // every storefront. The merchant adds rows; the section renders nothing until they do.
+  multicolumn: { heading: "Kenapa Belanja di Sini", eyebrow: "", columns: 3, items: [] },
+  faq: { heading: "Pertanyaan yang Sering Ditanya", eyebrow: "", items: [] },
   hero: {
     // The LAST default still shipping the demo store's finished homepage — every sibling below was
     // already turned into a prompt for exactly this reason. It carried three batik slides, the
@@ -430,4 +548,34 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
     limit: 3,
     ctaLabel: "Lihat semua tulisan",
   },
+};
+
+// ── WHICH SECTIONS BELONG ON WHICH PAGE ────────────────────────────────────────────────────────
+//
+// `page_templates.type` has had three values since ADR 0009 — `homepage`, `category`, `product` —
+// and the builder offered the SAME eleven sections to all three, because the palette was a single
+// static config that never saw the type. That is how a merchant could drop a Hero (with its own
+// `<h1>`) onto a product page that already has the product's name as the `<h1>`, or a Navigasi
+// Kategori onto a PDP tail.
+//
+// The three pages are genuinely different jobs:
+//
+// · **homepage** — the whole page IS the template. Everything is on offer.
+// · **category** — the template is the BODY under the category's own header. `CategoryHero` (the
+//   `<h1>`, the breadcrumb, the cover) is rendered by the page and is NOT a section, so `hero` is
+//   excluded: a second `<h1>` is exactly what the a11y audit flagged on the homepage carousel.
+//   `product-listing` is the point of the page and belongs first.
+// · **product** — the template is the PDP TAIL only (produk/[handle].astro renders it where the
+//   hand-built "Rekomendasi" strip sat; gallery, buy box, reviews and description are untouched).
+//   So: no `hero`, no `product-listing` (the shopper is looking at ONE product, not browsing), and
+//   no `category-nav`/`collection-bento` — navigation furniture belongs above the fold, not under
+//   a buy box.
+//
+// Ordered: the list drives the builder sidebar top-to-bottom, most-reached-for first.
+export const SECTIONS_BY_TEMPLATE_TYPE: Record<"homepage" | "category" | "product", SectionType[]> = {
+  homepage: SECTION_TYPES.filter((t) => t !== "product-listing"),
+  category: ["product-listing", "product-grid", "banner-promo", "marquee", "rich-text", "image-text", "multicolumn", "faq", "testimoni", "blog"],
+  // FAQ sits high on a PDP tail on purpose: "berapa lama kirim?" / "bisa tukar ukuran?" are the
+  // questions that decide the sale, and they are asked right after the buy box.
+  product: ["product-grid", "faq", "multicolumn", "image-text", "rich-text", "banner-promo", "testimoni", "marquee", "blog"],
 };

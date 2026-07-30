@@ -57,10 +57,20 @@ function fallbackNav(collections: NavCollection[]): NavItem[] {
       children: collections.map((c) => ({ label: c.name, href: `/kategori/${c.handle}` })),
     });
   }
-  // NO hardcoded "Promo Gajian" any more: it is a REAL collection (a manual one), so it now arrives
-  // through `collections` above like any other — hardcoding it too listed it twice for the demo, and
-  // for a store that has no such collection it was a link to an empty room.
-  items.push({ label: "Blog", href: "/blog" }, { label: "Kontak", href: "/kontak" });
+  // **Promo is a DEFAULT nav item for every store**, and it is a ROUTE, not a collection.
+  //
+  // The old hardcoded "Promo Gajian" was rightly removed — that was a demo-only COLLECTION handle that
+  // 404'd elsewhere. `/promo` is the opposite: a route every storefront serves, gathering the flash
+  // sale, voucher codes, free-ongkir threshold and every discounted product (PROMO P4). Until now the
+  // only link to it was gated on the store happening to own a `promo-gajian` collection, so a store
+  // with live vouchers and a running flash sale published an indexable hub with **zero inbound links**.
+  //
+  // Not gated on "does this store have a promo right now": a merchant switches promos on and off all
+  // month, and a menu item that appears and vanishes underneath them is worse than one that sometimes
+  // leads to an honest empty state — which `/promo` already renders (`hasAnything`). This is a
+  // FALLBACK anyway: the moment a merchant builds their own menu in Navigasi, theirs wins entirely,
+  // so anyone who does not want it simply deletes it.
+  items.push({ label: "Promo", href: "/promo" }, { label: "Blog", href: "/blog" }, { label: "Kontak", href: "/kontak" });
   return items;
 }
 
