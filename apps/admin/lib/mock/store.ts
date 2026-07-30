@@ -360,7 +360,6 @@ export const COLLECTIONS: Collection[] = [
   { id: "COL-2", name: "Atasan", emoji: "👚", products: 3, type: "otomatis", published: true },
   { id: "COL-3", name: "Bawahan", emoji: "👖", products: 2, type: "otomatis", published: true },
   { id: "COL-4", name: "Busana Muslim", emoji: "🧕", products: 3, type: "otomatis", published: true },
-  { id: "COL-5", name: "Promo Gajian", emoji: "🏷️", products: 8, type: "manual", published: true },
   { id: "COL-6", name: "Produk Terlaris", emoji: "🔥", products: 10, type: "otomatis", published: true },
   { id: "COL-7", name: "Loungewear", emoji: "🩱", products: 1, type: "otomatis", published: true },
   { id: "COL-8", name: "Outerwear", emoji: "🧥", products: 2, type: "otomatis", published: false },

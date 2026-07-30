@@ -30,11 +30,12 @@ const VIRTUAL: Record<VirtualCollectionHandle, ResolvedCollection & { products: 
     blurb: `Semua koleksi ${store.name}`,
     products: PRODUCTS,
   },
-  // `promo-gajian` and `produk-terlaris` USED TO BE HERE, and that was the bug. Both are real
-  // collections with real membership — "Promo Gajian" is a MANUAL one, 8 products the merchant
-  // hand-picked in the Kategori editor. This file rendered `filter(p => p.compareAt || p.bestseller)`
-  // instead: a guess, overriding the merchant's own curation, on a page advertising a promo. They now
-  // resolve from the DB like every other collection (see byCollection in data/catalog.ts).
+  // `promo-gajian` and `produk-terlaris` USED TO BE HERE, and that was the bug. Both were real
+  // collections with real membership — a MANUAL collection is products the merchant hand-picked in
+  // the Kategori editor. This file rendered `filter(p => p.compareAt || p.bestseller)` instead: a
+  // guess, overriding the merchant's own curation, on a page advertising a promo. A real collection
+  // now resolves from the DB like every other (see byCollection in data/catalog.ts).
+  // (`promo-gajian` itself is gone from the seed — the promo surface is `/promo`, not a category.)
 };
 
 // `/kategori/semua` is PERMANENTLY MOVED to `/produk`, not merely de-indexed.

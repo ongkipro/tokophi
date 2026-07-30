@@ -135,10 +135,11 @@ export type Catalog = {
  * store's products rather than a `collections` row. Excluded from `catalog.collections` (that list is
  * the store's REAL categories) and typed against [handle].astro's map so the two cannot drift.
  *
- * ⚠️ `promo-gajian` and `produk-terlaris` were on this list and are NOT any more. They are real rows
- * with real `collection_products` membership (8 and 10 products on the demo) — the only reason they
- * looked virtual is that `byCollection` could not see membership at all, so they came back empty and
- * the page invented a substitute. Now that membership is read they resolve like any other collection:
+ * ⚠️ `promo-gajian` and `produk-terlaris` were on this list and are NOT any more. They were real rows
+ * with real `collection_products` membership — the only reason they looked virtual is that
+ * `byCollection` could not see membership at all, so they came back empty and the page invented a
+ * substitute. Now that membership is read, a real collection resolves like any other. (`promo-gajian`
+ * has since been dropped from the seed entirely — `/promo` is the promo surface. See seed.ts.)
  * the merchant's curation, not our filter.
  *
  * `semua` is the only one left, and it earns it: no store has such a row, and "everything you sell"
@@ -202,14 +203,14 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
   // curation — was not read at all.
   //
   // It only ever worked for the demo, whose category strings happen to slugify onto its handles, and
-  // it was wrong in the way that matters most: **"Promo Gajian" is a MANUAL collection**. The
-  // merchant hand-picked 8 products into it; the storefront rendered
+  // it was wrong in the way that matters most: a MANUAL collection is the merchant's own curation.
+  // They hand-pick products in the Kategori editor; the storefront rendered
   // `PRODUCTS.filter(p => p.compareAt || p.bestseller)` — a guess, from a hardcoded VIRTUAL map. A
   // merchant built a promo and the shop showed different goods.
   //
   // Keyed by product HANDLE (not id) because that is what `Product` carries. Intersecting with the
-  // loaded `products` — already filtered to active/non-archived — is what keeps a DRAFT product out:
-  // `promo-gajian` really does list `gamis-syari`, which is a draft.
+  // loaded `products` — already filtered to active/non-archived — is what keeps a DRAFT product out
+  // of a collection that lists one.
   const memberRows = await db
     .select({ collectionHandle: schema.collections.handle, productHandle: schema.products.handle })
     .from(schema.collectionProducts)

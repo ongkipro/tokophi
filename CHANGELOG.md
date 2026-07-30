@@ -34,6 +34,15 @@ sale published an indexable hub with **zero inbound links**. `/promo` is now:
 - a **seeded main-menu item labelled "Promo"** (was "Promo Gajian" — a collection name on a route), and
 - part of the **fallback nav**, so every store gets it, including freshly provisioned ones.
 
+**And the manual "Promo Gajian" COLLECTION is gone.** Its membership was literally
+`seededProducts.slice(0, 8)` — an arbitrary first-eight with no relationship to what was actually
+discounted, so it advertised "Promo" over full-price goods while genuinely reduced products sat
+outside it. `/promo` computes the same idea from the real thing (flash sale ∪ markdowns ∪ vouchers ∪
+free-ongkir) and cannot drift: on the demo it shows **100 product cards, 4 voucher codes and a live
+countdown** where the collection showed 8 hand-picked items. The CAMPAIGN name lives on where it
+belongs — the flash sale is still called "Promo Gajian" and it is the hub's `promo_hub_title`.
+`/kategori/promo-gajian` now 404s.
+
 It is an ordinary menu item: a merchant who does not want it deletes or renames it in Navigasi, and a
 merchant-built menu wins over the fallback entirely. Not gated on "does this store have a promo right
 now" — promos come and go all month, and a menu item that appears and vanishes underneath the merchant

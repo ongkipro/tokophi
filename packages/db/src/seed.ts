@@ -230,7 +230,6 @@ const COLLECTIONS: Array<{ name: string; emoji: string; type: "manual" | "otomat
   { name: "Atasan", emoji: "👚", type: "otomatis", published: true, blurb: "Blouse, kemeja, & tunik", imageUrl: "/products/blouse-katun.webp" },
   { name: "Bawahan", emoji: "👖", type: "otomatis", published: true, blurb: "Rok & celana kulot", imageUrl: "/products/celana-kulot.webp" },
   { name: "Busana Muslim", emoji: "🧕", type: "otomatis", published: true, blurb: "Hijab, khimar, & gamis", imageUrl: "/products/gamis-syari.webp" },
-  { name: "Promo Gajian", emoji: "🏷️", type: "manual", published: true, imageUrl: "/products/hijab-voal.webp" },
   { name: "Produk Terlaris", emoji: "🔥", type: "otomatis", published: true, imageUrl: "/products/dress-batik.webp" },
   { name: "Loungewear", emoji: "🩱", type: "otomatis", published: true, blurb: "Nyaman untuk di rumah", imageUrl: "/products/cardigan-rajut.webp" },
   { name: "Outerwear", emoji: "🧥", type: "otomatis", published: false, blurb: "Cardigan & blazer", imageUrl: "/products/blazer-wanita.webp" },
@@ -539,8 +538,14 @@ const MAIN_MENU: MItem[] = [
     ],
   },
   // A MENU to the unified promo HUB (/promo), not a category — the hub gathers the flash sale, voucher
-  // codes, free ongkir, and every discounted product on one page (PROMO P4). The manual "Promo Gajian"
-  // collection still exists at /kategori/promo-gajian for anyone who links it, but the nav points here.
+  // codes, free ongkir, and every discounted product on one page (PROMO P4).
+  //
+  // The manual "Promo Gajian" COLLECTION that used to sit alongside it is GONE. It was a hand-curated
+  // list whose membership was literally `seededProducts.slice(0, 8)` — an arbitrary first-eight that
+  // had nothing to do with what was actually discounted, so it advertised "Promo" over products at
+  // full price while genuinely reduced ones sat outside it. `/promo` computes the same idea from the
+  // real thing (flash sale ∪ markdowns ∪ vouchers ∪ free-ongkir) and cannot drift. The CAMPAIGN name
+  // lives on where it belongs: the flash sale is still called "Promo Gajian" and it is the hub's title.
   //
   // Labelled **"Promo"**, not "Promo Gajian": the label named a COLLECTION while the href went to the
   // hub, so the one word the shopper reads promised a category and delivered a different page — and it
@@ -925,8 +930,6 @@ async function main() {
     let members: string[];
     if (col.name === "Produk Terlaris") {
       members = [...seededProducts].sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 10).map((p) => p.id);
-    } else if (col.name === "Promo Gajian") {
-      members = seededProducts.slice(0, 8).map((p) => p.id);
     } else {
       members = seededProducts.filter((p) => p.category === col.name).map((p) => p.id);
     }
