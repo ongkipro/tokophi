@@ -37,7 +37,7 @@ function FeedRow({ label, url, copied, onCopy }: { label: string; url: string; c
  * `content_ids` stops matching. No provider offers a re-key, so this is the merchant's call, made once,
  * ideally when little is being spent.
  */
-function CatalogIdSection({ scheme }: { scheme: string }) {
+function CatalogIdSection({ scheme, published }: { scheme: string; published: number }) {
   const canWrite = useCan("integrations:write");
   const router = useRouter();
   const [busy, start] = React.useTransition();
@@ -52,6 +52,10 @@ function CatalogIdSection({ scheme }: { scheme: string }) {
     );
   }
 
+  // Nothing is published yet, so there is no catalogue anywhere to re-key. Showing an irreversible
+  // warning to a merchant who has not listed a product is pure noise on the page they came to set up ads.
+  if (published === 0) return null;
+
   const switchNow = () =>
     start(async () => {
       const r = await switchToStableCatalogIds();
@@ -61,11 +65,21 @@ function CatalogIdSection({ scheme }: { scheme: string }) {
 
   return (
     <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-      <p className="text-xs font-medium">ID produk masih memakai nama handle</p>
+      <p className="text-xs font-medium">Sebaiknya pindah ke ID produk tetap</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        ID sekarang ikut nama produk dan urutan varian, jadi <span className="font-medium text-foreground">berubah</span> saat
-        Anda mengganti nama produk, menggeser urutan varian, atau menambah varian kedua. Google, Meta, dan TikTok
-        membaca ID yang berubah sebagai &quot;produk lama dihapus, produk baru muncul&quot;.
+        ID produk di feed ini masih diambil dari nama handle, jadi <span className="font-medium text-foreground">ikut berubah</span>{" "}
+        setiap Anda mengganti nama produk, menggeser urutan varian, atau menambah varian kedua —
+        dan Google, Meta, serta TikTok membaca ID yang berubah sebagai &quot;produk lama dihapus, produk baru
+        muncul&quot;. Penomoran tetap (mis. <code className="mx-0.5">1042-3</code>) tidak pernah berubah.
+      </p>
+      {/* The decision the merchant is actually being asked to make — they are the only one who knows
+          whether this feed URL has been pasted anywhere yet, and that single fact decides the answer. */}
+      <p className="mt-2 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">Belum pernah menghubungkan feed ini</span> ke Merchant
+        Center / Commerce Manager / TikTok? Pindah sekarang — tidak ada yang hilang, dan Anda tidak perlu
+        membayar biayanya nanti. <span className="font-medium text-foreground">Sudah terhubung?</span> Pindah tetap
+        bisa, tapi katalog lama dianggap produk baru: pilih waktu belanja iklan sedang kecil, lalu minta
+        platformnya menarik feed ulang.
       </p>
       {!confirming ? (
         canWrite && (
@@ -93,7 +107,7 @@ function CatalogIdSection({ scheme }: { scheme: string }) {
 export function FeedCard({ feed }: { feed: FeedStatus }) {
   const [copied, setCopied] = React.useState("");
   const unclassified = Math.max(0, feed.total - feed.classified);
-  const pct = feed.total ? Math.round((feed.classified / feed.total) * 100) : 0;
+  const missing = feed.notPublishedDraft + feed.notPublishedNoImage;
 
   const copy = async (url: string) => {
     try {
@@ -129,19 +143,44 @@ export function FeedCard({ feed }: { feed: FeedStatus }) {
         <FeedRow label="Google & Meta" url={feed.feedUrl} copied={copied === feed.feedUrl} onCopy={() => copy(feed.feedUrl)} />
         <FeedRow label="TikTok" url={feed.tiktokFeedUrl} copied={copied === feed.tiktokFeedUrl} onCopy={() => copy(feed.tiktokFeedUrl)} />
 
-        <CatalogIdSection scheme={feed.catalogIdScheme} />
+        <CatalogIdSection scheme={feed.catalogIdScheme} published={feed.total} />
 
+        {/* "22 produk terbit" alone is a number a merchant can read and cannot act on — and next to
+            "22 siap feed (100%)" it was the same number twice. What matters is the SHORTFALL and its
+            reason: a draft and a photo-less product are both invisible in the feed, for different
+            reasons, and both are one click away from being fixed. */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
           <span className="inline-flex items-center gap-1.5">
-            <ShoppingBag className="size-3.5 text-muted-foreground" /> {num(feed.total)} produk terbit
+            <ShoppingBag className="size-3.5 text-muted-foreground" />
+            {missing > 0 ? (
+              <>
+                <span className="font-medium">{num(feed.total)}</span> dari {num(feed.total + missing)} produk terbit di feed
+              </>
+            ) : (
+              <>
+                <span className="font-medium">{num(feed.total)}</span> produk terbit di feed
+              </>
+            )}
           </span>
-          <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-            <Sparkles className="size-3.5" /> {num(feed.classified)} siap feed ({pct}%)
-          </span>
+          {feed.notPublishedDraft > 0 && (
+            <Link href="/produk" className="inline-flex items-center gap-1.5 text-muted-foreground hover:underline">
+              <TriangleAlert className="size-3.5" /> {num(feed.notPublishedDraft)} masih draf
+            </Link>
+          )}
+          {feed.notPublishedNoImage > 0 && (
+            <Link href="/produk" className="inline-flex items-center gap-1.5 text-amber-600 hover:underline dark:text-amber-400">
+              <TriangleAlert className="size-3.5" /> {num(feed.notPublishedNoImage)} tanpa foto
+            </Link>
+          )}
           {unclassified > 0 && (
             <Link href="/produk" className="inline-flex items-center gap-1.5 text-amber-600 hover:underline dark:text-amber-400">
               <TriangleAlert className="size-3.5" /> {num(unclassified)} perlu kategori Google
             </Link>
+          )}
+          {missing === 0 && unclassified === 0 && feed.total > 0 && (
+            <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+              <Sparkles className="size-3.5" /> seluruh katalog siap
+            </span>
           )}
         </div>
       </CardContent>
