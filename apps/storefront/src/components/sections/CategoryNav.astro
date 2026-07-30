@@ -19,7 +19,10 @@ import { safeHref } from "../../lib/safe-href";
 import { ArrowRight } from "@lucide/astro";
 
 type Props = CategoryNavConfig;
-const { items } = Astro.props;
+// `?? []` like every sibling section. This was the ONE unguarded consumer left after the renderer
+// fallbacks landed: `items.length` on an undefined prop is a TypeError, and a TypeError in a section
+// takes the WHOLE page down. `validateTemplateData` permits `props: {}`, so the row is writable.
+const items = Astro.props.items ?? [];
 
 // The desktop arrows only earn their place when the shelf actually overflows — i.e. more than four.
 // Rendered always (SSR can't measure widths), but the script hides them when there is nothing to

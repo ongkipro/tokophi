@@ -20,7 +20,7 @@ const { store, catalog, origin } = Astro.locals;
 const BRAND_SHADES = catalog.brandShades;
 const { title, description = store.tagline, image, robots } = Astro.props;
 
-const fullTitle = `${title} — ${store.name}`;
+const fullTitle = `${title} - ${store.name}`;
 
 const clamp = (text: string, max = 155) => {
   const t = (text ?? "").replace(/\s+/g, " ").trim();
@@ -32,7 +32,13 @@ const desc = clamp(description ?? "");
 const canonical = new URL(Astro.url.pathname, origin).href;
 const favicon = store.faviconUrl ? mediaUrl(store.faviconUrl) : null;
 const ogImage = (() => {
-  const src = image || store.logoUrl || "";
+  // ⚠️ `mediaUrl()` on the LOGO. `store.logoUrl` is the relative `/api/uploads/<name>` the admin
+  // writes, and that path is served by the ADMIN app — resolving it against the STOREFRONT origin
+  // produced a 404 on every share. The favicon fifteen lines up already does this; the og:image did
+  // not. Measured: `/`, `/produk`, `/kontak` and every `/halaman/*` all shared a broken thumbnail,
+  // because they carry no explicit image and fall through to the logo — which is the first thing
+  // onboarding asks a merchant to upload. `image` is passed already-absolute by its callers.
+  const src = image || (store.logoUrl ? mediaUrl(store.logoUrl) : "") || "";
   if (!src) return null;
   try {
     return new URL(src, origin).href;

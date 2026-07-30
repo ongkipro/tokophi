@@ -42,7 +42,7 @@ const COLS = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-2 lg:grid-cols-3", 4: "sm:g
 
         <ul class:list={["mt-8 grid grid-cols-1 gap-8", COLS[columns] ?? COLS[3]]}>
           {rows.map((row) => {
-            const Icon = ICONS[row.icon as keyof typeof ICONS];
+            const Icon = Object.hasOwn(ICONS, row.icon) ? ICONS[row.icon as keyof typeof ICONS] : null;
             return (
               <li class="flex flex-col items-center text-center">
                 <span class="mb-4 flex size-12 items-center justify-center rounded-full bg-brand-50 text-brand-700">
@@ -52,7 +52,15 @@ const COLS = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-2 lg:grid-cols-3", 4: "sm:g
                     <span class="size-2 rounded-full bg-current" aria-hidden="true" />
                   )}
                 </span>
-                <h3 class="font-medium text-ink">{row.title}</h3>
+                {/* h2 when this section carries no heading of its own. The section's own <h2> is
+                    CONDITIONAL on `heading`, so a merchant who clears "Judul" would otherwise take the
+                    document from <h1> straight to <h3> — a skipped level is what a screen-reader user
+                    navigates by. Two plain branches, never `set:html`: `row.title` is merchant text. */}
+                {heading ? (
+                  <h3 class="font-medium text-ink">{row.title}</h3>
+                ) : (
+                  <h2 class="font-medium text-ink">{row.title}</h2>
+                )}
                 {row.text?.trim() && <p class="mt-1.5 text-sm leading-relaxed text-muted">{row.text}</p>}
               </li>
             );

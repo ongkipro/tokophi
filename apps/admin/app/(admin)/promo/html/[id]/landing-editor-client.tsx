@@ -180,7 +180,13 @@ export function LandingEditorClient({ editor }: { editor: LandingEditor }) {
             disabled={!canWrite}
           />
           <p className="text-xs text-muted-foreground">
-            Tempel isi HTML (bagian body). Form order + tombol "Pesan Sekarang" ditambahkan otomatis di bawah. Tag &lt;script&gt; tidak dijalankan (keamanan).
+            Tempel isi HTML (bagian body). Form order + tombol "Pesan Sekarang" ditambahkan otomatis di
+            bawah.{" "}
+            <strong className="text-amber-700 dark:text-amber-500">
+              HTML ini dijalankan apa adanya di halaman toko Anda, termasuk tag &lt;script&gt;.
+            </strong>{" "}
+            Jangan tempel kode dari sumber yang tidak Anda percaya — halaman ini memuat form pesanan
+            (nama, WhatsApp, alamat).
           </p>
         </CardContent>
       </Card>

@@ -40,8 +40,9 @@ export function BrandColorDialog({ initialColor }: { initialColor: string }) {
     }
     startTransition(async () => {
       try {
-        await saveBrandColor(hex);
-        toast.success("Warna brand tersimpan");
+        const res = await saveBrandColor(hex);
+        if (res.ok) toast.success("Warna brand tersimpan");
+        else toast.error(res.error);
       } catch {
         toast.error("Gagal menyimpan warna brand");
       }

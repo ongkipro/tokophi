@@ -4,17 +4,25 @@
 // shared OrderFunnel bound to that product, plus a floating "Pesan Sekarang" CTA that scrolls to it.
 // Standalone layout (no site nav), same as the product landing.
 //
-// SECURITY NOTE: the HTML is set:html'd — it is the MERCHANT's own content for their OWN storefront
-// (the same trust level as the Store Builder). Astro renders it into the SSR string; an injected
-// SCRIPT tag does NOT execute (innerHTML semantics), so a pasted pixel snippet won't run — a deliberate,
+// ⚠️ SECURITY NOTE — CORRECTED 2026-07-30. The previous version of this comment claimed a SCRIPT tag
+// "does NOT execute (innerHTML semantics)". **That was wrong, and the admin repeated it to the
+// merchant.** `set:html` routes through Astro's `unescapeHTML` and the string is emitted into the SSR
+// RESPONSE BODY — parsed by the browser's HTML parser, not assigned to `.innerHTML`. A SCRIPT tag in a
+// parsed document RUNS. There is no sanitizer on this path and no CSP on the storefront.
+//
+// It is the MERCHANT's own content for their OWN storefront (the Store Builder trust level), BUT the
+// write requires only `content:write`, which `staff` holds in every tenant — and this page carries the
+// COD order form (name, WhatsApp, full address). Narrowing that capability, or adding a real
+// sanitizer, is an owner decision filed in BACKLOG; a regex half-sanitizer would be worse than none,
+// because it would restore exactly the false confidence this comment was providing.
+// The admin's own caption now says the truth instead of the opposite.
+//
 // ⚠️ Do NOT write the literal opening `script` tag with angle brackets in THIS frontmatter comment.
 // Vite's dependency scanner extracts `<script>…</script>` regions from a .astro file with a naive
 // match that does not respect `//` comments — a literal one here made it treat everything down to the
 // real client script's `</script>` (incl. the `<LandingLayout>` template) as one TS script, and
 // esbuild then read `<LandingLayout` as a type cast: "Expected > but found title". It broke every
 // `npm run dev` cold start with a full-screen error overlay while the production build stayed green.
-// conservative default. If a merchant later needs real pixels, that becomes an explicit, reviewed head
-// injection, not arbitrary body script.
 import LandingLayout from "../../layouts/LandingLayout.astro";
 import OrderFunnel from "../../components/OrderFunnel.astro";
 import { ShoppingBag } from "@lucide/astro";

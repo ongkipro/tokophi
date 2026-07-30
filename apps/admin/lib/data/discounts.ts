@@ -20,9 +20,15 @@ function toDiscount(r: {
   const ends = r.endsAt ? r.endsAt.getTime() : null;
   // `nonaktif` wins over any date arithmetic — it is the merchant's explicit OFF, and deriving a
   // status purely from the dates is what let the editor resurrect a switched-off voucher.
+  // `habis` before any date arithmetic: `applyDiscount` refuses at the limit and `activeVouchers`
+  // hides it, so a seller list badging it green "Aktif" was the FOURTH definition of "usable" for one
+  // row (list / /promo / checkout / here). RAMADHAN15 sits at 890/900.
+  const exhausted = r.usageLimit != null && r.usedCount >= r.usageLimit;
   const status: Discount["status"] =
     r.status === "nonaktif"
       ? "nonaktif"
+      : exhausted
+        ? "habis"
       : now < starts
         ? "terjadwal"
         : ends !== null && now > ends

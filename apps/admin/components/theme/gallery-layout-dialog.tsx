@@ -90,7 +90,8 @@ export function GalleryLayoutDialog({ initialLayout }: { initialLayout: string }
     }
     startTransition(async () => {
       try {
-        await saveProductGalleryLayout(layout);
+        const res = await saveProductGalleryLayout(layout);
+        if (!res.ok) { toast.error(res.error); return; }
         toast.success("Layout galeri tersimpan");
         setOpen(false);
       } catch {

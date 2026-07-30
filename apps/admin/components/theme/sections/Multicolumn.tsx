@@ -35,7 +35,7 @@ export function Multicolumn({ heading, eyebrow, columns, items }: MulticolumnCon
       ) : (
         <ul className={`grid gap-8 ${COLS[columns] ?? COLS[3]}`}>
           {rows.map((row, i) => {
-            const Icon = ICONS[row.icon as keyof typeof ICONS];
+            const Icon = Object.hasOwn(ICONS, row.icon) ? ICONS[row.icon as keyof typeof ICONS] : null;
             return (
               <li key={i} className="flex flex-col items-center text-center">
                 <span className="mb-3 flex size-11 items-center justify-center rounded-full bg-brand-50 text-brand-700">

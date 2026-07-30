@@ -20,6 +20,7 @@ import { rateLimited, clientIp } from "@/lib/public-guard";
 import { getCodPolicy } from "@/lib/cod";
 import { quoteShipping, findRate } from "@/lib/shipping-quote";
 import { computeTax } from "@tokophi/lib/tax";
+import { IDR } from "@tokophi/lib/format";
 import { applyDiscount } from "@/lib/promo";
 import { activeFlashPrices } from "@/lib/flash";
 import { clientContextFromRequest, enqueuePurchase } from "@/lib/tracking-events";
@@ -240,6 +241,9 @@ async function handle(req: Request) {
   // ONLY when it undercuts the variant's base price — the storefront advertised it, so the order must
   // honour it; this is where that advertised price becomes money.
   const flash = await activeFlashPrices(store.id);
+  // Collected across the WHOLE cart, not thrown at the first mismatch: the shopper should be told
+  // everything that moved in one go, and the client needs every corrected price to repair the cart.
+  const priceChanges: { handle: string; variant: string; title: string; was: number; now: number }[] = [];
 
   for (const i of items) {
     const qty = Math.max(1, Math.floor(Number(i.qty) || 1));
@@ -303,6 +307,30 @@ async function handle(req: Request) {
     const flashPrice = flash.get(prod.id);
     const unitPrice = flashPrice != null ? Math.min(match.price, flashPrice) : match.price;
 
+    // ── THE CART IS REFUSED IF ITS PRICE MOVED ───────────────────────────────────────────────────
+    //
+    // `i.price` is still NOT trusted to price anything — `unitPrice` above is the only price that
+    // becomes money. It is used here for one thing: to detect that the browser is holding a stale
+    // number. `localStorage.cart` records the price at ADD-TO-CART and keeps it forever, so a flash
+    // sale that starts or lapses in between leaves the shopper agreeing to one figure and being
+    // charged another. This endpoint used to accept that silently and reprice UPWARD.
+    //
+    // Same rule the shipping path already follows: a picked service that is not in the fresh quote is
+    // REJECTED, never silently substituted. A tolerance would just be a smaller hole.
+    //
+    // Refused in BOTH directions, deliberately. A drop is good news, but "the number you agreed to is
+    // not the number we will take" is the thing being fixed, and a rule that fires one way invites
+    // "why didn't it tell me when it fell?". The message says which way it moved so reloading reads
+    // as safe rather than as a failure.
+    //
+    // 409, not 400: nothing has been written (this is before the txn) and the shopper can act on it.
+    // Skipped when the client sends no price — the landing funnel posts `{handle, variant, qty}` only,
+    // and it re-quotes from a fresh page load anyway.
+    const quoted = Number(i.price);
+    if (Number.isFinite(quoted) && quoted > 0 && quoted !== unitPrice) {
+      priceChanges.push({ handle: i.handle!, variant: i.variant ?? "", title: prod.title, was: quoted, now: unitPrice });
+    }
+
     resolved.push({
       variantId: match.id,
       // The line-item title comes from the DB too — the client's `name` is decoration.
@@ -312,6 +340,46 @@ async function handle(req: Request) {
       handle: i.handle!,
     });
   }
+  // ── REFUSE A CART WHOSE PRICE MOVED ──────────────────────────────────────────────────────────
+  //
+  // `i.price` still prices NOTHING — `unitPrice` is the only price that becomes money. It is compared
+  // here for one purpose: to notice that the browser is holding a stale number. `localStorage.cart`
+  // records the price at ADD-TO-CART and keeps it forever, so a flash sale that starts or lapses in
+  // between left the shopper agreeing to one figure and being charged another. This endpoint used to
+  // accept that silently and reprice UPWARD.
+  //
+  // Same rule the shipping path already follows: a picked service missing from the fresh quote is
+  // REJECTED, never silently substituted. A tolerance would just be a smaller hole.
+  //
+  // Refused in BOTH directions. A drop is good news, but "the number you agreed to is not the number
+  // we will take" is the thing being fixed, and a rule that only fires upward invites "why didn't it
+  // tell me when it fell?". The message names the direction so reloading reads as safe.
+  //
+  // ⚠️ `repriced` is returned WITH the refusal, and it is load-bearing: the cart lives in
+  // localStorage, so reloading the page does NOT re-price it. Without the corrected prices, "muat
+  // ulang keranjang" is advice the shopper cannot act on — they would reload, see the same stale
+  // number, press Bayar and be refused again, forever. The client rewrites the cart from this.
+  //
+  // 409, not 400: nothing has been written (this is before the txn) and the shopper can act on it.
+  // Skipped for a client that sends no price — the landing funnel posts `{handle, variant, qty}` only
+  // and re-quotes from a fresh page load anyway.
+  if (priceChanges.length) {
+    const first = priceChanges[0];
+    const arah = first.now > first.was ? "naik" : "turun";
+    const extra = priceChanges.length > 1 ? ` (dan ${priceChanges.length - 1} produk lain)` : "";
+    return NextResponse.json(
+      {
+        ok: false,
+        field: "items",
+        error:
+          `Harga "${first.title}" ${arah} dari ${IDR(first.was)} menjadi ${IDR(first.now)}${extra}. ` +
+          `Keranjang sudah diperbarui — periksa totalnya, lalu tekan Bayar lagi.`,
+        repriced: priceChanges.map((c) => ({ handle: c.handle, variant: c.variant, price: c.now })),
+      },
+      { status: 409, headers: CORS },
+    );
+  }
+
   const subtotal = resolved.reduce((a, r) => a + r.price * r.qty, 0);
   // ⚠️ RETURNED TO THE BROWSER, and it must be. The success page used to render `subtotal` and the
   // per-line prices from `localStorage.cart` — captured when the shopper ADDED the item, and kept

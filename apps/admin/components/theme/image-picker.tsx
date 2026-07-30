@@ -29,7 +29,9 @@ const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?
   { key: "produk", label: "Produk", icon: Package },
   { key: "kategori", label: "Kategori", icon: Tag },
 ];
-const MAX = 5 * 1024 * 1024;
+// 2MB, matching `lib/image-store.ts` MAX_BYTES — the server boundary. This said 5MB, so a 3MB
+// photo passed the client gate, uploaded, and was refused with a raw "file too large".
+const MAX = 2 * 1024 * 1024;
 
 // A responsive, searchable grid of pickable images (used by Galeri / Produk / Kategori).
 function ImageGrid({
@@ -87,7 +89,9 @@ export function ImagePickerField({
   field: { label?: string };
   readOnly?: boolean;
 }) {
-  const canWrite = useCan("theme:write");
+  const canWrite = // `media:write` — the capability `uploadMedia` actually requires. `theme:write` happens to be a
+  // subset today, so the two never diverge; they are different caps and one moved role flips that.
+  useCan("media:write");
   const [open, setOpen] = React.useState(false);
   const [tab, setTab] = React.useState<TabKey>("galeri");
   const [q, setQ] = React.useState("");
@@ -227,7 +231,7 @@ export function ImagePickerField({
                   <span className="text-muted-foreground">Peran Anda tidak bisa mengunggah.</span>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">JPG/PNG/WebP, maks 5MB — dikonversi ke WebP otomatis.</p>
+              <p className="text-xs text-muted-foreground">JPG/PNG/WebP, maks 2MB — dikonversi ke WebP otomatis.</p>
               <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => doUpload(e.target.files)} />
             </div>
           )}

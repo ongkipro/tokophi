@@ -977,6 +977,12 @@ if (rToken) {
     }
 
     var subtotal = 0;
+    // Extracted so the cart can be RE-rendered after the order API refuses a stale price and sends
+    // the corrected ones back. It was a one-shot block; re-running it is now the only way the shopper
+    // sees the number they are actually being asked to pay, since the cart lives in localStorage and
+    // a page reload would faithfully restore the stale price.
+    function renderItems() {
+    subtotal = 0;
     var itemsHtml = cart
       .map(function (item) {
         var sub = item.price * item.qty;
@@ -1016,6 +1022,8 @@ if (rToken) {
       s2thumb.src = cart[0].image;
       s2thumb.hidden = false;
     }
+    }
+    renderItems();
     (function () {
       var toggle = document.getElementById("summary2-toggle");
       var body = document.getElementById("summary2-body");
@@ -2299,6 +2307,25 @@ if (rToken) {
         .then(function (r) { return r.json(); })
         .then(function (res) {
           if (!res.ok) {
+            // ── THE CART'S PRICE MOVED (409 + `repriced`) ──────────────────────────────────────
+            // The endpoint refuses rather than charging a number the shopper never agreed to. It
+            // sends the CORRECTED prices with the refusal, and they are load-bearing: the cart lives
+            // in localStorage, so telling someone to "muat ulang" without rewriting it would send
+            // them round a loop — reload, same stale price, refused again. Rewrite it here, re-render
+            // the summary, and the next Bayar goes through at a number they have now actually seen.
+            if (Array.isArray(res.repriced) && res.repriced.length) {
+              res.repriced.forEach(function (c) {
+                cart.forEach(function (it) {
+                  var v = it.variant || it.size || "";
+                  if (it.handle === c.handle && v === (c.variant || "")) it.price = c.price;
+                });
+              });
+              try { localStorage.setItem("cart", JSON.stringify(cart)); } catch (e) {}
+              // `renderItems()` recomputes `subtotal`, which drives the ongkir quote, the PPN, the
+              // free-ship threshold and the COD cap — every one has to move with the corrected prices.
+              renderItems();
+              recompute();
+            }
             fail(res.error || "Gagal memproses pesanan.");
             // The API tells us WHICH field it refused — put the cursor there instead of making the
             // shopper hunt for it.
