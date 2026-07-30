@@ -76,9 +76,9 @@ const variantRowsOf = (input: ProductInput): VariantInput[] =>
     ? input.variants!
     : [{ option1: null, option2: null, option3: null, price: input.price, stock: input.stock, sku: input.sku ?? null }];
 
-export async function createProduct(input: ProductInput): Promise<string> {
+export async function createProduct(input: ProductInput): Promise<{ id: string; number: number }> {
   const { storeId: sid } = await requireCapability("products:write");
-  const id = await withTenant(sid, async (db) => {
+  const created = await withTenant(sid, async (db) => {
     // The product's permanent catalog number (ADR 0013) — allocated here, never derived from anything
     // the merchant can later edit.
     const number = await allocateProductNumber(db, sid);
@@ -114,22 +114,22 @@ export async function createProduct(input: ProductInput): Promise<string> {
     // product feed published it as `<g:image_link>` (plus four invented `-2..-5` gallery URLs), which is
     // an automatic disapproval at all three providers. `catalog.ts` already says it: never fabricate a
     // URL you have not been given. A product with no photo yet simply has none, and the feed skips it.
-    return p.id;
+    return { id: p.id, number };
   });
   revalidatePath("/produk");
-  return id;
+  return created;
 }
 
 export async function updateProduct(id: string, input: ProductInput): Promise<void> {
   const { storeId: sid } = await requireCapability("products:write");
-  await withTenant(sid, async (db) => {
+  const number = await withTenant(sid, async (db) => {
     // Verify the product belongs to THIS store BEFORE touching its children. product_options /
     // product_variants / inventory_levels have no store_id and no RLS, so a foreign id would let this
     // action delete+rewrite another store's rows — the `products` UPDATE below silently no-ops under
     // RLS but the child writes are keyed on the raw id. Read the parent under RLS first and bail if it
     // isn't ours (the pattern duplicateProduct already uses).
-    const [owned] = await db.select({ id: schema.products.id }).from(schema.products).where(eq(schema.products.id, id)).limit(1);
-    if (!owned) return;
+    const [owned] = await db.select({ id: schema.products.id, number: schema.products.number }).from(schema.products).where(eq(schema.products.id, id)).limit(1);
+    if (!owned) return null;
     await db.update(schema.products).set({ ...productFields(input), hasVariants: usesVariants(input) }).where(eq(schema.products.id, id));
     // Default location, not just any: new inventory rows must land where the merchant actually stocks.
     const [loc] = await db.select({ id: schema.locations.id }).from(schema.locations).where(eq(schema.locations.storeId, sid)).orderBy(desc(schema.locations.isDefault), asc(schema.locations.id)).limit(1);
@@ -197,9 +197,12 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
       await db.delete(schema.inventoryLevels).where(eq(schema.inventoryLevels.variantId, ev.id));
       await db.delete(schema.productVariants).where(eq(schema.productVariants.id, ev.id));
     }
+    return owned.number;
   });
   revalidatePath("/produk");
-  revalidatePath(`/produk/${id}`);
+  // The product URL is the NUMBER now (ADR 0013) — revalidating the UUID path would silently match no
+  // rendered route: a no-op that looks like it works.
+  if (number) revalidatePath(`/produk/${number}`);
 }
 
 // Products may be referenced by historical order line-items, so "delete" = archive
@@ -223,9 +226,9 @@ function omit<T extends object>(row: T, keys: string[]): Record<string, unknown>
 // Full clone: product + options + variants + inventory + media. The copy is a DRAFT with a unique
 // handle so it never collides with the original or shadows it on the storefront. Spread-copy each row
 // (minus its id/createdAt) so new columns are carried automatically. Returns the new product id.
-export async function duplicateProduct(id: string): Promise<{ ok: boolean; id?: string; error?: string }> {
+export async function duplicateProduct(id: string): Promise<{ ok: boolean; id?: string; number?: number; error?: string }> {
   const { storeId: sid } = await requireCapability("products:write");
-  const newId = await withTenant(sid, async (db) => {
+  const created = await withTenant(sid, async (db) => {
     const [orig] = await db.select().from(schema.products).where(eq(schema.products.id, id)).limit(1);
     if (!orig) return null;
 
@@ -267,11 +270,11 @@ export async function duplicateProduct(id: string): Promise<{ ok: boolean; id?: 
     if (media.length) {
       await db.insert(schema.productMedia).values(media.map((m) => ({ ...omit(m, ["id", "productId"]), productId: copy.id } as typeof schema.productMedia.$inferInsert)));
     }
-    return copy.id;
+    return { id: copy.id, number };
   });
-  if (!newId) return { ok: false, error: "Produk tidak ditemukan." };
+  if (!created) return { ok: false, error: "Produk tidak ditemukan." };
   revalidatePath("/produk");
-  return { ok: true, id: newId };
+  return { ok: true, id: created.id, number: created.number };
 }
 
 // ── Bulk actions (the Produk selection bar) ──────────────────────────────────

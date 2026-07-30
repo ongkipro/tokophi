@@ -392,7 +392,8 @@ catalog, which no provider can undo.
 | `capi_enabled` | server-side conversions on (Conversions API / Measurement Protocol / Events API) |
 | `capi_token_ciphertext` | **SECRET** — AES-256-GCM, `v1:iv:tag:ct`, key `INTEGRATION_TOKEN_KEY` (`apps/admin/lib/crypto.ts`). Never selected into a client component; the UI only learns `capiConfigured: boolean` |
 | `advanced_matching` | opt-in: hash + send buyer email/phone with events |
-| `test_event_code` | Meta/TikTok test-events code, blank when live |
+| `test_event_code` | Meta/TikTok test-events code, blank when live. **Not a sandbox** — Meta documents that events carrying it still flow into Events Manager and are used for targeting |
+| `ads_send_to` | **Google Ads** conversion destination (`AW-123456789/AbC-D_efGh`), migration 0082. Separate from `pixel_id`, which for this channel is the GA4 `G-…` tag: a GA4 event records nothing in Google Ads, so a merchant running both needs both fields |
 
 `tracking_event_deliveries` — **the queue itself** (there is no worker process; ADR 0012 §0.1). Written
 by `apps/admin/lib/tracking-events.ts` after a committed order, drained by
@@ -554,6 +555,7 @@ carry meaning were named by hand.
 | **0045** | `checkout_abandoned_at` | `checkout_sessions.abandoned_at` + a backfill of every existing `ditinggal` row from `coalesce(updated_at, created_at)`. **Without this column a "recovery rate" is a lie** — see §3.4 |
 | **0079** | `store_tracking_channels` | per-store Meta/Google/TikTok pixel + CAPI config, `unique(store_id, channel)` + RLS (ADR 0012) |
 | **0080** | `tracking_event_deliveries` | the server-side conversion QUEUE + `tracking_delivery_status` enum, `unique(store_id, channel, event_id)`, due/store indexes + RLS (ADR 0012) |
+| **0082** | `google_ads_send_to` | `store_tracking_channels.ads_send_to` — the Google Ads conversion destination, so GA4 and Google Ads can both be configured (ADR 0012) |
 | **0081** | `product_numbering` | `products.number` (per-store, `unique(store_id,number)`) + `products.variant_seq_next` + `product_variants.seq` (`unique(product_id,seq)`) + `store_counters` (RLS) + `stores.catalog_id_scheme`; deterministic one-shot backfill (ADR 0013) |
 
 ```bash

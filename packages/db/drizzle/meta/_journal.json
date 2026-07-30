@@ -575,6 +575,13 @@
       "when": 1785307349291,
       "tag": "0081_product_numbering",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1785406807888,
+      "tag": "0082_google_ads_send_to",
+      "breakpoints": true
     }
   ]
 }

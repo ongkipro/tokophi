@@ -43,7 +43,10 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 |---|---|---|---|
 | `/produk` | Product list | Shopify-style compact table (default) w/ `ProductThumb`, grid toggle; tabs+counts, stat quick-filters, sort, category + date filter, bulk select, "Ditambahkan" date+time | ✅ mock |
 | `/produk/baru` | New product (reuses editor) | same editor as `[id]`, empty state | ✅ mock |
-| `/produk/[id]` | Product editor (`product-editor.tsx`) | title/media/desc, harga+margin, inventori, **varian toggle**, channels, organisasi, SEO (content-width), "Tindakan lainnya" (ubah kategori / stok / buat PO) | ✅ mock |
+| `/produk/{number}` | Product editor (`product-editor.tsx`) | title/media/desc, harga+margin, inventori, **varian toggle**, channels, organisasi, SEO (content-width), "Tindakan lainnya" (ubah kategori / stok / buat PO) | ✅ mock |
+
+**The Seller's product URL is the catalog NUMBER** (`/produk/1042`), not the UUID — ADR 0013 §7.1. It is the number shown on the product list, searchable in ⌘K, and the one a Merchant Center / Events Manager disapproval names. A UUID-shaped URL redirects to it once, so old bookmarks keep working. The storefront's public URL stays the handle (`/produk/kemeja-linen`) — that is an SEO surface and the feed's `link`.
+
 | `/produk/kategori` | Collections list (Kategori) | list, search, Manual/Otomatis + status badges, rows → editor | ✅ mock |
 | `/produk/kategori/baru` | New collection | reuses collection editor | ✅ mock |
 | `/produk/kategori/[id]` | Collection editor (`collection-editor.tsx`) | Manual vs Otomatis, **conditions builder** (all/any + field/op/value), members/preview, image, publish/channels/template, SEO | ✅ mock |

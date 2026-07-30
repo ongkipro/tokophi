@@ -17,6 +17,8 @@ export type TrackingInput = {
   capiEnabled: boolean;
   advancedMatching: boolean;
   testEventCode: string;
+  /** Google Ads conversion destination, `AW-…/label`. Only meaningful on the `google` channel. */
+  adsSendTo?: string;
   // CAPI token intent: undefined = leave stored token unchanged; "" = clear it; a string = set (encrypted).
   capiToken?: string;
 };
@@ -43,6 +45,16 @@ export async function setTrackingChannel(input: TrackingInput): Promise<{ ok: bo
   if (testEventCode && !/^[A-Za-z0-9_-]{1,64}$/.test(testEventCode)) {
     return { ok: false, error: "Kode uji tidak valid (huruf, angka, - dan _ saja, maks 64)." };
   }
+  // Google Ads conversion destination. Validated to Google's own documented shape — `AW-` + the numeric
+  // conversion id + `/` + the action label — because a typo here does not error anywhere: gtag accepts
+  // any string and the conversion simply never appears in Google Ads.
+  const adsSendTo = (input.adsSendTo || "").trim();
+  if (adsSendTo && !/^AW-\d{6,14}\/[A-Za-z0-9_-]{6,40}$/.test(adsSendTo)) {
+    return { ok: false, error: "Tujuan konversi Google Ads harus berbentuk AW-123456789/AbC-D_efGh." };
+  }
+  if (adsSendTo && input.channel !== "google") {
+    return { ok: false, error: "Tujuan konversi Google Ads hanya untuk saluran Google." };
+  }
 
   // CAPI: only when a token exists (either stored or being set now). Encrypt a newly supplied token;
   // block enabling CAPI without an encryption key configured (never store a token plaintext).
@@ -64,6 +76,7 @@ export async function setTrackingChannel(input: TrackingInput): Promise<{ ok: bo
     capiEnabled: input.capiEnabled,
     advancedMatching: input.advancedMatching,
     testEventCode: testEventCode || null,
+    adsSendTo: adsSendTo || null,
     updatedAt: new Date(),
   };
 

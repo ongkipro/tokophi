@@ -328,6 +328,7 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
   const [capiEnabled, setCapiEnabled] = React.useState(cfg.capiEnabled);
   const [capiToken, setCapiToken] = React.useState(""); // blank = leave stored token unchanged
   const [testCode, setTestCode] = React.useState(cfg.testEventCode);
+  const [adsSendTo, setAdsSendTo] = React.useState(cfg.adsSendTo);
   const [saving, start] = React.useTransition();
   const [retrying, startRetry] = React.useTransition();
   const [testing, startTest] = React.useTransition();
@@ -362,6 +363,7 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
         capiEnabled,
         advancedMatching: advanced,
         testEventCode: testCode,
+        adsSendTo: cfg.channel === "google" ? adsSendTo : undefined,
         capiToken: capiToken.trim() ? capiToken.trim() : undefined,
       });
       if (r.ok) { toast.success(`${meta.name} disimpan.`); setCapiToken(""); router.refresh(); }
@@ -400,6 +402,23 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
             </div>
           </div>
         </div>
+
+        {/* Google Ads is a SEPARATE destination from GA4 — different id, and a per-action conversion
+            label. One field could only ever serve one of them, so a merchant running both had one
+            silently doing nothing. */}
+        {cfg.channel === "google" && (
+          <div className="space-y-1.5 rounded-lg border p-3">
+            <Label htmlFor="ads-send-to">Tujuan konversi Google Ads (opsional)</Label>
+            <Input id="ads-send-to" value={adsSendTo} onChange={(e) => setAdsSendTo(e.target.value.trim())}
+              placeholder="AW-123456789/AbC-D_efGh" disabled={!canWrite} />
+            <p className="text-xs text-muted-foreground">
+              Dari Google Ads → Tujuan → konversi Anda → &quot;Tag&quot; (gabungan ID konversi dan label).
+              Kolom di atas untuk <span className="font-medium text-foreground">GA4</span> (analitik);
+              yang ini yang membuat konversi tercatat di <span className="font-medium text-foreground">Google Ads</span>.
+              Isi keduanya kalau Anda memakai keduanya.
+            </p>
+          </div>
+        )}
 
         {/* Advanced matching */}
         <div className="flex items-start justify-between gap-4 rounded-lg border p-3">

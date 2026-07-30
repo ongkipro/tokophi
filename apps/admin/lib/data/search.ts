@@ -16,7 +16,7 @@ export type SearchItem = {
 export async function getSearchIndex(): Promise<SearchItem[]> {
   return withCurrentTenant(async (db: Tx) => {
     const products = await db
-      .select({ id: schema.products.id, title: schema.products.title, category: schema.products.category })
+      .select({ id: schema.products.id, number: schema.products.number, title: schema.products.title, category: schema.products.category })
       .from(schema.products)
       .where(ne(schema.products.status, "archived"));
     const orders = await db
@@ -30,7 +30,10 @@ export async function getSearchIndex(): Promise<SearchItem[]> {
       .from(schema.customers);
 
     return [
-      ...products.map((p): SearchItem => ({ id: p.id, label: p.title, sub: p.category ?? "Produk", href: `/produk/${p.id}`, type: "produk" })),
+      // `#1042` in the SUBTITLE, not just the href: it makes the catalog number searchable, which is
+      // the whole point of having one — a merchant reads it in a Merchant Center disapproval and needs
+      // to find the product from that number alone. The palette filters on label + sub.
+      ...products.map((p): SearchItem => ({ id: p.id, label: p.title, sub: `#${p.number} · ${p.category ?? "Produk"}`, href: `/produk/${p.number}`, type: "produk" })),
       ...orders.map((o): SearchItem => ({ id: o.number, label: o.number, sub: o.customer ?? o.city ?? "Pesanan", href: `/pesanan/${o.number.replace("#", "")}`, type: "pesanan" })),
       ...customers.map((c): SearchItem => ({ id: c.id, label: c.name, sub: c.email ?? "", href: `/pelanggan/${c.id}`, type: "pelanggan" })),
     ];

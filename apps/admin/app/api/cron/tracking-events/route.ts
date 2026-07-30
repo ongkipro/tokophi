@@ -3,6 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { decryptSecret, secretScope } from "@/lib/crypto";
 import { sanitize, sendGa4Purchase, sendMetaPurchase, sendTiktokPurchase, type ServerEvent } from "@/lib/capi";
+import { systemDomainFor } from "@/lib/data/domain";
 
 // CONVERSION DELIVERY WORKER (ADR 0012 §0.1, §16, §23) — the drain half of `tracking_event_deliveries`.
 // TokoΦ has no worker process, so this is a secured API route hit on a schedule, exactly like
@@ -39,6 +40,20 @@ function backoffMs(attempt: number): number {
  * Anything that does not look like that is refused rather than passed through — a malformed client id
  * is accepted by MP with a 204 and then quietly attributed to nobody.
  */
+/**
+ * The store's public storefront origin, cached per tick. Only needed for delivery rows that carry no
+ * captured origin (the payment-callback path), so most ticks never call it.
+ */
+const originCache = new Map<string, string>();
+async function storefrontUrl(storeId: string): Promise<string> {
+  const hit = originCache.get(storeId);
+  if (hit !== undefined) return hit;
+  const [s] = await db.select({ slug: schema.stores.slug }).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
+  const url = s?.slug ? `https://${systemDomainFor(s.slug)}/` : "";
+  originCache.set(storeId, url);
+  return url;
+}
+
 function ga4ClientId(raw?: string | null): string | null {
   if (!raw) return null;
   const m = raw.match(/^GA\d+\.\d+\.(\d+\.\d+)$/);
@@ -204,6 +219,10 @@ export async function GET(req: NextRequest) {
         numItems: Number(p.numItems ?? 0),
         orderNumber: String(p.orderNumber ?? ""),
         sourceUrl: p.client?.sourceUrl,
+        // Meta requires `event_source_url` and TikTok requires `page.url` on every website event. A row
+        // created by the payment-callback release path carries no origin, so the store's own storefront
+        // is the honest fallback — it IS where the sale happened.
+        fallbackUrl: await storefrontUrl(row.storeId),
         identity,
         client: p.client,
       };

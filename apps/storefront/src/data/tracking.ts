@@ -5,7 +5,16 @@ import { eq } from "drizzle-orm";
 // storefront's owner connection with an explicit store_id (like the rest of the catalog reads) — the
 // pixel id is PUBLIC (it ships in the page's JS), and the CAPI token is never read here. Configured by
 // the merchant at Pemasaran → Pelacakan (store_tracking_channels).
-export type StorePixel = { channel: "meta" | "google" | "tiktok"; pixelId: string; advancedMatching: boolean };
+export type StorePixel = {
+  channel: "meta" | "google" | "tiktok";
+  pixelId: string;
+  advancedMatching: boolean;
+  /**
+   * Google Ads conversion destination (`AW-…/label`), `null` when the merchant has not wired Google Ads.
+   * PUBLIC by nature — like the pixel id, it ships in the page's JS; it is a destination, not a secret.
+   */
+  adsSendTo: string | null;
+};
 
 export async function storeTrackingPixels(storeId: string): Promise<StorePixel[]> {
   const rows = await db
@@ -13,11 +22,17 @@ export async function storeTrackingPixels(storeId: string): Promise<StorePixel[]
       channel: schema.storeTrackingChannels.channel,
       pixelId: schema.storeTrackingChannels.pixelId,
       advancedMatching: schema.storeTrackingChannels.advancedMatching,
+      adsSendTo: schema.storeTrackingChannels.adsSendTo,
       enabled: schema.storeTrackingChannels.enabled,
     })
     .from(schema.storeTrackingChannels)
     .where(eq(schema.storeTrackingChannels.storeId, storeId));
   return rows
     .filter((r) => r.enabled && r.pixelId && r.pixelId.trim())
-    .map((r) => ({ channel: r.channel as StorePixel["channel"], pixelId: r.pixelId!.trim(), advancedMatching: r.advancedMatching }));
+    .map((r) => ({
+      channel: r.channel as StorePixel["channel"],
+      pixelId: r.pixelId!.trim(),
+      advancedMatching: r.advancedMatching,
+      adsSendTo: r.adsSendTo?.trim() || null,
+    }));
 }

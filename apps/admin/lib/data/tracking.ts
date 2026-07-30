@@ -19,6 +19,8 @@ export type TrackingConfig = {
   capiConfigured: boolean;
   advancedMatching: boolean;
   testEventCode: string;
+  /** Google Ads conversion destination, `AW-123456789/AbC-D_efGh`. Empty = Google Ads not wired. */
+  adsSendTo: string;
 };
 
 const KEYS: TrackingChannelKey[] = ["meta", "google", "tiktok"];
@@ -27,7 +29,7 @@ const KEYS: TrackingChannelKey[] = ["meta", "google", "tiktok"];
 export const emptyTrackingConfig = (): TrackingConfig[] => KEYS.map(empty);
 
 function empty(channel: TrackingChannelKey): TrackingConfig {
-  return { channel, enabled: false, pixelId: "", capiEnabled: false, capiConfigured: false, advancedMatching: false, testEventCode: "" };
+  return { channel, enabled: false, pixelId: "", capiEnabled: false, capiConfigured: false, advancedMatching: false, testEventCode: "", adsSendTo: "" };
 }
 
 export async function getTrackingConfig(): Promise<TrackingConfig[]> {
@@ -45,6 +47,7 @@ export async function getTrackingConfig(): Promise<TrackingConfig[]> {
         cipher: schema.storeTrackingChannels.capiTokenCiphertext,
         advancedMatching: schema.storeTrackingChannels.advancedMatching,
         testEventCode: schema.storeTrackingChannels.testEventCode,
+        adsSendTo: schema.storeTrackingChannels.adsSendTo,
       })
       .from(schema.storeTrackingChannels);
     const byKey = new Map(rows.map((r) => [r.channel, r]));
@@ -63,6 +66,7 @@ export async function getTrackingConfig(): Promise<TrackingConfig[]> {
         capiConfigured: !!r.cipher && decryptSecret(r.cipher, secretScope(storeId, k)) !== null,
         advancedMatching: r.advancedMatching,
         testEventCode: r.testEventCode ?? "",
+        adsSendTo: r.adsSendTo ?? "",
       };
     });
   });

@@ -952,6 +952,18 @@ export const storeTrackingChannels = pgTable(
     capiTokenCiphertext: text(), // Meta CAPI · GA4 Measurement Protocol · TikTok Events API token — encrypted
     advancedMatching: boolean().notNull().default(false), // hash + send email/phone with events
     testEventCode: text(), // optional Meta test_event_code for CAPI debugging
+    // Google Ads only, and it is what makes Google Ads actually WORK (migration 0082).
+    //
+    // `pixel_id` for this channel holds the analytics tag — a GA4 `G-…` Measurement ID. Google Ads is a
+    // different product with a different id AND a per-action conversion label, and `gtag('event',
+    // 'purchase', …)` alone records nothing there: Google documents a conversion as
+    // `gtag('event','conversion',{send_to:'AW-123456789/AbC-D_efGh'})`. So the merchant pastes that
+    // destination here, and a store can run GA4 and Google Ads at the same time — which is the whole
+    // point of "mix and match" and was impossible with one field.
+    adsSendTo: text(),
+    // `google_business_vertical` is required on every dynamic-remarketing item; "retail" is the only
+    // value that applies to a commerce catalog, so it is not a merchant question — recorded here as a
+    // reminder of where the value comes from rather than as a column.
     createdAt: createdAt(),
     updatedAt: createdAt(),
   },
