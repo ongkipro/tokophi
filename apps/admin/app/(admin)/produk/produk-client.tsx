@@ -96,7 +96,7 @@ function WeightWarning() {
   );
 }
 
-function RowActions({ id }: { id: string }) {
+function RowActions({ id, number }: { id: string; number?: number }) {
   const canDelete = useCan("products:delete");
   const canWrite = useCan("products:write");
   const router = useRouter();
@@ -123,7 +123,7 @@ function RowActions({ id }: { id: string }) {
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem render={<Link href={`/produk/${id}`} />}><Pencil /> Edit</DropdownMenuItem>
+        <DropdownMenuItem render={<Link href={`/produk/${number ?? id}`} />}><Pencil /> Edit</DropdownMenuItem>
         {canWrite && <DropdownMenuItem disabled={pending} onClick={dup}><Copy /> Duplikat</DropdownMenuItem>}
         {canDelete && <DropdownMenuSeparator />}
         {canDelete && <DropdownMenuItem variant="destructive" disabled={pending} onClick={archive}><Archive /> Arsipkan</DropdownMenuItem>}
@@ -386,14 +386,14 @@ export function ProdukClient({ products }: { products: Product[] }) {
             const isSel = selected.has(p.id);
             return (
               <Card key={p.id} className={cn("group relative overflow-hidden py-0 transition-all hover:-translate-y-0.5 hover:shadow-md", isSel && "ring-2 ring-primary")}>
-                <Link href={`/produk/${p.id}`} aria-label={p.name} className="absolute inset-0 z-[1] rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none" />
+                <Link href={`/produk/${p.number ?? p.id}`} aria-label={p.name} className="absolute inset-0 z-[1] rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none" />
                 {/* image */}
                 <div className={cn("relative aspect-square", p.status === "draft" && "opacity-70")}>
                   <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="absolute inset-0 size-full rounded-none" emojiClassName="text-5xl" />
                   <div className={cn("absolute left-1.5 top-1.5 z-[2] transition-opacity", isSel ? "opacity-100" : "opacity-0 group-hover:opacity-100")} onClick={(e) => e.stopPropagation()}>
                     <Checkbox checked={isSel} onCheckedChange={() => toggle(p.id)} aria-label={`Pilih ${p.name}`} className="border-2 bg-background/90 shadow-sm" />
                   </div>
-                  <div className="absolute right-1.5 top-1.5 z-[2]"><RowActions id={p.id} /></div>
+                  <div className="absolute right-1.5 top-1.5 z-[2]"><RowActions id={p.id} number={p.number} /></div>
                   {p.status === "draft" && <Badge variant="outline" className="absolute bottom-1.5 left-1.5 z-[2] bg-background/85 text-[10px]">Draft</Badge>}
                 </div>
                 {/* body */}
@@ -432,7 +432,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
                 {filtered.map((p) => {
                   const isSel = selected.has(p.id);
                   return (
-                    <TableRow key={p.id} data-state={isSel ? "selected" : undefined} className="cursor-pointer" onClick={() => router.push(`/produk/${p.id}`)}>
+                    <TableRow key={p.id} data-state={isSel ? "selected" : undefined} className="cursor-pointer" onClick={() => router.push(`/produk/${p.number ?? p.id}`)}>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox checked={isSel} onCheckedChange={() => toggle(p.id)} aria-label={`Pilih ${p.name}`} />
                       </TableCell>
@@ -441,6 +441,9 @@ export function ProdukClient({ products }: { products: Product[] }) {
                           <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9" />
                           <div className="min-w-0">
                             <p className="truncate font-medium">{p.name}</p>
+                            {/* The catalog number (ADR 0013) — the id Google/Meta/TikTok name in a
+                                disapproval, so the merchant can map an error back to a product. */}
+                            {!!p.number && <p className="text-xs text-muted-foreground tabular-nums">#{p.number}</p>}
                             <p className="text-xs text-muted-foreground md:hidden">{p.category}</p>
                             <div className="mt-1 flex flex-wrap items-center gap-1">
                               <GoogleCatBadge path={p.googleCategoryPath} />
@@ -455,7 +458,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
                       <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">{num(p.unitsSold)}</TableCell>
                       <TableCell><StatusBadge status={p.status} /></TableCell>
                       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground tabular-nums whitespace-nowrap">{dateTimeShort(p.addedTs)}</TableCell>
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}><RowActions id={p.id} /></TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}><RowActions id={p.id} number={p.number} /></TableCell>
                     </TableRow>
                   );
                 })}
@@ -466,7 +469,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
               filtered.map((p) => (
                 <DataCard
                   key={p.id}
-                  href={`/produk/${p.id}`}
+                  href={`/produk/${p.number ?? p.id}`}
                   lead={
                     <Checkbox
                       checked={selected.has(p.id)}
@@ -484,7 +487,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
                     </div>
                   }
                   badge={<StatusBadge status={p.status} />}
-                  actions={<RowActions id={p.id} />}
+                  actions={<RowActions id={p.id} number={p.number} />}
                 >
                   <DataRow label="Harga" strong>{IDR(p.price)}</DataRow>
                   <DataRow label="Stok"><StockBadge stock={p.stock} /></DataRow>

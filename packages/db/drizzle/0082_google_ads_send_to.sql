@@ -1,0 +1,14 @@
+-- 0082 — Google Ads gets its own destination (ADR 0012 §20, ADR 0013 §7).
+--
+-- `store_tracking_channels.pixel_id` for the `google` channel holds the ANALYTICS tag (a GA4 `G-…`
+-- Measurement ID). Google Ads is a separate product with a separate id AND a per-action conversion
+-- label, and `gtag('event','purchase',…)` records nothing in Google Ads on its own — Google documents a
+-- conversion as `gtag('event','conversion',{send_to:'AW-123456789/AbC-D_efGh'})`.
+--
+-- One field for both was therefore not a cosmetic limitation: a merchant running GA4 *and* Google Ads
+-- could only ever have one of them work. Purely additive, nullable — a store that uses neither is
+-- untouched.
+-- IF NOT EXISTS, like 0081. This repo's dev database has drifted from the migration ledger before, and
+-- a bare ADD COLUMN then fails the WHOLE chain on the next deploy — every later migration with it. An
+-- additive column has no reason to be the statement that can only ever run once.
+ALTER TABLE "store_tracking_channels" ADD COLUMN IF NOT EXISTS "ads_send_to" text;

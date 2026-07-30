@@ -19,8 +19,15 @@
 //
 // Analytics STAYS. Checkout is the whole point of the funnel — dropping the tracking here would blind
 // /analitik exactly where it matters.
+//
+// ⚠️ …and so does MarketingPixels, for the SAME reason and then some. This layout renders `/checkout`
+// AND `/checkout/sukses`, so it owns the only two pages where InitiateCheckout and Purchase can fire.
+// It was added to `Layout.astro` alone at first, which left the merchant's pixels receiving PageView,
+// ViewContent and AddToCart — and **zero conversions** — with build, lint and `astro check` all green.
+// A tracking component that is not on the checkout is a tracking component that does not track.
 import "../styles/global.css";
 import Analytics from "../components/Analytics.astro";
+import MarketingPixels from "../components/MarketingPixels.astro";
 import { mediaUrl } from "../data/catalog";
 
 interface Props {
@@ -112,6 +119,8 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
       }
     </style>
     <Analytics />
+    <!-- The merchant's own pixels — this layout owns InitiateCheckout + Purchase (see the note above). -->
+    <MarketingPixels />
   </head>
   <!-- No `bg-white` on <body> — it would be a DEAD CLASS. global.css sets `body { background: cream }`
        unlayered, and Tailwind v4 emits utilities inside `@layer utilities`; an unlayered rule beats

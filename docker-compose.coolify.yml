@@ -76,6 +76,14 @@ services:
       AUTOLARIS_API_KEY: ${AUTOLARIS_API_KEY:-}
       AUTOLARIS_CALLBACK_SECRET: ${AUTOLARIS_CALLBACK_SECRET:-}
       CRON_SECRET: ${CRON_SECRET:-}
+      # ADR 0012 — encrypts the merchants' own CAPI tokens at rest. WITHOUT IT THE FEATURE IS DEAD ON
+      # ARRIVAL, and silently so: the Seller's save is refused with "Kunci enkripsi belum diset" (we
+      # never store a token in plaintext), so server-side conversions can never be switched on and
+      # every prepaid order records no Purchase at all. Setting it in Coolify is not enough — a var
+      # only reaches a service if this block forwards it.
+      INTEGRATION_TOKEN_KEY: ${INTEGRATION_TOKEN_KEY:-}
+      # Optional: pins Meta's Graph version (defaults to a pinned one in lib/capi.ts).
+      META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
       # CNAME target a merchant points their custom domain at (Pengaturan → Domain). Defaults to
       # cname.tokophi.com in code, which is already RESERVED in the storefront host resolver — set here
@@ -237,6 +245,30 @@ services:
     # unobservable in production: nobody, human or machine, could tell a healthy sweep from one where
     # `awbFilled` had been 0 for a week. `docker logs cron-tracking` is now the record.
     command: ["sh", "-c", "while true; do echo \"[cron-tracking] $$(date -Iseconds)\"; wget -qO- \"http://admin:3000/api/cron/tracking?secret=$$CRON_SECRET\" || echo 'cron tracking failed'; echo; sleep 900; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # conversion delivery worker — drains `tracking_event_deliveries` into Meta CAPI / GA4 MP / TikTok
+  # Events API (ADR 0012 §0.1). The table IS the queue; this sidecar is the only thing that empties it.
+  #
+  # 60 seconds, not 900: an ad platform's attribution and its optimisation both degrade with delay, and
+  # a purchase is a low-volume, high-value event — the batch is capped at 100 and a tick with nothing due
+  # returns immediately, so a fast interval costs a query, not an API call. Retries carry their own
+  # backoff inside the endpoint (~1m → 6h), so this loop never becomes the retry rate.
+  #
+  # Response body to STDOUT (same lesson as cron-tracking): {claimed, sent, failed, dead} is how anyone
+  # tells a healthy queue from one that has been dead-lettering every conversion for a week.
+  cron-tracking-events:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      admin: { condition: service_healthy }
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-}
+    command: ["sh", "-c", "while true; do wget -qO- \"http://admin:3000/api/cron/tracking-events?secret=$$CRON_SECRET\" || echo 'cron tracking-events failed'; echo; sleep 60; done"]
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1 || exit 1"]
       interval: 30s

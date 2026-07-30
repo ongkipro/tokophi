@@ -19,6 +19,7 @@
     "./payment-fees": "./src/payment-fees.ts",
     "./validate": "./src/validate.ts",
     "./colors": "./src/colors.ts",
-    "./secret": "./src/secret.ts"
+    "./secret": "./src/secret.ts",
+    "./tracking-ids": "./src/tracking-ids.ts"
   }
 }

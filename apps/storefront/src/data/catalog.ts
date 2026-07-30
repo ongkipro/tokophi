@@ -35,9 +35,26 @@ export type Collection = {
   templateId: string | null;
 };
 
-export type VariantRow = { option1: string | null; option2: string | null; price: number; stock: number };
+export type VariantRow = {
+  option1: string | null;
+  option2: string | null;
+  option3: string | null;
+  price: number;
+  /** This variant's crossed-out price, when the merchant set one. The feed's `price` vs `sale_price`. */
+  compareAt: number | null;
+  stock: number;
+  /** Permanent catalog number for this variant (ADR 0013) — NOT its display position. */
+  seq: number;
+  /** Merchant's own codes, for the feed's `mpn` / `gtin`. */
+  sku: string | null;
+  barcode: string | null;
+};
 export type Product = {
   handle: string;
+  /** Permanent, per-store catalog number (ADR 0013). The feed and the pixel key items on it. */
+  number: number;
+  /** Merchant's brand for the feed's `brand` attribute; falls back to the store name. */
+  vendor?: string;
   name: string;
   price: number;
   compareAt?: number;
@@ -67,6 +84,17 @@ export type Product = {
   /** PROMO P3 — ISO end of the flash sale this product is in RIGHT NOW (undefined = not on sale). When
       set, `price` is the sale price and `compareAt` is the original; drives the countdown + sale badge. */
   flashEndsAt?: string;
+  /**
+   * The flash-sale price ITSELF, present whenever a sale is live — even when it does not beat the
+   * default variant's price and so never becomes `price`.
+   *
+   * It exists because `/api/public/order` applies a flash sale as `min(variant.price, flashPrice)` —
+   * an absolute CAP, per variant. Anything derived from `price`/`compareAt` is a ratio anchored on the
+   * position-0 variant, which charges a different number for every other variant. The product feed
+   * must advertise what the order endpoint will charge or Google disapproves the item, so it needs the
+   * cap, not the ratio.
+   */
+  flashPrice?: number;
 };
 /**
  * CAN A SHOPPER BUY THIS RIGHT NOW? The ONE answer — used by the card, the PDP's buy box, its
@@ -266,6 +294,8 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
     .select({
       id: schema.products.id,
       handle: schema.products.handle,
+      number: schema.products.number,
+      vendor: schema.products.vendor,
       name: schema.products.title,
       description: schema.products.description,
       shortDescription: schema.products.shortDescription,
@@ -323,14 +353,31 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       productId: schema.productVariants.productId,
       option1: schema.productVariants.option1,
       option2: schema.productVariants.option2,
+      option3: schema.productVariants.option3,
+      seq: schema.productVariants.seq,
+      sku: schema.productVariants.sku,
+      barcode: schema.productVariants.barcode,
       price: schema.productVariants.priceIdr,
-      stock: schema.inventoryLevels.available,
+      compareAt: schema.productVariants.compareAtIdr,
+      // SUM across locations, GROUPED BY the variant. The left join is one row per
+      // (variant, location) and `inventory_levels` is unique(variant, location) — so a variant stocked
+      // at two warehouses used to appear TWICE in this array. On the storefront that was a duplicate
+      // option; in the product feed it is two <item>s with an identical <g:id>, which Google rejects.
+      // Single-location today, which is exactly why it was invisible.
+      stock: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)`,
     })
     .from(schema.productVariants)
     .innerJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
     .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.productVariants.id))
     .where(eq(schema.products.storeId, storeId))
-    .orderBy(asc(schema.productVariants.position));
+    // Grouping by the PRIMARY KEY lets Postgres treat every other product_variants column as
+    // functionally dependent, so none of them has to be repeated here.
+    .groupBy(schema.productVariants.id)
+    // DISPLAY order. It used to be load-bearing for identity — this array's index WAS the catalog id's
+    // ordinal — which is why the `id` tiebreaker is here at all. Since ADR 0013 the id comes from
+    // `seq`, so a tie in `position` can no longer make the feed and the conversion disagree about which
+    // variant is which. The tiebreaker stays so rendering is at least deterministic.
+    .orderBy(asc(schema.productVariants.position), asc(schema.productVariants.id));
 
   const optNamesById = new Map<string, string[]>();
   for (const o of optRows) {
@@ -341,7 +388,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
   const variantsById = new Map<string, VariantRow[]>();
   for (const v of varRows) {
     const l = variantsById.get(v.productId) ?? [];
-    l.push({ option1: v.option1, option2: v.option2, price: v.price, stock: v.stock ?? 0 });
+    l.push({ option1: v.option1, option2: v.option2, option3: v.option3, seq: v.seq, sku: v.sku, barcode: v.barcode, price: v.price, compareAt: v.compareAt, stock: v.stock ?? 0 });
     variantsById.set(v.productId, l);
   }
 
@@ -405,10 +452,14 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       : rawVariants;
     return {
       handle: r.handle,
+      number: r.number,
+      vendor: r.vendor ?? undefined,
       name: r.name,
       price,
       compareAt,
       flashEndsAt: onSale ? flash!.endsAt.toISOString() : undefined,
+      // NOT gated on `onSale`: a sale that does not beat the DEFAULT variant can still cap a dearer one.
+      flashPrice: flash?.price,
       category: r.category ?? "",
       categoryHandle: slugify(r.category ?? ""),
       // "" = this product has no photo. It used to GUESS a filename from the handle

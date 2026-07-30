@@ -72,6 +72,35 @@
 - [ ] **Subscriptions/billing** · **M** · recurring plan billing (Pemula/Bisnis/Skala); invoices; dunning.
 - [~] **Domains + deploy pipeline** · **M** · custom domain per store — add/verify/resolve + admin UI BUILT (2026-07-15); TLS activation + automated per-client deploy pending.
 
+### Conversion tracking, tenant-owned — **ADR 0012**, epic
+Every store advertises with THEIR OWN pixels/assets; TokoΦ automates the plumbing, `store_id`-isolated
+throughout. Phase checklists + acceptance criteria: **`specs/decisions/0012-meta-commerce-tenant-owned-integration.md`** (§30).
+Background work = cron route + DB job table (no worker app, §0.1). Catalog ids MUST equal the existing
+`/feed/google.xml` `<g:id>` (§0.2 — one shared `retailerId()` helper enforces it).
+
+> **SCOPE DECISION (2026-07-29):** ship the **manual-pixel path** first — the merchant pastes their own
+> Pixel/Tag ID + server token, exactly like Shopify's tracking setup. This needs **no Meta Developer
+> App** and works today. OAuth + Catalog PUSH (P4/P5/P6/P10) stay deferred: ADR §0.2 already says the
+> existing PULL feed covers the catalog, and those phases cannot be live-verified without credentials.
+> **COD attribution signed off:** COD = Purchase at order creation (the thanks page); prepaid = Purchase
+> when the gateway callback confirms payment.
+
+- [x] **P1 — Shared ids + provider boundary** · **M** · `@tokophi/lib/tracking-ids` (`retailerId`, `purchaseEventId`, unit-tested + wired into `google.xml.ts` so feed and events cannot drift); `apps/admin/lib/capi.ts` = the ONE provider boundary (Meta CAPI · GA4 MP · TikTok Events API) with retry classification + `capi-sanitize.ts` (tested).
+- [x] **P2 — Schema + migrations** · **L** · `store_tracking_channels` (0079) + `tracking_event_deliveries` (0080, `tracking_delivery_status` enum, due/store indexes, `unique(store_id,channel,event_id)`); RLS on both, `verify-rls` green 48/49.
+- [x] **P3 — Token encryption + env** · **S** · versioned AES-256-GCM (`apps/admin/lib/crypto.ts`, `INTEGRATION_TOKEN_KEY`, `v1:` prefix so keys can rotate); refuses to store a token when unset; redaction in `capi-sanitize.ts`; documented in `DEPLOY.md`.
+- [ ] **P4 — Meta OAuth + asset selection** · **L** · **DEFERRED** — needs a Meta Developer App (`META_APP_ID`/`SECRET`/redirect URI). The manual token path above covers the MVP.
+- [x] **P5a — Catalog feeds hardened + stable ids** · **L** · **ADR 0013**: `products.number` + `product_variants.seq` (migration 0081) → catalog id `{number}-{seq}`, allocate-once; one shared feed builder serving `/feed/google.xml` (Google + Meta) and the new `/feed/tiktok.xml`; fixed the whole-feed XML rejection, the flash-sale price mismatch, the `in_stock` enum, photo-less items, and added `sale_price` / `identifier_exists` / `product_type` / extra images. Per-store cutover (`stores.catalog_id_scheme`) because a re-key is one-way.
+- [ ] **P5b — Catalog PUSH sync engine** · **L** · **DEFERRED** — the PULL feeds above serve all three providers; push (Meta Catalog API) needs OAuth, and is an upgrade rather than a prerequisite.
+- [ ] **P6 — Transaction-safe sync triggers** · **M** · **DEFERRED** with P5.
+- [x] **P7 — Storefront tenant pixel + browser events** · **M** · `MarketingPixels.astro` — per-store fbq/gtag/ttq bootstrap, PageView · ViewContent · AddToCart · InitiateCheckout · Purchase, server-issued shared `event_id`, catalog-matching `content_ids`, hashed advanced matching. ⚠️ **No consent gate exists in this repo** — tracked below.
+- [x] **P8 — Server-side conversion delivery** · **L** · enqueue from committed order state (`lib/tracking-events.ts`), `api/cron/tracking-events` + `cron-tracking-events` sidecar (60 s), atomic claim, bounded backoff → `dead_letter`, idempotent by `unique(store_id,channel,event_id)`.
+- [x] **P9a — Seller diagnostics** · **M** · per-channel 7-day health strip (terkirim/antre/dicoba ulang/gagal + last sanitized error) on Pemasaran → Pelacakan.
+- [ ] **P9b — Super-admin Meta Health** · **S** · cross-tenant delivery health table (sanitized, no tokens) + retry action. *(not built)*
+- [ ] **P10 — Webhooks + lifecycle hardening** · **M** · **DEFERRED** with P4 (provider webhooks need the app).
+- [ ] **P11 — Live verification with real pixels** · **M** · **BLOCKED on credentials**: a real Meta Pixel + CAPI token, GA4 property + MP secret, TikTok pixel + Events API token. Everything above is verified by build/tests/RLS + code review only — **no live provider call has been made**. Record honestly in `WORKLOG.md` when it happens.
+- [x] **Credential lifecycle** · **M** · per-channel "Uji koneksi" probe (Meta empty-`data` auth probe, TikTok body-code probe, GA4 honestly labelled "format only — Google does not validate credentials"), "Hapus token" (the clear path existed but was unreachable), `capiConfigured` = decryptable rather than present, audit entries on credential change, rate-limited retries, owner-only READ on the Pelacakan tab.
+- [ ] **Consent gating (privacy)** · **M** · ADR 0012 §15.7 expects marketing tracking to respect consent. TokoΦ has **no consent mechanism at all** today (no banner, no stored preference). Needs its own decision — do not fake it with a `localStorage` flag nobody sets.
+
 ---
 
 ## Suggested order (dependencies)

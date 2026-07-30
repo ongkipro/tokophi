@@ -43,7 +43,10 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 |---|---|---|---|
 | `/produk` | Product list | Shopify-style compact table (default) w/ `ProductThumb`, grid toggle; tabs+counts, stat quick-filters, sort, category + date filter, bulk select, "Ditambahkan" date+time | ✅ mock |
 | `/produk/baru` | New product (reuses editor) | same editor as `[id]`, empty state | ✅ mock |
-| `/produk/[id]` | Product editor (`product-editor.tsx`) | title/media/desc, harga+margin, inventori, **varian toggle**, channels, organisasi, SEO (content-width), "Tindakan lainnya" (ubah kategori / stok / buat PO) | ✅ mock |
+| `/produk/{number}` | Product editor (`product-editor.tsx`) | title/media/desc, harga+margin, inventori, **varian toggle**, channels, organisasi, SEO (content-width), "Tindakan lainnya" (ubah kategori / stok / buat PO) | ✅ mock |
+
+**The Seller's product URL is the catalog NUMBER** (`/produk/1042`), not the UUID — ADR 0013 §7.1. It is the number shown on the product list, searchable in ⌘K, and the one a Merchant Center / Events Manager disapproval names. A UUID-shaped URL redirects to it once, so old bookmarks keep working. The storefront's public URL stays the handle (`/produk/kemeja-linen`) — that is an SEO surface and the feed's `link`.
+
 | `/produk/kategori` | Collections list (Kategori) | list, search, Manual/Otomatis + status badges, rows → editor | ✅ mock |
 | `/produk/kategori/baru` | New collection | reuses collection editor | ✅ mock |
 | `/produk/kategori/[id]` | Collection editor (`collection-editor.tsx`) | Manual vs Otomatis, **conditions builder** (all/any + field/op/value), members/preview, image, publish/channels/template, SEO | ✅ mock |
@@ -74,7 +77,17 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 | `/diskon/baru` | New discount | reuses discount editor | ✅ mock |
 | `/diskon/[id]` | Discount editor (`discount-editor.tsx`) | code/type/value/limits/dates, status | ✅ mock |
 | `/analitik` | Analytics | KPIs, trends, by category/channel, funnel, region, device, ROAS | ✅ mock |
-| `/pemasaran` | Marketing (ads) | Meta/Google/TikTok summary+ROAS, per-channel, **province filter + Performa per Provinsi**, pixel/CAPI/GA4 tracking tab | ✅ mock |
+| `/pemasaran` | Marketing (ads) | Tab **Saluran** = Meta/Google/TikTok summary+ROAS, province filter (🟡 demo data, `ad_channels`) · Tab **Pelacakan** = 🟢 **REAL** per-store pixel setup (ADR 0012) | 🟡 mock + 🟢 real |
+
+**`/pemasaran` → Pelacakan (real, ADR 0012)** — one card per channel (Meta Pixel · Google GA4/Ads ·
+TikTok Pixel), each with: Pixel/Tag ID input + "Aktifkan pelacakan" switch → badge **Aktif** when live;
+"Advanced matching" switch (hashed email/phone); server-side section (Conversions API / Measurement
+Protocol / Events API) with an encrypted access-token field (shows `••••••••` + "Token sudah tersimpan",
+never the value) and an optional test-event code; and a **7-day delivery health strip**
+(`n terkirim / antre / dicoba ulang / gagal` + the last sanitized provider error). Every control is
+gated by `useCan("integrations:write")` — **owner only**, like Pengaturan. Provider names ARE shown
+here on purpose (the assets are the merchant's own — ADR 0012 §0.7 — unlike the white-labelled
+shipping/payment providers of ADR 0004).
 
 ### Online store content (Toko Online)
 | Route | Purpose | Key components / interactions | Status |

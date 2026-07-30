@@ -81,6 +81,12 @@ export type Product = {
   id: string;
   name: string;
   handle?: string;
+  /**
+   * System-generated, per-store catalog number (ADR 0013, migration 0081). It is what `<g:id>` and the
+   * conversion `content_ids` are built from, so it is the number a Merchant Center or Events Manager
+   * error names. `0` only for rows that predate the migration.
+   */
+  number?: number;
   emoji: string;
   image: string; // /products/<slug>.webp
   price: number;

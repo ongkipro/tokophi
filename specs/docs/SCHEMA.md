@@ -362,11 +362,53 @@ testimonials** and a "Gratis Ongkir" marquee onto a live shop.
 | `ad_metrics` | 11 | 11 | yes | **YES** |
 | `analytics_daily` | 6 | 122 | yes | **YES** |
 | `analytics_events` | 6 | 47804 | yes | **YES** |
+| `store_tracking_channels` | 11 | 0 | yes | **YES** |
+| `tracking_event_deliveries` | 15 | 0 | yes | **YES** |
 
-🔴 `ad_channels` / `ad_metrics`: **there is no Meta / Google / TikTok integration anywhere in this
-codebase.** The only OAuth in the repo is Google *Sign-In*. `/pemasaran` reads `ad_channels` for
-**labels only** and shows "Belum terhubung"; spend, impressions, ROAS and campaign lists were deleted
-(`62df4a1`) because a merchant could have raised a real ad budget against a return that never happened.
+🔴 `ad_channels` / `ad_metrics` are still **demo/label data** — spend, impressions, ROAS and campaign
+lists were deleted (`62df4a1`) because a merchant could have raised a real ad budget against a return
+that never happened. Do NOT read them as live numbers.
+
+🟢 **`store_tracking_channels` + `tracking_event_deliveries` (0079/0080, ADR 0012) ARE live** — this is
+the real conversion tracking, and it is deliberately SEPARATE from `ad_channels` above.
+
+**Catalog identity (0081, ADR 0013).** `products.number` is a per-store, allocate-once number and
+`product_variants.seq` its per-product counterpart; together they form the catalog id
+(`{number}-{seq}`) that `/feed/google.xml`, `/feed/tiktok.xml` and every conversion `content_ids` use.
+`products.variant_seq_next` is a high-water mark that NEVER decreases — reissuing a deleted variant's
+number would re-point a live Meta/Google catalog item at a different SKU. `store_counters` holds the
+allocation counter (its own table, not a column on `stores`, so a product create does not row-lock the
+row billing and settings also write). `stores.catalog_id_scheme` decides which id a store publishes:
+existing stores stay on the legacy `handle` scheme because switching re-keys an already-ingested
+catalog, which no provider can undo.
+
+`store_tracking_channels` — the merchant's own pixel config, one row per (store, channel):
+
+| Column | Meaning |
+|---|---|
+| `channel` | `meta` · `google` · `tiktok` (`ad_channel_key`) |
+| `enabled` | browser pixel on — the storefront renders it |
+| `pixel_id` | Meta Pixel ID · GA4 Measurement ID · TikTok Pixel ID. **PUBLIC** (ships in storefront JS), so plaintext |
+| `capi_enabled` | server-side conversions on (Conversions API / Measurement Protocol / Events API) |
+| `capi_token_ciphertext` | **SECRET** — AES-256-GCM, `v1:iv:tag:ct`, key `INTEGRATION_TOKEN_KEY` (`apps/admin/lib/crypto.ts`). Never selected into a client component; the UI only learns `capiConfigured: boolean` |
+| `advanced_matching` | opt-in: hash + send buyer email/phone with events |
+| `test_event_code` | Meta/TikTok test-events code, blank when live. **Not a sandbox** — Meta documents that events carrying it still flow into Events Manager and are used for targeting |
+| `ads_send_to` | **Google Ads** conversion destination (`AW-123456789/AbC-D_efGh`), migration 0082. Separate from `pixel_id`, which for this channel is the GA4 `G-…` tag: a GA4 event records nothing in Google Ads, so a merchant running both needs both fields |
+
+`tracking_event_deliveries` — **the queue itself** (there is no worker process; ADR 0012 §0.1). Written
+by `apps/admin/lib/tracking-events.ts` after a committed order, drained by
+`apps/admin/app/api/cron/tracking-events/route.ts` (docker sidecar `cron-tracking-events`, every 60s).
+
+| Column | Meaning |
+|---|---|
+| `event_id` | `purchase:{order_number}` — the SAME string the browser pixel sends as `eventID`. This is the de-duplication (ADR 0012 §14.3). No store id: `orders.number` is already platform-unique, and the tenant key does not belong in three ad platforms' logs |
+| `status` | `queued` → `processing` → `succeeded` \| `failed` (retry) \| `dead_letter` (`tracking_delivery_status`) |
+| `attempt_count` / `next_attempt_at` | attempt² minutes + jitter, 6 attempts, then `dead_letter`. `attempt_count` is incremented BY THE CLAIM, not by the outcome — a tick killed mid-send must still consume an attempt or a poison row loops forever. A **prepaid** order's row is parked at `2126-01-01` (held) until the payment callback releases it |
+| `payload` | commerce facts ONLY (value, currency, contentIds, numItems, orderNumber, occurredAt). **No email, phone or token** — identity is fetched fresh at send time, hashed inside the sender, never persisted (§9.4/§25) |
+| `last_error_message` | provider error, already stripped of anything token-shaped (`lib/capi-sanitize.ts`) — a merchant reads this on screen |
+
+`unique(store_id, channel, event_id)` is what makes the enqueue idempotent: a repeated payment
+callback, a double checkout submit, or a re-run cannot create a second conversion.
 
 `analytics_events` (**0037**) — the one table the funnel is counted from:
 
@@ -511,6 +553,10 @@ carry meaning were named by hand.
 | **0043** | `chat` | `chat_visitors`, `conversations`, `conversation_messages` + RLS — **in flight** |
 | **0044** | `customers_and_abandoned_checkout` | `customers.registered_at` (**NULL = guest**) / `password_hash` / `last_order_at` (backfilled from `orders`) + the new **`checkout_sessions`** table, its two indexes and its RLS policy |
 | **0045** | `checkout_abandoned_at` | `checkout_sessions.abandoned_at` + a backfill of every existing `ditinggal` row from `coalesce(updated_at, created_at)`. **Without this column a "recovery rate" is a lie** — see §3.4 |
+| **0079** | `store_tracking_channels` | per-store Meta/Google/TikTok pixel + CAPI config, `unique(store_id, channel)` + RLS (ADR 0012) |
+| **0080** | `tracking_event_deliveries` | the server-side conversion QUEUE + `tracking_delivery_status` enum, `unique(store_id, channel, event_id)`, due/store indexes + RLS (ADR 0012) |
+| **0082** | `google_ads_send_to` | `store_tracking_channels.ads_send_to` — the Google Ads conversion destination, so GA4 and Google Ads can both be configured (ADR 0012) |
+| **0081** | `product_numbering` | `products.number` (per-store, `unique(store_id,number)`) + `products.variant_seq_next` + `product_variants.seq` (`unique(product_id,seq)`) + `store_counters` (RLS) + `stores.catalog_id_scheme`; deterministic one-shot backfill (ADR 0013) |
 
 ```bash
 docker compose up -d db            # PostgreSQL 16 @ localhost:5433

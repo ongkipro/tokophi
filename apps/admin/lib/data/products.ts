@@ -10,6 +10,10 @@ const selectProduct = {
   id: schema.products.id,
   name: schema.products.title,
   handle: schema.products.handle,
+  // The merchant-facing catalog number (ADR 0013). This is the id a Merchant Center / Events Manager
+  // error names, so it has to be visible somewhere the merchant can search — otherwise the number is
+  // real but useless to the only person who needs it.
+  number: schema.products.number,
   emoji: schema.products.emoji,
   status: schema.products.status,
   category: schema.products.category,
@@ -45,7 +49,7 @@ function base(db: Tx) {
 }
 
 function toProduct(r: {
-  id: string; name: string; handle: string; emoji: string | null; status: "active" | "draft" | "archived";
+  id: string; name: string; handle: string; number?: number; emoji: string | null; status: "active" | "draft" | "archived";
   category: string | null; unitsSold: number; createdAt: Date; price: number | null; stock: number | null; image: string | null;
   weightMissing?: boolean; googleCategoryPath?: string | null;
 }): Product {
@@ -53,6 +57,7 @@ function toProduct(r: {
     id: r.id,
     name: r.name,
     handle: r.handle,
+    number: r.number ?? 0,
     emoji: r.emoji ?? "📦",
     image: r.image ?? `/products/${r.name}.webp`,
     price: r.price ?? 0,
@@ -74,6 +79,7 @@ export async function getProducts(): Promise<Product[]> {
         id: schema.products.id,
         name: schema.products.title,
         handle: schema.products.handle,
+        number: schema.products.number,
         emoji: schema.products.emoji,
         status: schema.products.status,
         category: schema.products.category,
@@ -96,6 +102,45 @@ export async function getProducts(): Promise<Product[]> {
       .groupBy(schema.products.id, schema.productMedia.url)
       .orderBy(desc(schema.products.createdAt));
     return rows.map(toProduct);
+  });
+}
+
+/**
+ * Resolve a merchant-facing product NUMBER to its internal UUID (ADR 0013).
+ *
+ * The Seller's product URL is `/produk/1042`, Shopify-style — a number the merchant can read, search
+ * for, and match against a Merchant Center disapproval. The UUID stays the primary key and every
+ * foreign key; only the URL changed.
+ *
+ * ⚠️ The `store_id` filter is EXPLICIT, not left to RLS. `unique(store_id, number)` means `1042` is a
+ * different product in every store, and a 4-digit number is enumerable in a way a UUID never was — so
+ * this is precisely the query where "the WHERE is the rule and the policy is only the net" has to hold.
+ */
+export async function resolveProductIdByNumber(number: number): Promise<string | null> {
+  // ⚠️ The UPPER bound is not decoration. `products.number` is `integer`, and Postgres answers a
+  // larger literal with 22003 ("out of range") — a different error class from the 22P02 the route's
+  // shape test guards, and it throws from inside the render, i.e. a 500 rather than a 404. A merchant
+  // fat-fingering `/produk/10422222222` is all it takes.
+  if (!Number.isInteger(number) || number <= 0 || number > 2_147_483_647) return null;
+  return withCurrentTenant(async (db, storeId) => {
+    const [row] = await db
+      .select({ id: schema.products.id })
+      .from(schema.products)
+      .where(and(eq(schema.products.storeId, storeId), eq(schema.products.number, number)))
+      .limit(1);
+    return row?.id ?? null;
+  });
+}
+
+/** The UUID → number direction, for redirecting an old bookmark to the canonical URL. */
+export async function productNumberById(id: string): Promise<number | null> {
+  return withCurrentTenant(async (db, storeId) => {
+    const [row] = await db
+      .select({ number: schema.products.number })
+      .from(schema.products)
+      .where(and(eq(schema.products.storeId, storeId), eq(schema.products.id, id)))
+      .limit(1);
+    return row?.number ?? null;
   });
 }
 

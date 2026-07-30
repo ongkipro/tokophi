@@ -153,6 +153,15 @@ export const stores = pgTable("stores", {
   socialFacebook: text(),
   socialPinterest: text(),
   socialX: text(),
+  // Which identifier this store's product feed and conversion events use (ADR 0013).
+  //   'handle' — the legacy scheme: `handle` / `handle-{ordinal}`. Unstable: renaming a product,
+  //              reordering variants, or ADDING A SECOND VARIANT re-keys it.
+  //   'number' — `{products.number}-{variant.seq}`. System-generated, allocate-once, stable forever.
+  // Existing stores stay on 'handle' and new ones start on 'number', because switching is a ONE-WAY
+  // door: Google overwrites the product and its history, Meta deletes and recreates the catalog item,
+  // and any retargeting audience keyed on the old content_ids goes cold. No provider offers a re-key.
+  // So the merchant chooses the moment, from Pemasaran → Pelacakan, warned in plain Indonesian.
+  catalogIdScheme: text().notNull().default("handle"),
   createdAt: createdAt(),
 });
 
@@ -251,9 +260,39 @@ export const products = pgTable(
     templateId: uuid().references((): AnyPgColumn => pageTemplates.id),
     archivedAt: ts(),
     createdAt: createdAt(),
+
+    // ── Stable catalog identity (ADR 0013, migration 0081) ────────────────────────────────────────
+    // The merchant-facing product NUMBER, allocated per store from `store_counters` and never reused.
+    // It exists because the ad platforms key a catalog item by the id we send, and every id we had was
+    // derived from something the merchant can edit: the handle. Rename a product, reorder its variants
+    // or delete one, and the id changed — which to Google and Meta means "that product was deleted and
+    // a new one appeared", taking its performance history and its retargeting audiences with it.
+    //
+    // Per STORE, not global: each merchant owns their own catalog (ADR 0012), so uniqueness is only
+    // ever needed inside one store — and a platform-wide counter would publish TokoΦ's total product
+    // count on every public `/feed/google.xml`.
+    // NO DEFAULT, deliberately. A default would let a future insert path forget to allocate and quietly
+    // publish catalog id `0-1` to three ad platforms; the second such product in a store then fails on
+    // the unique, naming nothing. Without a default the FIRST offender fails, at the insert, in the
+    // code that forgot.
+    number: integer().notNull(),
+    // High-water mark for this product's variant `seq`. It NEVER decreases: a deleted variant's number
+    // is retired forever, because handing it to the next variant re-points a live catalog item at a
+    // different SKU — a silent mis-attribution, not an error.
+    variantSeqNext: integer().notNull().default(1),
   },
-  (t) => [unique().on(t.storeId, t.handle)],
+  (t) => [unique().on(t.storeId, t.handle), unique().on(t.storeId, t.number)],
 );
+
+// Per-store allocation counters. A table of its own rather than a column on `stores`/`store_settings`
+// because it is a HOT counter: every product create row-locks it, and parking that lock on a row that
+// billing, branding or settings also write is how a save starts waiting on a product insert.
+export const storeCounters = pgTable("store_counters", {
+  storeId: uuid().primaryKey().references(() => stores.id),
+  // Next product number to hand out. Allocation is ONE statement (insert … on conflict do update …
+  // returning), so two concurrent creates in the same store serialise on this row and neither retries.
+  productNext: integer().notNull().default(1001),
+});
 
 export const productMedia = pgTable("product_media", {
   id: pk(),
@@ -284,8 +323,16 @@ export const productVariants = pgTable("product_variants", {
   option1: text(),
   option2: text(),
   option3: text(),
+  // DISPLAY order. It used to be identity too — the feed's `handle-{n}` ordinal was this column's rank
+  // — which meant dragging a variant re-keyed the catalog item. `seq` took that job (ADR 0013); this
+  // is now only what it says it is.
   position: integer().notNull().default(0),
-});
+  // Stable per-product variant number, allocated from `products.variant_seq_next` and NEVER reused.
+  // Deleting the middle of three variants leaves -1 and -3; -2 is retired, because handing it to the
+  // next variant would silently re-point a live Meta/Google catalog item at a different SKU.
+  // No default, same reasoning as `products.number`.
+  seq: integer().notNull(),
+}, (t) => [unique().on(t.productId, t.seq)]);
 
 export const inventoryLevels = pgTable(
   "inventory_levels",
@@ -886,6 +933,97 @@ export const adMetrics = pgTable("ad_metrics", {
   revenueIdr: money().notNull().default(0),
   reach: integer().notNull().default(0),
 });
+
+// Per-store marketing-pixel / conversion-tracking config — the REAL setup behind Pemasaran → Pelacakan
+// (which was disabled placeholders). One row per (store, channel). DISTINCT from `ad_channels`, whose
+// pixel/spend columns are seeded DEMO and deliberately unread (see lib/data/marketing.ts) — this table
+// is the merchant's live config that the storefront actually fires from. The pixel/tag id is PUBLIC (it
+// ships in storefront JS) so it is plaintext; `capiTokenCiphertext` is a SECRET → AES-256-GCM, server
+// only, never selected into a client component. RLS by store_id (migration 0079).
+export const storeTrackingChannels = pgTable(
+  "store_tracking_channels",
+  {
+    id: pk(),
+    storeId: uuid().notNull().references(() => stores.id),
+    channel: adChannelKey().notNull(), // meta | google | tiktok
+    enabled: boolean().notNull().default(false), // merchant switched browser tracking on
+    pixelId: text(), // Meta Pixel ID · GA4 Measurement ID (G-XXXX) · TikTok Pixel ID — PUBLIC
+    capiEnabled: boolean().notNull().default(false), // server-side events (CAPI / MP / Events API) on
+    capiTokenCiphertext: text(), // Meta CAPI · GA4 Measurement Protocol · TikTok Events API token — encrypted
+    advancedMatching: boolean().notNull().default(false), // hash + send email/phone with events
+    testEventCode: text(), // optional Meta test_event_code for CAPI debugging
+    // Google Ads only, and it is what makes Google Ads actually WORK (migration 0082).
+    //
+    // `pixel_id` for this channel holds the analytics tag — a GA4 `G-…` Measurement ID. Google Ads is a
+    // different product with a different id AND a per-action conversion label, and `gtag('event',
+    // 'purchase', …)` alone records nothing there: Google documents a conversion as
+    // `gtag('event','conversion',{send_to:'AW-123456789/AbC-D_efGh'})`. So the merchant pastes that
+    // destination here, and a store can run GA4 and Google Ads at the same time — which is the whole
+    // point of "mix and match" and was impossible with one field.
+    adsSendTo: text(),
+    // `google_business_vertical` is required on every dynamic-remarketing item; "retail" is the only
+    // value that applies to a commerce catalog, so it is not a merchant question — recorded here as a
+    // reminder of where the value comes from rather than as a column.
+    createdAt: createdAt(),
+    updatedAt: createdAt(),
+  },
+  (t) => [unique().on(t.storeId, t.channel)],
+);
+
+// Server-side conversion delivery queue (ADR 0012 §9.4/§23, migration 0080). THIS TABLE IS THE QUEUE —
+// TokoΦ has no worker process, so `api/cron/tracking-events` drains it on a schedule, exactly like
+// `api/cron/tracking` drains shipments. One row = one (store, channel, event) we owe a provider.
+//
+// Why a table and not a fire-and-forget POST inside the order path: a conversion that fails because
+// Meta 500'd must be RETRIED, and a conversion sent twice corrupts the merchant's ROAS. The unique
+// (store_id, channel, event_id) is what makes both true at once — the enqueue is idempotent (an
+// AutoLaris callback retry cannot double-book a Purchase) and the send is resumable.
+//
+// `eventId` is the SHARED browser/server id (`purchase:{orderNumber}`) — the storefront pixel
+// sends the same string as `eventID`, which is how Meta/TikTok de-duplicate the two copies of one sale.
+// Deliberately NO raw identity columns: emails/phones are hashed inside the sender and never persisted
+// here (§9.4 + §25 data minimisation). `payload` holds only commerce facts (value/currency/content ids).
+export const trackingDeliveryStatus = pgEnum("tracking_delivery_status", [
+  "queued",
+  "processing",
+  "succeeded",
+  "failed",
+  "dead_letter",
+]);
+
+export const trackingEventDeliveries = pgTable(
+  "tracking_event_deliveries",
+  {
+    id: pk(),
+    storeId: uuid().notNull().references(() => stores.id),
+    channel: adChannelKey().notNull(), // meta | google | tiktok
+    eventName: text().notNull(), // Purchase (MVP) — the normalized name, mapped per provider in the sender
+    // Shared with the browser pixel so the provider de-duplicates instead of double-counting.
+    eventId: text().notNull(),
+    orderId: uuid().references(() => orders.id),
+    status: trackingDeliveryStatus().notNull().default("queued"),
+    attemptCount: integer().notNull().default(0),
+    // Backoff clock. The cron only picks rows whose next attempt is due, so a failing provider does not
+    // starve the batch — it steps aside and the queue keeps moving.
+    nextAttemptAt: createdAt(),
+    deliveredAt: ts(),
+    // Commerce facts only — value/currency/contentIds/numItems/orderNumber, plus the hashed-identity
+    // OPT-IN flag. Never an email, phone, token or provider response body.
+    payload: jsonb().notNull().default({}),
+    lastErrorCode: text(),
+    lastErrorMessage: text(), // sanitized, truncated — never a raw provider payload
+    createdAt: createdAt(),
+    updatedAt: createdAt(),
+  },
+  (t) => [
+    // Idempotency: one delivery per (store, channel, event). The enqueue is ON CONFLICT DO NOTHING.
+    unique().on(t.storeId, t.channel, t.eventId),
+    // The cron's claim query: due rows, oldest first.
+    index("tracking_event_deliveries_due_idx").on(t.status, t.nextAttemptAt),
+    // The Admin diagnostics query.
+    index("tracking_event_deliveries_store_idx").on(t.storeId, t.createdAt),
+  ],
+);
 
 // Storefront funnel events. `type` is one of: visit | product_view | add_to_cart | checkout_start
 // | purchase. `device` (0037) is what makes the Perangkat breakdown a real COUNT instead of the

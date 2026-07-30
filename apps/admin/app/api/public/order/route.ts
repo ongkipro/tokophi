@@ -16,12 +16,13 @@ import {
   destIdError,
 } from "@tokophi/lib/validate";
 import { areaById } from "@/lib/data/areas";
-import { rateLimited } from "@/lib/public-guard";
+import { rateLimited, clientIp } from "@/lib/public-guard";
 import { getCodPolicy } from "@/lib/cod";
 import { quoteShipping, findRate } from "@/lib/shipping-quote";
 import { computeTax } from "@tokophi/lib/tax";
 import { applyDiscount } from "@/lib/promo";
 import { activeFlashPrices } from "@/lib/flash";
+import { clientContextFromRequest, enqueuePurchase } from "@/lib/tracking-events";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the
@@ -130,6 +131,10 @@ async function handle(req: Request) {
     destId?: number; // KiriminAja district id the ongkir quote was issued for
     channelCode?: string;
     discountCode?: string; // PROMO P0 — a voucher; validated + priced by lib/promo (never trusted from the body)
+    // ADR 0012 — the ad platforms' own cookies, read on the storefront. OPAQUE: never authorization,
+    // never priced against, never stored beyond the conversion row; only forwarded to the merchant's
+    // own pixel provider as match keys. Length-bounded in clientContextFromRequest.
+    trackingCookies?: { fbp?: string; fbc?: string; ga?: string };
   };
   try {
     body = await req.json();
@@ -646,15 +651,36 @@ async function handle(req: Request) {
   // is now always shipped by the seller from Pesanan → Buat pengiriman (regular expedition couriers).
   // Orders booked as instant BEFORE the removal keep their courier/awb text and render unchanged.
 
+  // ── Conversion tracking (ADR 0012 §14.4) ────────────────────────────────────────────────────────
+  // COD is a conversion the moment the order exists (signed off 2026-07-29: "COD = purchase at the
+  // thanks page"); a prepaid order only becomes one when the gateway callback confirms payment, so
+  // here we merely COMPUTE its ids and let /api/public/pay/callback do the enqueueing.
+  // `tracking` is echoed to the browser so the storefront pixel fires the SAME `event_id` and the SAME
+  // `content_ids` the server will send — that shared id is the entire de-duplication mechanism.
+  // NON-FATAL: a marketing table must never fail an order that is already committed.
+  // `browserPurchase` tells the storefront pixel whether THIS page view is a conversion: true for COD,
+  // false for prepaid — /checkout/sukses shows an UNPAID virtual account, and counting that as a sale
+  // would report every abandoned VA screen as revenue.
+  let tracking: { eventId: string; contentIds: string[]; browserPurchase: boolean } | null = null;
+  try {
+    // Both paths enqueue HERE, because this request is the only place the shopper's user agent, IP and
+    // ad-platform cookies exist — a prepaid row is just created on hold and released by the callback.
+    const client = clientContextFromRequest(req, clientIp(req), body.trackingCookies);
+    const facts = await enqueuePurchase(store.id, order.id, client, { hold: !isCod });
+    if (facts) tracking = { eventId: facts.eventId, contentIds: facts.contentIds, browserPurchase: isCod };
+  } catch (err) {
+    console.error("[order] tracking enqueue failed", err);
+  }
+
   // COD → the payment row was already written inside the order txn (collected on delivery, no gateway).
   if (isCod) {
-    return NextResponse.json({ ok: true, orderNumber: order.number, cod: true, shipping: shippingCost, tax: tax.taxIdr, discount: discountIdr, total }, { headers: CORS });
+    return NextResponse.json({ ok: true, orderNumber: order.number, cod: true, shipping: shippingCost, tax: tax.taxIdr, discount: discountIdr, total, tracking }, { headers: CORS });
   }
 
   // AutoLaris: the pending payment row already exists (written in the txn); the gateway call below
   // enriches it. If AutoLaris isn't configured, no row was written and there is nothing to enrich.
   if (!alConfigured) {
-    return NextResponse.json({ ok: true, orderNumber: order.number, error: "Pembayaran belum dikonfigurasi." }, { headers: CORS });
+    return NextResponse.json({ ok: true, orderNumber: order.number, error: "Pembayaran belum dikonfigurasi.", tracking }, { headers: CORS });
   }
   // THIS is where the double charge came from. `alCreatePayment` does an unguarded `await res.json()`
   // (packages/lib/src/autolaris.ts), so a network blip or a gateway's HTML 502 page THROWS rather
@@ -679,7 +705,7 @@ async function handle(req: Request) {
     pay = { ok: false, error: "Pembayaran tidak dapat dimulai. Hubungi penjual dengan nomor pesanan ini." };
   }
   if (!pay.ok) {
-    return NextResponse.json({ ok: true, orderNumber: order.number, payError: pay.error }, { headers: CORS });
+    return NextResponse.json({ ok: true, orderNumber: order.number, payError: pay.error, tracking }, { headers: CORS });
   }
   // Enrich the pending payment row (created atomically in the txn) with the gateway's VA/trxId/fees.
   // If this UPDATE were to fail, the order still has its payment row (pending) and the callback can
@@ -700,6 +726,7 @@ async function handle(req: Request) {
     // The ongkir + total the SERVER decided, echoed back so a stale quote in the browser cannot leave
     // the shopper believing a number the order does not contain.
     shipping: shippingCost, tax: tax.taxIdr, discount: discountIdr, total,
+    tracking,
     payment: {
       channel: { code: channel.code, label: channel.label, kind: channel.kind },
       virtualAccount: pay.virtualAccount, qr: pay.qr, paymentCode: pay.paymentCode, url: pay.url,

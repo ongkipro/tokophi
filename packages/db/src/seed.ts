@@ -656,10 +656,14 @@ const AD_PROVINCES: Array<{ province: string; spend: number; impressions: number
 ];
 
 async function truncateAll() {
-  // kiriminaja_areas is static reference data (7k districts) — never wiped by demo reseeds.
+  // Static REFERENCE data — never wiped by a demo reseed. `kelurahan` (78.764 rows) is on this list
+  // because it is what the checkout's kodepos auto-fill reads: it was missing, so every SEED_FORCE=1
+  // silently deleted it and broke address entry until someone re-imported by hand. CLAUDE.md names it
+  // as one of the two landmines in this package; the keep-list is where that warning has to be true.
   const rows = await client<{ table_name: string }[]>`
     select table_name from information_schema.tables
-    where table_schema = 'public' and table_name not in ('__drizzle_migrations', 'kiriminaja_areas')`;
+    where table_schema = 'public'
+      and table_name not in ('__drizzle_migrations', 'kiriminaja_areas', 'kelurahan', 'product_taxonomy')`;
   const list = rows.map((r) => `"${r.table_name}"`).join(", ");
   if (list) await client.unsafe(`truncate ${list} restart identity cascade`);
 }
@@ -766,9 +770,12 @@ async function main() {
   // and the merchant's real, moderated reviews never reached a shopper. The storefront aggregates
   // ratings from `reviews` (apps/storefront/src/data/catalog.ts), so an unlinked review is invisible.
   const productIdByName = new Map<string, string>();
-  for (const c of CATALOG) {
+  for (const [ci, c] of CATALOG.entries()) {
     const meta = STOREFRONT_META[c.slug];
     const [p] = await db.insert(schema.products).values({
+      // Catalog number (ADR 0013). Assigned from the CATALOG index so a reseed reproduces the same
+      // numbers byte-for-byte, like every other value here — the seed's whole contract.
+      number: 1001 + ci,
       storeId: store.id,
       title: c.name,
       handle: c.slug,
@@ -805,6 +812,9 @@ async function main() {
     for (const w of warna) {
       for (const u of ukuran) {
         const [nv] = await db.insert(schema.productVariants).values({
+          // `seq` = the permanent catalog number (ADR 0013); `position` = display order. They start out
+          // equal and diverge the first time a merchant reorders or deletes a variant.
+          seq: vPos + 1,
           productId: p.id, storeId: store.id, title: `${w} / ${u}`, position: vPos,
           option1: w, option2: u, priceIdr: c.price, compareAtIdr: meta?.compareAt ?? null,
           // Real apparel weight, 150–300 g. It was NULL on every variant, and the checkout
@@ -818,6 +828,9 @@ async function main() {
       }
     }
     if (!v) throw new Error(`no variant seeded for ${c.slug}`);
+    // High-water mark past the seqs just handed out, so the next variant a merchant adds cannot reuse
+    // one (ADR 0013). Set here rather than at insert because the count is only known now.
+    await db.update(schema.products).set({ variantSeqNext: vPos + 1 }).where(eq(schema.products.id, p.id));
     // 5-image gallery: base + -2..-5 (files exist in public/products/)
     await db.insert(schema.productMedia).values(
       [0, 1, 2, 3, 4].map((n) => ({
@@ -828,6 +841,15 @@ async function main() {
     );
     seededProducts.push({ id: p.id, variantId: v.id, category: c.category, unitsSold: c.unitsSold });
   }
+
+  // The allocation counter must start ABOVE the numbers just seeded. `truncateAll()` wipes
+  // `store_counters` like every other table, so without this the first product a merchant creates
+  // after a reseed is handed #1001 — which the seed already gave to a different product — and the
+  // create fails on `products_storeId_number_unique`.
+  await db
+    .insert(schema.storeCounters)
+    .values({ storeId: store.id, productNext: 1001 + CATALOG.length })
+    .onConflictDoUpdate({ target: schema.storeCounters.storeId, set: { productNext: 1001 + CATALOG.length } });
 
   // customers (capture name → id for order linking)
   //

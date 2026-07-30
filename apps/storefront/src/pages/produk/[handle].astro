@@ -10,6 +10,7 @@ import { imageSrcSet, inStock, productImages, type Product } from "../../data/ca
 import Breadcrumb from "../../components/Breadcrumb.astro";
 import ShareBar from "../../components/ShareBar.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
+import { itemGroupId, retailerId, type CatalogIdScheme } from "@tokophi/lib/tracking-ids";
 
 // SSR: tenant from the Host header (src/middleware.ts), product from the handle param.
 const { store, catalog } = Astro.locals;
@@ -127,6 +128,43 @@ const TEMPLATE = catalog.productTemplate(product);
 const ORIGIN = Astro.locals.origin;
 const abs = (u: string) => new URL(u, ORIGIN).href;
 const PAGE_URL = abs(`/produk/${product.handle}`);
+
+// The catalog id this page reports to the merchant's pixels (ADR 0013). Computed HERE, server-side,
+// with the same helper the feed and the Conversions API use — the browser cannot derive it (the id no
+// longer lives in the URL) and must never guess it: a `content_ids` value that is not a real catalog
+// item matches nothing, silently.
+//
+// The DEFAULT is the FIRST variant's exact item id, because that is what the page actually shows: the
+// picker pre-selects the first value of every option group and prices/stock-checks it at load, and a
+// product with no option groups has exactly one variant. An earlier version defaulted to the GROUP id
+// here — which under the `number` scheme is never null, so a product with no picker (nothing to
+// correct it) reported `product_group` on AddToCart for good. Meta forbids exactly that, and Google
+// has no group concept at all.
+//
+// The group survives as `catalogGroup`, used ONLY as the fallback when no variant row resolves.
+const catalogScheme: CatalogIdScheme = store.catalogIdScheme === "number" ? "number" : "handle";
+const variantCount = product.variants?.length ?? 1;
+const catalogId = retailerId(catalogScheme, product, {
+  seq: product.variants?.[0]?.seq ?? 1,
+  index: 0,
+  count: variantCount,
+});
+const catalogType = "product";
+const catalogGroup = itemGroupId(catalogScheme, product, variantCount);
+// A store on the legacy `handle` scheme has no group id for a single-variant product — fall back to the
+// item id rather than emit nothing, so the sparse-matrix branch always has something valid to report.
+const catalogGroupId = catalogGroup ?? catalogId;
+const catalogGroupType = catalogGroup ? "product_group" : "product";
+// Each variant's EXACT catalog item id, computed HERE by the shared helper and shipped with the picker.
+// It is what AddToCart / InitiateCheckout / Purchase must report: Meta documents plainly that
+// `product_group` must NOT be used with AddToCart or Purchase ("people buy specific products"), Google
+// has no group concept at all (`item_id` has to equal a Merchant Center offer id), and TikTok
+// recommends the `sku_id`. Composing `number + "-" + seq` in the browser instead would be a second
+// definition of the id rule — and under the legacy `handle` scheme it would produce a string that
+// exists in no catalog, which matches nothing, silently.
+const variantCatalogIds = (product.variants ?? []).map((v, i) =>
+  retailerId(catalogScheme, product, { seq: v.seq, index: i, count: variantCount }),
+);
 
 const variantPrices = (product.variants ?? []).map((v) => v.price).filter((n) => n > 0);
 const available = inStock(product);
@@ -457,7 +495,11 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         <div class:list={["flex flex-wrap items-center gap-x-3 gap-y-2", product.flashEndsAt ? "mt-3" : "mt-5"]}>
           {/* Unpriced → "Hubungi untuk harga" (not "Rp0"). NOT `tabular-nums`/`text-3xl` here since it
               is a phrase, not a figure. The variant-picker JS keeps this honest too — see below. */}
-          <span id="pdp-price" class:list={["font-semibold text-ink", unpriced ? "text-xl sm:text-2xl" : "text-2xl tabular-nums sm:text-3xl"]}>{unpriced ? "Hubungi untuk harga" : IDR(product.price)}</span>
+          <!-- `data-catalog-id` lives HERE, on an element every PDP renders. It used to sit on the buy-box
+               row, which a price-on-request product does not render at all — so no ViewContent fired for
+               a page a shopper is very much viewing. The buy BUTTONS carry their own copy, kept in step
+               with the variant picker; the pixel prefers those and falls back to this one. -->
+          <span id="pdp-price" data-catalog-id={catalogId} data-catalog-type={catalogType} class:list={["font-semibold text-ink", unpriced ? "text-xl sm:text-2xl" : "text-2xl tabular-nums sm:text-3xl"]}>{unpriced ? "Hubungi untuk harga" : IDR(product.price)}</span>
           {
             !unpriced && product.compareAt && (
               <span class="text-lg text-muted line-through tabular-nums">{IDR(product.compareAt)}</span>
@@ -489,7 +531,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         <!-- Variant picker (real product_variants: Warna, Ukuran) -->
         {
           product.options && product.options.length > 0 ? (
-            <div id="variant-picker" class="mt-8 flex flex-col gap-6" data-variants={JSON.stringify(product.variants ?? [])}>
+            <div id="variant-picker" class="mt-8 flex flex-col gap-6" data-variants={JSON.stringify((product.variants ?? []).map((v, i) => ({ option1: v.option1, option2: v.option2, price: v.price, stock: v.stock, catalogId: variantCatalogIds[i] })))}>
               {product.options.map((opt, oi) => (
                 <div>
                   <p class="text-sm font-medium text-ink">
@@ -571,6 +613,8 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             id="add-to-cart"
             disabled={!available}
             data-handle={product.handle}
+            data-catalog-id={catalogId}
+            data-catalog-type={catalogType}
             data-name={product.name}
             data-price={product.price}
             data-image={product.image}
@@ -583,6 +627,8 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             id="buy-now"
             disabled={!available}
             data-handle={product.handle}
+            data-catalog-id={catalogId}
+            data-catalog-type={catalogType}
             data-name={product.name}
             data-price={product.price}
             data-image={product.image}
@@ -732,7 +778,9 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
   }
 </style>
 
-<script is:inline>
+<!-- The GROUP id is passed in rather than re-derived: it is the fallback when a variant combination
+     has no row, and it must be the exact string the shared helper produced server-side. -->
+<script is:inline define:vars={{ GROUP_CATALOG_ID: catalogGroupId, GROUP_CATALOG_TYPE: catalogGroupType, FLASH_PRICE: product.flashPrice ?? null }}>
   (function () {
     // Flash-sale countdown — ticks to `data-ends` (ISO). Hides the whole banner at zero; the price stays
     // (server re-prices on the next load, and /api/public/order re-validates).
@@ -837,24 +885,31 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     function variantLabel() { return selected.filter(Boolean).join(" / "); }
     function updateVariant() {
       var v = resolveVariant();
-      // ⚠️ A combination with no row used to `return` here — AFTER the click handler had already
-      // flipped aria-pressed and the option label. Price, stock, data-price and data-variant all
-      // stayed on the PREVIOUS variant, so the page said "Beige / L" and the cart line said
-      // "Hitam / L". Sparse grids are ordinary (a merchant deletes one size); the demo is just dense.
-      // Refusing the sale is the only honest answer — never carry a stale variant into the cart.
       if (!v) {
+        // No row for this combination. Say so and refuse the sale: leaving the previous variant's price
+        // and an enabled button lets a shopper add something `/api/public/order` will reject at the last
+        // step, and reports it to three ad platforms at the wrong SKU's price on the way. The id drops
+        // back to the GROUP so nothing stale is ever reported, and the variant label follows the pick
+        // rather than staying on the last resolvable one — the page said "Beige / L" while the cart
+        // line said "Hitam / L".
         if (stockEl) { stockEl.textContent = "Kombinasi ini tidak tersedia"; stockEl.className = "mt-2 text-sm font-medium text-red-700"; }
         [addBtn, buyBtn].forEach(function (b) {
           if (!b) return;
           b.disabled = true;
           b.classList.add("opacity-50", "cursor-not-allowed");
+          b.dataset.catalogId = GROUP_CATALOG_ID;
+          b.dataset.catalogType = GROUP_CATALOG_TYPE;
           b.dataset.variant = variantLabel();
         });
         return;
       }
       // Mirror the server-side truth: a 0-priced variant is "not priced yet", never "Rp0". Keeps the
       // JS-driven price in step with the static "Hubungi untuk harga" the frontmatter renders.
-      if (priceEl) priceEl.textContent = v.price > 0 ? fmt(v.price) : "Hubungi untuk harga";
+      // Same expression the order endpoint uses: a flash sale CAPS each variant's price, it does not
+      // scale it. Without this the picker overwrote the sale price the page rendered with the raw
+      // variant price — so the shopper saw, and the pixel reported, more than the checkout charges.
+      var eff = FLASH_PRICE != null ? Math.min(v.price, FLASH_PRICE) : v.price;
+      if (priceEl) priceEl.textContent = eff > 0 ? fmt(eff) : "Hubungi untuk harga";
       var stock = v.stock || 0;
       if (stockEl) {
         // -600 → -700 on all THREE states. Measured against the cream page (#faf6f2): emerald-600 was
@@ -876,8 +931,12 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         b.disabled = out;
         b.classList.toggle("opacity-50", out);
         b.classList.toggle("cursor-not-allowed", out);
-        b.dataset.price = v.price;
+        b.dataset.price = eff;
         b.dataset.variant = variantLabel();
+        // The EXACT item id for the variant now selected. The picker pre-selects the first value of
+        // every option group and this runs at load, so a specific variant is always resolved — the
+        // "shopper has not chosen yet" case simply does not exist on this page.
+        if (v.catalogId) { b.dataset.catalogId = v.catalogId; b.dataset.catalogType = "product"; }
       });
     }
     if (picker) updateVariant();
@@ -904,13 +963,22 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
 
     var qty = 1;
     var qtyVal = document.getElementById("qty-val");
+    // Mirror the stepper onto the buy buttons. The marketing pixel reads it from the clicked button, so
+    // an AddToCart for 3 pieces reports 3 — it used to always report 1, which understates the event's
+    // value to every ad platform.
+    function publishQty() {
+      [addBtn, buyBtn].forEach(function (b) { if (b) b.dataset.qty = String(qty); });
+    }
+    publishQty();
     document.getElementById("qty-dec")?.addEventListener("click", function () {
       qty = Math.max(1, qty - 1);
       if (qtyVal) qtyVal.textContent = String(qty);
+      publishQty();
     });
     document.getElementById("qty-inc")?.addEventListener("click", function () {
       qty = Math.min(99, qty + 1);
       if (qtyVal) qtyVal.textContent = String(qty);
+      publishQty();
     });
 
     function addToCart(d, go) {
@@ -919,7 +987,10 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       var variant = d.variant || selectedSize || "";
       var existing = cart.find(function (i) { return i.handle === d.handle && (i.variant || i.size || "") === variant; });
       if (existing) { existing.qty += qty; }
-      else { cart.push({ handle: d.handle, name: d.name, price: Number(d.price), image: d.image, variant: variant, size: variant, qty: qty }); }
+      // `catalogId` rides along so InitiateCheckout can report real catalog ids (ADR 0013) — the cart's
+      // handle is not one under the number scheme. Carts already in a shopper's localStorage have no
+      // such field; the pixel falls back to sending no ids rather than a value that matches nothing.
+      else { cart.push({ handle: d.handle, catalogId: d.catalogId || "", catalogType: d.catalogType || "product", name: d.name, price: Number(d.price), image: d.image, variant: variant, size: variant, qty: qty }); }
       localStorage.setItem("cart", JSON.stringify(cart));
       window.dispatchEvent(new Event("cart:updated"));
       if (go) { window.location.href = "/checkout"; return; }

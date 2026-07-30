@@ -2,6 +2,180 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Google Ads is real, TikTok's purchase event was off-spec
+
+### 🔴 TikTok's purchase event name was not in TikTok's spec
+We sent `CompletePayment`. TikTok's current standard-event list does not contain it — the purchase event
+is **`Purchase`**, and their names are case-sensitive. Renamed in the browser **and** the server in the
+same commit, deliberately: TikTok de-duplicates on `(event_source_id, event, event_id)`, so changing one
+half alone would have made **every purchase count twice**.
+
+### 🟢 Google Ads: it recorded nothing, now it records conversions
+`gtag('event','purchase',…)` does not create a Google Ads conversion — Google documents it as its own
+call with a `send_to` destination — and dynamic remarketing wants a different item shape from GA4's
+(`id` + `google_business_vertical`, not `item_id`). We were sending GA4's shape to an `AW-` tag.
+
+`store_tracking_channels.ads_send_to` (migration 0082) now holds the Google Ads destination
+(`AW-123456789/AbC-D_efGh`) alongside the GA4 Measurement ID, so **a merchant can run both** — one field
+could only ever serve one of them. Verified in a browser: `config G-…` and `config AW-…` both fire, GA4
+gets `item_id`, Google Ads remarketing gets `id` + `google_business_vertical: retail`, and a purchase
+fires `event conversion` with the label.
+
+### 📐 Precision fixes on events we had just changed
+- **Per-item quantity was the ORDER total.** GA4 `items[].quantity` and TikTok `contents[].quantity` used
+  the sum of every line, so a 2-line order recorded **4 units**; 5 lines recorded 25. It is now sent only
+  when the event describes one item, and TikTok gets `contents[].price` (per-item) alongside it.
+- **InitiateCheckout was `num_items: 1` with no value.** It now reads the cart: real unit count and real
+  total (verified: `num_items: 4`, `value: 549000` for 3 × Rp120.000 + Rp189.000).
+- **A mixed cart downgraded the whole event to `product_group`**, so every exact id in it matched
+  nothing. Lines are partitioned now and the exact ids win; a group id travels only when the cart has
+  nothing more precise.
+- **A product with no variant options reported the GROUP id forever** — there is no picker to correct it,
+  and under the number scheme `itemGroupId` is never null. It now reports the exact item id. This was
+  invisible locally: every dev store is still on the legacy scheme.
+- **A flash sale reported a price above what checkout charges.** The picker overwrote the sale price with
+  the raw variant price; it now applies the same `min(variant, flash)` cap the order endpoint uses — so
+  the displayed price, the cart, the pixel and the feed finally agree.
+- **A price-on-request product fired no ViewContent at all** (the id lived on a buy-box row it never
+  renders). Moved to the price element, which every PDP has.
+- **Meta's `event_source_url` and TikTok's `page.url` are documented as required** and were conditional;
+  the payment-callback path supplied neither. Both are now always sent, falling back to the store's own
+  storefront URL.
+- **A sparse variant matrix left the buttons enabled** at the previous variant's price — a shopper could
+  add a combination the order API would refuse. It now says so and disables the sale.
+- One `safe()` wrapped all three pixel bootstraps, so a throw in the first killed the other two — the
+  exact outage its own comment claimed to prevent. One guard per vendor now.
+- `/produk/<huge number>` was a **500**, not a 404: `products.number` is `integer` and Postgres answers
+  22003, a different error class from the 22P02 the route guards. Bounded. `/promo/<number>` got the same
+  guard, since the new URL scheme teaches merchants to try it.
+
+## Unreleased — Product URL is the catalog number, events report the exact variant
+
+### 🔗 `/produk/1042` — the Seller's product URL is now the number, Shopify-style
+Not the UUID. It is the number on the product list, it is **searchable in ⌘K** (`#1042` shows in the
+subtitle), and it is the id a Merchant Center or Events Manager disapproval names — so it is the only id
+a merchant can actually act on. Old UUID bookmarks redirect to it once. The UUID remains the primary key
+and every foreign key; only the URL changed, and no server action's signature moved.
+
+The param is classified in JS before any query touches it: `number` is `integer` and `id` is `uuid`, and
+Postgres rejects the cross-type literal outright — which would surface as a **500**, not the 404 the page
+intends. Verified in a browser: `/produk/1001` opens the right product, a UUID redirects, `/produk/abc`
+and a foreign number both 404.
+
+### 🎯 Events now report the EXACT variant the shopper selected — not the product group
+This corrects a decision made two days ago on a wrong premise. We were sending the product-group id with
+`content_type: "product_group"` for ViewContent and AddToCart, reasoning that a browsing shopper has not
+chosen a variant. Checking the providers' own docs:
+- **Meta forbids it**: *"Do not use `product_group` with AddToCart or Purchase"* — people buy specific
+  products.
+- **Google has no group concept at all** — `items[].item_id` must equal a Merchant Center offer id, so a
+  group id matched nothing.
+- And on our own PDP the premise was false: the variant picker pre-selects the first value of every
+  option group, so a specific variant is always resolved.
+
+Now the PDP ships each variant's exact catalog id inside the picker payload — computed server-side by the
+same `retailerId()` helper, never composed in the browser — and the selection keeps it on the buy buttons.
+Verified in a browser: switching colour then size moves the reported id `1001-1` → `1001-4` → `1001-6`,
+and the cart records it so InitiateCheckout is exact for free. The group id survives as the fallback for a
+sparse option matrix and for price-on-request products.
+
+**`item_group_id` is unchanged and still the product number** — that IS the field whose value is shared
+across variants. `content_ids` never was.
+
+### 📊 Per-provider payloads corrected while we were in there
+- **Quantity reaches the pixel.** AddToCart reported `1` no matter what the stepper said; it now reports
+  the real quantity, and `value` is price × quantity (measured: Rp360.000 for 3 × Rp120.000) instead of 0.
+- **TikTok was missing required top-level fields** — `content_type` and `content_ids` (both required for
+  Video Shopping Ads); only the nested `contents[]` type was sent.
+- **GA4 no longer records `value: 0`** on view_item / add_to_cart / begin_checkout. An omitted parameter
+  is better than a zero that drags the reported average down.
+- **Meta gets `value`/`currency` on ViewContent and AddToCart**, so it can optimise on revenue rather
+  than event counts, and `num_items` on InitiateCheckout (the one event Meta documents it for).
+
+## Unreleased — Catalog: products get a permanent number (ADR 0013)
+
+### 🔢 Every product now has a system-generated id, and the ad platforms can finally rely on it
+Products get a **per-store number** (`#1001`, `#1002`, …) and variants a per-product `seq`, both
+allocated once and never reused. The catalog identifier becomes `{number}-{seq}` — so
+`<g:id>1042-3</g:id>` in the feed and `content_ids: ["1042-3"]` in every conversion.
+
+**Why it mattered:** the old id was the product HANDLE (`kemeja-linen`, or `kemeja-linen-2` for the
+n-th variant), and Google/Meta/TikTok key a catalog item by the id we send. Renaming a product,
+dragging a variant, deleting a sibling — or just **adding a second variant** — changed it, which all
+three read as "that product was deleted and a new one appeared": performance history reset, retargeting
+audiences cold, and no provider offers a re-key. Deleting the middle of three variants was worse than
+that: the survivor silently inherited the deleted variant's catalog item.
+
+Existing stores keep the old scheme (`stores.catalog_id_scheme`) because switching a live catalog is
+one-way; **new stores start stable and never pay it.** A merchant switches when they choose, warned
+about what resets.
+
+### 📦 The feed itself was rebuilt — several of its defects were silent and expensive
+One shared builder now serves **two endpoints**: `/feed/google.xml` (Google **and** Meta — both ingest
+RSS 2.0 + the `g:` namespace) and a new `/feed/tiktok.xml` (TikTok needs `sku_id` and caps the category
+at 3 levels). Fixed along the way:
+- **A single control character in a product description could reject the ENTIRE feed** — XML 1.0
+  forbids them and we only escaped `&<>"`. One paste out of Word took the whole catalog offline.
+- **Multi-variant products on a flash sale published the wrong price** — the raw variant price while
+  the PDP charged the sale price. Google calls that "Mismatched value (page crawl): price" and
+  disapproves the item. `price` + `sale_price` are now emitted correctly for both discount shapes.
+- **`availability` used `in_stock`**, which only Google documents; Meta and TikTok document `in stock`
+  (with a space). Now the value all three accept.
+- Photo-less products are no longer published as items every provider would reject (`image_link` is
+  required by all three), and the Katalog Iklan card now counts what is actually publishable —
+  previously it included drafts the feed never emitted.
+- Added `sale_price`, `additional_image_link`, `product_type`, `gtin`/`mpn`/`identifier_exists`,
+  option-3 support for `size`/`color`, plain-text descriptions with length caps, and `brand` from the
+  merchant's own `vendor` instead of always the shop name.
+
+### 🔐 Credentials: they can be tested, revoked, and no longer fail silently
+- **"Uji koneksi"** per channel — a real probe that says whether the token is valid *and* reaches that
+  pixel. Meta's uses an empty `data` array (auth is checked first) so it cannot create a conversion.
+  Google's is labelled honestly: Measurement Protocol does **not** validate credentials, so it can only
+  confirm the payload shape.
+- **"Hapus token"** — the clear path existed in the action and was unreachable from the UI, so a
+  merchant could never revoke a token an agency had pasted.
+- `capiConfigured` now means "decryptable", not "a row exists" — after a key rotation the UI used to
+  claim a token was stored while every conversion dead-lettered.
+- Credential changes write an audit entry; retries are rate-limited and no longer requeue failures that
+  can never succeed.
+- **TikTok rate limits are no longer dead-lettered as permanent** (`40100`/`40132` arrive with a 4xx,
+  and the body code was only parsed on 2xx) — a flash-sale burst used to lose every conversion in the
+  window. And GA4 events older than 72 h are sent rather than dropped: Measurement Protocol accepts
+  them and clamps the timestamp, so refusing to send was losing sales we could have reported.
+- The Pelacakan tab is now **owner-only to READ**, not just to write.
+
+## Unreleased — Conversion tracking: the merchant's OWN pixels, end to end (ADR 0012)
+
+### 📈 Pemasaran → Pelacakan is real, and the conversions actually leave the building
+Pelacakan used to be three disabled placeholder cards. It is now the real setup: the Seller pastes
+**their own** Meta Pixel / GA4 Measurement ID / TikTok Pixel (public ids, plaintext) plus an optional
+server-side token (Conversions API · Measurement Protocol · Events API) which is stored
+**AES-256-GCM-encrypted** (`INTEGRATION_TOKEN_KEY`) and never returned to the browser — the UI only
+learns *that* a token exists. Owner-only (`integrations:write`). The storefront then bootstraps exactly
+those pixels per store (`MarketingPixels.astro`, tenant resolved from the Host) and fires PageView ·
+ViewContent · AddToCart · InitiateCheckout · Purchase.
+
+**Three decisions worth knowing before touching this:**
+- **`content_ids` are the ids the product feed already emits** (`handle`, or `handle-{n}` per variant).
+  ONE helper — `@tokophi/lib/tracking-ids` `retailerId()` — is called by both `/feed/google.xml` and the
+  conversion payload, so a merchant who pasted the feed URL into Meta keeps ONE catalog instead of two.
+- **Purchase comes from the order row, never the success page.** `tracking_event_deliveries` (0080) IS
+  the queue; `api/cron/tracking-events` (new `cron-tracking-events` sidecar, 60 s) drains it with an
+  atomic claim, bounded exponential backoff and a `dead_letter` state. **COD counts at order creation;
+  prepaid counts when the payment callback confirms.**
+- **Browser and server send the SAME `event_id`** (`purchase:{store_id}:{order_number}`, issued by the
+  order API and echoed to the pixel) — that shared id is the only thing standing between one sale and
+  two counted conversions.
+
+Provider error bodies are redacted (`capi-sanitize.ts`) before they are stored or shown, because Meta
+and TikTok echo the request — token included — back on a rejection. `verify-rls` green 48/49.
+
+**Not built, deliberately:** Meta OAuth / asset discovery, catalog PUSH via the Catalog API (the pull
+feed covers it), webhooks, super-admin cross-tenant health, and any consent gate (this repo has no
+consent mechanism at all — see `TASKS.md`). **No live provider call has been made yet** — verification
+so far is builds, unit tests, RLS and review.
+
 ## Unreleased — Promo/PDP money paths + `/tema` per page type
 
 ### 🏷️ `nonaktif` = OFF; the DATES are the schedule (contract change)

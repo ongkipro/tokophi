@@ -99,6 +99,46 @@ The editor exposes a conditions builder (all/any + field/op/value) that maps to 
 `key(meta|google|tiktok), name, brand, connected, pixelLabel, pixelId, pixelActive, capiActive, spend, impressions, clicks, conversions, revenue, campaigns[] (AdCampaign{name,spend,conversions,revenue})`
 → `ad_channels` (connection + tracking config) + `ad_metrics` (daily rollup per channel/campaign from Meta/Google/TikTok APIs). Derived: ROAS/CTR/CPC/CPA. Tracking (pixel/CAPI/GA4/Events API) config per channel; server-side conversion events fire from order webhooks later.
 
+### Catalog identity  *(REAL — migration 0081, ADR 0013)*
+`products.number` (per store, `unique(store_id, number)`) · `products.variant_seq_next` (high-water
+mark) · `product_variants.seq` (`unique(product_id, seq)`) · `store_counters(store_id, product_next)` ·
+`stores.catalog_id_scheme` (`handle` | `number`)
+
+```text
+store_counters 1──1 stores          (allocation counter; one statement, race-free)
+stores        1──n products         (number is dense PER STORE: #1001, #1002, …)
+products      1──n product_variants (seq is dense PER PRODUCT, never reused)
+
+catalog id    = `{products.number}-{product_variants.seq}`   → <g:id> AND content_ids
+item_group_id = `{products.number}`
+```
+Both ids are allocate-once, so renaming a handle, reordering variants or deleting a sibling leaves
+every surviving id unchanged — which is the whole point, because Google/Meta/TikTok treat a changed id
+as "product deleted, new product appeared" and offer no re-key.
+
+### Tracking channel  *(REAL — `store_tracking_channels`, migration 0079, ADR 0012)* — Pemasaran → Pelacakan
+`store_id, channel(meta|google|tiktok), enabled, pixel_id, capi_enabled, capi_token_ciphertext,
+advanced_matching, test_event_code`
+**Not the same thing as `ad_channels` above** — that one is demo/label data. This is the merchant's own
+live pixel config: the storefront fires from it, and the conversion cron authenticates with it. One row
+per (store, channel); `pixel_id` is public, the token is AES-256-GCM at rest and never leaves the server.
+
+### Conversion delivery  *(REAL — `tracking_event_deliveries`, migration 0080, ADR 0012)*
+`store_id, channel, event_name, event_id, order_id, status(queued|processing|succeeded|failed|dead_letter),
+attempt_count, next_attempt_at, delivered_at, payload(jsonb), last_error_code, last_error_message`
+
+```text
+stores 1──n store_tracking_channels        (unique: store_id + channel)
+stores 1──n tracking_event_deliveries      (unique: store_id + channel + event_id)
+orders 1──n tracking_event_deliveries      (one row per enabled channel, per sale)
+orders 1──n order_line_items ──n product_variants ──1 products
+                                   └── retailerId(handle, position, count) → payload.contentIds
+                                       …the SAME string /feed/google.xml emits as <g:id>
+```
+The queue has no worker process: `api/cron/tracking-events` drains it (ADR 0012 §0.1). `payload` holds
+commerce facts only — buyer identity is read fresh at send time, hashed in the provider adapter, and
+never stored on the row.
+
 ### Province marketing stat  *(mock: `ProvinceStat`, `AD_PROVINCES`, `PROVINCES`)*
 `province, spend, impressions, clicks, conversions, revenue, reach` → `ad_metrics` grouped by `province` ("Performa per Provinsi").
 
