@@ -50,6 +50,8 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
       function safe(fn) { try { fn(); } catch (e) {} }
 
       // ---- bootstrap the enabled pixels ----
+      // One `safe()` PER vendor. Wrapping all three in a single guard was the bug the comment described:
+      // a throw in the first loader skipped the other two and fired nothing at all.
       safe(function () {
       if (META) {
         !(function (f, b, e, v, n, t, s) {
@@ -59,12 +61,21 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
         window.fbq("init", META.pixelId);
       }
+      });
+      safe(function () {
       if (GOOGLE) {
         window.dataLayer = window.dataLayer || [];
         window.gtag = function () { window.dataLayer.push(arguments); };
         window.gtag("js", new Date());
         window.gtag("config", GOOGLE.pixelId); // auto page_view
+        // Google Ads is a SEPARATE destination with its own id, configured alongside GA4 rather than
+        // instead of it — a merchant running both is the normal case, and one field could only ever
+        // serve one of them. `AW-123456789` is the account; the `/label` half identifies the action and
+        // is only used on the conversion call below.
+        if (GOOGLE.adsSendTo) window.gtag("config", String(GOOGLE.adsSendTo).split("/")[0]);
       }
+      });
+      safe(function () {
       if (TIKTOK) {
         !(function (w, d, t) {
           w.TiktokAnalyticsObject = t; var ttq = (w[t] = w[t] || []);
@@ -110,21 +121,57 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         data = data || {};
         var ids = data.contentIds || [];
         var ctype = data.contentType || "product";
+        var qty = data.numItems || 1;
+        // Per-ITEM quantity is only knowable when the event describes ONE item. `qty` is the event total
+        // (the sum of every line), so using it per item multiplied a 2-line order to 4 units. When there
+        // is more than one id, the field is omitted — an absent quantity is read as 1, a wrong one is
+        // read as truth.
+        var perItemQty = ids.length === 1 ? qty : null;
+        var val = typeof data.value === "number" && data.value > 0 ? data.value : null;
+        var cur = data.currency || "IDR";
         if (META) safe(function () {
           var opts = data.eventId ? { eventID: data.eventId } : undefined;
-          if (evt === "PageView") window.fbq("track", "PageView");
-          else if (evt === "ViewContent") window.fbq("track", "ViewContent", { content_ids: ids, content_type: ctype });
-          else if (evt === "AddToCart") window.fbq("track", "AddToCart", { content_ids: ids, content_type: ctype });
-          else if (evt === "InitiateCheckout") window.fbq("track", "InitiateCheckout", { content_ids: ids, content_type: ctype });
-          // No `num_items` on Purchase — Meta documents it as InitiateCheckout-only, and the server
-          // event omits it for the same reason. The two halves must describe the same sale.
-          else if (evt === "Purchase") window.fbq("track", "Purchase", { value: data.value || 0, currency: data.currency || "IDR", content_ids: ids, content_type: "product", order_id: data.orderId }, opts);
+          if (evt === "PageView") { window.fbq("track", "PageView"); return; }
+          // `value`/`currency` on ViewContent and AddToCart is what lets Meta optimise on revenue rather
+          // than on raw event counts; `num_items` is documented for InitiateCheckout specifically (and
+          // NOT for Purchase, which is why the server event omits it too — the two halves of one sale
+          // must describe it identically).
+          var d = { content_ids: ids, content_type: ctype };
+          if (val !== null) { d.value = val; d.currency = cur; }
+          if (evt === "InitiateCheckout") d.num_items = qty;
+          if (evt === "Purchase") { d = { value: data.value || 0, currency: cur, content_ids: ids, content_type: "product", order_id: data.orderId }; }
+          if (opts) window.fbq("track", evt, d, opts);
+          else window.fbq("track", evt, d);
         });
         if (TIKTOK) safe(function () {
-          var map = { ViewContent: "ViewContent", AddToCart: "AddToCart", InitiateCheckout: "InitiateCheckout", Purchase: "CompletePayment" };
+          // ⚠️ `Purchase`, not `CompletePayment`. TikTok's current standard-event list does not contain
+          // `CompletePayment`, and their names are case-sensitive. It MUST match `capi.ts`'s server
+          // event exactly: TikTok de-duplicates on (event_source_id, event, event_id), so a name that
+          // differs between the two halves means every purchase is counted twice.
+          var map = { ViewContent: "ViewContent", AddToCart: "AddToCart", InitiateCheckout: "InitiateCheckout", Purchase: "Purchase" };
           if (evt === "PageView") return; // ttq.page() already fired at load
           var name = map[evt]; if (!name) return;
-          var props = { contents: ids.map(function (id) { return { content_id: id, content_type: ctype }; }), quantity: data.numItems || 1, value: data.value || 0, currency: data.currency || "IDR" };
+          // TikTok documents `content_type` and `content_ids` as TOP-LEVEL properties (all three of
+          // content_type / content_ids / contents are required for Video Shopping Ads). Nesting the type
+          // inside `contents[]` alone left the required pair missing.
+          var props = {
+            content_type: ctype,
+            contents: ids.map(function (id) {
+              var c = { content_id: id, content_type: ctype };
+              if (perItemQty !== null) c.quantity = perItemQty;
+              // TikTok reads `price` as the PER-ITEM price and `value` as the order total.
+              if (perItemQty !== null && val !== null) c.price = Math.round(val / perItemQty);
+              return c;
+            }),
+            quantity: qty,
+            currency: cur,
+          };
+          // `content_id` (singular) is TikTok's flat form and only means anything for a single item;
+          // `content_ids` is Meta's spelling and TikTok does not document it. `contents[]` above is the
+          // multi-item form and always travels.
+          if (ids.length === 1) props.content_id = ids[0];
+          if (val !== null) props.value = val;
+          else if (evt === "Purchase") props.value = data.value || 0;
           // ⚠️ `event_id` is TikTok's THIRD argument, not a property of `properties`. Putting it inside
           // the payload — which looks entirely reasonable — means TikTok never sees a de-dup key, so
           // every purchase is counted twice: once by the pixel, once by the Events API.
@@ -135,9 +182,42 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           var map = { ViewContent: "view_item", AddToCart: "add_to_cart", InitiateCheckout: "begin_checkout", Purchase: "purchase" };
           if (evt === "PageView") return; // config already sent page_view
           var name = map[evt]; if (!name) return;
-          var payload = { value: data.value || 0, currency: data.currency || "IDR", items: ids.map(function (id) { return { item_id: id }; }) };
+          // ⚠️ `item_id` must equal the Merchant Center offer id — Google has NO group concept, so a
+          // group id matches nothing. `value` is OMITTED rather than sent as 0: a recorded zero-value
+          // conversion is worse than an absent parameter, because it drags the reported average down.
+          var payload = { currency: cur, items: ids.map(function (id) {
+            var it = { item_id: id };
+            if (perItemQty !== null) it.quantity = perItemQty;
+            return it;
+          }) };
+          if (val !== null) payload.value = val;
+          else if (evt === "Purchase") payload.value = data.value || 0;
           if (evt === "Purchase" && data.orderId) payload.transaction_id = data.orderId;
           window.gtag("event", name, payload);
+
+          // ── Google Ads ──────────────────────────────────────────────────────────────────────────
+          // GA4 events do NOT record a Google Ads conversion. Google documents it as its own call with
+          // a `send_to` destination, and dynamic remarketing wants a DIFFERENT item shape from GA4's:
+          // `id` (not `item_id`) plus `google_business_vertical`. Sending GA4's shape to an `AW-` tag was
+          // the reason Google Ads recorded nothing at all.
+          if (!GOOGLE.adsSendTo) return;
+          var awId = String(GOOGLE.adsSendTo).split("/")[0];
+          var rmk = {
+            send_to: awId,
+            value: payload.value,
+            currency: cur,
+            items: ids.map(function (id) { return { id: id, google_business_vertical: "retail" }; }),
+          };
+          // Remarketing on every funnel step; the conversion only where money changes hands.
+          window.gtag("event", name === "purchase" ? "purchase" : "view_item", rmk);
+          if (evt === "Purchase") {
+            window.gtag("event", "conversion", {
+              send_to: GOOGLE.adsSendTo,
+              value: data.value || 0,
+              currency: cur,
+              transaction_id: data.orderId,
+            });
+          }
         });
       }
 
@@ -150,16 +230,30 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
       // browsing has not chosen a variant, so a multi-variant product is reported as its group — the
       // id /feed/google.xml emits as <g:item_group_id>. Inventing `handle-1` here would report a
       // variant they never looked at.
+      // What the shopper is looking at, as precisely as the page knows it.
+      //
+      // Prefer the BUY BUTTON: the variant picker keeps `data-catalog-id` on it in step with the
+      // selection, so it is the EXACT catalog item id (`1042-3`). The fallback is the price element,
+      // which every PDP renders — including a price-on-request product, which has no buy button at all.
+      //
+      // Why exact matters: Meta documents that `product_group` must NOT be used with AddToCart or
+      // Purchase ("people buy specific products"), Google has no group concept at all so a group id
+      // matches no Merchant Center offer, and TikTok recommends the sku_id. Nothing is ever DERIVED
+      // here — a guessed id matches no catalog item and reports nothing, silently.
+      function ctxFrom(el) {
+        if (!el) return null;
+        var id = el.getAttribute("data-catalog-id");
+        if (!id) return null;
+        var price = Number(el.getAttribute("data-price") || 0);
+        return {
+          contentIds: [id],
+          contentType: el.getAttribute("data-catalog-type") || "product",
+          value: price > 0 ? price : undefined,
+        };
+      }
       function productContext() {
         if (path.indexOf("/produk/") !== 0) return null;
-        // The id is rendered by the PDP (`data-catalog-id` on the buy button), computed server-side by
-        // the SAME helper the feed and the Conversions API use. It is deliberately NOT derived from the
-        // URL any more: since ADR 0013 the catalog id is a number that does not appear in the path, and
-        // a guessed id is worse than none — it matches no catalog item and reports nothing, silently.
-        var el = document.querySelector("[data-catalog-id]");
-        var id = el ? el.getAttribute("data-catalog-id") : null;
-        if (!id) return null;
-        return { contentIds: [id], contentType: el.getAttribute("data-catalog-type") || "product" };
+        return ctxFrom(document.getElementById("add-to-cart")) || ctxFrom(document.querySelector("[data-catalog-id]"));
       }
       // Resolved AFTER the DOM exists — see ready(). Everything downstream reads this variable, so it
       // is assigned there and the events that depend on it fire from inside that callback.
@@ -175,10 +269,13 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         document.addEventListener("click", function (e) {
           var t = e.target; if (!t || !t.closest) return;
           var btn = t.closest("#add-to-cart, #buy-now, [data-track='add_to_cart']"); if (!btn || btn.disabled) return;
-          // Off a product page (a quick-add on a listing or the cart drawer) there is no catalog id to
-          // attach — fire the event anyway, without ids. Analytics.astro counts those clicks too, and a
-          // funnel where the two halves silently disagree is worse than one event with thin data.
-          fire("AddToCart", product || {});
+          // Read the CLICKED button: it carries the variant the shopper actually has selected right now,
+          // and the quantity stepper's value. Off a product page (a quick-add on a listing) there is no
+          // catalog id to attach — fire the event anyway, without ids. Analytics.astro counts those
+          // clicks too, and a funnel whose two halves disagree is worse than one event with thin data.
+          var ctx = ctxFrom(btn) || product || {};
+          var q = Number(btn.getAttribute("data-qty") || 0);
+          fire("AddToCart", q > 0 ? Object.assign({}, ctx, { numItems: q, value: ctx.value ? ctx.value * q : undefined }) : ctx);
         }, true);
       });
 
@@ -187,17 +284,33 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         // `catalogId` is what the PDP stored when the item was added (ADR 0013). A cart written before
         // that shipped has none — send the event with no ids rather than the handle, which under the
         // number scheme is not a catalog item at all and would quietly match nothing.
-        var cids = [], ctype = "product";
-        try {
-          var cart = JSON.parse(localStorage.getItem("cart") || "[]") || [];
-          cids = cart.map(function (i) { return i && i.catalogId; }).filter(Boolean);
-          // The id a PDP hands the cart is the GROUP id when the product has variants. Reporting a
-          // group id as `content_type: "product"` matches nothing — the group is not an item id — so
-          // the type the PDP recorded travels with it. Mixed carts fall back to the group form, which
-          // is the one that can describe both.
-          if (cart.some(function (i) { return i && i.catalogType === "product_group"; })) ctype = "product_group";
-        } catch (e) {}
-        fire("InitiateCheckout", { contentIds: cids, contentType: ctype });
+        // The cart records the id AND the type the PDP resolved for each line, plus qty and price.
+        //
+        // ⚠️ NEVER announce a mixed cart under one type. An earlier version downgraded the whole event
+        // to `product_group` if any line was group-level, which meant every variant-level id in that
+        // cart was sent as a group — matching nothing. So the lines are PARTITIONED and the exact ones
+        // win: a group id only travels when there is nothing more precise in the cart at all (a line
+        // added before this shipped, or a sparse variant matrix).
+        var cart = [];
+        try { cart = JSON.parse(localStorage.getItem("cart") || "[]") || []; } catch (e) {}
+        var exact = [], groups = [], units = 0, total = 0;
+        cart.forEach(function (i) {
+          if (!i || !i.catalogId) return;
+          var q = Number(i.qty) || 1;
+          units += q;
+          total += (Number(i.price) || 0) * q;
+          if (i.catalogType === "product_group") groups.push(i.catalogId);
+          else exact.push(i.catalogId);
+        });
+        var useExact = exact.length > 0;
+        fire("InitiateCheckout", {
+          contentIds: useExact ? exact : groups,
+          contentType: useExact ? "product" : "product_group",
+          // Real numbers, not 1 and 0: `num_items` is the field Meta documents for this event, and a
+          // begin_checkout with no value tells GA4 and TikTok nothing about what is at stake.
+          numItems: units || 1,
+          value: total > 0 ? total : undefined,
+        });
       }
       // Purchase — once per order (localStorage guard), with value + content_ids + advanced matching.
       //

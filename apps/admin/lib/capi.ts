@@ -36,6 +36,12 @@ export type ServerEvent = {
   numItems: number;
   orderNumber: string;
   sourceUrl?: string;
+  /**
+   * Where the sale happened, when the request that created the order did not record an origin (the
+   * payment-callback release path). Meta documents `event_source_url` as REQUIRED for website events and
+   * TikTok requires `page.url`, so "we did not capture it" cannot mean "omit it".
+   */
+  fallbackUrl?: string;
   /** Hashed inside this module, never stored on the delivery row. */
   identity?: { email?: string | null; phone?: string | null };
   /**
@@ -154,7 +160,10 @@ export async function sendMetaPurchase(args: {
         event_time: event.eventTime,
         event_id: event.eventId,
         action_source: "website",
-        ...(event.sourceUrl ? { event_source_url: event.sourceUrl } : {}),
+        // REQUIRED for website events, so it is never conditional. When the order carried no origin
+        // (the payment-callback fallback path), the store's own storefront URL is still the truthful
+        // answer — the sale did happen there — and an absent required field fails the whole event.
+        event_source_url: event.sourceUrl || event.fallbackUrl || "",
         user_data,
         custom_data: {
           value: event.value,
@@ -398,11 +407,16 @@ export async function sendTiktokPurchase(args: {
     ...(args.testEventCode ? { test_event_code: args.testEventCode } : {}),
     data: [
       {
-        event: "CompletePayment", // TikTok's name for a purchase
+        // `Purchase` — TikTok's current standard-event name (case-sensitive). It was `CompletePayment`,
+        // which is no longer in their documented set. MUST stay identical to MarketingPixels.astro's
+        // browser event: their dedup key is (event_source_id, event, event_id), so a mismatch
+        // double-counts every sale instead of merging the two copies.
+        event: "Purchase",
         event_time: event.eventTime,
         event_id: event.eventId,
         user,
-        ...(event.sourceUrl ? { page: { url: event.sourceUrl } } : {}),
+        // `page` is a REQUIRED per-event object for TikTok, with `page.url` required inside it.
+        page: { url: event.sourceUrl || event.fallbackUrl || "" },
         properties: {
           currency: event.currency,
           value: event.value,

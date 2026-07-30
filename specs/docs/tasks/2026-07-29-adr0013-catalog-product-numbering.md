@@ -50,3 +50,32 @@ was found.
    way to prove the feed is accepted. Nothing here has been ingested by a provider.
 3. Consent gating still does not exist anywhere in this repo (ADR 0012 §15.7).
 4. Catalog PUSH (Meta Catalog API) and OAuth remain deferred — they need a Meta Developer App.
+
+---
+
+## Follow-up landed 2026-07-30 (branch `feat/admin-product-number`)
+
+- [x] `INTEGRATION_TOKEN_KEY` **set in Coolify and live in production** (64 hex). ⚠️ Coolify stores the
+      compose **already substituted**: setting the env var is not enough, the application must be
+      re-parsed (`$app->parse()`) or the container still gets `''`. The first redeploy "succeeded" with
+      the key still missing — `printenv` inside the container is the only honest check.
+- [x] Admin product URL is the catalog number (`/produk/1042`), UUID bookmarks redirect once, junk and
+      out-of-range numbers 404 (an `integer` overflow is 22003, a different error class from 22P02).
+      `/promo/[id]` got the same guard.
+- [x] Events report the EXACT selected variant, not the group. Meta forbids `product_group` on
+      AddToCart/Purchase; Google has no group concept; and our picker pre-selects a variant, so the
+      "hasn't chosen yet" premise was false. Verified in a browser: `1001-1` → `1001-4` → `1001-6`.
+- [x] **TikTok purchase event renamed `CompletePayment` → `Purchase`** in BOTH halves atomically — their
+      dedup key includes the event name.
+- [x] **Google Ads made real**: `ads_send_to` (migration 0082) + `gtag('event','conversion',{send_to})`
+      + `items[].id` / `google_business_vertical`. GA4 and Google Ads now run side by side.
+- [x] Quantity/value precision: per-item quantity no longer the order total; InitiateCheckout carries the
+      cart's real units and total; flash-sale price capped like the order endpoint.
+
+### NEXT
+1. `ttclid` / `_ttp` are never captured — TikTok's click id is its strongest match key, the same role
+   `fbc`/`fbp` play for Meta. Same plumbing as the Meta cookies already use.
+2. Meta `contents[]` (per-item id + quantity + price) for value-based catalog optimisation.
+3. Check whether PPN belongs in the feed's `<g:price>` — Google requires tax-inclusive prices outside
+   US/CA, and PPN is added at checkout.
+4. Consent gating still does not exist anywhere in this repo.

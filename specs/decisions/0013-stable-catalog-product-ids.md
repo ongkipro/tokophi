@@ -135,3 +135,49 @@ switches schemes pays the re-key once, deliberately.
 column (`omit(orig, ["id","createdAt"])`) — a pattern designed to pick up new columns automatically. It
 must keep omitting `number`, or every "Salin produk" fails on the unique. The variants' `seq` values are
 correctly copied, because a copy is a new product with an identical variant set.
+
+---
+
+## 7. Addendum (2026-07-30) — the number is the ADMIN URL, and events report the exact variant
+
+Two things were settled after the first implementation landed, both by checking the providers' own
+documentation rather than by reasoning from the model.
+
+### 7.1 The Seller's product URL is the number
+
+`/produk/1042`, Shopify-style — not the UUID. It is the number on the product list, searchable in ⌘K,
+and the one a Merchant Center or Events Manager disapproval names, so it is the only id a merchant can
+act on. The UUID stays the primary key and every foreign key; **only the URL changed**, and every server
+action still takes the UUID from client state.
+
+A UUID-shaped param redirects to the canonical numeric URL (old bookmarks keep working, once). The param
+is classified in JS **before any query**: `products.number` is `integer` and `products.id` is `uuid`, and
+Postgres rejects the cross-type literal outright (22P02) — which surfaces as a 500 from inside the
+render, not the `notFound()` the route intends.
+
+The number lookup carries an EXPLICIT `store_id` filter. `unique(store_id, number)` means `1042` is a
+different product in every store, and a 4-digit number is enumerable in a way a UUID never was — this is
+exactly the query where "the WHERE is the rule and the policy is only the net" has to hold.
+
+### 7.2 Events report the EXACT variant, not the group
+
+The first implementation sent the product-group id with `content_type: "product_group"` for
+ViewContent and AddToCart, on the theory that a browsing shopper has not chosen a variant yet. **Both
+halves of that were wrong:**
+
+- Meta documents it plainly: *"All AddToCart and Purchase events should use `content_type=product`
+  because people buy specific products"* and *"Do not use `product_group` with AddToCart or Purchase."*
+- Google has **no group concept at all** — `items[].item_id` must equal a Merchant Center offer id, so a
+  group id matches nothing.
+- And on OUR product page the premise is false: the variant picker pre-selects the first value of every
+  option group and runs at load, so a specific variant is always resolved, priced and stock-checked.
+
+So the PDP now ships each variant's exact catalog id inside the picker payload — computed server-side by
+the same `retailerId()` helper, never composed in the browser — and `updateVariant()` keeps it on the buy
+buttons in step with the selection. AddToCart reads the clicked button, so it reports the variant the
+shopper actually chose, at the quantity they chose. The cart records the id, so InitiateCheckout is exact
+for free. The GROUP id survives as the fallback for the two cases where no variant resolves: a sparse
+option matrix, and a price-on-request product that renders no buy button.
+
+**Group ids are not gone** — `item_group_id` in the feed is still the product number, shared by every
+variant. That is the field whose value is the same across variants; `content_ids` never was.

@@ -286,9 +286,12 @@ export function ProductEditor({ product }: { product?: Product }) {
           // product row exists (see the note there), so it tells the merchant to save first — and a
           // bounce to /produk would make them hunt for the product they just created to act on that
           // instruction. `createProduct` already returned this id; it was being thrown away.
-          const id = await createProduct(buildInput());
+          // `createProduct` returns the catalog NUMBER as well as the uuid (ADR 0013) — the product
+          // URL is the number, so pushing the uuid would bounce through the compatibility redirect and
+          // flicker the URL on the happiest path in this module.
+          const created = await createProduct(buildInput());
           toast.success("Produk baru disimpan — foto bisa ditambahkan sekarang");
-          router.push(`/produk/${id}`);
+          router.push(`/produk/${created.number}`);
         }
         router.refresh();
       } catch {
@@ -313,9 +316,9 @@ export function ProductEditor({ product }: { product?: Product }) {
     if (!product) return;
     startTransition(async () => {
       const r = await duplicateProduct(product.id);
-      if (r.ok && r.id) {
+      if (r.ok && r.number) {
         toast.success("Produk diduplikat sebagai draft.");
-        router.push(`/produk/${r.id}`);
+        router.push(`/produk/${r.number}`);
       } else {
         toast.error(r.error ?? "Gagal menduplikat produk");
       }
