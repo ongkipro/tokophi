@@ -1,6 +1,6 @@
 import { getAdChannels } from "@/lib/data/marketing";
 import { getFeedStatus } from "@/lib/data/feed";
-import { getTrackingConfig, getTrackingHealth, emptyTrackingConfig, emptyTrackingHealth } from "@/lib/data/tracking";
+import { getTrackingConfig, getTrackingHealth, getTrackingStatus, emptyTrackingConfig, emptyTrackingHealth } from "@/lib/data/tracking";
 import { getSession } from "@/lib/auth";
 import { can } from "@/lib/rbac-policy";
 import { PemasaranClient } from "./pemasaran-client";
@@ -18,13 +18,16 @@ export default async function PemasaranPage() {
   const session = await getSession();
   const mayReadTracking = !!session && can(session.role, "integrations:write");
 
-  const [channels, feed, tracking, health] = await Promise.all([
+  const [channels, feed, status, tracking, health] = await Promise.all([
     getAdChannels(),
     getFeedStatus(),
+    // Ungated on purpose — "is a pixel connected?" is not a credential, and deriving the badge from the
+    // GATED config is what told every non-owner role that a live pixel was "Belum terhubung".
+    getTrackingStatus(),
     mayReadTracking ? getTrackingConfig() : Promise.resolve(emptyTrackingConfig()),
     mayReadTracking ? getTrackingHealth() : Promise.resolve(emptyTrackingHealth()),
   ]);
   return (
-    <PemasaranClient channels={channels} feed={feed} tracking={tracking} health={health} mayReadTracking={mayReadTracking} />
+    <PemasaranClient channels={channels} feed={feed} status={status} tracking={tracking} health={health} mayReadTracking={mayReadTracking} />
   );
 }

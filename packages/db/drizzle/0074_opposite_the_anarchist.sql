@@ -1,1 +1,1 @@
-ALTER TABLE "products" ADD COLUMN "short_description" text;
+ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "short_description" text;

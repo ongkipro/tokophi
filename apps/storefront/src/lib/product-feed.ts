@@ -96,7 +96,17 @@ const gallery = (p: Product): string[] =>
 const availability = (stock: number) => (stock > 0 ? "in stock" : "out of stock");
 
 /** `sale_price_effective_date` wants an ISO interval. The sale is live now; it ends when the flash does. */
-const saleWindow = (endsAt: string) => `${new Date().toISOString()}/${new Date(endsAt).toISOString()}`;
+/**
+ * `sale_price_effective_date` — `YYYY-MM-DDThh:mmZ/YYYY-MM-DDThh:mmZ`, exactly.
+ *
+ * ⚠️ Minutes, no seconds, no milliseconds. `toISOString()` emits both, which is a shape neither
+ * Google's syntax line nor Meta's documents. A provider that drops the attribute as malformed applies
+ * the sale price with NO END DATE — so after the flash lapses the feed keeps advertising the sale price
+ * while `/api/public/order` charges the base price. Under-quoting is exactly what this attribute was
+ * added to prevent.
+ */
+const minuteZ = (d: Date) => `${d.toISOString().slice(0, 16)}Z`;
+const saleWindow = (endsAt: string) => `${minuteZ(new Date())}/${minuteZ(new Date(endsAt))}`;
 
 /**
  * A GTIN is 8/12/13/14 digits with a mod-10 check digit. Anything else is a merchant's internal code
@@ -137,7 +147,12 @@ export function feedItems({ product: p, origin, storeName, scheme, profile }: Fe
   // The merchant's own brand when they set one; the shop name is the fallback, not the definition.
   const brand = clamp(p.vendor?.trim() || storeName, 70);
   const gender = p.gender || "";
-  const ageGroup = p.ageGroup || "adult";
+  // ⚠️ NOT `|| "adult"`. `age_group` is factual to all three platforms, and blank is the DEFAULT state
+  // (createProduct writes null when the merchant leaves it empty) — so defaulting it published every SKU
+  // of a children's-wear shop as adult apparel: mis-targeted delivery and a mismatched-attribute
+  // disapproval risk, invented by us. `gender` on the line above already does the right thing: emit it
+  // when it is known, omit it when it is not.
+  const ageGroup = p.ageGroup || "";
   const category = (() => {
     const path = p.googleCategoryPath || "";
     if (!path || profile.maxCategoryLevels === null) return path;
@@ -224,10 +239,10 @@ export function feedItems({ product: p, origin, storeName, scheme, profile }: Fe
       category ? `<g:google_product_category>${xml(category)}</g:google_product_category>` : "",
       p.category ? `<g:product_type>${xml(clamp(p.category, 750))}</g:product_type>` : "",
       gender ? `<g:gender>${xml(gender)}</g:gender>` : "",
-      `<g:age_group>${xml(ageGroup)}</g:age_group>`,
+      ageGroup ? `<g:age_group>${xml(ageGroup)}</g:age_group>` : "",
       color ? `<g:color>${xml(clamp(color, 100))}</g:color>` : "",
       size ? `<g:size>${xml(clamp(size, 100))}</g:size>` : "",
-      p.material ? `<g:material>${xml(p.material)}</g:material>` : "",
+      p.material ? `<g:material>${xml(clamp(p.material, 200))}</g:material>` : "",
     ].filter(Boolean);
     return [`<item>${lines.join("")}</item>`];
   });

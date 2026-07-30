@@ -4,6 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { decryptSecret, secretScope } from "@/lib/crypto";
 import { sanitize, sendGa4Purchase, sendMetaPurchase, sendTiktokPurchase, type ServerEvent } from "@/lib/capi";
 import { systemDomainFor } from "@/lib/data/domain";
+import { enqueuePurchase } from "@/lib/tracking-events";
 
 // CONVERSION DELIVERY WORKER (ADR 0012 §0.1, §16, §23) — the drain half of `tracking_event_deliveries`.
 // TokoΦ has no worker process, so this is a secured API route hit on a schedule, exactly like
@@ -41,16 +42,20 @@ function backoffMs(attempt: number): number {
  * is accepted by MP with a 204 and then quietly attributed to nobody.
  */
 /**
- * The store's public storefront origin, cached per tick. Only needed for delivery rows that carry no
- * captured origin (the payment-callback path), so most ticks never call it.
+ * The store's public storefront origin. Only needed for delivery rows that carry no captured origin
+ * (the payment-callback path), so most ticks never call it.
+ *
+ * ⚠️ The cache is created PER TICK and passed in — it used to be a module-level `Map`, which outlives
+ * the request in a long-running container, so a store that changed its slug kept sending the old
+ * `event_source_url` until the next deploy. `cfgCache` is per-tick for the same reason (a re-pasted
+ * token has to take effect on the next tick, not on the next release).
  */
-const originCache = new Map<string, string>();
-async function storefrontUrl(storeId: string): Promise<string> {
-  const hit = originCache.get(storeId);
+async function storefrontUrl(storeId: string, cache: Map<string, string>): Promise<string> {
+  const hit = cache.get(storeId);
   if (hit !== undefined) return hit;
   const [s] = await db.select({ slug: schema.stores.slug }).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
   const url = s?.slug ? `https://${systemDomainFor(s.slug)}/` : "";
-  originCache.set(storeId, url);
+  cache.set(storeId, url);
   return url;
 }
 
@@ -63,6 +68,10 @@ function ga4ClientId(raw?: string | null): string | null {
 
 type Payload = {
   value?: number;
+  goods?: number;
+  shipping?: number;
+  tax?: number;
+  lineItems?: { id: string; price?: number; qty?: number }[];
   currency?: string;
   contentIds?: string[];
   numItems?: number;
@@ -85,6 +94,66 @@ export async function GET(req: NextRequest) {
   }
 
   const now = new Date();
+
+  // ── RECONCILE, BEFORE THE CLAIM ─────────────────────────────────────────────────────────────────
+  // Two ways a real sale could produce no conversion at all, both silent, neither self-healing:
+  //
+  //  1. A PREPAID order is queued HELD at checkout and released only by the AutoLaris callback. That
+  //     webhook is a single un-retried delivery: get the callback secret wrong on a redeploy (it 401s),
+  //     or have the gateway drop it, and every prepaid Purchase in that window sits parked at the year
+  //     2126 forever. There is no payment poll and no "mark paid" path in the product.
+  //  2. `enqueuePurchase` runs AFTER the order transaction commits, inside a try/catch, and costs six
+  //     queries. One transient DB blip and it throws — the order is real, `tracking` comes back null, so
+  //     the storefront's positive gate suppresses the BROWSER pixel too, and nothing ever back-fills.
+  //     Prepaid recovers (the callback enqueues again); COD, where the thanks page IS the conversion,
+  //     never does.
+  //
+  // So: sweep both, bounded by time (older than a week is past Meta's event window anyway) and by row
+  // count, and cross-tenant with the store id carried explicitly on every predicate.
+  let released = 0;
+  let backfilled = 0;
+  try {
+    const rel = await db.execute(sql`
+      update tracking_event_deliveries d
+         set next_attempt_at = now(), updated_at = now()
+        from orders o
+       where d.order_id = o.id
+         and d.store_id = o.store_id
+         and d.status = 'queued'
+         and d.next_attempt_at > now() + interval '1 day'
+         and o.financial_status = 'dibayar'
+         and o.placed_at > now() - interval '7 days'`);
+    released = rel.length ?? 0;
+  } catch (err) {
+    console.error("[cron/tracking-events] release sweep failed", err);
+  }
+  try {
+    // A COD order counts at the thanks page; a prepaid one only once the money landed. Anything else
+    // (an unpaid VA) is correctly left alone — this sweep must never invent a conversion.
+    const missing = (await db.execute(sql`
+      select o.id::text as id, o.store_id::text as store_id
+        from orders o
+       where o.placed_at > now() - interval '3 days'
+         and not exists (select 1 from tracking_event_deliveries d where d.order_id = o.id)
+         and exists (
+               select 1 from store_tracking_channels c
+                where c.store_id = o.store_id and c.capi_enabled
+                  and c.capi_token_ciphertext is not null
+                  and nullif(btrim(c.pixel_id), '') is not null)
+         and (o.financial_status = 'dibayar'
+              or exists (select 1 from payments p where p.order_id = o.id and p.method = 'cod'))
+       order by o.placed_at desc
+       limit 20`)) as unknown as { id: string; store_id: string }[];
+    for (const m of missing) {
+      // No browser context — it is long gone. A conversion with weaker match keys beats no conversion.
+      const facts = await enqueuePurchase(m.store_id, m.id);
+      if (facts) backfilled++;
+    }
+    if (missing.length) console.warn(`[cron/tracking-events] backfilled ${backfilled}/${missing.length} order(s) that had no delivery row`);
+  } catch (err) {
+    console.error("[cron/tracking-events] backfill sweep failed", err);
+  }
+
   // CLAIM — ONE atomic `UPDATE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED) RETURNING`.
   //
   // ⚠️ This MUST stay a single statement. A SELECT-then-UPDATE cannot be made safe here: two ticks
@@ -130,7 +199,7 @@ export async function GET(req: NextRequest) {
       payload: schema.trackingEventDeliveries.payload,
     });
 
-  if (claimed.length === 0) return NextResponse.json({ ok: true, claimed: 0, sent: 0, failed: 0, dead: 0 });
+  if (claimed.length === 0) return NextResponse.json({ ok: true, claimed: 0, sent: 0, failed: 0, dead: 0, released, backfilled });
 
   let sent = 0;
   let failed = 0;
@@ -138,6 +207,7 @@ export async function GET(req: NextRequest) {
 
   // Channel config is per store; cache it for this tick so 50 orders from one shop are one read.
   const cfgCache = new Map<string, { pixelId: string | null; token: string | null; advancedMatching: boolean; testEventCode: string | null } | null>();
+  const originCache = new Map<string, string>();
   async function config(storeId: string, channel: "meta" | "google" | "tiktok") {
     const key = `${storeId}:${channel}`;
     if (cfgCache.has(key)) return cfgCache.get(key)!;
@@ -214,6 +284,11 @@ export async function GET(req: NextRequest) {
         eventId: row.eventId,
         eventTime: Math.floor(new Date(p.occurredAt ?? Date.now()).getTime() / 1000),
         value: Number(p.value ?? 0),
+        // Absent on rows queued before these fields existed — the senders fall back to `value`.
+        ...(typeof p.goods === "number" ? { goods: p.goods } : {}),
+        ...(typeof p.shipping === "number" ? { shipping: p.shipping } : {}),
+        ...(typeof p.tax === "number" ? { tax: p.tax } : {}),
+        ...(Array.isArray(p.lineItems) ? { lineItems: p.lineItems } : {}),
         currency: p.currency ?? "IDR",
         contentIds: Array.isArray(p.contentIds) ? p.contentIds : [],
         numItems: Number(p.numItems ?? 0),
@@ -221,8 +296,10 @@ export async function GET(req: NextRequest) {
         sourceUrl: p.client?.sourceUrl,
         // Meta requires `event_source_url` and TikTok requires `page.url` on every website event. A row
         // created by the payment-callback release path carries no origin, so the store's own storefront
-        // is the honest fallback — it IS where the sale happened.
-        fallbackUrl: await storefrontUrl(row.storeId),
+        // is the honest fallback — it IS where the sale happened. Only looked up when the row has no
+        // captured origin: it used to be awaited for EVERY row, which is one query per delivery for a
+        // value almost none of them use.
+        ...(p.client?.sourceUrl ? {} : { fallbackUrl: await storefrontUrl(row.storeId, originCache) }),
         identity,
         client: p.client,
       };
@@ -274,25 +351,42 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, claimed: claimed.length, sent, failed, dead });
+  return NextResponse.json({ ok: true, claimed: claimed.length, sent, failed, dead, released, backfilled });
 }
 
+/**
+ * Write a row's verdict. NEVER throws.
+ *
+ * ⚠️ It used to. The claim increments `attempt_count` for all 50 rows at once (deliberately — see the
+ * note above it), which is only sound if every claimed row gets a verdict in the same tick. `finish()`
+ * sat inside the per-row `catch` and was not itself guarded, so one DB blip while writing a verdict
+ * escaped the `for` loop and 500'd the route: the ~45 rows the tick had not reached yet kept
+ * `status='processing'` with an attempt already spent, waited out STALE_MS, were re-claimed, and spent
+ * another. Six such ticks and their FIRST real send landed on `attempt >= MAX_ATTEMPTS` — instantly
+ * dead-lettered, carrying an error from a failure that was never theirs.
+ */
 async function finish(
   id: string,
   attempt: number,
   o: { status: "failed" | "dead_letter"; code: string; message: string; retryInMs?: number },
 ) {
-  await db
-    .update(schema.trackingEventDeliveries)
-    .set({
-      status: o.status,
-      attemptCount: attempt,
-      // A dead row must never be picked up again: park its clock far in the future rather than rely on
-      // the status filter alone.
-      nextAttemptAt: new Date(Date.now() + (o.retryInMs ?? 365 * 24 * 3600_000)),
-      lastErrorCode: o.code.slice(0, 64),
-      lastErrorMessage: o.message.slice(0, 400),
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.trackingEventDeliveries.id, id));
+  try {
+    await db
+      .update(schema.trackingEventDeliveries)
+      .set({
+        status: o.status,
+        attemptCount: attempt,
+        // A dead row must never be picked up again: park its clock far in the future rather than rely
+        // on the status filter alone.
+        nextAttemptAt: new Date(Date.now() + (o.retryInMs ?? 365 * 24 * 3600_000)),
+        lastErrorCode: o.code.slice(0, 64),
+        lastErrorMessage: o.message.slice(0, 400),
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.trackingEventDeliveries.id, id));
+  } catch (err) {
+    // Leaving the row `processing` is the safe failure: STALE_MS reclaims it in 30 minutes. Losing the
+    // other 49 rows of the batch is not.
+    console.error(`[cron/tracking-events] could not write verdict for ${id}`, err);
+  }
 }

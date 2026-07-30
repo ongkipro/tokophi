@@ -81,15 +81,19 @@ const drawerPhone = (store.phone ?? "").trim() || null;
 const drawerEmail = (store.email ?? "").trim() || null;
 ---
 
+{/* HOME: the header floats over the hero, transparent, and turns solid on scroll (the
+    Casaio pattern). Elsewhere it is the sticky solid bar it always was. The colour flip
+    lives in the style block at the foot of this file, keyed on `data-solid`, so no child
+    needs to know which state it is in.
+    ⚠️ This comment sat BETWEEN the attributes below. Astro still built it, but its TSX
+    transform read it as an attribute — which is why `astro check` reported 8 errors and
+    typechecked NONE of the storefront's 92 files for eight days. Keep comments outside
+    the tag. */}
 <header
   id="site-header"
   data-header
   data-overlay={isHome ? "true" : undefined}
   data-solid="false"
-  {/* HOME: the header floats over the hero, transparent, and turns solid on scroll (the
-      Casaio pattern). Elsewhere it is the sticky solid bar it always was. The colour flip
-      lives in the <style> at the foot of this file, keyed on `data-solid`, so no child needs
-      to know which state it is in. */}
   class:list={[
     "z-40 transition-colors duration-300 motion-reduce:transition-none",
     isHome

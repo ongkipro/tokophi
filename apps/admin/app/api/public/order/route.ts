@@ -24,6 +24,7 @@ import { IDR } from "@tokophi/lib/format";
 import { applyDiscount } from "@/lib/promo";
 import { activeFlashPrices } from "@/lib/flash";
 import { clientContextFromRequest, enqueuePurchase } from "@/lib/tracking-events";
+import { adChannel } from "@/lib/ad-channel";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the
@@ -135,7 +136,7 @@ async function handle(req: Request) {
     // ADR 0012 — the ad platforms' own cookies, read on the storefront. OPAQUE: never authorization,
     // never priced against, never stored beyond the conversion row; only forwarded to the merchant's
     // own pixel provider as match keys. Length-bounded in clientContextFromRequest.
-    trackingCookies?: { fbp?: string; fbc?: string; ga?: string; ttp?: string; ttclid?: string };
+    trackingCookies?: { fbp?: string; fbc?: string; ga?: string; gcl?: string; ttp?: string; ttclid?: string };
   };
   try {
     body = await req.json();
@@ -594,7 +595,7 @@ async function handle(req: Request) {
         Date.now().toString().slice(-9) +
         Math.floor(Math.random() * 46656).toString(36).toUpperCase().padStart(3, "0");
       const [ord] = await tx.insert(schema.orders).values({
-    storeId: store.id, number, customerId: cid, status: "baru", financialStatus: "pending", channel: "organic",
+    storeId: store.id, number, customerId: cid, status: "baru", financialStatus: "pending", channel: adChannel(body.trackingCookies),
     subtotalIdr: subtotal, shippingIdr: shippingCost, taxIdr: tax.taxIdr, discountIdr, totalIdr: total,
     // The courier the shopper actually picked — `rate.code`, i.e. the courier of the fresh server-side
     // quote we matched (svcCode === rate.code by findRate), never the client's raw claim. Recording it

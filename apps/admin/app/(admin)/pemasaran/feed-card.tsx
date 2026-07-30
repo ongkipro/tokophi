@@ -177,6 +177,13 @@ export function FeedCard({ feed }: { feed: FeedStatus }) {
               <TriangleAlert className="size-3.5" /> {num(unclassified)} perlu kategori Google
             </Link>
           )}
+          {feed.feedItems > 0 && (
+            // Merchant Center counts VARIANTS. Saying only "22 produk" left the merchant staring at
+            // "86 items" in Google's UI with nothing on our side to reconcile it against.
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <Sparkles className="size-3.5" /> {num(feed.feedItems)} varian dikirim ke platform
+            </span>
+          )}
           {missing === 0 && unclassified === 0 && feed.total > 0 && (
             <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
               <Sparkles className="size-3.5" /> seluruh katalog siap

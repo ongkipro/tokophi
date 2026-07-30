@@ -18,9 +18,13 @@ const num = (k: string) => {
 };
 
 const order = get("order");
-const name = get("name");
-const phone = get("phone");
-const address = get("address");
+// ⚠️ NAME, PHONE AND ADDRESS ARE NOT IN THE URL, deliberately. They used to be: the funnel redirected
+// to `/thanks?name=<full name>&phone=<62…>&address=<street>` — a shopper's identity and home address in
+// browser history, in every server access log, and in any link they forward. It also blocked conversion
+// tracking on this page outright: Meta prohibits PII in event parameters (and disables pixels for it),
+// and `event_source_url` / `page_location` / `page.url` all carry the URL verbatim.
+// They now travel in `sessionStorage` (same tab, same origin, never sent anywhere) and are filled in by
+// the small script at the foot of this file. Everything below is order data, not personal data.
 const variant = get("variant"); // e.g. "Hitam / S"
 const qty = Math.max(1, num("qty") || 1);
 const subtotal = num("subtotal"); // price × qty (what was actually charged for the goods)
@@ -140,23 +144,15 @@ const STEPS = [
         </div>
       </section>
 
-      {/* Data pengiriman */}
-      {(order || name || phone || address) && (
+      {/* Data pengiriman — the three personal rows start hidden and are filled from sessionStorage. */}
+      {order && (
         <section>
           <h2 class="mb-3 font-bold text-ink">Data pengiriman</h2>
           <dl class="divide-y divide-line rounded-2xl border border-line text-sm">
-            {order && (
-              <div class="flex justify-between gap-4 px-4 py-3"><dt class="text-stone-500">No. Pesanan</dt><dd class="text-right font-medium text-ink">#{order}</dd></div>
-            )}
-            {name && (
-              <div class="flex justify-between gap-4 px-4 py-3"><dt class="text-stone-500">Nama</dt><dd class="text-right font-medium text-ink">{name}</dd></div>
-            )}
-            {phone && (
-              <div class="flex justify-between gap-4 px-4 py-3"><dt class="text-stone-500">WhatsApp</dt><dd class="text-right font-medium text-ink">{phone}</dd></div>
-            )}
-            {address && (
-              <div class="flex justify-between gap-4 px-4 py-3"><dt class="shrink-0 text-stone-500">Alamat</dt><dd class="text-right font-medium text-ink">{address}</dd></div>
-            )}
+            <div class="flex justify-between gap-4 px-4 py-3"><dt class="text-stone-500">No. Pesanan</dt><dd class="text-right font-medium text-ink">#{order}</dd></div>
+            <div class="flex justify-between gap-4 px-4 py-3" data-row="name" hidden><dt class="text-stone-500">Nama</dt><dd class="text-right font-medium text-ink" data-val="name"></dd></div>
+            <div class="flex justify-between gap-4 px-4 py-3" data-row="phone" hidden><dt class="text-stone-500">WhatsApp</dt><dd class="text-right font-medium text-ink" data-val="phone"></dd></div>
+            <div class="flex justify-between gap-4 px-4 py-3" data-row="address" hidden><dt class="shrink-0 text-stone-500">Alamat</dt><dd class="text-right font-medium text-ink" data-val="address"></dd></div>
           </dl>
         </section>
       )}
@@ -195,7 +191,7 @@ const STEPS = [
           </div>
           <ul class="space-y-2.5 text-sm text-stone-700">
             <li class="flex gap-2"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"></span><span>Siapkan uang tunai sesuai total tagihan: <strong class="text-ink">{IDR(total)}</strong>.</span></li>
-            <li class="flex gap-2"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"></span><span>Pastikan nomor WhatsApp{phone ? <> <strong class="text-ink">{phone}</strong></> : ""} tetap aktif untuk konfirmasi admin atau kurir.</span></li>
+            <li class="flex gap-2"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"></span><span>Pastikan nomor WhatsApp<strong class="text-ink" data-val="phone"></strong> tetap aktif untuk konfirmasi admin atau kurir.</span></li>
             <li class="flex gap-2"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"></span><span>Mohon terima paket saat kurir datang. Jika alamat sulit ditemukan, kurir dapat menghubungi nomor tersebut.</span></li>
           </ul>
         </section>
@@ -222,4 +218,28 @@ const STEPS = [
     </main>
     </div>
   </div>
+
+  {/* Fill the personal rows from sessionStorage — the funnel wrote them there instead of into the URL.
+      Keyed by order number, so a stale entry from an earlier order never shows under a new one, and
+      cleared straight after reading: this page is the only consumer. Fails silent by design (private
+      mode, a forwarded link, a direct visit) — the rows simply stay hidden. */}
+  <script is:inline>
+    (function () {
+      try {
+        var order = new URLSearchParams(location.search).get("order") || "";
+        var raw = sessionStorage.getItem("tphi:thanks");
+        if (!raw) return;
+        var d = JSON.parse(raw);
+        sessionStorage.removeItem("tphi:thanks");
+        if (!d || d.order !== order) return;
+        ["name", "phone", "address"].forEach(function (k) {
+          var v = (d[k] || "").toString().slice(0, 200);
+          if (!v) return;
+          document.querySelectorAll('[data-val="' + k + '"]').forEach(function (el) { el.textContent = v; });
+          var row = document.querySelector('[data-row="' + k + '"]');
+          if (row) row.hidden = false;
+        });
+      } catch (e) {}
+    })();
+  </script>
 </LandingLayout>

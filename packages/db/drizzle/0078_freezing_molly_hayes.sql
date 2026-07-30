@@ -1,1 +1,1 @@
-ALTER TABLE "stores" ADD COLUMN "product_gallery_layout" text DEFAULT 'thumbnail-left' NOT NULL;
+ALTER TABLE "stores" ADD COLUMN IF NOT EXISTS "product_gallery_layout" text DEFAULT 'thumbnail-left' NOT NULL;

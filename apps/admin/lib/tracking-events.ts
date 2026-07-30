@@ -43,7 +43,7 @@ export type ClientContext = {
 export function clientContextFromRequest(
   req: Request,
   ip: string | null,
-  cookies: { fbp?: unknown; fbc?: unknown; ga?: unknown; ttp?: unknown; ttclid?: unknown } | undefined,
+  cookies: { fbp?: unknown; fbc?: unknown; ga?: unknown; gcl?: unknown; ttp?: unknown; ttclid?: unknown } | undefined,
 ): ClientContext {
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 256) : null);
   const origin = req.headers.get("origin") ?? req.headers.get("referer") ?? null;
@@ -69,7 +69,14 @@ export type PurchaseFacts = {
   eventId: string;
   contentIds: string[];
   numItems: number;
+  /** What the shopper paid, all in. Meta's and TikTok's `value`. */
   value: number;
+  /** Goods only — price × quantity, no ongkir, no PPN. GA4 defines its `value` on THIS. */
+  goods: number;
+  shipping: number;
+  tax: number;
+  /** Per-line catalog id + price + quantity, in the same order as `contentIds`. */
+  lineItems: { id: string; price: number; qty: number }[];
   currency: "IDR";
   orderNumber: string;
   occurredAt: Date;
@@ -86,6 +93,10 @@ export async function purchaseFacts(storeId: string, orderId: string): Promise<P
     .select({
       number: schema.orders.number,
       total: schema.orders.totalIdr,
+      subtotal: schema.orders.subtotalIdr,
+      discount: schema.orders.discountIdr,
+      shipping: schema.orders.shippingIdr,
+      tax: schema.orders.taxIdr,
       placedAt: schema.orders.placedAt,
       phone: schema.orders.shipPhone,
       customerId: schema.orders.customerId,
@@ -108,12 +119,13 @@ export async function purchaseFacts(storeId: string, orderId: string): Promise<P
   // ONLY by `orderId` — an id whose ownership was just proven by the store-scoped query above. That
   // proof is the tenant boundary here; do not "simplify" it away.
   const lines = await db
-    .select({ variantId: schema.orderLineItems.variantId, qty: schema.orderLineItems.qty })
+    .select({ variantId: schema.orderLineItems.variantId, qty: schema.orderLineItems.qty, price: schema.orderLineItems.priceIdr })
     .from(schema.orderLineItems)
     .where(eq(schema.orderLineItems.orderId, orderId));
   const boughtIds = lines.map((l) => l.variantId).filter((v): v is string => !!v);
 
   let contentIds: string[] = [];
+  const lineItems: { id: string; price: number; qty: number }[] = [];
   // `numItems` counts ONLY the lines that produced a content id. Summing every line instead would report
   // `num_items: 3` next to two ids whenever a line's variant was hard-deleted (or predates variants),
   // and the provider silently mis-attributes the difference.
@@ -150,9 +162,11 @@ export async function purchaseFacts(storeId: string, orderId: string): Promise<P
         dropped += 1;
         continue;
       }
-      contentIds.push(
-        retailerId(scheme, { handle: r.handle, number: r.number }, { seq: r.seq, index: Number(r.rank) - 1, count: Number(r.variantCount) }),
-      );
+      const id = retailerId(scheme, { handle: r.handle, number: r.number }, { seq: r.seq, index: Number(r.rank) - 1, count: Number(r.variantCount) });
+      contentIds.push(id);
+      // Same order as `contentIds`, and only for lines that produced one — GA4's item-scoped metrics
+      // need the per-line price and quantity, and a half-mapped item list is worse than none.
+      lineItems.push({ id, price: Number(l.price ?? 0), qty: Number(l.qty ?? 0) });
       numItems += l.qty ?? 0;
     }
     // A dropped line means the conversion under-reports what was actually bought. Silent is how that
@@ -177,6 +191,11 @@ export async function purchaseFacts(storeId: string, orderId: string): Promise<P
     contentIds,
     numItems,
     value: Number(order.total ?? 0),
+    // Goods after the order-level discount, so the parts still add up to the total the shopper paid.
+    goods: Math.max(0, Number(order.subtotal ?? 0) - Number(order.discount ?? 0)),
+    shipping: Number(order.shipping ?? 0),
+    tax: Number(order.tax ?? 0),
+    lineItems,
     currency: "IDR",
     orderNumber: order.number,
     occurredAt: order.placedAt ?? new Date(), // the ORDER's time — providers reject a stale event_time
@@ -255,6 +274,13 @@ export async function enqueuePurchase(
         // Commerce facts only. No email, no phone, no token (§9.4 — data minimisation).
         payload: {
           value: facts.value,
+          // GA4's `value` excludes ongkir and PPN and gives each its own parameter; Meta's and TikTok's
+          // do not. Carrying all four lets the sender choose per provider instead of one number lying
+          // to two of them.
+          goods: facts.goods,
+          shipping: facts.shipping,
+          tax: facts.tax,
+          lineItems: facts.lineItems,
           currency: facts.currency,
           contentIds: facts.contentIds,
           numItems: facts.numItems,
