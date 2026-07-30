@@ -7,7 +7,7 @@ import { clamp } from "../lib/text";
 import Analytics from "../components/Analytics.astro";
 import MarketingPixels from "../components/MarketingPixels.astro";
 import Chat from "../components/Chat.astro";
-import { mediaUrl } from "../data/catalog";
+import { mediaUrl, ADMIN_BASE } from "../data/catalog";
 
 interface Props {
   title: string;
@@ -36,7 +36,7 @@ const { store, catalog, origin } = Astro.locals;
 const BRAND_SHADES = catalog.brandShades;
 const { title, description = store.tagline, image, type = "website", head, robots } = Astro.props;
 
-const fullTitle = `${title} — ${store.name}`;
+const fullTitle = `${title} - ${store.name}`;
 
 // A meta/OG description longer than ~155 chars is truncated mid-sentence by Google and hard-cut by
 // WhatsApp's preview card. `clamp` (src/lib/text.ts) cuts on a word and marks it — the footer needs
@@ -60,7 +60,13 @@ const favicon = store.faviconUrl ? mediaUrl(store.faviconUrl) : null;
 // og:image MUST be absolute — crawlers do not resolve a relative one. Product images are either
 // site-relative (/products/x.webp) or already absolute (mediaUrl() rewrites admin uploads).
 const ogImage = (() => {
-  const src = image || store.logoUrl || "";
+  // ⚠️ `mediaUrl()` on the LOGO. `store.logoUrl` is the relative `/api/uploads/<name>` the admin
+  // writes, and that path is served by the ADMIN app — resolving it against the STOREFRONT origin
+  // produced a 404 on every share. The favicon fifteen lines up already does this; the og:image did
+  // not. Measured: `/`, `/produk`, `/kontak` and every `/halaman/*` all shared a broken thumbnail,
+  // because they carry no explicit image and fall through to the logo — which is the first thing
+  // onboarding asks a merchant to upload. `image` is passed already-absolute by its callers.
+  const src = image || (store.logoUrl ? mediaUrl(store.logoUrl) : "") || "";
   if (!src) return null;
   try {
     return new URL(src, origin).href;
@@ -109,6 +115,10 @@ const ogImage = (() => {
         </Fragment>
       )
     }
+    {/* The merchant's photos, logo and favicon are served by the ADMIN app — a different origin in
+        production — so the browser paid DNS+TLS+RTT before the first byte of the LCP candidate on any
+        store that uses uploads. Only the two font hosts were preconnected. */}
+    {ADMIN_BASE && <link rel="preconnect" href={ADMIN_BASE} crossorigin />}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

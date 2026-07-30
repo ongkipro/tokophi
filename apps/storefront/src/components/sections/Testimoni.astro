@@ -39,6 +39,9 @@ const testimonials = items ?? [];
     </div>
     <div
       data-testimoni-track
+      tabindex="0"
+      role="group"
+      aria-label="Testimoni pelanggan"
       class="mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {
@@ -64,7 +67,10 @@ const testimonials = items ?? [];
 <script>
   // Lightweight scroll-snap carousel — no framework, one listener pair per section instance.
   document.querySelectorAll<HTMLElement>("[data-testimoni-nav]").forEach((nav) => {
-    const track = nav.closest("div")?.parentElement?.querySelector<HTMLElement>("[data-testimoni-track]");
+    // `closest()` INCLUDES the element itself, so `closest("div")` returned the nav, `.parentElement`
+    // was the heading row, and the track is that row's SIBLING — the lookup missed and the early return
+    // swallowed both buttons. Proven dead in Chromium: scrollLeft 0 before and after a click.
+    const track = nav.closest("section")?.querySelector<HTMLElement>("[data-testimoni-track]");
     if (!track) return;
     const scrollByCard = (dir: 1 | -1) => {
       const card = track.querySelector("figure");

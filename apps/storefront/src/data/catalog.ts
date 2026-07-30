@@ -180,7 +180,7 @@ const isVirtualHandle = (h: string): boolean => (VIRTUAL_COLLECTION_HANDLES as r
 // Merchant-uploaded media is stored as a relative /api/uploads/<name> path served by the ADMIN app.
 // The storefront runs on a different origin, so rewrite those to absolute (admin base derived from
 // PUBLIC_ONGKIR_API — no extra env). Seeded /products/*.webp stay relative (served from public/).
-const ADMIN_BASE = (() => {
+export const ADMIN_BASE = (() => {
   try {
     // RUNTIME env, not import.meta.env: built without env, the build-time read bakes in as undefined
     // and every merchant-uploaded product image would resolve against localhost. See store.ts.

@@ -1,4 +1,5 @@
 ---
+import { mediaUrl } from "../data/catalog";
 // Tenant resolved per-request from the Host header (src/middleware.ts).
 //
 // ── EVERY MERCHANT FIELD BELOW IS OPTIONAL, AND TODAY THEY ARE ALL EMPTY ────────────────────────
@@ -136,7 +137,7 @@ const HEADING = "text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-cre
     <div>
       {
         store.logoUrl ? (
-          <img src={store.logoUrl} alt={store.name} width="160" height="48" class="h-10 w-auto object-contain object-left" />
+          <img src={mediaUrl(store.logoUrl)} alt={store.name} width="160" height="48" class="h-10 w-auto object-contain object-left" />
         ) : (
           <p class="font-display text-2xl font-semibold text-cream">{store.name}</p>
         )

@@ -11,6 +11,7 @@
 // forwarded to the sections that can use it — see ./context.ts.
 import type { StoredTemplateData } from "@tokophi/sections";
 import { HOMEPAGE_CONTEXT, type SectionContext } from "./context";
+import { mediaUrl } from "../../data/catalog";
 import Hero from "./Hero.astro";
 import ProductListingSection from "./ProductListingSection.astro";
 import ProductGrid from "./ProductGrid.astro";
@@ -32,10 +33,35 @@ interface Props {
 }
 
 const { data, context = HOMEPAGE_CONTEXT } = Astro.props;
+
+// ── MERCHANT UPLOADS MUST BE REWRITTEN TO THE ADMIN ORIGIN ───────────────────────────────────────
+//
+// The Store Builder's image picker stores `/api/uploads/<name>`, and that path is served by the
+// ADMIN app — a different origin in production. NO section component called `mediaUrl()`, so every
+// image a merchant uploaded through the picker 404'd on their own shop. It went unseen because the
+// seeded template's only three image props are static files (`/hero/hero-1.webp`, …), so the
+// merchant-upload path is unreachable by clicking around the demo.
+//
+// Applied ONCE here rather than at the six render sites: six copies of the same call is six chances
+// for the next section to forget it. `mediaUrl` passes a non-upload path straight through, so this
+// is a no-op for static assets. Keys, not shapes — `slides[]` and `items[]` nest their own.
+const IMAGE_KEYS = new Set(["imageUrl", "mobileImageUrl"]);
+function withMedia<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(withMedia) as unknown as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) =>
+        IMAGE_KEYS.has(k) && typeof v === "string" ? [k, v ? mediaUrl(v) : v] : [k, withMedia(v)],
+      ),
+    ) as T;
+  }
+  return value;
+}
 ---
 
 {
-  data.content.map((item) => {
+  data.content.map((raw) => {
+    const item = { ...raw, props: withMedia(raw.props) } as typeof raw;
     switch (item.type) {
       case "hero":
         return <Hero {...item.props} />;
