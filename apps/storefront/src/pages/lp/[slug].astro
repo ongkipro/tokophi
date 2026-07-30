@@ -10,11 +10,13 @@
 // RESPONSE BODY — parsed by the browser's HTML parser, not assigned to `.innerHTML`. A SCRIPT tag in a
 // parsed document RUNS. There is no sanitizer on this path and no CSP on the storefront.
 //
-// It is the MERCHANT's own content for their OWN storefront (the Store Builder trust level), BUT the
-// write requires only `content:write`, which `staff` holds in every tenant — and this page carries the
-// COD order form (name, WhatsApp, full address). Narrowing that capability, or adding a real
-// sanitizer, is an owner decision filed in BACKLOG; a regex half-sanitizer would be worse than none,
-// because it would restore exactly the false confidence this comment was providing.
+// It is the MERCHANT's own content for their OWN storefront (the Store Builder trust level). The write
+// used to need only `content:write`, which `staff` holds in every tenant — on a page carrying the COD
+// order form (name, WhatsApp, full address). **DECIDED 2026-07-30: raw HTML is now OWNER-ONLY**
+// (`landing:html`, enforced in `actions/landing.ts` when the html actually changes, and gated in the
+// editor). Deliberately NOT a regex sanitizer: `<script>` is the obvious vector and `onerror=`,
+// `javascript:` in an href, `<iframe srcdoc>` and SVG event handlers are not, so a partial strip would
+// restore exactly the false confidence this comment used to provide.
 // The admin's own caption now says the truth instead of the opposite.
 //
 // ⚠️ Do NOT write the literal opening `script` tag with angle brackets in THIS frontmatter comment.

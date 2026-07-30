@@ -24,7 +24,15 @@ export type Capability =
   | "chat:read"
   | "chat:write"
   | "theme:write" // Store Builder (ADR 0009) — homepage/category/product section templates
-  | "integrations:write"; // marketing pixels / CAPI / Meta connection (ADR 0012) — owner-only, like settings
+  | "integrations:write" // marketing pixels / CAPI / Meta connection (ADR 0012) — owner-only, like settings
+  // Landing HTML — pasting RAW MARKUP that the storefront renders with `set:html`, i.e. it is emitted
+  // into the SSR response body and PARSED by the browser: a `<script>` tag in it RUNS, on the shop's
+  // own origin, on a page that carries the COD order form (name, WhatsApp, full address). There is no
+  // sanitizer and no CSP. It used to need only `content:write`, which `staff` holds in EVERY tenant.
+  // Owner-only (2026-07-30 decision) — the narrowest fix that does not pretend a regex sanitizer is
+  // one. Editing the REST of a landing (title, slug, product, funnel config) still needs only
+  // `content:write`: the escalation is on the executable markup, not on the feature.
+  | "landing:html";
 
 export const ALL_CAPABILITIES: Capability[] = [
   "products:write",
@@ -43,6 +51,7 @@ export const ALL_CAPABILITIES: Capability[] = [
   "chat:write",
   "theme:write",
   "integrations:write",
+  "landing:html",
 ];
 
 // Who can do what.
@@ -56,7 +65,9 @@ export const ALL_CAPABILITIES: Capability[] = [
 export const ROLE_CAPS: Record<Role, readonly Capability[]> = {
   owner: ALL_CAPABILITIES,
   // A tracking/Meta connection stores tenant secrets + is a store-level setting → owner-only, like settings.
-  admin: ALL_CAPABILITIES.filter((c) => c !== "settings:write" && c !== "integrations:write"),
+  admin: ALL_CAPABILITIES.filter(
+    (c) => c !== "settings:write" && c !== "integrations:write" && c !== "landing:html",
+  ),
   staff: [
     "products:write",
     "discounts:write",
