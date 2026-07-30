@@ -3,6 +3,7 @@ import { schema } from "@tokophi/db";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
+import { can } from "@/lib/rbac-policy";
 import { withTenant } from "@/lib/tenant";
 import { resolveFormConfig, type FormConfig } from "@tokophi/lib/form-config";
 
@@ -27,7 +28,8 @@ const slugify = (s: string) =>
     .slice(0, 80);
 
 export async function saveLanding(input: LandingInput): Promise<{ ok: boolean; error?: string; id?: string }> {
-  const { storeId } = await requireCapability("content:write");
+  const session = await requireCapability("content:write");
+  const { storeId } = session;
 
   const slug = slugify(input.slug);
   const title = input.title.trim().slice(0, 160);
@@ -47,6 +49,36 @@ export async function saveLanding(input: LandingInput): Promise<{ ok: boolean; e
   };
 
   const res = await withTenant(storeId, async (db) => {
+    // ── RAW HTML IS OWNER-ONLY (2026-07-30 decision) ──────────────────────────────────────────────
+    //
+    // `lp/[slug].astro` renders this with `set:html`, which emits it into the SSR response BODY — the
+    // browser's HTML parser handles it, not `innerHTML`, so a `<script>` tag in it RUNS. On the shop's
+    // own origin, on the page that carries the COD order form. No sanitizer, no CSP.
+    //
+    // Gated on the HTML ACTUALLY CHANGING, not on the action: staff keep managing the title, slug,
+    // product, countdown and funnel fields, which carry no such power. Escalating the whole editor
+    // would take a capability away for a reason that does not apply to most of it.
+    //
+    // A regex sanitizer was considered and refused: `<script>` is the obvious vector and `onerror=`,
+    // `javascript:` in an `href`, `<iframe srcdoc>` and SVG event handlers are not, so a partial strip
+    // would restore exactly the false confidence the old "tidak dijalankan" caption was providing.
+    const nextHtml = values.html;
+    let priorHtml = "";
+    if (input.id) {
+      const [row] = await db
+        .select({ html: schema.landingPages.html })
+        .from(schema.landingPages)
+        .where(and(eq(schema.landingPages.id, input.id), eq(schema.landingPages.storeId, storeId)))
+        .limit(1);
+      priorHtml = row?.html ?? "";
+    }
+    if (nextHtml !== priorHtml && !can(session.role, "landing:html")) {
+      return {
+        ok: false as const,
+        error: "Hanya Pemilik toko yang boleh mengubah HTML landing — isinya dijalankan apa adanya di halaman toko.",
+      };
+    }
+
     // CHILD-TABLE RULE: product_id is an FK on a table with no independent identity — confirm the
     // product is THIS store's (read back under RLS) before writing a row keyed on it.
     const [prod] = await db

@@ -233,6 +233,27 @@ SQL
 ⚠️ Resolve the postgres container by PREFIX, never by its full name — the hash suffix changes on
 every deploy, and a hardcoded one fails with "No such container" the moment anything ships.
 
+## Landing HTML (`/lp/<slug>`) — raw markup, OWNER-ONLY
+
+- ⚠️ **`set:html` EXECUTES.** The pasted HTML is emitted into the SSR response **body**, so the
+  browser's HTML **parser** handles it — not `innerHTML`. A `<script>` tag in it **runs**, on the
+  shop's own origin, on the page carrying the COD order form (name, WhatsApp, full address). There is
+  no sanitizer on this path and no CSP on the storefront. The admin used to tell the merchant the
+  opposite ("Tag &lt;script&gt; tidak dijalankan (keamanan)"), and the storefront comment it came from
+  said the same. Both now say the truth.
+- **Changing that HTML needs `landing:html` — owner only.** Everything ELSE on the screen (title,
+  slug, product, countdown, funnel fields) still needs only `content:write`: the escalation is on the
+  executable markup, not on the feature, so staff keep managing landings. Enforced in
+  `actions/landing.ts` **only when the html differs from the stored row**, and gated in the editor so
+  a staff user sees why before typing rather than after pressing Simpan.
+- ⚠️ **Do NOT "fix" this with a regex sanitizer.** `<script>` is the obvious vector; `onerror=`,
+  `javascript:` in an `href`, `<iframe srcdoc>` and SVG event handlers are not. A partial strip would
+  restore exactly the false confidence that caption was already providing. A real sanitizer (or a CSP)
+  is a separate, deliberate piece of work.
+- `admin` is derived by SUBTRACTION (`ALL_CAPABILITIES.filter(...)`), so a new owner-only capability
+  must be excluded there **explicitly** or it leaks to admin by default. `apps/admin/lib/rbac-landing.test.ts`
+  pins this.
+
 ## Store Builder / Tema — three page types, three different jobs
 
 `page_templates.type` is `homepage | category | product` and they are **not interchangeable**:

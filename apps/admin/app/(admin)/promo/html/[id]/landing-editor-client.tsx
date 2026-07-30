@@ -23,6 +23,10 @@ import { Label } from "@tokophi/ui/label";
 export function LandingEditorClient({ editor }: { editor: LandingEditor }) {
   const router = useRouter();
   const canWrite = useCan("content:write");
+  // The raw HTML is OWNER-ONLY: the storefront renders it with `set:html`, so a `<script>` in it runs
+  // on the shop's origin, on the page carrying the COD order form. Everything ELSE on this screen
+  // stays `content:write` — the escalation is on the executable markup, not on the feature.
+  const canEditHtml = useCan("landing:html");
   const [saving, startSave] = React.useTransition();
   const [deleting, startDelete] = React.useTransition();
   const [copied, setCopied] = React.useState(false);
@@ -177,7 +181,7 @@ export function LandingEditorClient({ editor }: { editor: LandingEditor }) {
             placeholder="<section>…tempel HTML halaman landing kamu di sini…</section>"
             rows={18}
             className="font-mono text-xs"
-            disabled={!canWrite}
+            disabled={!canWrite || !canEditHtml}
           />
           <p className="text-xs text-muted-foreground">
             Tempel isi HTML (bagian body). Form order + tombol "Pesan Sekarang" ditambahkan otomatis di
@@ -186,7 +190,13 @@ export function LandingEditorClient({ editor }: { editor: LandingEditor }) {
               HTML ini dijalankan apa adanya di halaman toko Anda, termasuk tag &lt;script&gt;.
             </strong>{" "}
             Jangan tempel kode dari sumber yang tidak Anda percaya — halaman ini memuat form pesanan
-            (nama, WhatsApp, alamat).
+            (nama, WhatsApp, alamat).{" "}
+            {!canEditHtml && (
+              <strong className="text-ink">
+                Karena itu hanya Pemilik toko yang bisa mengubahnya. Kolom lain di halaman ini tetap
+                bisa Anda sunting.
+              </strong>
+            )}
           </p>
         </CardContent>
       </Card>

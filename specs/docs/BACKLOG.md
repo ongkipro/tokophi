@@ -925,7 +925,11 @@ Fixed in `a6809ad` + the follow-up: the `updateDiscount` interval regression, `n
 editor, the percentage ceiling, the flash-price ceiling, the exhausted-voucher badge, the stale
 memos, and the landing-HTML claim. What remains:
 
-- [ ] **DECISION (owner): `/lp/<slug>` executes merchant-pasted `<script>`.** `set:html` emits into the
+- [x] **DECIDED 2026-07-30 — owner-only (`landing:html`).** Raw HTML now needs an owner-only
+  capability, enforced only when the html actually changes so staff keep managing the rest of a
+  landing. Deliberately NOT a regex sanitizer — a partial strip would restore the false confidence
+  the old caption provided. A real sanitizer or a storefront CSP remains open, separately.
+  ~~DECISION (owner): `/lp/<slug>` executes merchant-pasted `<script>`.~~ `set:html` emits into the
   SSR response body, so the browser PARSES it — a script tag runs. There is no sanitizer and no CSP.
   The write needs only `content:write`, which **`staff` holds in every tenant**, and the page carries
   the COD order form (name, WhatsApp, address). The false "tidak dijalankan" claim is corrected in
