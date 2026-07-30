@@ -80,6 +80,24 @@ function NotConnectedBadge() {
   );
 }
 
+/**
+ * What is ACTUALLY set up for this channel, read from `store_tracking_channels`.
+ *
+ * ⚠️ This tab used to hard-code "Belum terhubung" for all three, which was true while Pelacakan was a
+ * row of disabled placeholders. It is not true any more: a merchant can have Meta's pixel and its
+ * Conversions API live and still be told, on the first tab they open, that nothing is connected. A
+ * screen that contradicts the merchant's own configuration is worse than an empty one.
+ */
+function TrackingBadge({ cfg }: { cfg?: TrackingConfig }) {
+  const browser = !!cfg?.enabled && !!cfg?.pixelId;
+  const server = !!cfg?.capiEnabled && !!cfg?.capiConfigured;
+  if (browser && server)
+    return <Badge className="gap-1 bg-emerald-500/10 text-emerald-600"><CheckCircle2 className="size-3.5" /> Pelacakan lengkap</Badge>;
+  if (browser) return <Badge className="gap-1 bg-emerald-500/10 text-emerald-600"><CheckCircle2 className="size-3.5" /> Pixel aktif</Badge>;
+  if (server) return <Badge className="gap-1 bg-amber-500/10 text-amber-600">Hanya sisi server</Badge>;
+  return <NotConnectedBadge />;
+}
+
 function StatCard({
   label,
   value,
@@ -110,18 +128,39 @@ function StatCard({
   );
 }
 
-function IntegrationNotice() {
+function IntegrationNotice({ anyTracked }: { anyTracked: boolean }) {
+  if (anyTracked) {
+    return (
+      <Card className="border-primary/20 bg-primary/[0.03] p-4">
+        <div className="flex gap-3">
+          <Info className="mt-0.5 size-4 shrink-0 text-primary" />
+          <div className="space-y-1 text-sm">
+            <p className="font-medium">Pelacakan konversi aktif</p>
+            <p className="text-muted-foreground">
+              Event dari toko Anda dikirim ke platform yang sudah diatur di tab <span className="font-medium text-foreground">Pelacakan</span>.
+              Belanja iklan, impresi, dan ROAS tetap kosong: angka-angka itu hanya ada di platform iklannya
+              dan TokoΦ tidak menariknya — lebih baik kosong daripada menyesatkan keputusan budget Anda.
+            </p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+  return _IntegrationNoticeEmpty();
+}
+
+function _IntegrationNoticeEmpty() {
   return (
     <Card className="border-amber-500/30 bg-amber-500/5 p-4">
       <div className="flex gap-3">
         <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <div className="space-y-1 text-sm">
-          <p className="font-medium">Belum ada saluran iklan yang terhubung</p>
+          <p className="font-medium">Pelacakan konversi belum diatur</p>
           <p className="text-muted-foreground">
-            Belanja iklan, impresi, klik, ROAS, dan ID Pixel hanya bisa datang
-            dari platform iklannya (Meta, Google, TikTok). Selama saluran belum
-            terhubung, TokoΦ tidak menampilkan angka-angka itu — lebih baik
-            kosong daripada menyesatkan keputusan budget Anda.
+            Pasang Pixel milik Anda di tab <span className="font-medium text-foreground">Pelacakan</span> agar
+            konversi dari setiap iklan terekam. Belanja iklan, impresi, dan ROAS hanya ada di platform
+            iklannya (Meta, Google, TikTok) dan TokoΦ tidak menariknya — lebih baik kosong daripada
+            menyesatkan keputusan budget Anda.
           </p>
         </div>
       </div>
@@ -130,7 +169,8 @@ function IntegrationNotice() {
 }
 
 // ---- Tab 1: Saluran Iklan ----
-function ChannelCard({ channel }: { channel: AdChannelStatus }) {
+function ChannelCard({ channel, cfg, onSetup }: { channel: AdChannelStatus; cfg?: TrackingConfig; onSetup: () => void }) {
+  const tracked = (!!cfg?.enabled && !!cfg?.pixelId) || (!!cfg?.capiEnabled && !!cfg?.capiConfigured);
   return (
     <Card className="flex flex-col">
       <CardHeader>
@@ -139,7 +179,7 @@ function ChannelCard({ channel }: { channel: AdChannelStatus }) {
             <BrandSquare channel={channel} />
             <CardTitle className="text-base">{channel.name}</CardTitle>
           </div>
-          <NotConnectedBadge />
+          <TrackingBadge cfg={cfg} />
         </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">
@@ -154,16 +194,19 @@ function ChannelCard({ channel }: { channel: AdChannelStatus }) {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Pesanan &amp; pendapatan dihitung dari pesanan yang tercatat berasal
-          dari saluran ini. Belanja dan ROAS butuh data dari platform iklan —
-          hubungkan saluran untuk melihatnya.
+          Pesanan &amp; pendapatan dihitung dari pesanan toko Anda yang tercatat berasal dari saluran ini.
+          Belanja iklan dan ROAS hanya ada di platform iklannya — TokoΦ tidak menariknya, jadi angka itu
+          dikosongkan daripada dikira-kira.
         </p>
 
         <Separator />
 
+        {/* The action that EXISTS. "Hubungkan (belum tersedia)" was honest when nothing could be set up;
+            now that Pelacakan is real, a permanently-disabled button is just a dead end on the page a
+            merchant opens first. */}
         <div className="mt-auto pt-1">
-          <Button className="w-full" disabled>
-            <Plug /> Hubungkan (belum tersedia)
+          <Button className="w-full" variant={tracked ? "outline" : "default"} onClick={onSetup}>
+            <Plug /> {tracked ? "Ubah pelacakan" : "Atur pelacakan"}
           </Button>
         </div>
       </CardContent>
@@ -194,15 +237,25 @@ function MiniMetric({
   );
 }
 
-function SaluranTab({ channels }: { channels: AdChannelStatus[] }) {
+function SaluranTab({
+  channels,
+  tracking,
+  onSetup,
+}: {
+  channels: AdChannelStatus[];
+  tracking: TrackingConfig[];
+  onSetup: () => void;
+}) {
   const totals = channels.reduce(
     (a, c) => ({ orders: a.orders + c.orders, revenue: a.revenue + c.revenue }),
     { orders: 0, revenue: 0 },
   );
+  const byKey = new Map(tracking.map((t) => [t.channel, t]));
+  const anyTracked = tracking.some((t) => (t.enabled && t.pixelId) || (t.capiEnabled && t.capiConfigured));
 
   return (
     <div className="space-y-4">
-      <IntegrationNotice />
+      <IntegrationNotice anyTracked={anyTracked} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
@@ -228,7 +281,7 @@ function SaluranTab({ channels }: { channels: AdChannelStatus[] }) {
 
       <div className="grid gap-4 lg:grid-cols-3">
         {channels.map((c) => (
-          <ChannelCard key={c.key} channel={c} />
+          <ChannelCard key={c.key} channel={c} cfg={byKey.get(c.key as TrackingChannelKey)} onSetup={onSetup} />
         ))}
       </div>
 
@@ -589,7 +642,7 @@ export function PemasaranClient({ channels, feed, tracking, health, mayReadTrack
         </TabsList>
 
         <TabsContent value="saluran">
-          <SaluranTab channels={channels} />
+          <SaluranTab channels={channels} tracking={tracking} onSetup={() => setTab("pelacakan")} />
         </TabsContent>
         <TabsContent value="pelacakan">
           <PelacakanTab tracking={tracking} health={health} mayRead={mayReadTracking} />

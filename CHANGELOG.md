@@ -2,6 +2,26 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Pemasaran → Saluran Iklan stopped contradicting the merchant
+
+Making the **Pelacakan** tab real left the **Saluran Iklan** tab lying. A merchant with Meta's pixel and
+Conversions API live still opened Pemasaran and read *"Belum ada saluran iklan yang terhubung"*, saw
+"Belum terhubung" on the Meta card, and found a permanently-disabled **"Hubungkan (belum tersedia)"**
+button. Every one of those was true while Pelacakan was a row of placeholders; none of them was true any
+more. A screen that contradicts the merchant's own configuration is worse than an empty one.
+
+- Each channel card now shows what is **actually** set up, read from `store_tracking_channels`:
+  **Pixel aktif** · **Pelacakan lengkap** (browser + server) · **Hanya sisi server** · Belum terhubung.
+- The dead button became the action that exists — **"Atur pelacakan"** / **"Ubah pelacakan"**, which
+  switches to the Pelacakan tab.
+- The notice tells the truth in both directions: *"Pelacakan konversi aktif"* when something is wired,
+  *"Pelacakan konversi belum diatur"* when nothing is.
+
+**Spend, impressions and ROAS stay empty, deliberately.** Those numbers only exist inside the ad
+platforms and TokoΦ does not pull them — the copy now says that plainly instead of implying a connection
+is missing. Verified in a browser against the real config: Meta → "Pixel aktif", the other two → "Belum
+terhubung", one "Ubah pelacakan" and two "Atur pelacakan", and the button moves to the right tab.
+
 ## Unreleased — Audit follow-ups: TikTok click id, lighter storefront, feed shape
 
 ### 🎯 TikTok's click id is finally captured
