@@ -21,12 +21,18 @@ export type FeedProfile = {
   idFields: string[];
   /** TikTok: "Only supports three levels" of google_product_category. Google wants the leaf. */
   maxCategoryLevels: number | null;
+  /**
+   * Google's RSS form is a REPEATED `additional_image_link` element, one per image. TikTok documents a
+   * SINGLE field holding a comma-separated list (commas inside a URL encoded as `%2C`) — send it Google's
+   * way and TikTok reads at most the first image, or none.
+   */
+  imagesAsCsv: boolean;
 };
 
 export const PROFILES: Record<"google" | "tiktok", FeedProfile> = {
   // Google + Meta share this one. Meta documents the same RSS/`g:` format and the same field names.
-  google: { idFields: ["g:id"], maxCategoryLevels: null },
-  tiktok: { idFields: ["g:id", "g:sku_id"], maxCategoryLevels: 3 },
+  google: { idFields: ["g:id"], maxCategoryLevels: null, imagesAsCsv: false },
+  tiktok: { idFields: ["g:id", "g:sku_id"], maxCategoryLevels: 3, imagesAsCsv: true },
 };
 
 /**
@@ -64,6 +70,14 @@ const plain = (s: string) =>
 const clamp = (s: string, n: number) => (s.length <= n ? s : s.slice(0, n - 1).trimEnd() + "…");
 
 const abs = (url: string, origin: string) => (url.startsWith("http") ? url : origin + url);
+
+/** Repeated elements for Google/Meta, one comma-separated field for TikTok — see `imagesAsCsv`. */
+function extraImages(urls: string[], profile: FeedProfile): string[] {
+  if (!urls.length) return [];
+  if (!profile.imagesAsCsv) return urls.map((u) => `<g:additional_image_link>${xml(u)}</g:additional_image_link>`);
+  // A comma inside a URL would split the list, so it is percent-encoded — TikTok documents `%2C`.
+  return [`<g:additional_image_link>${xml(urls.map((u) => u.replace(/,/g, "%2C")).join(","))}</g:additional_image_link>`];
+}
 
 /**
  * The EXTRA images, beyond the primary one.
@@ -194,7 +208,7 @@ export function feedItems({ product: p, origin, storeName, scheme, profile }: Fe
       `<g:link>${xml(link)}</g:link>`,
       `<g:image_link>${xml(image)}</g:image_link>`,
       // Up to 10 extras (Google's cap; Meta allows 20, TikTok 10 — the lowest common limit wins).
-      ...gallery(p).slice(0, 10).map((u) => `<g:additional_image_link>${xml(abs(u, origin))}</g:additional_image_link>`),
+      ...extraImages(gallery(p).slice(0, 10).map((u) => abs(u, origin)), profile),
       `<g:availability>${availability(v.stock)}</g:availability>`,
       `<g:price>${listPrice} IDR</g:price>`,
       salePrice !== null ? `<g:sale_price>${salePrice} IDR</g:sale_price>` : "",

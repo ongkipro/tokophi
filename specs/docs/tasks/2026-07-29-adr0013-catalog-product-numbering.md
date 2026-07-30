@@ -79,3 +79,34 @@ was found.
 3. Check whether PPN belongs in the feed's `<g:price>` — Google requires tax-inclusive prices outside
    US/CA, and PPN is added at checkout.
 4. Consent gating still does not exist anywhere in this repo.
+
+---
+
+## Audit follow-ups landed 2026-07-30 (branch `feat/tracking-audit-followups`)
+
+- [x] **`ttclid` + `_ttp` captured** — TikTok's click id and first-party cookie, its equivalents of
+      `fbc`/`fbp`. Persisted on the landing page (28 days) because `ttclid` only ever appears in the URL
+      once. Verified in a browser.
+- [x] **~9,8 KB removed from every storefront page** — the explanatory comments inside the `is:inline`
+      MarketingPixels script moved to the component's frontmatter (11.885 → 2.086 bytes shipped).
+      Nothing deleted. **The proper fix is still open:** a JSON data island + a Vite-bundled, minified,
+      cacheable script, which would also remove the remaining 2 KB and the per-page parse cost.
+- [x] TikTok `additional_image_link` as one comma-separated field (it read at most the first image).
+- [x] Query string survives the `/produk/<uuid>` → `/produk/<number>` redirect.
+- [x] Google Ads `send_to` validated against Google's documented `AW-…/label` shape.
+
+### Still open, and why
+
+1. **PPN in the feed price — needs a product decision, not a patch.** Google requires tax-inclusive
+   prices outside US/CA. TokoΦ's PPN is exclusive by default (added at checkout) and the storefront shows
+   the ex-PPN price, so making the feed inclusive fixes the spec violation and creates a landing-page
+   mismatch. The real resolution is whether the storefront displays tax-inclusive prices at all, which
+   is the Indonesian retail convention. **Zero production stores have PPN enabled** — latent today.
+2. **Meta `contents[]`** (per-item id + quantity + price). We send `content_ids`, which Meta accepts, but
+   `contents` is the only way to give value-based catalog optimisation per-item data. TikTok already gets
+   it; Meta's needs the per-line qty/price threaded into the delivery payload.
+3. **`releasePurchase`'s fallback enqueue has no browser context** — a prepaid order whose held row is
+   missing (a channel switched on between checkout and payment) sends no user agent, IP or cookies. Meta
+   documents `client_user_agent` as required; `event_source_url` now falls back to the store's own
+   storefront, but the UA is genuinely unavailable by then. Bounded and rare; recorded rather than faked.
+4. **Consent gating** still does not exist anywhere in this repo.

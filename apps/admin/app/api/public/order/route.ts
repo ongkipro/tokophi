@@ -127,7 +127,7 @@ async function handle(req: Request) {
     // ADR 0012 — the ad platforms' own cookies, read on the storefront. OPAQUE: never authorization,
     // never priced against, never stored beyond the conversion row; only forwarded to the merchant's
     // own pixel provider as match keys. Length-bounded in clientContextFromRequest.
-    trackingCookies?: { fbp?: string; fbc?: string; ga?: string };
+    trackingCookies?: { fbp?: string; fbc?: string; ga?: string; ttp?: string; ttclid?: string };
   };
   try {
     body = await req.json();

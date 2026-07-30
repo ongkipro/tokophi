@@ -36,6 +36,193 @@ try {
 const meta = pixels.find((p) => p.channel === "meta") ?? null;
 const google = pixels.find((p) => p.channel === "google") ?? null;
 const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
+
+/*
+ * IMPLEMENTATION NOTES for the inline script below.
+ *
+ * They live HERE, in the frontmatter, because an `is:inline` script is shipped BYTE FOR BYTE to every
+ * shopper on every page — Astro does not minify it, so a comment inside it is a comment the browser
+ * downloads. 11.9 KB of them were. Keeping the reasoning (this repo pays for lost reasoning) while not
+ * making shoppers pay for it means keeping it on this side of the fence.
+ *
+ * ⚠️ The proper fix is to stop needing `is:inline`: pass the config as a JSON data island and let Vite
+ * bundle+minify the script, which also makes it cacheable across pages. That is a refactor of a
+ * money-adjacent file and wants its own change.
+ */
+
+// ── NOTE-1 ──────────────────────────────────────────────────────────────────────
+// Declared BEFORE the bootstrap: the loaders below are wrapped in it. They are vendor-standard
+// snippets, but they all run inside one IIFE — an exception in the first would leave the other
+// two un-bootstrapped and fire nothing at all, which is a silent, total tracking outage.
+
+// ── NOTE-2 ──────────────────────────────────────────────────────────────────────
+// ---- bootstrap the enabled pixels ----
+// One `safe()` PER vendor. Wrapping all three in a single guard was the bug the comment described:
+// a throw in the first loader skipped the other two and fired nothing at all.
+
+// ── NOTE-3 ──────────────────────────────────────────────────────────────────────
+// Google Ads is a SEPARATE destination with its own id, configured alongside GA4 rather than
+// instead of it — a merchant running both is the normal case, and one field could only ever
+// serve one of them. `AW-123456789` is the account; the `/label` half identifies the action and
+// is only used on the conversion call below.
+
+// ── NOTE-4 ──────────────────────────────────────────────────────────────────────
+// ---- helpers ----
+// Canonical Indonesian phone, the SAME shape the server hashes (`orders.ship_phone`, canonical
+// `62…` since migration 0048). This reads the RAW value the shopper typed, so `0812…` AND the
+// bare `812…` both have to become `62812…` — miss either and the browser hashes a different
+// string from the server, the identities never match, and nothing anywhere reports it.
+
+// ── NOTE-5 ──────────────────────────────────────────────────────────────────────
+// This script lives in <head>; the elements it inspects (#variant-picker) live in <body>. Reading
+// the DOM inline therefore ALWAYS found null — the multi-variant branch below was structurally
+// unreachable. Everything that touches the DOM goes through here.
+
+// ── NOTE-6 ──────────────────────────────────────────────────────────────────────
+// Fire ONE funnel event across every enabled pixel.
+// `data`: {value, currency, contentIds, numItems, contentType, eventId, orderId}.
+// `eventId` is passed to Meta as `eventID` and to TikTok as `event_id` — the de-dup key the
+// server-side Conversions API repeats. GA4 de-dupes on `transaction_id` instead.
+
+// ── NOTE-7 ──────────────────────────────────────────────────────────────────────
+// Per-ITEM quantity is only knowable when the event describes ONE item. `qty` is the event total
+// (the sum of every line), so using it per item multiplied a 2-line order to 4 units. When there
+// is more than one id, the field is omitted — an absent quantity is read as 1, a wrong one is
+// read as truth.
+
+// ── NOTE-8 ──────────────────────────────────────────────────────────────────────
+// `value`/`currency` on ViewContent and AddToCart is what lets Meta optimise on revenue rather
+// than on raw event counts; `num_items` is documented for InitiateCheckout specifically (and
+// NOT for Purchase, which is why the server event omits it too — the two halves of one sale
+// must describe it identically).
+
+// ── NOTE-9 ──────────────────────────────────────────────────────────────────────
+// ⚠️ `Purchase`, not `CompletePayment`. TikTok's current standard-event list does not contain
+// `CompletePayment`, and their names are case-sensitive. It MUST match `capi.ts`'s server
+// event exactly: TikTok de-duplicates on (event_source_id, event, event_id), so a name that
+// differs between the two halves means every purchase is counted twice.
+
+// ── NOTE-10 ─────────────────────────────────────────────────────────────────────
+// TikTok documents `content_type` and `content_ids` as TOP-LEVEL properties (all three of
+// content_type / content_ids / contents are required for Video Shopping Ads). Nesting the type
+// inside `contents[]` alone left the required pair missing.
+
+// ── NOTE-11 ─────────────────────────────────────────────────────────────────────
+// `content_id` (singular) is TikTok's flat form and only means anything for a single item;
+// `content_ids` is Meta's spelling and TikTok does not document it. `contents[]` above is the
+// multi-item form and always travels.
+
+// ── NOTE-12 ─────────────────────────────────────────────────────────────────────
+// ⚠️ `event_id` is TikTok's THIRD argument, not a property of `properties`. Putting it inside
+// the payload — which looks entirely reasonable — means TikTok never sees a de-dup key, so
+// every purchase is counted twice: once by the pixel, once by the Events API.
+
+// ── NOTE-13 ─────────────────────────────────────────────────────────────────────
+// ⚠️ `item_id` must equal the Merchant Center offer id — Google has NO group concept, so a
+// group id matches nothing. `value` is OMITTED rather than sent as 0: a recorded zero-value
+// conversion is worse than an absent parameter, because it drags the reported average down.
+
+// ── NOTE-14 ─────────────────────────────────────────────────────────────────────
+// ── Google Ads ──────────────────────────────────────────────────────────────────────────
+// GA4 events do NOT record a Google Ads conversion. Google documents it as its own call with
+// a `send_to` destination, and dynamic remarketing wants a DIFFERENT item shape from GA4's:
+// `id` (not `item_id`) plus `google_business_vertical`. Sending GA4's shape to an `AW-` tag was
+// the reason Google Ads recorded nothing at all.
+
+// ── NOTE-15 ─────────────────────────────────────────────────────────────────────
+// TikTok's click id arrives ONCE, as a URL parameter on the landing page, and is gone by the time
+// the shopper reaches checkout — so it is persisted here, on the first page they see. It is
+// TikTok's strongest match key, the role `_fbc` plays for Meta, and we were dropping it.
+// Stored for 28 days, which is TikTok's own attribution window; the cookie survives the visit.
+
+// ── NOTE-16 ─────────────────────────────────────────────────────────────────────
+// The catalog id for the product page we are on, and whether it is a variant GROUP. A shopper
+// browsing has not chosen a variant, so a multi-variant product is reported as its group — the
+// id /feed/google.xml emits as <g:item_group_id>. Inventing `handle-1` here would report a
+// variant they never looked at.
+// What the shopper is looking at, as precisely as the page knows it.
+// 
+// Prefer the BUY BUTTON: the variant picker keeps `data-catalog-id` on it in step with the
+// selection, so it is the EXACT catalog item id (`1042-3`). The fallback is the price element,
+// which every PDP renders — including a price-on-request product, which has no buy button at all.
+// 
+// Why exact matters: Meta documents that `product_group` must NOT be used with AddToCart or
+// Purchase ("people buy specific products"), Google has no group concept at all so a group id
+// matches no Merchant Center offer, and TikTok recommends the sku_id. Nothing is ever DERIVED
+// here — a guessed id matches no catalog item and reports nothing, silently.
+
+// ── NOTE-17 ─────────────────────────────────────────────────────────────────────
+// AddToCart — delegated (same selectors Analytics.astro uses), so page scripts stay untouched.
+// Registered HERE, not synchronously: a click that landed before DOMContentLoaded would fire
+// with `product` still null and lose its content id.
+
+// ── NOTE-18 ─────────────────────────────────────────────────────────────────────
+// Read the CLICKED button: it carries the variant the shopper actually has selected right now,
+// and the quantity stepper's value. Off a product page (a quick-add on a listing) there is no
+// catalog id to attach — fire the event anyway, without ids. Analytics.astro counts those
+// clicks too, and a funnel whose two halves disagree is worse than one event with thin data.
+
+// ── NOTE-19 ─────────────────────────────────────────────────────────────────────
+// `catalogId` is what the PDP stored when the item was added (ADR 0013). A cart written before
+// that shipped has none — send the event with no ids rather than the handle, which under the
+// number scheme is not a catalog item at all and would quietly match nothing.
+// The cart records the id AND the type the PDP resolved for each line, plus qty and price.
+// 
+// ⚠️ NEVER announce a mixed cart under one type. An earlier version downgraded the whole event
+// to `product_group` if any line was group-level, which meant every variant-level id in that
+// cart was sent as a group — matching nothing. So the lines are PARTITIONED and the exact ones
+// win: a group id only travels when there is nothing more precise in the cart at all (a line
+// added before this shipped, or a sparse variant matrix).
+
+// ── NOTE-20 ─────────────────────────────────────────────────────────────────────
+// Purchase — once per order (localStorage guard), with value + content_ids + advanced matching.
+// 
+// ⚠️ THIS PAGE IS NOT PROOF OF PAYMENT. /checkout/sukses is where an UNPAID virtual account or QR
+// is displayed — the shopper still has to go and pay it. Firing Purchase here for a prepaid order
+// would report a conversion for every abandoned VA screen and every failed gateway call, and
+// inflate the merchant's ROAS with sales that never happened.
+// 
+// So the SERVER decides, per order, whether this page is a conversion: `tracking.browserPurchase`
+// is true for COD (payment on delivery — the order IS the sale, signed off 2026-07-29) and false
+// for prepaid, which is counted instead by the Conversions API when the gateway callback
+// confirms the money. Same `event_id` on both sides, so nothing is ever counted twice.
+// 
+// Consequence, stated plainly: a store on prepaid channels with server-side tracking OFF records
+// no Purchase at all. That is the honest half of the trade — the Seller UI says so on the card.
+
+// ── NOTE-21 ─────────────────────────────────────────────────────────────────────
+// POSITIVE gate: fire only when the server SAID this is a conversion. The negative form
+// (`=== false`) leaked — if the server's enqueue threw, `tracking` comes back null, the order
+// has no flag, and a prepaid sale on an unpaid VA page was reported as revenue anyway.
+// Orders written before this shipped carry no flag either, and they are equally unknowable.
+
+// ── NOTE-22 ─────────────────────────────────────────────────────────────────────
+// Ids + de-dup key from the SERVER (order API `tracking`). The cart's handles are the
+// fallback for an order placed before this shipped — group-level, so they still match a
+// catalog item for single-variant products and the item_group for the rest.
+
+// ── NOTE-23 ─────────────────────────────────────────────────────────────────────
+// Server ids when we have them; otherwise the ids the PDP recorded in the cart. NEVER the
+// handle — under the stable scheme (ADR 0013) a handle appears nowhere in the feed, so it
+// would report a purchase against an item that does not exist. An old cart with no
+// `catalogId` yields an empty list, and no ids is better than wrong ids.
+
+// ── NOTE-24 ─────────────────────────────────────────────────────────────────────
+// Only when we actually HAVE a hash. `crypto.subtle` is undefined on an http:// origin,
+// so both come back null there — re-initing the pixel with `{}` would be a pointless
+// extra init observed in the browser run of 2026-07-29.
+// ⚠️ Meta documents advanced matching at the FIRST `init`; re-initing later is what the
+// community reports as unreliable, and no official answer exists. This is best-effort
+// for the browser copy — the server event always carries the hashed identity, and that
+// is the path we rely on.
+
+// ── NOTE-25 ─────────────────────────────────────────────────────────────────────
+// Google: `user_data` is the **Google Ads** enhanced-conversions contract (an `AW-` tag),
+// and gtag hashes it itself — so it takes the RAW values, unlike the two above. It is a
+// no-op on a pure GA4 `G-` tag, so we do not hand a shopper's plaintext email and phone
+// to a script that has no use for them. Phone must be E.164 WITH the `+`, or Google
+// matches nothing.
+
 ---
 
 {/* Google gtag.js loader — must load for the gtag() calls in the inline script below to reach GA. */}
@@ -44,14 +231,10 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
 {pixels.length > 0 && (
   <script is:inline define:vars={{ META: meta, GOOGLE: google, TIKTOK: tiktok }}>
     (function () {
-      // Declared BEFORE the bootstrap: the loaders below are wrapped in it. They are vendor-standard
-      // snippets, but they all run inside one IIFE — an exception in the first would leave the other
-      // two un-bootstrapped and fire nothing at all, which is a silent, total tracking outage.
+      // see NOTE-1 in the frontmatter above
       function safe(fn) { try { fn(); } catch (e) {} }
 
-      // ---- bootstrap the enabled pixels ----
-      // One `safe()` PER vendor. Wrapping all three in a single guard was the bug the comment described:
-      // a throw in the first loader skipped the other two and fired nothing at all.
+      // see NOTE-2 in the frontmatter above
       safe(function () {
       if (META) {
         !(function (f, b, e, v, n, t, s) {
@@ -68,10 +251,7 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         window.gtag = function () { window.dataLayer.push(arguments); };
         window.gtag("js", new Date());
         window.gtag("config", GOOGLE.pixelId); // auto page_view
-        // Google Ads is a SEPARATE destination with its own id, configured alongside GA4 rather than
-        // instead of it — a merchant running both is the normal case, and one field could only ever
-        // serve one of them. `AW-123456789` is the account; the `/label` half identifies the action and
-        // is only used on the conversion call below.
+        // see NOTE-3 in the frontmatter above
         if (GOOGLE.adsSendTo) window.gtag("config", String(GOOGLE.adsSendTo).split("/")[0]);
       }
       });
@@ -88,11 +268,7 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
       }
       });
 
-      // ---- helpers ----
-      // Canonical Indonesian phone, the SAME shape the server hashes (`orders.ship_phone`, canonical
-      // `62…` since migration 0048). This reads the RAW value the shopper typed, so `0812…` AND the
-      // bare `812…` both have to become `62812…` — miss either and the browser hashes a different
-      // string from the server, the identities never match, and nothing anywhere reports it.
+      // see NOTE-4 in the frontmatter above
       function digits(s) {
         s = String(s || "").replace(/[^\d]/g, "");
         if (s.slice(0, 1) === "0") return "62" + s.slice(1);
@@ -105,37 +281,26 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           return Array.prototype.map.call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, "0"); }).join("");
         } catch (e) { return null; }
       }
-      // This script lives in <head>; the elements it inspects (#variant-picker) live in <body>. Reading
-      // the DOM inline therefore ALWAYS found null — the multi-variant branch below was structurally
-      // unreachable. Everything that touches the DOM goes through here.
+      // see NOTE-5 in the frontmatter above
       function ready(fn) {
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn, { once: true });
         else fn();
       }
 
-      // Fire ONE funnel event across every enabled pixel.
-      // `data`: {value, currency, contentIds, numItems, contentType, eventId, orderId}.
-      // `eventId` is passed to Meta as `eventID` and to TikTok as `event_id` — the de-dup key the
-      // server-side Conversions API repeats. GA4 de-dupes on `transaction_id` instead.
+      // see NOTE-6 in the frontmatter above
       function fire(evt, data) {
         data = data || {};
         var ids = data.contentIds || [];
         var ctype = data.contentType || "product";
         var qty = data.numItems || 1;
-        // Per-ITEM quantity is only knowable when the event describes ONE item. `qty` is the event total
-        // (the sum of every line), so using it per item multiplied a 2-line order to 4 units. When there
-        // is more than one id, the field is omitted — an absent quantity is read as 1, a wrong one is
-        // read as truth.
+        // see NOTE-7 in the frontmatter above
         var perItemQty = ids.length === 1 ? qty : null;
         var val = typeof data.value === "number" && data.value > 0 ? data.value : null;
         var cur = data.currency || "IDR";
         if (META) safe(function () {
           var opts = data.eventId ? { eventID: data.eventId } : undefined;
           if (evt === "PageView") { window.fbq("track", "PageView"); return; }
-          // `value`/`currency` on ViewContent and AddToCart is what lets Meta optimise on revenue rather
-          // than on raw event counts; `num_items` is documented for InitiateCheckout specifically (and
-          // NOT for Purchase, which is why the server event omits it too — the two halves of one sale
-          // must describe it identically).
+          // see NOTE-8 in the frontmatter above
           var d = { content_ids: ids, content_type: ctype };
           if (val !== null) { d.value = val; d.currency = cur; }
           if (evt === "InitiateCheckout") d.num_items = qty;
@@ -144,16 +309,11 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           else window.fbq("track", evt, d);
         });
         if (TIKTOK) safe(function () {
-          // ⚠️ `Purchase`, not `CompletePayment`. TikTok's current standard-event list does not contain
-          // `CompletePayment`, and their names are case-sensitive. It MUST match `capi.ts`'s server
-          // event exactly: TikTok de-duplicates on (event_source_id, event, event_id), so a name that
-          // differs between the two halves means every purchase is counted twice.
+          // see NOTE-9 in the frontmatter above
           var map = { ViewContent: "ViewContent", AddToCart: "AddToCart", InitiateCheckout: "InitiateCheckout", Purchase: "Purchase" };
           if (evt === "PageView") return; // ttq.page() already fired at load
           var name = map[evt]; if (!name) return;
-          // TikTok documents `content_type` and `content_ids` as TOP-LEVEL properties (all three of
-          // content_type / content_ids / contents are required for Video Shopping Ads). Nesting the type
-          // inside `contents[]` alone left the required pair missing.
+          // see NOTE-10 in the frontmatter above
           var props = {
             content_type: ctype,
             contents: ids.map(function (id) {
@@ -166,15 +326,11 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
             quantity: qty,
             currency: cur,
           };
-          // `content_id` (singular) is TikTok's flat form and only means anything for a single item;
-          // `content_ids` is Meta's spelling and TikTok does not document it. `contents[]` above is the
-          // multi-item form and always travels.
+          // see NOTE-11 in the frontmatter above
           if (ids.length === 1) props.content_id = ids[0];
           if (val !== null) props.value = val;
           else if (evt === "Purchase") props.value = data.value || 0;
-          // ⚠️ `event_id` is TikTok's THIRD argument, not a property of `properties`. Putting it inside
-          // the payload — which looks entirely reasonable — means TikTok never sees a de-dup key, so
-          // every purchase is counted twice: once by the pixel, once by the Events API.
+          // see NOTE-12 in the frontmatter above
           if (data.eventId) window.ttq.track(name, props, { event_id: data.eventId });
           else window.ttq.track(name, props);
         });
@@ -182,9 +338,7 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           var map = { ViewContent: "view_item", AddToCart: "add_to_cart", InitiateCheckout: "begin_checkout", Purchase: "purchase" };
           if (evt === "PageView") return; // config already sent page_view
           var name = map[evt]; if (!name) return;
-          // ⚠️ `item_id` must equal the Merchant Center offer id — Google has NO group concept, so a
-          // group id matches nothing. `value` is OMITTED rather than sent as 0: a recorded zero-value
-          // conversion is worse than an absent parameter, because it drags the reported average down.
+          // see NOTE-13 in the frontmatter above
           var payload = { currency: cur, items: ids.map(function (id) {
             var it = { item_id: id };
             if (perItemQty !== null) it.quantity = perItemQty;
@@ -195,11 +349,7 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           if (evt === "Purchase" && data.orderId) payload.transaction_id = data.orderId;
           window.gtag("event", name, payload);
 
-          // ── Google Ads ──────────────────────────────────────────────────────────────────────────
-          // GA4 events do NOT record a Google Ads conversion. Google documents it as its own call with
-          // a `send_to` destination, and dynamic remarketing wants a DIFFERENT item shape from GA4's:
-          // `id` (not `item_id`) plus `google_business_vertical`. Sending GA4's shape to an `AW-` tag was
-          // the reason Google Ads recorded nothing at all.
+          // see NOTE-14 in the frontmatter above
           if (!GOOGLE.adsSendTo) return;
           var awId = String(GOOGLE.adsSendTo).split("/")[0];
           var rmk = {
@@ -221,25 +371,20 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         });
       }
 
+      // see NOTE-15 in the frontmatter above
+      safe(function () {
+        var m = location.search.match(/[?&]ttclid=([^&#]+)/);
+        if (!m) return;
+        var v = decodeURIComponent(m[1]).slice(0, 256);
+        try { localStorage.setItem("tphi:ttclid", JSON.stringify({ v: v, t: Date.now() })); } catch (e) {}
+      });
+
       var path = location.pathname.replace(/\/+$/, "") || "/";
 
       // PageView on every page (fbq/ttq already sent theirs at init; this is the funnel entry point).
       fire("PageView", {});
 
-      // The catalog id for the product page we are on, and whether it is a variant GROUP. A shopper
-      // browsing has not chosen a variant, so a multi-variant product is reported as its group — the
-      // id /feed/google.xml emits as <g:item_group_id>. Inventing `handle-1` here would report a
-      // variant they never looked at.
-      // What the shopper is looking at, as precisely as the page knows it.
-      //
-      // Prefer the BUY BUTTON: the variant picker keeps `data-catalog-id` on it in step with the
-      // selection, so it is the EXACT catalog item id (`1042-3`). The fallback is the price element,
-      // which every PDP renders — including a price-on-request product, which has no buy button at all.
-      //
-      // Why exact matters: Meta documents that `product_group` must NOT be used with AddToCart or
-      // Purchase ("people buy specific products"), Google has no group concept at all so a group id
-      // matches no Merchant Center offer, and TikTok recommends the sku_id. Nothing is ever DERIVED
-      // here — a guessed id matches no catalog item and reports nothing, silently.
+      // see NOTE-16 in the frontmatter above
       function ctxFrom(el) {
         if (!el) return null;
         var id = el.getAttribute("data-catalog-id");
@@ -263,16 +408,11 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         // ViewContent — product detail
         if (product) fire("ViewContent", product);
 
-        // AddToCart — delegated (same selectors Analytics.astro uses), so page scripts stay untouched.
-        // Registered HERE, not synchronously: a click that landed before DOMContentLoaded would fire
-        // with `product` still null and lose its content id.
+        // see NOTE-17 in the frontmatter above
         document.addEventListener("click", function (e) {
           var t = e.target; if (!t || !t.closest) return;
           var btn = t.closest("#add-to-cart, #buy-now, [data-track='add_to_cart']"); if (!btn || btn.disabled) return;
-          // Read the CLICKED button: it carries the variant the shopper actually has selected right now,
-          // and the quantity stepper's value. Off a product page (a quick-add on a listing) there is no
-          // catalog id to attach — fire the event anyway, without ids. Analytics.astro counts those
-          // clicks too, and a funnel whose two halves disagree is worse than one event with thin data.
+          // see NOTE-18 in the frontmatter above
           var ctx = ctxFrom(btn) || product || {};
           var q = Number(btn.getAttribute("data-qty") || 0);
           fire("AddToCart", q > 0 ? Object.assign({}, ctx, { numItems: q, value: ctx.value ? ctx.value * q : undefined }) : ctx);
@@ -281,16 +421,7 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
 
       // InitiateCheckout — checkout page opened
       if (path === "/checkout") {
-        // `catalogId` is what the PDP stored when the item was added (ADR 0013). A cart written before
-        // that shipped has none — send the event with no ids rather than the handle, which under the
-        // number scheme is not a catalog item at all and would quietly match nothing.
-        // The cart records the id AND the type the PDP resolved for each line, plus qty and price.
-        //
-        // ⚠️ NEVER announce a mixed cart under one type. An earlier version downgraded the whole event
-        // to `product_group` if any line was group-level, which meant every variant-level id in that
-        // cart was sent as a group — matching nothing. So the lines are PARTITIONED and the exact ones
-        // win: a group id only travels when there is nothing more precise in the cart at all (a line
-        // added before this shipped, or a sparse variant matrix).
+        // see NOTE-19 in the frontmatter above
         var cart = [];
         try { cart = JSON.parse(localStorage.getItem("cart") || "[]") || []; } catch (e) {}
         var exact = [], groups = [], units = 0, total = 0;
@@ -312,27 +443,11 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           value: total > 0 ? total : undefined,
         });
       }
-      // Purchase — once per order (localStorage guard), with value + content_ids + advanced matching.
-      //
-      // ⚠️ THIS PAGE IS NOT PROOF OF PAYMENT. /checkout/sukses is where an UNPAID virtual account or QR
-      // is displayed — the shopper still has to go and pay it. Firing Purchase here for a prepaid order
-      // would report a conversion for every abandoned VA screen and every failed gateway call, and
-      // inflate the merchant's ROAS with sales that never happened.
-      //
-      // So the SERVER decides, per order, whether this page is a conversion: `tracking.browserPurchase`
-      // is true for COD (payment on delivery — the order IS the sale, signed off 2026-07-29) and false
-      // for prepaid, which is counted instead by the Conversions API when the gateway callback
-      // confirms the money. Same `event_id` on both sides, so nothing is ever counted twice.
-      //
-      // Consequence, stated plainly: a store on prepaid channels with server-side tracking OFF records
-      // no Purchase at all. That is the honest half of the trade — the Seller UI says so on the card.
+      // see NOTE-20 in the frontmatter above
       if (path === "/checkout/sukses") {
         var order = null;
         try { order = JSON.parse(localStorage.getItem("lastOrder") || "null"); } catch (e) {}
-        // POSITIVE gate: fire only when the server SAID this is a conversion. The negative form
-        // (`=== false`) leaked — if the server's enqueue threw, `tracking` comes back null, the order
-        // has no flag, and a prepaid sale on an unpaid VA page was reported as revenue anyway.
-        // Orders written before this shipped carry no flag either, and they are equally unknowable.
+        // see NOTE-21 in the frontmatter above
         if (order && !(order.tracking && order.tracking.browserPurchase === true)) order = null;
         if (order) {
           var key = String(order.number || order.createdAt || "");
@@ -343,14 +458,9 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
             seen.push(key);
             try { localStorage.setItem("tphi:px:purchased", JSON.stringify(seen.slice(-20))); } catch (e) {}
             var items = Array.isArray(order.items) ? order.items : [];
-            // Ids + de-dup key from the SERVER (order API `tracking`). The cart's handles are the
-            // fallback for an order placed before this shipped — group-level, so they still match a
-            // catalog item for single-variant products and the item_group for the rest.
+            // see NOTE-22 in the frontmatter above
             var tr = order.tracking || {};
-            // Server ids when we have them; otherwise the ids the PDP recorded in the cart. NEVER the
-            // handle — under the stable scheme (ADR 0013) a handle appears nowhere in the feed, so it
-            // would report a purchase against an item that does not exist. An old cart with no
-            // `catalogId` yields an empty list, and no ids is better than wrong ids.
+            // see NOTE-23 in the frontmatter above
             var ids = Array.isArray(tr.contentIds) && tr.contentIds.length
               ? tr.contentIds
               : items.map(function (i) { return i && i.catalogId; }).filter(Boolean);
@@ -364,20 +474,10 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
             if (wantAM && (email || phone)) {
               Promise.all([email ? sha256(email) : null, phone ? sha256(phone) : null]).then(function (h) {
                 var em = h[0], ph = h[1];
-                // Only when we actually HAVE a hash. `crypto.subtle` is undefined on an http:// origin,
-                // so both come back null there — re-initing the pixel with `{}` would be a pointless
-                // extra init observed in the browser run of 2026-07-29.
-                // ⚠️ Meta documents advanced matching at the FIRST `init`; re-initing later is what the
-                // community reports as unreliable, and no official answer exists. This is best-effort
-                // for the browser copy — the server event always carries the hashed identity, and that
-                // is the path we rely on.
+                // see NOTE-24 in the frontmatter above
                 if (META && META.advancedMatching && (em || ph)) safe(function () { var am = {}; if (em) am.em = em; if (ph) am.ph = ph; window.fbq("init", META.pixelId, am); });
                 if (TIKTOK && TIKTOK.advancedMatching && (em || ph)) safe(function () { var id = {}; if (em) id.email = em; if (ph) id.phone_number = ph; window.ttq.identify(id); });
-                // Google: `user_data` is the **Google Ads** enhanced-conversions contract (an `AW-` tag),
-                // and gtag hashes it itself — so it takes the RAW values, unlike the two above. It is a
-                // no-op on a pure GA4 `G-` tag, so we do not hand a shopper's plaintext email and phone
-                // to a script that has no use for them. Phone must be E.164 WITH the `+`, or Google
-                // matches nothing.
+                // see NOTE-25 in the frontmatter above
                 if (GOOGLE && GOOGLE.advancedMatching && GOOGLE.pixelId.slice(0, 3) === "AW-") safe(function () {
                   var ud = {}; if (email) ud.email = email; if (phone) ud.phone_number = "+" + phone;
                   window.gtag("set", "user_data", ud);

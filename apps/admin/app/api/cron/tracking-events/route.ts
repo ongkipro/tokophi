@@ -68,7 +68,7 @@ type Payload = {
   numItems?: number;
   orderNumber?: string;
   occurredAt?: string;
-  client?: { userAgent?: string; ip?: string; fbp?: string; fbc?: string; gaClientId?: string; sourceUrl?: string };
+  client?: { userAgent?: string; ip?: string; fbp?: string; fbc?: string; gaClientId?: string; ttp?: string; ttclid?: string; sourceUrl?: string };
 };
 
 export async function GET(req: NextRequest) {

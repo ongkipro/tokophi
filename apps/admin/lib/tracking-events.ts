@@ -33,6 +33,9 @@ export type ClientContext = {
   fbp?: string | null;
   fbc?: string | null;
   gaClientId?: string | null;
+  /** TikTok's first-party cookie and click id — the pair that plays `fbp`/`fbc`'s role for TikTok. */
+  ttp?: string | null;
+  ttclid?: string | null;
   sourceUrl?: string | null;
 };
 
@@ -40,7 +43,7 @@ export type ClientContext = {
 export function clientContextFromRequest(
   req: Request,
   ip: string | null,
-  cookies: { fbp?: unknown; fbc?: unknown; ga?: unknown } | undefined,
+  cookies: { fbp?: unknown; fbc?: unknown; ga?: unknown; ttp?: unknown; ttclid?: unknown } | undefined,
 ): ClientContext {
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 256) : null);
   const origin = req.headers.get("origin") ?? req.headers.get("referer") ?? null;
@@ -54,6 +57,8 @@ export function clientContextFromRequest(
     fbp: str(cookies?.fbp),
     fbc: str(cookies?.fbc),
     gaClientId: str(cookies?.ga),
+    ttp: str(cookies?.ttp),
+    ttclid: str(cookies?.ttclid),
     // Meta requires `event_source_url` on website events. The checkout's own origin is the honest
     // answer — the sale happened on the storefront the shopper was standing on.
     sourceUrl: origin ? origin.slice(0, 512) : null,
