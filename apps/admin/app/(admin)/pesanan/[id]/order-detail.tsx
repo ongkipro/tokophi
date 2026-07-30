@@ -226,7 +226,11 @@ export function OrderDetail({
   // whole flow was rebuilt to remove.
   const [makingRate, setMakingRate] = React.useState<string | null>(null);
   const [insureShipment, setInsureShipment] = React.useState(false);
-  const [codShipment, setCodShipment] = React.useState(false);
+  // Seeded from the ORDER, not defaulted to false. Unseeded, a genuine COD parcel was booked telling
+  // the courier to collect 0 — and "Tandai selesai" then credited the merchant the full sale as
+  // withdrawable for cash nobody collected. It is now a mirror of the fact, not an independent switch:
+  // `createShipment` derives the real value and REFUSES a booking that disagrees with it.
+  const [codShipment, setCodShipment] = React.useState(isCod);
   const [senderError, setSenderError] = React.useState<string | null>(null);
   const makeShipment = (rate: Rate) => {
     setMakingRate(rate.code + rate.type);
@@ -926,7 +930,8 @@ export function OrderDetail({
               </label>
               {codAvailable && (
                 <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={codShipment} onChange={(e) => setCodShipment(e.target.checked)} className="size-4 accent-primary" /> COD (tagih {IDR(money.total)})
+                  <input type="checkbox" checked={codShipment} disabled readOnly className="size-4 accent-primary" />{" "}
+                  {isCod ? `COD — kurir menagih ${IDR(money.total)}` : "Sudah dibayar di muka — kurir tidak menagih"}
                 </label>
               )}
             </div>

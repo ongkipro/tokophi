@@ -1,6 +1,6 @@
 "use server";
 import { db, schema } from "@tokophi/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { normalizePhone } from "@tokophi/lib/validate";
@@ -497,6 +497,8 @@ export async function createShipment(input: {
         shipAddress: schema.orders.shipAddress, shipPostcode: schema.orders.shipPostcode,
         shipDistrictId: schema.orders.shipDistrictId,
         custName: schema.customers.name, custPhone: schema.customers.phone,
+        // ⚠️ Whether this parcel is COD is a FACT ABOUT THE ORDER, not a checkbox. See the booking below.
+        isCod: sql<boolean>`exists (select 1 from payments p where p.order_id = ${schema.orders.id} and p.method = 'cod')`,
       })
       .from(schema.orders)
       .leftJoin(schema.customers, eq(schema.customers.id, schema.orders.customerId))
@@ -511,6 +513,16 @@ export async function createShipment(input: {
   const o = data.o;
   if (!o) return { ok: false, error: "Pesanan tidak ditemukan." };
   if (o.awb) return { ok: false, error: `Pesanan sudah punya resi (${o.awb}).` };
+  // A caller that explicitly asks for the opposite of the order's own payment method is confused
+  // about which order it is booking — refuse rather than quietly correct it.
+  if (input.cod !== undefined && !!input.cod !== !!o.isCod) {
+    return {
+      ok: false,
+      error: o.isCod
+        ? `Pesanan ${o.number} dibayar COD — resi harus dibuat dengan penagihan COD.`
+        : `Pesanan ${o.number} sudah dibayar di muka — resi tidak boleh menagih COD lagi.`,
+    };
+  }
   if (o.kaOrderId) return { ok: false, error: `Pesanan sudah dibooking ke kurir (${o.kaOrderId}).` };
   // A terminal order cannot be booked — refuse BEFORE calling KiriminAja, so we never create a real
   // courier booking for an order we would then decline to record a status for. `batal`/`retur` the
@@ -623,7 +635,27 @@ export async function createShipment(input: {
       destZipcode: o.shipPostcode?.trim() || undefined,
       weight, width, length, height, itemValue: o.subtotal || o.total || 0, itemName: `Pesanan ${o.number}`,
       service: input.service, serviceType: input.serviceType, shippingCost: input.cost,
-      cod: input.cod ? (o.total || o.subtotal || 0) : 0,
+      // ── COD IS DERIVED FROM THE ORDER, NEVER FROM THE CALLER ────────────────────────────────
+      //
+      // This was `input.cod ? total : 0` — a free parameter — and the two callers got it wrong in
+      // opposite, expensive directions:
+      //
+      //  · `bulkGenerateResi` passed `!!rate.cod`, which is the SERVICE's capability (KiriminAja ×
+      //    platform `codAllowed` × the store's `cod_enabled`), i.e. `true` for EVERY order on an SPX
+      //    service in a COD-enabled store. But the bulk queue deliberately holds PREPAID orders too
+      //    (`financial_status='dibayar' OR has-cod-payment`). Measured on batik-nusantara today:
+      //    `cod_enabled = t` and **75 prepaid orders in that queue** — one click on "Generate resi"
+      //    booked every one of them with `cod = orders.total_idr`, so the courier would knock and ask
+      //    a buyer who has already paid to pay again, in cash, at the door.
+      //  · the order detail's checkbox defaults to `false` and is never seeded from the order, so a
+      //    genuine COD parcel was booked telling the courier to collect **0** — then "Tandai selesai"
+      //    credits the merchant the full sale as `available` for cash nobody ever collected, and the
+      //    platform pays out its own money.
+      //
+      // `payments.method = 'cod'` is the only thing that says what the shopper agreed to pay, and it
+      // is the same expression the Pesanan tabs already partition on (`IS_COD`, lib/data/orders.ts).
+      // `input.cod` is now a claim we CHECK, not an instruction we obey.
+      cod: o.isCod ? (o.total || o.subtotal || 0) : 0,
       insuranceAmount: input.insurance ? (o.subtotal || o.total || 0) : 0,
     },
     schedule,
