@@ -500,18 +500,29 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                a page a shopper is very much viewing. The buy BUTTONS carry their own copy, kept in step
                with the variant picker; the pixel prefers those and falls back to this one. -->
           <span id="pdp-price" data-catalog-id={catalogId} data-catalog-type={catalogType} class:list={["font-semibold text-ink", unpriced ? "text-xl sm:text-2xl" : "text-2xl tabular-nums sm:text-3xl"]}>{unpriced ? "Hubungi untuk harga" : IDR(product.price)}</span>
-          {
-            !unpriced && product.compareAt && (
-              <span class="text-lg text-muted line-through tabular-nums">{IDR(product.compareAt)}</span>
-            )
-          }
-          {
-            discount > 0 && (
-              <span class="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700">
-                -{discount}%
-              </span>
-            )
-          }
+          {/* Both are ALWAYS in the DOM, hidden when they do not apply, so the variant picker can
+              reveal them for a variant that carries a cut the base one does not. Rendering them
+              conditionally meant JS had nothing to show and the shopper saw a price drop with no
+              "was" beside it. `unpriced` still suppresses them entirely — a percentage off nothing
+              is nonsense. */}
+          {!unpriced && (
+            <span
+              id="pdp-compare"
+              class="text-lg text-muted line-through tabular-nums"
+              style={product.compareAt ? undefined : "display:none"}
+            >
+              {product.compareAt ? IDR(product.compareAt) : ""}
+            </span>
+          )}
+          {!unpriced && (
+            <span
+              id="pdp-discount"
+              class="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700"
+              style={discount > 0 ? undefined : "display:none"}
+            >
+              -{discount}%
+            </span>
+          )}
         </div>
         {/* Server-rendered, not left to JS. `updateVariant()` is the only thing that ever wrote this
             line and it is reachable ONLY through #variant-picker — so a product with variants but no
@@ -531,7 +542,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         <!-- Variant picker (real product_variants: Warna, Ukuran) -->
         {
           product.options && product.options.length > 0 ? (
-            <div id="variant-picker" class="mt-8 flex flex-col gap-6" data-variants={JSON.stringify((product.variants ?? []).map((v, i) => ({ option1: v.option1, option2: v.option2, price: v.price, stock: v.stock, catalogId: variantCatalogIds[i] })))}>
+            <div id="variant-picker" class="mt-8 flex flex-col gap-6" data-variants={JSON.stringify((product.variants ?? []).map((v, i) => ({ option1: v.option1, option2: v.option2, price: v.price, compareAt: v.compareAt, stock: v.stock, catalogId: variantCatalogIds[i] })))}>
               {product.options.map((opt, oi) => (
                 <div>
                   <p class="text-sm font-medium text-ink">
@@ -836,6 +847,11 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     var addBtn = document.getElementById("add-to-cart");
     var buyBtn = document.getElementById("buy-now");
     var priceEl = document.getElementById("pdp-price");
+    // The struck price and the % badge are rendered once, server-side, from PRODUCT-level values —
+    // so without these they stayed on the base variant's numbers while the price above them moved.
+    // Three numbers describing one price must never be able to disagree.
+    var compareEl = document.getElementById("pdp-compare");
+    var discountEl = document.getElementById("pdp-discount");
     var stockEl = document.getElementById("pdp-stock");
     // Must match the server's IDR() (Intl currency, id-ID) EXACTLY — that one emits "Rp 199.000" with
     // a non-breaking space. Hand-rolling "Rp" + toLocaleString produced "Rp199.000", so the price
@@ -893,6 +909,10 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         // rather than staying on the last resolvable one — the page said "Beige / L" while the cart
         // line said "Hitam / L".
         if (stockEl) { stockEl.textContent = "Kombinasi ini tidak tersedia"; stockEl.className = "mt-2 text-sm font-medium text-red-700"; }
+        // Hide the price furniture too — a struck price and a "-43%" over a combination that cannot
+        // be bought is an advertisement for something that does not exist.
+        if (compareEl) compareEl.style.display = "none";
+        if (discountEl) discountEl.style.display = "none";
         [addBtn, buyBtn].forEach(function (b) {
           if (!b) return;
           b.disabled = true;
@@ -914,6 +934,19 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       // variant price — so the shopper saw, and the pixel reported, more than the checkout charges.
       var eff = FLASH_PRICE != null ? Math.min(v.price, FLASH_PRICE) : v.price;
       if (priceEl) priceEl.textContent = eff > 0 ? fmt(eff) : "Hubungi untuk harga";
+      // `was` is THIS variant's own pre-sale price (data/catalog.ts writes it when a flash sale caps
+      // the variant), never the product-level base — striking the base against a dearer variant
+      // understates the cut, and against a cheaper one would overstate it.
+      var was = v.compareAt || 0;
+      var cut = was > eff && eff > 0 ? Math.round(((was - eff) / was) * 100) : 0;
+      if (compareEl) {
+        compareEl.textContent = was > eff ? fmt(was) : "";
+        compareEl.style.display = was > eff ? "" : "none";
+      }
+      if (discountEl) {
+        discountEl.textContent = "-" + cut + "%";
+        discountEl.style.display = cut > 0 ? "" : "none";
+      }
       var stock = v.stock || 0;
       if (stockEl) {
         // -600 → -700 on all THREE states. Measured against the cream page (#faf6f2): emerald-600 was

@@ -454,7 +454,22 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
     // `Math.min` per row, so a variant already cheaper than the sale price is never marked UP.
     const rawVariants = variantsById.get(r.id) ?? [];
     const variants = onSale
-      ? rawVariants.map((v) => ({ ...v, price: Math.min(v.price, flash!.price) }))
+      ? rawVariants.map((v) => {
+          const eff = Math.min(v.price, flash!.price);
+          return {
+            ...v,
+            price: eff,
+            // ⚠️ The variant's OWN pre-sale price becomes its struck price — otherwise capping
+            // `price` here destroys the only record of what this variant normally costs, and the PDP
+            // is left striking the PRODUCT-level base against every variant. On a product whose
+            // variants differ in price that understates the cut on the dearer ones.
+            // Same rule the product level already uses (`compareAt = onSale ? r.price : …`): strike
+            // the price the shopper would otherwise pay, not the merchant's own marketing compareAt.
+            // `eff < v.price` guards the variant that is ALREADY cheaper than the flash price — `min`
+            // keeps its own price, so there is no cut, so nothing may be struck.
+            compareAt: eff < v.price ? v.price : v.compareAt,
+          };
+        })
       : rawVariants;
     return {
       handle: r.handle,
