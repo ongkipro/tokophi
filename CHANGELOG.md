@@ -2,6 +2,56 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Storefront: a total that jumped, a badge on the wrong courier, a keyboard trap
+
+From the storefront audit — the half a shopper actually touches. Every item below was observed in
+Chrome at 390 × 844, not inferred.
+
+### 💸 The checkout showed a total it was going to change
+Before an address is entered it printed "Ongkir **Rp 0**" and a Total with no shipping in it — on a
+Rp 45.000 cart with real ongkir of Rp 11.100–19.000, the first number a shopper reads was 25–40% below
+what they pay, in the sticky bar that is the first thing on a phone screen. Then it jumps when they
+fill in their kecamatan, which is the classic abandonment moment. `/keranjang` already refuses to do
+this ("Dihitung saat checkout") and its own comment explains why; the checkout contradicted its
+sibling. Now "Dihitung" and "Belum lengkap" until a courier is picked.
+
+### 🚚 "Tercepat" was landing on the slower service
+The badge ranked on the FIRST integer of the ETD range, so "1-3" and "1-2" scored the same and the
+winner was whichever appeared first in an unsorted list. Observed: SPX Economy "Estimasi 1-3 hari"
+wearing both **Termurah** and **Tercepat**, directly above SPX Standard "1-2 hari" with no speed badge
+at all. Anyone buying for a deadline picks the badge and gets the slow one. Now ranked on the upper
+bound, then the lower.
+
+### 🖼️ A failed image wrecked the page instead of degrading
+Every image frame is already a tinted box with a fixed aspect ratio — but that fallback only rendered
+when the `src` was EMPTY. When the fetch FAILED the browser painted its own broken-image glyph plus
+unstyled alt text, which overflowed its frame and pushed the price and buy button ~1500 px down. Not
+theoretical: merchant photos are `/api/uploads/…` served by the ADMIN app on another origin, so every
+admin redeploy is a window where a shop's own product photos do not resolve. One capture-phase listener
+now hides the failed image and reveals the frame that was always behind it.
+
+### ⌨️ The closed mobile drawer was a keyboard trap
+It is only slid out of view (`translate-x-full`) — still `display:flex`, still visible — so ~15
+off-screen controls stayed in the tab order. Measured: the sixth Tab from the top of the homepage
+landed on the close button OUTSIDE the viewport, then walked ten more invisible links. A keyboard user
+could not get past the header. Now `inert` when closed (WCAG 2.4.3 / 2.4.11).
+
+### Also
+- The cart badge on `/checkout/sukses` still showed the pre-order count: `sukses.astro` clears the cart
+  and fires `cart:updated`, but `CheckoutLayout`'s badge was a one-shot IIFE with no listener (the
+  header's copy has both). A badge saying you still have a basket, on the page telling you the order
+  went through.
+- A single-variant product never said it was in stock. The positive line was left to the variant
+  picker's JS, and a product with no options has no picker — so a 4-variant item said "Stok tersedia
+  (17)" and a 1-variant item with 40 on hand said nothing. Scarcity is a reason to buy; silence is not.
+
+Still open from that audit, recorded not fixed: no `aria-live` anywhere on the checkout (every changing
+number changes silently), validation errors not associated via `aria-describedby`, the address cascade
+has no combobox semantics, the variant picker groups are unlabelled, hero carousel dots are 10 × 6 px,
+and hero body copy reaches 3.54:1 on its lightest slide. Plus the biggest performance win: seeded
+imagery is excluded from `srcset`, so a 390 px phone downloads the desktop rendition (~600 KB of the
+homepage's 821 KB).
+
 ## Unreleased — The payment webhook was rejecting every real payment
 
 Four parallel audits away from the ad-tracking stack — the money in checkout, auth/RBAC/tenant

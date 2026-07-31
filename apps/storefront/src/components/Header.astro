@@ -423,6 +423,7 @@ const drawerEmail = (store.email ?? "").trim() || null;
     role="dialog"
     aria-modal="true"
     aria-label="Menu navigasi"
+    inert
     class="fixed inset-y-0 right-0 z-50 flex w-full max-w-[26rem] translate-x-full flex-col bg-cream shadow-2xl transition-transform duration-300 ease-out"
   >
     {/* X on the LEFT, borderless — the minimalist reference. No logo in the menu header: the menu is
@@ -674,6 +675,9 @@ const drawerEmail = (store.email ?? "").trim() || null;
     function open() {
       overlay.classList.remove("pointer-events-none", "opacity-0");
       drawer.classList.remove("translate-x-full");
+      // Reachable again — see the note in close(). Removed BEFORE focus moves into the panel, or the
+      // browser refuses to focus a control inside an inert subtree.
+      drawer.removeAttribute("inert");
       openBtn.setAttribute("aria-expanded", "true");
       lockScroll();
       showSub(false); // always open on the main list, never mid-drill
@@ -685,6 +689,12 @@ const drawerEmail = (store.email ?? "").trim() || null;
     function close() {
       overlay.classList.add("pointer-events-none", "opacity-0");
       drawer.classList.add("translate-x-full");
+      // ⚠️ INERT, or the closed drawer keeps ~15 off-screen controls in the tab order. It is only
+      // slid out of view (`translate-x-full`) — still `display:flex`, still visible, so the tab-stop
+      // filter's `offsetParent === null` test passes it straight through. Measured: the SIXTH tab from
+      // the top of the homepage landed on the close button OUTSIDE the viewport, then walked ten more
+      // invisible links. A keyboard user could not get past the header. WCAG 2.4.3 / 2.4.11.
+      drawer.setAttribute("inert", "");
       openBtn.setAttribute("aria-expanded", "false");
       unlockScroll();
       showSub(false); // reset, so the next open starts on the main list

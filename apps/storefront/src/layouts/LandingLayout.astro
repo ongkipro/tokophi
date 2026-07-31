@@ -7,6 +7,7 @@
 import "../styles/global.css";
 import Analytics from "../components/Analytics.astro";
 import MarketingPixels from "../components/MarketingPixels.astro";
+import ImageFallback from "../components/ImageFallback.astro";
 import { mediaUrl } from "../data/catalog";
 
 interface Props {
@@ -91,6 +92,7 @@ const ogImage = (() => {
         build, lint and `astro check` stayed green. Same class of miss as CheckoutLayout's, one layout
         over: the note there says "every layout a shopper can convert under" — this is one of them. */}
     <MarketingPixels />
+    <ImageFallback />
   </head>
   <body class="min-h-screen bg-cream text-ink antialiased">
     <slot />

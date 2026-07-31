@@ -28,6 +28,7 @@
 import "../styles/global.css";
 import Analytics from "../components/Analytics.astro";
 import MarketingPixels from "../components/MarketingPixels.astro";
+import ImageFallback from "../components/ImageFallback.astro";
 import { mediaUrl } from "../data/catalog";
 
 interface Props {
@@ -121,6 +122,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
     <Analytics />
     <!-- The merchant's own pixels — this layout owns InitiateCheckout + Purchase (see the note above). -->
     <MarketingPixels />
+    <ImageFallback />
   </head>
   <!-- No `bg-white` on <body> — it would be a DEAD CLASS. global.css sets `body { background: cream }`
        unlayered, and Tailwind v4 emits utilities inside `@layer utilities`; an unlayered rule beats
@@ -228,17 +230,24 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
       (function () {
         var el = document.getElementById("checkout-cart-count");
         if (!el) return;
-        try {
-          var n = JSON.parse(localStorage.getItem("cart") || "[]").reduce(function (t, i) {
-            return t + (Number(i && i.qty) || 1);
-          }, 0);
-          if (n > 0) {
+        // ⚠️ IT MUST LISTEN, not just run once. `/checkout/sukses` clears the cart and fires
+        // `cart:updated` — this copy had neither listener (Header.astro has both), so the thank-you
+        // page rendered a badge saying the shopper still had something in their basket, and tapping it
+        // landed on an empty cart. The order went through; the header said otherwise.
+        function render() {
+          try {
+            var n = JSON.parse(localStorage.getItem("cart") || "[]").reduce(function (t, i) {
+              return t + (Number(i && i.qty) || 1);
+            }, 0);
             el.textContent = String(n);
-            el.hidden = false;
+            el.hidden = !(n > 0);
+          } catch (e) {
+            /* a corrupt cart must never break the page the shopper is paying on */
           }
-        } catch (e) {
-          /* a corrupt cart must never break the page the shopper is paying on */
         }
+        render();
+        window.addEventListener("cart:updated", render);
+        window.addEventListener("storage", render);
       })();
     </script>
 

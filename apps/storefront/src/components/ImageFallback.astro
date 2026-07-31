@@ -1,0 +1,36 @@
+---
+/**
+ * A broken image must not become 650 px of blank page with the alt text spilling out of its frame.
+ *
+ * Every image frame in this storefront is already a tinted `bg-brand-50` box with a fixed aspect
+ * ratio — the empty-photo state renders exactly that box with a lucide glyph in it. But that branch
+ * only runs when the `src` is EMPTY. When the URL is present and the FETCH fails, the browser paints
+ * its own broken-image glyph plus unstyled alt text, which overflows, clips, and pushes the price and
+ * the buy button a thousand pixels down the page. Observed on a PDP whose media 404'd.
+ *
+ * It is not a theoretical state: merchant-uploaded photos are `/api/uploads/…`, served by the ADMIN
+ * app on a different origin (`data/catalog.ts`), so every admin redeploy is a window where the shop's
+ * own product photos do not resolve — and the planned MinIO/S3 move adds a second origin that can fail
+ * independently. A PDP with no photo does not sell; a PDP with a wrecked layout sells less.
+ *
+ * Hiding the failed `<img>` reveals the tinted frame that is already behind it, which is the same
+ * empty state the no-photo branch renders. Capture phase, because `error` does not bubble.
+ */
+---
+
+<script is:inline>
+  document.addEventListener(
+    "error",
+    function (e) {
+      var el = e.target;
+      if (!el || el.tagName !== "IMG" || el.dataset.imgFailed) return;
+      el.dataset.imgFailed = "1";
+      el.style.display = "none";
+      // The alt text has already been announced to assistive tech by the time this runs; leaving it
+      // on a display:none element keeps it out of the accessibility tree too, which is the honest
+      // result — there is no image to describe.
+      el.setAttribute("alt", "");
+    },
+    true,
+  );
+</script>
