@@ -3,6 +3,7 @@
 // data (no store_id, no RLS) — queried on the owner connection like the other reference lookups.
 import { db, schema } from "@tokophi/db";
 import { and, asc, ilike, sql } from "drizzle-orm";
+import { likeContains } from "@tokophi/lib/like";
 
 export type TaxonomyOption = { id: number; path: string; name: string; isLeaf: boolean };
 
@@ -20,7 +21,9 @@ export async function searchTaxonomy(query: string): Promise<TaxonomyOption[]> {
       isLeaf: schema.productTaxonomy.isLeaf,
     })
     .from(schema.productTaxonomy)
-    .where(and(...terms.map((t) => ilike(schema.productTaxonomy.path, `%${t}%`))))
+    // Escaped: the merchant types this, and a `%` or `_` in it is a literal character to them, not a
+    // wildcard. This site was missed when the same fix landed in `data/areas.ts` and `data/orders.ts`.
+    .where(and(...terms.map((t) => ilike(schema.productTaxonomy.path, likeContains(t)))))
     .orderBy(asc(sql`length(${schema.productTaxonomy.path})`))
     .limit(25);
 }

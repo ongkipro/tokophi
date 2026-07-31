@@ -2,6 +2,7 @@ import "server-only";
 import { db, schema } from "@tokophi/db";
 import { or, ilike, eq, asc, sql } from "drizzle-orm";
 import { kaAddressByName } from "@tokophi/lib/kiriminaja";
+import { likeEscape } from "@tokophi/lib/like";
 
 // The STRUCTURED parts, not just the display string: the storefront checkout uses them to auto-fill
 // Kota and Provinsi from the chosen kecamatan, so the shopper types the district once instead of
@@ -43,7 +44,7 @@ export async function searchAreaLocal(q: string, limit = 8): Promise<Area[]> {
   const raw = q.trim();
   // `%` and `_` are LIKE wildcards. Unescaped, a lone "%" matched all 7.030 rows and returned the
   // first 8 arbitrarily — parameterised, so never injection, but a search that answers nonsense.
-  const lit = raw.replace(/[\\%_]/g, (c) => "\\" + c);
+  const lit = likeEscape(raw);
   const term = `%${lit}%`;
   const prefix = `${lit}%`;
   const rows = await db

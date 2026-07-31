@@ -223,6 +223,10 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
   `UPDATE … WHERE used_count < usage_limit` is the lock; 0 rows updated ⇒ `VoucherExhausted` ⇒ the
   whole order rolls back with a 409 the shopper can act on. (A comment here claimed this was already
   race-safe for weeks while the increment was a bare `used_count + 1`.)
+- **The badge's clock must be the PRICE's clock.** `isLive` was moved to the server and then the very
+  next line computed "Terjadwal" from `Date.now()` **in the browser** — the merchant's own laptop
+  clock deciding a label about a price this server sets. `isUpcoming` is now derived in
+  `lib/data/flash.ts` on the same `now` as `isLive`, so the two cannot contradict each other.
 - **A flash sale must reach the VARIANT rows, not just the headline price.** `data/catalog.ts`
   applies `Math.min(v.price, flash.price)` per variant, because the PDP's picker rewrites the price
   from `variants[]` on load — so a flash product WITH options rendered the **pre-sale** price next
@@ -290,6 +294,29 @@ every deploy, and a hardcoded one fails with "No such container" the moment anyt
   (`ledger_one_sale_per_payment`, `ledger_one_sale_per_order`, `ledger_one_retur_per_order`) plus
   `on conflict do nothing` on every writer. The balance is DERIVED (`Σ amount_idr` by status); there
   is no stored-balance column and there must not be.
+- **A GUESS MUST NEVER SUCCEED QUIETLY, and "we flag it" is a claim to grep before trusting.** The
+  comment above `createShipment`'s destination fallback said the guess "is flagged as a guess" while
+  `destinationGuessed` existed **nowhere in the repo** — 77 orders carry no `ship_district_id`, so the
+  branch was live and silent. It now returns the district it actually MATCHED (not the city it
+  searched: "Surabaya" → "Bandar Surabaya, Lampung Tengah, LAMPUNG" is only visible if you print the
+  match), the detail screen warns for 20s, and `BulkResult.guessedDestination` carries one entry per
+  order — a bulk run is exactly where three guesses vanish behind "50 pesanan dibooking".
+- **Report what you WROTE, never what you were asked to write.** `markLabelsPrinted` returned
+  `done: numbers.length` regardless of what the UPDATE matched, so a number belonging to another store
+  (RLS filters it out, no error) counted as printed. `.returning()` is the only honest source.
+- **A terminal order must never grow a live bill.** `createOrderPayment` had no `status` check, so a
+  cancelled order could be given a real VA: the buyer pays, the callback marks it `berhasil`, and
+  `creditSaleForPayment` then correctly skips `batal`/`retur` — money collected, no sale credited.
+  Refusing at creation is the only place this stops, because the callback is right to skip it. It also
+  refuses a SECOND bill while one is still `menunggu`.
+- **ONE definition of "the order's payment", used by every screen** — `paid_at desc nulls last, id
+  desc`, in both `data/orders.ts` and `data/order-detail.ts`. They used to order differently, so an
+  order with more than one payment row could read COD on one screen and VA on the other — and COD is
+  the fact `createShipment` turns into a cash-collection instruction for a courier.
+- **User-typed search strings are ESCAPED before they enter a LIKE pattern** (`@tokophi/lib/like`).
+  Not injection — everything is parameterised — but `%` and `_` are wildcards and the merchant is
+  typing a search box: measured, an unescaped `_` matched **all 842 orders**. It is one shared helper
+  because the same regex had already been written twice by hand and a third site was missed.
 - **Validate every URL parameter that reaches an enum cast.** `/pesanan?bayar=<anything>` was a 500
   (`invalid input value for enum payment_method`) because `bayar` was passed straight through while
   `tab` and `field` beside it were checked.

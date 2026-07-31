@@ -9,7 +9,8 @@ import SectionHeading from "../components/SectionHeading.astro";
 import SectionRenderer from "../components/sections/SectionRenderer.astro";
 import Hero from "../components/sections/Hero.astro";
 import type { HeroConfig } from "@tokophi/sections";
-import { storeCodEnabled, enabledPaymentChannels } from "../data/catalog";
+import { storeCodEnabled, enabledPaymentChannels, mediaUrl } from "../data/catalog";
+import { ldScript } from "../lib/breadcrumb";
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
 const { store, catalog } = Astro.locals;
@@ -109,9 +110,41 @@ const SUMMARY = [
   .filter(Boolean)
   .join(". ")
   .replace(/\.\s*\./g, ".");
+
+// ── Structured data ───────────────────────────────────────────────────────────────────────────────
+// The homepage had NONE, while /produk, /blog and the breadcrumb trails all did. It is the page every
+// crawler reaches first and the one that carries the shop's identity, so Organization + WebSite belong
+// here and nowhere else. Same `ldScript` (which escapes `<`) the product page uses.
+const ORIGIN = Astro.locals.origin;
+const LOGO = store.logoUrl ? new URL(mediaUrl(store.logoUrl), ORIGIN).href : undefined;
+const HEAD = [
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: store.name,
+    url: ORIGIN,
+    ...(LOGO ? { logo: LOGO } : {}),
+    ...(store.tagline?.trim() ? { description: store.tagline.trim() } : {}),
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: store.name,
+    url: ORIGIN,
+    // The storefront's search is `/cari?q=` — VERIFIED against `pages/cari.astro`, which reads exactly
+    // that param. Not `/produk?q=`: ProductListing reads `sort` and `page` only, so that URL would
+    // silently render the unfiltered catalogue. A SearchAction pointing somewhere that does not search
+    // is worse than no SearchAction.
+    potentialAction: {
+      "@type": "SearchAction",
+      target: { "@type": "EntryPoint", urlTemplate: `${ORIGIN}/cari?q={search_term_string}` },
+      "query-input": "required name=search_term_string",
+    },
+  },
+].map(ldScript).join("");
 ---
 
-<Layout title="Beranda" description={SUMMARY}>
+<Layout title={store.tagline?.trim() || `Belanja ${store.name}`} description={SUMMARY} head={HEAD}>
   {
     HOMEPAGE_TEMPLATE ? (
       <!-- ADR 0009: merchant-built homepage (Store Builder) -->

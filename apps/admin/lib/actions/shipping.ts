@@ -462,6 +462,13 @@ export type CreateShipmentResult = {
   senderIncomplete?: boolean;
   /** Exactly which sender fields are missing. */
   missing?: string[];
+  /**
+   * The order carried no `ship_district_id` (pre-0042), so the destination district was FUZZY-MATCHED
+   * from its free-text city — this is the district name we guessed and booked to. The parcel is on its
+   * way; the merchant has to confirm it is the right one. Set = a guess succeeded, and a guess must
+   * never succeed quietly.
+   */
+  destinationGuessed?: string;
 };
 
 export async function createShipment(input: {
@@ -570,8 +577,18 @@ export async function createShipment(input: {
   // `orders.ship_district_id` IS a KiriminAja district id — the one the shopper picked and the one
   // the ongkir they PAID was quoted against. It is the only destination that cannot disagree with
   // where the parcel is going. The city fallback stays for pre-0042 orders and is flagged as a guess.
-  const destDistrictId =
-    o.shipDistrictId ?? (await resolveArea(o.city ?? "").then((a) => a[0]?.id ?? null));
+  // ⚠️ The comment above said the fallback "is flagged as a guess" and `destinationGuessed` did not
+  // exist anywhere in the repo — the guess was booked in complete silence. 77 orders on the dev DB
+  // carry no `ship_district_id`, so this branch is live, not theoretical.
+  let destinationGuessed: string | undefined;
+  let destDistrictId = o.shipDistrictId ?? null;
+  if (!destDistrictId) {
+    const guess = (await resolveArea(o.city ?? ""))[0];
+    destDistrictId = guess?.id ?? null;
+    // Name the district we actually picked, not the city we searched for. "Surabaya" matching
+    // "Bandar Surabaya, Lampung Tengah, LAMPUNG" is only visible if we print the MATCH.
+    destinationGuessed = guess?.text || o.city || undefined;
+  }
   if (!destDistrictId) return { ok: false, error: `Area tujuan "${o.city}" tidak ditemukan di KiriminAja.` };
   const destAddress = o.shipAddress?.trim() || o.city || "-";
   if (!o.shipAddress?.trim()) {
@@ -727,7 +744,7 @@ export async function createShipment(input: {
     }
   });
   revalidatePath(`/pesanan/${input.orderNumber}`);
-  return { ok: true, awb, kaOrderId: r.kaOrderId, pickupNumber: r.pickupNumber, awbPending: !awb };
+  return { ok: true, awb, kaOrderId: r.kaOrderId, pickupNumber: r.pickupNumber, awbPending: !awb, destinationGuessed };
 }
 
 // ---- Cancel / void a shipment → clears the booking from the order ----

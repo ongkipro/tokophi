@@ -2,6 +2,69 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Six quiet lies in the order pipeline
+
+None of these threw, none failed a build, and none is reachable by clicking around the demo store —
+its data avoids every one of them. They were found by grepping for claims and checking them against
+SQL.
+
+### The guess that said it was flagged, and wasn't
+`createShipment`'s comment stated the city-name fallback "is flagged as a guess". `destinationGuessed`
+existed **nowhere in the repo**. 77 orders on the dev DB carry no `ship_district_id`, so the branch was
+live: a parcel booked to a fuzzy-matched kecamatan, silently, and the COD province gate then resolved
+the province *from that guess*. `resolveArea("Surabaya")[0]` is "Bandar Surabaya, Lampung Tengah,
+LAMPUNG".
+
+It now returns the district it actually **matched** — the match, not the city searched, because that
+is the only string in which the Lampung problem is visible. The order-detail screen raises a 20-second
+warning naming it and telling the merchant to check before the courier collects.
+`BulkResult.guessedDestination` carries one entry per order: a 50-order run is exactly where three
+guesses disappear behind "50 pesanan dibooking".
+
+### Reporting what we were asked to write, not what we wrote
+`markLabelsPrinted` returned `done: numbers.length` whatever the UPDATE matched. An order number
+belonging to another store is filtered out by RLS with **no error**, and counted as printed anyway.
+Now `.returning()`, and `ok` means every row landed.
+
+### A cancelled order could still be billed
+`createOrderPayment` never looked at `orders.status`, so a `batal`/`retur` order could be given a real
+VA at the gateway. The buyer pays, the callback marks it `berhasil`, and `creditSaleForPayment`
+correctly skips terminal orders — money collected, **no sale credited**. Refusing at creation is the
+only place that stops, because the callback is right to skip it. It now also refuses a second bill
+while one is still `menunggu`: two open VAs are two ways to pay one order.
+
+### Two definitions of "the order's payment"
+The list ordered by `paid_at desc nulls last`, the detail by `p.id desc`. On an order with more than
+one payment row they could name different methods — including **COD vs VA**, which is the fact
+`createShipment` turns into a cash-collection instruction for a courier. One definition now, in both
+files, each pointing at the other.
+
+### The badge's clock was the merchant's laptop
+`isLive` had just been moved to the server so the seller's Flash Sale list could not contradict the
+till. The line directly below it still computed "Terjadwal" from `Date.now()` **in the browser**.
+`isUpcoming` is now derived on the same `now` as `isLive`.
+
+### `_` matched all 842 orders
+Search terms went into `ILIKE '%…%'` unescaped. Never injection — everything is parameterised — but
+`%` and `_` are wildcards and the merchant is typing a search box: the literal resi `SPX_123` also
+matched `SPX0123`, and a bare `%` listed the whole shop. Fixed as a **class**, not an instance: the
+identical regex had already been hand-written twice (`data/areas.ts`, `data/orders.ts`) and a third
+site (`actions/taxonomy.ts`) was missed, so it is now one shared `@tokophi/lib/like` used by all
+three, with a test pinning both directions — wildcards neutralised *and* ordinary Indonesian search
+terms left untouched, because over-escaping would stop real order numbers matching.
+
+### Storefront: the homepage had no structured data
+`/produk`, `/blog` and every breadcrumb emitted JSON-LD; the page every crawler reaches first emitted
+none. Organization + WebSite now ship there, and the `SearchAction` points at **`/cari?q=`** — verified
+against `pages/cari.astro`, which reads exactly that param. Not `/produk?q=`: that route reads `sort`
+and `page` only and would have silently rendered the unfiltered catalogue. The title also stopped
+leading with "Beranda" (`Beranda - Batik Nusantara` → `Batik modern untuk hari-harimu - Batik
+Nusantara`).
+
+Gates: `tsc` clean (admin, super-admin, db, sections), `astro check` 0 errors, **145 tests**,
+`verify-migrations` + `verify-rls` green. Homepage JSON-LD parsed out of the served HTML in a real
+browser request, not asserted from source.
+
 ## Unreleased — Storefront: a total that jumped, a badge on the wrong courier, a keyboard trap
 
 From the storefront audit — the half a shopper actually touches. Every item below was observed in

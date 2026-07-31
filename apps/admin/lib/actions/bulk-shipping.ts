@@ -28,6 +28,10 @@ export type BulkResult = {
   /** Booked but the courier has not issued a waybill yet — the NORMAL post-booking state, not an
    *  error. KiriminAja returns awb:null until a courier accepts the pickup. */
   awaitingResi: string[];
+  /** Orders whose destination district was FUZZY-MATCHED from a free-text city because they carry no
+   *  `ship_district_id` (pre-0042). Booked, but to a district nobody confirmed. A bulk run is exactly
+   *  where these disappear — 50 successes and no line saying 3 of them were guesses. */
+  guessedDestination?: { number: string; district: string }[];
 };
 
 /** Book every selected order with the service the SHOPPER paid for (orders.courier + service_type).
@@ -37,6 +41,7 @@ export async function bulkGenerateResi(numbers: string[]): Promise<BulkResult> {
   await requireCapability("orders:write");
   const failed: { number: string; error: string }[] = [];
   const awaitingResi: string[] = [];
+  const guessedDestination: { number: string; district: string }[] = [];
   let done = 0;
 
   for (const number of numbers.slice(0, 50)) {
@@ -81,12 +86,13 @@ export async function bulkGenerateResi(numbers: string[]): Promise<BulkResult> {
       }
       done++;
       if (!r.awb) awaitingResi.push(number);
+      if (r.destinationGuessed) guessedDestination.push({ number, district: r.destinationGuessed });
     } catch (e) {
       failed.push({ number, error: String((e as { message?: string })?.message ?? e) });
     }
   }
   revalidatePath("/pesanan/massal");
-  return { ok: failed.length === 0, done, failed, awaitingResi };
+  return { ok: failed.length === 0, done, failed, awaitingResi, guessedDestination };
 }
 
 /** Ask KiriminAja for the waybill of every booked-but-resi-less order. trackShipment persists it. */
@@ -115,11 +121,19 @@ export async function bulkFetchResi(numbers: string[]): Promise<BulkResult> {
 export async function markLabelsPrinted(numbers: string[]): Promise<{ ok: boolean; done: number }> {
   const { storeId } = await requireCapability("orders:write");
   if (!numbers.length) return { ok: true, done: 0 };
-  await withTenant(storeId, (db) =>
-    db.update(schema.orders).set({ labelPrintedAt: new Date() }).where(inArray(schema.orders.number, numbers)),
+  // `done` is what we actually WROTE, not what we were asked to write. It used to be `numbers.length`,
+  // which reports full success for numbers that matched nothing — an order belonging to another store
+  // (RLS filters it out, no error) or one that no longer exists. "12 label ditandai tercetak" while
+  // three of them are untouched is the kind of lie a merchant only discovers at the drop-off point.
+  const rows = await withTenant(storeId, (db) =>
+    db
+      .update(schema.orders)
+      .set({ labelPrintedAt: new Date() })
+      .where(inArray(schema.orders.number, numbers))
+      .returning({ number: schema.orders.number }),
   );
   revalidatePath("/pesanan/massal");
-  return { ok: true, done: numbers.length };
+  return { ok: rows.length === numbers.length, done: rows.length };
 }
 
 async function orderService(number: string): Promise<{ courier: string; serviceType: string } | null> {
