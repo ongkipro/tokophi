@@ -12,6 +12,7 @@
 import type { ImageTextConfig } from "@tokophi/sections";
 import { safeHref } from "../../lib/safe-href";
 import { ArrowRight } from "@lucide/astro";
+import { imageSrcSet } from "../../data/catalog";
 
 type Props = ImageTextConfig;
 const { heading, body, imageUrl, imageSide, eyebrow, ctaLabel, ctaHref } = Astro.props;
@@ -20,6 +21,11 @@ const paragraphs = (body ?? "")
   .split(/\n{2,}/)
   .map((p) => p.trim())
   .filter(Boolean);
+
+// `sizes` tells the browser how WIDE this image renders, and it trusts it completely when
+// choosing a srcset candidate — a wrong value is worse than no srcset at all. Derived from this
+// component's own layout: Half the content column from md up; full width below it.
+const SIZES = "(min-width: 768px) 50vw, 100vw";
 ---
 
 <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24">
@@ -35,7 +41,15 @@ const paragraphs = (body ?? "")
     >
       {
         imageUrl ? (
-          <img src={imageUrl} alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />
+          <img
+            src={imageUrl}
+            srcset={imageSrcSet(imageUrl)}
+            sizes={imageSrcSet(imageUrl) ? SIZES : undefined}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            class="h-full w-full object-cover"
+          />
         ) : (
           <span class="block h-full w-full bg-gradient-to-br from-brand-100 to-brand-200" aria-hidden="true" />
         )

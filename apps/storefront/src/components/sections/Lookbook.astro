@@ -5,9 +5,15 @@
 // "Lookbook" beat. Deliberately simple: no shoppable dots, no carousel. The image is the section; the
 // heading names it. An empty `imageUrl` renders the brand-tinted panel, never a broken frame.
 import type { LookbookConfig } from "@tokophi/sections";
+import { imageSrcSet } from "../../data/catalog";
 
 type Props = LookbookConfig;
 const { heading, description, imageUrl } = Astro.props;
+
+// `sizes` tells the browser how WIDE this image renders, and it trusts it completely when
+// choosing a srcset candidate — a wrong value is worse than no srcset at all. Derived from this
+// component's own layout: A full-bleed band — one CSS pixel of viewport is one image pixel.
+const SIZES = "100vw";
 ---
 
 <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
@@ -24,7 +30,15 @@ const { heading, description, imageUrl } = Astro.props;
   <div class="relative aspect-[4/3] overflow-hidden rounded-md bg-brand-100 sm:aspect-[21/9]">
     {
       imageUrl ? (
-        <img src={imageUrl} alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />
+        <img
+          src={imageUrl}
+          srcset={imageSrcSet(imageUrl)}
+          sizes={imageSrcSet(imageUrl) ? SIZES : undefined}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          class="h-full w-full object-cover"
+        />
       ) : (
         <span class="block h-full w-full bg-gradient-to-br from-brand-100 to-brand-200" aria-hidden="true" />
       )

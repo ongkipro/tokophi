@@ -314,6 +314,15 @@ const centered = align === "center";
         source.srcset = source.dataset.srcset;
         source.removeAttribute("data-srcset");
       }
+      // …and the IMG's own srcset, which must also be in place BEFORE `src` is assigned or the browser
+      // commits to the single `src` URL — the full-size original. This was missed when the img gained a
+      // `data-srcset`: only the <source> was promoted, so slides 2..n each downloaded the whole
+      // 1920×1080 file on a phone (measured: 74 KB + 32 KB wasted on one page).
+      const imgSrcSet = el.dataset.srcset;
+      if (imgSrcSet) {
+        (el as HTMLImageElement).srcset = imgSrcSet;
+        el.removeAttribute("data-srcset");
+      }
       (el as HTMLImageElement).src = src;
     };
 

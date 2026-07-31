@@ -288,6 +288,13 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   for `public/` it is a meaningless query on the same bytes, which is worse than no srcset. ⚠️ The
   ladders in `STATIC_WIDTHS` and the script's `PLAN` **must stay identical** — a width listed with no
   file on disk is a 404 the browser may pick as its best candidate.
+- ⚠️ **A `data-srcset` must be promoted onto the IMG, not only onto its `<source>`.** The hero
+  carousel wakes slides 2..n by assigning `src`; if the img's own srcset is not set FIRST, the browser
+  has already committed to the single `src` URL — the full-size original. Invisible to every static
+  check (markup right, build green, bytes wrong); only `currentSrc` in a browser shows it. Guarded by
+  `scripts/check-hero-srcset.mjs`.
+- **`sizes` is derived from the component's OWN layout and named as a constant.** The browser trusts
+  `sizes` completely when choosing a candidate, so a wrong one is worse than no srcset at all.
 - ⚠️ **Astro middleware CANNOT set headers on `public/` assets** — the Node adapter's `sirv` handler
   serves them before middleware runs. Verified against a real build and reverted; long cache TTL is a
   Cloudflare Cache Rule (BACKLOG), not code. Do not re-write that middleware.

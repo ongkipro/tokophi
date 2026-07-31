@@ -14,6 +14,7 @@
 // fewer, order is preserved — there is nothing to choose.
 import type { CollectionBentoConfig } from "@tokophi/sections";
 import { ArrowUpRight } from "@lucide/astro";
+import { imageSrcSet } from "../../data/catalog";
 
 type Props = CollectionBentoConfig;
 const { heading } = Astro.props;
@@ -43,6 +44,11 @@ const spanClass = (i: number) => [
   MOBILE[i % MOBILE.length] === 2 ? "col-span-2" : "col-span-1",
   DESKTOP[i % DESKTOP.length] === 2 ? "lg:col-span-2" : "lg:col-span-1",
 ];
+
+// `sizes` tells the browser how WIDE this image renders, and it trusts it completely when
+// choosing a srcset candidate — a wrong value is worse than no srcset at all. Derived from this
+// component's own layout: A 2-col bento on phones, up to 4 tiles wide on desktop.
+const SIZES = "(min-width: 1024px) 25vw, 50vw";
 ---
 
 {
@@ -62,6 +68,8 @@ const spanClass = (i: number) => [
               {c.imageUrl ? (
                 <img
                   src={c.imageUrl}
+                  srcset={imageSrcSet(c.imageUrl)}
+                  sizes={imageSrcSet(c.imageUrl) ? SIZES : undefined}
                   alt=""
                   loading="lazy"
                   decoding="async"
