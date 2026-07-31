@@ -1,6 +1,7 @@
 import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
+import { likeContains } from "@tokophi/lib/like";
 import { eq, sql, type SQL } from "drizzle-orm";
 import type { Order } from "@/lib/mock/store";
 
@@ -147,7 +148,10 @@ function filterConds(p: OrderListParams): SQL[] {
   const conds: SQL[] = [];
   const term = p.q?.trim();
   if (term) {
-    const like = `%${term}%`;
+    // `%` and `_` are LIKE WILDCARDS and the merchant is typing a search box, not a pattern —
+    // see `@tokophi/lib/like` for what an unescaped one does (measured: a bare `%` listed all 842
+    // orders; `SPX_123` matched `SPX0123`).
+    const like = likeContains(term);
     switch (p.field ?? "no") {
       case "pembeli":
         conds.push(sql`coalesce(nullif(o.ship_recipient,''), c.name, '') ilike ${like}`);
@@ -222,8 +226,12 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
         (o.problem_at is not null)                              as "problem",
         o.problem_note                                          as "problemNote",
         o.placed_at                                             as "placedAt",
+        -- One definition of "the order's payment", shared with lib/data/order-detail.ts: most recently
+        -- PAID first, unpaid last, id as the tie-break. The two used to order differently (id desc
+        -- there), so a multi-payment order could show one method here and another on its detail page —
+        -- including COD vs VA, the fact createShipment now derives the cash-collection instruction from.
         (select p.method::text from payments p where p.order_id = o.id
-         order by p.paid_at desc nulls last limit 1)            as "paymentMethod"
+         order by p.paid_at desc nulls last, p.id desc limit 1)  as "paymentMethod"
       from orders o
       left join customers c on c.id = o.customer_id
       ${rowWhere}

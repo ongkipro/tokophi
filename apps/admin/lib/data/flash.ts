@@ -14,6 +14,12 @@ export type FlashSaleRow = {
   itemCount: number;
   /** Not `nonaktif` AND now inside the window — the ONLY state that actually drops prices. */
   isLive: boolean;
+  /** Not `nonaktif` and the window has not opened yet. Derived HERE, on the same `now` as `isLive`,
+   *  so the two can never contradict each other. The badge used to compute this in the browser with
+   *  `Date.now()`, i.e. on the merchant's own clock: a laptop set a few hours ahead labelled a sale
+   *  "Berakhir" while this server was still discounting it — the exact split the `isLive` fix closed,
+   *  reopened one line below it. */
+  isUpcoming: boolean;
 };
 
 export type FlashProductPick = { productId: string; title: string; basePrice: number; salePriceIdr: number };
@@ -65,6 +71,7 @@ export async function getFlashSales(): Promise<FlashSaleRow[]> {
     // PRICING readers were moved to `<> 'nonaktif'` — made the seller's list badge a live `terjadwal`
     // sale as "Berakhir" while the till was already discounting it.
     isLive: s.status !== "nonaktif" && s.startsAt.getTime() <= now && now < s.endsAt.getTime(),
+      isUpcoming: s.status !== "nonaktif" && s.startsAt.getTime() > now,
     }));
   });
 }

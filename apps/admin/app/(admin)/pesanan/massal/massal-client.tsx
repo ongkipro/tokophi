@@ -50,20 +50,38 @@ export function MassalClient({ data, filters }: { data: BulkShippingResult; filt
     router.push(sp.toString() ? `${pathname}?${sp}` : pathname, { scroll: false });
   }
 
+  // `guessedDestination` is optional because only `bulkGenerateResi` books anything — the fetch-resi
+  // and print runs reuse this reporter and have nothing to guess.
+  type BulkReport = {
+    done: number;
+    failed: { number: string; error: string }[];
+    awaitingResi: string[];
+    guessedDestination?: { number: string; district: string }[];
+  };
+
   // Partial failure is reported per order — never summarised into "berhasil". 8 booked / 2 failed
   // must read as exactly that: the seller has to know WHICH two.
-  const report = (r: { done: number; failed: { number: string; error: string }[]; awaitingResi: string[] }, verb: string) => {
+  const report = (r: BulkReport, verb: string) => {
     if (r.done) toast.success(`${r.done} pesanan ${verb}.`);
     if (r.awaitingResi.length)
       toast.info(`${r.awaitingResi.length} menunggu resi`, {
         description: "Kurir belum menerbitkan nomor resi. Klik “Ambil resi” lagi nanti — label baru bisa dicetak setelah resi terbit.",
         duration: 8000,
       });
+    // A guessed destination is NOT a failure — the parcel is booked — so it cannot ride in `failed`,
+    // and it must not be swallowed by the "N pesanan dibooking" success line either. This is the one
+    // place a bulk run can tell the merchant that some of those bookings went to a district nobody
+    // confirmed, while the courier has not collected yet.
+    for (const g of (r.guessedDestination ?? []).slice(0, 4))
+      toast.warning(`${g.number}: tujuan ditebak — “${g.district}”`, {
+        description: "Pesanan ini tidak menyimpan kecamatan tujuan, jadi kurir dibooking ke hasil pencocokan nama kota. Periksa sebelum kurir menjemput.",
+        duration: 20000,
+      });
     for (const f of r.failed.slice(0, 4)) toast.error(`${f.number}: ${f.error}`, { duration: 9000 });
     router.refresh();
   };
 
-  const run = async (label: string, fn: () => Promise<{ done: number; failed: { number: string; error: string }[]; awaitingResi: string[] }>, verb: string) => {
+  const run = async (label: string, fn: () => Promise<BulkReport>, verb: string) => {
     setBusy(label);
     try { report(await fn(), verb); } finally { setBusy(null); }
   };

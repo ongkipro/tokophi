@@ -23,7 +23,9 @@ const when = (iso: string) => fmt.format(new Date(iso));
 function StatusBadge({ row }: { row: FlashSaleRow }) {
   if (row.isLive) return <Badge className="gap-1 bg-emerald-500/10 text-emerald-600"><span className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-500" />Berlangsung</Badge>;
   if (row.status === "nonaktif") return <Badge className="bg-muted text-muted-foreground">Nonaktif</Badge>;
-  if (new Date(row.startsAt).getTime() > Date.now()) return <Badge className="bg-blue-500/10 text-blue-600">Terjadwal</Badge>;
+  // Server-derived (`lib/data/flash.ts`), NOT `Date.now()` — the price is decided by this server's
+  // clock, so the badge has to be too.
+  if (row.isUpcoming) return <Badge className="bg-blue-500/10 text-blue-600">Terjadwal</Badge>;
   return <Badge className="bg-muted text-muted-foreground">Berakhir</Badge>;
 }
 

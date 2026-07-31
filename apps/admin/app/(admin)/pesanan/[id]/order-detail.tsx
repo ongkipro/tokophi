@@ -244,6 +244,16 @@ export function OrderDetail({
       setMakingRate(null);
       if (r.ok) {
         setRateOpen(false);
+        if (r.destinationGuessed) {
+          // The order predates the address snapshot, so the district was fuzzy-matched from its city
+          // name. That match once turned "Surabaya" into "Bandar Surabaya, LAMPUNG". The booking has
+          // already gone out — the merchant cannot approve it, only check it — so this stays on
+          // screen far longer than a success toast and names the district we actually picked.
+          toast.warning("Tujuan pengiriman ditebak dari nama kota", {
+            description: `Pesanan ini tidak menyimpan kecamatan tujuan, jadi kurir dibooking ke “${r.destinationGuessed}”. Periksa apakah itu benar — kalau salah, batalkan pengiriman ini sebelum kurir menjemput.`,
+            duration: 20000,
+          });
+        }
         if (r.awb) {
           toast.success(`Pengiriman dibuat — resi ${r.awb}`);
         } else {

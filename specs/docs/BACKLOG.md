@@ -929,32 +929,34 @@ invariants at zero violations, all five AWB writers, `createShipment`'s failure 
 `requireCapability` on every mutating action, the CHILD-TABLE RULE on this surface, and the `/pesanan`
 tab partition (`0+75+50+656+45 = 826 = count(*)`). What remains:
 
-- [ ] **`createShipment` books a FUZZY-MATCHED destination with no warning.** `o.shipDistrictId ??
-  resolveArea(o.city)[0].id` — and the comment above it claims the fallback "is flagged as a guess".
-  It is not: `destinationGuessed` **does not exist anywhere in the repo** (grepped). `getShippingRates`
-  does label it ("perkiraan dari nama kota") but `bulkGenerateResi` reads only `q.rates` and discards
-  the destination string, so the bulk path books a guessed kecamatan with nothing on screen — and the
-  COD province gate then resolves the province FROM that guess. SQL: **77 orders** have
-  `ship_district_id IS NULL`, 5 of them live. Fix: return the flag and surface it in the toast and in
-  `BulkResult`.
-- [ ] **`markLabelsPrinted` reports success for rows it never touched** — `return { ok: true, done:
-  numbers.length }` regardless of what the UPDATE matched under RLS, and it stamps `label_printed_at`
-  on orders with no AWB. Fix: `.returning()` and report the real count.
-- [ ] **`createOrderPayment` mints a live VA/QRIS bill for a `batal`/`retur`/`selesai` order** — money
-  then arrives for a cancelled order, the callback stamps `financial_status='dibayar'` and fires a
-  Purchase conversion, while the ledger correctly refuses to credit. Reuse the `shipmentLocked`
-  predicate.
-- [ ] **Two definitions of "the order's payment"**: the list orders by `paid_at desc nulls last`, the
-  detail by `p.id desc`. On an order with more than one payment row they can name different methods —
-  including COD vs VA, the exact fact the booking now hangs on.
+- [x] **`createShipment` books a FUZZY-MATCHED destination with no warning** — FIXED 2026-07-31.
+  `destinationGuessed` now exists: `createShipment` returns the district name it actually matched
+  (the MATCH, not the city searched — "Surabaya" → "Bandar Surabaya, Lampung Tengah, LAMPUNG" is only
+  visible if you print the match), the order-detail screen raises a 20s warning toast telling the
+  merchant to check it before the courier collects, and `BulkResult.guessedDestination` carries one
+  entry per order so a 50-order run cannot hide three guesses behind "50 pesanan dibooking".
+- [x] **`markLabelsPrinted` reports success for rows it never touched** — FIXED 2026-07-31.
+  `.returning()`; `done` is the rows actually written and `ok` is `rows.length === numbers.length`.
+- [x] **`createOrderPayment` mints a live bill for a terminal order** — FIXED 2026-07-31. Refuses
+  `batal`/`retur`, refuses an already-`dibayar` order, and refuses a SECOND bill while one is still
+  `menunggu` (two open VAs = two ways to pay, and the second has no sale left to credit).
+- [x] **Two definitions of "the order's payment"** — FIXED 2026-07-31. Both the list and the detail
+  now order by `paid_at desc nulls last, id desc`, with the same comment on each pointing at the
+  other. This is the fact `createShipment` derives COD from, so the two disagreeing was a cash
+  instruction to a courier decided by which screen the merchant happened to open.
 - [ ] `getShippingRates` is gated on a session only, not a capability — a `gudang` user can burn live
   KiriminAja quota for any order in their store, unrated-limited.
 - [ ] The inventory restore is a **fourth** hand-copy of the default-location-row expression and the
   only one with no tenant-boundary comment — and it is the copy reachable from `ka-tracking.ts`, which
   runs on the OWNER connection where the `locations` join gives no protection. AGENTS.md requires the
   comment.
-- [ ] `resi` search does not escape LIKE wildcards (`?q=%` returns the full set). Cosmetic; the same
-  bug `areas.ts` already fixed.
+- [x] `resi` search does not escape LIKE wildcards — FIXED 2026-07-31, and fixed as a CLASS. The
+  regex had already been hand-written twice (`data/areas.ts`, then `data/orders.ts`) while a third
+  site (`actions/taxonomy.ts`) was missed, so it is now one shared `@tokophi/lib/like`
+  (`likeEscape`/`likeContains`) used by all three, with `like.test.ts` pinning both directions —
+  wildcards neutralised AND ordinary Indonesian search terms left untouched, because over-escaping
+  would stop real order numbers matching. Measured on the dev DB: `_` unescaped matched **all 842
+  orders**, escaped matched 0.
 
 ---
 

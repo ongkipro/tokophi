@@ -298,7 +298,12 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
       .select()
       .from(schema.payments)
       .where(eq(schema.payments.orderId, o.id))
-      .orderBy(desc(schema.payments.id))
+      // ⚠️ Must match the LIST's definition exactly (`lib/data/orders.ts`): most recently PAID first,
+      // unpaid last, id as the tie-break. It used to be `id desc` alone, so on an order with more than
+      // one payment row the list and this page could name DIFFERENT methods for the same order —
+      // including COD vs VA, which is the exact fact `createShipment` now derives the courier's
+      // cash-collection instruction from. One order, one answer.
+      .orderBy(desc(schema.payments.paidAt), desc(schema.payments.id))
       .limit(1);
 
     const payment: OrderPaymentRecord | null = p
