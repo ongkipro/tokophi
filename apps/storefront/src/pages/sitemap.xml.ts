@@ -33,6 +33,15 @@ export const GET: APIRoute = async ({ locals }) => {
     // from this file: two indexable URLs for one list is a duplicate we would be reporting ourselves.
     { path: "/produk", priority: "0.9", changefreq: "daily" },
     { path: "/kategori", priority: "0.7", changefreq: "weekly" },
+    // ⚠️ NO `<lastmod>` ON CATEGORIES OR PRODUCTS, AND IT IS NOT AN OVERSIGHT.
+    // `collections` has NO timestamp column at all (not even `created_at`) and `products` has only
+    // `created_at` — there is no `updated_at` on either, so the only date this file could emit for
+    // them is one that never moves after the row is written. That is worse than emitting nothing:
+    // Google's documented behaviour is to stop trusting `<lastmod>` for the WHOLE file once it finds
+    // the field unreliable, which would cost the blog and pages entries below their real signal too.
+    // Giving these two a `<lastmod>` is a SCHEMA change (a migration + every write path that must
+    // touch the column), not a sitemap change — tracked in `specs/docs/tasks/NEXT.md` N13.
+    //
     // Every category the shop actually renders — a URL that 404s in a sitemap is a negative signal,
     // so only list what /kategori/[handle] resolves.
     ...catalog.collections.map((c) => ({
@@ -63,6 +72,7 @@ export const GET: APIRoute = async ({ locals }) => {
     })),
     ...pages.map((p) => ({
       path: `/halaman/${p.handle}`,
+      lastmod: p.updatedAt,
       priority: "0.4",
       changefreq: "monthly",
     })),

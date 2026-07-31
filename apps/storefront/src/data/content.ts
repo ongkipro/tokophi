@@ -32,7 +32,10 @@ export type ArticleCard = {
   publishedAt: Date | null;
 };
 export type Article = ArticleCard & { body: string; seoTitle: string | null; seoDesc: string | null };
-export type PageCard = { handle: string; title: string };
+// `updatedAt` is here for the sitemap's `<lastmod>`, and it is trustworthy: `actions/pages.ts` sets it
+// from ONE shared `fields()` used by both create and update, so every save moves it. (A `<lastmod>`
+// that never changes is worse than none — crawlers stop believing the field, for the whole file.)
+export type PageCard = { handle: string; title: string; updatedAt: Date };
 export type Page = PageCard & { body: string };
 
 // ---------- body rendering ----------
@@ -119,7 +122,7 @@ export async function getArticle(storeId: string, handle: string): Promise<Artic
 export async function getPages(storeId: string): Promise<PageCard[]> {
   return cached(`content:pages:${storeId}`, async () => {
     return db
-      .select({ handle: schema.pages.handle, title: schema.pages.title })
+      .select({ handle: schema.pages.handle, title: schema.pages.title, updatedAt: schema.pages.updatedAt })
       .from(schema.pages)
       .where(and(eq(schema.pages.storeId, storeId), eq(schema.pages.status, "terbit")))
       .orderBy(schema.pages.title);
@@ -129,7 +132,7 @@ export async function getPages(storeId: string): Promise<PageCard[]> {
 export async function getPage(storeId: string, handle: string): Promise<Page | null> {
   return cached(`content:page:${storeId}:${handle}`, async () => {
     const [row] = await db
-      .select({ handle: schema.pages.handle, title: schema.pages.title, body: schema.pages.body })
+      .select({ handle: schema.pages.handle, title: schema.pages.title, body: schema.pages.body, updatedAt: schema.pages.updatedAt })
       .from(schema.pages)
       .where(
         and(
