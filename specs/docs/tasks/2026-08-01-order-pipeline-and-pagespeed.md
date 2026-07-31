@@ -60,7 +60,28 @@ Lighthouse, `https://toko.tokophi.com/`, mobile, throttled preset. Every row is 
 | Baseline, **no pixels** | 90 | 2.0 s | 2.1 s | 130 ms | 0 |
 | Pixels ON, old code | **66** | 2.7 s | 2.8 s | **770 ms** | 0 |
 | After `#119` + `#120` | **75** | 1.6 s | 1.7 s | 690 ms | 0 |
-| After `#122` | *see NEXT* | | | | |
+| After `#122`, median of 3 | **89** | 1.8 s | 2.1 s | 100 ms | 0 |
+
+⚠️ **Read the variance before quoting a number.** Lighthouse against a real CDN is noisy, and a single
+run is not a result. Measured after `#122` landed (`d11a96d`, verified by SHA on the running container):
+
+| | runs | median | range | TBT per run |
+|---|---|---|---|---|
+| Mobile | 92 · 76 · 89 | **89** | 76–92 | 80 ms · **630 ms** · 100 ms |
+| Desktop | 71 · 66 · 90 · 92 | **80** | 66–92 | 0 ms in all four |
+
+**Mobile is a real win: 66 → 89** against the same page with the same three pixels configured.
+
+**Desktop cannot be claimed either way.** Its baseline (84) was a *single* run, and the post-change
+range is 66–92 — the noise swamps the difference. TBT is **0 in every desktop run**, so the swing is
+LCP/network, not the pixels. Do not report a desktop delta from this data; take ≥5 runs first.
+
+🔎 **Why one mobile run showed 630 ms TBT:** `scroll` is one of our pixel load triggers, and Lighthouse
+**scrolls the page during a run** (for the full-page screenshot). When that scroll lands before TTI is
+computed, that run pays for all three vendor bundles and the score drops ~15 points. This is the design
+working as intended — a scrolling human is an engaged human — but it means the mobile score is
+*bimodal*, not noisy. If a future session wants a stable number, that is the reason, and removing
+`scroll` from the trigger list is the lever (at the cost of not tracking readers who never tap).
 
 Desktop baseline for reference: perf 84 · **a11y 100 · best-practices 100 · SEO 92**.
 
@@ -125,15 +146,13 @@ and there is nothing to look at.
 
 # NEXT — in priority order
 
-### 1. Confirm `#122` landed and re-measure ⏳ *the one thing left mid-flight*
-At handoff the build was still running. Verify and record the number:
-```bash
-curl -s https://toko.tokophi.com/ | grep -c "setTimeout(once, 10000)"   # 1 = live
-npx -y lighthouse@12 https://toko.tokophi.com/ --preset=perf --form-factor=mobile \
-  --screenEmulation.mobile --quiet --chrome-flags="--headless=new --no-sandbox"
-```
-Expectation was ~88–90 mobile with TBT back near the 130 ms baseline. **If it did not move, say so** —
-the estimate was mine, the measurement is the truth.
+### 1. ~~Confirm `#122` landed and re-measure~~ ✅ DONE
+Landed as `d11a96d` (verified by reading the SHA off the running container, not by inference — an
+earlier guess that a container swap *was* `#122` turned out to be `#121`'s build). Mobile median
+**89** (66 → 89 with pixels on). Numbers and variance are in the table above.
+
+**Left undone deliberately: a defensible DESKTOP number.** Four runs span 66–92, so nothing can be
+said about desktop yet. Take ≥5 runs and use the median before claiming any desktop delta.
 
 ### 2. Two Cloudflare zone settings — APPROVED, procedure written, NOT done
 Full steps, API equivalents and verification commands: **`specs/docs/CLOUDFLARE-PERF.md`**.

@@ -41,7 +41,14 @@ is built from the order row on the server (ADR 0012).
 the full-size original (106 KB). Fixed in `#120` and now guarded by a browser check — the class is
 invisible to `tsc`, lint and `astro check`, because only `currentSrc` shows it.
 
-**NEXT:** confirm `#122` landed and re-measure (build was still running at handoff) · two **approved**
+**FINAL NUMBERS** (`#122` landed as `d11a96d`, SHA read off the running container): **mobile 66 → 89**
+(median of 3: 92/76/89) with the same three pixels configured. ⚠️ **Desktop cannot be claimed either
+way** — 4 runs span 66–92 against a single-run baseline of 84, and TBT is 0 in all of them, so the swing
+is LCP/network noise and nothing can be said until ≥5 runs. The mobile score is *bimodal*, not noisy:
+`scroll` is one of our pixel triggers and Lighthouse scrolls during a run, so a run where that lands
+before TTI pays for all three bundles (TBT 630 ms vs 80 ms).
+
+**NEXT:** a defensible desktop number (≥5 runs) · two **approved**
 Cloudflare zone settings, procedure in `CLOUDFLARE-PERF.md`, not doable from this repo · `dom-size` 992
 and a `speed-index` of 7.1 s against an LCP of 1.7 s, undiagnosed · the impersonation-token decision is
 still open and still the owner's.
