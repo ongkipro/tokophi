@@ -6,6 +6,11 @@
 > Pairs with `BACKLOG.md` (priorities), `WORKLOG.md` (session log) and the dated handoffs in this
 > folder. **Legend:** size **S** (<1h) / **M** (half a day) / **L** (a day+). AC = acceptance criteria.
 >
+> 🔵 **N9 · N10 · N11 are DONE on branch `feat/next-queue` (not yet merged)** — and N13 is done as far
+> as the schema allows. See `2026-08-01-next-queue-n9-n13.md`. **Two items in this file rested on
+> claims that turned out to be false (N13's and N6's); both are corrected in place below.** If you are
+> picking something up, read those two entries before trusting their sizing.
+>
 > ⚠️ Before starting anything here: `git fetch && git log origin/main -3`. Several sessions run against
 > this repo at once — see the top of `AGENTS.md`.
 
@@ -37,6 +42,8 @@ Not doable from this repo: wrangler auth is expired and these are **zone setting
 
 - **Email Obfuscation → Off.** Injects a **render-blocking** `email-decode.min.js`, measured
   **1.621 ms** — the single largest blocker on the page, triggered by our own `mailto:` links.
+  ✔ **Re-confirmed still ON, 2026-08-01**: the homepage serves 2 `/cdn-cgi/l/email-protection` links
+  and `email-decode.min.js` loads in every run. Nothing has been changed in the zone yet.
 - **Cache Rules for static assets.** ⚠️ Read the table in that doc first: `/products/*.webp` and the
   other **SOURCE** images must **not** be `immutable` — a merchant replacing a photo keeps the
   filename, and we cannot purge what we told the world never changes.
@@ -47,11 +54,33 @@ Not doable from this repo: wrangler auth is expired and these are **zone setting
 
 ## 🟠 PERFORMANCE — the measurable tail
 
-Current: **mobile median 89** (66 → 89 this session). Desktop **not claimable** yet, see N3.
+**Re-measured 2026-08-01 against production, same commands, 8 runs.**
+**Mobile: median 92, range 82–95** (n=3) · **Desktop: median 100, range 90–100** (n=5).
+Two entries below were rewritten by that data — **N6 is closed as not reproducible and N7 is
+reversed**. Read them before spending anything here.
 
-### N3. A defensible desktop number · **S**
+### ✅ N3. A defensible desktop number — MEASURED 2026-08-01
+**5 runs · MEDIAN 100 · range 90–100 · TBT 0 ms in all five.** Command exactly as prescribed below.
+
+| run | perf | FCP | LCP | TBT | SI | CLS |
+|---|---|---|---|---|---|---|
+| 1 | 90 | 1,4 s | 1,5 s | 0 ms | 1,4 s | 0,002 |
+| 2 | 100 | 0,6 s | 0,7 s | 0 ms | 0,6 s | 0 |
+| 3 | 100 | 0,3 s | 0,5 s | 0 ms | 0,4 s | 0 |
+| 4 | 100 | 0,5 s | 0,6 s | 0 ms | 0,5 s | 0 |
+| 5 | 100 | 0,7 s | 0,7 s | 0 ms | 0,5 s | 0 |
+
+The old 66–92 spread was **run 1 in every series** — a cold origin/cache — not the pixels: TBT was 0
+throughout, then and now. Report the median with the range, and note that run 1 is systematically the
+slow one; a 4-run series that happens to start cold will understate this by ~10 points.
+⚠️ **`speed-index` 7,1 s (N4) does NOT reproduce on desktop** — median 0,5 s here. It is a mobile
+finding and must be re-measured as one.
+
+<details><summary>the original entry, kept because the method is the point</summary>
+
 Four runs spanned **66–92** against a single-run baseline of 84, with **TBT 0 in all four** — so the
 swing is LCP/network, not the pixels, and nothing can be said yet.
+</details>
 
 ```bash
 for r in 1 2 3 4 5; do
@@ -63,29 +92,60 @@ done
 **AC:** ≥5 runs, report the **median and the range**, never a single run. If the median is still ~84,
 say the work was neutral on desktop — that is a result too.
 
-### N4. `speed-index` 7.1 s against an LCP of 1.7 s — undiagnosed · **M**
-The page reaches its largest paint in under two seconds and then keeps changing for another five. Not
-investigated at all yet. Start with the Lighthouse filmstrip (`--output=html`) and find which frame is
-still moving.
+### N4. `speed-index` lags LCP — still open, but **re-measure before sizing it** · **M**
+Re-measured 2026-08-01: mobile **SI median 4,1 s (range 2,7–4,3) against LCP 2,8 s** — a ~1,3 s gap,
+not the 5,4 s this entry was written for. On **desktop it does not reproduce at all** (SI median
+0,5 s). It is a mobile finding; treat the 7,1 s as stale.
 
-### N5. `dom-size` 992 elements (scores **0**) · **M**
+Still worth the filmstrip (`--output=html`) to see which frame is still moving — but with TBT at 0 ms
+in the good runs and a 992-element DOM, expect it to point at the same place N5 does.
+
+### 🔺 N5. `dom-size` 992 elements (scores **0**) — now the TOP performance item · **M**
+Promoted 2026-08-01. With N6 closed (no JS to trim) and N7 reversed (the pixels are not what swings
+the score), this is the only remaining lever with evidence behind it: `mainthread-work-breakdown`
+**3,4 s** against `bootup-time` 0,5 s means the cost is style/layout over this DOM, not script.
+Still 992 elements, still scoring 0, unchanged by everything shipped in `#119`–`#125`.
 The homepage ships every carousel slide and every section. Candidates: render only slide 1 server-side
 and hydrate the rest, or cut the number of sections the default homepage template seeds with.
 ⚠️ **`SectionRenderer` must keep switching on every type** — narrowing the palette must never delete a
 merchant's published work (AGENTS.md, Store Builder).
 
-### N6. `unused-javascript` 44 KiB · `legacy-javascript` 12 KiB · **S**
-Cheapest remaining wins. Check the Vite `build.target` first — legacy transpilation for browsers we do
-not support is the usual cause.
+### ✅ N6. `unused-javascript` 44 KiB · `legacy-javascript` 12 KiB — NOT REPRODUCIBLE, closed 2026-08-01
+**Both audits PASS with 0 bytes of savings in all 8 runs measured today** (5 desktop + 3 mobile,
+production). There is nothing to fix and nothing to tune.
 
-### N7. Optional: make the mobile score stable · **S** — has a real cost, decide first
-The mobile score is **bimodal, not noisy**: `scroll` is one of our pixel load triggers and Lighthouse
-scrolls during a run, so a run where that lands before TTI pays for all three vendor bundles
-(**TBT 630 ms vs 80 ms**, ~15 points).
+🔴 **The suggested cause was impossible.** "Check the Vite `build.target`" assumes a bundle:
+`apps/storefront/dist/client/_astro/` contains **one CSS file and zero `.js`**. Every script on the
+page is inline (14 blocks, 63,7 KB uncompressed). There is no transpiled bundle here to target.
 
-Removing `scroll` from the trigger list in `MarketingPixels.astro` stabilises it — **at the cost of not
-tracking a reader who scrolls the whole page and never taps**. That is a real segment. Do not do this
-for the score alone.
+Only **two** scripts load on the page, both Cloudflare's, neither ours:
+```
+ 1 058 B  /cdn-cgi/scripts/…/cloudflare-static/email-decode.min.js   ← N2, still on
+11 577 B  static.cloudflareinsights.com/beacon.min.js
+```
+The three vendor pixel bundles did **not** load in any run — the deferral (`#122`) is working.
+
+**Reopen only with a run that reproduces it**, and say which URLs the audit named — most likely those
+KiB were measured *before* `#122` deferred the pixels, i.e. they were the vendors' bundles all along.
+
+### 🔴 N7. DO NOT DO THIS — the stated cause is not what the runs show · **decision reversed 2026-08-01**
+The bimodality is real. **The explanation is not.** Three mobile runs today:
+
+| run | perf | TBT | vendor pixel scripts loaded |
+|---|---|---|---|
+| 1 | 82 | **395 ms** | **0** |
+| 2 | 92 | 26 ms | **0** |
+| 3 | 95 | 0 ms | **0** |
+
+The swing from 0 → 395 ms TBT happens with **no pixel bundle loading at all** — Lighthouse's scroll
+does not fire them (the only scripts on the page are Cloudflare's two). So removing `scroll` from
+`MarketingPixels.astro` would **pay a real tracking cost — the reader who scrolls the whole page and
+never taps — and buy nothing.**
+
+What is left to blame is our own main thread: `mainthread-work-breakdown` **3,4 s** with
+`bootup-time` 0,5 s, on a **992-element DOM**. That is style/layout, not script. **N5 is the lever.**
+**AC before touching the trigger list again:** a run where a vendor bundle actually appears in
+`network-requests` *and* TBT moves with it.
 
 ---
 
@@ -98,30 +158,43 @@ it.
 **AC:** `select count(*) from orders where ship_district_id is null` drops, and every backfilled row's
 district agrees with its kelurahan's parent — verified in a rolled-back transaction before committing.
 
-### N9. The default-location expression still has **four** hand-written copies · **S**
-`actions/products.ts` (×3), `actions/purchases.ts` (×2), `actions/inventory.ts`, `lib/order-status.ts`.
-Only the last one carries the tenant filter (added in `#118`).
+### ✅ N9. The default-location expression — DONE on `feat/next-queue`
+One helper, `apps/admin/lib/inventory-location.ts`, replacing all five copies.
 
-⚠️ Do not just add the filter to the other three — **extract one helper**, or the fifth copy will be
-written next month. This is the same class as the LIKE-escape regex and the UUID guard, both of which
-cost sibling call sites this session.
+⚠️ **This entry undersold it.** It was not "only the last one carries the tenant filter" as a tidiness
+problem — `purchases.ts` (2 copies), `inventory.ts` (1) and `products.ts` (3) had **zero**
+`locations.storeId` between them, so a foreign `variantId` resolved to another store's shelf and the
+stock write landed there in silence. `order-status.ts` was the only guarded copy. Guarded now by a
+source scan (`inventory-location.test.ts`) that fails if the expression is written anywhere else.
 
-### N10. `promo` and `landing` actions still `throw` for user-facing rules · **S**
-Next **masks** a thrown Error in production, so the merchant gets a digest instead of the rule they
-broke. `theme.ts` and `flash.ts` are converted; these two are not.
-
-⚠️ **This is a two-file change every time.** The caller that awaits and ignores the return will report
-success over a failed save — strictly worse than the bug being fixed. `flash-editor.tsx` had exactly
-this shape (`#118`).
+### ✅ N10. `promo` / `landing` actions — DONE on `feat/next-queue`
+⚠️ **This entry was already stale when it was written.** `actions/promo.ts` and `actions/landing.ts`
+contain **zero `throw`s** — `savePromoPage`/`saveLanding` return `{ ok, error }` and both callers read
+it. The real gap was next door: **`deleteLanding` returned `void`**, so the editor toasted "Landing
+dihapus" and navigated away even when the DELETE matched nothing (a foreign id is filtered out by RLS
+without an error; so is a second click on a stale tab). `.returning()` decides now, and the caller
+reads it — the two-file change, in one commit.
 
 ---
 
 ## 🟢 STOREFRONT / SEO — smaller, all measured
 
-### N11. A builder homepage with no Hero renders **zero `<h1>`** · **S**
-A merchant who builds a homepage without a Hero section ships a page with no top-level heading.
-`CategoryHero` was fixed the same way (always rendered, `#`ADR 0009 note in AGENTS.md); the homepage
-has no equivalent floor.
+### ✅ N11. A builder homepage with no Hero renders zero `<h1>` — DONE on `feat/next-queue`
+`index.astro` renders `<h1 class="sr-only">{store.name}</h1>` when the template holds no `hero`
+section — hidden, because the merchant designed that page and a visible headline we wrote would be us
+editing it. Driven over HTTP against a real build + real DB, both branches (1 `<h1>` without a hero,
+the hero's own with one). Premise pinned by `sections/h1-floor.test.ts`.
+
+### N14. `Hero` emits one `<h1>` PER SLIDE — every store's homepage ships **three** · **S**
+Found while measuring N11, deliberately not fixed there (the floor does not fire when a hero exists,
+so it neither causes nor worsens this). The seeded 3-slide carousel publishes three `<h1>`s on the
+page that matters most. AGENTS.md already names it in passing — "a second one is the a11y defect the
+homepage carousel already has" — but nothing tracked it.
+⚠️ The non-first slides are `inert` + `opacity-0`, **not** `hidden`, so they are still in the
+accessibility tree. Whatever the fix is (one `<h1>` outside the slides, or `<h1>` on slide 1 and
+`<h2>`/`<p>` on the rest), it must not break the cross-fade the current markup exists for.
+**AC:** exactly one `<h1>` in the SSR response for a multi-slide hero; `h1-floor.test.ts` extended to
+pin the count, not just the emitter.
 
 ### N12. Merchant UPLOADS have no width variants on the storefront · **M**
 `imageSrcSet` handles `/api/uploads/*` via the admin's `?w=` route and now handles seeded `public/`
@@ -129,13 +202,37 @@ images via generated files — but a merchant's own uploaded hero goes through t
 different host, with a preconnect but no CDN rule. Worth measuring on a store that actually uses
 uploads before doing anything.
 
-### N13. Sitemap `<lastmod>` is only on blog articles · **S**
-Products and categories emit `<changefreq>`/`<priority>` but no `<lastmod>`, which is the field
-crawlers actually use to decide what to re-fetch. `products.updated_at` exists.
+### 🟡 N13. Sitemap `<lastmod>` — pages DONE, products + categories BLOCKED ON A MIGRATION · **M**, not S
+🔴 **`products.updated_at` DOES NOT EXIST.** This entry claimed it does. `products` carries
+`created_at` only, and `collections` has **no timestamp column at all** — `data/catalog.ts`'s own
+ordering comment already said so ("not even `created_at` — checked"). So the only date the sitemap
+could emit for either is one that never moves after insert, and Google's response to a `<lastmod>` it
+finds unreliable is to distrust the field **for the whole document** — costing blog + pages the real
+signal they do have. The sitemap now records that reasoning in the file itself.
+
+**Done on `feat/next-queue`:** `/halaman/*` carries `<lastmod>` — `pages.updated_at` exists *and* is
+genuinely maintained (`actions/pages.ts` sets it from one shared `fields()` used by create and
+update). Verified over HTTP: 55 URLs, 21 `<lastmod>` = 15 blog + 6 halaman.
+
+**What is left** is a schema decision, not a sitemap edit: add `updated_at` to `products` (and
+`collections`) + every write path that must touch it. ⚠️ Idempotent migration, and
+`git show origin/main:packages/db/drizzle/meta/_journal.json | tail` **before** generating one.
+**AC:** editing a product moves its `<lastmod>`; a product nobody has touched keeps its old one.
 
 ---
 
-## ✅ Closed this session — do not redo
+## ✅ Closed on `feat/next-queue` (2026-08-01) — not merged yet
+
+- **N9** one helper (`lib/inventory-location.ts`) + the tenant filter the other four copies never had.
+- **N10** `deleteLanding` returns `{ ok, error }`; the editor reads it. The rest of N10 was already done.
+- **N11** homepage `<h1>` floor, driven over HTTP against a real build.
+- **N13** `/halaman/*` `<lastmod>`; products/categories blocked on a migration, reasoning written into
+  the sitemap itself.
+- **N3** measured: desktop **median 100, range 90–100** over 5 runs.
+- **N6** re-diagnosed — the premise was wrong, see the entry.
+- New: **N14** (hero emits one `<h1>` per slide).
+
+## ✅ Closed the session before — do not redo
 
 - `destinationGuessed` now exists and is surfaced on both the single-order and bulk paths (`#117`).
 - `markLabelsPrinted` reports rows actually written (`#117`).
