@@ -2,6 +2,62 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — A quota anyone could spend, a restore that trusted a join, and four 500s
+
+### The one shipping door with no capability on it
+`getShippingRates` checked only that a session existed. Every other mutating action in
+`actions/shipping.ts` demands `orders:write`, and every call to this one is a **live KiriminAja rate
+request** — real quota, one per invocation, loopable over the store's order numbers by anything that
+can dispatch a `"use server"` action. It is also the read `createShipment` is paired with, so the two
+were asking different questions about the same order. Now both take `orders:write`. (`gudang` holds
+none, so it was already shut out of everything this would have let it price.)
+
+### The inventory restore trusted a join to scope it
+The `batal`/`retur` stock restore picks one row via `join locations loc … order by loc.is_default
+desc`. `inventory_levels` has no `store_id`, so RLS cannot scope it, and this is the copy reachable
+from `ka-tracking.ts` — which runs on the **owner** connection, RLS off entirely. The join only PICKED
+a row; it never proved whose row it was, and `is_default desc` would happily prefer another store's
+default location. `applyOrderStatusChange` already takes `storeId` as an argument; it now uses it.
+Verified on the dev DB: scoped and unscoped select the identical row for real data, so the filter
+changes nothing except what it makes impossible.
+
+### `/diskon/1042` was a 500
+Postgres throws `22P02` on a non-UUID string, so a mistyped id crashed the render instead of 404-ing.
+`/promo/[id]` had worked this out and guarded itself with a private regex — and `promo/html/[id]`,
+`diskon/[id]` and `flash-sale/[id]` beside it had not, which is what a private copy always costs. Now
+`lib/uuid.ts`, used by all four. `/produk/…` takes the catalog **number** (ADR 0013), so merchants
+genuinely do try this.
+
+### The merchant saw a digest instead of the rule they broke
+`actions/flash.ts` threw plain `Error` for four rules that are entirely the merchant's to fix
+("Tanggal berakhir harus setelah tanggal mulai", a flash price at or above the product price). Next
+**masks** a thrown Error in production, so all four arrived as an opaque digest. They are returned
+now; genuine failures still throw, because a DB outage is not friendly advice next to the Simpan
+button.
+
+⚠️ The editor changed in the same commit, and had to: it awaited the action and **ignored the return**.
+Returning instead of throwing would have made it report "Flash sale dibuat." over a save that never
+happened — strictly worse than the bug being fixed.
+
+### Storefront: page 2 of a listing declared itself a duplicate of page 1
+The canonical dropped the whole query string — correct for the `?utm_source=…` this ad-landed traffic
+is full of, wrong for `?page`, which is not tracking but a **different set of products**. For a
+12-per-page catalogue that hid everything from the 13th product on from search. Paginated pages now
+self-canonicalise via an allow-list (so a new tracking param does not have to be discovered and
+banned); `page=1` still normalises to the bare path. Verified over HTTP: `?page=2` → `?page=2`,
+`?page=1` → bare, `?utm_source=fb&page=3` → `?page=3`, `?page=abc` → bare.
+
+### …and a title regression from the commit before this one, fixed
+The previous change replaced the homepage's `"Beranda"` title with `stores.tagline`. On the dev store
+that is 30 characters. **On production it is 150** — a full paragraph — so the shipped `<title>` ran to
+~170 characters where Google cuts at ~60. `tagline` is unbounded free text and was never a title. It
+is now used only when it is already title-shaped (≤60 chars), otherwise a short honest descriptor
+("Belanja Online"); the full text still carries in the meta description, where the length belongs.
+Verified both ways in a browser against a production-shaped 139-char tagline (the dev row was changed
+in a transaction and **put back**).
+
+Gates: `tsc` clean, `astro check` 0 errors, 145 tests, `verify-rls` green. No migration.
+
 ## Unreleased — Six quiet lies in the order pipeline
 
 None of these threw, none failed a build, and none is reachable by clicking around the demo store —

@@ -94,13 +94,13 @@ export function FlashEditor({
       const err = validate(input);
       if (err) return void toast.error(err);
       try {
-        if (isNew) {
-          await createFlashSale(input);
-          toast.success("Flash sale dibuat.");
-        } else {
-          await updateFlashSale(sale!.id, input);
-          toast.success("Flash sale disimpan.");
-        }
+        // ⚠️ The action RETURNS its rule failures now (Next masks a thrown Error in production, so the
+        // merchant got a digest instead of "Tanggal berakhir harus setelah tanggal mulai"). That means
+        // the result has to be READ — awaiting and ignoring it would report "Flash sale dibuat." over a
+        // save that did not happen. The `catch` stays for genuine failures, which still throw.
+        const r = isNew ? await createFlashSale(input) : await updateFlashSale(sale!.id, input);
+        if (!r.ok) return void toast.error(r.error, { duration: 9000 });
+        toast.success(isNew ? "Flash sale dibuat." : "Flash sale disimpan.");
         router.push("/flash-sale");
         router.refresh();
       } catch (e) {

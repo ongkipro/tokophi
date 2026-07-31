@@ -944,12 +944,18 @@ tab partition (`0+75+50+656+45 = 826 = count(*)`). What remains:
   now order by `paid_at desc nulls last, id desc`, with the same comment on each pointing at the
   other. This is the fact `createShipment` derives COD from, so the two disagreeing was a cash
   instruction to a courier decided by which screen the merchant happened to open.
-- [ ] `getShippingRates` is gated on a session only, not a capability — a `gudang` user can burn live
-  KiriminAja quota for any order in their store, unrated-limited.
-- [ ] The inventory restore is a **fourth** hand-copy of the default-location-row expression and the
-  only one with no tenant-boundary comment — and it is the copy reachable from `ka-tracking.ts`, which
-  runs on the OWNER connection where the `locations` join gives no protection. AGENTS.md requires the
-  comment.
+- [x] `getShippingRates` is gated on a session only, not a capability — FIXED 2026-07-31. Now
+  `requireCapability("orders:write")`, the same gate `createShipment` uses (it is the read that pairs
+  with it). `gudang` holds no `orders:write`, so it was already locked out of every OTHER shipping
+  action — this was the one door left open, and each call spends real KiriminAja quota. Scope note:
+  the remaining session-only reads in this file (`searchArea`, `kelurahanOptions`, the settings
+  getters) are left as they are — staff legitimately need them for the address form.
+- [x] The inventory restore's default-location expression had no tenant boundary — FIXED 2026-07-31.
+  `and loc.store_id = ${storeId}` (the id is already a parameter of `applyOrderStatusChange`), plus the
+  🔴 comment AGENTS.md requires. The `locations` join only PICKED a row, it never proved whose it was,
+  and this is the one copy reachable from `ka-tracking.ts`, which runs on the OWNER connection with
+  RLS off entirely. Verified against the dev DB: scoped and unscoped select the identical row for real
+  data, so the filter changes nothing except what it makes impossible.
 - [x] `resi` search does not escape LIKE wildcards — FIXED 2026-07-31, and fixed as a CLASS. The
   regex had already been hand-written twice (`data/areas.ts`, then `data/orders.ts`) while a third
   site (`actions/taxonomy.ts`) was missed, so it is now one shared `@tokophi/lib/like`
@@ -1021,12 +1027,16 @@ memos, and the landing-HTML claim. What remains:
   one flat number applied per variant with `min()`. On a multi-price product the merchant is shown a
   discount that applies to one variant and never sees the real one. Show the variant range and compute
   against the MAX. (No multi-price product exists yet — `having min(price) <> max(price)` → 0 rows.)
-- [ ] **Three promo detail routes 500 on a malformed id** (`promo/html/[id]`, `diskon/[id]`,
-  `flash-sale/[id]`) — the raw segment reaches `eq(x.id, id)` → `invalid input syntax for type uuid`.
-  `/promo/[id]` guards with a UUID regex and documents why; lift it into a shared helper.
-- [ ] **`actions/flash.ts` throws plain `Error` for user-facing rules**, which Next MASKS in production
-  — so the merchant sees a digest, not the reason. `theme.ts` was converted to `{ok, error}` for
-  exactly this; flash/promo/landing still throw. Convert the file.
+- [x] **Three promo detail routes 500 on a malformed id** — FIXED 2026-07-31. Lifted into
+  `apps/admin/lib/uuid.ts` (`isUuid`) and applied to all four, including `/promo/[id]`, which now
+  shares the helper instead of keeping its own copy — the copy was the reason the other three never
+  got it.
+- [x] **`actions/flash.ts` throws plain `Error` for user-facing rules** — FIXED 2026-07-31. A
+  `FlashRuleError` subclass marks the four merchant-actionable rules, a `guard()` turns those into
+  `{ ok: false, error }` and lets everything else keep throwing (a DB outage is not friendly advice).
+  ⚠️ The EDITOR had to change in the same commit: it awaited the action and ignored the return, so
+  returning instead of throwing would have reported "Flash sale dibuat." over a save that never
+  happened — strictly worse than the bug being fixed. `promo`/`landing` still throw (not converted).
 - [ ] Smaller: an unlimited voucher renders "342 / 0" with a 0% bar; "Nonaktifkan" in the row menu is
   still disabled on a reason that is no longer true (the list status IS from the DB column now); the
   landing slug hint keeps showing the un-slugified text after save; `PromoHubCard` never calls
