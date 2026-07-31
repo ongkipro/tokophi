@@ -46,6 +46,12 @@ export const GET: APIRoute = async ({ locals }) => {
       priority: "0.9",
       changefreq: "weekly",
     })),
+    // The promo hub. It renders `robots="index,follow"` and it is a DEFAULT navigation item, so a
+    // crawler that reaches the shop finds it — but it was absent here, which is the one page whose
+    // whole job is to be found when someone searches for a discount. (Its children, `/promo/<handle>`,
+    // are `noindex,follow` ad-funnel pages and stay out on purpose: listing a noindex URL in a sitemap
+    // is a contradiction we would be publishing about ourselves.)
+    { path: "/promo", priority: "0.8", changefreq: "daily" },
     { path: "/blog", priority: "0.6", changefreq: "weekly" },
     // Published only — getArticles/getPages hard-filter status='terbit', so a draft can never leak
     // into the sitemap and get itself crawled.

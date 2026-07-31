@@ -70,12 +70,12 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
         fetch anyway — and those are exactly the ones you want obeying `noindex` and nothing more. */}
     <meta name="robots" content="noindex,follow" />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    {/* Inter is SELF-HOSTED (see styles/global.css). The Google Fonts <link> that used to sit here was
+        render-blocking for 1.409 ms on production, in front of an LCP that was 82% render delay.
+        `preload` because the font is referenced from inside a stylesheet, so the browser would
+        otherwise only discover it after parsing the CSS. latin only — latin-ext is fetched on demand
+        by unicode-range and preloading it would download 84 KB almost nobody needs. */}
+    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
     <!-- The merchant's brand-shade injection is GONE from this page (2026-07-16). It is not an
          oversight: nothing on the checkout reads `--color-brand-*` any more — the surface is neutral
          and the accent is the checkout's own (below). Leaving the <style> in would have been dead

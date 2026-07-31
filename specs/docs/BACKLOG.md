@@ -64,6 +64,19 @@ builds green.
       (`1810d8f`): 15 editorial images on `https://batik-nusantara.tokophi.id/blog`,
       `/api/uploads/jurnal-*.webp` → 200 `image/webp`, absolute `og:image`, 15 `media` rows, migrations
       0058–0061 applied on prod, no `/api/uploads` 404s.
+- [ ] **Static assets have no long cache TTL — this is a CLOUDFLARE rule, not code.** Lighthouse
+  `uses-long-cache-ttl` flags 15 resources (mobile) / 16 (desktop). The Node adapter serves everything
+  under `public/` with `Cache-Control: public, max-age=0` and Cloudflare papers over it with a 4-hour
+  default — four hours on a font file that will never change again.
+  ⚠️ **Astro middleware CANNOT fix this — verified empirically 2026-07-31, do not retry it.** The Node
+  adapter's `sirv` handler serves `public/` BEFORE middleware runs, so a `res.headers.set()` in
+  `middleware.ts` is dead code that looks like a fix. (It was written, tested against a real build,
+  measured as having no effect, and reverted.)
+  The fix is a Cloudflare Cache Rule on the zone: `/_astro/*`, `/fonts/*` and the generated
+  `*-<N>w.webp` renditions are content-addressed and can take `max-age=31536000, immutable`; the
+  SOURCE images (`/products/dress-batik.webp`) must NOT — a merchant replacing a photo keeps the
+  filename, and `immutable` would strand the old bytes in caches we cannot purge.
+
 - [ ] **Journal images do not cache-bust on re-seed.** `/api/uploads` sends `Cache-Control: immutable`
       (correct for unique upload names). But `seed-journal` reuses `jurnal-<handle>.webp`, so a returning
       visitor keeps the OLD image for a year after any art change. If journal art is ever expected to
