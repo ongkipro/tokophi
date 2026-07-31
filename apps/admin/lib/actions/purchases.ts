@@ -1,9 +1,10 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
+import { defaultInventoryLevelId } from "@/lib/inventory-location";
 
 function revalidate() {
   revalidatePath("/produk/pembelian");
@@ -64,31 +65,24 @@ export async function receivePurchaseOrder(code: string): Promise<void> {
     for (const it of items) {
       const add = it.qty - it.receivedQty;
       if (it.variantId && add > 0) {
-        // Target the default-location row explicitly: unordered limit(1) picks an ARBITRARY location
-        // once a store has more than one, so the receipt would land in a warehouse nobody stocked.
-        // ⚠️ THE `locations` JOIN IS ALSO THE TENANT BOUNDARY, not just an ordering device.
-        // `inventory_levels` has no store_id and no RLS; `locations` does. Replace this join with a
-        // cheaper `where variant_id = …` and a PO line carrying another store's variantId would add
-        // stock to THEIR shelf. createPurchaseOrder now filters variantIds too — belt AND braces.
+        // WHICH row (and whose store) — `lib/inventory-location.ts`, the one copy of this expression.
+        // It carries both reasons this is not a plain `where variant_id = …`: the default location (an
+        // unordered limit(1) lands the receipt in an ARBITRARY warehouse), and the `locations` join as
+        // THE TENANT BOUNDARY (a PO line carrying another store's variantId would add stock to THEIR
+        // shelf). createPurchaseOrder filters variantIds too — belt AND braces.
         //
-        // The select resolves WHICH row (and whose store); it deliberately does NOT read `available`.
-        // It used to: `set({ available: inv.available + add })` was a read-then-write with no lock, so a
-        // sale that decremented between the read and the write — or a second receipt — was silently
-        // overwritten by a stale absolute value (same last-write-wins class as bc2ebfd in the bulk
-        // editor). The UPDATE below is RELATIVE, evaluated by Postgres against the row's current value
-        // under the update's own row lock, so it needs no FOR UPDATE and cannot lose a concurrent write.
-        const [inv] = await db
-          .select({ id: schema.inventoryLevels.id })
-          .from(schema.inventoryLevels)
-          .innerJoin(schema.locations, eq(schema.locations.id, schema.inventoryLevels.locationId))
-          .where(eq(schema.inventoryLevels.variantId, it.variantId))
-          .orderBy(desc(schema.locations.isDefault), asc(schema.inventoryLevels.id))
-          .limit(1);
-        if (inv)
+        // It deliberately does NOT read `available`. It used to: `set({ available: inv.available + add })`
+        // was a read-then-write with no lock, so a sale that decremented between the read and the write
+        // — or a second receipt — was silently overwritten by a stale absolute value (same
+        // last-write-wins class as bc2ebfd in the bulk editor). The UPDATE below is RELATIVE, evaluated
+        // by Postgres against the row's current value under the update's own row lock, so it needs no
+        // FOR UPDATE and cannot lose a concurrent write.
+        const invId = await defaultInventoryLevelId(db, it.variantId, sid);
+        if (invId)
           await db
             .update(schema.inventoryLevels)
             .set({ available: sql`${schema.inventoryLevels.available} + ${add}` })
-            .where(eq(schema.inventoryLevels.id, inv.id));
+            .where(eq(schema.inventoryLevels.id, invId));
       }
       await db.update(schema.purchaseOrderItems).set({ receivedQty: it.qty }).where(eq(schema.purchaseOrderItems.id, it.id));
     }
@@ -146,23 +140,12 @@ export async function unreceivePurchaseOrder(
       // would invent stock removal that never happened.
       const back = it.receivedQty;
       if (it.variantId && back > 0) {
-        // Same row-resolution as receivePurchaseOrder, and for the same two reasons: the default
-        // location (an unordered limit(1) picks an ARBITRARY warehouse), and —
-        // ⚠️ THE `locations` JOIN IS THE TENANT BOUNDARY, not just an ordering device.
-        // `inventory_levels` has no store_id and no RLS; `locations` does. Swap this for a plain
-        // `where variant_id = …` and a line carrying another store's variantId subtracts from THEIR
-        // shelf. Keep the join even when it looks redundant.
-        // The select deliberately does NOT read `available` — see the UPDATE below.
-        const [inv] = await db
-          .select({ id: schema.inventoryLevels.id, title: schema.products.title })
-          .from(schema.inventoryLevels)
-          .innerJoin(schema.locations, eq(schema.locations.id, schema.inventoryLevels.locationId))
-          .innerJoin(schema.productVariants, eq(schema.productVariants.id, schema.inventoryLevels.variantId))
-          .innerJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
-          .where(eq(schema.inventoryLevels.variantId, it.variantId))
-          .orderBy(desc(schema.locations.isDefault), asc(schema.inventoryLevels.id))
-          .limit(1);
-        if (inv) {
+        // Same row-resolution as receivePurchaseOrder, from the same helper and for the same two
+        // reasons: the default location, and the `locations` join as THE TENANT BOUNDARY — a line
+        // carrying another store's variantId would subtract from THEIR shelf. See
+        // `lib/inventory-location.ts`; it deliberately does NOT read `available` (see the UPDATE below).
+        const invId = await defaultInventoryLevelId(db, it.variantId, sid);
+        if (invId) {
           // RELATIVE, evaluated by Postgres against the row's current value under the update's own
           // row lock — never `set({ available: read - back })`, which is the last-write-wins bug
           // bc2ebfd/80fb83b closed elsewhere: a sale landing between the read and the write would be
@@ -171,9 +154,20 @@ export async function unreceivePurchaseOrder(
           const [row] = await db
             .update(schema.inventoryLevels)
             .set({ available: sql`${schema.inventoryLevels.available} - ${back}` })
-            .where(eq(schema.inventoryLevels.id, inv.id))
+            .where(eq(schema.inventoryLevels.id, invId))
             .returning({ available: schema.inventoryLevels.available });
-          if (row && row.available < 0) negatives.push({ title: inv.title, available: row.available });
+          // The product title is only ever READ on this branch (the warning list), so it is fetched
+          // here rather than joined into every row resolution — a negative is the exception, not the
+          // path. Two extra joins on every PO line to label a case that usually does not happen.
+          if (row && row.available < 0) {
+            const [p] = await db
+              .select({ title: schema.products.title })
+              .from(schema.productVariants)
+              .innerJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
+              .where(eq(schema.productVariants.id, it.variantId))
+              .limit(1);
+            negatives.push({ title: p?.title ?? "Produk", available: row.available });
+          }
         }
       }
       await db.update(schema.purchaseOrderItems).set({ receivedQty: 0 }).where(eq(schema.purchaseOrderItems.id, it.id));
