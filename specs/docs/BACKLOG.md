@@ -1730,6 +1730,34 @@ badge listens for `cart:updated`, and a single-variant PDP states its stock. Ope
 
 ---
 
+## Payment confirmation has ONE writer and no break-glass — build the safety net
+
+Established by reading the code on 2026-08-01, not from memory:
+
+- Our AutoLaris client has **`create_payment`, `alProbeChannels`, `alTestConnection` — and nothing
+  else**. There is **no transaction status / inquiry call**, so we cannot ask whether a VA was paid.
+- **Exactly one line in the entire codebase** writes `orders.financial_status = 'dibayar'`, and it is
+  inside `/api/public/pay/callback`. No merchant button, no super-admin button. Confirmation is 100%
+  automatic and 100% dependent on a webhook we do not control.
+- COD is unaffected — it is marked when the merchant advances the order status
+  (`collectCodOnDelivery`), which is why all 56 `berhasil` payments in production are COD.
+- Platform **subscription invoices** CAN be flipped manually by super-admin (`setInvoiceStatus`,
+  audit-logged) — but that is our own billing, not a merchant's customer order.
+
+So when the webhook broke, there was no way to recover a single payment. Recommended, in order:
+
+- [ ] **Super-admin "Konfirmasi pembayaran manual" for a prepaid order.** Must run **the callback's own
+      code path** — never a direct `UPDATE` — so the ledger row, the order status and the held
+      conversion all move together. Audit-logged, like `setInvoiceStatus` already is.
+      *Design stance: auto stays primary, manual is the break-glass. Manual-only is slow and
+      error-prone; auto-only is exactly what failed silently for weeks.*
+- [ ] **Reconciliation screen:** payments `menunggu` older than N hours. The 401 bug was invisible for
+      weeks because no screen showed it; with this, the next failure is caught the same day.
+- [ ] **Ask AutoLaris for a status/inquiry endpoint and their callback retry policy.** If an inquiry
+      endpoint exists, a cron can poll `menunggu` payments and the whole class of failure disappears —
+      the system stops depending on a delivery we cannot observe. This is the highest-leverage question
+      to put to the vendor.
+
 ## One OWNER decision from the payments audit
 
 - [ ] **May a SUSPENDED merchant withdraw sales revenue they have already earned?** Today they cannot:
