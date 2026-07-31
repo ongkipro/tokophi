@@ -1705,6 +1705,20 @@ badge listens for `cart:updated`, and a single-variant PDP states its stock. Ope
 
 ---
 
+## One OWNER decision from the payments audit
+
+- [ ] **May a SUSPENDED merchant withdraw sales revenue they have already earned?** Today they cannot:
+  `requestPayout` calls `requireCapability("settings:write")` without `allowSuspended`, so a merchant
+  Rp305.250 behind on their subscription cannot touch, say, Rp12.000.000 of settled sales money that is
+  theirs. The read actions a few lines above deliberately stay open — *"a suspended merchant is
+  entitled to look at their own money … that is precisely when they need it"* — so the code already
+  argues both sides. `saveBankAccount` was opened up on 2026-07-31 (it moves no money; blocking it only
+  stopped them fixing where their own money goes). **The payout itself is a business call**: withholding
+  settled revenue over a subscription debt is leverage, and it is also the kind of thing that ends up in
+  a screenshot. Decide it deliberately, then make the code say so.
+
+---
+
 ## P3 — Polish
 
 - [ ] Loading / skeleton states.

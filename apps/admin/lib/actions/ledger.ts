@@ -119,7 +119,14 @@ export async function saveBankAccount(input: {
   bankAccount: string;
   bankHolder: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { storeId } = await requireCapability("settings:write");
+  // `allowSuspended`: this moves no money. Blocking it only stopped a suspended merchant from FIXING
+  // where their own money would go — while the read actions a few lines up deliberately stay open,
+  // with the comment "a suspended merchant is entitled to look at their own money … that is precisely
+  // when they need it". Being able to see the balance and not correct the account it pays into is the
+  // same principle applied halfway. (Whether `requestPayout` should also open up is a business
+  // decision about withholding settled sales revenue over a subscription debt — recorded in
+  // BACKLOG.md, deliberately not taken here.)
+  const { storeId } = await requireCapability("settings:write", { allowSuspended: true });
   const bankName = input.bankName.trim();
   const bankAccount = input.bankAccount.trim();
   const bankHolder = input.bankHolder.trim();
