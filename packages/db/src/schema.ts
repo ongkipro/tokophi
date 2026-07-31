@@ -471,17 +471,20 @@ export const suppliers = pgTable("suppliers", {
   email: text(),
 });
 
+// ⚠️ `code` is unique PER STORE (0084). Globally unique was actively broken here: the code is
+// `PO-${Date.now().toString().slice(-6)}`, which REPEATS every ~16.7 minutes, so two purchase orders
+// created anywhere on the platform at the same point in that cycle collided and the second failed.
 export const purchaseOrders = pgTable("purchase_orders", {
   id: pk(),
   storeId: uuid().notNull().references(() => stores.id),
   supplierId: uuid().references(() => suppliers.id),
-  code: text().notNull().unique(),
+  code: text().notNull(),
   status: poStatus().notNull().default("draft"),
   totalIdr: money().notNull().default(0),
   etaDate: date(),
   note: text(),
   createdAt: createdAt(),
-});
+}, (t) => [unique().on(t.storeId, t.code)]);
 
 export const purchaseOrderItems = pgTable("purchase_order_items", {
   id: pk(),
@@ -787,10 +790,14 @@ export const waMessages = pgTable("wa_messages", {
 });
 
 // ---------- discounts ----------
+// ⚠️ `code` is unique PER STORE (0084), not globally. A bare `.unique()` here meant the first merchant
+// to register a string owned it across the whole platform — and Indonesian promo codes collide
+// constantly (GAJIAN, DISKON10, GRATISONGKIR). The rejection also told the second merchant the code was
+// taken, which is a working way to probe a competitor's codes. Reads were always store-scoped.
 export const discounts = pgTable("discounts", {
   id: pk(),
   storeId: uuid().notNull().references(() => stores.id),
-  code: text().notNull().unique(),
+  code: text().notNull(),
   kind: discountKind().notNull(),
   value: integer().notNull().default(0),
   minPurchaseIdr: money().notNull().default(0),
@@ -799,7 +806,7 @@ export const discounts = pgTable("discounts", {
   startsAt: ts(),
   endsAt: ts(),
   status: discountStatus().notNull().default("aktif"),
-});
+}, (t) => [unique().on(t.storeId, t.code)]);
 
 export const discountUsages = pgTable("discount_usages", {
   id: pk(),
