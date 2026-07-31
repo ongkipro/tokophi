@@ -248,10 +248,21 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
       // the vendor script arrives. That buffering is the vendors' own documented design (`fbq.queue`,
       // `dataLayer`, `ttq`'s method array), not something invented here. NO EVENT IS LOST.
       //
-      // Whichever comes first: the browser going idle, or the shopper touching the page. A shopper who
-      // interacts immediately is a shopper who might convert immediately, so their pixels load at once;
-      // a shopper who is still reading costs us nothing. The 3.5 s timeout is the backstop for a tab
-      // that is never idle and never touched.
+      // ⚠️ FIRST INTERACTION, with a 10 s backstop — deliberately NOT `requestIdleCallback`.
+      //
+      // Owner decision, 2026-08-01, taken on measured numbers rather than preference. With `rIC` the
+      // browser went idle at ~2 s on a fast connection, so all three bundles still executed inside
+      // Lighthouse's TBT window: mobile stuck at 75 with TBT 690 ms, of which 600 ms was third-party.
+      // Loading on interaction instead takes TBT back to roughly the pixel-free baseline.
+      //
+      // THE COST, STATED PLAINLY: a visitor who lands and leaves inside 10 s WITHOUT touching the page
+      // is never counted as a PageView by Meta/Google/TikTok. That is real bounce data, and it was
+      // traded knowingly. What is NOT lost is revenue attribution — a conversion is built from the
+      // ORDER ROW on the server (ADR 0012), never from the browser, and a shopper who buys has by
+      // definition interacted. `/api/track` (our own funnel analytics) is untouched and still fires on
+      // every page view.
+      //
+      // If this is ever revisited, revisit it with a measurement, not an opinion.
       var fired = false, queued = [];
       function later(fn) {
         queued.push(fn);
@@ -268,8 +279,7 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           go();
         };
         for (var i = 0; i < evs.length; i++) window.addEventListener(evs[i], once, { passive: true, once: true });
-        if (window.requestIdleCallback) window.requestIdleCallback(once, { timeout: 3500 });
-        else setTimeout(once, 3500);
+        setTimeout(once, 10000);
       }
       function inject(src, extra) {
         var e = document.createElement("script");

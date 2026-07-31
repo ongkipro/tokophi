@@ -61,6 +61,14 @@ const inHtml = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => m[1])
 console.log(`vendor <script src> in the served HTML: ${inHtml.length} ${JSON.stringify(inHtml)}`);
 const before = inHtml.length;
 
+// 2b. NO INTERACTION, NO VENDORS. This is the owner decision of 2026-08-01 made testable: the loader
+// waits for a real interaction (or a 10 s backstop), so a visitor — or a Lighthouse run — that never
+// touches the page must not pay for three third-party bundles. Deterministic now that
+// `requestIdleCallback` is gone; it was NOT deterministic before, because idle fires whenever it likes.
+await page.waitForTimeout(3000);
+const idleHits = vendorHits.length;
+console.log(`vendor requests after 3 s with NO interaction: ${idleHits}`);
+
 // 3. An event fired NOW, while no SDK exists, must be buffered — not thrown away.
 await page.evaluate(() => {
   window.fbq && window.fbq("track", "TestBeforeLoad", { v: 1 });
@@ -93,6 +101,7 @@ const realErrs = failed.filter((f) => !/localhost:3000|127\.0\.0\.1:3000/.test(f
 const ok =
   stubs.fbq === "function" && stubs.gtag === "function" && stubs.ttq !== "undefined" &&
   before === 0 &&
+  idleHits === 0 &&
   buffered.fbqQueueLen > 0 &&
   hosts.length === 3 &&
   realErrs.length === 0;

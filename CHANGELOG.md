@@ -2,6 +2,25 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Pixels load on interaction now, and that is a trade the owner made
+
+`requestIdleCallback` was firing at ~2 s on a fast connection, so all three vendor bundles still
+executed inside Lighthouse's TBT window: mobile stuck at **75**, TBT **690 ms**, **600 ms** of it
+third-party. The loader now waits for a real interaction (pointer/key/touch/scroll) with a **10 s**
+backstop, and no `rIC` at all.
+
+**The cost, stated plainly:** a visitor who lands and leaves inside 10 s *without touching the page* is
+never counted as a PageView by Meta, Google or TikTok. That is real bounce data and it was traded
+knowingly, on measured numbers. What is **not** lost: revenue attribution — a conversion is built from
+the ORDER ROW on the server (ADR 0012), never from the browser, and a shopper who buys has by
+definition interacted. `/api/track`, our own funnel analytics, is untouched and still fires on every
+page view.
+
+Made testable rather than asserted: `check-pixel-defer.mjs` now pins **0 vendor requests after 3 s with
+no interaction**, which only became a deterministic claim once `rIC` was removed — idle fires whenever
+it likes. Still green on the rest: stubs synchronous, no vendor `<script src>` in the served HTML,
+events buffered while no SDK exists, all three loading after a click with GA's beacon going out.
+
 ## Unreleased — The srcset that was never promoted, and five sections that had none
 
 Follow-up measurement of the PageSpeed work. Production mobile went **66 → 75** with the pixels on
