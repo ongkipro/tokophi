@@ -9,6 +9,35 @@
 
 
 
+## 2026-08-01 — Session: the audits moved off tracking, and the money paths were worse ✅ `#105` `#107` `#112` `#114` `#115` `#116` — all merged + deployed + content-verified in production
+
+**Handoff:** [`tasks/2026-08-01-audit-wave-money-auth-storefront.md`](./tasks/2026-08-01-audit-wave-money-auth-storefront.md) — full findings, the NEXT list, and what this session should teach the next one.
+
+Parallel read-only auditors, one dimension each, then a second round pointed at my OWN merged diff.
+That second round found two of the worst defects, which is the whole argument for doing it.
+
+**The one that matters most: production could not confirm a single prepaid payment.** All five builders
+of the AutoLaris callback URL built it bare; the endpoint fails closed on a missing token; the secret is
+set on the live stack — so **every genuine callback was a 401**. `payments` stayed `menunggu` for ever,
+orders never became `dibayar`, no ledger row, and platform invoices ride the same callback so
+`current_period_end` stopped advancing. Uncatchable locally: with no secret set, dev accepts an
+unauthenticated callback. Production confirms the fingerprint — **5 AutoLaris rows, all `menunggu`,
+none ever `berhasil`** (the 56 `berhasil` are COD, which never touches the callback).
+
+Also: stock could go **−4** from a cart naming one variant twice (the `FOR UPDATE` gate ran per LINE);
+PPN was charged on the pre-discount subtotal and written into `orders.tax_idr`, the faktur's base; a
+session could not be revoked at all; and six ledger tests dead since migration `0081` were hiding a real
+production bug — voiding a shipment on a dispatched order silently did nothing. `astro check` had been
+typechecking **none** of the storefront's 92 files since 22 Jul, and 16 migrations were unapplied on the
+shared dev DB because drizzle runs a pending batch in one transaction.
+
+**NEXT (owner first, nothing blocked by code):** ① match the 5 stuck `reff_id` + 3 old invoices in the
+AutoLaris dashboard — our DB cannot tell "paid but rejected" from "never paid"; ② ask AutoLaris for a
+status/inquiry endpoint (we have none — `create_payment` only) and their callback retry policy;
+③ build the super-admin manual payment confirmation, through the callback's own code path — today
+**one line in the entire codebase** marks an order paid, and it lives inside the webhook; ④ a
+reconciliation screen for stale `menunggu`; ⑤ one real prepaid transaction as the actual proof.
+
 ## 2026-07-31 — Session: the audits reached the surfaces nobody had looked at, and both were worse than the ones that had ✅ `38958fe` `a16d7f7` `aa6cfeb` `8edef84` (+ docs) — branch `feat/fe-polish`
 > Six parallel audits over two days. The pattern that matters: **every one of the worst findings was
 > unreachable by clicking around the demo store.** Its data happens to avoid them.
