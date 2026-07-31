@@ -9,6 +9,43 @@
 
 
 
+## 2026-08-01 — Session: the order pipeline's quiet lies, then PageSpeed ✅ `#117` `#118` `#119` `#120` `#122` `#123` — all merged; `#117`–`#120` deployed + verified in production, `#122`/`#123` deploying at handoff
+
+**Handoff:** [`tasks/2026-08-01-order-pipeline-and-pagespeed.md`](./tasks/2026-08-01-order-pipeline-and-pagespeed.md) — findings, measurements, the NEXT list, and the owner decision recorded on the record.
+
+Two halves. **Part 1** audited the order pipeline by grepping for CLAIMS and checking them against SQL.
+`destinationGuessed` was described in a comment as flagging a fuzzy-matched shipping destination — the
+identifier existed **nowhere in the repo**, while 77 orders carry no `ship_district_id`, so parcels were
+booked to a guessed kecamatan in silence and the COD province gate resolved the province *from that
+guess*. Also: `markLabelsPrinted` reported success for rows RLS had filtered out; `createOrderPayment`
+would mint a live VA for a **cancelled** order (buyer pays, ledger correctly refuses to credit — money
+in, no sale); the order list and the order detail had **two different definitions of "the order's
+payment"**, including COD vs VA, which is the fact `createShipment` turns into a cash instruction for a
+courier; and an unescaped `_` in the search box matched **all 842 orders**.
+
+**Part 2** found a live KiriminAja quota any signed-in user could spend, and a `batal`/`retur` inventory
+restore whose tenant scoping was a `locations` join that only *picked* a row and never proved whose —
+on the one path that runs on the OWNER connection with RLS off.
+
+**Part 3 was PageSpeed, and the finding reframed it: the pixels were the page.** Switching Meta +
+Google + TikTok on took mobile **90 → 66** and TBT **130 ms → 770 ms**. The downloads were never the
+problem (all three were already `async`) — the cost is parse+execute of three third-party bundles during
+the paint. Self-hosting Inter (render-blocking **1.409 ms** across three layouts, in front of an LCP that
+was **82% render delay**) and generating real image widths (**461 KiB** wasted; a 1920×1080 hero on a
+412 px phone) took it to **75**. The owner then chose to load pixels on first interaction, accepting a
+named cost: bounce PageViews under 10 s are no longer recorded. Revenue attribution is unaffected — it
+is built from the order row on the server (ADR 0012).
+
+⚠️ **I shipped a regression in `#119` and found it by measuring, not by re-reading:** the hero's new
+`data-srcset` was promoted only onto the `<source>`, never the `<img>`, so waking a slide fell back to
+the full-size original (106 KB). Fixed in `#120` and now guarded by a browser check — the class is
+invisible to `tsc`, lint and `astro check`, because only `currentSrc` shows it.
+
+**NEXT:** confirm `#122` landed and re-measure (build was still running at handoff) · two **approved**
+Cloudflare zone settings, procedure in `CLOUDFLARE-PERF.md`, not doable from this repo · `dom-size` 992
+and a `speed-index` of 7.1 s against an LCP of 1.7 s, undiagnosed · the impersonation-token decision is
+still open and still the owner's.
+
 ## 2026-08-01 — Session: the audits moved off tracking, and the money paths were worse ✅ `#105` `#107` `#112` `#114` `#115` `#116` — all merged + deployed + content-verified in production
 
 **Handoff:** [`tasks/2026-08-01-audit-wave-money-auth-storefront.md`](./tasks/2026-08-01-audit-wave-money-auth-storefront.md) — full findings, the NEXT list, and what this session should teach the next one.
