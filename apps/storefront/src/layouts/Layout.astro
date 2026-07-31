@@ -51,7 +51,22 @@ const desc = clamp(description ?? "");
 //
 // The query string is dropped: this is ad-landed traffic, so `?utm_source=…` arrives constantly, and
 // leaving it in would splinter one page's ranking signals across dozens of URL variants.
-const canonical = new URL(Astro.url.pathname, origin).href;
+//
+// …EXCEPT `page`, which is not a tracking parameter — it is a different set of products. Dropping it
+// made every page of a paginated listing canonicalise to page 1, i.e. declare itself a duplicate of a
+// page that does not contain its products. For a 12-per-page catalogue that hides everything from the
+// 13th product on from search entirely. Paginated pages must SELF-canonicalise (Google's own
+// guidance since rel=prev/next was retired). `page=1` still normalises to the bare path — it is the
+// same page and two URLs for it is the splintering this comment is about.
+//
+// An ALLOW-LIST, not a blocklist: a new tracking param must not have to be discovered and banned.
+const CANONICAL_PARAMS = ["page"] as const;
+const canonicalUrl = new URL(Astro.url.pathname, origin);
+for (const k of CANONICAL_PARAMS) {
+  const v = Astro.url.searchParams.get(k);
+  if (v && v !== "1" && /^\d{1,4}$/.test(v)) canonicalUrl.searchParams.set(k, v);
+}
+const canonical = canonicalUrl.href;
 
 // The merchant's favicon (stores.favicon_url, set in Pengaturan → Profil Toko). mediaUrl() rewrites
 // an admin `/api/uploads/…` path to wherever uploads are actually served from — the same treatment

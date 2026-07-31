@@ -313,6 +313,19 @@ every deploy, and a hardcoded one fails with "No such container" the moment anyt
   desc`, in both `data/orders.ts` and `data/order-detail.ts`. They used to order differently, so an
   order with more than one payment row could read COD on one screen and VA on the other — and COD is
   the fact `createShipment` turns into a cash-collection instruction for a courier.
+- **A `"use server"` action that spends a PROVIDER's quota needs a capability, not a session.**
+  `getShippingRates` was the only door in `actions/shipping.ts` any signed-in store user could open,
+  and every call is a live KiriminAja rate request. It now takes `orders:write`, the same gate as the
+  `createShipment` it pairs with.
+- **Converting a throwing action to `{ ok, error }` is a TWO-file change.** Next masks a thrown Error
+  in production, so merchant-actionable rules must be returned — but a caller that awaits and ignores
+  the result will then report success over a save that never happened, which is worse than the digest.
+  Change the action and its callers in the same commit. (`actions/flash.ts` + `flash-editor.tsx`,
+  2026-07-31; `theme.ts` earlier.)
+- **`isUuid` (`lib/uuid.ts`) before any `eq(table.id, segment)`.** Postgres THROWS `22P02` on a
+  non-UUID string — a 500 where a 404 belongs — and `/produk/…` takes the catalog NUMBER, so merchants
+  really do try `/diskon/1042`. One route guarded itself with a private regex; the three beside it did
+  not, which is what a private copy always costs.
 - **User-typed search strings are ESCAPED before they enter a LIKE pattern** (`@tokophi/lib/like`).
   Not injection — everything is parameterised — but `%` and `_` are wildcards and the merchant is
   typing a search box: measured, an unescaped `_` matched **all 842 orders**. It is one shared helper

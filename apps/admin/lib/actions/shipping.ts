@@ -108,8 +108,12 @@ async function packageWeight(db: Tx, orderId: string): Promise<number> {
 export async function getShippingRates(input: {
   orderNumber: string;
 }): Promise<{ ok: boolean; rates: Rate[]; origin?: string; destination?: string; codEnabled?: boolean; error?: string }> {
-  const session = await getSession();
-  if (!session) return { ok: false, rates: [], error: "Sesi tidak valid." };
+  // `orders:write`, not merely a session. This is a `"use server"` action that spends REAL KiriminAja
+  // quota (one live rate call per invocation) and it was the only door into this file that any signed-in
+  // store user could open — a `gudang` account, which the RBAC matrix deliberately keeps out of every
+  // other shipping action, could loop it over the store's order numbers. It is also the read that
+  // `createShipment` is paired with, so the two should demand the same capability.
+  const session = await requireCapability("orders:write");
   if (!kiriminajaConfigured()) return { ok: false, rates: [], error: "KiriminAja belum dikonfigurasi oleh platform (super-admin → Pengaturan)." };
 
   const ctx = await withCurrentTenant(async (db) => {

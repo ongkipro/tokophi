@@ -142,9 +142,23 @@ const HEAD = [
     },
   },
 ].map(ldScript).join("");
+
+// TITLE. `Layout` appends " - <store name>", so this is the LEADING half — it has to be a phrase, not
+// a paragraph. It used to be the literal `"Beranda"`, which spent the most valuable characters in
+// search results on a word that describes nothing.
+//
+// ⚠️ `stores.tagline` is unbounded free text and it is NOT a title. It is 30 chars on the dev store
+// and **150 on production** ("Batik Nusantara adalah ragam seni lukis kain khas Indonesia yang
+// coraknya sangat dipengaruhi oleh budaya, flora, fauna, dan filosofi lokal."), which rendered a
+// ~170-character <title> that Google cuts at ~60. So it is used only when it is already title-shaped;
+// otherwise a short honest descriptor. Truncating the tagline mid-sentence was the other option and
+// it reads worse than not using it — the tagline still carries the full text in the meta description,
+// where the length belongs.
+const TAGLINE = store.tagline?.trim() ?? "";
+const HOME_TITLE = TAGLINE && TAGLINE.length <= 60 ? TAGLINE : "Belanja Online";
 ---
 
-<Layout title={store.tagline?.trim() || `Belanja ${store.name}`} description={SUMMARY} head={HEAD}>
+<Layout title={HOME_TITLE} description={SUMMARY} head={HEAD}>
   {
     HOMEPAGE_TEMPLATE ? (
       <!-- ADR 0009: merchant-built homepage (Store Builder) -->

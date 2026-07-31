@@ -17,13 +17,35 @@ export type FlashInput = {
   items: { productId: string; salePriceIdr: number }[];
 };
 
+/**
+ * A rule the MERCHANT broke, as opposed to something that went wrong.
+ *
+ * Next MASKS a thrown Error in production — the client receives an opaque digest, so
+ * "Tanggal berakhir harus setelah tanggal mulai" reached the merchant as
+ * "An error occurred in the Server Components render". Every message in this file is one the
+ * merchant can act on, which makes throwing exactly the wrong shape for all of them.
+ * `theme.ts` was converted to `{ ok, error }` for this reason; this file was left behind.
+ */
+class FlashRuleError extends Error {}
+
+/** Run a write and turn a broken RULE into a message, while letting real failures keep throwing —
+ *  a DB outage is not something to render as friendly advice next to the Simpan button. */
+async function guard<T>(fn: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
+  try {
+    return { ok: true, value: await fn() };
+  } catch (e) {
+    if (e instanceof FlashRuleError) return { ok: false, error: e.message };
+    throw e;
+  }
+}
+
 function saleFields(i: FlashInput) {
   const startsAt = new Date(i.startsAt);
   const endsAt = new Date(i.endsAt);
-  if (isNaN(startsAt.getTime()) || isNaN(endsAt.getTime())) throw new Error("Tanggal mulai/berakhir tidak valid.");
-  if (endsAt <= startsAt) throw new Error("Tanggal berakhir harus setelah tanggal mulai.");
+  if (isNaN(startsAt.getTime()) || isNaN(endsAt.getTime())) throw new FlashRuleError("Tanggal mulai/berakhir tidak valid.");
+  if (endsAt <= startsAt) throw new FlashRuleError("Tanggal berakhir harus setelah tanggal mulai.");
   const name = i.name.trim();
-  if (!name) throw new Error("Nama flash sale wajib diisi.");
+  if (!name) throw new FlashRuleError("Nama flash sale wajib diisi.");
   return { name, status: i.status, startsAt, endsAt };
 }
 
@@ -63,7 +85,7 @@ async function writeItems(db: Tx, saleId: string, ownsSale: boolean, items: Flas
     if (!ownedIds.has(it.productId)) continue;
     const cap = ceiling.get(it.productId);
     if (cap != null && Math.round(Number(it.salePriceIdr)) >= cap) {
-      throw new Error(
+      throw new FlashRuleError(
         `Harga flash untuk "${ownedIds.get(it.productId)}" (${Math.round(Number(it.salePriceIdr))}) tidak boleh sama atau lebih tinggi dari harga produk (${cap}) — promo tidak akan memotong apa pun.`,
       );
     }
@@ -75,27 +97,37 @@ async function writeItems(db: Tx, saleId: string, ownsSale: boolean, items: Flas
   if (rows.length) await db.insert(schema.flashSaleItems).values(rows);
 }
 
-export async function createFlashSale(input: FlashInput): Promise<string> {
+export type FlashResult = { ok: true; id: string } | { ok: false; error: string };
+
+export async function createFlashSale(input: FlashInput): Promise<FlashResult> {
   const { storeId } = await requireCapability(CAP);
-  const id = await withTenant(storeId, async (db) => {
-    const [s] = await db.insert(schema.flashSales).values({ storeId, ...saleFields(input) }).returning();
-    await writeItems(db, s.id, true, input.items); // fresh insert under this tenant → owned by construction
-    return s.id;
-  });
+  const r = await guard(() =>
+    withTenant(storeId, async (db) => {
+      const [s] = await db.insert(schema.flashSales).values({ storeId, ...saleFields(input) }).returning();
+      await writeItems(db, s.id, true, input.items); // fresh insert under this tenant → owned by construction
+      return s.id;
+    }),
+  );
+  if (!r.ok) return r;
   revalidatePath("/flash-sale");
-  return id;
+  return { ok: true, id: r.value };
 }
 
-export async function updateFlashSale(id: string, input: FlashInput): Promise<void> {
+export async function updateFlashSale(id: string, input: FlashInput): Promise<FlashResult> {
   const { storeId } = await requireCapability(CAP);
-  await withTenant(storeId, async (db) => {
-    // Prove the sale is the tenant's BEFORE writing items keyed on it (flash_sales is RLS'd).
-    const [owned] = await db.select({ id: schema.flashSales.id }).from(schema.flashSales).where(eq(schema.flashSales.id, id)).limit(1);
-    await db.update(schema.flashSales).set(saleFields(input)).where(eq(schema.flashSales.id, id));
-    await writeItems(db, id, !!owned, input.items);
-  });
+  const r = await guard(() =>
+    withTenant(storeId, async (db) => {
+      // Prove the sale is the tenant's BEFORE writing items keyed on it (flash_sales is RLS'd).
+      const [owned] = await db.select({ id: schema.flashSales.id }).from(schema.flashSales).where(eq(schema.flashSales.id, id)).limit(1);
+      await db.update(schema.flashSales).set(saleFields(input)).where(eq(schema.flashSales.id, id));
+      await writeItems(db, id, !!owned, input.items);
+      return id;
+    }),
+  );
+  if (!r.ok) return r;
   revalidatePath("/flash-sale");
   revalidatePath(`/flash-sale/${id}`);
+  return { ok: true, id };
 }
 
 export async function deleteFlashSale(id: string): Promise<void> {
