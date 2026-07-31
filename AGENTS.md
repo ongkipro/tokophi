@@ -315,6 +315,26 @@ every deploy, and a hardcoded one fails with "No such container" the moment anyt
   must be excluded there **explicitly** or it leaks to admin by default. `apps/admin/lib/rbac-landing.test.ts`
   pins this.
 
+## Codes are unique PER STORE, and the scope filter is load-bearing
+
+`discounts.code` and `purchase_orders.code` are `UNIQUE (store_id, code)` since migration **0084**.
+They used to be `UNIQUE (code)` — platform-wide — which on a multi-tenant product means the first
+merchant to use a string owns it forever:
+
+- **Vouchers**: Indonesian promo codes collide constantly (`GAJIAN`, `DISKON10`, `GRATISONGKIR`). One
+  shop registering `GAJIAN25` blocked every other shop, and the rejection told the second merchant the
+  code was taken — a working way to probe a competitor's codes.
+- **Purchase orders**: worse, because the code is generated. `PO-${Date.now().toString().slice(-6)}`
+  repeats every 10⁶ ms ≈ **16.7 minutes**, so two POs anywhere on the platform at the same point in
+  that cycle collided and the second one simply failed to save. The generator is wider now, but the
+  per-store scope is what makes a collision a local problem instead of a cross-tenant one.
+
+⚠️ **`applyDiscount`'s `store_id` filter is now the ONLY thing stopping one store redeeming another's
+code.** It used to be a second lock on a door only one key fitted; since 0084 it is the lock. Do not
+"simplify" it away. `packages/db/src/per-store-codes.test.ts` pins both the composite unique and the
+absence of a column-level `.unique()` — the edit that would silently restore the old behaviour
+type-checks and passes everything else.
+
 ## Store Builder / Tema — three page types, three different jobs
 
 `page_templates.type` is `homepage | category | product` and they are **not interchangeable**:

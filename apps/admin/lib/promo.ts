@@ -4,9 +4,13 @@ import { and, eq, sql } from "drizzle-orm";
 
 // THE ONE place a voucher is validated + priced (PROMO P0, spec: specs/PROMO_SPEC.md). The order API
 // applies it at the boundary and the /api/public/promo preview shows it — both call THIS, so the shopper
-// is charged exactly what they were shown. Codes are globally unique; we still scope by storeId so one
-// store can never redeem another's code. Case-insensitive match (a shopper typing "hemat25" gets the
-// merchant's "HEMAT25").
+// is charged exactly what they were shown.
+//
+// ⚠️ The `storeId` filter below is LOAD-BEARING, not belt-and-braces. Codes used to be unique across
+// the whole platform, so scoping was a second lock on a door only one key fitted. Since 0084 they are
+// unique PER STORE — two shops may both run `GAJIAN25` — so this filter is now the ONLY thing keeping
+// one store from redeeming another's code. Do not "simplify" it away.
+// Case-insensitive match (a shopper typing "hemat25" gets the merchant's "HEMAT25").
 export type DiscountResult =
   | {
       ok: true;

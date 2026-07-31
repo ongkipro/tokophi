@@ -22,7 +22,12 @@ export async function createPurchaseOrder(input: {
   const { storeId: sid } = await requireCapability("purchases:write");
   const lines = input.lines.filter((l) => l.variantId && l.qty > 0);
   if (!lines.length) throw new Error("no lines");
-  const code = `PO-${Date.now().toString().slice(-6)}`;
+  // ⚠️ NOT `Date.now().toString().slice(-6)`. Six digits of epoch-ms REPEAT every 10^6 ms ≈ 16.7
+  // minutes, so two POs at the same point in that cycle got the same code — and while the constraint
+  // was platform-wide, the second one FAILED TO SAVE for a merchant who had done nothing wrong.
+  // 0084 scoped the constraint per store, which removes the cross-tenant half; this removes the rest.
+  // Full millis + 4 random digits: monotonic, readable, and collision-free in practice.
+  const code = `PO-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 9000 + 1000)}`;
   await withTenant(sid, async (db) => {
     // match supplier by name (case-insensitive); nullable if not found
     const sups = await db.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers).where(eq(schema.suppliers.storeId, sid));

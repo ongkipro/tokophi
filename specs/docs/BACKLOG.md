@@ -994,7 +994,13 @@ memos, and the landing-HTML claim. What remains:
   both the admin caption and the storefront comment, so nothing lies any more — but the exposure is
   real. Options: narrow the capability to owner, add a real sanitizer (NOT a regex — a half-sanitizer
   restores exactly the false confidence just removed), or accept it explicitly. **Not decided here.**
-- [ ] **`discounts.code` is unique ACROSS EVERY TENANT** (`discounts_code_unique` on `code` alone,
+- [x] **DECIDED + SHIPPED 2026-07-31 (`0084`) — unique PER STORE.** Two shops may both run
+  `GAJIAN25`; a clash is now only possible inside one store, so the editor's error stopped guessing
+  ("mungkin sudah dipakai") and names the code. `purchase_orders.code` carried the SAME defect and was
+  fixed in the same migration — worse there, because the code is `PO-<6 digits of epoch-ms>`, which
+  repeats every ~16.7 minutes, so two POs anywhere on the platform at the same point in that cycle
+  collided and the second FAILED TO SAVE for a merchant who had done nothing. Generator widened too.
+  ~~`discounts.code` is unique ACROSS EVERY TENANT~~ (`discounts_code_unique` on `code` alone,
   no `store_id`). The first merchant to register `GAJIAN25` permanently blocks all other stores, which
   also makes the constraint an existence oracle over other tenants' codes — and Indonesian promo codes
   collide constantly (`GAJIAN`, `DISKON10`, `GRATISONGKIR`). Fix is `unique().on(storeId, code)` plus a

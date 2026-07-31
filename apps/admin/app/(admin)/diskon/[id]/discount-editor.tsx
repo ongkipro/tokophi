@@ -143,7 +143,10 @@ export function DiscountEditor({ discount }: { discount?: Discount }) {
         router.push("/diskon");
         router.refresh();
       } catch {
-        toast.error("Gagal menyimpan diskon (kode mungkin sudah dipakai)");
+        // Precise now, because a clash can only be inside THIS store. It used to say "mungkin"
+        // because the constraint was platform-wide, so the code could have been taken by a shop the
+        // merchant cannot see — which also made the rejection a way to probe a competitor's codes.
+        toast.error(`Gagal menyimpan diskon — kode "${code.trim().toUpperCase()}" sudah dipakai di toko ini.`);
       }
     });
   }
