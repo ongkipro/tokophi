@@ -10,6 +10,7 @@
 // every pre-carousel saved template resolves to via `heroSlides()`, stays a plain static hero.
 import { heroSlides, HERO_INTERVAL_MS, type HeroConfig } from "@tokophi/sections";
 import { safeHref } from "../../lib/safe-href";
+import { imageSrcSet } from "../../data/catalog";
 import { ArrowLeft, ArrowRight, CreditCard, Headphones, MessageCircle, Package, RotateCcw, ShieldCheck, Truck } from "@lucide/astro";
 
 type Props = HeroConfig;
@@ -67,6 +68,11 @@ const centered = align === "center";
            (when they set one) and NEVER downloads the heavy desktop file; everywhere else it uses the
            landscape `imageUrl` with `focal`. The <source> mirrors the img's lazy pattern — slide 1 ships
            a real `srcset`, slides 2..n carry `data-srcset` promoted by the same `wake()` as the img. */
+        /* The hero is full-bleed, so one CSS pixel of viewport = one image pixel: `sizes="100vw"` is
+           not an approximation here, it is the literal truth. Without a srcset the 1920×1080 file went
+           whole to a 412 px phone — Lighthouse `uses-responsive-images` scored 0, 461 KiB wasted on
+           this page alone. Slides 2..n mirror the existing lazy pattern (`data-srcset`, promoted by
+           `wake()`), or the srcset would defeat the deferral described above. */
         <picture>
           {slide.mobileImageUrl && (
             <source
@@ -79,6 +85,9 @@ const centered = align === "center";
             data-hero-img
             src={i === 0 ? slide.imageUrl : undefined}
             data-src={i === 0 ? undefined : slide.imageUrl}
+            srcset={i === 0 ? imageSrcSet(slide.imageUrl) : undefined}
+            data-srcset={i === 0 ? undefined : imageSrcSet(slide.imageUrl)}
+            sizes={imageSrcSet(slide.imageUrl) ? "100vw" : undefined}
             alt=""
             width="1920"
             height="1080"

@@ -215,8 +215,36 @@ const WIDTHS = [200, 400, 800, 1200];
  *
  * Takes a URL that has ALREADY been through `mediaUrl` — that is what the catalog hands out.
  */
+/**
+ * Seeded images live under `public/` and CANNOT take `?w=`. They get real, pre-generated width files
+ * instead (`apps/storefront/scripts/gen-image-widths.mjs` → `hero-1-640w.webp`), because Lighthouse
+ * scored `uses-responsive-images` **0 / 461 KiB wasted** on the homepage: a 1920×1080 hero delivered
+ * whole to a 412 px phone.
+ *
+ * The ladders MUST match the script's `PLAN` exactly — a width listed here with no file on disk is a
+ * 404 the browser may pick as its best candidate, which is a broken image, not a slow one. Keyed by
+ * the directory the path starts with, so a new static folder gets no srcset until it is added to BOTH.
+ */
+const STATIC_WIDTHS: Record<string, number[]> = {
+  "/hero/": [640, 1024, 1440],
+  "/sections/": [640, 1024],
+  "/products/": [200, 400],
+};
+
+const staticSrcSet = (u: string): string | undefined => {
+  // Only a bare `/dir/name.webp` — never an already-generated variant, and never a URL with a query
+  // or a different extension.
+  if (!/^\/[a-z]+\/[a-zA-Z0-9._-]+\.webp$/.test(u) || /-\d+w\.webp$/.test(u)) return undefined;
+  const dir = Object.keys(STATIC_WIDTHS).find((d) => u.startsWith(d));
+  if (!dir) return undefined;
+  const cands = STATIC_WIDTHS[dir].map((w) => `${u.replace(/\.webp$/, `-${w}w.webp`)} ${w}w`);
+  // The ORIGINAL is the top candidate — the generated ladder stops below the source width on purpose
+  // (the script never upscales), so without this a 1920px screen would be served the 1440w file.
+  return [...cands, `${u} ${dir === "/products/" ? 800 : 1920}w`].join(", ");
+};
+
 export const imageSrcSet = (u: string): string | undefined =>
-  u && isUploadUrl(u) ? WIDTHS.map((w) => `${u}?w=${w} ${w}w`).join(", ") : undefined;
+  u ? (isUploadUrl(u) ? WIDTHS.map((w) => `${u}?w=${w} ${w}w`).join(", ") : staticSrcSet(u)) : undefined;
 
 async function loadCatalog(store: StoreInfo): Promise<Catalog> {
   const storeId = store.id;

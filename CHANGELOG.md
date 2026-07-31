@@ -2,6 +2,56 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — PageSpeed: the pixels were the page, and the font was the LCP
+
+Measured with Lighthouse against production before and after. No guesses.
+
+### Turning tracking on cost 24 points
+Filling in Batik Nusantara's three ad channels (dummy ids) took **mobile 90 → 66** and Total Blocking
+Time **130 ms → 770 ms**. The downloads were never the problem — Meta, Google and TikTok were already
+`async`. The cost is parse + execute of three third-party bundles on the main thread during the paint.
+
+`MarketingPixels.astro` now injects the vendor `<script>`s only at **idle-or-first-interaction**, while
+every stub, queue and `init` stays synchronous. That is what makes it lossless: `fbq.queue`,
+`dataLayer` and `ttq`'s method array are the vendors' own buffers, so a call made before the SDK
+arrives replays in order. Whichever comes first — the browser going idle or the shopper touching the
+page — because a shopper who interacts is a shopper who might convert.
+
+Proven in a real browser (`scripts/check-pixel-defer.mjs`), not by typecheck: stubs exist
+synchronously, **no vendor `<script src>` is in the served HTML**, three events fired while no SDK
+exists are buffered (queue lengths grow), all three vendors load after a click, and GA's beacon
+actually goes out (`en=page_view&tid=…`).
+
+### The LCP element was an `<h1>` waiting on a font on someone else's origin
+Google Fonts was render-blocking for **1.409 ms** in three layouts (Layout, CheckoutLayout,
+LandingLayout) and the homepage's LCP was **82% render delay**. Inter is now self-hosted: one variable
+file per subset covering 100–900, latin + latin-ext only, `preload`ed same-origin. LandingLayout had
+also been asking for a weight (800) the other two never loaded, so a bold heading there was silently
+synthesised; the variable file ends that too.
+
+### A 1920×1080 hero delivered whole to a 412 px phone
+`uses-responsive-images` scored **0**, wasting **461 KiB** on one page. `?w=` only works for
+`/api/uploads/*`; for `public/` it is a meaningless query string on the same bytes. So the widths are
+made real: `scripts/gen-image-widths.mjs` generates 153 renditions (867 KB total, idempotent, never
+upscales) and `imageSrcSet` emits them. The mobile hero candidate is **9.9 KB against 66 KB**. All 30
+srcset candidates across `/`, `/produk`, `/kategori` and `/promo` were checked for a 200 — a candidate
+that 404s is a broken image, not a slow one.
+
+### `/promo` was indexable and absent from the sitemap
+It renders `index,follow` and it is a default navigation item — the one page whose whole job is to be
+found when someone searches for a discount. Its children (`/promo/<handle>`) are `noindex,follow` ad
+funnels and stay out: listing a noindex URL in a sitemap is a contradiction we would be publishing
+about ourselves.
+
+### Two findings that are NOT code, filed rather than faked
+- **Static assets have no long cache TTL.** Astro middleware cannot fix it — the Node adapter's `sirv`
+  serves `public/` before middleware runs. That was written, measured against a real build, found to
+  have no effect, and reverted. It is a Cloudflare Cache Rule.
+- **Cloudflare Email Obfuscation injects a render-blocking `email-decode.min.js`** — **1.621 ms**, the
+  single largest blocker on the page, triggered by our own `mailto:` links. A zone setting.
+- `robots-txt` scoring 0 stays untouched: the audit is behind the spec, and "fixing" it means deleting
+  an AI-training opt-out asserted under EU Directive 2019/790. Already reasoned out in the file.
+
 ## Unreleased — A quota anyone could spend, a restore that trusted a join, and four 500s
 
 ### The one shipping door with no capability on it

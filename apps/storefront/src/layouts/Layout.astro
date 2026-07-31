@@ -135,12 +135,12 @@ const ogImage = (() => {
         production — so the browser paid DNS+TLS+RTT before the first byte of the LCP candidate on any
         store that uses uploads. Only the two font hosts were preconnected. */}
     {ADMIN_BASE && <link rel="preconnect" href={ADMIN_BASE} crossorigin />}
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    {/* Inter is SELF-HOSTED (see styles/global.css). The Google Fonts <link> that used to sit here was
+        render-blocking for 1.409 ms on production, in front of an LCP that was 82% render delay.
+        `preload` because the font is referenced from inside a stylesheet, so the browser would
+        otherwise only discover it after parsing the CSS. latin only — latin-ext is fetched on demand
+        by unicode-range and preloading it would download 84 KB almost nobody needs. */}
+    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
     <!-- ADR 0009 — merchant's brand colour override (Store Builder colour panel). Declared
          after global.css so these custom properties win the cascade; every bg-brand-*/text-brand-*
          utility already in the storefront reads them via var(), so this alone re-themes the site. -->

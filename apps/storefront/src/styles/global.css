@@ -1,5 +1,49 @@
 @import "tailwindcss";
 
+/* ── INTER, SELF-HOSTED ────────────────────────────────────────────────────────────────────────────
+   Was `<link href="fonts.googleapis.com/css2?...">` in THREE layouts (Layout, CheckoutLayout,
+   LandingLayout). Measured on production with Lighthouse: that stylesheet was **render-blocking for
+   1.409 ms**, and the homepage's LCP element is an `<h1>` whose LCP was **82% "render delay"** — text
+   waiting on a font, on a third-party origin, behind a DNS lookup + TLS handshake + two round trips
+   (fonts.googleapis.com for the CSS, then fonts.gstatic.com for the file itself).
+
+   Self-hosting collapses that to a same-origin fetch we can `preload`, behind the CDN edge that is
+   already serving the page.
+
+   ONE variable file per subset covers 100–900, so the four static weights the old URL requested
+   (400/500/600/700 — and 800 in LandingLayout, which the other two never loaded, so a bold heading
+   on a landing page silently synthesised) become one 48 KB download that covers every weight.
+
+   latin + latin-ext ONLY. The Google CSS also serves cyrillic, cyrillic-ext, greek, greek-ext and
+   vietnamese; this is an Indonesian storefront and Indonesian is written in latin. `unicode-range`
+   is copied verbatim from Google's own CSS, so a shopper who does paste Cyrillic simply falls back
+   to the system font instead of downloading a subset nobody needs.
+
+   `font-display: swap` — text paints immediately in the fallback and re-paints in Inter. `size-adjust`
+   is deliberately NOT set: Inter and the system sans are close enough that the untuned swap measured
+   CLS 0 on mobile, and a wrong adjustment would introduce the shift it is meant to prevent.
+
+   Inter is OFL-1.1 (SIL Open Font License) — self-hosting and redistribution are expressly granted. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+
 /* ONE container serves every store (ADR 0009) — so nothing in this file may be "the demo's taste".
    This header used to read "Brand: elegant women's fashion (Batik Nusantara demo)", and the type
    scale below was exactly that: Playfair Display, an editorial serif, on every heading of every
