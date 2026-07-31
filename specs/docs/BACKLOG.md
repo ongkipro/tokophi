@@ -64,6 +64,14 @@ builds green.
       (`1810d8f`): 15 editorial images on `https://batik-nusantara.tokophi.id/blog`,
       `/api/uploads/jurnal-*.webp` → 200 `image/webp`, absolute `og:image`, 15 `media` rows, migrations
       0058–0061 applied on prod, no `/api/uploads` 404s.
+- [ ] **Two Cloudflare zone settings — APPROVED by the owner 2026-08-01, procedure written.** Exact
+  dashboard clicks, equivalent API calls and verification commands are in
+  **`specs/docs/CLOUDFLARE-PERF.md`**. They cannot be done from this repo (wrangler auth is expired and
+  these are zone settings, not Workers). ① Email Obfuscation OFF — it injects a **render-blocking**
+  `email-decode.min.js`, measured **1.621 ms**, the single largest blocker on the page, triggered by our
+  own `mailto:` links. ② Cache Rules for static assets — see the table in that doc for what may be
+  `immutable` and, more importantly, what must NOT be (the SOURCE images: a merchant replacing a photo
+  keeps the filename).
 - [ ] **Static assets have no long cache TTL — this is a CLOUDFLARE rule, not code.** Lighthouse
   `uses-long-cache-ttl` flags 15 resources (mobile) / 16 (desktop). The Node adapter serves everything
   under `public/` with `Cache-Control: public, max-age=0` and Cloudflare papers over it with a 4-hour

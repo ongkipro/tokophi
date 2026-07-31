@@ -311,7 +311,8 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   AI-training opt-out asserted as a right under EU Directive 2019/790.
 - ⚠️ **Cloudflare Email Obfuscation injects `email-decode.min.js` as a RENDER-BLOCKING script** —
   measured **1.621 ms**, the single largest blocker on the page. It is triggered by our own `mailto:`
-  links, and it is a zone setting, not code.
+  links, and it is a zone setting, not code. Procedure + verification: **`specs/docs/CLOUDFLARE-PERF.md`**
+  (also covers the static-asset Cache Rules, and why Managed robots.txt is left on deliberately).
 
 ## Order lifecycle — COD, the ledger, and the one legal set of transitions
 
