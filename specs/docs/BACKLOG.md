@@ -1,5 +1,7 @@
 # TokoΦ — Backlog & task board
 
+> ▶ **What to pick up next, in order: [`tasks/NEXT.md`](./tasks/NEXT.md)** — ordered, sized, with acceptance criteria. This file is priorities; that one is the queue.
+
 > **Reconciled against the code and the database 2026-07-14.** Items that shipped are marked and
 > collapsed; items that are still open are stated **honestly**, including the ones we would rather not
 > look at. Legend: `[ ]` todo · `[~]` partial · `[x]` done.

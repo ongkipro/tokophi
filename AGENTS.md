@@ -543,6 +543,7 @@ type-checks and passes everything else.
 | `specs/docs/CODE_MAP.md` | you need to find where a concern lives |
 | `specs/docs/STATUS.md` | **before you trust a number on a screen** — 🟢 real / 🟡 seeded / 🔴 fake |
 | `specs/docs/SCHEMA.md` | the DB, annotated from the catalog |
+| **`specs/docs/tasks/NEXT.md`** | **what to pick up next — ordered, sized, with acceptance criteria** |
 | `specs/docs/BACKLOG.md` | what is actually open |
 | `specs/docs/DEPLOY.md` | ops, env, the cron sidecars, how to verify a deploy really landed |
 | `specs/PRD.md` · `specs/decisions/` | what the product is · ADR 0010 couriers · **0012 conversion tracking · 0013 catalog ids** |

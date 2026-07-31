@@ -1,6 +1,7 @@
 # TokoΦ — Worklog (session log)
 
 > Newest first. What we did + what's next, so any session can resume instantly.
+> ▶ **The queue itself lives in [`tasks/NEXT.md`](./tasks/NEXT.md)** — ordered, sized, with AC.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
 ## ▶ CURRENT STATE (2026-07-13) · **LIVE ON `tokophi.com`** (landing · `app.` admin · `rich.` super-admin · `toko.` demo · **`<slug>.tokophi.com` = per-merchant storefront**, Cloudflare-proxied HTTPS, Vultr SG + Coolify) · RBAC + RLS enforcing · single-plan billing (PPN 11%) · super-admin store-control · client Akun section · support tiket 2-sisi · manual invoice + reminder · image→WebP · **self-serve signup `/daftar` + Google OAuth (flagged)** · **storefront SSR + `Host`-header MULTI-TENANT (one deploy serves every store)** · **Tema: named template variants + per-kategori/produk assignment** · chat spec written (not built) · provider brands hidden (white-label)
