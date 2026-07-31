@@ -2,6 +2,30 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — The srcset that was never promoted, and five sections that had none
+
+Follow-up measurement of the PageSpeed work. Production mobile went **66 → 75** with the pixels on
+(FCP 2.7 s → 1.6 s, LCP 2.8 s → 1.7 s), and `uses-responsive-images` still showed **277 KiB** wasted.
+Two causes, both real:
+
+### A srcset the browser never saw
+The hero carousel defers slides 2..n (`data-src`, woken on idle). The `data-srcset` added in the
+previous change was only promoted on the `<source>` element, never on the `<img>` itself — so waking a
+slide set `src` with no srcset and the browser committed to the full 1920×1080 original. **74 KB + 32
+KB wasted on one page**, on a phone, for images not yet on screen. This was a defect introduced by the
+previous commit and found by measuring it rather than by re-reading it.
+
+It is guarded now by `scripts/check-hero-srcset.mjs`, because this class is invisible to every static
+check: the markup is right, `astro check` is green, and the bytes are still wrong. Only a browser sees
+`currentSrc`. Verified at 412 px / DPR 2 — all three slides resolve to `-1024w`, **zero** full-size
+originals requested.
+
+### Five section components had no srcset at all
+`ImageText`, `Lookbook`, `BannerPromo`, `CollectionBento` and `CategoryNav` each render an `<img>` and
+none carried one — `/sections/denim-standard.webp` alone wasted **151 KiB**. Each now gets a `sizes`
+derived from **its own layout** and named as a constant with the reasoning attached, because a wrong
+`sizes` is worse than no srcset: the browser trusts it completely when picking a candidate.
+
 ## Unreleased — PageSpeed: the pixels were the page, and the font was the LCP
 
 Measured with Lighthouse against production before and after. No guesses.
