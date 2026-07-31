@@ -146,6 +146,10 @@ and there is nothing to look at.
 
 # NEXT — in priority order
 
+> ▶ **This list is now maintained in [`NEXT.md`](./NEXT.md)**, which carries the whole queue (not just
+> this session's leftovers) with sizes and acceptance criteria. What follows is the snapshot as of this
+> handoff; if the two disagree, `NEXT.md` is newer.
+
 ### 1. ~~Confirm `#122` landed and re-measure~~ ✅ DONE
 Landed as `d11a96d` (verified by reading the SHA off the running container, not by inference — an
 earlier guess that a container swap *was* `#122` turned out to be `#121`'s build). Mobile median
