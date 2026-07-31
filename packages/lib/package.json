@@ -20,6 +20,7 @@
     "./validate": "./src/validate.ts",
     "./colors": "./src/colors.ts",
     "./secret": "./src/secret.ts",
-    "./tracking-ids": "./src/tracking-ids.ts"
+    "./tracking-ids": "./src/tracking-ids.ts",
+    "./pay-callback": "./src/pay-callback.ts"
   }
 }

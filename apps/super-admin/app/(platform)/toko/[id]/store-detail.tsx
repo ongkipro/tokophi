@@ -68,8 +68,19 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
   const [auEmail, setAuEmail] = useState("");
   const [auRole, setAuRole] = useState<"admin" | "staff" | "gudang">("staff");
 
+  // ⚠️ RESPECT A REFUSAL. This used to `await fn()` and then announce success unconditionally, so any
+  // action that returns `{ ok: false, error }` — a guard doing its job — was reported to the operator
+  // as having worked. A control plane that says "done" when it refused is worse than one that throws.
   const run = (fn: () => Promise<unknown>, ok?: string) =>
-    startTransition(async () => { await fn(); if (ok) toast.success(ok); router.refresh(); });
+    startTransition(async () => {
+      const r = (await fn()) as { ok?: boolean; error?: string } | void;
+      if (r && typeof r === "object" && r.ok === false) {
+        toast.error(r.error ?? "Tidak bisa dijalankan.");
+        return;
+      }
+      if (ok) toast.success(ok);
+      router.refresh();
+    });
 
   function openAdmin() {
     startTransition(async () => {

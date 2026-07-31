@@ -19,7 +19,7 @@ import Stars from "../../components/Stars.astro";
 import OrderFunnel from "../../components/OrderFunnel.astro";
 import { ShieldCheck, Truck, ImageOff, Check, AlertTriangle } from "@lucide/astro";
 import { IDR } from "@tokophi/lib/format";
-import { productImages, imageSrcSet, storeFreeShip, storeTaxSettings } from "../../data/catalog";
+import { productImages, imageSrcSet, storeFreeShip, storeTaxSettings, storeCodPolicy } from "../../data/catalog";
 import { getPromoConfig } from "../../data/promo";
 import { buildPackages } from "../../lib/packages";
 
@@ -27,7 +27,7 @@ import { buildPackages } from "../../lib/packages";
 const { store, catalog } = Astro.locals;
 // The two settings /api/public/order prices with — passed into the funnel so its quoted total
 // cannot disagree with what the shopper is actually charged (on COD, with what the courier collects).
-const [freeShip, taxCfg] = await Promise.all([storeFreeShip(store.id), storeTaxSettings(store.id)]);
+const [freeShip, taxCfg, codPolicy] = await Promise.all([storeFreeShip(store.id), storeTaxSettings(store.id), storeCodPolicy(store.id)]);
 const { handle } = Astro.params;
 const product = handle ? catalog.findProduct(handle) : undefined;
 if (!product) return new Response(null, { status: 404, statusText: "Not Found" });
@@ -216,6 +216,7 @@ const heroSrcSet = gallery.length ? imageSrcSet(gallery[0]) : undefined;
       formConfig={promo.formConfig}
       freeShip={freeShip}
       tax={taxCfg}
+      cod={codPolicy}
     />
   </main>
 </LandingLayout>

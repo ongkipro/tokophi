@@ -106,7 +106,7 @@ export async function getStoreProfile(): Promise<StoreProfile> {
 // wa.me link and the CRM already assume. Accepts what a merchant naturally types (08…, +62…, spaces,
 // dashes) and normalises it, so the input is forgiving but the stored value is canonical.
 function normalizeWa(input: string): string | null {
-  var d = (input || "").replace(/[^0-9]/g, "");
+  let d = (input || "").replace(/[^0-9]/g, "");
   if (!d) return null; // cleared → NULL → no button (intentional)
   if (d.slice(0, 2) === "62") { /* already country code */ }
   else if (d[0] === "0") d = "62" + d.slice(1);

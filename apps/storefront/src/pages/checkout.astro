@@ -1170,9 +1170,14 @@ if (rToken) {
     // PPN added to the total, mirroring @tokophi/lib computeTax's `addToTotal`: only exclusive PPN
     // increases the amount charged (inclusive is already inside the prices). The order API recomputes
     // this authoritatively — this keeps the displayed total equal to what the shopper pays.
+    // ⚠️ CALL IT WITH THE DISCOUNTED GOODS. PPN is due on what the shopper actually transacts, so a
+    // voucher lowers the base — the order API computes it on `subtotal - voucherPriceOff` and this must
+    // agree exactly, or the screen and the bill diverge on every voucher.
     function ppnAdd(sub) {
       return (TAX_ENABLED && !TAX_INCLUSIVE && TAX_RATE > 0) ? Math.round(sub * TAX_RATE / 100) : 0;
     }
+    /** The PPN base: goods after the voucher's price cut. `shipWaived` is excluded — ongkir is not taxed. */
+    function taxableGoods() { return Math.max(0, subtotal - voucherPriceOff); }
 
     // The ONE unmet COD condition worth telling the shopper, in the order they can act on it. "" = say
     // nothing (no courier picked yet, or COD is actually available). Mirrors the gate in syncCod exactly.
@@ -1200,7 +1205,7 @@ if (rToken) {
     function syncCod() {
       if (!codOption || !codRadio) return;
       var shipEl = form.querySelector('input[name="shipping"]:checked');
-      var total = subtotal + selectedShipping() + ppnAdd(subtotal) - totalDisc(selectedShipping());
+      var total = subtotal + selectedShipping() + ppnAdd(taxableGoods()) - totalDisc(selectedShipping());
       var allowed =
         !!COD_ENABLED &&
         !!shipEl &&
@@ -1252,7 +1257,7 @@ if (rToken) {
 
     function recompute() {
       var ship = selectedShipping();
-      var ppn = ppnAdd(subtotal);
+      var ppn = ppnAdd(taxableGoods());
       // When the ongkir is fully waived, the ongkir line reads GRATIS (not a struck price) and the amount
       // is NOT repeated in the discount row — otherwise the shopper sees the free shipping counted twice.
       var waived = shipWaived(ship);

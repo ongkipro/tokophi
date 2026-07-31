@@ -405,6 +405,12 @@ type-checks and passes everything else.
 - **Storefront slugs are Indonesian:** `/produk/`, `/kategori/`, `/blog/`, `/halaman/` (not `/products//collections/…`).
 - Design: modern SaaS, `text-muted-foreground` for secondary text, indigo `--primary` accent, rounded-xl, soft shadows, responsive, AA. Keep it **console-clean**.
 - After changes: `npm run build` must pass, and the dev-overlay must show **0 issues** (check the browser console).
+- ⚠️ **`next build` does NOT run ESLint.** `npm run lint -w @tokophi/admin` is a separate gate that
+  nothing runs — no CI, no build step, no doc asked for it — so it rotted quietly to **28 errors** by
+  2026-07-31. Most were React Compiler rules that matter: a component defined inside another component
+  remounts its whole subtree on every parent render (state lost, inputs losing focus mid-typing), and
+  `Date.now()` in a CLIENT render path is the SSR-vs-client hydration mismatch this file forbids two
+  bullets up. Run it before you open a PR; the open ones are itemised in `specs/docs/BACKLOG.md`.
 - **⚠️ Money and checkout paths must be EXERCISED, not typechecked.** `astro check` passes clean on bugs inside a client `<script>`: a `ReferenceError: queueSave is not defined` in `checkout.astro` blocked the **entire rate load** — no rates → no COD → **no order at all** — with typecheck, lint and build all green. Only a browser caught it. Same family as `select sum(…) for update` in `requestPayout()`, which Postgres rejects outright (every withdrawal threw) and which `tsc` could not see inside the SQL string. Drive the flow: real browser, 0 console errors, and reconcile what is on screen against SQL.
 
 ## Adding a screen

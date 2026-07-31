@@ -40,7 +40,14 @@ export async function applyOrderStatusChange(
   const ALLOWED: Record<string, string[]> = {
     baru: ["diproses", "dikirim", "batal"],
     diproses: ["dikirim", "batal"],
-    dikirim: ["selesai", "batal", "retur"],
+    // `diproses` = the shipment was VOIDED and the order needs (re)booking. `cancelShipment` routes
+    // through here, and this transition was missing — so voiding a shipment on a `dikirim` order
+    // silently did nothing: the AWB and courier were cleared while the status stayed "Dikirim", which
+    // is the exact stuck state `actions/shipping.ts` says it was written to prevent (with `kaOrderId`
+    // now null, the tracking poller can never move it either). It moves no stock, fails no payment and
+    // books no money — `restores` is batal|retur only and `settleOrderLedger` matches none of its
+    // branches for `diproses`. Found by a ledger test that had been silently dead since migration 0081.
+    dikirim: ["selesai", "batal", "retur", "diproses"],
     // Settled, but a parcel can still come back. `retur` is the ONLY way out, and it carries its own
     // claw-back that reverses the sale correctly.
     selesai: ["retur"],

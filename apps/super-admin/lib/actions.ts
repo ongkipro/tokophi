@@ -10,6 +10,7 @@ import { isInstantService } from "@tokophi/lib/couriers";
 import { alTestConnection, alProbeChannels, alCreatePayment } from "@tokophi/lib/autolaris";
 import { addMonths, quote, withPpn } from "@tokophi/lib/billing";
 
+import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
 async function logStore(storeId: string, text: string): Promise<void> {
   await db.insert(schema.platformActivity).values({ kind: "admin", text, storeId });
@@ -393,7 +394,7 @@ export async function createManualInvoice(storeId: string, cycle: "monthly" | "a
   const q = quote(cycle, store.firstInvoicePaid);
   const amount = withPpn(q.amount).total;
   const reffId = `SUB-${store.slug}-${Date.now().toString().slice(-8)}`;
-  const callbackUrl = (process.env.PUBLIC_APP_URL ?? "http://localhost:3000") + "/api/public/pay/callback";
+  const callbackUrl = payCallbackUrl();
   const r = await alCreatePayment({ reffId, channelCode: "VABCA", amount, customerId: storeId, customerName: store.name, customerPhone: "081200000000", customerEmail: owner?.email ?? "merchant@tokophi.id", callbackUrl });
   if (!r.ok) return { ok: false, error: r.error ?? "Gagal membuat tagihan." };
 
@@ -456,15 +457,34 @@ export async function compStore(storeId: string, months = 1): Promise<{ ok: bool
   const now = new Date();
   const base = s.currentPeriodEnd && s.currentPeriodEnd > now ? s.currentPeriodEnd : now;
   const until = addMonths(base, months);
-  await db.update(schema.stores).set({ currentPeriodEnd: until, status: "active", firstInvoicePaid: true }).where(eq(schema.stores.id, storeId));
+  // ⚠️ `firstInvoicePaid` IS DELIBERATELY NOT TOUCHED. It used to be set `true` here, which BURNED the
+  // Rp50rb first-month promo as a side effect of a goodwill gesture: comp a store still on its trial
+  // and its first real invoice becomes Rp305.250 instead of Rp55.500 — Rp249.750 too much, charged to
+  // the merchant we were trying to compensate. `computeBilling` reads `active` from
+  // `currentPeriodEnd` alone (billing.ts), so the comp works without it.
+  await db.update(schema.stores).set({ currentPeriodEnd: until, status: "active" }).where(eq(schema.stores.id, storeId));
   await logStore(storeId, `Gratis ${months} bulan diberikan (aktif s/d ${until.toLocaleDateString("id-ID")})`);
   revalidatePath(`/toko/${storeId}`); revalidatePath("/toko"); revalidatePath("/");
   return { ok: true, until: until.toISOString() };
 }
 
 // Extend / reset the free trial by N days from now.
-export async function extendTrial(storeId: string, days = 7): Promise<{ ok: boolean }> {
+export async function extendTrial(storeId: string, days = 7): Promise<{ ok: boolean; error?: string }> {
   await requirePlatformAdmin();
+  // ⚠️ A PAYING STORE IS NOT PUT BACK ON TRIAL. This used to write `currentPeriodEnd: null,
+  // firstInvoicePaid: false` unconditionally, so "extend trial" on a store that had already paid
+  // Rp305.250 threw away whatever was left of the month they bought AND re-armed both the Rp50rb promo
+  // and the annual bonus month. Use "Gratiskan N bulan" for a paying store — that is what it is for.
+  const [s] = await db
+    .select({ currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid })
+    .from(schema.stores)
+    .where(eq(schema.stores.id, storeId))
+    .limit(1);
+  if (!s) return { ok: false, error: "Toko tidak ditemukan." };
+  const hasPaidPeriod = !!s.currentPeriodEnd && s.currentPeriodEnd > new Date();
+  if (hasPaidPeriod || s.firstInvoicePaid) {
+    return { ok: false, error: "Toko ini sudah berlangganan — pakai \"Gratiskan 1 bulan\" agar periode berbayarnya tidak hangus." };
+  }
   const until = new Date(Date.now() + days * 86_400_000);
   await db.update(schema.stores).set({ trialEndsAt: until, currentPeriodEnd: null, status: "trial", firstInvoicePaid: false }).where(eq(schema.stores.id, storeId));
   await logStore(storeId, `Trial diperpanjang ${days} hari (s/d ${until.toLocaleDateString("id-ID")})`);

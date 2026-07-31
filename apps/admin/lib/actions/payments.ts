@@ -1,11 +1,12 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 import { alCreatePayment, autolarisConfigured } from "@tokophi/lib/autolaris";
 
+import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 const channelToMethod = (code: string): "va" | "qris" | "dana" =>
   code === "QRIS" ? "qris" : code === "DANA" ? "dana" : "va";
 
@@ -28,6 +29,29 @@ export async function createOrderPayment(orderNumber: string, channelCode: strin
   });
   if (!order) return { ok: false, error: "Pesanan tidak ditemukan." };
 
+  // ⚠️ THE SERVER REFUSES A SECOND LIVE BILL. The order screen already hides the button once a payment
+  // exists, but the UI is not the boundary — this is a `"use server"` action and anything that can
+  // dispatch it can call it twice. Two live virtual accounts for one order are both payable and both
+  // match on `reff_id = order.number` (there is no unique index on it): the buyer pays both, the
+  // platform collects twice, `ledger_one_sale_per_order` credits the merchant once — correctly — and
+  // nothing anywhere records the money owed back.
+  const live = await withTenant(storeId, async (db) => {
+    const [p] = await db
+      .select({ status: schema.payments.status })
+      .from(schema.payments)
+      // `order_id` is proven ours by the store-scoped order read above (payments has no store_id of
+      // its own in this query's shape) — the CHILD-TABLE rule.
+      .where(and(eq(schema.payments.orderId, order.id), inArray(schema.payments.status, ["menunggu", "berhasil"])))
+      .limit(1);
+    return p ?? null;
+  });
+  if (live) {
+    return {
+      ok: false,
+      error: live.status === "berhasil" ? "Pesanan ini sudah dibayar." : "Sudah ada tagihan aktif untuk pesanan ini.",
+    };
+  }
+
   const r = await alCreatePayment({
     reffId: order.number,
     channelCode,
@@ -36,7 +60,7 @@ export async function createOrderPayment(orderNumber: string, channelCode: strin
     customerName: order.name ?? "Pelanggan",
     customerPhone: order.phone ?? "081200000000",
     customerEmail: order.email ?? "order@tokophi.id",
-    callbackUrl: (process.env.PUBLIC_APP_URL ?? "http://localhost:3000") + "/api/public/pay/callback",
+    callbackUrl: payCallbackUrl(),
   });
   if (!r.ok) return { ok: false, error: r.error ?? "Gagal membuat tagihan." };
 

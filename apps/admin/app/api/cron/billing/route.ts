@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { computeBilling, quote, withPpn } from "@tokophi/lib/billing";
 import { alCreatePayment, autolarisConfigured } from "@tokophi/lib/autolaris";
 
+import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 // Daily billing job (schedule via Coolify Scheduled Task / external cron → GET with the secret):
 //   1) sync each store's stored `status` to its real-time lifecycle state
 //   2) for stores whose period ended (past_due/suspended) with no pending subscription invoice,
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
     })
     .from(schema.stores);
 
-  const callbackUrl = (process.env.PUBLIC_APP_URL ?? "http://localhost:3000") + "/api/public/pay/callback";
+  const callbackUrl = payCallbackUrl();
   let statusSynced = 0;
   let invoicesCreated = 0;
 

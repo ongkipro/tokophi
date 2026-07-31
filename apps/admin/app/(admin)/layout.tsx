@@ -12,9 +12,20 @@ import { getTopbarData } from "@/lib/data/topbar";
 import { getPerluDikirimCount } from "@/lib/data/orders";
 import { IDR } from "@tokophi/lib/format";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
+  // ⚠️ NO SESSION HERE MEANS THE MEMBERSHIP IS GONE, not that the cookie is missing — `middleware.ts`
+  // already turned away anyone without a valid JWT, and it runs on the edge where it cannot ask the
+  // database. `getSession` re-checks `store_users` on every request, so a user removed from the store
+  // still holds a perfectly valid token and lands HERE. Without this redirect they got the full admin
+  // chrome wrapped around an empty dashboard: every read silently scoped to the NO_STORE sentinel,
+  // nothing leaked, and nothing explained why their shop had vanished. Send them to the login screen.
+  // …to the sign-out route, NOT straight to /login: middleware sees the still-valid JWT and would
+  // bounce /login back to /, and the two would ping-pong (ERR_TOO_MANY_REDIRECTS — measured). The
+  // cookie has to actually go, and only a route handler can delete one.
+  if (!session) redirect("/api/auth/signout");
   const user = session ? { name: session.name, email: session.email, role: session.role } : undefined;
   // Fetched ONCE here and handed to both chrome surfaces — the sidebar and the mobile drawer
   // render the same nav, and two copies of this query would be two chances to disagree.

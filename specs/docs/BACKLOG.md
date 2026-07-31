@@ -1647,6 +1647,30 @@ Also open, smaller, and ours to do:
 
 ---
 
+## `npm run lint` is RED on main, and nothing runs it
+
+Screened 2026-07-31: `npm run lint -w @tokophi/admin` → **28 errors, 23 warnings**. `next build` does
+not run ESLint, there is no CI, and no doc tells anyone to run it — so this has been accumulating
+unseen. Eight of the 28 were trivial (unescaped quotes, one `var`, one `let` that should be `const`) and
+are fixed; **20 remain**, all React Compiler rules:
+
+- [ ] **12 × "Cannot create components during render"** — a component defined inside another component's
+  body. React remounts the whole subtree on every parent render: state inside it is lost, inputs lose
+  focus mid-typing, and effects re-run. Files: the theme sections (`ImageText`, `BannerPromo`), the
+  navigasi item dialog, the command palette, `saldo-client`, `promo-list-client`.
+- [ ] **5 × "Calling setState synchronously within an effect can trigger cascading renders"** — each one
+  is a double render at best and a loop at worst.
+- [ ] **3 × "Cannot call impure function during render"** — `Date.now()` in a render path. Two are in
+  async SERVER components (`flash-sale/[id]`, `flash-sale/baru`) where it is harmless in practice; the
+  third is `flash-sale-client.tsx`'s `StatusBadge`, which is a CLIENT component — exactly the
+  SSR-vs-client hydration mismatch `AGENTS.md` §Conventions forbids. Fix that one first.
+
+Not fixed here because every remaining file belongs to a feature another agent is actively iterating on,
+and a 20-file React refactor is not a screening pass. **Whoever picks this up: fix, then keep it green** —
+consider wiring `lint` into the deploy path so it cannot rot again.
+
+---
+
 ## P3 — Polish
 
 - [ ] Loading / skeleton states.

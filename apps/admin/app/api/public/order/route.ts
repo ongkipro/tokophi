@@ -21,6 +21,7 @@ import { getCodPolicy } from "@/lib/cod";
 import { quoteShipping, findRate } from "@/lib/shipping-quote";
 import { computeTax } from "@tokophi/lib/tax";
 import { IDR } from "@tokophi/lib/format";
+import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 import { applyDiscount } from "@/lib/promo";
 import { activeFlashPrices } from "@/lib/flash";
 import { clientContextFromRequest, enqueuePurchase } from "@/lib/tracking-events";
@@ -404,11 +405,16 @@ async function handle(req: Request) {
     .from(schema.storeSettings)
     .where(eq(schema.storeSettings.storeId, store.id))
     .limit(1);
-  const tax = computeTax(subtotal, {
+  const taxSettings = {
     enabled: taxCfg?.enabled ?? false,
     ratePct: taxCfg?.ratePct ?? 0,
     inclusive: taxCfg?.inclusive ?? false,
-  });
+  };
+  // ⚠️ PPN IS COMPUTED BELOW, AFTER THE VOUCHER — on `subtotal - voucherPriceOff`, not on `subtotal`.
+  // It used to be computed here, on the full goods total, so a 50% voucher on Rp1.000.000 charged PPN
+  // on a DPP of Rp1.000.000 while the shopper actually transacted Rp500.000: Rp110.000 collected where
+  // Rp55.000 was due, and `orders.tax_idr` — the number the faktur is built from — recorded the wrong
+  // figure too. Under `inclusive` it does not overcharge but still mis-states the tax portion.
 
   // ── ONGKIR: RE-QUOTED HERE. `body.shipping.cost` is never read ────────────────────────────────
   // The weight fix closed lying about the INPUT; this closes lying about the OUTPUT. The order used
@@ -480,6 +486,10 @@ async function handle(req: Request) {
   const autoFreeShip = taxCfg?.freeShipEnabled && subtotal >= (taxCfg?.freeShipMinIdr ?? 0) ? shippingCost : 0;
   const shipOff = Math.max(voucherShipOff, autoFreeShip);
   const discountIdr = voucherPriceOff + shipOff;
+
+  // The taxable base is the goods AFTER the voucher's price cut. `shipOff` is excluded on purpose:
+  // it discounts ongkir, which is not in the PPN base to begin with.
+  const tax = computeTax(Math.max(0, subtotal - voucherPriceOff), taxSettings);
 
   // Exclusive PPN adds on top; inclusive PPN is already inside `subtotal` (addToTotal = 0). Either way
   // the COD-cap check below and the payment amount both see the real amount the shopper pays.
@@ -569,15 +579,30 @@ async function handle(req: Request) {
       // It locks (and reads) THE ROW THE DECREMENT WILL WRITE — the same `defaultLocationRow`
       // expression, so check and write can never disagree about which stock is being spent. It used
       // to lock every location row and sum them, which is a total, not the figure being decremented.
+      // ⚠️ BY VARIANT, NOT BY CART LINE. The lock serialises TRANSACTIONS; it does nothing about two
+      // lines of the SAME cart naming the same variant. Both read the same un-decremented `available`
+      // (nothing has been written yet), both pass, and the decrement loop below then subtracts twice.
+      // With `available = 6`, a posted cart of two × qty 5 committed an order for 10 units and left the
+      // row at −4: the shopper is charged correctly, the parcel cannot be sent, and on COD the courier
+      // has already been booked. The storefront's cart dedupes on handle+variant, so this needs a
+      // crafted POST — which is exactly the threat model this endpoint is written against.
+      // Sorted by variant id as well, so two shoppers buying the same two variants in opposite cart
+      // order cannot deadlock (Postgres aborts one, and it surfaces as an unactionable 500).
+      const needByVariant = new Map<string, { qty: number; title: string }>();
       for (const r of resolved) {
+        const hit = needByVariant.get(r.variantId);
+        if (hit) hit.qty += r.qty;
+        else needByVariant.set(r.variantId, { qty: r.qty, title: r.title });
+      }
+      for (const [variantId, need] of [...needByVariant.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
         const locked = await tx
           .select({ id: schema.inventoryLevels.id, available: schema.inventoryLevels.available })
           .from(schema.inventoryLevels)
-          .where(defaultLocationRow(r.variantId))
+          .where(defaultLocationRow(variantId))
           .for("update");
         // At most one row by construction; a missing row is 0 available, exactly as before.
         const have = Number(locked[0]?.available ?? 0);
-        if (have < r.qty) throw new OutOfStock(r.title, have);
+        if (have < need.qty) throw new OutOfStock(need.title, have);
       }
 
       // `Date.now().slice(-9)` alone against the GLOBAL `orders_number_unique` constraint: two orders
@@ -632,16 +657,20 @@ async function handle(req: Request) {
           title: r.title,
           qty: r.qty, priceIdr: r.price, totalIdr: r.price * r.qty,
         });
+      }
+
+      // One decrement per VARIANT, from the same aggregated map the check above used — so what was
+      // verified and what is spent are the same number even when a cart names a variant twice.
+      for (const [variantId, need] of needByVariant) {
         // No GREATEST clamp — the rows are locked and re-checked above, so this cannot go negative.
         // Flooring it at 0 is what made an oversell indistinguishable from an honest sell-out.
         // Target ONE row (the default location), not `where variant_id = X`: the latter subtracts qty
         // from EVERY location row of the variant, so the day a variant has stock at two warehouses each
         // sale over-decrements N×. Single-location today, but this is the landmine the schema's
-        // unique(variant,location) is built to allow. Real cross-warehouse fulfilment is a later feature.
-        // Same expression as both checks above — that shared definition is the point.
+        // unique(variant,location) is built to allow. Same expression as both checks above.
         await tx.update(schema.inventoryLevels)
-          .set({ available: sql`${schema.inventoryLevels.available} - ${r.qty}` })
-          .where(defaultLocationRow(r.variantId));
+          .set({ available: sql`${schema.inventoryLevels.available} - ${need.qty}` })
+          .where(defaultLocationRow(variantId));
       }
 
       // Payment row, ATOMIC with the order. Previously both inserts ran AFTER this txn committed, so a
@@ -777,7 +806,8 @@ async function handle(req: Request) {
       reffId: order.number, channelCode, amount: total,
       customerId, customerName: name,
       customerPhone: phone, customerEmail: email || "order@tokophi.id",
-      callbackUrl: (process.env.PUBLIC_APP_URL ?? "http://localhost:3000") + "/api/public/pay/callback",
+      // WITH the token — the endpoint fails closed and a bare URL was a 401 on every real payment.
+      callbackUrl: payCallbackUrl(),
     });
   } catch (err) {
     console.error("[order] alCreatePayment threw for", order.number, err);

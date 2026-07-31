@@ -2,6 +2,85 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — The payment webhook was rejecting every real payment
+
+Four parallel audits away from the ad-tracking stack — the money in checkout, auth/RBAC/tenant
+isolation, payments/saldo/ledger, and the storefront. The worst finding was not in any of the code
+those audits set out to read; it was one missing query parameter.
+
+### 🔴 In production, no prepaid payment could ever be confirmed
+`/api/public/pay/callback` authenticates on `x-callback-token` or `?token=`, and it fails closed. All
+**five** places that built the callback URL we hand AutoLaris built it bare — `alCreatePayment` sends
+`callback_url` as a plain string and no headers, so there was no other way for the token to travel.
+The secret IS set on the live stack, so every genuine callback got a **401**: `payments.status` stayed
+`menunggu` for ever, orders never became `dibayar`, no ledger row was written, held conversions were
+never released — and because platform invoices ride the same callback, `stores.current_period_end`
+stopped advancing, so the platform would eventually suspend its own paying merchants. It could not be
+caught locally: with no secret set, dev returns `true` and that branch is never exercised. One shared
+`payCallbackUrl()` now builds it. Measured against a production-mode server: bare URL **401**, new URL
+**200**, wrong token still **401**.
+
+### 📦 Stock could go negative, and the lock was never going to stop it
+The `FOR UPDATE` gate ran per cart LINE, not per variant, and every check ran before any decrement — so
+two lines naming the same variant both read the same untouched `available`, both passed, and the
+decrement subtracted twice. With 6 in stock, a posted cart of 2 × qty 5 committed an order for 10 and
+left the row at **−4**: charged correctly, unshippable, and on COD the courier is already booked. Now
+aggregated by variant before the lock, and locked in variant-id order so two shoppers buying the same
+two variants in opposite order cannot deadlock.
+
+### 🧾 PPN was charged on rupiah the shopper never paid
+`computeTax` ran on the pre-discount subtotal. A 50% voucher on Rp1.000.000 collected Rp110.000 of PPN
+where Rp55.000 was due — and wrote the wrong figure into `orders.tax_idr`, which is what the faktur is
+built from. The base is now the goods after the voucher, on the server and in the checkout display.
+
+### 👀 The success page hid the discount, then mislabelled the tax
+`order.discount` was computed, returned, stored — and rendered nowhere. An order with automatic free
+shipping printed "Subtotal 300.000 · Ongkir 25.000 · Total 300.000" with 25rb simply missing; on the
+COD panel that is cash a courier will ask for. Worse, the inclusive-vs-exclusive PPN test was
+`subtotal + ongkir + tax === total`, which any discount breaks — so a voucher flipped the label to
+"**Termasuk** PPN" on tax that had been added on top. Both fixed. The gateway's admin fee is now named
+too: the summary said Rp234.000 and the VA panel Rp238.000, six lines apart, and a shopper who
+transferred the number they remembered underpaid the VA and was never confirmed.
+
+### 🔑 A session could not be revoked
+`role` and `storeId` were trusted from the 7-day JWT and nothing ever looked again. An owner demoted to
+Staf, or removed from the store outright, kept full access for the rest of the week — and resetting the
+password of a compromised account, the obvious way to lock someone out, ended nothing. `getSession()`
+now re-reads `store_users` on every request. Exercised in a browser: demote → the owner-only tab is
+gated on the next request; remove → bounced to login. (The first attempt at that redirect looped, because
+middleware sees the still-valid JWT and sends `/login` back to `/`; the cookie has to actually be
+deleted, which only a route handler can do.)
+
+### ⚖️ Six ledger tests had been dead since migration 0081 — and they were right
+`mkVariantWithStock` did not set `products.number`/`variant_seq_next`, NOT NULL with no default since
+ADR 0013, so the whole `applyOrderStatusChange` suite errored on its own fixture. Because the file is
+`describe.skip` without a `TEST_DATABASE_URL`, `vitest run` stayed green and said nothing. Fixed — and
+one of the revived tests immediately caught a **real production bug**: `dikirim → diproses` was missing
+from the state machine's `ALLOWED` table, so voiding a shipment on a dispatched order silently did
+nothing. The AWB and courier were cleared while the status stayed "Dikirim", and with `kaOrderId` now
+null the tracking poller could never move it either — the exact stuck state `actions/shipping.ts` says
+it was written to prevent. **22/22 now pass.**
+
+### Also
+- A late `PAID` callback stamped `dibayar` on a **cancelled** order — money collected, never credited
+  (the ledger correctly refuses terminal orders), and nothing in the product writes a refund. Now
+  refused and logged as needing a decision.
+- A replayed `EXPIRED` walked a **collected** payment back to `gagal` and nulled its `paid_at`, while
+  the order stayed `dibayar` and the ledger kept the credit. Money received is not un-received by a
+  webhook.
+- `createOrderPayment` had no server-side guard against a second live bill on one order; the UI hid the
+  button, but the UI is not the boundary. Two payable VAs, both matching `reff_id`.
+- Super-admin: "Gratiskan 1 bulan" set `firstInvoicePaid`, **burning the Rp50rb first-month promo** — a
+  goodwill gesture that billed the merchant Rp249.750 too much. "Perpanjang trial" on a paying store
+  deleted the period they had already bought and re-armed the promo; it now refuses and says why. And
+  the control plane's `run()` helper announced success for every action, including ones that refused.
+- `payments` had no index on `trx_id`, `reff_id` or `order_id` — every gateway callback was two
+  sequential scans (migration 0085).
+- The COD-only ad funnel now mirrors the platform's COD cap and province allow-list, instead of walking
+  a shopper into a 403 after they have filled the whole form on a surface with no other payment method.
+- `npm run lint` was red on main with 28 errors and nothing runs it — `next build` does not, and there
+  is no CI. Eight fixed; the remaining 20 are React Compiler rules, itemised in `BACKLOG.md`.
+
 ## Unreleased — The ad funnel recorded nothing, and three numbers were wrong
 
 Five parallel audits of the Meta / Google / TikTok stack — delivery pipeline, provider payloads, catalog
