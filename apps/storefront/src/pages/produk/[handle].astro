@@ -175,6 +175,9 @@ const variantCatalogIds = (product.variants ?? []).map((v, i) =>
 const capFlash = (n: number) => (product.flashPrice != null ? Math.min(n, product.flashPrice) : n);
 const variantPrices = (product.variants ?? []).map((v) => capFlash(v.price)).filter((n) => n > 0);
 const available = inStock(product);
+// Units on hand for the DEFAULT variant — what the picker's JS would write for it. Only used when the
+// product has no options and therefore no picker to write it.
+const stockCount = Number((product.variants ?? [])[0]?.stock ?? 0);
 const offers =
   variantPrices.length > 1 && Math.min(...variantPrices) !== Math.max(...variantPrices)
     ? {
@@ -542,7 +545,17 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             `product_options` rows (no picker) showed no availability at all and kept an enabled buy
             button, letting a shopper add a sold-out item that /api/public/order then refuses. JS now
             only REFINES this per variant. `role="status"` so a variant change is announced. */}
-        <p id="pdp-stock" role="status" class="mt-2 text-sm text-muted">{available ? "" : "Stok habis"}</p>
+        {/* ⚠️ Server-render the POSITIVE case too. This said `available ? "" : "Stok habis"` and left
+            the rest to the variant picker's JS — but a product with no `product_options` has no
+            picker, so a single-variant item in stock said nothing at all, while a 4-variant one said
+            "Stok tersedia (17)". Scarcity is a reason to buy; silence is not. */}
+        <p
+          id="pdp-stock"
+          role="status"
+          class:list={["mt-2 text-sm", available ? "text-emerald-700" : "text-muted"]}
+        >
+          {available ? (stockCount > 0 ? `Stok tersedia (${stockCount})` : "Stok tersedia") : "Stok habis"}
+        </p>
 
         {/* SHORT DESCRIPTION — the one-line hook, next to the price and ABOVE the buy actions so they
             stay high on the page. The FULL story moved to "Deskripsi Produk" below the buy box (a long

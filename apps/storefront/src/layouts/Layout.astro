@@ -6,6 +6,7 @@ import SearchPalette from "../components/SearchPalette.astro";
 import { clamp } from "../lib/text";
 import Analytics from "../components/Analytics.astro";
 import MarketingPixels from "../components/MarketingPixels.astro";
+import ImageFallback from "../components/ImageFallback.astro";
 import Chat from "../components/Chat.astro";
 import { mediaUrl, ADMIN_BASE } from "../data/catalog";
 
@@ -135,6 +136,7 @@ const ogImage = (() => {
     <Analytics />
     <!-- Merchant's own marketing pixels (Meta/Google/TikTok), per store — Pemasaran → Pelacakan. -->
     <MarketingPixels />
+    <ImageFallback />
   </head>
   <body class="min-h-screen bg-cream text-ink antialiased">
     {/* Skip link (WCAG 2.4.1) — a keyboard/screen-reader shopper lands on the header nav every page and

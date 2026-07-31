@@ -1671,6 +1671,40 @@ consider wiring `lint` into the deploy path so it cannot rot again.
 
 ---
 
+## Storefront accessibility & performance (audited 2026-07-31, browser-measured)
+
+Fixed in the same pass: the closed drawer is `inert`, a failed image degrades to its frame, the ongkir
+line no longer says Rp0 before an address, "Tercepat" ranks on the ETD upper bound, the checkout cart
+badge listens for `cart:updated`, and a single-variant PDP states its stock. Open:
+
+- [ ] **No live regions anywhere on the checkout.** Measured `[aria-live],[role=status],[role=alert]`
+  on the fully loaded page: **`[]`**. The shipping list appearing, the total moving when a courier is
+  chosen, the voucher result and the field errors are all silent. On the PDP, `#pdp-price` and
+  `#qty-val` and `#cart-count` have none either — add-to-cart announces nothing. WCAG 2.2 AA **4.1.3**.
+- [ ] **Validation errors are visible but not associated.** The field gets `aria-invalid="true"` and an
+  inline `<p>` appears, but the `<p>` has no `id`, the field has no `aria-describedby`, and it is in no
+  live region — a screen-reader user hears "invalid entry" and never the reason. WCAG **1.3.1 / 3.3.1**.
+- [ ] **The kecamatan/kelurahan cascade has no combobox semantics** — no `role`, no `aria-expanded`,
+  no `aria-controls`, no `aria-activedescendant`; the results are a bare `<div>` of buttons; ArrowDown
+  does nothing, so the only way in is Tab. WCAG **4.1.2**.
+- [ ] **The variant picker groups are unlabelled** — `.opt-group` has no `role`/`aria-label`, and the
+  "Warna: Terracotta" heading is not linked to it, so two groups are indistinguishable. WCAG **1.3.1**.
+- [ ] **Hero carousel dots are 10 × 6 px** (active 32 × 6). WCAG 2.2 AA **2.5.8** wants 24 × 24 and no
+  spacing exemption applies. Practically un-tappable with a thumb.
+- [ ] **Hero body copy reaches 3.54:1 on its lightest slide** (measured from composited pixels, so the
+  scrim is accounted for; 4.5:1 required). Fix the scrim's mid-stop, not the text colour. WCAG **1.4.3**.
+- [ ] **The biggest performance win: seeded imagery is excluded from `srcset`** (`data/catalog.ts` —
+  only admin uploads can be resized), so a 390 px phone downloads the desktop rendition. ~600 KB of the
+  homepage's 821 KB is images; `sections/denim-standard.webp` alone is 217 KB, and PDP thumbnails are
+  800 px natural at 62 CSS px (6.45×). Second: 57–109 KB of `is:inline` script per page, re-sent
+  uncacheably on every navigation (`/checkout` is 78% inline JS).
+- [ ] **The mobile PDP buy button is 1.55 viewports below the fold** (measured at 390 × 844:
+  `#add-to-cart` at y=1309) and there is no sticky buy bar.
+- [ ] **Three edge states are unverified** because the demo store has no zero-stock variant, no
+  zero-priced variant and no sparse variant matrix. The code paths read correctly; nothing has run them.
+
+---
+
 ## P3 — Polish
 
 - [ ] Loading / skeleton states.

@@ -209,7 +209,11 @@ if (rToken) {
         </div>
         <div class="flex items-center justify-between">
           <span class="text-[var(--co-muted)]">Ongkir</span>
-          <span id="summary-shipping" class="font-medium text-ink tabular-nums">Rp0</span>
+          {/* NOT "Rp0". Before an address there is no ongkir to state, and printing zero makes the
+              first total a shopper reads 25–40% lower than what they pay — then it jumps when they
+              fill in their kecamatan, which is the classic abandonment moment. `/keranjang` already
+              says "Dihitung saat checkout" for exactly this reason; the checkout contradicted it. */}
+          <span id="summary-shipping" class="font-medium text-ink tabular-nums">Dihitung</span>
         </div>
         <div id="summary-ppn-row" class="flex items-center justify-between" hidden>
           <span id="summary-ppn-label" class="text-[var(--co-muted)]">PPN</span>
@@ -1128,8 +1132,12 @@ if (rToken) {
       });
     })();
 
+    /** The chosen rate's radio, or null — "no ongkir yet" and "ongkir is zero" are different states. */
+    function selectedShippingEl() {
+      return form.querySelector('input[name="shipping"]:checked');
+    }
     function selectedShipping() {
-      var el = form.querySelector('input[name="shipping"]:checked');
+      var el = selectedShippingEl();
       return el ? Number(el.getAttribute("data-price")) : 0;
     }
 
@@ -1275,11 +1283,17 @@ if (rToken) {
       // the top mobile bar, the bottom mobile bar and the bottom bar's detail — and two totals that
       // can disagree is worse than no total at all: the shopper reads one and is charged the other.
       // recompute() is the single funnel; every ongkir change already runs through it.
-      setText("summary-shipping", shipText);
-      setText("summary-total", total);
-      setText("summary-total-bar", total);
-      setText("summary2-shipping", shipText);
-      setText("summary2-total", total);
+      // ⚠️ NO ONGKIR YET = NO TOTAL YET. Showing goods-only as "Total" is the same lie the "Rp0"
+      // ongkir line was: the shopper reads a number, enters their address, and watches it climb. Say
+      // what is true — the sum is not known until the courier is picked.
+      var priced = !!selectedShippingEl();
+      var shipShown = priced ? shipText : "Dihitung";
+      var totalShown = priced ? total : "Belum lengkap";
+      setText("summary-shipping", shipShown);
+      setText("summary-total", totalShown);
+      setText("summary-total-bar", totalShown);
+      setText("summary2-shipping", shipShown);
+      setText("summary2-total", totalShown);
       syncCod();
     }
 
@@ -1689,8 +1703,23 @@ if (rToken) {
       if (ALL_RATES) {
         var universe = ALL_RATES;
         var cheapest = universe.slice().sort(byCost)[0];
-        var etdMin = function (e) { var m = String(e || "").match(/\d+/); return m ? Number(m[0]) : 99; };
-        var fastest = universe.reduce(function (best, x) { return etdMin(x.etd) < etdMin(best.etd) ? x : best; }, universe[0]);
+        // ⚠️ RANK ON THE UPPER BOUND, then the lower. Taking the FIRST integer scored "1-3" and "1-2"
+        // identically, so `reduce` kept whichever came first in the unsorted rate list — and "Tercepat"
+        // landed on SPX Economy "1-3 hari" sitting directly above SPX Standard "1-2 hari" with no badge
+        // at all (observed on a Depok route). Anyone buying for a deadline picks the badge and gets the
+        // slower service; the late parcel becomes a complaint or a return.
+        var etdBounds = function (e) {
+          var m = String(e || "").match(/\d+/g);
+          if (!m || !m.length) return [99, 99];
+          var lo = Number(m[0]);
+          var hi = m.length > 1 ? Number(m[m.length - 1]) : lo;
+          return [hi, lo];
+        };
+        var faster = function (a, b) {
+          var A = etdBounds(a), B = etdBounds(b);
+          return A[0] !== B[0] ? A[0] < B[0] : A[1] < B[1];
+        };
+        var fastest = universe.reduce(function (best, x) { return faster(x.etd, best.etd) ? x : best; }, universe[0]);
         if (keyOf(s) === keyOf(cheapest)) tags += tag("Termurah");
         if (keyOf(s) === keyOf(fastest)) tags += tag("Tercepat");
       }
