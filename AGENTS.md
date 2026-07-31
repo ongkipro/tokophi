@@ -272,8 +272,16 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   on took mobile from **90 → 66** and Total Blocking Time from **130 ms → 770 ms**. The downloads were
   never the problem — all three were already `async`. The cost is PARSE + EXECUTE of three third-party
   bundles on the main thread while the browser is trying to paint.
-  `MarketingPixels.astro` now injects the vendor `<script>`s only at **idle-or-first-interaction**
-  (`later()`), while every stub, queue and `init` stays SYNCHRONOUS. That is what makes it lossless:
+  `MarketingPixels.astro` injects the vendor `<script>`s only on **FIRST INTERACTION**, with a 10 s
+  backstop and deliberately **no `requestIdleCallback`** (owner decision 2026-08-01: with `rIC` the
+  browser went idle at ~2 s and all three bundles still executed inside Lighthouse's TBT window —
+  mobile stuck at 75, TBT 690 ms, 600 ms of it third-party). Every stub, queue and `init` stays
+  SYNCHRONOUS.
+  ⚠️ **THE COST WAS ACCEPTED KNOWINGLY:** a visitor who lands and leaves inside 10 s without touching
+  the page is never counted as a PageView by Meta/Google/TikTok. Revenue attribution is NOT affected —
+  a conversion is built from the ORDER ROW on the server (ADR 0012) and a shopper who buys has by
+  definition interacted — and `/api/track` still fires on every page view. Revisit with a measurement,
+  not an opinion. That is what makes it lossless:
   `fbq.queue`, `dataLayer` and `ttq`'s method array are the vendors' own documented buffers, so a call
   made before the SDK arrives is replayed in order. **Do not "simplify" a stub back into its vendor
   snippet** — the stock snippet injects the script as its last line, which silently undoes this.
