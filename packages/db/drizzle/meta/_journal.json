@@ -596,6 +596,13 @@
       "when": 1785406809888,
       "tag": "0084_per_store_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1785406810888,
+      "tag": "0085_payment_lookup_indexes",
+      "breakpoints": true
     }
   ]
 }

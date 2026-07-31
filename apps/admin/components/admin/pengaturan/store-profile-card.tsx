@@ -208,7 +208,7 @@ export function StoreProfileCard() {
                 disabled={!canWrite}
               />
               <p className="text-xs text-muted-foreground">
-                Tombol "Hubungi via WhatsApp" di storefront pakai nomor ini. <span className="font-medium">Kosongkan → tombolnya tidak muncul</span> (lebih baik daripada nomor yang tidak aktif).
+                Tombol &ldquo;Hubungi via WhatsApp&rdquo; di storefront pakai nomor ini. <span className="font-medium">Kosongkan → tombolnya tidak muncul</span> (lebih baik daripada nomor yang tidak aktif).
               </p>
             </div>
 

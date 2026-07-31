@@ -126,7 +126,7 @@ export async function purchaseFacts(storeId: string, orderId: string): Promise<P
     .where(eq(schema.orderLineItems.orderId, orderId));
   const boughtIds = lines.map((l) => l.variantId).filter((v): v is string => !!v);
 
-  let contentIds: string[] = [];
+  const contentIds: string[] = [];
   const lineItems: { id: string; price: number; qty: number }[] = [];
   // `numItems` counts ONLY the lines that produced a content id. Summing every line instead would report
   // `num_items: 3` next to two ids whenever a line's variant was hard-deleted (or predates variants),

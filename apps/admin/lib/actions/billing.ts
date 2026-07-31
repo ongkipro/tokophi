@@ -8,6 +8,7 @@ import { requireCapability } from "@/lib/rbac";
 import { quote, withPpn, type Cycle } from "@tokophi/lib/billing";
 import { alCreatePayment, autolarisConfigured, channelLabel } from "@tokophi/lib/autolaris";
 
+import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 // Everything a payment UI needs to show a VA / QRIS for one (unpaid) invoice.
 export type PaymentDetail = {
   number: string; cycle: string | null; amount: number;
@@ -82,7 +83,7 @@ export async function createSubscriptionPayment(cycle: Cycle, channelCode: strin
   const q = quote(cycle, store.firstInvoicePaid);
   const amount = withPpn(q.amount).total; // base + 11% PPN
   const reffId = `SUB-${store.slug}-${Date.now().toString().slice(-8)}`;
-  const callbackUrl = (process.env.PUBLIC_APP_URL ?? "http://localhost:3000") + "/api/public/pay/callback";
+  const callbackUrl = payCallbackUrl();
   const r = await alCreatePayment({
     reffId, channelCode, amount,
     customerId: store.id, customerName: session.name || "Merchant", customerPhone: "081200000000", customerEmail: session.email, callbackUrl,

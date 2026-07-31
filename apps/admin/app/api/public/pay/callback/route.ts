@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
-import { and, eq, ne, or } from "drizzle-orm";
+import { and, eq, ne, notInArray, or } from "drizzle-orm";
 import { timingSafeEqual } from "node:crypto";
 import { rateLimit } from "@tokophi/lib/cache";
 import { addMonths } from "@tokophi/lib/billing";
@@ -85,13 +85,33 @@ export async function POST(req: Request) {
         // idempotent: don't re-process a payment already in the target state (avoids paidAt churn
         // + re-firing order sync on AutoLaris retries)
         .set({ status: mapped, paidAt: mapped === "berhasil" ? new Date() : null })
-        .where(and(match, ne(schema.payments.status, mapped)))
+        // ⚠️ FORWARD ONLY OUT OF `berhasil`. `ne(status, mapped)` blocks a same-state replay and nothing
+        // else, so a late or replayed EXPIRED walked a COLLECTED payment back to `gagal` and nulled its
+        // `paid_at` — while `orders.financial_status` stayed `dibayar` and the ledger kept the credit.
+        // Three sources of truth, three answers, and the merchant's Keuangan screen the only one wrong.
+        // A VA lives 24 h and `applyOrderStatusChange` also writes `gagal`, so the out-of-order pair is
+        // ordinary, not exotic. Money that has been received is not un-received by a webhook.
+        .where(and(match, ne(schema.payments.status, mapped), ne(schema.payments.status, "berhasil")))
         .returning({ id: schema.payments.id, orderId: schema.payments.orderId });
       // sync the linked order's financial status when newly paid
       if (mapped === "berhasil") {
         const orderIds = rows.map((r) => r.orderId).filter((id): id is string => !!id);
         for (const oid of orderIds) {
-          await db.update(schema.orders).set({ financialStatus: "dibayar" }).where(eq(schema.orders.id, oid));
+          // ⚠️ NOT ON A CANCELLED OR RETURNED ORDER. This update used to be unconditional, so a PAID
+          // callback arriving after the merchant cancelled stamped `dibayar` on a `batal` order — which
+          // then sat in Pesanan badged "Dibayar" with NO ledger row, because `creditSaleForPayment`
+          // (correctly) refuses terminal orders. The money is in the platform's account, never enters
+          // the merchant's book and never leaves; nothing in the product writes `refund` either.
+          // Reachable by ordinary timing: a VA lives 24 h and cancelling sets the payment to `gagal`,
+          // so `gagal → berhasil` fires long afterwards. Flagging it beats silently mislabelling it.
+          const done = await db
+            .update(schema.orders)
+            .set({ financialStatus: "dibayar" })
+            .where(and(eq(schema.orders.id, oid), notInArray(schema.orders.status, ["batal", "retur"])))
+            .returning({ id: schema.orders.id });
+          if (done.length === 0) {
+            console.error(`[pay/callback] PAID arrived for a cancelled/returned order ${oid} — money collected, NOT credited. Needs a refund decision.`);
+          }
         }
         // Conversion tracking (ADR 0012 §14.4): a PREPAID order becomes a Purchase HERE — when the
         // money is confirmed — not on the browser's success page, which shows an unpaid VA number.

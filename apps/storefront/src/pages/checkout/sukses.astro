@@ -135,9 +135,16 @@ const store = Astro.locals.store;
 
     var shipPrice = order.shipping ? order.shipping.price || 0 : 0;
     var tax = order.tax || 0;
-    // Exclusive PPN adds on top (subtotal + ongkir + tax == total); inclusive PPN is already inside the
-    // subtotal (subtotal + ongkir == total). Adding a PPN row for inclusive would overstate the total.
-    var taxExclusive = tax > 0 && Math.round((order.subtotal || 0) + shipPrice + tax) === Math.round(order.total || 0);
+    // ⚠️ THE DISCOUNT MUST BE ON SCREEN. It was computed by the server, returned as `res.discount`,
+    // stored on `order` — and rendered nowhere. So an order with automatic free shipping printed
+    // "Subtotal 300.000 · Ongkir 25.000 · Total 300.000" and 25rb simply vanished, with no line to
+    // explain it. On the COD panel that missing number is the cash a courier will ask for.
+    var disc = order.discount || 0;
+    // Exclusive PPN adds on top; inclusive PPN is already inside the subtotal. This used to be inferred
+    // from `subtotal + ongkir + tax === total`, which a discount breaks — so any voucher flipped the
+    // label to "Termasuk PPN" on tax that had in fact been added on top. Now the discount is part of
+    // the identity, so the test describes the real arithmetic.
+    var taxExclusive = tax > 0 && Math.round((order.subtotal || 0) + shipPrice + tax - disc) === Math.round(order.total || 0);
 
     summary.innerHTML =
       '<div class="rounded-lg border border-[var(--co-line)] bg-white p-5 sm:p-6">' +
@@ -146,6 +153,7 @@ const store = Astro.locals.store;
       '<div class="mt-4 space-y-2 border-t border-[var(--co-line)] pt-4 text-sm">' +
       '<div class="flex items-center justify-between"><span class="text-[var(--co-muted)]">Subtotal</span><span class="font-medium text-ink tabular-nums">' + idr.format(order.subtotal || 0) + "</span></div>" +
       '<div class="flex items-center justify-between"><span class="text-[var(--co-muted)]">Ongkir</span><span class="font-medium text-ink tabular-nums">' + idr.format(shipPrice) + "</span></div>" +
+      (disc > 0 ? '<div class="flex items-center justify-between text-emerald-600"><span>Diskon</span><span class="font-medium tabular-nums">−' + idr.format(disc) + "</span></div>" : "") +
       (taxExclusive ? '<div class="flex items-center justify-between"><span class="text-[var(--co-muted)]">PPN</span><span class="font-medium text-ink tabular-nums">' + idr.format(tax) + "</span></div>" : "") +
       (tax > 0 && !taxExclusive ? '<div class="flex items-center justify-between text-xs"><span class="text-[var(--co-muted)]">Termasuk PPN</span><span class="text-[var(--co-muted)] tabular-nums">' + idr.format(tax) + "</span></div>" : "") +
       "</div>" +
@@ -210,9 +218,24 @@ const store = Astro.locals.store;
           '<p class="mt-1 break-all rounded border border-[var(--co-line)] bg-[var(--co-panel)] p-2 font-mono text-xs text-ink">' +
           esc(pay.qr) + "</p></div>";
       }
+      // ⚠️ THE GATEWAY'S ADMIN FEE IS ADDED AFTER THE SHOPPER AGREED TO THE TOTAL, and both numbers
+      // sit on this one screen: the summary above says `order.total`, this box says `pay.total`, which
+      // is `amount + admin`. A shopper who transfers the number they remember UNDERPAYS the virtual
+      // account, no callback ever fires, and the order sits unpaid with nobody able to explain why.
+      // Name the fee instead of letting two totals argue silently. (`orders`/`payments` keep the
+      // pre-fee amount, which is correct — the fee is the gateway's, not the merchant's revenue.)
+      var payTotal = pay.total || order.total || 0;
+      var adminFee = Math.max(0, payTotal - (order.total || 0));
       lines +=
         '<div class="mt-1 border-t border-[var(--co-line)] pt-3">' +
-        kv("Total bayar", '<span class="text-xl font-bold">' + idr.format(pay.total || order.total || 0) + "</span>") +
+        (adminFee > 0
+          ? kv("Subtotal pesanan", '<span class="tabular-nums">' + idr.format(order.total || 0) + "</span>") +
+            kv("Biaya admin", '<span class="tabular-nums">' + idr.format(adminFee) + "</span>")
+          : "") +
+        kv("Total bayar", '<span class="text-xl font-bold">' + idr.format(payTotal) + "</span>") +
+        (adminFee > 0
+          ? '<p class="mt-2 text-xs text-[var(--co-muted)]">Transfer <span class="font-medium text-ink">persis</span> sejumlah Total bayar di atas — kurang atau lebih membuat pembayaran tidak terdeteksi otomatis.</p>'
+          : "") +
         "</div>";
       if (pay.url) {
         lines +=

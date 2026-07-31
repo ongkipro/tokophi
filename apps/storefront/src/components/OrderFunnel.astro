@@ -30,8 +30,18 @@ interface Props {
    */
   freeShip?: { enabled: boolean; minIdr: number };
   tax?: { enabled: boolean; ratePct: number; inclusive: boolean };
+  /**
+   * The platform's COD limits. This surface is COD-ONLY and has no other payment method, so walking a
+   * shopper into `/api/public/order`'s 403 after they have filled the entire form is a dead end with no
+   * way out. `checkout.astro` has mirrored both limits since they shipped; this one had not — the same
+   * omission that once made it quote a total the endpoint would not charge.
+   * The endpoint stays the boundary; this only stops us offering what we would refuse.
+   */
+  cod?: { maxAmountIdr: number; allowedProvinces: string[] };
 }
-const { packages, storeSlug, productHandle, countdownMinutes, showScarcity, formConfig, freeShip, tax } = Astro.props;
+const { packages, storeSlug, productHandle, countdownMinutes, showScarcity, formConfig, freeShip, tax, cod } = Astro.props;
+const COD_MAX = Number(cod?.maxAmountIdr ?? 0);
+const COD_PROVINCES = Array.isArray(cod?.allowedProvinces) ? cod!.allowedProvinces : [];
 const FREE_SHIP = { enabled: !!freeShip?.enabled, minIdr: freeShip?.minIdr ?? 0 };
 const TAX = { enabled: !!tax?.enabled, ratePct: tax?.ratePct ?? 0, inclusive: !!tax?.inclusive };
 // The opening total already carries PPN — the summary must never start on a number the button will
@@ -182,7 +192,7 @@ const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/pub
   </form>
 </section>
 
-<script define:vars={{ ONGKIR_API, ORDER_API, STORE_SLUG: storeSlug, COUNTDOWN_MIN: countdownMinutes, PRODUCT_HANDLE: productHandle, FREE_SHIP, TAX }}>
+<script define:vars={{ ONGKIR_API, ORDER_API, STORE_SLUG: storeSlug, COUNTDOWN_MIN: countdownMinutes, PRODUCT_HANDLE: productHandle, FREE_SHIP, TAX, COD_MAX, COD_PROVINCES }}>
   (function () {
     var form = document.getElementById("order-form");
     if (!form) return;
@@ -306,8 +316,29 @@ const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/pub
       setText("sum-ppn", fmtIDR(ppn));
       setText("sum-total", fmtIDR(orderTotal()));
       var btn = byId("submit-btn");
-      if (shipping) { btn.disabled = false; btn.textContent = "Pesan Sekarang (COD) — " + fmtIDR(orderTotal()); }
+      // ⚠️ THIS SURFACE IS COD-ONLY — there is no other payment method to fall back on, so a limit the
+      // shopper only meets at submit is a dead end after they have filled the entire form. `/api/public
+      // /order` is still the boundary (lib/cod.ts); this just stops us offering what it will refuse.
+      // `checkout.astro` has mirrored both limits since they shipped; this surface had not — the same
+      // omission that once made it quote a total the endpoint would not charge.
+      var codBlock = codBlockReason();
+      if (codBlock) { btn.disabled = true; btn.textContent = codBlock; }
+      else if (shipping) { btn.disabled = false; btn.textContent = "Pesan Sekarang (COD) — " + fmtIDR(orderTotal()); }
       else { btn.disabled = true; btn.textContent = "Lengkapi kecamatan dulu"; }
+    }
+
+    /** "" = COD is fine. Otherwise the reason, phrased as something the shopper can act on. */
+    function codBlockReason() {
+      if (COD_MAX > 0 && orderTotal() > COD_MAX) {
+        return "COD maks " + fmtIDR(COD_MAX) + " — kurangi jumlah";
+      }
+      var prov = (byId("dest-prov") && byId("dest-prov").value || "").trim();
+      if (COD_PROVINCES.length && prov) {
+        var norm = function (v) { return String(v).toLowerCase().replace(/[^a-z]/g, ""); };
+        var ok = COD_PROVINCES.some(function (p) { return norm(p) === norm(prov); });
+        if (!ok) return "COD belum tersedia di " + prov;
+      }
+      return "";
     }
 
     // ── kecamatan autocomplete ────────────────────────────────────────────────────────────────

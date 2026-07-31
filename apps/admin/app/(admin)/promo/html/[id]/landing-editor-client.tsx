@@ -184,7 +184,7 @@ export function LandingEditorClient({ editor }: { editor: LandingEditor }) {
             disabled={!canWrite || !canEditHtml}
           />
           <p className="text-xs text-muted-foreground">
-            Tempel isi HTML (bagian body). Form order + tombol "Pesan Sekarang" ditambahkan otomatis di
+            Tempel isi HTML (bagian body). Form order + tombol &ldquo;Pesan Sekarang&rdquo; ditambahkan otomatis di
             bawah.{" "}
             <strong className="text-amber-700 dark:text-amber-500">
               HTML ini dijalankan apa adanya di halaman toko Anda, termasuk tag &lt;script&gt;.

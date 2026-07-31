@@ -288,8 +288,16 @@ suite("settleOrderLedger — the book moves with the order status", () => {
 // ── The order state machine's STOCK side — inventory restore on batal/retur ──────────────────────────
 async function mkVariantWithStock(tx: Db, storeId: string, available: number): Promise<string> {
   const loc = await rows(tx, sql`insert into locations (store_id, name) values (${storeId}, 'Gudang') returning id`);
-  const prod = await rows(tx, sql`insert into products (store_id, title, handle) values (${storeId}, 'Produk', ${"p-" + ++seq}) returning id`);
-  const v = await rows(tx, sql`insert into product_variants (product_id, store_id) values (${prod[0].id}, ${storeId}) returning id`);
+  // ⚠️ `number` and `seq` are NOT NULL with NO DEFAULT since migration 0081 (stable catalog ids, ADR
+  // 0013) — production allocates them from `store_counters`. This fixture omitted them, so every test
+  // in the `applyOrderStatusChange` suite died on its own setup with "null value in column number
+  // violates not-null constraint". Six tests, silently: the suite is `describe.skip` without a
+  // TEST_DATABASE_URL, so a normal `vitest run` is green and says nothing. What was unproven is the
+  // whole stock half — restore on batal, restore on retur, the no-double-restore guard, the terminal
+  // batal→retur guard, and that `→ diproses` moves nothing.
+  const n = 100000 + seq;
+  const prod = await rows(tx, sql`insert into products (store_id, title, handle, number, variant_seq_next) values (${storeId}, 'Produk', ${"p-" + ++seq}, ${n}, 2) returning id`);
+  const v = await rows(tx, sql`insert into product_variants (product_id, store_id, seq) values (${prod[0].id}, ${storeId}, 1) returning id`);
   await tx.execute(sql`insert into inventory_levels (variant_id, location_id, available) values (${v[0].id}, ${loc[0].id}, ${available})`);
   return v[0].id as string;
 }

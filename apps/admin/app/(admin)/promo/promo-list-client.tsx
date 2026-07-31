@@ -179,7 +179,7 @@ export function PromoListClient({ rows, landings }: { rows: PromoListRow[]; land
                 <TableRow>
                   <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
                     <Code2 className="mx-auto mb-2 h-8 w-8 opacity-40" />
-                    Belum ada landing HTML. Klik "Buat baru" untuk menempel HTML kamu.
+                    Belum ada landing HTML. Klik &ldquo;Buat baru&rdquo; untuk menempel HTML kamu.
                   </TableCell>
                 </TableRow>
               )}
