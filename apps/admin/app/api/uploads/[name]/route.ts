@@ -21,14 +21,25 @@ const TYPES: Record<string, string> = { webp: "image/webp", svg: "image/svg+xml"
 // two vulnerabilities at once:
 //   1. CPU-DoS: every distinct value is a fresh sharp decode+resize of a 2000px image on the origin.
 //   2. Cache poisoning/eviction: Cloudflare keys by full URL, so `?w=1,2,3,…` mints unbounded cache
-//      entries and evicts the zone's real ones. The allow-list bounds an image at 5 keys (original
-//      + 4 widths) — permanently, not per-attacker.
+//      entries and evicts the zone's real ones. The allow-list bounds an image at 7 keys (original
+//      + 6 widths) — permanently, not per-attacker.
 //
-// Widths chosen from the two real consumers (see the `sizes` derivations in ProductCard.astro and
-// produk/[handle].astro): a card is 156-296 CSS px and a PDP main image 260-492 CSS px. So 200 and
-// 400 cover cards at DPR 1-2, 800 covers a card at DPR 3 and the PDP at DPR 2, and 1200 covers the
-// PDP at DPR 3. Above that the 2000px original is the answer and there is nothing to serve.
-const WIDTHS = [200, 400, 800, 1200] as const;
+// Widths chosen from the real consumers (see the `sizes` derivations in ProductCard.astro and
+// produk/[handle].astro): a card is 156-296 CSS px, a PDP thumbnail 80-112 px and a PDP main image
+// 260-492 CSS px. So 200 and 400 cover thumbnails and cards at DPR 1-3, 800 covers a card at DPR 3
+// and the PDP at DPR 2, and 1200 covers the PDP at DPR 3.
+//
+// ⚠️ **1600 + 2000 exist for the FULL-BLEED case, and they must stay.** `saveImage` caps the long
+// edge at MAX_DIM = 2000, so those are the last two real renditions. Before they were added, 1200 was
+// a hard ceiling — an out-of-list `w` 400s — so a merchant's uploaded HERO (`sizes="100vw"`) on a
+// 1920px desktop, or a 412px phone at DPR 3, got a 1200px file stretched while their 2000px original
+// sat on disk unreachable. Adding them costs nothing on the small consumers: `sizes` decides the pick,
+// and every consumer of `imageSrcSet` sets one (checked — a missing `sizes` defaults to 100vw and
+// WOULD now pull 2000). Nothing here upscales, so `?w=2000` on a 1000px source is just the original.
+//
+// ⚠️ This list and `WIDTHS` in `apps/storefront/src/data/catalog.ts` are ONE decision in two files:
+// a width offered there and missing here is a 400 the browser may pick as its best candidate.
+const WIDTHS = [200, 400, 800, 1200, 1600, 2000] as const;
 
 // An out-of-list `w` is REJECTED (400), not silently ignored. Serving the original would be the
 // friendlier-looking choice and it is the wrong one: `?w=1` would then still be a valid URL that

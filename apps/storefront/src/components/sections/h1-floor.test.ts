@@ -31,8 +31,22 @@ describe("the homepage h1 floor", () => {
 
   it("index.astro renders the floor, and only when no hero is in the template", () => {
     const src = readFileSync(INDEX, "utf8");
-    // The predicate must key on the same section type the test above pinned.
-    expect(src).toMatch(/TEMPLATE_HAS_HEADING\s*=\s*!!HOMEPAGE_TEMPLATE\?\.content\.some\(\(s\) => s\.type === "hero"\)/);
+    // The predicate must key on the same section type the test above pinned…
+    expect(src).toMatch(/TEMPLATE_HAS_HEADING\s*=\s*!!HOMEPAGE_TEMPLATE\?\.content\.some\(/);
+    expect(src).toMatch(/s\.type === "hero"/);
     expect(src).toMatch(/!TEMPLATE_HAS_HEADING && <h1 class="sr-only">/);
+  });
+
+  // The floor and Hero's own `<h1>` are two halves of ONE predicate: "does a slide have a heading".
+  // `heroSlides()` keeps a slide with an `imageUrl` and no heading, so a hero CAN carry no words —
+  // and `s.type === "hero"` alone would then suppress the floor over a page with nothing to head it.
+  // If either half stops asking about the heading text, the pair silently disagrees: zero `<h1>` on a
+  // pictorial hero, or two on an ordinary one. Both are green in the build, lint and `astro check`.
+  it("both halves key on a slide that actually has a heading", () => {
+    expect(readFileSync(INDEX, "utf8")).toMatch(/heroSlides\(s\.props\)\.some\(\(sl\) => \(sl\.heading \?\? ""\)\.trim\(\) !== ""\)/);
+    const hero = readFileSync(join(SECTIONS, "Hero.astro"), "utf8");
+    expect(hero).toMatch(/HEADING_INDEX = slides\.findIndex\(\(s\) => \(s\.heading \?\? ""\)\.trim\(\) !== ""\)/);
+    // …and exactly one slide may render as the heading.
+    expect(hero).toMatch(/i === HEADING_INDEX \?/);
   });
 });
