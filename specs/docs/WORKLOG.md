@@ -77,7 +77,14 @@ rows.** N6 closed (the client target is already `esnext`, `dist/client` has zero
 Meta's `fbevents.js`), N12 closed, N4 diagnosed (the carousel's autoplay), N3 answered and recommended for
 retirement as a KPI.
 
-## 2026-08-01 — Session: working the NEXT.md queue, and the two entries that were wrong about themselves
+## 2026-08-01 — Session: working the NEXT.md queue, and the two entries that were wrong about themselves ✅ `#127` — merged (`dd2129d`) + **deployed and verified in production**
+
+**Deploy verified by the change itself, not by a 200.** The storefront answered 200 all the way through
+a build that had not landed yet, then went 503 during the container swap and back to 200 with the new
+code. The signal that actually proves it: `toko.tokophi.com/sitemap.xml` went **15 → 21 `<lastmod>`**
+(the 6 `/halaman/*` entries), while `/produk/*` and `/kategori/*` stayed at **0** — which is the
+deliberate half of N13. Surfaces after: `toko.` 200 · apex 200 · `app.` 307 (login) · `rich.` 307
+(login). Homepage still renders 3 `<h1>`s — N14 is real, filed, and not fixed here.
 
 **Handoff:** [`tasks/2026-08-01-next-queue-n9-n13.md`](./tasks/2026-08-01-next-queue-n9-n13.md) ·
 **Follow-ups:** [`tasks/2026-08-01-followups-n5-n14.md`](./tasks/2026-08-01-followups-n5-n14.md) ·
