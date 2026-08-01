@@ -16,13 +16,21 @@ let applyOrderStatusChange: (typeof import("./order-status"))["applyOrderStatusC
 // impossibility" claim — a claim ABOUT the database, only provable by asking the database.
 //
 // ISOLATION: every test runs inside a transaction that is ALWAYS rolled back, so nothing is committed
-// and the run cannot pollute anything. It needs an isolated DB — set TEST_DATABASE_URL to a throwaway
-// database (NEVER the shared dev DB — see CLAUDE.md). Without it, the suite SKIPS rather than fails, so
-// `vitest run` stays green on a machine with no test DB.
+// and the run cannot pollute anything. It needs an isolated DB — never the shared dev one (see
+// CLAUDE.md: truncating it costs whoever else is mid-verification their afternoon, silently).
 //
-//   docker exec <db> psql -U tokophi -d postgres -c 'CREATE DATABASE tokophi_test'
-//   DATABASE_URL=postgresql://tokophi:tokophi@localhost:5433/tokophi_test npx drizzle-kit migrate # in packages/db
-//   TEST_DATABASE_URL=postgresql://tokophi:tokophi@localhost:5433/tokophi_test npx vitest run apps/admin/lib/ledger-credit.test.ts
+// ⚠️ THIS NO LONGER NEEDS A MANUAL SETUP, and that is deliberate. It used to say "set
+// TEST_DATABASE_URL by hand, otherwise the suite skips so `vitest run` stays green" — and the
+// consequence was that these 22 tests **never ran**: not in anyone's default run, and there is no CI
+// here either. A test nobody runs is documentation. `test/db-setup.ts` (a vitest globalSetup) now
+// derives `<DATABASE_URL>_test`, creates it if absent, migrates it to head and exports
+// TEST_DATABASE_URL, so `npm test` runs this suite on any machine where the dev container is up.
+//
+// It still SKIPS — loudly, with a banner naming the reason — when the database is unreachable, so a
+// laptop with no Docker gets a green run rather than a wall of noise. Use `npm run test:db` when a
+// skip must be a failure instead (before a PR, or anywhere this suite is the point).
+//
+// An explicit TEST_DATABASE_URL still wins, and the setup REFUSES any name not ending in `_test`.
 
 const URL = process.env.TEST_DATABASE_URL;
 const suite = URL ? describe : describe.skip;
