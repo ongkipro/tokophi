@@ -176,7 +176,17 @@ export function TokoClient({
     startTransition(async () => {
       const r = await createStore({ name: nsName, ownerName: nsOwner, email: nsEmail, city: nsCity });
       if (r.ok && r.storeId) {
-        toast.success(`Toko “${nsName}” dibuat.`);
+        // The owner's password is random and shown ONCE — it is not stored anywhere readable and
+        // there is no "resend" (only a reset, from the store detail). We navigate to the store right
+        // after, so this must NOT be a dialog on this screen: the toast lives in the root layout and
+        // survives the push, and it stays until dismissed. Same hand-over as `invitePlatformAdmin`.
+        toast.success(`Toko “${nsName}” dibuat.`, {
+          description: r.password
+            ? `Login pemilik: ${nsEmail} · password sementara: ${r.password} — salin sekarang, tidak bisa dilihat lagi.`
+            : undefined,
+          duration: Infinity,
+          closeButton: true,
+        });
         setCreateOpen(false);
         setNsName(""); setNsOwner(""); setNsEmail(""); setNsCity("");
         router.push(`/toko/${r.storeId}`);
@@ -218,7 +228,7 @@ export function TokoClient({
                 <Label htmlFor="ns-email">Email pemilik</Label>
                 <Input id="ns-email" type="email" value={nsEmail} onChange={(e) => setNsEmail(e.target.value)} placeholder="owner@toko.id" />
               </div>
-              <p className="text-xs text-muted-foreground">Toko baru mulai <span className="font-medium">Trial 3 hari</span> paket TokoΦ. Password pemilik awal: <span className="font-mono">tokophi123</span>.</p>
+              <p className="text-xs text-muted-foreground">Toko baru mulai <span className="font-medium">Trial 3 hari</span> paket TokoΦ. Password pemilik dibuat <span className="font-medium">acak</span> dan hanya ditampilkan sekali setelah toko dibuat — salin lalu berikan ke pemilik.</p>
             </div>
             <DialogFooter>
               <DialogClose render={<Button variant="outline">Batal</Button>} />
