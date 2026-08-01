@@ -1,6 +1,7 @@
 import { schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { settleOrderLedger, type Db } from "./ledger-credit";
+import { defaultInventoryLevelId } from "./inventory-location";
 
 export type OrderStatus = "baru" | "diproses" | "dikirim" | "selesai" | "batal" | "retur";
 
@@ -70,23 +71,17 @@ export async function applyOrderStatusChange(
       // Restore to ONE row (the default location), mirroring the create-path decrement — a bare
       // `where variant_id = X` adds qty to EVERY location row, inflating stock N× under multi-location.
       //
-      // 🔴 `loc.store_id = ${storeId}` IS THE TENANT BOUNDARY — the CHILD-TABLE RULE (AGENTS.md).
-      // `inventory_levels` has no `store_id`, so RLS cannot scope it, and this is the ONE copy of the
-      // default-location expression reachable from `ka-tracking.ts`, which runs on the OWNER
-      // connection where RLS is off entirely. Without this the `locations` join protects nothing: it
-      // only picks a row, it does not prove whose row it is, and `is_default desc` would happily
-      // prefer another store's default location. Do not "simplify" the join away, and do not assume
-      // the wrapper scoped it — one of this expression's four call paths has no wrapper.
-      await db
-        .update(schema.inventoryLevels)
-        .set({ available: sql`${schema.inventoryLevels.available} + ${l.qty}` })
-        .where(sql`${schema.inventoryLevels.id} = (
-          select il.id from inventory_levels il
-          join locations loc on loc.id = il.location_id
-          where il.variant_id = ${l.variantId} and loc.store_id = ${storeId}
-          order by loc.is_default desc, il.id
-          limit 1
-        )`);
+      // 🔴 The `storeId` argument IS THE TENANT BOUNDARY — the CHILD-TABLE RULE (AGENTS.md) — and
+      // this path is why the helper takes it rather than reading it from a session: `ka-tracking.ts`
+      // reaches here on the OWNER connection, where RLS is off entirely. See
+      // `lib/inventory-location.ts`. (This used to be hand-written SQL here, and it was the ONLY one
+      // of the expression's five copies that carried the filter at all.)
+      const invId = await defaultInventoryLevelId(db, l.variantId, storeId);
+      if (invId)
+        await db
+          .update(schema.inventoryLevels)
+          .set({ available: sql`${schema.inventoryLevels.available} + ${l.qty}` })
+          .where(eq(schema.inventoryLevels.id, invId));
     }
 
     // fail any still-pending payment so a cancelled/returned order can't be marked paid later. For a

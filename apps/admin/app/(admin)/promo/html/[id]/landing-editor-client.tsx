@@ -60,7 +60,13 @@ export function LandingEditorClient({ editor }: { editor: LandingEditor }) {
   function remove() {
     if (!editor.id) return;
     startDelete(async () => {
-      await deleteLanding(editor.id!);
+      // The other half of `deleteLanding`'s return type. Navigating away on a delete that matched
+      // nothing is the failure that conversion exists to stop — same shape as `save()` above.
+      const res = await deleteLanding(editor.id!);
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menghapus");
+        return;
+      }
       toast.success("Landing dihapus");
       router.push("/promo");
     });

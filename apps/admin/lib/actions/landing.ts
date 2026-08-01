@@ -123,8 +123,19 @@ export async function saveLanding(input: LandingInput): Promise<{ ok: boolean; e
   return res;
 }
 
-export async function deleteLanding(id: string): Promise<void> {
+// REPORT WHAT WAS DELETED, NOT WHAT WAS ASKED FOR (AGENTS.md — the `markLabelsPrinted` rule).
+//
+// `saveLanding` above already returns `{ ok, error }`; this one returned `void`, so the editor
+// toasted "Landing dihapus" and navigated away no matter what happened. An id belonging to another
+// store is filtered out by RLS and deletes NOTHING — with no error, because a DELETE matching zero
+// rows is not an error — and a second click on a stale tab does the same. Both reported success over
+// a row that is still there. `.returning()` is the only honest source.
+export async function deleteLanding(id: string): Promise<{ ok: boolean; error?: string }> {
   const { storeId } = await requireCapability("content:write");
-  await withTenant(storeId, (db) => db.delete(schema.landingPages).where(eq(schema.landingPages.id, id)));
+  const deleted = await withTenant(storeId, (db) =>
+    db.delete(schema.landingPages).where(eq(schema.landingPages.id, id)).returning({ id: schema.landingPages.id }),
+  );
+  if (!deleted.length) return { ok: false, error: "Landing tidak ditemukan — mungkin sudah dihapus." };
   revalidatePath("/promo");
+  return { ok: true };
 }

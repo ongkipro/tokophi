@@ -1,10 +1,11 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 import { allocateProductNumber, allocateVariantSeq } from "@/lib/catalog-numbering";
+import { defaultInventoryLevelId, defaultLocationId } from "@/lib/inventory-location";
 
 export type VariantInput = {
   option1?: string | null;
@@ -88,7 +89,7 @@ export async function createProduct(input: ProductInput): Promise<{ id: string; 
       .values({ storeId: sid, hasVariants: usesVariants(input), number, variantSeqNext: rows.length + 1, ...productFields(input) })
       .returning();
     // Default location, not just any: new inventory rows must land where the merchant actually stocks.
-    const [loc] = await db.select({ id: schema.locations.id }).from(schema.locations).where(eq(schema.locations.storeId, sid)).orderBy(desc(schema.locations.isDefault), asc(schema.locations.id)).limit(1);
+    const locId = await defaultLocationId(db, sid);
 
     if (usesVariants(input)) {
       await db.insert(schema.productOptions).values(input.options!.map((o, i) => ({ productId: p.id, name: o.name, position: i })));
@@ -106,7 +107,7 @@ export async function createProduct(input: ProductInput): Promise<{ id: string; 
           priceIdr: v.price, sku: v.sku || null, compareAtIdr: input.compareAt ?? null, costIdr: input.cost ?? null, weightGrams: input.weightGrams ?? null,
         })
         .returning();
-      if (loc) await db.insert(schema.inventoryLevels).values({ variantId: nv.id, locationId: loc.id, available: v.stock });
+      if (locId) await db.insert(schema.inventoryLevels).values({ variantId: nv.id, locationId: locId, available: v.stock });
     }
     // NO fabricated media row. This used to insert `/products/<handle>.webp` — a filename the merchant
     // never uploaded and which only exists for the 12 seeded demo products. Every Seller-created product
@@ -132,7 +133,7 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
     if (!owned) return null;
     await db.update(schema.products).set({ ...productFields(input), hasVariants: usesVariants(input) }).where(eq(schema.products.id, id));
     // Default location, not just any: new inventory rows must land where the merchant actually stocks.
-    const [loc] = await db.select({ id: schema.locations.id }).from(schema.locations).where(eq(schema.locations.storeId, sid)).orderBy(desc(schema.locations.isDefault), asc(schema.locations.id)).limit(1);
+    const locId = await defaultLocationId(db, sid);
 
     // rebuild option definitions (no FK dependents)
     await db.delete(schema.productOptions).where(eq(schema.productOptions.productId, id));
@@ -152,17 +153,9 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
       return !!r;
     };
     const setInventory = async (variantId: string, available: number) => {
-      // Default-location row, explicitly: an unordered limit(1) writes the editor's stock number into
-      // an ARBITRARY warehouse once a store has more than one location.
-      const [inv] = await db
-        .select({ id: schema.inventoryLevels.id })
-        .from(schema.inventoryLevels)
-        .innerJoin(schema.locations, eq(schema.locations.id, schema.inventoryLevels.locationId))
-        .where(eq(schema.inventoryLevels.variantId, variantId))
-        .orderBy(desc(schema.locations.isDefault), asc(schema.inventoryLevels.id))
-        .limit(1);
-      if (inv) await db.update(schema.inventoryLevels).set({ available }).where(eq(schema.inventoryLevels.id, inv.id));
-      else if (loc) await db.insert(schema.inventoryLevels).values({ variantId, locationId: loc.id, available });
+      const invId = await defaultInventoryLevelId(db, variantId, sid);
+      if (invId) await db.update(schema.inventoryLevels).set({ available }).where(eq(schema.inventoryLevels.id, invId));
+      else if (locId) await db.insert(schema.inventoryLevels).values({ variantId, locationId: locId, available });
     };
 
     const keptKeys = new Set<string>();

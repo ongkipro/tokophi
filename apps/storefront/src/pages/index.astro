@@ -156,13 +156,35 @@ const HEAD = [
 // where the length belongs.
 const TAGLINE = store.tagline?.trim() ?? "";
 const HOME_TITLE = TAGLINE && TAGLINE.length <= 60 ? TAGLINE : "Belanja Online";
+
+// ── THE <h1> FLOOR ───────────────────────────────────────────────────────────────────────────────
+//
+// `Hero` is the ONLY section in the registry that emits an `<h1>` (checked: every other one starts at
+// `<h2>`, and Multicolumn's mention of `<h1>` is a comment). So a merchant who builds a homepage in
+// the Store Builder without dragging a Hero onto it ships the shop's most important page with **no
+// top-level heading at all** — no document outline for a screen reader to jump into, and nothing for
+// a crawler to read as the page's subject.
+//
+// Same defect `CategoryHero` had, and the same fix in spirit: the category page now ALWAYS renders
+// its header, so a template cannot cost the page its `<h1>`. The homepage has no such component to
+// always render — the template IS the page — so the floor is a visually-hidden heading instead. It is
+// hidden because the merchant designed this page: injecting a visible headline they did not write
+// would be us editing their homepage, which is the thing the fallback-hero comment above refuses to do.
+//
+// Deliberately NOT rendered when a Hero is present, even though Hero emits one `<h1>` PER SLIDE (a
+// multi-slide carousel therefore publishes several — a real, pre-existing a11y defect, tracked
+// separately). Adding a second one here would deepen that, not fix it.
+const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some((s) => s.type === "hero");
 ---
 
 <Layout title={HOME_TITLE} description={SUMMARY} head={HEAD}>
   {
     HOMEPAGE_TEMPLATE ? (
       <!-- ADR 0009: merchant-built homepage (Store Builder) -->
-      <SectionRenderer data={HOMEPAGE_TEMPLATE} />
+      <Fragment>
+        {!TEMPLATE_HAS_HEADING && <h1 class="sr-only">{store.name}</h1>}
+        <SectionRenderer data={HOMEPAGE_TEMPLATE} />
+      </Fragment>
     ) : (
       <Fragment>
   <!-- Hero — the registry section (see components/sections/Hero.astro), seeded with its defaults -->

@@ -1,9 +1,10 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
+import { defaultInventoryLevelId } from "@/lib/inventory-location";
 
 // Set available stock on each product's default variant. `expected` is the value the editor loaded;
 // when given, the write is OPTIMISTICALLY guarded — if the row no longer holds `expected`, a sale or
@@ -25,25 +26,19 @@ export async function updateStock(
         .where(and(eq(schema.productVariants.productId, u.productId), eq(schema.productVariants.position, 0)))
         .limit(1);
       if (!v) { skipped++; continue; }
-      // Which row to touch (default location) — this choice doesn't change under concurrency.
-      const [target] = await db
-        .select({ id: schema.inventoryLevels.id })
-        .from(schema.inventoryLevels)
-        .innerJoin(schema.locations, eq(schema.locations.id, schema.inventoryLevels.locationId))
-        .where(eq(schema.inventoryLevels.variantId, v.id))
-        .orderBy(desc(schema.locations.isDefault), asc(schema.inventoryLevels.id))
-        .limit(1);
-      if (!target) { skipped++; continue; }
+      // Which row to touch (default location, this store's) — this choice doesn't change under concurrency.
+      const targetId = await defaultInventoryLevelId(db, v.id, sid);
+      if (!targetId) { skipped++; continue; }
       // Lock the row, then compare to `expected` — a concurrent sale can't slip between read and write.
       const [inv] = await db
         .select({ available: schema.inventoryLevels.available })
         .from(schema.inventoryLevels)
-        .where(eq(schema.inventoryLevels.id, target.id))
+        .where(eq(schema.inventoryLevels.id, targetId))
         .for("update")
         .limit(1);
       if (!inv) { skipped++; continue; }
       if (typeof u.expected === "number" && inv.available !== u.expected) { skipped++; continue; }
-      await db.update(schema.inventoryLevels).set({ available: Math.max(0, Math.round(u.available)) }).where(eq(schema.inventoryLevels.id, target.id));
+      await db.update(schema.inventoryLevels).set({ available: Math.max(0, Math.round(u.available)) }).where(eq(schema.inventoryLevels.id, targetId));
       updated++;
     }
   });

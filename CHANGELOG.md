@@ -2,6 +2,62 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — The default-location expression had five copies and one tenant filter
+
+Working the `NEXT.md` queue (N9, N10, N11, N13). Two of its entries rested on claims that are not
+true, and the measurements at the end overturned two more.
+
+### 🔴 Four of the five copies had no tenant boundary
+
+`inventory_levels` has no `store_id`, so RLS cannot scope it. The `locations` join **picks** a row; it
+does not prove whose. Counted on `origin/main`: `purchases.ts` (2 copies), `inventory.ts` (1) and
+`products.ts` (3) carried **zero** `locations.storeId` between them — only the raw-SQL copy in
+`order-status.ts` was guarded. A `variantId` belonging to another store — a PO line, a bulk stock save
+— therefore resolved to **their** shelf and the write landed there, with no error in either direction.
+
+Now one helper, `apps/admin/lib/inventory-location.ts`, with `storeId` as a required parameter (one
+call path — `order-status.ts` ← the courier webhook — runs on the OWNER connection and has no session
+to read it from). `inventory-location.test.ts` scans the tree and fails on a sixth copy; confirmed it
+flags the pre-change files.
+
+⚠️ `defaultInventoryLevelId` returning `null` is **ambiguous** — "not stocked yet" and "not ours" look
+identical. Skip on `null` unless you have separately proved ownership, as `updateProduct` does.
+
+### `deleteLanding` reported success over a delete that matched nothing
+
+It returned `void`, so the editor toasted "Landing dihapus" and navigated away regardless. A DELETE
+matching zero rows is not an error — a foreign id is filtered out by RLS in silence, and so is a second
+click on a stale tab. `.returning()` decides now; the caller reads it, in the same commit.
+
+### A builder homepage with no Hero shipped zero `<h1>`
+
+`Hero` is the only section that emits one. `index.astro` now renders `<h1 class="sr-only">{store.name}</h1>`
+when the template holds no `hero` — hidden, because the merchant designed that page. Driven over HTTP
+against a real build and the real DB: 1 `<h1>` without a hero, the hero's own with one.
+
+⚠️ **Found, not fixed:** `Hero` emits one `<h1>` **per slide**, so every store's homepage currently
+ships **three** (confirmed on production). Tracked as N14.
+
+### Sitemap `<lastmod>` where the data supports it
+
+`/halaman/*` now carries it — `pages.updated_at` exists and every save moves it. Products and
+categories **cannot**: `products` has only `created_at` and `collections` has no timestamp column at
+all, so the only date available is one that never changes, and Google distrusts an unreliable
+`<lastmod>` for the whole document. The sitemap says so in the file. 55 URLs, 21 `<lastmod>`.
+
+### The measurements (8 runs, production)
+
+- **Desktop: median 100, range 90–100** (n=5), TBT 0 ms throughout — N3 answered. Run 1 is always the
+  cold one; that is the whole of the old 66–92 spread.
+- **Mobile: median 92, range 82–95** (n=3).
+- 🔴 **N7 reversed.** The bimodality is real (TBT 0 → 395 ms) and it happens with **no vendor pixel
+  bundle loading at all** — the only two scripts on the page are Cloudflare's. Removing the `scroll`
+  trigger would cost real tracking and buy nothing.
+- ✅ **N6 closed.** `unused-javascript` and `legacy-javascript` pass with **0 bytes** in all 8 runs, and
+  its suggested cause was impossible: `dist/client/_astro/` holds one CSS file and **zero `.js`**.
+- **N5 (`dom-size` 992) is now the only performance item with evidence behind it** —
+  `mainthread-work-breakdown` 3,4 s against `bootup-time` 0,5 s is style/layout, not script.
+
 ## Unreleased — Pixels load on interaction now, and that is a trade the owner made
 
 `requestIdleCallback` was firing at ~2 s on a fast connection, so all three vendor bundles still
