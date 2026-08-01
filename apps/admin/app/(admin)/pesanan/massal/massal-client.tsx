@@ -117,8 +117,20 @@ export function MassalClient({ data, filters }: { data: BulkShippingResult; filt
       if (!w) { toast.error("Popup diblokir browser — izinkan popup untuk mencetak."); return; }
       w.document.write(html); w.document.close(); w.focus(); w.print();
       // "Ditandai dicetak", not "berhasil dicetak": we opened the dialog, we cannot see the printer.
-      await markLabelsPrinted(printedNumbers);
-      toast.success(`${printedNumbers.length} label ditandai dicetak.`);
+      //
+      // ⚠️ Report what we WROTE, never what we asked to write. `markLabelsPrinted` returns the row
+      // count its UPDATE actually matched (`.returning()`) — a number that matched nothing, e.g. an
+      // order belonging to another store (RLS filters it out, no error) or one since deleted, is NOT
+      // stamped. The action was fixed to stop lying about that; toasting `printedNumbers.length` here
+      // told the same lie one layer up, and those orders stay behind the "Belum dicetak" filter until
+      // the merchant finds out at the drop-off point.
+      const { done } = await markLabelsPrinted(printedNumbers);
+      if (done < printedNumbers.length)
+        toast.warning(`${done} dari ${printedNumbers.length} label ditandai dicetak.`, {
+          description: `${printedNumbers.length - done} pesanan tidak bisa ditandai — nomornya tidak ditemukan di toko ini. Labelnya ikut tercetak, tapi statusnya masih “Belum dicetak”.`,
+          duration: 12000,
+        });
+      else toast.success(`${done} label ditandai dicetak.`);
       if (missed.size)
         toast.warning(`${missed.size} pesanan dilewati — resi belum terbit`, {
           description: `Tidak ikut tercetak dan TIDAK ditandai dicetak: ${[...missed].slice(0, 5).join(", ")}${missed.size > 5 ? `, +${missed.size - 5} lagi` : ""}. Klik “Ambil resi” dulu, lalu cetak ulang pesanan tersebut.`,

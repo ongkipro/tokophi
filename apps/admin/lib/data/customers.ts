@@ -4,9 +4,11 @@ import { withCurrentTenant } from "@/lib/tenant";
 import { desc, eq, sql } from "drizzle-orm";
 import type { Customer, Order } from "@/lib/mock/store";
 
-const ADMIN_TODAY = new Date("2026-06-30T00:00:00Z");
-// Same anchor as `lib/data/orders.ts` so relative times match the Pesanan screens.
-const ORDERS_TODAY = new Date("2026-07-02T00:00:00Z");
+// ⚠️ THE REAL CLOCK, in both places below. These were frozen to the seed's frames (`2026-06-30` for
+// the customer, `2026-07-02` to "match the Pesanan screens"), so the detail page rendered "Pelanggan
+// sejak −32 hari lalu" — a negative age — for anyone who signed up after the seed was written, and
+// every real order read "baru saja" forever. `lib/data/orders.ts` is on the real clock too, so the
+// two screens still agree. The seed may be anchored; the app is not.
 
 // A customer, plus the one fact the flat mock shape never carried: does this person have an ACCOUNT?
 //
@@ -35,15 +37,15 @@ function toCustomer(r: {
     orders: r.ordersCount,
     spent: r.totalSpentIdr,
     segment: r.segment,
-    joinedDaysAgo: Math.round((ADMIN_TODAY.getTime() - r.createdAt.getTime()) / 86_400_000),
+    joinedDaysAgo: Math.round((Date.now() - r.createdAt.getTime()) / 86_400_000),
     tags: (r.tags as string[] | null) ?? undefined,
     notes: r.notes ?? undefined,
     registered: r.registeredAt != null,
     registeredDaysAgo: r.registeredAt
-      ? Math.round((ADMIN_TODAY.getTime() - r.registeredAt.getTime()) / 86_400_000)
+      ? Math.round((Date.now() - r.registeredAt.getTime()) / 86_400_000)
       : null,
     lastOrderMinutesAgo: r.lastOrderAt
-      ? Math.max(0, Math.round((ORDERS_TODAY.getTime() - r.lastOrderAt.getTime()) / 60_000))
+      ? Math.max(0, Math.round((Date.now() - r.lastOrderAt.getTime()) / 60_000))
       : null,
   };
 }
@@ -97,7 +99,7 @@ export async function getCustomerOrders(customerId: string): Promise<CustomerOrd
         items: r.items,
         status: r.status,
         channel: r.channel,
-        minutesAgo: Math.round((ORDERS_TODAY.getTime() - r.placedAt.getTime()) / 60_000),
+        minutesAgo: Math.round((Date.now() - r.placedAt.getTime()) / 60_000),
         awb: r.awb,
         courierName: r.courier,
       }))

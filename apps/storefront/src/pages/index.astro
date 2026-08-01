@@ -8,7 +8,7 @@ import ProductCard from "../components/ProductCard.astro";
 import SectionHeading from "../components/SectionHeading.astro";
 import SectionRenderer from "../components/sections/SectionRenderer.astro";
 import Hero from "../components/sections/Hero.astro";
-import type { HeroConfig } from "@tokophi/sections";
+import { heroSlides, type HeroConfig } from "@tokophi/sections";
 import { storeCodEnabled, enabledPaymentChannels, mediaUrl } from "../data/catalog";
 import { ldScript } from "../lib/breadcrumb";
 
@@ -171,10 +171,18 @@ const HOME_TITLE = TAGLINE && TAGLINE.length <= 60 ? TAGLINE : "Belanja Online";
 // hidden because the merchant designed this page: injecting a visible headline they did not write
 // would be us editing their homepage, which is the thing the fallback-hero comment above refuses to do.
 //
-// Deliberately NOT rendered when a Hero is present, even though Hero emits one `<h1>` PER SLIDE (a
-// multi-slide carousel therefore publishes several — a real, pre-existing a11y defect, tracked
-// separately). Adding a second one here would deepen that, not fix it.
-const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some((s) => s.type === "hero");
+// ⚠️ "a hero is present" is NOT the condition — "a hero that actually says something" is. The
+// predicate goes through `heroSlides()` for two reasons, and both are live shapes:
+//   · a hero saved before the carousel keeps its headline in the legacy flat `heading` field, so
+//     reading `props.slides` directly would see an empty carousel on a hero that has a heading;
+//   · `heroSlides()` deliberately KEEPS a slide that has an `imageUrl` and no heading, so a purely
+//     pictorial hero carries no words at all. Keying on `type === "hero"` would suppress the floor
+//     for that page and leave the homepage with no heading — exactly the defect this is here for.
+// `Hero` emits its `<h1>` on the first slide that has a heading and none when no slide does, i.e.
+// on this same predicate — so the two together always produce exactly one, never zero and never two.
+const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some(
+  (s) => s.type === "hero" && heroSlides(s.props).some((sl) => (sl.heading ?? "").trim() !== ""),
+);
 ---
 
 <Layout title={HOME_TITLE} description={SUMMARY} head={HEAD}>

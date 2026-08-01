@@ -26,6 +26,7 @@ import { applyDiscount } from "@/lib/promo";
 import { activeFlashPrices } from "@/lib/flash";
 import { clientContextFromRequest, enqueuePurchase } from "@/lib/tracking-events";
 import { adChannel } from "@/lib/ad-channel";
+import { defaultInventoryLevelId } from "@/lib/inventory-location";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the
@@ -58,30 +59,33 @@ type Item = { handle?: string; name?: string; price?: number; variant?: string; 
 const bad = (error: string, field?: string, status = 400) =>
   NextResponse.json({ ok: false, error, field }, { status, headers: CORS });
 
-/**
- * The ONE `inventory_levels` row a sale touches: the variant's row at the DEFAULT location.
- *
- * ⚠️ This must stay the single definition, used by the availability pre-check, the `FOR UPDATE`
- * re-check AND the decrement. b1f3603 narrowed only the DECREMENT to this row (a `where variant_id
- * = X` update hit every location row, over-decrementing N× once a variant lives in two warehouses)
- * — but both checks kept aggregating `sum(available)` across ALL locations. That is a read/write
- * mismatch: a variant with 0 at the default location and 5 at warehouse B passes both checks, the
- * decrement drives the DEFAULT row negative, and B's 5 units are never consumed. The cross-location
- * TOTAL stays arithmetically right, which is exactly why it would be slow to notice — the totals
- * reconcile while the per-location ledger is fiction, and the negative row (deliberately unclamped,
- * see the decrement) fires as an oversell alarm on a variant that was never oversold.
- *
- * Identical on today's data: every store has exactly one location, so this row IS the whole sum.
- * Real cross-warehouse fulfilment (pick the location, split the shipment) is a later feature; until
- * then the rule is simply that what we check is what we write.
- */
-const defaultLocationRow = (variantId: string) => sql`${schema.inventoryLevels.id} = (
-  select il.id from inventory_levels il
-  join locations loc on loc.id = il.location_id
-  where il.variant_id = ${variantId}
-  order by loc.is_default desc, il.id
-  limit 1
-)`;
+// ── THE ONE `inventory_levels` ROW A SALE TOUCHES ────────────────────────────────────────────────
+//
+// The variant's row at the store's DEFAULT location, resolved by `defaultInventoryLevelId`
+// (`lib/inventory-location.ts`) — the shared definition every stock writer in the admin now uses.
+// This file used to hold a SIXTH hand-written copy of that expression, and it was the one copy that
+// carried NO `store_id` predicate at all.
+//
+// 🔴 That mattered most HERE. This route has no session, so it runs on the OWNER connection with RLS
+// off, and `inventory_levels` has no `store_id` for RLS to scope even when it is on (AGENTS.md, THE
+// CHILD-TABLE RULE). The `locations` join only PICKS a row; it does not prove whose row it is, and
+// `is_default desc` prefers whichever store's default warehouse sorts first. `store.id` is the
+// boundary, and it is not optional.
+//
+// ⚠️ ONE row for the availability pre-check, the `FOR UPDATE` re-check AND the decrement — the last
+// two now literally by id, resolved once under the lock, so check and write cannot disagree.
+// b1f3603 narrowed only the DECREMENT to this row (a `where variant_id = X` update hit every
+// location row, over-decrementing N× once a variant lives in two warehouses) — but both checks kept
+// aggregating `sum(available)` across ALL locations. That is a read/write mismatch: a variant with 0
+// at the default location and 5 at warehouse B passes both checks, the decrement drives the DEFAULT
+// row negative, and B's 5 units are never consumed. The cross-location TOTAL stays arithmetically
+// right, which is exactly why it would be slow to notice — the totals reconcile while the
+// per-location ledger is fiction, and the negative row (deliberately unclamped, see the decrement)
+// fires as an oversell alarm on a variant that was never oversold.
+//
+// Identical on today's data: every store has exactly one location, so this row IS the whole sum.
+// Real cross-warehouse fulfilment (pick the location, split the shipment) is a later feature; until
+// then the rule is simply that what we check is what we write.
 
 /** Thrown inside the write transaction when a variant sold out between the pre-check and the lock. */
 class OutOfStock extends Error {
@@ -294,13 +298,22 @@ async function handle(req: Request) {
       );
     }
 
-    // The row the decrement will actually touch — NOT `sum(available)` across locations (see
-    // defaultLocationRow). No row at all → 0, same answer the old `coalesce(sum(…), 0)` gave.
-    const [inv] = await db
-      .select({ available: schema.inventoryLevels.available })
-      .from(schema.inventoryLevels)
-      .where(defaultLocationRow(match.id));
-    const available = Number(inv?.available ?? 0);
+    // The row the decrement will actually touch — NOT `sum(available)` across locations (see the
+    // note above the handler). No row at all → 0, same answer the old `coalesce(sum(…), 0)` gave.
+    //
+    // A null from `defaultInventoryLevelId` is ambiguous by contract ("not stocked yet" vs "not
+    // ours"), but this is a READ that only ever REFUSES a sale, and both readings mean the same
+    // thing here: there is nothing of ours to sell. `match.id` is also known to be ours already —
+    // its product was read a few lines up with `storeId = store.id`.
+    let available = 0;
+    const preInvId = await defaultInventoryLevelId(db, match.id, store.id);
+    if (preInvId) {
+      const [inv] = await db
+        .select({ available: schema.inventoryLevels.available })
+        .from(schema.inventoryLevels)
+        .where(eq(schema.inventoryLevels.id, preInvId));
+      available = Number(inv?.available ?? 0);
+    }
     if (available < qty) return bad(`Stok "${prod.title}" tidak mencukupi (sisa ${available}).`, "items");
 
     // A live flash sale price overrides the base, but only DOWNWARD (never raises it — a misconfigured
@@ -576,9 +589,10 @@ async function handle(req: Request) {
       // decremented figure, and loses honestly. No clamp — if this arithmetic can go negative the
       // lock is not doing its job, and silently flooring it is how we stopped finding out.
       //
-      // It locks (and reads) THE ROW THE DECREMENT WILL WRITE — the same `defaultLocationRow`
-      // expression, so check and write can never disagree about which stock is being spent. It used
-      // to lock every location row and sum them, which is a total, not the figure being decremented.
+      // It locks (and reads) THE ROW THE DECREMENT WILL WRITE — literally the same row id, resolved
+      // once here and carried to the decrement below, so check and write can never disagree about
+      // which stock is being spent. It used to lock every location row and sum them, which is a
+      // total, not the figure being decremented.
       // ⚠️ BY VARIANT, NOT BY CART LINE. The lock serialises TRANSACTIONS; it does nothing about two
       // lines of the SAME cart naming the same variant. Both read the same un-decremented `available`
       // (nothing has been written yet), both pass, and the decrement loop below then subtracts twice.
@@ -594,15 +608,35 @@ async function handle(req: Request) {
         if (hit) hit.qty += r.qty;
         else needByVariant.set(r.variantId, { qty: r.qty, title: r.title });
       }
+      // inventory_levels.id → what this order spends from it. Keyed by the LOCKED row, so the
+      // decrement below cannot re-resolve to a different one (two variants can never share a row —
+      // `unique(variant_id, location_id)`).
+      const spend = new Map<string, { qty: number; title: string }>();
       for (const [variantId, need] of [...needByVariant.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-        const locked = await tx
-          .select({ id: schema.inventoryLevels.id, available: schema.inventoryLevels.available })
+        // Resolve tenant-scoped FIRST, then lock THAT id. ⚠️ A null is REFUSED here, never skipped:
+        // this is the gate in front of a stock write, the variant is already known to be this
+        // store's (its product was read with `storeId = store.id`), so "no row" is "no stock" —
+        // exactly the 0 the old missing-row branch produced. Skipping would sell what we do not have.
+        //
+        // The cast is the repo's existing idiom for this: `inventory-location.ts` types its
+        // connection as `Db` (= `typeof rootDb`), and a drizzle `tx` exposes the same query surface
+        // without `$client`. `lib/tenant.ts` (`Tx === Db`) and `ka-tracking.ts` cast identically, so
+        // the resolve runs inside THIS transaction — the same one that then locks the row.
+        const invId = await defaultInventoryLevelId(
+          tx as unknown as Parameters<typeof defaultInventoryLevelId>[0],
+          variantId,
+          store.id,
+        );
+        if (!invId) throw new OutOfStock(need.title, 0);
+        const [locked] = await tx
+          .select({ available: schema.inventoryLevels.available })
           .from(schema.inventoryLevels)
-          .where(defaultLocationRow(variantId))
+          .where(eq(schema.inventoryLevels.id, invId))
           .for("update");
         // At most one row by construction; a missing row is 0 available, exactly as before.
-        const have = Number(locked[0]?.available ?? 0);
+        const have = Number(locked?.available ?? 0);
         if (have < need.qty) throw new OutOfStock(need.title, have);
+        spend.set(invId, need);
       }
 
       // `Date.now().slice(-9)` alone against the GLOBAL `orders_number_unique` constraint: two orders
@@ -659,18 +693,22 @@ async function handle(req: Request) {
         });
       }
 
-      // One decrement per VARIANT, from the same aggregated map the check above used — so what was
+      // One decrement per LOCKED ROW, from the same aggregated map the check above used — so what was
       // verified and what is spent are the same number even when a cart names a variant twice.
-      for (const [variantId, need] of needByVariant) {
+      for (const [invId, need] of spend) {
         // No GREATEST clamp — the rows are locked and re-checked above, so this cannot go negative.
         // Flooring it at 0 is what made an oversell indistinguishable from an honest sell-out.
         // Target ONE row (the default location), not `where variant_id = X`: the latter subtracts qty
         // from EVERY location row of the variant, so the day a variant has stock at two warehouses each
         // sale over-decrements N×. Single-location today, but this is the landmine the schema's
-        // unique(variant,location) is built to allow. Same expression as both checks above.
+        // unique(variant,location) is built to allow.
+        //
+        // This is an UNGUARDED write, so it does not resolve anything: it writes the id the loop
+        // above locked, which is the only place the tenant filter and the stock check happened. No
+        // null can reach here — that loop threw.
         await tx.update(schema.inventoryLevels)
           .set({ available: sql`${schema.inventoryLevels.available} - ${need.qty}` })
-          .where(defaultLocationRow(variantId));
+          .where(eq(schema.inventoryLevels.id, invId));
       }
 
       // Payment row, ATOMIC with the order. Previously both inserts ran AFTER this txn committed, so a

@@ -16,4 +16,11 @@ export default defineConfig({
       "server-only": new URL("./test/stubs/server-only.ts", import.meta.url).pathname,
     },
   },
+  test: {
+    // Resolves + migrates the throwaway `*_test` database and exports TEST_DATABASE_URL, so the
+    // DB-coupled money suites RUN instead of skipping. They skipped by default, which meant 22 tests
+    // over the ledger never ran on anyone's machine — and there is no CI here to notice. See the long
+    // note in the setup file, especially the guard that refuses any database not named `*_test`.
+    globalSetup: ["./test/db-setup.ts"],
+  },
 });

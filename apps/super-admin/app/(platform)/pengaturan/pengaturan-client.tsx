@@ -459,7 +459,7 @@ export function PengaturanClient({
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
-                      <p className="text-xs text-muted-foreground">Password awal: <span className="font-mono">tokophi123</span> (operator ganti setelah masuk).</p>
+                      <p className="text-xs text-muted-foreground">Password awal dibuat <span className="font-medium">acak</span> dan hanya ditampilkan sekali setelah operator ditambahkan — salin lalu berikan, tidak bisa dilihat lagi.</p>
                     </div>
                     <DialogFooter>
                       <DialogClose render={<Button variant="outline">Batal</Button>} />

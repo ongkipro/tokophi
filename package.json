@@ -12,7 +12,8 @@
     "build:admin": "npm run build -w @tokophi/admin",
     "build:super": "npm run build -w @tokophi/super-admin",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:db": "TEST_DB_REQUIRED=1 vitest run"
   },
   "devDependencies": {
     "vitest": "^3.2.7"

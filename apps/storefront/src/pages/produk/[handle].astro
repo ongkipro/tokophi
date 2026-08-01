@@ -97,6 +97,45 @@ const GALLERY_SIZES =
 // no-photo branch below renders the tinted ImageOff frame and no <img> at all.
 const mainSrcSet = gallery.length > 0 ? imageSrcSet(gallery[0]) : undefined;
 
+// ── `sizes` for the THUMBNAIL rail — same derivation, from that button's own classes ──────────────
+//
+// The `<button data-thumb>` has carried a full `data-srcset` ladder all along (the switcher promotes
+// it onto the main image on click), but the visible `<img>` INSIDE the button rendered with a bare
+// `src`: the browser was handed the full-size original for a 66px box. Same family as the hero
+// `data-srcset` that was never promoted (#119/#120) — markup valid, `astro check` green, bytes wrong.
+// Only what the browser actually requests shows it, which is why `scripts/check-pdp-srcset.mjs` is a
+// browser check.
+//
+// Derived from the button's OWN classes, and it needs the THUMBNAIL COUNT — which is why `112px`
+// alone would have been wrong. `flex-1 basis-0` divides the row between all n tiles and `max-w-[7rem]`
+// only CAPS the result, so the tile is 112px at n=1 and 66px at n=5 on a 412px phone (measured, not
+// assumed). Declaring the cap over-claims by 1.7x and costs a whole rung of the ladder.
+//
+//   row (all sizes in thumbnail-bottom; below 640px in thumbnail-left)
+//     container `mx-auto max-w-7xl px-4` = 100vw - 32px, minus `gap-3` x (n-1)
+//     tile      = (100vw - 32 - 12(n-1)) / n   ...until `max-w-[7rem]` binds
+//     the cap binds from  112n + 32 + 12(n-1)  px up, so that is the breakpoint (n=5 -> 640px)
+//   rail (thumbnail-left, 640px up)  `sm:w-20` — a fixed 80px column.
+//
+// Above the cap breakpoint we declare 112px, which is exactly the `max-w` — so the thumbnail-bottom
+// layout inside the md+ two-column grid (narrower than the calc, still capped) is over-declared at
+// worst to the true maximum, never under. NOT `100vw`: the browser trusts `sizes` completely, so an
+// over-claim re-orders the ladder and hands back the bytes this fixes, and an under-claim is a blurry
+// thumbnail — which is why every branch here errs upward, never down.
+const THUMB_GAP = 12; // gap-3
+const THUMB_MAX = 112; // max-w-[7rem]
+const thumbCount = Math.max(1, gallery.length);
+const rowInset = 32 + THUMB_GAP * (thumbCount - 1); // px-4 both sides + the gaps between tiles
+const capFrom = THUMB_MAX * thumbCount + rowInset; // viewport width at which max-w-[7rem] starts binding
+const THUMB_SIZES = [
+  thumbsBeside ? "(min-width: 640px) 80px" : null,
+  // Unreachable (and so omitted) once the cap only binds above the rail breakpoint — n=5 lands exactly there.
+  !thumbsBeside || capFrom < 640 ? `(min-width: ${capFrom}px) ${THUMB_MAX}px` : null,
+  `calc((100vw - ${rowInset}px) / ${thumbCount})`,
+]
+  .filter(Boolean)
+  .join(", ");
+
 // `null` = no published reviews. The page then shows no stars and no review block at all — see
 // data/catalog.ts: the old code invented "4.8 · 187 ulasan" on a catalog holding 5 published reviews.
 const rating = catalog.productRating(product);
@@ -365,7 +404,14 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                     thumbsBeside && "sm:w-full sm:max-w-none sm:flex-none sm:basis-auto",
                   ]}
                 >
-                  <img src={src} alt={`${product.name} — tampilan ${i + 1}`} class="h-full w-full object-cover" loading="lazy" />
+                  <img
+                    src={src}
+                    srcset={imageSrcSet(src)}
+                    sizes={imageSrcSet(src) ? THUMB_SIZES : undefined}
+                    alt={`${product.name} — tampilan ${i + 1}`}
+                    class="h-full w-full object-cover"
+                    loading="lazy"
+                  />
                 </button>
               ))
             }

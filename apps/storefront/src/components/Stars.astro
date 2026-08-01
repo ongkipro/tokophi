@@ -1,6 +1,22 @@
 ---
 // Reusable star rating. Fractional fill via a width-clipped BRAND-coloured overlay over muted
 // outlines — the rating tracks the store's scheme colour (brand-500), not a fixed gold.
+//
+// ⚠️ ONE <svg> PER LAYER, FIVE <path>s INSIDE IT — never five <svg>s in a flex row.
+// This is a DOM-SIZE decision, measured (2026-08-01, N5). Five separate <svg><path> per layer, twice
+// over, plus the flex row that held them, made this component **26 elements per rating**. The
+// homepage renders 12 ratings, so the star widget alone was **312 of its 1023 elements — 30%** while
+// `dom-size` scored 0 at 992. It is 17 now: homepage 1023 → 915 elements, HTML 213.192 → 210.252 B.
+// The five stars are laid out INSIDE the viewBox instead of by flexbox, so the geometry has to be
+// written down rather than left to CSS: the box is in CSS pixels (1 user unit = 1px), each star is
+// `PX` wide, and `GAP` reproduces the `gap-0.5` (2px) gutter the flex row used to draw. The path is
+// authored in a 20×20 box, hence `scale(PX / 20)`.
+// Verified pixel-for-pixel against the old markup on 40 rating widgets across `/`, `/produk`, a PDP
+// (both `sm` and `md`) and a category page: byte-identical crops at DPR 2 and DPR 8, and at DPR 3 a
+// worst case of **2 pixels out of 45.288 differing by 5/255** on the fractional-fill clip edge.
+// ⚠️ Keep the two layers. The fill colour is CSS (`text-line` / `text-brand-500` + `fill-current`) so
+// it follows the merchant's scheme; folding them into one <svg> with a gradient would need literal
+// colour values and per-instance ids, and the rating would stop tracking the store's brand.
 interface Props {
   value: number;
   count?: number;
@@ -12,7 +28,10 @@ const { value, count, size = "sm", showValue = true, class: cls = "" } = Astro.p
 
 const pct = Math.max(0, Math.min(100, (value / 5) * 100));
 const STAR = "M10 1.5l2.6 5.27 5.82.85-4.21 4.1.99 5.79L10 14.77l-5.2 2.73.99-5.79L1.58 7.62l5.82-.85L10 1.5Z";
-const dim = size === "lg" ? "h-5 w-5" : size === "md" ? "h-4 w-4" : "h-3.5 w-3.5";
+// Star edge length in CSS px — the h-3.5 / h-4 / h-5 the five-<svg> row used to carry.
+const PX = size === "lg" ? 20 : size === "md" ? 16 : 14;
+const GAP = 2; // = gap-0.5
+const W = PX * 5 + GAP * 4;
 const text = size === "lg" ? "text-base" : size === "md" ? "text-sm" : "text-xs";
 const stars = [0, 1, 2, 3, 4];
 const label = `Rating ${value.toFixed(1)} dari 5${count != null ? `, ${count} ulasan` : ""}`;
@@ -20,19 +39,13 @@ const label = `Rating ${value.toFixed(1)} dari 5${count != null ? `, ${count} ul
 
 <div class:list={["flex items-center gap-1.5", cls]} role="img" aria-label={label}>
   <div class="relative inline-flex" aria-hidden="true">
-    <div class="flex gap-0.5 text-line">
-      {stars.map(() => (
-        <svg viewBox="0 0 20 20" class:list={[dim, "shrink-0 fill-current"]}>
-          <path d={STAR} />
-        </svg>
-      ))}
-    </div>
-    <div class="absolute inset-0 flex gap-0.5 overflow-hidden text-brand-500" style={`width:${pct}%`}>
-      {stars.map(() => (
-        <svg viewBox="0 0 20 20" class:list={[dim, "shrink-0 fill-current"]}>
-          <path d={STAR} />
-        </svg>
-      ))}
+    <svg width={W} height={PX} viewBox={`0 0 ${W} ${PX}`} class="block shrink-0 fill-current text-line">
+      {stars.map((i) => <path transform={`translate(${i * (PX + GAP)}) scale(${PX / 20})`} d={STAR} />)}
+    </svg>
+    <div class="absolute inset-0 overflow-hidden text-brand-500" style={`width:${pct}%`}>
+      <svg width={W} height={PX} viewBox={`0 0 ${W} ${PX}`} class="block shrink-0 fill-current">
+        {stars.map((i) => <path transform={`translate(${i * (PX + GAP)}) scale(${PX / 20})`} d={STAR} />)}
+      </svg>
     </div>
   </div>
   {showValue && <span class:list={[text, "font-semibold text-ink tabular-nums"]} aria-hidden="true">{value.toFixed(1)}</span>}

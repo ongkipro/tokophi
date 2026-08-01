@@ -4,8 +4,6 @@ import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { desc, eq } from "drizzle-orm";
 import type { BlogPost } from "@/lib/mock/store";
 
-const ADMIN_TODAY = new Date("2026-06-30T00:00:00Z");
-
 // ⚠️ `body` and `imageUrl` were NOT here, and their absence was destroying merchant work.
 //
 // The editor is a FORM: it renders what this returns and writes back everything in `ArticleInput`.
@@ -44,7 +42,9 @@ function toPost(r: {
     blog: r.blog,
     author: r.author ?? "",
     published: r.status === "terbit",
-    publishedDaysAgo: r.publishedAt ? Math.round((ADMIN_TODAY.getTime() - r.publishedAt.getTime()) / 86_400_000) : 0,
+    // Real clock. This was `ADMIN_TODAY = 2026-06-30`, the seed's frame: an article published today
+    // rendered "-32 hari lalu". Anchoring a READ to the seed is the same rule the WRITE side broke.
+    publishedDaysAgo: r.publishedAt ? Math.round((Date.now() - r.publishedAt.getTime()) / 86_400_000) : 0,
     excerpt: r.excerpt ?? "",
     body: r.body ?? "",
     imageUrl: r.imageUrl ?? "",

@@ -10,12 +10,24 @@ import { getStoreName } from "@/lib/data/store";
 // `checkout_sessions` + `orders` — there is no modelled, blended or "estimated" number here, and if
 // something cannot be counted (message delivered? read?) it is not shown at all.
 //
-// Anchor: the same demo clock the rest of the admin uses (orders are stamped from 2026-07-02), so
-// "2 jam lalu" means two hours before the data's own today, and SSR === client (no Date.now() in a
-// render path — the elapsed minutes are computed here, on the server, and shipped as a number).
-const CHECKOUT_TODAY = new Date("2026-07-02T00:00:00Z");
+// ⚠️ THE REAL CLOCK. This was `CHECKOUT_TODAY = 2026-07-02`, the seed's frame, and it broke both
+// halves of the screen:
+//   · every cart a real shopper abandoned was newer than the anchor, so `Math.max(0, …)` clamped it
+//     to 0 and the whole list read "baru saja" — which collapses `score()` below, whose entire job
+//     is to decay basket value by age. Every cart ranked as if it were a minute old.
+//   · "30 hari terakhir" was not a window at all: the window START was a frozen 2026-06-02 with no
+//     upper bound, so the range it actually covered grew by a day every day (60 days by 1 Agustus)
+//     while the label kept saying 30.
+// The seed may be anchored; the app is not.
+//
+// ⚠️ `windowStart()` is a FUNCTION, not a module const. A `Date.now()` evaluated at module scope is
+// frozen at the moment the container started, which is the same bug wearing a different hat — the
+// window would stop moving until the next deploy.
+//
+// The elapsed minutes are still computed HERE, on the server, and shipped as a number, so
+// SSR === client (no `Date.now()` in a render path).
 const WINDOW_DAYS = 30;
-const WINDOW_START = new Date(CHECKOUT_TODAY.getTime() - WINDOW_DAYS * 86_400_000);
+const windowStart = () => new Date(Date.now() - WINDOW_DAYS * 86_400_000);
 
 export type CartItem = { handle?: string; name: string; variant?: string; qty: number; price: number };
 export type CheckoutStep = "keranjang" | "kontak" | "alamat" | "pengiriman" | "pembayaran";
@@ -67,14 +79,14 @@ export async function getCheckoutMetrics(): Promise<CheckoutMetrics> {
         rescuedValue: sql<number>`coalesce(sum(${schema.checkoutSessions.subtotalIdr}) filter (where ${schema.checkoutSessions.abandonedAt} is not null and ${schema.checkoutSessions.recoveredAt} is not null), 0)`.mapWith(Number),
       })
       .from(schema.checkoutSessions)
-      .where(gte(schema.checkoutSessions.createdAt, WINDOW_START));
+      .where(gte(schema.checkoutSessions.createdAt, windowStart()));
 
     // A placed order IS a completed checkout — including one later cancelled, because the checkout
     // still finished. That is the denominator the abandonment rate needs.
     const [o] = await db
       .select({ orders: sql<number>`count(*)`.mapWith(Number) })
       .from(schema.orders)
-      .where(gte(schema.orders.placedAt, WINDOW_START));
+      .where(gte(schema.orders.placedAt, windowStart()));
 
     // Never had WhatsApp opened on them: an abandoned cart with a phone whose number carries no
     // `keranjang` follow-up with a sent_at. Digits-only on both sides, so "0812…" and "62812…" of
@@ -85,7 +97,7 @@ export async function getCheckoutMetrics(): Promise<CheckoutMetrics> {
       .where(
         and(
           eq(schema.checkoutSessions.status, "ditinggal"),
-          gte(schema.checkoutSessions.createdAt, WINDOW_START),
+          gte(schema.checkoutSessions.createdAt, windowStart()),
           isNotNull(schema.checkoutSessions.phone),
           sql`not exists (
             select 1 from followups f
@@ -137,7 +149,7 @@ export async function getAbandonedCarts(withPhoneLimit = 100, anonymousLimit = 4
     const rows = await db
       .select()
       .from(schema.checkoutSessions)
-      .where(and(eq(schema.checkoutSessions.status, "ditinggal"), gte(schema.checkoutSessions.createdAt, WINDOW_START)))
+      .where(and(eq(schema.checkoutSessions.status, "ditinggal"), gte(schema.checkoutSessions.createdAt, windowStart())))
       .orderBy(desc(schema.checkoutSessions.createdAt));
 
     // The `keranjang` WhatsApp template the CRM already ships — the same one the CRM sends from.
@@ -178,7 +190,7 @@ export async function getAbandonedCarts(withPhoneLimit = 100, anonymousLimit = 4
         items,
         itemsCount: items.reduce((a, i) => a + i.qty, 0),
         subtotal: r.subtotalIdr,
-        minutesAgo: Math.max(0, Math.round((CHECKOUT_TODAY.getTime() - last.getTime()) / 60_000)),
+        minutesAgo: Math.max(0, Math.round((Date.now() - last.getTime()) / 60_000)),
         waHref: r.phone && tpl ? waLink(r.phone, cartMessage(tpl.body, r.name, items, storeName)) : null,
         contactedLabel: contactedAt ? formatContact(contactedAt) : null,
       };
@@ -208,8 +220,7 @@ export function cartMessage(templateBody: string, name: string | null, items: Ca
 export const digits = (s: string) => s.replace(/\D/g, "");
 
 // Absolute, not relative: a contact attempt is a real wall-clock event (the merchant clicked it),
-// while the demo data lives on the 2026-07-02 anchor — mixing the two clocks in one "x jam lalu"
-// would produce a number that is simply wrong. A date says exactly what happened, when.
+// and a date says exactly what happened, when — no arithmetic to get wrong.
 function formatContact(d: Date): string {
   return new Intl.DateTimeFormat("id-ID", {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta",

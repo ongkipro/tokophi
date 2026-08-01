@@ -106,7 +106,29 @@ npm run dev:admin   # apps/admin        → http://localhost:3000
 npm run dev:super   # apps/super-admin  → http://localhost:3001
 # or per app:  cd apps/admin && npm run dev
 npm run build:admin ; npm run build:super   # typecheck + lint + static build
+
+npm test        # vitest — INCLUDES the DB-coupled money suites (see below)
+npm run test:db # same, but a missing/unreachable test DB FAILS instead of skipping
 ```
+
+### ⚠️ The money suites run by default now — keep it that way
+
+`test/db-setup.ts` (vitest `globalSetup`) derives `<DATABASE_URL>_test`, **creates that database if it
+is absent, migrates it to head** and exports `TEST_DATABASE_URL`. So `npm test` exercises the ledger
+against real Postgres on any machine where `docker compose up -d db` is running.
+
+This exists because the opposite was true and nobody noticed: the suites skipped unless a developer
+exported `TEST_DATABASE_URL` by hand, so **22 tests over the ledger — the code that decides when a
+sale becomes withdrawable — never ran**, in anyone's default run, with no CI to catch it. Same family
+as the `verify-rls` incident below: a gate that does not run is not a gate.
+
+- **The guard is load-bearing: the resolved name MUST end in `_test`, or setup throws.** These suites
+  seed stores, orders and payments. They roll every transaction back, but pointing them at the shared
+  dev database must remain impossible. Do not relax it.
+- **An unreachable database still SKIPS**, so a laptop without Docker gets a green run — but it prints
+  a banner naming the reason, instead of the old silent pass. `npm run test:db` turns that skip into a
+  failure; use it before a PR.
+- An explicit `TEST_DATABASE_URL` still wins over the derived one.
 
 ## Database (local Postgres — `@tokophi/db`)
 Local backend fully wired behind the data layer (all 3 surfaces read + all editors write; auth+RBAC+RLS; real variants). Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (schema mirrors `~/Documents/Development/tokophi/docs/SCHEMA.md`: **54 tables**, snake_case, money = bigint IDR). Single-tenant MVP: one store "Batik Nusantara" (ADR 0008). Auth (local, JWT) + RBAC + RLS are done locally; Storage (self-hosted MinIO/S3) comes with the VPS. **RLS** (migration 0012, extended by 0032 `page_templates`, 0035 `support_*`, 0036 `media`+`payments`, **0058 `stores`**) is enabled on **45 of the 46 store-scoped tables** AND **enforces at runtime**: the admin runs every read (`lib/data/*` via `withCurrentTenant`) + write (`lib/actions/*` via `withTenant`) inside a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`, so tenant queries execute as the non-owner role with policies applied. `npm run verify-rls -w @tokophi/db` derives the store-scoped set from the catalog (every table with a `store_id`) and FAILS if one lacks RLS — **45/46 as of 2026-07-17, and the ONE remaining exception is `platform_activity`** (the platform's own audit log: cross-tenant by design, written before a session exists). `media` + `payments` were retrofitted in 0036; **this doc claimed 36/39 with 3 exceptions long after that was false** — check `npm run verify-rls`, not this sentence. ⚠️ **`stores` is NOT in that count and never could be**: it is keyed by `id`, has no `store_id`, so the catalog query cannot see it — that blind spot leaked two merchants' data across tenants until `0058` put an `id`-based policy on it. Auth (`lib/auth.ts`, pre-session `store_users` read), super-admin (cross-tenant), and the storefront (`Host`-resolved read-only catalog) stay on the owner connection. On the VPS this becomes PostgREST connecting as `tokophi_app` with the JWT `store_id` claim feeding the GUC. **RBAC** (app-layer, `lib/rbac.ts`) is enforced too.
@@ -163,9 +185,25 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
 - **Never mint a fixed password.** Invited operators used to get `DEV_PASSWORD` (`tokophi123`), never
   revealed and never forced to change — an email plus a well-known default was a working control-plane
   login. Random per invite, revealed once.
+  - 🔴 **`createStore` was still on it (fixed 2026-08-01), and it is the worse half.** The
+    `invitePlatformAdmin` fix left a comment claiming the other paths were already correct; they were
+    not. Every store an operator onboarded got an OWNER `users` row hashed from `tokophi123`, so the
+    **merchant's** email address alone was a working login at `app.tokophi.com` — every order (buyer
+    name, WhatsApp, delivery address), every customer, and `settings:write` over the bank account.
+    **The mint now lives in `lib/temp-password.ts`** (pure, no DB — same split as `platform-rank.ts`)
+    and `lib/no-fixed-password.test.ts` fails if any `hashPassword()` in `actions.ts` is fed anything
+    but a freshly minted `pw`, or if a minting action stops returning it.
+  - **A password the UI drops on the floor is worse than the bug** — the merchant cannot log in and
+    nobody can say why. Each minting action returns `password`; the callers show it ONCE
+    (`toko-client.tsx` + `pengaturan-client.tsx`: a `duration: Infinity` toast that survives the
+    `router.push`; `store-detail.tsx`: the credential dialog). Same two-file rule as thrown errors.
 - **Never anchor a date to the seed.** `health.ts` measured recency from a frozen `2026-07-02`, so a
   store 34 days dormant read "5 days, ok" and a live one read **−23 hari**. `data.ts` had already been
   migrated off that anchor; the healthcheck was missed. Same rule as the discount editor.
+  - `createStore` did it in a **write** (fixed 2026-08-01): `created_at`/`accepted_at` = the anchor
+    while `trialEndsAt` = `Date.now()`, so a store was born ~30 days old with a 3-day trial in one
+    INSERT — and store health, "0 hari lalu" and the trial countdown all disagreed from birth. The
+    columns default to `now()`; don't set them. Pinned by the same test.
 
 ## Billing & super-admin control (single plan)
 - **One plan "TokoΦ"**, all features. `@tokophi/lib/billing`: 3-day trial → **Rp50rb** first month → **Rp275rb/mo** (annual Rp2.7jt). Prices are the **DPP (ex-tax)**; the merchant pays **base + PPN 11%** (`withPpn()`/`baseFromTotal()`) — invoices store the PPN-inclusive total, faktur itemizes DPP+PPN. **Do NOT reintroduce plan tiers** (Pemula/Bisnis/Skala are legacy, unused).
@@ -313,6 +351,36 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   measured **1.621 ms**, the single largest blocker on the page. It is triggered by our own `mailto:`
   links, and it is a zone setting, not code. Procedure + verification: **`specs/docs/CLOUDFLARE-PERF.md`**
   (also covers the static-asset Cache Rules, and why Managed robots.txt is left on deliberately).
+- ⚠️ **`unused-javascript` and `legacy-javascript` are `fbevents.js`. There is no bundle of ours to
+  fix, and the build target is NOT the cause** (measured 2026-08-01, closing N6). Astro hard-codes
+  `build.target: "esnext"` for the client build (`core/build/static-build.js`), `astro.config.mjs`
+  sets no `build` key, and there is **no browserslist anywhere in the repo** — nothing is being
+  transpiled down. The client build emits **zero `.js` files**: every first-party script is inlined
+  in the HTML (12 inline scripts, 62 KiB, of which 3 are esbuild-minified module bundles and 9 are
+  `is:inline` and therefore verbatim). Coverage on the homepage with **no** interaction: 37,8 KiB
+  unused, all of it ours, every item **under Lighthouse's 20 KiB per-resource floor** — which is why
+  a local Lighthouse run scores both audits **1, with no items**. After one click:
+  `connect.facebook.net/en_US/fbevents.js` arrives at **394,5 KiB with 188,8 KiB unused (47,9%)**,
+  which at its transfer size is the reported **~44 KiB**; it also bundles **core-js 3.32.2**, which
+  is exactly what `legacy-javascript` detects. Both audits therefore only appear in the runs where
+  Lighthouse's scroll trips the first-interaction loader. **Do not raise/lower a build target for
+  this, and do not undo the deferral (`#122`) to make an audit tidier.**
+- **DOM size is dominated by ICONS, not by sections or carousel slides** (measured 2026-08-01, N5).
+  On the homepage **393 of 1023 elements were in the SVG namespace** — 383 of those `<svg>` or
+  `<path>`, the remaining 10 `<circle>`/`<rect>` inside lucide icons — and the **star rating owned
+  240 of the 393 (61%)**.
+  ⚠️ **Two different counts live here and conflating them overstates the case.** The star WIDGET was
+  **312 elements**, which is 30% of the whole page, but only **240** of them were SVG; the other 72
+  are its four wrapper divs and two spans, twelve times over. "312 of the 393" would read as 79% and
+  is wrong. `Stars.astro` drew each rating as 2 layers × 5 `<svg><path>`, i.e. 26 elements, 12 times
+  per page. One `<svg>` per layer with five `<path>`s is the same pixels for 17: **1023 → 915**
+  (−108 = 12 × 9, of which 96 are SVG). Re-derived independently 2026-08-01 by building both versions
+  of `Stars.astro` and counting in the browser (`namespaceURI === "http://www.w3.org/2000/svg"`, and
+  `[role="img"][aria-label^="Rating"]` for the widget) — both totals reproduced exactly.
+  The hero carousel is only **106 elements in total**, so deferring slides 2..n could not have paid
+  for the crawler/no-JS risk; and cutting the DEFAULT TEMPLATE's sections changes nothing for any
+  store that already exists (**the seed is not a migration**, see above) — it could not have moved the
+  measured number at all. Look for repeated icon markup first.
 
 ## Order lifecycle — COD, the ledger, and the one legal set of transitions
 

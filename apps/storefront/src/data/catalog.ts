@@ -205,8 +205,22 @@ const isUploadUrl = (u: string) =>
   u.startsWith(UPLOAD_PATH) || (!!ADMIN_BASE && u.startsWith(ADMIN_BASE + UPLOAD_PATH));
 
 /** Must match WIDTHS in `apps/admin/app/api/uploads/[name]/route.ts` — that route REJECTS (400) any
- *  width not on its allow-list, so a value added here and not there is a broken candidate. */
-const WIDTHS = [200, 400, 800, 1200];
+ *  width not on its allow-list, so a value added here and not there is a broken candidate. The two
+ *  constants must therefore change in the SAME commit, in both directions.
+ *
+ *  ⚠️ **The top of this ladder must reach the SOURCE width, and 1200 did not.** `saveImage` caps an
+ *  upload's long edge at MAX_DIM = 2000, so 1600 + 2000 are the last two real renditions — and above
+ *  1200 there was nothing at all: `?w=` 400s outside the allow-list, so 1200 was a hard ceiling with
+ *  the merchant's 2000px original sitting on disk unreachable. `staticSrcSet` below has always
+ *  appended the source as its top candidate and says why ("without this a 1920px screen would be
+ *  served the 1440w file"); the upload branch simply had no equivalent.
+ *  Harmless on a product card (156–296 CSS px) — this is about a `sizes="100vw"` hero, where a 1920px
+ *  desktop (or a 412px phone at DPR 3) asks for more than 1200 and gets a 1200px file stretched.
+ *  Safe because the route NEVER upscales: `?w=2000` on a 1000px source returns the original bytes
+ *  (guard re-verified 2026-08-01 — sharp's `resize({fit:"inside"})` genuinely does enlarge, so that
+ *  guard is what stops it, and it sits before the resize). The cost is bounded and known: the
+ *  allow-list still caps one image at 7 cache keys (the original + 6 widths). */
+const WIDTHS = [200, 400, 800, 1200, 1600, 2000];
 
 /**
  * A `srcset` for a merchant upload, or `undefined` for anything else (seeded static images, and the

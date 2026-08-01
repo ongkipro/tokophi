@@ -42,6 +42,26 @@ const interval = typeof intervalMs === "number" && intervalMs >= 0 ? intervalMs 
 const FOCAL = { left: "object-left", center: "object-center", right: "object-right" } as const;
 const focalClass = (s: (typeof slides)[number]) => FOCAL[s.focal ?? "center"];
 const centered = align === "center";
+
+// ── EXACTLY ONE SLIDE CARRIES THE <h1> ───────────────────────────────────────────────────────────
+//
+// Every slide used to render its headline as an `<h1>`, so the seeded 3-slide carousel published
+// THREE top-level headings on every store's homepage (confirmed on production). The slides are a
+// cross-fade of one banner, not three documents: only one of them may be the page's heading.
+//
+// It is `HEADING_INDEX`, not "slide 0", because `heroSlides()` keeps a slide that has an `imageUrl`
+// and NO heading (a deliberate image-only slide). `<h1>{""}</h1>` is an element with no heading in
+// it — the same defect wearing a tag — and hard-coding slide 0 would either emit that or, if the
+// heading were dropped, leave a carousel whose later slides do have headings with no `<h1>` at all.
+// The FIRST slide that actually has words is the one the outline should name. `-1` = no slide has a
+// heading, so this hero emits NO `<h1>` and `index.astro`'s floor supplies it — the two conditions
+// are the same predicate, which is why they cannot disagree.
+const HEADING_INDEX = slides.findIndex((s) => (s.heading ?? "").trim() !== "");
+
+// One class list for both tags, because they must be visually INDISTINGUISHABLE — a second copy of
+// this string is a copy that drifts.
+const HEADING_CLASS =
+  "font-display text-[2.5rem] font-semibold leading-[1.03] tracking-tight text-balance text-white drop-shadow-sm sm:text-6xl md:text-[4rem] lg:text-[4.75rem]";
 ---
 
 <section
@@ -159,9 +179,16 @@ const centered = align === "center";
                 i === 0 ? "opacity-100" : "pointer-events-none opacity-0",
               ]}
             >
-              <h1 class="font-display text-[2.5rem] font-semibold leading-[1.03] tracking-tight text-balance text-white drop-shadow-sm sm:text-6xl md:text-[4rem] lg:text-[4.75rem]">
-                {slide.heading}
-              </h1>
+              {/* ⚠️ ONLY `HEADING_INDEX` IS AN `<h1>` (see the constant). The others are a `<p>` in the
+                  identical class list: pixel-identical, and the page keeps exactly one `<h1>` whichever
+                  slide is on screen. Nothing in the carousel script below selects `h1` — it drives
+                  `[data-hero-copy]` — and the off-screen slides are `inert` either way, so this changes
+                  the document outline and nothing else. */}
+              {i === HEADING_INDEX ? (
+                <h1 class={HEADING_CLASS}>{slide.heading}</h1>
+              ) : (
+                <p class={HEADING_CLASS}>{slide.heading}</p>
+              )}
               <p
                 class:list={[
                   "mt-5 max-w-md text-base leading-relaxed text-white/85 sm:text-lg",

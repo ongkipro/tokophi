@@ -6,9 +6,15 @@ import type { Activity } from "@/lib/mock/store";
 
 // Real "live activity" feed for the CURRENT store (RLS-scoped): recent orders, signups,
 // reviews, and low-stock alerts — replacing the static mock so it reflects the actual store
-// (incl. an impersonated one). Anchored just past the seed's TODAY so "N lalu" stays >= 0.
-const ANCHOR = new Date("2026-07-02T23:59:00Z");
-const minsAgo = (d: Date | null) => (d ? Math.max(0, Math.round((ANCHOR.getTime() - d.getTime()) / 60_000)) : 0);
+// (incl. an impersonated one).
+//
+// ⚠️ THE REAL CLOCK. This was `ANCHOR = 2026-07-02T23:59` — "just past the seed's TODAY so N stays
+// >= 0" — which is the `Math.max(0, …)` doing the hiding, not the anchor doing the job: every event
+// that actually happened after the seed was written clamped to 0 and read "baru saja", so a feed
+// whose entire purpose is recency showed a week-old order and a signup from this minute identically.
+// The seed may be anchored; the app is not. (`Math.max(0, …)` stays — a clock skew of a few seconds
+// on a row written by another process must not render as a negative age.)
+const minsAgo = (d: Date | null) => (d ? Math.max(0, Math.round((Date.now() - d.getTime()) / 60_000)) : 0);
 
 export async function getActivityFeed(limit = 8): Promise<Activity[]> {
   return withCurrentTenant(async (db: Tx) => {

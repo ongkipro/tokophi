@@ -1,14 +1,14 @@
 "use server";
 import { db, schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
-import { scryptSync, randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { signImpersonation } from "./session";
 import { requirePlatformAdmin } from "./platform-auth";
+import { tempPassword, hashPassword } from "./temp-password";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
 import { isInstantService } from "@tokophi/lib/couriers";
 import { alTestConnection, alProbeChannels, alCreatePayment } from "@tokophi/lib/autolaris";
-import { addMonths, quote, withPpn } from "@tokophi/lib/billing";
+import { BILLING, addMonths, quote, withPpn } from "@tokophi/lib/billing";
 
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
@@ -19,18 +19,12 @@ async function logStore(storeId: string, text: string): Promise<void> {
 async function logPlatform(text: string): Promise<void> {
   await db.insert(schema.platformActivity).values({ kind: "admin", text });
 }
-const tempPassword = () => "tokophi-" + randomBytes(3).toString("hex"); // scrypt-hashed before storing
-
 // Every super-admin mutation is gated by `requirePlatformAdmin()` (the security boundary):
 // impersonation + store lifecycle + provisioning + settings all require a platform-admin session.
+//
+// `tempPassword` / `hashPassword` live in `./temp-password` — pure, testable, and the ONLY way a
+// password is minted here. There is deliberately no password constant in this file.
 
-const DEV_PASSWORD = "tokophi123"; // default local password for provisioned owners/admins
-const ANCHOR = new Date("2026-07-02T00:00:00Z"); // matches the seed's TODAY so createdDaysAgo reads "0 hari lalu"
-
-function hashPassword(pw: string): string {
-  const salt = randomBytes(16).toString("hex");
-  return `${salt}:${scryptSync(pw, salt, 64).toString("hex")}`;
-}
 const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 // Impersonate a store's owner: mint the admin session cookie (host-scoped to localhost, so it
@@ -85,8 +79,20 @@ export async function setStoreStatus(storeId: string, status: "active" | "trial"
 
 // ---- provisioning: onboard a new merchant store (account + owner + store + membership + stats) ----
 // No `plan`: there is ONE plan (TokoΦ). The legacy `plan` column keeps its DB default.
+//
+// 🔴 THE OWNER PASSWORD IS RANDOM AND REVEALED ONCE — it used to be the literal `tokophi123`.
+// Every merchant onboarded from here got a `users` row hashed from a string published in this repo,
+// so their email address alone was a working OWNER login at app.tokophi.com. The caller
+// (`toko-client.tsx`) MUST surface `password`: nothing else can read it back, so an ignored return
+// value is a merchant who cannot log in and nobody able to say why.
+//
+// Timestamps are the REAL CLOCK. `created_at`/`accepted_at` were stamped with the seed's frozen
+// ANCHOR (2026-07-02) while `trialEndsAt` came from `Date.now()`, so a store was born ~30 days old
+// with a 3-day trial in one INSERT. Same rule as `health.ts` and the discount editor: the seed may be
+// anchored, the app never is. The columns default to `now()`, so they are simply not set here (this
+// is what `apps/admin/lib/provision.ts`, the self-serve twin of this function, already did).
 export type NewStoreInput = { name: string; ownerName: string; email: string; city: string };
-export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; storeId?: string; error?: string }> {
+export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; storeId?: string; password?: string; error?: string }> {
   await requirePlatformAdmin();
   const name = input.name?.trim();
   const email = input.email?.trim().toLowerCase();
@@ -102,24 +108,25 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
   const [dupSlug] = await db.select({ id: schema.stores.id }).from(schema.stores).where(eq(schema.stores.slug, slug)).limit(1);
   if (dupSlug) return { ok: false, error: `Nama toko bentrok (slug "${slug}" sudah ada).` };
 
+  const pw = tempPassword();
   const storeId = await db.transaction(async (tx) => {
-    const [acc] = await tx.insert(schema.accounts).values({ name, createdAt: ANCHOR }).returning();
-    const [u] = await tx.insert(schema.users).values({ email, name: ownerName, passwordHash: hashPassword(DEV_PASSWORD) }).returning();
-    // new store → 3-day free trial (real clock)
-    const trialEndsAt = new Date(Date.now() + 3 * 86_400_000);
+    const [acc] = await tx.insert(schema.accounts).values({ name }).returning();
+    const [u] = await tx.insert(schema.users).values({ email, name: ownerName, passwordHash: hashPassword(pw) }).returning();
+    // new store → free trial from the real clock (same length as the self-serve signup)
+    const trialEndsAt = new Date(Date.now() + BILLING.TRIAL_DAYS * 86_400_000);
     // `catalogIdScheme: "number"` — ADR 0013: a store created now has no catalog anywhere yet, so it
     // starts on the stable id and never pays the one-way re-key. Must match lib/provision.ts.
-    const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, status: "trial", trialEndsAt, firstInvoicePaid: false, catalogIdScheme: "number", createdAt: ANCHOR }).returning();
-    await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: ANCHOR });
+    const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, status: "trial", trialEndsAt, firstInvoicePaid: false, catalogIdScheme: "number" }).returning();
+    await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: new Date() });
     await tx.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
     await tx.insert(schema.storeSettings).values({ storeId: st.id });
-    await tx.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: 0, ordersCount: 0, productsCount: 0, updatedAt: ANCHOR });
+    await tx.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: 0, ordersCount: 0, productsCount: 0 });
     return st.id;
   });
   await logStore(storeId, `Toko dibuat oleh platform: ${name} (${slug}), pemilik ${email}`);
   revalidatePath("/toko");
   revalidatePath("/");
-  return { ok: true, storeId };
+  return { ok: true, storeId, password: pw };
 }
 
 // ---- billing: mark an invoice paid / failed / pending ----
@@ -358,7 +365,8 @@ export async function invitePlatformAdmin(input: { name: string; email: string; 
   const [dup] = await db.select({ id: schema.platformAdmins.id }).from(schema.platformAdmins).where(eq(schema.platformAdmins.email, email)).limit(1);
   if (dup) return { ok: false, error: "Email sudah terdaftar sebagai operator." };
 
-  // ⚠️ A RANDOM password, revealed ONCE — not `DEV_PASSWORD`.
+  // ⚠️ A RANDOM password, revealed ONCE — never a constant. (The `DEV_PASSWORD = "tokophi123"` this
+  // once used is gone from the file entirely; `createStore` was still on it until 2026-08-01.)
   //
   // Every operator minted here used to get the fixed `tokophi123`, never revealed and never forced to
   // change, so an email address plus a well-known default was a working login to the CONTROL PLANE —

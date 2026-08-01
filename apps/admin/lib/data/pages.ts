@@ -4,7 +4,8 @@ import { withCurrentTenant } from "@/lib/tenant";
 import { desc, eq } from "drizzle-orm";
 import type { CmsPage } from "@/lib/mock/store";
 
-const ADMIN_TODAY = new Date("2026-06-30T00:00:00Z");
+// ⚠️ THE REAL CLOCK. This was `ADMIN_TODAY = 2026-06-30`, the seed's frame, so anything created or
+// touched after the seed was written rendered a NEGATIVE age. The seed may be anchored; the app is not.
 
 function toPage(r: {
   id: string; title: string; handle: string; status: "terbit" | "draft"; template: string | null; views: number; updatedAt: Date;
@@ -14,7 +15,7 @@ function toPage(r: {
     title: r.title,
     handle: r.handle,
     published: r.status === "terbit",
-    updatedDaysAgo: Math.round((ADMIN_TODAY.getTime() - r.updatedAt.getTime()) / 86_400_000),
+    updatedDaysAgo: Math.round((Date.now() - r.updatedAt.getTime()) / 86_400_000),
     template: r.template ?? "page",
     views: r.views,
   };

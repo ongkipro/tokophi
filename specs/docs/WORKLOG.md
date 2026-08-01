@@ -10,6 +10,73 @@
 
 
 
+## 2026-08-01 — Session: every store we provisioned got the owner password `tokophi123` — audit wave 2
+
+**Handoff:** [`tasks/2026-08-01-audit-wave-2.md`](./tasks/2026-08-01-audit-wave-2.md) ·
+**Consolidated record, authority on every number:** `audit-2026-08-01/FINDINGS-SOURCE.md` ·
+Ten read-only agents against `origin/main` @ `86e3ec3`, one worktree each, then seven change sets.
+
+🔴 **`createStore` hashed every provisioned owner's password from `DEV_PASSWORD` — a string published in
+this repository and in `AGENTS.md`.** Onboard `budi@tokosaya.com` and anyone who knows that email address
+logs in at `app.tokophi.com` as store **owner**: every order with the buyer's name, WhatsApp and full
+delivery address, every customer record, and through `settings:write` the bank account and
+`requestPayout`. `AGENTS.md` already carried the rule, and `invitePlatformAdmin` **250 lines below in the
+same file** had already been fixed — with a comment asserting the other paths were correct. **Instance
+patched, class missed.** Random per store now, revealed once in a toast that survives the `router.push`;
+proven on `tokophi_test` (`verify('tokophi123') = false`) and guarded by a class-level test that was
+proven red 3-of-5 before green. ⚠️ **The code fix does not repair an account already provisioned** — the
+production rotation is step ① of the handoff. And the login pages still print those seeded credentials on
+screen: an owner decision, not a patch.
+
+**Twelve frozen "today" anchors, and one of them was a WRITE.** `actions/articles.ts` stamped
+`publishedAt = 2026-06-30`, and because the update is a full field replace, **re-saving a published
+article walked its date backwards** — mechanically identical to the voucher bug one file over. Proven
+against real Postgres: three saves held `2026-06-30` under the old code, `2026-07-20 08:30` unchanged
+under the new. Ten reads too — a follow-up due today computed **+32**, so the CRM overdue filter could not
+fire for it, and the whole activity feed read "0 menit lalu". `createStore`'s own anchor made a store born
+**~30 days old with a 3-day trial**, dropping it out of `newSignups30d` on day one. ⚠️ **Un-anchoring
+`data/checkout.ts` takes Keranjang Ditinggal from 796/340 to 6/143 on dev and that is CORRECT** — the old
+window was a frozen start with no upper bound, 60 days labelled 30. The drop is a **seed gap**:
+`seed:recent` inserts no `checkout_sessions`. **Extend the seed; do not re-anchor the app to make the demo
+look busy.**
+
+**`#127` fixed five default-location copies and there were six.** The sixth is `/api/public/order` — no
+session, the **OWNER connection with RLS off**, and **no `store_id` at all**, so `order by is_default desc`
+would prefer another store's default warehouse. Alongside it: drizzle's `desc()` emits a bare `DESC`,
+which is **NULLS FIRST** in Postgres, so the orders list and the order detail named **different payment
+methods for the same order** — while both files carried comments asserting they matched. Latent (827
+payments, 46 unpaid, **0** orders holding both shapes) and, contrary to an earlier draft, **not a money
+bug**: `createShipment` derives COD from an `exists` subquery no `ORDER BY` can affect.
+
+**22 money tests had never run on anyone's machine.** `ledger-credit.test.ts` skips without
+`TEST_DATABASE_URL`; nobody exported it and there is no CI, so the suites guarding *when a sale becomes
+withdrawable* were off by default. A `globalSetup` derives `<DATABASE_URL>_test`, creates it, migrates it
+and exports the variable: **16 files / 145 passed + 22 skipped → 22 files / 182 passed, 0 skipped.** The
+name must end in `_test` or setup throws — do not relax that.
+
+**And the homepage `<h1>` count was wrong in both directions.** `#127` floored the *missing* case;
+`Hero.astro` emitted one `<h1>` **per slide**, so every store shipped **three**. A third defect sat
+between them: the floor keys on `type === "hero"` while `heroSlides()` keeps a heading-less pictorial
+slide, so that template **stood the floor down AND shipped `<h1></h1>`** — measured **2, both empty**.
+Both halves ask the same question now. Plus: PDP thumbnails had no `srcset` at all — **153 940 → 30 782 B
+at DPR 1 (−80,0 %)** — and the upload ladder stopped at 1200 while `saveImage` caps at 2000. `Stars.astro`
+was **312 elements, 30 % of the homepage DOM**; the rewrite took it **1023 → 915** with `dist/client`
+unchanged, after measurement killed *both* candidates `NEXT.md` had named.
+
+**Two checks were caught flaky and repaired before entering the runbook** — one counted a browser cache
+hit as an oversize download (5 failures in 6 against a correct build), the other wrote to the shared dev
+DB at a fixed UUID. A coin-flip red check is how `verify-rls` sat red for weeks while two cross-tenant
+leaks shipped past it.
+
+**NEXT:** ① rotate any production owner still verifying against `tokophi123` — the only step that closes
+the *existing* exposure. ② teach `seed:recent` to insert `checkout_sessions`. ③ the 🔴 owner decisions in
+`NEXT.md`: the login-page credentials, `tokophi_app` holding full DML on the platform tables with RLS off,
+and the impersonation token, now three sessions old. **N8 was rewritten — its "77 rows on production" was
+the dev count; production has 65 nulls and not one `ship_postcode`, so every derivation resolves zero
+rows.** N6 closed (the client target is already `esnext`, `dist/client` has zero `.js`, and the 44 KiB is
+Meta's `fbevents.js`), N12 closed, N4 diagnosed (the carousel's autoplay), N3 answered and recommended for
+retirement as a KPI.
+
 ## 2026-08-01 — Session: working the NEXT.md queue, and the two entries that were wrong about themselves ✅ `#127` — merged (`dd2129d`) + **deployed and verified in production**
 
 **Deploy verified by the change itself, not by a 200.** The storefront answered 200 all the way through
