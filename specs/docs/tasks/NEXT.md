@@ -6,10 +6,13 @@
 > Pairs with `BACKLOG.md` (priorities), `WORKLOG.md` (session log) and the dated handoffs in this
 > folder. **Legend:** size **S** (<1h) / **M** (half a day) / **L** (a day+). AC = acceptance criteria.
 >
-> 🔵 **N9 · N10 · N11 are DONE on branch `feat/next-queue` (not yet merged)** — and N13 is done as far
-> as the schema allows. See `2026-08-01-next-queue-n9-n13.md`. **Two items in this file rested on
-> claims that turned out to be false (N13's and N6's); both are corrected in place below.** If you are
-> picking something up, read those two entries before trusting their sizing.
+> 🔵 **N9 · N10 · N11 · N13 · N3 · N6 are closed** (session `2026-08-01`, handoff
+> [`2026-08-01-next-queue-n9-n13.md`](./2026-08-01-next-queue-n9-n13.md)). **Two entries in this file
+> rested on claims that turned out to be false — N13's and N6's — and N7 was reversed on evidence.**
+> All three are corrected in place below; read them before trusting their sizing.
+>
+> ▶ **Starting work? The working brief for what is next is
+> [`2026-08-01-followups-n5-n14.md`](./2026-08-01-followups-n5-n14.md)** — ① N14, then ② N5.
 >
 > ⚠️ Before starting anything here: `git fetch && git log origin/main -3`. Several sessions run against
 > this repo at once — see the top of `AGENTS.md`.

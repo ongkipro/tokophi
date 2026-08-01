@@ -10,6 +10,45 @@
 
 
 
+## 2026-08-01 — Session: working the NEXT.md queue, and the two entries that were wrong about themselves
+
+**Handoff:** [`tasks/2026-08-01-next-queue-n9-n13.md`](./tasks/2026-08-01-next-queue-n9-n13.md) ·
+**Follow-ups:** [`tasks/2026-08-01-followups-n5-n14.md`](./tasks/2026-08-01-followups-n5-n14.md) ·
+Queue worked: **N9 N10 N11 N13**, measured: **N3 N4 N6 N7**, new: **N14**.
+
+**A queue is only as good as its facts, and two of these were false.** N13 said
+"`products.updated_at` exists" — it does not; `products` has `created_at` only and `collections` has
+**no timestamp column at all**, so a product `<lastmod>` is a migration, not a sitemap edit (S → M).
+N6 said "check the Vite `build.target`" — impossible, the storefront ships **zero bundled client JS**
+(`dist/client/_astro/` = one CSS file, no `.js`). N10 was stale on arrival: `promo.ts`/`landing.ts`
+already returned `{ ok, error }`.
+
+🔴 **N9 was filed as a de-duplication and was actually a cross-tenant write.** "Only the last one
+carries the tenant filter" undersold it: `purchases.ts` (2 copies), `inventory.ts` (1) and
+`products.ts` (3) had **zero** `locations.storeId` between them. `inventory_levels` has no `store_id`
+so RLS cannot reach it, and the `locations` join only *picks* a row — a `variantId` from another store
+resolved to **their** shelf and the stock write landed there, silently, in both directions. One helper
+now, `storeId` a required parameter (the courier-webhook path runs on the OWNER connection and has no
+session), and a source scan that fails on a sixth copy — verified against the pre-change tree.
+
+Also: `deleteLanding` toasted success over a DELETE matching zero rows (RLS filters a foreign id
+without an error); a builder homepage with no Hero shipped **zero `<h1>`**, now floored with a
+`sr-only` heading and exercised over HTTP against a real build + real DB; `/halaman/*` gained a real
+`<lastmod>` (`pages.updated_at` is genuinely maintained), and the sitemap now carries the written
+reason products and categories cannot have one.
+
+**8 Lighthouse runs against production settled three entries and reversed one.** Desktop **median 100,
+range 90–100** (n=5, TBT 0 ms throughout) — N3 answered, and the old 66–92 spread was simply run 1
+being cold every time. **N6 closed**: `unused-javascript`/`legacy-javascript` pass with **0 bytes** in
+all 8 runs. 🔴 **N7 reversed**: the mobile bimodality is real (TBT 0 → 395 ms) and it happens with **no
+vendor pixel bundle loading at all** — the only two scripts on the page are Cloudflare's — so removing
+the `scroll` trigger would cost real tracking and buy nothing. What is left is our own main thread
+(`mainthread-work-breakdown` **3,4 s** vs `bootup-time` 0,5 s) over a **992-element DOM**.
+
+**NEXT:** N5 (`dom-size`) is now the only performance item with evidence behind it, and N14 is new —
+`Hero` emits one `<h1>` **per slide**, so every store's homepage currently ships **three**, confirmed
+on production.
+
 ## 2026-08-01 — Session: the order pipeline's quiet lies, then PageSpeed ✅ `#117` `#118` `#119` `#120` `#122` `#123` — all merged; `#117`–`#120` deployed + verified in production, `#122`/`#123` deploying at handoff
 
 **Handoff:** [`tasks/2026-08-01-order-pipeline-and-pagespeed.md`](./tasks/2026-08-01-order-pipeline-and-pagespeed.md) — findings, measurements, the NEXT list, and the owner decision recorded on the record.
