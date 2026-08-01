@@ -4,6 +4,7 @@ import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { likeContains } from "@tokophi/lib/like";
 import { eq, sql, type SQL } from "drizzle-orm";
 import type { Order } from "@/lib/mock/store";
+import { latestPaymentFirst } from "@/lib/data/order-payment";
 
 // ⚠️ THE REAL CLOCK for "x menit lalu" (both call sites below). This was `TODAY = 2026-07-02`, the
 // seed's frame, so an order placed today rendered a NEGATIVE age and the list's freshest row read as
@@ -229,12 +230,16 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
         (o.problem_at is not null)                              as "problem",
         o.problem_note                                          as "problemNote",
         o.placed_at                                             as "placedAt",
-        -- One definition of "the order's payment", shared with lib/data/order-detail.ts: most recently
-        -- PAID first, unpaid last, id as the tie-break. The two used to order differently (id desc
-        -- there), so a multi-payment order could show one method here and another on its detail page —
-        -- including COD vs VA, the fact createShipment now derives the cash-collection instruction from.
-        (select p.method::text from payments p where p.order_id = o.id
-         order by p.paid_at desc nulls last, p.id desc limit 1)  as "paymentMethod"
+        -- One definition of "the order's payment" — latestPaymentFirst() in lib/data/order-payment.ts,
+        -- shared with lib/data/order-detail.ts (the DETAIL page). It is one exported ordering now
+        -- because two hand-written copies of it did NOT agree: this one said "nulls last", the detail
+        -- used drizzle's desc() (a bare DESC = NULLS FIRST in Postgres), so an order with an unpaid
+        -- bill beside a collected one read cod here and va there — same order, two screens, two
+        -- answers. The payments table is deliberately UNALIASED: the shared fragment renders
+        -- qualified column names.
+        -- (No backticks in this comment — it lives inside a JS template literal.)
+        (select payments.method::text from payments where payments.order_id = o.id
+         order by ${latestPaymentFirst()} limit 1)               as "paymentMethod"
       from orders o
       left join customers c on c.id = o.customer_id
       ${rowWhere}

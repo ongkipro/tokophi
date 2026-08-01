@@ -1,7 +1,8 @@
 import "server-only";
 import { schema } from "@tokophi/db";
-import { eq, asc, desc, sql } from "drizzle-orm";
+import { eq, asc, sql } from "drizzle-orm";
 import { withCurrentTenant } from "@/lib/tenant";
+import { latestPaymentFirst } from "@/lib/data/order-payment";
 
 // The real, per-order truth the detail page needs: line items straight out of `order_line_items`
 // (joined to the variant + product for the variant title / image / emoji), the money columns the
@@ -298,12 +299,15 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
       .select()
       .from(schema.payments)
       .where(eq(schema.payments.orderId, o.id))
-      // ⚠️ Must match the LIST's definition exactly (`lib/data/orders.ts`): most recently PAID first,
-      // unpaid last, id as the tie-break. It used to be `id desc` alone, so on an order with more than
-      // one payment row the list and this page could name DIFFERENT methods for the same order —
-      // including COD vs VA, which is the exact fact `createShipment` now derives the courier's
-      // cash-collection instruction from. One order, one answer.
-      .orderBy(desc(schema.payments.paidAt), desc(schema.payments.id))
+      // ⚠️ THE SAME ordering the LIST uses (`lib/data/orders.ts`), because it is now literally the
+      // same expression: `latestPaymentFirst()` in `lib/data/order-payment.ts`. Most recently PAID
+      // first, unpaid last, id as the tie-break — one order, one answer.
+      //
+      // This line used to read `desc(schema.payments.paidAt), desc(schema.payments.id)` and a comment
+      // above it claimed it matched the list. It did not: drizzle's `desc()` emits a BARE `desc`, and
+      // bare DESC in Postgres is NULLS FIRST, so this page ranked UNPAID payments first while the list
+      // ranked them last. Measured: list `cod`, detail `va`, same order.
+      .orderBy(latestPaymentFirst())
       .limit(1);
 
     const payment: OrderPaymentRecord | null = p
