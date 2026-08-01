@@ -110,7 +110,18 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 | `POST /api/track` | `analytics_events` | bot-UA reject · 30/min/IP |
 | **`POST /api/checkout-session`** | **`checkout_sessions`** — progressive capture **as the shopper types** (debounced beacons from `checkout.astro`), upsert on `(store_id, session_id)`, `step` only ever moves **forward**, a `pulih` row is never resurrected. Also carries the opportunistic **`aktif → ditinggal` sweep** (60 min of silence, ≤ once/min per SSR process — **no cron**) | bot-UA reject · 60/min/IP |
 
-`src/lib/recovery.ts` mints/verifies the **signed** recovery link (`/checkout?r=…`): an HS256 JWT `{sid, st}` (jose), store-bound, 7-day expiry, secret `CHECKOUT_RECOVERY_SECRET ?? AUTH_SECRET`. Deliberately **not** a raw session id — that would be a bearer credential over a stranger's name, phone and address the moment the link is forwarded or leaks via `Referer`. `/api/public/order` flips the session to `pulih` + `recovered_at` when it becomes an order.
+`src/lib/recovery.ts` **verifies** the signed recovery link (`/checkout?r=…`): an HS256 JWT `{sid, st}` (jose), store-bound, 7-day expiry, secret `CHECKOUT_RECOVERY_SECRET ?? AUTH_SECRET`. Deliberately **not** a raw session id — that would be a bearer credential over a stranger's name, phone and address the moment the link is forwarded or leaks via `Referer`. `/api/public/order` flips the session to `pulih` + `recovered_at` when it becomes an order.
+
+> 🔴 **NOTHING MINTS ONE. This line used to read "mints/verifies" and that half was never true.**
+> Verified 2026-08-01: `signRecoveryToken` has **zero callers** in all four apps
+> (`grep -rn signRecoveryToken apps packages` → the definition only), and the merchant's WhatsApp
+> message is built by `apps/admin/lib/data/checkout.ts#cartMessage`, which fills `{nama, produk, toko}`
+> into the `keranjang` `wa_templates` body — a body that contains **no link placeholder** (checked in
+> the DB: *"Halo kak {{nama}} 👋, produk *{{produk}}* masih ada di keranjang…"*). So the recovery
+> message a merchant sends today carries **no way back to the cart**, and the whole storefront half —
+> `verifyRecoveryToken`, the "Selamat datang kembali" banner, the basket restore and the field
+> pre-fill in `checkout.astro` — is **unreachable**. The security shape is right; the feature is
+> absent. Wiring it is tracked in `BACKLOG.md`. See also `REQUIREMENTS.md` SEC-13.
 
 ---
 

@@ -4,7 +4,8 @@ import { withCurrentTenant } from "@/lib/tenant";
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import type { PurchaseOrder } from "@/lib/mock/store";
 
-const ADMIN_TODAY = new Date("2026-06-30T00:00:00Z");
+// ⚠️ THE REAL CLOCK. This was `ADMIN_TODAY = 2026-06-30`, the seed's frame, so anything created or
+// touched after the seed was written rendered a NEGATIVE age. The seed may be anchored; the app is not.
 
 export async function getPurchaseOrders(): Promise<PurchaseOrder[]> {
   return withCurrentTenant(async (db) => {
@@ -29,8 +30,8 @@ export async function getPurchaseOrders(): Promise<PurchaseOrder[]> {
       status: r.status,
       items: r.items,
       total: r.total,
-      etaDays: r.etaDate ? Math.round((Date.parse(r.etaDate) - ADMIN_TODAY.getTime()) / 86_400_000) : 0,
-      createdDaysAgo: Math.round((ADMIN_TODAY.getTime() - r.createdAt.getTime()) / 86_400_000),
+      etaDays: r.etaDate ? Math.round((Date.parse(r.etaDate) - Date.now()) / 86_400_000) : 0,
+      createdDaysAgo: Math.round((Date.now() - r.createdAt.getTime()) / 86_400_000),
     }));
   });
 }

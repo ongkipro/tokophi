@@ -1599,8 +1599,41 @@ production yet.
   read layer derive `ditinggal` on the fly.
 - [ ] **The capture rate limiter is in-process memory** (per SSR process) — the same known gap as
   `/api/track`. Multi-instance needs a Cloudflare rule.
+- [ ] **`seed:recent` does not cover `checkout_sessions`, and Keranjang Ditinggal now shows that.**
+  `lib/data/checkout.ts` was un-anchored from `CHECKOUT_TODAY = 2026-07-02` to the real clock on
+  2026-08-01 (the anchor made every cart read "baru saja", collapsing the age-decay ranking, and made
+  "30 hari terakhir" a window that silently grew a day per day — 60 days by 1 Agustus). The screen is
+  now truthful and, on the shared dev DB, correspondingly **emptier**: the seed's newest `ditinggal`
+  row is 2026-07-15, so a real 30-day window holds **7 carts, not 796**. `seed:recent` refreshes
+  orders/flash/ledger but inserts no `checkout_sessions`. Extend it (insert-only + idempotent, like
+  the rest of that script) — **do not re-anchor the app to make the demo look busy.**
+- [ ] 🔴 **THE RECOVERY LINK IS NEVER MINTED — the WA message has no way back to the cart.**
+  Verified 2026-08-01: `signRecoveryToken` (`apps/storefront/src/lib/recovery.ts`) has **zero callers**
+  in all four apps, and `apps/admin/lib/data/checkout.ts#cartMessage` fills only `{nama, produk, toko}`
+  into the `keranjang` `wa_templates` body — which contains no link placeholder (confirmed in the DB).
+  So ~50 lines of storefront code are unreachable: `verifyRecoveryToken`, the "Selamat datang kembali"
+  banner, the basket restore and the field pre-fill in `checkout.astro`. `CODE_MAP.md`, `UI_INVENTORY.md`,
+  `STATUS.md` and `REQUIREMENTS.md` SEC-13 all claimed this shipped; all four are now corrected.
+  **What wiring it needs** (this is why it was not done as a drive-by):
+  1. `signRecoveryToken` lives in `apps/storefront/src/lib`, which the admin cannot import. Move the
+     pair to `packages/lib/src/recovery.ts` and re-export from the storefront (the secret helper
+     `@tokophi/lib/secret` is already shared, so the module has no new deps).
+  2. `getAbandonedCarts` must mint per cart and build `https://${systemDomainFor(store.slug)}/checkout?r=…`
+     (`systemDomainFor` is the existing helper — see `produk/kategori/page.tsx`). It needs the store
+     **slug**, which the read layer currently does not fetch (`getStoreName` only returns the name).
+  3. The template needs a `{{link}}`. ⚠️ **The seed is not a migration** — no existing store's row has
+     one, so either `cartMessage` appends the URL when the body lacks `{{link}}` (smallest, works for
+     every store today) **or** it takes a data fix. The template editor's variable chips + preview
+     (`crm/template/template-client.tsx`) need `link` too, or merchants get a literal `{{link}}`.
+  4. **Nothing has ever exercised the restore path in a browser.** It must be driven end to end before
+     any of this is claimed done — mint → open → assert the basket and the typed fields come back.
+  ⚠️ **When it is wired, the mint MUST keep this shape: a signed, store-bound, 7-day jose token —
+  NEVER a raw session id.** A raw id in a URL is a bearer credential over a stranger's name, phone and
+  address the moment the link is forwarded, screenshotted, or leaks via `Referer`, and those ids are
+  already echoed in every `/api/track` beacon. See `REQUIREMENTS.md` SEC-13.
 - [ ] **Set `CHECKOUT_RECOVERY_SECRET` in the production env.** It falls back to `AUTH_SECRET`, which
   works — but it means **rotating the auth secret silently invalidates every outstanding recovery link**.
+  (Moot until the item above ships: there are no outstanding links.)
 - [ ] **Google OAuth has still never been run against real credentials** (see *Feature completeness*
   above) — a signup blocker, not an abandoned-cart one, but it is the other thing standing between this
   branch and a merchant using it.

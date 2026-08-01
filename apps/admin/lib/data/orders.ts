@@ -5,7 +5,10 @@ import { likeContains } from "@tokophi/lib/like";
 import { eq, sql, type SQL } from "drizzle-orm";
 import type { Order } from "@/lib/mock/store";
 
-const TODAY = new Date("2026-07-02T00:00:00Z");
+// ⚠️ THE REAL CLOCK for "x menit lalu" (both call sites below). This was `TODAY = 2026-07-02`, the
+// seed's frame, so an order placed today rendered a NEGATIVE age and the list's freshest row read as
+// the oldest. Computed on the server and shipped as a number, so SSR === client. The seed may be
+// anchored; the app is not.
 const CHANNEL_DISPLAY: Record<string, string> = {
   meta_ads: "Meta Ads", tiktok_ads: "TikTok Ads", google_ads: "Google Ads", organic: "Organic", other: "Other",
 };
@@ -46,7 +49,7 @@ function toOrder(r: {
     items: r.items,
     status: r.status,
     channel: CHANNEL_DISPLAY[r.channel] ?? r.channel,
-    minutesAgo: Math.round((TODAY.getTime() - r.placedAt.getTime()) / 60_000),
+    minutesAgo: Math.round((Date.now() - r.placedAt.getTime()) / 60_000),
     awb: r.awb ?? null,
     courierName: r.courier ?? null,
   };
@@ -315,7 +318,7 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
           awb: r.awb,
           problem: Boolean(r.problem),
           problemNote: r.problemNote,
-          minutesAgo: Math.round((TODAY.getTime() - new Date(r.placedAt).getTime()) / 60_000),
+          minutesAgo: Math.round((Date.now() - new Date(r.placedAt).getTime()) / 60_000),
           lines: lines.slice(0, 2).map((l) => ({
             title: l.title,
             variant: l.variant,

@@ -5,9 +5,10 @@ import { BILLING } from "@tokophi/lib/billing";
 
 // Self-serve onboarding (Daftar + Google auto-provision). Mirrors the super-admin's
 // `createStore` one-txn tenant bootstrap (account → user → store → membership → location →
-// settings → stats), with two differences:
-//   • real timestamps (the super-admin seeds an ANCHOR date for deterministic demo data),
-//   • a real trial: status "trial" + trialEndsAt = now + BILLING.TRIAL_DAYS (3 days).
+// settings → stats). Both now stamp REAL timestamps: `createStore` used to write a frozen
+// `ANCHOR = 2026-07-02` "for deterministic demo data", which made every store it provisioned read
+// "30 hari lalu" on its first day and vanish from `newSignups30d`. Removed — the seed may be
+// anchored; the app is not. Only difference left: this path is reached without a platform session.
 // Runs on the OWNER connection — deliberate: there is no session/tenant yet, exactly like
 // `lib/auth.ts` (RLS tenant scoping only applies to signed-in admin reads/writes).
 

@@ -4,7 +4,8 @@ import { withCurrentTenant } from "@/lib/tenant";
 import { desc, eq } from "drizzle-orm";
 import type { Review } from "@/lib/mock/store";
 
-const ADMIN_TODAY = new Date("2026-06-30T00:00:00Z");
+// ⚠️ THE REAL CLOCK. This was `ADMIN_TODAY = 2026-06-30`, the seed's frame, so anything created or
+// touched after the seed was written rendered a NEGATIVE age. The seed may be anchored; the app is not.
 
 export async function getReviews(): Promise<Review[]> {
   return withCurrentTenant(async (db) => {
@@ -32,7 +33,7 @@ export async function getReviews(): Promise<Review[]> {
       text: r.body ?? "",
       reply: r.reply ?? "",
       status: r.status,
-      daysAgo: Math.round((ADMIN_TODAY.getTime() - r.createdAt.getTime()) / 86_400_000),
+      daysAgo: Math.round((Date.now() - r.createdAt.getTime()) / 86_400_000),
     }));
   });
 }
