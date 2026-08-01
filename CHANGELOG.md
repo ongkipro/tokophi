@@ -2,6 +2,238 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Every store we provisioned got the owner password `tokophi123`
+
+Audit wave 2: ten read-only agents against `origin/main` @ `86e3ec3`, one worktree each, then seven change
+sets. The consolidated record is `specs/docs/audit-2026-08-01/FINDINGS-SOURCE.md`; the session handoff is
+`specs/docs/tasks/2026-08-01-audit-wave-2.md`.
+
+### 🔴 `createStore` hashed the new owner's password from a constant published in this repository
+
+`apps/super-admin/lib/actions.ts:27,107` used `DEV_PASSWORD` — the string `tokophi123`, which appears in
+this repo and in `AGENTS.md`. Onboard `budi@tokosaya.com` and anyone who knows that email address logs in
+at `app.tokophi.com` as store **owner**: every order with the buyer's name, WhatsApp and full delivery
+address, every customer record, and through `settings:write` the bank account and `requestPayout`.
+
+`AGENTS.md` already carried the rule — *"Never mint a fixed password. Random per invite, revealed once"* —
+and `invitePlatformAdmin`, **250 lines below in the same file**, was already fixed, with a comment
+asserting the other paths were correct. **Instance patched, class missed.**
+
+Random per store now, returned by the action and revealed once in a **persistent toast** — a toast and not
+a dialog, because the handler `router.push`es immediately and a dialog would unmount, while `<Toaster>`
+lives in the root layout. An action that returns a password the UI drops on the floor leaves the merchant
+unable to log in at all. Proven on `tokophi_test`, rolled back: `verify('tokophi123') = false`,
+`verify(minted) = true`. `no-fixed-password.test.ts` guards the **class** — any `hashPassword()` call that
+receives something other than a freshly minted value, any minting action that fails to hand it back, any
+write anchored to a frozen date. Proven red (3 of 5) before green.
+
+⚠️ **The code fix does not repair an account already provisioned.** Check production for owners whose
+`password_hash` verifies against `tokophi123` and rotate them — that is the only step that closes the
+existing exposure.
+
+🔴 **NOT fixed, needs a decision:** both login pages print the seeded dev credentials on screen, and the
+seed genuinely creates those rows on deploy — so the control plane advertises a working credential on its
+own login screen. Delete the hint or rotate the seeded password; it touches the seed and both apps.
+
+### The same action stamped four columns with a frozen date while computing the trial from the clock
+
+`createStore` wrote `2026-07-02` into `accounts.created_at`, `stores.created_at`,
+`store_users.accepted_at` and `store_stats.updated_at` while deriving `trialEndsAt` from `now()` — one
+row, two clocks. **A store was born ~30 days old with a 3-day trial and dropped out of `newSignups30d`
+permanently on its first day.** All four are `defaultNow()`; the trial length reads `BILLING.TRIAL_DAYS`,
+matching `provision.ts`.
+
+## Unreleased — Twelve frozen "today" anchors, and one of them rewrote data on every save
+
+The seed may be anchored to `2026-06-30`. The app is not. `AGENTS.md` records this class **twice already**
+— the discount editor's `ADMIN_TODAY` made every voucher a merchant created born already expired, and the
+super-admin healthcheck read a live store as −23 hari.
+
+### 🔴 The write: re-saving a published article walked its date backwards
+
+`actions/articles.ts` stamped `publishedAt = 2026-06-30`, and `fields()` is a full replace — the same
+mechanic as the voucher bug, one file over. `updateArticle` now reads the row's current `publishedAt`
+inside `withTenant` first, and **that read doubles as the tenant check**: a foreign id returns nothing and
+the update is skipped, mirroring `updateDiscount`. Extracted to `lib/publish-date.ts` because a
+`"use server"` module can only export async actions, so it could not otherwise be tested.
+
+Proven against real Postgres, rolled back: three saves of an article truly published `2026-07-20 08:30`
+landed on `2026-06-30` **every time** under the old code and stayed unchanged under the new; a draft's
+first publish stamps today, where it used to stamp a date already in the past.
+
+### The reads (ten)
+
+A follow-up due today computed **+32**, so the CRM overdue filter `dueDays <= 0` could not fire for it;
+customer-detail rendered "Pelanggan sejak −32 hari lalu"; the whole Seller activity feed read
+"0 menit lalu", because `Math.max(0, ANCHOR - d)` clamped every event dated after the anchor.
+`lib/mock/store.ts` and every `packages/db/src/seed*.ts` anchor stay frozen deliberately.
+
+⚠️ **Keranjang Ditinggal drops from 796/340 to 6/143 on dev, and that is CORRECT.** Un-anchoring
+`data/checkout.ts` moves `WINDOW_START` as well as the ages — the old window was a frozen `2026-06-02`
+start with **no upper bound**, 60 days on 1 Agustus and growing, labelled "30 hari". The drop is a **data
+gap, not a regression**: the seed's newest `ditinggal` row is `2026-07-15` and `seed:recent` inserts no
+`checkout_sessions`. **Extend the seed. Do not re-anchor the app to make the demo look busy.**
+
+Also: `markLabelsPrinted`'s caller toasted `printedNumbers.length` instead of the `.done` the action
+returns from `.returning()` — the action was fixed in `#117` and its caller was not. The copy now branches
+when the two differ, instead of lying in the other direction.
+
+### Docs corrected: the abandoned-cart recovery link is never minted
+
+`signRecoveryToken` has **zero callers** in all four apps and no `wa_templates` row contains a link
+placeholder, so the merchant's WhatsApp message carries no way back and ~50 lines of storefront code — the
+verifier, the "Selamat datang kembali" banner, the basket restore, the field pre-fill — are unreachable.
+`REQUIREMENTS.md` SEC-13 said MET, `UI_INVENTORY.md` said "real DB", `CODE_MAP.md` said "mints/verifies",
+`STATUS.md` said the links are signed and not guessable. SEC-13 now reads **`VACUOUSLY MET — NO LINK IS
+EVER MINTED`**, which separates what is true (no raw-id path exists; the verifier is correct and
+store-bound) from what is not. Wiring it is a P1 in `BACKLOG.md` with the four steps.
+
+## Unreleased — The sixth default-location copy, on the one connection with no RLS
+
+### 🔴 `/api/public/order` resolved a stock row without proving whose it was
+
+`#127` routed five copies through `lib/inventory-location.ts` and left this one: the public order route
+defined its own `defaultLocationRow(variantId)` with **no `store_id` predicate at all**. It is the worst
+of the six — no session, the **OWNER connection with RLS off**, and `inventory_levels` has no `store_id`,
+so the `locations` join **picks** a row without proving whose. `order by loc.is_default desc` will prefer
+another store's default warehouse.
+
+Routed through `defaultInventoryLevelId(db, variantId, store.id)` now, using the id the route already
+resolves from `stores.slug`. `#127`'s contract says a `null` return is **ambiguous** — "not stocked yet"
+and "not ours" are indistinguishable — so each of the three sites handles it by what it is: the pre-check
+is a READ and refuses either way (ownership is proved separately, one query above); the `FOR UPDATE` gate
+**refuses, never skips** (skipping would sell stock we cannot prove we have); and the decrement resolves
+nothing at all now — the lock loop records `inventory_levels.id` in a spend map and the write targets that
+id, so check and write are the same **row**, not the same expression re-evaluated. Stronger than before.
+
+⚠️ **Correction to `#127`'s framing.** `NEXT.md` said seven copies and "only the last one carries the
+tenant filter". There were **eight**, and that claim is false — `products.ts:91`/`:135` carry it too, and
+the four join-based admin copies run inside `withTenant` where `locations` is RLS'd. The genuinely exposed
+sites were **two**: `order-status.ts` (the courier webhook, owner connection) and this route.
+
+### `desc()` is NULLS FIRST, so two screens named two payment methods for one order
+
+Drizzle's `desc()` emits a bare `DESC`. `data/order-detail.ts:306` used `desc(payments.paidAt)` while
+`data/orders.ts:234` used `paid_at desc nulls last` — and **both files carried comments asserting they
+matched**, the detail one reading *"Must match the LIST's definition exactly … One order, one answer."*
+One exported `latestPaymentFirst()` serves both, with a real-Postgres test proven red then green.
+
+**Latent, not live:** 827 payments, 46 with `paid_at IS NULL`, **0** orders currently carrying both
+shapes. ⚠️ **And it is NOT a money bug**, though an earlier draft said so: both comments claim this
+ordering feeds `createShipment`'s cash-collection instruction and it does not —
+`actions/shipping.ts:512` derives COD from `exists (select 1 from payments … method = 'cod')`, an
+existence test no `ORDER BY` can affect. The comments now say so. The same two files have now been found
+carrying two false comments each.
+
+*Same class, lower stakes, still open:* `data/articles.ts:57` sorts every draft above every published post.
+
+## Unreleased — 22 money tests that had never run on anyone's machine
+
+`apps/admin/lib/ledger-credit.test.ts` skips without `TEST_DATABASE_URL`. It guards what only a database
+can settle — that a double-credit is impossible (three partial unique indexes), and
+`select sum(…) for update`, which Postgres rejects outright and which `tsc` cannot see inside a SQL
+string. It ran only if a developer happened to export that variable by hand. Nobody did, and there is no
+CI here, so **22 tests over the code that decides when a sale becomes withdrawable had never run**.
+
+The skip was deliberate and well-meant — it kept `vitest run` green on a laptop with no test DB. The cost
+was silence.
+
+`test/db-setup.ts` (a vitest `globalSetup`) derives `<DATABASE_URL>_test`, creates that database if absent,
+migrates it to head and exports `TEST_DATABASE_URL`. The container is already required to run the app:
+
+```
+before   16 files passed, 1 skipped   145 passed, 22 skipped
+after    22 files passed              182 passed,  0 skipped
+```
+
+⚠️ **The guard is the point:** the resolved name **must** end in `_test` or setup throws. These suites seed
+stores, orders and payments; they roll every transaction back, but pointing them at the shared dev database
+must stay impossible. **Do not relax it.** An unreachable database still skips — with a banner naming the
+reason and the command to fix it — so a machine without Docker gets a green run instead of a wall of noise;
+`npm run test:db` turns that skip into a failure. Use it before a PR.
+
+## Unreleased — The star rating was 30% of the homepage DOM
+
+`dom-size` scored **0** at 992 elements. `NEXT.md` named two candidates and measurement killed **both**
+before a line was written: deferring the carousel slides buys ~30 elements of a 106-element hero and costs
+the crawler and the no-JS reader the copy; cutting what the default template seeds is **zero delta by
+construction**, because the seed is not a migration and reaches new stores only.
+
+Counted in Chromium at 412×915 DPR 2 instead. `Stars.astro` drew each rating as two layers of five
+separate `<svg>` elements — **26 elements, twelve times per homepage: 312 elements, 30% of the page**. One
+`<svg>` with five `<path>`s per layer, geometry moved into the `viewBox`, is **17**.
+
+```
+homepage DOM   1023 -> 915   (-10,6%)
+/ HTML         213 192 -> 210 252 B
+dist/client    0 delta
+```
+
+Verified by **pixel A/B** over 40 rating widgets: byte-identical at DPR 8 and DPR 2; at DPR 3, 8 of 40
+differ by 1–2 pixels out of 45 288, max channel delta 5/255, all on the fractional-fill clip edge. (The
+cross-validator's re-run found 36/36 identical at DPR 1 and 2 but **34 of 36** differing at DPR 3, at the
+same sub-pixel magnitude — the two runs agree on magnitude and disagree on count. Recorded, not smoothed.)
+
+**Honest limit:** 915 is under Lighthouse's 1400 median and still over its 800 p10 — the audit improves
+without passing. The next largest repeats are the header and footer lucide icons.
+
+## Unreleased — Three `<h1>`s on every homepage, and a 2000px original in a 66px tile
+
+### 🔴 The homepage `<h1>` count was wrong in BOTH directions, and a third case fell between them
+
+N11 fixed the *missing* `<h1>` (a Store Builder homepage with no Hero). This is the other half, N14:
+`Hero.astro` rendered the heading **inside the slide loop**, so the seeded 3-slide carousel published
+**three** on every store's homepage. Measured against a real build: `h1 3` → `h1 1`. Only one slide is
+an `<h1>` now; the rest are a `<p>` sharing ONE heading-class constant, so the two tags stay
+pixel-identical. The cross-fade is untouched — nothing is unmounted, nothing in the carousel script
+selects `h1` (it drives `[data-hero-copy]`), and off-screen slides are `inert` either way.
+
+⚠️ **A third defect was live between the two fixes.** `heroSlides()` deliberately keeps a slide with an
+`imageUrl` and no heading (a pictorial hero), and N11's floor keys on `s.type === "hero"` — so on that
+template the floor stood down *and* the hero rendered `<h1></h1>`. Measured on `origin/main` against
+that shape: **`h1 2`, both empty**. So it is `HEADING_INDEX`, not slide 0, and the floor now goes
+through `heroSlides()` too: **both halves ask the same question**, "is there a slide whose heading is
+non-blank". CONTRACT: change one and they silently disagree — zero `<h1>` on a pictorial hero, or two
+on an ordinary one, with build, lint and `astro check` green either way.
+
+Guarded twice on purpose. `sections/h1-floor.test.ts` pins the PREMISE (Hero is still the only emitter;
+both halves still key on the heading text) with no DB and no browser. `scripts/check-h1-floor.mjs`
+stages a hero-less AND a heading-less template in the DB and counts the `<h1>`s in the rendered HTML —
+a unit test cannot see a template that lives in the database.
+
+### 🔴 The PDP gallery thumbnails had no `srcset` at all — the third time this class has cost bytes
+
+The `<button data-thumb>` carried a full `data-srcset` ladder all along (it promotes it onto the main
+image on click) while the visible `<img>` **inside** it rendered a bare `src`: the browser was handed
+the full-size original for a 66 px tile. Same family as #119/#120 — markup valid, `astro check` green,
+bytes wrong. Measured on `/produk/dress-midi-bunga`, 3 runs each, identical every run:
+**153 940 → 30 782 B at DPR 1 (−80,0 %)** and **151 552 → 42 646 B at DPR 2 (−71,9 %)**.
+
+⚠️ `sizes` is derived from the container padding + `gap-3` + **the thumbnail COUNT**, NOT from the
+`max-w-[7rem]` class. `max-w` only CAPS a `flex-1 basis-0` tile, which measures **66 px** at n=5 on a
+412 px phone — declaring the cap over-claims 1,7× and costs a whole rung: `sizes="112px"` pulls the
+400w files for 60 114 B where the derived value pulls the 200w files for 42 646 B, **17 468 B for one
+word**. Guarded by `scripts/check-pdp-srcset.mjs`, which asserts what the browser RESOLVES TO (nothing
+over 3× the device pixels it fills) on a second, isolated selection — it does NOT read `currentSrc`
+after the page load, because the spec lets Chromium satisfy the 66 px thumbnail out of the main
+photo's already-fetched 800w copy, and the naive reading failed 5 runs in 6 against a correct build.
+
+⚠️ **Still open, and the check PRINTS it rather than failing:** `Header.astro` renders bare `<img>` on
+every page — 10 catalog images with no `srcset`, in a different file with separate `sizes` derivations.
+*A check red for work nobody in this change can land is a check everyone learns to ignore.*
+
+### The upload width ladder never offered the original
+
+`WIDTHS` in `data/catalog.ts` and the allow-list in `apps/admin/app/api/uploads/[name]/route.ts` are
+ONE decision in two files, and both stopped at **1200** while `saveImage` caps an upload at
+`MAX_DIM = 2000`. Out-of-list widths 400, so 1200 was a hard ceiling: a `sizes="100vw"` merchant hero
+on a 1920 px desktop got a 1200 px file stretched with the 2000 px original unreachable on disk. Both
+now end at 2000. Safe only because the route never upscales — re-verified by calling the handler
+directly: `?w=1200/1600/2000` on a 300 px source all return the original **byte-for-byte**, while the
+same sharp pipeline with the guard removed enlarges 300 → 2000 px, so the guard is what stops it, not
+sharp. `?w=2400` / `?w=999` / `?w=1` are still 400 — the allow-list still bounds the cache key space
+at original + 6 widths.
+
 ## Unreleased — The default-location expression had five copies and one tenant filter
 
 Working the `NEXT.md` queue (N9, N10, N11, N13). Two of its entries rested on claims that are not
