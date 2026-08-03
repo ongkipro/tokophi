@@ -603,6 +603,13 @@
       "when": 1785406810888,
       "tag": "0085_payment_lookup_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1785406811888,
+      "tag": "0086_operator_suspension",
+      "breakpoints": true
     }
   ]
 }

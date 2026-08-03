@@ -19,9 +19,16 @@ export class ForbiddenError extends Error {
 
 // Gate a server action. Returns the session (so callers get storeId/role/userId)
 // or throws ForbiddenError when the current role lacks the capability.
+// Two reasons a store is read-only, and they need two different sentences: an unpaid subscription
+// is fixed by paying, an operator suspension is not (paying it will not unlock anything). Telling a
+// merchant we locked for abuse to "bayar tagihan" invites a payment that changes nothing.
 export class SuspendedError extends Error {
-  constructor() {
-    super("Langganan ditangguhkan — aktifkan kembali (bayar tagihan) untuk menyimpan perubahan.");
+  constructor(reason?: string | null) {
+    super(
+      reason === undefined
+        ? "Langganan ditangguhkan — aktifkan kembali (bayar tagihan) untuk menyimpan perubahan."
+        : `Toko ditangguhkan oleh TokoΦ${reason ? ` — ${reason}` : ""}. Perubahan tidak bisa disimpan; hubungi kami lewat Bantuan.`,
+    );
     this.name = "SuspendedError";
   }
 }
@@ -37,7 +44,7 @@ export async function requireCapability(cap: Capability, opts?: { allowSuspended
   // (Paying re-activates via the langganan flow, which does not go through requireCapability.)
   if (!opts?.allowSuspended) {
     const bill = await getBilling();
-    if (bill?.readOnly) throw new SuspendedError();
+    if (bill?.readOnly) throw new SuspendedError(bill.operatorSuspended ? bill.suspendedReason : undefined);
   }
   return session;
 }

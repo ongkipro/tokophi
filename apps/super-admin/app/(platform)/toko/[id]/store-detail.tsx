@@ -28,7 +28,7 @@ import type { StoreInvoiceRow, StoreUserRow, StoreBalance, StoreMovement, StoreP
 import type { PActivity } from "@/lib/types";
 import { SaldoSection } from "./saldo-section";
 import {
-  impersonateStore, setStoreStatus, compStore, extendTrial, setStoreComped,
+  impersonateStore, suspendStore, liftSuspension, compStore, extendTrial, setStoreComped,
   resetOwnerPassword, resetStoreUserPassword, setStoreUserRole, removeStoreUser, addStoreUser,
   createManualInvoice, sendPaymentReminder,
 } from "@/lib/actions";
@@ -53,7 +53,14 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const suspended = store.status === "ditangguhkan";
+  // ⚠️ "Is this store suspended by US?" is `billing.operatorSuspended`, NOT the status badge.
+  // `store.status` is the BILLING lifecycle ("ditangguhkan" = past the payment grace period), so
+  // deriving the button from it made "Aktifkan" on an unpaid store flip the column, refresh, and
+  // come back reading "Aktifkan" again — the operator pressing a button that could never change its
+  // own label. These are two different facts and the button must name the one it actually writes.
+  const suspended = !!billing?.operatorSuspended;
+  const [susOpen, setSusOpen] = useState(false);
+  const [susReason, setSusReason] = useState("");
 
   // credential reveal dialog (after a password reset)
   const [cred, setCred] = useState<{ email: string; password: string } | null>(null);
@@ -71,14 +78,20 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
   // ⚠️ RESPECT A REFUSAL. This used to `await fn()` and then announce success unconditionally, so any
   // action that returns `{ ok: false, error }` — a guard doing its job — was reported to the operator
   // as having worked. A control plane that says "done" when it refused is worse than one that throws.
+  //
+  // …and a `message` on the result WINS over the caller's optimistic string. That is the other half:
+  // "Toko diaktifkan." was hard-coded at the call site, so lifting a suspension on a store that is
+  // still locked for non-payment announced a reactivation that did not happen. Only the action knows
+  // what the store became — it read the row back — so only the action gets to say it.
   const run = (fn: () => Promise<unknown>, ok?: string) =>
     startTransition(async () => {
-      const r = (await fn()) as { ok?: boolean; error?: string } | void;
+      const r = (await fn()) as { ok?: boolean; error?: string; message?: string } | void;
       if (r && typeof r === "object" && r.ok === false) {
         toast.error(r.error ?? "Tidak bisa dijalankan.");
         return;
       }
-      if (ok) toast.success(ok);
+      const said = (r && typeof r === "object" && r.message) || ok;
+      if (said) toast.success(said);
       router.refresh();
     });
 
@@ -89,7 +102,16 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
       else toast.error(r.error ?? "Gagal membuka Dashboard Seller.");
     });
   }
-  const toggleSuspend = () => run(() => setStoreStatus(store.id, suspended ? "active" : "suspended"), suspended ? "Toko diaktifkan." : "Toko ditangguhkan.");
+  const liftSuspend = () => run(() => liftSuspension(store.id));
+  const confirmSuspend = () =>
+    startTransition(async () => {
+      const r = await suspendStore(store.id, susReason);
+      if (!r.ok) { toast.error(r.error ?? "Gagal menangguhkan."); return; }
+      setSusOpen(false);
+      setSusReason("");
+      toast.success(r.message!);
+      router.refresh();
+    });
   const giveComp = () => run(() => compStore(store.id, 1), "Diberi gratis 1 bulan.");
   const makeInvoice = () => startTransition(async () => {
     const r = await createManualInvoice(store.id, "monthly");
@@ -165,11 +187,22 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
         </div>
         <div className="flex gap-2">
           <Button className="gap-1.5" disabled={pending} onClick={openAdmin}><ExternalLink className="size-4" /> Buka Dashboard Seller</Button>
-          <Button variant="ghost" disabled={pending} className={cn(!suspended && "text-destructive hover:text-destructive")} onClick={toggleSuspend}>
-            {suspended ? <><Play className="size-4" /> Aktifkan</> : <><Ban className="size-4" /> Tangguhkan</>}
+          <Button variant="ghost" disabled={pending} className={cn(!suspended && "text-destructive hover:text-destructive")} onClick={suspended ? liftSuspend : () => setSusOpen(true)}>
+            {suspended ? <><Play className="size-4" /> Cabut penangguhan</> : <><Ban className="size-4" /> Tangguhkan</>}
           </Button>
         </div>
       </div>
+
+      {/* Operator suspension — stated first, and stated as an OUTCOME: what is actually locked. */}
+      {suspended && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
+          <span className="flex items-center gap-2 text-destructive">
+            <Ban className="size-4" /> <b>Ditangguhkan oleh platform</b> — panel Seller baca-saja (semua penyimpanan ditolak); storefront tetap melayani pembeli.
+            {billing?.suspendedReason ? ` Alasan: ${billing.suspendedReason}` : ""}
+          </span>
+          <Button size="sm" variant="outline" disabled={pending} onClick={liftSuspend}>Cabut penangguhan</Button>
+        </div>
+      )}
 
       {/* VIP / recommendation banner */}
       {comp.comped && (
@@ -397,14 +430,36 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
                 <Button variant="outline" className="w-full justify-start gap-2 text-violet-600 hover:text-violet-600 dark:text-violet-400" disabled={pending} onClick={() => setVipOpen(true)}><Crown className="size-4" /> Jadikan VIP (hapus langganan)</Button>
               )}
               {suspended ? (
-                <Button variant="outline" className="w-full justify-start gap-2" disabled={pending} onClick={toggleSuspend}><Play className="size-4" /> Aktifkan</Button>
+                <Button variant="outline" className="w-full justify-start gap-2" disabled={pending} onClick={liftSuspend}><Play className="size-4" /> Cabut penangguhan</Button>
               ) : (
-                <Button variant="outline" className="w-full justify-start gap-2 text-destructive hover:text-destructive" disabled={pending} onClick={toggleSuspend}><Ban className="size-4" /> Tangguhkan</Button>
+                <Button variant="outline" className="w-full justify-start gap-2 text-destructive hover:text-destructive" disabled={pending} onClick={() => setSusOpen(true)}><Ban className="size-4" /> Tangguhkan</Button>
               )}
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* Suspension reason — REQUIRED. The merchant is shown this string on their own panel, and an
+          operator suspension nobody wrote a reason for is one nobody can review, appeal or lift. */}
+      <Dialog open={susOpen} onOpenChange={setSusOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Tangguhkan {store.name}</DialogTitle></DialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              Panel Seller menjadi <b>baca-saja</b> — pemilik toko tidak bisa menyimpan apa pun sampai penangguhan dicabut.
+              Storefront tetap melayani pembeli, dan tagihan tetap berjalan: <b>membayar tidak otomatis membuka penangguhan ini.</b>
+            </p>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="sus-reason">Alasan (wajib, ditampilkan ke pemilik toko)</Label>
+              <Input id="sus-reason" value={susReason} onChange={(e) => setSusReason(e.target.value)} placeholder="Mis. dugaan penjualan barang palsu — menunggu verifikasi" />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline">Batal</Button>} />
+            <Button variant="destructive" disabled={pending || susReason.trim().length < 5} onClick={confirmSuspend}>{pending ? "Menangguhkan…" : "Tangguhkan"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* VIP reason dialog */}
       <Dialog open={vipOpen} onOpenChange={setVipOpen}>

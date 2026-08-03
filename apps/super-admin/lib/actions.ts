@@ -8,7 +8,7 @@ import { tempPassword, hashPassword } from "@tokophi/lib/password";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
 import { isInstantService } from "@tokophi/lib/couriers";
 import { alTestConnection, alProbeChannels, alCreatePayment } from "@tokophi/lib/autolaris";
-import { BILLING, addMonths, quote, withPpn } from "@tokophi/lib/billing";
+import { BILLING, addMonths, quote, withPpn, computeBilling, type BillingStatus } from "@tokophi/lib/billing";
 
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
@@ -69,14 +69,131 @@ export async function impersonateStore(storeId: string): Promise<{ ok: boolean; 
   return { ok: true, adminUrl: url };
 }
 
-export async function setStoreStatus(storeId: string, status: "active" | "trial" | "suspended"): Promise<void> {
-  await requirePlatformAdmin();
-  await db.update(schema.stores).set({ status }).where(eq(schema.stores.id, storeId));
-  const label = status === "suspended" ? "ditangguhkan" : status === "active" ? "diaktifkan" : "dikembalikan ke trial";
-  await logStore(storeId, `Toko ${label} oleh platform`);
+// ============================================================================
+// Operator suspension — the platform locking a merchant's panel, deliberately
+// ============================================================================
+//
+// 🔴 THE BUTTON DID NOTHING FOR MONTHS, AND SAID IT HAD WORKED. `setStoreStatus` wrote
+// `stores.status` and an audit row reading "Toko ditangguhkan oleh platform". But whether a merchant
+// is locked out is decided by `computeBilling()` (`@tokophi/lib/billing`), which read `comped`,
+// `currentPeriodEnd` and `trialEndsAt` and **never `stores.status`** — so the suspended merchant
+// kept a fully writable panel (measured: "Tambah Produk" present, a real save persisted), and the
+// nightly billing cron rewrote the column back within 24 hours. Three separate lies: the toast, the
+// audit entry, and the badge.
+//
+// The fix is a SEPARATE FACT, not a better write to the same column: `stores.suspended_at`, which
+// `computeBilling` reads. Billing keeps running underneath. That is the point — the two must coexist:
+//   · a store suspended for ABUSE that then pays its invoice must stay suspended;
+//   · a store suspended for NON-PAYMENT must reactivate the moment it pays, without an operator;
+//   · a VIP (comped) store must still be lockable — VIP bypasses billing, it is not an abuse shield.
+//
+// ⚠️ AND THE AUDIT ENTRY REPORTS AN OUTCOME, NOT AN INTENT. Both actions below re-read the row they
+// just wrote (`.returning()`), recompute the effective state from it, and log THAT. The rule is
+// already in AGENTS.md from `markLabelsPrinted`: report what you WROTE, never what you were asked to
+// write. A store id that matches nothing updates zero rows, and now says so instead of logging a
+// suspension that never happened.
+
+// The billing columns `computeBilling` needs — one list, so a `returning()` cannot drift from the
+// selects in the read layer.
+const BILLING_COLS = {
+  trialEndsAt: schema.stores.trialEndsAt,
+  currentPeriodEnd: schema.stores.currentPeriodEnd,
+  firstInvoicePaid: schema.stores.firstInvoicePaid,
+  comped: schema.stores.comped,
+  suspendedAt: schema.stores.suspendedAt,
+  suspendedReason: schema.stores.suspendedReason,
+} as const;
+
+const EFFECTIVE_LABEL: Record<BillingStatus, string> = {
+  active: "aktif",
+  trial: "uji coba",
+  past_due: "menunggak",
+  suspended: "ditangguhkan",
+};
+
+// Re-read a store's billing columns and write `stores.status` from what is ACTUALLY there.
+//
+// `stores.status` is a denormalized cache (the nightly cron's job 1). Every action here used to set
+// it optimistically — `status: "active"` beside a comp, a VIP toggle or a trial extension — which is
+// how it came to disagree with the truth: "Gratiskan 1 bulan" on an operator-suspended store would
+// stamp `active` on a panel that is still locked. Deriving it from the row we just wrote costs one
+// SELECT and removes the whole class.
+async function syncStoredStatus(storeId: string, tx: typeof db = db) {
+  const [row] = await tx.select(BILLING_COLS).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
+  if (!row) return null;
+  const state = computeBilling(row);
+  await tx.update(schema.stores).set({ status: state.status }).where(eq(schema.stores.id, storeId));
+  return state;
+}
+
+// Write the operator's suspension, then read back what the store ACTUALLY is now — in one
+// transaction, so the column and the truth cannot disagree even for a moment, and so the audit line
+// below is written from the re-read rather than from what we intended.
+async function writeSuspension(storeId: string, suspendedAt: Date | null, reason: string | null) {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(schema.stores)
+      .set({ suspendedAt, suspendedReason: suspendedAt ? reason : null })
+      .where(eq(schema.stores.id, storeId))
+      .returning({ ...BILLING_COLS, name: schema.stores.name });
+    if (!row) return null; // no such store — nothing was written, so nothing gets logged
+    const state = computeBilling(row);
+    await tx.update(schema.stores).set({ status: state.status }).where(eq(schema.stores.id, storeId));
+    return { row, state };
+  });
+}
+
+function revalidateStore(storeId: string) {
   revalidatePath("/toko");
   revalidatePath(`/toko/${storeId}`);
   revalidatePath("/");
+}
+
+export type SuspensionResult = { ok: boolean; error?: string; message?: string; effective?: BillingStatus };
+
+// Lock a merchant's panel. Reads-stay-up: the storefront keeps selling, only the Seller panel's
+// writes are refused (`requireCapability` → SuspendedError).
+export async function suspendStore(storeId: string, reason: string): Promise<SuspensionResult> {
+  const admin = await requirePlatformAdmin();
+  const why = reason?.trim();
+  // A suspension with no stated reason is one nobody can review, appeal or lift with confidence —
+  // and the merchant is shown this string, so "because" is not good enough.
+  if (!why || why.length < 5) return { ok: false, error: "Tulis alasan penangguhan (minimal 5 karakter) — alasannya ditampilkan ke pemilik toko." };
+
+  const res = await writeSuspension(storeId, new Date(), why);
+  if (!res) return { ok: false, error: "Toko tidak ditemukan — tidak ada yang diubah." };
+
+  await logStore(storeId, `Toko DITANGGUHKAN oleh ${admin.email} — alasan: ${why}. Hasil: panel Seller terkunci (tulis ditolak), status efektif "${EFFECTIVE_LABEL[res.state.status]}"; storefront tetap jalan.`);
+  revalidateStore(storeId);
+  return { ok: true, effective: res.state.status, message: `“${res.row.name}” ditangguhkan — panel Seller terkunci (baca-saja).` };
+}
+
+// Lift the operator's suspension. It restores the BILLING-DERIVED state and nothing more — it does
+// not grant free time. So a store that was also overdue stays locked, for the other reason, and the
+// operator is told so instead of being shown a success message over a panel that is still read-only.
+// (Granting time is what "Gratiskan 1 bulan" is for; making the operator decide billing here would
+// hide a month of revenue behind a button labelled "Aktifkan".)
+export async function liftSuspension(storeId: string): Promise<SuspensionResult> {
+  const admin = await requirePlatformAdmin();
+  const res = await writeSuspension(storeId, null, null);
+  if (!res) return { ok: false, error: "Toko tidak ditemukan — tidak ada yang diubah." };
+
+  const st = res.state.status;
+  const stillLocked = res.state.readOnly;
+  await logStore(
+    storeId,
+    stillLocked
+      ? `Penangguhan platform DICABUT oleh ${admin.email}. Hasil: toko MASIH terkunci — status efektif "${EFFECTIVE_LABEL[st]}" (langganan belum lunas), bukan aktif.`
+      : `Penangguhan platform DICABUT oleh ${admin.email}. Hasil: panel Seller kembali bisa menulis, status efektif "${EFFECTIVE_LABEL[st]}".`,
+  );
+  revalidateStore(storeId);
+  return {
+    ok: true,
+    effective: st,
+    message: stillLocked
+      ? `Penangguhan dicabut, tapi “${res.row.name}” masih baca-saja: langganan ${EFFECTIVE_LABEL[st]}. Beri "Gratiskan 1 bulan" atau tunggu pembayaran.`
+      : `“${res.row.name}” aktif kembali — panel Seller bisa menulis lagi.`,
+  };
 }
 
 // ---- provisioning: onboard a new merchant store (account + owner + store + membership + stats) ----
@@ -472,8 +589,15 @@ export async function compStore(storeId: string, months = 1): Promise<{ ok: bool
   // and its first real invoice becomes Rp305.250 instead of Rp55.500 — Rp249.750 too much, charged to
   // the merchant we were trying to compensate. `computeBilling` reads `active` from
   // `currentPeriodEnd` alone (billing.ts), so the comp works without it.
-  await db.update(schema.stores).set({ currentPeriodEnd: until, status: "active" }).where(eq(schema.stores.id, storeId));
-  await logStore(storeId, `Gratis ${months} bulan diberikan (aktif s/d ${until.toLocaleDateString("id-ID")})`);
+  await db.update(schema.stores).set({ currentPeriodEnd: until }).where(eq(schema.stores.id, storeId));
+  // `status` is DERIVED, never asserted — a comp does not unlock a store an operator suspended.
+  const state = await syncStoredStatus(storeId);
+  await logStore(
+    storeId,
+    state?.operatorSuspended
+      ? `Gratis ${months} bulan diberikan (langganan s/d ${until.toLocaleDateString("id-ID")}). Hasil: toko TETAP ditangguhkan oleh platform — cabut penangguhan untuk membukanya.`
+      : `Gratis ${months} bulan diberikan (aktif s/d ${until.toLocaleDateString("id-ID")})`,
+  );
   revalidatePath(`/toko/${storeId}`); revalidatePath("/toko"); revalidatePath("/");
   return { ok: true, until: until.toISOString() };
 }
@@ -496,8 +620,14 @@ export async function extendTrial(storeId: string, days = 7): Promise<{ ok: bool
     return { ok: false, error: "Toko ini sudah berlangganan — pakai \"Gratiskan 1 bulan\" agar periode berbayarnya tidak hangus." };
   }
   const until = new Date(Date.now() + days * 86_400_000);
-  await db.update(schema.stores).set({ trialEndsAt: until, currentPeriodEnd: null, status: "trial", firstInvoicePaid: false }).where(eq(schema.stores.id, storeId));
-  await logStore(storeId, `Trial diperpanjang ${days} hari (s/d ${until.toLocaleDateString("id-ID")})`);
+  await db.update(schema.stores).set({ trialEndsAt: until, currentPeriodEnd: null, firstInvoicePaid: false }).where(eq(schema.stores.id, storeId));
+  const state = await syncStoredStatus(storeId);
+  await logStore(
+    storeId,
+    state?.operatorSuspended
+      ? `Trial diperpanjang ${days} hari (s/d ${until.toLocaleDateString("id-ID")}). Hasil: toko TETAP ditangguhkan oleh platform.`
+      : `Trial diperpanjang ${days} hari (s/d ${until.toLocaleDateString("id-ID")})`,
+  );
   revalidatePath(`/toko/${storeId}`); revalidatePath("/toko"); revalidatePath("/");
   return { ok: true };
 }
@@ -506,9 +636,12 @@ export async function extendTrial(storeId: string, days = 7): Promise<{ ok: bool
 export async function setStoreComped(storeId: string, comped: boolean, reason?: string): Promise<{ ok: boolean }> {
   await requirePlatformAdmin();
   const patch: Record<string, unknown> = { comped, compedReason: comped ? (reason?.trim() || "Dibebaskan platform") : null, compedAt: comped ? new Date() : null };
-  if (comped) patch.status = "active"; // VIP is always active
   await db.update(schema.stores).set(patch).where(eq(schema.stores.id, storeId));
-  await logStore(storeId, comped ? `Langganan dibebaskan (VIP) — ${reason?.trim() || "tanpa biaya bulanan"}` : "Status VIP dicabut — kembali ke langganan berbayar");
+  // VIP is always active — for BILLING. It is not an abuse shield: an operator suspension outranks
+  // it (see `computeBilling`), so the stored status is derived rather than asserted `active` here.
+  const state = await syncStoredStatus(storeId);
+  const suffix = state?.operatorSuspended ? " Hasil: toko TETAP ditangguhkan oleh platform (VIP hanya membebaskan biaya, bukan penangguhan)." : "";
+  await logStore(storeId, (comped ? `Langganan dibebaskan (VIP) — ${reason?.trim() || "tanpa biaya bulanan"}` : "Status VIP dicabut — kembali ke langganan berbayar") + suffix);
   revalidatePath(`/toko/${storeId}`); revalidatePath("/toko"); revalidatePath("/");
   return { ok: true };
 }

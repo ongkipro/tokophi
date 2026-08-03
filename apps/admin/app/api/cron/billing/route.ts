@@ -6,11 +6,18 @@ import { alCreatePayment, autolarisConfigured } from "@tokophi/lib/autolaris";
 
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 // Daily billing job (schedule via Coolify Scheduled Task / external cron → GET with the secret):
-//   1) sync each store's stored `status` to its real-time lifecycle state
+//   1) sync each store's stored `status` to its real-time EFFECTIVE state
 //   2) for stores whose period ended (past_due/suspended) with no pending subscription invoice,
 //      generate a monthly VA invoice so the merchant can renew.
 // Suspension enforcement itself is already real-time (computeBilling in requireCapability), so this
 // job is for stored-status accuracy + recurring invoice generation.
+//
+// ⚠️ THIS JOB MUST NOT OVERRULE AN OPERATOR. It used to write `computeBilling(s).status` from the
+// billing columns alone, so a store super-admin had suspended was flipped back to `active`/`trial`
+// on the next nightly run — the operator's decision expiring in silence, with nothing in the audit
+// log to say it had been undone. `computeBilling` now folds `stores.suspended_at` into `status`, so
+// the sync propagates the operator's decision instead of erasing it, and the invoice branch below
+// reads `billingStatus` so the money half stays keyed on the subscription alone.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -46,6 +53,9 @@ export async function GET(req: NextRequest) {
       currentPeriodEnd: schema.stores.currentPeriodEnd,
       firstInvoicePaid: schema.stores.firstInvoicePaid,
       comped: schema.stores.comped,
+      // 0086 — without this the job re-derives the status from billing ALONE and writes it back,
+      // which is how an operator's "Tangguhkan" was silently reverted within 24 hours.
+      suspendedAt: schema.stores.suspendedAt,
     })
     .from(schema.stores);
 
@@ -61,7 +71,13 @@ export async function GET(req: NextRequest) {
       statusSynced++;
     }
 
-    if ((b.status === "past_due" || b.status === "suspended") && autolarisConfigured()) {
+    // ⚠️ `billingStatus`, NOT `status`. `status` now carries the operator's suspension on top of the
+    // subscription, and a store an operator locked mid-period is fully paid up — raising a renewal
+    // invoice against it would bill it weeks early, for a lock that has nothing to do with money.
+    // A suspended store that genuinely IS overdue still reads `past_due`/`suspended` here and still
+    // gets its invoice: being locked does not cancel the debt, and paying is how it gets unlocked
+    // when the reason was non-payment.
+    if ((b.billingStatus === "past_due" || b.billingStatus === "suspended") && autolarisConfigured()) {
       const [pending] = await db
         .select({ id: schema.invoices.id })
         .from(schema.invoices)

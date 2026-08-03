@@ -309,7 +309,7 @@ export const BLOG_CATEGORIES = ["Berita Toko", "Tips & Panduan"] as const;
 // `body` + `imageUrl` are OPTIONAL here only because the mock fixtures below predate them. The DB
 // read layer (lib/data/articles.ts) always supplies both — and must, or the editor writes back an
 // empty body over the merchant's text. See the note on `sel` there.
-export type BlogPost = { id: string; title: string; handle: string; blog: string; author: string; published: boolean; publishedDaysAgo: number; excerpt: string; body?: string; imageUrl?: string; comments: number };
+export type BlogPost = { id: string; title: string; handle: string; blog: string; blogId?: string; author: string; published: boolean; publishedDaysAgo: number; excerpt: string; body?: string; imageUrl?: string; comments: number };
 export const BLOG_POSTS: BlogPost[] = [
   { id: "BP-1", title: "Promo Gajian: Diskon s/d 40% Sepanjang Bulan Ini", handle: "promo-gajian-diskon", blog: "Berita Toko", author: "Ongki Pratama", published: true, publishedDaysAgo: 2, excerpt: "Nikmati potongan harga untuk ratusan produk pilihan selama periode gajian.", comments: 8 },
   { id: "BP-2", title: "5 Tips Memilih Ukuran Baju yang Pas saat Belanja Online", handle: "tips-memilih-ukuran-baju", blog: "Tips & Panduan", author: "Sari Melati", published: true, publishedDaysAgo: 5, excerpt: "Panduan singkat agar tidak salah ukuran ketika belanja fashion secara online.", comments: 3 },

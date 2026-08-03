@@ -14,8 +14,11 @@ const STATUS_UI: Record<string, { label: string; dot: string; accent: string }> 
 export async function Sidebar({ navCounts }: { navCounts?: NavCounts }) {
   const bill = await getBilling();
   const ui = STATUS_UI[bill?.status ?? "active"];
-  const label = bill?.comped ? "VIP · gratis" : ui.label;
-  const days = bill && !bill.comped && bill.status !== "suspended" ? `${bill.daysLeft}h` : null;
+  // ⚠️ `comped` is checked SECOND. A VIP store an operator suspended is suspended — reading "VIP ·
+  // gratis" in a violet pill on a panel that refuses every save is the same lie in miniature.
+  const vip = !!bill?.comped && !bill.operatorSuspended;
+  const label = bill?.operatorSuspended ? "Ditangguhkan" : vip ? "VIP · gratis" : ui.label;
+  const days = bill && !vip && bill.status !== "suspended" ? `${bill.daysLeft}h` : null;
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r bg-card lg:flex">
       <div className="flex h-16 items-center border-b px-5">
@@ -25,11 +28,11 @@ export async function Sidebar({ navCounts }: { navCounts?: NavCounts }) {
       <div className="border-b px-3 py-2.5">
         <Link
           href="/akun/langganan"
-          className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs transition-colors hover:bg-muted/50 ${bill?.comped ? "border-violet-500/30 bg-violet-500/5" : ui.accent}`}
+          className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs transition-colors hover:bg-muted/50 ${vip ? "border-violet-500/30 bg-violet-500/5" : ui.accent}`}
         >
           <span className="flex items-center gap-1.5 font-medium"><Sparkles className="size-3.5 text-primary" /> Langganan</span>
           <span className="flex items-center gap-1.5">
-            <span className={`size-1.5 rounded-full ${bill?.comped ? "bg-violet-500" : ui.dot}`} />
+            <span className={`size-1.5 rounded-full ${vip ? "bg-violet-500" : ui.dot}`} />
             <span className="text-muted-foreground">{label}{days ? ` · ${days}` : ""}</span>
           </span>
         </Link>
