@@ -98,12 +98,20 @@ describe("normalizeAddress / addressError — letters AND digits; junk refused",
   });
 });
 
-describe("normalizePostcode / postcodeError — optional, exactly 5 digits", () => {
-  it("optional (empty ok), strips non-digits, refuses non-5-digit", () => {
-    expect(postcodeError("")).toBeNull();
+describe("normalizePostcode / postcodeError — REQUIRED, exactly 5 digits", () => {
+  it("required (empty is refused), strips non-digits, refuses non-5-digit", () => {
+    expect(postcodeError("")).toMatch(/wajib diisi/i);
+    expect(postcodeError("   ")).toMatch(/wajib diisi/i);
+    expect(postcodeError(undefined)).toMatch(/wajib diisi/i);
     expect(postcodeError("55281")).toBeNull();
     expect(normalizePostcode("55281-extra")).toBe("55281");
     expect(postcodeError("123")).toMatch(/5 angka/i);
+  });
+  // PRESENCE, not membership: the local `kelurahan` table is a snapshot and postcodes get added.
+  // A code that is real but not in our copy must still go through, or a real shopper is refused.
+  it("accepts a well-formed code that is not in the local kelurahan snapshot", () => {
+    expect(postcodeError("99999")).toBeNull();
+    expect(postcodeError("00001")).toBeNull();
   });
 });
 
