@@ -231,13 +231,23 @@ No waybill was issued in ~1 minute of polling, so there was no AWB to cancel wit
 (`tdev.kiriminaja.com`) and nothing will be collected, but if the owner wants it gone it must be voided
 from the KiriminAja dashboard, or cancelled via the API once a waybill exists.
 
-### N35. Nothing pins `KIRIMINAJA_ENV` in production · **S** · NEW
-`KIRIMINAJA_ENV` defaults to `sandbox`, and `AGENTS.md` already warns that an unset env in production
-"silently talks to sandbox". This run is the proof it matters: real bookings and pickup numbers come
-back from `tdev.` and look exactly like production ones. Nothing anywhere asserts which one a deployed
-container is on.
-**AC:** the admin surfaces the active environment where an operator can see it (super-admin already has
-a KiriminAja connection card), and a deploy check fails if production resolves to `sandbox`.
+### N35. Surface which KiriminAja environment a deploy is on · **S** · scoped down by the owner
+🔵 **Owner's ruling (2026-08-03): the API is the SAME on sandbox and production — same contract, same
+shapes; the cutover is an endpoint swap and nothing else.** So this is NOT an integration-parity task
+and must not be re-raised as one. Do not write a "verify the two environments behave alike" check, and
+do not budget for API differences at cutover — there are none.
+
+⚠️ **What survives, precisely BECAUSE they are identical:** a sandbox booking returns a `kaOrderId` and
+a `pickup_number` shaped exactly like a production one. Measured on 2026-08-03 —
+`5758-E2E68072665` / `XID-5544692486` — and nothing on any screen distinguishes it. A deploy pointed at
+the wrong endpoint therefore looks completely healthy: orders read "dibooking", resi appear, and no
+courier ever comes.
+
+`KIRIMINAJA_ENV` defaults to `sandbox`, so *unset* is the wrong one.
+
+**AC (small):** the active environment is visible where an operator already looks — the super-admin
+KiriminAja connection card (`kaTestConnection` already returns `env`; it just is not shown). Nothing
+more. No blocking check, no parity suite.
 
 ### ✅ N17. The abandoned-cart recovery link — **CLOSED 2026-08-03**, and the cause is the lesson
 Handoff: [`2026-08-03-n17-recovery-link.md`](./2026-08-03-n17-recovery-link.md). Branch
