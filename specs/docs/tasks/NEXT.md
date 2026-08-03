@@ -125,6 +125,78 @@ cutover keeps writes behind the Next apps. Picking one changes what PostgREST is
 
 ---
 
+## 🔴 SHIPPING — audited against KiriminAja's own docs, 2026-08-03
+
+Method: every endpoint our code calls, cross-referenced against the captured official docs
+(`~/Documents/kiriminaja/documents`, from developer.kiriminaja.com) and probed against the LIVE
+sandbox. Read-only calls only — nothing was booked.
+
+### N30. 🔴 Volumetric weight is NEVER computed — the merchant silently eats the difference · **M** · NEW
+KiriminAja's pricing doc is explicit: *"Regular (incl. Next Day, Same Day): width × length × height ÷ 6.
+**If the dimensional weight is greater than the actual weight, the dimensional weight is used when
+calling this endpoint.**"*
+
+We send `billableGrams = max(Σ weight_grams, 1000)` (`lib/shipping-weight.ts`). That is a **floor, not a
+volumetric weight**, and `product_variants` carries **only `weight_grams`** — there are no
+length/width/height columns, so it is not merely unimplemented, it is **structurally impossible today**.
+
+**Measured on the live sandbox** (origin 6138 → destination 5479, SPX Reguler):
+
+| weight sent | quote |
+|---|---|
+| 1.000 g (our floor) | **Rp14.000** |
+| 3.000 g | **Rp42.000** |
+
+A 30×30×30 cm box is **4.500 g volumetric**. If it actually weighs 800 g we quote the floor and the
+courier bills the dimensional weight — **a ~Rp28.000 gap per parcel, on every bulky-light order**, with
+nothing on any screen saying so. Same class as the three bugs `shipping-weight.ts`'s own header already
+describes (invented weight, client-supplied weight, client-supplied origin) — and the one still open.
+
+⚠️ **This is a SCHEMA decision, not a patch.** It needs dimension columns on `product_variants`, fields
+in the product editor, and a rule for what a cart's combined dimensions even are (couriers bill per
+parcel, not per line). Until then the shortfall is real and unmeasured.
+**AC:** a bulky-light cart quotes the dimensional weight; a dense cart is unchanged; the rule is stated
+where a merchant can see what their parcel is being billed as.
+
+### N31. The COD fee KiriminAja charges is never read · **S** · NEW
+Every `shipping_price` result carries `setting.cod_fee`, `minimum_cod_fee` and a computed
+`cod_fee_amount` (measured: present on all 4 sandbox services). **Nothing in the repo reads any of
+them** — `grep -rn "cod_fee"` over `apps/` + `packages/` returns nothing.
+
+So a merchant selling COD sees the ongkir but not the COD fee that is deducted from their payout. It is
+not a correctness bug (the ledger books what actually arrives) — it is a number we HAVE and do not show.
+**AC:** the COD fee appears next to the COD option wherever a merchant sees the shipping cost.
+
+### 🔵 What the audit CONFIRMED is correct (do not re-check)
+- **Endpoint versions match the docs**, and they genuinely vary per endpoint:
+  `v6.1/shipping_price` · `v6.1/request_pickup` · `v3/cancel_shipment` · `v2/get_address_by_name` ·
+  unversioned `province` / `tracking`. Not a mistake — the docs version them separately.
+- **`province` is a POST, not a GET** (a GET returns `"Method GET is not supported for this route"`).
+  Live sandbox probe: **37 provinces, `status: true`** — auth and connectivity are good, and the
+  response key is `datas`, not `data`.
+- **The resi chain is complete and correctly joined** — see N32.
+
+### N32. The resi chain has NEVER been exercised · **S** · NEW · needs the owner's go-ahead
+Every link exists and is correctly built:
+`createShipment` writes `awb` **only** from `details[0].awb` (never the booking ref — that bug is fixed
+and commented) and returns `awbPending` when the waybill has not landed · `cron/tracking` polls those
+orders, takes `data.awb`/`data.waybill` **excluding the ref itself**, and counts `awbFilled` ·
+`ka-tracking.ts` maps the outcome through `applyOrderStatusChange`, so inventory, ledger and COD move
+exactly as on a manual change · the AWB renders on three screens, with **"Ambil resi"** (`/pesanan/massal`)
+and **"Lacak"** (order detail) as the manual paths.
+
+🔴 **But `select count(*) from orders where ka_order_id is not null` = 0.** Not one order has ever been
+booked — the 58 `dikirim` rows were seeded straight into that status. So the chain is verified by
+READING, never by running.
+
+⚠️ **Finishing it means a real `request_pickup` against the sandbox** — an outward call that creates a
+pickup record in the owner's KiriminAja account. Reversible (`v3/cancel_shipment`), but not a call to
+make unasked.
+**AC:** book one seeded order → `awbPending` true → poll → `awb` filled → status advances → cancel the
+shipment and leave the DB as found.
+
+---
+
 ## 🟠 SECURITY & DATA INTEGRITY — open, not blocked
 
 ### ✅ N17. The abandoned-cart recovery link — **CLOSED 2026-08-03**, and the cause is the lesson
