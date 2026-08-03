@@ -10,8 +10,10 @@
 // the page looks perfect. Only what the browser actually RESOLVES shows it, which is why this is a
 // browser check and why it asserts on the RESOLVED IMAGE, not on attributes:
 //
-//   1. structural — every gallery thumbnail <img> carries a non-empty `srcset` AND `sizes`
-//                   (the exact regression; an <img> without them cannot be over-large by accident)
+//   1. structural — every gallery thumbnail <img> carries a non-empty `srcset` AND `sizes`, and no
+//                   catalog <img> anywhere on the page is bare (the store logo excepted — see below).
+//                   An <img> without them cannot be over-large by accident, and the claim needs no
+//                   measurement, which is what lets it cover elements this viewport never paints.
 //   2. resolution — no <img> in scope resolves to an image wider than 3x the device pixels it
 //                   occupies. Generous on purpose: a ladder is discrete, and `sizes` errs upward so a
 //                   thumbnail is never blurry. Pre-fix the thumbnails sat at 4,5–6,1x (verified by
@@ -99,6 +101,7 @@ const imgs = await page.evaluate(
     const meta = els.map((el, i) => ({
       i,
       thumb: !!el.closest("button[data-thumb]"),
+      logo: !!el.closest("[data-logo]"),
       hasSrcset: !!el.getAttribute("srcset"),
       hasSizes: !!el.getAttribute("sizes"),
       box: Math.round(el.getBoundingClientRect().width),
@@ -124,7 +127,14 @@ const imgs = await page.evaluate(
       );
     }
 
-    const resolved = (m) => !m.cands.length || (els[m.i].currentSrc.includes(PROBE) && els[m.i].complete);
+    // `box === 0` means an ancestor is `display:none` at THIS viewport — the mega menu is `xl:flex`
+    // and the mobile drawer is inside an `xl:hidden`, so one of the two is always switched off. Such
+    // an <img> is `loading="lazy"` and can never enter the viewport, so the browser never fetches it
+    // and never picks a candidate: waiting for one is waiting forever. It has no layout, so there is
+    // nothing here to measure and nothing to assert — the structural "has a srcset" claim below is
+    // what covers it, which is exactly why that claim is structural. (Before N22 these had no srcset
+    // at all and fell out through the `!m.cands.length` arm; giving them one is what surfaced this.)
+    const resolved = (m) => !m.cands.length || m.box === 0 || (els[m.i].currentSrc.includes(PROBE) && els[m.i].complete);
     for (let t = 0; t < 100 && !meta.every(resolved); t++) await new Promise((r) => setTimeout(r, 100));
 
     return meta.map((m) => {
@@ -134,6 +144,7 @@ const imgs = await page.evaluate(
       const picked = k != null ? m.cands[Number(k)] : null;
       return {
         thumb: m.thumb,
+        logo: m.logo,
         hasSrcset: m.hasSrcset,
         hasSizes: m.hasSizes,
         box: m.box,
@@ -183,22 +194,37 @@ check(
 const unsettled = scored.filter((i) => !i.settled);
 check(`every candidate re-resolved (the probe is what makes this deterministic)`, unsettled.length === 0, `${unsettled.length} timed out`);
 
-// ── Reported, NOT failed: catalog images with no srcset that this check did not put there ─────────
+// ── NOW A FAILURE: a catalog <img> with no srcset at all ──────────────────────────────────────────
 //
-// `Header.astro` has three (the mega-menu category thumb, its featured tile, and the mobile drawer's
-// two-up grid) — they render on EVERY page, not just this one, and each needs its own `sizes`
-// derivation. Tracked in specs/docs/tasks/NEXT.md. They are printed rather than thrown because a
-// check that is red for work nobody in this change can land is a check everyone learns to ignore —
-// the same reason `verify-rls` sat red for weeks while two leaks shipped past it. Fix them and this
-// section empties itself. The ratio is printed so the next agent can see what they are worth.
-const noSrcset = scored.filter((i) => !i.hasSrcset && !i.thumb);
-if (noSrcset.length) {
-  console.log(`\nNOTE  ${noSrcset.length} catalog image(s) still have no srcset (known, outside this check's scope):`);
-  for (const i of noSrcset) {
-    const worth = i.ratio ? ` (${i.ratio.toFixed(1)}x)` : i.box === 0 ? " (never painted)" : "";
-    console.log(`      ${String(i.box).padStart(4)}px box  ${i.width ? `${i.width}px file` : "unsized"}${worth}  ${i.src}`);
-  }
-}
+// This section used to PRINT `Header.astro`'s ten bare images without failing, and that was right at
+// the time: they are a different file with three separate `sizes` derivations, and a check that is
+// red for work nobody in the current change can land is a check everyone learns to ignore — the same
+// reason `verify-rls` sat red for weeks while two cross-tenant leaks shipped past it.
+//
+// They landed (N22), so the note becomes an assertion. A bare catalog `<img>` is never right: with no
+// srcset the browser has exactly one file to fetch, the full-size original, whatever box it paints it
+// into — measured here at **74 490 B** for five 44 px mega-menu thumbnails and **17 596 B** for the
+// drawer's two 184 px tiles, on every page of the shop. And it is invisible to `tsc`, ESLint,
+// `astro check` and the build, because the markup is valid and the page looks perfect.
+//
+// The rule is STRUCTURAL, not ratio-based, and deliberately so: the ratio test below can only see an
+// element the browser actually painted, and these render `display:none` at this check's 412 px
+// viewport (the mega menu is `xl:flex`) while still costing every desktop visitor the bytes. An
+// `<img>` with no srcset cannot be right at any width, so it does not need to be measured to be
+// judged.
+//
+// ⚠️ The store LOGO is exempt, and it is the one honest exception: it is a merchant upload of unknown
+// aspect ratio rendered `h-9 w-auto`, so its CSS width is a function of the file's own proportions
+// and cannot be derived from the layout the way the other three can. Giving it a `sizes` would mean
+// guessing — which is the failure this whole check exists to prevent. Tracked separately.
+const noSrcset = scored.filter((i) => !i.hasSrcset && !i.thumb && !i.logo);
+check(
+  `every catalog <img> carries a srcset (the store logo excepted)`,
+  noSrcset.length === 0,
+  noSrcset
+    .map((i) => `${i.src} → ${i.width ? `${i.width}px file` : "unsized"} for a ${i.box}px box${i.ratio ? ` (${i.ratio.toFixed(1)}x)` : i.box === 0 ? " (not painted at this viewport — still downloaded at others)" : ""}`)
+    .join("; "),
+);
 
 console.log(`\nimages: ${imgs.length} · catalog bytes on first load: ${bytes.toLocaleString()} B (reported only — see the header)`);
 for (const i of scored) {
