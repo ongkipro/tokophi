@@ -138,6 +138,37 @@ Same split as `platform-rank.ts` and `temp-password.ts`, for the same reason.
 `BACKLOG.md` · `NEXT.md`. Each now says the link is minted **and** carries the reason it was not, because
 the failure mode — a module the caller cannot import — will otherwise be re-created by the next move.
 
+## Deployed and verified in production (2026-08-03)
+
+Merged as `#131` → `5aeb85e`. Coolify build ~8 min; the container swap was observed rather than assumed:
+
+```
+09:56:47  checkout=200  admin=200     ← still the OLD containers, answering 200 the whole time
+09:57:07  checkout=503  admin=503     ← swap
+09:58:59  checkout=200  admin=200     ← new containers serving
+```
+
+⚠️ **A 200 immediately after a merge is the old container.** The first verification pass here fired at
+09:58:40, mid-swap, and reported 503 on everything — the numbers were meaningless and were re-taken.
+Read the swap, not the clock.
+
+**The risk this change carried was module resolution, not logic**: if `@tokophi/lib/recovery` failed to
+resolve inside the storefront container, `/checkout` would 500 and the shop could take **no orders at
+all**. Verified after the swap:
+
+| | |
+|---|---|
+| `toko.` · apex · `app.` | 200 · 200 · 200 · (`rich.` 307 = login) |
+| `/checkout?r=not-a-jwt` | **200**, 153 KB — the normal checkout, `name="whatsapp"` present, `novalidate` intact |
+| banner on a junk token | **absent**, as designed — a bad link renders an empty checkout, never a 500 |
+
+⚠️ **What is NOT verified in production: the admin's mint.** Reading a real `wa.me` body there means
+logging into the LIVE merchant admin, which is a production action and was not taken. The mint is
+verified end to end locally (against the same code, a real browser and a real DB) and structurally by
+`recovery-wired.test.ts`. If someone wants production proof, open Keranjang Ditinggal on a store that has
+an in-window cart with a phone and read the button's link — do not click it, that writes a `followups`
+row.
+
 ## NEXT
 
 - **N18** (`tempPassword()` 24 bits + no login rate-limit) — the next unblocked security item. ⚠️ It
