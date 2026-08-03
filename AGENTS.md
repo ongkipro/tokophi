@@ -320,6 +320,25 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
   `"Method GET is not supported for this route"`, and the payload key is **`datas`**, not `data`.
   Endpoint versions genuinely differ per route (`v6.1` price/pickup · `v3` cancel · `v2`
   get_address_by_name · unversioned province/tracking); that is the docs' own scheme, not drift.
+- **THE SELLER'S SHIPPING FLOW, end to end — four steps, and step 3 is AUTOMATIC:**
+
+  | # | step | what happens | where |
+  |---|---|---|---|
+  | 1 | **Proses** | `baru → diproses` via `applyOrderStatusChange` (the only writer of `orders.status`) | order detail · `/pesanan` |
+  | 2 | **Atur pengiriman** | `createShipment` / `bulkGenerateResi` books with **the service the SHOPPER paid for** (`orders.courier` + `service_type`) — there is deliberately NO rate picker here | order detail · `/pesanan/massal` |
+  | 3 | **Resi terbit** | booking returns `awb: null` (`awbPending`); **`cron-tracking` fills `orders.awb` on its own, every 15 min**, batch 100, for orders with a `ka_order_id` in `diproses`/`dikirim` | `api/cron/tracking` |
+  | 4 | **Cetak label** | `/api/admin/labels`, then `markLabelsPrinted` stamps `label_printed_at` — the "sudah/belum dicetak" filter | `/pesanan/massal` |
+
+  ⚠️ **Step 3 is the one that gets described wrongly.** The waybill is issued when a courier ACCEPTS
+  the pickup, not when we book — so `awb: null` is the normal post-booking state, not a failure. The
+  poller is what makes it appear; **"Ambil resi" / "Lacak" are shortcuts for a merchant who does not
+  want to wait, not the mechanism.** The UI used to say *"klik 'Ambil resi' lagi nanti"*, which
+  described the automatic feature as manual and left sellers watching a queue.
+  ⚠️ **A label cannot be printed before step 3.** `createShipment` writes `awb` ONLY from
+  `details[0].awb` — never the booking ref — so an unprinted label is never a fake resi.
+  ⚠️ **`cron-tracking` is a SEPARATE sidecar** (`sleep 900`) from the daily `cron` loop, and its own
+  compose comment records that `awbFilled` sat at 0 for a week when it was not running. If resi stop
+  appearing on their own, check that container before touching code.
 - 🔴 **CANCEL TAKES THE AWB, AND ONLY THE AWB** (fixed 2026-08-03, N34). The vendor doc says it in as
   many words — *"awb: AWB Number Already Obtained, **Not Order ID**"*. `cancelShipment` built
   `o.awb ?? o.kaOrderId`, and **every fresh booking has `awb: null`** (that is what `awbPending`

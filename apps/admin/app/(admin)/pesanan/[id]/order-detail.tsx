@@ -259,7 +259,8 @@ export function OrderDetail({
         } else {
           toast.success("Pengiriman dibooking ke kurir.", {
             description:
-              "Kurir belum menerbitkan nomor resi. Klik “Lacak” untuk mengambil resi begitu terbit — label baru bisa dicetak setelah itu.",
+              // The poller fills this on its own (see massal-client) — "Lacak" is the shortcut.
+              "Kurir belum menerbitkan nomor resi. Resi muncul sendiri begitu kurir menerima pesanan; “Lacak” hanya mempercepat. Label bisa dicetak setelah resi terbit.",
             duration: 8000,
           });
         }
@@ -414,7 +415,7 @@ export function OrderDetail({
     // No resi and not sandbox → explain.
     toast.error("Belum ada nomor resi — label tidak bisa dicetak.", {
       description: booked
-        ? "Pengiriman sudah dibooking, tapi kurir belum menerbitkan resi. Klik “Lacak” untuk mengambil resi begitu terbit."
+        ? "Pengiriman sudah dibooking, tapi kurir belum menerbitkan resi. Resi muncul sendiri begitu kurir menerima pesanan — “Lacak” hanya mempercepat."
         : "Buat pengiriman dulu lewat “Cek Ongkir” → pilih layanan → Buat.",
       duration: 8000,
     });
