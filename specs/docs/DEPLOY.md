@@ -8,7 +8,12 @@
 
 - **Vultr**, region **Singapore (sgp)**, plan `vhp-4c-8gb-amd` (4 vCPU / 8GB / 180GB NVMe), **Ubuntu 24.04.4 LTS**. ~$48/mo.
 - IP **45.77.33.112**; SSH **key-only** (`ssh -i ~/.ssh/tokophi_dev root@45.77.33.112`) — password auth **disabled** (`passwordauthentication no`).
-- **Coolify v4.1.2** (`http://45.77.33.112:8000`), server type = **Localhost/This Machine**. UFW active: 22/80/443/8000/6001/6002. API token at `~/.coolify_token`; app uuid `l7r4qaqcml4zigw1dc7iptun`; instance id `0d341106-34ff-4b5b-8441-9350e1b8ce35`.
+- **Coolify v4.1.2** (`http://45.77.33.112:8000`), server type = **Localhost/This Machine**. UFW active: 22/80/443/8000/6001/6002. app uuid `l7r4qaqcml4zigw1dc7iptun`; **Coolify app id `1`**; instance id `0d341106-34ff-4b5b-8441-9350e1b8ce35`.
+
+⚠️ **There is NO API token. `~/.coolify_token` does not exist** (checked 2026-08-01) — that is *why*
+`/api/v1` answers `Unauthenticated`, and this line used to claim the file was there. **There is no
+scripted deploy or rollback path**; everything below goes through SSH + `docker`, and rollback is
+`git revert` + push + webhook (~8–10 min, see below).
 - Provisioned fresh via **`vultr-cli`** + cloud-init (lean base, hardened SSH); Coolify installer auto-installs Docker. This is the **single consolidated box** — the earlier experiment box (`45.76.146.40`) was **deleted**.
 - **Domains:** `admin`/`super_admin`/`storefront` on `*.45.77.33.112.sslip.io` via the app's `docker_compose_domains` DB field (Coolify's `SERVICE_FQDN` env magic doesn't wire the compose build pack — set the DB field directly; note the **super-admin** service maps to the underscore key `super_admin`).
 
@@ -258,6 +263,37 @@ near production.
 
 **Do not verify with container health or HTTP status. Verify that the ARTEFACT CHANGED.**
 
+### ✅ The artefact check that has no false green: the image tag IS the commit sha
+
+**Read this before the `RunningFor` method below, which it supersedes** (verified 2026-08-01 shipping
+`2399ea5`). Every image is tagged with the **full git sha**:
+
+```
+l7r4qaqcml4zigw1dc7iptun_admin:2399ea509f7057f41f249bb78a22cb3a663a5543
+```
+
+So "has my commit landed?" is a string compare against `git rev-parse origin/main` — exact, per
+container, and impossible to fool with a partial swap or with deployment N finishing while N+1 builds:
+
+```bash
+WANT=$(git rev-parse origin/main)          # after: git fetch origin
+ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 \
+  "docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}' \
+   | grep -E '^(admin|super-admin|storefront|landing)-l7r4qaqcml4zigw1dc7iptun-'" \
+| awk -v w="$WANT" -F'\t' '{split($2,a,":"); if (a[2]==w && $3 ~ /healthy/) n++} END{print n"/4"}'
+```
+
+**Require `4/4` on TWO consecutive polls** — Coolify swaps services one at a time, so a single 4/4 can
+still be a false green. Poll every 45–60 s.
+
+⚠️ `app.` and `rich.` answering **307** is healthy (middleware → `/login`). Demanding 200 there is a
+permanently-red check.
+
+**A build takes 8–10 minutes, not ~5** — measured over five clean builds: 8m28s, 9m57s, 7m57s, 8m36s,
+8m32s. Two overlapping builds of the same commit took **14m36s and 20m47s**.
+
+### The older `RunningFor` method — still true, but weaker
+
 ```bash
 # BEFORE merging — record the running container id
 ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 "docker ps -q --filter name=admin- | head -1"
@@ -268,7 +304,8 @@ ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 \
 ```
 
 `RunningFor` is the honest signal: "11 minutes ago" means you are still looking at the *previous*
-deploy. Only once the id changes are HTTP checks meaningful.
+deploy. Only once the id changes are HTTP checks meaningful. It tells you something *changed*; the
+image sha tells you **what** is running, which is the question you actually have.
 
 **This is not hypothetical — it fooled a check on 2026-07-20.** A watcher matched `Up N (seconds|minute)`
 against `Up 10 minutes`, declared "containers rebuilt + healthy", and confirmed 200s from
@@ -288,12 +325,24 @@ which happened in one afternoon:
    container to change reports success while the **storefront** is still the old one — and then 503s a
    minute later when its turn comes. Wait for **every** app container (`admin`, `super-admin`,
    `storefront`) to be healthy, and require the streak to hold across two polls.
-2. **Overlapping deploys.** Three PRs merged inside 25 minutes queued **four** webhook builds
-   (`select id, status, is_webhook from application_deployment_queues order by id desc`). Each one tears
+2. **Overlapping deploys.** Three PRs merged inside 25 minutes queued **four** webhook builds. Each one tears
    the stack down again, so any single "it's up now" observation is meaningless. CLAUDE.md already says
    it: **merge, watch the deploy land, then let the next one go.** This is what that costs when ignored.
 3. **A healthy container running the PREVIOUS commit.** Deployment N finishes and everything is green
    while deployment N+1 — the one carrying your change — is still building.
+
+🔴 **`application_deployment_queues` IS SHARED ACROSS COOLIFY APPS ON THIS BOX.** This server also runs
+**Formalin** (app id `2`). An unfiltered `select … from application_deployment_queues order by id desc`
+— which this document used to print — shows *Formalin's* builds as though they were ours. On
+2026-08-01 that presented an "in-flight deploy of commit `11d86a2`" that this repository has never
+contained. **Always filter, and quote it — the column is `varchar`, so `= 1` errors:**
+
+```sql
+select id, status, left(commit,8), created_at, finished_at
+  from application_deployment_queues
+ where application_id = '1'          -- TokoΦ. Formalin is '2'.
+ order by id desc limit 3;
+```
 
 **So the only honest check is a CONTENT check: ask production for something only the new code can
 produce.** Pick a signal from the diff itself and poll for it:

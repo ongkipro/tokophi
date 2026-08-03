@@ -2,6 +2,66 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — The header shipped a 600 KB lie: bare `<img>` on every page, and a descriptor nobody could check
+
+### 🖼️ `Header.astro`'s three catalog images were bare `<img>` — 74 490 B for five 44 px thumbnails (N22)
+
+They render on **every page of the shop**, and with no `srcset` the browser has exactly one file to
+fetch: the full-size original, whatever box it is painted into. Measured on a cold `/`, unique bytes over
+real HTTP: **desktop 1440 DPR 1 133 612 → 59 122 B (−55,8 %)**, DPR 2 212 486 → 171 982 B (−19,1 %);
+**mobile 412 DPR 1 62 704 → 45 108 B (−28,1 %)**, DPR 2 152 894 → 142 152 B (−7,0 %). Pure waste: the
+same products' 200w/400w renditions were already on the wire for the product cards beside them.
+
+Three sites, **three separate `sizes` derivations**, each from its own box and named as a constant with
+the arithmetic written out — `44px` for the mega-menu thumb (`h-11 w-11 shrink-0`), `406px` for the
+featured tile (the `max-w-7xl` container is pinned at 1280 for every viewport the `xl:flex` nav exists
+at, so it is a constant, not a fraction), and `(min-width: 416px) 186px, calc((100vw - 44px) / 2)` for
+the drawer's two-up grid. All three verified against the built server: 44 / 406 / 184 px.
+
+⚠️ **A `max-w-*` is only a `sizes` if you can name the viewport at which it starts binding.** On the PDP
+thumbnail rail it caps a `flex-1 basis-0` share and declaring the cap cost a whole rung (17 468 B); on
+the drawer, the same class on a `w-full` element pinned to the viewport binds exactly at 416 px. Same
+class, opposite answers.
+
+⚠️ **The featured tile was NOT worth changing and the number is 0 B** — at 406 px it needs the 600 px
+source at both DPRs, so it resolves byte-identically to the bare `<img>`. It carries the srcset anyway,
+because on a merchant's own uploads the same markup ladders to 2000w for that 406 px box.
+
+`check-pdp-srcset.mjs` **now FAILS** on a bare catalog `<img>` instead of printing it. The claim is
+STRUCTURAL, not ratio-based: the mega menu (`xl:flex`) and the drawer (inside an `xl:hidden`) are never
+both on screen, so one is always `display:none` at any viewport this check can adopt — and an `<img>`
+with no srcset cannot be right at any width, so it needs no measurement to be judged. The store logo is
+the one exemption (`data-logo`, now on the footer's copy too): an upload of unknown aspect ratio rendered
+`h-9 w-auto` has a CSS width set by the file's own proportions, so a `sizes` for it would be a guess.
+
+### 🔴 Every `w` descriptor on a static image was a constant, and three of the four were wrong (N24)
+
+A `w` descriptor is the one field in a srcset candidate **the browser cannot verify** — it trusts the
+number, picks on it, and paints whatever bytes arrive. `staticSrcSet` labelled the source original from a
+per-directory constant. Read off disk with sharp, all 75 sources:
+
+- `/products/` claimed **`800w`**; **14 of the 70 are 600 × 600** — and they are exactly the
+  `<handle>.webp` of every product, i.e. the FIRST image, the one on every card, every menu thumbnail and
+  every PDP. Over-claim 33 % on the most-rendered image in the catalogue.
+- `/sections/` claimed **`1920w`** for **both** its files, and neither is: `denim-standard` is
+  **1200 × 960** (over-claim 60 %) and `lookbook` is **2000 × 784** (under-claim). ⚠️ These had never
+  been checked at all.
+- `/hero/` claimed `1920w` and all three really are 1920 × 1080 — the only honest branch.
+- All **150 generated renditions** are honest: every `-<N>w.webp` really is N px.
+
+**Fixed by correcting the declaration, not by generating a rendition** — an `800w` from a 600 px source
+is an upscale, which the generator refuses to do and which would be bytes for nothing.
+`gen-image-widths.mjs` now writes `src/data/static-image-widths.ts`: each source's **real intrinsic
+width** plus the renditions that **actually exist beside it**. `staticSrcSet` reads only that, and
+`STATIC_WIDTHS` is deleted. That also retires the old "`STATIC_WIDTHS` and the script's `PLAN` must stay
+identical" convention by making it structural — the ladder *is* the list of files that were generated, so
+a rung with no file on disk (a 404 the browser may pick as its best candidate) can no longer be listed.
+An image missing from the manifest gets **no** srcset: no claim beats a wrong one.
+
+Byte impact today is **0** — this is honesty, not a saving. What it buys is that the next `sizes`
+decision is made against a true number. Guarded by **`scripts/check-image-widths.mjs`**: sharp against
+disk, no server and no browser, so it cannot flake.
+
 ## Unreleased — The abandoned-cart recovery link was never minted, because the mint was in the wrong app
 
 `signRecoveryToken` was correct, store-bound and security-reviewed — and had **zero callers in all four
@@ -42,6 +102,7 @@ Guards: `packages/lib/src/recovery.test.ts` (round trip + three refusals), `apps
 (append vs substitute; no literal `{{link}}` can reach a customer), and **`apps/admin/lib/recovery-wired.test.ts`
 — the mint has a caller**, which is the failure no unit test can see and the one that would have caught
 this. `cartMessage` moved to a pure module so it is testable without a `DATABASE_URL`.
+
 
 ## Unreleased — Every store we provisioned got the owner password `tokophi123`
 

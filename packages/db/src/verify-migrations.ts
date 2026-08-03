@@ -19,15 +19,50 @@
  * 3. **A journal entry with no SQL file, or a SQL file no journal entry names.** Either way one of the
  *    two is lying about what the database will be asked to run.
  *
- * With `--db` it also answers the question no local check can: **is my newest stamp above the one the
- * TARGET database already holds?** Point `DATABASE_URL` at production and it tells you whether the
- * next deploy will actually run your migration or quietly skip it.
+ * 4. **A tag that an EARLIER revision of the journal recorded and today's does not.** Checks 1–3 read
+ *    the journal against itself and the files beside it, so they are structurally blind to an entry
+ *    that was removed or renumbered — the journal that lost it is perfectly self-consistent. Two
+ *    entries went that way before anyone noticed: `0046_good_dust`, whose `.sql` was never committed
+ *    (it broke `migrate` outright, so production never created `kelurahan` and `/api/public/ongkir`
+ *    500'd on every checkout), and `0064_store_public_email`, renumbered to `0070` after a two-branch
+ *    collision. This check replays every revision of `_journal.json` in THIS history and fails on a
+ *    tag that has quietly gone missing. A deliberate removal is declared in `RETIRED` below, with the
+ *    reason — the point is that no one can drop an entry without writing down why.
+ *
+ * With `--db` it also answers the questions no offline check can:
+ *   • **Is my newest stamp above the one the TARGET database already holds?** Point `DATABASE_URL` at
+ *     production and it tells you whether the next deploy will run your migration or quietly skip it.
+ *   • **Does every applied row correspond to a file this branch still has?** (check 5) — the one that
+ *     catches DDL nobody can reproduce from git. The shared dev container carries `color_palettes`
+ *     from an unmerged branch and `orders.ship_kelurahan_*` from a migration lost to a `0049`
+ *     collision, and every offline check is green on both.
+ *
+ * ⚠️ **What a local verifier cannot know.** It compares a database against ONE checkout. A row it
+ * cannot explain may be an unmerged branch, a `drizzle-kit push`, or a hand-run `psql` — it can say
+ * "this branch cannot reproduce this", never "this is wrong". And drizzle keys on `created_at`, not
+ * on the hash, so an edited-after-applying file is reported and will still never be re-run.
  *
  * Exits non-zero on any failure, so it can gate a release.
  */
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+
+/**
+ * Tags an earlier revision of the journal recorded and today's deliberately does not.
+ * Adding a name here is the act of writing down WHY an entry disappeared. Never add one to silence
+ * the check — if you cannot say what happened to it, the check is telling you the truth.
+ */
+const RETIRED: Record<string, string> = {
+  "0046_good_dust":
+    "journal entry whose .sql was never committed — `migrate` aborted on it, so production never " +
+    "created `kelurahan`. Replaced by 0046_silky_king_cobra (f1f417d), which ships the file.",
+  "0064_store_public_email":
+    "renumbered to 0070_store_public_email after feat/cetak-resi-demo landed its own 0064–0069 " +
+    "while this entry was open. Same SQL, higher stamp.",
+};
 
 type Entry = { idx: number; version: string; when: number; tag: string; breakpoints: boolean };
 
@@ -78,7 +113,64 @@ for (const f of sqlFiles) {
   if (!named.has(f)) note(`berkas '${f}' ada tapi TIDAK disebut journal — ia tidak akan pernah dijalankan.`);
 }
 
-// 4. optional: is our newest stamp above what the target database already recorded?
+// 4. TAG-SET REGRESSION — replay every past revision of the journal in THIS history.
+//
+// Scoped to HEAD's ancestry on purpose: a sibling branch that was never merged has not "lost"
+// anything, and folding `--all` in here would fail forever on every open PR's own numbering.
+// The cost is honest and worth stating — a tag that only ever existed on a branch that never
+// reached this history is invisible here. `0049_shipping_kelurahan` is exactly that case, and the
+// thing that catches it is check 5 against a database that has it applied.
+try {
+  // Both the `git log` pathspec and `git show <rev>:<path>` are resolved from the REPO ROOT here —
+  // a path relative to wherever this script happens to run silently matches nothing.
+  const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd: drizzleDir,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
+  const git = (args: string[], maxBuffer = 1024 * 1024) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer, stdio: ["ignore", "pipe", "ignore"] });
+  const journalRel = relative(root, journalPath).split("\\").join("/");
+  const revs = git(["log", "--format=%H", "HEAD", "--", journalRel]).split("\n").filter(Boolean);
+
+  const everRecorded = new Map<string, string>(); // tag → the OLDEST commit that recorded it
+  for (const rev of revs) {
+    let blob: string;
+    try {
+      blob = git(["show", `${rev}:${journalRel}`], 32 * 1024 * 1024);
+    } catch {
+      continue; // the path did not exist at that revision (a rename) — nothing to read
+    }
+    try {
+      for (const e of JSON.parse(blob).entries as Entry[]) everRecorded.set(e.tag, rev);
+    } catch {
+      continue; // a revision mid-merge-conflict is not evidence of anything
+    }
+  }
+
+  const today = new Set(entries.map((e) => e.tag));
+  const vanished = [...everRecorded.keys()].filter((t) => !today.has(t));
+  const unexplained = vanished.filter((t) => !(t in RETIRED));
+  console.log(
+    `Riwayat   : ${revs.length} revisi journal, ${everRecorded.size} tag pernah tercatat, ` +
+      `${today.size} hari ini (${vanished.length} hilang, ${vanished.length - unexplained.length} sudah dijelaskan)\n`,
+  );
+  for (const t of unexplained) {
+    note(
+      `tag '${t}' PERNAH tercatat di journal (${everRecorded.get(t)!.slice(0, 8)}) tapi HILANG sekarang.\n` +
+        `    Journal-nya konsisten dengan dirinya sendiri, jadi cek 1–3 tidak bisa melihat ini.\n` +
+        `    Kalau memang sengaja dibuang/dinomori-ulang, tulis alasannya di RETIRED (src/verify-migrations.ts).`,
+    );
+  }
+  // A RETIRED name that is back in the journal is a stale explanation, not a failure — say so once.
+  for (const t of Object.keys(RETIRED)) {
+    if (today.has(t)) console.log(`ℹ '${t}' ada lagi di journal — hapus entri RETIRED-nya.`);
+  }
+} catch {
+  console.log("ℹ Riwayat journal dilewati (git tidak tersedia di sini).\n");
+}
+
+// 5. optional: reconcile against a live database.
 if (process.argv.includes("--db")) {
   const url = process.env.DATABASE_URL;
   if (!url) {
@@ -87,14 +179,74 @@ if (process.argv.includes("--db")) {
     const postgres = (await import("postgres")).default;
     const sql = postgres(url, { max: 1 });
     try {
-      const rows = await sql<{ max: string | null }[]>`
-        select max(created_at)::text as max from drizzle.__drizzle_migrations
+      // drizzle hashes the WHOLE .sql file with sha256 (drizzle-orm/migrator readMigrationFiles),
+      // so the applied rows can be matched back to files by content — not by name, which is
+      // precisely the thing a collision changes.
+      const byHash = new Map<string, Entry>();
+      for (const e of entries) {
+        byHash.set(createHash("sha256").update(readFileSync(join(drizzleDir, `${e.tag}.sql`), "utf8")).digest("hex"), e);
+      }
+      const applied = await sql<{ hash: string; created_at: string }[]>`
+        select hash, created_at::text as created_at
+          from drizzle.__drizzle_migrations
+         order by created_at
       `;
-      const dbMax = Number(rows[0]?.max ?? 0);
+      const dbMax = applied.length ? Number(applied.at(-1)!.created_at) : 0;
       const mine = entries.at(-1)!;
-      console.log(`Database  : stempel tertinggi ${dbMax}`);
-      console.log(`Journal   : ${mine.tag} = ${mine.when}\n`);
-      if (mine.when <= dbMax) {
+      console.log(`Database  : ${applied.length} baris terpakai, stempel tertinggi ${dbMax}`);
+      console.log(`Journal   : ${entries.length} entri, ${mine.tag} = ${mine.when}\n`);
+
+      const explained = new Set<string>();
+      const orphans: { hash: string; when: number }[] = [];
+      const drifted: string[] = [];
+      for (const row of applied) {
+        const e = byHash.get(row.hash);
+        if (!e) {
+          orphans.push({ hash: row.hash, when: Number(row.created_at) });
+          continue;
+        }
+        explained.add(e.tag);
+        if (e.when !== Number(row.created_at)) {
+          note(
+            `'${e.tag}' terpakai dengan stempel ${row.created_at}, journal bilang ${e.when} — ` +
+              `entri ini pernah dinomori/distempel ulang.`,
+          );
+        }
+      }
+      // A journal entry whose hash is nowhere in the table is EITHER never applied, OR applied and
+      // then edited. drizzle keys on created_at, so an edited file will never be re-run: the
+      // database is running SQL this branch no longer contains, silently, forever.
+      const stamps = new Set(applied.map((r) => Number(r.created_at)));
+      for (const e of entries) {
+        if (explained.has(e.tag)) continue;
+        if (stamps.has(e.when)) drifted.push(e.tag);
+        else if (e.when <= dbMax)
+          note(
+            `'${e.tag}' (${e.when}) di BAWAH stempel tertinggi database (${dbMax}) dan TIDAK terpakai.\n` +
+              `    drizzle tidak akan pernah menjalankannya di sini.`,
+          );
+      }
+      const byWhen = new Map(entries.map((e) => [e.when, e.tag]));
+      for (const t of drifted) {
+        note(
+          `berkas '${t}.sql' BERUBAH setelah dijalankan (stempelnya terpakai, isinya tidak cocok).\n` +
+            `    drizzle mengunci pada created_at, jadi versi baru TIDAK akan pernah dijalankan di database ini.`,
+        );
+      }
+      // A row whose stamp belongs to a drifted entry is that SAME entry, seen from the other side —
+      // reporting it twice makes ten problems out of eight and buries the ones that are new.
+      for (const o of orphans.filter((o) => !drifted.includes(byWhen.get(o.when) ?? ""))) {
+        note(
+          `database menjalankan migrasi ${o.hash.slice(0, 12)}… (stempel ${o.when}) yang TIDAK cocok ` +
+            `dengan berkas mana pun di branch ini.\n` +
+            `    DDL yang tidak bisa direproduksi dari git: branch lain, 'drizzle-kit push', atau psql manual.\n` +
+            `    Cari isinya: git cat-file --batch-all-objects | sha256 — atau bandingkan dengan produksi.`,
+        );
+      }
+      // The stamp question, asked only when it can still bite: an entry that is ALREADY applied here
+      // is not going to be skipped by the next deploy — complaining about it is the alarm that is
+      // always on, which is the alarm that is off.
+      if (mine.when <= dbMax && !explained.has(mine.tag) && !drifted.includes(mine.tag)) {
         note(
           `'${mine.tag}' (${mine.when}) TIDAK di atas stempel database (${dbMax}).\n` +
             `    Deploy berikutnya akan MELEWATINYA dan tetap melapor "applied successfully".`,
@@ -116,4 +268,6 @@ if (problems.length) {
   process.exit(1);
 }
 
-console.log("✓ Journal waras: stempel naik, idx unik & berurutan, journal ↔ berkas cocok.");
+console.log(
+  "✓ Journal waras: stempel naik, idx unik & berurutan, journal ↔ berkas cocok, tidak ada tag yang hilang.",
+);

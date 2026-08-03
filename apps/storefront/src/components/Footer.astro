@@ -135,9 +135,14 @@ const HEADING = "text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-cre
   <div class="mx-auto grid max-w-7xl gap-x-10 gap-y-10 px-4 py-14 sm:px-6 md:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr] lg:gap-x-8 lg:py-16">
     {/* ── 1. Identity — logo, one line about the shop, and where to follow it ─────────────────────── */}
     <div>
+      {/* `data-logo` on the img marks it as the merchant's wordmark, the same way the header's link
+          is marked. It is what exempts it from the "every catalog <img> carries a srcset" rule in
+          scripts/check-pdp-srcset.mjs: an upload of unknown aspect ratio rendered `h-10 w-auto` has a
+          CSS WIDTH that follows the file's own proportions, so a `sizes` for it would be a guess —
+          and a wrong `sizes` is worse than no srcset at all. */}
       {
         store.logoUrl ? (
-          <img src={mediaUrl(store.logoUrl)} alt={store.name} width="160" height="48" class="h-10 w-auto object-contain object-left" />
+          <img src={mediaUrl(store.logoUrl)} data-logo alt={store.name} width="160" height="48" class="h-10 w-auto object-contain object-left" />
         ) : (
           <p class="font-display text-2xl font-semibold text-cream">{store.name}</p>
         )

@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { signImpersonation } from "./session";
 import { requirePlatformAdmin } from "./platform-auth";
-import { tempPassword, hashPassword } from "./temp-password";
+import { tempPassword, hashPassword } from "@tokophi/lib/password";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
 import { isInstantService } from "@tokophi/lib/couriers";
 import { alTestConnection, alProbeChannels, alCreatePayment } from "@tokophi/lib/autolaris";
@@ -22,8 +22,10 @@ async function logPlatform(text: string): Promise<void> {
 // Every super-admin mutation is gated by `requirePlatformAdmin()` (the security boundary):
 // impersonation + store lifecycle + provisioning + settings all require a platform-admin session.
 //
-// `tempPassword` / `hashPassword` live in `./temp-password` — pure, testable, and the ONLY way a
-// password is minted here. There is deliberately no password constant in this file.
+// `tempPassword` / `hashPassword` live in `@tokophi/lib/password` — pure, testable, and the ONLY way
+// a password is minted here. There is deliberately no password constant in this file. The mint is
+// SHARED with `apps/admin` on purpose: it used to be copied, and the two copies had already drifted
+// to different strengths (24 bits here, 32 there), with the weaker one on the store-owner path.
 
 const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 

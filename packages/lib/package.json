@@ -16,6 +16,7 @@
     "./like": "./src/like.ts",
     "./form-config": "./src/form-config.ts",
     "./totp": "./src/totp.ts",
+    "./password": "./src/password.ts",
     "./integration-status": "./src/integration-status.ts",
     "./payment-fees": "./src/payment-fees.ts",
     "./validate": "./src/validate.ts",

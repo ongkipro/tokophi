@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { scryptSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { tempPassword, hashPassword } from "./temp-password";
+import { tempPassword, hashPassword } from "@tokophi/lib/password";
 
 // The control plane mints logins for OTHER PEOPLE'S accounts — a store owner's, an operator's. A
 // fixed password here is not a weak password, it is a published one: `createStore` hashed the literal
@@ -14,8 +14,13 @@ import { tempPassword, hashPassword } from "./temp-password";
 //
 // `actions.ts` is `"use server"` and imports `@tokophi/db` at module scope, so it cannot be imported
 // here (same reason `platform-rank.ts` was split out). The generator is therefore exercised for real
-// through the pure `./temp-password` module, and the CALL SITES — where the regression actually
+// through the pure `@tokophi/lib/password` module, and the CALL SITES — where the regression actually
 // happened — are checked against the file's source.
+//
+// ⚠️ HOW STRONG the minted password is, is pinned in `packages/lib/src/password.test.ts`, next to the
+// (now single, shared) mint. This file is about WHERE it comes from and whether it reaches the
+// operator; that file is about what it costs to guess. Both are load-bearing and neither implies the
+// other — the 24-bit version passed every assertion below.
 
 const ACTIONS = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
 

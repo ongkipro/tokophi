@@ -1,7 +1,7 @@
 ---
 import { ShoppingBag, ArrowRight, Search, ChevronRight, Phone, Mail } from "@lucide/astro";
 import { IDR } from "@tokophi/lib/format";
-import { mediaUrl } from "../data/catalog";
+import { imageSrcSet, mediaUrl } from "../data/catalog";
 import { getMainNav, type NavItem } from "../data/nav";
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
@@ -72,6 +72,43 @@ const DRAWER_GROUPS = MAIN_NAV.filter((i) => i.children?.length);
 // Two bestsellers for the foot strip — real data, server-rendered, no client fetch. The reference
 // shows a product strip at the bottom of the menu; these are it.
 const DRAWER_FEATURED = catalog.bestsellers().slice(0, 2);
+
+// ── `sizes` FOR THE HEADER'S THREE CATALOG IMAGES ────────────────────────────────────────────────
+//
+// These three render on EVERY page of the shop, and all three used to be a bare `<img>`: the browser
+// was handed the full-size original for a 44 px tile. Measured on the seeded demo at 1440×900, the
+// five mega-menu thumbnails alone cost **74 490 B** — more than the rest of the homepage's catalog
+// images put together — and the drawer's two cost **17 596 B** on a 412 px phone. Both are pure
+// waste: the same products' 200w/400w renditions were already on the wire for the product cards.
+//
+// ⚠️ Each `sizes` is derived from ITS OWN box, because the browser trusts `sizes` completely when it
+// picks a candidate — a wrong one is worse than no srcset at all. Three sites, three derivations:
+//
+//   MEGA_THUMB — `h-11 w-11 shrink-0` on the wrapper, `h-full w-full` on the img. A fixed 44 px, no
+//     responsive variant and no flex growth, at every width the panel exists at (the nav is
+//     `xl:flex`, so ≥1280 only). Measured 44 px at 1440.
+//
+//   FEATURED — a fixed ~406 px, not a fraction, and the arithmetic is worth writing down:
+//     panel   `inset-x-6` inside the header's `mx-auto max-w-7xl` → min(100vw, 1280) − 48
+//     card    `border` on the panel + `p-5` on the grid            → − 2 − 40
+//     column  `md:grid-cols-[1.7fr_1fr]` with `gap-6`              → (content − 24) × 1/2.7
+//     tile    the `<a>`'s own `border` + `p-3`                     → − 2 − 24
+//     At any viewport ≥1280 the `max-w-7xl` container is pinned at 1280, so this is a CONSTANT:
+//     (1280 − 48 − 2 − 40 − 24)/2.7 − 26 = 406 px. Measured 406 px at 1440. Below 1280 the nav is
+//     `display:none`, so no other branch is reachable. It over-claims by ≤6 px in the 1265–1280
+//     sliver where a scrollbar narrows the container — upward, which is the direction to err.
+//
+//   DRAWER — `(min-width: 416px) 186px, calc((100vw - 44px) / 2)`:
+//     drawer  `w-full max-w-[26rem]`  → min(100vw, 416)
+//     inner   `px-4` + `grid-cols-2 gap-3` → tile = (min(100vw, 416) − 32 − 12) / 2
+//     Measured 184 px at 412 (= (412 − 44)/2). ⚠️ Here — unlike the PDP thumbnail rail, where
+//     `max-w-[7rem]` only CAPS a `flex-1 basis-0` share and declaring the cap over-claimed by 1,7×
+//     and cost a whole rung — the cap binds deterministically: the drawer is `w-full` against the
+//     viewport, so above 416 px the tile really is exactly 186 px. A `max-w` is only a `sizes` when
+//     you can say at which viewport it starts binding.
+const MEGA_THUMB_SIZES = "44px";
+const FEATURED_SIZES = "406px";
+const DRAWER_TILE_SIZES = "(min-width: 416px) 186px, calc((100vw - 44px) / 2)";
 
 // Contact for the drawer's foot. Read straight off the store — no second copy of the footer's
 // normalising, because these two fields need none: `phone` is free text by design (a shop writes its
@@ -203,6 +240,8 @@ const drawerEmail = (store.email ?? "").trim() || null;
       {meta?.image ? (
       <img
       src={meta.image}
+      srcset={imageSrcSet(meta.image)}
+      sizes={imageSrcSet(meta.image) ? MEGA_THUMB_SIZES : undefined}
       alt=""
       loading="lazy"
       class="h-full w-full object-cover transition-transform duration-300 group-hover/cat:scale-105"
@@ -245,6 +284,8 @@ const drawerEmail = (store.email ?? "").trim() || null;
       <span class="aspect-[4/3] w-full overflow-hidden rounded-lg bg-brand-50">
       <img
       src={featured.image}
+      srcset={imageSrcSet(featured.image)}
+      sizes={imageSrcSet(featured.image) ? FEATURED_SIZES : undefined}
       alt=""
       loading="lazy"
       class="h-full w-full object-cover transition-transform duration-500 group-hover/feat:scale-105"
@@ -530,7 +571,14 @@ const drawerEmail = (store.email ?? "").trim() || null;
                     >
                       <span class="block aspect-[3/4] overflow-hidden rounded-lg bg-brand-50 ring-1 ring-line">
                         {prod.image ? (
-                          <img src={prod.image} alt="" loading="lazy" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:group-hover:scale-100" />
+                          <img
+                            src={prod.image}
+                            srcset={imageSrcSet(prod.image)}
+                            sizes={imageSrcSet(prod.image) ? DRAWER_TILE_SIZES : undefined}
+                            alt=""
+                            loading="lazy"
+                            class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:group-hover:scale-100"
+                          />
                         ) : (
                           <span class="flex h-full w-full items-center justify-center">
                             <ShoppingBag class="size-5 text-brand-300" stroke-width={1.5} aria-hidden="true" />

@@ -91,6 +91,48 @@ function withMedia<T>(value: T): T {
         return <Lookbook {...item.props} />;
       case "blog":
         return <Blog {...item.props} />;
+      // ── EVERY TYPE MUST HAVE AN ARM, AND AN UNKNOWN ONE MUST NOT VANISH ────────────────────────
+      //
+      // Two different failures meet here and they need two different answers.
+      //
+      // ① **A type we forgot.** Adding a key to `SectionConfigMap` without an arm above used to
+      //    compile and render NOTHING — part of a merchant's published page simply disappeared, with
+      //    no error, no failed build and no migration to point at. `_exhaustive: never` is the fix:
+      //    with every arm present `item` is `never` here, so the assignment holds; the moment a new
+      //    type exists without an arm, `item` is that variant and this line fails to compile.
+      //    (The admin half already had this for free — `Config<SectionConfigMap>` in
+      //    apps/admin/lib/theme/puck-config.tsx is an exhaustive mapped type, so the BUILDER refused
+      //    a new section while the RENDERER stayed silent. This closes the asymmetry.)
+      //    ⚠️ The fix is this arm, never deleting arms above. Narrow the PALETTE
+      //    (`SECTIONS_BY_TEMPLATE_TYPE`), never the renderer: a template saved earlier holding a
+      //    section no longer offered for its type must keep rendering.
+      //
+      // ② **A type that genuinely is not known here** — an older template read by a rolled-back
+      //    deploy, or a row hand-edited/imported. That is a RUNTIME fact no compiler can prevent, and
+      //    the compile-time guard above does nothing about it. It stays a `console.warn` on the
+      //    server (this is SSR, so it lands in the container log where it can be grepped) plus a
+      //    visible panel in DEV only. NOT visible in production on purpose: a shopper on a merchant's
+      //    live shop must not be shown our internal error, and a merchant must not have a red box
+      //    published under their brand. Silence toward the shopper, never silence toward us.
+      default: {
+        const unknown = item as { type: string };
+        const _exhaustive: never = item;
+        void _exhaustive;
+        console.warn(
+          `[SectionRenderer] no renderer for section type "${unknown.type}" — it was skipped. ` +
+            `Add a case arm in SectionRenderer.astro, or the section is from a newer template than this deploy.`,
+        );
+        return import.meta.env.DEV ? (
+          <div
+            data-unknown-section={unknown.type}
+            style="margin:1rem;padding:1rem;border:2px dashed #dc2626;border-radius:.75rem;background:#fef2f2;color:#7f1d1d;font:14px/1.5 system-ui,sans-serif"
+          >
+            <strong>Unknown section type “{unknown.type}”.</strong> Nothing was rendered here. Add a{" "}
+            <code>case "{unknown.type}":</code> arm to <code>SectionRenderer.astro</code>. (Dev only —
+            production renders nothing and logs a warning.)
+          </div>
+        ) : null;
+      }
     }
   })
 }

@@ -1,9 +1,9 @@
 "use server";
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
-import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { normalizeEmail } from "@tokophi/lib/validate";
+import { tempPassword } from "@tokophi/lib/password";
 import { requireCapability } from "@/lib/rbac";
 import { getSession, hashPassword } from "@/lib/auth";
 import { withCurrentTenant } from "@/lib/tenant";
@@ -24,7 +24,6 @@ export type ManageableRole = "admin" | "staff" | "gudang";
 export type StoreUserRow = { userId: string; name: string; email: string; role: StoreRole; isSelf: boolean };
 
 const MANAGEABLE: ManageableRole[] = ["admin", "staff", "gudang"];
-const tempPassword = () => "tokophi-" + randomBytes(4).toString("hex");
 
 export async function getStoreUsers(): Promise<StoreUserRow[]> {
   const session = await getSession();

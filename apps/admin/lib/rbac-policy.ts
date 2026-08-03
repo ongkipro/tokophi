@@ -34,6 +34,10 @@ export type Capability =
   // `content:write`: the escalation is on the executable markup, not on the feature.
   | "landing:html";
 
+// ⚠️ ADDING A CAPABILITY HERE GRANTS IT TO `admin` BY DEFAULT — see the `admin` row below, which is
+// built by SUBTRACTION. `apps/admin/lib/rbac-census.test.ts` holds a `Record<Capability, …>` naming
+// who is meant to hold each one, so a new entry fails `tsc` AND `vitest` until it is classified
+// deliberately. That test is the reason the default cannot leak silently; keep it in step.
 export const ALL_CAPABILITIES: Capability[] = [
   "products:write",
   "products:delete",

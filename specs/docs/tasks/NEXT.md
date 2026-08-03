@@ -128,16 +128,55 @@ must agree with the storefront's `primaryOrigin()`) · mint per phone-carrying c
 **AC met:** admin login → real `wa.me` body → that exact link → banner, cart and typed fields restored,
 in a browser. Foreign-store / tampered / junk tokens all refused.
 
-### N18. `tempPassword()` is 24 bits, and no login rate-limit was found · **M** · NEW
-`randomBytes(3)` in super-admin (`"tokophi-" + 3 bytes hex`) against `randomBytes(4)` = 32 bits in the
-admin's own copy. Unchanged by audit wave 2 — `resetOwnerPassword` already used it — but **that function
-is now on the path that hands a merchant their first credential**, which raises what it is worth.
+### 🔵 N18a. `tempPassword()` was 24 bits — ✅ **DONE 2026-08-03**
+The two implementations are **one shared helper**, `@tokophi/lib/password`, at **60 bits** (12 symbols ×
+log2(32); the `tokophi-` prefix is 0 bits). `apps/super-admin/lib/temp-password.ts` is deleted and
+`apps/admin/lib/actions/users.ts` no longer keeps a private `randomBytes(4)`.
+`packages/lib/src/password.test.ts` measures the **min-entropy the generator actually emits** and fails
+below **48 bits** — it went red at 23,7 bits against the old mint before it went green — and it fails if
+either app grows a private mint again.
 
-24 bits is 16.7 M candidates. That is only a real attack with an unthrottled login, and **no login
-rate-limit was found**. Widen the mint *and* throttle the door; either alone is half the fix.
+### 🔴 N18b. The login door — the premise of this entry was WRONG, and it is a DECISION · **decision, not work**
 
-**AC:** the two `tempPassword()` implementations are one shared helper at ≥ 32 bits, and a test that a
-burst of failed logins for one email is refused.
+> ⚠️ **"no login rate-limit was found" was false when it was written.** One exists on **both** panels
+> and has since **2026-07-16** (`53dd9ee`): `apps/admin/lib/actions/auth.ts:17` `login:admin:<ip>` 15/min
+> and `apps/super-admin/lib/actions/auth.ts:16` `login:platform:<ip>` 10/min, both **before** the scrypt
+> check. `specs/docs/STATUS.md` row 20 said so the whole time. **Nothing was missing; something was
+> unread.** The AC below ("a test that a burst of failed logins for one email is refused") would have
+> been written against a limiter that does not key on email at all.
+
+What is **actually** absent, verified at HEAD:
+
+1. **The counter is per PROCESS** — `packages/lib/src/cache.ts:39`, a module-scope `Map`. It resets on
+   every redeploy and does not span replicas. Today that is survivable *by accident*: `docker-compose.coolify.yml`
+   runs exactly **one container per surface** with no `replicas` key, so the map is currently global per
+   panel. It stops being true the first time anything is scaled, silently.
+2. **It counts IPs, never accounts.** One named merchant can be attacked at 15/min **per source
+   address**; a botnet is not slowed at all. The 60-bit mint is what makes that arithmetic safe
+   (2⁵⁹ expected guesses ÷ 15/min ≈ 10¹² years per IP), which is why N18a was the half worth building.
+3. **A failed login is recorded NOWHERE** — no table, no `platform_activity` row, no log line. Nobody
+   can answer "is my merchant being attacked?", and no limiter can be tuned against data we do not keep.
+4. **Adjacent doors are unthrottled entirely**: `registerStore`, the Google OAuth callback, and — the
+   sharp one — `apps/admin/app/impersonate/route.ts`, an unauthenticated GET that exchanges a token for
+   a **7-day** session. **This is why N18b cannot be decided before N1**: any scheme that wraps only
+   `signIn` leaves the widest door untouched.
+5. TOTP shares the *same* `login:admin:<ip>` bucket as the password — no tighter second-factor counter,
+   and `verifyTotp` accepts a ±1 step (90 s) window.
+
+**The options, with what each one breaks** (sized 2026-08-03; **not implemented — owner's call**):
+
+| | Option | Cost | What it breaks / risks |
+|---|---|---|---|
+| **A** | **Do nothing more.** Keep IP-only, in-process. | 0 | Accepts (1)–(4). Defensible *only* while the mint stays ≥ 48 bits and there is one replica. **Then the honest fix is one line in `DEPLOY.md`: never scale a panel without doing B or C first.** |
+| **B** | **Per-account counter in Postgres** (`login_attempts`, or a column on `users`). | S–M: one migration, one write on failure, one read before the check. | ⚠️ **A lockout is a DoS an attacker can aim at a named merchant** — knowing an email is enough to keep the shop's owner out during a sale. Mitigate by throttling (a delay) rather than locking, and never confirm to the caller *why* a login failed. Adds a DB write to an unauthenticated path — itself an amplification target, so it needs the IP gate to stay in front of it. Also the only option that makes attacks **visible**, which is arguably worth more than the throttling. |
+| **C** | **Cloudflare Rate Limiting rule** at the edge on the two login paths. | S — zone config, no code. | ⚠️ **Cannot be done from this repo today**: the Cloudflare token has **no ruleset permission** (`docker-compose.coolify.yml:185`) and wrangler auth is expired (N2). Counts requests, not failures, so it must be loose enough not to bite a legitimate retry. Survives redeploys and replicas — the only option that fixes (1) properly. Does nothing for (3). |
+
+**Recommendation (D5, the owner's):** **A now + the `DEPLOY.md` line**, then **C** when N2 unblocks the
+Cloudflare token, and **B only for its logging value** — decided *after* N1, because the impersonation
+door is the one that actually needs closing and B does not touch it.
+
+**AC:** a decision recorded in `specs/decisions/`. **Not** a limiter built on the strength of this entry —
+the last AC here was written against a limiter that did not exist, and it would have shipped a second one.
 
 ---
 
@@ -351,21 +390,41 @@ Verified over HTTP: 55 URLs, 21 `<lastmod>` = 15 blog + 6 halaman.
 N8 ②, because the journal has already lost two entries to exactly this.
 **AC:** editing a product moves its `<lastmod>`; a product nobody has touched keeps its old one.
 
-### N22. `Header.astro` renders bare `<img>` on EVERY page · **S** · NEW
-Left open deliberately by the change that fixed the PDP thumbnails, and the reasoning is worth adopting
-as policy: it is a different file with separate `sizes` derivations, and *a check red for work nobody in
-that change can land is a check everyone learns to ignore.*
+### ✅ N22. `Header.astro` renders bare `<img>` on EVERY page — CLOSED
+Three sites, three `sizes` derivations, each from its own box and named as a constant in the file:
 
-So `check-pdp-srcset.mjs` **prints** them without failing — **10 catalog images with no `srcset`**, on
-every page of the shop.
+| site | derivation | `sizes` |
+|---|---|---|
+| mega-menu category thumb | `h-11 w-11 shrink-0`, no responsive variant | `44px` |
+| mega-menu featured tile | panel `inset-x-6` inside `max-w-7xl` → −48; panel border + grid `p-5` → −42; `[1.7fr_1fr]` with `gap-6` → ×1/2.7; the `<a>`'s border + `p-3` → −26. The container is pinned at 1280 for every viewport the nav exists at (`xl:flex`), so it is a CONSTANT | `406px` |
+| mobile drawer two-up | drawer `w-full max-w-[26rem]`, inner `px-4`, `grid-cols-2 gap-3` → `(min(100vw,416) − 44)/2` | `(min-width: 416px) 186px, calc((100vw - 44px) / 2)` |
 
-⚠️ Each `sizes` must be derived from **that component's own layout** and named as a constant. A wrong
-`sizes` is worse than no `srcset` at all: the browser trusts it completely when picking a candidate. See
-the PDP derivation in `produk/[handle].astro` for the shape — and the `max-w` trap it documents, which
-was worth 17 468 B for one word.
+All three measured against the built server, not read off the classes: 44 / 406 / 184 px.
 
-**AC:** the check FAILS on a bare `<img>` in `Header.astro` instead of printing it; measured bytes before
-and after, at DPR 1 and 2.
+**Measured, `/` cold load, unique catalog bytes over real HTTP** (the whole-page number, so it already
+nets off files the product cards were fetching anyway):
+
+| | before | after | delta |
+|---|---|---|---|
+| desktop 1440 DPR 1 | 133 612 B | 59 122 B | **−74 490 B (−55,8 %)** |
+| desktop 1440 DPR 2 | 212 486 B | 171 982 B | **−40 504 B (−19,1 %)** |
+| mobile 412 DPR 1 | 62 704 B | 45 108 B | **−17 596 B (−28,1 %)** |
+| mobile 412 DPR 2 | 152 894 B | 142 152 B | **−10 742 B (−7,0 %)** |
+
+Per element (probe-isolated, so no candidate can be satisfied out of another element's response): the
+five mega-menu thumbnails went **74 490 B → 8 992 B** at both DPRs (44 px box ⇒ the 200w rung wins even
+at DPR 2), and the drawer's two tiles **17 596 B → 2 470 B** at DPR 1 / **6 210 B** at DPR 2.
+
+⚠️ **The featured tile was NOT worth it, and the number is 0 B.** At 406 px it needs 406 device px at
+DPR 1 and 812 at DPR 2; the ladder for a seeded product is 200 / 400 / 600 (the source), so the browser
+picks the original either way — byte-identical to the bare `<img>` it replaced. It still carries the
+srcset, because on a merchant's own uploads the same markup ladders to 2000w and that tile would be
+handed a 2000 px original for a 406 px box. Reported rather than assumed: `?w=` renditions could not be
+measured here (the admin origin that serves them is not running in this harness).
+
+Only ONE of the two desktop/mobile sites is ever on screen: the nav is `xl:flex` and the drawer sits
+inside an `xl:hidden`, so at any viewport one of them is `display:none` — which is why the check that
+guards this had to become structural rather than ratio-based (see "Runnable checks" below).
 
 ### N23. `data/articles.ts:57` sorts every draft above every published post · **S** · NEW
 The surviving half of the NULLS-FIRST class that audit wave 2 fixed in the payment ordering:
@@ -378,20 +437,38 @@ One line — `publishedAt desc nulls last` — and it is the same mistake, in th
 **AC:** a store with drafts and published posts lists the published ones first; a test that pins the
 ordering, since this is the second time the class has shipped.
 
-### N24. `/products/*.webp` declares `800w` for a 600 px file · **S** · NEW
-`staticSrcSet` (`apps/storefront/src/data/catalog.ts`) appends the original as the top candidate —
-deliberately, because the generated ladder stops below the source width and without it a wide screen
-would be served the largest *generated* file. But for `/products/` it labels that original **`800w`**,
-and the sources are **600 × 600** (verified on disk this session, e.g.
-`public/products/blazer-wanita.webp`).
+### ✅ N24. `/products/*.webp` declares `800w` for a 600 px file — CLOSED
+**The full audit, every source read with sharp, not sampled** (75 files):
 
-The srcset therefore **over-claims by 33 %**. A browser that trusts the descriptor will pick the original
-believing it is 800 px wide — it is not a broken image (the file exists), it is a lie in the one field the
-candidate algorithm has no way to check. The `/hero/` and `/sections/` branches label theirs `1920w`;
-whether those are honest was **not checked** and should be, in the same pass.
+| dir | files | real widths | was declared | verdict |
+|---|---|---|---|---|
+| `/hero/` | 3 | all **1920 × 1080** | `1920w` | ✅ honest |
+| `/sections/` | 2 | `denim-standard` **1200 × 960**, `lookbook` **2000 × 784** | `1920w` | ❌ **both wrong** — one over-claims 60 %, the other under-claims |
+| `/products/` | 70 | **56 are 800 × 800**, **14 are 600 × 600** | `800w` | ❌ over-claims 33 % on 14 |
 
-**AC:** every descriptor in a generated `srcset` matches the file's real intrinsic width; a check that
-reads the actual dimensions off disk rather than trusting the constant.
+⚠️ **The 14 are not random: they are exactly the `<handle>.webp` of every product** — the FIRST image,
+the one on every card, every mega-menu thumbnail and every PDP. The `-2…-5` extras are all 800. So the
+lie was on the most-rendered image in the catalogue.
+
+All **150 generated renditions** were verified honest — every `-<N>w.webp` really is N px.
+
+**The fix is the descriptor, not a new rendition.** Generating an `800w` from a 600 px source is an
+upscale: bytes for nothing, and the generator refuses to (`if (w >= meta.width) continue`). The
+declaration was the thing that was false. `gen-image-widths.mjs` now writes
+`src/data/static-image-widths.ts` — every source's **real intrinsic width** plus the renditions that
+**actually exist beside it** — and `staticSrcSet` reads only that. `STATIC_WIDTHS` is deleted. That also
+retires the "the two ladders must stay identical" rule by making it structural: the ladder *is* the list
+of files that were generated, so a rung with no file on disk can no longer be listed.
+
+**Byte impact today: 0** — this is honesty, not a saving. The 600 px file was already the top candidate
+and stays the top candidate; the PDP main photo simply stops claiming to be 800 px for a 380 px box
+(`check-pdp-srcset` reported it at `800px 1.05x` and now reports `600px 0.79x` — the same file, and the
+*real* ratio is the second one). What it buys is that the next `sizes` decision is made against a true
+number: at 406 px the featured tile would have climbed to a "800w" candidate that is 600 px wide.
+
+Guarded by **`apps/storefront/scripts/check-image-widths.mjs`** — sharp against disk, four claims (the
+source's declared width IS its real width; every listed rung exists; every rung's real width matches its
+filename; no source on disk is missing from the manifest). No browser and no server, so it cannot flake.
 
 ### N25. `color_palettes` is an orphan table, and the journal has lost two entries before · **S** · NEW
 Two facts, one lesson: **`verify-migrations` checks the journal against itself and the files beside it,
@@ -504,8 +581,11 @@ DATABASE_URL=… PORT=4373 node apps/storefront/dist/server/entry.mjs &
 node apps/storefront/scripts/check-pixel-defer.mjs   # tracking survives the deferral
 node apps/storefront/scripts/check-hero-srcset.mjs   # srcset actually promoted (port 4374)
 node apps/storefront/scripts/check-h1-floor.mjs      # exactly one <h1>, all three template shapes
-node apps/storefront/scripts/check-pdp-srcset.mjs    # no image resolves over 3x the pixels it fills
-node apps/storefront/scripts/gen-image-widths.mjs    # regenerate renditions (idempotent)
+node apps/storefront/scripts/check-pdp-srcset.mjs    # no image resolves over 3x the pixels it fills,
+                                                     # and no catalog <img> is bare (logo excepted)
+node apps/storefront/scripts/check-image-widths.mjs  # every w descriptor IS the file's real width
+                                                     # (no server, no browser — disk vs disk)
+node apps/storefront/scripts/gen-image-widths.mjs    # regenerate renditions + the width manifest
 
 npm test                                             # ledger suites now run by default
 npm run test:db                                      # same, but an unreachable test DB FAILS instead of skipping
@@ -527,8 +607,16 @@ npx vitest run apps/storefront/src/components/sections/h1-floor.test.ts
   configure all three channels on the tenant you point it at, or make it assert only the channels the
   tenant has enabled — **an alarm that is always red is an alarm that is off**, and this repo has already
   paid for that lesson with two cross-tenant leaks that shipped past a red `verify-rls`.
-- ⚠️ **`check-pdp-srcset.mjs` PRINTS `Header.astro`'s 10 bare catalog images without failing** (N22).
-  That is deliberate, and it should stop being true once N22 lands.
+- ✅ **`check-pdp-srcset.mjs` now FAILS on a bare catalog `<img>` instead of printing it** (N22 landed).
+  The claim is STRUCTURAL, not ratio-based, on purpose: the ratio test can only judge an element the
+  browser actually painted, and the mega menu (`xl:flex`) and the drawer (inside an `xl:hidden`) are
+  never both on screen — one of them is always `display:none` at any given viewport while still costing
+  the other half of the audience its bytes. An `<img>` with no srcset cannot be right at any width, so
+  it does not need to be measured to be judged. **The store logo is the one exemption**, marked
+  `data-logo` in `Header.astro` and `Footer.astro`: a merchant upload of unknown aspect ratio rendered
+  `h-9 w-auto` has a CSS width that follows the file's own proportions, so a `sizes` for it would be a
+  guess — and a wrong `sizes` is worse than no srcset at all. Giving it real renditions means reading
+  its intrinsic size at upload time; that is a separate piece of work.
 
 ## 🔬 Two gates that only fire if you run them
 
