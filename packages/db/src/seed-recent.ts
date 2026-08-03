@@ -100,16 +100,7 @@ async function seedPromo(storeId: string) {
   console.log("✓ Halaman promo (/promo) siap: banner, voucher, gratis ongkir.");
 }
 
-async function main() {
-  const [store] = await q(sql`select id, name from stores where slug = ${SLUG}`);
-  if (!store) throw new Error(`Store ${SLUG} not found — nothing to top up.`);
-  const storeId = String(store.id);
-
-  // PROMO demo (PROMO P5) — runs BEFORE the order-gap early-return so the /promo hub is always populated,
-  // even when there are no empty order days. All now()-relative (the anchored main seed can't make a
-  // flash sale that is live TODAY) and idempotent, so it is safe to run on prod without truncating.
-  await seedPromo(storeId);
-
+async function seedOrders(storeId: string, storeName: string) {
   // Gap = every calendar day (Asia/Jakarta) in the last 30 that has no order at all for this store.
   // Bounded to 30 days on purpose: this tops the demo up, it does not rewrite history.
   const gap = await q(sql`
@@ -290,7 +281,251 @@ async function main() {
     `);
   }
 
-  console.log(`✓ ${made} pesanan ditambahkan untuk ${store.name} — mengisi ${gap.length} hari kosong (${gap[0].day} → ${gap[gap.length - 1].day}).`);
+  console.log(`✓ ${made} pesanan ditambahkan untuk ${storeName} — mengisi ${gap.length} hari kosong (${gap[0].day} → ${gap[gap.length - 1].day}).`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// checkout_sessions — the carts that never became orders.
+//
+// WHY THIS IS HERE. Un-anchoring `apps/admin/lib/data/checkout.ts` from the seed's frozen date was
+// correct (the old "30 hari" window was a frozen start with no upper bound, 60 days wide by 1
+// Agustus), but it exposed a DATA gap: the main seed's newest `ditinggal` row is 2026-07-15 and this
+// script refreshed orders, flash sales and the ledger while inserting no `checkout_sessions` at all.
+// Keranjang Ditinggal fell from 796/340 to 6/143. The fix is seeding — never re-anchoring the app so
+// the demo looks busy.
+//
+// The volume is DERIVED from the orders, per day, exactly as seed.ts derives it:
+//     abandoned(day) = 4 × orders(day)    →  4 / (4 + 1) = 80% abandonment (Indonesia runs ~82–83%)
+// and the RESCUED ones are pulled out of that pool at 14%, giving a recovery rate of
+//     0.56 / (4 + 0.56) ≈ 12,3%  — the honest band for WhatsApp cart recovery, not a vendor's 35%.
+//
+// ⚠️ THE METRIC TRAP (0045). A straight-through checkout ALSO ends `pulih`, so `pulih / (pulih +
+// ditinggal)` counts every ordinary sale as a rescue. `abandoned_at` is the only thing that tells
+// them apart, and both kinds are generated here so the difference stays visible in the data:
+//   rescued  = abandoned_at IS NOT NULL and recovered_at IS NOT NULL   (went quiet, then came back)
+//   straight = abandoned_at IS NULL     and recovered_at IS NOT NULL   (an ordinary sale)
+// `aktif` rows are NOT generated: they are excluded from both sides of every rate anyway, the sweep
+// would flip them to `ditinggal` within the hour, and inventing a live shopper who is not there is
+// the one thing this table must never do.
+//
+// IDEMPOTENT the same way the orders are: it fills only days (WIB) that currently have ZERO sessions
+// for this store. A second run inserts nothing. INSERT-only — nothing here updates or deletes a row.
+// ─────────────────────────────────────────────────────────────────────────────
+type CkStep = "keranjang" | "kontak" | "alamat" | "pengiriman" | "pembayaran";
+const STEP_MIX: Array<[CkStep, number]> = [
+  ["keranjang", 0.46], ["kontak", 0.2], ["alamat", 0.15], ["pengiriman", 0.11], ["pembayaran", 0.08],
+];
+const STEP_RANK: Record<CkStep, number> = { keranjang: 0, kontak: 1, alamat: 2, pengiriman: 3, pembayaran: 4 };
+
+async function seedCheckoutSessions(storeId: string) {
+  const gap = await q(sql`
+    with span as (
+      select generate_series(
+        (now() at time zone 'Asia/Jakarta')::date - interval '29 days',
+        (now() at time zone 'Asia/Jakarta')::date,
+        '1 day'
+      )::date as day
+    )
+    select to_char(s.day, 'YYYY-MM-DD') as day
+      from span s
+     where not exists (
+       select 1 from checkout_sessions c
+        where c.store_id = ${storeId}
+          and (c.created_at at time zone 'Asia/Jakarta')::date = s.day
+     )
+     order by s.day
+  `);
+  if (!gap.length) {
+    console.log("✓ Keranjang: tidak ada hari kosong dalam 30 hari terakhir — tidak ada yang perlu ditambahkan.");
+    return;
+  }
+
+  // The orders those carts are scaled against, and the ones the `pulih` rows point AT — a recovered
+  // session that names no real order is a recovery nobody can open.
+  const orders = await q(sql`
+    select id, total_idr as total, customer_id,
+           to_char((placed_at at time zone 'Asia/Jakarta')::date, 'YYYY-MM-DD') as day,
+           to_json(placed_at) #>> '{}' as at
+      from orders
+     where store_id = ${storeId} and placed_at >= now() - interval '30 days'
+     order by placed_at
+  `);
+  const byDay = new Map<string, Row[]>();
+  for (const o of orders) (byDay.get(String(o.day)) ?? byDay.set(String(o.day), []).get(String(o.day))!).push(o);
+
+  const customers = await q(sql`select id, name, phone, email, city from customers where store_id = ${storeId}`);
+  // Real destinations, lifted from orders that already exist — a made-up district id would not resolve
+  // in `kiriminaja_areas`, so the cart could never be quoted, let alone recovered.
+  const dests = await q(sql`
+    select distinct on (ship_district_id)
+           ship_address as address, ship_district_id as district_id, ship_postcode as postcode, city, province
+      from orders
+     where store_id = ${storeId} and ship_district_id is not null
+     limit 40
+  `);
+  const catalog = await q(sql`
+    select p.handle, p.title, v.title as variant, v.price_idr as price
+      from product_variants v
+      join products p on p.id = v.product_id
+     where p.store_id = ${storeId} and p.archived_at is null and p.status = 'active' and v.position = 0
+  `);
+  if (!customers.length || !catalog.length || !dests.length)
+    throw new Error("Store has no customers / products / shippable orders to sample carts from.");
+
+  const rnd = mulberry32(0x7373); // fixed seed → same gap, same carts, every run
+  const pick = <T>(a: T[]) => a[Math.floor(rnd() * a.length)];
+  const rollStep = (): CkStep => {
+    let r = rnd();
+    for (const [s, w] of STEP_MIX) if ((r -= w) <= 0) return s;
+    return "keranjang";
+  };
+  const cart = () => {
+    const items = Array.from({ length: 1 + Math.floor(rnd() * 3) }, () => {
+      const p = pick(catalog);
+      return { handle: String(p.handle), name: String(p.title), variant: String(p.variant), qty: rnd() < 0.18 ? 2 : 1, price: Number(p.price) };
+    });
+    return { items, subtotal: items.reduce((a, i) => a + i.price * i.qty, 0) };
+  };
+  const iso = (ms: number) => new Date(ms).toISOString();
+
+  type Ck = {
+    sid: string; customerId: string | null; name: string | null; phone: string | null; email: string | null;
+    address: string | null; city: string | null; province: string | null; postcode: string | null; districtId: number | null;
+    items: unknown; subtotal: number; shipping: number; step: CkStep; status: "ditinggal" | "pulih";
+    abandonedAt: string | null; recoveredOrderId: string | null; recoveredAt: string | null;
+    createdAt: string; updatedAt: string;
+  };
+  const rows: Ck[] = [];
+  let seq = 0;
+  let skipped = 0;
+
+  for (const g of gap) {
+    const day = String(g.day);
+    const dayOrders = byDay.get(day) ?? [];
+    // No orders that day means nothing to scale the carts against. After the order top-up above this
+    // does not happen; if it ever does, inventing a volume out of nothing is worse than a thin day.
+    if (!dayOrders.length) { skipped++; continue; }
+
+    const nAbandoned = dayOrders.length * 4;
+    const nRescued = Math.min(Math.round(nAbandoned * 0.14), dayOrders.length);
+    const dayStart = Date.parse(`${day}T08:00:00+07:00`);
+
+    // ---- ditinggal: never became anything ----
+    for (let k = 0; k < nAbandoned; k++) {
+      const step = rollStep();
+      const rank = STEP_RANK[step];
+      const anon = rank === 0; // never reached the contact form → we have nothing but a session id
+      // A quarter of the identified carts belong to someone who has bought here before, so the admin
+      // can open the whole customer rather than a bare phone number.
+      const known = !anon && rnd() < 0.25 ? pick(customers) : null;
+      const dest = pick(dests);
+      const { items, subtotal } = cart();
+      // Stamped inside the working day (WIB), and never in the future: the newest day is TODAY, and a
+      // cart abandoned at 20:00 tonight would render as "-4 jam lalu" and clamp to "baru saja".
+      // 95 minutes of headroom is the +27 min last touch plus the 60 min the sweep waits.
+      const created = Math.min(dayStart + Math.floor(rnd() * 780) * 60_000, Date.now() - (95 + Math.floor(rnd() * 240)) * 60_000);
+      const updated = created + (2 + Math.floor(rnd() * 25)) * 60_000;
+      rows.push({
+        sid: `ckr-${day}-${seq++}`,
+        customerId: known ? String(known.id) : null,
+        name: anon ? null : known ? String(known.name) : pick(customers).name as string,
+        // Canonical 62… on write, from every path (the checkout API normalises, so the seed must too).
+        phone: anon ? null : known?.phone ? String(known.phone) : `62812${String(1_000_000 + Math.floor(rnd() * 8_999_999))}`,
+        email: anon || rnd() < 0.45 ? null : (known?.email as string) ?? null,
+        address: rank >= 2 ? String(dest.address) : null,
+        city: rank >= 2 ? String(dest.city) : null,
+        province: rank >= 2 ? String(dest.province) : null,
+        postcode: rank >= 2 ? (dest.postcode == null ? null : String(dest.postcode)) : null,
+        districtId: rank >= 2 ? Number(dest.district_id) : null,
+        items, subtotal,
+        shipping: rank >= 3 ? 20_000 : 0,
+        step,
+        status: "ditinggal",
+        // The sweep flips a session once it has been quiet for 60 minutes, and stamps the moment it
+        // WENT quiet — not "now". Same arithmetic here.
+        abandonedAt: iso(updated + 60 * 60_000),
+        recoveredOrderId: null,
+        recoveredAt: null,
+        createdAt: iso(created),
+        updatedAt: iso(updated),
+      });
+    }
+
+    // ---- pulih: the sessions that BECAME one of this day's orders ----
+    //   k <  nRescued → went quiet, was chased, came back  → a real RESCUE (abandoned_at set)
+    //   k >= nRescued → walked straight through to payment → an ordinary sale (abandoned_at NULL)
+    for (let k = 0; k < dayOrders.length; k++) {
+      const o = dayOrders[k];
+      const placed = Date.parse(String(o.at));
+      const rescued = k < nRescued;
+      const cust = o.customer_id ? customers.find((c) => c.id === o.customer_id) : null;
+      const { items } = cart();
+      // A rescue started a day or two before it finally paid; a straight-through checkout takes minutes.
+      const created = placed - (rescued ? 1440 + Math.floor(rnd() * 2880) : 6 + Math.floor(rnd() * 20)) * 60_000;
+      rows.push({
+        sid: `ckr-${rescued ? "pulih" : "lurus"}-${day}-${seq++}`,
+        customerId: cust ? String(cust.id) : null,
+        name: cust ? String(cust.name) : null,
+        phone: cust?.phone ? String(cust.phone) : null,
+        email: (cust?.email as string) ?? null,
+        address: null,
+        city: cust?.city ? String(cust.city) : null,
+        province: null,
+        postcode: null,
+        districtId: null,
+        items,
+        subtotal: Number(o.total),
+        shipping: 20_000,
+        step: "pembayaran",
+        status: "pulih",
+        abandonedAt: rescued ? iso(created + 90 * 60_000) : null,
+        recoveredOrderId: String(o.id),
+        recoveredAt: iso(placed),
+        createdAt: iso(created),
+        updatedAt: iso(placed),
+      });
+    }
+  }
+
+  for (let i = 0; i < rows.length; i += 200) {
+    const values = rows.slice(i, i + 200).map(
+      (r) => sql`(${storeId}, ${r.sid}, ${r.customerId}, ${r.name}, ${r.phone}, ${r.email}, ${r.address},
+                  ${r.city}, ${r.province}, ${r.postcode}, ${r.districtId}, ${JSON.stringify(r.items)}::jsonb,
+                  ${r.subtotal}, ${r.shipping}, ${r.step}::checkout_step, ${r.status}::checkout_status,
+                  ${r.abandonedAt}::timestamptz, ${r.recoveredOrderId}::uuid, ${r.recoveredAt}::timestamptz,
+                  ${r.createdAt}::timestamptz, ${r.updatedAt}::timestamptz)`,
+    );
+    await db.execute(sql`
+      insert into checkout_sessions (store_id, session_id, customer_id, name, phone, email, address,
+                                     city, province, postcode, district_id, items,
+                                     subtotal_idr, shipping_idr, step, status,
+                                     abandoned_at, recovered_order_id, recovered_at, created_at, updated_at)
+      values ${sql.join(values, sql`, `)}
+      on conflict (store_id, session_id) do nothing
+    `);
+  }
+
+  const filled = gap.length - skipped;
+  console.log(
+    `✓ ${rows.length} keranjang ditambahkan — mengisi ${filled} hari kosong` +
+      `${skipped ? ` (${skipped} hari dilewati: tidak ada pesanan)` : ""}.`,
+  );
+}
+
+async function main() {
+  const [store] = await q(sql`select id, name from stores where slug = ${SLUG}`);
+  if (!store) throw new Error(`Store ${SLUG} not found — nothing to top up.`);
+  const storeId = String(store.id);
+
+  // PROMO demo (PROMO P5) — runs BEFORE the order top-up's early return so the /promo hub is always
+  // populated, even when there are no empty order days. All now()-relative (the anchored main seed
+  // can't make a flash sale that is live TODAY) and idempotent, so it is safe on prod.
+  await seedPromo(storeId);
+  await seedOrders(storeId, String(store.name));
+  // AFTER the orders, always — the cart volume is derived per day from that day's orders, so running
+  // it first would leave every day the top-up just filled without a single cart, and the NEXT run
+  // would insert them: a script that only settles on the third run is not idempotent.
+  await seedCheckoutSessions(storeId);
 }
 
 main()

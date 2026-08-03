@@ -1,7 +1,8 @@
 import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
-import { desc, eq } from "drizzle-orm";
+import { publishedFirst } from "@/lib/data/article-order";
+import { eq } from "drizzle-orm";
 import type { BlogPost } from "@/lib/mock/store";
 
 // ⚠️ `body` and `imageUrl` were NOT here, and their absence was destroying merchant work.
@@ -54,7 +55,7 @@ function toPost(r: {
 
 export async function getArticles(): Promise<BlogPost[]> {
   return withCurrentTenant(async (db) => {
-    const rows = await q(db).orderBy(desc(schema.articles.publishedAt));
+    const rows = await q(db).orderBy(publishedFirst());
     return rows.map(toPost);
   });
 }
