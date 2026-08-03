@@ -383,19 +383,64 @@ it); 110 → `booked`. `210`/`211`/`350` stay deliberately unmapped, with the re
 **Guard:** `apps/admin/lib/ka-status-codes.test.ts` transcribes the vendor's whole 38-code table plus
 the invariant *no FINAL-state code may return null*. **7 red before the fix, 41 green after.**
 
-### N37. `pickup_number` is returned and thrown away — it is the **payment id** · **M**
-`kaCreateOrder` returns `pickupNumber`, `createShipment` passes it back to the caller, and **nothing
-persists it** (`git grep pickupNumber` = client + one return statement, no column, no screen).
+### ✅ N37. `pickup_number` thrown away, and VA/COD conflated — **FIXED 2026-08-03** (migration 0087)
+**One booking call carries two money flows running in opposite directions, and all three fields that
+tell them apart were parsed and discarded for both.**
 
-The docs call this field "Pickup Number / Payment ID", and the Payment API takes it as `payment_id` to
-answer *has this shipment been paid for?* (`status_code` `9` = unpaid, `0` = paid). Default
-`payment_method` is **`va`**, so unless the account is Term-of-Payment, **every booking creates a
-payment someone must settle** — and today we hold no handle to check. It is also the reference a
-merchant would quote to KiriminAja support.
+- **NON-COD** — *we* owe KiriminAja the shipping cost; `payment_method` defaults to `va`, so the
+  booking answers with `payment_status` (unpaid | pending | paid) and a `qr_url`. **An unpaid booking
+  never gets a waybill.** The parcel does not ship, the poller keeps finding nothing, and the order
+  reads "dibooking" everywhere with nothing saying why. That silence was the defect.
+- **COD** — the *buyer* pays the courier; the vendor documents that `payment_method` is **ignored**
+  for COD packages and rejects the combination with code **4003**. Nothing for us to settle, so an
+  "unpaid" reading there is noise, not a debt.
 
-**AC:** persist it on `orders` (migration — ⚠️ check `_journal.json` first, see CLAUDE.md), show it on
-the order's shipping card, and log it. Reading payment status is a **separate** task: the Payment
-endpoint's path is NOT STATED IN DOCS.
+Migration **0087** adds `orders.ka_pickup_number` (the vendor's own **`payment_id`**),
+`ka_payment_status`, `ka_payment_url` — stored **verbatim, uninterpreted** — plus
+`ka_shipping_cost_idr`, the **cost side of ongkir the DB has never held** (`shipping_idr` is what the
+*shopper* paid; the seller may book a cheaper service than the shopper picked, and nothing recorded
+the gap). Storing the cost moves no money — it is the prerequisite `BACKLOG.md` already names, and
+what N42 needs.
+
+**`apps/admin/lib/shipment-payment.ts` is the ONE place that separates the flows**, deciding from the
+order's own COD flag (`payments.method = 'cod'`), never from the vendor's fields — the docs do not
+define `payment_status` for a COD package. NULL = *no reading* (every pre-0087 booking), never
+*unpaid*. Surfaced on the order's shipping card as "Ongkir ke kurir", red + a **Bayar** link only
+when it actually blocks; `unknown` renders nothing.
+
+**Guard:** `apps/admin/lib/shipment-payment.test.ts` (9 tests) — COD never blocks whatever the vendor
+put in `payment_status`, `pending` is in flight rather than a failure, only the VA flow may block,
+and no label ever names the provider (ADR 0004).
+
+⚠️ **Reading payment status back is still open** — the Payment endpoint's path is NOT STATED IN DOCS.
+We can now *ask* (we hold the `payment_id`); we do not yet know where.
+
+### 🔴 N42. COD settlement is not modelled — the platform pays the difference · **L** · **OWNER DECISION**
+Found auditing the ledger against the VA/COD split. **This one moves real money, so it is filed, not
+fixed.**
+
+On `selesai`, `settleOrderLedger` → `creditSaleForPayment` credits `payments.amount_idr` as
+immediately-`available`. For a COD order that amount is the **gross** `subtotal + ongkir + pajak −
+diskon` — the whole sum the courier collected at the door (`app/api/public/order/route.ts:513,725`,
+and the booking tells the courier to collect exactly the same total). KiriminAja remits **net** of
+the shipping cost it keeps, and of any COD fee.
+
+So **the merchant's `available` balance overstates by (ongkir + COD fee) on every delivered COD
+order**, and the platform pays that difference out of its own float when they withdraw.
+
+Nothing models the cost side at all: `ledger_kind` is `('sale','retur','payout','adjustment')` —
+there is no cost/fee kind — and no writer anywhere represents a courier charge. `platform_cod.fee_pct`
+exists in the schema and is **read by nothing** (only ever seeded to `0`). This is true for non-COD
+too, where we owe the shipping cost separately; it is simply less visible because no remittance is
+being netted.
+
+**Half the prerequisite is now in place**: `orders.ka_shipping_cost_idr` (0087) records what the
+courier was actually told to charge.
+
+**The decision is yours, and it is not technical:** does the platform absorb the ongkir on COD
+orders, or is it netted out of what the merchant is credited? Changing how merchants are credited
+changes what they are owed — that is not a call an audit gets to make. **AC:** the answer recorded in
+`specs/decisions/`, and only then a ledger kind for cost.
 
 ### N38. The label is missing required fields · **M** (one part blocked)
 `03-important-notes/03-shipping-label.md` is a spec for a label *we* render — **there is no label
@@ -411,6 +456,22 @@ COD rail**, so this is the highest-value blocked item on the shipping path.
 
 Not applicable to us: the JNE `CASHLESS` prefix is a **drop-off** rule and we book pickups. Our Code
 128-**B** vs the docs' "128A" is a divergence, not a defect — any Code 128 decodes to the same string.
+
+**Audited 2026-08-03 — four of the five are pure plumbing, one is not.** ⚠️ There is **no single-label
+API route**: `/api/admin/labels` is the BULK path (`lib/data/bulk-labels.ts`, one raw SQL select); the
+single label is built client-side in `pesanan/[id]/order-detail.tsx` from `getOrderDetail` props. Both
+paths need every change.
+
+| field | status | where it already is |
+|---|---|---|
+| service type | ✅ persisted, unread by both paths | `orders.service_type` (0053); the human name comes from the lateral join `bulk-shipping.ts` already uses |
+| recipient postcode | ✅ fetched by both — but glued into the address string, never its own field | `orders.ship_postcode` (**migration 0042**, not 0049) |
+| sender postcode / phone | ✅ persisted, **neither label path reads `store_settings` at all** | `store_settings.sender_postcode` / `sender_phone`; `getSenderAddress()` already exists and is RLS-scoped |
+| item prices | ✅ single path fetches then drops them; bulk `json_build_object` omits them | `order_line_items.price_idr` / `total_idr` |
+| **insurance** | 🔴 **never persisted — needs a column** | booking-time input only (`input.insurance`), consumed once and never written back; `bulk-shipping.ts` hardcodes `insurance: false` |
+
+So `LabelInput.senderLine` is `undefined` at **both** call sites today — the "Pengirim" box prints
+the store name and nothing else.
 
 **AC:** the unblocked fields printed and eyeballed on a real 100×150 print preview.
 

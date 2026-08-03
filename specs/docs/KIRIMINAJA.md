@@ -151,16 +151,46 @@ themselves:
 reconciliation path the vendor itself prescribes; the webhook is what makes the resi appear in seconds
 rather than up to 15 minutes.
 
-## 6. Paying KiriminAja
+## 6. Paying KiriminAja — VA and COD are opposite directions
 
-Default `payment_method` is **`va`** — every booking creates a payment we must settle, unless the
-account is a Term of Payment member. v6.2 adds `payment_method: "credit"` (KA Credit), which requires
-a 6-digit `pin` validated beforehand and **cannot be combined with COD** (COD uses the settlement
-scheme and `payment_method` is ignored). KA Credit **top-up and transaction history have no API** —
-dashboard only.
+**One booking call carries two money flows, and they must never be conflated:**
 
-**COD settlement beyond that rule is NOT STATED IN DOCS**: no settlement endpoint, no disbursement
-schedule, no fee schedule, no settlement webhook.
+| | **NON-COD (VA)** | **COD** |
+|---|---|---|
+| Who pays the courier | **we do** | the **buyer** does, at the door |
+| Direction | us → KiriminAja | buyer → KiriminAja → merchant |
+| `payment_method` | defaults to **`va`** | **ignored by the vendor** |
+| Response carries | `payment_status`, `qr_url` | settlement scheme, no VA to pay |
+| If unsettled | ⚠️ **no waybill is issued — the parcel does not ship** | n/a, nothing is owed |
+
+The vendor is explicit: *"For COD packages, the system will automatically use the COD settlement
+scheme; the `payment_method` field is ignored"*, and it rejects the combination outright with code
+**4003** (`"Paket COD tidak dapat dibayar dengan KA Credit"`).
+
+**The failure this separation exists to prevent:** a non-COD booking comes back `payment_status:
+"unpaid"` with a `qr_url`, nobody pays it, **no waybill is ever issued** — so the tracking poller
+finds nothing, the resi never appears, and the order reads "dibooking" on every screen with nothing
+anywhere saying why. All three fields were parsed and thrown away, so the case was invisible.
+
+Since **0087** we store what the vendor returned, verbatim: `orders.ka_pickup_number` (the vendor
+also calls this the **`payment_id`**), `ka_payment_status`, `ka_payment_url`, plus
+`ka_shipping_cost_idr` — the cost side of ongkir, which the DB had never held (`shipping_idr` is what
+the *shopper* paid, and the seller may book a cheaper service than the shopper picked).
+
+⚠️ **`apps/admin/lib/shipment-payment.ts` is the ONE place that separates the two flows**, and it
+decides from the ORDER's own COD flag (`payments.method = 'cod'`), never from the vendor's payment
+fields — the docs do not define what `payment_status` holds for a COD package, and guessing there
+would put a false "belum dibayar" on parcels nobody owes anything for. NULL means *no reading*
+(every booking before 0087), never *unpaid*.
+
+v6.2 adds `payment_method: "credit"` (KA Credit), needing a 6-digit `pin` validated beforehand. KA
+Credit **top-up and transaction history have no API** — dashboard only.
+
+🔴 **COD settlement itself is NOT STATED IN DOCS**: no settlement endpoint, no disbursement schedule,
+no fee schedule, no settlement webhook. And **we do not model it** — see **N42**: on `selesai` a COD
+merchant is credited the **gross** total including ongkir as immediately-`available` money, while
+KiriminAja remits **net** of the shipping cost it keeps. That difference is currently paid out of the
+platform's own float.
 
 ## 7. Volumetric divisors
 

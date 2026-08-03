@@ -2,6 +2,7 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { eq, asc, sql } from "drizzle-orm";
 import { withCurrentTenant } from "@/lib/tenant";
+import { shipmentPaymentState, shipmentPaymentLabel, type ShipmentPaymentState } from "@/lib/shipment-payment";
 import { latestPaymentFirst } from "@/lib/data/order-payment";
 
 // The real, per-order truth the detail page needs: line items straight out of `order_line_items`
@@ -55,6 +56,18 @@ export type OrderShipment = {
   awb: string | null;
   /** orders.ka_order_id — the KiriminAja booking reference. Real, but NOT a waybill. */
   kaOrderId: string | null;
+  /** orders.ka_pickup_number — the pickup number, which is also the courier's payment id (0087). */
+  pickupNumber: string | null;
+  /**
+   * Who owes the COURIER for this parcel, and whether it is settled — the ONE separation between
+   * the COD flow (the buyer pays the courier; nothing for us to settle) and the VA flow (we owe the
+   * shipping cost, and **an unpaid booking never gets a waybill**, so the parcel silently does not
+   * ship). Derived by `lib/shipment-payment.ts` from the order's own COD flag, never from the
+   * vendor's fields alone. NULL courier booking ⇒ this is still computed and reads `unknown`.
+   */
+  payment: ShipmentPaymentState;
+  /** The same state as merchant-facing Indonesian, formatted server-side. */
+  paymentLabel: string;
   city: string | null;
   province: string | null;
   /**
@@ -156,6 +169,9 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
         courier: schema.orders.courier,
         awb: schema.orders.awb,
         kaOrderId: schema.orders.kaOrderId,
+        kaPickupNumber: schema.orders.kaPickupNumber,
+        kaPaymentStatus: schema.orders.kaPaymentStatus,
+        kaPaymentUrl: schema.orders.kaPaymentUrl,
         problemAt: schema.orders.problemAt,
         problemNote: schema.orders.problemNote,
         // Address SNAPSHOT (migration 0042) — the address this parcel was BOUGHT with.
@@ -242,6 +258,7 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
           cityMatchesOrder: true,
         }
       : null;
+
     if (o.customerId) {
       const [c] = await db
         .select({
@@ -324,6 +341,16 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
         }
       : null;
 
+    // Separate the two COURIER money flows ONCE, here, so no render path has to reason about it.
+    // Must sit AFTER `payment`: the COD flag comes from `payments.method` — the same expression
+    // lib/cod.ts and the Pesanan tabs partition on — never from the vendor's own payment fields,
+    // which the docs do not define for a COD package.
+    const shipmentPayment: ShipmentPaymentState = shipmentPaymentState({
+      isCod: payment?.method === "cod",
+      kaPaymentStatus: o.kaPaymentStatus,
+      kaPaymentUrl: o.kaPaymentUrl,
+    });
+
     return {
       lines,
       money,
@@ -331,6 +358,11 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
         courier: o.courier ?? null,
         awb: o.awb ?? null,
         kaOrderId: o.kaOrderId ?? null,
+        pickupNumber: o.kaPickupNumber ?? null,
+        // The COD flag comes from `payments.method` — the same expression lib/cod.ts and the
+        // Pesanan tabs partition on — never from the vendor's payment fields.
+        payment: shipmentPayment,
+        paymentLabel: shipmentPaymentLabel(shipmentPayment),
         city: o.city ?? null,
         province: o.province ?? null,
         problemAt: o.problemAt ?? null,
