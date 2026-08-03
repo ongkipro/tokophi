@@ -156,6 +156,45 @@ Postgres half runs the REAL exported query under `SET LOCAL ROLE tokophi_app` + 
 GUC, in rolled-back transactions. **Its failure path was exercised, not assumed**: flipping
 `STORE_TZ` to `"UTC"` turns 3 of them red. `vitest.config.ts` gained the `@/` alias — without it no
 suite could import `lib/data/*` at all, which is why this layer had no tests.
+||||||| parent of b0f953f (wip: volumetric quote fix)
+
+## Unreleased — The quote and the booking priced different parcels; the merchant paid the difference
+
+Owner-authorised end-to-end run of the shipping chain. It found a money bug before it reached the
+booking, so the run became the fix.
+
+🔴 **`createShipment` has always sent `length/width/height` when it books. The QUOTE sent weight
+alone** — `kaShippingPrice` had no dimension parameters at all. KiriminAja applies **volumetric weight
+(w × l × h ÷ 6)** whenever it exceeds the actual weight, so the two calls described different boxes.
+
+Measured on the live sandbox — one 1.000 g order, 6138 → 2107, SPX Reguler:
+
+| request | quote |
+|---|---|
+| weight only — what the shopper was charged | **Rp13.700** |
+| weight + 40×30×20 cm — what the booking cost | **Rp54.800** |
+| weight 4.000 g (the volumetric those dims imply) | **Rp54.800** — identical, to the rupiah |
+
+**Rp41.100 on one parcel, 4× the quoted price, absorbed by the merchant** on every bulky-light order.
+
+**Fixed:** `weightForCart` and `weightForOrder` read `products.length_cm/width_cm/height_cm` (⚠️ they
+hang off `products`, not `product_variants`) and return the max per axis — the same rule the booking
+uses; `kaShippingPrice` forwards them; **they are part of the rate cache key**. Guarded by
+`shipping-dimensions.test.ts`, proven red 5/5 against `origin/main`.
+
+⚠️ **Two corrections to yesterday's audit, both mine.** The earlier note said dimensions were
+"structurally impossible today" — it had checked `product_variants`, which carries only
+`weight_grams`, and missed that `products` has had the columns all along. And the pickup schedule is
+**not** naive: `createShipment` books tomorrow 10:00 WIB in `Asia/Jakarta` with the cut-off reasoning
+written down; a first test script used `now + 1h` and was correctly refused.
+
+**N32 is not fully closed.** `shipping_price` returns real services and `request_pickup` reaches the
+API and validates our payload — it refused a bad schedule with a specific, correct error rather than
+accepting it — but a successful booking was not completed. Runbook with the remaining steps:
+`specs/docs/tasks/2026-08-03-shipping-e2e-runbook.md`.
+
+**The shared DB was left exactly as found** (row counts identical; the one product whose dimensions
+were set to 40×30×20 for the measurement is back at `1×1×1`).
 
 ## Unreleased — Shipping audited against KiriminAja's own docs: we do not bill volumetric, they do
 
