@@ -2,6 +2,45 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — A real booking went through, and could not be cancelled
+
+Owner-authorised end-to-end run of the resi chain, closing N32. `request_pickup` was accepted with the
+schedule `createShipment` computes (**tomorrow 10:00 WIB**, `Asia/Jakarta`):
+
+```
+request_pickup → {"ok":true,"kaOrderId":"5758-E2E68072665","pickupNumber":"XID-5544692486"}
+awbPending = true      ← awb is null on every fresh booking, exactly as documented
+tracking       → "Tracking tidak tersedia"    (no waybill yet — correct)
+cancel         → 🔴 "Paket tidak ditemukan"
+```
+
+🔴 **`cancelShipment` was sending the ORDER ID as the AWB.** KiriminAja's doc is explicit — *"awb: AWB
+Number Already Obtained, **Not Order ID**"* — and the code built `o.awb ?? o.kaOrderId`. Every fresh
+booking has `awb: null`, so the fallback fired on exactly the parcel a merchant had just created: the
+shipment stayed live at the courier and the merchant was shown an error that reads like it never
+existed. **That window — booked by mistake, seconds ago, waybill not yet issued — is precisely when
+someone cancels.**
+
+Cancel now takes `o.awb` and only `o.awb`; a booking with no waybill is refused **before** the network
+call, naming the next step instead of quoting the vendor. The lib comment asserting
+`AWB (= kj_order_id / resi we stored)` is corrected — a false equivalence in a comment is how the wrong
+identifier gets reintroduced by someone who trusted it.
+
+Guarded by `apps/admin/lib/cancel-shipment.test.ts`, proven red 4/4. It uses **`codeOnly` from
+`test/source-code.ts`**: a hand-rolled stripper would have been the fifth copy of a defect this repo
+has found four times — and it fails on the very comment that explains the fix. The lib assertion is
+therefore **positive** (the correction must be present) rather than an absence check that the
+explanation itself trips.
+
+⚠️ **A live sandbox booking is outstanding** — `5758-E2E68072665`, pickup `XID-5544692486`, JNE REG23,
+scheduled 2026-08-04 10:00 WIB. No waybill was issued while polling, so there was no AWB to cancel
+with; that is the bug, met in person. It is sandbox and nothing will be collected, but voiding it needs
+the KiriminAja dashboard.
+
+Also filed: **N35** — nothing anywhere asserts which KiriminAja environment a deployed container is on,
+and this run is the proof it matters: sandbox bookings and pickup numbers look exactly like production
+ones.
+
 ## Unreleased — The apex said "Segera hadir" three times on a live, billing product
 
 `tokophi.com` is the page ads point at. It carried **three** statements that TokoΦ had not launched —
