@@ -56,19 +56,22 @@
 // 800w` reports **285** at a 380px `sizes` (600 ÷ 800/380), not 600. It is the raw pixel width only
 // when there is no srcset — which is exactly where this file uses it.
 //
-// Run against a built storefront:
-//   npx astro build --root apps/storefront
-//   DATABASE_URL=… PORT=4392 node apps/storefront/dist/server/entry.mjs
-//   node apps/storefront/scripts/check-pdp-srcset.mjs        # T_URL to override the page
-import { chromium } from "playwright";
+// Normally run as part of the suite, which builds and starts the server for you:
+//   npm run verify -w @tokophi/storefront
+// Standalone, against a storefront you already have running (see check-env.mjs for the contract):
+//   CHECK_BASE_URL=http://toko-demo.test:4390 node apps/storefront/scripts/check-pdp-srcset.mjs
+import { pageUrl, launchChromium } from "./check-env.mjs";
 
-const T = process.env.T_URL || "http://toko-demo.test:4392/produk/dress-midi-bunga";
-const DPR = Number(process.env.DPR || 2); // the ordinary phone, and the case the bug was worst on
+// A seeded product with a real gallery. It is a CONSTANT, not an env var: this check exists to police
+// one shape of markup, so pointing it at an arbitrary PDP is a debugging session, not a run of the
+// gate — and a per-script knob is exactly what check-env.mjs was written to delete.
+const T = pageUrl("/produk/dress-midi-bunga");
+const DPR = 2; // the ordinary phone, and the case the bug was worst on
 const MAX_RATIO = 3;
 const PROBE = "__pdpprobe";
 const CATALOG = "\\/products\\/|\\/api\\/uploads\\/"; // a string: it is compiled inside the page too
 
-const b = await chromium.launch({ args: ["--no-sandbox", "--host-resolver-rules=MAP toko-demo.test 127.0.0.1"] });
+const b = await launchChromium();
 const page = await b.newPage({ viewport: { width: 412, height: 915 }, deviceScaleFactor: DPR });
 
 // The probe only needs the browser to COMMIT to a candidate, which it does before the response

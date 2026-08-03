@@ -35,19 +35,21 @@
 // `is_default` homepage template left in a database other people are verifying against is a silent,
 // confusing failure for someone else's afternoon, not yours.
 //
-// Run against a built storefront:
-//   npx astro build --root apps/storefront
-//   DATABASE_URL=… PORT=4392 node apps/storefront/dist/server/entry.mjs
-//   DATABASE_URL=… node apps/storefront/scripts/check-h1-floor.mjs     # H1_PORT to override 4392
+// Normally run as part of the suite, which builds and starts the server for you:
+//   npm run verify -w @tokophi/storefront
+// Standalone, against a storefront you already have running (see check-env.mjs for the contract):
+//   DATABASE_URL=… CHECK_BASE_URL=http://toko-demo.test:4390 node apps/storefront/scripts/check-h1-floor.mjs
 import postgres from "postgres";
 import http from "node:http";
 import { randomUUID } from "node:crypto";
+import { PORT, requireDatabaseUrl } from "./check-env.mjs";
 
-const PORT = Number(process.env.H1_PORT || 4392);
+// Only the PORT of CHECK_BASE_URL is used: this check walks EVERY store, so the Host header it sends
+// is per-store (`hostOf`), not the one hostname in the base URL.
 const TEMP_ID = randomUUID();
 const TEMP_NAME = "TEMP check-h1-floor"; // the marker the sweep and the insert agree on
 const LOCK_KEY = 528_311_907; // arbitrary, constant, this script's alone
-const sql = postgres(process.env.DATABASE_URL, { max: 2 });
+const sql = postgres(requireDatabaseUrl(), { max: 2 });
 
 /** GET `/` from the storefront as a given tenant. The tenant is the Host header (ADR 0009), and
  *  `fetch` refuses to set it — hence node:http. */

@@ -8,13 +8,13 @@
 // A srcset that is never promoted is invisible to every static check: the markup is right, the build
 // is green, and the bytes are still wrong. Only a browser sees `currentSrc`.
 //
-// Run against a built storefront:
-//   npx astro build --root apps/storefront
-//   PORT=4374 node apps/storefront/dist/server/entry.mjs   # needs DATABASE_URL
-//   node apps/storefront/scripts/check-hero-srcset.mjs
-import { chromium } from "playwright";
-const T = process.env.T_URL || "http://toko-demo.test:4374/";
-const b = await chromium.launch({ args: ["--no-sandbox", "--host-resolver-rules=MAP toko-demo.test 127.0.0.1"] });
+// Normally run as part of the suite, which builds and starts the server for you:
+//   npm run verify -w @tokophi/storefront
+// Standalone, against a storefront you already have running (see check-env.mjs for the contract):
+//   CHECK_BASE_URL=http://toko-demo.test:4390 node apps/storefront/scripts/check-hero-srcset.mjs
+import { pageUrl, launchChromium } from "./check-env.mjs";
+const T = pageUrl("/");
+const b = await launchChromium();
 const page = await b.newPage({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2 });
 
 const heroReqs = [];
