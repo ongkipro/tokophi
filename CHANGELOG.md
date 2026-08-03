@@ -157,6 +157,31 @@ GUC, in rolled-back transactions. **Its failure path was exercised, not assumed*
 `STORE_TZ` to `"UTC"` turns 3 of them red. `vitest.config.ts` gained the `@/` alias — without it no
 suite could import `lib/data/*` at all, which is why this layer had no tests.
 
+## Unreleased — Shipping audited against KiriminAja's own docs: we do not bill volumetric, they do
+
+Docs only. Every endpoint our code calls, cross-referenced against the captured official documentation
+and probed against the LIVE sandbox — read-only calls, nothing booked.
+
+🔴 **N30 — volumetric weight is never computed.** Their pricing doc is explicit that the dimensional
+weight (`w × l × h ÷ 6`) is used when it exceeds the actual weight. We send a **floor**
+(`max(Σ weight_grams, 1000)`), and `product_variants` has no dimension columns at all, so it is not
+merely unimplemented — it is structurally impossible today. Measured live: **1.000 g → Rp14.000,
+3.000 g → Rp42.000**; a 30×30×30 cm box is 4.500 g volumetric, so a bulky-light parcel is under-quoted
+by ~**Rp28.000** and the merchant absorbs it with nothing on screen saying so.
+
+**N31** — every quote carries `setting.cod_fee` / `minimum_cod_fee` / `cod_fee_amount` and nothing in
+the repo reads any of them, so a COD merchant never sees the fee deducted from their payout.
+
+**N32 — the resi chain has never been exercised.** Every link is correct on inspection (`createShipment`
+writes `awb` only from `details[0].awb`, `cron/tracking` backfills it excluding the booking ref,
+`ka-tracking.ts` routes the outcome through `applyOrderStatusChange`, three screens render it, with
+"Ambil resi" and "Lacak" as manual paths) — but `orders.ka_order_id is not null` returns **0**. Not one
+order has ever been booked; the 58 `dikirim` rows were seeded into that status. Finishing the check
+means a real `request_pickup` against the sandbox, which creates a pickup record in the owner's account.
+
+**Confirmed correct, do not re-check:** endpoint versions match the docs and genuinely vary per route;
+`province` is a POST returning `datas` (a GET is refused); live sandbox auth returns 37 provinces.
+
 
 ## Unreleased — the `/checkout` h1 fix shipped without a guard; `check-h1-floor` now sweeps 10 routes
 
