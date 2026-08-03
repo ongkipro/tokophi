@@ -60,18 +60,33 @@ export async function kaShippingPrice(p: {
   origin: number;
   destination: number;
   weight: number; // grams
+  // ⚠️ A PRICE INPUT, not metadata. KiriminAja applies VOLUMETRIC weight (w × l × h ÷ 6) whenever it
+  // exceeds the actual weight — their pricing doc says so, and it is measurable: the same 1.000 g
+  // parcel quotes Rp13.700 with weight alone and Rp54.800 once 40×30×20 cm is supplied, which is
+  // exactly the 4.000 g those dimensions imply. `createShipment` has ALWAYS sent them when it books,
+  // so omitting them here meant the quote and the booking priced two different parcels and the
+  // merchant absorbed the difference. Omitted from the request when undefined — a catalogue with no
+  // dimensions behaves exactly as before.
+  lengthCm?: number;
+  widthCm?: number;
+  heightCm?: number;
   itemValue?: number;
   insurance?: 0 | 1;
   couriers?: string[];
 }): Promise<{ ok: boolean; results: KaRate[]; error?: string }> {
   // cache successful rates per route (origin+dest+weight+value+insurance+couriers) — 10 min
-  const key = `ka:price:${p.origin}:${p.destination}:${p.weight}:${p.itemValue ?? 0}:${p.insurance ?? 0}:${(p.couriers ?? []).join(",")}`;
+  // ⚠️ The dimensions are part of the CACHE KEY. They change the price, so two carts that differ
+  // only in box size must not share a cached quote.
+  const key = `ka:price:${p.origin}:${p.destination}:${p.weight}:${p.lengthCm ?? 0}x${p.widthCm ?? 0}x${p.heightCm ?? 0}:${p.itemValue ?? 0}:${p.insurance ?? 0}:${(p.couriers ?? []).join(",")}`;
   const hit = cacheGet<{ ok: boolean; results: KaRate[] }>(key);
   if (hit) return hit;
   const r = await ka<{ status: boolean; text?: string; results?: KaRate[] }>("/api/mitra/v6.1/shipping_price", {
     origin: p.origin,
     destination: p.destination,
     weight: p.weight,
+    ...(p.lengthCm ? { length: p.lengthCm } : {}),
+    ...(p.widthCm ? { width: p.widthCm } : {}),
+    ...(p.heightCm ? { height: p.heightCm } : {}),
     item_value: String(p.itemValue ?? 0),
     insurance: p.insurance ?? 0,
     ...(p.couriers?.length ? { courier: p.couriers } : {}),

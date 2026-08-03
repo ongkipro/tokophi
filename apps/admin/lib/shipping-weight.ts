@@ -50,6 +50,22 @@ export type CartWeight = {
   grams: number;
   /** What we quote against: `max(grams, MIN_BILLABLE_GRAMS)`. */
   billableGrams: number;
+  /**
+   * Parcel dimensions in cm — the LARGEST value per axis across the lines, which is the same rule
+   * `createShipment` uses when it books. `undefined` when no product in the cart declares one.
+   *
+   * ⚠️ THESE ARE A PRICE INPUT, NOT DECORATION. KiriminAja applies volumetric weight
+   * (w × l × h ÷ 6) whenever it exceeds the actual weight, and the QUOTE used to send weight ALONE
+   * while the BOOKING sent dimensions — so the two priced different parcels. Measured on the
+   * sandbox, one 1.000 g order, Yogyakarta → Mampang Prapatan, SPX Reguler:
+   *     weight only .................. Rp13.700   ← what the shopper was charged
+   *     weight + 40×30×20 cm ......... Rp54.800   ← what the booking actually cost
+   *     weight 4.000 g (the volumetric those dims imply) ... Rp54.800  (identical)
+   * A Rp41.100 gap on one parcel, absorbed by the merchant, with nothing on any screen saying so.
+   */
+  lengthCm?: number;
+  widthCm?: number;
+  heightCm?: number;
   /** Lines whose variant had no weight and fell back to DEFAULT_WEIGHT_GRAMS (for the response). */
   missing: string[];
   /** Cart lines that resolved to a real variant of this store. */
@@ -57,6 +73,18 @@ export type CartWeight = {
 };
 
 /** Sum a cart's weight from the DB. Resolution mirrors /api/public/order (handle + variant title). */
+// The parcel's dimensions = the LARGEST value per axis across the matched lines — the same rule
+// `createShipment` uses when it books, so the quote and the booking describe the same box.
+// A product that declares none contributes nothing; if NO product does, all three stay undefined and
+// the request omits them, which is exactly today's behaviour for a catalogue without dimensions.
+function maxDims(matched: { l?: number | null; w?: number | null; h?: number | null }[]) {
+  const axis = (k: "l" | "w" | "h") => {
+    const vals = matched.map((m) => m[k]).filter((v): v is number => typeof v === "number" && v > 0);
+    return vals.length ? Math.max(...vals) : undefined;
+  };
+  return { lengthCm: axis("l"), widthCm: axis("w"), heightCm: axis("h") };
+}
+
 export async function weightForCart(db: Tx, storeId: string, items: CartItemRef[]): Promise<CartWeight> {
   const clean = items.filter((i) => (i.qty ?? 0) > 0);
   const variantIds = clean.map((i) => i.variantId).filter((v): v is string => typeof v === "string" && v.length > 0);
@@ -76,6 +104,12 @@ export async function weightForCart(db: Tx, storeId: string, items: CartItemRef[
       title: schema.productVariants.title,
       position: schema.productVariants.position,
       weight: schema.productVariants.weightGrams,
+      // ⚠️ Dimensions live on `products`, NOT on `product_variants` (which carries only
+      // `weight_grams`). Reading them off the variant returns undefined and silently drops the
+      // volumetric input — which is exactly how the quote came to disagree with the booking.
+      l: schema.products.lengthCm,
+      w: schema.products.widthCm,
+      h: schema.products.heightCm,
     })
     .from(schema.productVariants)
     .innerJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
@@ -84,6 +118,7 @@ export async function weightForCart(db: Tx, storeId: string, items: CartItemRef[
   let grams = 0;
   let resolved = 0;
   const missing: string[] = [];
+  const matched: { l?: number | null; w?: number | null; h?: number | null }[] = [];
   for (const i of clean) {
     const qty = i.qty ?? 1;
     const byId = i.variantId ? rows.find((r) => r.id === i.variantId) : undefined;
@@ -101,6 +136,7 @@ export async function weightForCart(db: Tx, storeId: string, items: CartItemRef[
       continue;
     }
     resolved++;
+    matched.push(match);
     if (match.weight == null) {
       missing.push(match.handle + (match.title ? ` (${match.title})` : ""));
       grams += DEFAULT_WEIGHT_GRAMS * qty;
@@ -108,7 +144,7 @@ export async function weightForCart(db: Tx, storeId: string, items: CartItemRef[
       grams += match.weight * qty;
     }
   }
-  return { grams, billableGrams: Math.max(MIN_BILLABLE_GRAMS, grams), missing, resolved };
+  return { grams, billableGrams: Math.max(MIN_BILLABLE_GRAMS, grams), missing, resolved, ...maxDims(matched) };
 }
 
 /** Same thing for an EXISTING order — from its line items' variants (the admin re-quote + booking). */
@@ -119,9 +155,15 @@ export async function weightForOrder(db: Tx, orderId: string): Promise<CartWeigh
       qty: schema.orderLineItems.qty,
       title: schema.orderLineItems.title,
       variantId: schema.orderLineItems.variantId,
+      // Same join `packageRows` in actions/shipping.ts already makes for the BOOKING — dimensions
+      // hang off `products`, so the variant alone cannot answer this.
+      l: schema.products.lengthCm,
+      w: schema.products.widthCm,
+      h: schema.products.heightCm,
     })
     .from(schema.orderLineItems)
     .leftJoin(schema.productVariants, eq(schema.productVariants.id, schema.orderLineItems.variantId))
+    .leftJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
     .where(eq(schema.orderLineItems.orderId, orderId));
 
   let grams = 0;
@@ -137,5 +179,5 @@ export async function weightForOrder(db: Tx, orderId: string): Promise<CartWeigh
       grams += r.weight * qty;
     }
   }
-  return { grams, billableGrams: Math.max(MIN_BILLABLE_GRAMS, grams), missing, resolved };
+  return { grams, billableGrams: Math.max(MIN_BILLABLE_GRAMS, grams), missing, resolved, ...maxDims(rows) };
 }

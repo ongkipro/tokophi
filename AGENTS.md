@@ -300,14 +300,22 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
   - ⚠️ **A COD-enabled store whose current selection doesn't qualify now sees a REASON, not a blank** (`checkout.astro` `#cod-hint`, written by `syncCod`). This deliberately reverses the old "hide silently, no excuse" rule: the silent hide made "COD on but invisible" look like a bug to the merchant testing it. It is a one-line explanation of the single unmet condition (non-SPX courier / SPX doesn't serve the route / province off the allow-list / over the cap) — **not** a clickable greyed-out COD row (that would be a payment we'd reject, dressed as a choice). Still UX; the endpoint is still the boundary.
 - **The merchant's shipping selection is PER SERVICE** (`store_shipping_methods`, written by `saveStoreServices`), not per courier — a courier-level list cannot express "I ship JNE Reguler but not JNE YES". `/api/public/ongkir` filters rates by **(platform-enabled couriers) ∩ (picked services)**, keyed `"<courier>:<service_type>"`; **no rows = the merchant never opened the card → fall back to `store_settings.couriers`** rather than render a checkout with zero shipping options. It filtered on the courier column until `35b88a4` and offered services the seller had switched OFF.
 - The `cod` flag on a rate is the **effective** one (KiriminAja capability × platform `codAllowed` × the store's `cod_enabled`) — never the raw courier capability.
-- 🔴 **WEIGHT IS NOT VOLUMETRIC, AND KIRIMINAJA BILLS VOLUMETRIC** (audited 2026-08-03, N30).
-  Their pricing doc: *"Regular: width × length × height ÷ 6. If the dimensional weight is greater than
-  the actual weight, the dimensional weight is used when calling this endpoint."* We send
-  `billableGrams = max(Σ weight_grams, 1000)` — a **floor**, not a dimensional weight — and
-  `product_variants` has **only `weight_grams`**, no length/width/height, so it cannot be computed
-  today at all. Measured live on sandbox (6138 → 5479, SPX Reguler): **1.000 g → Rp14.000 · 3.000 g →
-  Rp42.000**. A 30×30×30 cm box is 4.500 g volumetric, so a bulky-light parcel is under-quoted by
-  ~Rp28.000 and **the merchant absorbs it silently**. Fixing it is a SCHEMA change, not a patch.
+- 🔴 **THE QUOTE AND THE BOOKING MUST DESCRIBE THE SAME BOX** (fixed 2026-08-03, N30).
+  KiriminAja applies **volumetric weight (w × l × h ÷ 6)** whenever it exceeds the actual weight.
+  `createShipment` has ALWAYS sent `length/width/height` when it books (`packageRows` → max per axis);
+  the QUOTE sent weight alone, so the two priced different parcels and the merchant absorbed the gap.
+  Measured live, one 1.000 g order, 6138 → 2107, SPX Reguler: **weight only Rp13.700 · weight +
+  40×30×20 cm Rp54.800 · weight 4.000 g Rp54.800** — the dimensional figure and the volumetric one
+  agree to the rupiah. **Rp41.100 on one parcel, 4× the quoted price.**
+  ⚠️ **The dimensions live on `products`, NOT on `product_variants`** (which carries only
+  `weight_grams`). An earlier audit checked the variant, found nothing, and wrongly concluded the
+  columns did not exist — they have been there all along. `weightForCart` **and** `weightForOrder` now
+  read them and return the max per axis; `kaShippingPrice` forwards them; **they are part of the rate
+  cache key**, because two carts differing only in box size must not share a quote. Guarded by
+  `apps/admin/lib/shipping-dimensions.test.ts`.
+  ⚠️ **The seed writes `1×1×1 cm` for every product** — 0,17 g volumetric, so it never binds on the
+  quote, but it is *also* what the BOOKING declares to the courier. Filed as N33.
+
 - **`province` is a POST with a `{}` body, not a GET** — a GET returns
   `"Method GET is not supported for this route"`, and the payload key is **`datas`**, not `data`.
   Endpoint versions genuinely differ per route (`v6.1` price/pickup · `v3` cancel · `v2`

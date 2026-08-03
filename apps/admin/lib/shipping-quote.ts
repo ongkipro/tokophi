@@ -163,6 +163,11 @@ export async function quoteShipping(input: QuoteInput): Promise<Quote> {
     origin,
     destination: input.destinationId,
     weight: pkg.billableGrams,
+    // The same box `createShipment` books — see the note on CartWeight. Without these the quote
+    // prices on weight alone while the booking prices volumetrically, and the gap is the merchant's.
+    lengthCm: pkg.lengthCm,
+    widthCm: pkg.widthCm,
+    heightCm: pkg.heightCm,
     itemValue: input.itemValue || 0,
     insurance: 0,
     // Latency scope only — the platform ∩ store filter below still decides what a shopper may pick.

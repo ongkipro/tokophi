@@ -131,32 +131,41 @@ Method: every endpoint our code calls, cross-referenced against the captured off
 (`~/Documents/kiriminaja/documents`, from developer.kiriminaja.com) and probed against the LIVE
 sandbox. Read-only calls only — nothing was booked.
 
-### N30. 🔴 Volumetric weight is NEVER computed — the merchant silently eats the difference · **M** · NEW
-KiriminAja's pricing doc is explicit: *"Regular (incl. Next Day, Same Day): width × length × height ÷ 6.
-**If the dimensional weight is greater than the actual weight, the dimensional weight is used when
-calling this endpoint.**"*
+### ✅ N30. 🔴 The QUOTE and the BOOKING priced different parcels — **FIXED 2026-08-03**
+⚠️ **This entry's first version was WRONG in its reasoning.** It said dimensions were "structurally
+impossible today" because `product_variants` has only `weight_grams`. **`products` has carried
+`length_cm`/`width_cm`/`height_cm` all along** — the first pass looked at the wrong table. The real
+defect was narrower and worse: the columns existed, **`createShipment` used them when it booked**, and
+`shipping-quote.ts` did not when it quoted (`kaShippingPrice` had no dimension parameters at all).
 
-We send `billableGrams = max(Σ weight_grams, 1000)` (`lib/shipping-weight.ts`). That is a **floor, not a
-volumetric weight**, and `product_variants` carries **only `weight_grams`** — there are no
-length/width/height columns, so it is not merely unimplemented, it is **structurally impossible today**.
+KiriminAja applies **volumetric weight (w × l × h ÷ 6)** whenever it exceeds the actual weight.
+Measured on the live sandbox — one 1.000 g order, 6138 → 2107, SPX Reguler:
 
-**Measured on the live sandbox** (origin 6138 → destination 5479, SPX Reguler):
-
-| weight sent | quote |
+| request | quote |
 |---|---|
-| 1.000 g (our floor) | **Rp14.000** |
-| 3.000 g | **Rp42.000** |
+| weight only — what the shopper was charged | **Rp13.700** |
+| weight + 40×30×20 cm — what the booking cost | **Rp54.800** |
+| weight 4.000 g (the volumetric those dims imply) | **Rp54.800** — identical |
 
-A 30×30×30 cm box is **4.500 g volumetric**. If it actually weighs 800 g we quote the floor and the
-courier bills the dimensional weight — **a ~Rp28.000 gap per parcel, on every bulky-light order**, with
-nothing on any screen saying so. Same class as the three bugs `shipping-weight.ts`'s own header already
-describes (invented weight, client-supplied weight, client-supplied origin) — and the one still open.
+**Rp41.100 on one parcel, 4× the quoted price, absorbed by the merchant** on every bulky-light order.
 
-⚠️ **This is a SCHEMA decision, not a patch.** It needs dimension columns on `product_variants`, fields
-in the product editor, and a rule for what a cart's combined dimensions even are (couriers bill per
-parcel, not per line). Until then the shortfall is real and unmeasured.
-**AC:** a bulky-light cart quotes the dimensional weight; a dense cart is unchanged; the rule is stated
-where a merchant can see what their parcel is being billed as.
+**Fixed:** `weightForCart` **and** `weightForOrder` read the dimensions off `products` and return the
+max per axis — the same rule the booking uses; `kaShippingPrice` forwards them; **they are part of the
+rate cache key**, so two carts differing only in box size cannot share a quote. Guarded by
+`apps/admin/lib/shipping-dimensions.test.ts` (proven red 5/5 against `origin/main`).
+
+⚠️ **On the seeded demo this changes nothing, correctly** — all 24 products carry `1×1×1 cm`. See N33.
+
+### N33. The seed writes `1×1×1 cm` dimensions, and the BOOKING sends them · **S** · NEW
+Every seeded product declares a 1 cm cube. Harmless for the quote (0,17 g volumetric never beats the
+actual weight) but it is **also what `createShipment` books with**, so the parcel is declared to the
+courier as a 1 cm cube. The courier re-measures at pickup; the merchant is billed the difference.
+
+A placeholder that is *plausible* is worse than a blank: nothing warns, and the value is wrong on
+purpose. ⚠️ **The seed is not a migration** — existing stores keep whatever they were given.
+**AC:** either the seed carries believable per-product dimensions, or the columns are left NULL and the
+booking omits them (which is what `kaCreateOrder`'s `?? 10` fallback already handles); plus a decision
+on whether the product editor should require them before a merchant can ship.
 
 ### N31. The COD fee KiriminAja charges is never read · **S** · NEW
 Every `shipping_price` result carries `setting.cod_fee`, `minimum_cod_fee` and a computed
