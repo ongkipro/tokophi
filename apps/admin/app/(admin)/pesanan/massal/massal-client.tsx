@@ -29,6 +29,18 @@ const GROUP_LABEL: Record<string, string> = {
   one_day: "1 Hari", next_day: "Next Day", regular: "Reguler", economy: "Ekonomi", cargo: "Cargo",
 };
 
+// ⚠️ DECLARED OUTSIDE the screen, not inside it. A component defined during render is a NEW component
+// type on every parent render, so React unmounts and remounts its whole subtree — state lost, focus
+// dropped mid-typing. `AGENTS.md` names this class explicitly, and this is the bulk-shipping screen:
+// the filters sit above a table the merchant selects rows in.
+function Filter({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <Button size="sm" variant={active ? "secondary" : "ghost"} className="h-7 shrink-0" onClick={onClick}>
+      {label}
+    </Button>
+  );
+}
+
 export function MassalClient({ data, filters }: { data: BulkShippingResult; filters: BulkFilters }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -65,7 +77,13 @@ export function MassalClient({ data, filters }: { data: BulkShippingResult; filt
     if (r.done) toast.success(`${r.done} pesanan ${verb}.`);
     if (r.awaitingResi.length)
       toast.info(`${r.awaitingResi.length} menunggu resi`, {
-        description: "Kurir belum menerbitkan nomor resi. Klik “Ambil resi” lagi nanti — label baru bisa dicetak setelah resi terbit.",
+        // ⚠️ Say that it arrives ON ITS OWN. The poller (`cron-tracking`, every 15 min) fills
+        // `orders.awb` for every booked order — so "klik lagi nanti" described the feature as manual
+        // when the automatic path was already the normal one, and left the merchant watching a queue.
+        // "Ambil resi" is the shortcut for someone who does not want to wait, not the mechanism.
+        description:
+          "Kurir belum menerbitkan nomor resi. Resi akan muncul sendiri begitu kurir menerima pesanan — " +
+          "biasanya beberapa menit. Tombol “Ambil resi” hanya mempercepat; label bisa dicetak setelah resi terbit.",
         duration: 8000,
       });
     // A guessed destination is NOT a failure — the parcel is booked — so it cannot ride in `failed`,
@@ -139,10 +157,6 @@ export function MassalClient({ data, filters }: { data: BulkShippingResult; filt
       router.refresh();
     } finally { setBusy(null); }
   };
-
-  const Filter = ({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) => (
-    <Button size="sm" variant={active ? "secondary" : "ghost"} className="h-7 shrink-0" onClick={onClick}>{label}</Button>
-  );
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">

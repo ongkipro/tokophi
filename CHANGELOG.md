@@ -2,6 +2,23 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — the resi appears on its own; the UI was telling sellers to keep clicking
+
+The shipping flow is four steps — **Proses** (`baru → diproses`) → **Atur pengiriman** (book with the
+service the shopper paid for) → **Resi terbit** → **Cetak label** (with `label_printed_at` behind the
+sudah/belum filter). All four already existed and work.
+
+**Step 3 was being described as manual when it is not.** A booking returns `awb: null` — the waybill is
+issued when a courier *accepts* the pickup — and `cron-tracking` fills `orders.awb` **on its own, every
+15 minutes**, batch 100. The screens said *"Klik 'Ambil resi' lagi nanti"* and *"Klik 'Lacak' untuk
+mengambil resi begitu terbit"*, so a seller had no way to know it would arrive without them, and sat
+watching a queue. Three copy sites now say it appears by itself and that the buttons are the shortcut.
+
+Also fixed while in that file: **`Filter` was declared inside the bulk-shipping screen's render**, so
+every parent render created a new component type and React remounted the whole filter row — the class
+`AGENTS.md` names (state lost, focus dropped mid-typing), on the screen where a merchant selects rows
+in a table. Hoisted out: **8 eslint errors → 0** in that file.
+
 ## Unreleased — A real booking went through, and could not be cancelled
 
 Owner-authorised end-to-end run of the resi chain, closing N32. `request_pickup` was accepted with the
