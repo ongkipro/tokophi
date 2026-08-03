@@ -53,9 +53,9 @@ const sql = postgres(requireDatabaseUrl(), { max: 2 });
 
 /** GET `/` from the storefront as a given tenant. The tenant is the Host header (ADR 0009), and
  *  `fetch` refuses to set it — hence node:http. */
-const getHome = (host) =>
+const getPath = (host, path) =>
   new Promise((resolve, reject) => {
-    const req = http.request({ host: "127.0.0.1", port: PORT, path: "/", headers: { Host: host } }, (res) => {
+    const req = http.request({ host: "127.0.0.1", port: PORT, path, headers: { Host: host } }, (res) => {
       let body = "";
       res.on("data", (c) => (body += c));
       res.on("end", () => resolve({ status: res.statusCode, body }));
@@ -63,6 +63,7 @@ const getHome = (host) =>
     req.on("error", reject);
     req.end();
   });
+const getHome = (host) => getPath(host, "/");
 
 const countH1 = (html) => (html.match(/<h1[\s>]/g) || []).length;
 /** The host this store is actually served on: its active primary domain (the subdomain 301s to it). */
@@ -80,6 +81,34 @@ const check = (label, ok, detail) => {
 // never uses again.
 const lock = await sql.reserve();
 await lock`select pg_advisory_lock(${LOCK_KEY})`;
+
+// The static-route sweep needs only a store row, no template staging — run it first so it still
+// happens if a later case throws.
+// ── EVERY OTHER PAGE A SHOPPER LANDS ON — exactly one <h1>, no template staging needed ──────────
+//
+// The cases above are about the merchant-built HOMEPAGE, which is why they stage a `page_templates`
+// row. These routes are plain pages, and they were never covered by anything: a 2026-08-03 sweep that
+// simply LOADED each one found **`/checkout` with no `<h1>` at all** — its highest heading was
+// `<h2>Ringkasan Pesanan`, on the single page a shopper hands their name, phone and address to.
+// Third instance of this class after the builder homepage and the hero carousel, and the only one on
+// the money path.
+//
+// ⚠️ `/checkout` and `/checkout/sukses` are BOTH here on purpose. They share `CheckoutLayout`, so the
+// tempting fix — put the floor in the layout — gives `sukses`, which already has a visible `<h1>`, a
+// second one. That is the hero-carousel defect reintroduced by the homepage fix. One asserts the floor
+// exists, the other asserts the fix did not overshoot; only together do they pin it.
+{
+  const [store] = await sql`
+    select slug, (select host from store_domains d
+                   where d.store_id = s.id and d.is_primary and d.status = 'active' limit 1) as primary_host
+      from stores s order by created_at limit 1`;
+  const host = hostOf(store);
+  for (const path of ["/", "/produk", "/kategori", "/blog", "/promo", "/cari", "/kontak", "/keranjang", "/checkout", "/checkout/sukses"]) {
+    const { status, body } = await getPath(host, path);
+    if (status !== 200) { check(`${path} responds 200`, false, `HTTP ${status}`); continue; }
+    check(`${path} has exactly 1 <h1>`, countH1(body) === 1, `h1 ${countH1(body)}`);
+  }
+}
 
 try {
   // Safe only while the lock is held — see the header.

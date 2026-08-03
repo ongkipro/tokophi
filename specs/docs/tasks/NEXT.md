@@ -560,12 +560,17 @@ Full method + scoreboard: [`2026-08-03-surface-sweep.md`](./2026-08-03-surface-s
 all three surfaces: **0 dead nav links, 0 unreachable pages** — each of the nine non-sidebar routes was
 verified to be linked from somewhere, not assumed.
 
-### ✅ N26. `/checkout` had no `<h1>` — the only money-path page without one · **CLOSED**
+### ✅ N26. `/checkout` had no `<h1>` — the only money-path page without one · **CLOSED + GUARDED**
 Its highest heading was `<h2>Ringkasan Pesanan`. Third instance of the N11/N14 class. Fixed with an
 `sr-only` `<h1>` **in the page, not the layout** — `checkout/sukses.astro` already renders a visible
 one, so a layout-level floor would have given that page **two**: the N14 defect, reintroduced by the fix
-for N11's. ⚠️ Not visible on purpose — the visible title was removed 2026-07-16 deliberately, and a
-headline costs the first field its place above the fold at 390 px.
+for N11's. ⚠️ Not visible on purpose — the visible title was removed 2026-07-16 deliberately.
+
+⚠️ **The fix originally shipped with NO guard, and `check-h1-floor` did not cover it** — that script is
+about the merchant-built HOMEPAGE and stages a `page_templates` row. It now also sweeps **10 static
+routes**, `/checkout` and `/checkout/sukses` among them, and both are load-bearing: one asserts the
+floor exists, the other asserts the fix did not overshoot into a second `<h1>`. Proven red by deleting
+the `<h1>` and re-running: `FAIL /checkout has exactly 1 <h1> — h1 0`.
 
 ### ✅ N27. `/halaman/baru` had no `<h1>`; `/navigasi` + `/pemasaran` skipped h1→h3 · **CLOSED**
 `PageEditor` gated its heading on `{isEdit && …}`, so only the CREATE screen lacked one — while
@@ -690,7 +695,20 @@ npx vitest run apps/storefront/src/components/sections/h1-floor.test.ts
 | `check-hero-srcset` | the hero's `data-srcset` is actually promoted onto the IMG |
 | `check-pdp-srcset` | no image resolves over 3× the pixels it fills, and no catalog `<img>` is bare (logo excepted) |
 | `check-pixel-defer` | tracking survives the deferral, for every channel **this tenant** enabled |
-| `check-h1-floor` | exactly one `<h1>`, all three template shapes |
+| `check-h1-floor` | exactly one `<h1>` — all three template shapes **and the 10 static routes**, incl. `/checkout` (had none) and `/checkout/sukses` (must not gain a second) |
+
+**Vitest guards worth knowing by name** (all run under `npm test` / `npm run test:db`):
+
+| guard | what it proves |
+|---|---|
+| `packages/lib/src/no-published-credentials.test.ts` | no shipped screen names an account that authenticates — scans EVERY app file, strips `//` + `/* */` but **not** HTML comments |
+| `packages/lib/src/password.test.ts` | the temp-password mint's measured min-entropy ≥ 48 bits, one implementation |
+| `packages/lib/src/recovery.test.ts` | the recovery token round-trips, is store-bound, and never throws on junk |
+| `apps/admin/lib/recovery-wired.test.ts` | **the mint has a caller** — the failure no unit test can see |
+| `apps/admin/lib/cart-message.test.ts` | the link is appended when the template has no `{{link}}`; a literal `{{link}}` can never reach a customer |
+| `apps/admin/lib/inventory-location.test.ts` | the default-location expression exists in exactly one place |
+| `apps/admin/lib/rbac-census.test.ts` | every capability is classified owner-only / admin-too |
+| `packages/db/src/article-order.test.ts` | the blog order is `published_at desc nulls last, title asc`, shared by both surfaces |
 
 ⚠️ **One invocation contract, and the old names now FAIL rather than being ignored.** To run a single
 check by hand: `CHECK_BASE_URL=http://toko-demo.test:4390 node apps/storefront/scripts/<name>.mjs`
