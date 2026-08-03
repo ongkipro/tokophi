@@ -2,9 +2,13 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant } from "@/lib/tenant";
 import { and, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
-import { fillTemplate, waLink } from "@tokophi/lib/format";
+import { waLink } from "@tokophi/lib/format";
 import { getSession } from "@/lib/auth";
-import { getStoreName } from "@/lib/data/store";
+// Pure (no DB import) so it is testable without a DATABASE_URL — see the note in that file.
+// Re-exported below because callers have always imported it from here.
+import { cartMessage } from "@/lib/cart-message";
+import { getStoreName, getStorefrontHost } from "@/lib/data/store";
+import { recoveryUrl } from "@tokophi/lib/recovery";
 
 // Abandoned checkouts (0044). Every figure on the Keranjang Ditinggal screen is a `count`/`sum` over
 // `checkout_sessions` + `orders` — there is no modelled, blended or "estimated" number here, and if
@@ -144,6 +148,9 @@ export async function getAbandonedCarts(withPhoneLimit = 100, anonymousLimit = 4
   // in the table" (there are 7 of them).
   const session = await getSession();
   const storeName = (session ? await getStoreName(session.storeId) : null) ?? "Toko";
+  // The canonical host the recovery link must point at — resolved ONCE for the whole list, not per
+  // cart (it is the same store for every row, and it costs a query).
+  const host = session ? await getStorefrontHost(session.storeId) : null;
 
   return withCurrentTenant(async (db) => {
     const rows = await db
@@ -175,26 +182,42 @@ export async function getAbandonedCarts(withPhoneLimit = 100, anonymousLimit = 4
       if (!prev || c.sentAt > prev) lastContact.set(key, c.sentAt);
     }
 
-    const carts = rows.map((r): AbandonedCart => {
-      const items = ((r.items as CartItem[] | null) ?? []).filter((i) => i && i.name);
-      const last = r.updatedAt ?? r.createdAt;
-      const contactedAt = r.phone ? lastContact.get(digits(r.phone)) : undefined;
-      return {
-        id: r.id,
-        name: r.name,
-        phone: r.phone,
-        email: r.email,
-        city: r.city,
-        customerId: r.customerId,
-        step: r.step as CheckoutStep,
-        items,
-        itemsCount: items.reduce((a, i) => a + i.qty, 0),
-        subtotal: r.subtotalIdr,
-        minutesAgo: Math.max(0, Math.round((Date.now() - last.getTime()) / 60_000)),
-        waHref: r.phone && tpl ? waLink(r.phone, cartMessage(tpl.body, r.name, items, storeName)) : null,
-        contactedLabel: contactedAt ? formatContact(contactedAt) : null,
-      };
-    });
+    // ── THE LINK IS MINTED HERE, AND IT IS THE WHOLE POINT OF THE MESSAGE ────────────────────────
+    //
+    // Until this existed the WhatsApp body carried {nama, produk, toko} and NO WAY BACK — the shopper
+    // was told their cart was waiting and given nothing to tap. `signRecoveryToken` had zero callers
+    // across all four apps, so every downstream piece (the verifier, the "Selamat datang kembali"
+    // banner, the basket restore, the field pre-fill) was live but unreachable.
+    //
+    // Minted ONLY for carts with a phone: without one there is no WhatsApp to send, and a token is a
+    // credential — do not create ones nobody can use. `sessionId` (not `r.id`) is what the storefront
+    // looks the row up by.
+    //
+    // ⚠️ `Promise.all` because minting is async (HS256 sign). Do not "simplify" this back to a sync
+    // `.map` by hoisting one token out of the loop — a token is bound to ONE session id.
+    const carts = await Promise.all(
+      rows.map(async (r): Promise<AbandonedCart> => {
+        const items = ((r.items as CartItem[] | null) ?? []).filter((i) => i && i.name);
+        const last = r.updatedAt ?? r.createdAt;
+        const contactedAt = r.phone ? lastContact.get(digits(r.phone)) : undefined;
+        const link = r.phone && host ? await recoveryUrl(host, r.storeId, r.sessionId) : null;
+        return {
+          id: r.id,
+          name: r.name,
+          phone: r.phone,
+          email: r.email,
+          city: r.city,
+          customerId: r.customerId,
+          step: r.step as CheckoutStep,
+          items,
+          itemsCount: items.reduce((a, i) => a + i.qty, 0),
+          subtotal: r.subtotalIdr,
+          minutesAgo: Math.max(0, Math.round((Date.now() - last.getTime()) / 60_000)),
+          waHref: r.phone && tpl ? waLink(r.phone, cartMessage(tpl.body, r.name, items, storeName, link)) : null,
+          contactedLabel: contactedAt ? formatContact(contactedAt) : null,
+        };
+      }),
+    );
 
     const byScore = (a: AbandonedCart, b: AbandonedCart) =>
       score(b.subtotal, b.minutesAgo) - score(a.subtotal, a.minutesAgo);
@@ -212,10 +235,7 @@ export async function getAbandonedCart(id: string) {
   });
 }
 
-export function cartMessage(templateBody: string, name: string | null, items: CartItem[], storeName: string): string {
-  const produk = items.length > 1 ? `${items[0].name} +${items.length - 1} lainnya` : items[0]?.name ?? "produk pilihan Anda";
-  return fillTemplate(templateBody, { nama: name ?? "", produk, toko: storeName });
-}
+export { cartMessage };
 
 export const digits = (s: string) => s.replace(/\D/g, "");
 
