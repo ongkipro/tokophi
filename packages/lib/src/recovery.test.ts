@@ -30,7 +30,20 @@ describe("recovery token", () => {
 
   it("refuses a tampered signature", async () => {
     const token = await signRecoveryToken(STORE, SID);
-    expect(await verifyRecoveryToken(token.slice(0, -1) + "X", STORE)).toBeNull();
+    // ⚠️ DO NOT TAMPER THE LAST CHARACTER. It was `token.slice(0, -1) + "X"`, and that made this suite
+    // fail ~7,5% of runs with "expected 'ck-10-0-350' to be null" — the token still verified.
+    //
+    // An HS256 signature is 32 bytes = 256 bits, and base64url carries 6 bits per character: 43
+    // characters, of which the last holds only 256 − 42×6 = 4 significant bits. Its low two bits are
+    // padding, so FOUR different characters decode to the same signature bytes. "Change the last
+    // character" is not a tamper — it is a coin flip.
+    //
+    // The first character of the signature carries all six bits, so changing it always changes the
+    // bytes. Assert on that, and pick a replacement that differs from what is there.
+    const [h, p, sig] = token.split(".");
+    const flipped = (sig[0] === "A" ? "B" : "A") + sig.slice(1);
+    expect(flipped).not.toBe(sig);
+    expect(await verifyRecoveryToken(`${h}.${p}.${flipped}`, STORE)).toBeNull();
   });
 
   it("NEVER THROWS on junk — a bad link must render an empty checkout, not a 500", async () => {

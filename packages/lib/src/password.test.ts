@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { scryptSync } from "node:crypto";
@@ -83,19 +84,25 @@ const INERT_EXTENSIONS = new Set([
   ".json", ".sql", ".md", ".css", ".sh", ".yaml", ".yml", // config, migrations, prose, shell
 ]);
 
-/** Every file under the repo root, minus the skipped directories. */
+/**
+ * Every file GIT TRACKS, minus the skipped directories.
+ *
+ * ⚠️ This used to walk the filesystem, and that made the extension census go RED for anyone who had
+ * run `tsc` before `vitest`: `*.tsbuildinfo` is gitignored, is a build artefact, and appeared in an
+ * ordinary workflow. An alarm that fires on a normal working day is the alarm everybody learns to
+ * scroll past — `verify-rls` sat red for weeks here and two cross-tenant leaks shipped past it.
+ *
+ * Tracked files are also the honest scope: the mint scanner asks "can a second mint be IN THIS REPO",
+ * and something git does not carry is not in the repo. A build output, a scratch probe or another
+ * agent's untracked worktree file is not a shipping credential path.
+ */
 function repoFiles(): string[] {
-  const out: string[] = [];
-  const walk = (dir: string) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".") || SKIP_DIRS.has(entry.name)) continue;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.isFile()) out.push(full);
-    }
-  };
-  walk(REPO_ROOT);
-  return out;
+  const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
+    .split("\0")
+    .filter(Boolean);
+  return tracked
+    .filter((rel) => !rel.split("/").some((seg) => seg.startsWith(".") || SKIP_DIRS.has(seg)))
+    .map((rel) => path.join(REPO_ROOT, rel));
 }
 
 /**
