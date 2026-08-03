@@ -20,9 +20,10 @@ const suite = URL ? describe : describe.skip;
 
 let client: ReturnType<typeof postgres>;
 let db: ReturnType<typeof drizzle>;
-// `article-order.ts` imports `schema` from @tokophi/db as a VALUE, and that module throws at import
-// time when DATABASE_URL is unset — so both are dynamic-imported after pointing it at the throwaway
-// DB, exactly as order-payment.test.ts does.
+// ⚠️ `publishedFirst` itself is now import-safe — it moved to `packages/db` and imports `./schema`
+// DIRECTLY, not the `@tokophi/db` barrel, so it no longer drags in `client.ts` (which throws at
+// import time when DATABASE_URL is unset). The dynamic import below is kept only for `schema`, whose
+// barrel path still does, exactly as order-payment.test.ts does.
 let publishedFirst: (typeof import("./article-order"))["publishedFirst"];
 let schema: (typeof import("@tokophi/db"))["schema"];
 
