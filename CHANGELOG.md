@@ -2,6 +2,49 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Five browser checks, five invocation conventions, three phantom regressions
+
+### 🧪 `npm run verify -w @tokophi/storefront` — one runner, one env contract
+
+The storefront's five checks had each invented their own invocation: two different meanings of `T_URL`
+(an origin in one file, a full PDP URL in another), an `H1_PORT` that was deliberately not `PORT`, four
+default ports (4373 / 4374 / 4392 / none) and a `DATABASE_URL` requirement on one of them. Every one was
+locally reasonable and the SET was not runnable. On **2026-08-02 a reviewer started one server, pointed
+three of them at it and reported three regressions that did not exist.**
+
+Fixed by CONVERGING them, not by wrapping them — a wrapper that papers over five conventions leaves five
+conventions for the next person who runs one by hand. `scripts/check-env.mjs` now owns the contract:
+**`CHECK_BASE_URL`** (an origin; the hostname selects the tenant, ADR 0009) and **`DATABASE_URL` from the
+environment**. `T_URL` / `H1_PORT` / `DPR` are retired and **exit 1 if set** — silently running the
+default while the caller believes they aimed elsewhere is exactly what produced the phantom three.
+
+`scripts/run-checks.mjs` builds if the build is stale, starts **one** server, waits for a **200 for the
+tenant host** (not merely for the port to answer — a 404 means every check below would be measuring
+"Toko tidak ditemukan"), runs all five, prints a table and exits non-zero on any red. It signals **only
+the process group it spawned**, including when a check throws or on Ctrl-C — never `pkill`, which in this
+repo kills other agents' servers. A busy port fails in a second with the port number, never hangs.
+
+**Three results, not two.** `SKIP` (exit 2) = the check does not APPLY to the data it was pointed at.
+It is printed with its reason every run and never counted as a pass.
+
+### 🔴 `check-pixel-defer` was red on clean `main`, forever — and its loudest claim was vacuous
+
+It demanded `hosts.length === 3` while `store_tracking_channels` holds exactly one row
+(`batik-nusantara | meta | t`), so no change set could ever make it green. **An alarm that is always on
+is an alarm that is off** — the `verify-rls` lesson, which this repo paid for with two cross-tenant leaks
+that shipped past a verifier that was already failing. It now reads the enabled channels for the tenant
+the host resolves to and asserts what was always meant: each is stubbed synchronously, buffers an event
+fired before its SDK exists, and loads on interaction — plus the reverse, that **nothing loads for a
+channel that is switched off**. No channels at all ⇒ SKIP.
+
+⚠️ And its "no vendor `<script src>` in the served HTML" claim — the one its own comment calls *THE
+DETERMINISTIC CLAIM* — was fetched with `fetch(…, { headers: { host } })`. **Undici derives `Host` from
+the URL and silently discards yours**, so that request arrived as `Host: 127.0.0.1`, resolved to no store
+and was answered by the 404 page, which of course contains no vendor scripts. It had proved nothing since
+the day it was written. Now `getAsTenant()` (node:http), and the 200 is asserted alongside the claim.
+`check-h1-floor` had used node:http all along and said why; the others did not. That is what a per-file
+convention costs.
+
 ## Unreleased — Every route on all three apps, driven in a browser
 
 A sweep, not a read-through: enumerate routes from disk, cross-reference against the sidebar, then load
@@ -73,6 +116,7 @@ the query plan) and the removal of a correctness dependency on an invariant held
 The sweep that found it is mechanical and worth re-running: parse `schema.ts` for nullability, grep
 every `desc(schema.X.Y)`, cross-reference. 31 sites → 2 candidates → 1 real. The class has now shipped
 three times.
+
 
 ## Unreleased — The header shipped a 600 KB lie: bare `<img>` on every page, and a descriptor nobody could check
 
