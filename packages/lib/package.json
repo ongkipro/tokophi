@@ -22,6 +22,10 @@
     "./colors": "./src/colors.ts",
     "./secret": "./src/secret.ts",
     "./tracking-ids": "./src/tracking-ids.ts",
-    "./pay-callback": "./src/pay-callback.ts"
+    "./pay-callback": "./src/pay-callback.ts",
+    "./recovery": "./src/recovery.ts"
+  },
+  "dependencies": {
+    "jose": "^6.2.3"
   }
 }

@@ -84,6 +84,10 @@ const VARIABLES: { token: string; gloss: string }[] = [
   { token: "{{no_pesanan}}", gloss: "nomor pesanan" },
   { token: "{{total}}", gloss: "total tagihan" },
   { token: "{{toko}}", gloss: "nama toko" },
+  // Only substituted on the `keranjang` template — it is the one message that HAS a cart to return
+  // to. Left in the shared list on purpose: a merchant who puts it in another template sees an empty
+  // substitution in the preview rather than a literal `{{link}}` going out to a customer.
+  { token: "{{link}}", gloss: "link lanjutkan pesanan (keranjang)" },
 ];
 
 // Sample values for the live-preview chat bubble.
@@ -93,6 +97,9 @@ const PREVIEW_VARS = {
   no_pesanan: "#INV-4821",
   total: "Rp275.000",
   toko: "Toko Anda",
+  // Shaped like the real thing (`https://<host>/checkout?r=<jwt>`) but obviously a sample — a
+  // merchant editing the template must see how much room the URL takes in the bubble.
+  link: "https://toko-anda.tokophi.id/checkout?r=eyJhbGciOi…",
 };
 
 const JENIS: TemplType[] = ["keranjang", "pembayaran", "konfirmasi", "pascabeli", "ulasan", "repeat", "broadcast"];

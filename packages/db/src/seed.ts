@@ -480,6 +480,15 @@ const FOLLOWUPS: Array<{ customer: string; phone: string; type: FType; context: 
   { customer: "Wulan Dari", phone: "6281234511010", type: "repeat", context: "Pelanggan VIP · 45 hari", dueDays: 2, status: "menunggu", lastMessage: "" },
 ];
 const WA_TEMPLATES: Array<{ name: string; type: string; body: string }> = [
+  // ⚠️ NO `{{link}}` HERE, DELIBERATELY — `cartMessage` APPENDS the recovery link instead.
+  // Two reasons, and the second is the one that bites:
+  //  1. **The seed is not a migration.** A placeholder here reaches NEW stores only, so every store
+  //     that already exists would still send a message with no way back — the exact bug being fixed.
+  //     The append works for every store, today, with no data fix.
+  //  2. This ONE body is also rendered by the CRM follow-up screens (`crm/page.tsx`,
+  //     `followup-client.tsx`, `pipeline-client.tsx`), which work from `followups` rows and have no
+  //     checkout session — so they CANNOT mint a link. `fillTemplate` leaves an unknown token
+  //     verbatim, so seeding `{{link}}` would send the literal string `{{link}}` to a customer.
   { name: "Keranjang ditinggalkan", type: "keranjang", body: "Halo kak {{nama}} 👋, produk *{{produk}}* masih ada di keranjang. Mau saya bantu proses sekarang? Stok terbatas ya kak 😊 — {{toko}}" },
   { name: "Pengingat pembayaran", type: "pembayaran", body: "Hai kak {{nama}}, pesanan {{no_pesanan}} sebesar *{{total}}* menunggu pembayaran. Konfirmasi ya kak biar segera kami kirim 🙏 — {{toko}}" },
   { name: "Konfirmasi pesanan", type: "konfirmasi", body: "Halo kak {{nama}}, pesanan {{no_pesanan}} sudah kami terima dan sedang diproses. Terima kasih sudah belanja di {{toko}}! 📦" },

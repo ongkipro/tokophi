@@ -94,12 +94,15 @@ function lastContactLabel(daysAgo: number): string {
 export function PipelineClient({ leads: LEADS, templates }: { leads: Lead[]; templates: WaTemplate[] }) {
   const storeName = useStoreName();
   const leadWaHref = (lead: Lead): string => {
+    // `link: ""` — see `followup-client.tsx`. A lead has no checkout session, so there is no recovery
+    // link to mint; `fillTemplate` would otherwise pass an unknown `{{link}}` through verbatim.
     const msg = fillTemplate(templates[0]?.body ?? "", {
       nama: lead.name,
       produk: "",
       no_pesanan: "",
       total: "",
       toko: storeName,
+      link: "",
     });
     return waLink(lead.phone, msg);
   };

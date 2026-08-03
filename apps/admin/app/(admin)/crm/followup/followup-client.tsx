@@ -147,6 +147,12 @@ const ALL_TYPES: FollowupType[] = [
 ];
 
 // Build the prefilled WhatsApp message for a follow-up using a given template body.
+//
+// ⚠️ `link: ""` is not padding. `fillTemplate` leaves an UNKNOWN token verbatim, so a merchant who
+// types `{{link}}` into the keranjang template would otherwise send the literal string `{{link}}` to
+// a customer from this screen. A follow-up row has no `checkout_sessions.session_id`, so there is no
+// recovery link to mint here — only Keranjang Ditinggal (`lib/data/checkout.ts`) can produce one.
+// Collapsing it to empty is the honest answer; emitting the placeholder is not.
 function buildMessage(f: Followup, body: string, toko: string) {
   return fillTemplate(body, {
     nama: f.customer,
@@ -154,6 +160,7 @@ function buildMessage(f: Followup, body: string, toko: string) {
     no_pesanan: f.context,
     total: f.context,
     toko,
+    link: "",
   });
 }
 

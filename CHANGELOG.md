@@ -2,6 +2,47 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — The abandoned-cart recovery link was never minted, because the mint was in the wrong app
+
+`signRecoveryToken` was correct, store-bound and security-reviewed — and had **zero callers in all four
+apps** for the life of the feature. It lived in `apps/storefront/src/lib/recovery.ts`, a path the ADMIN
+cannot import, and the admin is the only surface that lists abandoned carts.
+
+So the merchant's WhatsApp message carried `{nama, produk, toko}` and **no way back to the cart**, and
+~50 lines of storefront code — `verifyRecoveryToken`, the "Selamat datang kembali" banner, the basket
+restore, the field pre-fill — were live and unreachable. Nothing failed: a shopper who never returns is
+indistinguishable from one who changed their mind. Four docs recorded it as working.
+
+**A module's location is part of its contract.** The pair now lives in `@tokophi/lib/recovery` (with
+`jose` declared rather than relied on via hoisting); the storefront keeps its import path via a
+re-export. `getAbandonedCarts` mints per cart **that has a phone**, on `sessionId` (the row `id` would
+verify fine and match no row), against `getStorefrontHost()` — the **active primary** custom domain,
+else `<slug>.<base>`, agreeing with the storefront's `primaryOrigin()`.
+
+⚠️ **`cartMessage` APPENDS the link when the template has no `{{link}}`, and that fallback is the fix.**
+The seed is not a migration, so no existing store's body has a placeholder — substitution alone would
+have shipped and changed nothing for a single live merchant.
+
+⚠️ **`{{link}}` was deliberately kept OUT of the seed.** The same `keranjang` body is rendered by three
+CRM screens working from `followups` rows, which have no checkout session and cannot mint a link — and
+`fillTemplate` passes an unknown token through verbatim, so seeding it would have sent the literal string
+`{{link}}` to a customer. Those three now pass `link: ""`.
+
+⚠️ **`CHECKOUT_RECOVERY_SECRET` must be set on BOTH surfaces or neither** — they resolve it
+independently, and a mismatch fails silently as a checkout that does not restore.
+
+**Driven in a browser, because the restore path had never been run in one:** admin login → the real
+`wa.me` body → that exact link → banner, cart (`1x Gamis Syari Polos`), name, phone and address all back,
+session id reused; a second cart restored a subtotal matching `checkout_sessions.subtotal_idr` exactly.
+Foreign-store, tampered and junk tokens all refused with the normal empty checkout, never a 500. The
+shared dev DB was left untouched (the link was read from the RSC payload rather than clicking the button,
+which would have written a `followups` row).
+
+Guards: `packages/lib/src/recovery.test.ts` (round trip + three refusals), `apps/admin/lib/cart-message.test.ts`
+(append vs substitute; no literal `{{link}}` can reach a customer), and **`apps/admin/lib/recovery-wired.test.ts`
+— the mint has a caller**, which is the failure no unit test can see and the one that would have caught
+this. `cartMessage` moved to a pure module so it is testable without a `DATABASE_URL`.
+
 ## Unreleased — Every store we provisioned got the owner password `tokophi123`
 
 Audit wave 2: ten read-only agents against `origin/main` @ `86e3ec3`, one worktree each, then seven change

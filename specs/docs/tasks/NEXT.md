@@ -104,38 +104,29 @@ cutover keeps writes behind the Next apps. Picking one changes what PostgREST is
 
 ## 🟠 SECURITY & DATA INTEGRITY — open, not blocked
 
-### N17. The abandoned-cart recovery link is NEVER minted — P1 · **L** · NEW
-`signRecoveryToken` (`apps/storefront/src/lib/recovery.ts:43`) has **zero callers** in all four apps;
-none of the 6 `wa_templates` rows contains a link placeholder or a URL; `cartMessage` fills only
-`{nama, produk, toko}`. **The merchant's WhatsApp message therefore contains no way back**, and ~50 lines
-of storefront code — the verifier, the "Selamat datang kembali" banner, the basket restore, the field
-pre-fill — are unreachable. Independently confirmed twice.
+### ✅ N17. The abandoned-cart recovery link — **CLOSED 2026-08-03**, and the cause is the lesson
+Handoff: [`2026-08-03-n17-recovery-link.md`](./2026-08-03-n17-recovery-link.md). Branch
+`feat/cart-recovery-link`.
 
-The docs claimed it worked: `REQUIREMENTS.md` SEC-13 = MET, `UI_INVENTORY.md:60` = "✅ real DB",
-`CODE_MAP.md:113` = "mints/verifies", `STATUS.md:162` = "Recovery links are signed, not guessable".
-**All four are corrected**; SEC-13 now reads `VACUOUSLY MET — NO LINK IS EVER MINTED`.
+**Why it was never minted is worth more than the fix.** `signRecoveryToken` sat in
+`apps/storefront/src/lib/recovery.ts` — a path **the admin cannot import** — and the admin is the only
+surface that lists abandoned carts. So the mint had zero callers for the life of the feature while the
+verify half was live, correct and store-bound. Nothing failed: the checkout just never restored, and
+four docs recorded it as working. **A module in the wrong app is a feature that cannot exist.**
 
-**Four steps, and this is why it is not a drive-by** (full text in `BACKLOG.md`):
+Shipped: the pair in `@tokophi/lib/recovery` (+ `jose` declared, not hoisting-by-luck) · a re-export so
+the storefront path is unchanged · `getStorefrontHost()` (active primary domain, else `<slug>.<base>` —
+must agree with the storefront's `primaryOrigin()`) · mint per phone-carrying cart on `sessionId` ·
+`cartMessage` **appends** when the body has no `{{link}}`.
 
-1. `signRecoveryToken` lives in `apps/storefront/src/lib`, which the admin cannot import. Move the pair
-   to `packages/lib/src/recovery.ts` and re-export from the storefront (`@tokophi/lib/secret` is already
-   shared, so the module gains no new deps).
-2. `getAbandonedCarts` must mint per cart and build
-   `https://${systemDomainFor(store.slug)}/checkout?r=…`. It needs the store **slug**, which the read
-   layer does not fetch today (`getStoreName` returns only the name).
-3. The template needs a `{{link}}`. ⚠️ **The seed is not a migration** — no existing store's row has one,
-   so either `cartMessage` appends the URL when the body lacks `{{link}}` (smallest, works for every
-   store today) **or** it takes a data fix. The template editor's variable chips + preview need `link`
-   too, or merchants get a literal `{{link}}`.
-4. **The restore path has never been run in a browser.** Drive it end to end — mint → open → assert the
-   basket and the typed fields come back — before any of this is claimed done.
+⚠️ **Two traps found while doing it, both recorded in `BACKLOG.md`:**
+- `{{link}}` was deliberately **kept out of the seed**. The same `keranjang` body is rendered by three
+  CRM screens that work from `followups` rows and cannot mint a link, and `fillTemplate` passes an
+  unknown token through verbatim — seeding it would have sent the literal `{{link}}` to a customer.
+- `CHECKOUT_RECOVERY_SECRET` must be set on **both** surfaces or every link fails to verify, silently.
 
-⚠️ **When it is wired, the mint MUST keep this shape: a signed, store-bound, 7-day jose token — NEVER a
-raw session id.** A raw id in a URL is a bearer credential over a stranger's name, phone and address the
-moment the link is forwarded, screenshotted or leaks via `Referer` — and those ids are already echoed in
-every `/api/track` beacon.
-
-**AC:** a real WhatsApp message body containing a working link, and the restore driven in a browser.
+**AC met:** admin login → real `wa.me` body → that exact link → banner, cart and typed fields restored,
+in a browser. Foreign-store / tampered / junk tokens all refused.
 
 ### N18. `tempPassword()` is 24 bits, and no login rate-limit was found · **M** · NEW
 `randomBytes(3)` in super-admin (`"tokophi-" + 3 bytes hex`) against `randomBytes(4)` = 32 bits in the
