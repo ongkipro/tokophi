@@ -2,6 +2,161 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — The apex said "Segera hadir" three times on a live, billing product
+
+`tokophi.com` is the page ads point at. It carried **three** statements that TokoΦ had not launched —
+the eyebrow pill ("Segera hadir"), the `<meta name="description">` ("Situsnya sedang disusun"), and the
+lede ("Situsnya masih kami susun — panel adminnya kami kerjakan lebih dulu"). All three are gone.
+
+**Untrue claims removed, with the evidence each was untrue:**
+- **"Tinggal diaktifkan"** about QRIS / e-wallet / COD — the merchant has **no switch** for payment
+  channels at all (ADR 0004; the client-facing Pembayaran tab was removed 2026-07-13 because nothing
+  read it). The blurb now says the true and better thing: platform-managed, nothing to register.
+- **"e-wallet"** — every e-wallet channel is seeded `enabled: false` (`packages/db/src/seed.ts`, "the
+  6 confirmed active on sandbox (QRIS + 5 VA)"). Naming a channel a shopper cannot pick is a promise
+  the checkout breaks. Dropped; QRIS + transfer bank + COD are real.
+- **"pajak sudah ikut dihitung"** — `store_settings.tax_enabled` **defaults to false** and the order
+  API only applies tax when it is on, so this was false for every store that never opened that setting.
+- **`<title>` said "panel admin"** — forbidden in user-visible copy (📛 above), and it propagated into
+  `og:`, `twitter:` and the JSON-LD `description`: one wrong word in five places, on the most-indexed
+  string on the platform.
+- **`© {year}`** — `new Date().getFullYear()` in a **static** build freezes at image-build time and is
+  silently wrong from the next 1 Januari. The year is gone; a copyright line does not need one.
+- The trial length is now read from `@tokophi/lib/billing` (`BILLING.TRIAL_DAYS`), not typed.
+
+**Content that was being HIDDEN, on ordinary screens:** `@media (max-height: 720px)` `display: none`d
+the three feature blurbs **and** the free-trial line. A 1366×768 laptop has a ~660px viewport — measured
+in a browser — so a large share of visitors saw neither, with no scrollbar to suggest anything was
+missing. A second rule hid the trial line on **every phone**, on the claim that "the CTAs already say
+it"; they say "Daftar toko" and "Masuk". Both hides are gone: the layout now tightens, then scrolls.
+
+⚠️ **`.shell` was `height: 100dvh; overflow: hidden`** — a hard box that CLIPPED with no scrollbar and no
+keyboard route. That fails **WCAG 1.4.4** at 200% zoom. It is `min-height` now: still one screen where it
+fits (verified: 768px and 660px viewports both render the whole page without scrolling), a scroll where
+it does not. The three blurbs also moved **inside `<main>`** — they were siblings of it, so landmark
+navigation skipped the only place the page says what the product does.
+
+**New pages: `/privasi`, `/kontak`, `/404`.** The apex had no privacy policy, no contact, no company
+identity and no 404 — which blocks Google/Meta Ads and leaves a UU PDP notice unpublished. Every factual
+claim in `/privasi` was read out of this codebase and the source file is named next to it in a comment
+(signup fields, scrypt hashing, the pre-order `checkout_sessions` capture, WhatsApp-not-email recovery,
+what `api/track` actually stores, ad pixels only where the merchant enabled a channel, Singapore
+hosting). Provider brands stay generic per ADR 0004.
+
+🔴 **THE IDENTITY IS NOT IN THE CODE, AND MUST NOT BE INVENTED.** Nothing in this repo establishes the
+operating entity, its registered address or a monitored support channel. `apps/landing/src/lib/identity.ts`
+reads four build-time vars — `PUBLIC_LEGAL_NAME`, `PUBLIC_LEGAL_ADDRESS`, `PUBLIC_CONTACT_EMAIL`,
+`PUBLIC_CONTACT_WHATSAPP` — with **no defaults on purpose**. While they are empty both pages print a
+visible notice naming exactly what is missing and stating the document is not final. **A placeholder
+rendered as text IS a published claim** — a reader cannot tell it from a real one. Set the four vars in
+Coolify and the notice disappears with no code change. **The pages still need a lawyer's review** and
+`/privasi` §6 (retention periods) is deliberately qualitative because no period is defined anywhere.
+
+**Deliberately NOT done: no Terms of Service.** Drafting the contract between TokoΦ and a merchant it
+already bills is not a thing to autocomplete, and Google Ads does not require one — a privacy policy plus
+identity and contact is the pair that unblocks review. It belongs on the signup flow, not the apex.
+
+`astro check` now runs for the landing app too (`npm run check:landing`, wired into root `test`) — it
+never had before. The baseline was already clean, so every finding is 0/0/0 on both sides.
+
+## Unreleased — `analytics_daily` had no writer outside the seed: the two screens a merchant opens every day were frozen on one store and empty on the other six
+
+The Dashboard's money strip + chart and the whole of `/analitik` read `analytics_daily`. **The only
+INSERT into that table in the entire repository was `packages/db/src/seed.ts`.** No cron, no order
+hook, no backfill. Measured on the dev DB, 2026-08-03:
+
+- **six of seven stores had ZERO rows.** `kopi-senja` holds 3 completed orders / Rp450.000 and its
+  seller was told *"Belum ada penjualan pada periode ini."* Every store created through `/daftar` or
+  the super-admin is in that state — i.e. every real merchant.
+- **on the seeded store the rows stopped the day the seed ran**, so ONE screen contradicted itself:
+  "Penjualan hari ini **Rp0**, −100,0% vs kemarin" and a chart labelled "30 Hari Terakhir" whose axis
+  read **5 Jun → 2 Jul**, directly above "Pesanan Terbaru" listing orders placed that morning.
+
+⚠️ `dashboard.ts` carried a comment about this gap concluding *"they do not visibly clash"*. It was
+false, and it is the reassurance that let the bug live. Rewritten, not deleted.
+
+**The shape: derive at read time.** `getDailyStats()` was the table's only reader, so this is one
+function body — every downstream derivation keeps its `DayPoint[]` contract. A **cron** was rejected
+(one more thing that stops silently; this repo has a documented history of exactly that, and a
+stopped cron reproduces the bug being fixed). A **database view** was rejected (needs a destructive
+migration to drop the table, and changes the RLS story; the query as written runs under
+`withCurrentTenant` → `SET LOCAL ROLE tokophi_app`). Pointing each screen at `orders` was rejected:
+it duplicates "what counts as revenue" across the chart, the KPIs, the tiles and the sparklines.
+
+- **Revenue is `total_idr - tax_idr` on non-cancelled orders** — the SAME expression
+  `getChannelSalesDaily` / `getRegionSales` / `getOrderStats` already use, so the chart total now
+  equals the Sumber Penjualan total instead of contradicting it.
+- **The series is DENSE** (`generate_series` LEFT JOIN the aggregates) and its last row is TODAY.
+  `resolve()` slices it positionally, so a bare `GROUP BY` would make "7 hari terakhir" mean "the
+  last 7 days that sold something".
+- **`visitors` was NOT invented.** It has no source in `orders`, so it is counted from
+  `analytics_events` (`type='visit'`) — the same rows `getVisitsKpi`/`getConversionKpi` already
+  count, with `count(*)` so the two cannot disagree. A store the tracker has never written for gets
+  0 and the UI renders **"—"**. Same for the funnel and the device split: real source or an honest
+  empty state, never a number.
+- ⚠️ **THE DAY IS WIB, AND THERE IS NOW ONE DEFINITION OF IT** — `apps/admin/lib/data/day-bucket.ts`.
+  The container's `TimeZone` is UTC, so "hari ini" used to start at 07:00 WIB and every merchant's
+  previous evening fell into "kemarin". All five day-bucketed queries (daily, hourly, channels,
+  product sales, funnel, devices) go through `dayKey()`, because the client matches their date keys
+  against each other with `Set.has` — a query bucketing differently stops reconciling *silently*.
+  Assumes WIB for every store (`stores` has no timezone column; WITA/WIT merchants read a boundary
+  1–2 h off theirs — stated, not hidden).
+
+**What happened to the seeded rows:** the seed no longer writes them and nothing reads them. The
+table is kept (dropping it is a destructive migration) and marked RETIRED in `schema.ts`. Rows in an
+existing database are inert — they can no longer disagree with `orders`. **Do not restore the seed
+insert.**
+
+### Frozen date anchors still in runtime code (the twelve fixed earlier missed these four)
+
+- **`dashboard.ts` "Bulan Ini" was `startsWith("2026-06")`**, "Bulan Lalu" `"2026-05"` — the seed's
+  frame. On 3 August, choosing "Bulan Ini" showed **June**, driving five KPIs, the chart and six
+  derived cards on `/` and `/analitik`. The month is now the month the series ends in, i.e. the
+  server's today, arriving as a prop (SSR and the client cannot disagree).
+- **`produk-client.tsx` compared against `TODAY` from the mock** (2026-06-30), so "7 hari terakhir"
+  was a **41-day** window widening by a day per day. The clock is read in the data layer
+  (`serverNowTs`) and handed down — not in the client (hydration mismatch) and not inline in the page
+  (React Compiler's impure-in-render rule).
+- **`hourlyFor` (mock) splattered a real daily total over 24 hours on a hard-coded curve**, on a page
+  whose comment says "nothing on this page is synthesized". The intraday chart now buckets
+  `orders.placed_at` by WIB hour; the 24 bars sum to the day's own total. No rows ⇒ zero bars.
+- **`BLOG_CATEGORIES` (mock) drove the `/blog` tabs, their badges and the editor's picker.** It is
+  the pair the seed writes for the demo store, so any other store saw two names it does not have and
+  every badge read 0. All three now read the store's own `blogs` rows.
+  - The picker was also a **dead control** — `blog` never left the editor's local state (it was not
+    on `ArticleInput`), so moving an article to another blog showed a success toast and moved
+    nothing. It persists now, via an id read back under RLS in the same txn (child-table rule).
+  - **`createArticle` crashed on a store with no `blogs` row** (`blog!.id` on an empty result). Only
+    the seed writes that table, and only for the demo store — so no merchant onboarded through
+    `/daftar` or the super-admin could ever publish an article. A store with none now gets a "Blog".
+
+### Verification
+
+`npm run build:admin`, `npx tsc --noEmit -p apps/admin/tsconfig.json`, `npm test` (238 tests) all
+clean; admin ESLint **41 problems (19 errors, 22 warnings)** — one fewer than main's 42, nothing added.
+`npm run verify-rls` green (13/13).
+
+**Driven in a browser against a scratch clone** (`pg_dump tokophi | psql tokophi_scratch_analytics`,
+dropped afterwards), as two stores, every figure reconciled against SQL over the same window:
+
+| | Hari ini | 7 hari | 30 hari | Bulan Ini | Bulan Lalu |
+|---|---|---|---|---|---|
+| **batik-nusantara** (screen) | Rp1.738.428 / 6 | Rp14.283.120 / 42 | Rp63.227.855 / 186 | Rp6.896.218 / 20 | Rp65.087.552 / 188 |
+| **batik-nusantara** (SQL) | 1738428 / 6 | 14283120 / 42 | 63227855 / 186 | Aug 6896218 / 20 | Jul 65087552 / 188 |
+| **kopi-senja** (screen) | Rp0 / 0 | Rp0 / 0 | Rp0 / 0 | Rp0 / 0 | Rp150.000 / 1 |
+| **kopi-senja** (SQL) | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | Jul 150000 / 1 |
+
+`kopi-senja` has **zero `analytics_daily` rows** — the case that rendered an empty dashboard before.
+The "30 Hari Terakhir" axis reads **7 Jul → 3 Agu** (was 5 Jun → 2 Jul); "Bulan Ini" is August. 0
+console errors on kopi-senja; the two on batik are `404 /api/uploads/produk-…webp` (the gitignored
+uploads dir is not populated in a scratch environment), unrelated.
+
+`apps/admin/lib/data/daily-stats.test.ts` — 13 checks. The pure half pins the range resolver; the
+Postgres half runs the REAL exported query under `SET LOCAL ROLE tokophi_app` + the `app.store_id`
+GUC, in rolled-back transactions. **Its failure path was exercised, not assumed**: flipping
+`STORE_TZ` to `"UTC"` turns 3 of them red. `vitest.config.ts` gained the `@/` alias — without it no
+suite could import `lib/data/*` at all, which is why this layer had no tests.
+
 ## Unreleased — Shipping audited against KiriminAja's own docs: we do not bill volumetric, they do
 
 Docs only. Every endpoint our code calls, cross-referenced against the captured official documentation
@@ -26,6 +181,7 @@ means a real `request_pickup` against the sandbox, which creates a pickup record
 
 **Confirmed correct, do not re-check:** endpoint versions match the docs and genuinely vary per route;
 `province` is a POST returning `datas` (a GET is refused); live sandbox auth returns 37 provinces.
+
 
 ## Unreleased — the `/checkout` h1 fix shipped without a guard; `check-h1-floor` now sweeps 10 routes
 

@@ -14,6 +14,12 @@ export async function getBilling(): Promise<BillingState | null> {
         currentPeriodEnd: schema.stores.currentPeriodEnd,
         firstInvoicePaid: schema.stores.firstInvoicePaid,
         comped: schema.stores.comped,
+        // The operator's own suspension (0086). This is THE read that locks the panel:
+        // `requireCapability` refuses every write when `readOnly` is true, and `readOnly` is what
+        // `computeBilling` sets from this column. Dropping it from this select silently unsuspends
+        // every store on the platform — which is why `StoreBillingRow.suspendedAt` is not optional.
+        suspendedAt: schema.stores.suspendedAt,
+        suspendedReason: schema.stores.suspendedReason,
       })
       .from(schema.stores)
       // Explicit, because RLS does NOT police `stores` (no store_id column, relrowsecurity = false).

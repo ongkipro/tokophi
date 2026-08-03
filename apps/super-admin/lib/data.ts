@@ -31,6 +31,7 @@ const BILL_TO_UI: Record<"trial" | "active" | "past_due" | "suspended", StoreSta
 type StoreRow = {
   id: string; name: string; city: string | null;
   trialEndsAt: string | null; currentPeriodEnd: string | null; firstInvoicePaid: boolean; comped: boolean;
+  suspendedAt: string | null; suspendedReason: string | null;
   createdAt: string; owner: string | null; email: string | null;
   gmv: string | number; orders: number; orders30d: number; products: number; lastOrderAt: string | null;
 };
@@ -41,16 +42,20 @@ function rowToStore(r: StoreRow): Store {
     currentPeriodEnd: r.currentPeriodEnd ? new Date(r.currentPeriodEnd) : null,
     firstInvoicePaid: r.firstInvoicePaid,
     comped: r.comped,
+    suspendedAt: r.suspendedAt ? new Date(r.suspendedAt) : null,
+    suspendedReason: r.suspendedReason,
   };
+  const state = computeBilling(bill);
   return {
     id: r.id,
     name: r.name,
     owner: r.owner ?? "",
     email: r.email ?? "",
     city: r.city ?? "",
-    status: BILL_TO_UI[computeBilling(bill).status],
+    status: BILL_TO_UI[state.status],
     segment: storeSegment(bill),
     comped: r.comped,
+    operatorSuspended: state.operatorSuspended,
     gmv: Number(r.gmv ?? 0),
     orders: Number(r.orders ?? 0),
     orders30d: Number(r.orders30d ?? 0),
@@ -68,6 +73,8 @@ const STORES_SQL = sql`
     s.trial_ends_at        as "trialEndsAt",
     s.current_period_end   as "currentPeriodEnd",
     s.first_invoice_paid   as "firstInvoicePaid",
+    s.suspended_at         as "suspendedAt",
+    s.suspended_reason     as "suspendedReason",
     s.comped, s.created_at as "createdAt",
     u.name  as "owner",
     u.email as "email",
@@ -106,12 +113,16 @@ export async function getStoreById(id: string): Promise<Store | null> {
 export type SubStats = { trial: number; active: number; pastDue: number; suspended: number; vip: number; mrr: number; trialEndingSoon: number; total: number };
 export async function getSubscriptionStats(): Promise<SubStats> {
   const rows = await db
-    .select({ trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid, comped: schema.stores.comped })
+    .select({ trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid, comped: schema.stores.comped, suspendedAt: schema.stores.suspendedAt })
     .from(schema.stores);
   const s: SubStats = { trial: 0, active: 0, pastDue: 0, suspended: 0, vip: 0, mrr: 0, trialEndingSoon: 0, total: rows.length };
   for (const r of rows) {
-    if (r.comped) { s.vip++; continue; } // VIP: active but no MRR, tracked separately
     const b = computeBilling(r);
+    // Operator suspension is counted BEFORE VIP: a comped store an operator locked is suspended,
+    // not "VIP, free and fine". This bucket feeds the Status Toko card and the "Toko aktif" KPI, and
+    // counting a locked store as active is exactly the lie the suspend button was already telling.
+    if (b.operatorSuspended) { s.suspended++; continue; }
+    if (r.comped) { s.vip++; continue; } // VIP: active but no MRR, tracked separately
     if (b.status === "trial") {
       s.trial++;
       if (b.daysLeft <= 1) s.trialEndingSoon++;
@@ -349,7 +360,7 @@ export async function getServerMetrics(): Promise<ServerMetrics> {
 // Real subscription state for a store (single-plan lifecycle).
 export async function getStoreBilling(id: string): Promise<BillingState | null> {
   const [s] = await db
-    .select({ trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid, comped: schema.stores.comped })
+    .select({ trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid, comped: schema.stores.comped, suspendedAt: schema.stores.suspendedAt, suspendedReason: schema.stores.suspendedReason })
     .from(schema.stores)
     .where(eq(schema.stores.id, id))
     .limit(1);
@@ -392,10 +403,23 @@ export async function getPlatform(): Promise<Platform> {
   };
 }
 
-export async function getStatusDistribution(): Promise<{ status: StoreStatus; label: string; count: number }[]> {
+// ⚠️ THE SLICES MUST SUM TO EVERY STORE, or the shares beside them are shares of nothing.
+//
+// VIP was missing, so the card totalled 6 while the KPI next to it read "Toko aktif 2 / 7" — the
+// comped store existed in one number and not in the other, and every percentage on the card was
+// computed against the short denominator. `vip` is its OWN slice rather than folded into "Aktif":
+// it is a distinct lifecycle segment here (its own tab in the Toko catalog) and hiding it inside
+// Aktif is how it went missing in the first place.
+//
+// Its key is deliberately NOT `StoreStatus` — that union describes a store's *billing* status badge
+// and has no VIP member; widening it would put a value into every badge component that none of them
+// render. This card owns its own key.
+export type StatusSlice = "aktif" | "trial" | "menunggak" | "ditangguhkan" | "vip";
+export async function getStatusDistribution(): Promise<{ status: StatusSlice; label: string; count: number }[]> {
   const s = await getSubscriptionStats();
   return [
     { status: "aktif", label: "Aktif", count: s.active },
+    { status: "vip", label: "VIP (gratis)", count: s.vip },
     { status: "trial", label: "Trial", count: s.trial },
     { status: "menunggak", label: "Menunggak", count: s.pastDue },
     { status: "ditangguhkan", label: "Ditangguhkan", count: s.suspended },
@@ -457,7 +481,7 @@ export async function getRiskQueue(): Promise<RiskStore[]> {
     `) as unknown as Promise<{ storeId: string; status: "gagal" | "menunggu"; cnt: number; amount: string; oldest: { days?: number } | string }[]>,
   ]);
   const bill = await db
-    .select({ id: schema.stores.id, trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid, comped: schema.stores.comped })
+    .select({ id: schema.stores.id, trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid, comped: schema.stores.comped, suspendedAt: schema.stores.suspendedAt })
     .from(schema.stores);
   const billById = new Map(bill.map((b) => [b.id, b]));
 
@@ -476,11 +500,17 @@ export async function getRiskQueue(): Promise<RiskStore[]> {
     const state = computeBilling(b);
     const reasons: RiskReason[] = [];
 
-    // 1) billing lifecycle — the clock that ends in a suspension
+    // 1) billing lifecycle — the clock that ends in a suspension.
+    //
+    // `billingStatus`, not `status`: this queue is "who is about to stop paying us", and an OPERATOR
+    // suspension is a decision we already made, not a risk to be worked. Reading the effective status
+    // here would file every store we deliberately locked at severity 100, permanently, at the top of
+    // the operator's morning worklist — and `daysLeft` is forced to 0 by the override, so the grace
+    // and trial countdowns beside it would have been wrong too.
     if (!s.comped) {
-      if (state.status === "past_due") reasons.push({ kind: "grace", daysLeft: state.daysLeft });
-      else if (state.status === "suspended") reasons.push({ kind: "suspended" });
-      else if (state.status === "trial" && state.daysLeft <= TRIAL_ENDING_DAYS) reasons.push({ kind: "trial_ending", daysLeft: state.daysLeft });
+      if (state.billingStatus === "past_due") reasons.push({ kind: "grace", daysLeft: state.daysLeft });
+      else if (state.billingStatus === "suspended") reasons.push({ kind: "suspended" });
+      else if (state.billingStatus === "trial" && state.daysLeft <= TRIAL_ENDING_DAYS) reasons.push({ kind: "trial_ending", daysLeft: state.daysLeft });
     }
 
     // 2) money that did not arrive
@@ -491,7 +521,7 @@ export async function getRiskQueue(): Promise<RiskStore[]> {
 
     // 3) a paying store that has stopped trading is next month's churn — but a store still on trial
     //    with no orders is just new, so it is not counted.
-    if (state.status !== "trial") {
+    if (state.billingStatus !== "trial") {
       if (s.lastOrderDays == null) reasons.push({ kind: "never_ordered" });
       else if (s.lastOrderDays >= DORMANT_DAYS) reasons.push({ kind: "dormant", days: s.lastOrderDays });
     }

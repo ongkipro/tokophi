@@ -27,6 +27,17 @@ export const pct = (n: number, digits = 1) => {
   return `${sign}${Math.abs(n).toFixed(digits).replace(".", ",")}%`;
 };
 
+// SHARE formatter — a part of a whole ("83,3% dari total"), NOT a change. No sign, ever.
+//
+// It exists because `pct()` was used for one: the super-admin "Status Toko" card fed it
+// `count / total * 100`, so the control plane read "Ditangguhkan 5 **+83,3%**" — five stores, and a
+// plus sign implying suspensions were CLIMBING 83% when nothing had moved at all. Two comments in
+// this file already told callers to "format locally instead", and two of them (`return-summary.tsx`,
+// `keranjang-client.tsx`) duly wrote the same one-liner by hand; the third borrowed the delta
+// formatter. A rule that has to be re-obeyed by hand at every call site is how the third one
+// happened, so here is the thing to reach for.
+export const share = (n: number, digits = 1) => `${n.toFixed(digits).replace(".", ",")}%`;
+
 export const timeAgo = (minutes: number) => {
   if (minutes < 1) return "baru saja";
   if (minutes < 60) return `${Math.floor(minutes)} mnt lalu`;

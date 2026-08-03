@@ -14,6 +14,11 @@ export default defineConfig({
   resolve: {
     alias: {
       "server-only": new URL("./test/stubs/server-only.ts", import.meta.url).pathname,
+      // `@/…` is apps/admin's own path alias (its tsconfig maps `@/*` → `./*`). Vitest runs from the
+      // repo root and knew nothing about it, so any suite over a `lib/data/*` module died on
+      // "Cannot find package '@/lib/tenant'" — which meant the DB-backed data layer was effectively
+      // untestable and stayed untested. Admin is the only workspace using this prefix.
+      "@/": new URL("./apps/admin/", import.meta.url).pathname,
     },
   },
   test: {

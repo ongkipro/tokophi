@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { SECTIONS_BY_TEMPLATE_TYPE, SECTION_DEFAULTS, type SectionType } from "@tokophi/sections";
+import { codeOnly } from "../../../../../test/source-code";
 
 // `SectionRenderer.astro` is the ONLY thing that turns a saved `page_templates.sections[].type` into
 // pixels. It had 14 `case` arms, no `default:` and no exhaustiveness assertion, so **a type added to
@@ -18,15 +18,22 @@ import { SECTIONS_BY_TEMPLATE_TYPE, SECTION_DEFAULTS, type SectionType } from "@
 // ⚠️ THIS FILE USED TO MATCH `case "…":` WITH A REGEX OVER THE RAW FILE TEXT, AND THAT IS NOT A GATE.
 // **Commenting an arm out leaves the text**, so an audit commented out `case "lookbook":` and all four
 // tests stayed green while the renderer would have dropped every `lookbook` section on a live
-// storefront — including the demo homepage's own template, which contains one. The arms are now read
-// off the TypeScript LEXER (comments are trivia, so they are simply not there) rather than off the
-// characters, and each arm is checked for the component it actually returns — an arm that renders the
-// WRONG component is the other half of "this type is covered" that text matching cannot see.
+// storefront — including the demo homepage's own template, which contains one. Each arm is also
+// checked for the component it actually returns — an arm that renders the WRONG component is the
+// other half of "this type is covered" that text matching cannot see.
 //
-// Why the lexer and not the alternatives: stripping comments with a regex is the same class of
-// mistake one layer down (it eats a `//` inside a string), and rendering the component for real needs
-// Astro's vite pipeline wired into the root vitest config — which every other suite in the repo would
-// then pay for, to prove a mapping that is static. `typescript` is already a dependency of this app.
+// ⚠️ AND THEN IT GREW THE SAME HOLE AGAIN, ONE LEVEL DOWN. The first fix ran the TypeScript lexer and
+// joined `getTokenText()` — which for a string or template token IS THE RAW SOURCE OF THE LITERAL, so
+// the contents were re-injected as if they were code. Deleting the real arm and planting
+// ``const doc = `case "lookbook": return <Lookbook />`;`` kept all five tests green. Comments were not
+// code; strings still were.
+//
+// The rule, and the shared implementation, now live in `test/source-code.ts`: a guard asserts against
+// a file's CODE, never its TEXT, and `codeOnly()` is the one answer to what that means — comments are
+// trivia to a lexer, and every literal's contents are re-emitted inert. Assertions here are therefore
+// whitespace-tolerant, because that helper joins tokens with spaces.
+//
+// Why not the AST: this is an `.astro` file, so it is not a TypeScript program — see that file.
 //
 // Note which list is authoritative. `SECTION_DEFAULTS` is typed `SectionConfigMap`, so TypeScript
 // requires an entry for EVERY `SectionType` — its keys are the complete union at runtime.
@@ -39,19 +46,6 @@ const SRC = readFileSync(
 
 const ALL_TYPES = Object.keys(SECTION_DEFAULTS).sort() as SectionType[];
 
-/** The file with every comment removed — the lexer emits tokens, and a comment is not a token. */
-function codeOnly(src: string): string {
-  const scanner = ts.createScanner(ts.ScriptTarget.Latest, /* skipTrivia */ true, ts.LanguageVariant.JSX, src);
-  const tokens: string[] = [];
-  for (let kind = scanner.scan(); kind !== ts.SyntaxKind.EndOfFileToken; kind = scanner.scan()) {
-    tokens.push(scanner.getTokenText());
-  }
-  // Joined with a space, so every assertion below tolerates whitespace between tokens. The renderer's
-  // own dev-only panel prints the literal text `case "{unknown.type}":` — that is JSX text, not code,
-  // and it cannot survive as a `case "<slug>":` shape because the interpolation is in the way.
-  return tokens.join(" ");
-}
-
 const CODE = codeOnly(SRC);
 
 /**
@@ -60,7 +54,7 @@ const CODE = codeOnly(SRC);
  * claim, and only the first one was ever being checked.
  */
 const RENDERS = new Map(
-  [...CODE.matchAll(/case\s+"([a-z0-9-]+)"\s*:\s*return\s*<\s*([A-Za-z_][A-Za-z0-9_]*)/g)].map(
+  [...CODE.matchAll(/case\s*"([a-z0-9-]+)"\s*:\s*return\s*<\s*([A-Za-z_][A-Za-z0-9_]*)/g)].map(
     (m) => [m[1], m[2]] as const,
   ),
 );

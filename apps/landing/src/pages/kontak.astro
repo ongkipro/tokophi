@@ -1,0 +1,115 @@
+---
+import Base from "../layouts/Base.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import { IDENTITY, HAS_CONTACT, MISSING_IDENTITY } from "../lib/identity";
+
+// Identity + how to reach a human. This page exists because the apex had NEITHER, which is what an
+// ads reviewer looks for first and what a buyer looks for when something goes wrong.
+// ⚠️ NO FORM here on purpose: a contact form would need a mailer, and this product has none —
+// submissions would go nowhere while looking like they had been received.
+const loginUrl = import.meta.env.PUBLIC_LOGIN_URL || "https://app.tokophi.com/login";
+
+const title = "Kontak — TokoΦ";
+const description =
+  "Identitas penyelenggara TokoΦ dan cara menghubungi kami — untuk pemilik toko maupun pembeli.";
+---
+
+<Base {title} {description} path="/kontak/">
+  <div class="shell">
+    <SiteHeader />
+
+    <main class="doc">
+      <h1>Kontak</h1>
+      <p class="doc-lede">
+        TokoΦ adalah platform toko online untuk penjual di Indonesia. Halaman ini memuat identitas
+        penyelenggaranya dan cara menghubungi kami.
+      </p>
+
+      {
+        MISSING_IDENTITY.length > 0 && (
+          <div class="notice" role="note">
+            <p>
+              <strong>Halaman ini belum lengkap.</strong> {MISSING_IDENTITY.join(", ")} belum
+              dicantumkan.
+            </p>
+            <p>
+              Kami memilih menyatakannya secara terbuka daripada memasang keterangan sementara yang
+              tidak bisa dibedakan dari keterangan sungguhan.
+            </p>
+          </div>
+        )
+      }
+
+      <h2>Penyelenggara</h2>
+      {
+        IDENTITY.legalName || IDENTITY.address ? (
+          <dl>
+            {IDENTITY.legalName && (
+              <>
+                <dt>Badan usaha</dt>
+                <dd>{IDENTITY.legalName}</dd>
+              </>
+            )}
+            {IDENTITY.address && (
+              <>
+                <dt>Alamat terdaftar</dt>
+                <dd>{IDENTITY.address}</dd>
+              </>
+            )}
+          </dl>
+        ) : (
+          <p>
+            Identitas badan usaha penyelenggara belum dicantumkan di halaman ini.
+          </p>
+        )
+      }
+
+      <h2>Cara menghubungi kami</h2>
+      {
+        HAS_CONTACT ? (
+          <dl>
+            {IDENTITY.email && (
+              <>
+                <dt>Email</dt>
+                <dd>
+                  <a href={`mailto:${IDENTITY.email}`}>{IDENTITY.email}</a>
+                </dd>
+              </>
+            )}
+            {IDENTITY.whatsapp && (
+              <>
+                <dt>WhatsApp</dt>
+                <dd>
+                  <a href={`https://wa.me/${IDENTITY.whatsapp}`}>+{IDENTITY.whatsapp}</a>
+                </dd>
+              </>
+            )}
+          </dl>
+        ) : (
+          <p>
+            Kanal kontak resmi belum dicantumkan di halaman ini. Kami sengaja tidak memasang alamat
+            atau nomor apa pun sebelum ada yang benar-benar membacanya.
+          </p>
+        )
+      }
+
+      <h2>Anda membeli di sebuah toko?</h2>
+      <p>
+        Pertanyaan tentang pesanan, pengiriman, atau pengembalian barang ditangani oleh
+        <strong> pemilik toko tempat Anda berbelanja</strong>, bukan oleh kami. Setiap toko
+        mencantumkan kanal kontaknya sendiri di halaman Kontak toko tersebut, dan nomor pesanan Anda
+        adalah rujukan tercepat. Kami memproses data pesanan atas nama toko — lihat
+        <a href="/privasi/"> Kebijakan Privasi</a>.
+      </p>
+
+      <h2>Anda pemilik toko?</h2>
+      <p>
+        Sebagian besar hal — pengaturan toko, langganan, pengiriman, pesanan — diatur langsung dari
+        panel Seller. <a href={loginUrl}>Masuk ke panel Seller</a>.
+      </p>
+    </main>
+
+    <SiteFooter />
+  </div>
+</Base>

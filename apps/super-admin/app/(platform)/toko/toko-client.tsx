@@ -57,7 +57,7 @@ import { type Store } from "@/lib/types";
 import { type HealthVerdict } from "@/lib/health-types";
 import { initials, StatusBadge, HealthBadge, SegmentBadge } from "@/components/bits";
 import { SEGMENT_META, type StoreSegment } from "@tokophi/lib/billing";
-import { impersonateStore, setStoreStatus, createStore, setStoreComped } from "@/lib/actions";
+import { impersonateStore, liftSuspension, createStore, setStoreComped } from "@/lib/actions";
 import { IDR, num } from "@tokophi/lib/format";
 
 type StatusFilter = "semua" | Store["status"];
@@ -155,11 +155,19 @@ export function TokoClient({
     });
   }
 
-  function toggleSuspend(s: Store) {
-    const next = s.status === "ditangguhkan" ? "active" : "suspended";
+  // Lifting needs no input, so it stays a one-click action here. SUSPENDING does — the reason is
+  // mandatory and is shown to the merchant — so this menu only offers it where it can be collected:
+  // the store detail (see the `Tangguhkan…` link below). A row menu that cannot ask for the reason
+  // must not pretend it can.
+  //
+  // The toast is whatever the action reports having WRITTEN, never a string chosen here: lifting a
+  // suspension on a store that is also unpaid leaves it read-only, and "Toko diaktifkan." was a lie
+  // in exactly that case.
+  function liftSuspend(s: Store) {
     startTransition(async () => {
-      await setStoreStatus(s.id, next);
-      toast.success(next === "suspended" ? `Toko “${s.name}” ditangguhkan.` : `Toko “${s.name}” diaktifkan.`);
+      const r = await liftSuspension(s.id);
+      if (!r.ok) { toast.error(r.error ?? "Gagal mencabut penangguhan."); return; }
+      toast.success(r.message!);
       router.refresh();
     });
   }
@@ -368,13 +376,13 @@ export function TokoClient({
                         <DropdownMenuItem disabled={pending} onClick={() => toggleVip(s)}>
                           <Crown className="size-4" /> {s.comped ? "Cabut VIP" : "Jadikan VIP (gratis)"}
                         </DropdownMenuItem>
-                        {s.status === "ditangguhkan" ? (
-                          <DropdownMenuItem disabled={pending} onClick={() => toggleSuspend(s)}>
-                            <Play className="size-4" /> Aktifkan
+                        {s.operatorSuspended ? (
+                          <DropdownMenuItem disabled={pending} onClick={() => liftSuspend(s)}>
+                            <Play className="size-4" /> Cabut penangguhan
                           </DropdownMenuItem>
                         ) : (
-                          <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => toggleSuspend(s)}>
-                            <Ban className="size-4" /> Tangguhkan
+                          <DropdownMenuItem variant="destructive" render={<Link href={`/toko/${s.id}`} />}>
+                            <Ban className="size-4" /> Tangguhkan…
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>

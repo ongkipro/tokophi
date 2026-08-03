@@ -18,7 +18,7 @@ import { num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { toast } from "sonner";
 import { deleteArticle } from "@/lib/actions/articles";
-import { BLOG_CATEGORIES, type BlogPost } from "@/lib/mock/store";
+import type { BlogPost } from "@/lib/mock/store";
 
 import { Card, CardContent } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
@@ -89,7 +89,9 @@ function RowActions({ id }: { id: string }) {
   );
 }
 
-export function BlogClient({ posts }: { posts: BlogPost[] }) {
+// `blogs` = this store's own `blogs.title` rows (lib/data/articles.ts `getBlogs`). It was the mock
+// constant BLOG_CATEGORIES, which is the seed's demo pair — correct on one store, wrong on all others.
+export function BlogClient({ posts, blogs }: { posts: BlogPost[]; blogs: string[] }) {
   const router = useRouter();
   const canWrite = useCan("content:write");
   const [search, setSearch] = React.useState("");
@@ -97,11 +99,11 @@ export function BlogClient({ posts }: { posts: BlogPost[] }) {
 
   const counts = React.useMemo(() => {
     const map: Record<string, number> = { all: posts.length };
-    for (const c of BLOG_CATEGORIES) {
+    for (const c of blogs) {
       map[c] = posts.filter((p) => p.blog === c).length;
     }
     return map;
-  }, []);
+  }, [posts, blogs]);
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -140,7 +142,7 @@ export function BlogClient({ posts }: { posts: BlogPost[] }) {
                 {num(counts.all)}
               </Badge>
             </TabsTrigger>
-            {BLOG_CATEGORIES.map((c) => (
+            {blogs.map((c) => (
               <TabsTrigger key={c} value={c}>
                 {c}
                 <Badge variant="secondary" className="ml-1 tabular-nums">

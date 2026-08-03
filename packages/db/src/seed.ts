@@ -1457,10 +1457,16 @@ async function main() {
     await db.insert(schema.ledgerEntries).values(uniqueLedger.slice(i, i + 2000)).onConflictDoNothing();
   }
 
-  // daily sales rollup (Dashboard/Analitik series)
-  await db.insert(schema.analyticsDaily).values(
-    DAILY.map((d) => ({ storeId: store.id, date: d.date, salesIdr: d.sales, orders: d.orders, visitors: d.visitors })),
-  );
+  // ⚠️ NO `analytics_daily` INSERT. The table is RETIRED (2026-08-03) — the Dashboard/Analitik
+  // series is now derived from `orders` + `analytics_events` at read time (`getDailyStats()` in
+  // apps/admin/lib/data/analytics.ts). This insert was the table's ONLY writer in the whole repo,
+  // which is exactly what was wrong with it: the six demo stores it did not cover showed an empty
+  // dashboard over real orders, and on the store it did cover the numbers froze on the day the
+  // seed ran while the orders kept arriving. Do not restore it — a second source of truth for
+  // money is how one screen ends up contradicting the screen beside it.
+  //
+  // `DAILY` itself stays: it is the generator for the funnel events below (visitors + orders per
+  // day), not a rollup anybody reads.
 
   // ---- storefront funnel events (analytics_events) ----
   // /analitik used to render the funnel + device split from HARDCODED constants. These rows exist

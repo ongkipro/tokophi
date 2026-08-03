@@ -42,14 +42,21 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const navCounts = { perluDikirim: perluDikirim ?? 0 };
   // The store's public storefront origin for "Kunjungi storefront" (same helper as the Domain card).
   const storefrontHost = storeSlug ? systemDomainFor(storeSlug) : "";
-  const billingBanner = bill && (bill.status === "past_due" || bill.status === "suspended") && (
+  // ⚠️ AN OPERATOR SUSPENSION IS NOT A BILL, AND MUST NOT BE DRESSED AS ONE. Telling a merchant we
+  // locked for abuse to "bayar Rp305.250 untuk mengaktifkan kembali" sends them to pay money that
+  // will not unlock anything — the payment lands, `currentPeriodEnd` moves, and the panel stays
+  // read-only, correctly. They get the reason and a route to support instead.
+  const operatorSuspended = !!bill?.operatorSuspended;
+  const billingBanner = bill && (operatorSuspended || bill.status === "past_due" || bill.status === "suspended") && (
     <Link
-      href="/akun/langganan"
+      href={operatorSuspended ? "/bantuan" : "/akun/langganan"}
       className={`block px-4 py-2 text-center text-sm font-medium ${bill.status === "suspended" ? "bg-destructive text-white" : "bg-orange-500 text-white"}`}
     >
-      {bill.status === "suspended"
-        ? `Langganan ditangguhkan — mode baca-saja. Bayar ${IDR(bill.nextAmount)} untuk mengaktifkan kembali →`
-        : `Tagihan ${IDR(bill.nextAmount)} menunggu — bayar dalam ${bill.daysLeft} hari sebelum toko ditangguhkan →`}
+      {operatorSuspended
+        ? `Toko ditangguhkan oleh TokoΦ — mode baca-saja.${bill.suspendedReason ? ` Alasan: ${bill.suspendedReason}.` : ""} Hubungi kami untuk menindaklanjuti →`
+        : bill.status === "suspended"
+          ? `Langganan ditangguhkan — mode baca-saja. Bayar ${IDR(bill.nextAmount)} untuk mengaktifkan kembali →`
+          : `Tagihan ${IDR(bill.nextAmount)} menunggu — bayar dalam ${bill.daysLeft} hari sebelum toko ditangguhkan →`}
     </Link>
   );
   return (

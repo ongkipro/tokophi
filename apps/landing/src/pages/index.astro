@@ -1,5 +1,8 @@
 ---
-import "../styles/global.css";
+import { BILLING } from "@tokophi/lib/billing";
+import Base from "../layouts/Base.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
 
 // Link targets are configurable at BUILD time (static output) via PUBLIC_* env vars.
 // Production values are the defaults; a dev build can point them at localhost:
@@ -9,14 +12,13 @@ import "../styles/global.css";
 const loginUrl = import.meta.env.PUBLIC_LOGIN_URL || "https://app.tokophi.com/login";
 const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
 
-const title = "TokoΦ — satu panel admin untuk toko online Anda";
+// ⚠️ "panel admin" is forbidden in user-visible copy (AGENTS.md — the merchant's surface is the
+// SELLER). This <title> is the most-indexed string on the platform and it propagates into og:,
+// twitter: and the JSON-LD `description`, so the wrong word here is the wrong word in five places.
+const title = "TokoΦ — satu panel untuk toko online Anda";
 const description =
-  "TokoΦ menyatukan produk, pesanan, pelanggan, pembayaran, dan pengiriman untuk penjual di Indonesia dalam satu panel admin. Bahasa Indonesia, rupiah, kurir dan pembayaran lokal. Situsnya sedang disusun — tokonya sudah bisa dibuat.";
+  "TokoΦ menyatukan produk, pesanan, pelanggan, pembayaran, dan pengiriman untuk penjual di Indonesia dalam satu panel. Bahasa Indonesia, rupiah, kurir dan pembayaran lokal — tanpa mendaftar akun kurir atau pembayaran sendiri.";
 const url = "https://tokophi.com/";
-const year = new Date().getFullYear();
-
-// Absolute URL — og:image is one of the few tags crawlers will NOT resolve relatively.
-// WhatsApp in particular drops the preview entirely on a relative path.
 const ogImage = new URL("/og.png", url).href;
 
 // Structured data. Deliberately NO `offers`/price: the plan is priced ex-PPN (the merchant pays
@@ -56,60 +58,16 @@ const jsonLd = {
 };
 ---
 
-<html lang="id">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="canonical" href={url} />
-    <title>{title}</title>
-    <meta name="description" content={description} />
-    <meta name="generator" content={Astro.generator} />
-    <meta name="theme-color" content="#fbfbfe" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#080913" media="(prefers-color-scheme: dark)" />
+<Base {title} {description} path="/" {jsonLd}>
+  <div class="shell shell-home">
+    <SiteHeader class="rise" />
 
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="TokoΦ" />
-    <meta property="og:locale" content="id_ID" />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
-    <meta property="og:url" content={url} />
-    <meta property="og:image" content={ogImage} />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:alt" content="TokoΦ — seluruh toko Anda, dalam satu panel." />
-
-    <!-- summary_large_image, not summary: with a 1200x630 card the small variant crops it to a square. -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content={title} />
-    <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content={ogImage} />
-    <meta name="twitter:image:alt" content="TokoΦ — seluruh toko Anda, dalam satu panel." />
-
-    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} is:inline />
-  </head>
-
-  <body>
-    <!-- One screen, always: the shell owns the viewport height and never scrolls. -->
-    <div class="shell">
-      <header class="rise shell-head">
-        <a href="/" class="wordmark" aria-label="TokoΦ — beranda">
-          <span class="wordmark-tile" aria-hidden="true">
-            <svg viewBox="0 0 32 32" width="32" height="32" fill="none">
-              <ellipse cx="16" cy="16" rx="7.4" ry="9" stroke="currentColor" stroke-width="2.4"></ellipse>
-              <rect x="14.8" y="3.6" width="2.4" height="24.8" rx="1.2" fill="currentColor"></rect>
-            </svg>
-          </span>
-          <span class="wordmark-text">TokoΦ</span>
-        </a>
-      </header>
-
-      <main class="hero">
+    <main class="home-main">
+      <div class="hero">
         <div class="hero-copy">
           <p class="eyebrow rise pill" style="animation-delay:60ms">
-            <span class="beacon dot" aria-hidden="true"></span>
-            Segera hadir
+            <span class="dot" aria-hidden="true"></span>
+            Untuk penjual di Indonesia
           </p>
 
           <h1 class="display rise" style="animation-delay:120ms">
@@ -118,8 +76,8 @@ const jsonLd = {
 
           <p class="lede rise" style="animation-delay:180ms">
             <strong>TokoΦ</strong> menyatukan produk, pesanan, pelanggan, pembayaran, dan pengiriman
-            untuk penjual di Indonesia. Situsnya masih kami susun — panel adminnya kami kerjakan
-            lebih dulu, dan sudah bisa dipakai.
+            untuk penjual di Indonesia. Buat toko, susun katalognya, dan urus semuanya dari satu
+            tempat.
           </p>
 
           <div class="cta rise" style="animation-delay:240ms">
@@ -127,8 +85,10 @@ const jsonLd = {
             <a href={loginUrl} class="btn btn-ghost">Masuk</a>
           </div>
 
+          {/* The trial length comes from @tokophi/lib/billing, the same constant the Seller panel
+              and the billing cron read — never typed here, where it would drift the day it changes. */}
           <p class="micro rise" style="animation-delay:300ms">
-            Gratis tiga hari untuk mulai. Sudah punya toko di TokoΦ? Langsung masuk.
+            Gratis {BILLING.TRIAL_DAYS} hari untuk mulai. Sudah punya toko di TokoΦ? Langsung masuk.
           </p>
         </div>
 
@@ -153,27 +113,33 @@ const jsonLd = {
             </g>
           </svg>
         </div>
-      </main>
+      </div>
 
+      <!-- Inside <main> on purpose: these three were siblings of it, so landmark navigation
+           ("jump to main content") skipped the only place the page says what it does. -->
       <ul class="facts rise" style="animation-delay:360ms">
         <li>
           <h2 class="fact-label">Satu panel</h2>
           <p>Produk, stok, pesanan, pelanggan, diskon, sampai laporan. Tanpa aplikasi tambahan.</p>
         </li>
         <li>
+          {/* NOT "tinggal diaktifkan": payment channels are a PLATFORM decision (ADR 0004) and the
+              merchant has no switch for them at all. What is true is the opposite and better —
+              nothing to register, nothing to configure. E-wallet is off the list on purpose: only
+              QRIS + virtual account are enabled channels (packages/db/src/seed.ts). */}
           <h2 class="fact-label">Bayar &amp; kirim</h2>
-          <p>QRIS, e-wallet, transfer bank, COD, dan kurir dalam negeri. Tinggal diaktifkan.</p>
+          <p>
+            QRIS, transfer bank, COD, dan kurir dalam negeri — disediakan dan dikelola TokoΦ, tanpa
+            akun sendiri.
+          </p>
         </li>
         <li>
           <h2 class="fact-label">Bahasa kita</h2>
-          <p>Antarmuka Bahasa Indonesia, rupiah tanpa sen, pajak sudah ikut dihitung.</p>
+          <p>Antarmuka Bahasa Indonesia, rupiah tanpa sen, tanggal dan angka dalam format lokal.</p>
         </li>
       </ul>
+    </main>
 
-      <footer class="rise shell-foot" style="animation-delay:420ms">
-        <p>&copy; {year} TokoΦ</p>
-        <p>tokophi.com</p>
-      </footer>
-    </div>
-  </body>
-</html>
+    <SiteFooter class="rise" />
+  </div>
+</Base>

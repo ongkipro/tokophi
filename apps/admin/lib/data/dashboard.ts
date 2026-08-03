@@ -1,9 +1,9 @@
 // Pure derivation utils for Dashboard/Analitik. The data (daily series, products, orders,
 // activities) is fetched from the DB in the server wrapper and passed in — no storage access
 // here, so these stay callable client-side (the range switcher re-derives on the client).
-import { hourlyFor, type DayPoint, type Product, type Order, type Activity, type Review } from "@/lib/mock/store";
+import type { DayPoint, Product, Order, Activity, Review } from "@/lib/mock/store";
 import type { FunnelDay, DeviceDay } from "@/lib/data/funnel";
-import type { ChannelDay, ProductSaleDay } from "@/lib/data/analytics";
+import type { ChannelDay, HourPoint, ProductSaleDay } from "@/lib/data/analytics";
 import type { CourierReturns } from "@/lib/data/returns";
 import type { TicketRow } from "@/lib/data/support";
 
@@ -22,9 +22,27 @@ export const rangeLabel = (k: RangeKey) => RANGE_OPTIONS.find((r) => r.key === k
 
 type Resolved = { days: DayPoint[]; prev: DayPoint[]; granularity: "hour" | "day"; compardeLabel: string };
 
+/** `"2026-08" + (-1)` → `"2026-07"`. Pure string/int arithmetic — no Date, no timezone. */
+export function shiftMonth(ym: string, by: number): string {
+  if (!/^\d{4}-\d{2}$/.test(ym)) return "";
+  const [y, m] = ym.split("-").map(Number);
+  const t = y * 12 + (m - 1) + by;
+  return `${String(Math.floor(t / 12)).padStart(4, "0")}-${String((t % 12) + 1).padStart(2, "0")}`;
+}
+
 function resolve(all: DayPoint[], key: RangeKey): Resolved {
   const n = all.length;
   const slice = (a: number, b: number) => all.slice(Math.max(0, a), b);
+  // ⚠️ THE MONTH COMES FROM THE DATA, NEVER FROM A LITERAL. This was
+  //     case "month": all.filter(d => d.date.startsWith("2026-06"))   // "Bulan Lalu" = "2026-05"
+  // — the seed's frame, frozen. Verified in a browser on 3 August 2026: choosing "Bulan Ini"
+  // showed JUNE, and it drove all five KPIs, the chart and six derived cards on `/` and `/analitik`.
+  // `getDailyStats()` returns a dense series ending on the server's today, so the last row's month
+  // IS this month — and because it is a value that arrived as a prop, SSR and the client agree
+  // (a `new Date()` here would be the hydration mismatch this repo's conventions forbid).
+  // An empty series yields an empty month, not EVERY date (`"".startsWith` matches all).
+  const thisMonth = all[n - 1]?.date.slice(0, 7) ?? "";
+  const inMonth = (ym: string) => (ym ? all.filter((d) => d.date.startsWith(ym)) : []);
   switch (key) {
     case "today":
       return { days: slice(n - 1, n), prev: slice(n - 2, n - 1), granularity: "hour", compardeLabel: "kemarin" };
@@ -35,9 +53,9 @@ function resolve(all: DayPoint[], key: RangeKey): Resolved {
     case "30d":
       return { days: slice(n - 30, n), prev: slice(n - 60, n - 30), granularity: "day", compardeLabel: "30 hari sebelumnya" };
     case "month":
-      return { days: all.filter((d) => d.date.startsWith("2026-06")), prev: all.filter((d) => d.date.startsWith("2026-05")), granularity: "day", compardeLabel: "bulan lalu" };
+      return { days: inMonth(thisMonth), prev: inMonth(shiftMonth(thisMonth, -1)), granularity: "day", compardeLabel: "bulan lalu" };
     case "lastmonth":
-      return { days: all.filter((d) => d.date.startsWith("2026-05")), prev: all.filter((d) => d.date.startsWith("2026-04")), granularity: "day", compardeLabel: "bulan sebelumnya" };
+      return { days: inMonth(shiftMonth(thisMonth, -1)), prev: inMonth(shiftMonth(thisMonth, -2)), granularity: "day", compardeLabel: "bulan sebelumnya" };
   }
 }
 
@@ -76,14 +94,35 @@ export function getSummary(all: DayPoint[], key: RangeKey): Summary {
 
 export type SeriesPoint = { label: string; sales: number; prev: number; orders: number };
 
-export function getSeries(all: DayPoint[], key: RangeKey): { points: SeriesPoint[]; granularity: "hour" | "day" } {
+/**
+ * @param hours real intraday rows (`getHourlyStats()`), used by the "Hari ini"/"Kemarin" ranges.
+ *
+ * ⚠️ THE INTRADAY CHART IS NOT SYNTHESIZED ANY MORE. It used to call `hourlyFor(days[0])` from
+ * `lib/mock/store.ts`, which took the day's real total and spread it over 24 hours on a hard-coded
+ * weight curve plus seeded jitter — a shape nobody had measured, drawn on a page whose comment says
+ * "nothing on this page is synthesized" from a file whose header says "no storage access here".
+ * `hours` comes from `orders.placed_at`; the 24 buckets sum to exactly the day's own total because
+ * both aggregate the same rows with the same revenue expression and the same time zone.
+ * With no rows the bars are ZERO, which is the truth, not a curve.
+ */
+export function getSeries(all: DayPoint[], key: RangeKey, hours: HourPoint[] = []): { points: SeriesPoint[]; granularity: "hour" | "day" } {
   const { days, prev, granularity } = resolve(all, key);
   if (granularity === "hour") {
-    const cur = hourlyFor(days[0]);
-    const pv = prev.length ? hourlyFor(prev[0]) : cur.map(() => ({ sales: 0 }));
+    const bucket = (date: string | undefined) => {
+      const out = Array.from({ length: 24 }, () => ({ sales: 0, orders: 0 }));
+      if (!date) return out;
+      for (const h of hours) {
+        if (h.date !== date || h.hour < 0 || h.hour > 23) continue;
+        out[h.hour].sales += h.sales;
+        out[h.hour].orders += h.orders;
+      }
+      return out;
+    };
+    const cur = bucket(days[0]?.date);
+    const pv = bucket(prev[0]?.date);
     return {
       granularity,
-      points: cur.map((h, i) => ({ label: h.label, sales: h.sales, prev: pv[i]?.sales ?? 0, orders: h.orders })),
+      points: cur.map((h, i) => ({ label: `${String(i).padStart(2, "0")}:00`, sales: h.sales, prev: pv[i].sales, orders: h.orders })),
     };
   }
   const fmt = (d: string) => new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
@@ -142,8 +181,8 @@ export function getActivities(activities: Activity[], limit = 8) {
 // Event-derived cards (analytics_events, via lib/data/funnel.ts). Everything below is a
 // COUNT of rows for the days inside the selected range — so the range switcher actually
 // moves the numbers, and the funnel's top/bottom equal the Pengunjung/Pesanan KPIs
-// (the seed writes one `visit` event per counted visitor and one `purchase` per counted
-// order, so `visit events == analytics_daily.visitors` and `purchase == analytics_daily.orders`).
+// (`getDailyStats().visitors` counts the very same `visit` rows, so the funnel's top step and
+// the Pengunjung KPI cannot drift apart).
 //
 // A store with NO events (every store created via /daftar — the seed only runs on an empty DB)
 // gets `null` back, and the UI must render an honest "belum ada data" state.
@@ -302,14 +341,20 @@ export type MoneyTile = { key: RangeKey; label: string; value: number; delta: nu
  * Fixed ranges on purpose (a seller centre always shows all three at once); they do NOT follow the
  * range switcher, which drives the chart below. Built on `resolve()`/`getSummary()` — no new maths.
  *
- * ⚠️ SOURCE = `analytics_daily`, the same table the chart and /analitik read, so the page can never
- * contradict itself. But `analytics_daily` DOES NOT reconcile with the `orders` table: for June the
- * rollup says Rp117.9jt / 646 orders while `orders` holds Rp8.4jt / 23 rows for the same window.
- * The rollup is seeded independently of the order rows — it is real data from a real table, but it
- * is NOT a projection of the orders a merchant can open. Fixing that belongs in packages/db (make
- * the seed derive analytics_daily FROM orders, or make the rollup a view). Until then, every money
- * figure on this page reads from the rollup and "Uang tertahan" (below) reads from `orders` — the
- * two answer different questions, so they do not visibly clash, but do not add them together.
+ * ⚠️ SOURCE = `getDailyStats()`, which is now DERIVED FROM `orders` (non-cancelled,
+ * `total_idr - tax_idr`, bucketed in WIB). So these tiles, the chart, /analitik and "Uang tertahan"
+ * below are all projections of the same rows a merchant can open in Pesanan.
+ *
+ * The paragraph that used to sit here said the rollup and `orders` disagreed but "do not visibly
+ * clash". That conclusion was FALSE, and it was the reassurance that let the bug live: on
+ * 2026-08-03 this strip read "Penjualan hari ini Rp0 · −100,0% vs kemarin" directly above a
+ * "Pesanan Terbaru" list showing four orders placed that morning (Rp1.571.028) — one screen,
+ * two answers, in adjacent cards. It clashed because `analytics_daily` had no writer outside the
+ * seed. It is retired; see the header of `lib/data/analytics.ts`.
+ *
+ * "Uang tertahan" still answers a different QUESTION (rupiah in unshipped orders, `baru` +
+ * `diproses`, regardless of date) — so still do not add it to a sales tile. But both now count the
+ * same table, so a discrepancy is now a real discrepancy and not two universes.
  */
 export function getMoneyTiles(all: DayPoint[]): MoneyTile[] {
   const tiles: { key: RangeKey; label: string }[] = [

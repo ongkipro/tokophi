@@ -20,7 +20,7 @@ import {
   getVisitsKpi, getConversionKpi,
   getActionQueue, getStuckMoney, getMoneyTiles, getReturnSummary,
 } from "@/lib/data/dashboard";
-import type { ChannelDay, ProductSaleDay } from "@/lib/data/analytics";
+import type { ChannelDay, HourPoint, ProductSaleDay } from "@/lib/data/analytics";
 import type { FunnelDay } from "@/lib/data/funnel";
 import type { CourierReturns } from "@/lib/data/returns";
 import type { TicketRow } from "@/lib/data/support";
@@ -30,6 +30,7 @@ import { exportCsv } from "@/lib/csv";
 
 export function DashboardClient({
   days,
+  hours,
   products,
   orders,
   reviews,
@@ -43,6 +44,7 @@ export function DashboardClient({
   ownerName,
 }: {
   days: DayPoint[];
+  hours: HourPoint[];
   products: Product[];
   orders: Order[];
   reviews: Review[];
@@ -57,7 +59,7 @@ export function DashboardClient({
 }) {
   const [range, setRange] = useState<RangeKey>("30d");
   const s = getSummary(days, range);
-  const { points } = getSeries(days, range);
+  const { points } = getSeries(days, range, hours);
 
   // What has to be done RIGHT NOW + where the money is stuck. Counts only — every one of them is a
   // filter over rows the server already fetched, so each traces back to an existing query.

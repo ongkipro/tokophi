@@ -1,9 +1,11 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { scryptSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { tempPassword, hashPassword } from "./password";
+import { codeOnly } from "../../../test/source-code";
 
 // This is the credential handed to a STORE OWNER and to an INVITED OPERATOR. The account it opens
 // reads every buyer's name, WhatsApp number and delivery address, and reaches the payout actions.
@@ -41,32 +43,84 @@ const DECLARES_MINT = new RegExp(String.raw`(?:export\s+)?(?:const|let|var|funct
 const CALLS_MINT = new RegExp(String.raw`\b${MINT}\s*\(`);
 const IMPORTS_MINT = new RegExp(String.raw`import\s*\{[^}]*\b${MINT}\b[^}]*\}\s*from\s*"@tokophi/lib/password"`);
 const IMPORTS_MINT_LOCALLY = new RegExp(String.raw`import\s*\{[^}]*\b${MINT}\b[^}]*\}\s*from\s*"\./password"`);
+/** `export { tempPassword } from "…"` — a SECOND import path for the one name. */
+const REEXPORTS_MINT = new RegExp(String.raw`export\s*\{[^}]*\b${MINT}\b[^}]*\}\s*from\b`);
+/** `{ tempPassword: () => … }` — the mint as an object member, which `\s*\(` cannot see past the colon. */
+const MINT_AS_PROPERTY = new RegExp(
+  String.raw`\b${MINT}\s*:\s*(?:async\s+)?(?:function\b|\(|[A-Za-z_$][\w$]*\s*=>)`,
+);
 const HASH = "hashPassword";
 const DECLARES_HASH = new RegExp(String.raw`(?:export\s+)?(?:const|let|var|function)\s+${HASH}\b`);
-/** A credential-shaped binding fed by `randomBytes` — the mint written out under a different name. */
-const HAND_ROLLED_MINT = /\b(?:pw|pass|passwd|password|cred|credential|temp)\w*\s*(?::\s*string\s*)?=\s*[^;\n]*\brandomBytes\s*\(/i;
+/**
+ * A credential-shaped binding fed by a random source — the mint written out under a different name.
+ *
+ * The NAME half is what keeps this specific, and the SOURCE half is deliberately allowed to be broad
+ * because of it: `Math.random()` is in the list because `const pw = Math.random().toString(36)` is the
+ * classic weak mint, and nothing named `jitter`, `seed` or `delay` can reach this pattern. Flagging
+ * every `Math.random()` in the repo is the version that gets switched off — see the note on ② below.
+ */
+const HAND_ROLLED_MINT =
+  /\b(?:pw|pass|passwd|password|cred|credential|temp)\w*\s*(?::\s*string\s*)?=\s*[^;]*?\b(?:randomBytes|Math\s*\.\s*random)\s*\(/i;
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 // Dot-directories are skipped wholesale: `.git`, `.astro`, `.next` — and `.claude/worktrees/*`, which
 // on the main checkout holds entire second copies of this repo (another branch's mint is not ours).
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage"]);
-const SOURCE = /\.(?:ts|tsx|mts|cts|astro|mjs|js|jsx)$/;
+const SOURCE = /\.(?:ts|tsx|mts|cts|cjs|astro|mjs|js|jsx)$/;
 
-/** Every source file in the repo, checked by `inspect`. No list to keep in sync — that was the bug. */
-function scanRepo(inspect: (rel: string, src: string) => string[]): string[] {
+// ⚠️ EVERY EXTENSION THE REPO HOLDS IS EITHER SCANNED OR NAMED HERE AS INERT. The list above had
+// `mts` and `cts` — neither of which any file in this repo uses — and not `cjs`, which is a module
+// format Node executes. That is a blind spot of exactly the kind this file's own history is made of:
+// a mint in an unlisted file type is invisible, silently, forever. So the extensions are CENSUSED
+// instead of trusted: a file type nobody has classified turns the suite red with its own name in the
+// message, and whoever added it decides which side it belongs on.
+//
+// Extension-LESS files are deliberately not scanned and the census ignores them. The four in this repo
+// are Dockerfiles, and more to the point Node cannot import an extension-less file as a module from
+// application code — so such a file cannot BE the second mint an app reaches. A standalone ops script
+// that mints a credential is a real risk and a different guard; it is not this one.
+const INERT_EXTENSIONS = new Set([
+  ".webp", ".png", ".svg", ".woff2", ".csv", ".txt", // assets
+  ".json", ".sql", ".md", ".css", ".sh", ".yaml", ".yml", // config, migrations, prose, shell
+]);
+
+/**
+ * Every file GIT TRACKS, minus the skipped directories.
+ *
+ * ⚠️ This used to walk the filesystem, and that made the extension census go RED for anyone who had
+ * run `tsc` before `vitest`: `*.tsbuildinfo` is gitignored, is a build artefact, and appeared in an
+ * ordinary workflow. An alarm that fires on a normal working day is the alarm everybody learns to
+ * scroll past — `verify-rls` sat red for weeks here and two cross-tenant leaks shipped past it.
+ *
+ * Tracked files are also the honest scope: the mint scanner asks "can a second mint be IN THIS REPO",
+ * and something git does not carry is not in the repo. A build output, a scratch probe or another
+ * agent's untracked worktree file is not a shipping credential path.
+ */
+function repoFiles(): string[] {
+  const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
+    .split("\0")
+    .filter(Boolean);
+  return tracked
+    .filter((rel) => !rel.split("/").some((seg) => seg.startsWith(".") || SKIP_DIRS.has(seg)))
+    .map((rel) => path.join(REPO_ROOT, rel));
+}
+
+/**
+ * Every source file in the repo, checked by `inspect`. No list to keep in sync — that was the bug.
+ *
+ * ⚠️ `inspect` receives the file's CODE (`test/source-code.ts`), never its text. A guard that greps
+ * characters cannot tell a mint from a comment describing one, and this repo has now been bitten by
+ * that in three separate guards. Here it runs in the false-RED direction — the notes above explaining
+ * the 24-bit mint name the very patterns below — and a scanner that reports itself is a scanner
+ * somebody deletes. Same reason the patterns are assembled from `MINT` rather than written out.
+ */
+let sources: Array<[string, string]> | null = null; // lexed once — two scans below, ~1 s each otherwise
+function scanRepo(inspect: (rel: string, code: string) => string[]): string[] {
+  sources ??= repoFiles()
+    .filter((f) => SOURCE.test(f))
+    .map((f) => [path.relative(REPO_ROOT, f), codeOnly(readFileSync(f, "utf8"))]);
   const out: string[] = [];
-  const walk = (dir: string) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".") || SKIP_DIRS.has(entry.name)) continue;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.isFile() && SOURCE.test(entry.name)) {
-        const rel = path.relative(REPO_ROOT, full);
-        for (const problem of inspect(rel, readFileSync(full, "utf8"))) out.push(`${rel}: ${problem}`);
-      }
-    }
-  };
-  walk(REPO_ROOT);
+  for (const [rel, code] of sources) for (const problem of inspect(rel, code)) out.push(`${rel}: ${problem}`);
   return out.sort();
 }
 
@@ -133,11 +187,32 @@ describe("the temp password is expensive to guess", () => {
       if (rel !== MINT_MODULE) {
         // ① The name. A second declaration of it, anywhere, whatever it is worth in bits.
         if (DECLARES_MINT.test(src)) found.push(`declares its own ${MINT}() — there must be exactly one`);
-        // ② The shape, minted under another name: a credential-ish binding fed by `randomBytes`.
-        //    Deliberately NOT "any randomBytes": a salt (`hashPassword`), a GCM iv (`lib/crypto.ts`),
-        //    an OAuth nonce, a TOTP secret and a domain-verification token are all legitimate and
-        //    none of them is a login credential. A guard that cries wolf on those gets switched off.
-        if (HAND_ROLLED_MINT.test(src)) found.push("mints a password from randomBytes() locally — import the shared mint instead");
+        // ①b The same thing as an object MEMBER. `{ tempPassword: () => randomBytes(3)… }` declares
+        //    no binding and is not called with `(` next to the name, so ① and ③ both walk past it,
+        //    and `obj.tempPassword()` reads at every call site exactly like the real one.
+        if (MINT_AS_PROPERTY.test(src)) found.push(`defines ${MINT} as an object member — there must be exactly one`);
+        // ①c A re-export. It declares nothing, so ① is blind to it, and it hands the ONE name a
+        //    SECOND import path — including from a module outside this repo, which no file-walking
+        //    scanner can ever look inside. `hashPassword` is deliberately NOT policed this way:
+        //    `apps/admin/lib/auth.ts` re-exports it so `@/lib/auth` keeps resolving for its callers,
+        //    and a re-export of the one implementation is not a copy. The mint is stricter because
+        //    a second import path is how a second mint gets adopted without anyone editing a caller.
+        if (REEXPORTS_MINT.test(src)) found.push(`re-exports ${MINT} — callers import it from "@tokophi/lib/password"`);
+        // ② The shape, minted under another name: a credential-ish binding fed by a random source.
+        //    Deliberately NOT "any randomBytes", and NOT "any Math.random()": a salt
+        //    (`hashPassword`), a GCM iv (`lib/crypto.ts`), an OAuth nonce, a TOTP secret and a
+        //    domain-verification token are all legitimate, and `Math.random()` appears in jitter,
+        //    sampling and demo data. A guard that cries wolf on those gets switched off — this repo
+        //    has already paid that bill once, with `verify-rls` sitting red for weeks while two
+        //    cross-tenant leaks shipped past it. The BINDING NAME is the filter that keeps this
+        //    specific enough to be believed; the random source can therefore be broad.
+        //    ⚠️ Known and accepted limit: a mint bound to a name with no credential word in it
+        //    (`genSecret`, `ownerLoginSecret`) is NOT caught here, and no name list can fix that —
+        //    the next one would just be spelled differently. The durable guard for that shape is at
+        //    the SINK, not the source: what `hashPassword()` is fed. `apps/super-admin/lib/
+        //    no-fixed-password.test.ts` already asserts exactly that, and generalising it beyond the
+        //    one file it names is the open work.
+        if (HAND_ROLLED_MINT.test(src)) found.push("mints a password from a random source locally — import the shared mint instead");
       }
       // ③ Every CALLER reaches the one module. `@tokophi/lib/password` from an app; the relative
       //    path is only legal inside packages/lib, where the specifier does not exist yet.
@@ -170,5 +245,25 @@ describe("the temp password is expensive to guess", () => {
     );
 
     expect(violations, `a SECOND password hasher exists:\n  ${violations.join("\n  ")}`).toEqual([]);
+  });
+
+  it("scans every file type the repo actually holds", () => {
+    // The scanner above is only as wide as `SOURCE`, and nothing anywhere said what `SOURCE` was
+    // meant to cover. It listed `mts` and `cts` — no file in this repo uses either — and omitted
+    // `cjs`, which Node executes. An unlisted extension is a mint the scanner cannot see, and it
+    // fails SILENTLY, which is the property every defect in this file's history has shared.
+    const unclassified = [
+      ...new Set(
+        repoFiles()
+          .map((f) => path.extname(f))
+          .filter((e) => e !== "" && !SOURCE.test(`x${e}`) && !INERT_EXTENSIONS.has(e)),
+      ),
+    ].sort();
+
+    expect(
+      unclassified,
+      `unclassified file type(s): ${unclassified.join(", ")}. Add each to SOURCE (the mint scanner ` +
+        `must read it) or to INERT_EXTENSIONS (it cannot hold JavaScript).`,
+    ).toEqual([]);
   });
 });

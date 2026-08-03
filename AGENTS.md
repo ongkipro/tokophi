@@ -130,6 +130,43 @@ as the `verify-rls` incident below: a gate that does not run is not a gate.
   failure; use it before a PR.
 - An explicit `TEST_DATABASE_URL` still wins over the derived one.
 
+### ⚠️ A guard reads a file's CODE, never its TEXT — `test/source-code.ts`
+
+Eight test files in this repo read source with `readFileSync`, and they do it for an honest reason:
+when the bug IS the markup and the fix is the **absence** of markup, there is nothing to import and
+call, and no type-checker has an opinion. What is never honest is matching the **characters**, because
+a comment is text, and code inside a string is text:
+
+```js
+// case "lookbook": return <Lookbook />        ← a comment. Renders nothing.
+const doc = `case "lookbook": return <Lookbook />`;  ← a string. Renders nothing.
+case "lookbook": return <Lookbook />;         ← code.
+```
+
+**This defect has now been found FOUR times, in four different guards, one of them introduced by the
+very commit that fixed it elsewhere.** Each was patched by hand, differently, and every hand-rolled
+"ignore the comments" had a different hole — a line-prefix filter that missed the checkout file
+entirely, a `{/* */}`+`<!-- -->` stripper that did not know about `//`, and a lexer walk that joined
+`getTokenText()` and so re-injected every string's raw source. So the rule is a shared module now:
+
+| use | for | it does |
+|---|---|---|
+| `codeOnly(src)` | **the default** — any claim about what a file executes | comments gone, every literal's contents inert |
+| `textWithoutComments(src)` | only a claim about MARKUP the file can emit | comments gone, literals kept verbatim |
+
+Both run the TypeScript **scanner** (a comment is trivia, so there is nothing to strip and nothing to
+get wrong) and join tokens with single spaces — **so write assertions whitespace-tolerantly**
+(`d\s*\.\s*variant`), or compare against `codeOnly("<the snippet>")`, which normalises both sides.
+Not the AST: the files that need this are `.astro`, which is not a TypeScript program. `typescript`
+is already a dependency, so this costs no install.
+
+⚠️ `textWithoutComments` is for `h1-floor.test.ts` and its shape only — markup concatenated into a JS
+string and assigned to `innerHTML` really is emitted (the search palette's `<img>` exists that way and
+nothing else). Reach for `codeOnly` unless you can say why the string contents count.
+⚠️ **`<!-- … -->` is NOT a JavaScript comment and neither function removes it** — and that is correct,
+because an `.astro` file's HTML comments are served to the browser (`no-published-credentials.test.ts`
+depends on exactly that). Write section comments as `{/* … */}`.
+
 ## Database (local Postgres — `@tokophi/db`)
 Local backend fully wired behind the data layer (all 3 surfaces read + all editors write; auth+RBAC+RLS; real variants). Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (schema mirrors `~/Documents/Development/tokophi/docs/SCHEMA.md`: **54 tables**, snake_case, money = bigint IDR). Single-tenant MVP: one store "Batik Nusantara" (ADR 0008). Auth (local, JWT) + RBAC + RLS are done locally; Storage (self-hosted MinIO/S3) comes with the VPS. **RLS** (migration 0012, extended by 0032 `page_templates`, 0035 `support_*`, 0036 `media`+`payments`, **0058 `stores`**) is enabled on **45 of the 46 store-scoped tables** AND **enforces at runtime**: the admin runs every read (`lib/data/*` via `withCurrentTenant`) + write (`lib/actions/*` via `withTenant`) inside a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`, so tenant queries execute as the non-owner role with policies applied. `npm run verify-rls -w @tokophi/db` derives the store-scoped set from the catalog (every table with a `store_id`) and FAILS if one lacks RLS — **45/46 as of 2026-07-17, and the ONE remaining exception is `platform_activity`** (the platform's own audit log: cross-tenant by design, written before a session exists). `media` + `payments` were retrofitted in 0036; **this doc claimed 36/39 with 3 exceptions long after that was false** — check `npm run verify-rls`, not this sentence. ⚠️ **`stores` is NOT in that count and never could be**: it is keyed by `id`, has no `store_id`, so the catalog query cannot see it — that blind spot leaked two merchants' data across tenants until `0058` put an `id`-based policy on it. Auth (`lib/auth.ts`, pre-session `store_users` read), super-admin (cross-tenant), and the storefront (`Host`-resolved read-only catalog) stay on the owner connection. On the VPS this becomes PostgREST connecting as `tokophi_app` with the JWT `store_id` claim feeding the GUC. **RBAC** (app-layer, `lib/rbac.ts`) is enforced too.
 ```bash
@@ -240,8 +277,17 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
 
 ## Billing & super-admin control (single plan)
 - **One plan "TokoΦ"**, all features. `@tokophi/lib/billing`: 3-day trial → **Rp50rb** first month → **Rp275rb/mo** (annual Rp2.7jt). Prices are the **DPP (ex-tax)**; the merchant pays **base + PPN 11%** (`withPpn()`/`baseFromTotal()`) — invoices store the PPN-inclusive total, faktur itemizes DPP+PPN. **Do NOT reintroduce plan tiers** (Pemula/Bisnis/Skala are legacy, unused).
-- **Store lifecycle segments** (`storeSegment()`): `trial → first_month → regular → vip`. **VIP = `stores.comped`** — super-admin bypasses billing (free, always active, never billed/suspended; admin `getBilling` + billing cron honor `comped`). Segments drive the super-admin Toko catalog (4 tabs).
-- **Super-admin per-store control** (`apps/super-admin/lib/actions.ts`): comp 1 month, extend trial, VIP toggle, reset owner/user password (scrypt), manage store users, suspend/activate — every action audit-logged to `platform_activity` (with `store_id` + `admin` kind).
+- **Store lifecycle segments** (`storeSegment()`): `trial → first_month → regular → vip`. **VIP = `stores.comped`** — super-admin bypasses billing (free, always active, never billed; admin `getBilling` + billing cron honor `comped`). Segments drive the super-admin Toko catalog (4 tabs). ⚠️ **VIP is a BILLING bypass, not an abuse shield** — an operator suspension outranks it (below).
+- 🔴 **AN OPERATOR SUSPENSION IS A SEPARATE FACT FROM BILLING — `stores.suspended_at` (0086).** The Suspend button did nothing for months and said it had worked: `setStoreStatus` wrote `stores.status` + an audit row reading *"Toko ditangguhkan oleh platform"*, but the lockout is decided by `computeBilling()`, which read only `comped`/`currentPeriodEnd`/`trialEndsAt` and **never `stores.status`**. The suspended merchant kept a fully writable panel (measured: a real product save persisted), and the nightly billing cron rewrote the column back within 24 h. **There was no working way to suspend a store.**
+  - The two must **coexist**, which is why one column could not carry both: a store suspended for **abuse** that then pays must stay suspended; a store suspended for **non-payment** must reactivate on payment with no operator involved. `computeBilling` now returns **`status`** (effective — billing with the operator override on top), **`billingStatus`** (the subscription alone) and **`operatorSuspended`**.
+  - **`billingStatus` is what the MONEY reads.** The cron's renewal-invoice branch and `getRiskQueue`'s lifecycle reasons both use it — keying them on the effective status would bill a paid-up store a month early for a lock that has nothing to do with money, and park every deliberately-locked store at severity 100 on the operator's worklist forever.
+  - **`StoreBillingRow.suspendedAt` is REQUIRED, not optional, on purpose**: a read path that forgets to `select` it silently unsuspends every store, and there is no runtime symptom. `tsc` is the guard — it found a 4th read site (`getRiskQueue`) that a manual grep had missed.
+  - **Never derive "did WE suspend this?" from the status badge.** `store.status === "ditangguhkan"` is *also* what an unpaid store reads past its grace period; deriving the button from it is what made "Aktifkan" flip a column, refresh, and come back reading "Aktifkan" again. Use `operatorSuspended`.
+  - **Lifting restores the BILLING state and nothing more.** A store that was also overdue stays read-only, and both the toast and the audit line say so rather than announcing a reactivation that did not happen. Granting time is what "Gratiskan 1 bulan" is for.
+  - **The audit entry reports an OUTCOME.** `suspendStore`/`liftSuspension` re-read the row through `.returning()`, recompute the effective state, and log *that* + the operator's email; a store id matching nothing logs nothing. Same rule as `markLabelsPrinted` — report what you WROTE. `compStore`/`extendTrial`/`setStoreComped` no longer assert `status: "active"` either; `syncStoredStatus()` derives it.
+  - Pinned by `packages/lib/src/billing.test.ts` → *"operator suspension survives computeBilling"*.
+- **Super-admin per-store control** (`apps/super-admin/lib/actions.ts`): comp 1 month, extend trial, VIP toggle, reset owner/user password (scrypt), manage store users, `suspendStore`/`liftSuspension` — every action audit-logged to `platform_activity` (with `store_id` + `admin` kind). **A suspension REQUIRES a reason** (≥5 chars): the merchant is shown it, and one nobody wrote down cannot be reviewed, appealed or lifted with confidence. The store-list row menu therefore only offers *lift* inline — "Tangguhkan…" links to the detail, where the reason can actually be collected.
+- **`pct()` is a DELTA formatter; `share()` is the one for a part of a whole** (`@tokophi/lib/format`). The super-admin "Status Toko" card fed `count/total*100` to `pct()`, so the control plane read *"Ditangguhkan 5 **+83,3%**"* — a plus sign implying suspensions were climbing when nothing had moved. Two comments in `format.ts` already told callers to "format locally"; two obeyed by hand (`return-summary.tsx`, `keranjang-client.tsx`) and the third borrowed the delta formatter. A rule re-obeyed by hand at every call site is how the third one happened. ⚠️ **That card's slices must SUM TO EVERY STORE** — VIP was missing from `getStatusDistribution`, so it totalled 6 while the KPI beside it read "Toko aktif 2 / 7" and every share was against the short denominator. It has its own key type (`StatusSlice`, with `vip`), not `StoreStatus`.
 - **Client "Akun" section** `/akun/{profil,keamanan,langganan}` (NOT under Pengaturan) — tabbed layout; avatar menu links here. Langganan has payment history + printable **`/faktur/[number]`**. Sidebar shows a subscription badge under the logo.
 - **Payment channels are a PLATFORM decision** (ADR 0004) — super-admin owns `platform_payment_channels`; the storefront checkout reads *those*. The client-admin **"Pembayaran" tab was REMOVED (2026-07-13)**: it let a merchant pick channels + a fee bearer, but **nothing ever read either value** — the storefront read the platform list and no pricing code touched the bearer, so the UI silently lied. ⚠️ **`store_settings.payment_channels` / `payment_fee_bearer` are dead columns** (kept, not dropped — dropping is a destructive migration and super-admin may want per-store overrides later). **A merchant-facing fee-bearer feature does NOT exist**: `@tokophi/lib/payment-fees` (VA Rp4.000, e-wallet 2,4%, QRIS 1%, retail Rp4.000) is only used for *display*. If it is ever wanted, it must be **built into checkout pricing** — not merely stored.
 - **Provider brands stay hidden from clients** (KiriminAja/AutoLaris) — generic labels; only super-admin sees brands (ADR 0004).
@@ -352,16 +398,28 @@ every deploy, and a hardcoded one fails with "No such container" the moment anyt
 Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
 
 > ### 🧪 RUN THEM AS A SUITE: **`npm run verify -w @tokophi/storefront`** (from the repo root)
-> Builds if the build is stale, starts ONE storefront, runs all five checks against it, prints a
-> pass/fail table and exits non-zero if anything is red. It kills **only the process group it spawned**
-> — never `pkill`, so another agent's server on another port is untouched — and a port that is already
-> taken fails in one second with the port number in the message instead of hanging.
+> Builds if the build is stale, starts ONE storefront, runs **all six** `check-*.mjs` in
+> `apps/storefront/scripts/` against it, prints a pass/fail table and exits non-zero if anything is
+> red. It kills **only the process group it spawned** — never `pkill`, so another agent's server on
+> another port is untouched — and a port that is already taken fails in one second with the port
+> number in the message instead of hanging.
 > - **There is ONE invocation contract now** (`scripts/check-env.mjs`): `CHECK_BASE_URL` (an origin —
 >   the hostname selects the tenant, ADR 0009) and `DATABASE_URL` from the environment. The old
->   `T_URL` / `H1_PORT` / `DPR` are **retired and now fail loudly** rather than being ignored. They had
+>   `T_URL` / `H1_PORT` / `DPR` are **retired and fail loudly** rather than being ignored. They had
 >   two different meanings of `T_URL` and four default ports between them, and on 2026-08-02 a reviewer
 >   started one server, pointed three checks at it and reported **three regressions that did not
 >   exist**. A check that is hard to run correctly gets run wrongly — same family as `verify-rls`.
+>   ⚠️ **This sentence was FALSE for `check-search-srcset` until 2026-08-03**, and false in the way
+>   that matters: the loud failure lives in `check-env.mjs`, so a script that never imports it cannot
+>   fail loudly. That check shipped in the same wave that converged the others, was left out of the
+>   runner's `CHECKS` array, and kept its own `T_URL`/`DPR` on a sixth default port (4411) — so
+>   `npm run verify` ran five of six and the search-palette fix had a guard nobody ran. Both halves are
+>   now pinned by **`apps/storefront/scripts/checks-registered.test.ts`**, which derives the expected
+>   list from the DIRECTORY: a new `check-*.mjs` that is not in `CHECKS`, or a server-needing check
+>   that does not import `check-env.mjs`, or any check reading a retired variable, fails `npm test`.
+>   *(`audit-responsive.mjs` and `gen-image-widths.mjs` are deliberately outside the suite and are not
+>   `check-*`: the first sweeps a **dev** server for horizontal overflow at many widths via
+>   `npm run audit:responsive`, the second is a build-time generator.)*
 > - **Three results, not two: PASS / FAIL / SKIP.** SKIP (exit code 2) means the check does not APPLY
 >   to the data it was pointed at. It is printed with its reason on every run and never counted as a
 >   pass — see `check-pixel-defer` below.
@@ -489,6 +547,35 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   for the crawler/no-JS risk; and cutting the DEFAULT TEMPLATE's sections changes nothing for any
   store that already exists (**the seed is not a migration**, see above) — it could not have moved the
   measured number at all. Look for repeated icon markup first.
+
+## Dashboard & Analitik numbers — one source, one day, no rollup
+
+> ### 📊 THE RULE: **`analytics_daily` IS RETIRED. Money on a screen is derived from `orders`, live.**
+> Its only writer in the whole repo was the seed, so six of seven stores had **zero rows** (an empty
+> dashboard over real orders) and the seventh **froze** on the day the seed ran: "Penjualan hari ini
+> Rp0 · −100,0%" directly above four orders placed that morning. The table is kept but **unread and
+> unwritten** — do not point anything at it, and do not restore the seed insert.
+
+- **`getDailyStats()` (`lib/data/analytics.ts`) is the ONE producer of the daily series.** Revenue is
+  `sum(total_idr - tax_idr)` over non-cancelled orders — the same expression `getChannelSalesDaily`,
+  `getRegionSales` and `getOrderStats` use, so the chart total equals the Sumber Penjualan total.
+- **The series must stay DENSE and end on TODAY.** `resolve()` slices it positionally
+  (`all.slice(n - 7, n)`, `all[n-1]` = "Hari ini"), so a bare `GROUP BY` would silently turn
+  "7 hari terakhir" into "the last 7 days that sold something". `generate_series` LEFT JOIN the
+  aggregates is what makes the range switcher mean what it says.
+- ⚠️ **`lib/data/day-bucket.ts` is the ONE definition of a day, and it is WIB.** Every day-bucketed
+  query (daily, hourly, channels, product sales, funnel, devices) goes through `dayKey()`, because
+  `dashboard.ts` matches their date keys against each other with `Set.has` — a query bucketing in a
+  different zone does not error, it just **stops reconciling**. The container's `TimeZone` is UTC, so
+  before this "hari ini" began at 07:00 WIB and every merchant's evening fell into "kemarin".
+  Known limit: WIB is assumed for every store (`stores` has no timezone column).
+- **A figure with no source is "—", never a number.** `visitors`/Konversi/funnel/device split come
+  from `analytics_events` (the storefront tracker) and render an honest empty state for a store that
+  has none. That is the standing rule that keeps producing bugs when broken — see the ad dashboard
+  with no integration behind it.
+- **Runnable check: `apps/admin/lib/data/daily-stats.test.ts`.** Its Postgres half runs the real
+  exported query under `SET LOCAL ROLE tokophi_app`. `vitest.config.ts` aliases `@/` → `apps/admin/`;
+  without it no suite can import `lib/data/*` at all.
 
 ## Order lifecycle — COD, the ledger, and the one legal set of transitions
 
@@ -644,10 +731,9 @@ type-checks and passes everything else.
   storefront's build is a bare `astro build`, transpile-only), so that guard was decoration.
   ⚠️ **Both halves are load-bearing and they catch different things.** `astro check` catches a wrong
   **prop**; `section-renderer-exhaustive.test.ts` catches a missing or misrouted **arm** — and it reads
-  the file through the **TypeScript lexer**, not a regex, because comments are trivia to a lexer and
-  invisible to a regex: commenting out `case "lookbook":` left the text in place and kept all four
-  tests green while the renderer dropped that section on a live storefront. The same was true of the
-  `_exhaustive: never` assertion itself.
+  the file's CODE, not its text (see the rule below): commenting out `case "lookbook":` left the text
+  in place and kept all four tests green while the renderer dropped that section on a live storefront.
+  The same was true of the `_exhaustive: never` assertion itself.
 - A type that genuinely is unknown at runtime (an older saved template, a rolled-back deploy) gets a
   `console.warn` on the server — this is SSR, so it lands in the container log — plus a visible panel
   **in DEV only**. Not in production on purpose: a shopper must not be shown our internal error on a
@@ -746,7 +832,7 @@ type-checks and passes everything else.
 | **`specs/docs/tasks/NEXT.md`** | **what to pick up next — ordered, sized, with acceptance criteria** |
 | `specs/docs/BACKLOG.md` | what is actually open |
 | `specs/docs/DEPLOY.md` | ops, env, the cron sidecars, how to verify a deploy really landed |
-| `specs/PRD.md` · `specs/decisions/` | what the product is · ADR 0010 couriers · **0012 conversion tracking · 0013 catalog ids** |
+| `specs/PRD.md` · `specs/decisions/` | what the product is · **0012 conversion tracking · 0013 catalog ids**. ⚠️ **There is no ADR 0010** — a courier-policy ADR was held for that number and never written, on purpose (the curation it would have recorded was reversed; the live KiriminAja API is the roster). Courier policy = `packages/lib/src/couriers.ts` + "Shipping & COD" above; the reversal is `specs/docs/BACKLOG.md` → "RESOLVED 2026-07-21" |
 
 Changelog: `CHANGELOG.md`. `apps/admin/AGENTS.md` = the "Next 16 has breaking changes" note.
 

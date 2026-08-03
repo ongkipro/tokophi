@@ -48,13 +48,20 @@ export function addMonths(base: Date, months: number): Date {
 
 export type BillingStatus = "trial" | "active" | "past_due" | "suspended";
 export type BillingState = {
-  status: BillingStatus;
+  status: BillingStatus; // EFFECTIVE — what the merchant actually experiences
+  // What the SUBSCRIPTION alone says, ignoring any operator suspension. The debt does not go away
+  // because an operator locked the store, so the billing job still has to see it: renewal invoices
+  // are raised off THIS, not off `status` (a paid-up store an operator suspended must not be billed
+  // a month early just because it reads "suspended").
+  billingStatus: BillingStatus;
+  operatorSuspended: boolean; // a person at the platform suspended this store, deliberately
+  suspendedReason: string | null; // why they did — shown to the merchant and in the audit line
   label: string;
   daysLeft: number; // days left in trial / current period / grace
   nextAmount: number; // IDR the merchant pays next (monthly)
   isPromo: boolean; // next payment is the Rp50rb first-month promo
   dueDate: Date | null; // when the next payment is due
-  readOnly: boolean; // grace exceeded → block writes (storefront stays up)
+  readOnly: boolean; // grace exceeded OR operator-suspended → block writes (storefront stays up)
   firstInvoicePaid: boolean; // false = still on promo / annual-bonus eligible
   comped: boolean; // VIP: billing bypassed by the platform
 };
@@ -64,6 +71,21 @@ export type StoreBillingRow = {
   currentPeriodEnd: Date | null;
   firstInvoicePaid: boolean;
   comped?: boolean; // VIP: platform bypasses billing → always active, no charge
+  // 🔴 OPERATOR SUSPENSION — REQUIRED, and required on purpose (2026-08-03).
+  //
+  // Suspension used to be DERIVED from billing alone, so super-admin's "Tangguhkan" button wrote
+  // `stores.status` + an audit row and changed NOTHING: the merchant panel stayed fully writable,
+  // and the nightly billing cron reverted the column within 24 hours. There was no working way to
+  // suspend a store.
+  //
+  // This column is the operator's own fact, kept apart from billing because the two are different
+  // facts that must coexist: a suspended store that then pays must NOT silently reactivate, and a
+  // paid-up store suspended for abuse must stay suspended. `null` = not suspended by us.
+  //
+  // It is NOT optional in this type so that `tsc` fails on any read path that forgets to select it —
+  // a missed `select` is invisible at runtime and silently unlocks the store it was meant to lock.
+  suspendedAt: Date | null;
+  suspendedReason?: string | null;
 };
 
 // The 4 lifecycle "sessions" the store list is split into (Trial → Bulan pertama → Reguler → VIP).
@@ -76,17 +98,48 @@ export const SEGMENT_META: Record<StoreSegment, { label: string; short: string; 
 };
 
 // Which of the 4 lifecycle sessions a store belongs to (independent of active/past_due/suspended).
+// Reads `billingStatus`, NOT `status`: an operator suspension does not move a store out of its trial
+// or off the first-month promo — it locks the panel. Reading the effective status here would file
+// every suspended trial store under "Bulan 1" in the Toko catalog.
 export function storeSegment(s: StoreBillingRow, now: Date = new Date()): StoreSegment {
   if (s.comped) return "vip";
   const b = computeBilling(s, now);
-  if (b.status === "trial") return "trial";
+  if (b.billingStatus === "trial") return "trial";
   return s.firstInvoicePaid ? "regular" : "first_month";
 }
 
 const dayMs = 86_400_000;
 const ceilDays = (ms: number) => Math.max(0, Math.ceil(ms / dayMs));
 
+// The EFFECTIVE state: the subscription's own state, then the operator's override on top.
+//
+// ⚠️ The override wins over `comped` too. VIP bypasses BILLING; it is not an abuse shield. A store
+// we host for free that starts selling counterfeit goods must still be lockable, and the operator
+// pressing "Tangguhkan" on a VIP store would otherwise get the same silent nothing this whole
+// mechanism exists to fix.
 export function computeBilling(s: StoreBillingRow, now: Date = new Date()): BillingState {
+  const b = subscriptionState(s, now);
+  if (!s.suspendedAt) {
+    return { ...b, billingStatus: b.status, operatorSuspended: false, suspendedReason: null };
+  }
+  return {
+    ...b,
+    status: "suspended",
+    billingStatus: b.status,
+    operatorSuspended: true,
+    suspendedReason: s.suspendedReason?.trim() || null,
+    label: "Ditangguhkan oleh platform",
+    daysLeft: 0,
+    readOnly: true,
+    // `nextAmount`, `isPromo` and `dueDate` are deliberately carried over from `b`: the subscription
+    // keeps running underneath, so the merchant can still pay while locked and the cron can still
+    // raise the invoice they owe.
+  };
+}
+
+// The subscription lifecycle on its own — trial → active → past_due → suspended, plus VIP.
+type SubscriptionState = Omit<BillingState, "billingStatus" | "operatorSuspended" | "suspendedReason">;
+function subscriptionState(s: StoreBillingRow, now: Date): SubscriptionState {
   // 0) comped/VIP → billing bypassed: always active, nothing due, full access
   if (s.comped) {
     return { status: "active", label: "VIP (gratis)", daysLeft: 0, nextAmount: 0, isPromo: false, dueDate: null, readOnly: false, firstInvoicePaid: s.firstInvoicePaid, comped: true };

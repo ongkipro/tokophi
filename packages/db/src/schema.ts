@@ -103,6 +103,19 @@ export const stores = pgTable("stores", {
   comped: boolean().notNull().default(false),
   compedReason: text(),
   compedAt: ts(),
+  // 🔴 OPERATOR SUSPENSION (0086) — a DELIBERATE ACT by the platform, not a consequence of an
+  // unpaid invoice, and therefore its own column rather than a value of `status`.
+  //
+  // `status` is a denormalized cache the billing cron rewrites nightly from `computeBilling()`, so
+  // an operator who wrote `status='suspended'` had their decision reverted within 24 hours — and it
+  // never took effect in the first place, because the merchant lockout is decided by
+  // `computeBilling()`, which read only comped/currentPeriodEnd/trialEndsAt. Two facts had been
+  // collapsed into one column and billing always won.
+  //
+  // `suspendedAt IS NOT NULL` ⇒ `computeBilling()` returns suspended + readOnly, over ANY billing
+  // state including `comped`. Paying does not clear it; only `liftSuspension` does.
+  suspendedAt: ts(),
+  suspendedReason: text(),
   // Branding read-only by the storefront/checkout (ADR 0009 — checkout is locked/uniform,
   // only pulls these tokens; NOT part of the drag-drop Store Builder).
   logoUrl: text(),
@@ -1046,7 +1059,19 @@ export const analyticsEvents = pgTable("analytics_events", {
   device: text(), // ponsel | desktop | tablet
 });
 
-// Daily sales rollup that the Dashboard/Analitik series read (store_id, date).
+// 🔴 RETIRED 2026-08-03 — NOTHING READS THIS TABLE AND NOTHING WRITES IT.
+//
+// It was the Dashboard/Analitik daily series. Its only writer in the entire repository was
+// `seed.ts`: no cron, no order hook, no backfill. So it was empty for every store the seed did not
+// create (six of the seven demo stores, and every store made through `/daftar` or the super-admin —
+// i.e. every real merchant), and frozen on the seed's last day for the one it did. The series is
+// now derived from `orders` (+ `analytics_events` for visitors) at read time — see the header of
+// `apps/admin/lib/data/analytics.ts` for the shape and the alternatives that were rejected.
+//
+// The TABLE is kept rather than dropped: dropping it is a destructive migration, and rows already
+// in an existing database are now inert (no reader). Do not point anything at it again, and do not
+// "restore" the seed insert — that is what made money on the Dashboard disagree with money in
+// Pesanan.
 export const analyticsDaily = pgTable(
   "analytics_daily",
   {

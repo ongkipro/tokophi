@@ -1,0 +1,43 @@
+---
+import Base from "../layouts/Base.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+
+// The apex had no 404 at all: every stale link, old campaign URL and mistyped path was answered by
+// the Node adapter's own bare "Not found" — no branding, no way back, and nothing to tell a visitor
+// they were still on tokophi.com. `output: "static"` emits this as dist/client/404.html and the
+// standalone node server serves it for unmatched paths (verified in a browser, not assumed).
+//
+// noindex: a 404 body served under an arbitrary URL is exactly the page you do not want indexed.
+// It is also excluded from sitemap.xml — see the filter in sitemap.xml.ts.
+
+const title = "Halaman tidak ditemukan — TokoΦ";
+const description = "Alamat yang Anda buka tidak ada di tokophi.com.";
+---
+
+<Base {title} {description} noindex>
+  <div class="shell">
+    <SiteHeader />
+
+    <main class="doc">
+      <p class="eyebrow pill"><span class="dot" aria-hidden="true"></span>404</p>
+      <h1>Halaman ini tidak ada.</h1>
+      <p class="doc-lede">
+        Alamat yang Anda buka tidak ada di tokophi.com. Mungkin tautannya sudah berubah, atau ada
+        salah ketik.
+      </p>
+
+      <div class="cta">
+        <a href="/" class="btn btn-primary">Kembali ke beranda</a>
+        <a href="/kontak/" class="btn btn-ghost">Kontak</a>
+      </div>
+
+      <p>
+        Mencari sebuah toko? Setiap toko di TokoΦ punya alamatnya sendiri —
+        <code>namatoko.tokophi.com</code> — jadi periksa kembali tautan dari penjualnya.
+      </p>
+    </main>
+
+    <SiteFooter />
+  </div>
+</Base>

@@ -9,7 +9,8 @@ import { uploadMedia, getMedia } from "@/lib/actions/media";
 import { useCan } from "@/components/admin/permissions";
 import { ArrowLeft, ImageUp, ChevronDown, Newspaper, Trash2 } from "lucide-react";
 
-import { BLOG_CATEGORIES, type BlogPost } from "@/lib/mock/store";
+import type { BlogPost } from "@/lib/mock/store";
+import type { BlogRef } from "@/lib/data/articles";
 
 import {
   Card,
@@ -45,7 +46,11 @@ const counterClass = (len: number, max: number) =>
       : "text-muted-foreground";
 
 
-export function ArticleEditor({ post }: { post?: BlogPost }) {
+// `blogs` = this store's own rows (`getBlogs()`), never the mock's BLOG_CATEGORIES pair — that
+// literal is what the seed writes for the demo store, so the picker offered two names a different
+// store does not have. A store with none gets a "Blog" created for it on first save (see
+// `resolveBlogId` in lib/actions/articles.ts).
+export function ArticleEditor({ post, blogs }: { post?: BlogPost; blogs: BlogRef[] }) {
   const isEdit = Boolean(post);
   const canWrite = useCan("content:write");
 
@@ -59,7 +64,8 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
   const [excerpt, setExcerpt] = React.useState(post?.excerpt ?? "");
   const [author, setAuthor] = React.useState(post?.author ?? "Ongki Pratama");
   const [published, setPublished] = React.useState(post?.published ?? false);
-  const [blog, setBlog] = React.useState<string>(post?.blog ?? BLOG_CATEGORIES[0]);
+  const [blogId, setBlogId] = React.useState<string>(post?.blogId ?? blogs[0]?.id ?? "");
+  const blogTitle = blogs.find((b) => b.id === blogId)?.title ?? post?.blog ?? "Blog";
   const [handle, setHandle] = React.useState(post?.handle ?? "");
   const [metaDesc, setMetaDesc] = React.useState("");
   const [seoTitle, setSeoTitle] = React.useState("");
@@ -110,6 +116,7 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
     excerpt,
     author,
     imageUrl,
+    blogId: blogId || undefined,
     published,
   });
   const handleSave = () => {
@@ -236,7 +243,7 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
               {/* Google preview */}
               <div className="max-w-2xl rounded-lg border bg-background p-3">
                 <p className="truncate text-xs text-muted-foreground">
-                  tokoanda.com › blogs › {blog.toLowerCase().replace(/\s+/g, "-")}{" "}
+                  tokoanda.com › blogs › {blogTitle.toLowerCase().replace(/\s+/g, "-")}{" "}
                   › {handle || "judul-artikel"}
                 </p>
                 <p className="mt-0.5 truncate text-sm font-medium text-[#1a0dab] dark:text-blue-400">
@@ -341,14 +348,14 @@ export function ArticleEditor({ post }: { post?: BlogPost }) {
                   >
                     <span className="inline-flex items-center gap-1.5">
                       <Newspaper className="size-4 text-muted-foreground" />
-                      {blog}
+                      {blogTitle}
                     </span>
                     <ChevronDown className="text-muted-foreground" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="w-[--anchor-width]">
-                    {BLOG_CATEGORIES.map((c) => (
-                      <DropdownMenuItem key={c} onClick={() => setBlog(c)}>
-                        {c}
+                    {blogs.map((b) => (
+                      <DropdownMenuItem key={b.id} onClick={() => setBlogId(b.id)}>
+                        {b.title}
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>

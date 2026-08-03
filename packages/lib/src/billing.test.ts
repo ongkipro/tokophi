@@ -48,19 +48,19 @@ describe("quote — promo first month + annual bonus month", () => {
 
 describe("storeSegment — the 4 lifecycle buckets", () => {
   it("comped → vip regardless of everything else", () => {
-    expect(storeSegment({ trialEndsAt: null, currentPeriodEnd: null, firstInvoicePaid: true, comped: true }, NOW)).toBe("vip");
+    expect(storeSegment({ trialEndsAt: null, currentPeriodEnd: null, firstInvoicePaid: true, comped: true, suspendedAt: null }, NOW)).toBe("vip");
   });
   it("in trial → trial", () => {
-    expect(storeSegment({ trialEndsAt: future(2), currentPeriodEnd: null, firstInvoicePaid: false }, NOW)).toBe("trial");
+    expect(storeSegment({ trialEndsAt: future(2), currentPeriodEnd: null, firstInvoicePaid: false, suspendedAt: null }, NOW)).toBe("trial");
   });
   it("paid once → regular; not yet → first_month", () => {
-    expect(storeSegment({ trialEndsAt: null, currentPeriodEnd: future(20), firstInvoicePaid: true }, NOW)).toBe("regular");
-    expect(storeSegment({ trialEndsAt: null, currentPeriodEnd: future(20), firstInvoicePaid: false }, NOW)).toBe("first_month");
+    expect(storeSegment({ trialEndsAt: null, currentPeriodEnd: future(20), firstInvoicePaid: true, suspendedAt: null }, NOW)).toBe("regular");
+    expect(storeSegment({ trialEndsAt: null, currentPeriodEnd: future(20), firstInvoicePaid: false, suspendedAt: null }, NOW)).toBe("first_month");
   });
 });
 
 describe("computeBilling — trial → active → past_due → suspended, and VIP", () => {
-  const base = (o: Partial<StoreBillingRow>): StoreBillingRow => ({ trialEndsAt: null, currentPeriodEnd: null, firstInvoicePaid: false, ...o });
+  const base = (o: Partial<StoreBillingRow>): StoreBillingRow => ({ trialEndsAt: null, currentPeriodEnd: null, firstInvoicePaid: false, suspendedAt: null, ...o });
 
   it("comped/VIP → active, never read-only, nothing due", () => {
     const s = computeBilling(base({ comped: true, firstInvoicePaid: true }), NOW);
@@ -96,5 +96,63 @@ describe("computeBilling — trial → active → past_due → suspended, and VI
     const s = computeBilling(base({ currentPeriodEnd: past(BILLING.GRACE_DAYS + 1), firstInvoicePaid: true }), NOW);
     expect(s.status).toBe("suspended");
     expect(s.readOnly).toBe(true);
+  });
+});
+
+// 🔴 THE ONE THAT PINS THE BUG. Super Admin's "Tangguhkan" wrote `stores.status` + an audit row and
+// changed nothing a merchant could feel, because THIS function — the one `requireCapability` asks
+// before allowing a write — never looked at that column. It is not enough that a column exists: an
+// operator suspension has to survive `computeBilling`, over every billing state including the ones
+// that would otherwise return `active`, or the button is decorative again.
+describe("operator suspension survives computeBilling", () => {
+  const base = (o: Partial<StoreBillingRow>): StoreBillingRow => ({ trialEndsAt: null, currentPeriodEnd: null, firstInvoicePaid: false, suspendedAt: null, ...o });
+  const SUSPENDED = { suspendedAt: past(1), suspendedReason: "dugaan barang palsu" };
+
+  it("a PAID-UP store an operator suspended is suspended and read-only", () => {
+    const s = computeBilling(base({ currentPeriodEnd: future(20), firstInvoicePaid: true, ...SUSPENDED }), NOW);
+    expect(s.status).toBe("suspended");
+    expect(s.readOnly).toBe(true);
+    expect(s.operatorSuspended).toBe(true);
+    expect(s.suspendedReason).toBe("dugaan barang palsu");
+  });
+
+  it("PAYING does not lift it — the subscription runs on underneath, untouched", () => {
+    const s = computeBilling(base({ currentPeriodEnd: future(20), firstInvoicePaid: true, ...SUSPENDED }), NOW);
+    // The store IS inside a paid period: billing says active, the effective state says suspended.
+    // That is the whole design — one column would have had to choose, and billing always won.
+    expect(s.billingStatus).toBe("active");
+    expect(s.status).toBe("suspended");
+  });
+
+  it("VIP is a billing bypass, NOT an abuse shield", () => {
+    const s = computeBilling(base({ comped: true, firstInvoicePaid: true, ...SUSPENDED }), NOW);
+    expect(s.status).toBe("suspended");
+    expect(s.readOnly).toBe(true);
+    expect(s.comped).toBe(true); // still comped — we just refuse to let that unlock the panel
+  });
+
+  it("a store in its TRIAL can be suspended, and stays in the trial segment", () => {
+    const row = base({ trialEndsAt: future(2), ...SUSPENDED });
+    expect(computeBilling(row, NOW).status).toBe("suspended");
+    expect(computeBilling(row, NOW).billingStatus).toBe("trial");
+    expect(storeSegment(row, NOW)).toBe("trial"); // lockout ≠ moving them off the promo
+  });
+
+  it("lifting it restores the BILLING state, and only that", () => {
+    // unpaid past the grace → still suspended after lifting, for the other reason
+    const unpaid = computeBilling(base({ currentPeriodEnd: past(BILLING.GRACE_DAYS + 1), firstInvoicePaid: true }), NOW);
+    expect(unpaid.status).toBe("suspended");
+    expect(unpaid.operatorSuspended).toBe(false); // …and it is NOT ours, so "Cabut penangguhan" must not claim it fixed anything
+    // paid-up → back to active the moment the operator's fact is removed
+    const paid = computeBilling(base({ currentPeriodEnd: future(20), firstInvoicePaid: true }), NOW);
+    expect(paid.status).toBe("active");
+    expect(paid.readOnly).toBe(false);
+  });
+
+  it("the DEBT is still visible while locked, so the cron can still bill and the merchant can still pay", () => {
+    const s = computeBilling(base({ currentPeriodEnd: past(BILLING.GRACE_DAYS + 1), firstInvoicePaid: true, ...SUSPENDED }), NOW);
+    expect(s.billingStatus).toBe("suspended"); // overdue on its own account
+    expect(s.nextAmount).toBe(BILLING.MONTHLY_IDR);
+    expect(s.dueDate).not.toBeNull();
   });
 });

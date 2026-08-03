@@ -1,15 +1,153 @@
 import "server-only";
-import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
-import { asc, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+import { dayKey, dayOf, hourOf, today, midnightDaysAgo } from "@/lib/data/day-bucket";
 import type { DayPoint } from "@/lib/mock/store";
 
-// Daily sales rollup for the Dashboard/Analitik series (120 days, oldest→newest).
+// ---------------------------------------------------------------------------
+// 🔴 `analytics_daily` IS RETIRED. THE SERIES IS DERIVED FROM `orders`, LIVE. (2026-08-03)
+//
+// What was wrong: `analytics_daily` had exactly ONE writer in the entire repository — the seed
+// (`packages/db/src/seed.ts`). No cron, no order hook, nothing. So:
+//   · the SIX demo stores that are not `batik-nusantara` had **zero rows**, and every money figure
+//     on their Dashboard and all of /analitik read "Rp0 / belum ada data" while `orders` held real
+//     sales (kopi-senja: 3 orders, Rp450rb, showing "Belum ada penjualan pada periode ini");
+//   · on the seeded store the rows stopped on the day the seed ran, so on 2026-08-03 the page said
+//     "Penjualan hari ini Rp0, −100,0%" and drew a chart labelled "30 Hari Terakhir" whose axis read
+//     5 Jun → 2 Jul, immediately above "Pesanan Terbaru" listing four orders placed that morning.
+//     ONE screen, contradicting itself, for every merchant in production.
+//
+// THE SHAPE CHOSEN: derive at read time. `getDailyStats()` is the ONLY reader the table ever had,
+// so this is one function body, not a migration of many call sites — every downstream derivation in
+// `lib/data/dashboard.ts` keeps its exact `DayPoint[]` contract.
+//   · rejected — a CRON that materialises the rollup: faster on a huge store, but it is one more
+//     thing that stops silently, and this repo has a documented history of exactly that (a red
+//     `verify-rls` nobody read; a `check-pixel-defer` asserting against a 404 for its whole life).
+//     A stopped cron reproduces the bug being fixed here, and looks identical to working software.
+//   · rejected — a database VIEW named `analytics_daily`: same freshness, but it needs a destructive
+//     migration to drop the table, and a view is `security_definer` by default so the RLS story
+//     changes. The query below runs under `withCurrentTenant` → `SET LOCAL ROLE tokophi_app`, so it
+//     is policed by the same policies as every other read here.
+//   · rejected — pointing each screen at `orders` directly: the smallest diff on paper, but it
+//     duplicates "what counts as revenue" across the chart, the KPIs, the money tiles and the
+//     sparklines. There is one aggregate and one definition.
+//
+// COST, stated rather than assumed: one bounded aggregate per page load, `placed_at >= midnight
+// 120 days ago`, served by `orders_store_placed_idx (store_id, placed_at)`. Measured on the shared
+// dev DB (batik-nusantara, 885 orders): ~4 ms. A store with a million orders scans only its own
+// last 120 days; if that ever hurts, the answer is a materialised view refreshed BY the write path,
+// not a cron on a timer.
+//
+// WHAT HAPPENS TO THE SEEDED ROWS: nothing reads them any more, and the seed no longer writes them.
+// Rows already in an existing database are inert — the table is kept (dropping it is a destructive
+// migration) but it is no longer a source of truth that can disagree with `orders`. See the note on
+// `analyticsDaily` in `packages/db/src/schema.ts`.
+//
+// `revenue` is `total_idr - tax_idr`, the SAME expression `getChannelSalesDaily`, `getRegionSales`
+// and `getOrderStats` already use — so the chart's total now equals the Sumber Penjualan pie's
+// total instead of contradicting it.
+//
+// `visitors` has no source in `orders` and was NOT invented: it is counted from `analytics_events`
+// (`type = 'visit'`), the same rows `getVisitsKpi`/`getConversionKpi` count, with `count(*)` rather
+// than `count(distinct session_id)` so the two can never disagree. A store the storefront tracker
+// has never written for gets 0, and the UI renders "—" (it already did).
+// ---------------------------------------------------------------------------
+
+/** Days of history the series carries. `resolve()` needs 60 for "30d vs 30d" and ~92 for months. */
+export const SERIES_DAYS = 120;
+
+/**
+ * Daily series for the Dashboard/Analitik chart + KPIs — DENSE and ending TODAY (merchant time).
+ *
+ * ⚠️ THE DENSITY IS LOAD-BEARING. `resolve()` in `lib/data/dashboard.ts` does `all.slice(n - 7, n)`
+ * — it treats this array as one contiguous row per calendar day, ending today. A bare `GROUP BY`
+ * would drop the days with no orders, so "7 hari terakhir" would quietly mean "the last 7 days that
+ * happened to sell something", and `all[n-1]` ("Hari ini") would be the last day with a sale rather
+ * than today. `generate_series` LEFT JOINed to the aggregates is what makes the range switcher mean
+ * what it says.
+ */
 export async function getDailyStats(): Promise<DayPoint[]> {
-  return withCurrentTenant(async (db) => {
-    const rows = await db.select().from(schema.analyticsDaily).orderBy(asc(schema.analyticsDaily.date));
-    return rows.map((r) => ({ date: r.date, ts: Date.parse(r.date), sales: r.salesIdr, orders: r.orders, visitors: r.visitors }));
-  });
+  return withCurrentTenant(dailyStatsRows);
+}
+
+/**
+ * The query itself, taking the tenant-scoped handle — so `daily-stats.test.ts` can run the REAL
+ * SQL (under `SET LOCAL ROLE tokophi_app` + the `app.store_id` GUC, exactly as production does)
+ * against a throwaway database. A test that re-types the SQL guards nothing; this is the only copy.
+ */
+export async function dailyStatsRows(db: Tx): Promise<DayPoint[]> {
+  {
+    const rows = (await db.execute(sql`
+      with d as (
+        select generate_series(${today()} - ${SERIES_DAYS}::int, ${today()}, interval '1 day')::date as day
+      ),
+      o as (
+        select ${dayOf(sql`o.placed_at`)}               as day,
+               sum(o.total_idr - o.tax_idr)::bigint     as sales,
+               count(*)::int                            as orders
+          from orders o
+         where ${NOT_CANCELLED}
+           and o.placed_at >= ${midnightDaysAgo(SERIES_DAYS)}
+         group by 1
+      ),
+      v as (
+        select ${dayOf(sql`e.ts`)} as day, count(*)::int as visitors
+          from analytics_events e
+         where e.type = 'visit'
+           and e.ts >= ${midnightDaysAgo(SERIES_DAYS)}
+         group by 1
+      )
+      select to_char(d.day, 'YYYY-MM-DD')  as "date",
+             coalesce(o.sales, 0)::bigint  as "sales",
+             coalesce(o.orders, 0)::int    as "orders",
+             coalesce(v.visitors, 0)::int  as "visitors"
+        from d
+        left join o on o.day = d.day
+        left join v on v.day = d.day
+       order by d.day
+    `)) as unknown as { date: string; sales: string | number; orders: number; visitors: number }[];
+
+    return rows.map((r) => ({
+      date: r.date,
+      ts: Date.parse(r.date),
+      sales: Number(r.sales),
+      orders: Number(r.orders),
+      visitors: Number(r.visitors),
+    }));
+  }
+}
+
+export type HourPoint = { date: string; hour: number; sales: number; orders: number };
+
+/**
+ * Intraday series for the "Hari ini" / "Kemarin" ranges — REAL hours off `orders.placed_at`.
+ *
+ * It replaces `hourlyFor()` from `lib/mock/store.ts`, which took a real daily total and splattered
+ * it across 24 hours on a hard-coded weight curve plus seeded noise: a shape nobody measured,
+ * rendered on a page whose own comment says "nothing on this page is synthesized" inside a file
+ * whose header says "no storage access here".
+ *
+ * Three days deep because "Kemarin" compares yesterday against the day before it.
+ */
+export async function getHourlyStats(): Promise<HourPoint[]> {
+  return withCurrentTenant(hourlyStatsRows);
+}
+
+/** The query itself — see `dailyStatsRows` for why it is separable. */
+export async function hourlyStatsRows(db: Tx): Promise<HourPoint[]> {
+  {
+    const rows = (await db.execute(sql`
+      select ${dayKey(sql`o.placed_at`)}                as "date",
+             ${hourOf(sql`o.placed_at`)}                as "hour",
+             sum(o.total_idr - o.tax_idr)::bigint       as "sales",
+             count(*)::int                              as "orders"
+        from orders o
+       where ${NOT_CANCELLED}
+         and o.placed_at >= ${midnightDaysAgo(2)}
+       group by 1, 2
+    `)) as unknown as { date: string; hour: number; sales: string | number; orders: number }[];
+    return rows.map((r) => ({ date: r.date, hour: Number(r.hour), sales: Number(r.sales), orders: Number(r.orders) }));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -107,8 +245,8 @@ const CHANNEL_LABEL: Record<string, string> = {
 export async function getChannelSalesDaily(): Promise<ChannelDay[]> {
   return withCurrentTenant(async (db: Tx) => {
     const rows = (await db.execute(sql`
-      select to_char(o.placed_at, 'YYYY-MM-DD') as "date",
-             o.channel::text                    as "channel",
+      select ${dayKey(sql`o.placed_at`)}          as "date",
+             o.channel::text                      as "channel",
              sum(o.total_idr - o.tax_idr)::bigint as "value"
       from orders o
       where ${NOT_CANCELLED}
@@ -128,7 +266,7 @@ export type ProductSaleDay = {
 export async function getProductSalesDaily(): Promise<ProductSaleDay[]> {
   return withCurrentTenant(async (db: Tx) => {
     const rows = (await db.execute(sql`
-      select to_char(o.placed_at, 'YYYY-MM-DD') as "date",
+      select ${dayKey(sql`o.placed_at`)}        as "date",
              p.id::text                         as "productId",
              p.title                            as "name",
              coalesce(p.emoji, '')              as "emoji",

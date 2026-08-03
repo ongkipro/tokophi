@@ -12,7 +12,7 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num, dateTimeShort } from "@tokophi/lib/format";
-import { TODAY, type Product } from "@/lib/mock/store";
+import type { Product } from "@/lib/mock/store";
 import { cn } from "@tokophi/ui/lib/utils";
 import { toast } from "sonner";
 import { bulkSetProductStatus, bulkDeleteProducts, duplicateProduct, deleteProduct } from "@/lib/actions/products";
@@ -150,7 +150,7 @@ function StatCard({ icon, label, value, accent, active, onClick }: {
   );
 }
 
-export function ProdukClient({ products }: { products: Product[] }) {
+export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: number }) {
   const CATEGORIES = Array.from(new Set(products.map((p) => p.category)));
   const router = useRouter();
   const canWrite = useCan("products:write");
@@ -180,7 +180,8 @@ export function ProdukClient({ products }: { products: Product[] }) {
       if (tab === "active" && p.status !== "active") return false;
       if (tab === "draft" && p.status !== "draft") return false;
       if (tab === "low" && p.stock >= LOW_STOCK) return false;
-      if (dateRange > 0 && p.addedTs < TODAY.getTime() - dateRange * 86_400_000) return false;
+      // Real clock, from the server (see the note in page.tsx) — never the seed's frozen TODAY.
+      if (dateRange > 0 && p.addedTs < nowTs - dateRange * 86_400_000) return false;
       if (gcat === "set" && !p.googleCategoryPath) return false;
       if (gcat === "unset" && p.googleCategoryPath) return false;
       return true;
@@ -192,7 +193,7 @@ export function ProdukClient({ products }: { products: Product[] }) {
     else if (sort === "stok-asc") sorted.sort((a, b) => a.stock - b.stock);
     else if (sort === "terlaris") sorted.sort((a, b) => b.unitsSold - a.unitsSold);
     return sorted;
-  }, [search, category, tab, sort, dateRange, gcat]);
+  }, [search, category, tab, sort, dateRange, gcat, nowTs]);
 
   const TABS: { key: TabKey; label: string; count: number }[] = [
     { key: "all", label: "Semua", count: counts.all },

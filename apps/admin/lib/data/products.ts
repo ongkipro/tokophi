@@ -225,3 +225,19 @@ export async function getProduct(id: string): Promise<Product | null> {
     };
   });
 }
+
+/**
+ * The SERVER's wall clock, for the Produk list's "Ditambahkan" filter.
+ *
+ * The filter compared `p.addedTs` against `TODAY` imported from `lib/mock/store.ts` — the seed's
+ * frame, frozen at 2026-06-30 — so on 2026-08-03 "7 hari terakhir" was a 41-day window, and it grew
+ * by a day every day. It cannot be read in the client component (`Date.now()` there renders one
+ * value on the server and another in the browser: the hydration mismatch AGENTS.md forbids), and
+ * reading it inline in the page trips the React Compiler's "impure function during render" rule.
+ * The clock lives with the rest of the real-clock reads — `data/orders.ts`, `data/crm.ts`,
+ * `data/articles.ts` and `data/reviews.ts` all do exactly this — and the page hands it down as a
+ * prop. `/produk` is `force-dynamic`, so it is evaluated per request.
+ */
+export function serverNowTs(): number {
+  return Date.now();
+}

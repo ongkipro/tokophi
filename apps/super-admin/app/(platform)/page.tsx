@@ -15,8 +15,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import { Badge } from "@tokophi/ui/badge";
-import { IDR, num, pct, timeAgo } from "@tokophi/lib/format";
-import { type StoreStatus } from "@/lib/types";
+import { IDR, num, share, timeAgo } from "@tokophi/lib/format";
 import { initials, SegmentBadge, ActivityIcon, InvoiceBadge, RiskReasonChip } from "@/components/bits";
 import { RevenueChart } from "./revenue-chart";
 import {
@@ -24,6 +23,7 @@ import {
   getStores,
   getSubscriptionStats,
   getStatusDistribution,
+  type StatusSlice,
   getInvoices,
   getActivity,
   getRevenueSeries,
@@ -35,8 +35,12 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const STATUS_BAR: Record<StoreStatus, string> = {
+// Keyed on `StatusSlice`, not `StoreStatus`: this card's slices must sum to EVERY store, and VIP —
+// which has no `StoreStatus` member — was simply missing. The card totalled 6 while the KPI beside
+// it read "Toko aktif 2 / 7", and every share on it was a share of the wrong denominator.
+const STATUS_BAR: Record<StatusSlice, string> = {
   aktif: "bg-emerald-500",
+  vip: "bg-violet-500",
   trial: "bg-amber-500",
   menunggak: "bg-orange-500",
   ditangguhkan: "bg-destructive",
@@ -265,7 +269,7 @@ export default async function PlatformDashboard() {
                   <span className={`size-2.5 shrink-0 rounded-full ${STATUS_BAR[s.status]}`} />
                   <span className="flex-1">{s.label}</span>
                   <span className="font-semibold tabular-nums">{s.count}</span>
-                  <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">{pct((s.count / totalStatus) * 100)}</span>
+                  <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">{share((s.count / totalStatus) * 100)}</span>
                 </div>
               ))}
             </div>
