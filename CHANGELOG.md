@@ -2,6 +2,41 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — The control plane trusted a seven-day cookie, and there was no way to rotate its password
+
+Three defects on the platform-operator identity surface, each measured against a running server before
+and after. ⚠️ **Contract change other surfaces read:** `addStoreUser` now returns
+`password: string | null` plus `outcome`; `apps/admin/lib/session-revocation.ts` **moved** to
+`@tokophi/lib/session-revocation`; `platform_admins` gained `password_changed_at` (migration **0088**).
+
+- 🔴 **`getPlatformSession()` never read the database.** It decoded the JWT and returned the claims,
+  so `role` was whatever was true at login for the token's full seven days. Driven with ONE cookie
+  held constant while the `platform_admins` row was mutated by SQL: **demoted owner → support still
+  minted a new platform operator** (an owner-gated act); so did one whose **row was deleted**; so did
+  one whose **password was rotated**. Four operator accounts from one cookie that should have been
+  dead after the first. It now re-reads the row on every request, takes the rank from it, and fails
+  closed — after: **one** account created, by the one request that was still legitimate.
+  The decision lives in `platform-session.ts` (pure, tested); the layout redirects to a new
+  `/api/auth/signout` route rather than `/login`, because a dead-but-valid cookie makes the layout and
+  the edge middleware redirect at each other (`ERR_TOO_MANY_REDIRECTS`, measured — `apps/admin` hit
+  the same wall one wave earlier and has the identical file).
+- 🔴 **`addStoreUser` reported a password it had not written.** The mint was unconditional, the hash
+  was written only when the `users` row was new, and `pw` came back either way — so linking an
+  existing account produced a credential dialog for a string that verified against the stored hash as
+  **false**. Now `password: null` + `outcome: "linked"`, and the caller says *"Akunnya sudah ada, jadi
+  kata sandinya TIDAK berubah"* instead of announcing a handover that did not happen. **Not** fixed by
+  rehashing: that would lock the person out of the store they already staff.
+- 🔴 **There was no change-password path for `platform_admins` at all** — nothing wrote
+  `password_hash` outside `invitePlatformAdmin`'s INSERT, so the super-admin credential exposed in a
+  chat transcript could not be rotated through any UI. Avatar menu → **"Ubah kata sandi"**
+  (`changePlatformPassword`): current password re-proved, ≥8 chars, must actually differ, audited to
+  `platform_activity`, and it **revokes every other session** — migration 0088 puts 0087's trigger
+  function on `platform_admins` too. Verified in two browsers: the tab that changed it stays in, the
+  one holding the old password's session is bounced to `/login`, the old password no longer logs in.
+- Runnable checks: `apps/super-admin/lib/platform-session.test.ts` (6),
+  `apps/super-admin/lib/add-store-user.test.ts` (5, proved red against three mutations first), and a
+  second DDL suite in `packages/lib/src/session-revocation.test.ts` for the new trigger.
+
 ## Unreleased — The demo store could not be shipped: 160 of 219 orders had no usable address
 
 **Measured on production**: 219 orders, **one** store. 50 carried no `ship_address` /

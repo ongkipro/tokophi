@@ -131,6 +131,39 @@ cutover keeps writes behind the Next apps. Picking one changes what PostgREST is
 **AC:** the decision recorded in `specs/decisions/`, then a `verify-rls`-style check that fails if
 `tokophi_app` holds INSERT/UPDATE/DELETE on a `platform_*` table or on `stores`.
 
+### N36. An operator who forgets their password has NO way back in · **S** · NEW
+Opened by the branch that shipped `changePlatformPassword` (audit wave 7). That form requires the
+CURRENT password — correctly, it is a self-service rotation, not a recovery. But nothing else writes
+`platform_admins.password_hash` except `invitePlatformAdmin`, which only INSERTs, so an operator who
+forgets theirs is locked out until somebody runs `psql`. There is no SMTP on this platform (see
+`coolify-vps-dev`), so "email a reset link" is not the answer.
+
+The shape that fits what already exists: **an owner-rank "Reset kata sandi" beside each operator in
+Pengaturan → Tim Platform**, minting via `tempPassword()` and revealing once — exactly what
+`resetStoreUserPassword` already does for a merchant's staff, and the rank/audit conventions are
+already written. It was left out of wave 7 deliberately: that branch's job was to close three
+verified defects, and a new owner-rank credential-handover action over the control plane is a
+separate decision with its own escalation question (may an owner reset ANOTHER owner?).
+
+**AC:** an owner can reset another operator's password from the UI; the new password is revealed once
+and never logged; the action is audited to `platform_activity` with both emails; the target's live
+sessions end (migration 0088's trigger already does this — assert it).
+
+### N37. A refused super-admin action shows the operator NOTHING · **S** · NEW
+`requirePlatformAdmin` **throws**, and none of the callers in `pengaturan-client.tsx` /
+`store-detail.tsx` catch it. Measured on 2026-08-03 with a demoted operator: clicking "Undang"
+produced **no toast at all** — the action correctly refused (`Tidak diizinkan — perlu peran owner,
+akun ini support.` in the server log, and no row was written), but the screen said nothing and the
+dialog stayed open as if the click had been ignored.
+
+This is the *safe* direction of the failure — nothing claimed success — but it is the same class
+AGENTS.md already names: converting a throwing action to `{ ok, error }` is a TWO-file change, and
+Next masks a thrown `Error` in production behind a digest. An operator-actionable rule ("you are not
+an owner any more") should be a returned string, not a swallowed exception.
+
+**AC:** a rank refusal renders an Indonesian toast naming the required rank; the action and every
+caller change in the same commit; one runnable check that a caller cannot ignore the result.
+
 ---
 
 ## 🔴 SHIPPING — audited against KiriminAja's own docs, 2026-08-03
