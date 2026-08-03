@@ -1,0 +1,18 @@
+---
+interface Props {
+  class?: string;
+}
+const { class: className = "" } = Astro.props;
+---
+
+<header class:list={["shell-head", className]}>
+  <a href="/" class="wordmark" aria-label="TokoΦ — beranda">
+    <span class="wordmark-tile" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="32" height="32" fill="none">
+        <ellipse cx="16" cy="16" rx="7.4" ry="9" stroke="currentColor" stroke-width="2.4"></ellipse>
+        <rect x="14.8" y="3.6" width="2.4" height="24.8" rx="1.2" fill="currentColor"></rect>
+      </svg>
+    </span>
+    <span class="wordmark-text">TokoΦ</span>
+  </a>
+</header>

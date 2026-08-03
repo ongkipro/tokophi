@@ -92,14 +92,15 @@ body::before {
   border-radius: 0.75rem;
 }
 
-/* ── Shell: exactly one screen, at every size ─────────────────────────────────
-   100dvh (not 100vh — mobile browser chrome would push the page into a scroll).
-   Header / hero / facts / footer are flex rows; the hero takes the slack. Every
-   vertical value is fluid so the layout compresses instead of overflowing. */
+/* ── Shell: one screen where it fits, a scroll where it does not ──────────────
+   min-height, NOT height + overflow:hidden. It used to be a hard 100dvh box that
+   clipped: at 200% zoom (WCAG 1.4.4) and on a short laptop the tail of the page
+   simply was not reachable — no scrollbar, no keyboard route, nothing. The layout
+   still targets a single screen (fluid vertical values, hero takes the slack);
+   when the content genuinely does not fit, the page scrolls instead of cutting.
+   100dvh not 100vh — mobile browser chrome would otherwise force a scroll. */
 .shell {
-  height: 100dvh;
-  max-height: 100dvh;
-  overflow: hidden;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   gap: clamp(0.75rem, 2.2vh, 2rem);
@@ -116,12 +117,38 @@ body::before {
 .shell-foot {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 1rem;
+  align-items: center;
+  gap: 0.5rem 1rem;
   padding-top: clamp(0.6rem, 1.4vh, 1.1rem);
   border-top: 1px solid var(--color-line);
   font-size: 0.8125rem;
   color: var(--color-muted);
+}
+.shell-foot nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+}
+.shell-foot a {
+  color: var(--color-muted);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+  text-decoration-color: var(--color-hairline);
+}
+.shell-foot a:hover {
+  color: var(--color-primary-ink);
+}
+
+/* Homepage only: hero + facts share the slack the shell hands to <main>. */
+.home-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(0.75rem, 2.2vh, 2rem);
 }
 
 /* ── Wordmark ─────────────────────────────────────────────────────────────── */
@@ -173,8 +200,9 @@ body::before {
 .display {
   font-family: var(--font-serif);
   font-weight: 600;
-  /* min() with vh keeps the headline honest on short screens (landscape phones). */
-  font-size: min(clamp(2.35rem, 1.5rem + 3.2vw, 4rem), 9.2vh);
+  /* Width-driven only. The old `min(…, 9.2vh)` shrank the headline to fit a viewport that is now
+     allowed to scroll, and at 200% zoom it made the H1 smaller than the body copy under it. */
+  font-size: clamp(2.35rem, 1.5rem + 3.2vw, 4rem);
   line-height: 1.05;
   letter-spacing: -0.021em;
   text-wrap: balance;
@@ -290,17 +318,156 @@ body::before {
   color: var(--color-primary-ink);
 }
 
+/* ── Document pages (privasi, kontak, 404) ────────────────────────────────────
+   Long-form, scrolling, measured for reading. Nothing here is height-constrained:
+   a legal notice that does not fit is a legal notice nobody read. */
+.doc {
+  flex: 1 1 auto;
+  max-width: 46rem;
+  padding-block: clamp(1.5rem, 5vh, 3.5rem);
+}
+
+.doc h1 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: clamp(1.9rem, 1.4rem + 1.8vw, 2.75rem);
+  line-height: 1.12;
+  letter-spacing: -0.018em;
+  text-wrap: balance;
+}
+
+.doc h2 {
+  margin-top: 2.25rem;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: clamp(1.15rem, 1.05rem + 0.4vw, 1.375rem);
+  line-height: 1.25;
+  letter-spacing: -0.012em;
+}
+
+.doc h3 {
+  margin-top: 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.doc p,
+.doc li {
+  margin-top: 0.75rem;
+  font-size: 0.9375rem;
+  line-height: 1.68;
+  color: var(--color-muted);
+  text-wrap: pretty;
+}
+
+.doc ul {
+  margin-top: 0.5rem;
+  padding-left: 1.15rem;
+  list-style: disc;
+}
+.doc li {
+  margin-top: 0.4rem;
+}
+.doc li::marker {
+  color: var(--color-hairline);
+}
+
+.doc strong {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.doc a {
+  color: var(--color-primary-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.doc code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  border-radius: 0.35rem;
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary-ink);
+}
+
+.doc .eyebrow {
+  margin-bottom: 1rem;
+}
+.doc .cta {
+  margin-top: 1.75rem;
+}
+/* A button that happens to be an <a> is not prose. `.doc a` (0,2,0) outranks `.btn-primary`
+   (0,1,0), so without this the primary CTA rendered indigo-on-indigo and both were underlined. */
+.doc .btn {
+  text-decoration: none;
+}
+.doc .btn-primary {
+  color: var(--color-on-primary);
+}
+.doc .btn-ghost {
+  color: var(--color-ink);
+}
+
+.doc dl {
+  margin-top: 0.75rem;
+}
+.doc dt {
+  margin-top: 0.9rem;
+  font-size: 0.6875rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--color-primary-ink);
+}
+.doc dd {
+  margin-top: 0.2rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+/* The lede under a document title reads as body copy, not as a subtitle. */
+.doc-lede {
+  margin-top: 0.85rem;
+  font-size: clamp(1rem, 0.96rem + 0.2vw, 1.0625rem) !important;
+  line-height: 1.6;
+}
+
+/* ⚠️ The "this document is not finished" callout. It is deliberately loud and deliberately
+   specific: a legal page missing its publisher's identity must SAY so, because a reader (and an
+   ads reviewer) cannot tell an incomplete notice from a reviewed one by looking. It disappears by
+   itself the moment PUBLIC_LEGAL_NAME / PUBLIC_LEGAL_ADDRESS / a contact channel are set at build. */
+.notice {
+  margin-top: 1.75rem;
+  padding: 0.95rem 1.1rem;
+  border: 1px solid var(--color-hairline);
+  border-left-width: 3px;
+  border-left-color: var(--color-primary);
+  border-radius: 0.75rem;
+  background-color: var(--color-primary-soft);
+}
+.notice p {
+  margin-top: 0;
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.notice p + p {
+  margin-top: 0.5rem;
+  color: var(--color-muted);
+}
+
 /* ── Adaptive: one screen at every size ───────────────────────────────────────
    Stacked by default (phone/tablet portrait). Side-by-side as soon as the
    viewport is wide OR short — on a landscape phone height is the scarce axis and
    stacking would overflow. Content is cut, never scrolled. */
 
-/* Phone portrait: the helper line goes (the CTAs already say it) and the plate
-   shrinks, so the copy + the three facts still fit one screen. */
+/* Phone portrait: the plate shrinks so the copy + the three facts still fit one screen.
+   ⚠️ `.micro { display: none }` used to live here too, on the claim that "the CTAs already say it".
+   They do not — they say "Daftar toko" and "Masuk"; the free-trial line is the ONLY place the
+   offer appears, and this hid it on every phone, i.e. on most of the Indonesian traffic. */
 @media (max-width: 639px) {
-  .micro {
-    display: none;
-  }
   .plate-wrap {
     /* sits in the text column, not floating in the middle of it */
     align-self: flex-start;
@@ -344,15 +511,15 @@ body::before {
   }
 }
 
-/* Short viewports (landscape phone, small laptops): the fact row and the helper
-   line are the first things to go. The page still has to say what it is and let
-   you in — and that has to fit without a scrollbar. */
+/* Short viewports (landscape phone, small laptops): TIGHTEN, never hide.
+   ⚠️ This block used to `display: none` the fact row AND the trial line. A 1366×768 laptop —
+   an ordinary screen, not an edge case — has a viewport around 660px, so the three things the
+   page says about the product and the only mention of the free trial were invisible to a large
+   share of visitors, with no scrollbar to hint anything was missing. Content is compressed and,
+   past that, scrolled. Never removed. */
 @media (max-height: 720px) {
-  .facts,
-  .micro {
-    display: none;
-  }
-  .shell {
+  .shell,
+  .home-main {
     gap: clamp(0.5rem, 1.6vh, 1rem);
   }
   .lede {
@@ -364,7 +531,7 @@ body::before {
 @media (max-height: 460px) {
   .display {
     margin-top: 0.5rem;
-    font-size: min(clamp(1.9rem, 1.2rem + 2.4vw, 2.6rem), 10.5vh);
+    font-size: clamp(1.9rem, 1.2rem + 2.4vw, 2.6rem);
   }
   .lede {
     margin-top: 0.6rem;
@@ -457,25 +624,12 @@ body::before {
   animation: draw 1.1s ease-out 0.25s both;
 }
 
-@keyframes beacon {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.35;
-    transform: scale(0.72);
-  }
-}
-.beacon {
-  animation: beacon 2.4s ease-in-out infinite;
-}
+/* The pulsing `.beacon` went with the "Segera hadir" pill it annotated — a live-status blink over
+   a launched product was decoration pretending to be information. */
 
 @media (prefers-reduced-motion: reduce) {
   .rise,
-  .plate,
-  .beacon {
+  .plate {
     animation: none;
   }
   .btn {

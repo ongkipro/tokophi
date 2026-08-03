@@ -1,0 +1,66 @@
+---
+import "../styles/global.css";
+
+// The apex's one <head>. Extracted when the landing grew past a single page (privasi, kontak, 404):
+// four copies of the og/twitter/canonical block is four places for one of them to drift.
+interface Props {
+  /** Full <title>. This is the most-indexed string on the platform — see the naming rule in AGENTS.md. */
+  title: string;
+  description: string;
+  /** Path with a leading and trailing slash, e.g. "/privasi/". Used for canonical + og:url. */
+  path?: string;
+  /** JSON-LD @graph. Homepage only; the legal pages have nothing structured to say. */
+  jsonLd?: unknown;
+  noindex?: boolean;
+}
+
+const { title, description, path = "/", jsonLd, noindex = false } = Astro.props;
+
+const site = "https://tokophi.com";
+const url = new URL(path, `${site}/`).href;
+// Absolute URL — og:image is one of the few tags crawlers will NOT resolve relatively.
+// WhatsApp in particular drops the preview entirely on a relative path.
+const ogImage = new URL("/og.png", `${site}/`).href;
+---
+
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    {/* No canonical on a noindex page: a 404 is served under whatever URL was mistyped, so
+        pointing it at "/" would tell a crawler that every bad URL IS the homepage. */}
+    {!noindex && <link rel="canonical" href={url} />}
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    {noindex && <meta name="robots" content="noindex" />}
+    <meta name="theme-color" content="#fbfbfe" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#080913" media="(prefers-color-scheme: dark)" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="TokoΦ" />
+    <meta property="og:locale" content="id_ID" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={url} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:alt" content="TokoΦ — seluruh toko Anda, dalam satu panel." />
+
+    <!-- summary_large_image, not summary: with a 1200x630 card the small variant crops it to a square. -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content="TokoΦ — seluruh toko Anda, dalam satu panel." />
+
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} is:inline />}
+  </head>
+
+  <body>
+    <slot />
+  </body>
+</html>

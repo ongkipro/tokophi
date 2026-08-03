@@ -1,0 +1,268 @@
+---
+import Base from "../layouts/Base.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import { IDENTITY, IDENTITY_COMPLETE, MISSING_IDENTITY } from "../lib/identity";
+
+// ⚠️ EVERY FACTUAL CLAIM BELOW WAS READ OUT OF THIS CODEBASE, and each one carries the file it
+// came from so the next person can re-check it instead of trusting the prose:
+//   · signup fields ......... apps/admin/app/daftar/daftar-form.tsx
+//   · password hashing ...... AGENTS.md (scrypt, salt:hash) + packages/lib/src/password.ts
+//   · session cookie ........ apps/admin/lib/auth.ts (httpOnly jose JWT)
+//   · shopper order data .... apps/admin/app/api/public/order/route.ts + orders.ship_* columns
+//   · typing capture ........ apps/storefront/src/pages/api/checkout-session.ts (60-min sweep)
+//   · WhatsApp recovery ..... apps/storefront/src/lib/recovery.ts (signed, store-bound, 7 days)
+//   · first-party analytics . apps/storefront/src/pages/api/track.ts (type + device; IP only rate-limits)
+//   · ad pixels ............. apps/storefront/src/components/MarketingPixels.astro (per merchant channel)
+//   · hosting region ........ specs/docs/DEPLOY.md (Vultr, Singapore)
+// There is NO mailer in this product and NO cookie banner, so this document describes neither.
+// If you change what the product collects, change this page in the same commit.
+
+const title = "Kebijakan Privasi — TokoΦ";
+const description =
+  "Data apa yang dikumpulkan TokoΦ, untuk apa, dibagikan ke siapa, dan bagaimana Anda menggunakan hak Anda berdasarkan UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi.";
+---
+
+<Base {title} {description} path="/privasi/">
+  <div class="shell">
+    <SiteHeader />
+
+    <main class="doc">
+      <h1>Kebijakan Privasi</h1>
+      <p class="doc-lede">
+        Halaman ini menjelaskan data pribadi apa yang diproses dalam layanan TokoΦ, untuk keperluan
+        apa, kepada siapa data itu diberikan, dan bagaimana Anda menggunakan hak Anda berdasarkan
+        <strong>UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi</strong>. Identitas
+        penyelenggara ada di <a href="#kontak">bagian 9</a>.
+      </p>
+
+      {
+        !IDENTITY_COMPLETE && (
+          <div class="notice" role="note">
+            <p>
+              <strong>Dokumen ini belum lengkap.</strong> Isi teknisnya sudah sesuai dengan cara
+              kerja TokoΦ, tetapi {MISSING_IDENTITY.join(", ")} belum dicantumkan.
+            </p>
+            <p>
+              Sampai bagian itu diisi dan seluruh dokumen ditinjau oleh penasihat hukum, halaman ini
+              belum bisa diperlakukan sebagai pemberitahuan resmi. Kami menampilkan catatan ini
+              secara terbuka supaya tidak ada yang salah mengira dokumen ini sudah final.
+            </p>
+          </div>
+        )
+      }
+
+      <h2>1. Siapa yang memproses data Anda</h2>
+      <p>
+        TokoΦ adalah platform tempat penjual di Indonesia membuat dan mengelola toko online. Ada dua
+        peran yang berbeda dan perbedaannya menentukan ke mana Anda mengajukan permintaan:
+      </p>
+      <ul>
+        <li>
+          <strong>Untuk pemilik toko:</strong> kami adalah <strong>Pengendali Data Pribadi</strong>.
+          Kami menentukan data akun apa yang dibutuhkan agar layanan ini berjalan dan agar tagihan
+          langganan bisa diterbitkan.
+        </li>
+        <li>
+          <strong>Untuk pembeli yang berbelanja di toko pengguna kami:</strong> pemilik toko adalah
+          Pengendali Data Pribadi atas data Anda; kami adalah <strong>Prosesor</strong> yang
+          menyimpan dan memprosesnya atas nama toko tersebut. Permintaan mengenai pesanan Anda
+          diajukan lebih dulu kepada tokonya; kami membantu toko memenuhinya.
+        </li>
+      </ul>
+
+      <h2>2. Data yang kami kumpulkan</h2>
+
+      <h3>a. Saat Anda membuka tokophi.com</h3>
+      <p>
+        Halaman ini statis. Tidak ada formulir, tidak ada skrip analitik pihak ketiga, dan kami
+        tidak menaruh cookie apa pun di peramban Anda dari domain ini. Yang tetap tercatat adalah
+        log akses server dan jaringan pengiriman konten di depannya — alamat IP, waktu, halaman yang
+        diminta, dan jenis peramban — yang lazim ada pada setiap layanan web dan kami gunakan untuk
+        keamanan serta menjaga situs tetap hidup.
+      </p>
+
+      <h3>b. Saat Anda membuat toko (pemilik toko)</h3>
+      <ul>
+        <li>Nama toko, nama pemilik, alamat email, dan kata sandi.</li>
+        <li>
+          Kata sandi <strong>tidak pernah kami simpan apa adanya</strong> — yang disimpan adalah
+          hasil fungsi hash berjenis scrypt beserta salt-nya, dan itu tidak bisa dikembalikan
+          menjadi kata sandi Anda.
+        </li>
+        <li>
+          Bila Anda memilih masuk dengan akun Google, kami menerima nama dan alamat email dari
+          Google. Kami tidak menerima kata sandi Google Anda.
+        </li>
+        <li>
+          Setelah masuk, satu cookie sesi (httpOnly) dipasang di domain panel Seller. Cookie itu
+          wajib ada agar Anda tetap dalam keadaan masuk — bukan untuk iklan atau pengukuran.
+        </li>
+        <li>
+          Data yang Anda isi sendiri untuk menjalankan toko: alamat penjemputan paket, nomor
+          WhatsApp toko, rekening bank untuk pencairan dana, dan isi katalog Anda.
+        </li>
+        <li>Riwayat tagihan dan pembayaran langganan TokoΦ.</li>
+      </ul>
+
+      <h3>c. Saat Anda berbelanja di toko yang berjalan di atas TokoΦ</h3>
+      <ul>
+        <li>
+          Nama penerima, nomor WhatsApp/telepon, alamat pengiriman lengkap (termasuk kecamatan,
+          kelurahan, dan kode pos), alamat email bila Anda mengisinya, serta isi pesanan Anda.
+          Membeli tidak mewajibkan pembuatan akun.
+        </li>
+        <li>
+          <strong>Isian keranjang tersimpan sebelum Anda menekan tombol bayar.</strong> Saat Anda
+          mengetik di halaman pembayaran, isian itu dikirim ke server supaya pemilik toko bisa
+          menghubungi Anda apabila proses terhenti di tengah jalan. Setelah 60 menit tanpa aktivitas
+          sesi tersebut ditandai ditinggalkan.
+        </li>
+        <li>
+          Tindak lanjut keranjang yang ditinggalkan berjalan lewat <strong>WhatsApp</strong>, bukan
+          email. Tautan pemulihan yang dikirimkan bersifat sementara, terikat pada satu toko, dan
+          berlaku maksimal 7 hari.
+        </li>
+        <li>
+          Ukuran kunjungan yang kami catat sendiri hanya berupa jenis peristiwa (kunjungan, lihat
+          produk, masuk keranjang, mulai pembayaran, pembelian) dan jenis perangkat. Catatan ini
+          tidak memuat nama Anda. Alamat IP hanya dipakai sesaat untuk membatasi penyalahgunaan dan
+          tidak disimpan bersama peristiwa tersebut.
+        </li>
+        <li>
+          Keranjang belanja disimpan di peramban Anda sendiri (localStorage), bukan di server, sampai
+          Anda menyelesaikan pesanan.
+        </li>
+      </ul>
+
+      <h2>3. Untuk apa data itu dipakai</h2>
+      <ul>
+        <li>Menjalankan layanan: membuat toko, menampilkan katalog, memproses pesanan.</li>
+        <li>
+          Menghitung ongkos kirim dan memesan pengiriman — nama, nomor telepon, dan alamat penerima
+          harus diteruskan kepada mitra pengiriman agar paket bisa dijemput dan diantar.
+        </li>
+        <li>Menerbitkan tagihan pembayaran pesanan dan tagihan langganan.</li>
+        <li>Menjawab pertanyaan dan menangani keluhan.</li>
+        <li>Mencegah penipuan, penyalahgunaan, dan menjaga keamanan sistem.</li>
+        <li>Memenuhi kewajiban pembukuan dan perpajakan.</li>
+      </ul>
+      <p>
+        <strong>Kami tidak menjual data pribadi Anda</strong> dan tidak mengirimi Anda email
+        pemasaran — TokoΦ tidak memiliki sistem pengiriman email massal.
+      </p>
+
+      <h2>4. Kepada siapa data dibagikan</h2>
+      <ul>
+        <li>
+          <strong>Pemilik toko tempat Anda berbelanja</strong>, untuk memproses dan mengirim pesanan
+          Anda.
+        </li>
+        <li>
+          <strong>Mitra agregator pengiriman</strong> yang kami tunjuk, untuk menghitung tarif dan
+          menerbitkan resi. Yang diteruskan adalah data penerima dan alamat tujuan.
+        </li>
+        <li>
+          <strong>Mitra penyedia pembayaran</strong> yang kami tunjuk, untuk menerbitkan tagihan
+          (virtual account, QRIS) dan mencatat pelunasannya.
+        </li>
+        <li>
+          <strong>Penyedia infrastruktur</strong> (server, jaringan pengiriman konten) yang menjadi
+          tempat layanan ini berjalan.
+        </li>
+        <li>
+          <strong>Platform periklanan</strong> — Meta, Google, dan TikTok — hanya pada toko yang
+          pemiliknya mengaktifkan pengukuran iklan. Bila aktif, skrip pengukuran platform tersebut
+          dimuat di toko itu dan dapat menaruh pengenalnya sendiri di peramban Anda. Pada toko yang
+          tidak mengaktifkannya, tidak ada skrip pihak ketiga yang dimuat.
+        </li>
+        <li>
+          <strong>Aparat penegak hukum atau otoritas berwenang</strong>, bila diwajibkan oleh
+          peraturan perundang-undangan.
+        </li>
+      </ul>
+
+      <h2>5. Di mana data disimpan</h2>
+      <p>
+        Basis data dan berkas layanan ini berjalan di server yang berlokasi di{" "}
+        <strong>Singapura</strong>. Artinya data pribadi Anda diproses di luar wilayah Indonesia.
+        Kami memilih lokasi tersebut karena jaraknya paling dekat dengan pengguna di Indonesia di
+        antara pilihan yang tersedia.
+      </p>
+
+      <h2>6. Berapa lama disimpan</h2>
+      <p>
+        Data akun toko disimpan selama toko masih aktif. Data pesanan dan catatan pembayaran
+        disimpan lebih lama karena merupakan bukti transaksi yang dibutuhkan untuk penyelesaian
+        sengketa serta kewajiban pembukuan dan perpajakan. Isian keranjang yang tidak berlanjut
+        menjadi pesanan tidak dibutuhkan selamanya.
+      </p>
+
+      <h2>7. Hak Anda</h2>
+      <p>Berdasarkan UU No. 27 Tahun 2022, Anda berhak untuk:</p>
+      <ul>
+        <li>mengetahui data pribadi apa tentang Anda yang kami proses dan meminta salinannya;</li>
+        <li>meminta perbaikan data yang keliru atau tidak lengkap;</li>
+        <li>meminta penghapusan data, sepanjang tidak bertentangan dengan kewajiban hukum kami;</li>
+        <li>menarik kembali persetujuan yang pernah Anda berikan;</li>
+        <li>mengajukan keberatan atas pemrosesan tertentu;</li>
+        <li>mengajukan pengaduan.</li>
+      </ul>
+      <p>
+        Bila permintaan Anda menyangkut pesanan di sebuah toko, ajukan lebih dulu kepada pemilik
+        toko tersebut — merekalah pengendali data atas pesanan itu. Untuk hal lain, hubungi kami
+        melalui <a href="/kontak/">halaman Kontak</a>.
+      </p>
+
+      <h2>8. Perubahan kebijakan ini</h2>
+      <p>
+        Bila cara kerja layanan berubah, halaman ini ikut diperbarui. Perubahan yang berdampak
+        besar akan kami sampaikan kepada pemilik toko melalui panel Seller.
+      </p>
+
+      <h2 id="kontak">9. Kontak</h2>
+      {
+        IDENTITY.email || IDENTITY.whatsapp ? (
+          <dl>
+            {IDENTITY.legalName && (
+              <>
+                <dt>Penyelenggara</dt>
+                <dd>{IDENTITY.legalName}</dd>
+              </>
+            )}
+            {IDENTITY.address && (
+              <>
+                <dt>Alamat</dt>
+                <dd>{IDENTITY.address}</dd>
+              </>
+            )}
+            {IDENTITY.email && (
+              <>
+                <dt>Email</dt>
+                <dd>
+                  <a href={`mailto:${IDENTITY.email}`}>{IDENTITY.email}</a>
+                </dd>
+              </>
+            )}
+            {IDENTITY.whatsapp && (
+              <>
+                <dt>WhatsApp</dt>
+                <dd>
+                  <a href={`https://wa.me/${IDENTITY.whatsapp}`}>+{IDENTITY.whatsapp}</a>
+                </dd>
+              </>
+            )}
+          </dl>
+        ) : (
+          <p>
+            Kanal kontak resmi belum dicantumkan di halaman ini. Sampai itu tersedia, kami tidak
+            mencantumkan alamat mana pun di sini agar tidak ada permintaan yang dikirim ke tujuan
+            yang tidak dibaca siapa pun.
+          </p>
+        )
+      }
+    </main>
+
+    <SiteFooter />
+  </div>
+</Base>

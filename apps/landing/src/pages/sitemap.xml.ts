@@ -11,7 +11,11 @@ const SITE = (import.meta.env.SITE ?? "https://tokophi.com").replace(/\/$/, "");
 const routes = Object.keys(import.meta.glob("./**/*.astro"))
   .map((f) => f.replace(/^\.\//, "").replace(/\.astro$/, ""))
   // Skip Astro partials (_foo) and dynamic routes ([slug]) — the latter need real params.
-  .filter((r) => !r.split("/").some((seg) => seg.startsWith("_")) && !r.includes("["))
+  // `404` is a real .astro page but not a real URL: it is the body served for paths that do not
+  // exist, so listing it would publish https://tokophi.com/404/ as a canonical page to crawl.
+  .filter(
+    (r) => !r.split("/").some((seg) => seg.startsWith("_")) && !r.includes("[") && r !== "404",
+  )
   .map((r) => (r === "index" ? "" : r.replace(/\/index$/, "")));
 
 export const GET: APIRoute = () => {

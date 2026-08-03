@@ -1,0 +1,20 @@
+---
+import { IDENTITY } from "../lib/identity";
+
+interface Props {
+  class?: string;
+}
+const { class: className = "" } = Astro.props;
+
+// NO year. The build is static, so `new Date().getFullYear()` freezes at the moment the image was
+// built and is wrong from the next 1 Januari onward — silently, forever, until someone redeploys.
+// A copyright line does not need a year to be valid, and this one can never be stale.
+---
+
+<footer class:list={["shell-foot", className]}>
+  <p>&copy; {IDENTITY.legalName ?? "TokoΦ"}</p>
+  <nav aria-label="Tautan legal">
+    <a href="/privasi/">Kebijakan Privasi</a>
+    <a href="/kontak/">Kontak</a>
+  </nav>
+</footer>
