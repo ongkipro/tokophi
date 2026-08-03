@@ -17,7 +17,7 @@ import {
   getVisitsKpi, getFunnel, getDeviceSplit,
 } from "@/lib/data/dashboard";
 import type { FunnelDay, DeviceDay } from "@/lib/data/funnel"; // type-only: funnel.ts is server-only
-import type { RegionSale, CustomerMix, CategorySale, ChannelDay, ProductSaleDay, OrderStats } from "@/lib/data/analytics";
+import type { RegionSale, CustomerMix, CategorySale, ChannelDay, HourPoint, ProductSaleDay, OrderStats } from "@/lib/data/analytics";
 import { IDR, num, pct } from "@tokophi/lib/format";
 import { exportCsv } from "@/lib/csv";
 
@@ -32,6 +32,7 @@ const EmptyState = ({ text }: { text: string }) => (
 
 export function AnalitikClient({
   days,
+  hours,
   products,
   regions,
   mix,
@@ -44,6 +45,7 @@ export function AnalitikClient({
   devices,
 }: {
   days: DayPoint[];
+  hours: HourPoint[];
   products: Product[];
   regions: RegionSale[];
   mix: CustomerMix;
@@ -57,7 +59,7 @@ export function AnalitikClient({
 }) {
   const [range, setRange] = useState<RangeKey>("30d");
   const s = getSummary(days, range);
-  const { points } = getSeries(days, range);
+  const { points } = getSeries(days, range, hours);
   const salesSpark = points.map((p) => p.sales);
   const orderSpark = points.map((p) => p.orders);
 

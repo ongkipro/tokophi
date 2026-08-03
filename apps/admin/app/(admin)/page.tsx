@@ -1,4 +1,4 @@
-import { getDailyStats, getChannelSalesDaily, getProductSalesDaily } from "@/lib/data/analytics";
+import { getDailyStats, getHourlyStats, getChannelSalesDaily, getProductSalesDaily } from "@/lib/data/analytics";
 import { getFunnelDaily } from "@/lib/data/funnel";
 import { getProducts } from "@/lib/data/products";
 import { getOrders } from "@/lib/data/orders";
@@ -17,9 +17,10 @@ export const dynamic = "force-dynamic";
 // their existing uses; `returns` feeds the retur rate (orders.status = 'retur', migration 0039).
 export default async function DashboardPage() {
   const session = await getSession();
-  const [days, products, orders, reviews, tickets, returns, storeName, activities, channels, productSales, funnel] =
+  const [days, hours, products, orders, reviews, tickets, returns, storeName, activities, channels, productSales, funnel] =
     await Promise.all([
       getDailyStats(),
+      getHourlyStats(), // real intraday buckets for the "Hari ini"/"Kemarin" ranges
       getProducts(), // action queue (stok) + CSV export
       getOrders(),
       getReviews(), // action queue (ulasan menunggu moderasi)
@@ -36,6 +37,7 @@ export default async function DashboardPage() {
   return (
     <DashboardClient
       days={days}
+      hours={hours}
       products={products}
       orders={orders}
       reviews={reviews}

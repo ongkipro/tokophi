@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getArticle } from "@/lib/data/articles";
+import { getArticle, getBlogs } from "@/lib/data/articles";
 import { ArticleEditor } from "./article-editor";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export default async function EditArticlePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const post = await getArticle(id);
+  const [post, blogs] = await Promise.all([getArticle(id), getBlogs()]);
   if (!post) notFound();
-  return <ArticleEditor post={post} />;
+  return <ArticleEditor post={post} blogs={blogs} />;
 }

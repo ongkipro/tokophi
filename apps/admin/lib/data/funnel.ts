@@ -1,6 +1,7 @@
 import "server-only";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { sql } from "drizzle-orm";
+import { dayKey } from "@/lib/data/day-bucket";
 
 // Conversion funnel + device split, COUNTED from analytics_events (migration 0037 added `device`).
 //
@@ -8,13 +9,17 @@ import { sql } from "drizzle-orm";
 // 78/18/4) that were identical for every store. They live in their own file rather than in
 // data/analytics.ts because they are the only aggregates that come from EVENTS instead of orders.
 //
-// The numbers reconcile with the KPIs on the same screen — by construction, not by luck:
-//     visit    events == analytics_daily.visitors  (the "Pengunjung" KPI)
-//     purchase events == analytics_daily.orders    (the "Pesanan" KPI)
-// so the funnel can never contradict the cards next to it.
+// The numbers reconcile with the KPIs on the same screen — by construction, not by luck. `visit`
+// events ARE the "Pengunjung" figure: `getDailyStats()` counts the same rows the same way, so
+// `DayPoint.visitors` and `getVisitsKpi()` cannot drift apart. (This comment used to pin them to
+// `analytics_daily.visitors`/`.orders`; that table had no writer outside the seed and is retired —
+// see the header of `lib/data/analytics.ts`.)
 //
 // Rows are DAY-BUCKETED: /analitik filters by the range switcher on the client (same contract as
 // `days`), so aggregate these in the client and the range actually changes the numbers.
+// ⚠️ The date key MUST come from `dayKey()` (`lib/data/day-bucket.ts`) — the client matches these
+// strings against the daily series' own keys with `Set.has`, so a query bucketing in a different
+// time zone silently stops reconciling instead of failing.
 //
 // The storefront tracker is LIVE (`apps/storefront/src/pages/api/track.ts`, since b7ae0ff): it writes
 // real `analytics_events` as shoppers browse (bot + rate gated, fail-quiet). In production these cards
@@ -36,9 +41,9 @@ export type DeviceDay = { date: string; device: string; count: number };
 export async function getFunnelDaily(): Promise<FunnelDay[]> {
   return withCurrentTenant(async (db: Tx) => {
     const rows = (await db.execute(sql`
-      select to_char(ts, 'YYYY-MM-DD') as "date",
-             type                      as "type",
-             count(*)::int             as "count"
+      select ${dayKey(sql`ts`)} as "date",
+             type              as "type",
+             count(*)::int     as "count"
       from analytics_events
       group by 1, 2
     `)) as unknown as { date: string; type: string; count: number }[];
@@ -53,9 +58,9 @@ export async function getFunnelDaily(): Promise<FunnelDay[]> {
 export async function getDeviceDaily(): Promise<DeviceDay[]> {
   return withCurrentTenant(async (db: Tx) => {
     const rows = (await db.execute(sql`
-      select to_char(ts, 'YYYY-MM-DD')            as "date",
+      select ${dayKey(sql`ts`)}                     as "date",
              coalesce(nullif(device, ''), 'lainnya') as "device",
-             count(*)::int                        as "count"
+             count(*)::int                          as "count"
       from analytics_events
       where type = 'visit'
       group by 1, 2
