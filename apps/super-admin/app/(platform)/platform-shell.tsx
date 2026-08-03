@@ -1,11 +1,24 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ShieldCheck, Store, LogOut } from "lucide-react";
+import { ShieldCheck, Store, LogOut, KeyRound } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@tokophi/ui/lib/utils";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import { Badge } from "@tokophi/ui/badge";
+import { Button } from "@tokophi/ui/button";
+import { Input } from "@tokophi/ui/input";
+import { Label } from "@tokophi/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@tokophi/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -13,7 +26,7 @@ import {
   DropdownMenuSeparator,
 } from "@tokophi/ui/dropdown-menu";
 import { NAV } from "@/lib/nav";
-import { signOut } from "@/lib/actions/auth";
+import { signOut, changePlatformPassword } from "@/lib/actions/auth";
 
 type Admin = { name: string; email: string };
 
@@ -26,6 +39,36 @@ export function PlatformShell({ admin, openTickets, children }: { admin: Admin; 
   const current = NAV.find((n) => isActive(n.href));
   const title = current?.label ?? "Platform";
   const inits = (admin.name || admin.email).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "SA";
+
+  // "Ubah kata sandi" — the operator's own credential, so it sits in the account menu next to
+  // "Keluar" rather than in Pengaturan → Tim Platform (which is the roster of OTHER operators).
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwCurrent, setPwCurrent] = useState("");
+  const [pwNext, setPwNext] = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
+  const [pwSaving, startPwSave] = useTransition();
+
+  function submitPassword() {
+    // Confirmation is checked here and NOT in the action: it is a typo guard on this form, not a
+    // rule about the credential. The action's rules (session, length, current password, and "must
+    // actually differ") are the boundary and are enforced there.
+    if (pwNext !== pwConfirm) {
+      toast.error("Konfirmasi kata sandi tidak cocok.");
+      return;
+    }
+    startPwSave(async () => {
+      const r = await changePlatformPassword(pwCurrent, pwNext);
+      if (!r.ok) {
+        toast.error(r.error ?? "Gagal mengubah kata sandi.");
+        return;
+      }
+      setPwOpen(false);
+      setPwCurrent("");
+      setPwNext("");
+      setPwConfirm("");
+      toast.success("Kata sandi diubah. Sesi lain yang memakai kata sandi lama sudah dicabut.");
+    });
+  }
 
   return (
     <div className="flex min-h-screen w-full">
@@ -111,6 +154,13 @@ export function PlatformShell({ admin, openTickets, children }: { admin: Admin; 
                   <div className="truncate text-xs text-muted-foreground">{admin.email}</div>
                 </div>
                 <DropdownMenuSeparator />
+                <button
+                  type="button"
+                  onClick={() => setPwOpen(true)}
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-muted"
+                >
+                  <KeyRound className="size-4" /> Ubah kata sandi
+                </button>
                 <form action={signOut}>
                   <button
                     type="submit"
@@ -121,6 +171,38 @@ export function PlatformShell({ admin, openTickets, children }: { admin: Admin; 
                 </form>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Dialog open={pwOpen} onOpenChange={setPwOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Ubah kata sandi</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col gap-4 py-2">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="pw-current">Kata sandi saat ini</Label>
+                    <Input id="pw-current" name="current" type="password" autoComplete="current-password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="pw-next">Kata sandi baru</Label>
+                    <Input id="pw-next" name="next" type="password" autoComplete="new-password" value={pwNext} onChange={(e) => setPwNext(e.target.value)} />
+                    <p className="text-xs text-muted-foreground">Minimal 8 karakter.</p>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="pw-confirm">Ulangi kata sandi baru</Label>
+                    <Input id="pw-confirm" name="confirm" type="password" autoComplete="new-password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Setelah diubah, semua sesi yang dibuka dengan kata sandi lama langsung berakhir — di perangkat mana pun. Tab ini tetap masuk.
+                  </p>
+                </div>
+                <DialogFooter>
+                  <DialogClose render={<Button variant="outline">Batal</Button>} />
+                  <Button disabled={pwSaving || !pwCurrent || !pwNext} onClick={submitPassword}>
+                    {pwSaving ? "Menyimpan…" : "Simpan"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </header>
 
