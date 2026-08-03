@@ -5,7 +5,7 @@
 **Scope:** TokoΦ merchant admin ("Seller"), storefront, backend (Next.js server actions + cron-triggered API routes — TokoΦ has **no** separate worker app; see §0), and super-admin diagnostics  
 **Primary implementation mode:** AI terminal development  
 
-> **Renumbered 0010 → 0012 on intake.** The source draft was numbered 0010, but **0010 is reserved for the courier policy** (referenced in `AGENTS.md`/`CLAUDE.md` and `packages/lib/src/couriers.ts`) and **0011 is the Google product taxonomy**. 0012 is the next free number. **Read §0 first** — it maps this ADR's generic assumptions onto TokoΦ's actual conventions, and its rules override the generic text below wherever they conflict.
+> **Renumbered 0010 → 0012 on intake.** The source draft was numbered 0010, but 0010 was being held for a courier-policy ADR and **0011 is the Google product taxonomy**, so 0012 was the next free number. ⚠️ **That courier ADR was never written, and deliberately so — do not write it now.** The curation it would have recorded (a `BASELINE_SERVICES` lock plus a per-origin coverage probe) is a direction this repo **consciously reversed**: `origin/main` treats the **live KiriminAja API as the roster**, and neither `BASELINE_SERVICES` nor the probe was taken. The reasoning is `specs/docs/BACKLOG.md` → "✅ RESOLVED 2026-07-21 — the local-`main` divergence (25 commits) is SUPERSEDED"; the policy that actually ships is `packages/lib/src/couriers.ts` and the "Shipping & COD" section of `AGENTS.md`. **0010 stays permanently unused** rather than being recycled, so this note keeps meaning something. **Read §0 first** — it maps this ADR's generic assumptions onto TokoΦ's actual conventions, and its rules override the generic text below wherever they conflict.
 
 ---
 

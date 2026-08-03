@@ -380,20 +380,53 @@ if (rToken) {
                  the province from the district id when gating COD. Deriving the visible fields from
                  the same id means the form can no longer disagree with what ships. -->
             <div class="sm:col-span-2">
+              {/* THIS IS A COMBOBOX, AND IT NOW SAYS SO. It had no ARIA at all: a screen reader was
+                  told "Kecamatan Tujuan, edit text" and nothing else — not that a list appears, not
+                  that one is open, not that the rows below are its options. This is the field the
+                  parcel is BOOKED against (`dest_id` → the district the courier collects for), and
+                  this repo has already shipped a wrong district once ("a Surabaya parcel to Lampung").
+                  ⚠️ Only what the widget ACTUALLY does is claimed. There is NO arrow-key navigation
+                  here — the rows are real `<button>`s reached by Tab — so there is no
+                  `aria-activedescendant` and no `aria-selected`: describing a roving-focus model this
+                  picker does not implement would be worse than the silence it replaces. */}
               <div class="field">
-                <input type="text" id="dest-search" autocomplete="off" placeholder=" " class="input-field" />
+                <input
+                  type="text"
+                  id="dest-search"
+                  autocomplete="off"
+                  placeholder=" "
+                  class="input-field"
+                  role="combobox"
+                  aria-expanded="false"
+                  aria-controls="dest-results"
+                  aria-autocomplete="list"
+                  aria-describedby="dest-hint"
+                />
                 <label for="dest-search" class="float-label">
                   Kecamatan Tujuan <span class="text-red-500">*</span>
                 </label>
               </div>
               <input type="hidden" name="dest_id" id="dest-id" />
               <input type="hidden" name="dest_text" id="dest-text" />
-              <div id="dest-results" class="mt-1 hidden max-h-48 overflow-y-auto rounded-lg border border-[var(--co-line)] bg-white shadow-sm"></div>
+              <div
+                id="dest-results"
+                role="listbox"
+                aria-label="Hasil pencarian kecamatan"
+                class="mt-1 hidden max-h-48 overflow-y-auto rounded-lg border border-[var(--co-line)] bg-white shadow-sm"
+              ></div>
               {/* The old placeholder said "Ketik kecamatan / kota" — the only thing telling a shopper
                   this box is a SEARCH and not a text field. The floating label eats placeholders, so
                   it moves here. Without it the field looks typed-in-freely, and the ongkir quote
                   depends on them picking a row (dest_id), not on what they typed. */}
-              <p class="mt-1.5 text-xs text-[var(--co-muted)]">Ketik untuk mencari, lalu pilih dari daftar. Mis. Semarang Tengah.</p>
+              {/* ⚠️ THE 3-CHARACTER MINIMUM IS NOW VISIBLE. `if (q.length < 3) return` fails SILENTLY:
+                  a shopper typing "Su" gets no list, no spinner and no reason, and a search box that
+                  answers nothing reads as broken — on the one field the whole ongkir quote depends on.
+                  This is the field's `aria-describedby` target, so the same sentence reaches a screen
+                  reader; `aria-live` makes the swap audible, since a description change while focus is
+                  already inside the box is otherwise announced by nothing. */}
+              <p id="dest-hint" aria-live="polite" class="mt-1.5 text-xs text-[var(--co-muted)]">
+                Ketik untuk mencari, lalu pilih dari daftar. Mis. Semarang Tengah.
+              </p>
 
               <!-- KOTA + PROVINSI ARE DERIVED, SO THEY ARE SHOWN, NOT ASKED.
                    They used to be two readonly boxes the shopper could not fill in anyway — two more
@@ -1439,6 +1472,7 @@ if (rToken) {
     // ONGKIR_API + ORIGIN_CITY injected via define:vars (env-driven, per-store origin)
     var destSearch = document.getElementById("dest-search");
     var destResults = document.getElementById("dest-results");
+    var destHint = document.getElementById("dest-hint");
     var destId = document.getElementById("dest-id");
     var destText = document.getElementById("dest-text");
     var shipHint = document.getElementById("ship-hint");
@@ -1504,8 +1538,6 @@ if (rToken) {
     var kelValue = document.getElementById("kel-value");
     var kelResults = document.getElementById("kel-results");
     var KEL = []; // the district's kelurahan, held in memory — see the markup note
-    var areaLine = document.getElementById("area-derived");
-    var areaText = document.getElementById("area-derived-text");
     var alamatEl = form.querySelector('textarea[name="alamat"]');
     var destTextEl = document.getElementById("dest-text");
     var summaryBox = document.getElementById("dest-summary");
@@ -1521,7 +1553,17 @@ if (rToken) {
     function renderDestSummary() {
       if (!summaryBox || !summaryStreet || !summaryAdmin) return;
       var kec = destTextEl && destTextEl.value ? destTextEl.value.trim() : "";
-      if (!kec) { summaryBox.hidden = true; return; }
+      // ⚠️ `kec` ALONE IS NOT ENOUGH TO DECIDE THERE IS NOTHING TO CONFIRM. A RECOVERED checkout
+      // restores the district ID (what the parcel is booked against) and the derived kota/provinsi,
+      // but never the district's display text — `checkout_sessions` does not store it. So gating the
+      // whole card on `kec` hid it for exactly the shopper who most needs it: a returning one, with a
+      // live district id, a priced ongkir and NOTHING on screen saying where the parcel goes.
+      // (The "Kota · Provinsi" line that used to cover that case, `#area-derived`, had been DEAD
+      // MARKUP since this summary replaced it — the element existed nowhere, so `showArea()` returned
+      // on its own first line. Deleted rather than left as a ghost; this is its live replacement.)
+      var area = [kotaEl && kotaEl.value, provinsiEl && provinsiEl.value].filter(Boolean).join(", ");
+      var where = kec || area;
+      if (!where) { summaryBox.hidden = true; return; }
 
       var kel = kelWrap && !kelWrap.hidden && kelValue ? kelValue.value : "";
       if (kel && kel.indexOf("Pilih") === 0) kel = ""; // the placeholder option
@@ -1534,24 +1576,13 @@ if (rToken) {
       // kelurahan and append the kodepos. A missing piece is simply omitted.
       summaryStreet.textContent = jalan;
       summaryStreet.hidden = !jalan;
-      summaryAdmin.textContent = (kel ? "Kel. " + kel + ", " : "") + kec + (pos ? " " + pos : "");
+      summaryAdmin.textContent = (kel ? "Kel. " + kel + ", " : "") + where + (pos ? " " + pos : "");
       summaryBox.hidden = false;
-    }
-
-    // The derived line IS the display of the hidden kota/provinsi inputs — it renders from them, so
-    // it can never say something different from what is submitted.
-    function showArea() {
-      if (!areaLine || !areaText) return;
-      var parts = [kotaEl && kotaEl.value, provinsiEl && provinsiEl.value].filter(Boolean);
-      if (!parts.length) { areaLine.hidden = true; areaText.textContent = ""; return; }
-      areaText.textContent = parts.join(" · ");
-      areaLine.hidden = false;
     }
 
     function applyArea(city, province) {
       if (kotaEl && city) kotaEl.value = city;
       if (provinsiEl && province) provinsiEl.value = province;
-      showArea();
       renderDestSummary();
       // COD eligibility is province-gated — recheck it now that the province actually exists.
       syncCod();
@@ -1560,7 +1591,6 @@ if (rToken) {
     function clearArea() {
       if (kotaEl) kotaEl.value = "";
       if (provinsiEl) provinsiEl.value = "";
-      showArea();
       renderDestSummary();
       resetKelurahan();
       syncCod();
@@ -1626,6 +1656,9 @@ if (rToken) {
           if (kodeposEl) kodeposEl.value = codes[0];
           setKodeposManual(false);                // derived, not typed
           if (kelNote) kelNote.hidden = true;
+          // The card is the shopper's read-back of what ships — same pattern as the kelurahan pick
+          // below. Without this it kept the postcode until they happened to touch another field.
+          renderDestSummary();
           captureSoon();
           return;
         }
@@ -1690,6 +1723,27 @@ if (rToken) {
       });
     }
 
+    // ── THE COMBOBOX'S STATE LIVES IN ONE PLACE ──────────────────────────────────────────────────
+    // `aria-expanded` is STATE, not a static attribute: it has to flip at every site that shows or
+    // hides the list, and there are five of them (too short, no hits, hits, fetch failed, picked).
+    // Set once in the markup and forgotten, it would permanently claim "collapsed" over an open list —
+    // which is the ARIA equivalent of the wrong kecamatan: confidently stated, wrong.
+    function setDestOpen(open) {
+      if (!destResults) return;
+      destResults.classList.toggle("hidden", !open);
+      if (destSearch) destSearch.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    // The visible half of the `q.length < 3` guard. `min` = they have typed something, but not enough.
+    var DEST_HINT_IDLE = destHint ? destHint.textContent.trim() : "";
+    function setDestHint(min) {
+      if (!destHint) return;
+      destHint.textContent = min ? "Ketik minimal 3 huruf untuk mulai mencari." : DEST_HINT_IDLE;
+      destHint.classList.toggle("text-[var(--co-muted)]", !min);
+      destHint.classList.toggle("font-medium", min);
+      destHint.classList.toggle("text-[var(--co-accent)]", min);
+    }
+
     if (destSearch) {
       destSearch.addEventListener("input", function () {
         // Editing the search box invalidates the selection — so the derived city/province must go
@@ -1698,7 +1752,8 @@ if (rToken) {
         clearArea();
         clearTimeout(searchTimer);
         var q = destSearch.value.trim();
-        if (q.length < 3) { destResults.classList.add("hidden"); return; }
+        if (q.length < 3) { setDestOpen(false); setDestHint(q.length > 0); return; }
+        setDestHint(false);
         searchTimer = setTimeout(function () {
           // A .catch() is not optional here. Without one, a hiccup in the ongkir proxy made this an
           // UNHANDLED REJECTION and the shopper saw NOTHING: no dropdown, no spinner, no error — they
@@ -1706,17 +1761,21 @@ if (rToken) {
           // A dead checkout with no explanation. The rates call at the bottom of this file already
           // degrades properly; these two just never followed it.
           api({ op: "search", q: q }).then(function (res) {
-            if (!res.ok || !res.results.length) { destResults.classList.add("hidden"); return; }
+            if (!res.ok || !res.results.length) { setDestOpen(false); return; }
             destResults.innerHTML = res.results.slice(0, 8).map(function (a) {
               // data-city / data-province ride along so picking a result can fill the form without a
               // second round-trip. They may be absent (the live-API fallback can't always be parsed),
               // in which case applyArea() leaves those inputs alone rather than blanking them.
-              return '<button type="button" data-id="' + a.id + '" data-text="' + esc(a.text) + '" data-city="' + esc(a.city || "") + '" data-province="' + esc(a.province || "") + '" class="block w-full border-b border-[var(--co-line)] px-4 py-2 text-left text-sm last:border-0 hover:bg-[var(--co-accent-weak)]">' + esc(a.text) + "</button>";
+              // `role="option"` because these ARE the listbox's options; they stay real <button>s, so
+              // Tab still reaches them and Enter/Space still picks one.
+              return '<button type="button" role="option" data-id="' + a.id + '" data-text="' + esc(a.text) + '" data-city="' + esc(a.city || "") + '" data-province="' + esc(a.province || "") + '" class="block w-full border-b border-[var(--co-line)] px-4 py-2 text-left text-sm last:border-0 hover:bg-[var(--co-accent-weak)]">' + esc(a.text) + "</button>";
             }).join("");
-            destResults.classList.remove("hidden");
+            setDestOpen(true);
           }).catch(function () {
-            destResults.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Gagal mencari kecamatan. Periksa koneksi lalu coba lagi.</p>';
-            destResults.classList.remove("hidden");
+            // Inside a listbox the only legal child is an option, so the failure speaks as a disabled
+            // one — a bare <p> here would be markup a screen reader is entitled to drop on the floor.
+            destResults.innerHTML = '<p role="option" aria-disabled="true" class="px-4 py-3 text-sm text-[var(--co-muted)]">Gagal mencari kecamatan. Periksa koneksi lalu coba lagi.</p>';
+            setDestOpen(true);
           });
         }, 300);
       });
@@ -1726,7 +1785,8 @@ if (rToken) {
         destId.value = btn.getAttribute("data-id");
         destText.value = btn.getAttribute("data-text");
         destSearch.value = btn.getAttribute("data-text");
-        destResults.classList.add("hidden");
+        setDestOpen(false);
+        setDestHint(false);
         applyArea(btn.getAttribute("data-city"), btn.getAttribute("data-province"));
         loadKelurahan(destId.value);
         loadRates();
@@ -1988,9 +2048,9 @@ if (rToken) {
     if (RECOVER && RECOVER.destId) {
       destId.value = String(RECOVER.destId);
       if (destSearch && !destSearch.value) destSearch.value = RECOVER.city || "";
-      // kota/provinsi were restored into the hidden inputs above → render the derived line for them,
-      // otherwise a returning shopper sees a district with no city/province under it.
-      showArea();
+      // kota/provinsi were restored into the hidden inputs above → render the "Kirim ke" card from
+      // them, otherwise a returning shopper sees a district with no city/province under it.
+      renderDestSummary();
       // Restore the kelurahan picker as well, then put the saved kodepos back — loadKelurahan()
       // deliberately blanks it, and a recovered checkout must not lose what the shopper had chosen.
       var savedPostcode = RECOVER.postcode || "";
@@ -2009,6 +2069,9 @@ if (rToken) {
             if (kelValue) kelValue.value = hits[0].name;
           }
         }
+        // loadKelurahan() has just rewritten the kodepos (and possibly the kelurahan); re-render so
+        // the card confirms the restored address rather than the half of it that existed at t=0.
+        renderDestSummary();
       }, 600);
       loadRates();
     }
