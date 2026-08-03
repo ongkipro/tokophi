@@ -234,36 +234,52 @@ Chasing the number means delaying the cross-fade past the audit window — buyin
 that feels dead on arrival. ⚠️ `prefers-reduced-motion` was used as an **instrument** here, not as a
 proposal.
 
-### 🔺 N5. `dom-size` — the stars landed; **the two candidates this entry named are dead** · **M**
-**Partly closed 2026-08-01.** `Stars.astro` drew each rating as two layers of five separate `<svg>`
-elements — 26 elements, twelve times per homepage: **312 elements, 30 % of the page**. One `<svg>` with
-five `<path>`s per layer is 17.
+### 🔵 N5. `dom-size` — MEASURED TO THE END. **It is a DECISION now, not work** · 2026-08-03
+Production homepage, Chrome at **390 px / DPR 2**, every number from a loaded page.
 
-```
-homepage DOM   1023 -> 915   (-10,6%)
-/ HTML         213 192 -> 210 252 B
-dist/client    0 delta
-```
+🔴 **This entry's own hypothesis was wrong.** It said *"the next largest repeats are the header and
+footer lucide icons. Measure them before assuming."* Measured: **header 21 + footer 67 = 88 of 912
+elements**, only 39 of them SVG. They are not the lever.
 
-Verified by pixel A/B over 40 rating widgets — byte-identical at DPR 8 and DPR 2; at DPR 3, 8 of 40
-differ by 1–2 pixels out of 45 288, max channel delta 5/255, on the fractional-fill clip edge.
+**Where the 912 actually are:**
 
-🔴 **BOTH candidates this entry used to name were measured and KILLED. Do not re-derive them:**
-- *render only slide 1 server-side and hydrate the rest* — buys ~30 elements of a 106-element hero, and
-  costs the crawler and the no-JS reader the copy;
-- *cut how many sections the default homepage template seeds with* — **zero delta by construction**. The
-  seed is not a migration, so it reaches new stores only and production keeps what it was given.
+| region | elements | of which SVG |
+|---|---|---|
+| section «Produk Terbaru» | **220** | 96 |
+| section «Paling Dicari» | **107** | 48 |
+| hero | 106 | 38 |
+| footer | 67 | 30 |
+| `nav.hidden … xl:flex` (desktop mega-menu) | **60** | 8 |
+| header | 21 | 9 |
 
-**What is left:** 915 is under Lighthouse's 1400 median and **still over its 800 p10** — the audit
-improves without passing. The next largest repeats are the **header and footer lucide icons**. Measure
-them before assuming.
+**The star rating is STILL the single biggest repeated structure** — wave 3 took it 312 → 204, and
+**204 of the 335 product-card elements (61%), i.e. 22% of the whole page, are still it**. 12 widgets ×
+17. ⚠️ **It is at its floor:** `Stars.astro`'s own comment refuses the one-`<svg>` version, and the
+reason is good — the fill is CSS (`fill-current` + `text-brand-500`) so the rating tracks the
+MERCHANT'S brand colour; a gradient would need literal colours and per-instance ids. Do not re-derive
+that.
+
+**🆕 101 elements (11%) are `display:none` at 390 px** — shipped to every phone, counted by `dom-size`,
+never rendered. The biggest is the **desktop mega-menu at 60 elements**.
+✅ **And its 11 links are ALL reachable elsewhere on the page** (checked: `ONLY_in_desktop_nav` = []),
+so deferring it costs the crawler **no unique URL** — the SEO objection that would normally kill this
+does not apply here.
+
+**The three options, costed. Lighthouse p10 is 800; today is 912.**
+
+| option | Δ | page total | passes p10? | what it costs |
+|---|---|---|---|---|
+| do nothing | — | 912 | no | — |
+| render the desktop nav client-side ≥1280 px | −60 | 852 | no | a no-JS desktop reader loses the top nav (all 11 links survive elsewhere) |
+| drop the rating from product CARDS (keep it on the PDP) | −204 | 708 | **yes** | a merchandising decision — ratings sell |
+| both | −264 | 648 | **yes** | both of the above |
+
+**Only the last two pass, and both are PRODUCT decisions, not engineering ones.** That is why this is
+now a decision: there is no remaining change that is purely technical. **AC unchanged if someone acts
+on it** — ≥5 mobile runs, median and range, element count before and after.
 
 ⚠️ **`SectionRenderer` must keep switching on every type** — narrowing the palette must never delete a
-merchant's published work (`AGENTS.md`, Store Builder). Narrow the palette, never the renderer.
-
-**AC:** ≥5 mobile runs, report **median and range**; state the element count before and after; and
-confirm no merchant-visible section stopped rendering (build a template holding one of each type and diff
-the rendered output).
+merchant's published work (`AGENTS.md`, Store Builder).
 
 ### ✅ N6. `unused-javascript` 44 KiB · `legacy-javascript` 12 KiB — CLOSED, zero code change
 Closed twice over, and the second pass found *what those bytes actually are*.

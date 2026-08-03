@@ -10,6 +10,27 @@
 
 
 
+## 2026-08-03 — N5 measured to the end: it is a decision, not work · `#135` deployed + verified
+
+`#135` (the surface sweep) is **merged, deployed and verified in production**: `/checkout` h1 count
+**0 → 1** (`<h1 class="sr-only">Checkout — Batik Nusantara</h1>`), `/checkout/sukses` **stayed at 1** —
+the double-h1 trap avoided. Surfaces 200/200/200.
+
+Then N5, measured on production at 390 px / DPR 2. 🔴 **Its own hypothesis was wrong**: header + footer
+are **88 of 912** elements, not the lever. The star rating is still the biggest repeat (204 = 22% of
+the page even after wave 3 took it 312 → 204) and it is **at its floor** — `Stars.astro` refuses the
+one-`<svg>` version so the rating keeps tracking the merchant's brand colour, which is correct.
+
+🆕 **101 elements (11%) are `display:none` at 390 px**, led by a 60-element desktop mega-menu shipped
+to every phone — and **all 11 of its links are reachable elsewhere**, so deferring it costs the crawler
+no unique URL.
+
+**Only two options reach Lighthouse's 800 p10, and both are PRODUCT decisions** (drop ratings from
+product cards −204 → 708; + defer the desktop nav −264 → 648). No purely technical change is left, so
+N5 is reclassified **decision, not work** — like N3/N4/N7 before it.
+
+**NEXT:** N5, N25, N28 all need the owner. Nothing unblocked of size remains.
+
 ## 2026-08-03 — Sweep: every route on all three apps, driven in a browser
 
 **Handoff:** [`tasks/2026-08-03-surface-sweep.md`](./tasks/2026-08-03-surface-sweep.md) · closes
