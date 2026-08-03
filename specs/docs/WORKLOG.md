@@ -10,6 +10,29 @@
 
 
 
+## 2026-08-03 — Session: N17, and the reason a correct function never ran
+
+**Handoff:** [`tasks/2026-08-03-n17-recovery-link.md`](./tasks/2026-08-03-n17-recovery-link.md) · branch
+`feat/cart-recovery-link` · closes **N17** (P1).
+
+`signRecoveryToken` was correct and had **zero callers in all four apps** — because it lived in
+`apps/storefront/src/lib`, which the ADMIN cannot import, and the admin is the only surface that lists
+abandoned carts. The merchant's WA message carried no way back to the cart; ~50 lines of storefront
+restore code were live and unreachable; four docs said it shipped. **A module's location is part of its
+contract.** The pair is in `@tokophi/lib/recovery` now.
+
+Two traps the queue's own plan would have walked into: `{{link}}` must NOT go in the seed (three CRM
+screens render the same body from `followups` rows, cannot mint a link, and `fillTemplate` emits an
+unknown token verbatim — a literal `{{link}}` to a customer), and `cartMessage` must APPEND rather than
+only substitute (the seed is not a migration, so substitution alone changes nothing for any existing
+store).
+
+Driven end to end in a browser — admin login → real `wa.me` body → that link → banner, cart and typed
+fields restored — plus the three refusals. Dev DB left untouched.
+
+**NEXT:** N18 (24-bit `tempPassword()` + no login rate-limit) · N19 (`seed:recent` inserts no
+`checkout_sessions`, so a real 30-day window holds **4** carts, 1 with a phone — the entry says 7).
+
 ## 2026-08-01 — Session: every store we provisioned got the owner password `tokophi123` — audit wave 2
 
 **Handoff:** [`tasks/2026-08-01-audit-wave-2.md`](./tasks/2026-08-01-audit-wave-2.md) ·

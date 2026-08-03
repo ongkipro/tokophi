@@ -1607,33 +1607,33 @@ production yet.
   row is 2026-07-15, so a real 30-day window holds **7 carts, not 796**. `seed:recent` refreshes
   orders/flash/ledger but inserts no `checkout_sessions`. Extend it (insert-only + idempotent, like
   the rest of that script) — **do not re-anchor the app to make the demo look busy.**
-- [ ] 🔴 **THE RECOVERY LINK IS NEVER MINTED — the WA message has no way back to the cart.**
-  Verified 2026-08-01: `signRecoveryToken` (`apps/storefront/src/lib/recovery.ts`) has **zero callers**
-  in all four apps, and `apps/admin/lib/data/checkout.ts#cartMessage` fills only `{nama, produk, toko}`
-  into the `keranjang` `wa_templates` body — which contains no link placeholder (confirmed in the DB).
-  So ~50 lines of storefront code are unreachable: `verifyRecoveryToken`, the "Selamat datang kembali"
-  banner, the basket restore and the field pre-fill in `checkout.astro`. `CODE_MAP.md`, `UI_INVENTORY.md`,
-  `STATUS.md` and `REQUIREMENTS.md` SEC-13 all claimed this shipped; all four are now corrected.
-  **What wiring it needs** (this is why it was not done as a drive-by):
-  1. `signRecoveryToken` lives in `apps/storefront/src/lib`, which the admin cannot import. Move the
-     pair to `packages/lib/src/recovery.ts` and re-export from the storefront (the secret helper
-     `@tokophi/lib/secret` is already shared, so the module has no new deps).
-  2. `getAbandonedCarts` must mint per cart and build `https://${systemDomainFor(store.slug)}/checkout?r=…`
-     (`systemDomainFor` is the existing helper — see `produk/kategori/page.tsx`). It needs the store
-     **slug**, which the read layer currently does not fetch (`getStoreName` only returns the name).
-  3. The template needs a `{{link}}`. ⚠️ **The seed is not a migration** — no existing store's row has
-     one, so either `cartMessage` appends the URL when the body lacks `{{link}}` (smallest, works for
-     every store today) **or** it takes a data fix. The template editor's variable chips + preview
-     (`crm/template/template-client.tsx`) need `link` too, or merchants get a literal `{{link}}`.
-  4. **Nothing has ever exercised the restore path in a browser.** It must be driven end to end before
-     any of this is claimed done — mint → open → assert the basket and the typed fields come back.
-  ⚠️ **When it is wired, the mint MUST keep this shape: a signed, store-bound, 7-day jose token —
-  NEVER a raw session id.** A raw id in a URL is a bearer credential over a stranger's name, phone and
-  address the moment the link is forwarded, screenshotted, or leaks via `Referer`, and those ids are
-  already echoed in every `/api/track` beacon. See `REQUIREMENTS.md` SEC-13.
+- [x] ✅ **THE RECOVERY LINK IS MINTED — done 2026-08-03, driven in a browser.**
+  The pair moved to **`packages/lib/src/recovery.ts`** (`jose` declared there rather than relied on by
+  hoisting); the storefront keeps its import path via a one-line re-export. `getAbandonedCarts` mints
+  per cart **that has a phone** — no phone, no WhatsApp, and a token is a credential — passing
+  `sessionId` (NOT the row `id`, which would verify fine and then match no row).
+  **The host is `getStorefrontHost()`**: the store's **active primary** custom domain, else
+  `<slug>.<base>`. It must agree with the storefront's `primaryOrigin()`, and `status='active'` is
+  load-bearing — a `pending`/`provisioning` domain has no cert and does not answer.
+  ⚠️ **`cartMessage` APPENDS the link when the template has no `{{link}}`, and that fallback IS the
+  fix.** The seed is not a migration, so no existing store's body carries a placeholder — substitution
+  alone would have shipped and changed nothing for a single live merchant.
+  ⚠️ **`{{link}}` was deliberately NOT added to the seed.** The same `keranjang` body is rendered by
+  three CRM screens working from `followups` rows, which have no checkout session and cannot mint a
+  link — and `fillTemplate` leaves an unknown token verbatim, so seeding it would have sent the literal
+  string `{{link}}` to a customer. Those three now pass `link: ""`.
+  **Verified end to end** (2026-08-03): admin login → `/pelanggan/keranjang` → the real `wa.me` body →
+  that exact link → "Selamat datang kembali, Fajar!", cart restored (`1x Gamis Syari Polos`), name,
+  phone and address pre-filled, session id reused. Subtotal matched `checkout_sessions.subtotal_idr`
+  exactly on a second cart (Rp 1.095.000). Refusal verified: foreign-store token, tampered signature
+  and junk all render the normal empty checkout, never a 500.
+  Pinned by `packages/lib/src/recovery.test.ts` (round trip + the three refusals) and
+  `apps/admin/lib/recovery-wired.test.ts` (**the mint has a caller** — the failure no unit test can see).
 - [ ] **Set `CHECKOUT_RECOVERY_SECRET` in the production env.** It falls back to `AUTH_SECRET`, which
   works — but it means **rotating the auth secret silently invalidates every outstanding recovery link**.
-  (Moot until the item above ships: there are no outstanding links.)
+  ⚠️ **No longer moot — links are minted now.** And it must be set on **BOTH** the admin and the
+  storefront: they resolve the secret independently, and a mismatch fails SILENTLY, as a checkout
+  that simply does not restore.
 - [ ] **Google OAuth has still never been run against real credentials** (see *Feature completeness*
   above) — a signup blocker, not an abandoned-cart one, but it is the other thing standing between this
   branch and a merchant using it.

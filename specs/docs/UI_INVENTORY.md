@@ -57,18 +57,19 @@ Shared code: `@tokophi/ui` (shadcn on **Base UI**), `@tokophi/lib` (formatters),
 | Route | Purpose | Key components / interactions | Status |
 |---|---|---|---|
 | `/pelanggan` | Customer list | list, segment tabs, sort, bulk select, rows → detail; **Tamu vs Terdaftar badge** (`customers.registered_at IS NULL` = guest — the **normal** case: buying never requires an account) | ✅ real DB |
-| `/pelanggan/keranjang` | **Keranjang Ditinggal** (`keranjang-client.tsx`) | abandoned checkouts from `checkout_sessions` (0044/0045): abandon + recovery rate cards, tabs (Semua / Ada nomor WA / Belum dihubungi / Anonim) counted with **true SQL totals**, ranked has-phone-first then value **decayed by age**, one-click **WA recovery** (filled `wa_templates` body; records **"WA dibuka"**, not "terkirim") | ✅ real DB — **but the message carries NO recovery link** (see below) |
+| `/pelanggan/keranjang` | **Keranjang Ditinggal** (`keranjang-client.tsx`) | abandoned checkouts from `checkout_sessions` (0044/0045): abandon + recovery rate cards, tabs (Semua / Ada nomor WA / Belum dihubungi / Anonim) counted with **true SQL totals**, ranked has-phone-first then value **decayed by age**, one-click **WA recovery** (filled `wa_templates` body; records **"WA dibuka"**, not "terkirim") | ✅ real DB — and the message now carries a **working recovery link** (see below) |
 | `/pelanggan/[id]` | Customer detail (`customer-detail.tsx`) | full profile: stats (belanja/pesanan/AOV/terakhir), order history, activity, contact, address, tags+notes, segment, akun (tamu/terdaftar), Kirim WA/email | ✅ real DB |
 | `/pelanggan/segmen` | Segments (Segmen) | segment cards (count, growth, rule), create dialog | ✅ mock |
 | `/pelanggan/ulasan` | Reviews (Ulasan) | rating stats, status tabs, **moderation** (terbit/menunggu) | ✅ mock |
 
-> 🔴 **Keranjang Ditinggal: the WA message has no link back to the cart.** This row claimed the
-> recovery ran "via a **signed, store-bound, 7-day** recovery link". Verified 2026-08-01: that link is
-> **never minted** — `signRecoveryToken` (`apps/storefront/src/lib/recovery.ts`) has zero callers, and
-> `cartMessage` fills only `{nama, produk, toko}` into a `keranjang` template body that has no link
-> placeholder. The *screen* is real DB (the counts, the ranking, the "WA dibuka" record all are); the
-> shopper simply has no way back to their basket, and the storefront's restore path is unreachable
-> code. See `CODE_MAP.md` §6 and `REQUIREMENTS.md` SEC-13.
+> ✅ **Keranjang Ditinggal: the WA message carries a working recovery link (2026-08-03).**
+> This row once claimed that and it was false — the link was **never minted**: `signRecoveryToken`
+> lived in `apps/storefront/src/lib`, which the admin cannot import, so it had zero callers and the
+> storefront's whole restore path was unreachable code. The pair now lives in `@tokophi/lib/recovery`,
+> `getAbandonedCarts` mints one per cart, and `cartMessage` **appends** it when the merchant's template
+> has no `{{link}}` — which is every store that exists, because the seed is not a migration.
+> Driven in a browser, not inferred: admin login → real `wa.me` body → that link → "Selamat datang
+> kembali", the basket and the typed fields all back. See `CODE_MAP.md` §6 and `REQUIREMENTS.md` SEC-13.
 
 ### CRM (WhatsApp)
 | Route | Purpose | Key components / interactions | Status |
