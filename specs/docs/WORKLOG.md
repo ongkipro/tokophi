@@ -10,7 +10,7 @@
 
 
 
-## 2026-08-03 — Session: N17, and the reason a correct function never ran
+## 2026-08-03 — Session: N17, and the reason a correct function never ran ✅ `#131` (`5aeb85e`) — merged, deployed, verified in production
 
 **Handoff:** [`tasks/2026-08-03-n17-recovery-link.md`](./tasks/2026-08-03-n17-recovery-link.md) · branch
 `feat/cart-recovery-link` · closes **N17** (P1).
