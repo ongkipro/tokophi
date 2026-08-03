@@ -610,6 +610,13 @@
       "when": 1785406811888,
       "tag": "0086_operator_suspension",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1785406812888,
+      "tag": "0087_password_revokes_sessions",
+      "breakpoints": true
     }
   ]
 }
