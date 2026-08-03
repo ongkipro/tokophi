@@ -346,6 +346,125 @@ the last AC here was written against a limiter that did not exist, and it would 
 
 ---
 
+## 🚚 KIRIMINAJA DOC SWEEP (2026-08-03) — all 34 pages read by flow
+
+Summary written to **[`specs/docs/KIRIMINAJA.md`](../KIRIMINAJA.md)** — the vendor contract, beside
+`FLOWS.md` §5 which owns the product flow. Five findings below came out of comparing that summary
+against the code.
+
+⚠️ **The captured docs give HTTP verbs, not paths** — 25 of 34 pages render `**Endpoint**: POST` with
+no URL. Every path we call came from our own working code. **Do not invent a path** for an endpoint we
+do not yet call; that is what blocks N39 and gates N41.
+
+🔵 **Two things the docs settle, so nobody re-raises them:** (a) there is **no standalone pickup
+endpoint** — creating the express order *is* the pickup request (`method: "request_pickup"`), and
+pickup vs drop-off is the per-package `drop` boolean; (b) **skipping the schedule endpoint is
+explicitly allowed** ("if your company prefers a fixed daily pickup process… skip this endpoint"), so
+our hardcoded tomorrow-10:00-WIB is a legitimate choice, not a defect.
+
+### ✅ N36. Five documented status codes were unmapped — **FIXED 2026-08-03**
+`outcomeFromTrackingCode` returned `null` ("fill the AWB, change nothing") for **302** pickup canceled
+by seller, **310** rejected–did not order, **311** rejected–**unwilling to pay (the COD refusal)**,
+**333** destroyed by courier and **555** confiscated by Customs. It also mapped **110** "pending
+*direct pickup*" to `shipped` — the code falls inside the `106..200` transit range but is PRE-pickup,
+and `RANK` is forward-only, so telling the merchant and the buyer a parcel was moving while it still
+sat at origin was permanent.
+
+**333 and 555 are documented FINAL states.** Unmapped, the order never left `dikirim`, so the poller
+re-queued it every 15 minutes forever — and the sweep takes a bounded `BATCH` per tick, ordered
+AWB-less-first, so parcels that can *never* resolve accumulate at the head of the queue and starve the
+ones with work outstanding. Same family as the un-ordered `.limit()` bug the file already documents.
+
+Now: 302 → `canceled`; 310/311 → `returned`; 333/555 → `problem` (no status change — a destroyed
+parcel is neither delivered nor returned, and whether it settles as `batal` is a refund/claim decision
+that is **not** ours to make here — but it raises `problem_at`/`problem_note`, so the merchant SEES
+it); 110 → `booked`. `210`/`211`/`350` stay deliberately unmapped, with the reason in the code.
+
+**Guard:** `apps/admin/lib/ka-status-codes.test.ts` transcribes the vendor's whole 38-code table plus
+the invariant *no FINAL-state code may return null*. **7 red before the fix, 41 green after.**
+
+### N37. `pickup_number` is returned and thrown away — it is the **payment id** · **M**
+`kaCreateOrder` returns `pickupNumber`, `createShipment` passes it back to the caller, and **nothing
+persists it** (`git grep pickupNumber` = client + one return statement, no column, no screen).
+
+The docs call this field "Pickup Number / Payment ID", and the Payment API takes it as `payment_id` to
+answer *has this shipment been paid for?* (`status_code` `9` = unpaid, `0` = paid). Default
+`payment_method` is **`va`**, so unless the account is Term-of-Payment, **every booking creates a
+payment someone must settle** — and today we hold no handle to check. It is also the reference a
+merchant would quote to KiriminAja support.
+
+**AC:** persist it on `orders` (migration — ⚠️ check `_journal.json` first, see CLAUDE.md), show it on
+the order's shipping card, and log it. Reading payment status is a **separate** task: the Payment
+endpoint's path is NOT STATED IN DOCS.
+
+### N38. The label is missing required fields · **M** (one part blocked)
+`03-important-notes/03-shipping-label.md` is a spec for a label *we* render — **there is no label
+endpoint and no label URL in the booking response**. Against its required-field list, ours omits:
+**service type**, **Insurance Information** (we do send `insurance_amount`), **postal code** on both
+sender and recipient (we snapshot `orders.ship_postcode` in 0049 and never print it), **sender
+phone**, item **prices**, and the **Sorting Code**.
+
+🔴 **Sorting Code is blocked twice over:** its values must be requested from KiriminAja
+(`tech@kiriminaja.com` / your PIC), and it is delivered on the `processed_packages` webhook — which we
+do not receive (N39). **SPX requires a 2-column sorting code and SPX is our primary courier and the
+COD rail**, so this is the highest-value blocked item on the shipping path.
+
+Not applicable to us: the JNE `CASHLESS` prefix is a **drop-off** rule and we book pickups. Our Code
+128-**B** vs the docs' "128A" is a divergence, not a defect — any Code 128 decodes to the same string.
+
+**AC:** the unblocked fields printed and eyeballed on a real 100×150 print preview.
+
+### N39. Webhooks exist and we use none · **L** · 🔴 **BLOCKED — registration path not in the docs**
+`processed_packages` carries the **AWB** (and `sorting_code`); `shipped_packages`, `canceled_packages`,
+`finished_packages`, `returned_packages` cover the rest. **This is what would make the resi appear in
+seconds instead of up to 15 minutes** — the thing the owner actually asked for.
+
+Design constraints the docs impose, none of them optional:
+- **A webhook goes BESIDE the poller, never instead of it.** Both event pages name the fallback
+  themselves: *"If our webhook endpoint is unavailable, use the Tracking API to pull shipment status
+  directly."* KiriminAja documents **no server-side retry**, and says a slow endpoint "may result in
+  missed notifications". The poller is the reconciliation path the vendor prescribes.
+- **There is no signature scheme** — no HMAC, no `X-Signature`, no replay protection, no documented IP
+  allowlist. Auth is a bare `Authorization: Bearer {api_key}` and the docs never say whose key it is.
+  A receiver can only constant-time compare the bearer. Treat the payload as untrusted: re-fetch, or
+  at minimum never let it move money on its word alone.
+- **No event id**, so de-duplication keys off `order_id` + `awb` + `method`.
+- **One callback URL per account**, must resolve to a valid A/AAAA record. One URL for the whole
+  platform, so the receiver has to route to the right tenant itself.
+
+**Blocked on:** the registration endpoint's path (`POST {"url": …}` — verb only in the docs). Get it
+from the portal or support. Everything else can be built and tested against a hand-rolled POST.
+
+### N40. We book on `/api/mitra/v6.1/request_pickup` — **KiriminAja marks v6.1 deprecated** · **M**
+`10-deprecated-api/01-express.md` is titled "Create Order Express v6.1" and says: *"This API is
+deprecated. Please use the new Create Order Express v6.2 API."* Only the **order** call is affected —
+`shipping_price` v6.1 is not in the deprecated section.
+
+Not urgent, not ignorable. What v6.2 changes: `payment_method` (`credit`) + `pin` for KA Credit,
+`credit_balance_after` in the response, `package_type_id` 9 for regular packages. ⚠️ **The v6.2 doc
+contradicts itself on the destination field names** — its table says `destination_province_id` /
+`destination_county_id` / `destination_subdistrict_id` / `destination_village_id`, its own example
+sends `destination_provinsi_id` / `destination_kabupaten_id` / `destination_kecamatan_id`. **Resolve
+that against the sandbox before migrating** — booking to the wrong village is the failure mode 0042
+was written to stop.
+
+**AC:** a sandbox booking on v6.2 that returns the same three identifiers, then the version bumped in
+one place. Keep the `drop` default explicit while you are in there — we never send it and its default
+is NOT STATED IN DOCS.
+
+### N41. We cannot see courier holidays (`libur`) · **S** · gated on the path
+The schedule endpoint returns `{clock, until, expired, libur}` per window, `libur` = holiday. **Not
+calling it is allowed** (see the 🔵 note above), so this is not a bug — but it means a fixed
+tomorrow-10:00 booking can target a day the courier is closed, and we would not know. The docs do
+**not** state what happens when you book a `libur: true` date, nor what "local time" resolves to, nor
+what happens after the stated **16:00 request cut-off**.
+
+**AC:** decide — either call the endpoint and skip `libur` windows, or record in `KIRIMINAJA.md` that
+we accept the risk. Gated on the path (NOT STATED IN DOCS) and on the endpoint's request body, which
+the docs do not document at all.
+
+---
+
 ## 🟠 PERFORMANCE — what the measurements actually said
 
 **Re-measured 2026-08-01 against production. Three of the five entries here were rewritten or closed by
