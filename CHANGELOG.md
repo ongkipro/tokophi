@@ -2,6 +2,39 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Validating wave 3, and one blog-order rule the storefront could not reach
+
+An audit of `#133` rather than a new front beside it. Two things came out of it.
+
+🔴 **`NEXT.md` was stale on FOUR entries — N19, N20, N21, N23 — all done in `52ef1de`, all still marked
+open**, three tagged `NEW`. That file is what four other docs point a starting session at, so stale in
+this direction means the next session rewrites finished work. It nearly did: N19 was picked precisely
+because it looked untouched, and `seedCheckoutSessions` was already three lines from the bottom of the
+file being opened to add it. **Close the entry in the same commit as the code.**
+
+**Validated by running, not reading** — the repo's own rule is that an item is checked off because you
+ran it. N19: 900 carts inserted, **second run inserted 0** (idempotent), and both kinds of `pulih` are
+present — **rescued 89 vs straight-through 86** — so the metric trap `abandoned_at` exists for is
+actually exercised; 175 recovered rows, 0 dangling `recovered_order_id`. N20 and N21 were validated by
+**breaking them on purpose**: a fake section type produced the exact `not assignable to type 'never'`
+error, and a capability added the careless way turned the RBAC census red. Both reverted.
+
+⚠️ **The blog order was one rule in two places, and only one of them was fixed.** N23's
+`publishedFirst()` (`published_at desc nulls last, title asc`) landed in `apps/admin/lib/data/`, **which
+the storefront cannot import**, so `content.ts` kept its own bare `desc(publishedAt)`. That is the N17
+shape one week later — a rule in the wrong package is a rule only one surface can obey. It now lives in
+`packages/db/src/article-order.ts` and both apps call it; it imports `./schema` directly, never the
+barrel, so it does not drag in `client.ts` and stays testable without a `DATABASE_URL`.
+
+**Said plainly in the code: on the storefront query `nulls last` changes nothing today** — that query
+filters `status='terbit'` and `publishedAtFor()` guarantees a published row has a date. What it buys is
+determinism (`title asc` settles two posts published in the same second, which a bare `desc` leaves to
+the query plan) and the removal of a correctness dependency on an invariant held in a *different app*.
+
+The sweep that found it is mechanical and worth re-running: parse `schema.ts` for nullability, grep
+every `desc(schema.X.Y)`, cross-reference. 31 sites → 2 candidates → 1 real. The class has now shipped
+three times.
+
 ## Unreleased — The header shipped a 600 KB lie: bare `<img>` on every page, and a descriptor nobody could check
 
 ### 🖼️ `Header.astro`'s three catalog images were bare `<img>` — 74 490 B for five 44 px thumbnails (N22)

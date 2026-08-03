@@ -1,7 +1,7 @@
 import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
-import { publishedFirst } from "@/lib/data/article-order";
+import { publishedFirst } from "@tokophi/db/article-order";
 import { eq } from "drizzle-orm";
 import type { BlogPost } from "@/lib/mock/store";
 

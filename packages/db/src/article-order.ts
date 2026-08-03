@@ -1,7 +1,17 @@
-import { schema } from "@tokophi/db";
+import * as schema from "./schema";
 import { sql, type SQL } from "drizzle-orm";
 
 /**
+ * THE blog order — the seller's list AND the shopper's /blog, one definition.
+ *
+ * ⚠️ IT LIVES IN `packages/db` FOR A REASON. It was `apps/admin/lib/data/article-order.ts`, which the
+ * STOREFRONT cannot import, so the storefront kept its own bare `desc(publishedAt)` and only the
+ * admin half of the class was ever fixed. Same shape as the recovery-link mint (N17): a rule in the
+ * wrong package is a rule only one surface can obey. Both apps already depend on `@tokophi/db`.
+ *
+ * It imports `./schema` directly, never the `@tokophi/db` barrel — the barrel pulls `client.ts`,
+ * which throws at import time without DATABASE_URL, and that would make this untestable again.
+ *
  * The seller's Blog list order: most recently PUBLISHED first, drafts last.
  *
  * ⚠️ `nulls last` IS THE DEFINITION, not decoration — this is the same NULLS-FIRST class as

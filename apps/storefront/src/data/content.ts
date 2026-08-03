@@ -10,7 +10,8 @@
 // A draft is unreleased merchant work — it must 404, not merely be absent from a listing, or a
 // guessable handle would leak it.
 import { db, schema } from "@tokophi/db";
-import { and, desc, eq } from "drizzle-orm";
+import { publishedFirst } from "@tokophi/db/article-order";
+import { and, eq } from "drizzle-orm";
 import { cached } from "./cache";
 import { mediaUrl } from "./catalog";
 
@@ -85,7 +86,21 @@ export async function getArticles(storeId: string): Promise<ArticleCard[]> {
       .from(schema.articles)
       .leftJoin(schema.blogs, eq(schema.blogs.id, schema.articles.blogId))
       .where(and(eq(schema.articles.storeId, storeId), eq(schema.articles.status, "terbit")))
-      .orderBy(desc(schema.articles.publishedAt));
+      // ONE definition of "blog order", shared with the seller's list (`@tokophi/db/article-order`).
+      //
+      // This was a bare `desc(publishedAt)` — the same expression the admin had, and the admin's was
+      // a real bug: `DESC` is NULLS FIRST in Postgres, so every draft sat above every published post.
+      // The rule was fixed in `apps/admin/lib/data/`, which **the storefront cannot import**, so this
+      // copy stayed bare. That is the N17 shape exactly: a rule in the wrong package is a rule only
+      // one surface can obey. It now lives in `packages/db`, which both already depend on.
+      //
+      // ⚠️ On THIS query `nulls last` changes nothing today and is still not decoration: the filter
+      // is `status='terbit'`, and `publishedAtFor()` (admin) guarantees a published row has a date —
+      // an invariant held in a DIFFERENT app, by one function, with nothing here to enforce it. What
+      // this line DOES change today is determinism: `title asc` settles two posts published in the
+      // same second, which a bare `desc` leaves to the query plan, so the blog could reorder itself
+      // between two loads of unchanged data.
+      .orderBy(publishedFirst());
     return rows.map((r) => absMedia({ ...r, excerpt: r.excerpt ?? "" }));
   });
 }

@@ -10,6 +10,30 @@
 
 
 
+## 2026-08-03 — Session: validating wave 3, and a queue stale in the expensive direction
+
+**Handoff:** [`tasks/2026-08-03-validating-wave-3.md`](./tasks/2026-08-03-validating-wave-3.md) ·
+branch `feat/seed-recent-carts`.
+
+An AUDIT of `#133`, not a new front. 🔴 **`NEXT.md` was stale on four entries — N19, N20, N21, N23 —
+all implemented in `52ef1de`, all still open**, three tagged `NEW`. Four other docs point a starting
+session at that file, so this costs a whole session; it nearly cost this one (a worktree was created
+for N19 before finding `seedCheckoutSessions` already in the file). **Close the entry in the same
+commit as the code.**
+
+All four validated by RUNNING them: seed:recent inserts 900 carts and **0 on a second run**, with both
+kinds of `pulih` present (rescued 89 / straight-through 86) so the metric trap is exercised; N20 and
+N21 validated by deliberately breaking them and confirming red.
+
+⚠️ Fixed what wave 3 left half-done: `publishedFirst()` lived in `apps/admin/lib/data/`, **which the
+storefront cannot import**, so `content.ts` kept a bare `desc(publishedAt)` — the N17 shape again. Moved
+to `packages/db/src/article-order.ts`; both apps call it. Honest note in the code that on the storefront
+query it changes nothing today (the `terbit` filter + `publishedAtFor()` make it moot) — what it buys is
+determinism and one less cross-app invariant.
+
+**NEXT:** N25 needs an owner decision (its AC involves dropping a table on the SHARED dev container) ·
+N5 is the only unblocked engineering item of size left.
+
 ## 2026-08-03 — Session: N17, and the reason a correct function never ran ✅ `#131` (`5aeb85e`) — merged, deployed, verified in production
 
 **Handoff:** [`tasks/2026-08-03-n17-recovery-link.md`](./tasks/2026-08-03-n17-recovery-link.md) · branch
