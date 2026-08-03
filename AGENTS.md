@@ -132,8 +132,9 @@ as the `verify-rls` incident below: a gate that does not run is not a gate.
 
 ### ⚠️ A guard reads a file's CODE, never its TEXT — `test/source-code.ts`
 
-Eight test files in this repo read source with `readFileSync`, and they do it for an honest reason:
-when the bug IS the markup and the fix is the **absence** of markup, there is nothing to import and
+Ten test files in this repo read source with `readFileSync`, and **all ten now go through
+`test/source-code.ts`** (2026-08-03) — there is no hand-rolled comment stripper left. They read
+source for an honest reason: when the bug IS the markup and the fix is the **absence** of markup, there is nothing to import and
 call, and no type-checker has an opinion. What is never honest is matching the **characters**, because
 a comment is text, and code inside a string is text:
 
@@ -143,11 +144,17 @@ const doc = `case "lookbook": return <Lookbook />`;  ← a string. Renders nothi
 case "lookbook": return <Lookbook />;         ← code.
 ```
 
-**This defect has now been found FOUR times, in four different guards, one of them introduced by the
-very commit that fixed it elsewhere.** Each was patched by hand, differently, and every hand-rolled
+**This defect has now been found NINE times, in nine different guards** (four in the wave that built
+this module, five in the sweep after it) **— one of them introduced by the very commit that fixed it
+elsewhere.** Each was patched by hand, differently, and every hand-rolled
 "ignore the comments" had a different hole — a line-prefix filter that missed the checkout file
-entirely, a `{/* */}`+`<!-- -->` stripper that did not know about `//`, and a lexer walk that joined
-`getTokenText()` and so re-injected every string's raw source. So the rule is a shared module now:
+entirely, a `{/* */}`+`<!-- -->` stripper that did not know about `//`, a lexer walk that joined
+`getTokenText()` and so re-injected every string's raw source, and a two-regex stripper whose `[^:]`
+saved `https://` and nothing else while a `/*` inside an ordinary glob string ate the file down to the
+next `*/`. So the rule is a shared module now — and **each one was proved blind against a mutated copy
+of its own target BEFORE being converted, then proved red against the same mutation after**, because a
+guard converted on faith can be green for the wrong reason (that mistake has been made and caught
+here). Mutate a COPY and point the test at it; never edit product source another stream may own:
 
 | use | for | it does |
 |---|---|---|
@@ -160,12 +167,39 @@ get wrong) and join tokens with single spaces — **so write assertions whitespa
 Not the AST: the files that need this are `.astro`, which is not a TypeScript program. `typescript`
 is already a dependency, so this costs no install.
 
-⚠️ `textWithoutComments` is for `h1-floor.test.ts` and its shape only — markup concatenated into a JS
-string and assigned to `innerHTML` really is emitted (the search palette's `<img>` exists that way and
-nothing else). Reach for `codeOnly` unless you can say why the string contents count.
+⚠️ **CHOOSE PER ASSERTION, NOT PER FILE**, and `textWithoutComments` is no longer `h1-floor`'s alone.
+It is for any claim about text the file EMITS to something that then executes or renders it, and there
+are three shapes here, not one: markup concatenated into a JS string and assigned to `innerHTML` (the
+search palette's `<img>` exists that way and nothing else); a CREDENTIAL, which lives inside the string
+literal being hunted, so `codeOnly` would inert the evidence and go permanently green
+(`no-published-credentials.test.ts`); and **raw SQL inside a `sql` template**, which Postgres executes
+exactly the way a browser renders markup — `codeOnly` turns `is_default desc` into `is_default·desc`,
+so a pattern for a real copy could never match again (`inventory-location.test.ts` uses BOTH helpers,
+one per assertion, and says why at each). Reach for `codeOnly` unless you can say why the string
+contents count — then say it, in the file.
 ⚠️ **`<!-- … -->` is NOT a JavaScript comment and neither function removes it** — and that is correct,
 because an `.astro` file's HTML comments are served to the browser (`no-published-credentials.test.ts`
-depends on exactly that). Write section comments as `{/* … */}`.
+depends on exactly that). Write section comments as `{/* … */}`. But note what the lexer does to one:
+`<!-- admin@tokophi.id -->` comes back as `< ! -- admin @ tokophi . id -- >`, so a pattern that must
+find a credential in one has to be **whitespace-tolerant**, while the same address inside a string
+literal survives as a single token.
+
+⚠️ **A DIRECTORY SKIPPED BY NAME IS THE SAME BLIND SPOT AS A HARDCODED FILE LIST** (found 2026-08-03).
+Two repo sweeps skipped any directory called `public`. `apps/<app>/public` is images;
+**`apps/admin/app/api/public` is the PUBLIC API** — four route files that neither
+`inventory-location.test.ts` nor `no-published-credentials.test.ts` could see, ever. And the worst
+instance of the class `inventory-location` hunts lived in exactly one of them: `order/route.ts` held
+the sixth copy of the default-location expression, the one with no `store_id` predicate, on the one
+path that runs as OWNER with RLS off. Both now skip `public` only at the app root. **Scan everything
+and name your exceptions; never bind a guard to a list of targets.**
+
+**The sink beats the source.** `packages/lib/src/password.test.ts` scans every tracked source file for
+`hashPassword(<arg>)` and fails on a literal, or on an identifier bound to a literal in the same file
+— the two shapes that actually shipped (`createStore`, `invitePlatformAdmin`). A mint bound to a name
+with no credential word in it (`genSecret`) is invisible to any name-based scanner but still has to
+reach the sink. `packages/db/src/seed.ts` is the single named exemption (its fixed password is tracked
+as N29); `apps/super-admin/lib/no-fixed-password.test.ts` keeps the stricter local claim — the argument
+there must be exactly `pw`, and `pw` must come from the mint.
 
 ## Database (local Postgres — `@tokophi/db`)
 Local backend fully wired behind the data layer (all 3 surfaces read + all editors write; auth+RBAC+RLS; real variants). Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (schema mirrors `~/Documents/Development/tokophi/docs/SCHEMA.md`: **54 tables**, snake_case, money = bigint IDR). Single-tenant MVP: one store "Batik Nusantara" (ADR 0008). Auth (local, JWT) + RBAC + RLS are done locally; Storage (self-hosted MinIO/S3) comes with the VPS. **RLS** (migration 0012, extended by 0032 `page_templates`, 0035 `support_*`, 0036 `media`+`payments`, **0058 `stores`**) is enabled on **45 of the 46 store-scoped tables** AND **enforces at runtime**: the admin runs every read (`lib/data/*` via `withCurrentTenant`) + write (`lib/actions/*` via `withTenant`) inside a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`, so tenant queries execute as the non-owner role with policies applied. `npm run verify-rls -w @tokophi/db` derives the store-scoped set from the catalog (every table with a `store_id`) and FAILS if one lacks RLS — **45/46 as of 2026-07-17, and the ONE remaining exception is `platform_activity`** (the platform's own audit log: cross-tenant by design, written before a session exists). `media` + `payments` were retrofitted in 0036; **this doc claimed 36/39 with 3 exceptions long after that was false** — check `npm run verify-rls`, not this sentence. ⚠️ **`stores` is NOT in that count and never could be**: it is keyed by `id`, has no `store_id`, so the catalog query cannot see it — that blind spot leaked two merchants' data across tenants until `0058` put an `id`-based policy on it. Auth (`lib/auth.ts`, pre-session `store_users` read), super-admin (cross-tenant), and the storefront (`Host`-resolved read-only catalog) stay on the owner connection. On the VPS this becomes PostgREST connecting as `tokophi_app` with the JWT `store_id` claim feeding the GUC. **RBAC** (app-layer, `lib/rbac.ts`) is enforced too.
@@ -797,7 +831,11 @@ type-checks and passes everything else.
 **The API is the boundary, the form is UX.** `/api/public/order` re-normalises and re-validates every field before it writes a customer or an order; the copies of these rules in `checkout.astro` exist only so the shopper sees the error early. **Over-validation is itself a bug**: a rule that rejects a legitimate Indonesian name, a new carrier prefix or an unusual address costs a sale and nobody ever finds out — the shopper just leaves.
 - **Phone = canonical `62xxx`** (`normalizePhone`). Accept `0812…`/`812…`/`+62 812-…`/`62 812…` with any separators. Validate **structure, not carrier**: after `62` it starts with `8`, national part 9–12 digits. **NEVER hard-code operator prefixes** (811/812/…) — carriers add prefixes and the list would one day refuse a real customer, silently and permanently. Normalise on write from EVERY path (order API, `checkout-session`, chat, seller pickup phone); migration `0048` backfilled the existing rows. `waLink()` normalises too (`wa.me/08…` does not open a chat).
 - **Email = shape only, optional, NO domain whitelist** (no mailer exists here; a gmail/yahoo allow-list would reject corporate/university/self-hosted buyers — the higher-value ones).
-- **Nama** = letters incl. diacritics + space `.` `'` `-` (`Nur'aini`, `M. Rizky`); digits/symbols refused. **Alamat** = letters AND digits (RT/RW is the point) + punctuation; only junk refused (emoji, control chars, one repeated char, <10 chars). **Kode pos** = 5 digits, optional.
+- **Nama** = letters incl. diacritics + space `.` `'` `-` (`Nur'aini`, `M. Rizky`); digits/symbols refused. **Alamat** = letters AND digits (RT/RW is the point) + punctuation; only junk refused (emoji, control chars, one repeated char, <10 chars).
+- 🔴 **Kode pos is REQUIRED (2026-08-03) — and "required" means THE SHOPPER MUST SUPPLY IT, never "the system must have derived it".** It is printed on the parcel. The checkout auto-fills it wherever the cascade can answer honestly (a district with one postcode → filled on the district pick; several → filled on the kelurahan pick) and the field is **ALWAYS EDITABLE**, because ~4% of KiriminAja's districts have no kelurahan data and the lookup can fail — a rule that only accepted a *derived* code would strand exactly those shoppers on a field they cannot fill. PRESENCE + **5 digits**, and deliberately **NOT** "must exist in our `kelurahan` snapshot": postcodes get added and redrawn, and refusing a real new one costs the sale silently.
+  - ⚠️ **`readOnly` SILENTLY CANCELS `required`.** A readonly input is *barred from constraint validation* — `willValidate` is false and `valueMissing` never fires. The field used to be locked whenever the value was derived, so adding `required` alone would have been a **no-op on exactly the two branches that auto-fill** (measured in a browser: `required` + `readOnly` → `willValidate: false`, and Bayar went straight through with an empty kodepos). The same trap already applied to Kota/Provinsi, which is why the kecamatan is checked in JS. **Never re-lock the field.**
+  - ⚠️ **A programmatic `el.value = …` fires NEITHER `input` NOR `change`**, so it does not clear the custom validity a failed submit left behind — and `setCustomValidity(msg)` keeps a control invalid until the string is cleared. A shopper who pressed Bayar with an empty kodepos and then picked a kelurahan that filled it FOR them would be refused **forever** by a field that is now correct. **`setKodepos()` is the ONE writer** and it calls `clearValidity("kodepos")`; `apps/storefront/src/lib/checkout-kodepos.test.ts` fails if a second writer appears, if `required` or the `MISSING` entry goes, or if `readOnly` comes back.
+  - **`loadKelurahan()` drops a response whose district the shopper has left** (same `destAtCall` guard `loadRates()` has always had). It had none: measured, two districts picked in quick succession left district A's postcode **55764** on an order shipping to district B (Sewon, 552), read back by the "Kirim ke" card as if it belonged there. A recovered checkout's saved kodepos is now restored **inside** that lookup too — it used to be re-applied from a `setTimeout(…, 600)` racing it, so any slower lookup wiped it (measured: 2 s → field emptied), which under a required rule is a returning shopper who cannot submit.
 - **Kecamatan is NOT character-validated** — it is picked from a list, so the only real rule is "the `dest_id` resolves in `kiriminaja_areas`" (`areaById`). **Kota + Provinsi are DERIVED from it**; the typed values are ignored everywhere (they were the COD hole).
 - ⚠️ **`<form novalidate>` on `checkout.astro` is LOAD-BEARING — it is what makes the checkout speak Indonesian. Do not remove it.** The browser runs its own constraint check **before** the `submit` event: finding an empty `required` field it blocks the submit and shows **its own bubble, in the BROWSER's language, not the page's `lang="id"`**. An Indonesian shopper on an English phone got *"Please fill out this field."* / *"Please select one of these options."* — the only strings on the page we did not write — **and the submit handler never ran, so every Indonesian message it already carried (`"Nama lengkap wajib diisi."`) was unreachable dead code.** `novalidate` disables only the automatic pre-submit gate; `checkValidity()`/`reportValidity()` still work when *we* call them. Our market is Indonesia: **every message a shopper can see must be ours.**
   - `labelMissing()` stamps an Indonesian sentence on **every** `valueMissing` control (map `MISSING`, keyed by `name`) **before** anything reports — the submit handler bails at the first bad field, so labelling lazily leaves the rest holding English: invisible today, one stray `reportValidity()` from being shown. **Add a `name` to `MISSING` when you add a required control.**
