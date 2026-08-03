@@ -10,6 +10,7 @@
 // Deliberately NOT the shared PageHeader (blog/kontak/halaman still use that) — this is the category
 // page's own hero, so it can be more of a hero without touching those.
 import Breadcrumb from "./Breadcrumb.astro";
+import { imageSrcSet } from "../data/catalog";
 import type { Crumb } from "../lib/breadcrumb";
 
 interface Props {
@@ -25,6 +26,33 @@ interface Props {
 
 const { crumbs, eyebrow = "Koleksi", title, dek, imageUrl, imageAlt = "" } = Astro.props;
 const hasCrumbs = !!crumbs?.length;
+
+// ── THE COVER IS THIS PAGE'S LCP ELEMENT — measured, 2026-08-03 ───────────────────────────────────
+//
+// It is `eager` + `fetchpriority="high"` and it WAS bare: no `srcset`, no `sizes`. Every other
+// catalog image on the storefront goes through `imageSrcSet`; this one — the biggest paint on
+// `/kategori/*` — was the one that did not.
+//
+// ⚠️ **On the SEEDED demo this saves nothing, and saying otherwise would be the wrong claim.** The
+// seed points every category cover at a PRODUCT photo (`/products/<slug>.webp`), and all seven are
+// **600 × 600**. Against `sizes="100vw"` the browser needs 1440 device px at 1440/DPR1, 2880 at
+// 1440/DPR2 and 824 at 412/DPR2 — so it picks the 600w original in all three cases and downloads the
+// same 14 252 B it did before. The ladder's 400w rung (4 200 B) only wins below ~400 device px.
+// A 600 px square stretched across a 1440 × 320 banner is a **2,4× upscale** (4,8× at DPR2): the real
+// defect here is the ASSET, and a srcset that tops out at 600 px cannot fix it. A proper 1920 × 720
+// cover is a content change (see BACKLOG) — this is not it, and it must not be mistaken for it.
+//
+// What it DOES fix is the MERCHANT path, which is the one that ships: a cover uploaded in Kategori is
+// `/api/uploads/…`, where `imageSrcSet` yields the full 200→2000 `?w=` ladder. `saveImage` caps an
+// upload at 2000 px, so a real merchant cover was being delivered WHOLE to a 412 px phone that needed
+// 824. That is the case this attribute exists for.
+const coverSrcSet = imageUrl ? imageSrcSet(imageUrl) : undefined;
+
+// `sizes` is derived from THIS component's layout, not guessed: the banner is the full-bleed
+// `<section>` (no `max-w-*` on it — the cap is on the inner content div) and the img is
+// `absolute inset-0 w-full`, so its box is the viewport width at every breakpoint. Measured in a
+// browser: 1440 CSS px at a 1440 viewport, 412 at 412. `100vw` is arithmetic here.
+const COVER_SIZES = "100vw";
 ---
 
 {
@@ -33,11 +61,24 @@ const hasCrumbs = !!crumbs?.length;
        bottom-left, over a scrim that darkens top + bottom for legibility. No separate breadcrumb strip
        above it, and a modest fixed height so the cover does not eat the whole viewport. */
     <section class="relative isolate overflow-hidden bg-ink">
+      {/* ⚠️ NO `width`/`height` ON PURPOSE — and this is the deliberate part, not an omission.
+          It carried `width="1920" height="720"` over a file that is **600 × 600**. Two separate
+          things are wrong with putting a number back:
+            1. This is a MERCHANT UPLOAD of unknown dimensions. The seed happens to point at a 600²
+               product photo; the next merchant uploads 2000 × 800. No literal is true for both, and
+               a component cannot know. The repo already settled this shape of question — an image
+               missing from the manifest gets NO srcset, because no claim beats a wrong one.
+            2. There is nothing for it to do. The img is `absolute inset-0 h-full w-full`, so BOTH
+               used dimensions are definite and the UA's `aspect-ratio: attr(width)/attr(height)` is
+               overridden — the attributes never sized this element. Verified in a browser before and
+               after removing them: identical 1440 × 320 box, CLS unchanged at 0. So the old
+               attributes were **not** a layout-shift bug; they were a false intrinsic claim that
+               bought nothing, which is why the fix is to delete rather than to correct them. */}
       <img
         src={imageUrl}
+        srcset={coverSrcSet}
+        sizes={coverSrcSet ? COVER_SIZES : undefined}
         alt={imageAlt}
-        width="1920"
-        height="720"
         loading="eager"
         fetchpriority="high"
         decoding="async"

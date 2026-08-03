@@ -10,10 +10,23 @@
 - IP **45.77.33.112**; SSH **key-only** (`ssh -i ~/.ssh/tokophi_dev root@45.77.33.112`) — password auth **disabled** (`passwordauthentication no`).
 - **Coolify v4.1.2** (`http://45.77.33.112:8000`), server type = **Localhost/This Machine**. UFW active: 22/80/443/8000/6001/6002. app uuid `l7r4qaqcml4zigw1dc7iptun`; **Coolify app id `1`**; instance id `0d341106-34ff-4b5b-8441-9350e1b8ce35`.
 
-⚠️ **There is NO API token. `~/.coolify_token` does not exist** (checked 2026-08-01) — that is *why*
-`/api/v1` answers `Unauthenticated`, and this line used to claim the file was there. **There is no
-scripted deploy or rollback path**; everything below goes through SSH + `docker`, and rollback is
-`git revert` + push + webhook (~8–10 min, see below).
+⚠️ **The API token is EXPIRED/REVOKED, not missing — do not go and create the file** (re-checked
+2026-08-03). `/api/v1` answers `401 {"message":"Unauthenticated."}`, and the conclusion drawn from
+that — **no scripted deploy or rollback path today** — is right. The *diagnosis* printed here on
+2026-08-01 was not: it said `~/.coolify_token` "does not exist".
+
+```bash
+ls -l ~/.coolify_token        # → -rw------- 50 bytes, Jul 10.  It is there.
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H "Authorization: Bearer $(cat ~/.coolify_token)" http://45.77.33.112:8000/api/v1/applications
+# → 401
+```
+
+The earlier check almost certainly ran **on the VPS**, where `~` is `/root` and the file genuinely is
+absent — it lives on the **workstation**. So the fix is **not** "write the file"; the file is already
+written and its contents are dead. **Regenerate it in Coolify → Keys & Tokens** and overwrite it
+(`chmod 600`), then re-run the curl above and expect a 200. Until someone does, everything below goes
+through SSH + `docker`, and rollback is `git revert` + push + webhook (~8–9 min, see below).
 - Provisioned fresh via **`vultr-cli`** + cloud-init (lean base, hardened SSH); Coolify installer auto-installs Docker. This is the **single consolidated box** — the earlier experiment box (`45.76.146.40`) was **deleted**.
 - **Domains:** `admin`/`super_admin`/`storefront` on `*.45.77.33.112.sslip.io` via the app's `docker_compose_domains` DB field (Coolify's `SERVICE_FQDN` env magic doesn't wire the compose build pack — set the DB field directly; note the **super-admin** service maps to the underscore key `super_admin`).
 
@@ -289,8 +302,52 @@ still be a false green. Poll every 45–60 s.
 ⚠️ `app.` and `rich.` answering **307** is healthy (middleware → `/login`). Demanding 200 there is a
 permanently-red check.
 
-**A build takes 8–10 minutes, not ~5** — measured over five clean builds: 8m28s, 9m57s, 7m57s, 8m36s,
-8m32s. Two overlapping builds of the same commit took **14m36s and 20m47s**.
+### How long a deploy takes — and why the number you read is usually two numbers
+
+⚠️ **`finished_at − created_at` is WEBHOOK-TO-LIVE, not build time.** `created_at` is when the webhook
+queued the deployment; there is no `started_at` column. Coolify serialises deploys **per application**,
+so anything already running for app `1` is pure waiting time folded into that subtraction. Re-derive
+the split rather than reading the total:
+
+```bash
+ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 'docker exec -i coolify-db psql -U coolify -d coolify -P pager=off -c "
+with q as (select id, application_id, left(commit,7) sha, created_at, finished_at,
+                  lag(finished_at) over (partition by application_id order by id) prev_fin
+             from application_deployment_queues where status = '"'"'finished'"'"')
+select id, sha, extract(epoch from (finished_at-created_at))::int total,
+       extract(epoch from (finished_at - greatest(created_at, coalesce(prev_fin, created_at))))::int build_secs,
+       extract(epoch from (greatest(created_at, coalesce(prev_fin, created_at)) - created_at))::int wait_secs
+  from q where application_id = '"'"'1'"'"' order by id desc limit 15;"'
+```
+
+⚠️ **`where application_id = '1'`** — that table is SHARED with **Formalin, which is app id `2`** on
+this same box. Omit the filter and you are averaging two different products' builds.
+
+**The build itself is ~8–9 minutes and remarkably stable** (re-derived 2026-08-03 over **all 37**
+finished app-`1` deploys since 2026-07-30): the spread is 470–597 s, but **34 of the 37 sit between
+470 s and 528 s — 7m50s to 8m48s — with a median of 508 s = 8m28s.** Budget **8m30s ± 30s**, and treat
+anything past ~9 minutes as a signal, not noise. (The three above the band: 532 s and 543 s on
+2026-07-30, and the 597 s outlier below.)
+
+**Everything above that band has a cause, and it is never the code:**
+
+| id | sha | wall-clock | actual build | cause |
+|---|---|---|---|---|
+| 322 | `dd2129d` | 9m57s | 9m57s | **Formalin (app `2`, queue 323) built 06:10:14–06:15:01, inside this window.** Different apps do NOT serialise — they share 4 vCPUs. |
+| 317 | `d11a96d` | 14m36s | **7m50s** | queued behind 316 → 6m46s of waiting |
+| 318 | `d11a96d` | 20m47s | **7m57s** | queued behind 317 → 12m50s of waiting |
+| 330 | `52ef1de` | **15m37s** | **8m32s** | queued at 03:01:47 while 329 was still building; started 03:08:52 → **7m05s of waiting** |
+
+So the old line here ("8–10 minutes … five clean builds: 8m28s, 9m57s, 7m57s, 8m36s, 8m32s") was
+citing real durations but two things about it misled: **it did not say the five were queue-free**, and
+**9m57s was not clean at all** — that is 322, contending with a Formalin build. The genuinely clean
+five are 8m28s, 7m57s, 8m36s, 8m32s, 8m29s.
+
+**The practical rule this replaces "8–10 minutes" with:** a deploy that has the queue to itself is
+live ~8m30s after the merge. A deploy that does not is `8m30s + however long the one in front of it
+has left` — 330 is the worked example, and it is the case CLAUDE.md's *"merge, watch the deploy land,
+then let the next one go"* exists to prevent. If a deploy feels slow, look at the queue before you
+look at the Dockerfile.
 
 ### The older `RunningFor` method — still true, but weaker
 
