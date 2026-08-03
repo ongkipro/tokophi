@@ -26,6 +26,7 @@
     "verify-rls": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/verify-rls.ts",
     "verify-rls-app": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/verify-rls-app.ts",
     "seed:recent": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/seed-recent.ts",
+    "backfill:ship-address": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/backfill-ship-address.ts",
     "verify-migrations": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/verify-migrations.ts"
   },
   "dependencies": {

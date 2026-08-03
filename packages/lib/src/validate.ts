@@ -136,16 +136,25 @@ export function addressError(raw: unknown): FieldError {
   return null;
 }
 
-// ── Kode pos ────────────────────────────────────────────────────────────────────────────────────
-// Auto-filled from the picked kelurahan, but it stays TYPEABLE for the ~4% of districts with no
-// kelurahan data — that path must never block an order. Optional, and exactly 5 digits when given.
+// ── Kode pos (REQUIRED) ─────────────────────────────────────────────────────────────────────────
+// It is printed on the parcel, so an order without one is an address a rider has to phone about.
+// The checkout AUTO-FILLS it wherever the address cascade can answer it honestly (a district with a
+// single postcode, or the kelurahan the shopper picked), so for ~96% of destinations this costs the
+// shopper no interaction at all — but "required" means THE SHOPPER MUST SUPPLY IT, never "the system
+// must have derived it": ~4% of KiriminAja's districts have no kelurahan data and the lookup can
+// simply fail, and in both cases the field is empty, editable, and the shopper types their own.
+//
+// PRESENCE + SHAPE, and the shape stays at 5 digits. There is deliberately NO check that the code
+// exists in the local `kelurahan` table: that table is a snapshot, postcodes are added and redrawn,
+// and refusing a real new one would cost the sale silently — the exact over-validation bug this
+// module exists to avoid.
 export function normalizePostcode(raw: unknown): string {
   return typeof raw === "string" ? raw.replace(/\D+/g, "").slice(0, 5) : "";
 }
 
 export function postcodeError(raw: unknown): FieldError {
   const s = typeof raw === "string" ? raw.trim() : "";
-  if (!s) return null; // optional
+  if (!s) return "Kode pos wajib diisi.";
   if (!/^\d{5}$/.test(s)) return "Kode pos harus 5 angka.";
   return null;
 }

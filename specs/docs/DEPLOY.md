@@ -188,14 +188,77 @@ Env (all optional, all with defaults; the alert-channel secrets belong in that s
   every check was writing to its **neighbour's** counter, so nothing could ever reach the threshold.
   Same lesson as `queueSave` — **exercise it, do not typecheck it.**
 
-## Billing cron (schedule this)
+## Billing cron (scheduled — the `cron` service in the compose. **Do NOT add a second schedule.**)
 
 Subscription enforcement is real-time (`computeBilling` in `requireCapability` → suspended stores
 are read-only immediately, no job needed). But **recurring invoice generation + stored-status
-sync** run via `GET /api/cron/billing?secret=$CRON_SECRET` — schedule it **daily**:
-- Set `CRON_SECRET` (admin container env; already in the compose).
-- Coolify Scheduled Task (or a host crontab): `curl -s "https://<admin-domain>/api/cron/billing?secret=$CRON_SECRET"` at e.g. `0 2 * * *`.
-- Returns `{stores, statusSynced, invoicesCreated}`. It generates a VA invoice for past-due/suspended stores with no pending subscription invoice; payment callback then extends the period.
+sync** run via `GET /api/cron/billing?secret=$CRON_SECRET`, and the thing that calls it is the
+`cron` **sidecar** in `docker-compose.coolify.yml`, alongside `cron-tracking` /
+`cron-tracking-events`. This heading used to read *"schedule this"* and told you to add a **Coolify
+Scheduled Task** — following that would have created a **second** caller. Verified 2026-08-03:
+`select count(*) from scheduled_tasks` in `coolify-db` is **0**; the sidecar is the only scheduler
+and always has been.
+- `CRON_SECRET` is set in the admin container (checked live: present, 40 chars) — the route
+  **fails closed** without it in production, so an unset one is a 401 on every run, not a free pass.
+- Returns `{stores, statusSynced, invoicesCreated}`. It generates a VA invoice for past-due/suspended
+  stores with no pending subscription invoice; the payment callback then extends the period.
+
+**Verify it ran** — `docker logs --timestamps $(docker ps --format '{{.Names}}' | grep -m1 '^cron-l7r4')`
+(prefix, never a full name — the hash changes every deploy). You should see one
+`[cron-billing] <iso>` line per run followed by that JSON.
+- ⚠️ **Before 2026-08-03 that log was EMPTY, on a healthy box and on a broken one alike.** The command
+  was `wget -qO- … >/dev/null 2>&1 || echo 'cron billing failed'` — the body was discarded, so a run
+  that invoiced nothing and a run that invoiced every merchant were indistinguishable, and the only
+  way to prove the job had fired at all was `docker top` (a `sleep 86400` whose elapsed time matched
+  the container's). `cron-tracking` and `cron-tracking-events` already carried a comment recording
+  exactly this lesson; the billing job was the one that had not learned it. Body → STDOUT now.
+- The container being `Up (healthy)` proves nothing about the job: the healthcheck is `kill -0 1`,
+  i.e. "`sh` has a PID". Read the log, not the state.
+
+### ⚠️ The billing schedule is the DEPLOY schedule, and nothing watches this container
+
+Two facts to hold together before anyone "fixes" either one:
+
+1. **`sleep 86400` re-anchors to container start.** Every redeploy restarts the loop *and fires a
+   billing run immediately*, so the billing hour is wherever a merge happened to land. Measured from
+   `application_deployment_queues`: **13 deploys on 2026-08-03, 18 on 07-30, 24 on 07-23** — the
+   86 400 s sleep has almost never been the thing that triggered a run. There is no fixed hour, and
+   a day can hold a dozen runs or (over a quiet weekend) exactly one.
+2. **It does not double-invoice today, and the reason is in the ROUTE, not here.**
+   `billing/route.ts` skips any store that already has a `menunggu` `subscription` invoice. Measured
+   against production: **at most one subscription invoice exists on any single day**, including the
+   18-deploy one. That guard is load-bearing — do not "simplify" it.
+   ⚠️ But it is a **check-then-act with no lock and no idempotency key** (`invoices.number` is unique,
+   yet it is `Date.now().toString().slice(-9)` — a timestamp, not a natural key, and three different
+   call sites mint it). It holds for **sequential** re-runs. Two genuinely **concurrent** runs — an
+   old sidecar still in `wget` while the new one starts — would both read "no pending" and both
+   `alCreatePayment` + insert. The window is sub-second and unobserved, not closed.
+
+**Fixing this properly is a project, not a compose line** (~½–1 day): a fixed wall-clock trigger
+(Coolify Scheduled Task *replacing* the sidecar, or `supercronic` in it), a `unique (store_id, period)`
+idempotency key on the subscription invoice so a repeat is a DB no-op rather than a race, and an
+advisory lock around the walk. Do **not** half-build it by putting `$(( 86400 - $(date +%s) % 86400 ))`
+in the compose string: that pins the hour without removing the run-on-start, so it changes when the
+double-run happens and not whether it can.
+
+### Nothing notices if a cron sidecar dies
+
+- **L1 (`ops/tokophi-watchdog.sh`) deliberately excludes them** — `SERVICES="admin super-admin
+  storefront landing"`, and the comment says it "NEVER touches postgres / backup / coolify / cron".
+- `restart: unless-stopped` covers a **crash**, and nothing else. It does **not** cover the failure
+  shape this box has actually produced: Coolify leaving a container in state `created` and moving on.
+  That happened again on **this** deploy — `/var/log/tokophi-watchdog.log`, 2026-08-03 15:03, healed
+  `admin`, `super-admin` and `storefront` from `created`. Had the three `cron-*` containers landed
+  the same way, **nothing would have started them and nothing would have said so**, and billing +
+  AWB polling + conversion delivery would have been off until a human looked.
+- **L2 (`ops/tokophi-probe.sh`) does not check them either** — its four checks are the 5 public
+  surfaces, `POST /api/public/ongkir`, disk, and the L1 heartbeat. And `notify()` is still a stub, so
+  it cannot page anyone regardless.
+- **Smallest real fix (not done here, BACKLOG P1.8):** add `cron cron-tracking cron-tracking-events`
+  to the watchdog's `SERVICES`. It is safe for exactly the reason `migrate` is not — these loops are
+  idempotent restarts of a poller, whereas starting `migrate` re-runs migrations. It is a change to a
+  file that lives on the **VPS**, deployed by `scp`, so it does not ride a git deploy and is out of
+  scope for a repo-only change.
 
 ## Tracking cron (scheduled — `cron-tracking` in the compose)
 

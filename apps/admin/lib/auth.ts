@@ -6,6 +6,7 @@ import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { authSecretBytes } from "@tokophi/lib/secret";
 import { hashPassword } from "@tokophi/lib/password";
+import { sessionOutlivesPassword } from "./session-revocation";
 
 // Lazy (throws in prod if AUTH_SECRET is unset, never at build) — see @tokophi/lib/secret.
 const secret = () => authSecretBytes();
@@ -53,8 +54,18 @@ export async function findLogin(email: string) {
   return row ?? null;
 }
 
-export async function signSession(s: Session): Promise<string> {
-  return new SignJWT({ ...s }).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("7d").sign(secret());
+/**
+ * `issuedAt` overrides the token's `iat`. Exactly one caller passes it — `changePassword`, which has
+ * just rotated the credential and must hand the merchant's own tab a replacement that is
+ * unambiguously NEWER than the rotation it caused. See `sessionOutlivesPassword` for why "same
+ * second" is not good enough. Everyone else mints at `now()`.
+ */
+export async function signSession(s: Session, issuedAt?: Date): Promise<string> {
+  return new SignJWT({ ...s })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt(issuedAt ? Math.floor(issuedAt.getTime() / 1000) : undefined)
+    .setExpirationTime("7d")
+    .sign(secret());
 }
 
 /**
@@ -74,26 +85,44 @@ export async function signSession(s: Session): Promise<string> {
  *
  * NOTE: `role` is taken from the row, not the token, so a demotion takes effect on the next request
  * rather than on the next login.
+ *
+ * ⚠️ THE COMMENT ABOVE OVERSOLD IT, AND THE GAP WAS DRIVEN, NOT ARGUED. The re-read bought back
+ * demotion and removal — NOT credential rotation. Logged in as a store owner, `password_hash` was
+ * rewritten and the browser stayed authenticated on `/produk`; only deleting the `store_users` row
+ * ended it. So the merchant's own `/akun/keamanan` change and super-admin's "Reset password owner" —
+ * both of them the obvious "lock them out" move — left a stolen 7-day cookie working.
+ *
+ * The same join now also reads `users.password_changed_at` (migration 0087, stamped by a BEFORE
+ * UPDATE trigger so no writer can forget it) and refuses any token issued at or before it. Still ONE
+ * round trip: it is an inner join onto a row this query was already keyed by.
  */
 export async function getSession(): Promise<Session | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
   let claims: Session;
+  let iat: number | undefined;
   try {
     const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
     claims = payload as unknown as Session;
+    iat = payload.iat;
   } catch {
     return null;
   }
   if (!claims?.userId || !claims?.storeId) return null;
   try {
     const [membership] = await db
-      .select({ role: schema.storeUsers.role })
+      .select({ role: schema.storeUsers.role, passwordChangedAt: schema.users.passwordChangedAt })
       .from(schema.storeUsers)
+      .innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
       .where(and(eq(schema.storeUsers.userId, claims.userId), eq(schema.storeUsers.storeId, claims.storeId)))
       .limit(1);
     // Removed from the store (or the store is gone) → the session is over, immediately.
     if (!membership) return null;
+    // The password that opened this session has been rotated since → so is this session, on every
+    // surface at once. Applies to an impersonated session too, by the same rule and deliberately:
+    // the merchant changing their own password is the ONE lever that ends an operator's live
+    // impersonation of them, and that is the incident-response behaviour you would want.
+    if (!sessionOutlivesPassword(iat, membership.passwordChangedAt)) return null;
     return { ...claims, role: membership.role };
   } catch (err) {
     // A database blip must not silently hand back a stale role. Fail closed: the user re-authenticates.

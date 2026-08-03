@@ -2,6 +2,110 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — The demo store could not be shipped: 160 of 219 orders had no usable address
+
+**Measured on production**: 219 orders, **one** store. 50 carried no `ship_address` /
+`ship_district_id` / `ship_postcode` at all (pre-0042 rows); 108 had an address shorter than 15
+characters; the whole store held **7 distinct kecamatan and 10 distinct addresses**, two of which were
+`"Test ruma kami"` and `"Jsjsj rw rt dkdj"`. Nothing in that shape can be booked, and a demo where a
+hundred parcels go to one kecamatan tests nothing.
+
+`packages/db/src/backfill-ship-address.ts` (`npm run backfill:ship-address -w @tokophi/db`, with
+`DRY_RUN=1` to print the plan and write nothing) repairs the snapshot. It is **UPDATE-only, on
+`orders` only, and writes exactly seven columns**: `ship_recipient`, `ship_phone`, `ship_address`,
+`ship_district_id`, `ship_postcode`, `city`, `province`. It never names `total_idr`, `subtotal_idr`,
+`shipping_idr`, `tax_idr`, `courier`, `service_type`, `status` or `awb`, and touches no other table —
+orders carry payments, line items and ledger entries, and a destination is not money.
+
+- **It is NOT part of `seed-recent.ts`, deliberately.** That script's whole safety story is
+  "INSERT-only, never truncates", and this is an UPDATE. It is also *downstream* of these rows —
+  `seed-recent` samples its destinations **from `orders`**, so on production it was copying those 7
+  districts and `"Test ruma kami"` into every new demo order. Repairing the rows fixes what it copies.
+- **A row is repaired only when its snapshot cannot ship a parcel**: no address, under 15 characters,
+  **no digit anywhere in it** (a street with no house number, no RT/RW and no block is not an address
+  a rider can walk to — that is what caught `"Jalan maju"` and `"Jsjsj rw rt dkdj"`), a missing or
+  unresolvable district/postcode, or a `city`/`province` that is not the pair **derived** from the
+  district. Real addresses someone actually typed (`"Ngoto RT 01 Bangunharjo Sewon Bantul"`) are left
+  alone. That predicate is also the idempotence proof: after a run nothing satisfies it, so a second
+  run updates **0 rows** (verified on a production clone).
+- **No district id is invented.** All 85 are real `kiriminaja_areas` ids, each **pinned to the district
+  name it is expected to be** — if the reference table is re-imported and an id moves, the script fails
+  instead of addressing parcels to another island. Every postcode is a real `kelurahan` row *under that
+  district*, and the kelurahan in the address text is the one the postcode came from.
+- **The SPX column is measured, not assumed.** Every candidate was quoted live against
+  `shipping_price` from this store's pickup district (6138 Gubeng, Surabaya, sandbox, `courier:["spx"]`,
+  1.000 g). ⚠️ **SPX quotes nothing to Bali** from that origin — surprising, and exactly why it is
+  measured. The pool is bucketed so all four COD outcomes exist in the data: allowed province + SPX
+  serves (**45 SPX orders**), allowed province where **SPX does not serve** (6 — Bawean, Karimunjawa,
+  the Gunung Kidul south coast), province off the allow-list (50), and neither (5), plus 113 orders on
+  a non-SPX rail. Result: **7 → 88 kecamatan, 4 → 31 provinces, 10 → 163 distinct addresses**, all six
+  COD provinces populated.
+- **The names and phones are the ones an over-eager validator has refused before** — `Nur'aini`,
+  `M. Rizky`, `I Gusti Ngurah Rai`, `Abdul Ghofur Al-Rasyid`, `Anne-Marie Tobing`, `Aisyah Zahra’`, and
+  carrier prefixes **0838 / 0881 / 0895 / 0851**. `packages/db/src/demo-addresses.test.ts` runs every
+  generated name, phone and address through `@tokophi/lib/validate`: if the generator can emit
+  something the checkout would reject, the demo is carrying rows a real order could never have created.
+  The generator lives in the pure `demo-addresses.ts` for the same reason `cod-policy.ts` is split from
+  `cod.ts` — the writer imports `./client`, which connects at module scope.
+- ⚠️ **Not fixed, and not fixable by editing a destination: no order exceeds the COD cap.** The largest
+  is **Rp1.814.000** against a Rp2.000.000 cap, so the "over the cap" refusal has no row to exercise it.
+  Raising a total means writing a financial column, which this script refuses to do; testing that branch
+  needs a real checkout above Rp2jt.
+
+## Unreleased — an incomplete address can no longer buy anything: kode pos is required
+
+**Kode pos was optional on both halves**, so a parcel could be booked with no postcode on it —
+measured before the change: the form let Bayar through with the field empty and
+`/api/public/order` wrote the order. It is required now in `@tokophi/lib/validate`
+(`postcodeError("")` is an error), which the checkout form and the order API both read, so the API
+refuses the same payload independently of the form — verified by posting straight at it.
+
+**Required does NOT mean "the system derived it".** The cascade auto-fills the field wherever it can
+answer honestly (one postcode in the district → filled on the district pick; several → filled on the
+kelurahan pick) and the field is now **always editable**; the ~4% of districts with no kelurahan data,
+and any failed lookup, leave it empty, editable, and explained by a hint under the field. Making it
+required *only when derivable* would have been the over-validation bug `AGENTS.md` warns about.
+
+Three things had to change for `required` to mean anything, and each was invisible:
+
+- ⚠️ **`readOnly` silently cancels `required`** — a readonly input is barred from constraint
+  validation (`willValidate: false`). The field was locked whenever the value was derived, so the
+  attribute alone would have been a **no-op on exactly the two branches that auto-fill**. Lock removed;
+  it also means a shopper who knows their own kodepos can now correct ours.
+- **One writer, `setKodepos()`.** Six sites assigned `kodeposEl.value` directly, and a programmatic
+  assignment fires neither `input` nor `change` — so it never cleared the custom validity a failed
+  submit had set. A shopper who pressed Bayar empty, then picked a kelurahan that filled the field for
+  them, would have been refused forever by a field that was now correct.
+- **`kodepos` added to the `MISSING` map** — otherwise the one string a shopper sees is the browser's,
+  in the browser's language.
+
+Two quiet defects found and fixed in the same file, both measured against the previous build:
+
+- **`loadKelurahan()` had no stale-response guard** (`loadRates()` beside it has always had one). Two
+  kecamatan picked in quick succession: district A's postcode **55764** ended up on an order shipping
+  to **Sewon (552)**, with the "Kirim ke" card reading it back as if it belonged there.
+- **A recovered checkout's saved kodepos was re-applied from a `setTimeout(…, 600)` racing that same
+  lookup.** A 2 s lookup wiped it (measured) — under the new rule, a returning shopper who cannot
+  submit. The restore now happens inside the lookup, which is the only thing that knows when it is done.
+
+Also: the kecamatan's "pilih dari daftar" refusal is now shown **inline** (`<p data-err>` +
+`aria-invalid`) as well as in the bubble, and `#dest-search` carries `name="kecamatan"` — so when the
+order API refuses with `field: "kecamatan"`, the response handler's
+`form.querySelector('[name="…"]').focus()` finally finds something. It matched nothing before.
+
+Checks in on-screen order: the kecamatan is validated **between Alamat and Kode Pos**, because it is
+upstream — picking it is what fills the kodepos — so an empty kodepos no longer pre-empts the field
+that would have filled it. `kelurahan` stays **optional** (unchanged): the local table's ids are BPS
+codes carrying `id: null` on purpose, a wrong village id books the parcel to the wrong village, and
+the order API ignores the field entirely.
+
+Guarded by `apps/storefront/src/lib/checkout-kodepos.test.ts` (every assertion mutation-tested to go
+red) and the updated `packages/lib/src/validate.test.ts`. The over-validation sweep was re-run in a
+real browser on an `en-US` locale — 13 Indonesian names, prefixes 0838/0881/0895/0851, university /
+self-hosted / plus-addressed emails, `Blok C2/14` and `RT.001/RW.009` addresses — all still pass, with
+focus never yanked out of the field the shopper clicked into (37 assertions).
+
+
 ## Unreleased — the resi appears on its own; the UI was telling sellers to keep clicking
 
 The shipping flow is four steps — **Proses** (`baru → diproses`) → **Atur pengiriman** (book with the

@@ -49,8 +49,16 @@ URL is a merchant's account.
 carries **no impersonation marker at all** — no `aud`, no operator id, no shortened expiry — so nothing
 downstream can distinguish it from the merchant's own login, and **every action taken during it is
 attributed to the merchant**. Only the mint is audited. There is **no revocation** (no `jti`, no token
-version) and **a password reset does not kill it**. The only kill switch is deleting the owner's
-`store_users` row.
+version) and ~~a password reset does not kill it~~ — ✅ **a password rotation DOES kill it now**
+(migration `0087` + `sessionOutlivesPassword`, 2026-08-03): the merchant changing their own password,
+or an operator resetting it, ends every session for that user including a live impersonation, because
+`getSession()` refuses any JWT issued at or before `users.password_changed_at`.
+**That closes one limb and NONE of the three above.** The token is still replayable inside its 2-minute
+window, still rides in a query string, still mints 7 days, and still carries no impersonation marker —
+so a leaked URL is still a merchant's account, and the decision below is unchanged. Deliberately no
+marker, no shortened expiry and no single-use was added: those are the owner's options, not a side
+effect of a revocation fix. What did change is that the "only kill switch is deleting the owner's
+`store_users` row" is no longer true; there are two now.
 
 **Options to put to the owner** (do not pick one unilaterally): single-use token (consume on redeem) ·
 POST + body instead of a query string · bind the minted session's expiry to the operator's

@@ -212,7 +212,11 @@ async function handle(req: Request) {
     ["whatsapp", phoneError(cust.phone)],
     ["email", emailError(cust.email)], // optional — empty is valid, and there is no domain whitelist
     ["alamat", addressError(addr.alamat)],
-    ["kodepos", postcodeError(addr.kodepos)], // optional — 5 digits when given
+    // REQUIRED (2026-08-03) — it is printed on the parcel. The checkout auto-fills it from the
+    // kelurahan/district cascade wherever that can answer honestly and leaves it editable everywhere,
+    // so this refuses a payload, never a shopper who had no way to supply one. PRESENCE + 5 digits:
+    // deliberately NOT "must exist in our `kelurahan` snapshot" — postcodes change.
+    ["kodepos", postcodeError(addr.kodepos)],
     ["kecamatan", destIdError(body.shipping?.destId ?? body.destId)],
   ];
   const firstErr = errs.find(([, e]) => e);

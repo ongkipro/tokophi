@@ -51,6 +51,40 @@ const MINT_AS_PROPERTY = new RegExp(
 );
 const HASH = "hashPassword";
 const DECLARES_HASH = new RegExp(String.raw`(?:export\s+)?(?:const|let|var|function)\s+${HASH}\b`);
+/** Every call to the sink, with its argument. Assembled from `HASH` so this file cannot flag itself. */
+const HASH_CALL = new RegExp(String.raw`\b${HASH}\s*\(([^)]*)\)`, "g");
+/**
+ * Is this argument a FIXED value?
+ *
+ * Two shapes, and they are the two that actually shipped: the literal written at the call site
+ * (`createStore`), and an identifier bound to a literal in the same file (`invitePlatformAdmin`'s
+ * `DEV_PASSWORD`). Post-`codeOnly` every literal comes back double-quoted, whichever way it was
+ * spelled, so one leading `"` recognises all three of `'…'`, `"…"` and a template.
+ *
+ * A binding fed by anything else — a parameter, a call, a env read — is NOT judged here. It cannot be:
+ * whether `hashPassword(next)` is a user's chosen password or a constant three files away is dataflow,
+ * and this is a lexer. That is the honest scope, and it is enough: it is decidable, and it covers every
+ * instance this repo has actually had.
+ */
+function fixedArgument(src: string, arg: string): string | null {
+  if (arg.startsWith('"')) return "a literal";
+  if (!/^[A-Za-z_$][\w$]*$/.test(arg)) return null; // an expression — not judged, see above
+  const bound = new RegExp(String.raw`\b(?:const|let|var)\s+${arg}\s*(?::[^=;]*)?=\s*"`).test(src);
+  return bound ? `\`${arg}\`, which is bound to a literal in this file` : null;
+}
+/**
+ * ⚠️ THE ONE EXEMPTION, AND IT IS AN EXEMPTION FROM A TOTAL SCAN — not a list of files to look at.
+ * That distinction is the whole lesson of this file: a guard bound to a LIST of targets has a blind
+ * spot for everything off the list; a guard that scans everything and names its exceptions makes each
+ * exception argue for itself, and a new file cannot hide in it.
+ *
+ * The seed genuinely hashes a fixed password (`tokophi123`) into the demo store's owner row, and that
+ * is a KNOWN, TRACKED fact, not an oversight: AGENTS.md records that the credential is no longer
+ * published anywhere but still authenticates on every existing deployment, and rotating it is a data
+ * fix (N29) because the seed is not a migration. When N29 lands, delete this line — the guard is
+ * already written.
+ */
+const FIXED_PASSWORD_ALLOWED = new Set(["packages/db/src/seed.ts"]);
 /**
  * A credential-shaped binding fed by a random source — the mint written out under a different name.
  *
@@ -245,6 +279,39 @@ describe("the temp password is expensive to guess", () => {
     );
 
     expect(violations, `a SECOND password hasher exists:\n  ${violations.join("\n  ")}`).toEqual([]);
+  });
+
+  it("no call site anywhere feeds it a FIXED password — the sink, repo-wide", () => {
+    // THE GUARD THIS FILE HAS BEEN ASKING FOR IN A COMMENT. The note on ② above says it plainly: a
+    // mint bound to a name with no credential word in it (`genSecret`, `ownerLoginSecret`) is
+    // invisible to a scanner that looks for the SOURCE, and no list of names can fix that. What every
+    // instance DOES have in common is the sink — the value reaches `hashPassword()`.
+    //
+    // `apps/super-admin/lib/no-fixed-password.test.ts` has asserted this for `actions.ts` alone since
+    // the `createStore` fix, and one file is exactly the scope that let a 24-bit mint survive its own
+    // guard. It is scoped that way for a good reason — it can demand the argument be literally `pw`,
+    // which is true there and nowhere else — so it KEEPS that stricter claim and this one covers the
+    // other ~7 call sites, in four packages, that nothing was watching.
+    //
+    // Both shapes this catches have shipped here: the literal at the call site, and the module
+    // constant. `apps/admin/lib/actions/security.ts` and `register.ts` hash a password the USER chose;
+    // those are the sink working correctly and must stay green.
+    const calls: string[] = [];
+    const violations = scanRepo((rel, src) => {
+      const found: string[] = [];
+      for (const [, arg] of src.matchAll(HASH_CALL)) {
+        calls.push(rel);
+        const fixed = fixedArgument(src, arg.trim());
+        if (fixed && !FIXED_PASSWORD_ALLOWED.has(rel)) found.push(`hashes ${fixed}`);
+      }
+      return found;
+    });
+
+    // A scan that reaches no call site passes forever — the same failure this file's extension census
+    // exists for. There are 12 today across four packages; a floor of 8 survives ordinary refactoring
+    // and still fails if the scan (or the module specifier) silently stops matching.
+    expect(calls.length, "no hashPassword() call site was found — has the scan stopped reaching them?").toBeGreaterThanOrEqual(8);
+    expect(violations, `a fixed password is hashed:\n  ${violations.join("\n  ")}`).toEqual([]);
   });
 
   it("scans every file type the repo actually holds", () => {

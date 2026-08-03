@@ -195,6 +195,13 @@ export const users = pgTable("users", {
   email: text().notNull().unique(),
   name: text(),
   passwordHash: text(), // scrypt "salt:hash" (local auth)
+  // WHEN the current `passwordHash` was ROTATED — the session revocation clock (migration 0087).
+  // `getSession()` refuses any JWT issued at or before this instant, so changing a password ends
+  // every session the old one opened. Written ONLY by the `users_stamp_password_changed_at` BEFORE
+  // UPDATE trigger, never by application code: six code paths write `passwordHash`, and a stamp five
+  // of them remember is worse than none. NULL = never rotated (a fresh account, or a session that
+  // predates 0087) → nothing to revoke. Do not set this from a query; the trigger will overwrite it.
+  passwordChangedAt: ts(),
   // How this user signs in: "password" (scrypt) or "google" (OAuth). Password users keep working
   // untouched; a Google user may also have a passwordHash (linked account) — the provider column
   // only records how the account was created / last linked.
