@@ -11,12 +11,14 @@
     "dev:super": "npm run dev -w @tokophi/super-admin",
     "build:admin": "npm run build -w @tokophi/admin",
     "build:super": "npm run build -w @tokophi/super-admin",
-    "test": "vitest run && npm run check:storefront",
+    "test": "vitest run && npm run check:storefront && npm run check:landing",
     "test:watch": "vitest",
     "check:storefront": "astro check --root apps/storefront",
+    "check:landing": "astro check --root apps/landing",
     "test:db": "TEST_DB_REQUIRED=1 vitest run"
   },
   "devDependencies": {
+    "typescript": "^5.9.3",
     "vitest": "^3.2.7"
   }
 }

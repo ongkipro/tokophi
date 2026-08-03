@@ -18,16 +18,24 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { noVariantChoice } from "./cart-variant";
+import { codeOnly } from "../../../../test/source-code";
 
-const src = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
+// ⚠️ BOTH FILES GO THROUGH `codeOnly`, AND THE ONE THAT DID NOT IS WHAT THIS NOTE IS ABOUT.
+//
+// The PDP half was filtered line-by-line for comment prefixes; `CHECKOUT` was matched RAW. So an
+// audit commented out the `normalizeCart(...)` call inside `readCart()` — killing the repair for
+// every shopper already holding a poisoned cart — and all seven tests stayed green, because the text
+// of the call was still on the line. That is the same defect the same PR fixed in
+// `section-renderer-exhaustive.test.ts` one commit later, reintroduced one commit earlier: a guard
+// hand-rolls its own idea of "ignore the comments", and the hand-rolled one has a hole.
+//
+// The rule and the one implementation are in `test/source-code.ts`: a guard asserts against a file's
+// CODE, never its TEXT. `codeOnly` drops comments (trivia to a lexer, so there is nothing to strip
+// wrongly) and makes every literal's contents inert. It joins tokens with spaces, so every assertion
+// below is written whitespace-tolerantly — `d\s*\.\s*variant`, not `d\.variant`.
+const src = (p: string) => codeOnly(readFileSync(new URL(p, import.meta.url), "utf8"));
 const PDP = src("../pages/produk/[handle].astro");
 const CHECKOUT = src("../pages/checkout.astro");
-
-// Only the executable half of the PDP. The comments explaining this bug name every identifier the
-// assertions below forbid, and a test that greps the prose documenting it can never go green.
-const pdpCode = PDP.split("\n")
-  .filter((l) => !/^\s*(\/\/|\*|\{?\/\*|-->)/.test(l))
-  .join("\n");
 
 describe("noVariantChoice — which cart lines may have their variant cleared", () => {
   const one = [{ stock: 3 }];
@@ -56,16 +64,18 @@ describe("the PDP cannot offer a size that is not a variant", () => {
   it("renders no picker built from products.sizes", () => {
     // Each of these is a piece of the deleted fallback picker. `products.sizes` has exactly one
     // reader left in the repo (`noVariantChoice`), and it must never become a control again.
-    expect(pdpCode).not.toMatch(/product\.sizes/);
-    expect(pdpCode).not.toMatch(/size-options|size-btn|data-size/);
+    // Both spellings of each marker are covered: `class="size-options"` keeps its hyphen inside the
+    // literal, while the attribute NAME `data-size` lexes as three tokens.
+    expect(PDP).not.toMatch(/product\s*\.\s*sizes/);
+    expect(PDP).not.toMatch(/size\s*-\s*options|size\s*-\s*btn|data\s*-\s*size/);
   });
 
   it("puts only a real variant title in the cart", () => {
     // `d.variant` is written by updateVariant() from the REAL option rows. The old `|| selectedSize`
     // is the bug; empty is the correct answer for a product with nothing to pick, because
     // /api/public/order reads an unnamed line as "the position-0 variant".
-    expect(pdpCode).toMatch(/var variant = d\.variant \|\| "";/);
-    expect(pdpCode).not.toMatch(/selectedSize/);
+    expect(PDP).toMatch(/var\s+variant\s*=\s*d\s*\.\s*variant\s*\|\|\s*""\s*;/);
+    expect(PDP).not.toMatch(/selectedSize/);
   });
 });
 
@@ -74,12 +84,20 @@ describe("checkout repairs carts poisoned before the picker was deleted", () => 
     // On read, not at submit: the poisoned string also drives the ongkir quote, the pixel's
     // content_ids and the summary. Written back, or the next page load restores the broken cart and
     // the shopper is stuck forever.
-    expect(CHECKOUT).toMatch(/function normalizeCart\(/);
-    expect(CHECKOUT).toMatch(/readCart\(\) \{[\s\S]{0,200}normalizeCart\(/);
-    expect(CHECKOUT).toMatch(/function normalizeCart\([\s\S]*?localStorage\.setItem\("cart"/);
+    expect(CHECKOUT).toMatch(/function\s+normalizeCart\s*\(/);
+    // ⚠️ NOT a character budget. This assertion used to be `readCart\(\) \{[\s\S]{0,200}normalizeCart\(`
+    // and the 200 was calibrated against RAW text — with the comments gone the window reached past the
+    // end of `readCart` and matched the `function normalizeCart(` DECLARATION below it, so the guard
+    // was green over the very mutation it was being repaired for. `[^}]` is the honest scope: it stops
+    // at the first close brace, i.e. at the end of `readCart`'s `try`, and it is only trustworthy
+    // because this is code — a brace inside a comment or a string cannot reach it.
+    expect(CHECKOUT).toMatch(/function\s+readCart\s*\(\s*\)\s*\{[^}]*?\breturn\s+normalizeCart\s*\(/);
+    expect(CHECKOUT).toMatch(
+      /function\s+normalizeCart\s*\([\s\S]*?localStorage\s*\.\s*setItem\s*\(\s*"cart"/,
+    );
   });
 
   it("scopes the repair with noVariantChoice, never a hand-rolled copy of it", () => {
-    expect(CHECKOUT).toMatch(/catalog\.products\.filter\(noVariantChoice\)/);
+    expect(CHECKOUT).toMatch(/catalog\s*\.\s*products\s*\.\s*filter\s*\(\s*noVariantChoice\s*\)/);
   });
 });

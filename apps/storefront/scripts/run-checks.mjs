@@ -59,6 +59,7 @@ const CHECKS = [
   { name: "check-image-widths", server: false },
   { name: "check-hero-srcset", server: true },
   { name: "check-pdp-srcset", server: true },
+  { name: "check-search-srcset", server: true },
   { name: "check-pixel-defer", server: true },
   { name: "check-h1-floor", server: true },
 ];

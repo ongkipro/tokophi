@@ -33,19 +33,34 @@
 // `currentSrc` would then report the grid's wider file. Every candidate is rewritten to a URL unique
 // to its own `<img>`, and the browser chooses again against the real layout, `sizes` and DPR.
 //
-// Run against a built storefront:
-//   npx astro build --root apps/storefront
-//   PORT=4411 node --env-file=apps/storefront/.env apps/storefront/dist/server/entry.mjs
-//   node apps/storefront/scripts/check-search-srcset.mjs      # T_URL overrides the page
-import { chromium } from "playwright";
+// ── ⚠️ IT SHIPPED OUTSIDE THE RUNNER, AND THAT MADE A DOC FALSE ──────────────────────────────────
+//
+// This file was added in the same wave that CONVERGED every other check onto `check-env.mjs`, and it
+// was left out of `run-checks.mjs`'s `CHECKS` array — so `npm run verify` ran five of six and the
+// search-palette fix had a guard nobody ran. Worse, it kept its own `T_URL` and `DPR` with a sixth
+// default port (4411), which made AGENTS.md's claim that "the old `T_URL` / `H1_PORT` / `DPR` are
+// retired and now fail loudly" false for exactly the check the same wave added: the loud failure
+// lives in `check-env.mjs`, and a script that does not import it cannot fail loudly. Pointed at it by
+// the runner it simply connected to 4411, found nothing, and threw.
+//
+// Both halves are the same lesson as `verify-rls`: a gate that does not run is not a gate, and a gate
+// that is hard to run correctly gets run wrongly.
+//
+// Normally run as part of the suite, which builds and starts the server for you:
+//   npm run verify -w @tokophi/storefront
+// Standalone, against a storefront you already have running (see check-env.mjs for the contract):
+//   CHECK_BASE_URL=http://toko-demo.test:4390 node apps/storefront/scripts/check-search-srcset.mjs
+import { pageUrl, launchChromium } from "./check-env.mjs";
 
-const T = process.env.T_URL || "http://toko-demo.test:4411/";
-const DPR = Number(process.env.DPR || 2);
+// The palette is mounted by `Layout.astro`, so any route would do; the homepage is the one whose grid
+// renders the same products, which is the perturbation the isolated probe below exists to survive.
+const T = pageUrl("/");
+const DPR = 2; // the ordinary phone, and the case the bug was worst on — a constant, not a knob
 const MAX_RATIO = 3; // same generosity as the PDP check: a ladder is discrete and `sizes` errs upward
 const PROBE = "__sqprobe";
 const CATALOG = "\\/products\\/|\\/api\\/uploads\\/";
 
-const b = await chromium.launch({ args: ["--no-sandbox", "--host-resolver-rules=MAP toko-demo.test 127.0.0.1"] });
+const b = await launchChromium();
 const page = await b.newPage({ viewport: { width: 412, height: 915 }, deviceScaleFactor: DPR });
 
 const PIXEL = Buffer.from("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA", "base64");
