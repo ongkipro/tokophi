@@ -772,8 +772,26 @@ export async function cancelShipment(orderNumber: string, reason = "Dibatalkan o
       .from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1);
     return row ?? null;
   });
-  const ref = o?.awb ?? o?.kaOrderId ?? null;
-  if (!ref) return { ok: false, error: "Pesanan ini belum punya pengiriman." };
+  if (!o?.awb && !o?.kaOrderId) return { ok: false, error: "Pesanan ini belum punya pengiriman." };
+  // ⚠️ CANCEL TAKES THE AWB, AND ONLY THE AWB. KiriminAja's own doc is explicit —
+  // *"awb: AWB Number Already Obtained, **Not Order ID**"* — and this used to be
+  // `o.awb ?? o.kaOrderId`, so a booking whose waybill had not landed yet was cancelled by sending
+  // the ORDER ID. Measured against the sandbox: booking `5758-E2E68072665` (awb null, as every fresh
+  // booking is) came back **"Paket tidak ditemukan"**, and the shipment stayed live at the courier
+  // while the merchant was told the cancel had been *refused* — an error that reads like the parcel
+  // does not exist, on the one parcel they just created.
+  //
+  // That window is exactly when a merchant wants to cancel: they booked by mistake, seconds ago. So
+  // the honest answer is not a vendor error string, it is what to do about it.
+  if (!o.awb) {
+    return {
+      ok: false,
+      error:
+        "Nomor resi belum terbit dari kurir, dan pembatalan butuh nomor resi. " +
+        "Klik “Lacak” untuk mengambil resi begitu terbit, lalu batalkan.",
+    };
+  }
+  const ref = o.awb;
   // TERMINAL ORDERS ARE NOT RE-BOOKABLE, so they must not be walked back to `diproses`. `selesai`
   // means delivered — and for COD, cash collected and the ledger credited; `batal`/`retur` the state
   // machine refuses on its own. Refuse before calling KiriminAja: there is nothing to cancel on a

@@ -320,6 +320,24 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
   `"Method GET is not supported for this route"`, and the payload key is **`datas`**, not `data`.
   Endpoint versions genuinely differ per route (`v6.1` price/pickup · `v3` cancel · `v2`
   get_address_by_name · unversioned province/tracking); that is the docs' own scheme, not drift.
+- 🔴 **CANCEL TAKES THE AWB, AND ONLY THE AWB** (fixed 2026-08-03, N34). The vendor doc says it in as
+  many words — *"awb: AWB Number Already Obtained, **Not Order ID**"*. `cancelShipment` built
+  `o.awb ?? o.kaOrderId`, and **every fresh booking has `awb: null`** (that is what `awbPending`
+  means), so the fallback fired on exactly the parcel a merchant had just created and KiriminAja
+  answered **"Paket tidak ditemukan"** — the shipment stayed live at the courier while the merchant
+  read an error that sounds like it never existed. That window — booked by mistake, seconds ago — is
+  precisely when someone cancels. A booking with no waybill is now refused BEFORE the call, naming the
+  next step ("Klik 'Lacak'…") rather than quoting the vendor.
+  ⚠️ **Cancellation is only possible before the courier collects, and a non-COD void is QUEUED up to
+  48 h** — `status: true` means "accepted for cancellation", not "cancelled".
+- **A booking returns `awb: null`; the waybill lands later.** Verified live 2026-08-03:
+  `request_pickup` → `{ok:true, kaOrderId:"5758-…", pickupNumber:"XID-…"}` with no AWB, and
+  `tracking` answering *"Tracking tidak tersedia"* until one exists. `cron/tracking` is what fills it
+  (`awbFilled`), and it must never store the booking ref as the waybill — `createShipment` writes
+  `awb` **only** from `details[0].awb` for that reason.
+  ⚠️ **The pickup schedule is TOMORROW 10:00 WIB, computed in `Asia/Jakarta`, and that is deliberate**
+  — couriers enforce a daily cut-off. A test that books `now + 1h` is correctly refused with
+  *"Jadwal penjemputan tidak lagi tersedia"*; the script is wrong, not the code.
 - **`apps/admin/lib/shipping-quote.ts` is the ONE place a shipping PRICE is produced.** `/api/public/ongkir` quotes the checkout and **`/api/public/order` RE-QUOTES the order before it writes `orders.shipping_idr`** — same function, same origin, same DB weight, same platform∩store service scope. `body.shipping.cost` is **not read** (the storefront no longer sends it): the order stores the price *we* computed for the service the shopper picked (matched on `courier`+`service_type`), and a picked service that is **not in the fresh quote is REJECTED**, never silently re-couriered. Do NOT "validate the client's number against ours" — a tolerance is just a smaller hole. ⚠️ Consequence: a KiriminAja outage now fails the order. Deliberate — a parcel we cannot price is a parcel we cannot ship.
 - **Item prices come from `product_variants`, not from the cart.** `items[].price` used to be summed into `orders.subtotal_idr` + the line items, so `price: 0` bought the goods for nothing. The client says WHAT is in the cart (handle + variant + qty); the server says what it costs, what it weighs, and where it ships from.
 

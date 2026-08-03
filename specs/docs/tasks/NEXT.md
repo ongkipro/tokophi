@@ -185,28 +185,59 @@ not a correctness bug (the ledger books what actually arrives) — it is a numbe
   response key is `datas`, not `data`.
 - **The resi chain is complete and correctly joined** — see N32.
 
-### N32. The resi chain has NEVER been exercised · **S** · NEW · needs the owner's go-ahead
-Every link exists and is correctly built:
-`createShipment` writes `awb` **only** from `details[0].awb` (never the booking ref — that bug is fixed
-and commented) and returns `awbPending` when the waybill has not landed · `cron/tracking` polls those
-orders, takes `data.awb`/`data.waybill` **excluding the ref itself**, and counts `awbFilled` ·
-`ka-tracking.ts` maps the outcome through `applyOrderStatusChange`, so inventory, ledger and COD move
-exactly as on a manual change · the AWB renders on three screens, with **"Ambil resi"** (`/pesanan/massal`)
-and **"Lacak"** (order detail) as the manual paths.
+### ✅ N32. The resi chain, driven end to end — **CLOSED 2026-08-03**, and it found N34
+Owner-authorised. Runbook: [`2026-08-03-shipping-e2e-runbook.md`](./2026-08-03-shipping-e2e-runbook.md).
 
-🔴 **But `select count(*) from orders where ka_order_id is not null` = 0.** Not one order has ever been
-booked — the 58 `dikirim` rows were seeded straight into that status. So the chain is verified by
-READING, never by running.
+**A real booking went through.** `request_pickup` with the schedule computed the way `createShipment`
+computes it (**tomorrow 10:00 WIB**, `Asia/Jakarta`):
 
-⚠️ **Finishing it means a real `request_pickup` against the sandbox** — an outward call that creates a
-pickup record in the owner's KiriminAja account. Reversible (`v3/cancel_shipment`), but not a call to
-make unasked.
-**AC:** book one seeded order → `awbPending` true → poll → `awb` filled → status advances → cancel the
-shipment and leave the DB as found.
+```
+1) quote        → jne/REG23  Rp17.000
+2) request_pickup → {"ok":true,"kaOrderId":"5758-E2E68072665","pickupNumber":"XID-5544692486"}
+   awbPending = true          ← awb is null on every fresh booking, exactly as documented
+3) tracking     → "Tracking tidak tersedia"   (no waybill yet — correct)
+4) cancel       → 🔴 "Paket tidak ditemukan"  ← THIS IS N34
+```
 
----
+So the chain is real: the payload is accepted, `ka_order_id`/`pickup_number` come back, and
+`awbPending` behaves as the code says. **The cancel is where it breaks — see N34.**
 
-## 🟠 SECURITY & DATA INTEGRITY — open, not blocked
+⚠️ **An earlier attempt used `now + 1h` and was refused with *"Jadwal penjemputan tidak lagi
+tersedia"*.** That was the SCRIPT being wrong, not the code: `createShipment` already books tomorrow
+10:00 with a comment recording the courier cut-off. Do not "fix" the schedule.
+
+### 🔴 N34. `cancelShipment` sent the ORDER ID as the AWB — **FIXED 2026-08-03**
+KiriminAja's doc is explicit: **`awb` — *"AWB Number Already Obtained, **Not Order ID**"***.
+`cancelShipment` built `const ref = o.awb ?? o.kaOrderId`, and **every fresh booking has `awb: null`**
+(that is why `awbPending` exists). So the fallback fired on exactly the parcel a merchant had just
+created, and the API answered **"Paket tidak ditemukan"** — the shipment stayed live at the courier
+while the merchant read an error that sounds like the parcel does not exist.
+
+**That window is precisely when someone cancels**: booked by mistake, seconds ago, waybill not issued.
+
+**Fixed:** cancel takes `o.awb` and only `o.awb`. A booking with no waybill is refused **before** the
+network call, with the next step instead of a vendor string — *"Nomor resi belum terbit dari kurir…
+Klik 'Lacak' untuk mengambil resi begitu terbit, lalu batalkan."* The lib comment that asserted
+`AWB (= kj_order_id / resi we stored)` is corrected; that false equivalence is how the wrong
+identifier would be reintroduced by someone who trusted it.
+
+Guarded by `apps/admin/lib/cancel-shipment.test.ts` (proven red 4/4), which uses **`codeOnly` from
+`test/source-code.ts`** — a hand-rolled comment stripper would have been the fifth copy of a defect
+this repo has already found four times, and it fails on the very comment explaining the fix.
+
+⚠️ **A LIVE SANDBOX BOOKING IS OUTSTANDING AND COULD NOT BE CANCELLED** — that is the bug, met in
+person: `5758-E2E68072665`, pickup `XID-5544692486`, JNE REG23, pickup scheduled 2026-08-04 10:00 WIB.
+No waybill was issued in ~1 minute of polling, so there was no AWB to cancel with. It is **sandbox**
+(`tdev.kiriminaja.com`) and nothing will be collected, but if the owner wants it gone it must be voided
+from the KiriminAja dashboard, or cancelled via the API once a waybill exists.
+
+### N35. Nothing pins `KIRIMINAJA_ENV` in production · **S** · NEW
+`KIRIMINAJA_ENV` defaults to `sandbox`, and `AGENTS.md` already warns that an unset env in production
+"silently talks to sandbox". This run is the proof it matters: real bookings and pickup numbers come
+back from `tdev.` and look exactly like production ones. Nothing anywhere asserts which one a deployed
+container is on.
+**AC:** the admin surfaces the active environment where an operator can see it (super-admin already has
+a KiriminAja connection card), and a deploy check fails if production resolves to `sandbox`.
 
 ### ✅ N17. The abandoned-cart recovery link — **CLOSED 2026-08-03**, and the cause is the lesson
 Handoff: [`2026-08-03-n17-recovery-link.md`](./2026-08-03-n17-recovery-link.md). Branch

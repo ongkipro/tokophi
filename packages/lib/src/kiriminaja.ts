@@ -154,7 +154,14 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
 // couriers only (SPX, JNE, SiCepat, AnterAja, …). Do not reintroduce it without a product decision:
 // it is the only feature that ever needed lat/lng coordinates.
 
-// cancel/void an express shipment by AWB (= kj_order_id / resi we stored)
+// Cancel/void an express shipment. ⚠️ **BY AWB, AND ONLY BY AWB.**
+// This comment used to read "by AWB (= kj_order_id / resi we stored)". That equivalence is FALSE and
+// the vendor doc says so in as many words — *"awb: AWB Number Already Obtained, Not Order ID"*.
+// Verified against the sandbox: passing a `kj_order_id` returns **"Paket tidak ditemukan"**, so a
+// fresh booking (whose `awb` is always null) could not be cancelled at all. `cancelShipment` in
+// apps/admin now refuses before the call and tells the merchant to fetch the waybill first.
+// ⚠️ Cancellation is only possible BEFORE the courier collects, and a non-COD void is queued for up
+// to 48 h — `status: true` means "accepted for cancellation", not "cancelled".
 export async function kaCancelShipment(awb: string, reason: string): Promise<{ ok: boolean; error?: string }> {
   const r = await ka<{ status: boolean; text?: string }>("/api/mitra/v3/cancel_shipment", { awb, reason });
   return { ok: !!r.status, error: r.status ? undefined : r.text };

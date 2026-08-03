@@ -117,3 +117,45 @@ after   orders 901 · payments 886 · line_items 2176 · customers 25 · session
 ```
 
 The one product whose dimensions were changed for the measurement is back at `1×1×1`.
+
+
+---
+
+# Run 2 — the booking completed, and the cancel did not (2026-08-03)
+
+With the schedule computed the way `createShipment` computes it — **tomorrow 10:00 WIB**:
+
+```
+schedule: 2026-08-04 10:00:00
+1) quote          → jne/REG23  Rp17.000  cod=false
+2) request_pickup → {"ok":true,"kaOrderId":"5758-E2E68072665","pickupNumber":"XID-5544692486"}
+   awbPending = true
+3) tracking       → "Tracking tidak tersedia"
+4) cancel         → 🔴 {"ok":false,"error":"Paket tidak ditemukan"}
+```
+
+**Steps 1–3 are the chain working.** The payload is accepted, the booking reference and pickup number
+come back, `awb` is null exactly as `awbPending` promises, and tracking correctly reports nothing until
+a waybill exists.
+
+**Step 4 is N34** — `cancelShipment` was passing `o.awb ?? o.kaOrderId`, and the vendor doc forbids the
+order id. Fixed; see `NEXT.md` N34.
+
+## ⚠️ Outstanding: one live sandbox booking
+
+`5758-E2E68072665` · pickup `XID-5544692486` · JNE REG23 · pickup scheduled **2026-08-04 10:00 WIB** ·
+env **sandbox** (`tdev.kiriminaja.com`).
+
+Six tracking polls over ~1 minute returned *"Tracking tidak tersedia"* — no waybill was issued, so there
+was no AWB to cancel with. **That is the bug itself, met in person.** Nothing will be collected in
+sandbox; if the owner wants it removed it must be voided from the KiriminAja dashboard, or cancelled
+through the API once a waybill exists.
+
+**Do not repeat this run to "try again".** The chain is proven; a second booking is a second
+uncancellable record.
+
+## The database
+
+Untouched by this run — the booking went to KiriminAja, not to `orders`. `ka_order_id is not null`
+remains **0**: closing that last gap means booking through `createShipment` itself (which writes the
+row), and that should wait until the cancel path can undo it.
