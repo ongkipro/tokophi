@@ -6,7 +6,15 @@
  * rule that lives inside a module which pulls `@tokophi/db` at import scope is the rule that has no
  * test, which is exactly how the super-admin rank gate went two years ungated.)
  *
- * `getSession()` is the only caller. See `apps/admin/lib/auth.ts` and migration 0087.
+ * ⚠️ IT LIVES IN `packages/lib` BECAUSE BOTH SURFACES REVOKE, and a copy is how the weaker half
+ * survives a fix — the same lesson `@tokophi/lib/password` records (two mints, one of them 24 bits,
+ * on the store-owner path). It started in `apps/admin/lib/` when only merchant sessions had a
+ * `password_changed_at`; the control plane got one in migration 0088 and now shares this function
+ * rather than re-deriving "is the cookie older than the rotation?" a second time.
+ *
+ * Two callers, one rule: `getSession()` (`apps/admin/lib/auth.ts`, `users.password_changed_at`,
+ * migration 0087) and `getPlatformSession()` (`apps/super-admin/lib/platform-auth.ts` via
+ * `resolvePlatformSession`, `platform_admins.password_changed_at`, migration 0088).
  */
 
 /**

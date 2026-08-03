@@ -6,7 +6,7 @@ import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { authSecretBytes } from "@tokophi/lib/secret";
 import { hashPassword } from "@tokophi/lib/password";
-import { sessionOutlivesPassword } from "./session-revocation";
+import { sessionOutlivesPassword } from "@tokophi/lib/session-revocation";
 
 // Lazy (throws in prod if AUTH_SECRET is unset, never at build) — see @tokophi/lib/secret.
 const secret = () => authSecretBytes();
