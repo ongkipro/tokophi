@@ -390,9 +390,17 @@ if (rToken) {
                   `aria-activedescendant` and no `aria-selected`: describing a roving-focus model this
                   picker does not implement would be worse than the silence it replaces. */}
               <div class="field">
+                {/* `name="kecamatan"` is NOT there to be submitted (the answer is the hidden
+                    `dest_id` below; this box only ever held display text). It is the key the error
+                    machinery is addressed by: `showFieldError` writes `<p data-err="<name>">`, the
+                    form's `change` handler calls `clearValidity(t.name)`, and — the one that was
+                    already broken — when `/api/public/order` refuses with `field: "kecamatan"`, the
+                    response handler does `form.querySelector('[name="'+res.field+'"]').focus()`,
+                    which found nothing at all and left the shopper to hunt for the field. */}
                 <input
                   type="text"
                   id="dest-search"
+                  name="kecamatan"
                   autocomplete="off"
                   placeholder=" "
                   class="input-field"
@@ -482,9 +490,27 @@ if (rToken) {
                 ></div>
               </div>
 
-              <div id="kodepos-wrap" class="field sm:col-span-2">
-                <input type="text" name="kodepos" id="kodepos" inputmode="numeric" autocomplete="postal-code" placeholder=" " class="input-field" />
-                <label for="kodepos" class="float-label">Kode Pos (opsional)</label>
+              {/* KODE POS IS REQUIRED, AUTO-FILLED, AND ALWAYS EDITABLE — all three at once.
+                   It is printed on the parcel, so an order without one is an address the rider has
+                   to phone about. But `required` here means THE SHOPPER MUST SUPPLY IT, never "the
+                   system must have derived it": ~4% of KiriminAja's districts have no kelurahan data
+                   and the lookup can fail outright, so a rule that only accepts a DERIVED code would
+                   strand those shoppers on a field they cannot fill — over-validation, a lost sale,
+                   and nobody ever finds out.
+                   ⚠️ It used to be `readOnly` whenever the value was derived, and a readonly input is
+                   BARRED FROM CONSTRAINT VALIDATION — `willValidate` is false, so `required` on it
+                   would have been a silent no-op in exactly the two branches that auto-fill (measured
+                   in the browser). Dropping readOnly is what makes the requirement real AND what
+                   makes the field honest: a shopper who knows their own kodepos can correct ours. */}
+              <div id="kodepos-col" class="sm:col-span-2">
+                <div id="kodepos-wrap" class="field">
+                  <input type="text" name="kodepos" id="kodepos" required inputmode="numeric" autocomplete="postal-code" placeholder=" " class="input-field" />
+                  <label for="kodepos" class="float-label">Kode Pos <span class="text-red-500">*</span></label>
+                </div>
+                {/* Written by setKodepos(): says whether this was filled FOR them (and that they may
+                     change it) or whether it is theirs to type. Silence on the no-data path is what
+                     turns "required" into a dead end. */}
+                <p id="kodepos-hint" hidden class="mt-1.5 text-xs text-[var(--co-muted)]"></p>
               </div>
 
               <!-- Shown ONLY for the 18% of districts that really do span several postcodes: there the
@@ -1051,7 +1077,10 @@ if (rToken) {
         return "";
       }
       if (nameAttr === "kodepos") {
-        if (!v) return ""; // optional — the ~4% of districts with no kelurahan data type it by hand
+        // REQUIRED. Auto-filled from the address cascade wherever that can answer it honestly, but
+        // the ~4% of districts with no kelurahan data (and any failed lookup) leave it to be typed —
+        // so the field is always editable and this is a PRESENCE check, never "did we derive it".
+        if (!v) return "Kode pos wajib diisi.";
         if (!/^\d{5}$/.test(v)) return "Kode pos harus 5 angka.";
         return "";
       }
@@ -1531,7 +1560,8 @@ if (rToken) {
     // readonly in the markup, so this is the only writer.
     var kotaEl = form.querySelector('input[name="kota"]');
     var kodeposEl = document.getElementById("kodepos");
-    var kodeposWrap = document.getElementById("kodepos-wrap");
+    var kodeposCol = document.getElementById("kodepos-col");
+    var kodeposHint = document.getElementById("kodepos-hint");
     var kelWrap = document.getElementById("kel-wrap");
     var kelNote = document.getElementById("kel-note");
     var kelSearch = document.getElementById("kel-search");
@@ -1592,34 +1622,61 @@ if (rToken) {
       if (kotaEl) kotaEl.value = "";
       if (provinsiEl) provinsiEl.value = "";
       renderDestSummary();
-      resetKelurahan();
+      // No district selected at all → no hint. "Kecamatan ini belum ada data kelurahannya" would be a
+      // claim about a kecamatan the shopper has not picked yet.
+      resetKelurahan("", "");
       syncCod();
     }
 
     // ---- Kelurahan → kodepos -------------------------------------------------------------------
     // A kodepos belongs to a kelurahan, not to a kecamatan, so it cannot be filled from the district
     // the shopper picked for ongkir. Ask for the kelurahan and take the kodepos from it.
-    function setKodeposManual(manual) {
+    //
+    // ⚠️ THE FIELD IS NEVER `readOnly`. It used to be, whenever the value was derived — and a readonly
+    // input is BARRED FROM CONSTRAINT VALIDATION, so `required` on it reports `willValidate === false`
+    // and never fires `valueMissing`. Locking the field would therefore have made this whole change a
+    // silent no-op on the two branches that auto-fill. It also made a wrong code unfixable: a shopper
+    // who knows their own kodepos could not correct ours.
+    /**
+     * THE ONE WRITER OF THE KODEPOS FIELD. Six places used to assign `kodeposEl.value` directly and
+     * every one of them is now required to go through here, because a programmatic assignment fires
+     * NEITHER `input` NOR `change` — so the listener that clears a stale message never runs.
+     * ⚠️ `setCustomValidity(msg)` keeps a control invalid until the string is cleared. Without the
+     * clearValidity() below, a shopper who pressed Bayar with an empty kodepos, then picked a
+     * kelurahan that filled it for them, would be refused FOREVER by a field that is now correct.
+     * `hint` is "derived" (we answered it, they may still change it) | "manual" (theirs to type) | "".
+     */
+    function setKodepos(value, hint) {
       if (!kodeposEl) return;
-      kodeposEl.readOnly = !manual;
-      kodeposEl.classList.toggle("cursor-not-allowed", !manual);
-      kodeposEl.classList.toggle("bg-[var(--co-accent-weak)]/60", !manual);
-      kodeposEl.classList.toggle("text-[var(--co-muted)]", !manual);
+      kodeposEl.value = value || "";
+      clearValidity("kodepos");
+      showFieldError(kodeposEl, "");
+      if (kodeposHint) {
+        kodeposHint.textContent =
+          hint === "derived" ? "Terisi otomatis dari kelurahan. Ubah kalau kode posmu berbeda."
+          : hint === "manual" ? "Kecamatan ini belum ada data kelurahannya — isi kode posmu sendiri."
+          : "";
+        kodeposHint.hidden = !kodeposHint.textContent;
+      }
+      renderDestSummary();
     }
 
-    function resetKelurahan() {
+    /**
+     * Hide the kelurahan picker and put the kodepos back to a full-width, hand-typed field.
+     * `value` is what the kodepos should hold afterwards ("" for "we have nothing to offer"), and
+     * `hint` is passed straight to setKodepos — the caller knows WHY it is resetting, this does not.
+     */
+    function resetKelurahan(value, hint) {
       if (kelWrap) kelWrap.hidden = true;
       if (kelNote) kelNote.hidden = true;
       KEL = [];
       if (kelSearch) kelSearch.value = "";
       if (kelValue) kelValue.value = "";
       if (kelResults) kelResults.classList.add("hidden");
-      if (kodeposEl) kodeposEl.value = "";
       // No kelurahan next to it → Kode Pos takes the whole row instead of sitting in a half-width
       // column with a hole beside it.
-      if (kodeposWrap) kodeposWrap.classList.add("sm:col-span-2");
-      // Back to a plain typed field until a district tells us otherwise.
-      setKodeposManual(true);
+      if (kodeposCol) kodeposCol.classList.add("sm:col-span-2");
+      setKodepos(value, hint);
     }
 
     // ── THE KODEPOS FILLS ITSELF WHENEVER IT HONESTLY CAN ────────────────────────────────────────
@@ -1632,18 +1689,33 @@ if (rToken) {
     //     on that pick.
     //   ·   295 districts (4,2% of all) have no kelurahan data → the kodepos stays typed by hand.
     // Never guessed: a postcode is only auto-filled when every candidate agrees on it.
-    function loadKelurahan(districtId) {
+    //
+    // `restore` is the kodepos a RECOVERED checkout is carrying (`checkout_sessions.postcode`): the
+    // shopper already answered this question once and must not be made to answer it again. It only
+    // survives on the branches that have nothing better to offer — a district with exactly one
+    // postcode overrules it, because there the stored code cannot be right if it differs.
+    //
+    // ⚠️ THE RESPONSE IS DROPPED IF THE SHOPPER HAS MOVED ON. `loadRates()` below has always guarded
+    // itself this way (`destAtCall !== destId.value`) and this call had no guard at all: two districts
+    // picked in quick succession resolve in whatever order the network returns them, so the SLOWER
+    // first request could land last and stamp district A's postcode — or A's kelurahan list — onto an
+    // order shipping to district B. Silent, and the number ends up printed on the parcel.
+    function loadKelurahan(districtId, restore) {
       if (!kelWrap || !kelSearch || !districtId) return;
+      var destAtCall = String(districtId);
+      var stale = function () { return destId && String(destId.value) !== destAtCall; };
       api({ op: "kelurahan", destinationId: Number(districtId) }).catch(function () {
-        // Lookup unreachable → fall back to a typed kodepos rather than leaving the field readonly and
-        // empty, which would make the form unsubmittable with no way for the shopper to fix it.
+        // Lookup unreachable → fall back to a typed kodepos rather than leaving the field empty with
+        // no explanation, which would make the form unsubmittable with no way for the shopper to fix it.
         return { ok: true, kelurahan: [] };
       }).then(function (res) {
+        if (stale()) return; // the shopper picked a different kecamatan while this was in flight
         var list = (res && res.ok && res.kelurahan) || [];
         if (!list.length) {
-          // No kelurahan data for this district. Degrade to a typed kodepos rather than inventing
-          // one — this number gets printed on a real parcel.
-          resetKelurahan();
+          // No kelurahan data for this district (or the lookup failed). Degrade to a typed kodepos
+          // rather than inventing one — this number gets printed on a real parcel — and SAY SO, since
+          // the field is required and silence here would be a dead end.
+          resetKelurahan(restore || "", restore ? "" : "manual");
           return;
         }
 
@@ -1651,14 +1723,8 @@ if (rToken) {
         list.forEach(function (k) { if (k.postcode && codes.indexOf(k.postcode) < 0) codes.push(k.postcode); });
 
         if (codes.length === 1) {
-          // One postcode for the whole district → answer it for them.
-          resetKelurahan();                       // hides the kelurahan row, kodepos full width
-          if (kodeposEl) kodeposEl.value = codes[0];
-          setKodeposManual(false);                // derived, not typed
-          if (kelNote) kelNote.hidden = true;
-          // The card is the shopper's read-back of what ships — same pattern as the kelurahan pick
-          // below. Without this it kept the postcode until they happened to touch another field.
-          renderDestSummary();
+          // One postcode for the whole district → answer it for them. Still editable.
+          resetKelurahan(codes[0], "derived"); // hides the kelurahan row, kodepos full width
           captureSoon();
           return;
         }
@@ -1668,12 +1734,24 @@ if (rToken) {
         if (kelValue) kelValue.value = "";
         kelWrap.hidden = false;
         // Kelurahan is back → the two share the row (Kelurahan | Kode Pos).
-        if (kodeposWrap) kodeposWrap.classList.remove("sm:col-span-2");
+        if (kodeposCol) kodeposCol.classList.remove("sm:col-span-2");
         if (kelNote) kelNote.hidden = false;
-        // The kodepos now comes from the picker, so stop it being typed — and leave it EMPTY until a
-        // kelurahan is actually chosen. Pre-filling the first one would silently ship a wrong code.
-        if (kodeposEl) kodeposEl.value = "";
-        setKodeposManual(false);
+        // Nothing to derive yet: the district spans several codes, so the kelurahan IS the question
+        // (#kel-note says exactly that). Pre-filling the first one would silently ship a wrong code.
+        // A RECOVERED kodepos is kept — the shopper already chose it — and its kelurahan named back
+        // from it where that is unambiguous.
+        setKodepos(restore || "", "");
+        if (restore) {
+          // Ambiguous (two kelurahan sharing a code) or absent → leave the picker blank and keep the
+          // kodepos: the code is what ships, and a guessed name next to it adds nothing but a chance
+          // to be wrong.
+          var hits = KEL.filter(function (k) { return k.postcode === restore; });
+          if (hits.length === 1) {
+            if (kelSearch) kelSearch.value = hits[0].name;
+            if (kelValue) kelValue.value = hits[0].name;
+            renderDestSummary();
+          }
+        }
       });
     }
 
@@ -1704,7 +1782,7 @@ if (rToken) {
       kelSearch.addEventListener("input", function () {
         // Typing invalidates the pick: the kodepos was DERIVED from it, so it must not outlive it.
         if (kelValue) kelValue.value = "";
-        if (kodeposEl) kodeposEl.value = "";
+        setKodepos("", "");
         renderKel(kelSearch.value);
       });
       kelResults.addEventListener("click", function (e) {
@@ -1712,9 +1790,8 @@ if (rToken) {
         if (!btn) return;
         kelSearch.value = btn.getAttribute("data-name");
         if (kelValue) kelValue.value = btn.getAttribute("data-name");
-        if (kodeposEl) kodeposEl.value = btn.getAttribute("data-code");
+        setKodepos(btn.getAttribute("data-code"), "derived");
         kelResults.classList.add("hidden");
-        renderDestSummary();
         captureSoon();
       });
       // Click-away closes it. Without this the list sits over the kodepos field underneath it.
@@ -1749,6 +1826,10 @@ if (rToken) {
         // Editing the search box invalidates the selection — so the derived city/province must go
         // too, or the form would keep showing an address the district id no longer matches.
         destId.value = "";
+        // They are acting on the complaint → drop it. Same rule as every other field: a message that
+        // outlives the problem is how a form refuses input the shopper has already corrected.
+        showFieldError(destSearch, "");
+        destSearch.setCustomValidity("");
         clearArea();
         clearTimeout(searchTimer);
         var q = destSearch.value.trim();
@@ -2051,28 +2132,13 @@ if (rToken) {
       // kota/provinsi were restored into the hidden inputs above → render the "Kirim ke" card from
       // them, otherwise a returning shopper sees a district with no city/province under it.
       renderDestSummary();
-      // Restore the kelurahan picker as well, then put the saved kodepos back — loadKelurahan()
-      // deliberately blanks it, and a recovered checkout must not lose what the shopper had chosen.
-      var savedPostcode = RECOVER.postcode || "";
-      loadKelurahan(RECOVER.destId);
-      setTimeout(function () {
-        if (kodeposEl && savedPostcode) {
-          kodeposEl.value = savedPostcode;
-          // Name the kelurahan back from the postcode we saved. The picker holds names now, not
-          // postcodes, and the session only ever stored the code — so the only honest restore is to
-          // look it up. Ambiguous (two kelurahan sharing a code) or absent → leave the picker blank
-          // and keep the kodepos: the code is what ships, and a guessed name next to it adds nothing
-          // but a chance to be wrong.
-          var hits = KEL.filter(function (k) { return k.postcode === savedPostcode; });
-          if (hits.length === 1) {
-            if (kelSearch) kelSearch.value = hits[0].name;
-            if (kelValue) kelValue.value = hits[0].name;
-          }
-        }
-        // loadKelurahan() has just rewritten the kodepos (and possibly the kelurahan); re-render so
-        // the card confirms the restored address rather than the half of it that existed at t=0.
-        renderDestSummary();
-      }, 600);
+      // Restore the kelurahan picker, HANDING IT the saved kodepos — loadKelurahan() blanks the field
+      // on the multi-postcode branch, and a recovered checkout must not lose what the shopper already
+      // chose. It used to be re-applied from a `setTimeout(…, 600)` racing that same fetch: any
+      // slower-than-600ms lookup landed AFTER the restore and wiped it, which since the kodepos became
+      // required would turn a recovered checkout into one the shopper cannot submit. The lookup itself
+      // is the only thing that knows when it is done, so the restore happens inside it.
+      loadKelurahan(RECOVER.destId, RECOVER.postcode || "");
       loadRates();
     }
 
@@ -2154,6 +2220,7 @@ if (rToken) {
       nama: "Nama lengkap wajib diisi.",
       whatsapp: "Nomor WhatsApp wajib diisi.",
       alamat: "Alamat lengkap wajib diisi.",
+      kodepos: "Kode pos wajib diisi.",
       shipping: "Pilih ekspedisi pengiriman dulu.",
       va_bank: "Pilih bank tujuan transfer.",
       payment: "Pilih metode pembayaran dulu.",
@@ -2249,6 +2316,47 @@ if (rToken) {
       if (msg) el.setAttribute("aria-invalid", "true");
       else el.removeAttribute("aria-invalid");
     }
+    /**
+     * Run one field's rule and, if it fails, put the shopper IN it. Returns true when it blocked.
+     * Inline AND the bubble: stealing focus is correct here — they pressed Bayar, so taking them to
+     * the field that is stopping them is the help they asked for. (On blur it is a trap — see
+     * showFieldError.)
+     */
+    function reportField(name) {
+      var el = form.querySelector('[name="' + name + '"]');
+      if (!el) return false;
+      var msg = checkField(el);
+      if (!msg) return false;
+      showFieldError(el, msg);
+      el.reportValidity();
+      el.focus();
+      return true;
+    }
+
+    /**
+     * The kecamatan has no constraint of its own that could carry this. `#dest-search` is a SEARCH
+     * BOX: text in it proves nothing — the answer is the hidden `dest_id` the shopper picked from the
+     * list, and that is what the ongkir was priced against and what the parcel is booked to. Kota and
+     * Provinsi are readonly hidden inputs, and a readonly input is BARRED from constraint validation,
+     * so `required` on them never fired and checkValidity() would pass with no destination at all.
+     * The message is shown INLINE as well as in the bubble, like every other field: the bubble closes
+     * on the next click, and this is the one field where "nothing on screen says why" was the state
+     * a shopper was left in.
+     */
+    function reportDestination() {
+      if (destId && destId.value) return false;
+      if (!destSearch) return true;
+      var msg = "Pilih kecamatan tujuan dari daftar.";
+      showFieldError(destSearch, msg);
+      destSearch.setCustomValidity(msg);
+      destSearch.reportValidity();
+      // Cleared straight away: the message belongs to this press of Bayar, and a custom validity left
+      // behind would keep the control invalid after the shopper has picked one.
+      destSearch.setCustomValidity("");
+      destSearch.focus();
+      return true;
+    }
+
     VALIDATED.forEach(function (n) {
       var el = form.querySelector('[name="' + n + '"]');
       if (!el) return;
@@ -2299,36 +2407,19 @@ if (rToken) {
       // the first bad field, so labelling lazily would leave the rest in the browser's English.
       labelMissing();
 
-      // Our own rules run BEFORE checkValidity(), so the message the browser shows is ours (nama /
-      // whatsapp / email / alamat / kodepos). The API re-checks all of them anyway — this is only
-      // here so the shopper is not told "something is wrong" by a server round-trip.
-      for (var vi = 0; vi < VALIDATED.length; vi++) {
-        var vel = form.querySelector('[name="' + VALIDATED[vi] + '"]');
-        if (!vel) continue;
-        var vmsg = checkField(vel);
-        if (vmsg) {
-          // Inline AND the bubble. Focus-stealing is correct HERE — they pressed Bayar, so taking
-          // them to the field that is stopping them is the help they asked for.
-          showFieldError(vel, vmsg);
-          vel.reportValidity();
-          vel.focus();
-          return;
-        }
-      }
+      // Our own rules run BEFORE checkValidity(), so the message the browser shows is ours. They run
+      // IN THE ORDER THE FIELDS APPEAR ON SCREEN, and the kecamatan is deliberately checked between
+      // Alamat and Kode Pos: it is where it sits in the form, and it is UPSTREAM of the kodepos —
+      // picking it is what fills the kodepos on ~96% of destinations — so complaining about an empty
+      // kode pos first would send the shopper off to fix a symptom of the field above it.
+      // The API re-checks every one of these anyway; this is only here so the shopper is not told
+      // "something is wrong" by a server round-trip.
+      if (reportField("nama") || reportField("whatsapp") || reportField("email") || reportField("alamat")) return;
+      if (reportDestination()) return;
+      if (reportField("kodepos")) return;
+
       if (!form.checkValidity()) {
         reportFirstInvalid();
-        return;
-      }
-      // Kota/Provinsi are readonly, and a readonly input is BARRED from constraint validation — so
-      // `required` on them never fired and checkValidity() would happily pass with no destination at
-      // all. The real rule is "a kecamatan was chosen"; enforce it here, where it runs.
-      if (!destId.value) {
-        if (destSearch) {
-          destSearch.setCustomValidity("Pilih kecamatan tujuan dari daftar.");
-          destSearch.reportValidity();
-          destSearch.setCustomValidity("");
-          destSearch.focus();
-        }
         return;
       }
       if (err) err.classList.add("hidden");
