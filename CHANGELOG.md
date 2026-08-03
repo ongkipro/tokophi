@@ -2,6 +2,18 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — the `/checkout` h1 fix shipped without a guard; `check-h1-floor` now sweeps 10 routes
+
+`check-h1-floor` is about the merchant-built **homepage** — it stages a `page_templates` row and asserts
+the floor under it. So the `/checkout` fix landed covered by nothing, which is how this class comes back.
+
+It now also sweeps the ten plain routes a shopper lands on. ⚠️ **`/checkout` and `/checkout/sukses` are
+both in the list on purpose**: they share `CheckoutLayout`, so the tempting fix — a floor in the layout —
+gives `sukses`, which already has a visible `<h1>`, a second one. One asserts the floor exists, the other
+asserts the fix did not overshoot; only together do they pin it.
+
+Proven red by deleting the `<h1>` and re-running: `FAIL /checkout has exactly 1 <h1> — h1 0`.
+
 ## Unreleased — Both login pages published a working credential; the control plane's was one of them
 
 Verified live on production before the fix: `rich.tokophi.com/login` served `admin@tokophi.id` +
