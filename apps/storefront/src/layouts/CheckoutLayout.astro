@@ -279,6 +279,11 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
             built on — on cream-vs-cream the hairline divider was carrying it alone, and losing. */}
         <main class="bg-white lg:col-start-1 lg:row-start-1 lg:flex lg:justify-end">
           <div class="mx-auto w-full max-w-[628px] px-4 py-8 sm:px-6 lg:mx-0 lg:max-w-[580px] lg:py-10 lg:pr-10">
+            {/* ⚠️ NO `<h1>` HERE, DELIBERATELY. The floor belongs to `checkout.astro`, which is the
+                page that lacks one — `checkout/sukses.astro`, the layout's other consumer, already
+                renders a visible `<h1>`, so putting one here would give THAT page two. That is the
+                N14 defect (a hero emitting one `<h1>` per slide) reintroduced by the fix for N11's.
+                Two consumers, one of which is already correct: fix the one that is wrong. */}
             <slot />
           </div>
         </main>

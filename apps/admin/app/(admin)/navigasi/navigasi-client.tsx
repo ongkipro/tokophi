@@ -701,7 +701,11 @@ export function NavigasiClient({ menus: initialMenus }: { menus: NavMenu[] }) {
 
             <CardContent className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Item menu</h3>
+                {/* h2, not h3 — this page's only other heading is the page `<h1>`, so an h3 here
+                    skipped a level, and a skipped level is what a screen-reader user navigates by
+                    (the same rule `Multicolumn.astro` already spells out on the storefront). The
+                    class is unchanged: the size is set by `text-sm`, not by the tag. */}
+                <h2 className="text-sm font-semibold">Item menu</h2>
                 <span className="text-xs text-muted-foreground">
                   {countItems(activeMenu.items)} item
                 </span>

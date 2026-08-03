@@ -508,6 +508,44 @@ both losses.
 
 ---
 
+## 🟢 SURFACE SWEEP (2026-08-03) — every route driven in a browser
+
+Full method + scoreboard: [`2026-08-03-surface-sweep.md`](./2026-08-03-surface-sweep.md).
+**admin 40/40 and storefront 14/14 now clean**; four defects found, all four fixed. Routing is clean on
+all three surfaces: **0 dead nav links, 0 unreachable pages** — each of the nine non-sidebar routes was
+verified to be linked from somewhere, not assumed.
+
+### ✅ N26. `/checkout` had no `<h1>` — the only money-path page without one · **CLOSED**
+Its highest heading was `<h2>Ringkasan Pesanan`. Third instance of the N11/N14 class. Fixed with an
+`sr-only` `<h1>` **in the page, not the layout** — `checkout/sukses.astro` already renders a visible
+one, so a layout-level floor would have given that page **two**: the N14 defect, reintroduced by the fix
+for N11's. ⚠️ Not visible on purpose — the visible title was removed 2026-07-16 deliberately, and a
+headline costs the first field its place above the fold at 390 px.
+
+### ✅ N27. `/halaman/baru` had no `<h1>`; `/navigasi` + `/pemasaran` skipped h1→h3 · **CLOSED**
+`PageEditor` gated its heading on `{isEdit && …}`, so only the CREATE screen lacked one — while
+`topBarTitle` already computed `"Tambah halaman"` for that exact case, i.e. the guard hid a string it
+had built. `article-editor.tsx` next door renders its own unconditionally; the two had diverged. The two
+skips were `<h3>` on pages with no `<h2>`; tag changed, `className` untouched.
+
+### N28. super-admin's 7 screens have never been crawled · **S** · NEW · BLOCKED ON THE OWNER
+Routing and gating ARE verified — all 7 routes 307 to login unauthenticated. The screens themselves were
+not driven: it needs a platform credential, and since `#133` the operator password is randomly minted
+and revealed once, so obtaining one means **resetting a control-plane password on the shared DB**. Not a
+decision to take unilaterally.
+**AC:** the same sweep against `rich.` — status, `<h1>`, heading skips, console errors per screen.
+
+### 🔵 Not defects — checked, so nobody re-chases them
+- **`/api/uploads/*` 404s on 6 admin pages are LOCAL ONLY.** `public/uploads/` is gitignored; production
+  mounts a named volume (`tokophi-uploads`) and serves all of them (6/6 → 200), so merchant media
+  survives a deploy. ⚠️ A **dev-DB filename tested against the production server proves nothing** — that
+  misread briefly looked like a broken store logo in production.
+- **`ERR_CONNECTION_REFUSED` on storefront pages** is the admin origin not running in an isolated scan.
+- **No horizontal overflow at 390 px** on any storefront route. The one hit was `/sitemap.xml` — XML in
+  a browser, a false positive of the check.
+
+---
+
 ## ✅ Closed by audit wave 2 (2026-08-01) — do not redo
 
 - **N9** the **sixth** default-location copy: `/api/public/order` had **no `store_id` at all**, on the
