@@ -228,11 +228,15 @@ export default async function CrmPage() {
                 const due = dueLabel(f.dueDays);
                 const tpl =
                   WA_TEMPLATES.find((t) => t.type === f.type) ?? WA_TEMPLATES[0];
+                // `link: ""` — see `followup-client.tsx`. A follow-up row carries no checkout
+                // session, so no recovery link exists here; without this an unknown `{{link}}` would
+                // go out to a customer verbatim.
                 const message = fillTemplate(tpl.body, {
                   nama: f.customer,
                   produk: f.context,
                   no_pesanan: f.context,
                   toko: storeName ?? "Toko",
+                  link: "",
                 });
                 return (
                   <li
