@@ -74,22 +74,38 @@ Not doable from this repo: wrangler auth is expired and these are **zone setting
 
 **AC:** the `curl -I` checks in that doc return what it says they should.
 
-### N15. Both login pages publish working control-plane credentials · **S** · NEW
-`apps/super-admin/app/login/page.tsx:30` prints `admin@tokophi.id / tokophi123`; the admin login has its
-equivalent. **The seed genuinely creates those rows on deploy**, so on `rich.tokophi.com` the control
-plane advertises a working credential on its own login screen.
+### ✅ N15. Both login pages published working control-plane credentials — **CLOSED 2026-08-03**
+Owner's decision: **delete the hint** (not rotate the seed). No seed change, no data fix.
 
-This is the visible half of the defect audit wave 2 fixed in `createStore` (see the handoff, ②). The code
-fix stopped *new* stores getting a published password; it did nothing about the account the seed creates
-and the login page names.
+🔴 **Verified live on production before the fix, both pages:**
+`rich.tokophi.com/login` served `admin@tokophi.id` + `tokophi123`; `app.tokophi.com/login` served
+`ongki@batiknusantara.id` + `tokophi123`. Not placeholders — the seed creates those rows on deploy.
 
-**Why it is the owner's:** the two options are not equivalent. **Delete the hint** and the demo login
-becomes undiscoverable for anyone onboarding; **rotate the seeded password** and it touches the seed —
-and ⚠️ **the seed is not a migration**, so an existing deployment keeps the old one until someone applies
-a data fix. It touches both apps either way.
+⚠️ **It was FOUR sites, not two.** Besides the two `Dev: …` lines, **both email inputs carried a
+`defaultValue` naming the account**. Removing only the password line would have left the page still
+publishing *which account to attack* — and per `AGENTS.md` the login limiter is keyed on **IP, not on
+account**, and **no failed login is written to any table**, so nothing anywhere would record that one
+specific operator was being tried. All four removed; the `placeholder` shows the shape without naming
+anyone.
 
-**AC:** no deployed login screen names a password that authenticates; if the seeded password is rotated,
-the data fix for existing deployments is stated in the commit body, because nothing else will apply it.
+**Guarded by `packages/lib/src/no-published-credentials.test.ts`** — a source scan over **every** app
+file, not a list of two (a list of two is how the 24-bit mint survived its own guard in `#137`).
+Proven red first: **4 of its 5 tests fail** against `origin/main`.
+⚠️ It **strips `//` and `/* */` comments before matching**, deliberately — `super-admin/lib/actions.ts`
+legitimately *names* `tokophi123` while explaining the fix, and a guard that forbids describing the bug
+it guards gets deleted the first time someone needs that sentence. **HTML comments are NOT stripped**:
+`<!-- … -->` in an `.astro` file is served to the browser.
+
+**Not done, and deliberately:** the seeded password itself is unchanged, so `tokophi123` still
+authenticates for anyone who already knows it. That was the owner's call — rotating it touches the seed,
+and **the seed is not a migration**, so existing deployments would need a manual data fix. Filed below.
+
+### N29. The seeded password still authenticates · **S** · NEW · owner's call
+`tokophi123` is no longer *published*, but it is still the seeded credential on every deployment that
+already exists. Rotating it means minting per-deploy (`@tokophi/lib/password` already exists, 60-bit)
+**plus a data fix for live deployments stated in the commit body**, because nothing else will apply it.
+**AC:** a fresh deploy's seeded accounts have a random password; the fix for existing ones is written
+down where an operator will find it.
 
 ### N16. `tokophi_app` holds full DML on the platform tables, with RLS off · **M** · NEW
 `platform_cod`, `platform_couriers`, `platform_payout`, `platform_payment_channels` and `plans` are

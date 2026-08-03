@@ -24,7 +24,12 @@ export function LoginForm({ googleEnabled, notice }: { googleEnabled: boolean; n
       <form action={action} className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <Label htmlFor="email">Email</Label>
-          <Input id="email" name="email" type="email" placeholder="nama@toko.id" required autoComplete="email" defaultValue="ongki@batiknusantara.id" />
+          {/* ⚠️ NO `defaultValue`. It pre-filled the seeded owner's address, so this page published
+              half a working credential — and the seed genuinely creates that row on deploy, so it was
+              not a placeholder. The `placeholder` is the right affordance: it shows the SHAPE without
+              naming an account. Do not add it back "for dev convenience"; that is exactly the reason
+              it was there. */}
+          <Input id="email" name="email" type="email" placeholder="nama@toko.id" required autoComplete="email" />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="password">Kata sandi</Label>
@@ -45,7 +50,6 @@ export function LoginForm({ googleEnabled, notice }: { googleEnabled: boolean; n
             Daftar gratis
           </Link>
         </p>
-        <p className="text-center text-xs text-muted-foreground">Dev: ongki@batiknusantara.id / tokophi123</p>
       </form>
     </div>
   );

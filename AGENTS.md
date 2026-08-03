@@ -203,6 +203,21 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
     emits** and fails under **48 bits**, so shortening it, narrowing the alphabet or biasing the
     mapping all go red. It **scans every source file in the repo** (not a list of two, which is how a
     24-bit copy survived this very test once), and it pins `hashPassword` at one implementation too.
+  - 🔴 **NO SHIPPED SCREEN MAY NAME AN ACCOUNT THAT AUTHENTICATES** (2026-08-03). Both login pages
+    published one: `rich.tokophi.com/login` printed `admin@tokophi.id / tokophi123` AND pre-filled that
+    address into the email field; the Seller panel did the same with the seeded owner. The seed
+    genuinely creates those rows on deploy, so neither was a placeholder — they were working
+    credentials, on the public internet, on the page that accepts them.
+    ⚠️ **It was FOUR sites, not the two `Dev:` lines.** The `defaultValue` on each email input is the
+    half that gets missed, and on the control plane it is the one that matters: it names *which account
+    to attack*, and the limiter above is keyed on **IP, not account**, with **no failed login written
+    anywhere**. `packages/lib/src/no-published-credentials.test.ts` scans EVERY app source (not a list
+    of two — that is how the 24-bit mint survived its own guard) and strips `//` + `/* */` comments so
+    the notes explaining this fix stay legal. **HTML comments are not stripped: `<!-- … -->` in an
+    `.astro` file is served to the browser.**
+    ⚠️ **The seeded password itself is UNCHANGED** — it is no longer published, but `tokophi123` still
+    authenticates on every existing deployment. Rotating it touches the seed, and **the seed is not a
+    migration**, so it needs a data fix stated in the commit body (`NEXT.md` N29).
   - **A login rate-limit DOES exist — but it is a floor, not a wall, and it is keyed on IP ALONE.**
     `signIn` on both panels calls `rateLimit()` from `@tokophi/lib/cache` **before** the scrypt check
     (`login:admin:<ip>` 15/min, `login:platform:<ip>` 10/min, shipped `53dd9ee` 2026-07-16). ⚠️ Two
