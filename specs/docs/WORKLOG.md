@@ -10,6 +10,25 @@
 
 
 
+## 2026-08-03 — N15: both login pages published a working credential
+
+Closes **N15**, files **N29**. Owner chose *delete the hint*, not *rotate the seed*.
+
+🔴 Verified live on production first: `rich.tokophi.com/login` served `admin@tokophi.id` + `tokophi123`
+(the CONTROL PLANE), `app.tokophi.com/login` the seeded owner. The seed creates those rows on deploy —
+not placeholders.
+
+⚠️ **Four sites, not two**: both email inputs also carried a `defaultValue` naming the account. Removing
+only the password line leaves *which account to attack* published, and the limiter is keyed on IP with
+no failed login recorded anywhere.
+
+Guarded by `no-published-credentials.test.ts` — scans EVERY app file (not a list of two; that is how the
+24-bit mint survived its own guard), strips `//`+`/* */` comments so the notes explaining the fix stay
+legal, does NOT strip HTML comments. Proven red: 4/5 fail on `origin/main`.
+
+**Not done on purpose:** the seeded password still authenticates → **N29** (needs a data fix for
+existing deployments, because the seed is not a migration).
+
 ## 2026-08-03 — N5 measured to the end: it is a decision, not work · `#135` deployed + verified
 
 `#135` (the surface sweep) is **merged, deployed and verified in production**: `/checkout` h1 count

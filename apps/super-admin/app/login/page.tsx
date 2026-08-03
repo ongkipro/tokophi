@@ -19,7 +19,13 @@ export default function LoginPage() {
           <form action={action} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" placeholder="nama@tokophi.id" required autoComplete="email" defaultValue="admin@tokophi.id" />
+              {/* ⚠️ NO `defaultValue`, and this is the CONTROL PLANE. It pre-filled the seeded
+                  operator's address — an account the seed genuinely creates on deploy — so the page
+                  that reaches every store on the platform named the one account worth attacking.
+                  That matters more here than on the Seller panel: the login limiter is keyed on IP,
+                  not on account (AGENTS.md), so nothing anywhere records that one specific operator
+                  is being tried. The `placeholder` shows the shape without naming anyone. */}
+              <Input id="email" name="email" type="email" placeholder="nama@tokophi.id" required autoComplete="email" />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="password">Kata sandi</Label>
@@ -27,7 +33,6 @@ export default function LoginPage() {
             </div>
             {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
             <Button type="submit" disabled={pending}>{pending ? "Masuk…" : "Masuk"}</Button>
-            <p className="text-center text-xs text-muted-foreground">Dev: admin@tokophi.id / tokophi123</p>
           </form>
         </CardContent>
       </Card>

@@ -2,6 +2,32 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Both login pages published a working credential; the control plane's was one of them
+
+Verified live on production before the fix: `rich.tokophi.com/login` served `admin@tokophi.id` +
+`tokophi123`, `app.tokophi.com/login` served `ongki@batiknusantara.id` + `tokophi123`. **Not
+placeholders** — the seed creates those rows on deploy, so these were working logins on the public
+internet, on the page that accepts them. `#133` fixed the half that MINTS (`createStore`); the account
+the seed creates and the page advertised survived that fix.
+
+⚠️ **It was FOUR sites, not two.** Besides the two `Dev: …` lines, **both email inputs carried a
+`defaultValue` naming the account**. Deleting only the password line leaves the page publishing *which
+account to attack* — and the login limiter is keyed on **IP, not account**, with **no failed login
+written to any table**, so nothing would record that one specific operator was being tried. The
+`placeholder` shows the shape without naming anyone.
+
+**Guarded by `packages/lib/src/no-published-credentials.test.ts`**, a source scan over **every** app
+file rather than a list of two — a list of two is exactly how the 24-bit mint survived its own guard in
+`#137`. Proven red first: **4 of 5 tests fail** against `origin/main`.
+⚠️ It **strips `//` and `/* */` comments before matching**, on purpose: `super-admin/lib/actions.ts`
+legitimately names `tokophi123` while explaining the fix, and a guard that forbids describing the bug it
+guards gets deleted the first time someone needs that sentence. **HTML comments are not stripped** —
+`<!-- … -->` in an `.astro` file is served to the browser.
+
+**Deliberately NOT done:** the seeded password is unchanged, so `tokophi123` still authenticates for
+anyone who already knows it. Owner's call — rotating it touches the seed, and **the seed is not a
+migration**, so existing deployments need a manual data fix. Filed as `NEXT.md` **N29**.
+
 ## Unreleased — Five browser checks, five invocation conventions, three phantom regressions
 
 ### 🧪 `npm run verify -w @tokophi/storefront` — one runner, one env contract
