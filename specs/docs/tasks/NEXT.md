@@ -8,6 +8,13 @@
 > Pairs with `BACKLOG.md` (priorities), `WORKLOG.md` (session log) and the dated handoffs in this
 > folder. **Legend:** size **S** (<1h) / **M** (half a day) / **L** (a day+). AC = acceptance criteria.
 >
+> 🔴 **THIS FILE WAS STALE ON FOUR ENTRIES, AND STALE IN THE EXPENSIVE DIRECTION** (found 2026-08-03).
+> **N19 · N20 · N21 · N23 were all done in `52ef1de` (audit wave 3, `#133`) and all four were still
+> marked open**, three of them tagged `NEW`. A session that trusts the queue creates a worktree and
+> starts rewriting finished work — that nearly happened on N19. All four are closed below **with the
+> evidence of having been RUN**, not merely read. ⚠️ **Close the entry in the same commit as the
+> code.** The queue is what four different docs point sessions at; stale here costs a whole session.
+>
 > 🔵 **Closed by audit wave 2: N5 (in part) · N9 · N11 · N12 · N14 · N6 · N4 · N3.** 🔴 **N8 was
 > REWRITTEN — its premise was disproved.** N7 stays reversed. **Eleven items were ADDED** from the audit;
 > they are new, not carried over, and nothing else in the repo tracks them.
@@ -332,45 +339,44 @@ with production; and the source of the postcodes is real shopper input, not the 
 backfilled row's district agrees with its kelurahan's parent, and `destinationGuessed` still fires for
 every row that was not backfilled.
 
-### N19. `seed:recent` inserts no `checkout_sessions` — the demo's Keranjang Ditinggal is now honest and empty · **M** · NEW
-Un-anchoring `data/checkout.ts` (audit wave 2, ③) moved `WINDOW_START` as well as the ages, and Keranjang
-Ditinggal went from **796/340 to 6/143** on dev. **Both halves are correct** — the old window was a frozen
-`2026-06-02` start with **no upper bound**, 60 days on 1 Agustus and growing, labelled "30 hari".
+### ✅ N19. `seed:recent` inserts no `checkout_sessions` — **DONE in `#133`, VALIDATED 2026-08-03**
+⚠️ **This entry was still marked open while the code was already on `main`.** `seedCheckoutSessions`
+landed in `52ef1de` (audit wave 3) — the same commit that closed N20/N21/N23 — and NEXT.md was not
+updated for any of the four. A session picking this up creates a worktree and starts writing a
+function that already exists; that nearly happened here.
 
-The drop is a **data gap**: the seed's newest `ditinggal` row is `2026-07-15` and `seed:recent` refreshes
-orders/flash/ledger but inserts **no `checkout_sessions` at all**.
+**Validated by RUNNING it, not by reading it** (dev DB, 2026-08-03):
 
-🔴 **Do NOT re-anchor the app to make the demo look busy.** The fix is seeding.
+| claim | result |
+|---|---|
+| inserts carts | **900** added, filling 29 empty days |
+| **idempotent** — a second run does nothing | second run: *"tidak ada hari kosong"*, **0 inserted** |
+| both kinds of `pulih` exist (the metric trap) | **rescued 89** (`abandoned_at` + `recovered_at`) vs **straight-through 86** (`abandoned_at` NULL) |
+| `recovered_order_id` points at real orders | 175 recovered rows, **0 dangling** |
+| the "Anonim" tab is not a lie | 724 `ditinggal` in-window, **398 with a phone** |
 
-**AC:** `seed:recent` inserts `checkout_sessions` — insert-only and idempotent, like the rest of that
-script — and a second run does nothing. ⚠️ Fix N8's ② first or check it: `seed:recent` currently cannot
-run against production at all.
+Keranjang Ditinggal now has real volume, so **N17's recovery link is visible on the demo** — the two
+halves only became demonstrable together.
 
-### N20. `SectionRenderer` has no `default:` arm and no exhaustiveness assertion · **S** · NEW
-14 `case` arms, no fallthrough. **A section type added to `SectionConfigMap` and forgotten compiles, and
-renders nothing on a live storefront** — no error, no build failure, no migration to point at. Part of a
-merchant's published page simply disappears.
+### ✅ N20. `SectionRenderer` exhaustiveness — **DONE in `#133`, VALIDATED 2026-08-03**
+The `default:` arm with `const _exhaustive: never = item` is on `main`, plus
+`section-renderer-exhaustive.test.ts` — which matters because **`astro check` is the only thing that
+compiles that file and nothing runs it** (the storefront build is transpile-only).
 
-⚠️ The fix is a `default:` arm and/or `const _exhaustive: never = item` — **not** removing branches.
-Narrow the palette, never the renderer.
+**Validated by breaking it on purpose:** adding a fake `'audit-fake-section'` to `SectionConfigMap`
+with no renderer arm produced exactly the AC's failure —
+`Type '{ type: "audit-fake-section"; … }' is not assignable to type 'never'` at
+`SectionRenderer.astro:119`. Reverted after.
 
-**AC:** adding a type to `SectionConfigMap` without a renderer arm fails `tsc`; an unknown type arriving
-from an older saved template renders a visible dev-only warning rather than nothing.
+### ✅ N21. `admin` derived by SUBTRACTION — **DONE in `#133`, VALIDATED 2026-08-03**
+`rbac-census.test.ts` holds a `Record<Capability, "owner-only" | "admin-too">`, so a new capability
+fails `tsc` (missing key) *and* `vitest` until someone classifies it. The census was chosen over an
+allow-list deliberately — an allow-list swaps a silent GRANT for a silent REMOVAL, which is worse to
+diagnose because `useCan` just hides the control.
 
-### N21. The `admin` role is derived by SUBTRACTION, so new owner-only caps leak to it · **S** · NEW
-`rbac-policy.ts:68-70` builds `admin` as `ALL_CAPABILITIES.filter(...)`. **A new owner-only capability
-leaks to `admin` by default** unless someone remembers to add it to the filter. `staff` and `gudang` are
-allow-lists and are immune by construction.
-
-`apps/admin/lib/rbac-landing.test.ts` pins this for `landing:html` — the one capability that has already
-been through it. Nothing pins the **class**.
-
-**AC:** a test that enumerates the owner-only capabilities from one declared list and fails if `admin`
-holds any of them — so adding the eleventh owner-only cap goes red, not silent.
-
----
-
-## 🟢 STOREFRONT / SEO / HYGIENE — all small, all measured
+**Validated by breaking it on purpose:** adding an `audit:danger` capability the careless way (to
+`ALL_CAPABILITIES` only, so it lands in `admin` by subtraction) turned the census **red**, 2 of 4
+tests failing on `expect(actual).toEqual(declared)`. Reverted after.
 
 ### 🟡 N13. Sitemap `<lastmod>` — pages DONE, products + categories BLOCKED ON A MIGRATION · **M**, not S
 🔴 **`products.updated_at` DOES NOT EXIST.** This entry claimed it does. `products` carries `created_at`
@@ -426,16 +432,26 @@ Only ONE of the two desktop/mobile sites is ever on screen: the nav is `xl:flex`
 inside an `xl:hidden`, so at any viewport one of them is `display:none` — which is why the check that
 guards this had to become structural rather than ratio-based (see "Runnable checks" below).
 
-### N23. `data/articles.ts:57` sorts every draft above every published post · **S** · NEW
-The surviving half of the NULLS-FIRST class that audit wave 2 fixed in the payment ordering:
-`desc(publishedAt)` emits a bare `DESC`, which is **NULLS FIRST** in Postgres, and a draft has no
-`published_at`. So the seller's Blog list buries their published work under every draft they have ever
-started.
+### ✅ N23. Drafts sorted above published posts — **DONE in `#133`; the STOREFRONT half closed 2026-08-03**
+⚠️ **The path in this entry never existed** (`data/articles.ts:57`). The real admin fix is
+`publishedFirst()` — `published_at desc nulls last, title asc` — and it works: measured against the
+dev DB, a bare `desc` puts the one seeded draft above all 15 published articles; `nulls last` puts
+"Kenapa Batik Tulis Lebih Mahal" back on top.
 
-One line — `publishedAt desc nulls last` — and it is the same mistake, in the same shape, one screen over.
+🔴 **But the class was only half closed, and the reason is N17's exactly.** The rule lived in
+`apps/admin/lib/data/article-order.ts` — **which the storefront cannot import** — so
+`apps/storefront/src/data/content.ts` kept its own bare `desc(publishedAt)`. A rule in the wrong
+package is a rule only one surface can obey.
 
-**AC:** a store with drafts and published posts lists the published ones first; a test that pins the
-ordering, since this is the second time the class has shipped.
+Moved to **`packages/db/src/article-order.ts`** (`@tokophi/db/article-order`), which both apps already
+depend on; both now call `publishedFirst()`. It imports `./schema` directly, never the barrel, so it
+does not drag in `client.ts` and stays testable without a `DATABASE_URL`.
+
+⚠️ **On the storefront query `nulls last` changes nothing today** — it filters `status='terbit'`, and
+`publishedAtFor()` guarantees a published row has a date. Say that plainly rather than claiming a bug
+that is not there. What it DOES change today is **determinism**: `title asc` settles two posts
+published in the same second, which a bare `desc` leaves to the query plan. Driven on a real build:
+`/blog` lists published-first, draft absent.
 
 ### ✅ N24. `/products/*.webp` declares `800w` for a 600 px file — CLOSED
 **The full audit, every source read with sharp, not sampled** (75 files):
