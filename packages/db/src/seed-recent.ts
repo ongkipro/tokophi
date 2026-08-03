@@ -133,9 +133,17 @@ async function seedOrders(storeId: string, storeName: string) {
     where p.store_id = ${storeId} and p.archived_at is null
   `);
   // Real destinations + real courier/service pairs, lifted from orders that already exist.
+  //
+  // ⚠️ **No `ship_kelurahan_name` here, and do not put it back without a migration.** It used to be
+  // selected AND inserted, and the column exists in no `.sql` and in no `schema.ts` entry on this
+  // branch: it arrived from `0049_shipping_kelurahan`, which lost its slot to a second `0049`
+  // (`0049_watery_supernaut`) and was never re-numbered. It survives on the shared dev container
+  // only because that database had the losing migration applied before the collision — so this
+  // script was green on dev and **could not run against production at all**, which has 86 applied
+  // migrations, 77 tables and no such column (verified 2026-08-03). Nothing in `apps/` ever read it.
   const dests = await q(sql`
     select distinct on (ship_district_id, courier)
-           ship_recipient, ship_phone, ship_address, ship_district_id, ship_kelurahan_name,
+           ship_recipient, ship_phone, ship_address, ship_district_id,
            ship_postcode, city, province, courier, service_type
     from orders
     where store_id = ${storeId} and ship_district_id is not null and courier is not null
@@ -200,14 +208,14 @@ async function seedOrders(storeId: string, storeName: string) {
                             subtotal_idr, discount_idr, shipping_idr, tax_idr, total_idr,
                             city, province, placed_at, courier, service_type,
                             ship_recipient, ship_phone, ship_address, ship_district_id,
-                            ship_kelurahan_name, ship_postcode)
+                            ship_postcode)
         values (${storeId}, ${number}, ${cust.id}, ${status}::order_status,
                 ${paid ? "dibayar" : "pending"}::financial_status,
                 ${pick(["organic", "meta_ads", "tiktok_ads", "google_ads", "other"])}::order_channel,
                 ${subtotal}, 0, ${shipping}, 0, ${subtotal + shipping},
                 ${dest.city}, ${dest.province}, ${at}, ${dest.courier}, ${dest.service_type},
                 ${cust.name}, ${cust.phone}, ${dest.ship_address}, ${dest.ship_district_id},
-                ${dest.ship_kelurahan_name}, ${dest.ship_postcode})
+                ${dest.ship_postcode})
         returning id
       `);
       const orderId = String(ord.id);
