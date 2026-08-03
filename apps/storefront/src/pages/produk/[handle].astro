@@ -63,8 +63,9 @@ const thumbsBeside = galleryLayout === "thumbnail-left"; // vertical rail on sm+
 
 // Specifications — built ONLY from attributes the merchant actually filled in, so the table never
 // shows a blank row. Kategori is always known; the rest are optional. `sizes` is deliberately NOT
-// repeated here (it is already the Ukuran picker in the buy box). Gender is mapped to a shopper-
-// facing word, not the feed code ("female").
+// shown here either: it is the legacy display-only column that used to be the Ukuran picker in the buy
+// box, and it names sizes this shop cannot actually pick or ship separately (see the picker note
+// below). Gender is mapped to a shopper-facing word, not the feed code ("female").
 const genderLabel =
   product.gender === "female" ? "Wanita" : product.gender === "male" ? "Pria" : product.gender === "unisex" ? "Unisex" : undefined;
 const specs = [
@@ -611,7 +612,25 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           <p class="mt-6 text-base leading-relaxed text-ink/80">{product.shortDescription}</p>
         )}
 
-        <!-- Variant picker (real product_variants: Warna, Ukuran) -->
+        <!-- Variant picker (real product_variants: Warna, Ukuran).
+             ⚠️ THERE IS NO FALLBACK PICKER, AND THERE MUST NOT BE ONE AGAIN. `products.sizes` is a
+             legacy display-only jsonb column (`["All Size"]`, `["S","M","L"]`) that was NEVER
+             reconciled with `product_variants`, and this block used to render it as an "Ukuran"
+             picker whenever a product had no `product_options` rows. `addToCart` then parked the
+             SIZE STRING in `cart.variant` — but `/api/public/order` requires an exact
+             `product_variants.title` match (the anti-substitution rule, deliberately), and every one
+             of those products has exactly ONE variant, titled `Default`. So the cart said "All Size",
+             the database said "Default", and the order was refused at the last step with
+             `Varian "All Size" … Muat ulang halaman produk.` — advice that cannot help, because
+             reloading leaves the same string in the cart. Measured on production 2026-08-03:
+             **10 of batik-nusantara's 22 active products were unbuyable, with 0 line items ever sold
+             between them** against 170 for the other 12.
+             The size was fiction in the other direction too: the order's line title comes from the DB
+             (`match.title === "Default" ? prod.title : …`), so the string never reached the parcel.
+             A product with no option rows has no variant to NAME — the storefront cannot map a size
+             to a `product_variants.title`, and guessing is exactly what the API refuses to do. If a
+             merchant wants per-size stock, that is real variants in the Seller editor (which always
+             writes `product_options` alongside them), not a text column. -->
         {
           product.options && product.options.length > 0 ? (
             <div id="variant-picker" class="mt-8 flex flex-col gap-6" data-variants={JSON.stringify((product.variants ?? []).map((v, i) => ({ option1: v.option1, option2: v.option2, price: v.price, compareAt: v.compareAt, stock: v.stock, catalogId: variantCatalogIds[i] })))}>
@@ -641,28 +660,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                 </div>
               ))}
             </div>
-          ) : (
-            product.sizes.length > 0 && (
-              <div class="mt-8">
-                <p class="text-sm font-medium text-ink">Ukuran</p>
-                <div id="size-options" class="mt-3 flex flex-wrap gap-2">
-                  {product.sizes.map((s, i) => (
-                    <button
-                      type="button"
-                      data-size={s}
-                      aria-pressed={i === 0 ? "true" : "false"}
-                      class:list={[
-                        "size-btn rounded-lg border px-4 py-2 text-sm font-medium transition-colors",
-                        i === 0 ? "border-brand-600 bg-brand-600 text-white" : "border-line bg-white text-ink hover:border-brand-400",
-                      ]}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )
-          )
+          ) : null
         }
 
         <!-- Quantity -->
@@ -1056,26 +1054,6 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     }
     if (picker) updateVariant();
 
-    // ---- legacy size (products without real variant options) ----
-    var selectedSize =
-      (document.querySelector(".size-btn[aria-pressed='true']") || {}).dataset ? document.querySelector(".size-btn[aria-pressed='true']").dataset.size : null;
-    var sizeWrap = document.getElementById("size-options");
-    if (sizeWrap) {
-      sizeWrap.addEventListener("click", function (e) {
-        var btn = e.target.closest(".size-btn");
-        if (!btn) return;
-        sizeWrap.querySelectorAll(".size-btn").forEach(function (b) {
-          b.classList.remove("border-brand-600", "bg-brand-600", "text-white");
-          b.classList.add("border-line", "bg-white", "text-ink", "hover:border-brand-400");
-          b.setAttribute("aria-pressed", "false");
-        });
-        btn.classList.add("border-brand-600", "bg-brand-600", "text-white");
-        btn.classList.remove("border-line", "bg-white", "text-ink", "hover:border-brand-400");
-        btn.setAttribute("aria-pressed", "true");
-        selectedSize = btn.dataset.size;
-      });
-    }
-
     var qty = 1;
     var qtyVal = document.getElementById("qty-val");
     // Mirror the stepper onto the buy buttons. The marketing pixel reads it from the clicked button, so
@@ -1099,7 +1077,13 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     function addToCart(d, go) {
       var cart = [];
       try { cart = JSON.parse(localStorage.getItem("cart") || "[]"); } catch (e) { cart = []; }
-      var variant = d.variant || selectedSize || "";
+      // `d.variant` is written by `updateVariant()` and is a REAL `product_variants.title` ("Hitam / L").
+      // Empty when the product has no option groups — and empty is the right answer, not a gap to fill:
+      // `/api/public/order` reads an unnamed line as "take the position-0 variant", which for a product
+      // with one `Default` variant is the only thing it could ever have meant. The old
+      // `|| selectedSize` filled it with a legacy SIZE string the database has never heard of; see the
+      // note above the picker markup.
+      var variant = d.variant || "";
       var existing = cart.find(function (i) { return i.handle === d.handle && (i.variant || i.size || "") === variant; });
       if (existing) { existing.qty += qty; }
       // `catalogId` rides along so InitiateCheckout can report real catalog ids (ADR 0013) — the cart's

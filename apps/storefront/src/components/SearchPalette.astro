@@ -157,12 +157,30 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
       });
     }
 
+    // The thumbnail box is `h-14 w-[2.625rem]` and `shrink-0` inside a flex row, so its width is
+    // 2.625rem = 42 CSS px at EVERY viewport — no breakpoint, no cap that only binds above some
+    // width, no flex share to guess at (AGENTS.md: a `max-w-*` is only a `sizes` if you can name the
+    // viewport at which it starts binding; here there is no cap at all, the width is the width).
+    // Arithmetic, not an estimate — and the browser trusts it completely, which is why it is a named
+    // constant beside the class it is derived from rather than a literal inside the string builder.
+    var THUMB_SIZES = "42px";
+
     // A PRODUCT ROW, in the shop's own language: a 3:4 portrait thumbnail, because a garment is
     // recognised by its silhouette and a square crops the silhouette away. Same aspect as
     // ProductCard, so the palette reads as a miniature of the grid rather than a list of commands.
+    //
+    // ⚠️ THE THUMBNAIL CARRIES A SRCSET, AND IT COMES FROM THE SERVER (`api/search.ts`), NOT FROM A
+    // MANIFEST IN THIS FILE. Without it the browser had exactly one file to fetch — the full-size
+    // original — for a 42px box: measured 91 178 B for six rows on the seeded store, 7,1x oversize
+    // (`scripts/check-search-srcset.mjs`). It was invisible to every static check and to the browser
+    // checks alike, because this <img> does not exist until somebody presses ⌘K.
+    // `p.srcset` is absent for a product whose image has no ladder; then both attributes are omitted
+    // and the row renders exactly as it did before. Both go through `esc` — this is string
+    // concatenation into `innerHTML`, so an unescaped URL is an injection vector, not just a bug.
     function productRow(p) {
+      var srcset = p.srcset ? ' srcset="' + esc(p.srcset) + '" sizes="' + esc(THUMB_SIZES) + '"' : "";
       var thumb = p.image
-        ? '<img src="' + esc(p.image) + '" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />'
+        ? '<img src="' + esc(p.image) + '"' + srcset + ' alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />'
         : '<span class="flex h-full w-full items-center justify-center">' + iconProduct + "</span>";
       var price = p.soldOut
         ? '<span class="text-xs font-medium text-muted">Stok habis</span>'

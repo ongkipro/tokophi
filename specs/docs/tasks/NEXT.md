@@ -141,7 +141,20 @@ log2(32); the `tokophi-` prefix is 0 bits). `apps/super-admin/lib/temp-password.
 `apps/admin/lib/actions/users.ts` no longer keeps a private `randomBytes(4)`.
 `packages/lib/src/password.test.ts` measures the **min-entropy the generator actually emits** and fails
 below **48 bits** — it went red at 23,7 bits against the old mint before it went green — and it fails if
-either app grows a private mint again.
+any file grows a private mint again.
+
+> ⚠️ **CORRECTION (2026-08-03, second pass).** `apps/super-admin/lib/temp-password.ts` was **NOT**
+> deleted by that commit — the deletion was staged in the source worktree and lost in integration, so
+> the 24-bit mint shipped to `main`, still `export`ed, its docblock still claiming to be *the* mint.
+> Dead code (no importer), not a live login, but the next person to grep would have found it and
+> believed it. Deleted now.
+> **The guard could not see it**: that test iterated a hardcoded two-file list, so a private mint in
+> any THIRD file was invisible to the test written to stop exactly that. It **scans every source file
+> in the repo** now — declaration, hand-rolled `randomBytes` credential, or a call that does not import
+> the shared module — and it was proved red against the surviving file *before* that file was deleted.
+> `hashPassword` is now genuinely unified too (it was claimed, not done: five byte-identical copies —
+> `apps/admin/lib/auth.ts` re-exports the shared one, `actions/security.ts` and `packages/db/src/seed.ts`
+> import it), and the same scan pins it at one implementation.
 
 ### 🔴 N18b. The login door — the premise of this entry was WRONG, and it is a DECISION · **decision, not work**
 
@@ -645,22 +658,30 @@ with build, lint and `astro check` green either way. Guarded on both sides —
 Each guards a failure that is **silent** under `tsc`, lint and `astro check`:
 
 ```bash
-npx astro build --root apps/storefront
-DATABASE_URL=… PORT=4373 node apps/storefront/dist/server/entry.mjs &
+npm run verify -w @tokophi/storefront     # ← ALL FIVE. builds if stale, starts ONE server, table + exit code
+npm run verify -w @tokophi/storefront -- --no-build
 
-node apps/storefront/scripts/check-pixel-defer.mjs   # tracking survives the deferral
-node apps/storefront/scripts/check-hero-srcset.mjs   # srcset actually promoted (port 4374)
-node apps/storefront/scripts/check-h1-floor.mjs      # exactly one <h1>, all three template shapes
-node apps/storefront/scripts/check-pdp-srcset.mjs    # no image resolves over 3x the pixels it fills,
-                                                     # and no catalog <img> is bare (logo excepted)
-node apps/storefront/scripts/check-image-widths.mjs  # every w descriptor IS the file's real width
-                                                     # (no server, no browser — disk vs disk)
 node apps/storefront/scripts/gen-image-widths.mjs    # regenerate renditions + the width manifest
 
 npm test                                             # ledger suites now run by default
 npm run test:db                                      # same, but an unreachable test DB FAILS instead of skipping
 npx vitest run apps/storefront/src/components/sections/h1-floor.test.ts
 ```
+
+| the suite runs | what it proves |
+|---|---|
+| `check-image-widths` | every `w` descriptor IS the file's real width (no server, no browser — disk vs disk) |
+| `check-hero-srcset` | the hero's `data-srcset` is actually promoted onto the IMG |
+| `check-pdp-srcset` | no image resolves over 3× the pixels it fills, and no catalog `<img>` is bare (logo excepted) |
+| `check-pixel-defer` | tracking survives the deferral, for every channel **this tenant** enabled |
+| `check-h1-floor` | exactly one `<h1>`, all three template shapes |
+
+⚠️ **One invocation contract, and the old names now FAIL rather than being ignored.** To run a single
+check by hand: `CHECK_BASE_URL=http://toko-demo.test:4390 node apps/storefront/scripts/<name>.mjs`
+(plus `DATABASE_URL` for `check-h1-floor` and `check-pixel-defer`; it is read from the repo-root or
+main-checkout `.env` if unset). `T_URL`, `H1_PORT` and `DPR` are retired — `scripts/check-env.mjs`
+exits 1 if it sees one, because silently running the default while the caller believes they aimed
+somewhere else is exactly how three phantom regressions got reported on 2026-08-02.
 
 - **Both `<h1>` alarms are kept on purpose and they are not redundant.** `h1-floor.test.ts` pins the
   **premise** — that `Hero` is still the only section emitting an `<h1>`, and that the floor and the hero
@@ -671,12 +692,19 @@ npx vitest run apps/storefront/src/components/sections/h1-floor.test.ts
   that has none. It now uses a random id per run **plus a Postgres session advisory lock on a reserved
   connection** — a session lock is released when the connection dies, and a `finally` block is not. Still:
   while it runs, a real store has a homepage it never built.
-- ⚠️ **`check-pixel-defer.mjs` cannot pass on the seeded data, and that is TENANT DATA, not code.**
-  `store_tracking_channels` holds exactly one row (`batik-nusantara | meta | t`), so its
-  `hosts.length === 3` can never hold. Everything the one seeded channel *can* prove passes. Either
-  configure all three channels on the tenant you point it at, or make it assert only the channels the
-  tenant has enabled — **an alarm that is always red is an alarm that is off**, and this repo has already
-  paid for that lesson with two cross-tenant leaks that shipped past a red `verify-rls`.
+- ✅ **`check-pixel-defer.mjs` no longer hard-codes three vendors** (2026-08-03). It read
+  `hosts.length === 3` while `store_tracking_channels` holds exactly one row
+  (`batik-nusantara | meta | t`), so it was red on clean `main`, for every change set, forever — **an
+  alarm that is always red is an alarm that is off**, and this repo has already paid for that lesson
+  with two cross-tenant leaks that shipped past a red `verify-rls`. It now reads the enabled channels
+  for the tenant the host resolves to and asserts the claim that was always meant: each one is stubbed
+  synchronously, buffers an event fired before its SDK exists, and loads on interaction — plus the
+  reverse, that nothing loads for a channel that is switched off. A tenant with **no** channels exits
+  `2` = **SKIP**, which the runner prints with its reason and never counts as a pass.
+  - ⚠️ In the same pass: its "no vendor `<script src>` in the served HTML" claim had been measured with
+    `fetch(…, {headers:{host}})`, and **undici silently drops a `host` header** — so it was counting
+    scripts on the 404 "Toko tidak ditemukan" page, where there are none, for its whole life. Use
+    `getAsTenant()` (node:http). `check-h1-floor` already did, and said why; the others did not.
 - ✅ **`check-pdp-srcset.mjs` now FAILS on a bare catalog `<img>` instead of printing it** (N22 landed).
   The claim is STRUCTURAL, not ratio-based, on purpose: the ratio test can only judge an element the
   browser actually painted, and the mega menu (`xl:flex`) and the drawer (inside an `xl:hidden`) are

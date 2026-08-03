@@ -1,15 +1,10 @@
 "use server";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
-import { scryptSync, randomBytes } from "node:crypto";
 import QRCode from "qrcode";
 import { getSession, verifyPassword } from "@/lib/auth";
+import { hashPassword } from "@tokophi/lib/password";
 import { generateTotpSecret, verifyTotp, otpauthURL } from "@tokophi/lib/totp";
-
-function hashPassword(pw: string): string {
-  const salt = randomBytes(16).toString("hex");
-  return `${salt}:${scryptSync(pw, salt, 64).toString("hex")}`;
-}
 
 export async function getSecurity(): Promise<{ email: string; twoFactor: boolean } | null> {
   const session = await getSession();

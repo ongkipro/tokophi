@@ -1191,8 +1191,25 @@ confirmed by reading the code, running SQL, or driving a real browser — none i
 - [ ] Canonical **drops `?page`** (`Layout.astro:52`), so page 2 canonicalises to page 1.
 - [ ] **3 × `<h1>`** on the homepage (one per hero slide); a builder homepage with no Hero has **none**.
 - [ ] **Zero JSON-LD on the homepage** — no Organization, no WebSite/SearchAction (`/cari` exists).
-- [ ] The **LCP hero image bypasses `imageSrcSet()`** (`Hero.astro:77`) — full-size original to a
-  320px phone. Same for the category cover (`CategoryHero.astro:36`).
+- [x] (closed) ~~The **LCP hero image bypasses `imageSrcSet()`** (`Hero.astro:77`)~~ — fixed by #119/#120.
+- [x] (closed 2026-08-03) ~~Same for the category cover (`CategoryHero.astro:36`)~~ — it now emits
+  `imageSrcSet()` + `sizes="100vw"` (measured: the img box equals the viewport width at all 11 widths
+  `audit-responsive` sweeps, so `100vw` is arithmetic). ⚠️ **Byte-neutral on the seeded demo, and the
+  reason why is the item below.**
+- [ ] 🔴 **THE CATEGORY COVER IS A PRODUCT PHOTO, AND THAT — NOT THE SRCSET — IS THE DEFECT.**
+  `seed.ts` points all seven category covers at a **600 × 600** `/products/*.webp`. The hero paints it
+  `object-cover` into a **1440 × 320** banner: a **2,4× upscale at DPR 1, 4,8× at DPR 2**, and it is
+  the **LCP element** on every `/kategori/*` page. Measured 2026-08-03 at 1440/DPR1, 1440/DPR2 and
+  412/DPR2 — the browser downloads the same **14 252 B** original in all three, because against
+  `sizes="100vw"` it needs 1440 / 2880 / 824 device px and the ladder tops out at 600. **A srcset
+  cannot fix a source that is too small; do not add rungs and call it done.**
+  **Size it:** 7 landscape covers at 1920 × 720 (2,67:1), through `gen-image-widths.mjs` for the
+  640/1024/1440 rungs, the way `/hero/*` already is. Cost is not a saving — those heroes are 65–152 KB
+  whole and 30–58 KB at 1440w, so expect **~+10–25 KB on desktop** in exchange for a banner that is
+  sharp and composed instead of a blown-up crop of a skirt. Two follow-ons: `/hero/` covers cost
+  nothing to a merchant, but **the seed is not a migration** — the live store keeps whatever cover it
+  has, so this needs an explicit data fix; and merchants uploading their own cover want a **ratio hint
+  in the Kategori editor**, or they will keep uploading squares.
 - [ ] **Render-blocking Google Fonts** — MEASURED on a dev server, throttled 1.6 Mbps / 150 ms at 390px:
   as-shipped `CLS 0.358`, fonts blocked `CLS 0.182`. Every shift entry named the same node — the hero
   copy container reflowing when Inter swaps under `text-balance`. Self-host the two woff2 with
@@ -1200,7 +1217,12 @@ confirmed by reading the code, running SQL, or driving a real browser — none i
   DELTA as the signal; the prod-build measurement has not been taken.
 - [ ] **Header logo has no `width`/`height`** (the footer's does). `media.width/height` is already
   recorded at upload. Mechanism is clear; the shift was not observed (the logo 404'd during the audit),
-  so do not hardcode a ratio the way `CategoryHero` does — read the real one.
+  so read the real one — do not hardcode a ratio. (`CategoryHero` used to hardcode `1920×720` over a
+  600×600 file; that is now **removed rather than corrected**, because its img is `absolute inset-0
+  h-full w-full` — both used dimensions are definite, so the attributes never sized it and no literal
+  could be true for an arbitrary merchant upload. Measured before *and* after: CLS **0**, box
+  identical. The header logo is the opposite case: it IS sized by its attributes, and its real
+  dimensions ARE knowable from `media`.)
 - [x] (closed) ~~no preconnect to the uploads origin~~
 - [x] (closed — see above) ~~`ProductCard` exposes a `level` prop~~ so a card under a page `<h1>` becomes `<h2>` — **no call
   site passes it**, so every listing goes `h1 → h3`.

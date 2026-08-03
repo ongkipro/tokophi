@@ -3,6 +3,7 @@ import { ShoppingCart, Banknote, MapPin, Truck, ChevronDown, Info } from "@lucid
 import PayIcon from "../components/PayIcon.astro";
 import CheckoutLayout from "../layouts/CheckoutLayout.astro";
 import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings, storeFreeShip } from "../data/catalog";
+import { noVariantChoice } from "../lib/cart-variant";
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { verifyRecoveryToken } from "../lib/recovery";
@@ -93,6 +94,25 @@ const FREE_SHIP_ENABLED = FS.enabled;
 const FREE_SHIP_MIN = FS.minIdr;
 const COD_MAX = COD.maxAmountIdr; // 0 = no cap
 const COD_PROVINCES = COD.allowedProvinces; // [] = every province
+
+// ── CARTS POISONED BY THE OLD PDP SIZE PICKER (see produk/[handle].astro) ────────────────────────
+// Until 2026-08-03 the PDP rendered `products.sizes` — a legacy display-only column — as an "Ukuran"
+// picker for any product with no `product_options`, and `addToCart` parked the chosen SIZE STRING in
+// `cart.variant`. `/api/public/order` requires an exact `product_variants.title` and every one of
+// those products has ONE variant, titled `Default`, so the order was refused at Bayar with
+// `Varian "All Size" … Muat ulang halaman produk.` — and reloading cannot help, because the string is
+// in localStorage. **Deleting the picker fixes tomorrow's carts; it does not reach the ones already
+// sitting in a shopper's browser**, or the ones a WhatsApp recovery link restores from the
+// `checkout_sessions` snapshot below (same string, same refusal). Those recover HERE, on read.
+//
+// Only products that have BOTH a legacy `sizes` list AND at most one variant are listed: that is
+// exactly the set the old picker could have stamped, and with one variant there is nothing to
+// substitute — clearing the line's variant resolves to the same single row the order API would have
+// picked anyway. A product with real options is NOT here: for those a stale title is a genuine
+// mis-pick and the API must keep refusing it (a silently re-substituted variant is how a shopper is
+// charged for something they did not choose). `sizes` has no writer outside the demo seeders, so on a
+// real merchant's store this list is empty.
+const NO_CHOICE_HANDLES = catalog.products.filter(noVariantChoice).map((p) => p.handle);
 
 // ── Recovery link (?r=<signed token>) ────────────────────────────────────────────────────────────
 // The merchant's WhatsApp "kamu meninggalkan keranjang" message links here. The token is an HS256
@@ -853,7 +873,7 @@ if (rToken) {
   }
 </style>
 
-<script is:inline define:vars={{ ONGKIR_API, ORDER_API, PROMO_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, TAX_ENABLED, TAX_RATE, TAX_INCLUSIVE, FREE_SHIP_ENABLED, FREE_SHIP_MIN, RECOVER }}>
+<script is:inline define:vars={{ ONGKIR_API, ORDER_API, PROMO_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, TAX_ENABLED, TAX_RATE, TAX_INCLUSIVE, FREE_SHIP_ENABLED, FREE_SHIP_MIN, RECOVER, NO_CHOICE_HANDLES }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -863,10 +883,39 @@ if (rToken) {
 
     function readCart() {
       try {
-        return JSON.parse(localStorage.getItem("cart") || "[]");
+        return normalizeCart(JSON.parse(localStorage.getItem("cart") || "[]"));
       } catch (e) {
         return [];
       }
+    }
+
+    // Repair a cart poisoned by the old PDP size picker — see NO_CHOICE_HANDLES in the frontmatter.
+    // On READ, not at submit: the poisoned string also drives the ongkir quote, the pixel's
+    // `content_ids` and what the summary shows, so a line repaired only on the way out would still
+    // have been wrong on everything the shopper saw. And it must be WRITTEN BACK, or the next page
+    // load restores the same broken cart from localStorage and the shopper is stuck forever.
+    //
+    // Merging is not optional: a shopper who added "S" and then "M" of the same one-variant product
+    // has TWO lines, and clearing both leaves two rows with the same identity — the cart's own
+    // dedupe key is handle+variant, so the page would show one product twice.
+    function normalizeCart(cart) {
+      if (!Array.isArray(cart)) return [];
+      var out = [];
+      var changed = false;
+      cart.forEach(function (it) {
+        if (NO_CHOICE_HANDLES.indexOf(it.handle) >= 0 && (it.variant || it.size)) {
+          it.variant = "";
+          it.size = "";
+          changed = true;
+        }
+        var key = it.variant || it.size || "";
+        var same = null;
+        out.forEach(function (o) { if (o.handle === it.handle && (o.variant || o.size || "") === key) same = o; });
+        if (same) { same.qty = (same.qty || 0) + (it.qty || 0); changed = true; }
+        else out.push(it);
+      });
+      if (changed) { try { localStorage.setItem("cart", JSON.stringify(out)); } catch (e) {} }
+      return out;
     }
 
     function esc(s) {

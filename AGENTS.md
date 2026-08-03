@@ -201,7 +201,8 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
     off a support screen) = **60 bits**; the `tokophi-` prefix is worth **0 bits** and is only a label.
     `packages/lib/src/password.test.ts` measures the **min-entropy of what the generator actually
     emits** and fails under **48 bits**, so shortening it, narrowing the alphabet or biasing the
-    mapping all go red — and it fails if either app grows a private `const tempPassword` again.
+    mapping all go red. It **scans every source file in the repo** (not a list of two, which is how a
+    24-bit copy survived this very test once), and it pins `hashPassword` at one implementation too.
   - **A login rate-limit DOES exist — but it is a floor, not a wall, and it is keyed on IP ALONE.**
     `signIn` on both panels calls `rateLimit()` from `@tokophi/lib/cache` **before** the scrypt check
     (`login:admin:<ip>` 15/min, `login:platform:<ip>` 10/min, shipped `53dd9ee` 2026-07-16). ⚠️ Two
@@ -323,6 +324,26 @@ every deploy, and a hardcoded one fails with "No such container" the moment anyt
 
 Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
 
+> ### 🧪 RUN THEM AS A SUITE: **`npm run verify -w @tokophi/storefront`** (from the repo root)
+> Builds if the build is stale, starts ONE storefront, runs all five checks against it, prints a
+> pass/fail table and exits non-zero if anything is red. It kills **only the process group it spawned**
+> — never `pkill`, so another agent's server on another port is untouched — and a port that is already
+> taken fails in one second with the port number in the message instead of hanging.
+> - **There is ONE invocation contract now** (`scripts/check-env.mjs`): `CHECK_BASE_URL` (an origin —
+>   the hostname selects the tenant, ADR 0009) and `DATABASE_URL` from the environment. The old
+>   `T_URL` / `H1_PORT` / `DPR` are **retired and now fail loudly** rather than being ignored. They had
+>   two different meanings of `T_URL` and four default ports between them, and on 2026-08-02 a reviewer
+>   started one server, pointed three checks at it and reported **three regressions that did not
+>   exist**. A check that is hard to run correctly gets run wrongly — same family as `verify-rls`.
+> - **Three results, not two: PASS / FAIL / SKIP.** SKIP (exit code 2) means the check does not APPLY
+>   to the data it was pointed at. It is printed with its reason on every run and never counted as a
+>   pass — see `check-pixel-defer` below.
+> - ⚠️ **`fetch` CANNOT send a `Host` header** — undici derives it from the URL and silently drops
+>   yours, so `fetch("http://127.0.0.1:4390/", {headers:{host:"toko-demo.test"}})` is answered by the
+>   404 page. Use `getAsTenant()` (node:http). `check-pixel-defer` had been asserting "no vendor
+>   `<script src>` in the served HTML" against that 404 for its whole life — the loudest claim in the
+>   file was vacuous. Found and fixed 2026-08-03.
+
 - 🔴 **MARKETING PIXELS ARE THE DOMINANT COST, AND THEY ARE DEFERRED.** Turning Meta + Google + TikTok
   on took mobile from **90 → 66** and Total Blocking Time from **130 ms → 770 ms**. The downloads were
   never the problem — all three were already `async`. The cost is PARSE + EXECUTE of three third-party
@@ -342,6 +363,14 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   snippet** — the stock snippet injects the script as its last line, which silently undoes this.
   Guarded by `apps/storefront/scripts/check-pixel-defer.mjs` (a BROWSER check: build, lint and
   `astro check` all stay green while events are being dropped).
+  ⚠️ **It asserts the channels THIS TENANT enabled, read from `store_tracking_channels` — never a
+  hard-coded three.** It used to demand `hosts.length === 3` while the seeded store has exactly one
+  channel (`batik-nusantara | meta`), so it was red on clean `main`, for every change set, forever —
+  and this repo has already paid for that once: `verify-rls` sat red for weeks, everyone learned to
+  scroll past it, and two cross-tenant leaks shipped past a verifier that was already failing. The
+  claim that was always meant — *every channel the merchant switched on is stubbed synchronously,
+  buffers, and loads on interaction, and nothing loads for a channel that is off* — is true on the
+  seeded data and stays true on a tenant with all three. A tenant with none is SKIP, not PASS.
 - **Inter is SELF-HOSTED** (`public/fonts/`, `@font-face` in `styles/global.css`). The Google Fonts
   `<link>` was render-blocking for **1.409 ms** in three layouts, in front of an LCP that was **82%
   render delay** — the LCP element is an `<h1>`, i.e. text waiting on a font on a third-party origin.
@@ -373,6 +402,26 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   cost a whole rung (17 468 B). In the mobile drawer the same class on a `w-full` element pinned to the
   viewport binds exactly, so `(min-width: 416px) 186px` is arithmetic, not a guess. `Header.astro`
   carries all three of its derivations as constants with the arithmetic written out.
+- ⚠️ **MARKUP BUILT IN A JS STRING IS INVISIBLE TO BOTH KINDS OF CHECK.** The search palette's rows
+  are concatenated into `innerHTML` (`SearchPalette.astro`), so its thumbnail `<img>` exists in no
+  `.astro` template, in no built HTML file, and on no page nobody has pressed ⌘K on — the static
+  sweeps and `check-pdp-srcset.mjs` alike walk right past it. It was the LAST bare `<img>` after
+  `#133`: six full-size originals, **91 178 B**, for six **42 × 56 px** boxes (7,14× oversize at
+  DPR 2). Fixed at **9 956 B** (−89%), and for a MERCHANT UPLOAD the same row now asks for `?w=200`
+  instead of a ≤2000px original — the case that is far larger in production than on the seeded demo.
+  ⚠️ **The srcset is built on the SERVER (`api/search.ts` returns `srcset` per row), not in the
+  browser.** `imageSrcSet` reads `STATIC_IMAGE_WIDTHS`, a 5,2 KB generated manifest of all 75 static
+  sources; shipping that to every visitor of every page to serve six rows behind an interaction would
+  be a regression wearing a fix's clothes. The JSON grew **938 → 1 700 B** (**+448 → +762 B**, 352 →
+  448 B gzipped) — **+762 B of JSON to save 81 222 B of images, ~107:1** — and there is ONE
+  implementation of "which renditions exist". `sizes="42px"` is arithmetic, not a cap: the box is
+  `w-[2.625rem]` and `shrink-0`, so it is 42 px at every viewport with no breakpoint to name.
+  Guarded by `scripts/check-search-srcset.mjs`, which OPENS the palette (⌘K), waits for `/api/search`,
+  and re-resolves each row's candidates through the isolated probe — the homepage behind it renders
+  the same products, so `currentSrc` alone would sometimes report the grid's wider file. It is a
+  sibling of the PDP check rather than a few lines inside it: the palette is on every route, and
+  opening it pins `document.body` and covers the page, which is exactly the kind of perturbation that
+  cost that file its determinism once already.
 - ⚠️ **Astro middleware CANNOT set headers on `public/` assets** — the Node adapter's `sirv` handler
   serves them before middleware runs. Verified against a real build and reverted; long cache TTL is a
   Cloudflare Cache Rule (BACKLOG), not code. Do not re-write that middleware.
@@ -563,10 +612,15 @@ type-checks and passes everything else.
   — part of a merchant's published page gone, no error, no failed build. The admin half never had this
   problem (`Config<SectionConfigMap>` in `puck-config.tsx` is an exhaustive mapped type, so the
   BUILDER refused the new section while the RENDERER stayed silent). `const _exhaustive: never = item`
-  closes it. **`astro check` is the only thing that compiles that file and NOTHING runs it** — the
-  storefront's build is a bare `astro build`, transpile-only — so the arm and every case are ALSO
-  pinned by `apps/storefront/src/components/sections/section-renderer-exhaustive.test.ts`, which does
-  run under `npx vitest run`.
+  closes it. **`astro check` is the only thing that compiles that file, and it is WIRED NOW** —
+  `npm test` is `vitest run && npm run check:storefront` (+14 s). For a long time nothing ran it (the
+  storefront's build is a bare `astro build`, transpile-only), so that guard was decoration.
+  ⚠️ **Both halves are load-bearing and they catch different things.** `astro check` catches a wrong
+  **prop**; `section-renderer-exhaustive.test.ts` catches a missing or misrouted **arm** — and it reads
+  the file through the **TypeScript lexer**, not a regex, because comments are trivia to a lexer and
+  invisible to a regex: commenting out `case "lookbook":` left the text in place and kept all four
+  tests green while the renderer dropped that section on a live storefront. The same was true of the
+  `_exhaustive: never` assertion itself.
 - A type that genuinely is unknown at runtime (an older saved template, a rolled-back deploy) gets a
   `console.warn` on the server — this is SSR, so it lands in the container log — plus a visible panel
   **in DEV only**. Not in production on purpose: a shopper must not be shown our internal error on a
