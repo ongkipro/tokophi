@@ -1,10 +1,11 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { scryptSync, timingSafeEqual } from "node:crypto";
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { authSecretBytes } from "@tokophi/lib/secret";
+import { hashPassword } from "@tokophi/lib/password";
 
 // Lazy (throws in prod if AUTH_SECRET is unset, never at build) — see @tokophi/lib/secret.
 const secret = () => authSecretBytes();
@@ -13,13 +14,15 @@ export const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7d — matches the JWT expir
 
 export type Session = { userId: string; storeId: string; role: string; email: string; name: string };
 
-// scrypt "salt:hash" (same scheme as the seed + super-admin provisioning).
-export function hashPassword(pw: string): string {
-  const salt = randomBytes(16).toString("hex");
-  return `${salt}:${scryptSync(pw, salt, 64).toString("hex")}`;
-}
+// Re-exported, not re-implemented. There were FIVE byte-identical copies of this four-line function
+// (here, `actions/security.ts`, `packages/db/src/seed.ts`, `@tokophi/lib/password`, and the deleted
+// `super-admin/lib/temp-password.ts`) — the same shape that let the MINT drift to 24 bits in one copy
+// while the other said 32. Nothing here drifts yet; the point is that a copy is where it would.
+// `verifyPassword` below is the reader of this format, so the writer stays one function.
+// The specifier stays `@/lib/auth` for every caller — this is a re-export, not a call-site change.
+export { hashPassword };
 
-// scrypt "salt:hash" (matches the seed's hashPassword).
+// scrypt "salt:hash" — the verifier for what `hashPassword` writes (16-byte hex salt, 64-byte key).
 export function verifyPassword(pw: string, stored: string | null): boolean {
   if (!stored) return false;
   const [salt, hash] = stored.split(":");

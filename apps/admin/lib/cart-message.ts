@@ -5,8 +5,8 @@ import type { CartItem } from "@/lib/data/checkout";
 //
 // This lived in `lib/data/checkout.ts`, which pulls the Drizzle client at module scope, so importing
 // it in a test demanded a DATABASE_URL for a function that only does string substitution. Same split
-// the repo already uses for `platform-rank.ts` and `temp-password.ts`, and for the same reason: the
-// rule worth pinning was the one that could not be reached without standing up a database.
+// the repo already uses for `platform-rank.ts` and `@tokophi/lib/password`, and for the same reason:
+// the rule worth pinning was the one that could not be reached without standing up a database.
 
 // ⚠️ THE LINK IS APPENDED WHEN THE TEMPLATE HAS NO `{{link}}`, AND THAT FALLBACK IS THE FEATURE.
 //

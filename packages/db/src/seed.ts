@@ -3,15 +3,12 @@
 //   npm run seed -w @tokophi/db   (idempotent — truncates public tables first)
 import { db, client, schema } from "./client";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { scryptSync, randomBytes } from "node:crypto";
 import { COURIERS } from "@tokophi/lib/couriers";
+// The one writer of `users.password_hash` (scrypt `salt:hash`) — see @tokophi/lib/password.
+import { hashPassword } from "@tokophi/lib/password";
 
-// Local auth: scrypt "salt:hash". Dev owner password below (change for real deploys).
+// Dev owner password below (change for real deploys).
 const DEV_OWNER_PASSWORD = "tokophi123";
-function hashPassword(pw: string): string {
-  const salt = randomBytes(16).toString("hex");
-  return `${salt}:${scryptSync(pw, salt, 64).toString("hex")}`;
-}
 
 const TODAY = new Date("2026-07-02T00:00:00Z");
 const daysAgo = (n: number) => new Date(TODAY.getTime() - n * 86_400_000);
