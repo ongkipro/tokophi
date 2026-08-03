@@ -2,6 +2,45 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — Every route on all three apps, driven in a browser
+
+A sweep, not a read-through: enumerate routes from disk, cross-reference against the sidebar, then load
+each one logged-in and record status, `<h1>` count, heading-level skips, console errors and horizontal
+overflow at 390 px. **admin 40/40 and storefront 14/14 are now clean.**
+
+**Routing was already clean and that is a result**: 0 dead nav links, 0 unreachable pages across all
+three surfaces. The nine admin routes absent from the sidebar are all reached deliberately (the `/akun/*`
+trio from the avatar menu, the six `*/baru` screens from their list page) — verified by grepping for a
+link to each, not assumed.
+
+🔴 **`/checkout` had no `<h1>` at all** — the one page a shopper hands their name, phone and address to,
+and the only money-path page without one. Highest heading was `<h2>Ringkasan Pesanan`. Third instance of
+the class after the builder homepage (N11) and the hero carousel (N14).
+
+⚠️ **The fix is `sr-only`, and it is in the PAGE, not `CheckoutLayout`.** Not visible because the note
+directly above it records that the visible "Checkout" title was removed deliberately on 2026-07-16. Not
+in the layout because its other consumer, `checkout/sukses.astro`, already renders a visible `<h1>` — a
+floor there would have given that page **two**, which is the N14 defect reintroduced by the fix for
+N11's. Two consumers, one already correct: fix the one that is wrong.
+
+**`/halaman/baru` had no `<h1>`** — `PageEditor` gated its heading on `{isEdit && …}`, so only the CREATE
+screen lacked one, while `topBarTitle` was already computing `"Tambah halaman"` for that exact case. The
+guard was hiding a string it had built. `article-editor.tsx` next door renders its own unconditionally.
+
+**`/navigasi` and `/pemasaran` skipped h1→h3** — `<h3>` on pages with no `<h2>`. Tag changed, `className`
+untouched: the size comes from `text-sm`, not the tag.
+
+**Recorded so nobody re-chases them:** the `/api/uploads/*` 404s on six admin pages are **local only** —
+`public/uploads/` is gitignored, and production mounts a named volume and serves all of them, so merchant
+media survives a deploy. ⚠️ A dev-DB filename tested against the production server proves nothing; that
+misread briefly looked like a broken store logo in production. The storefront's
+`ERR_CONNECTION_REFUSED` is the admin origin absent from an isolated scan, and the single 390 px overflow
+hit was `/sitemap.xml` — XML in a browser, a false positive of the check.
+
+**super-admin: gating verified (all 7 routes 307 to login), screens NOT crawled.** It needs a platform
+credential, and since `#133` that password is randomly minted and revealed once — obtaining one means
+resetting a control-plane password on the shared DB. Filed as N28 rather than done badly.
+
 ## Unreleased — Validating wave 3, and one blog-order rule the storefront could not reach
 
 An audit of `#133` rather than a new front beside it. Two things came out of it.

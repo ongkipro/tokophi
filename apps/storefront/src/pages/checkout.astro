@@ -250,6 +250,21 @@ if (rToken) {
       The "Kolom bertanda * wajib diisi" line went with them — the asterisks are on the labels, where
       the shopper actually reads them, and a legend explaining a convention everyone knows is a line
       of chrome above the first field. */}
+
+  {/* ⚠️ `sr-only`, and that is the whole point — do NOT make it visible.
+      This page had NO `<h1>` at all (measured across every storefront route): its highest heading
+      was `<h2>Ringkasan Pesanan`, so the one page a shopper hands their name, phone and address to
+      offered no document outline to land on. `/keranjang` and `/checkout/sukses` both have one; this
+      page was simply missed. Third instance of the class after N11 and N14 — and the only one on the
+      money path.
+
+      A VISIBLE title is not the fix: the note directly above records that it was removed
+      deliberately on 2026-07-16 (the steps and the tab already say "Checkout", and a headline costs
+      the first field its place above the fold on a 390 px phone). A hidden `<h1>` restores the
+      outline without re-litigating that. It lives HERE, not in `CheckoutLayout`, because the layout's
+      other consumer — `checkout/sukses.astro` — already renders a visible `<h1>`, and a floor in the
+      layout would give that page two. */}
+  <h1 class="sr-only">Checkout — {store.name}</h1>
   {
     RECOVER && (
       <p class="mt-4 rounded-lg border border-[var(--co-accent)]/30 bg-[var(--co-accent-weak)] px-4 py-3 text-sm text-ink">

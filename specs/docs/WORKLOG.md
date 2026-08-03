@@ -10,6 +10,26 @@
 
 
 
+## 2026-08-03 — Sweep: every route on all three apps, driven in a browser
+
+**Handoff:** [`tasks/2026-08-03-surface-sweep.md`](./tasks/2026-08-03-surface-sweep.md) · closes
+**N26**, **N27**; files **N28**.
+
+Routing clean on all three surfaces (0 dead nav links, 0 unreachable pages). Four defects found by
+loading pages, all fixed: 🔴 **`/checkout` had no `<h1>`** — the only money-path page without one, third
+instance of the N11/N14 class; `/halaman/baru` had none (heading gated on `{isEdit && …}` while the
+title string was already computed); `/navigasi` + `/pemasaran` skipped h1→h3.
+
+⚠️ The checkout floor went in the PAGE, not `CheckoutLayout` — the layout's other consumer already has a
+visible `<h1>`, so a floor there would have given it two: N14 reintroduced by N11's fix.
+
+Recorded as NOT defects: the `/api/uploads` 404s are local (gitignored dir; production mounts a volume
+and serves 6/6), and a dev-DB filename tested against the prod server proves nothing.
+
+super-admin gating verified (7/7 → 307); its screens need a control-plane credential to crawl → **N28**.
+
+**NEXT:** N28 (owner) · N25 (owner) · N5 is the only unblocked engineering item of size left.
+
 ## 2026-08-03 — Session: validating wave 3, and a queue stale in the expensive direction
 
 **Handoff:** [`tasks/2026-08-03-validating-wave-3.md`](./tasks/2026-08-03-validating-wave-3.md) ·

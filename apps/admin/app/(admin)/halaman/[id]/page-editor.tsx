@@ -150,11 +150,13 @@ export function PageEditor({ page }: { page?: CmsPage }) {
             <ArrowLeft className="size-4" />
             Halaman
           </Link>
-          {isEdit && (
-            <h1 className="text-lg font-semibold tracking-tight">
-              {topBarTitle}
-            </h1>
-          )}
+          {/* ⚠️ UNCONDITIONAL. This was `{isEdit && …}`, so `/halaman/baru` — the CREATE screen —
+              shipped with no `<h1>` at all: no top-level heading for a screen reader to land on, and
+              the only page in the admin without one (measured: all 40 admin routes crawled). The
+              value was already there; `topBarTitle` computes "Tambah halaman" for exactly this case,
+              so the guard was hiding a string it had already built. `article-editor.tsx` next door
+              renders its own unconditionally — the two had simply diverged. */}
+          <h1 className="text-lg font-semibold tracking-tight">{topBarTitle}</h1>
         </div>
         <div className="flex items-center gap-2">
           {isEdit && canWrite && (

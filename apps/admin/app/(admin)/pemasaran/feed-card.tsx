@@ -130,7 +130,9 @@ export function FeedCard({ feed }: { feed: FeedStatus }) {
             <Rss className="size-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold">Feed Produk (Katalog Iklan)</h3>
+            {/* h2, not h3 — /pemasaran renders no other heading between this and the page `<h1>`,
+                so an h3 skipped a level. Tag only; `text-sm` still sets the size. */}
+            <h2 className="text-sm font-semibold">Feed Produk (Katalog Iklan)</h2>
             <p className="text-xs text-muted-foreground">
               Pasang URL ini di Google Merchant Center, Meta Commerce, atau TikTok agar seluruh produk tampil di iklan katalog. Diperbarui otomatis.
             </p>
