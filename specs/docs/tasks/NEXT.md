@@ -513,6 +513,26 @@ was written to stop.
 one place. Keep the `drop` default explicit while you are in there — we never send it and its default
 is NOT STATED IN DOCS.
 
+### N43. `password.test.ts` is FLAKY under a full run — 1 in 3 · **S** · from #147, not the sweep
+Measured 2026-08-05 on `ka/flow-audit` rebased onto `b5f9ded`:
+
+```
+full suite, 3 runs → 349 pass · 349 pass · 348 pass + 1 FAIL
+  × the temp password is expensive to guess > is the ONLY mint in the repo — no file keeps a
+    private copy   →  Test timed out in 5000ms   (the suite itself took 8613ms)
+same file ALONE, 3 runs → 7 pass · 7 pass · 7 pass
+```
+
+So it is **contention, not content**: the check walks every file in the repo, and with ~40 suites
+sharing the machine it crosses vitest's default 5s timeout. Nothing in the doc sweep touches that
+file (`git diff --name-only origin/main...HEAD` = 0 hits); it arrived with **#147**.
+
+Left for its author deliberately — a bare timeout bump would also hide a scan that is genuinely
+getting slower, and the measurement above is the more useful half. ⚠️ **This repo has no CI**, so a
+1-in-3 flake is a gate every agent will hit and learn to re-run past, which is exactly how a real red
+gets waved through. Worth fixing soon: either a per-suite `testTimeout`, or share one directory walk
+across the textual guards the way `test/source-code.ts` already shares the scanner.
+
 ### N41. We cannot see courier holidays (`libur`) · **S** · gated on the path
 The schedule endpoint returns `{clock, until, expired, libur}` per window, `libur` = holiday. **Not
 calling it is allowed** (see the 🔵 note above), so this is not a bug — but it means a fixed

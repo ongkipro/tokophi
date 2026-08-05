@@ -397,7 +397,6 @@ Postgres half runs the REAL exported query under `SET LOCAL ROLE tokophi_app` + 
 GUC, in rolled-back transactions. **Its failure path was exercised, not assumed**: flipping
 `STORE_TZ` to `"UTC"` turns 3 of them red. `vitest.config.ts` gained the `@/` alias — without it no
 suite could import `lib/data/*` at all, which is why this layer had no tests.
-||||||| parent of b0f953f (wip: volumetric quote fix)
 
 ## Unreleased — The quote and the booking priced different parcels; the merchant paid the difference
 
