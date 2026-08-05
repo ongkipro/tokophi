@@ -16,6 +16,17 @@ are building one product together, not racing. Everything below was learned by b
     the seed running out, not a trend). `seed:recent` only INSERTS, touches one store, and is idempotent
     — it fills only days with zero orders, so a second run does nothing. Re-running it is free; truncating
     the shared DB costs someone else their afternoon.
+  - 🛑 **`SEED_FORCE=1` now REFUSES** when the database holds rows nothing writes back — orders,
+    customers, ledger entries, media, Store Builder templates, flash sales, the platform operator
+    logins, the aggregator API key, the gateway credentials, and **the encrypted CAPI tokens in
+    `store_tracking_channels`, which the seed does not write at all** (N42). It prints the count per
+    table and stops. Re-run with **`SEED_DESTROY_CONFIG=1`** as well if you truly mean it — a second
+    variable, because `SEED_FORCE=1` is a flag people copy out of a doc.
+    ⚠️ **Do not "fix" this by lengthening the truncate keep-list.** Measured: with
+    `store_tracking_channels`, `page_templates` and `flash_sales` on the list, Postgres still prints
+    `truncate cascades to table "…"` for all three and empties them — `cascade` follows their
+    `store_id` FK into the truncated set. A keep-list entry for a store-scoped table is a no-op that
+    READS like protection. `packages/db/src/seed-guard.ts` + `seed-guard.test.ts` hold the details.
 - **Dev servers.** **Never `pkill -f "astro dev"` / `pkill next`** — that kills *their* server, not just
   yours. Record the PID of what you start (`echo $! > …`) and kill only that PID.
 - **The git index.** Other agents leave files **staged**. A bare `git add -A` + `git commit` will
@@ -230,7 +241,7 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
 ```
 - Package: `packages/db` → `import { db, schema } from "@tokophi/db"` (server-only; `postgres` is `serverExternalPackages`). `npm run reset` drops `public` + `drizzle` schemas.
 - `DATABASE_URL` lives in root `.env` (tooling) + each app's `.env.local` (Next). Copy from `.env.example`.
-- **Wired to DB** (read via server-only `lib/data/*`, pages `dynamic="force-dynamic"`): **super-admin** (all 5) + **admin** (Produk, Diskon, Pelanggan, Kategori, Pesanan, Halaman, Blog, Inventori, CRM, Pembelian, Segmen, Ulasan, Navigasi, Dashboard, Analitik, Pemasaran — 16 modules) + **storefront** (catalog via `@tokophi/db` at build/SSR). **Reads: done end-to-end.** - **Auth (local, real):** email/password login against `users` (`password_hash` = scrypt `salt:hash`, seeded owner **ongki@batiknusantara.id / tokophi123**) ⋈ `store_users` (role). Session = **jose JWT in an httpOnly `session` cookie** (`AUTH_SECRET` env). `lib/auth.ts` (verify/findLogin/signSession/getSession — server-only, Node), `lib/actions/auth.ts` (`signIn`/`signOut`), `app/login/page.tsx`, `middleware.ts` (edge-safe JWT check → redirects to `/login`; excludes `/products`). Topbar shows the session user + "Keluar". Aligns with the VPS/PostgREST **JWT** prod plan. **RBAC** (`lib/rbac.ts` `requireCapability`, role→capability matrix) gates every mutating server action; **RLS** (migration 0012, `withTenant()` + `verify-rls`) isolates the store-scoped tables by `store_id` (36/39 — see above) (enforced under the `tokophi_app` role on the VPS).
+- **Wired to DB** (read via server-only `lib/data/*`, pages `dynamic="force-dynamic"`): **super-admin** (all 5) + **admin** (Produk, Diskon, Pelanggan, Kategori, Pesanan, Halaman, Blog, Inventori, CRM, Pembelian, Segmen, Ulasan, Navigasi, Dashboard, Analitik, Pemasaran — 16 modules) + **storefront** (catalog via `@tokophi/db` at build/SSR). **Reads: done end-to-end.** - **Auth (local, real):** email/password login against `users` (`password_hash` = scrypt `salt:hash`, seeded owner **ongki@batiknusantara.id**, password minted at random per seed run and printed once — N29) ⋈ `store_users` (role). Session = **jose JWT in an httpOnly `session` cookie** (`AUTH_SECRET` env). `lib/auth.ts` (verify/findLogin/signSession/getSession — server-only, Node), `lib/actions/auth.ts` (`signIn`/`signOut`), `app/login/page.tsx`, `middleware.ts` (edge-safe JWT check → redirects to `/login`; excludes `/products`). Topbar shows the session user + "Keluar". Aligns with the VPS/PostgREST **JWT** prod plan. **RBAC** (`lib/rbac.ts` `requireCapability`, role→capability matrix) gates every mutating server action; **RLS** (migration 0012, `withTenant()` + `verify-rls`) isolates the store-scoped tables by `store_id` (36/39 — see above) (enforced under the `tokophi_app` role on the VPS).
 
 **Writes: DONE across all admin editors** — Produk, Diskon, Halaman, Blog, Kategori, order-status, Inventori-stock, Navigasi, Pelanggan, CRM (follow-up), Segmen, Pembelian (PO create/receive/cancel) all persist via `lib/actions/*` server actions.
 - **Media (local):** the product editor's Media section uploads real files → `apps/admin/public/uploads/` (gitignored) + a `product_media` row (`lib/actions/media.ts` `uploadProductImage`/`deleteProductImage`; 5MB image cap). `getProduct` returns the real `media[]`; the seed loads 5 media rows/product (base + `-2..-5`). Local storage now; on the VPS this becomes MinIO/S3.
@@ -331,9 +342,19 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
     of two — that is how the 24-bit mint survived its own guard) and strips `//` + `/* */` comments so
     the notes explaining this fix stay legal. **HTML comments are not stripped: `<!-- … -->` in an
     `.astro` file is served to the browser.**
-    ⚠️ **The seeded password itself is UNCHANGED** — it is no longer published, but `tokophi123` still
-    authenticates on every existing deployment. Rotating it touches the seed, and **the seed is not a
-    migration**, so it needs a data fix stated in the commit body (`NEXT.md` N29).
+    ✅ **The SEED is fixed too (N29, 2026-08-05).** `packages/db/src/seed.ts` mints a fresh 60-bit
+    password **per account** and prints them **once** at the end of the run — that print is the only
+    copy that will ever exist. `SEED_OWNER_PASSWORD=<yours>` pins them all to one string for local
+    dev (and refuses a published default like `tokophi123`, which would put the defect straight back).
+    `password.test.ts` no longer exempts the seed: its repo-wide sink scan now covers every tracked
+    file with nothing carved out, so a fixed password anywhere goes red.
+    ⚠️ **The ROWS are still unchanged, and that is not an oversight** — **the seed is not a migration**,
+    so every deployment that already exists still authenticates with `tokophi123` until somebody
+    rotates it. That is a PROCEDURE, not a deploy:
+    `specs/docs/tasks/2026-08-03-rotate-exposed-owners.md` §② (use the UI for stores, raw SQL only for
+    the operator), §③ (one password per account) and §⑤ (which order, and which account **not** to
+    touch). Measured there: 7 of 8 store owners plus the operator. **Rotate the accounts that were
+    measured, never the table.**
   - **A login rate-limit DOES exist — but it is a floor, not a wall, and it is keyed on IP ALONE.**
     `signIn` on both panels calls `rateLimit()` from `@tokophi/lib/cache` **before** the scrypt check
     (`login:admin:<ip>` 15/min, `login:platform:<ip>` 10/min, shipped `53dd9ee` 2026-07-16). ⚠️ Two

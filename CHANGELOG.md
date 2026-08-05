@@ -2,6 +2,50 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — The seed stopped handing out one password, one keep-list entry that never protected anything, and 24 one-centimetre parcels
+
+Three items in `packages/db`, all of them things a *new* deployment gets. ⚠️ **The seed is not a
+migration**: not one existing row changed, and every claim below about production was measured
+read-only before it was written down.
+
+- 🔴 **N29 — the seed no longer mints a fixed password.** `const DEV_OWNER_PASSWORD = "tokophi123"` was
+  hashed into the store owner, the platform operator, every demo store's owner and every registered
+  demo customer. Now each account gets its own 60-bit `tempPassword()` and the run **prints them once**
+  at the end — the only copy that will ever exist, and it is printed on a crash too (the owner and the
+  operator are written in the first of ~1.500 un-transacted inserts). `SEED_OWNER_PASSWORD` pins them
+  all to one string for local dev and **refuses a published default**.
+  **`packages/lib/src/password.test.ts` no longer exempts `packages/db/src/seed.ts`** — its repo-wide
+  sink scan now covers every tracked file with nothing carved out. Proven red by re-adding the constant.
+  ⚠️ **Existing deployments are unchanged and still authenticate with `tokophi123`.** Rotating is a
+  procedure, not a deploy: `specs/docs/tasks/2026-08-03-rotate-exposed-owners.md` §②/§③/§⑤. Measured
+  there on 2026-08-03: 7 of 8 store owners plus the operator. **Rotate the accounts that were measured,
+  never the table.** And the demo store's 219 orders are a DUMMY set (32 distinct phones across all
+  219) — an earlier draft of this note called them real buyer data, which was wrong in the expensive
+  direction.
+- 🔴 **N42 — `SEED_FORCE=1` refuses instead of silently destroying operator config.** It now counts and
+  prints every row nothing writes back — orders, customers, ledger entries, media, Store Builder
+  templates, flash sales, the operator logins, the aggregator key, the gateway credentials, and the
+  **encrypted CAPI tokens the seed does not write at all** — and stops unless `SEED_DESTROY_CONFIG=1`
+  is set as well. It runs before EVERY truncate, not only under `SEED_FORCE`: that skip only counts
+  `stores`, so a database with a rotated operator and no store yet would sail past it.
+  ⚠️ **A longer keep-list is not the fix, and this was MEASURED, not reasoned.** With
+  `store_tracking_channels`, `page_templates` and `flash_sales` added to it, Postgres still printed
+  `truncate cascades to table "…"` for all three and emptied them — `cascade` follows their `store_id`
+  FK. Two corrections to the same note: `kelurahan` **does** have a foreign key (to `kiriminaja_areas`,
+  which is kept too — the rule is *no FK path out of the keep-list*, not *no foreign keys*), and the
+  platform singletons have **none**, so a keep-list *would* save them; they are on the loss list because
+  keeping them collides with `platform_admins_email_unique` on the reseed.
+- 🔴 **N33 — every seeded product declared a 1 cm cube, and the BOOKING sends it.** Harmless for the
+  quote (0,17 g volumetric never beats the actual weight, which is why it survived) but
+  `createShipment` declares the same three columns to the courier, who re-measures at pickup and bills
+  the merchant the difference. Both seeders now read `packages/db/src/product-dims.ts` — the folded
+  polymailer per garment kind, 100 g … 1.062 g volumetric — and an unknown handle **throws** rather
+  than defaulting. It is also what finally lets wave 7's dimension-aware quote (N30) fire on the demo.
+  **Existing stores need a data fix and it is not in this release:**
+  `ops/tokophi-n33-product-dimensions.sql`, dry-run only, ending in `rollback`, matching only the exact
+  `1 AND 1 AND 1` fingerprint (24 rows on the dev database; a merchant's typed value and a NULL are
+  both left alone).
+
 ## Unreleased — The control plane trusted a seven-day cookie, and there was no way to rotate its password
 
 Three defects on the platform-operator identity surface, each measured against a running server before
