@@ -222,6 +222,16 @@ the sixth copy of the default-location expression, the one with no `store_id` pr
 path that runs as OWNER with RLS off. Both now skip `public` only at the app root. **Scan everything
 and name your exceptions; never bind a guard to a list of targets.**
 
+⚠️ **AND A `*` FOLLOWED BY `/` INSIDE A BLOCK COMMENT CLOSES IT — twice in one day, 2026-08-05.**
+Once in `test/source-code.ts` (a comment explaining a comment-splice hole, written literally) and
+once in `packages/db/src/seed.ts` (a JSDoc containing the glob `apps/*/app/**`). Both times the
+comment ended early and the prose after it became code. The first failed **18 of 50 test files at
+import** while the 296 tests that still collected all passed — a green-looking count over a broken
+module; the second failed `tsc -p packages/db` with `Cannot find name 'app'`. This file's style is
+long explanatory comments full of globs and code samples, so the trap is structural here, not a
+slip. **`tsc` and `npm test` both catch it; nothing else does.** Describe the sequence in words, or
+put the example in a `//` line comment.
+
 **The sink beats the source.** `packages/lib/src/password.test.ts` scans every tracked source file for
 `hashPassword(<arg>)` and fails on a literal, or on an identifier bound to a literal in the same file
 — the two shapes that actually shipped (`createStore`, `invitePlatformAdmin`). A mint bound to a name

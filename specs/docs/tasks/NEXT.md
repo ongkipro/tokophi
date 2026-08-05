@@ -1495,3 +1495,34 @@ which pins that every route REACHES an `h1` — the floor, not the structure.
 **MEASURED**: the money strip's and the return-rate card's verdict is carried by green/red text with
 no icon, sign or word. WCAG 1.4.1. The delta figures beside them already carry `+`/`−` (U+2212), so
 the fix is to let the verdict borrow the same signal rather than invent one.
+
+### N54. 🔴 There is NO way to create a landing page — the button 404s · **S** · NEW
+**MEASURED at HEAD, twice, by reading the two halves against each other:**
+- `apps/admin/app/(admin)/promo/promo-list-client.tsx:126` — the "Buat baru" button is
+  `<Link href="/promo/html/baru" />`
+- `apps/admin/app/(admin)/promo/html/[id]/page.tsx:12` — `if (!isUuid(id)) notFound();`
+- `apps/admin/app/(admin)/promo/html/` contains **only `[id]`**. There is no `baru/` route.
+
+`"baru"` is not a UUID, so the only entry point to the feature returns 404. **The whole Landing HTML
+feature is unreachable for creating anything** — it has an editor, a storefront renderer, an
+owner-only `landing:html` capability and a documented XSS posture, and no row can be made through
+the UI. Existing rows edit fine, which is why this survived: the screen looks complete.
+
+⚠️ The `isUuid` guard is CORRECT and must stay — Postgres throws `22P02` on a non-UUID, a 500 where a
+404 belongs, and that rule is written up in `AGENTS.md`. The fix is a `baru/` route (or a create
+action that mints a row and redirects), not a loosened guard.
+
+Found by the wave-9 labelling sweep, which could not measure `landing-editor-client.tsx`'s switches
+**because no landing row exists to render** — the a11y gap there is fixed by shape, not by
+measurement, until this is.
+
+### N55. Colour-only verdict, third site · **S** · NEW
+`apps/admin/components/admin/return-by-courier.tsx` decides each courier's row by bar colour alone
+(`rate > 5 ? bg-destructive : bg-emerald-500/70`) with a colour-neutral `x,x%` beside it. Same WCAG
+1.4.1 class as the two wave-9 fixed; found while fixing those, outside the two the brief named.
+
+### N56. Puck's own vendored controls are unnamed · **S** · NEW
+Measured: the viewport-zoom `<select>` and the ArrayField add-button inside
+`node_modules/@measured/puck` have no accessible name. The array field has an override point; the
+zoom control does not. Not ours to patch in place — either an override, or accepted and recorded.
+
