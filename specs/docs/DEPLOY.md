@@ -10,23 +10,40 @@
 - IP **45.77.33.112**; SSH **key-only** (`ssh -i ~/.ssh/tokophi_dev root@45.77.33.112`) — password auth **disabled** (`passwordauthentication no`).
 - **Coolify v4.1.2** (`http://45.77.33.112:8000`), server type = **Localhost/This Machine**. UFW active: 22/80/443/8000/6001/6002. app uuid `l7r4qaqcml4zigw1dc7iptun`; **Coolify app id `1`**; instance id `0d341106-34ff-4b5b-8441-9350e1b8ce35`.
 
-⚠️ **The API token is EXPIRED/REVOKED, not missing — do not go and create the file** (re-checked
-2026-08-03). `/api/v1` answers `401 {"message":"Unauthenticated."}`, and the conclusion drawn from
-that — **no scripted deploy or rollback path today** — is right. The *diagnosis* printed here on
-2026-08-01 was not: it said `~/.coolify_token` "does not exist".
+✅ **The API token WORKS — re-measured 2026-08-05.** `GET /api/v1/applications` → **200**, listing
+both apps (`tokophi` `l7r4qaqcml4zigw1dc7iptun` and `formalin` `jh4u1nj1kef6dqbfu88u3nb8`). Somebody
+regenerated it after the 08-03 check; this page said "EXPIRED/REVOKED" and concluded **"no scripted
+deploy or rollback path today"**, and both halves are now false.
 
 ```bash
-ls -l ~/.coolify_token        # → -rw------- 50 bytes, Jul 10.  It is there.
 curl -s -o /dev/null -w '%{http_code}\n' \
   -H "Authorization: Bearer $(cat ~/.coolify_token)" http://45.77.33.112:8000/api/v1/applications
-# → 401
+# → 200 (2026-08-05).  Was 401 on 2026-08-03.
 ```
 
-The earlier check almost certainly ran **on the VPS**, where `~` is `/root` and the file genuinely is
-absent — it lives on the **workstation**. So the fix is **not** "write the file"; the file is already
-written and its contents are dead. **Regenerate it in Coolify → Keys & Tokens** and overwrite it
-(`chmod 600`), then re-run the curl above and expect a 200. Until someone does, everything below goes
-through SSH + `docker`, and rollback is `git revert` + push + webhook (~8–9 min, see below).
+The token lives on the **workstation**, never on the VPS — the 2026-08-01 diagnosis that
+`~/.coolify_token` "does not exist" was almost certainly run on the box, where `~` is `/root`. Keep
+`chmod 600`.
+
+🔴 **But the API REDACTS every env VALUE, so do not build anything on top of reading them.** Measured
+2026-08-05: `GET /api/v1/applications/<uuid>/envs` returns all 39 rows with `value: ""` — **0 of 39
+carried a value**, with and without `?show_sensitive=true` (this token has no sensitive scope). The
+failure is silent and it is the dangerous kind: a script that copies env from here writes 39 empty
+strings, and a parity check that compares *counts* or even the values themselves reports a perfect
+match, because both sides are equally empty. **Compare sha256 digests, and treat
+`e3b0c442…` — the digest of the empty string — as a failure, not a match.**
+
+The honest source for a value is the running container:
+
+```bash
+ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 \
+  "docker inspect --format '{{json .Config.Env}}' \
+   \$(docker ps --format '{{.Names}}' | grep -m1 '^admin-l7r4qaqcml4zigw1dc7iptun-')"
+```
+
+⚠️ **A `0` id comes back as `null` in this API.** `GET /api/v1/servers/<uuid>` reports
+`private_key_id: null` for the localhost server while the database row says `0` and joins correctly to
+a real key — the serializer treats the falsy id as absent. Do not go hunting for a missing key.
 - Provisioned fresh via **`vultr-cli`** + cloud-init (lean base, hardened SSH); Coolify installer auto-installs Docker. This is the **single consolidated box** — the earlier experiment box (`45.76.146.40`) was **deleted**.
 - **Domains:** `admin`/`super_admin`/`storefront` on `*.45.77.33.112.sslip.io` via the app's `docker_compose_domains` DB field (Coolify's `SERVICE_FQDN` env magic doesn't wire the compose build pack — set the DB field directly; note the **super-admin** service maps to the underscore key `super_admin`).
 
@@ -535,13 +552,40 @@ See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!
 
 ## Local validation before pushing (always)
 
-```bash
-docker compose -f docker-compose.coolify.yml -p tokophi-test up -d --build
-docker compose -f docker-compose.coolify.yml -p tokophi-test ps        # all up, migrate Exited(0)
-docker compose -f docker-compose.coolify.yml -p tokophi-test logs migrate | tail
-docker compose -f docker-compose.coolify.yml -p tokophi-test down -v    # cleanup
+🔴 **The command this section used to print has not worked since the `tokophi.com` cutover.** Run
+verbatim, `docker compose -f docker-compose.coolify.yml …` dies before it builds anything:
+
 ```
-Validated 2026-07-09: migrate+seed OK (7030 areas), admin/super-admin/storefront all serving.
+invalid interpolation format for services.landing.labels.[].
+You may need to escape any $ with another $.
+traefik.http.middlewares.www-to-apex.redirectregex.replacement=https://tokophi.com/${1}
+```
+
+`${1}` is Traefik's capture-group reference, and `docker compose` tries to expand it as a shell
+variable. The label arrived with the apex redirect on 2026-07-13; this page's "Validated 2026-07-09"
+predates it, so the instruction has been dead for three weeks while still reading as routine.
+
+⚠️ **Do NOT fix it by escaping to `$${1}` in the compose file.** That file's own comment (just above
+the label) records why: Coolify hands labels straight to the Docker API with none of
+docker-compose's `$$` → `$` unescaping, so `$${1}` reaches Traefik verbatim and it emits a literal
+`Location: https://tokophi.com/${1}` — which shipped exactly that way once. **One file cannot satisfy
+plain `docker compose` and Coolify at the same time.** Escape a COPY, outside the repo, and keep the
+build context pointed at the repo:
+
+```bash
+sed -E 's/\$\{([0-9])\}/$$\{\1\}/g' docker-compose.coolify.yml > /tmp/tokophi-local.yml
+docker compose --project-directory . -f /tmp/tokophi-local.yml -p tokophi-test up -d --build
+docker compose --project-directory . -f /tmp/tokophi-local.yml -p tokophi-test ps    # migrate Exited(0)
+docker compose --project-directory . -f /tmp/tokophi-local.yml -p tokophi-test logs migrate | tail
+docker compose --project-directory . -f /tmp/tokophi-local.yml -p tokophi-test down -v   # cleanup
+```
+
+`--project-directory .` is load-bearing: the build contexts are repo-root-relative, so without it the
+compose file's `/tmp` location becomes the context and every build fails.
+
+Re-validated **2026-08-05** on the escaped copy: migrate `Exited (0)` with **7030 KiriminAja areas**
+and 78 764 kelurahan seeded, `postgres`/`landing`/`storefront`/`admin`/`super-admin`/`backup` all
+`healthy`, three `cron-*` sidecars started. (Original run 2026-07-09 reported the same 7030 areas.)
 
 ## Migration Vultr → Hetzner (prod), precise steps
 
