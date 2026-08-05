@@ -5,6 +5,7 @@ import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import {
   PLATFORM_COOKIE,
+  PLATFORM_MAX_AGE,
   findAdmin,
   verifyPassword,
   signPlatformSession,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/platform-auth";
 import { hashPassword } from "@tokophi/lib/password";
 import { rateLimit } from "@tokophi/lib/cache";
+import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
 
 export type SignInState = { error?: string };
 
@@ -38,12 +40,7 @@ export async function signIn(_prev: SignInState, formData: FormData): Promise<Si
     name: row.name ?? "",
     role: row.role,
   });
-  (await cookies()).set(PLATFORM_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
+  (await cookies()).set(PLATFORM_COOKIE, token, sessionCookieOptions(PLATFORM_MAX_AGE));
   redirect("/");
 }
 
@@ -104,11 +101,6 @@ export async function changePlatformPassword(current: string, next: string): Pro
 
   const stamp = rotated?.changedAt ?? new Date();
   const token = await signPlatformSession(session, new Date(stamp.getTime() + 1000));
-  (await cookies()).set(PLATFORM_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
+  (await cookies()).set(PLATFORM_COOKIE, token, sessionCookieOptions(PLATFORM_MAX_AGE));
   return { ok: true };
 }

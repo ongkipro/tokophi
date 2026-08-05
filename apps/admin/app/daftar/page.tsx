@@ -9,6 +9,11 @@ const NOTICES: Record<string, string> = {
   google_state: "Sesi pendaftaran Google kedaluwarsa. Coba lagi.",
   google_batal: "Pendaftaran dengan Google dibatalkan.",
   ditutup: "Pendaftaran toko baru sedang ditutup sementara.",
+  // `provisionStore` enforces the name rules and reports a lost race for BOTH signup paths, so the
+  // Google callback has answers to carry back. Before this it had none — the throw became a 500 on a
+  // route whose whole job is to land the person somewhere they can read.
+  nama_google: "Nama akun Google-mu tidak bisa dipakai sebagai nama toko. Daftar lewat formulir di bawah.",
+  bentrok: "Email atau nama toko itu baru saja dipakai. Coba lagi.",
 };
 
 // Public self-serve signup (outside the (admin) route group, like /login — middleware lets it

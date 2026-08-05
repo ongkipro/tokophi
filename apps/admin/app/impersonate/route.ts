@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { authSecretBytes } from "@tokophi/lib/secret";
-import { SESSION_COOKIE, signSession, type Session } from "@/lib/auth";
+import { SESSION_COOKIE, SESSION_MAX_AGE, signSession, type Session } from "@/lib/auth";
+import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
 
 // Cross-subdomain impersonation exchange. The super-admin ("Buka Dashboard Seller") sends a short-lived
 // signed token (same AUTH_SECRET) here; we verify it and set a real `session` cookie on THIS
@@ -39,12 +40,7 @@ export async function GET(req: NextRequest) {
       name: s.name,
     });
     const res = redirectTo(dest);
-    res.cookies.set(SESSION_COOKIE, full, {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
+    res.cookies.set(SESSION_COOKIE, full, sessionCookieOptions(SESSION_MAX_AGE));
     return res;
   } catch {
     return redirectTo("/login");

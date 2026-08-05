@@ -11,6 +11,8 @@ import { alTestConnection, alProbeChannels, alCreatePayment } from "@tokophi/lib
 import { BILLING, addMonths, quote, withPpn, computeBilling, type BillingStatus } from "@tokophi/lib/billing";
 
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
+import { NAME_MAX, STORE_NAME_MIN, isReservedSlug, slugify } from "@tokophi/lib/store-slug";
+import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
 async function logStore(storeId: string, text: string): Promise<void> {
   await db.insert(schema.platformActivity).values({ kind: "admin", text, storeId });
@@ -27,7 +29,11 @@ async function logPlatform(text: string): Promise<void> {
 // SHARED with `apps/admin` on purpose: it used to be copied, and the two copies had already drifted
 // to different strengths (24 bits here, 32 there), with the weaker one on the store-owner path.
 
-const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+// `slugify` is `@tokophi/lib/store-slug` now. The private copy here did NOT normalise NFKD while
+// the self-serve twin in `apps/admin/lib/provision.ts` did, so the two doors onto this product
+// disagreed about a shop's permanent public address: measured, "Café Senja" → `caf-senja` here and
+// `cafe-senja` there. Same reason the password mint was converged — a copy is how the weaker half
+// survives a fix.
 
 // Impersonate a store's owner: mint the admin session cookie (host-scoped to localhost, so it
 // reaches :3000) and hand back the admin URL for the client to open.
@@ -226,8 +232,15 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
   const city = input.city?.trim() || null;
   if (!name || !email) return { ok: false, error: "Nama toko & email pemilik wajib diisi." };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, error: "Format email tidak valid." };
+  if (name.length < STORE_NAME_MIN) return { ok: false, error: `Nama toko minimal ${STORE_NAME_MIN} karakter.` };
+  if (name.length > NAME_MAX) return { ok: false, error: `Nama toko maksimal ${NAME_MAX} karakter.` };
+  if (ownerName.length > NAME_MAX) return { ok: false, error: `Nama pemilik maksimal ${NAME_MAX} karakter.` };
   const slug = slugify(name);
   if (!slug) return { ok: false, error: "Nama toko tidak valid." };
+  // The storefront refuses to RESOLVE these as a store (`app`, `rich`, `www`, …), so writing one
+  // here mints a shop that 404s on its own subdomain. The self-serve path skips to `<slug>-2`; an
+  // operator typing a name by hand gets told, because they can simply pick another one.
+  if (isReservedSlug(slug)) return { ok: false, error: `Nama toko itu dipakai platform (slug "${slug}"). Pilih nama lain.` };
 
   const [dupEmail] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email)).limit(1);
   if (dupEmail) return { ok: false, error: "Email sudah dipakai pengguna lain." };
@@ -235,24 +248,40 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
   if (dupSlug) return { ok: false, error: `Nama toko bentrok (slug "${slug}" sudah ada).` };
 
   const pw = tempPassword();
-  const storeId = await db.transaction(async (tx) => {
-    const [acc] = await tx.insert(schema.accounts).values({ name }).returning();
-    const [u] = await tx.insert(schema.users).values({ email, name: ownerName, passwordHash: hashPassword(pw) }).returning();
-    // new store → free trial from the real clock (same length as the self-serve signup)
-    const trialEndsAt = new Date(Date.now() + BILLING.TRIAL_DAYS * 86_400_000);
-    // `catalogIdScheme: "number"` — ADR 0013: a store created now has no catalog anywhere yet, so it
-    // starts on the stable id and never pays the one-way re-key. Must match lib/provision.ts.
-    const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, status: "trial", trialEndsAt, firstInvoicePaid: false, catalogIdScheme: "number" }).returning();
-    await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: new Date() });
-    await tx.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
-    await tx.insert(schema.storeSettings).values({ storeId: st.id });
-    await tx.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: 0, ordersCount: 0, productsCount: 0 });
-    return st.id;
-  });
+  // The two `dup*` checks above are unlocked reads followed by a write, so a second operator (or the
+  // self-serve path) can take either value in between. `users.email` and `stores.slug` are both
+  // UNIQUE, so the data is never wrong — but the throw surfaced as a Next error digest on a form that
+  // otherwise answers in sentences. The constraint is the lock; this reports it.
+  let storeId: string;
+  try {
+    storeId = await insertStore();
+  } catch (e) {
+    const constraint = uniqueViolationConstraint(e);
+    if (constraint === "users_email_unique") return { ok: false, error: "Email sudah dipakai pengguna lain." };
+    if (constraint !== null) return { ok: false, error: `Nama toko bentrok (slug "${slug}" sudah ada).` };
+    throw e;
+  }
   await logStore(storeId, `Toko dibuat oleh platform: ${name} (${slug}), pemilik ${email}`);
   revalidatePath("/toko");
   revalidatePath("/");
   return { ok: true, storeId, password: pw };
+
+  async function insertStore(): Promise<string> {
+    return db.transaction(async (tx) => {
+      const [acc] = await tx.insert(schema.accounts).values({ name }).returning();
+      const [u] = await tx.insert(schema.users).values({ email, name: ownerName, passwordHash: hashPassword(pw) }).returning();
+      // new store → free trial from the real clock (same length as the self-serve signup)
+      const trialEndsAt = new Date(Date.now() + BILLING.TRIAL_DAYS * 86_400_000);
+      // `catalogIdScheme: "number"` — ADR 0013: a store created now has no catalog anywhere yet, so it
+      // starts on the stable id and never pays the one-way re-key. Must match lib/provision.ts.
+      const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, status: "trial", trialEndsAt, firstInvoicePaid: false, catalogIdScheme: "number" }).returning();
+      await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: new Date() });
+      await tx.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
+      await tx.insert(schema.storeSettings).values({ storeId: st.id });
+      await tx.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: 0, ordersCount: 0, productsCount: 0 });
+      return st.id;
+    });
+  }
 }
 
 // ---- billing: mark an invoice paid / failed / pending ----
