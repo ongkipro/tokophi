@@ -38,6 +38,24 @@ are building one product together, not racing. Everything below was learned by b
   unapplied** on the shared dev DB — `0062` aborted on a column that had arrived earlier via `push`, so
   `0063`–`0083` never ran, for everyone. Mixing `push` and `migrate` on one database is how the
   divergence starts; idempotency is what makes it survivable.
+  - 🔴 **AND A STAMP THAT IS TOO HIGH SKIPS SOMEBODY ELSE'S MIGRATION, SILENTLY.** Drizzle applies only
+    entries whose `when` exceeds the newest stamp already recorded in the target database — so the
+    danger is not just a duplicate `idx`, it is a stamp that JUMPS. Live example, 2026-08-05: the
+    shared dev DB's newest applied stamp was **1785774399036**, which came from `ka/flow-audit` — an
+    **unmerged** branch, whose migration is ALSO numbered `0087` and therefore collides with main's
+    `0087_password_revokes_sessions` (stamped 1785774**06**812888, i.e. lower). Wave 7's `0088` had to be
+    stamped **above** the dev DB's newest (1785774400000) or the column would never arrive locally and
+    `getPlatformSession` would throw → **every operator locked out of the control plane**.
+    ⚠️ **The cost is paid by whoever merges SECOND.** Once wave 7 is on production, production's newest
+    stamp is 1785774400000, so a later merge carrying 1785774399036 is **skipped while printing
+    "migrations applied successfully"**. `verify-migrations` catches the duplicate `0087` **index**, so
+    the collision cannot ship unnoticed — but renumbering to `0089` is only half the fix. **RE-STAMP as
+    well as renumber**, and confirm with `select max(created_at) from drizzle.__drizzle_migrations` on
+    the target, not by reading the journal.
+    ⚠️ **A migration applied to the shared dev DB from an unmerged branch is the root cause here.**
+    It makes every other open branch choose between "works locally" and "works on production". Prefer
+    not to `migrate` a branch's own migration into the shared container until it is close to merging.
+
 - **PR numbers.** `gh pr create` prints the number; **use that one**. Guessing "the next number" is
   how you run `gh pr merge` against a PR that is not yours. It happened on 2026-07-22 and only failed
   because that PR had already been merged.
