@@ -1,7 +1,23 @@
 -- TokoΦ — remove the 48 money rows whose `orders` parent does not exist.
 --
--- ⚠️ AS SHIPPED THIS FILE CHANGES NOTHING. The last statement is ROLLBACK. Deleting production rows
--- is the owner's call; running it is a separate, deliberate act (see RUNNING IT, below).
+-- ✅ ALREADY EXECUTED AGAINST PRODUCTION on 2026-08-05, with the owner's explicit approval.
+--    Deleted 8 ledger_entries + 10 payments + 30 order_line_items. The 2 `kind='payout'` entries
+--    (order_id NULL BY DESIGN) were left untouched, which is the whole point of the NULL split below.
+--    Measured effect on what /saldo, the topbar chip and requestPayout read:
+--        available  Rp21.842.562 → Rp21.032.562   (−Rp810.000, withdrawable money with no order behind it)
+--        pending    Rp25.726.347 → Rp23.424.347   (−Rp2.302.000)
+--    And the check that mattered: pending now EQUALS its own itemised "Dana dalam proses" list
+--    (Rp23.424.347 = Rp23.424.347). Before, the page contradicted itself by Rp2.302.000.
+--    The 48 rows were dumped as INSERT statements before deletion:
+--        ~/Documents/work/notes/tokophi-orphans-backup-20260805.sql   (not in this repo — it is money data)
+--
+-- ⚠️ RE-RUNNING THIS IS A NO-OP, NOT A REPAIR. It deletes by "parent does not exist", and there are
+--    no such rows left (`npm run verify-ledger -w @tokophi/db` proves it). Kept as the record of what
+--    was run and as the tool if it ever recurs — but the FKs are validated and a dangling insert is
+--    refused (23503), so it cannot recur through any application path.
+--
+-- ⚠️ THE LAST STATEMENT IS STILL `rollback`. It was changed to `commit` for the one deliberate run
+--    above and changed straight back. Deleting production rows is the owner's call, every time.
 --
 -- ── WHY THIS IS NOT A DRIZZLE MIGRATION ────────────────────────────────────────────────────────
 -- A file in `packages/db/drizzle/` is not a proposal, it is an execution: deploy = Coolify auto-build

@@ -22,7 +22,7 @@
 > ⚠️ **Three entries in this file have now been found to rest on claims that were false** — N13's, N6's
 > and N8's. Read an entry before trusting its sizing. That is the pattern, not the exception.
 >
-> 🟣 **AUDIT WAVE 7 (2026-08-03) ADDED N36–N46** — the surfaces the first six waves never touched:
+> 🟣 **AUDIT WAVE 7 ADDED N36–N48** — the surfaces the first six waves never touched:
 > `apps/landing`, admin empty states + zero-state arithmetic, the public API surface, seed-vs-production
 > drift, date anchors in write paths, and accessibility beyond checkout. **Nothing above was renumbered.**
 > The owner-facing narrative — what six waves changed, what is still open, what was deliberately NOT
@@ -139,7 +139,7 @@ cutover keeps writes behind the Next apps. Picking one changes what PostgREST is
 **AC:** the decision recorded in `specs/decisions/`, then a `verify-rls`-style check that fails if
 `tokophi_app` holds INSERT/UPDATE/DELETE on a `platform_*` table or on `stores`.
 
-### N36. An operator who forgets their password has NO way back in · **S** · NEW
+### N47. An operator who forgets their password has NO way back in · **S** · NEW
 Opened by the branch that shipped `changePlatformPassword` (audit wave 7). That form requires the
 CURRENT password — correctly, it is a self-service rotation, not a recovery. But nothing else writes
 `platform_admins.password_hash` except `invitePlatformAdmin`, which only INSERTs, so an operator who
@@ -157,7 +157,7 @@ separate decision with its own escalation question (may an owner reset ANOTHER o
 and never logged; the action is audited to `platform_activity` with both emails; the target's live
 sessions end (migration 0088's trigger already does this — assert it).
 
-### N37. A refused super-admin action shows the operator NOTHING · **S** · NEW
+### N48. A refused super-admin action shows the operator NOTHING · **S** · NEW
 `requirePlatformAdmin` **throws**, and none of the callers in `pengaturan-client.tsx` /
 `store-detail.tsx` catch it. Measured on 2026-08-03 with a demoted operator: clicking "Undang"
 produced **no toast at all** — the action correctly refused (`Tidak diizinkan — perlu peran owner,
@@ -945,7 +945,13 @@ Destroyed and **never put back by any seed**:
 **AC:** either those tables join the keep-list, or `SEED_FORCE=1` prints exactly what it is about to
 destroy and what has no restore path, and `AGENTS.md` says so beside the existing landmine note.
 
-### N43. Two live defects that exist only in a commit body, and nothing tracks them · **S** · NEW
+### N43. Two live defects that exist only in a commit body, and nothing tracks them · **S** · ✅ DONE (wave 7)
+> **RESOLVED in the same wave that filed it.** Both defects were fixed and DRIVEN, not merely tracked:
+> `getPlatformSession()` now re-reads `platform_admins` per request — a demoted operator was measured
+> minting a new platform account from a stale cookie BEFORE, and is refused with the DB role AFTER;
+> a deleted row and a rewritten hash both bounce to `/login`. `addStoreUser` returns
+> `password: string | null` + `outcome`, and the revealed string was scrypt-verified against the stored
+> hash on both paths. The finding stands as written — this note records that it no longer applies.
 `b5f9ded` (wave 6) named them *"both real, both one surface up"* and neither reached this file.
 **MEASURED** — both verified at HEAD, and `grep` over `NEXT.md` + `BACKLOG.md` for either returns **zero**.
 

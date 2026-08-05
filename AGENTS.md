@@ -267,7 +267,7 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
 >   own row, and a rank floor would stop a `support` operator rotating a leaked credential. The
 >   current password is re-proved instead. Rotating revokes every other session (migration 0088) and
 >   re-mints this tab's cookie with `iat` one second past the stamp.
->   **Resetting SOMEBODY ELSE's operator password still does not exist** — `NEXT.md` N36.
+>   **Resetting SOMEBODY ELSE's operator password still does not exist** — `NEXT.md` N47.
 
 - **`requirePlatformAdmin(min)` is the first statement of all 27 mutating actions**, and the rank is
   `support` 1 < `admin` 2 < `owner` 3. The ladder lives in `platform-rank.ts` — a PURE module, no DB
