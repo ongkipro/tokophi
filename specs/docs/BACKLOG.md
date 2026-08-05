@@ -1739,25 +1739,55 @@ Also open, smaller, and ours to do:
 
 ## `npm run lint` is RED on main, and nothing runs it
 
-Screened 2026-07-31: `npm run lint -w @tokophi/admin` → **28 errors, 23 warnings**. `next build` does
-not run ESLint, there is no CI, and no doc tells anyone to run it — so this has been accumulating
-unseen. Eight of the 28 were trivial (unescaped quotes, one `var`, one `let` that should be `const`) and
-are fixed; **20 remain**, all React Compiler rules:
+`next build` does not run ESLint, there is no CI, and no doc tells anyone to run it — so this
+accumulates unseen. First screened 2026-07-31 at **28 errors, 23 warnings**.
 
-- [ ] **12 × "Cannot create components during render"** — a component defined inside another component's
-  body. React remounts the whole subtree on every parent render: state inside it is lost, inputs lose
-  focus mid-typing, and effects re-run. Files: the theme sections (`ImageText`, `BannerPromo`), the
-  navigasi item dialog, the command palette, `saldo-client`, `promo-list-client`.
-- [ ] **5 × "Calling setState synchronously within an effect can trigger cascading renders"** — each one
-  is a double render at best and a loop at worst.
-- [ ] **3 × "Cannot call impure function during render"** — `Date.now()` in a render path. Two are in
-  async SERVER components (`flash-sale/[id]`, `flash-sale/baru`) where it is harmless in practice; the
-  third is `flash-sale-client.tsx`'s `StatusBadge`, which is a CLIENT component — exactly the
-  SSR-vs-client hydration mismatch `AGENTS.md` §Conventions forbids. Fix that one first.
+> ### ⚠️ RE-DERIVE THIS COUNT BEFORE QUOTING IT. It has been wrong once already.
+> This section said "**20 remain**" for five days while people were quietly fixing them, so anyone
+> planning from it was planning against a number that was **nearly double the truth**. It is a
+> *measurement*, not a fact about the code, and it goes stale the moment someone touches a file.
+> ```bash
+> cd apps/admin && npx eslint --format json -o /tmp/lint.json   # then count by ruleId + severity
+> ```
+> Use `--format json`. A `grep`/`awk` pass over the human output **mis-attributes files** — it did
+> here, pinning an error on `lib/data/landing.ts`, which in fact has only an unused-import warning.
 
-Not fixed here because every remaining file belongs to a feature another agent is actively iterating on,
-and a 20-file React refactor is not a screening pass. **Whoever picks this up: fix, then keep it green** —
-consider wiring `lint` into the deploy path so it cannot rot again.
+**Re-measured 2026-08-05 on `1021a11`: 11 errors · 22 warnings**, all in `@tokophi/admin`.
+`@tokophi/super-admin` is **clean**. ⚠️ `storefront` and `landing` have **no `lint` script at all**,
+so "run lint before a PR" only ever covered two of the four surfaces.
+
+### The 11 errors — every one located
+
+- [ ] **4 × `react-hooks/static-components`** ("Cannot create components during render") — a component
+  defined inside another component's body. React remounts the whole subtree on every parent render:
+  state inside it is lost, inputs lose focus mid-typing, effects re-run.
+  **Down from 12, and now confined to ONE file**: `app/(admin)/saldo/saldo-client.tsx` **:129 :130
+  :131 :133**. The five other files this entry used to name — the theme sections (`ImageText`,
+  `BannerPromo`), the navigasi item dialog, the command palette, `promo-list-client` — are **clear of
+  this rule now** (the two theme sections carry only a `no-img-element` warning each).
+- [ ] **5 × `react-hooks/set-state-in-effect`** — a double render at best, a loop at worst.
+  **Unchanged in count**, and these are the locations:
+  `app/(admin)/produk/[id]/product-editor.tsx:393` · `components/admin/command-palette.tsx:73` and
+  **:84** · `components/admin/navigasi/item-form-dialog.tsx:49` ·
+  `components/admin/pengaturan/sender-address-card.tsx:48`.
+- [ ] **2 × `react-hooks/purity`** ("Cannot call impure function during render") — `Date.now()` in a
+  render path. Both are async **SERVER** components (`flash-sale/[id]/page.tsx:15`,
+  `flash-sale/baru/page.tsx:10`) where it is harmless in practice.
+  ✅ **The one this entry told you to fix first is already fixed.** It was
+  `flash-sale-client.tsx`'s `StatusBadge` — a CLIENT component, i.e. the SSR-vs-client hydration
+  mismatch `AGENTS.md` §Conventions forbids. That file now derives the status on the server
+  (`lib/data/flash.ts`) and carries a comment saying so; it lints clean. **So the remaining two are
+  the LOW-priority pair, not the high one** — do not read the old ordering off this entry.
+
+### The 22 warnings, by rule
+
+`react-hooks/exhaustive-deps` × 13 · `@next/next/no-img-element` × 4 ·
+`@typescript-eslint/no-unused-expressions` × 3 · `@typescript-eslint/no-unused-vars` × 2.
+
+Still not fixed here: the remaining files belong to features other agents are iterating on, and a
+React refactor is not a screening pass. **Whoever picks this up: fix, then keep it green** — and the
+real fix is to stop it rotting, i.e. wire `lint` into the deploy path and give `storefront`/`landing`
+a `lint` script so all four surfaces are covered.
 
 ---
 
