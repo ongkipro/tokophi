@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type Dispatch, type SetStateAction, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug, QrCode, Landmark, Smartphone, Store, RefreshCw, Info } from "lucide-react";
+import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug, QrCode, Landmark, Smartphone, Store, RefreshCw, Info, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import type { CourierRow } from "@/lib/data";
 
@@ -38,6 +38,8 @@ import {
 import { cn } from "@tokophi/ui/lib/utils";
 import { initials } from "@/components/bits";
 import { saveGateways, saveCouriers, savePaymentChannels, syncPaymentChannels, invitePlatformAdmin, testKiriminajaConnection, testAutolarisConnection, saveCodAllowed, syncCouriersFromKiriminaja } from "@/lib/actions";
+import { resetPlatformAdminPassword } from "@/lib/actions";
+import { refused } from "@/lib/refused";
 import type { PaymentChannelRow } from "@/lib/data";
 
 type Toggle = { key: string; name: string; desc: string; on: boolean };
@@ -78,12 +80,14 @@ export function PengaturanClient({
   channels: initChannels,
   aggregator,
   team,
+  me,
 }: {
   gateways: Toggle[];
   couriers: CourierRow[];
   channels: PaymentChannelRow[];
-  aggregator: { provider: string; enabled: boolean };
+  aggregator: { provider: string; enabled: boolean; env: string };
   team: TeamMember[];
+  me: { adminId: string; role: string };
 }) {
   const router = useRouter();
   const [section, setSection] = useState<SectionId>("pembayaran");
@@ -112,7 +116,8 @@ export function PengaturanClient({
   const [chanSyncing, startChanSync] = useTransition();
   const syncChannels = () =>
     startChanSync(async () => {
-      await syncPaymentChannels();
+      const no = refused(await syncPaymentChannels());
+      if (no) return void toast.error(no);
       router.refresh(); // reloads channels with fresh active/enabled from AutoLaris probe
       toast.success("Channel disinkron dari AutoLaris.");
     });
@@ -121,8 +126,13 @@ export function PengaturanClient({
   // One "Simpan" for the whole payment section: PSP gateways (AutoLaris + COD) AND channels.
   const savePayment = () =>
     startTransition(async () => {
-      await saveGateways(gateways.map((g) => ({ key: g.key, on: g.on })));
-      await savePaymentChannels(channels.map((c) => ({ key: c.key, on: c.enabled })));
+      // Sequential, and it STOPS on the first refusal: the two writes are one operator intent, and
+      // both are gated identically, so a second call could only fail the same way. Reporting the
+      // gateways as saved and the channels as refused would describe a split that cannot happen.
+      const no =
+        refused(await saveGateways(gateways.map((g) => ({ key: g.key, on: g.on })))) ??
+        refused(await savePaymentChannels(channels.map((c) => ({ key: c.key, on: c.enabled }))));
+      if (no) return void toast.error(no);
       toast.success("Pengaturan pembayaran disimpan.");
       router.refresh();
     });
@@ -132,6 +142,22 @@ export function PengaturanClient({
       setPayPing({ ok: r.ok, message: r.message });
       if (r.ok) toast.success(r.message);
       else toast.error(r.message);
+    });
+
+  // N47 — hand a locked-out operator their way back in. Owner-only, and the server says so too:
+  // hiding the button is courtesy, `platformGate("owner")` inside the action is the boundary.
+  const [resetting, startReset] = useTransition();
+  const resetOperator = (m: TeamMember) =>
+    startReset(async () => {
+      const r = await resetPlatformAdminPassword(m.id);
+      const no = refused(r);
+      if (no) return void toast.error(no);
+      // Shown ONCE and never again — same hand-over as the invite below, so it stays until dismissed.
+      toast.success(`Password ${m.email} direset.`, {
+        description: `Password sementara: ${r.password} — salin sekarang, tidak bisa dilihat lagi. Semua sesi lamanya dicabut, jadi ia harus masuk ulang.`,
+        duration: Infinity,
+        closeButton: true,
+      });
     });
 
   // invite dialog
@@ -175,10 +201,12 @@ export function PengaturanClient({
             allowed: codOn[`${c.key}:${s.type}`] ?? s.codAllowed,
           })),
       );
-      await Promise.all([
+      const [rc, rcod] = await Promise.all([
         saveCouriers(couriers.map((c) => ({ key: c.key, on: c.on }))),
         saveCodAllowed(codUpdates),
       ]);
+      const no = refused(rc) ?? refused(rcod);
+      if (no) return void toast.error(no);
       toast.success("Pengaturan kurir & COD disimpan.");
       router.refresh();
     });
@@ -339,6 +367,22 @@ export function PengaturanClient({
                       <span>Agregator pengiriman: <span className="font-medium">{aggregator.provider}</span> · <span className="font-medium">{couriers.filter((c) => c.on).length}</span>/{couriers.length} kurir aktif</span>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
+                      {/* N35 — WHICH KEY is live, on the card itself. Production is the one that books
+                          a real parcel and bills a merchant, so it is the one that gets the loud
+                          colour; the label is the raw env value, not a prettified synonym, because
+                          it is the string an operator will compare against `.env`. */}
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "border-transparent",
+                          aggregator.env === "production"
+                            ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                            : "bg-muted text-muted-foreground",
+                        )}
+                        title={aggregator.env === "production" ? "Kunci produksi — pemesanan nyata, ditagihkan." : "Kunci sandbox — tidak ada paket yang benar-benar dikirim."}
+                      >
+                        {aggregator.env}
+                      </Badge>
                       {aggregator.enabled && (
                         <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
                       )}
@@ -482,7 +526,17 @@ export function PengaturanClient({
                           <div className="text-xs text-muted-foreground">{m.email}</div>
                         </div>
                       </div>
-                      <Badge className={cn(ROLE_CLASS[m.role] ?? "bg-muted text-foreground")}>{roleLabel(m.role)}</Badge>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {/* Own row excluded: resetting it revokes the cookie doing the resetting. The
+                            action refuses it too — this only keeps the operator from finding out by
+                            being logged out. Their own path is “Ubah kata sandi” in the shell menu. */}
+                        {me.role === "owner" && m.id !== me.adminId && (
+                          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" disabled={resetting} onClick={() => resetOperator(m)}>
+                            <KeyRound className="size-3.5" /> Reset password
+                          </Button>
+                        )}
+                        <Badge className={cn(ROLE_CLASS[m.role] ?? "bg-muted text-foreground")}>{roleLabel(m.role)}</Badge>
+                      </div>
                     </div>
                   </div>
                 ))}

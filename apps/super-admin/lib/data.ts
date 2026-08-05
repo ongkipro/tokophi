@@ -351,8 +351,20 @@ export async function getConversion(): Promise<Conversion> {
   };
 }
 
+/**
+ * Which KiriminAja key is live — `sandbox` books nothing and moves no parcel, `production` books
+ * for real and bills a merchant.
+ *
+ * ONE reader, called by both surfaces that print it (Analitik → Sistem, and the connection card on
+ * Pengaturan → Kurir). A second `process.env.KIRIMINAJA_ENV ?? "sandbox"` next to the card would be
+ * a second place to drift, and the two would then disagree about which environment is live — the
+ * exact failure the card exists to prevent. The default matches `@tokophi/lib/kiriminaja`, which is
+ * what actually chooses the base URL.
+ */
+export const kaEnvName = () => process.env.KIRIMINAJA_ENV ?? "sandbox";
+
 // Platform system + integration status.
-export type SystemStatus = { kiriminaja: boolean; autolaris: boolean; kaEnv: string; stores: number; dbOk: boolean; region: string };
+export type SystemStatus ={ kiriminaja: boolean; autolaris: boolean; kaEnv: string; stores: number; dbOk: boolean; region: string };
 export async function getSystemStatus(): Promise<SystemStatus> {
   let stores = 0;
   let dbOk = true;
@@ -365,7 +377,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
   return {
     kiriminaja: kiriminajaConfigured(),
     autolaris: autolarisConfigured(),
-    kaEnv: process.env.KIRIMINAJA_ENV ?? "sandbox",
+    kaEnv: kaEnvName(),
     stores,
     dbOk,
     region: process.env.DEPLOY_REGION ?? "lokal", // was hardcoded "Singapore" on a laptop
@@ -676,10 +688,13 @@ export async function getPlatformAdmins(): Promise<PlatformAdminRow[]> {
   return rows.map((r) => ({ id: r.id, name: r.name ?? r.email, email: r.email, role: r.role }));
 }
 
-export async function getAggregator(): Promise<{ provider: string; enabled: boolean }> {
+export async function getAggregator(): Promise<{ provider: string; enabled: boolean; env: string }> {
   const agg = (await db.select().from(schema.shippingAggregator))[0];
   const PROVIDER_NAME: Record<string, string> = { biteship: "Biteship", rajaongkir: "RajaOngkir", shipper: "Shipper", kiriminaja: "KiriminAja" };
-  return { provider: agg ? PROVIDER_NAME[agg.provider] ?? agg.provider : "—", enabled: agg?.enabled ?? false };
+  // N35: the card said WHICH aggregator but never WHICH KEY. "Terhubung" against the sandbox and
+  // "Terhubung" against production read identically, and only one of them moves a real parcel — the
+  // operator had to press Test koneksi (whose message carries it) or leave for Analitik to find out.
+  return { provider: agg ? PROVIDER_NAME[agg.provider] ?? agg.provider : "—", enabled: agg?.enabled ?? false, env: kaEnvName() };
 }
 
 // ---- per-store control-plane detail (invoices, users, audit) ----
