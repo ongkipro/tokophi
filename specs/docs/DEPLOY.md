@@ -583,6 +583,24 @@ docker compose --project-directory . -f /tmp/tokophi-local.yml -p tokophi-test d
 `--project-directory .` is load-bearing: the build contexts are repo-root-relative, so without it the
 compose file's `/tmp` location becomes the context and every build fails.
 
+🔴 **NEVER run this on a machine where Coolify has this app deployed — including the VPS — and always
+`down -v` when finished.** The compose hard-codes a Traefik service NAME:
+
+```
+traefik.http.services.tokophi-stores.loadbalancer.server.port=4327
+```
+
+Coolify's deployed container carries the identical label, so **Traefik merges the two into ONE service
+with TWO servers** — and the `docker compose` container sits on its own bridge network, which the proxy
+cannot reach. Measured on a box running both: the storefront and the landing page answered
+`200, 000, 200, 000, 200` — an exact 50/50 alternation — while `admin` and `super-admin` stayed
+healthy, because those two carry no Traefik labels of their own in the compose.
+
+The failure mode is worth naming because every instinct points the wrong way: containers are all
+`healthy`, the proxy is `healthy`, DNS resolves, and half the requests still die. It is not DNS, and
+pinning `/etc/hosts` does not change it (both were tried). `docker compose down -v` on the validation
+stack restored 6/6.
+
 Re-validated **2026-08-05** on the escaped copy: migrate `Exited (0)` with **7030 KiriminAja areas**
 and 78 764 kelurahan seeded, `postgres`/`landing`/`storefront`/`admin`/`super-admin`/`backup` all
 `healthy`, three `cron-*` sidecars started. (Original run 2026-07-09 reported the same 7030 areas.)
