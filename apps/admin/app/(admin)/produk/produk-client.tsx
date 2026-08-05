@@ -371,14 +371,40 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
         <p className="mb-3 text-xs text-muted-foreground">Menampilkan {num(filtered.length)} dari {num(products.length)} produk</p>
       )}
 
+      {/* ⚠️ HEADING ORDER: the page `<h1>` is PageHeader's, and the grid cards below title
+          themselves with `<h3>` — h1 → h3, a skipped level, and the only `h3` in the whole admin.
+          Demoting the cards to `<h2>` would put 24 same-level headings under the page title with
+          nothing naming the region they belong to; naming the region is the fix that carries
+          information. `sr-only` because the visible result count above already says it in numbers.
+          It sits OUTSIDE the grid/table branch on purpose — both views list the same products. */}
+      <h2 className="sr-only">Daftar produk</h2>
+
       {/* Content */}
       {filtered.length === 0 ? (
         <Card className="py-0">
           <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
             <Package className="size-8 text-muted-foreground" />
-            <p className="text-sm font-medium">Tidak ada produk ditemukan</p>
-            <p className="text-sm text-muted-foreground">Coba ubah kata kunci atau filter Anda.</p>
-            {hasFilters && <Button variant="outline" size="sm" className="mt-2" onClick={resetFilters}>Bersihkan filter</Button>}
+            {/* ⚠️ "no rows" and "no rows MATCHING" are two different facts. A store on its first day
+                has zero products and no filter set, and was told to "ubah kata kunci atau filter" it
+                had never touched — advice that cannot work, on the one screen where the next step is
+                obvious. Key on the unfiltered total, not on `filtered`. */}
+            {products.length === 0 ? (
+              <>
+                <p className="text-sm font-medium">Belum ada produk</p>
+                <p className="text-sm text-muted-foreground">Tambahkan produk pertama agar toko Anda punya sesuatu untuk dijual.</p>
+                {canWrite && (
+                  <Button size="sm" className="mt-2" nativeButton={false} render={<Link href="/produk/baru" />}>
+                    <Plus /> Tambah Produk
+                  </Button>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium">Tidak ada produk ditemukan</p>
+                <p className="text-sm text-muted-foreground">Coba ubah kata kunci atau filter Anda.</p>
+                {hasFilters && <Button variant="outline" size="sm" className="mt-2" onClick={resetFilters}>Bersihkan filter</Button>}
+              </>
+            )}
           </CardContent>
         </Card>
       ) : view === "grid" ? (

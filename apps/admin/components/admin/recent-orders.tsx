@@ -5,6 +5,17 @@ import type { Order } from "@/lib/mock/store";
 import { IDR, timeAgo } from "@tokophi/lib/format";
 
 export function RecentOrders({ orders }: { orders: Order[] }) {
+  // A brand-new store rendered this as a HEADER-ONLY table: five column labels over nothing, which
+  // reads as "the data failed to load" rather than "you have no orders yet". Same rule the sibling
+  // cards on this dashboard already follow ("Belum ada penjualan pada periode ini.") — say what is
+  // missing and what brings it.
+  if (orders.length === 0) {
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        Belum ada pesanan. Pesanan pertama muncul di sini begitu ada pembeli yang checkout di storefront Anda.
+      </p>
+    );
+  }
   return (
     <Table>
       <TableHeader>
