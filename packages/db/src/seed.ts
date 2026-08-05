@@ -7,16 +7,29 @@ import { COURIERS } from "@tokophi/lib/couriers";
 // The one writer of `users.password_hash` (scrypt `salt:hash`) and the one MINT — see
 // @tokophi/lib/password. There is no second implementation of either, anywhere (enforced by
 // `packages/lib/src/password.test.ts`, which scans every tracked source file).
-import { hashPassword, tempPassword } from "@tokophi/lib/password";
+import { hashPassword, tempPassword, PUBLISHED_PASSWORDS } from "@tokophi/lib/password";
+import { assertTruncateIsDeliberate } from "./seed-guard";
 
 // ── SEEDED CREDENTIALS — RANDOM PER ACCOUNT, PER RUN, REVEALED ONCE (N29) ─────────────────────────
 //
-// 🔴 THIS USED TO BE `const DEV_OWNER_PASSWORD = "tokophi123"` — one constant, hashed into the store
+// 🔴 THIS USED TO BE `const DEV_OWNER_PASSWORD = "tokophi123"` — ONE constant, hashed into the store
 // owner, the platform operator, every demo store's owner and every registered demo customer. The
-// string was published in this repository, in `AGENTS.md`, in `README.md` and on both login screens.
-// Audit wave 5 deleted it from the SCREENS; the ROWS were untouched, because the seed is not a
-// migration. **Measured on production 2026-08-05: `demo@tokophi.com` — the owner of the one real
-// store, 219 orders, real buyer names/phones/addresses — still authenticates with it today.**
+// string was published in this repository, in `AGENTS.md`, in `README.md`, in `SYSTEM_GUIDE.md` and
+// on both login screens. Audit wave 5 deleted it from the SCREENS; the ROWS were untouched, because
+// the seed is not a migration. Measured read-only on production 2026-08-03
+// (`specs/docs/tasks/2026-08-03-rotate-exposed-owners.md` §①): **7 of 8 store owners, plus the
+// platform operator, authenticate with it.** Re-measured 2026-08-05: the demo store's owner still does.
+//
+// ⚠️ WHAT THIS IS **NOT**, and the first draft of this comment got it wrong in the expensive direction.
+// The demo store's 219 orders are a **DUMMY set** — 32 distinct phone numbers across all 219, buyer
+// names like "feri crut". There is no real buyer's name, number or address behind that login, and
+// saying otherwise would have put a false severity into the one file everybody greps. **Overstating an
+// exposure is as bad as understating one**: the next person prices their response off this sentence.
+// Nor is that account a defect: `demo@tokophi.com` / `tokophi123` is a credential the OWNER chose,
+// deliberately, for a demo store. **This change is about the accounts a NEW deployment mints** — it
+// leaves every existing row exactly as it is, which is the whole meaning of "the seed is not a
+// migration". Rotating an existing one is a procedure, not a code change: see §②/§③ of that doc.
+// (The platform operator on production, `ongkiardiansyah@gmail.com`, is already off the constant.)
 //
 // So: no fixed default. Each account gets its own 60-bit mint and the run PRINTS them once at the
 // end, which is the only copy that will ever exist (nothing writes a password to a table or a file).
@@ -24,12 +37,24 @@ import { hashPassword, tempPassword } from "@tokophi/lib/password";
 //
 // ⚠️ PER ACCOUNT, not per run. A single random string shared by nine accounts is unguessable but
 // still one-breach-opens-all — the same shape as the defect being repaired, with a fresher constant.
-// `specs/docs/tasks/2026-08-03-rotate-exposed-owners.md` §③ says it in as many words.
+// `2026-08-03-rotate-exposed-owners.md` §③ says it in as many words ("One password per account").
 //
-// **`SEED_OWNER_PASSWORD` pins every seeded account to one string you choose.** That is the local-dev
-// escape hatch (and the only way to get a memorable login back); it is deliberately an env var, so
-// choosing it is an act, not a default. Never set it on a deploy that faces the internet.
+// **`SEED_OWNER_PASSWORD` pins every seeded account to one string you choose.** Kept deliberately,
+// because the alternative is worse: this database is shared by several agents and re-seeded by hand,
+// so a login nobody can predict is a login someone re-adds a constant to get back — and a constant
+// re-added quietly is how this defect existed in the first place. An env var makes the choice an ACT,
+// leaves no fixed string in a tracked file (`packages/lib/src/password.test.ts` scans every one), and
+// is absent by default, which is the case that matters on a deploy. Never set it on one that faces
+// the internet.
 const PINNED_PASSWORD = process.env.SEED_OWNER_PASSWORD?.trim() || null;
+// …and it may not be used to put the published string back. `SEED_OWNER_PASSWORD=tokophi123` would
+// reproduce the exact defect above, with all of the deliberateness and none of the safety. Refusing
+// one comparison is cheaper than discovering it on a deploy log six weeks later.
+if (PINNED_PASSWORD && (PUBLISHED_PASSWORDS as readonly string[]).includes(PINNED_PASSWORD.toLowerCase())) {
+  throw new Error(
+    `SEED_OWNER_PASSWORD is a published default ("${PINNED_PASSWORD}") — that is the exact credential N29 removed. Pick another, or unset it and let the seed mint one per account.`,
+  );
+}
 /** Every credential this run minted, printed once at the end. `[what it opens, the password]`. */
 const MINTED: Array<[string, string]> = [];
 /** A password for ONE seeded account. Recorded so the run can reveal it; never returned twice. */
@@ -690,81 +715,18 @@ const AD_PROVINCES: Array<{ province: string; spend: number; impressions: number
   { province: "Lainnya", spend: 1_150_000, impressions: 164_000, clicks: 4_500, conversions: 30, revenue: 5_100_000, reach: 86_000 },
 ];
 
-// ── WHAT `SEED_FORCE=1` DESTROYS THAT NOTHING PUTS BACK (N42) ─────────────────────────────────────
-//
-// 🔴 THE KEEP-LIST BELOW CANNOT PROTECT ANY OF THIS, AND THAT IS NOT A MATTER OF ADDING NAMES TO IT.
-// `truncate … CASCADE` follows every foreign key INTO the truncated set. Measured on production:
-// `store_tracking_channels`, `page_templates` and `flash_sales` all carry a `store_id` FK to
-// `stores`, so excluding them from the list changes nothing — cascade empties them anyway. The three
-// tables the keep-list really does save (`kiriminaja_areas`, `kelurahan`, `product_taxonomy`) are
-// standalone REFERENCE tables with no FK into anything, which is precisely why it works for them.
-//
-// So the honest guard is not a longer list, it is a REFUSAL: count what is about to be lost, print
-// it, and make the operator name the destruction in a second variable. `SEED_FORCE=1` alone is a
-// flag someone copies out of a doc; `SEED_DESTROY_CONFIG=1` is a sentence they have to mean.
-//
-// Each entry is `[table, predicate, what it costs]`. The table is skipped when it does not exist
-// (a database that never had it has nothing to lose), and both strings are literals from this file —
-// there is no caller-supplied text anywhere near `client.unsafe`.
-const IRREPLACEABLE: Array<[table: string, predicate: string, what: string]> = [
-  ["orders", "true", "ORDERS — buyer name, WhatsApp, full delivery address, the money"],
-  ["customers", "true", "customer records"],
-  ["ledger_entries", "true", "ledger entries — the merchant's balance is DERIVED from these"],
-  ["store_tracking_channels", "true", "pixel ids — the seed does not write this table AT ALL, so nothing restores it"],
-  ["store_tracking_channels", "capi_token_ciphertext is not null", "…of those, ENCRYPTED CAPI TOKENS. Not re-derivable from anything"],
-  ["page_templates", "true", "Store Builder templates — published merchant work"],
-  ["flash_sales", "true", "flash sales"],
-  ["platform_admins", "true", "platform operator logins — replaced by ONE fresh seeded account"],
-  ["shipping_aggregator", "api_key is not null", "the courier aggregator API key — re-seeded NULL"],
-  ["platform_payment_gateways", "credentials is not null", "the payment gateway credentials — re-seeded NULL"],
-  ["media", "true", "media library rows (the FILES survive on disk; the rows pointing at them do not)"],
-];
-
-/**
- * Refuse to truncate a database that holds something no seed can put back.
- *
- * Runs before EVERY truncate, not only under `SEED_FORCE` — the skip above only looks at `stores`,
- * so a database with a rotated platform operator and no store yet would sail past it and lose the
- * operator. Silent and ~free when there is nothing to lose, which is the fresh-database case.
- */
-async function assertTruncateIsDeliberate() {
-  const lines: string[] = [];
-  for (const [table, predicate, what] of IRREPLACEABLE) {
-    const [reg] = await client<{ t: string | null }[]>`select to_regclass(${"public." + table})::text as t`;
-    if (!reg?.t) continue;
-    const [row] = await client.unsafe<{ c: number }[]>(`select count(*)::int as c from "${table}" where ${predicate}`);
-    if (row.c > 0) lines.push(`   ${String(row.c).padStart(7)}  ${table.padEnd(24)} ${what}`);
-  }
-  if (!lines.length) return;
-
-  console.error("\n🔴 THE SEED TRUNCATES EVERY TABLE. This database holds rows nothing will put back:\n");
-  console.error(lines.join("\n"));
-  console.error(
-    "\n   There is no backup step in this script and no restore path for any line above.\n" +
-      "   The truncate keep-list cannot save them: `cascade` follows the store_id FKs into them.\n",
-  );
-  if (process.env.SEED_DESTROY_CONFIG) {
-    console.error("   SEED_DESTROY_CONFIG=1 — proceeding, as instructed.\n");
-    return;
-  }
-  console.error(
-    "   REFUSING. If you meant it, re-run with SEED_DESTROY_CONFIG=1 as well.\n" +
-      "   If the demo merely looks stale, you almost certainly want `npm run seed:recent -w @tokophi/db`\n" +
-      "   instead — it only INSERTS, touches one store, and is idempotent.\n",
-  );
-  await client.end();
-  process.exit(1);
-}
-
 async function truncateAll() {
   // Static REFERENCE data — never wiped by a demo reseed. `kelurahan` (78.764 rows) is on this list
   // because it is what the checkout's kodepos auto-fill reads: it was missing, so every SEED_FORCE=1
   // silently deleted it and broke address entry until someone re-imported by hand. CLAUDE.md names it
   // as one of the two landmines in this package; the keep-list is where that warning has to be true.
   //
-  // ⚠️ IT ONLY WORKS FOR TABLES NOTHING REFERENCES. See `IRREPLACEABLE` above: `cascade` reaches any
-  // table with an FK into the truncated set, so adding a store-scoped table here is a no-op that
-  // READS like protection. That is the trap this comment exists to close.
+  // ⚠️ IT ONLY WORKS FOR A TABLE WITH NO FK PATH OUT OF THE LIST. `cascade` reaches any table that
+  // references one being truncated, so adding a store-scoped table here is a no-op that READS like
+  // protection — measured, with Postgres printing `truncate cascades to table "…"` for all three of
+  // `store_tracking_channels`, `page_templates`, `flash_sales`. That is the trap this comment exists
+  // to close, and `src/seed-guard.ts` is the guard that replaces the longer list nobody can write.
+  // (`kelurahan` is on the list DESPITE having an FK — to `kiriminaja_areas`, which is kept too.)
   const rows = await client<{ table_name: string }[]>`
     select table_name from information_schema.tables
     where table_schema = 'public'
@@ -785,7 +747,10 @@ async function main() {
       return;
     }
   }
-  await assertTruncateIsDeliberate();
+  // Refuse (unless SEED_DESTROY_CONFIG=1) when this database holds rows no seed writes back — see
+  // the note at the top of `seed-guard.ts` for why a longer keep-list is not the fix. Deliberately
+  // OUTSIDE the `SEED_FORCE` branch above: that skip only counts `stores`.
+  await assertTruncateIsDeliberate(client, () => client.end());
   await truncateAll();
 
   // plans (config)
@@ -1900,8 +1865,10 @@ async function main() {
 /**
  * THE ONLY COPY THAT WILL EVER EXIST. `tempPassword()` returns a string that is hashed and
  * discarded — nothing writes it to a table, a log table or a file, and there is no mailer and no
- * forgot-password route in this product (checked: `apps/*/app/**` has neither). If this block does
- * not print, the account it minted is unreachable until somebody resets it from super-admin.
+ * forgot-password route anywhere under `apps/` (checked). If this block does not print, the account
+ * it minted is unreachable until somebody resets it from super-admin.
+ * (The glob that named those routes is gone on purpose: a `*` followed by `/` ENDS this comment, and
+ * the draft's version did exactly that — `tsc` then read the prose as code and failed on `app`.)
  *
  * Printed to STDOUT, once, at the very end so it is the last thing in a deploy log rather than
  * buried under 1.500 inserts.
@@ -1920,6 +1887,13 @@ function revealCredentials() {
 
 main().catch(async (e) => {
   console.error(e);
+  // ⚠️ REVEAL ON FAILURE TOO. The seed is not one transaction — it is ~1.500 inserts, and the owner
+  // and the platform operator are written in the FIRST few. A crash at insert 900 therefore leaves
+  // real, hashed, working accounts in the database whose passwords exist only in this process's
+  // memory, and the re-run needs `SEED_FORCE=1` because `stores` is no longer empty. Printing here
+  // costs nothing on a clean run (the list is empty before the first mint) and is the difference
+  // between "re-run it" and "open psql".
+  revealCredentials();
   await client.end();
   process.exit(1);
 });
