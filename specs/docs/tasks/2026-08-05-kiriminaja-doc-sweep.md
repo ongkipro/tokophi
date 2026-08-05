@@ -70,3 +70,37 @@ Then, in rough value order:
 ⚠️ **Still outstanding from the E2E run:** sandbox booking `5758-E2E68072665` / pickup
 `XID-5544692486` could not be cancelled. **Do not repeat the booking run** — see
 `2026-08-03-shipping-e2e-runbook.md`.
+
+---
+
+## Follow-up, same day: N42 decided and shipped
+
+**Owner's ruling: the platform ABSORBS the courier's shipping cost on COD orders** —
+[ADR 0014](../../decisions/0014-platform-absorbs-cod-shipping.md). The merchant keeps being credited
+the gross order total including ongkir; we settle the courier.
+
+- [x] ADR 0014 written — the decision, and why the gross credit is now deliberate.
+- [x] `getCourierCostAbsorbed()` + "Ongkir COD yang kami tanggung" on Super Admin → Analitik.
+- [x] `creditSaleForPayment`'s docblock names the ADR, because that is where the next auditor lands.
+- [x] `apps/super-admin/lib/cod-shipping-cost.test.ts` — **mutation-tested**, not assumed: merging the
+      two flows → `51000 ≠ 40000`; counting non-delivered parcels → `227000 ≠ 40000`.
+- [x] Gates: vitest **456/456**, `build:super` exit 0. Browser-verified on the built app with real
+      rows (COD Rp40.000/2, prabayar Rp11.000/1, 1 tak tercatat, 0 console errors), dev DB restored
+      to **0 dirty rows**.
+
+**No money moved.** The credit was already gross; the ADR makes that correct rather than a defect, and
+the work was making the absorbed cost visible — it previously had no ledger kind, no reader, no screen.
+
+### What is still open here
+
+- 🟠 **Prepaid is the same shape and is NOT decided.** A prepaid order also credits the merchant gross
+  while we settle the courier by VA. The card shows that number beside COD's, labelled *"mekanisme
+  sama, belum diputuskan"*, so it stays visible until someone rules on it. Needs its own ADR.
+- 🔴 **The figure is the shipping cost only.** No COD settlement fee is documented anywhere and
+  `platform_cod.fee_pct` is read by nothing (seeded `0`), so the real cost is that **or more**.
+
+### NEXT after this
+
+Unchanged: **N38** label fields (insurance needs a column; sorting code blocked twice) · **N39**
+webhooks (blocked on the registration path) · **N40** `v6.1` booking endpoint is vendor-deprecated ·
+**N41** courier holidays · **N43** `password.test.ts` flakes 1-in-3 under a full run.

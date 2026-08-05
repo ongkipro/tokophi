@@ -456,7 +456,38 @@ and no label ever names the provider (ADR 0004).
 ⚠️ **Reading payment status back is still open** — the Payment endpoint's path is NOT STATED IN DOCS.
 We can now *ask* (we hold the `payment_id`); we do not yet know where.
 
-### 🔴 N42. COD settlement is not modelled — the platform pays the difference · **L** · **OWNER DECISION**
+### ✅ N42. COD settlement — **DECIDED + SHIPPED 2026-08-05** ([ADR 0014](../../decisions/0014-platform-absorbs-cod-shipping.md))
+🔵 **The owner's ruling: the platform ABSORBS the courier's shipping cost on COD orders.** The
+merchant is credited the gross order total including ongkir; we settle the courier.
+
+**So no money moved, and that is the point.** `creditSaleForPayment` already booked the gross — under
+this ADR that is now *correct*, not the bug it was filed as. What was missing is that the cost we
+absorb left **no trace anywhere**: no ledger kind, no column, no screen.
+
+⚠️ **It looks exactly like the classic "forgot the cost" bug and has already been re-found once.**
+`creditSaleForPayment`'s docblock now names the ADR, and
+`apps/super-admin/lib/cod-shipping-cost.test.ts` fails if anyone starts netting. **Change the ADR
+first, then the tests, then the code.**
+
+Shipped: `getCourierCostAbsorbed()` + "Ongkir COD yang kami tanggung" on Super Admin → Analitik,
+under the merchant-float box because that is what it drains. Three honesties the figure is shaped
+around, each of which a naive `sum()` destroys — **NULL means not recorded, never zero** (every
+booking before 0088); **COD and prepaid stay separate numbers** (only COD is decided — see below);
+**only delivered orders count** (a returned parcel did not necessarily cost a full carry). Guard is
+mutation-tested: merging the two flows → `51000 ≠ 40000`, counting non-delivered → `227000 ≠ 40000`.
+Browser-verified on the built app with real rows, then the dev DB restored to 0 dirty rows.
+
+🟠 **Left deliberately open — prepaid is the SAME shape and is NOT decided.** A prepaid order also
+credits the merchant gross while we settle the courier by VA. The screen now shows that number beside
+the COD one, labelled *"mekanisme sama, belum diputuskan"*, so it stops being invisible while you
+decide. If the answer differs from COD's it needs its own ADR.
+
+🔴 **The reported figure is the SHIPPING COST ONLY, and the real cost is that or more.** KiriminAja
+documents no COD settlement fee — no endpoint, no schedule, no webhook — and `platform_cod.fee_pct`
+is in the schema but **read by nothing** (only ever seeded to `0`). Do not present this as the total
+cost of COD; the card says so.
+
+### ~~The original N42 filing~~ — kept because the reasoning is the ADR's context
 Found auditing the ledger against the VA/COD split. **This one moves real money, so it is filed, not
 fixed.**
 

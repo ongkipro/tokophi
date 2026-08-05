@@ -35,6 +35,15 @@ export type Db = typeof rootDb;
  * `total` adds the gateway's admin fee, which is the gateway's money and never was the merchant's.
  * That also keeps the Dashboard revenue, the Pesanan list and the Saldo ledger the same number.
  *
+ * ⚠️ **On a COD order this credits the GROSS total, ongkir included, and that is DELIBERATE —
+ * ADR 0014.** The courier collects the gross from the buyer and remits it NET of the shipping cost
+ * it keeps, so the merchant's balance is larger than the cash that reached us and the platform
+ * covers the gap from its own float. That is the owner's decision, not an oversight: the platform
+ * absorbs the courier's shipping cost on COD. It looks exactly like the classic "forgot the cost"
+ * bug and has already been re-found once — **do not net the shipping cost out here.** The absorbed
+ * amount is reported instead, on Super Admin → Analitik (`getCourierCostAbsorbed`), and pinned by
+ * `apps/super-admin/lib/cod-shipping-cost.test.ts`. Change the ADR first, then the tests, then this.
+ *
  * Status follows the release rule (`platform_payout.release_on = 'selesai'`): the credit lands
  * `pending` and is released to `available` by `setOrderStatus` when the order reaches `selesai`.
  * A payment collected on an already-finished order (`selesai`/`retur` — e.g. COD collected on
