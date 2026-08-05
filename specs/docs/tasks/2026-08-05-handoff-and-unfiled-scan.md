@@ -102,11 +102,15 @@ their authors can do:
       the closer of the two. `OPEN.md` now carries the measured figures and says what it used to
       claim. Recorded here because the number is not cosmetic: the low one is what makes someone
       conclude a healthy deploy has failed and start intervening.
-- [ ] **`BACKLOG.md`'s ESLint count is stale.** It says "**20 remain**", all React Compiler rules.
-      Measured today: **11 errors, 22 warnings** in `@tokophi/admin` (`super-admin` is clean). The
-      breakdown has shifted too — 4 × "Cannot create components during render" (BACKLOG says 12),
-      5 × "setState synchronously within an effect", 2 × "Cannot call impure function during render".
-      Someone has been fixing these without updating the count. Re-derive before quoting it.
+- [x] **`BACKLOG.md`'s ESLint count was stale — CORRECTED.** It claimed "20 remain"; re-measured on
+      `1021a11` with `--format json`: **11 errors, 22 warnings**, all in `@tokophi/admin`
+      (`super-admin` clean; **`storefront` and `landing` have no `lint` script at all**, which nothing
+      had said). Every error is now located to file:line, and two of the entry's own claims had
+      inverted: `static-components` is down 12 → 4 and confined to `saldo-client.tsx` alone, and the
+      `purity` error it told you to "fix first" — the CLIENT-component `StatusBadge` — **is already
+      fixed**, leaving only the two harmless async server components. The entry now carries a
+      re-derive command and a warning that a `grep`/`awk` pass mis-attributes files (it pinned an
+      error on `lib/data/landing.ts`, which only has an unused-import warning).
 - [ ] **`X-Content-Type-Options: nosniff`.** Cloudflare bundles it into the same `security_header`
       object HSTS lives in, so it is one field away (`CLOUDFLARE-PERF.md` §4). Left off deliberately —
       it is a different header and deserves its own decision — but nothing tracks that decision.
