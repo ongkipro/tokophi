@@ -737,6 +737,24 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   (`ledger_one_sale_per_payment`, `ledger_one_sale_per_order`, `ledger_one_retur_per_order`) plus
   `on conflict do nothing` on every writer. The balance is DERIVED (`Σ amount_idr` by status); there
   is no stored-balance column and there must not be.
+- **⚠️ NOTHING THAT SUMS THE BALANCE MAY JOIN `orders`, and a `payout` entry is why.** Its `order_id`
+  is NULL by design — it belongs to a withdrawal, not an order — so an inner join silently drops every
+  payout and the available balance jumps by everything already paid out (measured on production:
+  Rp21.043.271 → **Rp43.733.271**, handing back Rp23,5jt). By the same token `not exists (select 1 from
+  orders where id = l.order_id)` is TRUE for a NULL, so the obvious orphan query reports every
+  withdrawal as corruption. **Count `order_id IS NULL` separately, always.**
+- **`npm run verify-ledger -w @tokophi/db`** (read-only, safe against production) reports children of
+  `orders` with a missing parent and what they are worth in each store's balance. It exists because
+  production carried **48 such rows** — 10 `payments`, 30 `order_line_items`, 8 `ledger_entries`, all
+  from ten `INV-47xx` orders that no longer exist — putting **Rp810.000 into `available`**, i.e.
+  withdrawable via `requestPayout`, and Rp2.302.000 into `pending`, where `/saldo` printed a held total
+  its own itemised list (`getPendingFunds`, which *does* join `orders`) could not account for.
+  The three FKs are present and VALIDATED and Postgres refuses a dangling insert today, so **no
+  application path can make these**; only a load with referential triggers off (`pg_restore
+  --data-only --disable-triggers`, `session_replication_role = 'replica'`). Cleanup SQL —
+  transactional, guarded, ending in `rollback` — is `ops/tokophi-orphan-cleanup.sql`; it is
+  deliberately **not** a drizzle migration, because merging one would delete production rows
+  unattended on the next Coolify build. Both traps are pinned by `packages/db/src/verify-ledger.test.ts`.
 - **A GUESS MUST NEVER SUCCEED QUIETLY, and "we flag it" is a claim to grep before trusting.** The
   comment above `createShipment`'s destination fallback said the guess "is flagged as a guess" while
   `destinationGuessed` existed **nowhere in the repo** — 77 orders carry no `ship_district_id`, so the
