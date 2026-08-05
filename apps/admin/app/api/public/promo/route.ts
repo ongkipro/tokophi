@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
-import { rateLimited } from "@/lib/public-guard";
+import { rateLimited, readPublicBody } from "@/lib/public-guard";
 import { applyDiscount } from "@/lib/promo";
 
 // Voucher PREVIEW (PROMO P0) — the checkout calls this on "Terapkan" to show the discount live before
@@ -22,8 +22,12 @@ export async function POST(req: Request) {
   if (limited) return limited;
 
   let body: { storeSlug?: string; code?: string; subtotal?: number; shipping?: number };
+  // Capped read — see `lib/public-guard.ts`. This route has no array to bound, but `req.json()` will
+  // happily buffer a 64 MB body for four scalar fields.
+  const raw = await readPublicBody(req, CORS);
+  if (raw.res) return raw.res;
   try {
-    body = await req.json();
+    body = JSON.parse(raw.text);
   } catch {
     return NextResponse.json({ ok: false, error: "Permintaan tidak valid." }, { status: 400, headers: CORS });
   }

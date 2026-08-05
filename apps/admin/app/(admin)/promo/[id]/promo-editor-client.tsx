@@ -204,7 +204,10 @@ export function PromoEditorClient({ editor }: { editor: PromoEditor }) {
                 maxLength={120}
                 disabled={!canWrite}
               />
-              <Button variant="ghost" size="icon" onClick={() => set("benefits", cfg.benefits.filter((_, j) => j !== i))} disabled={!canWrite}>
+              {/* Icon-only + destructive: with no name a screen reader announced N identical
+                  "button"s that each delete a different row. The index is what tells them apart —
+                  the field's own text is user input and may be blank. */}
+              <Button variant="ghost" size="icon" aria-label={`Hapus manfaat ${i + 1}`} onClick={() => set("benefits", cfg.benefits.filter((_, j) => j !== i))} disabled={!canWrite}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -227,7 +230,9 @@ export function PromoEditorClient({ editor }: { editor: PromoEditor }) {
             {cfg.idealFor.map((c) => (
               <span key={c} className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1 text-sm">
                 {c}
-                <button type="button" onClick={() => set("idealFor", cfg.idealFor.filter((x) => x !== c))} disabled={!canWrite} className="text-muted-foreground hover:text-foreground disabled:opacity-40">
+                {/* The chip's text sits in the parent `<span>`, NOT in this button — adjacency is
+                    not an accessible name. Name it with the chip it removes. */}
+                <button type="button" aria-label={`Hapus ${c}`} onClick={() => set("idealFor", cfg.idealFor.filter((x) => x !== c))} disabled={!canWrite} className="text-muted-foreground hover:text-foreground disabled:opacity-40">
                   <X className="h-3.5 w-3.5" />
                 </button>
               </span>
@@ -291,6 +296,7 @@ export function PromoEditorClient({ editor }: { editor: PromoEditor }) {
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label={`Hapus poin masalah ${i + 1}`}
                   onClick={() => setContent("problemBullets", (cfg.content.problemBullets ?? []).filter((_, j) => j !== i))}
                   disabled={!canWrite}
                 >

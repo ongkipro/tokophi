@@ -25,7 +25,8 @@
     "./session-revocation": "./src/session-revocation.ts",
     "./tracking-ids": "./src/tracking-ids.ts",
     "./pay-callback": "./src/pay-callback.ts",
-    "./recovery": "./src/recovery.ts"
+    "./recovery": "./src/recovery.ts",
+    "./env-file": "./src/env-file.mjs"
   },
   "dependencies": {
     "jose": "^6.2.3"

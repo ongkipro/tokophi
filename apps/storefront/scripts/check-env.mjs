@@ -22,6 +22,7 @@
 // per-script knobs are what this file exists to delete.
 import http from "node:http";
 import path from "node:path";
+import { readDatabaseUrl } from "@tokophi/lib/env-file";
 import { chromium } from "playwright";
 
 // The tenant is resolved from the Host header (ADR 0009), so the HOSTNAME is not cosmetic: it selects
@@ -81,22 +82,25 @@ export const launchChromium = () =>
   chromium.launch({ args: ["--no-sandbox", `--host-resolver-rules=MAP ${HOSTNAME} 127.0.0.1`] });
 
 /** Checks that talk to Postgres take `DATABASE_URL` from the environment, like everything else here.
- *  An explicit env var always wins; failing that we read the same two `.env` files `packages/db`'s
- *  scripts do (`dotenv -e ../../.env -e ../../../../../.env`): the repo root, and — because a worktree
- *  lives at `<main>/.claude/worktrees/<name>` and `.env` is gitignored, so a worktree never has one —
- *  the main checkout's. Named here so the failure is one sentence, not a `postgres()` stack trace. */
+ *  An explicit env var always wins; failing that `@tokophi/lib/env-file` reads the same two `.env`
+ *  files `packages/db`'s scripts do (`dotenv -e ../../.env -e ../../../../../.env`): the repo root,
+ *  and — because a worktree lives at `<main>/.claude/worktrees/<name>` and `.env` is gitignored, so a
+ *  worktree never has one — the main checkout's. Named here so the failure is one sentence, not a
+ *  `postgres()` stack trace.
+ *
+ *  ⚠️ THE LOOKUP MOVED OUT OF THIS FILE and must not move back. It was inline here, correct, with the
+ *  worktree reason spelled out — while `test/db-setup.ts` had its own version that knew only about its
+ *  own root, and so skipped the 22 ledger tests in every worktree while exiting 0. One resolver. */
 export const requireDatabaseUrl = () => {
-  const repo = path.join(import.meta.dirname, "..", "..", "..");
-  for (const f of [path.join(repo, ".env"), path.join(repo, "..", "..", "..", ".env")]) {
-    if (process.env.DATABASE_URL) break;
-    try { process.loadEnvFile(f); } catch { /* absent, or unreadable — the next one, then the message */ }
-  }
-  if (!process.env.DATABASE_URL) {
+  const url = readDatabaseUrl(path.join(import.meta.dirname, "..", "..", ".."));
+  if (!url) {
     console.error("\nDATABASE_URL is not set, and no .env was found at the repo root or the main checkout.");
     console.error("This check reads (and, for check-h1-floor, briefly writes) the dev database.\n");
     process.exit(1);
   }
-  return process.env.DATABASE_URL;
+  // The individual checks are spawned as child processes and read it from their own environment.
+  process.env.DATABASE_URL = url;
+  return url;
 };
 
 /** The exit code that means "this check does not APPLY to the data it was pointed at" — as distinct

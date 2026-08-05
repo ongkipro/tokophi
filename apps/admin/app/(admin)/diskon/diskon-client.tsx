@@ -361,9 +361,20 @@ export function DiskonClient({ discounts, savings }: { discounts: Discount[]; sa
                       <TableCell colSpan={7}>
                         <div className="flex flex-col items-center gap-2 py-10 text-center">
                           <Ticket className="size-6 text-muted-foreground" />
-                          <p className="text-sm text-muted-foreground">
-                            Tidak ada diskon pada kategori ini.
-                          </p>
+                          {/* "pada kategori ini" points at a tab. A store with zero discounts is not
+                              on the wrong tab — it has never made one. */}
+                          {discounts.length === 0 ? (
+                            <>
+                              <p className="text-sm font-medium">Belum ada diskon</p>
+                              <p className="text-sm text-muted-foreground">
+                                Buat kode promo pertama untuk mendorong pembeli menyelesaikan checkout.
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              Tidak ada diskon pada kategori ini.
+                            </p>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

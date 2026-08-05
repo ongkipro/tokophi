@@ -79,6 +79,15 @@ export function BuilderClient({
     // the wrapper → `null`) is the only reason that was caught. Map to the same
     // `--color-brand-<shade>` names `globals.css` declares and the storefront's Layout emits.
     <div className="h-screen w-full" style={brandVars(initialBrandColor)}>
+      {/* ⚠️ THIS ROUTE HAD NO `<h1>` AT ALL — measured in a browser, not inferred. It is FULL-BLEED
+          (`admin-chrome.tsx` `FULL_BLEED`), so the sidebar and topbar are gone too, and everything
+          Puck renders starts at `<h2>` (its `headerTitle`, "Components", "Outline", "Page"). A
+          screen-reader user landing here had no top-level heading to orient on, on the one screen
+          where the whole page is a canvas.
+          `sr-only` rather than a visible heading for the same reason `index.astro` uses one on the
+          storefront: the visible title already exists in Puck's own chrome, which we cannot re-tag,
+          so a second visible one would be duplicate furniture. Same floor, same convention. */}
+      <h1 className="sr-only">Tema Toko — {title}</h1>
       <Puck
         config={config}
         data={initialData}

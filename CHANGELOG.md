@@ -7,7 +7,7 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 Three defects on the platform-operator identity surface, each measured against a running server before
 and after. ⚠️ **Contract change other surfaces read:** `addStoreUser` now returns
 `password: string | null` plus `outcome`; `apps/admin/lib/session-revocation.ts` **moved** to
-`@tokophi/lib/session-revocation`; `platform_admins` gained `password_changed_at` (migration **0088**).
+`@tokophi/lib/session-revocation`; `platform_admins` gained `password_changed_at` (migration **0089** — it was 0088 until `ka/flow-audit` landed its own).
 
 - 🔴 **`getPlatformSession()` never read the database.** It decoded the JWT and returned the claims,
   so `role` was whatever was true at login for the token's full seven days. Driven with ONE cookie
@@ -30,12 +30,116 @@ and after. ⚠️ **Contract change other surfaces read:** `addStoreUser` now re
   `password_hash` outside `invitePlatformAdmin`'s INSERT, so the super-admin credential exposed in a
   chat transcript could not be rotated through any UI. Avatar menu → **"Ubah kata sandi"**
   (`changePlatformPassword`): current password re-proved, ≥8 chars, must actually differ, audited to
-  `platform_activity`, and it **revokes every other session** — migration 0088 puts 0087's trigger
+  `platform_activity`, and it **revokes every other session** — migration 0089 puts 0087's trigger
   function on `platform_admins` too. Verified in two browsers: the tab that changed it stays in, the
   one holding the old password's session is bounced to `/login`, the old password no longer logs in.
 - Runnable checks: `apps/super-admin/lib/platform-session.test.ts` (6),
   `apps/super-admin/lib/add-store-user.test.ts` (5, proved red against three mutations first), and a
   second DDL suite in `packages/lib/src/session-revocation.test.ts` for the new trigger.
+
+## Unreleased — the gate built to stop the money suites skipping was, in a worktree, skipping
+
+**Measured in `.claude/worktrees/w8-harness` before the fix: 263 passed / 36 skipped, exit 0** — green
+— with all 22 `ledger-credit` tests among the skipped. With `DATABASE_URL` exported: 299 passed, 0
+skipped. **After: 317 passed, 0 skipped, with no `.env` in the worktree and nothing exported.**
+
+`test/db-setup.ts` (the vitest `globalSetup`) derives `<DATABASE_URL>_test`, creates it, migrates it
+and so lets the ledger suites run by default. It read `<its own root>/.env` and nothing else — but
+`.gitignore` is `.env*`, so **a git worktree can never carry one**, and this repo does nearly all of
+its work in worktrees. It printed its banner and skipped, exactly what it was written to stop.
+
+- **The fallback already existed, correctly, a few files over.** `apps/storefront/scripts/check-env.mjs`
+  read the repo root *and* the main checkout three levels up (`<main>/.claude/worktrees/<name>`), with
+  the worktree reason spelled out in its comment; db-setup had a private copy that did not. A private
+  copy is how the weaker version of a rule survives the fix meant to catch it — see the 24-bit password
+  mint. **The lookup is now one module, `@tokophi/lib/env-file`, and both import it.** It is `.mjs`, not
+  `.ts`, because `apps/storefront/scripts/*` run under plain `node`.
+- The 18 `packages/db` npm scripts still restate the same pair declaratively
+  (`dotenv -e ../../.env -e ../../../../../.env`) — they are shell and cannot import a module. Named in
+  `env-file.mjs` so the next layout change finds them.
+- **Every existing contract is unchanged and was re-measured**: a resolved database name that does not
+  end in `_test` still throws; an unreachable database still SKIPS with the loud banner at exit 0
+  (a laptop without Docker gets a green run); `npm run test:db` still turns that skip into exit 1.
+- `test/env-file.test.ts` is the check, and it was proved red first: delete the main-checkout entry
+  from `envFiles()` and two tests fail; re-inline the lookup in either caller and the "one resolver"
+  guard fails (it reads the files' CODE via `test/source-code.ts`, not their text).
+
+### An SVG path made of NaN, and money formatters that printed "RpNaN"
+
+`kpi-card.tsx` guarded its sparkline with `!data.length` while the byte-identical geometry in
+`dashboard/money-strip.tsx` used `data.length < 2`. A one-element series divides by zero in
+`(i / (data.length - 1))`, so the KPI card emitted `d="MNaN,30.0"` and
+`area="MNaN,30.0 L88,32 L0,32 Z"`. **Reachable, not theoretical: on the 1st of any month `/analitik`'s
+"Bulan Ini" resolves to exactly one day** (`inMonth(thisMonth)`), as does any store with a single row
+in `daily_stats` — all four KPI cards then render a NaN path. Two copies with two guards *is* the bug,
+so there is one `components/admin/sparkline.tsx` now (`area` prop for the KPI tiles' gradient, the only
+difference the copies ever had) and `sparkline.test.ts` covers both the geometry and the de-duplication.
+
+`@tokophi/lib/format` had no non-finite floor: `IDR(NaN)` → `"RpNaN"`, `IDR(Infinity, {compact})` →
+`"RpInfinity M"`, `num(NaN)` → `"NaN"`, `share(NaN)` → `"NaN%"`, and `pct(NaN)` → `"NaN%"` **with the
+sign dropped** — the one thing `pct` exists to guarantee. All four now return `NO_FIGURE` (`"—"`): a
+figure with no source is a dash, never a number. ⚠️ **A real `0` is a measurement and still renders**
+(`Number.isFinite(0)`), and `pct()` (delta) and `share()` (part of a whole) stay separate — that
+distinction is what the *"Ditangguhkan 5 +83,3%"* incident cost. `format.test.ts` pins both.
+
+⚠️ Still unfloored, deliberately out of this change's scope: `timeAgo(NaN)` → `"NaN hari lalu"`.
+
+## Unreleased — A brand-new Seller was shown a header-only table and told to change a filter it never set
+
+Driven in a browser as the owner of the seeded store with **0 products, 0 orders, 0 customers**
+(`snack-rumahan-bu-tati`) — no row was created and none was changed. Two families, both of them
+"the screen renders a SHAPE where it has no data", the same family as the dashboard that once read
+*"Penjualan hari ini Rp0 · −100,0%"* above four orders placed that morning.
+
+- **The dashboard's two silent cards.** "Pesanan Terbaru" rendered a `<table>` with five column
+  headers and an empty `<tbody>`; "Aktivitas Langsung" rendered a card title over an empty `<ul>`.
+  Both read as a query that failed. They now say what is missing and what brings it, in the same
+  one-line form the sibling cards on that page already used. `/pemasaran`'s channel table did the
+  same thing under a "Total 0" footer — fixed with it.
+- **"No results" and "no rows" are different facts, and seven list screens conflated them.**
+  `/produk`, `/produk/inventori`, `/produk/kategori`, `/blog`, `/halaman`, `/diskon` and `/pelanggan`
+  all answered an empty store with search copy — *"Coba ubah kata kunci atau filter Anda"*, *"Coba
+  kata kunci lain"*, *"Tidak ada … yang cocok"* — advice that cannot work, because there is no filter
+  set and nothing to filter. Each now branches on the **unfiltered total**: first-run copy naming the
+  next step (and, on `/produk`, the Tambah Produk button) when the store has nothing, the existing
+  filter copy when a filter is what emptied the list. The filtered branch is unchanged.
+
+**Accessibility, admin side** (the storefront's checkout was done in an earlier wave; the admin never
+was). Measured per route, logged in, in a real browser:
+
+- 🔴 **`/tema/[id]` had no `<h1>` at all** — and it is FULL_BLEED, so the sidebar and topbar are gone
+  too. Every heading on it came from Puck and started at `<h2>`. Now carries an `sr-only` `<h1>`, the
+  same floor and the same reasoning as the storefront's `index.astro`.
+- **`/produk` went h1 → h3**, skipping a level — the grid cards' `<h3>` is the only `h3` in the admin.
+  An `sr-only` `<h2>` now names the results region above both views.
+- **Three unnamed destructive icon buttons**, all on `/promo/[id]`: the row-delete `X` on Manfaat
+  Utama and on Poin masalah, and the chip-remove `X` on Ideal Untuk (its text is in the parent
+  `<span>` — adjacency is not an accessible name). All three now carry one.
+- **The topbar's unread dot was colour alone** — the bell's label read "Notifikasi" whether or not
+  anything was waiting. It now names the count, the way `obrolan-client.tsx` already did.
+- **Every `/pengaturan` switch was anonymous** (`ToggleRow` renders its `title` in a sibling `<p>`).
+  One `aria-label` in that shared component names all of them.
+- The store-builder's image-picker thumbnail computed **no accessible name at all** (an `<img alt="">`
+  in one branch, an icon in the other).
+
+Two guards, each proved RED before it was proved green:
+
+- `apps/admin/lib/admin-h1-floor.test.ts` — every `page.tsx` under `app/(admin)` reaches an `<h1>`,
+  by walking its local import graph plus its ancestor layouts. Uses `test/source-code.ts`; no comment
+  stripper is hand-rolled. ⚠️ **The mutation proof is what earned this file its one exclusion**: the
+  first version was green over a `/tema/[id]` with the heading deleted, because the graph leaks into
+  `components/theme/sections/`, whose `Hero.tsx` emits an `<h1>` — for the storefront page being
+  composed inside Puck's canvas, not for the admin screen. Excluded by name, and said so.
+- `apps/admin/components/admin/dashboard-empty.test.tsx` — renders `RecentOrders`/`LiveActivity` with
+  `[]` via `renderToStaticMarkup` and asserts there is no `<table>`/`<ul>` and there is an
+  explanation, plus that the populated case still renders the table.
+
+**Known, NOT fixed** (ranked, for whoever picks this up): ~40 form controls across the admin have no
+programmatic label — the biggest cluster is the list-screen search boxes (placeholder-only) and the
+Puck sidebar field overrides (`lib/theme/puck-field-overrides.tsx`); `CardTitle` is a `<div>`, so the
+admin's 128 card headings are invisible to heading navigation; and the good/bad verdict on the
+dashboard's money bars and the return-rate bar is carried by colour alone (the numbers beside them
+are not).
 
 ## Unreleased — The demo store could not be shipped: 160 of 219 orders had no usable address
 

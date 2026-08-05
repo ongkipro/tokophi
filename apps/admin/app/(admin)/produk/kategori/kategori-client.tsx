@@ -130,8 +130,19 @@ export function KategoriClient({ collections, storefrontBase }: { collections: C
       {filtered.length === 0 ? (
         <Card className="flex flex-col items-center justify-center gap-2 py-16 text-center">
           <FolderTree className="size-8 text-muted-foreground" />
-          <p className="text-sm font-medium">Kategori tidak ditemukan</p>
-          <p className="text-sm text-muted-foreground">Coba kata kunci lain.</p>
+          {/* "Coba kata kunci lain" over a store that has never made a category is advice for a
+              search nobody ran. Key on the unfiltered total. */}
+          {collections.length === 0 ? (
+            <>
+              <p className="text-sm font-medium">Belum ada kategori</p>
+              <p className="text-sm text-muted-foreground">Buat kategori pertama agar pembeli bisa menelusuri produk Anda per kelompok.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium">Kategori tidak ditemukan</p>
+              <p className="text-sm text-muted-foreground">Coba kata kunci lain.</p>
+            </>
+          )}
         </Card>
       ) : (
         <Card className="overflow-hidden py-0">

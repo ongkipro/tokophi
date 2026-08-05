@@ -38,7 +38,10 @@ export function ToggleRow({
           <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
         )}
       </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      {/* `title` is rendered in a sibling `<p>`, so it is ADJACENT to the switch, not associated
+          with it — a screen reader announced a bare "switch, on". This one component is every
+          toggle on /pengaturan, so naming it here names all of them. */}
+      <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={title} />
     </div>
   )
 }

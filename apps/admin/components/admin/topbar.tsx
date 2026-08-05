@@ -214,7 +214,16 @@ export function Topbar({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="ghost" size="icon" className="relative" aria-label="Notifikasi">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative"
+                // ⚠️ The dot below was the ONLY signal that anything is waiting — a bare coloured
+                // circle with no text, and the label said "Notifikasi" either way, so nothing about
+                // "there is something new" reached a screen reader or anyone who cannot see the
+                // colour. `obrolan-client.tsx` already does it right; this is the same fix.
+                aria-label={notifs.length > 0 ? `Notifikasi — ${notifs.length} baru` : "Notifikasi"}
+              >
                 <Bell className="size-[18px]" />
                 {/* dot only when there is actually something to see */}
                 {notifs.length > 0 && (

@@ -1462,3 +1462,37 @@ its own change set and **prove it red against a mutated copy of a real credentia
 
 Interim: the timeout is raised to 20 s with the profile written into the file. That is a ceiling, not
 a fix — the work is still 819 ms of CPU competing with 41 other test files.
+
+### N50. An empty store is told its sales are unchanged, not that there is nothing to compare · **S** · NEW
+**MEASURED** (wave 8, rendering the seeded empty store `snack-rumahan-bu-tati`).
+`apps/admin/lib/data/dashboard.ts:65` computes `delta = prev === 0 ? 0 : …`, so a store with no
+history renders **"Penjualan hari ini +0,0%"** — *"no change"* — where the truth is *"there is
+nothing to compare to"*. This is the same family as the incident already recorded above: a dashboard
+reading "Rp0 · −100,0%" over four orders placed that morning. The standing rule is **a figure with no
+source is "—", never a number**, and `Tingkat retur` immediately beside it already obeys it.
+
+⚠️ **Deliberately not fixed in wave 8, and the reason is the size, not the difficulty**: honest
+output needs `Kpi.delta: number | null` threaded through every KPI card, the money strip and the
+analitik tiles — a data-layer contract change, and the wave that found it was scoped to screens.
+Do it with the `NO_FIGURE` floor wave 8 already added to the formatters, not beside it.
+
+### N51. ~40 admin form controls have no programmatic label · **S** · NEW
+**MEASURED by rendering**, not grepped. Wave 8 fixed the ones it could name (`/pengaturan` switches
+via the shared `ToggleRow`, the topbar's colour-only unread dot, the store-builder image picker with
+no accessible name at all, three unlabelled destructive buttons on `/promo/[id]`). The rest cluster:
+every list screen's search box, `lib/theme/puck-field-overrides.tsx`, `saldo-filters.tsx`'s date
+pair, and `order-detail.tsx`'s bare checkboxes. A screen reader announces these as "edit text", with
+no indication of what they filter or what the checkbox will do to an order.
+
+### N52. `CardTitle` is a `<div>`, so 128 card headings are invisible to heading navigation · **S** · NEW
+**MEASURED**: the admin is a **flat `h1`** on nearly every screen — every card title on every
+dashboard, list and detail page is a styled `div`. A screen-reader user cannot jump between regions;
+they must read linearly through the whole page. Changing the primitive is one edit but it touches
+every admin screen's visual rhythm, so it wants its own change set and a pass over the levels
+(`h2` under the page `h1`, `h3` inside a card). Wave 8 added `apps/admin/lib/admin-h1-floor.test.ts`,
+which pins that every route REACHES an `h1` — the floor, not the structure.
+
+### N53. Good/bad is communicated by colour alone in two places · **S** · NEW
+**MEASURED**: the money strip's and the return-rate card's verdict is carried by green/red text with
+no icon, sign or word. WCAG 1.4.1. The delta figures beside them already carry `+`/`−` (U+2212), so
+the fix is to let the verdict borrow the same signal rather than invent one.

@@ -232,9 +232,19 @@ export function HalamanClient({ pages }: { pages: CmsPage[] }) {
                   <TableCell colSpan={7}>
                     <div className="flex flex-col items-center gap-2 py-12 text-center">
                       <FileText className="size-6 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">
-                        Tidak ada halaman yang cocok.
-                      </p>
+                      {/* "cocok" implies a filter. A store with no pages at all never set one. */}
+                      {pages.length === 0 ? (
+                        <>
+                          <p className="text-sm font-medium">Belum ada halaman</p>
+                          <p className="text-sm text-muted-foreground">
+                            Buat halaman seperti Tentang Kami atau Kebijakan Pengembalian agar pembeli percaya toko Anda.
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Tidak ada halaman yang cocok.
+                        </p>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readDatabaseUrl } from "@tokophi/lib/env-file";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -27,20 +27,15 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 const MIGRATIONS = path.join(ROOT, "packages/db/drizzle");
 
-/** DATABASE_URL from the environment, else from the root .env the repo's own scripts read. */
-function readDatabaseUrl(): string | undefined {
-  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
-  const envFile = path.join(ROOT, ".env");
-  if (!existsSync(envFile)) return undefined;
-  // Only DATABASE_URL is needed, so a full dotenv parser (and a dependency on one) is not.
-  const line = readFileSync(envFile, "utf8").split(/\r?\n/).find((l) => /^\s*DATABASE_URL\s*=/.test(l));
-  return line?.replace(/^\s*DATABASE_URL\s*=\s*/, "").trim().replace(/^["']|["']$/g, "") || undefined;
-}
-
 /** `…/tokophi` → `…/tokophi_test`. An explicit TEST_DATABASE_URL always wins. */
 function resolveTestUrl(): string | undefined {
   if (process.env.TEST_DATABASE_URL) return process.env.TEST_DATABASE_URL;
-  const base = readDatabaseUrl();
+  // ⚠️ `readDatabaseUrl` is SHARED (`@tokophi/lib/env-file`) and that is the point. This file used to
+  // read `<ROOT>/.env` and nothing else — and `.gitignore` is `.env*`, so a git worktree can never
+  // have one. In a worktree the whole gate below therefore fell through to the SKIP banner and exited
+  // 0: 36 tests, 22 of them the ledger's, silently not running, in the place this repo does nearly
+  // all of its work. Do not re-inline the lookup here; fix it in the shared module.
+  const base = readDatabaseUrl(ROOT);
   if (!base) return undefined;
   const u = new URL(base);
   const name = u.pathname.replace(/^\//, "");
@@ -63,7 +58,7 @@ export default async function setup() {
   const url = resolveTestUrl();
 
   if (!url) {
-    const msg = "No DATABASE_URL (env or root .env) — cannot derive a test database.";
+    const msg = "No DATABASE_URL (env, this root's .env, or the main checkout's) — cannot derive a test database.";
     if (required) throw new Error(`${msg} Start the container and copy .env.example to .env.`);
     banner(["DB-COUPLED SUITES SKIPPED — the ledger/money tests did NOT run.", msg]);
     return;
