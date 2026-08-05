@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { scryptSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { tempPassword, hashPassword } from "./password";
-import { codeOnly } from "../../../test/source-code";
+import { codeOnly, SOURCE_SCAN_TIMEOUT_MS } from "../../../test/source-code";
 
 // This is the credential handed to a STORE OWNER and to an INVITED OPERATOR. The account it opens
 // reads every buyer's name, WhatsApp number and delivery address, and reaches the payout actions.
@@ -205,6 +205,8 @@ describe("the temp password is expensive to guess", () => {
     }
   });
 
+  // ⏱ 3.544 ms of real work — it lexes every TRACKED file, a wider set than `apps/`. The number and
+  // the reason live in ONE place (`SOURCE_SCAN_TIMEOUT_MS`), not copied per call site.
   it("is the ONLY mint in the repo — no file keeps a private copy", () => {
     // THE regression this file exists to stop is not a weak number, it is a SECOND number: a local
     // mint is how the fix stops travelling, and how the WEAKER number survives the commit that
@@ -258,7 +260,7 @@ describe("the temp password is expensive to guess", () => {
     });
 
     expect(violations, `a SECOND mint exists:\n  ${violations.join("\n  ")}`).toEqual([]);
-  });
+  }, SOURCE_SCAN_TIMEOUT_MS);
 
   it("storing a password has ONE implementation too", () => {
     // There were FIVE copies of `hashPassword` — here, `apps/admin/lib/auth.ts`,

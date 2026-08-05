@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { textWithoutComments } from "../../../test/source-code";
+import { SOURCE_SCAN_TIMEOUT_MS, textWithoutComments } from "../../../test/source-code";
 
 // NO SHIPPED SCREEN MAY NAME AN ACCOUNT THAT AUTHENTICATES.
 //
@@ -115,29 +115,15 @@ describe("no shipped screen publishes a working credential", () => {
     expect(files.length).toBeGreaterThan(200);
   });
 
-  // ⚠️ 20 s, NOT the 5 s default, and the number is measured rather than guessed. Profiled on this
-  // repo: the directory walk is **8 ms** and reading all 455 files is **24 ms** — the filesystem is
-  // not the cost. Lexing 3,3 MB through the TypeScript scanner is **819 ms**, paid in full by the
-  // FIRST of the three patterns (the rest hit the memo). Solo that is nowhere near a timeout; under
-  // `npm test`, where this competes with 41 other test files for cores, it blew past 5 s and the
-  // suite went red on a green codebase. **A test that fails ~sometimes teaches people to ignore
-  // red** — this repo has already paid for that with `verify-rls` sitting red for weeks while two
-  // cross-tenant leaks shipped past it. So: raise the ceiling to what the real work needs.
-  //
-  // 💡 There IS a 400× win available and it was measured, not imagined: **1 of 455 files contains
-  // any needle in its raw text at all**, so lexing could be restricted to files that could possibly
-  // match (lexing only strips comments and inserts spaces, so whitespace-stripped LEXED ⊆
-  // whitespace-stripped RAW — the prefilter can over-select but never under-select). It is NOT done
-  // here on purpose: `SECRETS` holds whitespace-tolerant REGEXES, not literals, so the prefilter has
-  // to re-apply each pattern to whitespace-stripped source, and getting that subtly wrong makes this
-  // guard **silently blind** — the exact failure this module exists to end, found nine times in nine
-  // guards. It needs its own change set, proved red against a mutated copy first. `NEXT.md` N49.
+  // ⏱ 2.699 ms of real work: the FIRST of the three patterns lexes all 455 files and the rest hit
+  // the memo. The measured profile and why a ceiling is not the fix are in ONE place —
+  // `SOURCE_SCAN_TIMEOUT_MS` in `test/source-code.ts`. Do not copy the number here.
   it.each(SECRETS)("no app source names $what", ({ pattern }) => {
     const hits = files
       .filter((f) => pattern.test(code(f)))
       .map((f) => f.slice(APPS.length + 1));
     expect(hits).toEqual([]);
-  }, 20_000);
+  }, SOURCE_SCAN_TIMEOUT_MS);
 
   it("neither login page pre-fills an email address", () => {
     // The password line is the obvious half; `defaultValue` on the email input is the half that was

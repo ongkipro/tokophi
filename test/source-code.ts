@@ -193,3 +193,39 @@ function scan(source: string, inertLiterals: boolean): string {
 
   return out.join(" ");
 }
+
+/**
+ * The timeout a REPO-WIDE source scan needs, and why it is not the 5 s default.
+ *
+ * A guard that lexes the whole repo is doing real, bounded work. Profiled on this machine while
+ * integrating audit wave 7:
+ *
+ * | step                                        | cost        |
+ * |---------------------------------------------|-------------|
+ * | `readdirSync` walk of `apps/`               | **8 ms**    |
+ * | `readFileSync` all 455 files (3,3 MB)       | **24 ms**   |
+ * | lex 3,3 MB through the TypeScript scanner   | **819 ms**  |
+ *
+ * The filesystem is NOT the cost — swapping the walk for `git ls-files` (also 8 ms) buys nothing.
+ * The scanner is. Measured per test, the two that pay it in full are
+ * `password.test.ts > is the ONLY mint in the repo` (**3.544 ms**, it scans every tracked file, a
+ * wider set than `apps/`) and `no-published-credentials.test.ts > …'the seeded password'` (**2.699 ms**,
+ * the first of three patterns fills the memo for the rest). Every other scanning guard is under
+ * 130 ms and must NOT be given this — a long timeout on a fast test only hides a future regression.
+ *
+ * Solo, both pass comfortably. Under `npm test` they share cores with 41 other test files and both
+ * blew past 5 s, so the suite went red on a codebase where nothing was wrong. **A test that fails
+ * sometimes teaches people to ignore red**, and this repo has already paid that bill in full:
+ * `verify-rls` sat red for weeks, everyone learned to scroll past it, and two cross-tenant leaks
+ * shipped past a verifier that was already failing.
+ *
+ * ⚠️ **This is a CEILING, not a fix, and it is deliberately not the real one.** 1 of 455 files
+ * contains any needle in its raw text, so lexing only the files that could possibly match is a ~400×
+ * win — and it is SOUND, because lexing strips comments and inserts whitespace and never invents
+ * characters, so whitespace-stripped LEXED ⊆ whitespace-stripped RAW (a raw prefilter over-selects,
+ * never under-selects). It is not done here because the needles are whitespace-tolerant REGEXES, and
+ * a subtly wrong prefilter makes a security guard **silently green forever** — the exact failure this
+ * module exists to end, found nine times in nine guards. `NEXT.md` N49; prove it red against a
+ * mutated copy before trusting it.
+ */
+export const SOURCE_SCAN_TIMEOUT_MS = 20_000;
