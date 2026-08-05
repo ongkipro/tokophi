@@ -18,10 +18,12 @@ import {
   Plus,
   Crown,
   Clock,
+  CircleCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Card } from "@tokophi/ui/card";
+import { Badge } from "@tokophi/ui/badge";
 import { Button } from "@tokophi/ui/button";
 import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
@@ -57,7 +59,7 @@ import { type Store } from "@/lib/types";
 import { type HealthVerdict } from "@/lib/health-types";
 import { initials, StatusBadge, HealthBadge, SegmentBadge } from "@/components/bits";
 import { SEGMENT_META, type StoreSegment } from "@tokophi/lib/billing";
-import { impersonateStore, liftSuspension, createStore, setStoreComped } from "@/lib/actions";
+import { impersonateStore, liftSuspension, createStore, setStoreComped, approveStore } from "@/lib/actions";
 import { refused } from "@/lib/refused";
 import { IDR, num } from "@tokophi/lib/format";
 
@@ -168,6 +170,16 @@ export function TokoClient({
     startTransition(async () => {
       const r = await liftSuspension(s.id);
       if (!r.ok) { toast.error(r.error ?? "Gagal mencabut penangguhan."); return; }
+      toast.success(r.message!);
+      router.refresh();
+    });
+  }
+
+  function approve(s: Store) {
+    startTransition(async () => {
+      const r = await approveStore(s.id);
+      const no = refused(r);
+      if (no) return void toast.error(no);
       toast.success(r.message!);
       router.refresh();
     });
@@ -346,7 +358,14 @@ export function TokoClient({
                     </div>
                   </TableCell>
                   <TableCell><SegmentBadge segment={s.segment} /></TableCell>
-                  <TableCell><StatusBadge status={s.status} /></TableCell>
+                  <TableCell>
+                    {/* A queued signup is `status: "ditangguhkan"` like a punished store, and on a
+                        list of many shops that badge is the only thing an operator reads. Naming it
+                        is what makes the queue visible without inventing a tab or a second filter. */}
+                    {s.pendingApproval
+                      ? <Badge variant="secondary" className="border-transparent bg-amber-500/12 text-amber-600 dark:text-amber-400">Menunggu persetujuan</Badge>
+                      : <StatusBadge status={s.status} />}
+                  </TableCell>
                   <TableCell><HealthBadge verdict={verdictOf(s.id)} /></TableCell>
                   <TableCell className="text-right tabular-nums">{IDR(s.gmv, { compact: true })}</TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -378,7 +397,14 @@ export function TokoClient({
                         <DropdownMenuItem disabled={pending} onClick={() => toggleVip(s)}>
                           <Crown className="size-4" /> {s.comped ? "Cabut VIP" : "Jadikan VIP (gratis)"}
                         </DropdownMenuItem>
-                        {s.operatorSuspended ? (
+                        {s.pendingApproval ? (
+                          // The signup queue's exit. Offered instead of "Cabut penangguhan" because
+                          // that verb undoes a penalty nobody imposed — and `approveStore` is what
+                          // stamps `approved_at`, i.e. what takes the store OUT of the queue for good.
+                          <DropdownMenuItem disabled={pending} onClick={() => approve(s)}>
+                            <CircleCheck className="size-4" /> Setujui pendaftaran
+                          </DropdownMenuItem>
+                        ) : s.operatorSuspended ? (
                           <DropdownMenuItem disabled={pending} onClick={() => liftSuspend(s)}>
                             <Play className="size-4" /> Cabut penangguhan
                           </DropdownMenuItem>

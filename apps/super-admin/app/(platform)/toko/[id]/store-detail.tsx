@@ -30,7 +30,7 @@ import { SaldoSection } from "./saldo-section";
 import {
   impersonateStore, suspendStore, liftSuspension, compStore, extendTrial, setStoreComped,
   resetOwnerPassword, resetStoreUserPassword, setStoreUserRole, removeStoreUser, addStoreUser,
-  createManualInvoice, sendPaymentReminder,
+  createManualInvoice, sendPaymentReminder, approveStore,
 } from "@/lib/actions";
 import { refused } from "@/lib/refused";
 import { IDR, num } from "@tokophi/lib/format";
@@ -60,6 +60,10 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
   // come back reading "Aktifkan" again — the operator pressing a button that could never change its
   // own label. These are two different facts and the button must name the one it actually writes.
   const suspended = !!billing?.operatorSuspended;
+  // 0090 — a store nobody has reviewed yet is locked by the same column, and the operator needs the
+  // opposite verb for it: "Setujui" admits a new merchant, "Cabut penangguhan" undoes a penalty. The
+  // action refuses the wrong one, so this is about not offering it, not about safety.
+  const pendingApproval = !!billing?.pendingApproval;
   const [susOpen, setSusOpen] = useState(false);
   const [susReason, setSusReason] = useState("");
 
@@ -107,6 +111,7 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
     });
   }
   const liftSuspend = () => run(() => liftSuspension(store.id));
+  const approve = () => run(() => approveStore(store.id));
   const confirmSuspend = () =>
     startTransition(async () => {
       const r = await suspendStore(store.id, susReason);
@@ -213,13 +218,29 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
       </div>
 
       {/* Operator suspension — stated first, and stated as an OUTCOME: what is actually locked. */}
-      {suspended && (
+      {suspended && !pendingApproval && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
           <span className="flex items-center gap-2 text-destructive">
             <Ban className="size-4" /> <b>Ditangguhkan oleh platform</b> — panel Seller baca-saja (semua penyimpanan ditolak); storefront tetap melayani pembeli.
             {billing?.suspendedReason ? ` Alasan: ${billing.suspendedReason}` : ""}
           </span>
           <Button size="sm" variant="outline" disabled={pending} onClick={liftSuspend}>Cabut penangguhan</Button>
+        </div>
+      )}
+
+      {/* The signup queue, for the one store this screen is about. Amber, not red: nothing is wrong
+          here — a person signed up and is waiting on us. The email is the thing an operator is
+          actually judging (nobody has proved they own it), so it is repeated in the sentence. */}
+      {pendingApproval && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          <span className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+            <Clock className="size-4" />
+            <span>
+              <b>Menunggu persetujuan</b> — pendaftaran mandiri {store.createdDaysAgo === 0 ? "hari ini" : `${store.createdDaysAgo} hari lalu`} oleh{" "}
+              <b>{store.email || "—"}</b>. Panel Seller-nya baca-saja sampai disetujui; email ini belum terverifikasi.
+            </span>
+          </span>
+          <Button size="sm" disabled={pending} onClick={approve}>Setujui pendaftaran</Button>
         </div>
       )}
 

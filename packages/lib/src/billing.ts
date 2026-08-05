@@ -55,6 +55,12 @@ export type BillingState = {
   // a month early just because it reads "suspended").
   billingStatus: BillingStatus;
   operatorSuspended: boolean; // a person at the platform suspended this store, deliberately
+  // Locked because NOBODY HAS REVIEWED IT YET, not because anyone judged it (0090). A self-serve
+  // signup is created suspended, so `operatorSuspended` is true for both cases and cannot tell them
+  // apart — and they need opposite words: one screen apologises for a wait, the other explains a
+  // penalty. Derived here so the merchant banner, the sidebar badge and the operator's queue all
+  // read the same rule rather than each re-deriving `approvedAt === null` its own way.
+  pendingApproval: boolean;
   suspendedReason: string | null; // why they did — shown to the merchant and in the audit line
   label: string;
   daysLeft: number; // days left in trial / current period / grace
@@ -67,6 +73,12 @@ export type BillingState = {
 };
 
 export type StoreBillingRow = {
+  // When a human first cleared this store (0090). OPTIONAL, unlike `suspendedAt` below, and the
+  // asymmetry is deliberate: forgetting `suspendedAt` unsuspends every store — a silent security
+  // failure — while forgetting this one only makes a queued store read as plainly suspended. So
+  // `tsc` is made to police the dangerous one and left permissive about the cosmetic one, instead
+  // of forcing ~10 read sites that have no opinion about approval to select a column.
+  approvedAt?: Date | null;
   trialEndsAt: Date | null;
   currentPeriodEnd: Date | null;
   firstInvoicePaid: boolean;
@@ -120,15 +132,22 @@ const ceilDays = (ms: number) => Math.max(0, Math.ceil(ms / dayMs));
 export function computeBilling(s: StoreBillingRow, now: Date = new Date()): BillingState {
   const b = subscriptionState(s, now);
   if (!s.suspendedAt) {
-    return { ...b, billingStatus: b.status, operatorSuspended: false, suspendedReason: null };
+    return { ...b, billingStatus: b.status, operatorSuspended: false, pendingApproval: false, suspendedReason: null };
   }
+  // Never reviewed by a human AND locked ⇒ this is the signup queue, not a penalty (0090).
+  // `approvedAt` is optional on the row type so the many read sites that do not care keep compiling;
+  // absent is read as APPROVED, which is the safe direction — an unreviewed store mislabelled as
+  // suspended is rude, a suspended store mislabelled as "just waiting" tells a merchant we punished
+  // that nothing is wrong.
+  const pendingApproval = s.approvedAt === null;
   return {
     ...b,
     status: "suspended",
     billingStatus: b.status,
     operatorSuspended: true,
+    pendingApproval,
     suspendedReason: s.suspendedReason?.trim() || null,
-    label: "Ditangguhkan oleh platform",
+    label: pendingApproval ? "Menunggu persetujuan" : "Ditangguhkan oleh platform",
     daysLeft: 0,
     readOnly: true,
     // `nextAmount`, `isPromo` and `dueDate` are deliberately carried over from `b`: the subscription
@@ -138,7 +157,7 @@ export function computeBilling(s: StoreBillingRow, now: Date = new Date()): Bill
 }
 
 // The subscription lifecycle on its own — trial → active → past_due → suspended, plus VIP.
-type SubscriptionState = Omit<BillingState, "billingStatus" | "operatorSuspended" | "suspendedReason">;
+type SubscriptionState = Omit<BillingState, "billingStatus" | "operatorSuspended" | "pendingApproval" | "suspendedReason">;
 function subscriptionState(s: StoreBillingRow, now: Date): SubscriptionState {
   // 0) comped/VIP → billing bypassed: always active, nothing due, full access
   if (s.comped) {

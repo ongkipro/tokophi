@@ -20,6 +20,9 @@ export async function getBilling(): Promise<BillingState | null> {
         // every store on the platform — which is why `StoreBillingRow.suspendedAt` is not optional.
         suspendedAt: schema.stores.suspendedAt,
         suspendedReason: schema.stores.suspendedReason,
+        // 0090 — without this the banner greets a brand-new merchant with "ditangguhkan oleh TokoΦ".
+        // Optional on the row type, so omitting it here would compile and simply read as approved.
+        approvedAt: schema.stores.approvedAt,
       })
       .from(schema.stores)
       // Explicit, because RLS does NOT police `stores` (no store_id column, relrowsecurity = false).

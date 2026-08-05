@@ -22,6 +22,9 @@ export type Store = {
   // which is also what an unpaid store reads once its grace period lapses. Never derive "did we
   // suspend this?" from the status badge — that is what made the Aktifkan button un-pressable.
   operatorSuspended: boolean;
+  // Locked because it came in through self-serve signup and nobody has reviewed it yet (0090) —
+  // NOT because an operator judged it. Both are `operatorSuspended`; only this separates them.
+  pendingApproval: boolean;
   // --- all four derived from `orders` / `products`, never from the store_stats rollup ---
   gmv: number; // Σ orders.total_idr, excluding batal (IDR) — the MERCHANT's money, not ours
   orders: number; // count(orders) excluding batal
