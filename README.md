@@ -43,11 +43,16 @@ Demo store: **Batik Nusantara** (women's fashion, 14 products × 5 images, real 
 npm install                       # all workspaces
 docker compose up -d db           # PostgreSQL 16 → localhost:5433
 npm run migrate -w @tokophi/db    # apply migrations (canonical)
-npm run seed    -w @tokophi/db    # demo data — idempotent
+npm run seed    -w @tokophi/db    # demo data — idempotent. ⚠️ PRINTS THE SEEDED LOGINS ONCE, at the
+                                  # end of its output. They are random per account (N29) and nothing
+                                  # stores them — copy them then, or reset from Super Admin later.
+                                  # `SEED_OWNER_PASSWORD=<yours>` pins them all to one string instead.
+                                  # ⚠️ SEED_FORCE=1 now REFUSES on a database holding orders,
+                                  # customers, ledger rows or CAPI tokens — see packages/db/src/seed-guard.ts.
 npm run seed:areas -w @tokophi/db # KiriminAja districts + kelurahan→kodepos (78k rows, one-off)
 
-npm run dev:admin                 # seller dashboard → :3000   (ongki@batiknusantara.id / tokophi123)
-npm run dev:super                 # super admin      → :3001   (admin@tokophi.id / tokophi123)
+npm run dev:admin                 # seller dashboard → :3000
+npm run dev:super                 # super admin      → :3001
 npm run dev -w @tokophi/storefront   # storefront    → :4327
 ```
 

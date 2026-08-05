@@ -116,10 +116,10 @@ export function LandingEditorClient({ editor }: { editor: LandingEditor }) {
       <Card>
         <CardContent className="flex items-center justify-between py-4">
           <div>
-            <div className="font-medium">Aktifkan landing</div>
+            <label htmlFor="lp-enabled" className="block font-medium">Aktifkan landing</label>
             <p className="text-sm text-muted-foreground">Saat nonaktif, URL /lp/{f.slug || "…"} mengembalikan 404.</p>
           </div>
-          <Switch checked={f.enabled} onCheckedChange={(v) => set("enabled", v)} disabled={!canWrite} />
+          <Switch id="lp-enabled" checked={f.enabled} onCheckedChange={(v) => set("enabled", v)} disabled={!canWrite} />
         </CardContent>
       </Card>
 
@@ -167,10 +167,10 @@ export function LandingEditorClient({ editor }: { editor: LandingEditor }) {
             </div>
             <div className="flex items-center justify-between rounded-lg border border-line p-3">
               <div>
-                <div className="text-sm font-medium">Tampilkan sisa stok</div>
+                <label htmlFor="lp-scarcity" className="block text-sm font-medium">Tampilkan sisa stok</label>
                 <p className="text-xs text-muted-foreground">Dari stok varian terpilih.</p>
               </div>
-              <Switch checked={f.showScarcity} onCheckedChange={(v) => set("showScarcity", v)} disabled={!canWrite} />
+              <Switch id="lp-scarcity" checked={f.showScarcity} onCheckedChange={(v) => set("showScarcity", v)} disabled={!canWrite} />
             </div>
           </div>
         </CardContent>

@@ -36,8 +36,15 @@ export const num = (n: number) => (Number.isFinite(n) ? new Intl.NumberFormat("i
 // locally instead of borrowing the "+".
 // Negative input used to come out as "-6.4%" (ASCII hyphen, dot) and callers that passed
 // Math.abs(delta) got a bare "+6,4%" for a DECLINE — hence the explicit sign here.
-export const pct = (n: number, digits = 1) => {
-  if (!Number.isFinite(n)) return NO_FIGURE;
+// ⚠️ `null` IS ACCEPTED, and it is the "there was nothing to compare to" case — not a slip.
+// A delta needs a previous period to divide by; an empty one has no percentage, so the producer
+// (`lib/data/dashboard.ts`) returns `null` rather than the `0` it used to, which read as "unchanged"
+// on a store that had never sold anything. It lands on the SAME floor as NaN/Infinity instead of a
+// second em dash invented at each call site — a rule re-obeyed by hand at every call site is exactly
+// how `share()` came to exist. (`Number.isFinite(null)` is already `false`; the explicit test is
+// there so the narrowing is visible to a reader as well as to tsc.)
+export const pct = (n: number | null, digits = 1) => {
+  if (n === null || !Number.isFinite(n)) return NO_FIGURE;
   const sign = n > 0 ? "+" : n < 0 ? "−" : "";
   return `${sign}${Math.abs(n).toFixed(digits).replace(".", ",")}%`;
 };

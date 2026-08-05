@@ -73,9 +73,14 @@ export function BrandColorDialog({ initialColor }: { initialColor: string }) {
 
         <div className="space-y-4">
           <div className="flex items-end gap-3">
+            {/* Both <Label>s were drawn without `htmlFor` and both controls without an `id`: on
+                screen a labelled pair, to the accessibility tree nothing. Measured 2026-08-05 —
+                the colour well had NO name, and the hex box was announced as "#a85572", its own
+                placeholder, i.e. an example value where the field's purpose belongs. */}
             <div className="space-y-1.5">
-              <Label>Pilih Warna</Label>
+              <Label htmlFor="brand-color">Pilih Warna</Label>
               <input
+                id="brand-color"
                 type="color"
                 value={valid ? hex : DEFAULT_BRAND_COLOR}
                 onChange={(e) => setHex(e.target.value)}
@@ -83,8 +88,8 @@ export function BrandColorDialog({ initialColor }: { initialColor: string }) {
               />
             </div>
             <div className="flex-1 space-y-1.5">
-              <Label>Kode Hex</Label>
-              <Input value={hex} onChange={(e) => setHex(e.target.value)} placeholder="#a85572" />
+              <Label htmlFor="brand-hex">Kode Hex</Label>
+              <Input id="brand-hex" value={hex} onChange={(e) => setHex(e.target.value)} placeholder="#a85572" />
             </div>
           </div>
 

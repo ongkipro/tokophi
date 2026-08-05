@@ -29,6 +29,17 @@ import { scryptSync, randomBytes } from "node:crypto";
 const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
 const LENGTH = 12;
 
+/**
+ * Passwords that are PUBLIC KNOWLEDGE and must never authenticate anything we mint.
+ *
+ * `tokophi123` was the seed's constant and was published in this repository, in `AGENTS.md`,
+ * `README.md`, `specs/docs/SYSTEM_GUIDE.md` and on both login screens. It lives here, beside the mint,
+ * because it has two consumers that would otherwise keep private copies: `password.test.ts` asserts no
+ * minted credential can ever equal one of these, and `packages/db/src/seed.ts` refuses a
+ * `SEED_OWNER_PASSWORD` that is one of them. Two lists is how the shorter one goes stale.
+ */
+export const PUBLISHED_PASSWORDS = ["tokophi123", "tokophi", "password", "admin123"] as const;
+
 /** A fresh, unguessable temp password to hand over ONCE. Never a constant, never derived from input. */
 export const tempPassword = (): string => {
   // `b & 31` is UNIFORM: 256 is a whole multiple of 32, so the low five bits of a random byte carry

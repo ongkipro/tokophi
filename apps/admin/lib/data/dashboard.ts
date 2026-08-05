@@ -62,9 +62,26 @@ function resolve(all: DayPoint[], key: RangeKey): Resolved {
 const sum = (arr: DayPoint[], k: keyof Pick<DayPoint, "sales" | "orders" | "visitors">) =>
   arr.reduce((a, d) => a + d[k], 0);
 
-const delta = (cur: number, prev: number) => (prev === 0 ? 0 : ((cur - prev) / prev) * 100);
+/**
+ * Percentage change vs the previous period — or `null` when there is NOTHING TO COMPARE TO.
+ *
+ * ⚠️ `null` and `0` are different facts and the screen must not say the same thing for both.
+ * This returned `0` for an empty denominator, so a store with no history rendered
+ * "Penjualan hari ini **+0,0%**" — which reads as *"no change"*, i.e. a measurement, on a store
+ * that has never sold anything. Same family as the dashboard that printed
+ * "Penjualan hari ini Rp0 · −100,0%" above four orders placed that morning: a figure with no
+ * source is "—", never a number (see CLAUDE.md → "Dashboard & Analitik numbers").
+ *
+ * ⚠️ THE BOUNDARY IS THE DENOMINATOR, NOT THE NUMERATOR. A store that genuinely sold Rp0 today
+ * after selling yesterday has a REAL −100%, and that must stay a number — turning a measured
+ * collapse into an em dash is the same lie in the other direction. Only `prev === 0` is the dash,
+ * because a change *from zero* has no percentage: it is not "+∞%" and it is certainly not "0%".
+ * Pinned on both sides by `kpi-delta.test.ts`.
+ */
+const delta = (cur: number, prev: number): number | null =>
+  prev === 0 ? null : ((cur - prev) / prev) * 100;
 
-export type Kpi = { value: number; delta: number };
+export type Kpi = { value: number; delta: number | null };
 export type Summary = {
   sales: Kpi;
   orders: Kpi;
@@ -334,7 +351,7 @@ export function getStuckMoney(orders: Order[]): StuckMoney {
   return { orders: open.length, value: open.reduce((a, o) => a + o.total, 0) };
 }
 
-export type MoneyTile = { key: RangeKey; label: string; value: number; delta: number; compareLabel: string; spark: number[] };
+export type MoneyTile = { key: RangeKey; label: string; value: number; delta: number | null; compareLabel: string; spark: number[] };
 
 /**
  * "Uang masuk" — penjualan hari ini / 7 hari / 30 hari, each vs the SAME-LENGTH previous period.

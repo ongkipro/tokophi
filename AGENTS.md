@@ -16,6 +16,17 @@ are building one product together, not racing. Everything below was learned by b
     the seed running out, not a trend). `seed:recent` only INSERTS, touches one store, and is idempotent
     — it fills only days with zero orders, so a second run does nothing. Re-running it is free; truncating
     the shared DB costs someone else their afternoon.
+  - 🛑 **`SEED_FORCE=1` now REFUSES** when the database holds rows nothing writes back — orders,
+    customers, ledger entries, media, Store Builder templates, flash sales, the platform operator
+    logins, the aggregator API key, the gateway credentials, and **the encrypted CAPI tokens in
+    `store_tracking_channels`, which the seed does not write at all** (N42). It prints the count per
+    table and stops. Re-run with **`SEED_DESTROY_CONFIG=1`** as well if you truly mean it — a second
+    variable, because `SEED_FORCE=1` is a flag people copy out of a doc.
+    ⚠️ **Do not "fix" this by lengthening the truncate keep-list.** Measured: with
+    `store_tracking_channels`, `page_templates` and `flash_sales` on the list, Postgres still prints
+    `truncate cascades to table "…"` for all three and empties them — `cascade` follows their
+    `store_id` FK into the truncated set. A keep-list entry for a store-scoped table is a no-op that
+    READS like protection. `packages/db/src/seed-guard.ts` + `seed-guard.test.ts` hold the details.
 - **Dev servers.** **Never `pkill -f "astro dev"` / `pkill next`** — that kills *their* server, not just
   yours. Record the PID of what you start (`echo $! > …`) and kill only that PID.
 - **The git index.** Other agents leave files **staged**. A bare `git add -A` + `git commit` will
@@ -211,6 +222,16 @@ the sixth copy of the default-location expression, the one with no `store_id` pr
 path that runs as OWNER with RLS off. Both now skip `public` only at the app root. **Scan everything
 and name your exceptions; never bind a guard to a list of targets.**
 
+⚠️ **AND A `*` FOLLOWED BY `/` INSIDE A BLOCK COMMENT CLOSES IT — twice in one day, 2026-08-05.**
+Once in `test/source-code.ts` (a comment explaining a comment-splice hole, written literally) and
+once in `packages/db/src/seed.ts` (a JSDoc containing the glob `apps/*/app/**`). Both times the
+comment ended early and the prose after it became code. The first failed **18 of 50 test files at
+import** while the 296 tests that still collected all passed — a green-looking count over a broken
+module; the second failed `tsc -p packages/db` with `Cannot find name 'app'`. This file's style is
+long explanatory comments full of globs and code samples, so the trap is structural here, not a
+slip. **`tsc` and `npm test` both catch it; nothing else does.** Describe the sequence in words, or
+put the example in a `//` line comment.
+
 **The sink beats the source.** `packages/lib/src/password.test.ts` scans every tracked source file for
 `hashPassword(<arg>)` and fails on a literal, or on an identifier bound to a literal in the same file
 — the two shapes that actually shipped (`createStore`, `invitePlatformAdmin`). A mint bound to a name
@@ -230,7 +251,7 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
 ```
 - Package: `packages/db` → `import { db, schema } from "@tokophi/db"` (server-only; `postgres` is `serverExternalPackages`). `npm run reset` drops `public` + `drizzle` schemas.
 - `DATABASE_URL` lives in root `.env` (tooling) + each app's `.env.local` (Next). Copy from `.env.example`.
-- **Wired to DB** (read via server-only `lib/data/*`, pages `dynamic="force-dynamic"`): **super-admin** (all 5) + **admin** (Produk, Diskon, Pelanggan, Kategori, Pesanan, Halaman, Blog, Inventori, CRM, Pembelian, Segmen, Ulasan, Navigasi, Dashboard, Analitik, Pemasaran — 16 modules) + **storefront** (catalog via `@tokophi/db` at build/SSR). **Reads: done end-to-end.** - **Auth (local, real):** email/password login against `users` (`password_hash` = scrypt `salt:hash`, seeded owner **ongki@batiknusantara.id / tokophi123**) ⋈ `store_users` (role). Session = **jose JWT in an httpOnly `session` cookie** (`AUTH_SECRET` env). `lib/auth.ts` (verify/findLogin/signSession/getSession — server-only, Node), `lib/actions/auth.ts` (`signIn`/`signOut`), `app/login/page.tsx`, `middleware.ts` (edge-safe JWT check → redirects to `/login`; excludes `/products`). Topbar shows the session user + "Keluar". Aligns with the VPS/PostgREST **JWT** prod plan. **RBAC** (`lib/rbac.ts` `requireCapability`, role→capability matrix) gates every mutating server action; **RLS** (migration 0012, `withTenant()` + `verify-rls`) isolates the store-scoped tables by `store_id` (36/39 — see above) (enforced under the `tokophi_app` role on the VPS).
+- **Wired to DB** (read via server-only `lib/data/*`, pages `dynamic="force-dynamic"`): **super-admin** (all 5) + **admin** (Produk, Diskon, Pelanggan, Kategori, Pesanan, Halaman, Blog, Inventori, CRM, Pembelian, Segmen, Ulasan, Navigasi, Dashboard, Analitik, Pemasaran — 16 modules) + **storefront** (catalog via `@tokophi/db` at build/SSR). **Reads: done end-to-end.** - **Auth (local, real):** email/password login against `users` (`password_hash` = scrypt `salt:hash`, seeded owner **ongki@batiknusantara.id**, password minted at random per seed run and printed once — N29) ⋈ `store_users` (role). Session = **jose JWT in an httpOnly `session` cookie** (`AUTH_SECRET` env). `lib/auth.ts` (verify/findLogin/signSession/getSession — server-only, Node), `lib/actions/auth.ts` (`signIn`/`signOut`), `app/login/page.tsx`, `middleware.ts` (edge-safe JWT check → redirects to `/login`; excludes `/products`). Topbar shows the session user + "Keluar". Aligns with the VPS/PostgREST **JWT** prod plan. **RBAC** (`lib/rbac.ts` `requireCapability`, role→capability matrix) gates every mutating server action; **RLS** (migration 0012, `withTenant()` + `verify-rls`) isolates the store-scoped tables by `store_id` (36/39 — see above) (enforced under the `tokophi_app` role on the VPS).
 
 **Writes: DONE across all admin editors** — Produk, Diskon, Halaman, Blog, Kategori, order-status, Inventori-stock, Navigasi, Pelanggan, CRM (follow-up), Segmen, Pembelian (PO create/receive/cancel) all persist via `lib/actions/*` server actions.
 - **Media (local):** the product editor's Media section uploads real files → `apps/admin/public/uploads/` (gitignored) + a `product_media` row (`lib/actions/media.ts` `uploadProductImage`/`deleteProductImage`; 5MB image cap). `getProduct` returns the real `media[]`; the seed loads 5 media rows/product (base + `-2..-5`). Local storage now; on the VPS this becomes MinIO/S3.
@@ -331,9 +352,19 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
     of two — that is how the 24-bit mint survived its own guard) and strips `//` + `/* */` comments so
     the notes explaining this fix stay legal. **HTML comments are not stripped: `<!-- … -->` in an
     `.astro` file is served to the browser.**
-    ⚠️ **The seeded password itself is UNCHANGED** — it is no longer published, but `tokophi123` still
-    authenticates on every existing deployment. Rotating it touches the seed, and **the seed is not a
-    migration**, so it needs a data fix stated in the commit body (`NEXT.md` N29).
+    ✅ **The SEED is fixed too (N29, 2026-08-05).** `packages/db/src/seed.ts` mints a fresh 60-bit
+    password **per account** and prints them **once** at the end of the run — that print is the only
+    copy that will ever exist. `SEED_OWNER_PASSWORD=<yours>` pins them all to one string for local
+    dev (and refuses a published default like `tokophi123`, which would put the defect straight back).
+    `password.test.ts` no longer exempts the seed: its repo-wide sink scan now covers every tracked
+    file with nothing carved out, so a fixed password anywhere goes red.
+    ⚠️ **The ROWS are still unchanged, and that is not an oversight** — **the seed is not a migration**,
+    so every deployment that already exists still authenticates with `tokophi123` until somebody
+    rotates it. That is a PROCEDURE, not a deploy:
+    `specs/docs/tasks/2026-08-03-rotate-exposed-owners.md` §② (use the UI for stores, raw SQL only for
+    the operator), §③ (one password per account) and §⑤ (which order, and which account **not** to
+    touch). Measured there: 7 of 8 store owners plus the operator. **Rotate the accounts that were
+    measured, never the table.**
   - **A login rate-limit DOES exist — but it is a floor, not a wall, and it is keyed on IP ALONE.**
     `signIn` on both panels calls `rateLimit()` from `@tokophi/lib/cache` **before** the scrypt check
     (`login:admin:<ip>` 15/min, `login:platform:<ip>` 10/min, shipped `53dd9ee` 2026-07-16). ⚠️ Two
@@ -721,6 +752,27 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   from `analytics_events` (the storefront tracker) and render an honest empty state for a store that
   has none. That is the standing rule that keeps producing bugs when broken — see the ad dashboard
   with no integration behind it.
+- 🔴 **AND THE SAME RULE APPLIES TO THE DELTA: `Kpi.delta` / `MoneyTile.delta` are `number | null`.**
+  `null` = **there was no previous period to divide by**, and it renders through the shared
+  `NO_FIGURE` floor (`pct(null)` → "—"), never a digit. It used to be `prev === 0 ? 0`, so the empty
+  seeded store (`snack-rumahan-bu-tati`) was told **"Penjualan hari ini +0,0% vs kemarin"** — a
+  measurement of *"unchanged"* on a shop that has never sold anything. Measured in a browser
+  2026-08-05 on all three money tiles and all four `/analitik` KPIs.
+  ⚠️ **THE BOUNDARY IS THE DENOMINATOR, NOT THE NUMERATOR.** A store that genuinely sold Rp0 today
+  after selling yesterday has a **real −100%** and it must stay a number — an em dash there is the
+  same lie pointing the other way. Only `prev === 0` is the dash. Both sides are pinned by
+  `apps/admin/lib/data/kpi-delta.test.ts` (proved red against both mutations before being trusted).
+  ⚠️ **`null >= 0` is `true` in JavaScript**, so every `up = delta >= 0` is a live trap: it paints an
+  emerald ↗ over an em dash. `kpi-card.tsx` / `money-strip.tsx` / `sparkline.tsx` take
+  `boolean | null` and go **neutral** in that state.
+- **NO GOOD/BAD VERDICT MAY BE CARRIED BY COLOUR ALONE (WCAG 1.4.1).** The two on the dashboard are
+  the sales delta and the return rate; both badges carry a glyph plus a word (`sr-only` for the
+  delta's "naik"/"turun"), and both have a **third, neutral state** for "nothing to judge". The
+  return tile's `shipped === 0` used to fall into the `!bad` arm and wear the same **emerald** pill a
+  genuinely clean rate wears — a healthy verdict on a store that had never posted a parcel.
+  ⚠️ **Still open:** `return-by-courier.tsx` decides a courier's row by bar colour alone
+  (`rate > 5 ? bg-destructive : bg-emerald-500/70`) with a neutral "x,x%" beside it — same class,
+  not fixed here.
 - **Runnable check: `apps/admin/lib/data/daily-stats.test.ts`.** Its Postgres half runs the real
   exported query under `SET LOCAL ROLE tokophi_app`. `vitest.config.ts` aliases `@/` → `apps/admin/`;
   without it no suite can import `lib/data/*` at all.

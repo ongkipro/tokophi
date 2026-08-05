@@ -11,6 +11,14 @@ import { defineConfig } from "vitest/config";
 // half is testable — moves secret-handling code around for a test's convenience, and `crypto.ts` is
 // exactly the file where that trade is worst.
 export default defineConfig({
+  // The AUTOMATIC JSX runtime, because that is the one Next actually compiles these files with.
+  // `packages/ui/tsconfig.json` says `"jsx": "preserve"` — correct for a library whose consumer does
+  // the transform — and esbuild reads that and falls back to the CLASSIC runtime, i.e. bare
+  // `React.createElement`. The result is a split that has nothing to do with the component: files
+  // that happen to `import * as React` render fine under vitest (`input.tsx`, `textarea.tsx`) and
+  // files that do not throw `ReferenceError: React is not defined` (`switch.tsx`, `checkbox.tsx`) —
+  // so a rendered test could cover half of `@tokophi/ui` and no one would know why.
+  esbuild: { jsx: "automatic" },
   resolve: {
     alias: {
       "server-only": new URL("./test/stubs/server-only.ts", import.meta.url).pathname,

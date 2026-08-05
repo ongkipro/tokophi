@@ -15,9 +15,7 @@ import {
   PackageCheck,
   Star,
   Repeat,
-  MessageCircle,
-  Search,
-  Clock,
+  MessageCircle,Clock,
   AlertTriangle,
   Eye,
   ChevronDown,
@@ -26,7 +24,6 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { Card } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
-import { Input } from "@tokophi/ui/input";
 import { Badge } from "@tokophi/ui/badge";
 import { Separator } from "@tokophi/ui/separator";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
@@ -55,6 +52,7 @@ import {
 } from "@/lib/mock/store";
 import { num, waLink, fillTemplate } from "@tokophi/lib/format";
 import { cn } from "@tokophi/ui/lib/utils";
+import { SearchInput } from "@/components/admin/search-input";
 
 
 // ---- helpers ----
@@ -329,15 +327,13 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
           </Tabs>
 
           <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Cari pelanggan atau konteks…"
-                className="h-8 w-full pl-8 sm:w-64"
-              />
-            </div>
+            <SearchInput
+              label="Cari follow-up"
+              value={query}
+              onValueChange={setQuery}
+              placeholder="Cari pelanggan atau konteks…"
+              inputClassName="h-8 w-full sm:w-64"
+            />
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={

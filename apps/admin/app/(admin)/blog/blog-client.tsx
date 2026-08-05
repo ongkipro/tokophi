@@ -4,9 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Plus,
-  Search,
-  MoreHorizontal,
+  Plus,MoreHorizontal,
   Pencil,
   Trash2,
   MessageSquare,
@@ -23,7 +21,6 @@ import type { BlogPost } from "@/lib/mock/store";
 import { Card, CardContent } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Badge } from "@tokophi/ui/badge";
-import { Input } from "@tokophi/ui/input";
 import { Checkbox } from "@tokophi/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
 import {
@@ -44,6 +41,7 @@ import {
 
 import { BlogStatusBadge } from "@/components/admin/blog/status-badge";
 import { AuthorCell } from "@/components/admin/blog/author-cell";
+import { SearchInput } from "@/components/admin/search-input";
 
 function daysAgoLabel(days: number) {
   if (days <= 0) return "hari ini";
@@ -156,15 +154,13 @@ export function BlogClient({ posts, blogs }: { posts: BlogPost[]; blogs: string[
 
       {/* Toolbar */}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari artikel…"
-            className="pl-8"
-          />
-        </div>
+        <SearchInput
+          label="Cari artikel"
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Cari artikel…"
+          className="w-full sm:max-w-xs"
+        />
       </div>
 
       {filtered.length === 0 ? (

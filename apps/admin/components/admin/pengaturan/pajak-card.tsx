@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@tokophi/ui/button";
 import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
-import { Switch } from "@tokophi/ui/switch";
+import { ToggleRow } from "@/components/admin/pengaturan/toggle-row";
 import { useCan } from "@/components/admin/permissions";
 import { getTaxSettings, saveTaxSettings } from "@/lib/actions/tax";
 
@@ -40,13 +40,15 @@ export function PajakCard() {
         <CardDescription>Atur penerapan Pajak Pertambahan Nilai (PPN) pada pesanan.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
-        <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/40 p-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">Aktifkan PPN</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">Tambahkan PPN pada setiap transaksi pelanggan.</p>
-          </div>
-          <Switch checked={enabled} onCheckedChange={setEnabled} disabled={!canWrite || !loaded} />
-        </div>
+        {/* Was a hand-rolled copy of ToggleRow's own markup — same classes, same two <p>s — minus
+            the one thing ToggleRow exists for. Measured nameless in Chromium 2026-08-05. */}
+        <ToggleRow
+          title="Aktifkan PPN"
+          description="Tambahkan PPN pada setiap transaksi pelanggan."
+          checked={enabled}
+          onCheckedChange={setEnabled}
+          disabled={!canWrite || !loaded}
+        />
 
         <div className="grid gap-2">
           <Label htmlFor="tarif-ppn">Tarif PPN (%)</Label>
@@ -61,13 +63,13 @@ export function PajakCard() {
           <p className="text-xs text-muted-foreground">Tarif PPN umum di Indonesia saat ini 11%.</p>
         </div>
 
-        <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/40 p-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">Harga sudah termasuk pajak</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">Harga produk yang ditampilkan sudah termasuk PPN.</p>
-          </div>
-          <Switch checked={inclusive} onCheckedChange={setInclusive} disabled={!canWrite || !enabled} />
-        </div>
+        <ToggleRow
+          title="Harga sudah termasuk pajak"
+          description="Harga produk yang ditampilkan sudah termasuk PPN."
+          checked={inclusive}
+          onCheckedChange={setInclusive}
+          disabled={!canWrite || !enabled}
+        />
 
         <div className="rounded-lg border border-border/60 bg-muted/40 p-3 text-xs text-muted-foreground">
           <p><span className="font-medium text-foreground">Inclusive</span> — PPN sudah termasuk di dalam harga yang ditampilkan (harga tidak bertambah saat checkout).</p>

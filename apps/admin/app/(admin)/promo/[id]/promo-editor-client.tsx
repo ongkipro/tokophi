@@ -115,12 +115,12 @@ export function PromoEditorClient({ editor }: { editor: PromoEditor }) {
       <Card>
         <CardContent className="flex items-center justify-between py-4">
           <div>
-            <div className="font-medium">Aktifkan halaman promo</div>
+            <label htmlFor="promo-enabled" className="block font-medium">Aktifkan halaman promo</label>
             <p className="text-sm text-muted-foreground">
               Saat nonaktif, link di atas mengembalikan 404 dan produk hanya tampil di halaman produk biasa.
             </p>
           </div>
-          <Switch checked={cfg.enabled} onCheckedChange={(v) => set("enabled", v)} disabled={!canWrite} />
+          <Switch id="promo-enabled" checked={cfg.enabled} onCheckedChange={(v) => set("enabled", v)} disabled={!canWrite} />
         </CardContent>
       </Card>
 
@@ -242,6 +242,9 @@ export function PromoEditorClient({ editor }: { editor: PromoEditor }) {
           {cfg.idealFor.length < 12 && (
             <div className="flex gap-2">
               <Input
+                /* The placeholder here is an INSTRUCTION ("— Enter untuk tambah"), and with no
+                   other name the browser announced the whole sentence as the field's name. */
+                aria-label="Tambah tag cocok untuk"
                 value={chip}
                 onChange={(e) => setChip(e.target.value)}
                 onKeyDown={(e) => {
@@ -394,10 +397,10 @@ export function PromoEditorClient({ editor }: { editor: PromoEditor }) {
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium">Tampilkan sisa stok</div>
+              <label htmlFor="promo-scarcity" className="block font-medium">Tampilkan sisa stok</label>
               <p className="text-sm text-muted-foreground">Angka nyata dari stok varian terpilih.</p>
             </div>
-            <Switch checked={cfg.showScarcity} onCheckedChange={(v) => set("showScarcity", v)} disabled={!canWrite} />
+            <Switch id="promo-scarcity" checked={cfg.showScarcity} onCheckedChange={(v) => set("showScarcity", v)} disabled={!canWrite} />
           </div>
         </CardContent>
       </Card>

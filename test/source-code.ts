@@ -219,13 +219,42 @@ function scan(source: string, inertLiterals: boolean): string {
  * `verify-rls` sat red for weeks, everyone learned to scroll past it, and two cross-tenant leaks
  * shipped past a verifier that was already failing.
  *
- * ⚠️ **This is a CEILING, not a fix, and it is deliberately not the real one.** 1 of 455 files
- * contains any needle in its raw text, so lexing only the files that could possibly match is a ~400×
- * win — and it is SOUND, because lexing strips comments and inserts whitespace and never invents
- * characters, so whitespace-stripped LEXED ⊆ whitespace-stripped RAW (a raw prefilter over-selects,
- * never under-selects). It is not done here because the needles are whitespace-tolerant REGEXES, and
- * a subtly wrong prefilter makes a security guard **silently green forever** — the exact failure this
- * module exists to end, found nine times in nine guards. `NEXT.md` N49; prove it red against a
- * mutated copy before trusting it.
+ * ⚠️ **AND THE "REAL FIX" DOES NOT EXIST — I FILED IT WITH A NUMBER I HAD MIS-MEASURED.**
+ * The ceiling above was raised alongside `NEXT.md` N49, which claimed a prefilter would be a ~400×
+ * win because "1 of 455 files contains any needle in its raw text". **That measurement used LITERAL
+ * needles. The patterns are whitespace-tolerant REGEXES**, and that changes the answer completely.
+ *
+ * A match in the LEXED text needs each of the pattern's whitespace-free CHUNKS present in the RAW
+ * source as a verbatim token — so the only SOUND cheap prefilter is "raw contains chunk X".
+ * Selectivity, measured over the same 458 files:
+ *
+ * | pattern | its chunks | best sound prefilter | files it selects |
+ * |---|---|---|---|
+ * | `/tokophi123/` | one | `tokophi123` | **1 (0,2%)** |
+ * | `/ongki\s*@\s*batiknusantara\s*\.\s*id/` | `ongki` `@` `batiknusantara` `.` `id` | `batiknusantara` | **1 (0,2%)** |
+ * | `/admin\s*@\s*tokophi\s*\.\s*id/` | `admin` `@` `tokophi` `.` `id` | — | **123 (26,9%)** |
+ *
+ * The third pattern is the one that decides it: its longest chunk is `tokophi`, which appears in
+ * **68,6%** of this repo's files (every `@tokophi/*` import), and requiring ALL its chunks still
+ * leaves 123. Since the three patterns share ONE memoised lex pass, prefiltering the two selective
+ * ones saves nothing while the third still lexes everything. Dropping the memo and prefiltering per
+ * pattern gives **458 → 125 lexes: 3,7×**, not 400×.
+ *
+ * **So N49 is CLOSED, not deferred.** 3,7× is not worth hand-rolled per-pattern chunk extraction
+ * inside a security guard, where being subtly wrong means silently green forever — the exact failure
+ * this module exists to end, found nine times in nine guards. The ceiling is the fix.
+ *
+ * ⚠️ One more thing that was checked rather than assumed: the feared "comment splice" (a comment
+ * between two halves of a credential, removed by lexing, creating a match the raw text never had)
+ * **cannot happen inside a string literal.** A block comment written between `admin@` and
+ * `tokophi.id` INSIDE the quotes lexes as ONE string token, comment characters and all, and matches
+ * neither side. It would need the two halves as separate CODE tokens, which no shipped credential
+ * shape here has ever been.
+ *
+ * ⚠️⚠️ AND THE EXAMPLE THAT SENTENCE ORIGINALLY SPELLED OUT **BROKE THIS FILE.** Writing the
+ * splice literally put a `*` immediately followed by `/` inside this block comment, which CLOSED it
+ * early: 18 of 50 test files then failed to import, while the 296 tests that still collected all
+ * passed — a green-looking count over a broken module. Caught only by running the suite. Do not
+ * write that two-character sequence anywhere in this comment; describe it in words instead.
  */
 export const SOURCE_SCAN_TIMEOUT_MS = 20_000;

@@ -113,7 +113,7 @@ export function SenderAddressCard() {
           {!kecName && (
             <>
               <div className="flex gap-2">
-                <Input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), doSearch())} placeholder="Cari kecamatan / kota…" disabled={!loaded} />
+                <Input aria-label="Cari kecamatan" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), doSearch())} placeholder="Cari kecamatan / kota…" disabled={!loaded} />
                 <Button type="button" variant="outline" onClick={doSearch} disabled={searching || !q.trim()}>
                   <Search className="size-4" /> {searching ? "Cari…" : "Cari"}
                 </Button>

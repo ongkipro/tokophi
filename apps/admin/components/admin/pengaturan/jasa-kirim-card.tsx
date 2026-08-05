@@ -117,16 +117,21 @@ export function JasaKirimCard() {
           <CardDescription>Pembeli membayar tunai saat paket tiba. Dana diteruskan ke saldo Anda setelah kurir menyetor.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* 20 switches on this one card had NO accessible name at all — measured in Chromium
+              2026-08-05 (`Accessibility.getPartialAXTree`) on /pengaturan → Pengiriman. The audit
+              that fixed /pengaturan fixed only the toggles routed through `ToggleRow`; every switch
+              on this card is hand-rolled and was missed. `htmlFor` on the text already on screen is
+              the fix — Base UI's Switch republishes it as `aria-labelledby`. */}
           <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
             <div className="min-w-0">
-              <div className="text-sm font-medium">Aktifkan COD</div>
+              <label htmlFor="cod-enabled" className="block text-sm font-medium">Aktifkan COD</label>
               <div className="text-xs text-muted-foreground">
                 {codCouriers.length
                   ? `Tersedia lewat ${codCouriers.join(", ")}.`
                   : "Belum ada layanan yang mendukung COD."}
               </div>
             </div>
-            <Switch checked={cod} onCheckedChange={setCod} disabled={!canWrite || !codCapable.length} />
+            <Switch id="cod-enabled" checked={cod} onCheckedChange={setCod} disabled={!canWrite || !codCapable.length} />
           </div>
           {cod && (
             <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
@@ -149,10 +154,10 @@ export function JasaKirimCard() {
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
             <div className="min-w-0">
-              <div className="text-sm font-medium">Aktifkan gratis ongkir</div>
+              <label htmlFor="free-ship-on" className="block text-sm font-medium">Aktifkan gratis ongkir</label>
               <div className="text-xs text-muted-foreground">Ongkir otomatis Rp0 di checkout saat syarat terpenuhi.</div>
             </div>
-            <Switch checked={freeShip} onCheckedChange={setFreeShipOn} disabled={!canWrite} />
+            <Switch id="free-ship-on" checked={freeShip} onCheckedChange={setFreeShipOn} disabled={!canWrite} />
           </div>
           {freeShip && (
             <div className="grid gap-1.5 rounded-lg border p-3">
@@ -212,7 +217,11 @@ export function JasaKirimCard() {
                       return (
                         <div key={k} className={cn("flex items-center justify-between gap-4 px-4 py-3", !enabled && "opacity-60")}>
                           <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-1.5">
+                            {/* The whole title row is the label, badges included, so the switch is
+                                announced "Reguler, SPX, COD" rather than a bare "Reguler" that is
+                                identical across five couriers. The name is exactly what is on
+                                screen — nothing paraphrased, nothing to drift. */}
+                            <label htmlFor={`svc-${k}`} className="flex flex-wrap items-center gap-1.5">
                               <span className="text-sm font-medium">{s.name}</span>
                               <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal text-muted-foreground">
                                 {courierName(s.courier)}
@@ -220,7 +229,7 @@ export function JasaKirimCard() {
                               {s.codAllowed && (
                                 <Badge className="h-5 bg-emerald-600 px-1.5 text-[10px] hover:bg-emerald-600">COD</Badge>
                               )}
-                            </div>
+                            </label>
                             <div className="mt-0.5 text-xs text-muted-foreground">
                               {s.codAllowed
                                 ? cod
@@ -230,6 +239,7 @@ export function JasaKirimCard() {
                             </div>
                           </div>
                           <Switch
+                            id={`svc-${k}`}
                             checked={enabled}
                             onCheckedChange={(v) => setOn((o) => ({ ...o, [k]: v }))}
                             disabled={!canWrite}

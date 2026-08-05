@@ -4,11 +4,66 @@
 import { db, client, schema } from "./client";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { COURIERS } from "@tokophi/lib/couriers";
-// The one writer of `users.password_hash` (scrypt `salt:hash`) — see @tokophi/lib/password.
-import { hashPassword } from "@tokophi/lib/password";
+// The one writer of `users.password_hash` (scrypt `salt:hash`) and the one MINT — see
+// @tokophi/lib/password. There is no second implementation of either, anywhere (enforced by
+// `packages/lib/src/password.test.ts`, which scans every tracked source file).
+import { hashPassword, tempPassword, PUBLISHED_PASSWORDS } from "@tokophi/lib/password";
+import { assertTruncateIsDeliberate } from "./seed-guard";
+import { packedDims } from "./product-dims";
 
-// Dev owner password below (change for real deploys).
-const DEV_OWNER_PASSWORD = "tokophi123";
+// ── SEEDED CREDENTIALS — RANDOM PER ACCOUNT, PER RUN, REVEALED ONCE (N29) ─────────────────────────
+//
+// 🔴 THIS USED TO BE `const DEV_OWNER_PASSWORD = "tokophi123"` — ONE constant, hashed into the store
+// owner, the platform operator, every demo store's owner and every registered demo customer. The
+// string was published in this repository, in `AGENTS.md`, in `README.md`, in `SYSTEM_GUIDE.md` and
+// on both login screens. Audit wave 5 deleted it from the SCREENS; the ROWS were untouched, because
+// the seed is not a migration. Measured read-only on production 2026-08-03
+// (`specs/docs/tasks/2026-08-03-rotate-exposed-owners.md` §①): **7 of 8 store owners, plus the
+// platform operator, authenticate with it.** Re-measured 2026-08-05: the demo store's owner still does.
+//
+// ⚠️ WHAT THIS IS **NOT**, and the first draft of this comment got it wrong in the expensive direction.
+// The demo store's 219 orders are a **DUMMY set** — 32 distinct phone numbers across all 219, buyer
+// names like "feri crut". There is no real buyer's name, number or address behind that login, and
+// saying otherwise would have put a false severity into the one file everybody greps. **Overstating an
+// exposure is as bad as understating one**: the next person prices their response off this sentence.
+// Nor is that account a defect: `demo@tokophi.com` / `tokophi123` is a credential the OWNER chose,
+// deliberately, for a demo store. **This change is about the accounts a NEW deployment mints** — it
+// leaves every existing row exactly as it is, which is the whole meaning of "the seed is not a
+// migration". Rotating an existing one is a procedure, not a code change: see §②/§③ of that doc.
+// (The platform operator on production, `ongkiardiansyah@gmail.com`, is already off the constant.)
+//
+// So: no fixed default. Each account gets its own 60-bit mint and the run PRINTS them once at the
+// end, which is the only copy that will ever exist (nothing writes a password to a table or a file).
+// On Coolify that lands in the deploy log for the ONE deploy that seeds an empty database.
+//
+// ⚠️ PER ACCOUNT, not per run. A single random string shared by nine accounts is unguessable but
+// still one-breach-opens-all — the same shape as the defect being repaired, with a fresher constant.
+// `2026-08-03-rotate-exposed-owners.md` §③ says it in as many words ("One password per account").
+//
+// **`SEED_OWNER_PASSWORD` pins every seeded account to one string you choose.** Kept deliberately,
+// because the alternative is worse: this database is shared by several agents and re-seeded by hand,
+// so a login nobody can predict is a login someone re-adds a constant to get back — and a constant
+// re-added quietly is how this defect existed in the first place. An env var makes the choice an ACT,
+// leaves no fixed string in a tracked file (`packages/lib/src/password.test.ts` scans every one), and
+// is absent by default, which is the case that matters on a deploy. Never set it on one that faces
+// the internet.
+const PINNED_PASSWORD = process.env.SEED_OWNER_PASSWORD?.trim() || null;
+// …and it may not be used to put the published string back. `SEED_OWNER_PASSWORD=tokophi123` would
+// reproduce the exact defect above, with all of the deliberateness and none of the safety. Refusing
+// one comparison is cheaper than discovering it on a deploy log six weeks later.
+if (PINNED_PASSWORD && (PUBLISHED_PASSWORDS as readonly string[]).includes(PINNED_PASSWORD.toLowerCase())) {
+  throw new Error(
+    `SEED_OWNER_PASSWORD is a published default ("${PINNED_PASSWORD}") — that is the exact credential N29 removed. Pick another, or unset it and let the seed mint one per account.`,
+  );
+}
+/** Every credential this run minted, printed once at the end. `[what it opens, the password]`. */
+const MINTED: Array<[string, string]> = [];
+/** A password for ONE seeded account. Recorded so the run can reveal it; never returned twice. */
+function seedPassword(who: string): string {
+  const pw = PINNED_PASSWORD ?? tempPassword();
+  MINTED.push([who, pw]);
+  return pw;
+}
 
 const TODAY = new Date("2026-07-02T00:00:00Z");
 const daysAgo = (n: number) => new Date(TODAY.getTime() - n * 86_400_000);
@@ -666,6 +721,13 @@ async function truncateAll() {
   // because it is what the checkout's kodepos auto-fill reads: it was missing, so every SEED_FORCE=1
   // silently deleted it and broke address entry until someone re-imported by hand. CLAUDE.md names it
   // as one of the two landmines in this package; the keep-list is where that warning has to be true.
+  //
+  // ⚠️ IT ONLY WORKS FOR A TABLE WITH NO FK PATH OUT OF THE LIST. `cascade` reaches any table that
+  // references one being truncated, so adding a store-scoped table here is a no-op that READS like
+  // protection — measured, with Postgres printing `truncate cascades to table "…"` for all three of
+  // `store_tracking_channels`, `page_templates`, `flash_sales`. That is the trap this comment exists
+  // to close, and `src/seed-guard.ts` is the guard that replaces the longer list nobody can write.
+  // (`kelurahan` is on the list DESPITE having an FK — to `kiriminaja_areas`, which is kept too.)
   const rows = await client<{ table_name: string }[]>`
     select table_name from information_schema.tables
     where table_schema = 'public'
@@ -686,6 +748,10 @@ async function main() {
       return;
     }
   }
+  // Refuse (unless SEED_DESTROY_CONFIG=1) when this database holds rows no seed writes back — see
+  // the note at the top of `seed-guard.ts` for why a longer keep-list is not the fix. Deliberately
+  // OUTSIDE the `SEED_FORCE` branch above: that skip only counts `stores`.
+  await assertTruncateIsDeliberate(client, () => client.end());
   await truncateAll();
 
   // plans (config)
@@ -693,7 +759,7 @@ async function main() {
 
   // the one account + owner + store + membership + settings + stats
   const [account] = await db.insert(schema.accounts).values({ name: STORE.name, plan: STORE.plan, createdAt: daysAgo(STORE.createdDaysAgo) }).returning();
-  const [user] = await db.insert(schema.users).values({ email: STORE.email, name: STORE.owner, passwordHash: hashPassword(DEV_OWNER_PASSWORD) }).returning();
+  const [user] = await db.insert(schema.users).values({ email: STORE.email, name: STORE.owner, passwordHash: hashPassword(seedPassword(`Seller  ${STORE.email}`)) }).returning();
   const [store] = await db.insert(schema.stores).values({
     accountId: account.id,
     name: STORE.name,
@@ -793,12 +859,12 @@ async function main() {
       sizes: meta?.sizes ?? null,
       badge: meta?.badge ?? null,
       bestseller: meta?.bestseller ?? false,
-      // Shipping dims (cm). 1×1×1 by product decision: volumetric weight (l×w×h÷6000) is then
-      // negligible, so the courier bills the ACTUAL weight — which is what apparel should be
-      // charged on. Set real dims here only if a merchant ships bulky-but-light goods.
-      lengthCm: 1,
-      widthCm: 1,
-      heightCm: 1,
+      // Shipping dims (cm) — the FOLDED PARCEL, per garment kind. See `product-dims.ts`.
+      // ⚠️ These were `1, 1, 1`, and the comment defending it had the divisor wrong (`÷6000`, not
+      // `÷6`) and the conclusion wrong with it: 1×1×1 is not "the courier bills actual weight", it is
+      // "the parcel is DECLARED to the courier as a one-centimetre cube", because `createShipment`
+      // sends these exact columns. N33.
+      ...packedDims(c.slug),
       ratingValue: meta?.rating[0] ?? null,
       ratingCount: meta?.rating[1] ?? 0,
       hasVariants: true,
@@ -881,7 +947,10 @@ async function main() {
         tags: ["pelanggan", c.segment],
         // They made the account at (or right after) their first purchase — not before it.
         registeredAt: isRegistered(c) ? createdAt : null,
-        passwordHash: isRegistered(c) ? hashPassword(DEV_OWNER_PASSWORD) : null,
+        // A demo SHOPPER account. Random per customer and deliberately NOT printed: nothing in this
+        // repo logs in as one, so a credential nobody holds is strictly safer than one everybody
+        // does. Pin `SEED_OWNER_PASSWORD` if you need to drive the shopper login by hand.
+        passwordHash: isRegistered(c) ? hashPassword(PINNED_PASSWORD ?? tempPassword()) : null,
         createdAt,
       };
     }),
@@ -1553,8 +1622,10 @@ async function main() {
   // platform activity
   await db.insert(schema.platformActivity).values(ACTIVITY.map((a) => ({ kind: a.kind, text: a.text, ts: minutesAgo(a.minutesAgo) })));
 
-  // platform operator (super-admin login) — admin@tokophi.id / tokophi123
-  await db.insert(schema.platformAdmins).values({ email: "admin@tokophi.id", name: "Admin Platform", passwordHash: hashPassword(DEV_OWNER_PASSWORD), role: "owner" });
+  // platform operator (super-admin login). ⚠️ THE HIGHEST-VALUE ROW THIS FILE WRITES — the control
+  // plane reaches every tenant, including impersonation. Its password is minted separately from the
+  // merchant's on purpose; they shared one constant, and that is how one leak opened both.
+  await db.insert(schema.platformAdmins).values({ email: "admin@tokophi.id", name: "Admin Platform", passwordHash: hashPassword(seedPassword("Super Admin  admin@tokophi.id")), role: "owner" });
 
   // support tickets (2-sided demo) — for Batik Nusantara
   const [tkt1] = await db.insert(schema.supportTickets).values({ storeId: store.id, subject: "Cara menghubungkan domain kustom?", status: "answered", createdAt: minutesAgo(4 * 60), lastMessageAt: minutesAgo(90) }).returning();
@@ -1641,7 +1712,7 @@ async function main() {
   let ordSeq = 8000;
   for (const d of DEMO_STORES) {
     const [acc] = await db.insert(schema.accounts).values({ name: d.name, plan: d.plan, createdAt: daysAgo(d.createdDaysAgo) }).returning();
-    const [u] = await db.insert(schema.users).values({ email: d.email, name: d.owner, passwordHash: hashPassword(DEV_OWNER_PASSWORD) }).returning();
+    const [u] = await db.insert(schema.users).values({ email: d.email, name: d.owner, passwordHash: hashPassword(seedPassword(`Seller  ${d.email}`)) }).returning();
     // demo billing lifecycle from the store's status. firstPaid=false → still on the Rp50rb first month.
     const firstPaid = d.firstPaid ?? true;
     const bill =
@@ -1788,11 +1859,42 @@ async function main() {
   );
 
   console.log(`Seeded: ${PLANS.length} plans, ${1 + DEMO_STORES.length} stores (${STORE.name} + ${DEMO_STORES.length} demo), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${SUPPLIERS.length} suppliers/${PURCHASE_ORDERS.length} POs, ${SEGMENTS.length} segments, ${REVIEWS.length} reviews, ${MENU_DEFS.length} menus, ${DAILY.length} daily-stats, ${AD_CHANNELS.length} ad-channels/${AD_PROVINCES.length} provinces, ${INVOICES.length} invoices, platform settings.`);
+  revealCredentials();
   await client.end();
+}
+
+/**
+ * THE ONLY COPY THAT WILL EVER EXIST. `tempPassword()` returns a string that is hashed and
+ * discarded — nothing writes it to a table, a log table or a file, and there is no mailer and no
+ * forgot-password route anywhere under `apps/` (checked). If this block does not print, the account
+ * it minted is unreachable until somebody resets it from super-admin.
+ * (The glob that named those routes is gone on purpose: a `*` followed by `/` ENDS this comment, and
+ * the draft's version did exactly that — `tsc` then read the prose as code and failed on `app`.)
+ *
+ * Printed to STDOUT, once, at the very end so it is the last thing in a deploy log rather than
+ * buried under 1.500 inserts.
+ */
+function revealCredentials() {
+  if (!MINTED.length) return;
+  if (PINNED_PASSWORD) {
+    console.log(`\n⚠️  SEED_OWNER_PASSWORD was set: all ${MINTED.length} seeded accounts share ONE password you chose.`);
+    return;
+  }
+  const pad = Math.max(...MINTED.map(([who]) => who.length));
+  console.log("\n🔑 SEEDED LOGINS — random per account, shown ONCE. Copy them now; nothing stores them.");
+  for (const [who, pw] of MINTED) console.log(`   ${who.padEnd(pad)}   ${pw}`);
+  console.log("   (set SEED_OWNER_PASSWORD to pin them to a string of your own instead)\n");
 }
 
 main().catch(async (e) => {
   console.error(e);
+  // ⚠️ REVEAL ON FAILURE TOO. The seed is not one transaction — it is ~1.500 inserts, and the owner
+  // and the platform operator are written in the FIRST few. A crash at insert 900 therefore leaves
+  // real, hashed, working accounts in the database whose passwords exist only in this process's
+  // memory, and the re-run needs `SEED_FORCE=1` because `stores` is no longer empty. Printing here
+  // costs nothing on a clean run (the list is empty before the first mint) and is the difference
+  // between "re-run it" and "open psql".
+  revealCredentials();
   await client.end();
   process.exit(1);
 });
