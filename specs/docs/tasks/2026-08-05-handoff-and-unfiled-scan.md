@@ -124,8 +124,14 @@ their authors can do:
 
 `OPEN.md` is the index; the two that came up today and are correctly recorded there:
 
-- **HSTS `max_age` ramp** — currently 86400. Raise to `31536000` after a week (`CLOUDFLARE-PERF.md` §4).
-  Until then the protection lapses for anyone who has not visited in 24 h.
+- ~~**HSTS `max_age` ramp**~~ ✅ **DONE the same day** — raised 86400 → **31536000** on the owner's
+  call, preconditions re-checked immediately before (6 records, all proxied, no MX, no DNS-only).
+  🔴 What replaces it is not a task but a standing consequence: **the commitment can no longer be
+  withdrawn early.** Disabling the setting stops us sending the header; it does not reach a browser
+  that already holds one, which refuses `http://` for up to a year from its last visit. The one live
+  decision left is HSTS on merchant **custom hostnames** — same year-long promise, on a domain we do
+  not control — and it must be settled before Cloudflare for SaaS is wired
+  (`CLOUDFLARE-PERF.md` §4).
 - **N2 is NOT unblocked by the HSTS work.** That used `Zone Settings: Edit`, which the token in the
   environment has. N2's two items need **ruleset** permission, which it does not.
 - **Email verification before opening signup** — a product decision, not a task. Costed in
