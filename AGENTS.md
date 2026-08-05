@@ -721,6 +721,27 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   from `analytics_events` (the storefront tracker) and render an honest empty state for a store that
   has none. That is the standing rule that keeps producing bugs when broken — see the ad dashboard
   with no integration behind it.
+- 🔴 **AND THE SAME RULE APPLIES TO THE DELTA: `Kpi.delta` / `MoneyTile.delta` are `number | null`.**
+  `null` = **there was no previous period to divide by**, and it renders through the shared
+  `NO_FIGURE` floor (`pct(null)` → "—"), never a digit. It used to be `prev === 0 ? 0`, so the empty
+  seeded store (`snack-rumahan-bu-tati`) was told **"Penjualan hari ini +0,0% vs kemarin"** — a
+  measurement of *"unchanged"* on a shop that has never sold anything. Measured in a browser
+  2026-08-05 on all three money tiles and all four `/analitik` KPIs.
+  ⚠️ **THE BOUNDARY IS THE DENOMINATOR, NOT THE NUMERATOR.** A store that genuinely sold Rp0 today
+  after selling yesterday has a **real −100%** and it must stay a number — an em dash there is the
+  same lie pointing the other way. Only `prev === 0` is the dash. Both sides are pinned by
+  `apps/admin/lib/data/kpi-delta.test.ts` (proved red against both mutations before being trusted).
+  ⚠️ **`null >= 0` is `true` in JavaScript**, so every `up = delta >= 0` is a live trap: it paints an
+  emerald ↗ over an em dash. `kpi-card.tsx` / `money-strip.tsx` / `sparkline.tsx` take
+  `boolean | null` and go **neutral** in that state.
+- **NO GOOD/BAD VERDICT MAY BE CARRIED BY COLOUR ALONE (WCAG 1.4.1).** The two on the dashboard are
+  the sales delta and the return rate; both badges carry a glyph plus a word (`sr-only` for the
+  delta's "naik"/"turun"), and both have a **third, neutral state** for "nothing to judge". The
+  return tile's `shipped === 0` used to fall into the `!bad` arm and wear the same **emerald** pill a
+  genuinely clean rate wears — a healthy verdict on a store that had never posted a parcel.
+  ⚠️ **Still open:** `return-by-courier.tsx` decides a courier's row by bar colour alone
+  (`rate > 5 ? bg-destructive : bg-emerald-500/70`) with a neutral "x,x%" beside it — same class,
+  not fixed here.
 - **Runnable check: `apps/admin/lib/data/daily-stats.test.ts`.** Its Postgres half runs the real
   exported query under `SET LOCAL ROLE tokophi_app`. `vitest.config.ts` aliases `@/` → `apps/admin/`;
   without it no suite can import `lib/data/*` at all.
