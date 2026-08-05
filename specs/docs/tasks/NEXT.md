@@ -1436,32 +1436,31 @@ produced:
 Run all three plus the browser checks before any PR. **Nothing runs ESLint automatically**, which is how
 it rotted to 19 errors / 23 warnings in `apps/admin` (pre-existing, itemised in `BACKLOG.md`).
 
-### N49. The credential sweep lexes 455 files to check 1 of them · **S** · NEW
-**MEASURED** while integrating wave 7, after this suite timed out under `npm test` and went red on a
-green codebase. Profile of `packages/lib/src/no-published-credentials.test.ts`:
+### N49. The credential sweep lexes 455 files to check 1 of them · **S** · ❌ CLOSED — the premise was my own mis-measurement
+**RETRACTED 2026-08-05, with the numbers.** I filed this claiming a raw prefilter would be a ~400×
+win because "1 of 455 files contains any needle in its raw text". **That was measured with LITERAL
+needles. `SECRETS` holds whitespace-tolerant REGEXES**, which changes the answer.
 
-| step | cost |
-|---|---|
-| `readdirSync` walk of `apps/` | **8 ms** |
-| `readFileSync` all 455 files (3,3 MB) | **24 ms** |
-| lex all of it through the TypeScript scanner | **819 ms** |
-| files whose RAW text contains ANY needle | **1 of 455** |
+A match in the LEXED text requires each of a pattern's whitespace-free CHUNKS to be present in the
+RAW source as a verbatim token, so the only sound cheap prefilter is "raw contains chunk X":
 
-The filesystem is not the cost and `git ls-files` would buy nothing. The lexer runs so that a
-credential inside a comment does not count — but a file that does not contain the string **at all**
-cannot be a hit, so 454 of the 455 lexes answer a question nobody asked. Lexing only strips comments
-and inserts whitespace, so whitespace-stripped LEXED ⊆ whitespace-stripped RAW: a raw prefilter can
-over-select but never under-select, which is the safe direction.
+| pattern | best sound prefilter | selects |
+|---|---|---|
+| `/tokophi123/` | `tokophi123` | **1 of 458 (0,2%)** |
+| `/ongki\s*@\s*batiknusantara\s*\.\s*id/` | `batiknusantara` | **1 of 458 (0,2%)** |
+| `/admin\s*@\s*tokophi\s*\.\s*id/` | — its longest chunk is `tokophi` | **123 of 458 (26,9%)** |
 
-⚠️ **Why this was NOT done inline.** `SECRETS` holds whitespace-tolerant REGEXES, not literals (an
-`<!-- admin@tokophi.id -->` lexes to `< ! -- admin @ tokophi . id -- >`, which is why the patterns are
-loose in the first place). The prefilter therefore has to re-apply each pattern against
-whitespace-stripped source, and a subtly wrong one makes this guard **silently green forever** — the
-precise failure mode `test/source-code.ts` exists to end, found nine times in nine guards. Do it in
-its own change set and **prove it red against a mutated copy of a real credential first**.
+`tokophi` appears in **68,6%** of files (every `@tokophi/*` import). The three patterns share ONE
+memoised lex pass, so prefiltering the two selective ones saves nothing while the third lexes
+everything anyway. Per-pattern prefiltering without the memo gives **458 → 125 lexes = 3,7×**.
 
-Interim: the timeout is raised to 20 s with the profile written into the file. That is a ceiling, not
-a fix — the work is still 819 ms of CPU competing with 41 other test files.
+**3,7× is not worth hand-rolled chunk extraction inside a security guard**, where subtly wrong means
+silently green forever — the failure `test/source-code.ts` exists to end, found nine times in nine
+guards. The 20 s ceiling stays as the fix, and the reasoning now lives beside the constant so nobody
+re-files this.
+
+Also checked rather than assumed: the feared comment-splice hole **cannot occur inside a string
+literal** — `"admin@/*c*/tokophi.id"` lexes as one token and matches neither raw nor lexed.
 
 ### N50. An empty store is told its sales are unchanged, not that there is nothing to compare · **S** · NEW
 **MEASURED** (wave 8, rendering the seeded empty store `snack-rumahan-bu-tati`).
