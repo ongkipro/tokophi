@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { textWithoutComments } from "../../../test/source-code";
+import { SOURCE_SCAN_TIMEOUT_MS, textWithoutComments } from "../../../test/source-code";
 
 // NO SHIPPED SCREEN MAY NAME AN ACCOUNT THAT AUTHENTICATES.
 //
@@ -115,12 +115,15 @@ describe("no shipped screen publishes a working credential", () => {
     expect(files.length).toBeGreaterThan(200);
   });
 
+  // ⏱ 2.699 ms of real work: the FIRST of the three patterns lexes all 455 files and the rest hit
+  // the memo. The measured profile and why a ceiling is not the fix are in ONE place —
+  // `SOURCE_SCAN_TIMEOUT_MS` in `test/source-code.ts`. Do not copy the number here.
   it.each(SECRETS)("no app source names $what", ({ pattern }) => {
     const hits = files
       .filter((f) => pattern.test(code(f)))
       .map((f) => f.slice(APPS.length + 1));
     expect(hits).toEqual([]);
-  });
+  }, SOURCE_SCAN_TIMEOUT_MS);
 
   it("neither login page pre-fills an email address", () => {
     // The password line is the obvious half; `defaultValue` on the email input is the half that was

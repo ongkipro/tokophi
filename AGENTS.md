@@ -38,6 +38,24 @@ are building one product together, not racing. Everything below was learned by b
   unapplied** on the shared dev DB — `0062` aborted on a column that had arrived earlier via `push`, so
   `0063`–`0083` never ran, for everyone. Mixing `push` and `migrate` on one database is how the
   divergence starts; idempotency is what makes it survivable.
+  - 🔴 **AND A STAMP THAT IS TOO HIGH SKIPS SOMEBODY ELSE'S MIGRATION, SILENTLY.** Drizzle applies only
+    entries whose `when` exceeds the newest stamp already recorded in the target database — so the
+    danger is not just a duplicate `idx`, it is a stamp that JUMPS. Live example, 2026-08-05: the
+    shared dev DB's newest applied stamp was **1785774399036**, which came from `ka/flow-audit` — an
+    **unmerged** branch, whose migration is ALSO numbered `0087` and therefore collides with main's
+    `0087_password_revokes_sessions` (stamped 1785774**06**812888, i.e. lower). Wave 7's `0088` had to be
+    stamped **above** the dev DB's newest (1785774400000) or the column would never arrive locally and
+    `getPlatformSession` would throw → **every operator locked out of the control plane**.
+    ⚠️ **The cost is paid by whoever merges SECOND.** Once wave 7 is on production, production's newest
+    stamp is 1785774400000, so a later merge carrying 1785774399036 is **skipped while printing
+    "migrations applied successfully"**. `verify-migrations` catches the duplicate `0087` **index**, so
+    the collision cannot ship unnoticed — but renumbering to `0089` is only half the fix. **RE-STAMP as
+    well as renumber**, and confirm with `select max(created_at) from drizzle.__drizzle_migrations` on
+    the target, not by reading the journal.
+    ⚠️ **A migration applied to the shared dev DB from an unmerged branch is the root cause here.**
+    It makes every other open branch choose between "works locally" and "works on production". Prefer
+    not to `migrate` a branch's own migration into the shared container until it is close to merging.
+
 - **PR numbers.** `gh pr create` prints the number; **use that one**. Guessing "the next number" is
   how you run `gh pr merge` against a PR that is not yours. It happened on 2026-07-22 and only failed
   because that PR had already been merged.
@@ -242,6 +260,33 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
 
 ## Super Admin — the control plane reaches every tenant
 
+> ### 🔴 THE RULE: **the operator's RANK comes from `platform_admins`, on every request. Never from the cookie.**
+> `getPlatformSession()` decoded the 7-day JWT and returned the claims verbatim — no DB read of any
+> kind. Driven on 2026-08-03 against a live server, ONE cookie held constant while the row was mutated
+> by SQL: an operator **demoted owner → support still minted a new platform operator**; so did one
+> whose row had been **DELETED**; so did one whose **password had been rotated**. Four operator
+> accounts created from one cookie that should have been dead after the first.
+> The merchant side had re-read `store_users` since day one — that is why deleting a membership logs a
+> merchant out. **The control plane, which reaches EVERY tenant, was the weaker of the two.**
+> - The decision is `resolvePlatformSession` (`platform-session.ts`) — PURE, so it is tested; the same
+>   split as `platform-rank.ts`, and for the same reason. Row gone ⇒ null. Password rotated after the
+>   token was minted ⇒ null (`@tokophi/lib/session-revocation`, shared with the merchant side — ONE
+>   implementation, because a copy is how the weaker half survives a fix). Role from the row.
+> - **Cost:** one indexed PK lookup, once in the platform layout and once inside
+>   `requirePlatformAdmin`. There is **no `react` `cache()` pattern in this repo** — the merchant's
+>   `getSession()` is called far more often and is likewise uncached. Do not invent one for this.
+> - ⚠️ **A dead-but-valid cookie makes the layout and the middleware redirect at each other**
+>   (`ERR_TOO_MANY_REDIRECTS` — measured). Middleware runs on the edge and cannot ask the database, so
+>   it sees a valid JWT and bounces `/login` back to `/`. The layout redirects to
+>   **`/api/auth/signout`**, never straight to `/login`: a Server Component cannot delete a cookie and
+>   a route handler can. `apps/admin` has the identical file for the identical reason.
+> - **Operators can change their own password** — avatar menu → "Ubah kata sandi"
+>   (`changePlatformPassword`). Gated on a SESSION, not a rank, deliberately: it acts on the caller's
+>   own row, and a rank floor would stop a `support` operator rotating a leaked credential. The
+>   current password is re-proved instead. Rotating revokes every other session (migration 0088) and
+>   re-mints this tab's cookie with `iat` one second past the stamp.
+>   **Resetting SOMEBODY ELSE's operator password still does not exist** — `NEXT.md` N47.
+
 - **`requirePlatformAdmin(min)` is the first statement of all 27 mutating actions**, and the rank is
   `support` 1 < `admin` 2 < `owner` 3. The ladder lives in `platform-rank.ts` — a PURE module, no DB
   import — because `platform-auth.ts` pulls `@tokophi/db` at module scope, which is why the rule
@@ -301,6 +346,21 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
     nobody can say why. Each minting action returns `password`; the callers show it ONCE
     (`toko-client.tsx` + `pengaturan-client.tsx`: a `duration: Infinity` toast that survives the
     `router.push`; `store-detail.tsx`: the credential dialog). Same two-file rule as thrown errors.
+  - 🔴 **AND THE MIRROR OF IT: never REPORT a credential you did not WRITE** (fixed 2026-08-03).
+    `addStoreUser` minted `pw` unconditionally, hashed it only inside `if (!u)` — the branch that
+    creates a new `users` row — and returned it either way. So adding an email that **already**
+    belonged to someone here produced a "here is their new password" dialog for a string that had
+    never been hashed into any row. Measured: the revealed `tokophi-…` verified against the stored
+    hash as **false**. The operator reads it out, it does not work, and nothing on any screen explains
+    why — the string is well-formed and the operation reported success.
+    ⚠️ **Do NOT "fix" that by rehashing.** Silently resetting an existing person's password because
+    someone added them to a second store locks them out of the first, with no message either. The
+    action now mints INSIDE the branch that writes the hash and returns
+    `password: string | null` + `outcome: "created" | "linked"`; `store-detail.tsx` shows the dialog on
+    one path and says *"Akunnya sudah ada, jadi kata sandinya TIDAK berubah"* on the other. `outcome`
+    is its own field on purpose — "no password" and "no password was NEEDED" read identically at a
+    call site and only one of them is good news. Pinned by `apps/super-admin/lib/add-store-user.test.ts`
+    (both files; proved red against three separate mutations before being trusted).
 - **Never anchor a date to the seed.** `health.ts` measured recency from a frozen `2026-07-02`, so a
   store 34 days dormant read "5 days, ok" and a live one read **−23 hari**. `data.ts` had already been
   migrated off that anchor; the healthcheck was missed. Same rule as the discount editor.
@@ -695,6 +755,24 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   (`ledger_one_sale_per_payment`, `ledger_one_sale_per_order`, `ledger_one_retur_per_order`) plus
   `on conflict do nothing` on every writer. The balance is DERIVED (`Σ amount_idr` by status); there
   is no stored-balance column and there must not be.
+- **⚠️ NOTHING THAT SUMS THE BALANCE MAY JOIN `orders`, and a `payout` entry is why.** Its `order_id`
+  is NULL by design — it belongs to a withdrawal, not an order — so an inner join silently drops every
+  payout and the available balance jumps by everything already paid out (measured on production:
+  Rp21.043.271 → **Rp43.733.271**, handing back Rp23,5jt). By the same token `not exists (select 1 from
+  orders where id = l.order_id)` is TRUE for a NULL, so the obvious orphan query reports every
+  withdrawal as corruption. **Count `order_id IS NULL` separately, always.**
+- **`npm run verify-ledger -w @tokophi/db`** (read-only, safe against production) reports children of
+  `orders` with a missing parent and what they are worth in each store's balance. It exists because
+  production carried **48 such rows** — 10 `payments`, 30 `order_line_items`, 8 `ledger_entries`, all
+  from ten `INV-47xx` orders that no longer exist — putting **Rp810.000 into `available`**, i.e.
+  withdrawable via `requestPayout`, and Rp2.302.000 into `pending`, where `/saldo` printed a held total
+  its own itemised list (`getPendingFunds`, which *does* join `orders`) could not account for.
+  The three FKs are present and VALIDATED and Postgres refuses a dangling insert today, so **no
+  application path can make these**; only a load with referential triggers off (`pg_restore
+  --data-only --disable-triggers`, `session_replication_role = 'replica'`). Cleanup SQL —
+  transactional, guarded, ending in `rollback` — is `ops/tokophi-orphan-cleanup.sql`; it is
+  deliberately **not** a drizzle migration, because merging one would delete production rows
+  unattended on the next Coolify build. Both traps are pinned by `packages/db/src/verify-ledger.test.ts`.
 - **A GUESS MUST NEVER SUCCEED QUIETLY, and "we flag it" is a claim to grep before trusting.** The
   comment above `createShipment`'s destination fallback said the guess "is flagged as a guess" while
   `destinationGuessed` existed **nowhere in the repo** — 77 orders carry no `ship_district_id`, so the

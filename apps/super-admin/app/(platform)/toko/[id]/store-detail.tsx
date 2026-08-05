@@ -144,11 +144,23 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
       router.refresh();
     });
   }
+  // ⚠️ The credential dialog and the toast BOTH follow `outcome` — a caller that ignores it reports
+  // a handover that did not happen. `addStoreUser` returns `password: null` when the email already
+  // belonged to someone here: it links the membership and deliberately does NOT rehash, so there is
+  // no new credential to reveal and the operator must be told to say so rather than read out a
+  // string that cannot log the merchant in. (See the note above the action.)
   function submitAddUser() {
     startTransition(async () => {
       const r = await addStoreUser(store.id, { name: auName, email: auEmail, role: auRole });
-      if (r.ok) { setAddOpen(false); setAuName(""); setAuEmail(""); if (r.password) setCred({ email: auEmail, password: r.password }); toast.success("User ditambahkan."); router.refresh(); }
-      else toast.error(r.error ?? "Gagal menambah user.");
+      if (!r.ok) { toast.error(r.error ?? "Gagal menambah user."); return; }
+      setAddOpen(false); setAuName(""); setAuEmail("");
+      if (r.outcome === "created" && r.password) {
+        setCred({ email: auEmail, password: r.password });
+        toast.success("User ditambahkan — akun baru dibuat, salin kata sandinya sekarang.");
+      } else {
+        toast.success("User ditambahkan ke toko ini. Akunnya sudah ada, jadi kata sandinya TIDAK berubah — pakai yang lama.");
+      }
+      router.refresh();
     });
   }
 

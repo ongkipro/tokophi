@@ -1419,6 +1419,12 @@ export const platformAdmins = pgTable("platform_admins", {
   email: text().notNull().unique(),
   name: text(),
   passwordHash: text(), // scrypt "salt:hash" (local auth)
+  // Rotating an operator's password ends every session that password opened. Same rule, same trigger
+  // FUNCTION and the same pure comparison as `users.password_changed_at` (0087) — the control plane
+  // got it in 0088, the migration that also gave operators a way to change their own password at
+  // all. Written ONLY by `platform_admins_stamp_password_changed_at`; never set it from a query.
+  // NULL = never rotated → nothing to revoke.
+  passwordChangedAt: ts(),
   role: text().notNull().default("owner"),
   createdAt: createdAt(),
 });

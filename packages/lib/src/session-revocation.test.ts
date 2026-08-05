@@ -118,3 +118,58 @@ dbSuite("users.password_changed_at is stamped by the DATABASE, not by callers", 
     expect(row.password_changed_at).toBeNull();
   });
 });
+
+// ── The CONTROL PLANE half (migration 0088). Same guarantee, same trigger FUNCTION, second table.
+//
+// `platform_admins` had no revocation of any kind — and no way to change a password at all, so the
+// question never came up until one had to be rotated. The trigger is deliberately 0087's function
+// re-used rather than a second copy: this repo has twice paid for a duplicated security rule (two
+// password mints, one of them 24 bits, on the weaker path). What that re-use makes worth asserting
+// is that the function really was ATTACHED here — a trigger nobody created is a column that stays
+// NULL forever, which reads exactly like "never rotated" and silently revokes nothing.
+dbSuite("platform_admins.password_changed_at is stamped by the same DATABASE trigger", () => {
+  let sqlc: ReturnType<typeof postgres>;
+  beforeAll(() => {
+    sqlc = postgres(URL!, { max: 1 });
+  });
+  afterAll(async () => {
+    await sqlc?.end();
+  });
+
+  async function withOperator(mutate: (tx: postgres.TransactionSql, id: string) => Promise<void>) {
+    let out: { password_hash: string | null; password_changed_at: Date | null } | undefined;
+    const ROLLBACK = Symbol("rollback");
+    try {
+      await sqlc.begin(async (tx) => {
+        const [a] = await tx<{ id: string; password_changed_at: Date | null }[]>`
+          insert into platform_admins (email, name, role, password_hash)
+          values (${`revocation-${Date.now()}@test.invalid`}, 'Test', 'support', 'salt:aaaa')
+          returning id, password_changed_at`;
+        expect(a.password_changed_at, "an INSERT must not stamp").toBeNull();
+        await mutate(tx, a.id);
+        [out] = await tx`select password_hash, password_changed_at from platform_admins where id = ${a.id}`;
+        throw ROLLBACK;
+      });
+    } catch (e) {
+      if (e !== ROLLBACK) throw e;
+    }
+    return out!;
+  }
+
+  it("rotating an operator's password stamps it", async () => {
+    const row = await withOperator(async (tx, id) => {
+      await tx`update platform_admins set password_hash = 'salt:bbbb' where id = ${id}`;
+    });
+    expect(row.password_hash).toBe("salt:bbbb");
+    expect(row.password_changed_at).toBeInstanceOf(Date);
+  });
+
+  it("changing an operator's ROLE does not stamp", async () => {
+    // A demotion must not also sign the operator out — the re-read already handles rank on the next
+    // request, and conflating the two would make every role edit an unexplained logout.
+    const row = await withOperator(async (tx, id) => {
+      await tx`update platform_admins set role = 'admin' where id = ${id}`;
+    });
+    expect(row.password_changed_at).toBeNull();
+  });
+});

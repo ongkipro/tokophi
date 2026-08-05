@@ -624,6 +624,13 @@
       "when": 1785895548092,
       "tag": "0088_ka_shipment_payment",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1785895600000,
+      "tag": "0089_platform_password_revokes_sessions",
+      "breakpoints": true
     }
   ]
 }

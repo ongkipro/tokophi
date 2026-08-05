@@ -62,6 +62,17 @@ const RETIRED: Record<string, string> = {
   "0064_store_public_email":
     "renumbered to 0070_store_public_email after feat/cetak-resi-demo landed its own 0064–0069 " +
     "while this entry was open. Same SQL, higher stamp.",
+  "0088_platform_password_revokes_sessions":
+    "renumbered to 0089 after ka/flow-audit landed its own 0088_ka_shipment_payment while this " +
+    "entry was open. Same SQL. ⚠️ THE RENUMBER WAS THE EASY HALF — this entry was stamped " +
+    "1785774400000, deliberately HIGH because the shared dev DB already carried that branch's " +
+    "then-unmerged migration; once it landed, main's newest stamp became 1785895548092, i.e. " +
+    "ABOVE ours. Drizzle applies only entries past the target's newest stamp, so keeping the old " +
+    "number's stamp would have left this migration SKIPPED on production while printing " +
+    "'migrations applied successfully' — and with no platform_admins.password_changed_at column, " +
+    "getPlatformSession throws and every operator is locked out of the control plane. Re-stamped " +
+    "to 1785895600000. RENUMBER AND RE-STAMP ARE TWO SEPARATE OBLIGATIONS; this check catches the " +
+    "first, and nothing catches the second but reading max(created_at) on the target.",
 };
 
 type Entry = { idx: number; version: string; when: number; tag: string; breakpoints: boolean };

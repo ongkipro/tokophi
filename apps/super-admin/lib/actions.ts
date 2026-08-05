@@ -721,21 +721,50 @@ export async function removeStoreUser(storeId: string, storeUserId: string): Pro
   return { ok: true };
 }
 
-export async function addStoreUser(storeId: string, input: { name: string; email: string; role: "admin" | "staff" | "gudang" }): Promise<{ ok: boolean; password?: string; error?: string }> {
+/**
+ * Add a user to a store. TWO outcomes, and they are not the same event:
+ *
+ *   `created` — the email was new here, so a `users` row was written WITH a fresh password hash.
+ *               That password is the only copy in existence; the operator hands it over once.
+ *   `linked`  — the email already belonged to someone on this platform (a merchant who staffs two
+ *               shops, a returning owner). We add the MEMBERSHIP and touch nothing else.
+ *
+ * 🔴 IT REPORTED `created` FOR BOTH. `const pw = tempPassword()` was minted unconditionally, the
+ * hash was written only inside `if (!u)`, and the return handed `pw` back either way — so linking an
+ * existing person produced a "here is their new password" credential dialog for a string that had
+ * never been hashed into any row and could not log anybody in. The operator then reads it out to the
+ * merchant, the merchant tries it, it fails, and neither of them can tell why: the password is
+ * well-formed, the account exists, and every screen said the operation succeeded.
+ *
+ * ⚠️ AND THE FIX IS **NOT** TO REHASH. Silently resetting an existing person's password because
+ * someone added them to a second store would lock them out of the first one — a worse bug, and one
+ * with no message anywhere either. `password: null` plus a caller that says what actually happened
+ * is the honest shape. `outcome` is returned as its own field rather than left to be inferred from
+ * `password == null`, because "no password" and "no password was NEEDED" read identically at a call
+ * site and only one of them is good news.
+ */
+export async function addStoreUser(storeId: string, input: { name: string; email: string; role: "admin" | "staff" | "gudang" }): Promise<{ ok: boolean; password?: string | null; outcome?: "created" | "linked"; error?: string }> {
   await requirePlatformAdmin();
   const email = input.email?.trim().toLowerCase();
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, error: "Email tidak valid." };
   let [u] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email)).limit(1);
-  const pw = tempPassword();
+  // Minted INSIDE the branch that writes it, so the returned credential and the stored hash cannot
+  // drift apart again — there is no `pw` in scope on the path that writes no hash.
+  let minted: string | null = null;
   if (!u) {
+    const pw = tempPassword();
     [u] = await db.insert(schema.users).values({ email, name: input.name?.trim() || email, passwordHash: hashPassword(pw) }).returning({ id: schema.users.id });
+    minted = pw;
   }
   const [dup] = await db.select({ id: schema.storeUsers.id }).from(schema.storeUsers).where(and(eq(schema.storeUsers.storeId, storeId), eq(schema.storeUsers.userId, u.id))).limit(1);
   if (dup) return { ok: false, error: "User sudah ada di toko ini." };
   await db.insert(schema.storeUsers).values({ storeId, userId: u.id, role: input.role, acceptedAt: new Date() });
-  await logStore(storeId, `User ${email} (${input.role}) ditambahkan oleh platform`);
+  // The audit line says which of the two happened too — "ditambahkan" alone cannot be reviewed later
+  // to answer "was this person given a credential?".
+  const how = minted ? "akun baru dibuat" : "akun yang sudah ada dihubungkan";
+  await logStore(storeId, `User ${email} (${input.role}) ditambahkan oleh platform — ${how}`);
   revalidatePath(`/toko/${storeId}`);
-  return { ok: true, password: pw };
+  return { ok: true, password: minted, outcome: minted ? "created" : "linked" };
 }
 
 // ============================================================================
