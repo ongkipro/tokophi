@@ -22,6 +22,14 @@
 > ⚠️ **Three entries in this file have now been found to rest on claims that were false** — N13's, N6's
 > and N8's. Read an entry before trusting its sizing. That is the pattern, not the exception.
 >
+> 🟣 **AUDIT WAVE 7 (2026-08-03) ADDED N36–N46** — the surfaces the first six waves never touched:
+> `apps/landing`, admin empty states + zero-state arithmetic, the public API surface, seed-vs-production
+> drift, date anchors in write paths, and accessibility beyond checkout. **Nothing above was renumbered.**
+> The owner-facing narrative — what six waves changed, what is still open, what was deliberately NOT
+> done, and the decisions waiting on him — is **[`../AUDIT-SUMMARY.md`](../AUDIT-SUMMARY.md)**.
+> ⚠️ **Every wave-7 entry is labelled MEASURED or READ.** Do not upgrade a READ to a MEASURED without
+> running something; three claims have already been retracted here for blurring that line.
+>
 > ▶ **Starting work? The working brief is
 > [`2026-08-01-followups-n5-n14.md`](./2026-08-01-followups-n5-n14.md)** — **N14 is CLOSED**, so ② N5
 > (`dom-size`) is the head of it, and part of N5 has landed too.
@@ -756,6 +764,299 @@ decision to take unilaterally.
 - **`ERR_CONNECTION_REFUSED` on storefront pages** is the admin origin not running in an isolated scan.
 - **No horizontal overflow at 390 px** on any storefront route. The one hit was `/sitemap.xml` — XML in
   a browser, a false positive of the check.
+
+---
+
+## 🟣 AUDIT WAVE 7 (2026-08-03) — the surfaces nobody had audited
+
+Waves 1–6 concentrated on checkout, money, passwords, RLS, storefront performance and the super-admin.
+This wave swept what was left: `apps/landing`, admin **error paths and empty states**, the **public API
+surface**, **seed vs production drift**, **date anchors in write paths**, and **accessibility beyond
+checkout**. Full narrative + the measured/inferred split: **[`../AUDIT-SUMMARY.md`](../AUDIT-SUMMARY.md)**
+§5.
+
+> ⚠️ **Each entry below is labelled MEASURED or READ.** MEASURED = something was run and this is its
+> output. READ = the code was read line by line and the conclusion follows from it, but the thing that
+> would prove it was not run. Three claims have already been retracted in this repo for blurring that
+> line — do not upgrade a READ to a MEASURED without running something.
+
+### N36. Three public routes take the TENANT from the BODY, and two are cross-store oracles · **M** · NEW
+**READ** — `promo/route.ts:31-34`, `order/route.ts:192-199`, `ongkir/route.ts:81-88`. All three resolve
+the store from a body field `storeSlug`; the slug is public (it is the storefront hostname).
+
+⚠️ **The contrast is already a written rule in this repo, on the other surface.** Every storefront
+endpoint resolves the tenant from the **`Host` header** and refuses to read a store id from the body —
+`checkout-session.ts:13-15` and `track.ts:9-11` say so in as many words, and `search.ts:3-5` explains
+why: *"a store id in a query string would let one shop's palette read another shop's catalogue."*
+
+What that buys an anonymous caller today:
+- **`/api/public/promo` is a side-effect-free voucher oracle against ANY store**, 30/min/IP, CORS `*`.
+  `applyDiscount` (`lib/promo.ts:49-56`) returns **six distinguishable answers** — not found · inactive ·
+  not yet valid · expired · quota exhausted · and `` `Minimum belanja Rp{N} untuk voucher ini.` ``,
+  **which discloses the exact threshold**. `AGENTS.md`'s "Codes are unique PER STORE" section already
+  flags the competitor-probe risk; this route is where it is reachable without a login.
+- **`/api/public/order` discloses exact live stock**: `` `Stok "${prod.title}" tidak mencukupi (sisa
+  ${available}).` `` (`order/route.ts:321`), one variant per request, 10/min/IP, against any slug.
+
+⚠️ The limiter is a module-scope `Map` keyed on a **header-derived** IP (`public-guard.ts:5-8` falls back
+to `x-forwarded-for`), so it resets on every redeploy — and `#147` measured **13–24 deploys a day**.
+
+**AC:** either the error taxonomy collapses to one indistinguishable refusal for a code that is not
+usable *right now*, or the preview endpoint requires the same Host-derived tenant the storefront already
+has. **Do NOT simply lower the rate limit** — that changes the cost of the probe, not its existence.
+
+### N37. No body-size or array-length cap on ANY public route · **S** · NEW
+**MEASURED** — `grep` for `slice(`/`length >`/`MAX_` across `apps/admin/app/api/public/**`: the only cap
+on any input is `sessionId.slice(0, 64)` (`order/route.ts:782`). `next.config.ts` sets no body limit.
+
+`/api/public/order:151` filters `items[]` and never truncates it, then does ~4 DB round-trips **per
+element** (`:257-360`) before the transaction opens; `/api/public/ongkir:108` forwards `body.items`
+straight into `weightForCart`, which builds an `inArray` of that length.
+
+⚠️ **The right answer is already in the repo:** `apps/storefront/src/pages/api/checkout-session.ts:109`
+does `v.slice(0, 50)` — and that file only *records* a cart it will never charge. The endpoint that turns
+the same cart into money and stock caps nothing. Same file also shows the bot gate the four admin public
+routes do not have (`BOT_UA`, 40+ patterns) — **MEASURED**: `grep BOT_UA apps/admin/app/api/public/`
+returns nothing.
+
+**AC:** a named constant cap on `items[]` on both routes, refused with a merchant-safe message, plus a
+body-size limit; and a one-line note saying which number was chosen and why (the storefront's 50 is the
+obvious precedent).
+
+### N38. Provider error text is returned verbatim to anonymous shoppers · **S** · NEW
+**READ**, traced at every hop:
+
+```
+kiriminaja.ts:94       { ok:false, error: r.text }          ← the vendor's own message
+shipping-quote.ts:176  { ok:false, error: r.error ?? … }
+ongkir/route.ts:111    NextResponse.json({ ok:false, error: q.error })   → shopper
+order/route.ts:474     bad(quote.error, "shipping")                      → shopper
+autolaris.ts:116       { ok:false, error: r.ket ?? `Gagal (rc=${r.rc})` }
+order/route.ts:859     NextResponse.json({ …, payError: pay.error })     → shopper
+```
+
+⚠️ **NOT measured:** whether a real provider error string names its brand. What is certain is that it is
+the vendor's internal error taxonomy, on a shopper's screen, in a product whose rule (ADR 0004) is that
+provider brands stay hidden from clients. `#143` already fixed this class for `cancelShipment` — refuse
+**before** the network call and name the next step *instead of quoting the vendor*. The `throw` paths
+here are already correct (fixed Bahasa strings); it is the `{ok:false}` paths that leak.
+
+**AC:** the shopper-facing string is ours on every branch; the vendor's text goes to `console.error` only.
+
+### N39. `npm test` silently skips the 22 money tests inside a worktree — and worktrees are the mandated workflow · **S** · NEW
+**MEASURED**, in `wave7/w7-audit`:
+
+| run | result |
+|---|---|
+| `npm test` | banner *"DB-COUPLED SUITES SKIPPED … No DATABASE_URL (env or root .env)"*, **36 tests skipped of 299**, **exit 0** |
+| `DATABASE_URL=… npx vitest run`, same worktree, no code change | **39 files, 299 passed, 0 skipped** — `ledger-credit.test.ts` (22) among them |
+| `npm run test:db` | fails correctly and names the reason |
+
+Structural cause: `.gitignore:8` is `.env*`, so a worktree **can never** carry a root `.env`; and
+`test/db-setup.ts:33` reads only `path.join(ROOT, ".env")` — its own root — and stops.
+
+🔴 **This repo already solved it, twice, elsewhere.** `apps/storefront/scripts/check-env.mjs:84-91` reads
+**both** files and its comment states the reason verbatim: *"because a worktree lives at
+`<main>/.claude/worktrees/<name>` and `.env` is gitignored, so a worktree never has one — the main
+checkout's."* Eleven `packages/db` scripts do the same via `dotenv -e ../../.env -e ../../../../../.env`.
+**Three resolvers; the one that does not know about worktrees is the one gating the money tests.**
+
+**MEASURED** — of **30 worktrees** on this machine, **3 have no root `.env`**, including two of the three
+wave-7 worktrees created today. So the env copy usually works; when it does not, the failure is **silent
+and green**, which is exactly the condition `#129` was written to end.
+
+**AC:** `test/db-setup.ts` falls back to the main checkout's `.env` the way `check-env.mjs` does, proven
+by running `npm test` in a worktree with no root `.env` and seeing 0 skipped.
+
+### N40. A literal `NaN` in an SVG path, and formatters with no non-finite floor · **S** · NEW
+**MEASURED** — the exact expression from `apps/admin/components/admin/kpi-card.tsx:10`, one data point:
+
+```
+d = "MNaN,30.0"
+```
+
+Its guard is `if (!data.length) return null` (`:7`) — that catches **empty**, not **one point**, and
+`i / (data.length - 1)` is `0 / 0`. Both `<path d>` attributes ship the string `NaN`; the browser drops
+the path and the sparkline vanishes.
+
+Reachable: `/analitik` range **"Bulan Ini"** uses `inMonth(thisMonth)` (`dashboard.ts:56`, `:45`) over a
+series that is dense-to-today, so **on the 1st of any month it yields exactly one `DayPoint`** →
+`getSeries` returns one point (`dashboard.ts:129-132`) → all four KPI sparklines
+(`analitik-client.tsx:62-64, 74-79`).
+
+🔴 **The byte-identical function one directory over is already guarded** —
+`components/admin/dashboard/money-strip.tsx:26` reads `if (data.length < 2) return null`. Two copies of
+one function; the dashboard's is right and `/analitik`'s is not. **Delete one of the two rather than
+fixing both.**
+
+And **MEASURED**, running the four exported formatters in `packages/lib/src/format.ts`:
+
+| input | `IDR` | `IDR({compact})` | `num` | `pct` | `share` |
+|---|---|---|---|---|---|
+| `NaN` | `RpNaN` | `RpNaN` | `NaN` | `NaN%` | `NaN%` |
+| `Infinity` | `Rp∞` | **`RpInfinity M`** | `∞` | `+Infinity%` | `Infinity%` |
+
+So ~30 hand-written divisor guards are the only thing between a merchant and `RpNaN`, and the guard above
+proves that discipline has already slipped once. `pct(NaN)` even drops its sign, because `n > 0` and
+`n < 0` are both false.
+
+**AC:** the sparkline duplicate is gone; `IDR`/`num`/`pct`/`share` render a defined fallback for
+non-finite input; a test that goes red on `IDR(0/0)`.
+
+### N41. Seed drift that never reached an existing store — five data fixes, ranked · **M** · NEW
+"The seed is not a migration" is already the rule. What had never been counted is **how much is left
+behind**. Ranked by what it costs a live merchant:
+
+| # | Drift | Consequence | Evidence |
+|---|---|---|---|
+| 1 | `platform_couriers.services` changed **dialect** on 2026-07-14 — `["REG","BEST"]` → `{type,name,group,cod,codAllowed}` | It is a **platform singleton**. A DB first seeded before that date has **no `codAllowed` at all** ⇒ the COD chain's second link fails ⇒ **COD is off platform-wide**, and `/api/public/ongkir`'s `"<courier>:<service_type>"` key can never match | **READ** — `seed.ts:1680-1685` states it. Dev container **MEASURED** on the NEW dialect; **production NOT checked** |
+| 2 | `store_settings.sender_kecamatan_id` (the ongkir origin), 2026-07-14 | Every quote on that shop falls back to fuzzy-matching the registered city name and returns `originFrom: "store-city"` | **MEASURED** — **6 of 7 stores on the dev DB have it NULL** |
+| 3 | `store_shipping_methods` (18 rows), 2026-07-14 | Zero rows ⇒ fallback to `store_settings.couriers`, which is **NULL on all 7** = "every courier KiriminAja returns". The shop offers Jagopack / BIGPACK / SiCepat CARGO at checkout — the hole `35b88a4` closed | **MEASURED** |
+| 4 | `reviews.product_id`, 2026-07-15 | Reviews seeded earlier landed with `product_id = NULL`, so **no product carries a rating**, and **no migration backfills it** | **READ** — grep of every `packages/db/drizzle/*.sql` |
+| 5 | `platform_payment_channels` (2026-07-09) · `platform_payout` (2026-07-14) | Both platform singletons. An older DB has **zero payment channels at checkout**, and the payout policy the super-admin renders does not exist in the DB | **READ** — `seed.ts:1768`, `:1761-1765` |
+
+✅ **The control group, and it is the pattern to copy:** `payments.store_id` got `0036` with a real
+`UPDATE … FROM orders`; product numbering got `0081` (columns → backfill → constraints →
+`INSERT INTO store_counters SELECT … FROM stores` for **every existing store**); phone canonicalisation
+got `0048`. Those three are what "an existing store needs this too" looks like when it is done.
+
+⚠️ **N33 is the counter-example and must not be swept into this**: the seed's `1×1×1 cm` dimensions are a
+change an existing store should **not** receive — NULL is safer there, because the booking declares them.
+
+**AC:** each of the five is either applied to production with the SQL stated in the commit body, or
+explicitly ruled not-needed with the reason. Check production before writing anything — see the psql
+snippet in `AGENTS.md`.
+
+### N42. `SEED_FORCE=1` destroys operator config with no restore path — including CAPI tokens · **S** · NEW
+**READ** — `seed.ts:672`. The truncate keep-list is
+`('__drizzle_migrations','kiriminaja_areas','kelurahan','product_taxonomy')`. All three reference tables
+are present, so the `AGENTS.md` landmine is satisfied. **But the list only protects REFERENCE data.**
+
+Destroyed and **never put back by any seed**:
+- **`store_tracking_channels`** — every store's pixel ids **and its encrypted CAPI token**. The seed does
+  not insert this table *at all*. ⚠️ And the single row in it is what `check-pixel-defer.mjs` reads, so a
+  force-reseed silently turns that guard into **SKIP** — an alarm that stops guarding without failing.
+- **`shipping_aggregator.api_key`** and **`platform_payment_gateways.credentials`** — re-seeded **NULL**
+  (`seed.ts:1676-1679`).
+- **`platform_admins`** — a rotated operator password goes back to `tokophi123` (`seed.ts:1557`). This
+  interacts directly with **N29**.
+- non-demo `page_templates`, `flash_sales` — gone.
+
+**AC:** either those tables join the keep-list, or `SEED_FORCE=1` prints exactly what it is about to
+destroy and what has no restore path, and `AGENTS.md` says so beside the existing landmine note.
+
+### N43. Two live defects that exist only in a commit body, and nothing tracks them · **S** · NEW
+`b5f9ded` (wave 6) named them *"both real, both one surface up"* and neither reached this file.
+**MEASURED** — both verified at HEAD, and `grep` over `NEXT.md` + `BACKLOG.md` for either returns **zero**.
+
+1. 🔴 **`getPlatformSession()` returns the JWT payload VERBATIM with no DB re-read at all** —
+   `apps/super-admin/lib/platform-auth.ts:47-56`: `jwtVerify` then `return payload as PlatformSession`.
+   A **demoted or deleted platform operator keeps their rank for 7 days**, and `platform_admins` has no
+   revocation of any kind. That is **strictly worse than the merchant bug `0087` just closed**, where
+   `getSession()` at least re-reads membership. It is also the same surface as **N1**.
+2. **`addStoreUser` returns `password: pw` even when the user already existed and the hash was NOT
+   written** — `apps/super-admin/lib/actions.ts:729-738`: `pw` is minted unconditionally at `:729` but
+   `hashPassword(pw)` only runs inside `if (!u)`. The operator is handed a password that cannot
+   authenticate, and nothing says so.
+
+⚠️ **The finding behind the finding.** `AGENTS.md` already says *"Hand off in the repo, not in chat"*.
+What is missing is the second half: **and in `NEXT.md`, in the same commit** — the rule `#134` wrote for
+CLOSING an entry applies just as much to OPENING one.
+
+**AC:** ① `getPlatformSession` re-reads `platform_admins` (rank and existence) on every call, the same
+one-round-trip shape `getSession()` uses; ② `addStoreUser` returns `password` only when it wrote the hash.
+
+### N44. Empty states: the first screen a new merchant opens is the emptiest · **S** · NEW
+**READ** — grep finds no zero-length branch in any of the four:
+
+| screen | what a merchant with no data sees |
+|---|---|
+| `/` → `components/admin/recent-orders.tsx:20` | a **fully-rendered table header** (Pelanggan · Invoice · Channel · Status · Total) with zero rows. Worse than blank — column headers assert there is a table to read |
+| `/` → `components/admin/live-activity.tsx:23` | a card title over an entirely empty body |
+| `/pelanggan/segmen` → `segmen-client.tsx:244` | a strip reading *"**0** segmen aktif"*, then a blank grid. The only way forward is the header CTA, which is `crm:write`-gated — so a **staff user sees a page that is blank below the strip** |
+| `/crm/template` → `template-client.tsx:349` | the "Variabel tersedia" helper renders unconditionally — documentation for a feature the store has no instance of — then blank space. Same permission-gated CTA |
+
+Seventeen other screens **do** have one, some very good (`pesanan-client.tsx:436` distinguishes "no
+orders yet" from "no match for this filter"). There is **no shared `EmptyState` primitive** in
+`packages/ui`, which is why the coverage is uneven.
+
+Filed together with it, same screens: **`lib/data/dashboard.ts:65`** returns `0` for a zero baseline, so
+a first-ever month of Rp0 → Rp5jt renders **"+0,0%" beside a green up-arrow** (`kpi-card.tsx:41,51` treats
+`0` as a rise). ✅ **The honest version already exists** — `app/(admin)/keuangan/page.tsx:27-28` returns
+`null` and renders *"Belum ada periode pembanding."*, with a comment saying *"both of which would be
+inventions."*
+
+**AC:** the four screens render an empty state; a zero baseline renders no delta rather than a fabricated
+one; and if a shared primitive is added, the seventeen existing ones are left alone unless they are worse.
+
+### N45. Accessibility beyond checkout — one heading skip, one screen with no `<h1>`, three unlabelled destructive buttons · **S** · NEW
+**MEASURED** (grep), except where noted:
+
+- **`/produk` skips h1 → h3.** `produk-client.tsx:402` is the **only heading tag in the whole file**
+  (`<h3>` for the product name on each grid card); the `<h1>` comes from `PageHeader` and there is no
+  `<h2>` anywhere. ⚠️ **This repo already wrote the rule down twice, in two other files** —
+  `pemasaran/feed-card.tsx:133` and `navigasi/navigasi-client.tsx:704` both carry the comment *"h2, not
+  h3 — this page's only other heading is the page `<h1>`"*. Two authors reasoned it through; the third
+  instance was missed. Change the tag, leave the `className`, exactly as `#139` did.
+- **`/tema/[id]` has no `<h1>` in application code at all** — `builder-client.tsx` contains **zero**
+  `<h1>`/`<h2>`/`<h3>`/`PageHeader` (`grep -c` = 0). The only title is handed to `<Puck headerTitle=…>`,
+  third-party. Every other admin route gives a screen-reader user a heading to land on.
+- **Three destructive icon-only buttons with no accessible name**, all in one file:
+  `promo/[id]/promo-editor-client.tsx:207` (delete a benefit bullet), `:230` (remove an "Ideal Untuk"
+  chip), `:291` (delete a problem bullet). All three are one click, unconfirmed. `:230` is the sharpest —
+  the chip's label sits in the **parent** `<span>`, outside the button, so it contributes nothing to the
+  name. `collection-editor.tsx:593` does the identical job with `aria-label={\`Hapus ${p.name}\`}`.
+
+🔵 **Checked and clean, so nobody re-chases:** no colour-only status badge anywhere in `apps/admin` (all
+six order statuses and all five other badges carry text; colour is redundant encoding); all 13 `<img>`
+carry `alt`; 17 of 19 icon buttons carry an `aria-label`, most of them contextual.
+
+**AC:** `/produk` renders h1 → h2; `/tema/[id]` has an `<h1>`; the three buttons have names that say
+which item they delete.
+
+### N46. The credential sweep scans `apps/` only, while its sibling already scans the whole repo · **S** · NEW
+**MEASURED** — `packages/lib/src/no-published-credentials.test.ts:25`: `const APPS = join(ROOT, "apps")`,
+and `sources(APPS)` is what it walks. So **23 `.astro`/`.tsx` files under `packages/{sections,ui}` —
+markup that is rendered into merchants' live storefronts — are outside it.** `packages/lib/src/password.test.ts`
+next door already walks `git ls-files` over the entire repo (that widening was `#141`'s fix for exactly
+this shape).
+
+**MEASURED** — nothing is there today: a grep for `tokophi123` / `admin@tokophi` / `ongki@batiknusantara`
+across `packages/sections` + `packages/ui` returns nothing. This is about the guard's **reach**, not a
+live leak — the same *"never bind a guard to a list of targets"* rule the file's own comments make, one
+scope up.
+
+**AC:** the sweep's root is the repo (or `apps/` + `packages/`), proven by planting a credential in a
+`packages/sections` component and watching it go red, then removing it.
+
+### 🔵 Wave 7 — checked and CLEAN (do not re-chase)
+- 🔴 **No frozen seed anchor survives in ANY application read or write path.** Four sweeps of the whole
+  worktree (`2026-06-30`, `2026-07-02`, `TODAY|ADMIN_TODAY|ANCHOR`, `new Date("2026`): every hit under
+  `apps/` is a **comment recording a fix that landed**, a test, or `lib/mock/store.ts` — and that mock's
+  `TODAY` never reaches runtime, because **all 30 `import … from "@/lib/mock/store"` sites are
+  type-only**. `createdAt` is never explicitly stamped anywhere in app code; the two `acceptedAt` stamps
+  are required (`store_users.accepted_at` is `ts()`, with no `defaultNow()`). **MEASURED.**
+- **All four `/api/public/**` routes ARE rate-limited** — ongkir 60/min, order 10/min, promo 30/min,
+  pay/callback 60/min per IP. **MEASURED.** Wave 6's "invisible to two guards" was about the source
+  sweeps, not the limiters. `pay/callback` is the one authenticated route: `timingSafeEqual` shared
+  secret, fails closed in production if unset, limiter **before** the compare.
+- **All three cron routes require `CRON_SECRET` and REJECT in production when it is unset.** **MEASURED.**
+  (Minor: all three sidecars pass it in the **query string** — `docker-compose.coolify.yml:237,266,290` —
+  although the routes also accept `x-cron-secret`, and `docker top` on a sidecar prints it expanded.)
+- **`apps/landing` publishes zero credentials**, has zero forms, zero `<img>`, exactly one `<h1>` per
+  page, no heading skips and no broken internal links, and **does not assert a legal entity that may not
+  exist** — the four "belum lengkap" notices say the opposite, loudly. Its four served HTML comments are
+  benign. What is left there is **owner work, not engineering**: the four `PUBLIC_LEGAL_*`/`PUBLIC_CONTACT_*`
+  build args are **passed nowhere** (`docker-compose.coolify.yml:176-200` has no `args:` block —
+  **MEASURED**), there is no ToS and no refund policy, and the apex states no price at all. Two small
+  code-side leftovers: `index.astro:132` states **"COD" flatly** while `store_settings.cod_enabled`
+  defaults **false** (`schema.ts:1213`) and COD is SPX-only / Rp2jt-capped / 6 provinces; and
+  `docker-compose.coolify.yml:173` still describes landing as *"currently 'segera hadir'"*, the exact copy
+  `#141` deleted from the page.
+- **~30 division sites across admin + super-admin are correctly guarded** — every return rate, funnel
+  step, AOV, conversion and channel share. The two exceptions are N40.
+- **There is no `.html` report anywhere in this repo** — `find` outside `node_modules`/`.git` returns
+  zero. **MEASURED.** One was not created; that is the owner's call.
 
 ---
 
