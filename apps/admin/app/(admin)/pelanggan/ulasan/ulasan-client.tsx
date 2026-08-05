@@ -9,16 +9,13 @@ import {
   MoreHorizontal,
   Check,
   EyeOff,
-  MessageSquare,
-  Search,
-  Trash2,
+  MessageSquare,Trash2,
   Clock,
 } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { Card } from "@tokophi/ui/card";
 import { Badge } from "@tokophi/ui/badge";
 import { Button } from "@tokophi/ui/button";
-import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
 import { Textarea } from "@tokophi/ui/textarea";
 import {
@@ -37,6 +34,7 @@ import {
 import { type Review, type ReviewStatus } from "@/lib/mock/store";
 import { num } from "@tokophi/lib/format";
 import { cn } from "@tokophi/ui/lib/utils";
+import { SearchInput } from "@/components/admin/search-input";
 
 // Render a 1..5 rating as filled/empty stars.
 function Stars({
@@ -186,15 +184,13 @@ export function UlasanClient({ reviews }: { reviews: Review[] }) {
             </TabsList>
           </Tabs>
 
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Cari pelanggan, produk, atau isi ulasan…"
-              className="h-8 w-full pl-8 lg:w-72"
-            />
-          </div>
+          <SearchInput
+            label="Cari ulasan"
+            value={query}
+            onValueChange={setQuery}
+            placeholder="Cari pelanggan, produk, atau isi ulasan…"
+            inputClassName="h-8 w-full lg:w-72"
+          />
         </div>
 
         <Separator />

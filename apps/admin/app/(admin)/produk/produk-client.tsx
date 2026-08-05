@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Plus, Upload, Search, LayoutGrid, List, ChevronDown, MoreHorizontal,
+  Plus, Upload,LayoutGrid, List, ChevronDown, MoreHorizontal,
   Pencil, Copy, Archive, Package, CheckCircle2, AlertTriangle, Tags, Check,
   ArrowUpDown, X, Trash2, CircleCheck, FileText, Calendar, Sparkles,
 } from "lucide-react";
@@ -21,7 +21,6 @@ import { useCan } from "@/components/admin/permissions";
 import { Card, CardContent } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Badge } from "@tokophi/ui/badge";
-import { Input } from "@tokophi/ui/input";
 import { Checkbox } from "@tokophi/ui/checkbox";
 import { Separator } from "@tokophi/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
@@ -30,6 +29,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator,
 } from "@tokophi/ui/dropdown-menu";
+import { SearchInput } from "@/components/admin/search-input";
 
 const LOW_STOCK = 20;
 
@@ -260,10 +260,13 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
 
       {/* Toolbar */}
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari produk…" className="pl-8" />
-        </div>
+        <SearchInput
+          label="Cari produk"
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Cari produk…"
+          className="w-full sm:max-w-xs"
+        />
         <div className="flex flex-wrap items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>

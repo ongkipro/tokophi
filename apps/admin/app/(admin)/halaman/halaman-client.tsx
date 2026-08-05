@@ -4,9 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Plus,
-  Search,
-  ChevronDown,
+  Plus,ChevronDown,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -31,7 +29,6 @@ import {
   TableRow,
 } from "@tokophi/ui/table";
 import { Button } from "@tokophi/ui/button";
-import { Input } from "@tokophi/ui/input";
 import { Checkbox } from "@tokophi/ui/checkbox";
 import {
   DropdownMenu,
@@ -40,6 +37,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@tokophi/ui/dropdown-menu";
+import { SearchInput } from "@/components/admin/search-input";
 
 // ---- status filter ----
 type StatusFilter = "semua" | "terbit" | "draft";
@@ -135,15 +133,13 @@ export function HalamanClient({ pages }: { pages: CmsPage[] }) {
 
       {/* Toolbar */}
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Cari halaman…"
-            className="pl-8"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
+        <SearchInput
+          label="Cari halaman"
+          placeholder="Cari halaman…"
+          className="flex-1"
+          value={query}
+          onValueChange={setQuery}
+        />
         <DropdownMenu>
           <DropdownMenuTrigger
             render={

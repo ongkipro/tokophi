@@ -549,7 +549,11 @@ export function CollectionEditor({ collection, products }: { collection?: Collec
                 <>
                   <div className="relative">
                     <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                    {/* Not <SearchInput>: the results popover is a SIBLING of this input inside
+                        the same `relative` box, so the shared component's wrapper would push it
+                        out of its positioning context. */}
                     <Input
+                      aria-label="Cari produk untuk ditambahkan"
                       value={productQuery}
                       onChange={(e) => setProductQuery(e.target.value)}
                       placeholder="Cari produk untuk ditambahkan"

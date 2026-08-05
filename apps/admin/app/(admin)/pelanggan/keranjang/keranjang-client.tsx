@@ -4,12 +4,11 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ShoppingCart, TrendingDown, RotateCcw, Phone, MessageCircle, Search, Check } from "lucide-react";
+import { ShoppingCart, TrendingDown, RotateCcw, Phone, MessageCircle,Check } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { Card } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
-import { Input } from "@tokophi/ui/input";
 import { Separator } from "@tokophi/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
@@ -18,6 +17,7 @@ import { useCan } from "@/components/admin/permissions";
 import { recordCartContact } from "@/lib/actions/checkout";
 import type { AbandonedCart, CheckoutMetrics } from "@/lib/data/checkout";
 import { IDR, num, timeAgo } from "@tokophi/lib/format";
+import { SearchInput } from "@/components/admin/search-input";
 
 // Rate → "80,0%" (id-ID decimal comma). NOT `pct()`: that one carries a "+"/"−" sign, which is for
 // deltas. An abandonment rate is a share, not a change.
@@ -164,15 +164,13 @@ export function KeranjangClient({ carts, metrics }: { carts: AbandonedCart[]; me
             </TabsList>
           </Tabs>
 
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Cari nama, nomor, atau produk…"
-              className="h-8 w-full pl-8 sm:w-72"
-            />
-          </div>
+          <SearchInput
+            label="Cari keranjang ditinggal"
+            value={query}
+            onValueChange={setQuery}
+            placeholder="Cari nama, nomor, atau produk…"
+            inputClassName="h-8 w-full sm:w-72"
+          />
         </div>
 
         <Separator />

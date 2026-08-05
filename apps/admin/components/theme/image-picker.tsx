@@ -5,7 +5,7 @@
 // category's own photo. Everything it reads is already tenant-scoped server-side.
 import * as React from "react";
 import { toast } from "sonner";
-import { UploadCloud, ImageIcon, X, Search, Check, Link2, LayoutGrid, Package, Tag } from "lucide-react";
+import { UploadCloud, ImageIcon, X,Check, Link2, LayoutGrid, Package, Tag } from "lucide-react";
 import { getMedia, uploadMedia, type MediaItem } from "@/lib/actions/media";
 import { pickerProducts, pickerCategoryImages, type PickerImage } from "@/lib/actions/picker";
 import { useCan } from "@/components/admin/permissions";
@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@tokophi/ui/dialog";
+import { SearchInput } from "@/components/admin/search-input";
 
 type TabKey = "galeri" | "upload" | "url" | "produk" | "kategori";
 const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -203,10 +204,7 @@ export function ImagePickerField({
 
           {/* Search (galeri/produk/kategori) */}
           {(tab === "galeri" || tab === "produk" || tab === "kategori") && (
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari…" className="pl-8" />
-            </div>
+            <SearchInput label="Cari gambar" value={q} onValueChange={setQ} placeholder="Cari…" />
           )}
 
           {tab === "galeri" && (

@@ -3,13 +3,14 @@
 // Rendered by a Puck `type:"custom"` field; the stored VALUE stays a plain path/URL string, so existing
 // templates and the storefront are untouched. Sources are tenant-scoped server-side.
 import * as React from "react";
-import { X, Search, Package, Tag, FileText, Link2, ChevronRight } from "lucide-react";
+import { X,Package, Tag, FileText, Link2, ChevronRight } from "lucide-react";
 import { pickerProductLinks, pickerCategoryLinks, pickerPageLinks, type PickerLink } from "@/lib/actions/picker";
 import { cn } from "@tokophi/ui/lib/utils";
 import { Button } from "@tokophi/ui/button";
 import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@tokophi/ui/dialog";
+import { SearchInput } from "@/components/admin/search-input";
 
 type TabKey = "produk" | "kategori" | "halaman" | "url";
 const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -137,10 +138,7 @@ export function LinkPickerField({
           </div>
 
           {tab !== "url" && (
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari…" className="pl-8" />
-            </div>
+            <SearchInput label="Cari tautan" value={q} onValueChange={setQ} placeholder="Cari…" />
           )}
 
           {tab === "produk" && (
