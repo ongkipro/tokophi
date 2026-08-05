@@ -10,6 +10,7 @@ import { Badge } from "@tokophi/ui/badge";
 import { Textarea } from "@tokophi/ui/textarea";
 import { cn } from "@tokophi/ui/lib/utils";
 import { replyTicketAdmin, setTicketStatus } from "@/lib/actions";
+import { refused } from "@/lib/refused";
 import type { PTicketDetail } from "@/lib/data";
 import { TICKET_UI } from "../tiket-client";
 
@@ -25,7 +26,12 @@ export function ThreadClient({ ticket }: { ticket: PTicketDetail }) {
     const r = await replyTicketAdmin(ticket.id, body);
     if (r.ok) { setBody(""); toast.success("Balasan terkirim."); router.refresh(); } else toast.error(r.error ?? "Gagal.");
   });
-  const setStatus = (s: "open" | "closed") => start(async () => { await setTicketStatus(ticket.id, s); toast.success(s === "closed" ? "Tiket ditutup." : "Tiket dibuka lagi."); router.refresh(); });
+  const setStatus = (s: "open" | "closed") => start(async () => {
+    const no = refused(await setTicketStatus(ticket.id, s));
+    if (no) return void toast.error(no);
+    toast.success(s === "closed" ? "Tiket ditutup." : "Tiket dibuka lagi.");
+    router.refresh();
+  });
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">

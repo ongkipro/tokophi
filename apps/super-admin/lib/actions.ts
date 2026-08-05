@@ -3,7 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { signImpersonation } from "./session";
-import { requirePlatformAdmin } from "./platform-auth";
+import { platformGate } from "./platform-auth";
 import { tempPassword, hashPassword } from "@tokophi/lib/password";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
 import { isInstantService } from "@tokophi/lib/couriers";
@@ -11,6 +11,8 @@ import { alTestConnection, alProbeChannels, alCreatePayment } from "@tokophi/lib
 import { BILLING, addMonths, quote, withPpn, computeBilling, type BillingStatus } from "@tokophi/lib/billing";
 
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
+import { NAME_MAX, STORE_NAME_MIN, isReservedSlug, slugify } from "@tokophi/lib/store-slug";
+import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
 async function logStore(storeId: string, text: string): Promise<void> {
   await db.insert(schema.platformActivity).values({ kind: "admin", text, storeId });
@@ -27,7 +29,11 @@ async function logPlatform(text: string): Promise<void> {
 // SHARED with `apps/admin` on purpose: it used to be copied, and the two copies had already drifted
 // to different strengths (24 bits here, 32 there), with the weaker one on the store-owner path.
 
-const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+// `slugify` is `@tokophi/lib/store-slug` now. The private copy here did NOT normalise NFKD while
+// the self-serve twin in `apps/admin/lib/provision.ts` did, so the two doors onto this product
+// disagreed about a shop's permanent public address: measured, "Café Senja" → `caf-senja` here and
+// `cafe-senja` there. Same reason the password mint was converged — a copy is how the weaker half
+// survives a fix.
 
 // Impersonate a store's owner: mint the admin session cookie (host-scoped to localhost, so it
 // reaches :3000) and hand back the admin URL for the client to open.
@@ -35,7 +41,9 @@ const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").repla
 // and walks into their shop as them. It requires OWNER, and it is AUDITED — it previously required
 // only "logged in" and left NO trace at all, so nobody could answer "who went into my store?".
 export async function impersonateStore(storeId: string): Promise<{ ok: boolean; adminUrl?: string; error?: string }> {
-  const admin = await requirePlatformAdmin("owner");
+  const gate = await platformGate("owner");
+  if (!gate.ok) return gate;
+  const admin = gate.admin;
   const [owner] = await db
     .select({
       userId: schema.users.id,
@@ -154,7 +162,9 @@ export type SuspensionResult = { ok: boolean; error?: string; message?: string; 
 // Lock a merchant's panel. Reads-stay-up: the storefront keeps selling, only the Seller panel's
 // writes are refused (`requireCapability` → SuspendedError).
 export async function suspendStore(storeId: string, reason: string): Promise<SuspensionResult> {
-  const admin = await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
+  const admin = gate.admin;
   const why = reason?.trim();
   // A suspension with no stated reason is one nobody can review, appeal or lift with confidence —
   // and the merchant is shown this string, so "because" is not good enough.
@@ -174,7 +184,9 @@ export async function suspendStore(storeId: string, reason: string): Promise<Sus
 // (Granting time is what "Gratiskan 1 bulan" is for; making the operator decide billing here would
 // hide a month of revenue behind a button labelled "Aktifkan".)
 export async function liftSuspension(storeId: string): Promise<SuspensionResult> {
-  const admin = await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
+  const admin = gate.admin;
   const res = await writeSuspension(storeId, null, null);
   if (!res) return { ok: false, error: "Toko tidak ditemukan — tidak ada yang diubah." };
 
@@ -212,15 +224,23 @@ export async function liftSuspension(storeId: string): Promise<SuspensionResult>
 // is what `apps/admin/lib/provision.ts`, the self-serve twin of this function, already did).
 export type NewStoreInput = { name: string; ownerName: string; email: string; city: string };
 export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; storeId?: string; password?: string; error?: string }> {
-  await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const name = input.name?.trim();
   const email = input.email?.trim().toLowerCase();
   const ownerName = input.ownerName?.trim() || name;
   const city = input.city?.trim() || null;
   if (!name || !email) return { ok: false, error: "Nama toko & email pemilik wajib diisi." };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, error: "Format email tidak valid." };
+  if (name.length < STORE_NAME_MIN) return { ok: false, error: `Nama toko minimal ${STORE_NAME_MIN} karakter.` };
+  if (name.length > NAME_MAX) return { ok: false, error: `Nama toko maksimal ${NAME_MAX} karakter.` };
+  if (ownerName.length > NAME_MAX) return { ok: false, error: `Nama pemilik maksimal ${NAME_MAX} karakter.` };
   const slug = slugify(name);
   if (!slug) return { ok: false, error: "Nama toko tidak valid." };
+  // The storefront refuses to RESOLVE these as a store (`app`, `rich`, `www`, …), so writing one
+  // here mints a shop that 404s on its own subdomain. The self-serve path skips to `<slug>-2`; an
+  // operator typing a name by hand gets told, because they can simply pick another one.
+  if (isReservedSlug(slug)) return { ok: false, error: `Nama toko itu dipakai platform (slug "${slug}"). Pilih nama lain.` };
 
   const [dupEmail] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email)).limit(1);
   if (dupEmail) return { ok: false, error: "Email sudah dipakai pengguna lain." };
@@ -228,29 +248,46 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
   if (dupSlug) return { ok: false, error: `Nama toko bentrok (slug "${slug}" sudah ada).` };
 
   const pw = tempPassword();
-  const storeId = await db.transaction(async (tx) => {
-    const [acc] = await tx.insert(schema.accounts).values({ name }).returning();
-    const [u] = await tx.insert(schema.users).values({ email, name: ownerName, passwordHash: hashPassword(pw) }).returning();
-    // new store → free trial from the real clock (same length as the self-serve signup)
-    const trialEndsAt = new Date(Date.now() + BILLING.TRIAL_DAYS * 86_400_000);
-    // `catalogIdScheme: "number"` — ADR 0013: a store created now has no catalog anywhere yet, so it
-    // starts on the stable id and never pays the one-way re-key. Must match lib/provision.ts.
-    const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, status: "trial", trialEndsAt, firstInvoicePaid: false, catalogIdScheme: "number" }).returning();
-    await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: new Date() });
-    await tx.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
-    await tx.insert(schema.storeSettings).values({ storeId: st.id });
-    await tx.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: 0, ordersCount: 0, productsCount: 0 });
-    return st.id;
-  });
+  // The two `dup*` checks above are unlocked reads followed by a write, so a second operator (or the
+  // self-serve path) can take either value in between. `users.email` and `stores.slug` are both
+  // UNIQUE, so the data is never wrong — but the throw surfaced as a Next error digest on a form that
+  // otherwise answers in sentences. The constraint is the lock; this reports it.
+  let storeId: string;
+  try {
+    storeId = await insertStore();
+  } catch (e) {
+    const constraint = uniqueViolationConstraint(e);
+    if (constraint === "users_email_unique") return { ok: false, error: "Email sudah dipakai pengguna lain." };
+    if (constraint !== null) return { ok: false, error: `Nama toko bentrok (slug "${slug}" sudah ada).` };
+    throw e;
+  }
   await logStore(storeId, `Toko dibuat oleh platform: ${name} (${slug}), pemilik ${email}`);
   revalidatePath("/toko");
   revalidatePath("/");
   return { ok: true, storeId, password: pw };
+
+  async function insertStore(): Promise<string> {
+    return db.transaction(async (tx) => {
+      const [acc] = await tx.insert(schema.accounts).values({ name }).returning();
+      const [u] = await tx.insert(schema.users).values({ email, name: ownerName, passwordHash: hashPassword(pw) }).returning();
+      // new store → free trial from the real clock (same length as the self-serve signup)
+      const trialEndsAt = new Date(Date.now() + BILLING.TRIAL_DAYS * 86_400_000);
+      // `catalogIdScheme: "number"` — ADR 0013: a store created now has no catalog anywhere yet, so it
+      // starts on the stable id and never pays the one-way re-key. Must match lib/provision.ts.
+      const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, status: "trial", trialEndsAt, firstInvoicePaid: false, catalogIdScheme: "number" }).returning();
+      await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: new Date() });
+      await tx.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
+      await tx.insert(schema.storeSettings).values({ storeId: st.id });
+      await tx.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: 0, ordersCount: 0, productsCount: 0 });
+      return st.id;
+    });
+  }
 }
 
 // ---- billing: mark an invoice paid / failed / pending ----
-export async function setInvoiceStatus(number: string, status: "dibayar" | "menunggu" | "gagal"): Promise<void> {
-  await requirePlatformAdmin();
+export async function setInvoiceStatus(number: string, status: "dibayar" | "menunggu" | "gagal"): Promise<{ ok: boolean; error?: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const [inv] = await db.select({ storeId: schema.invoices.storeId }).from(schema.invoices).where(eq(schema.invoices.number, number)).limit(1);
   await db.update(schema.invoices).set({ status }).where(eq(schema.invoices.number, number));
   // Money: an operator flipping an invoice to "dibayar" by hand extends a store's paid period without
@@ -259,13 +296,15 @@ export async function setInvoiceStatus(number: string, status: "dibayar" | "menu
   else await logPlatform(`Status faktur ${number} diubah → ${status} (manual, platform)`);
   revalidatePath("/paket");
   revalidatePath("/");
+  return { ok: true };
 }
 
 // ---- platform settings: persist gateway / courier toggles (were fake-saved before) ----
 // Live-probe AutoLaris, persist `active` per channel, and auto-enable the active ones.
 // EXPENSIVE (one create_payment per channel) — super-admin on-demand only.
-export async function syncPaymentChannels(): Promise<void> {
-  await requirePlatformAdmin();
+export async function syncPaymentChannels(): Promise<{ ok: boolean; error?: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const probed = await alProbeChannels();
   const existing = await db.select({ channel: schema.platformPaymentChannels.channel }).from(schema.platformPaymentChannels);
   const have = new Set(existing.map((e) => e.channel));
@@ -284,11 +323,13 @@ export async function syncPaymentChannels(): Promise<void> {
     }
   }
   revalidatePath("/pengaturan");
+  return { ok: true };
 }
 
 // Persist the enable/disable toggles (what's offered at checkout).
-export async function savePaymentChannels(updates: { key: string; on: boolean }[]): Promise<void> {
-  await requirePlatformAdmin();
+export async function savePaymentChannels(updates: { key: string; on: boolean }[]): Promise<{ ok: boolean; error?: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   for (const u of updates) {
     await db
       .update(schema.platformPaymentChannels)
@@ -296,22 +337,27 @@ export async function savePaymentChannels(updates: { key: string; on: boolean }[
       .where(eq(schema.platformPaymentChannels.channel, u.key));
   }
   revalidatePath("/pengaturan");
+  return { ok: true };
 }
 
-export async function saveGateways(updates: { key: string; on: boolean }[]): Promise<void> {
-  await requirePlatformAdmin();
+export async function saveGateways(updates: { key: string; on: boolean }[]): Promise<{ ok: boolean; error?: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   for (const u of updates) {
     if (u.key === "cod") await db.update(schema.platformCod).set({ enabled: u.on });
     else await db.update(schema.platformPaymentGateways).set({ enabled: u.on }).where(eq(schema.platformPaymentGateways.provider, u.key as "midtrans" | "xendit" | "duitku"));
   }
   if (updates.length) await logPlatform(`Gateway pembayaran diubah: ${updates.map((u) => `${u.key}=${u.on ? "aktif" : "nonaktif"}`).join(", ")}`);
   revalidatePath("/pengaturan");
+  return { ok: true };
 }
 
-export async function saveCouriers(updates: { key: string; on: boolean }[]): Promise<void> {
-  await requirePlatformAdmin();
+export async function saveCouriers(updates: { key: string; on: boolean }[]): Promise<{ ok: boolean; error?: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   for (const u of updates) await db.update(schema.platformCouriers).set({ enabled: u.on }).where(eq(schema.platformCouriers.courier, u.key));
   revalidatePath("/pengaturan");
+  return { ok: true };
 }
 
 /**
@@ -325,8 +371,9 @@ export async function saveCouriers(updates: { key: string; on: boolean }[]): Pro
  *
  * A service KiriminAja does not support COD on can never be switched on: `cod` is the ceiling.
  */
-export async function saveCodAllowed(updates: { courier: string; type: string; allowed: boolean }[]): Promise<void> {
-  await requirePlatformAdmin();
+export async function saveCodAllowed(updates: { courier: string; type: string; allowed: boolean }[]): Promise<{ ok: boolean; error?: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const byCourier = new Map<string, Map<string, boolean>>();
   for (const u of updates) {
     const m = byCourier.get(u.courier) ?? new Map<string, boolean>();
@@ -352,11 +399,16 @@ export async function saveCodAllowed(updates: { courier: string; type: string; a
   // refused-parcel return. A change here is a platform risk decision and must be auditable.
   if (updates.length) await logPlatform(`Izin COD per-layanan diubah: ${updates.map((u) => `${u.courier}/${u.type}=${u.allowed ? "boleh" : "tidak"}`).join(", ")}`);
   revalidatePath("/pengaturan");
+  return { ok: true };
 }
 
 // ---- KiriminAja aggregator: live connectivity test (platform key) ----
-export async function testKiriminajaConnection(): Promise<{ ok: boolean; env: string; provinces?: number; message: string }> {
-  await requirePlatformAdmin();
+export async function testKiriminajaConnection(): Promise<{ ok: boolean; env?: string; provinces?: number; message: string }> {
+  // These three report through `message`, not `error` — their callers print one string either way.
+  // A refusal that arrives with no `message` renders as an empty red toast, which is the N48 bug
+  // again one layer down, so it is translated into the shape THIS caller reads.
+  const gate = await platformGate();
+  if (!gate.ok) return { ok: false, message: gate.error };
   return kaTestConnection();
 }
 
@@ -388,7 +440,8 @@ export async function testKiriminajaConnection(): Promise<{ ok: boolean; env: st
  * still hold orders that reference it).
  */
 export async function syncCouriersFromKiriminaja(): Promise<{ ok: boolean; couriers: number; services: number; message: string }> {
-  await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return { ok: false, couriers: 0, services: 0, message: gate.error };
 
   const r = await kaServices();
   if (!r.ok || !r.services.length) {
@@ -454,7 +507,8 @@ export async function syncCouriersFromKiriminaja(): Promise<{ ok: boolean; couri
 
 // ---- AutoLaris payment gateway: live connectivity test ----
 export async function testAutolarisConnection(): Promise<{ ok: boolean; message: string }> {
-  await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return { ok: false, message: gate.error };
   return alTestConnection();
 }
 
@@ -470,7 +524,9 @@ export async function testAutolarisConnection(): Promise<{ ok: boolean; message:
  * previously unlogged, so a self-promotion would have left no trace whatsoever.
  */
 export async function invitePlatformAdmin(input: { name: string; email: string; role: string }): Promise<{ ok: boolean; error?: string; password?: string }> {
-  const admin = await requirePlatformAdmin("owner");
+  const gate = await platformGate("owner");
+  if (!gate.ok) return gate;
+  const admin = gate.admin;
 
   const email = input.email?.trim().toLowerCase();
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, error: "Email tidak valid." };
@@ -498,9 +554,53 @@ export async function invitePlatformAdmin(input: { name: string; email: string; 
   return { ok: true, password: pw };
 }
 
+/**
+ * Reset ANOTHER operator's control-plane password — N47, the way back in.
+ *
+ * 🔴 AN OPERATOR WHO FORGOT THEIR PASSWORD HAD NO WAY BACK IN. `changePlatformPassword` is
+ * self-service and re-proves the CURRENT password, so it is exactly the door someone locked out
+ * cannot open; `invitePlatformAdmin` only INSERTs, so it refuses a known email. That left one
+ * documented recovery — an owner hand-editing `platform_admins` with `psql` on the production
+ * container — and if the locked-out account was the last `owner`, the control plane had nobody who
+ * could impersonate a merchant or reset a merchant's password until someone reached the database.
+ *
+ * There is no email out of this system (`sendPaymentReminder` writes a log line and says so on
+ * screen), so a reset LINK would be a door that opens onto nothing. Same hand-over as every other
+ * credential here instead: a random password, shown once, handed over out of band.
+ *
+ * ⚠️ NOT the caller's own row. Writing `password_hash` fires migration 0088's trigger, which stamps
+ * `password_changed_at` and revokes every session that password opened — including the tab that
+ * pressed the button. `changePlatformPassword` survives that by minting a replacement cookie, and it
+ * has earned the right to: the person there proved they know the current password. Here nobody
+ * proved anything, so a self-reset would log the operator out with a toast that says "berhasil".
+ * The self-service dialog is one click away in the shell; point at it.
+ */
+export async function resetPlatformAdminPassword(adminId: string): Promise<{ ok: boolean; password?: string; email?: string; error?: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return gate;
+  if (adminId === gate.admin.adminId) {
+    return { ok: false, error: "Untuk akun Anda sendiri, pakai “Ubah kata sandi” — reset di sini akan mengeluarkan Anda." };
+  }
+  const [target] = await db
+    .select({ email: schema.platformAdmins.email, role: schema.platformAdmins.role })
+    .from(schema.platformAdmins)
+    .where(eq(schema.platformAdmins.id, adminId))
+    .limit(1);
+  if (!target) return { ok: false, error: "Operator tidak ditemukan." };
+
+  const pw = tempPassword();
+  await db.update(schema.platformAdmins).set({ passwordHash: hashPassword(pw) }).where(eq(schema.platformAdmins.id, adminId));
+  // Handing over a control-plane credential reaches every tenant. Audited like the invite above —
+  // and the revocation is stated, because it is what the target will experience.
+  await logPlatform(`Password operator ${target.email} (${target.role}) direset oleh ${gate.admin.email} — semua sesi lamanya dicabut`);
+  revalidatePath("/pengaturan");
+  return { ok: true, password: pw, email: target.email };
+}
+
 // ---- manual billing: create a VA invoice for a store + payment reminder ----
 export async function createManualInvoice(storeId: string, cycle: "monthly" | "annual" = "monthly"): Promise<{ ok: boolean; number?: string; virtualAccount?: string; reused?: boolean; error?: string }> {
-  await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   // reuse an existing unpaid subscription invoice — never duplicate
   const [pending] = await db
     .select({ number: schema.invoices.number, virtualAccount: schema.invoices.virtualAccount })
@@ -537,7 +637,8 @@ export async function createManualInvoice(storeId: string, cycle: "monthly" | "a
 }
 
 export async function sendPaymentReminder(storeId: string): Promise<{ ok: boolean; error?: string }> {
-  await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const [pending] = await db
     .select({ number: schema.invoices.number })
     .from(schema.invoices)
@@ -553,7 +654,8 @@ export async function sendPaymentReminder(storeId: string): Promise<{ ok: boolea
 
 // ---- support tickets (platform side) ----
 export async function replyTicketAdmin(ticketId: string, body: string): Promise<{ ok: boolean; error?: string }> {
-  await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const b = body?.trim();
   if (!b) return { ok: false, error: "Pesan kosong." };
   // support_messages.store_id is denormalized (migration 0035) so RLS can key on it —
@@ -565,8 +667,9 @@ export async function replyTicketAdmin(ticketId: string, body: string): Promise<
   revalidatePath("/tiket"); revalidatePath(`/tiket/${ticketId}`);
   return { ok: true };
 }
-export async function setTicketStatus(ticketId: string, status: "open" | "answered" | "closed"): Promise<{ ok: boolean }> {
-  await requirePlatformAdmin();
+export async function setTicketStatus(ticketId: string, status: "open" | "answered" | "closed"): Promise<{ ok: boolean; error?: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   await db.update(schema.supportTickets).set({ status }).where(eq(schema.supportTickets.id, ticketId));
   revalidatePath("/tiket"); revalidatePath(`/tiket/${ticketId}`);
   return { ok: true };
@@ -577,8 +680,9 @@ export async function setTicketStatus(ticketId: string, status: "open" | "answer
 // ============================================================================
 
 // Gratiskan N bulan (comp): extend the paid period at no charge (goodwill / compensation).
-export async function compStore(storeId: string, months = 1): Promise<{ ok: boolean; until?: string }> {
-  await requirePlatformAdmin();
+export async function compStore(storeId: string, months = 1): Promise<{ ok: boolean; until?: string; error?: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const [s] = await db.select({ currentPeriodEnd: schema.stores.currentPeriodEnd }).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
   if (!s) return { ok: false };
   const now = new Date();
@@ -604,7 +708,8 @@ export async function compStore(storeId: string, months = 1): Promise<{ ok: bool
 
 // Extend / reset the free trial by N days from now.
 export async function extendTrial(storeId: string, days = 7): Promise<{ ok: boolean; error?: string }> {
-  await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   // ⚠️ A PAYING STORE IS NOT PUT BACK ON TRIAL. This used to write `currentPeriodEnd: null,
   // firstInvoicePaid: false` unconditionally, so "extend trial" on a store that had already paid
   // Rp305.250 threw away whatever was left of the month they bought AND re-armed both the Rp50rb promo
@@ -633,8 +738,9 @@ export async function extendTrial(storeId: string, days = 7): Promise<{ ok: bool
 }
 
 // VIP bypass: comped=true → no monthly charge (the "hapus langganan" one-door control).
-export async function setStoreComped(storeId: string, comped: boolean, reason?: string): Promise<{ ok: boolean }> {
-  await requirePlatformAdmin();
+export async function setStoreComped(storeId: string, comped: boolean, reason?: string): Promise<{ ok: boolean; error?: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const patch: Record<string, unknown> = { comped, compedReason: comped ? (reason?.trim() || "Dibebaskan platform") : null, compedAt: comped ? new Date() : null };
   await db.update(schema.stores).set(patch).where(eq(schema.stores.id, storeId));
   // VIP is always active — for BILLING. It is not an abuse shield: an operator suspension outranks
@@ -648,8 +754,9 @@ export async function setStoreComped(storeId: string, comped: boolean, reason?: 
 
 // Reset the OWNER's password → returns a one-time temp password to hand over (scrypt-hashed at rest).
 // Resetting a merchant's password hands over their account. Owner only.
-export async function resetOwnerPassword(storeId: string): Promise<{ ok: boolean; password?: string; email?: string }> {
-  await requirePlatformAdmin("owner");
+export async function resetOwnerPassword(storeId: string): Promise<{ ok: boolean; password?: string; email?: string; error?: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return gate;
   const [row] = await db
     .select({ userId: schema.storeUsers.userId, email: schema.users.email })
     .from(schema.storeUsers)
@@ -677,24 +784,29 @@ export async function resetOwnerPassword(storeId: string): Promise<{ ok: boolean
 //   1. membership — the target must be a member of THIS store, read back through `store_users`.
 //   2. rank — resetting an OWNER needs `owner`, exactly like `resetOwnerPassword`. Handing over a
 //      merchant's account is the same act whichever button reaches it.
-export async function resetStoreUserPassword(storeId: string, userId: string): Promise<{ ok: boolean; password?: string; email?: string }> {
-  await requirePlatformAdmin();
+export async function resetStoreUserPassword(storeId: string, userId: string): Promise<{ ok: boolean; password?: string; email?: string; error?: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const [target] = await db
     .select({ email: schema.users.email, role: schema.storeUsers.role })
     .from(schema.storeUsers)
     .innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
     .where(and(eq(schema.storeUsers.storeId, storeId), eq(schema.storeUsers.userId, userId)))
     .limit(1);
-  if (!target) return { ok: false };
-  if (target.role === "owner") await requirePlatformAdmin("owner");
+  if (!target) return { ok: false, error: "User tidak ditemukan di toko ini." };
+  if (target.role === "owner") {
+    const ownerGate = await platformGate("owner");
+    if (!ownerGate.ok) return ownerGate;
+  }
   const pw = tempPassword();
   await db.update(schema.users).set({ passwordHash: hashPassword(pw) }).where(eq(schema.users.id, userId));
   await logStore(storeId, `Password ${target.email} (${target.role}) direset oleh platform`);
   return { ok: true, password: pw, email: target.email };
 }
 
-export async function setStoreUserRole(storeId: string, storeUserId: string, role: "owner" | "admin" | "staff" | "gudang"): Promise<{ ok: boolean }> {
-  await requirePlatformAdmin();
+export async function setStoreUserRole(storeId: string, storeUserId: string, role: "owner" | "admin" | "staff" | "gudang"): Promise<{ ok: boolean; error?: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   await db.update(schema.storeUsers).set({ role }).where(and(eq(schema.storeUsers.id, storeUserId), eq(schema.storeUsers.storeId, storeId)));
   // A role change is a privilege change — promoting a user to `owner` grants them owner-only powers.
   // Log it (with the user's email) exactly like add/remove/reset already do.
@@ -710,7 +822,8 @@ export async function setStoreUserRole(storeId: string, storeUserId: string, rol
 }
 
 export async function removeStoreUser(storeId: string, storeUserId: string): Promise<{ ok: boolean; error?: string }> {
-  await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const [su] = await db.select({ role: schema.storeUsers.role, email: schema.users.email })
     .from(schema.storeUsers).innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
     .where(eq(schema.storeUsers.id, storeUserId)).limit(1);
@@ -744,7 +857,8 @@ export async function removeStoreUser(storeId: string, storeUserId: string): Pro
  * site and only one of them is good news.
  */
 export async function addStoreUser(storeId: string, input: { name: string; email: string; role: "admin" | "staff" | "gudang" }): Promise<{ ok: boolean; password?: string | null; outcome?: "created" | "linked"; error?: string }> {
-  await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const email = input.email?.trim().toLowerCase();
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, error: "Email tidak valid." };
   let [u] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email)).limit(1);
@@ -783,7 +897,8 @@ const rupiah = (n: number) => "Rp" + n.toLocaleString("id-ID");
 
 /** Menunggu → Diproses: the operator picked it up / initiated the bank transfer. */
 export async function processPayout(payoutId: string): Promise<{ ok: boolean; error?: string }> {
-  await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const r = await db.transaction(async (tx) => {
     const [p] = await tx.select().from(schema.payouts).where(eq(schema.payouts.id, payoutId)).for("update").limit(1);
     if (!p) return { ok: false as const, error: "Pencairan tidak ditemukan." };
@@ -806,7 +921,8 @@ export async function processPayout(payoutId: string): Promise<{ ok: boolean; er
  * recorded. Crediting or debiting again here would double-count.
  */
 export async function markPayoutPaid(payoutId: string): Promise<{ ok: boolean; error?: string }> {
-  await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const r = await db.transaction(async (tx) => {
     const [p] = await tx.select().from(schema.payouts).where(eq(schema.payouts.id, payoutId)).for("update").limit(1);
     if (!p) return { ok: false as const, error: "Pencairan tidak ditemukan." };
@@ -839,7 +955,8 @@ export async function markPayoutPaid(payoutId: string): Promise<{ ok: boolean; e
  * post a reversal and hand the merchant their money twice.
  */
 export async function rejectPayout(payoutId: string, reason: string): Promise<{ ok: boolean; error?: string; restored?: number }> {
-  await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   const why = reason?.trim();
   if (!why) return { ok: false, error: "Alasan penolakan wajib diisi." };
 
@@ -892,7 +1009,8 @@ export async function rejectPayout(payoutId: string, reason: string): Promise<{ 
  * to the safe end on purpose, and the UI says so out loud.
  */
 export async function savePayoutPolicy(input: { releaseOn: "selesai" | "dikirim"; minPayoutIdr: number }): Promise<{ ok: boolean; error?: string }> {
-  await requirePlatformAdmin();
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
   if (input.releaseOn !== "selesai" && input.releaseOn !== "dikirim") return { ok: false, error: "Pilihan pelepasan dana tidak valid." };
   const min = Math.floor(Number(input.minPayoutIdr));
   if (!Number.isFinite(min) || min < 0) return { ok: false, error: "Minimum penarikan tidak valid." };

@@ -32,6 +32,7 @@ import {
   resetOwnerPassword, resetStoreUserPassword, setStoreUserRole, removeStoreUser, addStoreUser,
   createManualInvoice, sendPaymentReminder,
 } from "@/lib/actions";
+import { refused } from "@/lib/refused";
 import { IDR, num } from "@tokophi/lib/format";
 
 const BAR_TONE: Record<StoreHealth["verdict"], string> = { sehat: "bg-emerald-500", perhatian: "bg-amber-500", bermasalah: "bg-destructive" };
@@ -86,8 +87,11 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
   const run = (fn: () => Promise<unknown>, ok?: string) =>
     startTransition(async () => {
       const r = (await fn()) as { ok?: boolean; error?: string; message?: string } | void;
-      if (r && typeof r === "object" && r.ok === false) {
-        toast.error(r.error ?? "Tidak bisa dijalankan.");
+      // The refusal shape is read in ONE place for the whole app (`lib/refused.ts`) — this helper
+      // was where that logic was first written, and four other screens were missing it entirely.
+      const no = refused(r);
+      if (no) {
+        toast.error(no);
         return;
       }
       const said = (r && typeof r === "object" && r.message) || ok;
@@ -123,7 +127,8 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
   const revertVip = () => run(() => setStoreComped(store.id, false), "VIP dicabut — kembali berbayar.");
   function confirmVip() {
     startTransition(async () => {
-      await setStoreComped(store.id, true, vipReason);
+      const no = refused(await setStoreComped(store.id, true, vipReason));
+      if (no) return void toast.error(no);
       setVipOpen(false);
       toast.success(`“${store.name}” dijadikan VIP (gratis).`);
       router.refresh();
@@ -133,14 +138,16 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
     startTransition(async () => {
       const r = await resetOwnerPassword(store.id);
       if (r.ok && r.password) setCred({ email: r.email!, password: r.password });
-      else toast.error("Gagal reset password owner.");
+      // A refused reset now SAYS why ("perlu peran owner…") instead of a generic failure the
+      // operator can only read as "the button is broken".
+      else toast.error(refused(r) ?? "Gagal reset password owner.");
     });
   }
   function resetUser(u: StoreUserRow) {
     startTransition(async () => {
       const r = await resetStoreUserPassword(store.id, u.userId);
       if (r.ok && r.password) setCred({ email: r.email!, password: r.password });
-      else toast.error("Gagal reset password.");
+      else toast.error(refused(r) ?? "Gagal reset password.");
       router.refresh();
     });
   }

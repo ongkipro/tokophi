@@ -58,6 +58,7 @@ import { type HealthVerdict } from "@/lib/health-types";
 import { initials, StatusBadge, HealthBadge, SegmentBadge } from "@/components/bits";
 import { SEGMENT_META, type StoreSegment } from "@tokophi/lib/billing";
 import { impersonateStore, liftSuspension, createStore, setStoreComped } from "@/lib/actions";
+import { refused } from "@/lib/refused";
 import { IDR, num } from "@tokophi/lib/format";
 
 type StatusFilter = "semua" | Store["status"];
@@ -174,7 +175,8 @@ export function TokoClient({
 
   function toggleVip(s: Store) {
     startTransition(async () => {
-      await setStoreComped(s.id, !s.comped, s.comped ? undefined : `${s.orders30d} pesanan/30 hari — dibebaskan platform`);
+      const no = refused(await setStoreComped(s.id, !s.comped, s.comped ? undefined : `${s.orders30d} pesanan/30 hari — dibebaskan platform`));
+      if (no) return void toast.error(no);
       toast.success(s.comped ? `“${s.name}” kembali berbayar.` : `“${s.name}” dijadikan VIP (gratis).`);
       router.refresh();
     });

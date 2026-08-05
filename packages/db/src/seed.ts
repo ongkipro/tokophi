@@ -10,6 +10,7 @@ import { COURIERS } from "@tokophi/lib/couriers";
 import { hashPassword, tempPassword, PUBLISHED_PASSWORDS } from "@tokophi/lib/password";
 import { assertTruncateIsDeliberate } from "./seed-guard";
 import { packedDims } from "./product-dims";
+import { slugify } from "@tokophi/lib/store-slug";
 
 // ── SEEDED CREDENTIALS — RANDOM PER ACCOUNT, PER RUN, REVEALED ONCE (N29) ─────────────────────────
 //
@@ -71,7 +72,10 @@ const minutesAgo = (n: number) => new Date(TODAY.getTime() - n * 60_000);
 // Billing lifecycle dates must be relative to the REAL clock (not the TODAY anchor), else trials/
 // periods lapse whenever the deploy date drifts past the anchor — computeBilling uses `new Date()`.
 const fromNow = (days: number) => new Date(Date.now() + days * 86_400_000);
-const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+// ⚠️ This writes `stores.slug` (line ~766) — so it is a STORE slug, and it must be the same rule
+// the two app-side creation paths use. It was a third private copy, without NFKD. It happens to
+// agree today because "Batik Nusantara" is pure ASCII; a demo store with an accent in its name
+// would have been seeded onto a different address than the app would have minted for it.
 
 // ---- the one store ----
 const STORE = {

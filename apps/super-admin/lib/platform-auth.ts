@@ -13,6 +13,9 @@ import { authSecretBytes } from "@tokophi/lib/secret";
 // Lazy (throws in prod if AUTH_SECRET is unset, never at build) — see @tokophi/lib/secret.
 const secret = () => authSecretBytes();
 export const PLATFORM_COOKIE = "platform_session";
+// Matches the JWT expiry set in `signPlatformSession`. It was a bare `60 * 60 * 24 * 7` written out
+// at both call sites — the admin's `SESSION_MAX_AGE` is the same constant, named, one app over.
+export const PLATFORM_MAX_AGE = 60 * 60 * 24 * 7; // 7d
 
 // The session SHAPE and the rule that decides what a cookie is still worth both live in
 // `platform-session.ts` — pure, so they can be tested without a database. Re-exported here so every
@@ -119,8 +122,46 @@ export async function getPlatformSession(): Promise<PlatformSession | null> {
 export type { PlatformRole } from "./platform-rank";
 import { clearsRank, type PlatformRole } from "./platform-rank";
 
+/** The refusal shape every super-admin action already speaks: `{ ok: false, error }`. */
+export type PlatformRefusal = { ok: false; error: string };
+export type PlatformGate = { ok: true; admin: PlatformSession } | PlatformRefusal;
+
 /**
- * Security boundary for every super-admin mutation.
+ * Security boundary for every super-admin mutation — the NON-THROWING half.
+ *
+ * 🔴 WHY THIS EXISTS. `requirePlatformAdmin` throws, and a `"use server"` action that throws does
+ * not reach its caller's `{ ok, error }` handling at all: the rejection lands in the
+ * `startTransition` nobody catches. Driven 2026-08-05 against a real server, one operator cookie
+ * held constant while the row was demoted owner → support by SQL, then "Simpan" pressed on
+ * Pengaturan → Pembayaran:
+ *
+ *   | build | what the operator saw |
+ *   |---|---|
+ *   | `next dev`   | ZERO toasts, and the dev error overlay over the whole screen |
+ *   | `next start` | ZERO toasts, and the page REPLACED by Next's own global error — *"This page couldn't load · A server error occurred · ERROR 2389982270"*, in English, on a Bahasa Indonesia control plane |
+ *
+ * So the refused operator is not merely told nothing — the screen they were working on is gone, and
+ * nothing on it says the word "izin". They reload and try again, because that is what the page
+ * tells them to do.
+ *
+ * ⚠️ `requirePlatformAdmin` STAYS, and it stays throwing. A gate whose refusal can be ignored by
+ * forgetting an `if` is a gate that fails OPEN, and 27 actions rest on this one comparison. The two
+ * share ONE decision and ONE message (a copy is how the weaker half survives a fix — the same
+ * reason `platform-rank.ts` and `session-revocation` are single implementations); an action opts
+ * into the returnable shape deliberately, and `tsc` then forces it to handle the refusal because
+ * `gate.admin` does not exist on the other arm of the union.
+ */
+export async function platformGate(min: PlatformRole = "admin"): Promise<PlatformGate> {
+  const s = await getPlatformSession();
+  if (!s) return { ok: false, error: "Sesi berakhir atau akun tidak aktif lagi. Masuk lagi lalu ulangi." };
+  if (!clearsRank(s.role, min)) {
+    return { ok: false, error: `Tidak diizinkan — perlu peran ${min}, akun ini ${s.role || "tanpa peran"}.` };
+  }
+  return { ok: true, admin: s };
+}
+
+/**
+ * Security boundary for every super-admin mutation — the THROWING half.
  *
  * ⚠️ It used to check only that SOMEONE was logged in — the `role` on the session was carried
  * around and never once read. So a `support` operator could reject a merchant's withdrawal, reset
@@ -132,11 +173,7 @@ import { clearsRank, type PlatformRole } from "./platform-rank";
  * "logged in" is not the bar.
  */
 export async function requirePlatformAdmin(min: PlatformRole = "admin"): Promise<PlatformSession> {
-  const s = await getPlatformSession();
-  if (!s) throw new Error("Tidak diizinkan — perlu login platform admin.");
-
-  if (!clearsRank(s.role, min)) {
-    throw new Error(`Tidak diizinkan — perlu peran ${min}, akun ini ${s.role || "tanpa peran"}.`);
-  }
-  return s;
+  const gate = await platformGate(min);
+  if (!gate.ok) throw new Error(gate.error);
+  return gate.admin;
 }

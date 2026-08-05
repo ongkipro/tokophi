@@ -11,11 +11,28 @@ time you read this.
 > And measure on `origin/main`, never on your own rebased branch — that is how a task got filed for a
 > flake that the very next merge had already fixed.
 
-Two detailed handoffs sit underneath this index; go to them for reasoning, not to this file:
+▶️ **Wondering what happened on 2026-08-05?**
+[`2026-08-05-session-close.md`](./2026-08-05-session-close.md) is the ledger — nine PRs, two zone
+changes, the verified end state, and what each remaining item belongs to. Start there, then come back
+to this file for the open list.
+
+⚠️ **Starting fresh on THIS machine? Read
+[`2026-08-05-handoff-and-unfiled-scan.md`](./2026-08-05-handoff-and-unfiled-scan.md) first.** The
+working copy carries **26 dirty worktrees, ~60 local branches and a `main` that is 30 ahead / 522
+behind** — five of those worktrees hold a migration journal stamped BELOW main's, which is the
+"applied successfully" silent-skip. Nothing there is safe to mass-commit.
+
+Three detailed handoffs sit underneath this index; go to them for reasoning, not to this file:
 - **[`2026-08-05-audit-waves-6-9-handoff.md`](./2026-08-05-audit-waves-6-9-handoff.md)** — the audit
   stream, and its **"do not re-file"** list.
 - **[`2026-08-05-kiriminaja-doc-sweep.md`](./2026-08-05-kiriminaja-doc-sweep.md)** — the shipping /
   KiriminAja stream.
+- **[`2026-08-05-signup-open-audit.md`](./2026-08-05-signup-open-audit.md)** — what
+  `SIGNUP_ENABLED=true` would actually expose, now that #154 made the switch reachable. **Signup is
+  still shut.**
+- **[`2026-08-05-handoff-and-unfiled-scan.md`](./2026-08-05-handoff-and-unfiled-scan.md)** — the five
+  PRs that shipped 2026-08-05, the repo's own verifiers re-run and green, and **four items that had
+  no task behind them** (this file's deploy-time figure is one of them — it is wrong).
 
 ---
 
@@ -47,12 +64,14 @@ mid-flight is how two people work the same id from opposite ends. Wave-7 heading
 |---|---|
 | **Prepaid shipping absorption** | [ADR 0014](../../decisions/0014-platform-absorbs-cod-shipping.md) settled COD: the platform absorbs it. **Prepaid runs the identical shape and is undecided** — merchant credited gross, platform settles the courier by VA. The figure is already on Super Admin → Analitik labelled *"belum diputuskan"*. Needs its own ADR. |
 | **N29 — rotate the exposed accounts** | The *seed* is fixed (#150); **no existing row changed**, and `demo@tokophi.com` still authenticates with the published password. Runbook `2026-08-03-rotate-exposed-owners.md` is written and **unrun**. ⚠️ Its measurements are stale (it assumes 8 stores / 9 principals; production now holds 1 store, 1 user, 1 operator) — **re-measure first**. |
-| **N2 — two Cloudflare zone settings** | Approved 2026-08-01, procedure in `CLOUDFLARE-PERF.md`, still not executed. Zone config, no code. Blocked on a token with ruleset permission. |
+| **N2 — two Cloudflare zone settings** | Approved 2026-08-01, procedure in `CLOUDFLARE-PERF.md` §1–§2, still not executed. Zone config, no code. Blocked on a token with **ruleset** permission. ⚠️ The HSTS row below was done on the same zone with the token we DO have — that is `Zone Settings: Edit`, a different permission. **N2 is not unblocked by it.** |
+| ~~No host sends HSTS~~ | ✅ **DONE 2026-08-05 — both halves, and the ramp is finished.** Cookie half was #156 (all seven writes through `@tokophi/lib/session-cookie`). HSTS is live on the zone at **`max-age=31536000; includeSubDomains`** — raised from the 24 h ramp value the same day — verified on all six hosts **including a tenant subdomain** (`batik-nusantara.tokophi.com`), the line that proves `includeSubDomains` reaches a per-merchant shop. `preload` stays OFF (one-way door). 🔴 **There is no follow-up left, and no early rollback either**: disabling it stops us SENDING the header but cannot reach a browser that already holds one — that browser refuses `http://` for up to a year from its last visit. The remaining decision is [`CLOUDFLARE-PERF.md`](../CLOUDFLARE-PERF.md) §4's last note: **settle HSTS on merchant custom hostnames BEFORE wiring Cloudflare for SaaS**, because the same year-long promise would be emitted on a domain we do not control. |
 | **N1 — impersonation token** | 2-minute JWT in a **query string**, no `jti`, no single-use, and it mints a **7-day** session cookie carrying no impersonation marker. Unchanged. Needs an ADR before code. |
 | **N16 — `tokophi_app` DML on platform tables** | `0012_tenant_rls.sql` still grants full DML on *all* tables; no `REVOKE` anywhere; the `stores` policy is `FOR ALL`, so a tenant can UPDATE its own `comped`/`status`. Architecture decision before the PostgREST cutover. |
 | **N25 — `color_palettes` orphan** | In `SCHEMA.md`, in no migration, read by nothing. Dropping it on the shared dev container is destructive. |
 | **N5 — `dom-size`** | Measured to the end; both options costed; neither taken. A decision, not work. |
 | **N28 — super-admin's 7 screens** | Gating verified, **content never crawled**. Needs the owner's go-ahead to drive `rich.` |
+| **Open self-serve signup?** | #154 made the switch reachable; the gate is sound, **metered** (5/10 min per IP), and the three 🟡 items are **done** (reserved slugs, both check-then-insert races, name bounds — plus a third `slugify` the sweep turned up in the seed). What is left is one product decision: signup would create real tenants for **unverified email addresses** — there is no mailer in this repo, so verification is a provider + tokens + a pending state, not a small change. Cheaper alternatives (operator approval, or keep onboarding by hand through Super Admin) are costed in [`2026-08-05-signup-open-audit.md`](./2026-08-05-signup-open-audit.md). |
 
 ## 🟢 Ready to pick up — no decision needed
 
@@ -62,7 +81,8 @@ Roughly highest value first. **S** ≈ under an hour, **M** ≈ half a day, **L*
 |---|---|---|
 | 🔴 **N54** | **There is NO way to create a landing page — the button 404s.** `promo-list-client.tsx:126` links to `/promo/html/baru`; that route only has `[id]/`, which `notFound()`s on a non-UUID. The feature has never been reachable. | **S** |
 | **N38** (shipping) | Label misses required fields. **Four of five are pure plumbing** — service type, both postcodes, sender phone, item prices all already persisted. **Insurance is not stored at all** and needs a column. 🔴 Sorting code is blocked twice (values come from KiriminAja support, and it rides the webhook we do not receive) — and **SPX needs a 2-column one, SPX being the primary courier and the COD rail**. | **M** |
-| **N33 aftermath** | ⚠️ **Nobody has filed this.** #150 fixed the *seed*, but **the seed is not a migration**: 24 dev products and every existing store still carry `1×1×1 cm`, and `createShipment` declares those to the courier, who re-measures and bills the difference. `ops/tokophi-n33-product-dimensions.sql` exists, is **unexecuted**, and ends in `rollback`. | **M** |
+| ~~N33 aftermath~~ | ✅ **DONE 2026-08-05 — backfilled on PRODUCTION and dev**, 24 rows each, log: [`2026-08-05-n33-backfill-executed.md`](./2026-08-05-n33-backfill-executed.md). ⚠️ Measured: it is **price-neutral** — 35×26×7 implies 1.062 g volumetric, which rounds into the same 1 kg tier as the existing floor. The value delivered is that the BOOKING now declares a truthful parcel, so the courier's re-measure stops surcharging the merchant. | — |
+| 🟠 **Parcel size ignores quantity** | **NEW, nobody had filed it.** `maxDims()` takes the largest value per axis across cart lines, so a cart of five gamis still declares ONE garment's parcel while the weight grows to 2,5 kg. Deliberate (quote and booking must agree) and therefore not a regression — but volumetric can then only ever dominate on a single bulky item. Decide: sum an axis, scale the smallest, or accept and record it in `KIRIMINAJA.md`. | **S** |
 | **N44** (wave 7) | Empty states, 2 screens left: `pelanggan/segmen/segmen-client.tsx` and `crm/template/template-client.tsx` — both print a summary strip over a bare `.map`. | **S** |
 | **N47 · N48** | An operator who forgets their password has **no way back in** (only self-service change exists); and a refused super-admin action **throws into a `startTransition` nobody catches**, so the operator sees nothing. | **S** |
 | **N52** | `CardTitle` is a `<div>`, so 128 card headings are invisible to heading navigation. | **S** |
@@ -158,8 +178,12 @@ npm run build:admin ; npm run build:super
 
 ## Deploying
 
-Merge to `origin/main` → Coolify rebuilds. **~6 minutes**, then a **60–90 s window of 503** while
-containers swap (admin recovers slightly before the storefront). Watch until all four return:
+Merge to `origin/main` → Coolify rebuilds. **9–11 minutes** from merge to all four hosts green, with
+a **~1,5–2,5 min window of 503** while containers swap (admin recovers slightly before the
+storefront). ⚠️ This used to read "~6 minutes / 60–90 s" and both halves were understated — measured
+FOUR times on 2026-08-05: **524 s · 656 s · 558 s · 542 s**, sampled every 25 s. `DEPLOY.md`'s
+"~8–9 min" was the closer of the two figures. The low number is what makes someone conclude a healthy
+deploy has failed and start intervening. Watch until all four return:
 
 ```bash
 for h in tokophi.com app.tokophi.com rich.tokophi.com toko.tokophi.com; do

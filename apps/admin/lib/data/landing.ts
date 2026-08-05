@@ -62,16 +62,29 @@ export async function listLandings(): Promise<LandingListRow[]> {
   });
 }
 
-/** Editor state. `id === "baru"` → a blank create form (still needs the product picker). */
+/**
+ * A blank draft for `/promo/html/baru`. Nothing is written until Simpan — `saveLanding` INSERTs when
+ * it gets no id, so an abandoned draft leaves no row (and no slug squatting `/lp/<slug>`).
+ *
+ * It is its own function rather than `getLandingEditor("baru")` because the editor route is
+ * `[id]`-keyed and 404s anything that is not a UUID (`lib/uuid.ts` — Postgres throws `22P02`, a 500
+ * where a 404 belongs). A magic string threaded through an id parameter would be describing a route
+ * shape that cannot exist. Never returns null: there is always a draft to render.
+ */
+export async function newLandingEditor(): Promise<LandingEditor> {
+  return withCurrentTenant(async (db: Tx) => {
+    const products = await activeProducts(db);
+    return {
+      id: null, slug: "", title: "", html: "", productId: products[0]?.id ?? "",
+      enabled: false, countdownMinutes: 0, showScarcity: true, formConfig: resolveFormConfig({}), products, shareUrl: null,
+    };
+  });
+}
+
+/** Editor state for an existing landing. `null` = no such row in THIS store (RLS scopes the read). */
 export async function getLandingEditor(id: string): Promise<LandingEditor | null> {
   return withCurrentTenant(async (db: Tx, storeId: string) => {
     const products = await activeProducts(db);
-    if (id === "baru") {
-      return {
-        id: null, slug: "", title: "", html: "", productId: products[0]?.id ?? "",
-        enabled: false, countdownMinutes: 0, showScarcity: true, formConfig: resolveFormConfig({}), products, shareUrl: null,
-      };
-    }
     const [row] = await db.select().from(schema.landingPages).where(eq(schema.landingPages.id, id)).limit(1);
     if (!row) return null; // RLS already scopes to this store
     const slug = await storeSlug(db, storeId);

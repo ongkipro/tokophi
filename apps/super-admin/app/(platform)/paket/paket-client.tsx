@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
 import { type Invoice } from "@/lib/types";
 import { InvoiceBadge } from "@/components/bits";
 import { setInvoiceStatus } from "@/lib/actions";
+import { refused } from "@/lib/refused";
 import { IDR, num } from "@tokophi/lib/format";
 import { BILLING } from "@tokophi/lib/billing";
 import type { SubStats, Conversion, FinanceStats } from "@/lib/data";
@@ -33,7 +34,8 @@ export function PaketClient({ sub, allInvoices, conv, fin }: { sub: SubStats; al
   function mark(inv: Invoice, status: Invoice["status"]) {
     if (status === inv.status) return;
     startTransition(async () => {
-      await setInvoiceStatus(inv.id, status);
+      const no = refused(await setInvoiceStatus(inv.id, status));
+      if (no) return void toast.error(no);
       toast.success(`Invoice ${inv.id} → ${status}.`);
       router.refresh();
     });

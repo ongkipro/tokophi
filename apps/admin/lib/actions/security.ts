@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { getSession, verifyPassword, signSession, SESSION_COOKIE, SESSION_MAX_AGE } from "@/lib/auth";
 import { hashPassword } from "@tokophi/lib/password";
 import { generateTotpSecret, verifyTotp, otpauthURL } from "@tokophi/lib/totp";
+import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
 
 export async function getSecurity(): Promise<{ email: string; twoFactor: boolean } | null> {
   const session = await getSession();
@@ -42,7 +43,7 @@ export async function changePassword(current: string, next: string): Promise<{ o
     { userId: session.userId, storeId: session.storeId, role: session.role, email: session.email, name: session.name },
     new Date(stamp.getTime() + 1000),
   );
-  (await cookies()).set(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", path: "/", maxAge: SESSION_MAX_AGE });
+  (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions(SESSION_MAX_AGE));
   return { ok: true };
 }
 
