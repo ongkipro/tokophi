@@ -16,6 +16,9 @@ Two detailed handoffs sit underneath this index; go to them for reasoning, not t
   stream, and its **"do not re-file"** list.
 - **[`2026-08-05-kiriminaja-doc-sweep.md`](./2026-08-05-kiriminaja-doc-sweep.md)** — the shipping /
   KiriminAja stream.
+- **[`2026-08-05-signup-open-audit.md`](./2026-08-05-signup-open-audit.md)** — what
+  `SIGNUP_ENABLED=true` would actually expose, now that #154 made the switch reachable. **Signup is
+  still shut.**
 
 ---
 
@@ -48,11 +51,13 @@ mid-flight is how two people work the same id from opposite ends. Wave-7 heading
 | **Prepaid shipping absorption** | [ADR 0014](../../decisions/0014-platform-absorbs-cod-shipping.md) settled COD: the platform absorbs it. **Prepaid runs the identical shape and is undecided** — merchant credited gross, platform settles the courier by VA. The figure is already on Super Admin → Analitik labelled *"belum diputuskan"*. Needs its own ADR. |
 | **N29 — rotate the exposed accounts** | The *seed* is fixed (#150); **no existing row changed**, and `demo@tokophi.com` still authenticates with the published password. Runbook `2026-08-03-rotate-exposed-owners.md` is written and **unrun**. ⚠️ Its measurements are stale (it assumes 8 stores / 9 principals; production now holds 1 store, 1 user, 1 operator) — **re-measure first**. |
 | **N2 — two Cloudflare zone settings** | Approved 2026-08-01, procedure in `CLOUDFLARE-PERF.md`, still not executed. Zone config, no code. Blocked on a token with ruleset permission. |
+| **Session cookie has no `Secure`, and no host sends HSTS** | **NEW, measured 2026-08-05.** All **five** sites that write the `session` cookie set `httpOnly`/`sameSite`/`path`/`maxAge` and **not `secure`** (login · signup · Google callback · password re-mint · impersonate), and `curl -I` returns no `strict-transport-security` on `tokophi.com` or `app.`. `http://app.` is a Cloudflare 301 — but the browser has already sent the 7-day token in cleartext. Code half is one line × 5; the decision is whether `secure` breaks anyone's local dev (Safari). HSTS half rides with **N2**. Detail: [`2026-08-05-signup-open-audit.md`](./2026-08-05-signup-open-audit.md). |
 | **N1 — impersonation token** | 2-minute JWT in a **query string**, no `jti`, no single-use, and it mints a **7-day** session cookie carrying no impersonation marker. Unchanged. Needs an ADR before code. |
 | **N16 — `tokophi_app` DML on platform tables** | `0012_tenant_rls.sql` still grants full DML on *all* tables; no `REVOKE` anywhere; the `stores` policy is `FOR ALL`, so a tenant can UPDATE its own `comped`/`status`. Architecture decision before the PostgREST cutover. |
 | **N25 — `color_palettes` orphan** | In `SCHEMA.md`, in no migration, read by nothing. Dropping it on the shared dev container is destructive. |
 | **N5 — `dom-size`** | Measured to the end; both options costed; neither taken. A decision, not work. |
 | **N28 — super-admin's 7 screens** | Gating verified, **content never crawled**. Needs the owner's go-ahead to drive `rich.` |
+| **Open self-serve signup?** | #154 made the switch reachable; the gate is sound and now **metered** (5/10 min per IP). What is left is a product decision: signup would create real tenants for **unverified email addresses** — there is no mailer in this repo, so verification is a provider + tokens + a pending state, not a small change. Cheaper alternatives (operator approval, or keep onboarding by hand through Super Admin) are costed in [`2026-08-05-signup-open-audit.md`](./2026-08-05-signup-open-audit.md), along with three 🟡 items sized **S** that ride with it. |
 
 ## 🟢 Ready to pick up — no decision needed
 
