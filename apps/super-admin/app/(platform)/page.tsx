@@ -10,6 +10,7 @@ import {
   Landmark,
   Receipt,
   TriangleAlert,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
@@ -31,6 +32,7 @@ import {
   getRiskQueue,
   getConversion,
   getFinanceStats,
+  getPendingApprovals,
 } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +49,7 @@ const STATUS_BAR: Record<StatusSlice, string> = {
 };
 
 export default async function PlatformDashboard() {
-  const [platform, stores, subStats, statusDistribution, invoices, activity, revenue, float, risk, conv, fin] =
+  const [platform, stores, subStats, statusDistribution, invoices, activity, revenue, float, risk, conv, fin, pending] =
     await Promise.all([
       getPlatform(),
       getStores(),
@@ -60,6 +62,7 @@ export default async function PlatformDashboard() {
       getRiskQueue(),
       getConversion(),
       getFinanceStats(),
+      getPendingApprovals(),
     ]);
 
   // KPIs. Every one of these is a number with a query behind it — there are no deltas, because
@@ -124,12 +127,52 @@ export default async function PlatformDashboard() {
                 {num(risk.length)}
               </Badge>
             )}
+            {/* Counted separately from `risk`, and shown separately below — the two answer different
+                questions ("who is about to stop paying us" vs "who is waiting on us"), and one number
+                covering both would be a total nobody could act on. */}
+            {pending.length > 0 && (
+              <Badge variant="secondary" className="border-transparent bg-primary/12 text-primary">
+                {num(pending.length)} menunggu persetujuan
+              </Badge>
+            )}
           </CardTitle>
           <Link href="/toko" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
             Kelola toko <ArrowUpRight className="size-3.5" />
           </Link>
         </CardHeader>
         <CardContent>
+          {/* ── THE SIGNUP QUEUE, ABOVE THE CHURN LIST ────────────────────────────────────────────
+              First because it is the only block here with a promise attached: the merchant's own
+              dashboard tells them "biasanya dalam 1×24 jam", and nothing else notifies anybody —
+              there is no mailer in this repo, so this row IS the notification. Rendered only when
+              somebody is actually waiting; an empty box that says "0" every morning is how a queue
+              stops being read. Oldest first, and the wait is stated in hours, because "3 jam" and
+              "31 jam" are the same word ("menunggu") until you write the number. */}
+          {pending.length > 0 && (
+            <ul className="mb-3 divide-y rounded-xl border border-amber-500/40 bg-amber-500/5">
+              {pending.slice(0, 5).map((p) => (
+                <li key={p.id}>
+                  <Link href={`/toko/${p.id}`} className="flex items-center gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-amber-500/10">
+                    <Clock className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">{p.name}</div>
+                      {/* The email is the thing being judged — nobody has proved they own it. */}
+                      <div className="truncate text-xs text-muted-foreground">{p.email || "—"}</div>
+                    </div>
+                    <span className="shrink-0 text-xs tabular-nums text-amber-700 dark:text-amber-400">
+                      menunggu {p.hoursWaiting < 1 ? "<1" : num(p.hoursWaiting)} jam
+                    </span>
+                    <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                  </Link>
+                </li>
+              ))}
+              {pending.length > 5 && (
+                <li className="px-3 py-2 text-xs text-muted-foreground">
+                  +{num(pending.length - 5)} lagi menunggu — <Link href="/toko" className="text-primary hover:underline">lihat semua di Toko</Link>
+                </li>
+              )}
+            </ul>
+          )}
           {worklist.length ? (
             <ul className="divide-y">
               {worklist.map((r) => (
@@ -153,7 +196,7 @@ export default async function PlatformDashboard() {
             </ul>
           ) : (
             <div className="flex min-h-24 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
-              Tidak ada toko yang butuh tindakan 🎉
+              {pending.length ? "Tidak ada risiko langganan — sisanya antrean pendaftaran di atas." : "Tidak ada toko yang butuh tindakan 🎉"}
             </div>
           )}
         </CardContent>

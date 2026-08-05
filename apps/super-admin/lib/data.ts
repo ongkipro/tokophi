@@ -530,6 +530,43 @@ export async function getInvoices(): Promise<Invoice[]> {
  * Each reason is a fact with a query behind it, and reasons stack — a store can be past-due AND
  * sitting on a failed payment AND dormant, which is exactly the store you call first.
  */
+/**
+ * THE SIGNUP REVIEW QUEUE — who is waiting on US, oldest first (0090).
+ *
+ * Deliberately NOT folded into `getRiskQueue()` below. That list answers "who is about to stop paying
+ * us", and its own comment records why an operator-suspended store is excluded from it: a suspension
+ * is a decision we already made, not a risk to be worked. A signup awaiting review is the opposite
+ * shape — nobody has decided anything yet, and the clock is OURS. Mixing the two would file every
+ * queued shop at severity 100 forever and bury the churn signals the list exists for.
+ *
+ * `approved_at IS NULL AND suspended_at IS NOT NULL` is the same predicate `computeBilling()` turns
+ * into `pendingApproval`; it is expressed in SQL here because the count has to come from the whole
+ * table, not from a page of it.
+ *
+ * Oldest first, because the merchant was promised "biasanya dalam 1×24 jam" on their own dashboard —
+ * newest-first would serve whoever arrived last while the person who has waited longest scrolls off.
+ */
+export type PendingStore = { id: string; name: string; email: string; owner: string; hoursWaiting: number };
+
+export async function getPendingApprovals(): Promise<PendingStore[]> {
+  const rows = (await db.execute(sql`
+    select s.id, s.name, s.created_at as "createdAt",
+           u.email as "email", u.name as "owner"
+    from stores s
+    left join store_users su on su.store_id = s.id and su.role = 'owner'
+    left join users u on u.id = su.user_id
+    where s.approved_at is null and s.suspended_at is not null
+    order by s.created_at asc
+  `)) as unknown as { id: string; name: string; createdAt: string; email: string | null; owner: string | null }[];
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    email: r.email ?? "",
+    owner: r.owner ?? "",
+    hoursWaiting: Math.max(0, Math.round((Date.now() - new Date(r.createdAt).getTime()) / 3_600_000)),
+  }));
+}
+
 export type RiskReason =
   | { kind: "grace"; daysLeft: number } // past due, inside the 3-day grace → suspends in N days
   | { kind: "suspended" } // grace exhausted, storefront read-only
