@@ -310,7 +310,23 @@ services:
       timeout: 5s
       retries: 3
 
-  # daily Postgres backup — custom-format dump to a volume, keeps the last 7.
+  # Postgres backup — custom-format dump to a volume.
+  #
+  # 🔴 THE PREVIOUS SHAPE LOST HISTORY, and it read as if it did not. It dumped IMMEDIATELY on start,
+  # then `sleep 86400`, and kept the newest 7 BY COUNT. Every deploy restarts this container — so ten
+  # deploys in a day produced ten dumps and `keep-7` evicted every recovery point from every earlier
+  # day. Measured on production 2026-08-05: all seven dumps spanned 10:44 → 16:28, i.e. **5 h 44 min**
+  # of retention where "daily, keep-7" implies seven days. A data-corrupting change not noticed within
+  # ~7 deploys had no clean dump left to restore from. Full reasoning: specs/docs/SLA-DRP.md §3.
+  #
+  # Three defects, three fixes — do not collapse them back:
+  #  1. RESTART-SAFE CADENCE. Dump only if the newest dump is older than 6 h, so a redeploy neither
+  #     resets the clock nor manufactures a recovery point. Waking hourly keeps the real interval ≤6 h.
+  #  2. RETENTION BY AGE, NOT COUNT (`-mtime +14`). Deploy-triggered dumps can no longer evict a day.
+  #     ⚠️ Never put a `keep the newest N` rule back — N files is not N days when restarts write files.
+  #  3. ATOMIC WRITE. Dump to `.part`, rename only on success. An interrupted pg_dump used to leave a
+  #     truncated `.dump` that looked like a valid recovery point, became "the newest" (suppressing the
+  #     next dump), and satisfied the healthcheck.
   backup:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -320,14 +336,36 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:-tokophi}
     volumes:
       - tokophi-backups:/backups
-    command: ["sh", "-c", "while true; do pg_dump -h postgres -U tokophi -d tokophi -Fc -f /backups/tokophi-$$(date +%Y%m%d-%H%M%S).dump && echo backup-ok; ls -1t /backups/*.dump 2>/dev/null | tail -n +8 | xargs -r rm -f; sleep 86400; done"]
+    command:
+      - "sh"
+      - "-c"
+      - |
+        while true; do
+          rm -f /backups/*.part 2>/dev/null
+          newest=$$(ls -1t /backups/*.dump 2>/dev/null | head -1)
+          if [ -z "$$newest" ] || [ -z "$$(find "$$newest" -mmin -360 2>/dev/null)" ]; then
+            f=/backups/tokophi-$$(date +%Y%m%d-%H%M%S).dump
+            if pg_dump -h postgres -U tokophi -d tokophi -Fc -f "$$f.part" && mv "$$f.part" "$$f"; then
+              echo backup-ok
+            else
+              rm -f "$$f.part"; echo backup-FAILED
+            fi
+          fi
+          find /backups -name '*.dump' -mtime +14 -delete
+          sleep 3600
+        done
     healthcheck:
-      # healthy only once at least one dump exists → doubles as proof the backup ran
-      test: ["CMD-SHELL", "ls /backups/*.dump >/dev/null 2>&1 || exit 1"]
-      interval: 30s
+      # ⚠️ The old test was `ls /backups/*.dump` — it passed if ANY dump existed, including one from six
+      # months ago, while its own comment claimed to "double as proof the backup ran". An alarm that
+      # cannot fire is an alarm that is off; this repo has paid for that twice (verify-rls, the pixel
+      # check). This one goes UNHEALTHY when no dump has landed in 8 h — one missed 6 h cycle plus
+      # slack. Nothing `depends_on` this service, so an unhealthy backup blocks no deploy; it is a
+      # signal, which is the whole point.
+      test: ["CMD-SHELL", "test -n \"$$(find /backups -name '*.dump' -mmin -480 2>/dev/null)\" || exit 1"]
+      interval: 60s
       timeout: 5s
       retries: 3
-      start_period: 90s
+      start_period: 120s
 
 volumes:
   tokophi-pgdata:
