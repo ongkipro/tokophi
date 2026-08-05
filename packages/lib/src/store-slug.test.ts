@@ -66,26 +66,17 @@ const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage"]);
 const SOURCE = /\.(?:ts|tsx|mts|cts|cjs|astro|mjs|js|jsx)$/;
 const SELF = ["packages/lib/src/store-slug.ts", "packages/lib/src/store-slug.test.ts"];
-// ⚠️ AND TEST FILES, NAMED AS AN EXCEPTION RATHER THAN LEFT IMPLICIT (2026-08-05).
-//
-// This sweep shipped RED. `packages/db/src/provision-conflicts.test.ts` does
-// `insert(schema.stores).values({ … slug })` TWICE on purpose — provoking `stores_slug_unique` is its
-// entire job — so the sink found a fourth "writer", the list assertion failed, and the guard has been
-// failing on `main` ever since it landed. This repo has already paid for that once: `verify-rls` sat
-// red for weeks, everyone learned to scroll past it, and two cross-tenant leaks shipped past a
-// verifier that was already failing. An alarm that is always on is an alarm that is off.
-//
-// The claim is about code that SHIPS a store slug. A `*.test.ts` ships nothing: it runs against the
-// test database and rolls back. Excluding it costs the sweep nothing real — a slug rule hiding in a
-// test file has no production caller — while leaving it in costs the sweep its entire value.
-const TEST_FILE = /\.test\.[cm]?[jt]sx?$/;
 
 function repoSources(): string[] {
   return execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
     .split("\0")
     .filter(Boolean)
     .filter((rel) => !rel.split("/").some((seg) => seg.startsWith(".") || SKIP_DIRS.has(seg)))
-    .filter((rel) => SOURCE.test(rel) && !TEST_FILE.test(rel) && !SELF.includes(rel));
+    // ⚠️ TESTS ARE NOT PRODUCT WRITERS. `provision-conflicts.test.ts` inserts a store with a literal
+    // slug ON PURPOSE — it provokes the unique violation — and must NOT import the shared rule. This
+    // guard flagged it as a fourth writer, which is a false positive in the guard, not a defect in the
+    // test. Excluded by suffix rather than by name: the next such fixture would otherwise repeat it.
+    .filter((rel) => SOURCE.test(rel) && !SELF.includes(rel) && !/\.test\.[cm]?[jt]sx?$/.test(rel));
 }
 
 // ⚠️ THE CLAIM IS ABOUT THE **STORE** SLUG, AND THE SINK IS WHAT IDENTIFIES ONE.
@@ -101,7 +92,11 @@ function repoSources(): string[] {
 // i.e. a THIRD store-slug rule, invisible to a reviewer and to every test, waiting for one accent.
 //
 // So: a file that writes `schema.stores` … `slug` must import the shared rule.
-const WRITES_STORE_SLUG = /insert\s*\(\s*schema\s*\.\s*stores\s*\)[\s\S]{0,400}?\bslug\s*[,:]/;
+// ⚠️ The window is SHORT and stops at the first `)` group on purpose. It was `{0,400}` and that
+// reached past the statement it was anchored on into an unrelated `schema.stores.slug` in a later
+// `delete(...)` line — so whether it fired depended on how many characters sat between two unrelated
+// statements. A guard whose verdict moves with whitespace is not a guard.
+const WRITES_STORE_SLUG = /insert\s*\(\s*schema\s*\.\s*stores\s*\)\s*\.\s*values\s*\(\s*\{[^}]{0,200}?\bslug\b/;
 const IMPORTS_SHARED = /from\s*"@tokophi\/lib\/store-slug"/;
 const REDEFINES_RESERVED = /const\s+RESERVED(?:_SLUGS)?\s*=\s*new\s+Set\s*\(/;
 
