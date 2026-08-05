@@ -139,6 +139,11 @@ cutover keeps writes behind the Next apps. Picking one changes what PostgREST is
 **AC:** the decision recorded in `specs/decisions/`, then a `verify-rls`-style check that fails if
 `tokophi_app` holds INSERT/UPDATE/DELETE on a `platform_*` table or on `stores`.
 
+> 📍 **START HERE IF YOU ARE PICKING THIS UP ON ANOTHER MACHINE:**
+> **`specs/docs/tasks/2026-08-05-audit-waves-6-9-handoff.md`** — where production stands, what is
+> waiting on the owner, the two traps that fired during waves 6–9, and the five claims that were
+> refuted by measurement (do not re-file those).
+
 ### N47. An operator who forgets their password has NO way back in · **S** · NEW
 Opened by the branch that shipped `changePlatformPassword` (audit wave 7). That form requires the
 CURRENT password — correctly, it is a self-service rotation, not a recovery. But nothing else writes
@@ -1493,7 +1498,12 @@ re-files this.
 Also checked rather than assumed: the feared comment-splice hole **cannot occur inside a string
 literal** — `"admin@/*c*/tokophi.id"` lexes as one token and matches neither raw nor lexed.
 
-### N50. An empty store is told its sales are unchanged, not that there is nothing to compare · **S** · NEW
+### N50. An empty store is told its sales are unchanged, not that there is nothing to compare · **S** · ✅ DONE (wave 9, `0fa69b2a`)
+> `Kpi.delta` is `number | null`; `prev === 0` (the DENOMINATOR) renders `—`, while a fall **to** zero
+> stays `−100,0%` — driven both ways against real data. ⚠️ The bug `tsc` could not see: `KpiCard`'s
+> prop was still `delta: number` and `Sparkline`'s `up: boolean`, and **`null >= 0` is `true` in
+> JavaScript**, so every `up = delta >= 0` painted an emerald ↗ over an em dash. Pinned by
+> `apps/admin/lib/data/kpi-delta.test.ts`, proved red against two mutated copies.
 **MEASURED** (wave 8, rendering the seeded empty store `snack-rumahan-bu-tati`).
 `apps/admin/lib/data/dashboard.ts:65` computes `delta = prev === 0 ? 0 : …`, so a store with no
 history renders **"Penjualan hari ini +0,0%"** — *"no change"* — where the truth is *"there is
@@ -1506,7 +1516,15 @@ output needs `Kpi.delta: number | null` threaded through every KPI card, the mon
 analitik tiles — a data-layer contract change, and the wave that found it was scoped to screens.
 Do it with the `NO_FIGURE` floor wave 8 already added to the formatters, not beside it.
 
-### N51. ~40 admin form controls have no programmatic label · **S** · NEW
+### N51. ~40 admin form controls have no programmatic label · **S** · ✅ DONE (wave 9, `0fa69b2a`)
+> The estimate was low. **~2.100 controls swept across 52 routes, reading the name Blink itself
+> computes (CDP `getPartialAXTree`): 90 were `""`. Now 0 of ours.** ⚠️ Wave 8 had reported
+> `/pengaturan` fixed — it fixed the toggles routed through `ToggleRow`, and **22 switches on that
+> same screen, in two other cards, went on being nameless**; one was a hand-copy of `ToggleRow`'s
+> markup minus the naming. Base UI's Switch is a `<span role="switch">`, **not labelable**, so a
+> wrapping `<label>` names nothing and `htmlFor` is the only native route. Three of wave 8's claims
+> were refuted by rendering (`saldo-filters` dates, order-detail checkboxes, and the search boxes,
+> which were named by their `placeholder`). Guarded by `apps/admin/lib/form-labels.test.tsx`.
 **MEASURED by rendering**, not grepped. Wave 8 fixed the ones it could name (`/pengaturan` switches
 via the shared `ToggleRow`, the topbar's colour-only unread dot, the store-builder image picker with
 no accessible name at all, three unlabelled destructive buttons on `/promo/[id]`). The rest cluster:
@@ -1522,7 +1540,12 @@ every admin screen's visual rhythm, so it wants its own change set and a pass ov
 (`h2` under the page `h1`, `h3` inside a card). Wave 8 added `apps/admin/lib/admin-h1-floor.test.ts`,
 which pins that every route REACHES an `h1` — the floor, not the structure.
 
-### N53. Good/bad is communicated by colour alone in two places · **S** · NEW
+### N53. Good/bad is communicated by colour alone in two places · **S** · ✅ DONE (wave 9) — and the brief was WRONG
+> The claim was that the two verdicts carry colour "with no icon, sign or word". **That is not what
+> the code did**: the sales badge already had `↗`/`↘` and `+`/`−`; the return badge already had a
+> word. What was genuinely colour-only was the **judgement over MISSING data** — an emerald "belum
+> ada data" pill, and (after N50) an emerald ↗ over `—`. That is what was fixed. A third site,
+> outside the two the brief named, is **N55**.
 **MEASURED**: the money strip's and the return-rate card's verdict is carried by green/red text with
 no icon, sign or word. WCAG 1.4.1. The delta figures beside them already carry `+`/`−` (U+2212), so
 the fix is to let the verdict borrow the same signal rather than invent one.
