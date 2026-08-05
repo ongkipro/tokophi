@@ -16,7 +16,13 @@ import {
   destIdError,
 } from "@tokophi/lib/validate";
 import { areaById } from "@/lib/data/areas";
-import { rateLimited, clientIp } from "@/lib/public-guard";
+import {
+  rateLimited,
+  clientIp,
+  readPublicBody,
+  MAX_CART_ITEMS,
+  SHIPPING_QUOTE_UNAVAILABLE,
+} from "@/lib/public-guard";
 import { getCodPolicy } from "@/lib/cod";
 import { quoteShipping, findRate } from "@/lib/shipping-quote";
 import { computeTax } from "@tokophi/lib/tax";
@@ -58,6 +64,21 @@ type Item = { handle?: string; name?: string; price?: number; variant?: string; 
 /** A rejected request: one Bahasa message the shopper can act on, plus the field it belongs to. */
 const bad = (error: string, field?: string, status = 400) =>
   NextResponse.json({ ok: false, error, field }, { status, headers: CORS });
+
+/**
+ * What a shopper is told when the payment gateway refuses to open a bill.
+ *
+ * ⚠️ ADR 0004 again (see SHIPPING_QUOTE_UNAVAILABLE): `alCreatePayment` returns the PSP's own `ket`
+ * field verbatim, and this route put it straight into `payError`. Measured 2026-08-05 against the
+ * live gateway with a bad key: `{"rc":"401","ket":"Unauthorized"}` — so the JSON this shop's own
+ * origin serves said "Unauthorized" about a shopper's order. The order EXISTS and is payable later,
+ * which is why this is a 200 carrying a note rather than a failure; the note has to say the one
+ * thing the shopper can act on, and the gateway's word for it is not that.
+ *
+ * The throw path below already used this sentence. Both now do, so there is one string and no way
+ * for the rc-path to drift back to the provider's.
+ */
+const PAY_START_FAILED = "Pembayaran tidak dapat dimulai. Hubungi penjual dengan nomor pesanan ini.";
 
 // ── THE ONE `inventory_levels` ROW A SALE TOUCHES ────────────────────────────────────────────────
 //
@@ -143,10 +164,31 @@ async function handle(req: Request) {
     // own pixel provider as match keys. Length-bounded in clientContextFromRequest.
     trackingCookies?: { fbp?: string; fbc?: string; ga?: string; gcl?: string; ttp?: string; ttclid?: string; utmSource?: string; utmMedium?: string };
   };
+  // Capped read — see `lib/public-guard.ts`. `req.json()` buffers whatever arrives: a 64 MB body was
+  // accepted, parsed and held in this process's heap before this line existed.
+  const raw = await readPublicBody(req, CORS);
+  if (raw.res) return raw.res;
   try {
-    body = await req.json();
+    body = JSON.parse(raw.text);
   } catch {
     return bad("Body tidak valid.");
+  }
+  // ── HOW MANY LINES ONE ORDER MAY NAME ────────────────────────────────────────────────────────
+  // The loop below is FOUR sequential DB round-trips per element (product · variants · the default
+  // inventory row · that row's `available`), and nothing bounded the array. Measured on this branch:
+  // 10.000 items → 50.498 index scans and 63,8 s in ONE request, which never reaches the courier API
+  // or a write — it only spends the database. `checkout-session.ts`, which merely RECORDS a cart,
+  // has capped at 50 since it shipped; this endpoint takes the money and capped at nothing.
+  //
+  // Checked on the RAW array, before the filter, so junk elements cost nothing either.
+  // 100 is deliberately generous — an extreme wholesale order, ~1,2 s and ~12 KB — because a cap
+  // that refuses a real cart is a lost sale nobody ever hears about.
+  if ((body.items?.length ?? 0) > MAX_CART_ITEMS) {
+    return bad(
+      `Pesanan ini punya terlalu banyak baris produk (maksimum ${MAX_CART_ITEMS}). Pisahkan menjadi beberapa pesanan.`,
+      "items",
+      413,
+    );
   }
   const items = (body.items ?? []).filter((i) => i.handle && (i.qty ?? 0) > 0);
   if (!items.length) return bad("Keranjang kosong.");
@@ -471,7 +513,15 @@ async function handle(req: Request) {
   });
   // A quote we cannot produce is a parcel we cannot price. Failing the order is the honest outcome:
   // the alternative is falling back to the client's number, which is the bug being closed.
-  if (!quote.ok) return bad(quote.error, "shipping");
+  // ADR 0004 — the aggregator's own words never reach the shopper (see SHIPPING_QUOTE_UNAVAILABLE in
+  // lib/public-guard.ts). Measured before this line: a crafted `service` came back to the checkout as
+  // "kurir <x> tidak terdaftar di sistem kami" — the provider, in the first person, on the merchant's
+  // page. OUR failures ("Tujuan belum dipilih.", "Alamat pengambilan toko belum diatur.") are still
+  // returned as-is: those are ours to say, and they are the ones anyone can act on.
+  if (!quote.ok) {
+    if (quote.fromProvider) console.error("[order] courier API refused the quote:", quote.error);
+    return bad(quote.fromProvider ? SHIPPING_QUOTE_UNAVAILABLE : quote.error, "shipping");
+  }
   const rate = findRate(quote.rates, svcCode, svcType);
   if (!rate) {
     return bad("Layanan pengiriman yang dipilih tidak tersedia lagi. Muat ulang halaman checkout.", "shipping");
@@ -853,10 +903,16 @@ async function handle(req: Request) {
     });
   } catch (err) {
     console.error("[order] alCreatePayment threw for", order.number, err);
-    pay = { ok: false, error: "Pembayaran tidak dapat dimulai. Hubungi penjual dengan nomor pesanan ini." };
+    pay = { ok: false, error: PAY_START_FAILED };
   }
   if (!pay.ok) {
-    return NextResponse.json({ ok: true, orderNumber: order.number, payError: pay.error, tracking }, { headers: CORS });
+    // The gateway's `ket` is the PROVIDER's copy (measured: "Unauthorized" on a bad key) — logged,
+    // never served. See PAY_START_FAILED.
+    console.error("[order] payment gateway refused for", order.number, "—", pay.error);
+    return NextResponse.json(
+      { ok: true, orderNumber: order.number, payError: PAY_START_FAILED, tracking },
+      { headers: CORS },
+    );
   }
   // Enrich the pending payment row (created atomically in the txn) with the gateway's VA/trxId/fees.
   // If this UPDATE were to fail, the order still has its payment row (pending) and the callback can

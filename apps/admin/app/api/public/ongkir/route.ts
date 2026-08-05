@@ -3,7 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { resolveArea, kelurahanForDistrict } from "@/lib/data/areas";
-import { rateLimited } from "@/lib/public-guard";
+import { rateLimited, readPublicBody, MAX_CART_ITEMS, SHIPPING_QUOTE_UNAVAILABLE } from "@/lib/public-guard";
 import { quoteShipping, FAST_COURIERS } from "@/lib/shipping-quote";
 
 // Public (no-auth) storefront-facing shipping endpoint. The storefront checkout calls this to
@@ -44,8 +44,12 @@ async function handle(req: Request) {
     return NextResponse.json({ ok: false, error: "Shipping belum dikonfigurasi." }, { status: 200, headers: CORS });
   }
   let body: { op?: string; q?: string; destinationId?: number; items?: { handle?: string; variant?: string; variantId?: string; qty?: number }[]; itemValue?: number; storeSlug?: string; all?: boolean };
+  // Capped read — see `lib/public-guard.ts`. `req.json()` buffers whatever arrives, and a 64 MB body
+  // was accepted here before this line existed.
+  const raw = await readPublicBody(req, CORS);
+  if (raw.res) return raw.res;
   try {
-    body = await req.json();
+    body = JSON.parse(raw.text);
   } catch {
     return NextResponse.json({ ok: false, error: "Body tidak valid." }, { status: 400, headers: CORS });
   }
@@ -77,6 +81,15 @@ async function handle(req: Request) {
   // logic would be two prices, and the one the order keeps is the one that decides what the merchant
   // gets paid.
   if (body.op === "rates") {
+    // One quote covers the whole cart, so a longer array buys no extra rate call — but
+    // `weightForCart` still walks it per line against every matched row, and the checkout has no
+    // reason to send more lines than the order endpoint will accept. Same cap, same message.
+    if ((body.items?.length ?? 0) > MAX_CART_ITEMS) {
+      return NextResponse.json(
+        { ok: false, error: `Keranjang terlalu panjang (maksimum ${MAX_CART_ITEMS} baris produk).` },
+        { status: 413, headers: CORS },
+      );
+    }
     // Fail closed on a missing slug rather than defaulting to a hardcoded demo store (see order route).
     const slug = (body.storeSlug ?? "").trim();
     if (!slug) return NextResponse.json({ ok: false, error: "Toko tidak dikenali." }, { headers: CORS });
@@ -108,7 +121,15 @@ async function handle(req: Request) {
       itemValue: body.itemValue || 0,
       couriers: body.all === true ? undefined : [...FAST_COURIERS],
     });
-    if (!q.ok) return NextResponse.json({ ok: false, error: q.error }, { headers: CORS });
+    // ADR 0004 — the aggregator's own words never reach the shopper (see SHIPPING_QUOTE_UNAVAILABLE).
+    // They go to the container log, where whoever can fix an expired key or a bad origin will see them.
+    if (!q.ok) {
+      if (q.fromProvider) console.error("[ongkir] courier API refused the quote:", q.error);
+      return NextResponse.json(
+        { ok: false, error: q.fromProvider ? SHIPPING_QUOTE_UNAVAILABLE : q.error },
+        { headers: CORS },
+      );
+    }
 
     // `origin`/`originFrom` are returned so the caller can never be confused about which address the
     // price was built from — a missing pickup address is visible instead of silently priced from a
