@@ -9,6 +9,7 @@ import { COURIERS } from "@tokophi/lib/couriers";
 // `packages/lib/src/password.test.ts`, which scans every tracked source file).
 import { hashPassword, tempPassword, PUBLISHED_PASSWORDS } from "@tokophi/lib/password";
 import { assertTruncateIsDeliberate } from "./seed-guard";
+import { packedDims } from "./product-dims";
 
 // ── SEEDED CREDENTIALS — RANDOM PER ACCOUNT, PER RUN, REVEALED ONCE (N29) ─────────────────────────
 //
@@ -858,12 +859,12 @@ async function main() {
       sizes: meta?.sizes ?? null,
       badge: meta?.badge ?? null,
       bestseller: meta?.bestseller ?? false,
-      // Shipping dims (cm). 1×1×1 by product decision: volumetric weight (l×w×h÷6000) is then
-      // negligible, so the courier bills the ACTUAL weight — which is what apparel should be
-      // charged on. Set real dims here only if a merchant ships bulky-but-light goods.
-      lengthCm: 1,
-      widthCm: 1,
-      heightCm: 1,
+      // Shipping dims (cm) — the FOLDED PARCEL, per garment kind. See `product-dims.ts`.
+      // ⚠️ These were `1, 1, 1`, and the comment defending it had the divisor wrong (`÷6000`, not
+      // `÷6`) and the conclusion wrong with it: 1×1×1 is not "the courier bills actual weight", it is
+      // "the parcel is DECLARED to the courier as a one-centimetre cube", because `createShipment`
+      // sends these exact columns. N33.
+      ...packedDims(c.slug),
       ratingValue: meta?.rating[0] ?? null,
       ratingCount: meta?.rating[1] ?? 0,
       hasVariants: true,
