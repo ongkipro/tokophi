@@ -87,7 +87,7 @@ describe("the control plane never mints a fixed password", () => {
     // A password the UI cannot show is worse than the bug: the merchant is locked out of a live store
     // and nothing on screen says why. Each minting action must return it (the callers surface it —
     // toko-client.tsx / pengaturan-client.tsx / store-detail.tsx show it once).
-    for (const fn of ["createStore", "invitePlatformAdmin", "resetOwnerPassword", "resetStoreUserPassword", "addStoreUser"]) {
+    for (const fn of ["createStore", "invitePlatformAdmin", "resetOwnerPassword", "resetStoreUserPassword", "addStoreUser", "resetPlatformAdminPassword"]) {
       const sig = new RegExp(`export\\s+async\\s+function\\s+${fn}\\s*\\([^)]*\\)\\s*:\\s*Promise\\s*<([^>]*)>`).exec(ACTIONS);
       expect(sig, `${fn} not found`).not.toBeNull();
       expect(sig![1], `${fn} must return the minted password`).toMatch(/password\s*\?\s*:\s*string/);
