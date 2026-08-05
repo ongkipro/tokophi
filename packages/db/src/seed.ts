@@ -4,11 +4,40 @@
 import { db, client, schema } from "./client";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { COURIERS } from "@tokophi/lib/couriers";
-// The one writer of `users.password_hash` (scrypt `salt:hash`) — see @tokophi/lib/password.
-import { hashPassword } from "@tokophi/lib/password";
+// The one writer of `users.password_hash` (scrypt `salt:hash`) and the one MINT — see
+// @tokophi/lib/password. There is no second implementation of either, anywhere (enforced by
+// `packages/lib/src/password.test.ts`, which scans every tracked source file).
+import { hashPassword, tempPassword } from "@tokophi/lib/password";
 
-// Dev owner password below (change for real deploys).
-const DEV_OWNER_PASSWORD = "tokophi123";
+// ── SEEDED CREDENTIALS — RANDOM PER ACCOUNT, PER RUN, REVEALED ONCE (N29) ─────────────────────────
+//
+// 🔴 THIS USED TO BE `const DEV_OWNER_PASSWORD = "tokophi123"` — one constant, hashed into the store
+// owner, the platform operator, every demo store's owner and every registered demo customer. The
+// string was published in this repository, in `AGENTS.md`, in `README.md` and on both login screens.
+// Audit wave 5 deleted it from the SCREENS; the ROWS were untouched, because the seed is not a
+// migration. **Measured on production 2026-08-05: `demo@tokophi.com` — the owner of the one real
+// store, 219 orders, real buyer names/phones/addresses — still authenticates with it today.**
+//
+// So: no fixed default. Each account gets its own 60-bit mint and the run PRINTS them once at the
+// end, which is the only copy that will ever exist (nothing writes a password to a table or a file).
+// On Coolify that lands in the deploy log for the ONE deploy that seeds an empty database.
+//
+// ⚠️ PER ACCOUNT, not per run. A single random string shared by nine accounts is unguessable but
+// still one-breach-opens-all — the same shape as the defect being repaired, with a fresher constant.
+// `specs/docs/tasks/2026-08-03-rotate-exposed-owners.md` §③ says it in as many words.
+//
+// **`SEED_OWNER_PASSWORD` pins every seeded account to one string you choose.** That is the local-dev
+// escape hatch (and the only way to get a memorable login back); it is deliberately an env var, so
+// choosing it is an act, not a default. Never set it on a deploy that faces the internet.
+const PINNED_PASSWORD = process.env.SEED_OWNER_PASSWORD?.trim() || null;
+/** Every credential this run minted, printed once at the end. `[what it opens, the password]`. */
+const MINTED: Array<[string, string]> = [];
+/** A password for ONE seeded account. Recorded so the run can reveal it; never returned twice. */
+function seedPassword(who: string): string {
+  const pw = PINNED_PASSWORD ?? tempPassword();
+  MINTED.push([who, pw]);
+  return pw;
+}
 
 const TODAY = new Date("2026-07-02T00:00:00Z");
 const daysAgo = (n: number) => new Date(TODAY.getTime() - n * 86_400_000);
@@ -661,11 +690,81 @@ const AD_PROVINCES: Array<{ province: string; spend: number; impressions: number
   { province: "Lainnya", spend: 1_150_000, impressions: 164_000, clicks: 4_500, conversions: 30, revenue: 5_100_000, reach: 86_000 },
 ];
 
+// ── WHAT `SEED_FORCE=1` DESTROYS THAT NOTHING PUTS BACK (N42) ─────────────────────────────────────
+//
+// 🔴 THE KEEP-LIST BELOW CANNOT PROTECT ANY OF THIS, AND THAT IS NOT A MATTER OF ADDING NAMES TO IT.
+// `truncate … CASCADE` follows every foreign key INTO the truncated set. Measured on production:
+// `store_tracking_channels`, `page_templates` and `flash_sales` all carry a `store_id` FK to
+// `stores`, so excluding them from the list changes nothing — cascade empties them anyway. The three
+// tables the keep-list really does save (`kiriminaja_areas`, `kelurahan`, `product_taxonomy`) are
+// standalone REFERENCE tables with no FK into anything, which is precisely why it works for them.
+//
+// So the honest guard is not a longer list, it is a REFUSAL: count what is about to be lost, print
+// it, and make the operator name the destruction in a second variable. `SEED_FORCE=1` alone is a
+// flag someone copies out of a doc; `SEED_DESTROY_CONFIG=1` is a sentence they have to mean.
+//
+// Each entry is `[table, predicate, what it costs]`. The table is skipped when it does not exist
+// (a database that never had it has nothing to lose), and both strings are literals from this file —
+// there is no caller-supplied text anywhere near `client.unsafe`.
+const IRREPLACEABLE: Array<[table: string, predicate: string, what: string]> = [
+  ["orders", "true", "ORDERS — buyer name, WhatsApp, full delivery address, the money"],
+  ["customers", "true", "customer records"],
+  ["ledger_entries", "true", "ledger entries — the merchant's balance is DERIVED from these"],
+  ["store_tracking_channels", "true", "pixel ids — the seed does not write this table AT ALL, so nothing restores it"],
+  ["store_tracking_channels", "capi_token_ciphertext is not null", "…of those, ENCRYPTED CAPI TOKENS. Not re-derivable from anything"],
+  ["page_templates", "true", "Store Builder templates — published merchant work"],
+  ["flash_sales", "true", "flash sales"],
+  ["platform_admins", "true", "platform operator logins — replaced by ONE fresh seeded account"],
+  ["shipping_aggregator", "api_key is not null", "the courier aggregator API key — re-seeded NULL"],
+  ["platform_payment_gateways", "credentials is not null", "the payment gateway credentials — re-seeded NULL"],
+  ["media", "true", "media library rows (the FILES survive on disk; the rows pointing at them do not)"],
+];
+
+/**
+ * Refuse to truncate a database that holds something no seed can put back.
+ *
+ * Runs before EVERY truncate, not only under `SEED_FORCE` — the skip above only looks at `stores`,
+ * so a database with a rotated platform operator and no store yet would sail past it and lose the
+ * operator. Silent and ~free when there is nothing to lose, which is the fresh-database case.
+ */
+async function assertTruncateIsDeliberate() {
+  const lines: string[] = [];
+  for (const [table, predicate, what] of IRREPLACEABLE) {
+    const [reg] = await client<{ t: string | null }[]>`select to_regclass(${"public." + table})::text as t`;
+    if (!reg?.t) continue;
+    const [row] = await client.unsafe<{ c: number }[]>(`select count(*)::int as c from "${table}" where ${predicate}`);
+    if (row.c > 0) lines.push(`   ${String(row.c).padStart(7)}  ${table.padEnd(24)} ${what}`);
+  }
+  if (!lines.length) return;
+
+  console.error("\n🔴 THE SEED TRUNCATES EVERY TABLE. This database holds rows nothing will put back:\n");
+  console.error(lines.join("\n"));
+  console.error(
+    "\n   There is no backup step in this script and no restore path for any line above.\n" +
+      "   The truncate keep-list cannot save them: `cascade` follows the store_id FKs into them.\n",
+  );
+  if (process.env.SEED_DESTROY_CONFIG) {
+    console.error("   SEED_DESTROY_CONFIG=1 — proceeding, as instructed.\n");
+    return;
+  }
+  console.error(
+    "   REFUSING. If you meant it, re-run with SEED_DESTROY_CONFIG=1 as well.\n" +
+      "   If the demo merely looks stale, you almost certainly want `npm run seed:recent -w @tokophi/db`\n" +
+      "   instead — it only INSERTS, touches one store, and is idempotent.\n",
+  );
+  await client.end();
+  process.exit(1);
+}
+
 async function truncateAll() {
   // Static REFERENCE data — never wiped by a demo reseed. `kelurahan` (78.764 rows) is on this list
   // because it is what the checkout's kodepos auto-fill reads: it was missing, so every SEED_FORCE=1
   // silently deleted it and broke address entry until someone re-imported by hand. CLAUDE.md names it
   // as one of the two landmines in this package; the keep-list is where that warning has to be true.
+  //
+  // ⚠️ IT ONLY WORKS FOR TABLES NOTHING REFERENCES. See `IRREPLACEABLE` above: `cascade` reaches any
+  // table with an FK into the truncated set, so adding a store-scoped table here is a no-op that
+  // READS like protection. That is the trap this comment exists to close.
   const rows = await client<{ table_name: string }[]>`
     select table_name from information_schema.tables
     where table_schema = 'public'
@@ -686,6 +785,7 @@ async function main() {
       return;
     }
   }
+  await assertTruncateIsDeliberate();
   await truncateAll();
 
   // plans (config)
@@ -693,7 +793,7 @@ async function main() {
 
   // the one account + owner + store + membership + settings + stats
   const [account] = await db.insert(schema.accounts).values({ name: STORE.name, plan: STORE.plan, createdAt: daysAgo(STORE.createdDaysAgo) }).returning();
-  const [user] = await db.insert(schema.users).values({ email: STORE.email, name: STORE.owner, passwordHash: hashPassword(DEV_OWNER_PASSWORD) }).returning();
+  const [user] = await db.insert(schema.users).values({ email: STORE.email, name: STORE.owner, passwordHash: hashPassword(seedPassword(`Seller  ${STORE.email}`)) }).returning();
   const [store] = await db.insert(schema.stores).values({
     accountId: account.id,
     name: STORE.name,
@@ -881,7 +981,10 @@ async function main() {
         tags: ["pelanggan", c.segment],
         // They made the account at (or right after) their first purchase — not before it.
         registeredAt: isRegistered(c) ? createdAt : null,
-        passwordHash: isRegistered(c) ? hashPassword(DEV_OWNER_PASSWORD) : null,
+        // A demo SHOPPER account. Random per customer and deliberately NOT printed: nothing in this
+        // repo logs in as one, so a credential nobody holds is strictly safer than one everybody
+        // does. Pin `SEED_OWNER_PASSWORD` if you need to drive the shopper login by hand.
+        passwordHash: isRegistered(c) ? hashPassword(PINNED_PASSWORD ?? tempPassword()) : null,
         createdAt,
       };
     }),
@@ -1553,8 +1656,10 @@ async function main() {
   // platform activity
   await db.insert(schema.platformActivity).values(ACTIVITY.map((a) => ({ kind: a.kind, text: a.text, ts: minutesAgo(a.minutesAgo) })));
 
-  // platform operator (super-admin login) — admin@tokophi.id / tokophi123
-  await db.insert(schema.platformAdmins).values({ email: "admin@tokophi.id", name: "Admin Platform", passwordHash: hashPassword(DEV_OWNER_PASSWORD), role: "owner" });
+  // platform operator (super-admin login). ⚠️ THE HIGHEST-VALUE ROW THIS FILE WRITES — the control
+  // plane reaches every tenant, including impersonation. Its password is minted separately from the
+  // merchant's on purpose; they shared one constant, and that is how one leak opened both.
+  await db.insert(schema.platformAdmins).values({ email: "admin@tokophi.id", name: "Admin Platform", passwordHash: hashPassword(seedPassword("Super Admin  admin@tokophi.id")), role: "owner" });
 
   // support tickets (2-sided demo) — for Batik Nusantara
   const [tkt1] = await db.insert(schema.supportTickets).values({ storeId: store.id, subject: "Cara menghubungkan domain kustom?", status: "answered", createdAt: minutesAgo(4 * 60), lastMessageAt: minutesAgo(90) }).returning();
@@ -1641,7 +1746,7 @@ async function main() {
   let ordSeq = 8000;
   for (const d of DEMO_STORES) {
     const [acc] = await db.insert(schema.accounts).values({ name: d.name, plan: d.plan, createdAt: daysAgo(d.createdDaysAgo) }).returning();
-    const [u] = await db.insert(schema.users).values({ email: d.email, name: d.owner, passwordHash: hashPassword(DEV_OWNER_PASSWORD) }).returning();
+    const [u] = await db.insert(schema.users).values({ email: d.email, name: d.owner, passwordHash: hashPassword(seedPassword(`Seller  ${d.email}`)) }).returning();
     // demo billing lifecycle from the store's status. firstPaid=false → still on the Rp50rb first month.
     const firstPaid = d.firstPaid ?? true;
     const bill =
@@ -1788,7 +1893,29 @@ async function main() {
   );
 
   console.log(`Seeded: ${PLANS.length} plans, ${1 + DEMO_STORES.length} stores (${STORE.name} + ${DEMO_STORES.length} demo), ${CATALOG.length} products, ${COLLECTIONS.length} collections, ${CUSTOMERS.length} customers, ${ORDERS_SEED.length} orders, ${DISCOUNTS.length} discounts, ${PAGES.length} pages, ${BLOGS.length} blogs/${ARTICLES.length} articles, ${LEADS.length} leads/${FOLLOWUPS.length} followups/${WA_TEMPLATES.length} templates, ${SUPPLIERS.length} suppliers/${PURCHASE_ORDERS.length} POs, ${SEGMENTS.length} segments, ${REVIEWS.length} reviews, ${MENU_DEFS.length} menus, ${DAILY.length} daily-stats, ${AD_CHANNELS.length} ad-channels/${AD_PROVINCES.length} provinces, ${INVOICES.length} invoices, platform settings.`);
+  revealCredentials();
   await client.end();
+}
+
+/**
+ * THE ONLY COPY THAT WILL EVER EXIST. `tempPassword()` returns a string that is hashed and
+ * discarded — nothing writes it to a table, a log table or a file, and there is no mailer and no
+ * forgot-password route in this product (checked: `apps/*/app/**` has neither). If this block does
+ * not print, the account it minted is unreachable until somebody resets it from super-admin.
+ *
+ * Printed to STDOUT, once, at the very end so it is the last thing in a deploy log rather than
+ * buried under 1.500 inserts.
+ */
+function revealCredentials() {
+  if (!MINTED.length) return;
+  if (PINNED_PASSWORD) {
+    console.log(`\n⚠️  SEED_OWNER_PASSWORD was set: all ${MINTED.length} seeded accounts share ONE password you chose.`);
+    return;
+  }
+  const pad = Math.max(...MINTED.map(([who]) => who.length));
+  console.log("\n🔑 SEEDED LOGINS — random per account, shown ONCE. Copy them now; nothing stores them.");
+  for (const [who, pw] of MINTED) console.log(`   ${who.padEnd(pad)}   ${pw}`);
+  console.log("   (set SEED_OWNER_PASSWORD to pin them to a string of your own instead)\n");
 }
 
 main().catch(async (e) => {
