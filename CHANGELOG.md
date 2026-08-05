@@ -106,6 +106,87 @@ self-hosted / plus-addressed emails, `Blok C2/14` and `RT.001/RW.009` addresses 
 focus never yanked out of the field the shopper clicked into (37 assertions).
 
 
+
+## Unreleased — the courier's own bill, and five status codes that meant nothing to us
+
+**All 34 captured KiriminAja doc pages were read by flow and written up as `specs/docs/KIRIMINAJA.md`** —
+the vendor contract, beside `FLOWS.md` §5 which owns the product flow. Comparing that summary against
+the code produced everything below. ⚠️ 25 of the 34 pages give an HTTP verb and **no path**; every path
+we call came from our own working code, and nothing here invents one.
+
+**Two things the docs settle, recorded so they stop being re-raised:** there is **no standalone pickup
+endpoint** — creating the express order *is* the pickup request (`method: "request_pickup"`), and
+pickup vs drop-off is the per-package `drop` boolean; and **skipping the schedule endpoint is
+explicitly allowed**, so our fixed tomorrow-10:00-WIB is a legitimate choice, not a defect.
+
+### VA and COD are opposite directions, and we were treating them as one thing
+
+One booking call carries two money flows, and all three response fields that tell them apart were
+parsed and thrown away for both:
+
+- **NON-COD** — *we* owe KiriminAja the shipping cost. `payment_method` defaults to `va`, so the
+  booking answers with `payment_status` (unpaid | pending | paid) and a `qr_url`. **An unpaid booking
+  never gets a waybill**: the parcel does not ship, the poller keeps finding nothing, and the order
+  reads "dibooking" on every screen with nothing anywhere saying why. That silence was the defect.
+- **COD** — the *buyer* pays the courier. The vendor **ignores** `payment_method` for COD packages and
+  rejects the combination with code 4003, so we owe nothing and an "unpaid" reading there is noise.
+
+Migration **0087** stores what the vendor returns, verbatim: `orders.ka_pickup_number` (which the
+vendor's own docs also call the **payment id** — received on every booking since the integration
+shipped and persisted nowhere), `ka_payment_status`, `ka_payment_url`, plus **`ka_shipping_cost_idr`,
+the cost side of ongkir the DB had never held** (`shipping_idr` is what the *shopper* paid; a seller
+may book a cheaper service and nothing recorded the gap).
+
+**`apps/admin/lib/shipment-payment.ts` is the ONE place that separates the flows**, deciding from the
+order's own COD flag (`payments.method = 'cod'`) — never from the vendor's fields, which the docs do
+not define for a COD package. NULL means *no reading*, never *unpaid*. The order's shipping card now
+shows "Ongkir ke kurir": red with a **Bayar** link only when it actually blocks; `unknown` renders
+nothing. Browser-verified against the built app, and both test rows restored to NULL afterwards.
+
+⚠️ **The migration was written by hand, not generated.** `drizzle-kit generate` diffs against the last
+snapshot — **0082**, because 0083–0086 are hand-written and left none — so it re-emitted all of their
+changes, including `ADD COLUMN` without `IF NOT EXISTS` for `stores.suspended_*` and the
+discounts/purchase_orders unique constraints under **different names** than 0084 actually created.
+Drizzle applies the pending batch in ONE transaction, so that would have failed and rolled back
+everything behind it.
+
+### Five documented status codes were silently unmapped
+
+`outcomeFromTrackingCode` returned `null` — *fill the AWB, change nothing* — for **302** (pickup
+canceled by seller), **310** / **311** (rejected; 311 is the **COD refusal**), **333** (destroyed by
+courier) and **555** (confiscated by Customs), and mapped **110** ("pending *direct* pickup") to
+`shipped`.
+
+**333 and 555 are documented FINAL states.** Unmapped, the order never left `dikirim`, so the poller
+re-queued it every 15 minutes forever — and the sweep takes a bounded batch per tick, ordered
+AWB-less-first, so parcels that can *never* resolve accumulate at the head of the queue and starve the
+ones with work outstanding. **110** falls inside the `106..200` transit range but is PRE-pickup, and
+`RANK` is forward-only, so calling it `shipped` told the merchant and the buyer a parcel was moving
+while it still sat at origin — permanently.
+
+333/555 now map to `problem`, which deliberately does *not* change status (a destroyed parcel is
+neither delivered nor returned, and whether it settles as `batal` is a refund decision that is not
+this function's to make) but does raise `problem_at`/`problem_note`, so it is visible. 210/211/350
+stay unmapped on purpose, with the reason in the code. **Guard:
+`apps/admin/lib/ka-status-codes.test.ts` transcribes the vendor's whole 38-code table — 7 red before,
+41 green after.**
+
+### Filed, not fixed — N42 needs an owner decision because it moves money
+
+**COD settlement is not modelled.** On `selesai` a COD merchant is credited the **gross** total
+*including ongkir* as immediately-`available` money, while KiriminAja remits **net** of the shipping
+cost it keeps. The balance overstates by (ongkir + COD fee) on every delivered COD order and the
+platform pays the difference out of its own float. `ledger_kind` has no cost concept and
+`platform_cod.fee_pct` is read by nothing. Half the prerequisite now exists
+(`orders.ka_shipping_cost_idr`); whether the platform absorbs that cost or nets it out of the
+merchant's credit changes what merchants are owed, so it is not a call an audit gets to make.
+
+Also open: **N38** the label misses required fields (sorting code is blocked twice over — values come
+from KiriminAja support, and it rides a webhook we do not receive); **N39** webhooks exist and are
+unused, blocked on a registration path the docs do not give; **N40** our booking endpoint `v6.1` is
+**marked deprecated by the vendor**; **N41** we cannot see courier holidays.
+
+
 ## Unreleased — the resi appears on its own; the UI was telling sellers to keep clicking
 
 The shipping flow is four steps — **Proses** (`baru → diproses`) → **Atur pengiriman** (book with the
