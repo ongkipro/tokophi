@@ -2,6 +2,8 @@ import "server-only";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { BILLING } from "@tokophi/lib/billing";
+import { NAME_MAX, STORE_NAME_MIN, isReservedSlug, slugify } from "@tokophi/lib/store-slug";
+import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
 
 // Self-serve onboarding (Daftar + Google auto-provision). Mirrors the super-admin's
 // `createStore` one-txn tenant bootstrap (account → user → store → membership → location →
@@ -32,17 +34,22 @@ export type ProvisionResult = {
   slug: string;
 };
 
-export const slugify = (s: string) =>
-  s
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
+// `slugify` moved to `@tokophi/lib/store-slug` — super-admin's `createStore` had its OWN copy and the
+// two had already drifted ("Café Senja" → `cafe-senja` here, `caf-senja` there). Re-exported because
+// callers import it from this module.
+export { slugify };
 
 // Unique store slug: "batik-nusantara" → "batik-nusantara-2" → … (bounded, then random suffix).
+//
+// ⚠️ A RESERVED slug is skipped exactly like a TAKEN one. `RESERVED_SLUGS` is the storefront's own
+// list of hostnames it refuses to resolve as a store (`app`, `rich`, `www`, `api`, …) — it was
+// consulted on the way OUT and by nothing on the way IN, so a shop called "App" got `slug: "app"`
+// and a storefront that 404s on its own subdomain, with no screen anywhere saying why. Falling
+// through to `app-2` is the same answer this function already gives for a name someone else has.
 async function uniqueSlug(base: string): Promise<string> {
   for (let i = 0; i < 25; i++) {
     const candidate = i === 0 ? base : `${base}-${i + 1}`;
+    if (isReservedSlug(candidate)) continue;
     const [dup] = await db
       .select({ id: schema.stores.id })
       .from(schema.stores)
@@ -81,6 +88,56 @@ export class SignupClosedError extends Error {
   }
 }
 
+/**
+ * A rule about the input, refused AT THE BOUNDARY so both self-serve paths obey it.
+ *
+ * The length rules lived in `registerStore` only — so the GOOGLE path, which takes the store name
+ * from the Google profile and never touches that function, enforced NOTHING: a one-character display
+ * name created a one-character shop, and there was no upper bound anywhere on either column
+ * (`text()`, no cap, straight into `stores.name`, `accounts.name` and the `platform_activity` line
+ * the control plane reads).
+ *
+ * `message` is merchant-facing Indonesian, because `registerStore` returns it to the form.
+ */
+export class ProvisionInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProvisionInputError";
+  }
+}
+
+/**
+ * The email or the slug was taken BETWEEN our check and our INSERT.
+ *
+ * `emailTaken()` and `uniqueSlug()` are unlocked reads followed by a write, so two signups racing on
+ * the same address (or the same shop name) both pass the check. Postgres refuses the second —
+ * `users.email` and `stores.slug` are both `UNIQUE`, so the data is never wrong — but it surfaced as
+ * an unhandled throw, i.e. a Next error digest, on a form that is otherwise careful to return a
+ * sentence the person can act on. The constraint is the lock; this is how the lock reports itself.
+ */
+export class ProvisionConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProvisionConflictError";
+  }
+}
+
+export const EMAIL_TAKEN_MSG = "Email sudah terdaftar. Silakan masuk.";
+const SLUG_TAKEN_MSG = "Nama toko itu baru saja dipakai. Coba nama lain sedikit.";
+
+/**
+ * Constraint name → the sentence a person can act on.
+ *
+ * ⚠️ These strings come from the MIGRATIONS, not from `schema.ts` prose — drizzle derives
+ * `<table>_<column>_unique` from a column-level `.unique()`. They are pinned by
+ * `packages/db/src/provision-conflicts.test.ts`, which provokes BOTH violations against the real test
+ * database, so a rename lands as a red test instead of as an unexplained 500 on the signup form.
+ */
+const CONFLICT_MESSAGES: Record<string, string> = {
+  users_email_unique: EMAIL_TAKEN_MSG,
+  stores_slug_unique: SLUG_TAKEN_MSG,
+};
+
 /** Create account + owner user + store (3-day trial) + membership + default location/settings/stats — ONE txn. */
 export async function provisionStore(input: ProvisionInput): Promise<ProvisionResult> {
   // THE boundary. Both self-serve paths — the /daftar form (registerStore) and the Google OAuth
@@ -91,10 +148,46 @@ export async function provisionStore(input: ProvisionInput): Promise<ProvisionRe
   const email = input.email.toLowerCase().trim();
   const storeName = input.storeName.trim();
   const ownerName = input.ownerName.trim() || storeName;
+
+  // Both bounds, at the boundary — see `ProvisionInputError`. The floor was in `registerStore` only
+  // and the ceiling was nowhere.
+  if (storeName.length < STORE_NAME_MIN) {
+    throw new ProvisionInputError(`Nama toko minimal ${STORE_NAME_MIN} karakter.`);
+  }
+  if (storeName.length > NAME_MAX) throw new ProvisionInputError(`Nama toko maksimal ${NAME_MAX} karakter.`);
+  if (ownerName.length > NAME_MAX) throw new ProvisionInputError(`Nama pemilik maksimal ${NAME_MAX} karakter.`);
+
   const base = slugify(storeName) || slugify(email.split("@")[0]) || "toko";
   const slug = await uniqueSlug(base);
   const trialEndsAt = new Date(Date.now() + BILLING.TRIAL_DAYS * 86_400_000);
 
+  try {
+    return await insertTenant({ input, email, storeName, ownerName, slug, trialEndsAt });
+  } catch (e) {
+    // The check-then-insert races, caught where the DB actually decides them.
+    const constraint = uniqueViolationConstraint(e);
+    if (constraint !== null) throw new ProvisionConflictError(CONFLICT_MESSAGES[constraint] ?? SLUG_TAKEN_MSG);
+    throw e;
+  }
+}
+
+type InsertTenantArgs = {
+  input: ProvisionInput;
+  email: string;
+  storeName: string;
+  ownerName: string;
+  slug: string;
+  trialEndsAt: Date;
+};
+
+async function insertTenant({
+  input,
+  email,
+  storeName,
+  ownerName,
+  slug,
+  trialEndsAt,
+}: InsertTenantArgs): Promise<ProvisionResult> {
   return db.transaction(async (tx) => {
     const [acc] = await tx.insert(schema.accounts).values({ name: storeName }).returning();
     const [u] = input.userId

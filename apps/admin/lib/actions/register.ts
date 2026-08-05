@@ -2,7 +2,15 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE, SESSION_MAX_AGE, hashPassword, signSession } from "@/lib/auth";
-import { emailTaken, provisionStore, signupOpen, SignupClosedError } from "@/lib/provision";
+import {
+  EMAIL_TAKEN_MSG,
+  ProvisionConflictError,
+  ProvisionInputError,
+  SignupClosedError,
+  emailTaken,
+  provisionStore,
+  signupOpen,
+} from "@/lib/provision";
 import { rateLimit } from "@tokophi/lib/cache";
 import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
 
@@ -41,10 +49,12 @@ export async function registerStore(_prev: RegisterState, formData: FormData): P
   const password = String(formData.get("password") ?? "");
 
   if (!storeName || !ownerName || !email || !password) return { error: "Semua kolom wajib diisi." };
-  if (storeName.length < 3) return { error: "Nama toko minimal 3 karakter." };
   if (!EMAIL_RE.test(email)) return { error: "Format email tidak valid." };
   if (password.length < 8) return { error: "Kata sandi minimal 8 karakter." };
-  if (await emailTaken(email)) return { error: "Email sudah terdaftar. Silakan masuk." };
+  // The name RULES now live in `provisionStore` so the Google path obeys them too; this is the
+  // cheap pre-answer, and `emailTaken` stays here for the same reason — both save a scrypt hash and
+  // a transaction. Neither is the boundary, and neither is the race guard: see the catch below.
+  if (await emailTaken(email)) return { error: EMAIL_TAKEN_MSG };
 
   // Only provisionStore is wrapped — `redirect()` below signals via a thrown error, so it must stay
   // outside any catch that could swallow it.
@@ -59,6 +69,9 @@ export async function registerStore(_prev: RegisterState, formData: FormData): P
     });
   } catch (e) {
     if (e instanceof SignupClosedError) return { error: CLOSED_MSG };
+    // A rule about the input, and a conflict Postgres decided — both are things this person can act
+    // on, so both come back as a sentence on the form instead of as a Next error digest.
+    if (e instanceof ProvisionInputError || e instanceof ProvisionConflictError) return { error: e.message };
     throw e;
   }
 

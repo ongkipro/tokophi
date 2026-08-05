@@ -57,7 +57,7 @@ mid-flight is how two people work the same id from opposite ends. Wave-7 heading
 | **N25 — `color_palettes` orphan** | In `SCHEMA.md`, in no migration, read by nothing. Dropping it on the shared dev container is destructive. |
 | **N5 — `dom-size`** | Measured to the end; both options costed; neither taken. A decision, not work. |
 | **N28 — super-admin's 7 screens** | Gating verified, **content never crawled**. Needs the owner's go-ahead to drive `rich.` |
-| **Open self-serve signup?** | #154 made the switch reachable; the gate is sound and now **metered** (5/10 min per IP). What is left is a product decision: signup would create real tenants for **unverified email addresses** — there is no mailer in this repo, so verification is a provider + tokens + a pending state, not a small change. Cheaper alternatives (operator approval, or keep onboarding by hand through Super Admin) are costed in [`2026-08-05-signup-open-audit.md`](./2026-08-05-signup-open-audit.md), along with three 🟡 items sized **S** that ride with it. |
+| **Open self-serve signup?** | #154 made the switch reachable; the gate is sound, **metered** (5/10 min per IP), and the three 🟡 items are **done** (reserved slugs, both check-then-insert races, name bounds — plus a third `slugify` the sweep turned up in the seed). What is left is one product decision: signup would create real tenants for **unverified email addresses** — there is no mailer in this repo, so verification is a provider + tokens + a pending state, not a small change. Cheaper alternatives (operator approval, or keep onboarding by hand through Super Admin) are costed in [`2026-08-05-signup-open-audit.md`](./2026-08-05-signup-open-audit.md). |
 
 ## 🟢 Ready to pick up — no decision needed
 
