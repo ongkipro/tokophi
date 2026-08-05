@@ -156,10 +156,10 @@ export function FlashEditor({
             </div>
             <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
               <div>
-                <div className="text-sm font-medium">Aktifkan</div>
+                <label htmlFor="fs-active" className="block text-sm font-medium">Aktifkan</label>
                 <div className="text-xs text-muted-foreground">Nonaktif = harga tetap normal walau di dalam jadwal.</div>
               </div>
-              <Switch checked={active} onCheckedChange={setActive} disabled={!canWrite} />
+              <Switch id="fs-active" checked={active} onCheckedChange={setActive} disabled={!canWrite} />
             </div>
           </CardContent>
         </Card>
@@ -181,16 +181,23 @@ export function FlashEditor({
               const pct = on && salePrice > 0 && salePrice < p.basePrice ? Math.round(((p.basePrice - salePrice) / p.basePrice) * 100) : 0;
               return (
                 <div key={p.id} className={`flex flex-wrap items-center gap-3 rounded-lg border p-3 ${on ? "border-amber-300 bg-amber-50/40" : ""}`}>
-                  <Switch checked={on} onCheckedChange={(v) => toggle(p.id, v, p.basePrice)} disabled={!canWrite} />
+                  {/* One switch per product, so this shape multiplies: the catalogue rendered 22
+                      nameless switches in a column (measured 2026-08-05). `truncate` needs a block
+                      box, which is why the label carries `block` — the shared <Label> is a flex
+                      container and would break the ellipsis. */}
+                  <Switch id={`fs-p-${p.id}`} checked={on} onCheckedChange={(v) => toggle(p.id, v, p.basePrice)} disabled={!canWrite} />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{p.title}</div>
+                    <label htmlFor={`fs-p-${p.id}`} className="block truncate text-sm font-medium">{p.title}</label>
                     <div className="text-xs text-muted-foreground">Harga normal {IDR(p.basePrice)}</div>
                   </div>
                   {on && (
                     <div className="flex items-center gap-2">
                       <div className="relative w-36">
                         <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
-                        <Input inputMode="numeric" value={raw} onChange={(e) => setPrice(p.id, e.target.value)} placeholder="0" className="pl-8 tabular-nums" disabled={!canWrite} />
+                        {/* No visible text label by design — the row's product name is the only
+                            heading and the "Rp" is an adornment. A placeholder of "0" is what the
+                            browser would otherwise announce as this field's name. */}
+                        <Input aria-label={`Harga promo ${p.title}`} inputMode="numeric" value={raw} onChange={(e) => setPrice(p.id, e.target.value)} placeholder="0" className="pl-8 tabular-nums" disabled={!canWrite} />
                       </div>
                       {pct > 0 ? (
                         <span className="rounded bg-red-500 px-1.5 py-0.5 text-xs font-semibold text-white tabular-nums">−{pct}%</span>

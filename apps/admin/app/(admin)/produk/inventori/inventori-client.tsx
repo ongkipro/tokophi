@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { updateStock } from "@/lib/actions/inventory";
 import { useCan } from "@/components/admin/permissions";
 import {
-  Boxes, Minus, Plus, Search, AlertTriangle, PackageX, Warehouse, Download,
+  Boxes, Minus, Plus,AlertTriangle, PackageX, Warehouse, Download,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
@@ -22,6 +22,7 @@ import { Badge } from "@tokophi/ui/badge";
 import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
+import { SearchInput } from "@/components/admin/search-input";
 
 const LOW_STOCK = 20;
 
@@ -198,10 +199,13 @@ export function InventoriClient({ products }: { products: Product[] }) {
 
       {/* Toolbar */}
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama produk atau SKU…" className="pl-8" />
-        </div>
+        <SearchInput
+          label="Cari produk atau SKU"
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Cari nama produk atau SKU…"
+          className="w-full sm:max-w-xs"
+        />
         <p className="text-xs text-muted-foreground">
           Menampilkan {num(filtered.length)} dari {num(products.length)} produk
         </p>

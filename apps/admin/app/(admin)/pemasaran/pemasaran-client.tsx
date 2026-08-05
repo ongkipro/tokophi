@@ -505,20 +505,22 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
         {/* Advanced matching */}
         <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 text-sm font-medium"><ShieldCheck className="size-4 text-muted-foreground" /> Advanced matching (browser)</div>
+            <label htmlFor={`${cfg.channel}-advanced`} className="flex items-center gap-1.5 text-sm font-medium"><ShieldCheck className="size-4 text-muted-foreground" /> Advanced matching (browser)</label>
             <p className="mt-0.5 text-xs text-muted-foreground">
               Kirim email/telepon pembeli (di-hash) dari browser agar konversi lebih akurat. Event sisi
               server selalu menyertakannya — tanpa itu {meta.name} tidak bisa mencocokkan konversi sama sekali.
             </p>
           </div>
-          <Switch checked={advanced} onCheckedChange={setAdvanced} disabled={!canWrite} />
+          <Switch id={`${cfg.channel}-advanced`} checked={advanced} onCheckedChange={setAdvanced} disabled={!canWrite} />
         </div>
 
         {/* CAPI / server-side */}
         <div className="space-y-3 rounded-lg border p-3">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <div className="text-sm font-medium">{meta.capiName} <span className="font-normal text-muted-foreground">— pelacakan sisi server</span></div>
+              {/* Three tracking channels render this card, so the ids are channel-scoped: two
+                  switches with the same `id` would leave one of them nameless again, silently. */}
+              <label htmlFor={`${cfg.channel}-capi-on`} className="block text-sm font-medium">{meta.capiName} <span className="font-normal text-muted-foreground">— pelacakan sisi server</span></label>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Kirim event dari server TokoΦ (tahan ad-blocker). Butuh token akses.{" "}
                 <span className="text-foreground">Pesanan prabayar (VA/QRIS) hanya terhitung lewat jalur ini</span> —
@@ -526,7 +528,7 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
                 terhitung begitu pesanan masuk.
               </p>
             </div>
-            <Switch checked={capiEnabled} onCheckedChange={setCapiEnabled} disabled={!canWrite} />
+            <Switch id={`${cfg.channel}-capi-on`} checked={capiEnabled} onCheckedChange={setCapiEnabled} disabled={!canWrite} />
           </div>
           {capiEnabled && (
             <>

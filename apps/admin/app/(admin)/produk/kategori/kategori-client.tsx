@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Plus, Search, MoreHorizontal, Pencil, ExternalLink, Trash2,
+  Plus,MoreHorizontal, Pencil, ExternalLink, Trash2,
   Zap, Hand, FolderTree, Sparkles,
 } from "lucide-react";
 
@@ -18,12 +18,12 @@ import { type Collection } from "@/lib/mock/store";
 import { Card } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Badge } from "@tokophi/ui/badge";
-import { Input } from "@tokophi/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@tokophi/ui/dropdown-menu";
+import { SearchInput } from "@/components/admin/search-input";
 
 function TypeBadge({ type }: { type: Collection["type"] }) {
   return type === "otomatis" ? (
@@ -121,10 +121,13 @@ export function KategoriClient({ collections, storefrontBase }: { collections: C
       </div>
 
       {/* Search */}
-      <div className="relative mb-3 w-full sm:max-w-xs">
-        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari kategori…" className="pl-8" />
-      </div>
+      <SearchInput
+        label="Cari kategori"
+        value={search}
+        onValueChange={setSearch}
+        placeholder="Cari kategori…"
+        className="mb-3 w-full sm:max-w-xs"
+      />
 
       {/* Table */}
       {filtered.length === 0 ? (

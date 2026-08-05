@@ -9,9 +9,7 @@ import {
   Wallet,
   UserCheck,
   UserPlus,
-  Download,
-  Search,
-  ArrowUpDown,
+  Download,ArrowUpDown,
   MoreHorizontal,
   Eye,
   MessageCircle,
@@ -55,6 +53,7 @@ import { createCustomer, deleteCustomer } from "@/lib/actions/customers";
 import { cn } from "@tokophi/ui/lib/utils";
 import { SegmentBadge } from "@/components/admin/pelanggan/segment-badge";
 import { AccountBadge } from "@/components/admin/pelanggan/account-badge";
+import { SearchInput } from "@/components/admin/search-input";
 
 // ---- helpers ----
 function initials(name: string) {
@@ -369,15 +368,13 @@ export function PelangganClient({ customers }: { customers: CustomerRow[] }) {
                 ))}
               </TabsList>
             </Tabs>
-            <div className="relative">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Cari nama atau email…"
-                className="h-8 w-full pl-8 sm:w-64"
-              />
-            </div>
+            <SearchInput
+              label="Cari pelanggan"
+              value={query}
+              onValueChange={setQuery}
+              placeholder="Cari nama atau email…"
+              inputClassName="h-8 w-full sm:w-64"
+            />
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={

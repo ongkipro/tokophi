@@ -184,7 +184,11 @@ export function DomainCard() {
         {/* Add */}
         {canWrite && (
           <div className="flex flex-col gap-2 sm:flex-row">
+            {/* No visible label — the field sits under its own explanatory paragraph. Without this
+                the browser fell back to the placeholder, so the box was announced as
+                "namadomaintokomu.com": an example value standing in for the field's purpose. */}
             <Input
+              aria-label="Domain kustom"
               value={host}
               onChange={(e) => setHost(e.target.value)}
               placeholder="namadomaintokomu.com"
