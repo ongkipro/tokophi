@@ -383,7 +383,7 @@ it); 110 → `booked`. `210`/`211`/`350` stay deliberately unmapped, with the re
 **Guard:** `apps/admin/lib/ka-status-codes.test.ts` transcribes the vendor's whole 38-code table plus
 the invariant *no FINAL-state code may return null*. **7 red before the fix, 41 green after.**
 
-### ✅ N37. `pickup_number` thrown away, and VA/COD conflated — **FIXED 2026-08-03** (migration 0087)
+### ✅ N37. `pickup_number` thrown away, and VA/COD conflated — **FIXED 2026-08-03** (migration 0088)
 **One booking call carries two money flows running in opposite directions, and all three fields that
 tell them apart were parsed and discarded for both.**
 
@@ -395,7 +395,7 @@ tell them apart were parsed and discarded for both.**
   for COD packages and rejects the combination with code **4003**. Nothing for us to settle, so an
   "unpaid" reading there is noise, not a debt.
 
-Migration **0087** adds `orders.ka_pickup_number` (the vendor's own **`payment_id`**),
+Migration **0088** adds `orders.ka_pickup_number` (the vendor's own **`payment_id`**),
 `ka_payment_status`, `ka_payment_url` — stored **verbatim, uninterpreted** — plus
 `ka_shipping_cost_idr`, the **cost side of ongkir the DB has never held** (`shipping_idr` is what the
 *shopper* paid; the seller may book a cheaper service than the shopper picked, and nothing recorded
@@ -404,7 +404,7 @@ what N42 needs.
 
 **`apps/admin/lib/shipment-payment.ts` is the ONE place that separates the flows**, deciding from the
 order's own COD flag (`payments.method = 'cod'`), never from the vendor's fields — the docs do not
-define `payment_status` for a COD package. NULL = *no reading* (every pre-0087 booking), never
+define `payment_status` for a COD package. NULL = *no reading* (every pre-0088 booking), never
 *unpaid*. Surfaced on the order's shipping card as "Ongkir ke kurir", red + a **Bayar** link only
 when it actually blocks; `unknown` renders nothing.
 
@@ -434,7 +434,7 @@ exists in the schema and is **read by nothing** (only ever seeded to `0`). This 
 too, where we owe the shipping cost separately; it is simply less visible because no remittance is
 being netted.
 
-**Half the prerequisite is now in place**: `orders.ka_shipping_cost_idr` (0087) records what the
+**Half the prerequisite is now in place**: `orders.ka_shipping_cost_idr` (0088) records what the
 courier was actually told to charge.
 
 **The decision is yours, and it is not technical:** does the platform absorb the ongkir on COD

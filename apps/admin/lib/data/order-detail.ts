@@ -56,7 +56,7 @@ export type OrderShipment = {
   awb: string | null;
   /** orders.ka_order_id — the KiriminAja booking reference. Real, but NOT a waybill. */
   kaOrderId: string | null;
-  /** orders.ka_pickup_number — the pickup number, which is also the courier's payment id (0087). */
+  /** orders.ka_pickup_number — the pickup number, which is also the courier's payment id (0088). */
   pickupNumber: string | null;
   /**
    * Who owes the COURIER for this parcel, and whether it is settled — the ONE separation between

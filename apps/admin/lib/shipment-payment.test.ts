@@ -52,7 +52,7 @@ describe("shipmentPaymentState — COD and VA are different money", () => {
   });
 
   it("no reading is 'unknown' — never 'unpaid'", () => {
-    // Every order booked before 0087 has NULL here. Treating absence as a debt would flag the whole
+    // Every order booked before 0088 has NULL here. Treating absence as a debt would flag the whole
     // back catalogue; treating an unrecognised status as fine is the same discipline the tracking
     // mapper uses for a code it does not know.
     for (const raw of [null, undefined, "", "   ", "settled-ish"]) {

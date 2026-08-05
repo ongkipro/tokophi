@@ -695,7 +695,7 @@ export const orders = pgTable("orders", {
   // two flows an order is on is not re-derived from them — `apps/admin/lib/shipment-payment.ts` is
   // the ONE place that separates the two, and it decides from the order's own COD flag.
   kaPickupNumber: text(), // vendor `pickup_number` — and the `payment_id` the Payment API takes
-  kaPaymentStatus: text(), // vendor `payment_status`, as sent. NULL = the booking predates 0087
+  kaPaymentStatus: text(), // vendor `payment_status`, as sent. NULL = the booking predates 0088
   kaPaymentUrl: text(), // vendor `qr_url` — where a non-COD booking gets paid
   // What the courier was actually told to charge for carrying this parcel. DISTINCT from
   // `shipping_idr`, which is what the SHOPPER paid at checkout: the seller may book a different or

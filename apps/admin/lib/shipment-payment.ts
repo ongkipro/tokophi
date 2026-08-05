@@ -30,7 +30,7 @@ export type ShipmentPaymentState =
   | { flow: "va"; settled: false; blocking: false; payUrl: string | null }
   /** Non-COD and UNPAID. ⚠️ This parcel will not ship until it is settled. */
   | { flow: "va"; settled: false; blocking: true; payUrl: string | null }
-  /** We have no reading — a booking made before 0087, or a vendor response without the field. */
+  /** We have no reading — a booking made before 0088, or a vendor response without the field. */
   | { flow: "unknown"; settled: false; blocking: false };
 
 export type ShipmentPaymentInput = {

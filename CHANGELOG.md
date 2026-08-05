@@ -131,7 +131,7 @@ parsed and thrown away for both:
 - **COD** — the *buyer* pays the courier. The vendor **ignores** `payment_method` for COD packages and
   rejects the combination with code 4003, so we owe nothing and an "unpaid" reading there is noise.
 
-Migration **0087** stores what the vendor returns, verbatim: `orders.ka_pickup_number` (which the
+Migration **0088** stores what the vendor returns, verbatim: `orders.ka_pickup_number` (which the
 vendor's own docs also call the **payment id** — received on every booking since the integration
 shipped and persisted nowhere), `ka_payment_status`, `ka_payment_url`, plus **`ka_shipping_cost_idr`,
 the cost side of ongkir the DB had never held** (`shipping_idr` is what the *shopper* paid; a seller

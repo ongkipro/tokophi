@@ -172,7 +172,7 @@ scheme; the `payment_method` field is ignored"*, and it rejects the combination 
 finds nothing, the resi never appears, and the order reads "dibooking" on every screen with nothing
 anywhere saying why. All three fields were parsed and thrown away, so the case was invisible.
 
-Since **0087** we store what the vendor returned, verbatim: `orders.ka_pickup_number` (the vendor
+Since **0088** we store what the vendor returned, verbatim: `orders.ka_pickup_number` (the vendor
 also calls this the **`payment_id`**), `ka_payment_status`, `ka_payment_url`, plus
 `ka_shipping_cost_idr` — the cost side of ongkir, which the DB had never held (`shipping_idr` is what
 the *shopper* paid, and the seller may book a cheaper service than the shopper picked).
@@ -181,7 +181,7 @@ the *shopper* paid, and the seller may book a cheaper service than the shopper p
 decides from the ORDER's own COD flag (`payments.method = 'cod'`), never from the vendor's payment
 fields — the docs do not define what `payment_status` holds for a COD package, and guessing there
 would put a false "belum dibayar" on parcels nobody owes anything for. NULL means *no reading*
-(every booking before 0087), never *unpaid*.
+(every booking before 0088), never *unpaid*.
 
 v6.2 adds `payment_method: "credit"` (KA Credit), needing a 6-digit `pin` validated beforehand. KA
 Credit **top-up and transaction history have no API** — dashboard only.

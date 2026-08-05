@@ -11,7 +11,7 @@ code against it, fix what is safely fixable, file the rest.
       the product flow).
 - [x] **N36** — five documented status codes were unmapped (302, 310, 311, 333, 555) and 110 was
       mis-mapped. Guard: `apps/admin/lib/ka-status-codes.test.ts`, **7 red → 41 green**.
-- [x] **N37** — VA and COD separated. Migration **0087** adds `ka_pickup_number`, `ka_payment_status`,
+- [x] **N37** — VA and COD separated. Migration **0088** adds `ka_pickup_number`, `ka_payment_status`,
       `ka_payment_url`, `ka_shipping_cost_idr`. `apps/admin/lib/shipment-payment.ts` is the one place
       that separates the flows. Guard: `shipment-payment.test.ts` (9 tests). Browser-verified.
 - [x] Gates: **vitest 323/323**, `tsc --noEmit` clean, eslint clean, `build:admin` completes.
