@@ -20,6 +20,7 @@ import sharp from "sharp";
 import { db, client, schema } from "./client";
 import { and, eq, sql } from "drizzle-orm";
 import { suggestGoogleCategory, suggestGender } from "@tokophi/lib/taxonomy-suggest";
+import { packedDims } from "./product-dims";
 
 const DEMO_SLUG = "batik-nusantara";
 // Fixed anchor so re-runs are deterministic; small per-item offset so they sort newest-first sensibly.
@@ -231,9 +232,9 @@ async function main() {
         material: d.title.match(/katun|rayon|jersey|denim|linen|sutra|wol|twill|toyobo/i)?.[0] ?? null,
         sizes: d.sizes,
         unitsSold: 0,
-        lengthCm: 1,
-        widthCm: 1,
-        heightCm: 1,
+        // The FOLDED PARCEL, per garment kind — one table shared with `seed.ts` (N33). This was
+        // `1, 1, 1`, which is what `createShipment` then declared to the courier.
+        ...packedDims(d.handle),
         hasVariants: false,
         createdAt: new Date(ANCHOR.getTime() - i * 3_600_000),
       })

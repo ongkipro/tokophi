@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { scryptSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { tempPassword, hashPassword } from "./password";
+import { tempPassword, hashPassword, PUBLISHED_PASSWORDS } from "./password";
 import { codeOnly, SOURCE_SCAN_TIMEOUT_MS } from "../../../test/source-code";
 
 // This is the credential handed to a STORE OWNER and to an INVITED OPERATOR. The account it opens
@@ -24,8 +24,10 @@ import { codeOnly, SOURCE_SCAN_TIMEOUT_MS } from "../../../test/source-code";
 const SAMPLES = 5_000;
 const FLOOR_BITS = 48;
 
-// Passwords that are public knowledge: the seed's, and anything ever shipped as a default.
-const PUBLISHED = ["tokophi123", "tokophi", "password", "admin123"];
+// Passwords that are public knowledge: the seed's, and anything ever shipped as a default. The list
+// lives beside the mint (`password.ts`) because `packages/db/src/seed.ts` needs the same one to refuse
+// `SEED_OWNER_PASSWORD=tokophi123`; a second copy here is a second thing to keep in step.
+const PUBLISHED: readonly string[] = PUBLISHED_PASSWORDS;
 
 /** The longest prefix every sample shares — a fixed prefix carries no entropy and must not be counted. */
 function commonPrefix(samples: string[]): string {
@@ -73,18 +75,18 @@ function fixedArgument(src: string, arg: string): string | null {
   return bound ? `\`${arg}\`, which is bound to a literal in this file` : null;
 }
 /**
- * ⚠️ THE ONE EXEMPTION, AND IT IS AN EXEMPTION FROM A TOTAL SCAN — not a list of files to look at.
- * That distinction is the whole lesson of this file: a guard bound to a LIST of targets has a blind
- * spot for everything off the list; a guard that scans everything and names its exceptions makes each
- * exception argue for itself, and a new file cannot hide in it.
+ * ⚠️ THERE IS NO EXEMPTION ANY MORE, AND THAT IS THE POINT — do not reintroduce one.
  *
- * The seed genuinely hashes a fixed password (`tokophi123`) into the demo store's owner row, and that
- * is a KNOWN, TRACKED fact, not an oversight: AGENTS.md records that the credential is no longer
- * published anywhere but still authenticates on every existing deployment, and rotating it is a data
- * fix (N29) because the seed is not a migration. When N29 lands, delete this line — the guard is
- * already written.
+ * This used to be `new Set(["packages/db/src/seed.ts"])`, because the seed genuinely hashed the fixed
+ * `tokophi123` into the demo store's owner, the platform operator, every demo store's owner and every
+ * registered demo customer. It was a KNOWN, TRACKED fact (N29) rather than an oversight, and the note
+ * here said "when N29 lands, delete this line — the guard is already written."
+ *
+ * **N29 landed.** The seed now calls `tempPassword()` per account and reveals each one once, so the
+ * scan below covers every tracked file with nothing carved out of it. An exemption is the one shape
+ * that lets a fixed password be re-added and stay green; the empty set is what makes it go red.
  */
-const FIXED_PASSWORD_ALLOWED = new Set(["packages/db/src/seed.ts"]);
+const FIXED_PASSWORD_ALLOWED = new Set<string>();
 /**
  * A credential-shaped binding fed by a random source — the mint written out under a different name.
  *

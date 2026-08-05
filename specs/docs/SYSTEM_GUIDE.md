@@ -108,10 +108,15 @@ annotated reference = [`SCHEMA.md`](SCHEMA.md).
 
 - **Auth (local):** email/password → **jose JWT in an httpOnly `session` cookie** (`AUTH_SECRET`).
   `lib/auth.ts` (verify/findLogin/signSession/getSession), `middleware.ts` protects the admin.
-  Passwords hashed with scrypt (`salt:hash`). Owner login: **ongki@batiknusantara.id / tokophi123**.
+  Passwords hashed with scrypt (`salt:hash`). The seeded owner is `ongki@batiknusantara.id`; **its
+  password is minted at random by each seed run and printed once** (N29) — this document deliberately
+  does not name one.
 - **Super-admin auth is separate:** a distinct **`platform_session`** cookie + `platform_admins`
-  table (migration 0013), login **admin@tokophi.id / tokophi123**. `requirePlatformAdmin()` gates
-  every super-admin mutation.
+  table (migration 0013), seeded operator `admin@tokophi.id` — same random-per-run password, printed
+  once by the seed. `requirePlatformAdmin()` gates every super-admin mutation.
+  ⚠️ **A deployment seeded before 2026-08-05 still has `tokophi123` on these rows.** The seed is not a
+  migration, so nothing here changed them; rotating one is a procedure, not a deploy —
+  `specs/docs/tasks/2026-08-03-rotate-exposed-owners.md` §②/§③/§⑤.
 - **RBAC (app-layer):** role→capability matrix in `lib/rbac-policy.ts` (client-safe). Every mutating
   server action calls `await requireCapability("<cap>")` (the security boundary; throws `ForbiddenError`).
   UI gates controls with `useCan("<cap>")` / `<Can>`; roles = **owner / admin / staff / gudang**.
