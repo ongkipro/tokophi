@@ -719,8 +719,26 @@ export async function createShipment(input: {
     // `serviceType` moves with it: the seller may book a DIFFERENT service than the shopper picked,
     // and leaving the old type behind pairs one courier with another's service — production had
     // exactly that (courier "SAP Satria Reg" carrying JNE's REG23).
+    //
+    // The three payment fields ride along for the same reason: the booking DID happen and the
+    // courier's own bill is part of it. `pickup_number` is the vendor's `payment_id` — the handle
+    // for asking "has this shipment been paid for?" — and it was returned and thrown away, along
+    // with `payment_status` and the `qr_url` that settles it. For a NON-COD parcel we owe the
+    // shipping cost, and an unpaid booking never gets a waybill: the parcel silently does not ship
+    // while the order reads "dibooking". Stored verbatim; `lib/shipment-payment.ts` is the ONE place
+    // that separates the COD flow (buyer pays the courier — nothing for us to settle) from the VA
+    // flow, and it decides from the ORDER's COD flag, never from these columns.
     await db.update(schema.orders)
-      .set({ awb, courier: input.service, serviceType: input.serviceType, kaOrderId: r.kaOrderId })
+      .set({
+        awb, courier: input.service, serviceType: input.serviceType, kaOrderId: r.kaOrderId,
+        kaPickupNumber: r.pickupNumber ?? null,
+        kaPaymentStatus: r.paymentStatus ?? null,
+        kaPaymentUrl: r.paymentUrl ?? null,
+        // The COST side of ongkir — `input.cost` is the number we just told the courier to charge.
+        // `shipping_idr` is the shopper's side and the two can differ (the seller may book a
+        // cheaper service than the shopper picked). Recording it changes no money today.
+        kaShippingCostIdr: input.cost,
+      })
       .where(eq(schema.orders.id, cur.id));
 
     // ── 2. The STATUS, through the ONE writer that owns it. A terminal order's status is no longer

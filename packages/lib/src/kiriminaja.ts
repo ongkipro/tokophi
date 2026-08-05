@@ -115,10 +115,19 @@ export type KaPackage = {
   qty?: number; width?: number; length?: number; height?: number; packageTypeId?: number;
 };
 export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: string): Promise<{
-  ok: boolean; awb?: string; kaOrderId?: string; pickupNumber?: string; error?: string;
+  ok: boolean; awb?: string; kaOrderId?: string; pickupNumber?: string;
+  /** Vendor `payment_status` (unpaid | pending | paid), verbatim. See below — this is load-bearing. */
+  paymentStatus?: string; paymentUrl?: string; error?: string;
 }> {
+  // ⚠️ The payment fields are NOT decoration. One booking call carries two opposite money flows:
+  // for a NON-COD parcel WE owe KiriminAja the shipping cost (`payment_method` defaults to `va`),
+  // and an UNPAID booking never gets a waybill — so the parcel silently does not ship while the
+  // order reads "dibooking". For a COD parcel the vendor ignores `payment_method` entirely and
+  // settles from the buyer. These were parsed away for both, which made the first case invisible.
+  // `apps/admin/lib/shipment-payment.ts` is the ONE place that separates the two.
   const r = await ka<{
     status: boolean; text?: string; pickup_number?: string;
+    payment_status?: string; qr_url?: string | null;
     details?: { order_id: string; kj_order_id: string; awb: string | null; service: string; service_type: string }[];
   }>("/api/mitra/v6.1/request_pickup", {
     name: sender.name, phone: sender.phone, address: sender.address,
@@ -145,6 +154,8 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
     awb: d?.awb ?? undefined,
     kaOrderId: d?.kj_order_id,
     pickupNumber: r.pickup_number,
+    paymentStatus: r.payment_status,
+    paymentUrl: r.qr_url ?? undefined,
     error: r.status ? undefined : r.text,
   };
 }

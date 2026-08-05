@@ -681,6 +681,29 @@ export const orders = pgTable("orders", {
   // dump — the raw tracking response goes to the cron log, never into this column.
   problemNote: text(),
   kaOrderId: text(),
+  // ── What the COURIER's own booking costs, and who settles it ─────────────────────────────────
+  // ONE booking call carries TWO different money flows, and conflating them is how a parcel sits
+  // unpaid while every screen reads "dibooking":
+  //   · NON-COD — WE owe KiriminAja the shipping cost. `payment_method` defaults to `va`, so the
+  //     booking answers with `payment_status` (unpaid | pending | paid) and, while unpaid, a
+  //     `qr_url` to settle it. An unpaid booking is not a shipped parcel: no waybill is issued,
+  //     the poller keeps finding nothing, and nothing on any screen said why.
+  //   · COD — KiriminAja collects from the BUYER and settles to the merchant. The vendor documents
+  //     that `payment_method` is IGNORED for COD packages ("the system will automatically use the
+  //     COD settlement scheme"), so there is no VA for us to pay.
+  // These columns store what the vendor ACTUALLY returned, verbatim and uninterpreted. Which of the
+  // two flows an order is on is not re-derived from them — `apps/admin/lib/shipment-payment.ts` is
+  // the ONE place that separates the two, and it decides from the order's own COD flag.
+  kaPickupNumber: text(), // vendor `pickup_number` — and the `payment_id` the Payment API takes
+  kaPaymentStatus: text(), // vendor `payment_status`, as sent. NULL = the booking predates 0088
+  kaPaymentUrl: text(), // vendor `qr_url` — where a non-COD booking gets paid
+  // What the courier was actually told to charge for carrying this parcel. DISTINCT from
+  // `shipping_idr`, which is what the SHOPPER paid at checkout: the seller may book a different or
+  // cheaper service than the shopper picked, and until now nothing recorded the difference — the DB
+  // held the revenue side of ongkir and no cost side at all. Recording it does not move any money;
+  // it is the prerequisite BACKLOG.md already names for ever computing a real ongkir margin, and
+  // for modelling what KiriminAja nets out of a COD remittance.
+  kaShippingCostIdr: money(),
   placedAt: createdAt(),
 });
 
