@@ -11,7 +11,13 @@ time you read this.
 > And measure on `origin/main`, never on your own rebased branch — that is how a task got filed for a
 > flake that the very next merge had already fixed.
 
-Two detailed handoffs sit underneath this index; go to them for reasoning, not to this file:
+⚠️ **Starting fresh on THIS machine? Read
+[`2026-08-05-handoff-and-unfiled-scan.md`](./2026-08-05-handoff-and-unfiled-scan.md) first.** The
+working copy carries **26 dirty worktrees, ~60 local branches and a `main` that is 30 ahead / 522
+behind** — five of those worktrees hold a migration journal stamped BELOW main's, which is the
+"applied successfully" silent-skip. Nothing there is safe to mass-commit.
+
+Three detailed handoffs sit underneath this index; go to them for reasoning, not to this file:
 - **[`2026-08-05-audit-waves-6-9-handoff.md`](./2026-08-05-audit-waves-6-9-handoff.md)** — the audit
   stream, and its **"do not re-file"** list.
 - **[`2026-08-05-kiriminaja-doc-sweep.md`](./2026-08-05-kiriminaja-doc-sweep.md)** — the shipping /
@@ -19,6 +25,9 @@ Two detailed handoffs sit underneath this index; go to them for reasoning, not t
 - **[`2026-08-05-signup-open-audit.md`](./2026-08-05-signup-open-audit.md)** — what
   `SIGNUP_ENABLED=true` would actually expose, now that #154 made the switch reachable. **Signup is
   still shut.**
+- **[`2026-08-05-handoff-and-unfiled-scan.md`](./2026-08-05-handoff-and-unfiled-scan.md)** — the five
+  PRs that shipped 2026-08-05, the repo's own verifiers re-run and green, and **four items that had
+  no task behind them** (this file's deploy-time figure is one of them — it is wrong).
 
 ---
 
@@ -164,8 +173,12 @@ npm run build:admin ; npm run build:super
 
 ## Deploying
 
-Merge to `origin/main` → Coolify rebuilds. **~6 minutes**, then a **60–90 s window of 503** while
-containers swap (admin recovers slightly before the storefront). Watch until all four return:
+Merge to `origin/main` → Coolify rebuilds. **9–11 minutes** from merge to all four hosts green, with
+a **~1,5–2,5 min window of 503** while containers swap (admin recovers slightly before the
+storefront). ⚠️ This used to read "~6 minutes / 60–90 s" and both halves were understated — measured
+FOUR times on 2026-08-05: **524 s · 656 s · 558 s · 542 s**, sampled every 25 s. `DEPLOY.md`'s
+"~8–9 min" was the closer of the two figures. The low number is what makes someone conclude a healthy
+deploy has failed and start intervening. Watch until all four return:
 
 ```bash
 for h in tokophi.com app.tokophi.com rich.tokophi.com toko.tokophi.com; do
