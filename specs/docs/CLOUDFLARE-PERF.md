@@ -1,10 +1,16 @@
-# Cloudflare zone settings that cost PageSpeed points
+# Cloudflare zone settings — the things that are NOT code
 
-Two of the largest remaining performance items on the storefront are **not code**. They live in the
-Cloudflare zone for `tokophi.com` and cannot be changed from this repo. Both were approved by the owner
-on 2026-08-01; this file is the exact procedure, so nobody has to re-derive it.
+Some of what this product does is decided in the Cloudflare zone for `tokophi.com`, not in this repo.
+This file is the exact procedure for each, so nobody has to re-derive it.
 
-All numbers below are Lighthouse measurements against `https://toko.tokophi.com/`, mobile, 2026-07-31.
+**Zone id `d31e0f9f9c3df05d38ba9c5a7d98854e`.** Every record in it is **proxied** — measured
+2026-08-05, all six (`tokophi.com`, `www`, `app`, `rich`, `toko`, and the `*` wildcard). That is a
+standing requirement (`DEPLOY.md`: the wildcard's TLS is a Cloudflare **Origin CA** cert, which
+browsers do not trust directly), and §4 below now depends on it as well.
+
+§1 and §2 are performance, approved by the owner 2026-08-01, and their numbers are Lighthouse against
+`https://toko.tokophi.com/`, mobile, 2026-07-31 — **both are still open.** §3 records a setting that is
+left on deliberately. **§4 is security, and it is DONE.**
 
 ---
 
@@ -115,3 +121,96 @@ SEO category at 92 instead of 100.
 Managed robots.txt off would delete an AI-training opt-out that the injected text asserts as an **express
 reservation of rights under Article 4 of EU Directive 2019/790**. Eight points on a linter is not worth
 that. The full reasoning lives in `apps/storefront/src/pages/robots.txt.ts`.
+
+---
+
+## 4. HSTS — ✅ **ENABLED 2026-08-05**
+
+### What it fixes
+
+The session cookie is `Secure` since #156, so it no longer rides a cleartext request. HSTS closes the
+other half: **the request itself**. `always_use_https` was already on, so `http://app.tokophi.com/`
+answered `301` — but a 301 is an answer, which means the browser had already *sent* the request in the
+clear. Anything in it (path, `Referer`, any non-`Secure` cookie) was on the wire, and an on-path
+attacker can answer that first request instead of Cloudflare. HSTS makes the browser refuse to send it
+at all: after one HTTPS visit, `http://` becomes an internal redirect the network never sees.
+
+### What was measured before touching anything
+
+| setting | value |
+|---|---|
+| `security_header` | `enabled: false`, everything zeroed |
+| `always_use_https` | **on** (this is why the hole *looked* closed) |
+| `ssl` | **strict** |
+| `min_tls_version` | 1.2 |
+| DNS | 6 records, **all proxied**, none DNS-only, no MX |
+
+Those last two lines are the ones that make `includeSubDomains` safe: there is no name under
+`tokophi.com` that is served by anything other than Cloudflare over HTTPS, so there is nothing for the
+flag to break.
+
+### The settings, and why each one is what it is
+
+```jsonc
+{ "enabled": true, "max_age": 86400, "include_subdomains": true, "preload": false, "nosniff": false }
+```
+
+- **`include_subdomains: true` is the whole point, not a bonus.** The header on the apex protects the
+  apex. `app.` and `rich.` get their own header from Cloudflare once visited — but a subdomain nobody
+  has visited yet gets nothing, and this product mints a **new subdomain per merchant**
+  (`<slug>.tokophi.com`). Without the flag, every new shop's first visit is unprotected forever.
+- 🔴 **`preload: false`, deliberately.** Preloading submits the domain to a list compiled into
+  browsers; removal takes **months** and is not ours to schedule. It is a one-way door and it is not
+  needed for anything above. Do not switch it on to "finish the job".
+- **`max_age: 86400` is a RAMP, not the destination.** 24 h is short on purpose: if some subdomain
+  ever does need plain HTTP, the mistake expires in a day instead of a year. The measurements above
+  say that cannot happen here, but a cheap first step that proves it in production beats a confident
+  one that cannot be taken back. **Raise it to a year once it has run a week** (see below).
+- **`nosniff: false` — left alone on purpose.** Cloudflare bundles `X-Content-Type-Options` into this
+  same object. It is a good header and probably wants switching on, but it is a *different* header
+  than the one being installed here, so it is its own decision, not a rider on this one.
+
+### API
+
+Needs a token with **Zone → Zone Settings → Edit**. `CLOUDFLARE_API_TOKEN` in the shell environment
+had it (the ruleset permission §2 is blocked on is a different one — §2 stays open).
+
+```bash
+Z=d31e0f9f9c3df05d38ba9c5a7d98854e
+curl -sX PATCH "https://api.cloudflare.com/client/v4/zones/$Z/settings/security_header" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+  --data '{"value":{"strict_transport_security":{"enabled":true,"max_age":86400,"include_subdomains":true,"preload":false,"nosniff":false}}}'
+```
+
+### Dashboard (equivalent)
+
+Zone **tokophi.com** → **SSL/TLS** → **Edge Certificates** → **HTTP Strict Transport Security (HSTS)**.
+
+### Verify — on a TENANT subdomain, not only the apex
+
+```bash
+for h in tokophi.com www.tokophi.com app.tokophi.com rich.tokophi.com \
+         toko.tokophi.com batik-nusantara.tokophi.com; do
+  printf '%-32s %s\n' "$h" "$(curl -sI https://$h/ | grep -i '^strict-transport-security:' | tr -d '\r')"
+done
+```
+
+Measured 2026-08-05, all six: `max-age=86400; includeSubDomains`. **Check the wildcard one** — it is
+the only line that proves `include_subdomains` reaches a per-merchant shop, which is the case the flag
+was turned on for.
+
+### ⏭️ The follow-up, and the rollback
+
+**Raise `max_age` to a year** — the same PATCH with `"max_age": 31536000` — once this has run for a
+week with nothing broken. Until then the protection lapses for anyone who has not visited in 24 h.
+
+To back it out, PATCH `"enabled": false`. ⚠️ That stops Cloudflare SENDING the header; it does **not**
+reach browsers that already hold it — they keep refusing `http://` until their copy expires. That is
+what `max_age` really controls, and why it starts at a day.
+
+### ⚠️ If Cloudflare for SaaS custom hostnames ever get wired
+
+`CUSTOM_DOMAIN_CNAME_TARGET` is a seam today (`storefront/src/data/store.ts` — no column, not wired).
+When a merchant's own domain is served through this zone, **this header will be emitted on their
+domain too**, `includeSubDomains` included — i.e. we would be making a durable promise about
+subdomains of a domain we do not control. Decide it then, deliberately; it is not decided here.

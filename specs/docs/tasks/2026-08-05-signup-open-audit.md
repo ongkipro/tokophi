@@ -161,9 +161,12 @@ seven now go through `@tokophi/lib/session-cookie`, and `packages/lib/src/sessio
 scans every tracked source file for a session-cookie write that does not, so the eighth call site
 cannot be written by copying the sixth.
 
-⚠️ **The HSTS half is NOT fixed** — it is a Cloudflare zone setting, not code, and it belongs with
-**N2**. Until it lands, a first visit to `http://app.tokophi.com` still leaves the browser before the
-301, and `Secure` only guarantees the *cookie* does not ride along.
+✅ **The HSTS half landed the same day**, on the zone rather than in this repo:
+`max-age=86400; includeSubDomains`, verified on all six hosts including a tenant subdomain. So the
+first request no longer leaves the browser at all — the 301 becomes an internal redirect. `preload` is
+deliberately off and `max_age` is a 24 h **ramp** with one follow-up (raise to a year after a week);
+the reasoning, the rollback and the pre-flight measurements are `CLOUDFLARE-PERF.md` §4. ⚠️ It did
+**not** unblock **N2** — that needs a token with *ruleset* permission; this needed *Zone Settings*.
 
 ⚠️ **And `Secure` cannot be proved by any test in this repo.** `NODE_ENV` is `test` under vitest, so
 the suite exercises the FALSE branch and pins the expression by reading it; the true branch is only
