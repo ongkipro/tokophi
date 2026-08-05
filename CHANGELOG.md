@@ -2,6 +2,53 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — the gate built to stop the money suites skipping was, in a worktree, skipping
+
+**Measured in `.claude/worktrees/w8-harness` before the fix: 263 passed / 36 skipped, exit 0** — green
+— with all 22 `ledger-credit` tests among the skipped. With `DATABASE_URL` exported: 299 passed, 0
+skipped. **After: 317 passed, 0 skipped, with no `.env` in the worktree and nothing exported.**
+
+`test/db-setup.ts` (the vitest `globalSetup`) derives `<DATABASE_URL>_test`, creates it, migrates it
+and so lets the ledger suites run by default. It read `<its own root>/.env` and nothing else — but
+`.gitignore` is `.env*`, so **a git worktree can never carry one**, and this repo does nearly all of
+its work in worktrees. It printed its banner and skipped, exactly what it was written to stop.
+
+- **The fallback already existed, correctly, a few files over.** `apps/storefront/scripts/check-env.mjs`
+  read the repo root *and* the main checkout three levels up (`<main>/.claude/worktrees/<name>`), with
+  the worktree reason spelled out in its comment; db-setup had a private copy that did not. A private
+  copy is how the weaker version of a rule survives the fix meant to catch it — see the 24-bit password
+  mint. **The lookup is now one module, `@tokophi/lib/env-file`, and both import it.** It is `.mjs`, not
+  `.ts`, because `apps/storefront/scripts/*` run under plain `node`.
+- The 18 `packages/db` npm scripts still restate the same pair declaratively
+  (`dotenv -e ../../.env -e ../../../../../.env`) — they are shell and cannot import a module. Named in
+  `env-file.mjs` so the next layout change finds them.
+- **Every existing contract is unchanged and was re-measured**: a resolved database name that does not
+  end in `_test` still throws; an unreachable database still SKIPS with the loud banner at exit 0
+  (a laptop without Docker gets a green run); `npm run test:db` still turns that skip into exit 1.
+- `test/env-file.test.ts` is the check, and it was proved red first: delete the main-checkout entry
+  from `envFiles()` and two tests fail; re-inline the lookup in either caller and the "one resolver"
+  guard fails (it reads the files' CODE via `test/source-code.ts`, not their text).
+
+### An SVG path made of NaN, and money formatters that printed "RpNaN"
+
+`kpi-card.tsx` guarded its sparkline with `!data.length` while the byte-identical geometry in
+`dashboard/money-strip.tsx` used `data.length < 2`. A one-element series divides by zero in
+`(i / (data.length - 1))`, so the KPI card emitted `d="MNaN,30.0"` and
+`area="MNaN,30.0 L88,32 L0,32 Z"`. **Reachable, not theoretical: on the 1st of any month `/analitik`'s
+"Bulan Ini" resolves to exactly one day** (`inMonth(thisMonth)`), as does any store with a single row
+in `daily_stats` — all four KPI cards then render a NaN path. Two copies with two guards *is* the bug,
+so there is one `components/admin/sparkline.tsx` now (`area` prop for the KPI tiles' gradient, the only
+difference the copies ever had) and `sparkline.test.ts` covers both the geometry and the de-duplication.
+
+`@tokophi/lib/format` had no non-finite floor: `IDR(NaN)` → `"RpNaN"`, `IDR(Infinity, {compact})` →
+`"RpInfinity M"`, `num(NaN)` → `"NaN"`, `share(NaN)` → `"NaN%"`, and `pct(NaN)` → `"NaN%"` **with the
+sign dropped** — the one thing `pct` exists to guarantee. All four now return `NO_FIGURE` (`"—"`): a
+figure with no source is a dash, never a number. ⚠️ **A real `0` is a measurement and still renders**
+(`Number.isFinite(0)`), and `pct()` (delta) and `share()` (part of a whole) stay separate — that
+distinction is what the *"Ditangguhkan 5 +83,3%"* incident cost. `format.test.ts` pins both.
+
+⚠️ Still unfloored, deliberately out of this change's scope: `timeAgo(NaN)` → `"NaN hari lalu"`.
+
 ## Unreleased — The demo store could not be shipped: 160 of 219 orders had no usable address
 
 **Measured on production**: 219 orders, **one** store. 50 carried no `ship_address` /

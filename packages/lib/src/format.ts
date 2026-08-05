@@ -1,7 +1,21 @@
 // Indonesian-market formatting helpers.
 import { normalizePhone } from "./validate";
 
+// A FIGURE WITH NO SOURCE IS "—", NEVER A NUMBER.
+//
+// These are money formatters on merchant-facing screens, and every one of them used to render its
+// own arithmetic accident as if it were a measurement: `IDR(NaN)` → "RpNaN", `IDR(Infinity,
+// {compact})` → "RpInfinity M", `num(NaN)` → "NaN", `share(NaN)` → "NaN%", and `pct(NaN)` → "NaN%"
+// with **the sign silently dropped** (the one thing `pct` exists to guarantee). A `0/0` upstream —
+// an empty period, a store with no shipped parcels — is the ordinary way to get one.
+//
+// ⚠️ ZERO IS A MEASUREMENT. `Number.isFinite(0)` is true, so `IDR(0)` is still "Rp 0" and `pct(0)` is
+// still "0,0%": the em dash means "we have no figure", and turning a real zero into one would be the
+// same lie in the other direction. Only NaN, Infinity and −Infinity get it.
+export const NO_FIGURE = "—";
+
 export const IDR = (n: number, opts: { compact?: boolean } = {}) => {
+  if (!Number.isFinite(n)) return NO_FIGURE;
   if (opts.compact) {
     if (n >= 1_000_000_000) return `Rp${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, "")} M`;
     if (n >= 1_000_000) return `Rp${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")} jt`;
@@ -14,7 +28,7 @@ export const IDR = (n: number, opts: { compact?: boolean } = {}) => {
   }).format(n);
 };
 
-export const num = (n: number) => new Intl.NumberFormat("id-ID").format(n);
+export const num = (n: number) => (Number.isFinite(n) ? new Intl.NumberFormat("id-ID").format(n) : NO_FIGURE);
 
 // DELTA formatter: always carries its own sign, so a fall reads as a fall even without the arrow.
 // "+16,9%" / "−6,4%" / "0,0%" — id-ID decimal comma, typographic minus (U+2212, matches the
@@ -23,6 +37,7 @@ export const num = (n: number) => new Intl.NumberFormat("id-ID").format(n);
 // Negative input used to come out as "-6.4%" (ASCII hyphen, dot) and callers that passed
 // Math.abs(delta) got a bare "+6,4%" for a DECLINE — hence the explicit sign here.
 export const pct = (n: number, digits = 1) => {
+  if (!Number.isFinite(n)) return NO_FIGURE;
   const sign = n > 0 ? "+" : n < 0 ? "−" : "";
   return `${sign}${Math.abs(n).toFixed(digits).replace(".", ",")}%`;
 };
@@ -36,7 +51,8 @@ export const pct = (n: number, digits = 1) => {
 // `keranjang-client.tsx`) duly wrote the same one-liner by hand; the third borrowed the delta
 // formatter. A rule that has to be re-obeyed by hand at every call site is how the third one
 // happened, so here is the thing to reach for.
-export const share = (n: number, digits = 1) => `${n.toFixed(digits).replace(".", ",")}%`;
+export const share = (n: number, digits = 1) =>
+  Number.isFinite(n) ? `${n.toFixed(digits).replace(".", ",")}%` : NO_FIGURE;
 
 export const timeAgo = (minutes: number) => {
   if (minutes < 1) return "baru saja";
