@@ -35,10 +35,24 @@ channels on a one-channel tenant). So: run today, on `a8c7c05`.
 | `lint -w @tokophi/super-admin` | ✅ clean |
 | `npm test` | ✅ 511/511 (see §④ for the one number that is stale) |
 
-⚠️ **`verify-rls` and `verify-ledger` ran against the LOCAL DEV database**, because that is what
-`DATABASE_URL` points at. `verify-ledger` is documented as safe to run read-only against production
-and **has not been re-run there since the 48-orphan cleanup**. Someone with the prod URL should do
-that once; it is the check that found Rp810.000 of withdrawable money with no order behind it.
+⚠️ **`verify-rls` ran against the LOCAL DEV database**, because that is what `DATABASE_URL` points at.
+
+✅ **`verify-ledger` HAS now been run against PRODUCTION (2026-08-05)** — the first time since the
+48-orphan cleanup, i.e. the first time anyone re-checked the thing that had put **Rp810.000** of
+withdrawable money behind orders that no longer existed. **All 7 child tables: 0 orphans.** Every FK
+VALIDATED, the dangling insert refused today, `available` Rp21.032.562 and `pending` Rp23.424.347
+both fully backed by orders. Nothing to act on.
+
+Run where the credential already lives, so it never reaches a shell history or a transcript — the
+admin container carries both `DATABASE_URL` and the monorepo source:
+`docker exec -w /app/packages/db <admin-container> /app/node_modules/.bin/tsx src/verify-ledger.ts`.
+
+⚠️ **And the word the docs used for it was wrong: it is NOT read-only.** `refusesDanglingInsert`
+writes three rows to prove the FK still bites *today* — `convalidated` only says it was checked once.
+Both exit paths throw, so the transaction always rolls back; **confirmed on production afterwards**
+with `select count(*) from stores where slug like 'fk-probe-%'` → **0**, rather than assumed. Safe,
+but an audit of "what writes to production" would have wrongly filtered it out. `AGENTS.md` now says
+so.
 
 ---
 

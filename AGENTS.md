@@ -813,7 +813,7 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   Rp21.043.271 → **Rp43.733.271**, handing back Rp23,5jt). By the same token `not exists (select 1 from
   orders where id = l.order_id)` is TRUE for a NULL, so the obvious orphan query reports every
   withdrawal as corruption. **Count `order_id IS NULL` separately, always.**
-- **`npm run verify-ledger -w @tokophi/db`** (read-only, safe against production) reports children of
+- **`npm run verify-ledger -w @tokophi/db`** (**safe against production — but NOT read-only, see below**) reports children of
   `orders` with a missing parent and what they are worth in each store's balance. It exists because
   production carried **48 such rows** — 10 `payments`, 30 `order_line_items`, 8 `ledger_entries`, all
   from ten `INV-47xx` orders that no longer exist — putting **Rp810.000 into `available`**, i.e.
@@ -825,6 +825,21 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   transactional, guarded, ending in `rollback` — is `ops/tokophi-orphan-cleanup.sql`; it is
   deliberately **not** a drizzle migration, because merging one would delete production rows
   unattended on the next Coolify build. Both traps are pinned by `packages/db/src/verify-ledger.test.ts`.
+  ⚠️ **"Read-only" was WRONG, and the word matters.** `refusesDanglingInsert` INSERTs an account, a
+  store and a deliberately-dangling `ledger_entries` row — deliberately, because `convalidated` only
+  says the constraint was checked ONCE and the question is whether the trigger fires TODAY (that gap
+  is exactly what a `--disable-triggers` restore leaves behind). Both exit paths throw (`23503`, or an
+  explicit "THE FOREIGN KEY DID NOT FIRE"), so `sql.begin()` always rolls back and nothing commits —
+  it is genuinely safe. But it opens a WRITE transaction, and an audit of "what touches production"
+  that trusted the old phrase would have filtered it straight out.
+  ✅ **Run against PRODUCTION 2026-08-05** — the first time since the cleanup. All **7** child tables
+  0 orphans, every FK VALIDATED, the dangling insert refused today, `available` **Rp21.032.562** and
+  `pending` **Rp23.424.347** both fully backed by orders. The 48 orphan rows are gone.
+  **The rollback was CONFIRMED, not assumed**: `select count(*) from stores where slug like
+  'fk-probe-%'` afterwards → **0**.
+  ⚠️ Run it where the credential already lives, so it never lands in a shell history or a transcript —
+  the admin container carries both `DATABASE_URL` and the monorepo source:
+  `docker exec -w /app/packages/db $(docker ps --format '{{.Names}}' | grep -m1 '^admin-') /app/node_modules/.bin/tsx src/verify-ledger.ts`
 - **A GUESS MUST NEVER SUCCEED QUIETLY, and "we flag it" is a claim to grep before trusting.** The
   comment above `createShipment`'s destination fallback said the guess "is flagged as a guess" while
   `destinationGuessed` existed **nowhere in the repo** — 77 orders carry no `ship_district_id`, so the
