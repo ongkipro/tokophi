@@ -3,6 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { SESSION_COOKIE, SESSION_MAX_AGE, signSession } from "@/lib/auth";
 import { OAUTH_STATE_COOKIE, exchangeCode, googleConfig } from "@/lib/google";
+import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
 import { provisionStore, signupOpen } from "@/lib/provision";
 
 // Google OAuth callback: state check → code exchange → id_token verify (JWKS) → find-or-create the
@@ -93,12 +94,7 @@ export async function GET(req: NextRequest) {
 
   const token = await signSession(session);
   const res = redirectTo(slug ? `/store/${slug}` : "/");
-  res.cookies.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_MAX_AGE,
-  });
+  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(SESSION_MAX_AGE));
   res.cookies.delete(OAUTH_STATE_COOKIE);
   return res;
 }

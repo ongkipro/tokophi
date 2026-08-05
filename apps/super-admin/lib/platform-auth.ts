@@ -13,6 +13,9 @@ import { authSecretBytes } from "@tokophi/lib/secret";
 // Lazy (throws in prod if AUTH_SECRET is unset, never at build) — see @tokophi/lib/secret.
 const secret = () => authSecretBytes();
 export const PLATFORM_COOKIE = "platform_session";
+// Matches the JWT expiry set in `signPlatformSession`. It was a bare `60 * 60 * 24 * 7` written out
+// at both call sites — the admin's `SESSION_MAX_AGE` is the same constant, named, one app over.
+export const PLATFORM_MAX_AGE = 60 * 60 * 24 * 7; // 7d
 
 // The session SHAPE and the rule that decides what a cookie is still worth both live in
 // `platform-session.ts` — pure, so they can be tested without a database. Re-exported here so every

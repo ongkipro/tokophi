@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { SESSION_COOKIE, SESSION_MAX_AGE, hashPassword, signSession } from "@/lib/auth";
 import { emailTaken, provisionStore, signupOpen, SignupClosedError } from "@/lib/provision";
 import { rateLimit } from "@tokophi/lib/cache";
+import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
 
 export type RegisterState = { error?: string };
 
@@ -62,11 +63,6 @@ export async function registerStore(_prev: RegisterState, formData: FormData): P
   }
 
   const token = await signSession({ userId: r.userId, storeId: r.storeId, role: r.role, email: r.email, name: r.name });
-  (await cookies()).set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_MAX_AGE,
-  });
+  (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions(SESSION_MAX_AGE));
   redirect(`/store/${r.slug}`);
 }

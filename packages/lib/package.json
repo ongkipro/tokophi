@@ -22,6 +22,7 @@
     "./validate": "./src/validate.ts",
     "./colors": "./src/colors.ts",
     "./secret": "./src/secret.ts",
+    "./session-cookie": "./src/session-cookie.ts",
     "./session-revocation": "./src/session-revocation.ts",
     "./tracking-ids": "./src/tracking-ids.ts",
     "./pay-callback": "./src/pay-callback.ts",

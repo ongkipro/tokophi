@@ -133,11 +133,22 @@ And `curl -I` returns **no `strict-transport-security`** on `tokophi.com` or `ap
 `http://app.tokophi.com/login` is a Cloudflare **301** to https — but the browser has already attached
 the cookie to that plaintext request. A 7-day session token, over HTTP, on the first visit.
 
-**Not fixed here, deliberately** — this is five call sites on the live auth path plus a zone setting,
-which is a different change from "meter the signup form", and it is the owner's call whether adding
-`secure` breaks anyone's local dev (Chrome and Firefox treat `http://localhost` as a secure context
-and accept it; Safari historically did not). The zone half belongs with **N2**, the Cloudflare work
-that is already approved and unrun.
+✅ **FIXED 2026-08-05, and it was SEVEN sites, not five.** The table above lists the merchant's five;
+the sweep for the fix found the super-admin's two as well — operator login and the operator password
+re-mint — i.e. the **control plane**, the one that reaches every tenant, was in the same state. All
+seven now go through `@tokophi/lib/session-cookie`, and `packages/lib/src/session-cookie.test.ts`
+scans every tracked source file for a session-cookie write that does not, so the eighth call site
+cannot be written by copying the sixth.
+
+⚠️ **The HSTS half is NOT fixed** — it is a Cloudflare zone setting, not code, and it belongs with
+**N2**. Until it lands, a first visit to `http://app.tokophi.com` still leaves the browser before the
+301, and `Secure` only guarantees the *cookie* does not ride along.
+
+⚠️ **And `Secure` cannot be proved by any test in this repo.** `NODE_ENV` is `test` under vitest, so
+the suite exercises the FALSE branch and pins the expression by reading it; the true branch is only
+observable in a real `Set-Cookie` on the deployed site. Confirm it by logging in and reading the
+cookie's `Secure` column in DevTools. Note also that this does **not** log anyone out: an existing
+cookie keeps whatever flags it was issued with until it is re-minted.
 
 ### Google account linking is unproven, and that is (probably) fine
 
