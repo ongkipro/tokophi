@@ -342,6 +342,16 @@ function SaluranTab({
                     </TableCell>
                   </TableRow>
                 ))}
+                {channels.length === 0 && (
+                  // Header row + a "Total 0" footer over an empty body reads as a failed query. A
+                  // store with no orders has no attributed channels yet — say so.
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                      Belum ada pesanan dari saluran iklan. Baris muncul sendiri begitu ada pesanan
+                      yang tercatat berasal dari sebuah saluran.
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
               <TableFooter>
                 <TableRow>

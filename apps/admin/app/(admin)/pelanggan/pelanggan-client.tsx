@@ -522,7 +522,12 @@ export function PelangganClient({ customers }: { customers: CustomerRow[] }) {
                   colSpan={9}
                   className="py-12 text-center text-sm text-muted-foreground"
                 >
-                  Tidak ada pelanggan yang cocok.
+                  {/* "yang cocok" describes a filter miss. A store with no customers at all has
+                      nothing to filter — and the reason is upstream (no orders), so say that
+                      rather than sending them back to the search box. */}
+                  {customers.length === 0
+                    ? "Belum ada pelanggan. Data pembeli tercatat sendiri begitu pesanan pertama masuk — Anda tidak perlu memasukkannya manual."
+                    : "Tidak ada pelanggan yang cocok."}
                 </TableCell>
               </TableRow>
             )}

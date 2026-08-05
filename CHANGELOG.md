@@ -84,6 +84,63 @@ distinction is what the *"Ditangguhkan 5 +83,3%"* incident cost. `format.test.ts
 
 ⚠️ Still unfloored, deliberately out of this change's scope: `timeAgo(NaN)` → `"NaN hari lalu"`.
 
+## Unreleased — A brand-new Seller was shown a header-only table and told to change a filter it never set
+
+Driven in a browser as the owner of the seeded store with **0 products, 0 orders, 0 customers**
+(`snack-rumahan-bu-tati`) — no row was created and none was changed. Two families, both of them
+"the screen renders a SHAPE where it has no data", the same family as the dashboard that once read
+*"Penjualan hari ini Rp0 · −100,0%"* above four orders placed that morning.
+
+- **The dashboard's two silent cards.** "Pesanan Terbaru" rendered a `<table>` with five column
+  headers and an empty `<tbody>`; "Aktivitas Langsung" rendered a card title over an empty `<ul>`.
+  Both read as a query that failed. They now say what is missing and what brings it, in the same
+  one-line form the sibling cards on that page already used. `/pemasaran`'s channel table did the
+  same thing under a "Total 0" footer — fixed with it.
+- **"No results" and "no rows" are different facts, and seven list screens conflated them.**
+  `/produk`, `/produk/inventori`, `/produk/kategori`, `/blog`, `/halaman`, `/diskon` and `/pelanggan`
+  all answered an empty store with search copy — *"Coba ubah kata kunci atau filter Anda"*, *"Coba
+  kata kunci lain"*, *"Tidak ada … yang cocok"* — advice that cannot work, because there is no filter
+  set and nothing to filter. Each now branches on the **unfiltered total**: first-run copy naming the
+  next step (and, on `/produk`, the Tambah Produk button) when the store has nothing, the existing
+  filter copy when a filter is what emptied the list. The filtered branch is unchanged.
+
+**Accessibility, admin side** (the storefront's checkout was done in an earlier wave; the admin never
+was). Measured per route, logged in, in a real browser:
+
+- 🔴 **`/tema/[id]` had no `<h1>` at all** — and it is FULL_BLEED, so the sidebar and topbar are gone
+  too. Every heading on it came from Puck and started at `<h2>`. Now carries an `sr-only` `<h1>`, the
+  same floor and the same reasoning as the storefront's `index.astro`.
+- **`/produk` went h1 → h3**, skipping a level — the grid cards' `<h3>` is the only `h3` in the admin.
+  An `sr-only` `<h2>` now names the results region above both views.
+- **Three unnamed destructive icon buttons**, all on `/promo/[id]`: the row-delete `X` on Manfaat
+  Utama and on Poin masalah, and the chip-remove `X` on Ideal Untuk (its text is in the parent
+  `<span>` — adjacency is not an accessible name). All three now carry one.
+- **The topbar's unread dot was colour alone** — the bell's label read "Notifikasi" whether or not
+  anything was waiting. It now names the count, the way `obrolan-client.tsx` already did.
+- **Every `/pengaturan` switch was anonymous** (`ToggleRow` renders its `title` in a sibling `<p>`).
+  One `aria-label` in that shared component names all of them.
+- The store-builder's image-picker thumbnail computed **no accessible name at all** (an `<img alt="">`
+  in one branch, an icon in the other).
+
+Two guards, each proved RED before it was proved green:
+
+- `apps/admin/lib/admin-h1-floor.test.ts` — every `page.tsx` under `app/(admin)` reaches an `<h1>`,
+  by walking its local import graph plus its ancestor layouts. Uses `test/source-code.ts`; no comment
+  stripper is hand-rolled. ⚠️ **The mutation proof is what earned this file its one exclusion**: the
+  first version was green over a `/tema/[id]` with the heading deleted, because the graph leaks into
+  `components/theme/sections/`, whose `Hero.tsx` emits an `<h1>` — for the storefront page being
+  composed inside Puck's canvas, not for the admin screen. Excluded by name, and said so.
+- `apps/admin/components/admin/dashboard-empty.test.tsx` — renders `RecentOrders`/`LiveActivity` with
+  `[]` via `renderToStaticMarkup` and asserts there is no `<table>`/`<ul>` and there is an
+  explanation, plus that the populated case still renders the table.
+
+**Known, NOT fixed** (ranked, for whoever picks this up): ~40 form controls across the admin have no
+programmatic label — the biggest cluster is the list-screen search boxes (placeholder-only) and the
+Puck sidebar field overrides (`lib/theme/puck-field-overrides.tsx`); `CardTitle` is a `<div>`, so the
+admin's 128 card headings are invisible to heading navigation; and the good/bad verdict on the
+dashboard's money bars and the return-rate bar is carried by colour alone (the numbers beside them
+are not).
+
 ## Unreleased — The demo store could not be shipped: 160 of 219 orders had no usable address
 
 **Measured on production**: 219 orders, **one** store. 50 carried no `ship_address` /

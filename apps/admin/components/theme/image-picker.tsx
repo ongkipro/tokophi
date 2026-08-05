@@ -147,6 +147,10 @@ export function ImagePickerField({
           type="button"
           disabled={readOnly}
           onClick={() => setOpen(true)}
+          // Neither branch below produces text: with a value the only child is an `<img alt="">`
+          // (correctly decorative — the picture is not the label), without one it is an icon. So
+          // this control computed NO accessible name at all.
+          aria-label={value ? `Ganti gambar — ${label}` : `Pilih gambar — ${label}`}
           className={cn(
             "relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted transition-colors",
             value ? "border-border" : "border-2 border-dashed border-border hover:border-primary/60",

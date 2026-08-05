@@ -171,10 +171,22 @@ export function BlogClient({ posts, blogs }: { posts: BlogPost[]; blogs: string[
         <Card className="py-0">
           <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
             <Newspaper className="size-8 text-muted-foreground" />
-            <p className="text-sm font-medium">Tidak ada artikel ditemukan</p>
-            <p className="text-sm text-muted-foreground">
-              Coba ubah kata kunci atau filter blog Anda.
-            </p>
+            {/* An untouched blog is not a search that missed — do not send a new seller filter-hunting. */}
+            {posts.length === 0 ? (
+              <>
+                <p className="text-sm font-medium">Belum ada artikel</p>
+                <p className="text-sm text-muted-foreground">
+                  Tulis artikel pertama — blog membantu toko Anda ditemukan lewat pencarian.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium">Tidak ada artikel ditemukan</p>
+                <p className="text-sm text-muted-foreground">
+                  Coba ubah kata kunci atau filter blog Anda.
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (

@@ -212,8 +212,18 @@ export function InventoriClient({ products }: { products: Product[] }) {
         <Card className="py-0">
           <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
             <Boxes className="size-8 text-muted-foreground" />
-            <p className="text-sm font-medium">Tidak ada produk ditemukan</p>
-            <p className="text-sm text-muted-foreground">Coba ubah kata kunci atau filter Anda.</p>
+            {/* Same split as /produk: an empty catalog is not a search that missed. */}
+            {products.length === 0 ? (
+              <>
+                <p className="text-sm font-medium">Belum ada produk untuk dipantau</p>
+                <p className="text-sm text-muted-foreground">Stok muncul di sini setelah Anda menambahkan produk di menu Produk.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium">Tidak ada produk ditemukan</p>
+                <p className="text-sm text-muted-foreground">Coba ubah kata kunci atau filter Anda.</p>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (

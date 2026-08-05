@@ -17,6 +17,16 @@ const TONE: Record<Activity["kind"], string> = {
 // (`analytics_events` exists in the schema but is empty and has no writer), so any
 // number shown would be invented. The items below are real store events.
 export function LiveActivity({ items }: { items: Activity[] }) {
+  // With no events this rendered an EMPTY `<ul>` — a card with a title and literally nothing under
+  // it, indistinguishable from a broken query. Same one-line form as the dashboard's other empty
+  // cards.
+  if (items.length === 0) {
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        Belum ada aktivitas. Pesanan, ulasan, dan perubahan stok akan tercatat di sini.
+      </p>
+    );
+  }
   return (
     <div>
       <ul className="space-y-3.5">
