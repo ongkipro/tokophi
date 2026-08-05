@@ -22,6 +22,12 @@ working copy carries **26 dirty worktrees, ~60 local branches and a `main` that 
 behind** — five of those worktrees hold a migration journal stamped BELOW main's, which is the
 "applied successfully" silent-skip. Nothing there is safe to mass-commit.
 
+🔴 **NEW 2026-08-05 — the backups retain HOURS, not days.** All seven dumps on production are from
+one day (`10:44`→`16:28`); every deploy restarts the backup container, which dumps immediately and
+then `sleep 86400`, so `keep-7` evicts every older recovery point. **A data-corrupting change not
+caught within ~7 deploys has no clean dump to restore from**, and the dumps sit on the box they
+protect with no offsite copy. Detail + runbook → [`../SLA-DRP.md`](../SLA-DRP.md) §3.
+
 **Security posture in one place → [`../SECURITY.md`](../SECURITY.md)** (new 2026-08-05). It is the
 standing shape — boundaries, identity, isolation, transport, secrets, limits, and §10 "gaps we are
 living with". Findings still belong in `AUDIT-SUMMARY.md`; do not duplicate them there.
