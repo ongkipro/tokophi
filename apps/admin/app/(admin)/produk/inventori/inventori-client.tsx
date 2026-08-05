@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { updateStock } from "@/lib/actions/inventory";
@@ -23,6 +24,7 @@ import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
 import { SearchInput } from "@/components/admin/search-input";
+import { ADMIN_LIST_PAGE_SIZE, ListPagination } from "@/components/admin/list-pagination";
 
 const LOW_STOCK = 20;
 
@@ -71,6 +73,7 @@ function StatCard({ icon, label, value, accent }: {
 export function InventoriClient({ products }: { products: Product[] }) {
   const [search, setSearch] = React.useState("");
   const [tab, setTab] = React.useState<TabKey>("all");
+  const [page, setPage] = React.useState(1);
   // Editable quantities kept in local state, seeded from the mock stock. Clamped at 0.
   const [qty, setQty] = React.useState<Record<string, number>>(() =>
     Object.fromEntries(products.map((p) => [p.id, p.stock])),
@@ -140,6 +143,14 @@ export function InventoriClient({ products }: { products: Product[] }) {
     { key: "out", label: "Habis", count: counts.out },
   ];
 
+  const pageCount = Math.max(1, Math.ceil(filtered.length / ADMIN_LIST_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageProducts = filtered.slice((currentPage - 1) * ADMIN_LIST_PAGE_SIZE, currentPage * ADMIN_LIST_PAGE_SIZE);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [search, tab]);
+
   return (
     <div>
       <PageHeader title="Inventori" desc="Pantau dan sesuaikan stok produk Anda.">
@@ -206,9 +217,6 @@ export function InventoriClient({ products }: { products: Product[] }) {
           placeholder="Cari nama produk atau SKU…"
           className="w-full sm:max-w-xs"
         />
-        <p className="text-xs text-muted-foreground">
-          Menampilkan {num(filtered.length)} dari {num(products.length)} produk
-        </p>
       </div>
 
       {/* Table */}
@@ -235,7 +243,7 @@ export function InventoriClient({ products }: { products: Product[] }) {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead>Produk</TableHead>
+                <TableHead className="w-[40%] lg:w-[44%]">Produk</TableHead>
                 <TableHead className="hidden sm:table-cell">SKU</TableHead>
                 <TableHead className="text-center">Tersedia</TableHead>
                 <TableHead className="hidden text-right md:table-cell">Masuk</TableHead>
@@ -243,25 +251,31 @@ export function InventoriClient({ products }: { products: Product[] }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((p) => {
+              {pageProducts.map((p) => {
                 const i = products.indexOf(p);
                 const q = qty[p.id] ?? 0;
                 const incoming = incomingFor(p, i);
                 return (
                   <TableRow key={p.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9" />
-                        <div className="min-w-0">
-                          <p className="truncate font-medium">{p.name}</p>
-                          <p className="text-xs text-muted-foreground">{p.category}</p>
+                    <TableCell className="max-w-[32rem] py-3.5">
+                      <div className="flex items-start gap-3.5">
+                        <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="mt-0.5 size-10 shrink-0 rounded-md" />
+                        <div className="min-w-0 flex-1">
+                          <Link
+                            href={`/produk/${p.number ?? p.id}`}
+                            className="line-clamp-2 rounded-sm whitespace-normal break-words text-sm font-medium leading-5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            title={p.name}
+                          >
+                            {p.name}
+                          </Link>
+                          <p className="mt-1 line-clamp-2 whitespace-normal break-words text-xs leading-4 text-muted-foreground">{p.category}</p>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="hidden sm:table-cell">
+                    <TableCell className="hidden py-3.5 sm:table-cell">
                       <span className="font-mono text-xs text-muted-foreground">{p.id}</span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-3.5">
                       <div className="mx-auto flex w-fit items-center gap-1">
                         <Label htmlFor={`qty-${p.id}`} className="sr-only">Stok {p.name}</Label>
                         <Button
@@ -291,15 +305,16 @@ export function InventoriClient({ products }: { products: Product[] }) {
                         </Button>
                       </div>
                     </TableCell>
-                    <TableCell className="hidden text-right tabular-nums text-muted-foreground md:table-cell">
+                    <TableCell className="hidden py-3.5 text-right tabular-nums text-muted-foreground md:table-cell">
                       {incoming > 0 ? `+${num(incoming)}` : "—"}
                     </TableCell>
-                    <TableCell><StockStatusBadge qty={q} /></TableCell>
+                    <TableCell className="py-3.5"><StockStatusBadge qty={q} /></TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
           </Table>
+          <ListPagination page={currentPage} total={filtered.length} unit="produk" onPageChange={setPage} />
         </Card>
       )}
     </div>

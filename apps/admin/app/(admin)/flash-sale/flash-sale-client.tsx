@@ -16,9 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@tokophi/ui/badge";
 import { Button } from "@tokophi/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@tokophi/ui/dropdown-menu";
-
-const fmt = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-const when = (iso: string) => fmt.format(new Date(iso));
+import { DateTimeCell } from "@/components/admin/date-time-cell";
 
 function StatusBadge({ row }: { row: FlashSaleRow }) {
   if (row.isLive) return <Badge className="gap-1 bg-emerald-500/10 text-emerald-600"><span className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-500" />Berlangsung</Badge>;
@@ -68,7 +66,7 @@ export function FlashSaleClient({ sales }: { sales: FlashSaleRow[] }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4">Nama</TableHead>
+                <TableHead className="w-[36%] pl-4">Nama</TableHead>
                 <TableHead>Produk</TableHead>
                 <TableHead>Mulai</TableHead>
                 <TableHead>Berakhir</TableHead>
@@ -79,10 +77,19 @@ export function FlashSaleClient({ sales }: { sales: FlashSaleRow[] }) {
             <TableBody>
               {sales.map((s) => (
                 <TableRow key={s.id} className="cursor-pointer" onClick={() => router.push(`/flash-sale/${s.id}`)}>
-                  <TableCell className="pl-4 font-medium">{s.name}</TableCell>
+                  <TableCell className="max-w-sm pl-4">
+                    <Link
+                      href={`/flash-sale/${s.id}`}
+                      className="line-clamp-2 whitespace-normal break-words font-medium hover:underline"
+                      title={s.name}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {s.name}
+                    </Link>
+                  </TableCell>
                   <TableCell className="tabular-nums text-muted-foreground">{s.itemCount} produk</TableCell>
-                  <TableCell className="text-sm tabular-nums">{when(s.startsAt)}</TableCell>
-                  <TableCell className="text-sm tabular-nums">{when(s.endsAt)}</TableCell>
+                  <TableCell className="py-3.5 text-sm text-muted-foreground"><DateTimeCell value={s.startsAt} /></TableCell>
+                  <TableCell className="py-3.5 text-sm text-muted-foreground"><DateTimeCell value={s.endsAt} /></TableCell>
                   <TableCell><StatusBadge row={s} /></TableCell>
                   <TableCell className="pr-4 text-right" onClick={(e) => e.stopPropagation()}>
                     <RowActions id={s.id} />

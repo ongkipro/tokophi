@@ -23,6 +23,7 @@ import {
   DialogTrigger,
 } from "@tokophi/ui/dialog";
 import { IDR } from "@tokophi/lib/format";
+import { DateTimeCell } from "@/components/admin/date-time-cell";
 import { OrderStatusBadge } from "@/components/admin/order-status";
 import { useCan } from "@/components/admin/permissions";
 import { InvoiceDialog } from "@/components/admin/saldo/invoice-dialog";
@@ -43,17 +44,6 @@ import type {
   SaldoTab,
 } from "@/lib/data/ledger";
 import type { OrderStatus } from "@/lib/mock/store";
-
-// Pinned to WIB: this string is rendered on the server AND on the client, so leaving the timezone
-// to the host would let the two disagree by a day and hydrate a mismatch. It also has to agree with
-// the date filter, which cuts the day at Asia/Jakarta midnight (lib/data/ledger.ts).
-const dt = (d: Date) =>
-  new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Jakarta",
-  }).format(d);
 
 const KIND_LABEL: Record<string, string> = {
   sale: "Penjualan",
@@ -80,6 +70,15 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="p-10 text-center text-sm text-muted-foreground">{children}</p>;
 }
 
+function MoneyRow({ label, value, muted, strong }: { label: string; value: string; muted?: boolean; strong?: boolean }) {
+  return (
+    <div className={`flex justify-between ${strong ? "text-sm font-semibold" : "text-sm"} ${muted ? "text-muted-foreground" : ""}`}>
+      <span>{label}</span>
+      <span className="tabular-nums">{value}</span>
+    </div>
+  );
+}
+
 /** The order behind a Mutasi row, unfolded INLINE under it: what the buyer bought and the money
  *  breakdown (produk → ongkir → diskon → total). Fetched on expand, so it can be loading or absent. */
 function MovementDetail({ number, detail, loading }: { number: string | null; detail: InvoiceDetail | null | undefined; loading: boolean }) {
@@ -93,12 +92,6 @@ function MovementDetail({ number, detail, loading }: { number: string | null; de
   if (!detail) {
     return <p className="py-6 text-center text-sm text-muted-foreground">Rincian pesanan tidak ditemukan.</p>;
   }
-  const Row = ({ label, value, muted, strong }: { label: string; value: string; muted?: boolean; strong?: boolean }) => (
-    <div className={`flex justify-between ${strong ? "text-sm font-semibold" : "text-sm"} ${muted ? "text-muted-foreground" : ""}`}>
-      <span>{label}</span>
-      <span className="tabular-nums">{value}</span>
-    </div>
-  );
   return (
     <div className="grid gap-4 px-5 py-4 sm:grid-cols-2">
       {/* Isi pesanan */}
@@ -126,11 +119,11 @@ function MovementDetail({ number, detail, loading }: { number: string | null; de
       </div>
       {/* Rincian dana */}
       <div className="space-y-1.5 sm:border-l sm:pl-4">
-        <Row label="Subtotal produk" value={IDR(detail.subtotal)} muted />
-        {detail.discount > 0 && <Row label="Diskon" value={`− ${IDR(detail.discount)}`} muted />}
-        <Row label="Ongkos kirim" value={detail.shipping === 0 ? "Gratis" : IDR(detail.shipping)} muted />
+        <MoneyRow label="Subtotal produk" value={IDR(detail.subtotal)} muted />
+        {detail.discount > 0 && <MoneyRow label="Diskon" value={`− ${IDR(detail.discount)}`} muted />}
+        <MoneyRow label="Ongkos kirim" value={detail.shipping === 0 ? "Gratis" : IDR(detail.shipping)} muted />
         <Separator className="my-1.5" />
-        <Row label="Total pesanan" value={IDR(detail.total)} strong />
+        <MoneyRow label="Total pesanan" value={IDR(detail.total)} strong />
         <div className="pt-1.5">
           <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/pesanan/${number ?? detail.number}`} />}>
             Buka pesanan
@@ -428,7 +421,7 @@ export function SaldoClient({
                                 data-state={isOpen ? "selected" : undefined}
                                 onClick={canExpand ? () => toggleRow(m.orderId!) : undefined}
                               >
-                                <TableCell className="whitespace-nowrap text-muted-foreground">{dt(m.createdAt)}</TableCell>
+                                <TableCell className="py-3.5 text-muted-foreground"><DateTimeCell value={m.createdAt} /></TableCell>
                                 <TableCell>
                                   <span className="font-medium">{KIND_LABEL[m.kind] ?? m.kind}</span>
                                   {m.orderNumber && (
@@ -508,7 +501,13 @@ export function SaldoClient({
                         {pending.rows.map((p) => (
                           <TableRow key={p.orderId}>
                             <TableCell>
-                              <span className="font-mono font-medium">{p.number}</span>
+                              <button
+                                type="button"
+                                className="font-mono font-medium hover:underline"
+                                onClick={() => openInvoice(p.orderId, p.number)}
+                              >
+                                {p.number}
+                              </button>
                               {p.isCod && (
                                 <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px]">
                                   COD
@@ -519,7 +518,7 @@ export function SaldoClient({
                               <div className="font-medium">{p.customer ?? "—"}</div>
                               <div className="text-xs text-muted-foreground">{p.city ?? "—"}</div>
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-muted-foreground">{dt(p.placedAt)}</TableCell>
+                            <TableCell className="py-3.5 text-muted-foreground"><DateTimeCell value={p.placedAt} /></TableCell>
                             <TableCell>
                               <OrderStatusBadge status={p.status as OrderStatus} />
                             </TableCell>
@@ -567,11 +566,11 @@ export function SaldoClient({
                           const s = PAYOUT_LABEL[p.status] ?? { label: p.status, cls: "" };
                           return (
                             <TableRow key={p.id}>
-                              <TableCell className="whitespace-nowrap text-muted-foreground">
-                                {dt(p.requestedAt)}
+                              <TableCell className="py-3.5 text-muted-foreground">
+                                <DateTimeCell value={p.requestedAt} />
                               </TableCell>
-                              <TableCell className="whitespace-nowrap text-muted-foreground">
-                                {p.paidAt ? dt(p.paidAt) : "—"}
+                              <TableCell className="py-3.5 text-muted-foreground">
+                                {p.paidAt ? <DateTimeCell value={p.paidAt} /> : "—"}
                               </TableCell>
                               <TableCell>
                                 <div className="font-medium">
