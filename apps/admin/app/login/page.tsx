@@ -16,7 +16,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl tracking-tight">TokoΦ</CardTitle>
+          {/* `level={1}`: `CardTitle` defaults to `h2` because a card normally sits under a page
+              `PageHeader`. This page has no PageHeader — measured in a browser, its only heading
+              was this one — so the default would leave the screen with no `h1`. The class still
+              sets the size; the prop changes the tag only. */}
+          <CardTitle level={1} className="text-2xl tracking-tight">TokoΦ</CardTitle>
           <CardDescription>Masuk ke Dashboard Seller toko Anda</CardDescription>
         </CardHeader>
         <CardContent>

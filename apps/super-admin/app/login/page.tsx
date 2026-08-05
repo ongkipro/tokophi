@@ -12,7 +12,12 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl tracking-tight">TokoΦ</CardTitle>
+          {/* `level={1}` — the third and last screen of this shape. `CardTitle` defaults to `h2`
+              because a card normally sits under a page `PageHeader`; the two login screens and
+              `/daftar` are the only places where the card IS the page. Every other super-admin route
+              draws its own `<h1>` (9 routes checked, 8 of them do), so those keep the default.
+              Missing this one would have left the CONTROL PLANE's front door with no `h1` at all. */}
+          <CardTitle level={1} className="text-2xl tracking-tight">TokoΦ</CardTitle>
           <CardDescription>Masuk ke panel Super Admin (platform)</CardDescription>
         </CardHeader>
         <CardContent>

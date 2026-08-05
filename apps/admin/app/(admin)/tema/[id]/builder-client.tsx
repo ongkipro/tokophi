@@ -8,6 +8,7 @@ import "@measured/puck/puck.css";
 import "@/lib/theme/puck-theme.css";
 import { toast } from "sonner";
 import { puckFieldOverrides } from "@/lib/theme/puck-field-overrides";
+import { PuckA11yLabels } from "@/lib/theme/puck-a11y";
 import { puckConfigFor, type TemplateType } from "@/lib/theme/puck-config";
 import { saveTemplate } from "@/lib/actions/theme";
 import { useCan } from "@/components/admin/permissions";
@@ -88,6 +89,10 @@ export function BuilderClient({
           storefront: the visible title already exists in Puck's own chrome, which we cannot re-tag,
           so a second visible one would be duplicate furniture. Same floor, same convention. */}
       <h1 className="sr-only">Tema Toko — {title}</h1>
+      {/* Names Puck's own zoom select and array "add item" button — the two controls on this screen
+          it renders without an accessible name, and the only two left after the field overrides.
+          Renders nothing; see lib/theme/puck-a11y.tsx for why it is a DOM patch. */}
+      <PuckA11yLabels />
       <Puck
         config={config}
         data={initialData}
