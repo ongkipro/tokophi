@@ -116,6 +116,19 @@ export const stores = pgTable("stores", {
   // state including `comped`. Paying does not clear it; only `liftSuspension` does.
   suspendedAt: ts(),
   suspendedReason: text(),
+  // 🟠 FIRST REVIEW (0090) — the second half of a suspension's meaning.
+  //
+  // `suspendedAt` says a store is locked; it cannot say WHY, and the two reasons need opposite
+  // words. Self-serve signup creates a store LOCKED (there is no email verification on the password
+  // path and no mailer in this repo to build one with — `specs/docs/tasks/2026-08-05-signup-open-audit.md`),
+  // so the very first thing a new merchant would otherwise read is "Toko ditangguhkan oleh TokoΦ",
+  // as though they had done something wrong.
+  //
+  // `approvedAt IS NULL AND suspendedAt IS NOT NULL` ⇒ waiting for a first review. Set once, by
+  // `approveStore`; NEVER cleared — a store suspended later for cause keeps its approval date, so
+  // the queue cannot re-fill with stores that have already been vetted. Stores that existed before
+  // this column were backfilled to `created_at`: they were onboarded by an operator by hand.
+  approvedAt: ts(),
   // Branding read-only by the storefront/checkout (ADR 0009 — checkout is locked/uniform,
   // only pulls these tokens; NOT part of the drag-drop Store Builder).
   logoUrl: text(),

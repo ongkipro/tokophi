@@ -66,13 +66,26 @@ const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage"]);
 const SOURCE = /\.(?:ts|tsx|mts|cts|cjs|astro|mjs|js|jsx)$/;
 const SELF = ["packages/lib/src/store-slug.ts", "packages/lib/src/store-slug.test.ts"];
+// ⚠️ AND TEST FILES, NAMED AS AN EXCEPTION RATHER THAN LEFT IMPLICIT (2026-08-05).
+//
+// This sweep shipped RED. `packages/db/src/provision-conflicts.test.ts` does
+// `insert(schema.stores).values({ … slug })` TWICE on purpose — provoking `stores_slug_unique` is its
+// entire job — so the sink found a fourth "writer", the list assertion failed, and the guard has been
+// failing on `main` ever since it landed. This repo has already paid for that once: `verify-rls` sat
+// red for weeks, everyone learned to scroll past it, and two cross-tenant leaks shipped past a
+// verifier that was already failing. An alarm that is always on is an alarm that is off.
+//
+// The claim is about code that SHIPS a store slug. A `*.test.ts` ships nothing: it runs against the
+// test database and rolls back. Excluding it costs the sweep nothing real — a slug rule hiding in a
+// test file has no production caller — while leaving it in costs the sweep its entire value.
+const TEST_FILE = /\.test\.[cm]?[jt]sx?$/;
 
 function repoSources(): string[] {
   return execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
     .split("\0")
     .filter(Boolean)
     .filter((rel) => !rel.split("/").some((seg) => seg.startsWith(".") || SKIP_DIRS.has(seg)))
-    .filter((rel) => SOURCE.test(rel) && !SELF.includes(rel));
+    .filter((rel) => SOURCE.test(rel) && !TEST_FILE.test(rel) && !SELF.includes(rel));
 }
 
 // ⚠️ THE CLAIM IS ABOUT THE **STORE** SLUG, AND THE SINK IS WHAT IDENTIFIES ONE.

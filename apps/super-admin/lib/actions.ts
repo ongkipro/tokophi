@@ -189,6 +189,14 @@ export async function liftSuspension(storeId: string): Promise<SuspensionResult>
   const admin = gate.admin;
   const res = await writeSuspension(storeId, null, null);
   if (!res) return { ok: false, error: "Toko tidak ditemukan — tidak ada yang diubah." };
+  // A human unlocking a store IS a review, so an operator who reaches for "Aktifkan" on a store that
+  // was still in the signup queue must not leave it unstamped: `approved_at` would stay NULL, and the
+  // next suspension — for cause — would then tell that merchant they are merely "menunggu
+  // persetujuan". `coalesce` so a genuine approval date is never overwritten by a later lift.
+  await db
+    .update(schema.stores)
+    .set({ approvedAt: sql`coalesce(${schema.stores.approvedAt}, now())` })
+    .where(eq(schema.stores.id, storeId));
 
   const st = res.state.status;
   const stillLocked = res.state.readOnly;
@@ -206,6 +214,56 @@ export async function liftSuspension(storeId: string): Promise<SuspensionResult>
       ? `Penangguhan dicabut, tapi “${res.row.name}” masih baca-saja: langganan ${EFFECTIVE_LABEL[st]}. Beri "Gratiskan 1 bulan" atau tunggu pembayaran.`
       : `“${res.row.name}” aktif kembali — panel Seller bisa menulis lagi.`,
   };
+}
+
+/**
+ * Approve a store that came in through self-serve signup — the review queue's only exit (0090).
+ *
+ * Separate from `liftSuspension` on purpose, though both clear `suspended_at`. Three reasons:
+ *  1. **It stamps `approved_at`**, which is what keeps an approved store OUT of the queue forever
+ *     after. A later suspension for cause keeps the stamp, so the queue never re-fills with shops a
+ *     human has already looked at.
+ *  2. **The audit line is a different sentence.** "Penangguhan DICABUT" describes undoing a penalty;
+ *     nobody penalised this store. `platform_activity` is what the operator reads back later to
+ *     answer "who let this shop in?", and the two acts must not be indistinguishable there.
+ *  3. **It refuses a store that is not in the queue.** Pointing this at a store suspended for abuse
+ *     would silently launder that suspension into an approval.
+ *
+ * `admin` rank, not `owner`: reviewing a signup is day-to-day operator work, the same tier as
+ * suspending and lifting. It is not an account handover.
+ */
+export async function approveStore(storeId: string): Promise<SuspensionResult> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
+  const admin = gate.admin;
+
+  const [before] = await db
+    .select({ approvedAt: schema.stores.approvedAt, suspendedAt: schema.stores.suspendedAt, name: schema.stores.name })
+    .from(schema.stores)
+    .where(eq(schema.stores.id, storeId))
+    .limit(1);
+  if (!before) return { ok: false, error: "Toko tidak ditemukan — tidak ada yang diubah." };
+  if (before.approvedAt) {
+    return { ok: false, error: `“${before.name}” sudah pernah disetujui. Untuk membuka penangguhan, pakai “Aktifkan”.` };
+  }
+
+  const res = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(schema.stores)
+      .set({ approvedAt: new Date(), suspendedAt: null, suspendedReason: null })
+      .where(eq(schema.stores.id, storeId))
+      .returning({ ...BILLING_COLS, approvedAt: schema.stores.approvedAt, name: schema.stores.name });
+    if (!row) return null;
+    // Report what we WROTE, not what we asked for — same rule as `writeSuspension` above.
+    const state = computeBilling(row);
+    await tx.update(schema.stores).set({ status: state.status }).where(eq(schema.stores.id, storeId));
+    return { row, state };
+  });
+  if (!res) return { ok: false, error: "Toko tidak ditemukan — tidak ada yang diubah." };
+
+  await logStore(storeId, `Pendaftaran DISETUJUI oleh ${admin.email}. Status efektif "${EFFECTIVE_LABEL[res.state.status]}".`);
+  revalidateStore(storeId);
+  return { ok: true, effective: res.state.status, message: `“${res.row.name}” disetujui — panel Seller-nya bisa menulis sekarang.` };
 }
 
 // ---- provisioning: onboard a new merchant store (account + owner + store + membership + stats) ----
@@ -274,7 +332,10 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
       const trialEndsAt = new Date(Date.now() + BILLING.TRIAL_DAYS * 86_400_000);
       // `catalogIdScheme: "number"` — ADR 0013: a store created now has no catalog anywhere yet, so it
       // starts on the stable id and never pays the one-way re-key. Must match lib/provision.ts.
-      const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, status: "trial", trialEndsAt, firstInvoicePaid: false, catalogIdScheme: "number" }).returning();
+      // `approvedAt` set here on purpose: an operator typing a merchant in by hand HAS vetted them,
+      // so this path stays instant and never enters the signup review queue (0090). The queue is for
+      // `apps/admin/lib/provision.ts`, the self-serve door, where nobody has proved anything.
+      const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, status: "trial", trialEndsAt, firstInvoicePaid: false, catalogIdScheme: "number", approvedAt: new Date() }).returning();
       await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: new Date() });
       await tx.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
       await tx.insert(schema.storeSettings).values({ storeId: st.id });

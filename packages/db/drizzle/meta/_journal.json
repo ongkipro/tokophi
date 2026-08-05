@@ -631,6 +631,13 @@
       "when": 1785895600000,
       "tag": "0089_platform_password_revokes_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1785895700000,
+      "tag": "0090_signup_needs_approval",
+      "breakpoints": true
     }
   ]
 }

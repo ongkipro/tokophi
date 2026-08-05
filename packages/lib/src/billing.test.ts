@@ -156,3 +156,54 @@ describe("operator suspension survives computeBilling", () => {
     expect(s.dueDate).not.toBeNull();
   });
 });
+
+// 🟠 THE SIGNUP QUEUE AND A PUNISHMENT SHARE ONE COLUMN (0090), and they must not share one word.
+//
+// Self-serve signup creates a store LOCKED, because nothing on the password path proves the person
+// controls the email they typed. So `operatorSuspended` is true for a merchant who has done nothing
+// at all — and the merchant banner, the sidebar badge and the operator's store list all read that
+// flag. Without `pendingApproval` beside it, the first thing a new merchant sees after handing over
+// their details is "Toko ditangguhkan oleh TokoΦ".
+//
+// The direction of the default is the load-bearing part: `approvedAt` is OPTIONAL on the row, and an
+// ABSENT value must read as APPROVED. A read site that forgets to select the column then merely
+// mislabels a queued store as suspended (rude); the opposite default would tell a merchant we
+// suspended for cause that they are simply waiting on us (a lie, and it hides a real penalty).
+describe("pending approval is distinguishable from a suspension for cause", () => {
+  const base = (o: Partial<StoreBillingRow>): StoreBillingRow => ({ trialEndsAt: null, currentPeriodEnd: null, firstInvoicePaid: false, suspendedAt: null, ...o });
+  const LOCKED = { suspendedAt: past(1), suspendedReason: "Menunggu persetujuan tim TokoΦ" };
+
+  it("locked + never approved = the signup queue, with its own label", () => {
+    const s = computeBilling(base({ trialEndsAt: future(3), ...LOCKED, approvedAt: null }), NOW);
+    expect(s.pendingApproval).toBe(true);
+    expect(s.label).toBe("Menunggu persetujuan");
+    // It is still a real lock: writes are refused exactly as they are for a punished store.
+    expect(s.status).toBe("suspended");
+    expect(s.readOnly).toBe(true);
+    // …and the subscription runs underneath, so the 3-day trial is not consumed by a billing state.
+    expect(s.billingStatus).toBe("trial");
+  });
+
+  it("locked AFTER approval is a punishment, and keeps the punishing words", () => {
+    const s = computeBilling(base({ currentPeriodEnd: future(20), firstInvoicePaid: true, suspendedAt: past(1), suspendedReason: "dugaan barang palsu", approvedAt: past(30) }), NOW);
+    expect(s.pendingApproval).toBe(false);
+    expect(s.label).toBe("Ditangguhkan oleh platform");
+    expect(s.suspendedReason).toBe("dugaan barang palsu");
+  });
+
+  it("an UNSELECTED approvedAt reads as approved, never as queued", () => {
+    // The row every existing read site builds today — no `approvedAt` key at all.
+    const s = computeBilling(base({ currentPeriodEnd: future(20), firstInvoicePaid: true, suspendedAt: past(1), suspendedReason: "dugaan barang palsu" }), NOW);
+    expect(s.pendingApproval).toBe(false);
+    expect(s.label).toBe("Ditangguhkan oleh platform");
+  });
+
+  it("a store that is NOT locked is never in the queue, approved or not", () => {
+    // `approved_at` is backfilled to `created_at` for every store that already existed, but a NULL
+    // on a live store must not put it into a queue it never entered.
+    const s = computeBilling(base({ trialEndsAt: future(2), approvedAt: null }), NOW);
+    expect(s.pendingApproval).toBe(false);
+    expect(s.status).toBe("trial");
+    expect(s.readOnly).toBe(false);
+  });
+});

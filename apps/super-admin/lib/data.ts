@@ -31,7 +31,7 @@ const BILL_TO_UI: Record<"trial" | "active" | "past_due" | "suspended", StoreSta
 type StoreRow = {
   id: string; name: string; city: string | null;
   trialEndsAt: string | null; currentPeriodEnd: string | null; firstInvoicePaid: boolean; comped: boolean;
-  suspendedAt: string | null; suspendedReason: string | null;
+  suspendedAt: string | null; suspendedReason: string | null; approvedAt: string | null;
   createdAt: string; owner: string | null; email: string | null;
   gmv: string | number; orders: number; orders30d: number; products: number; lastOrderAt: string | null;
 };
@@ -44,6 +44,8 @@ function rowToStore(r: StoreRow): Store {
     comped: r.comped,
     suspendedAt: r.suspendedAt ? new Date(r.suspendedAt) : null,
     suspendedReason: r.suspendedReason,
+    // 0090 — the signup queue. Without it every queued store reads as plainly "ditangguhkan".
+    approvedAt: r.approvedAt ? new Date(r.approvedAt) : null,
   };
   const state = computeBilling(bill);
   return {
@@ -56,6 +58,7 @@ function rowToStore(r: StoreRow): Store {
     segment: storeSegment(bill),
     comped: r.comped,
     operatorSuspended: state.operatorSuspended,
+    pendingApproval: state.pendingApproval,
     gmv: Number(r.gmv ?? 0),
     orders: Number(r.orders ?? 0),
     orders30d: Number(r.orders30d ?? 0),
@@ -74,6 +77,7 @@ const STORES_SQL = sql`
     s.current_period_end   as "currentPeriodEnd",
     s.first_invoice_paid   as "firstInvoicePaid",
     s.suspended_at         as "suspendedAt",
+    s.approved_at          as "approvedAt",
     s.suspended_reason     as "suspendedReason",
     s.comped, s.created_at as "createdAt",
     u.name  as "owner",
@@ -433,7 +437,7 @@ export async function getServerMetrics(): Promise<ServerMetrics> {
 // Real subscription state for a store (single-plan lifecycle).
 export async function getStoreBilling(id: string): Promise<BillingState | null> {
   const [s] = await db
-    .select({ trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid, comped: schema.stores.comped, suspendedAt: schema.stores.suspendedAt, suspendedReason: schema.stores.suspendedReason })
+    .select({ trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid, comped: schema.stores.comped, suspendedAt: schema.stores.suspendedAt, suspendedReason: schema.stores.suspendedReason, approvedAt: schema.stores.approvedAt })
     .from(schema.stores)
     .where(eq(schema.stores.id, id))
     .limit(1);

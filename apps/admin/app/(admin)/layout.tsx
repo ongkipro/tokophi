@@ -47,12 +47,25 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // will not unlock anything — the payment lands, `currentPeriodEnd` moves, and the panel stays
   // read-only, correctly. They get the reason and a route to support instead.
   const operatorSuspended = !!bill?.operatorSuspended;
+  // ⚠️ AND A STORE NOBODY HAS REVIEWED YET IS NOT A STORE WE PUNISHED (0090). Self-serve signup
+  // creates the shop locked, so this banner is the FIRST thing a new merchant reads — and with one
+  // set of words for both cases it read "Toko ditangguhkan oleh TokoΦ" to someone who had just
+  // handed us their details thirty seconds earlier. Amber, not red; an apology with a timeframe,
+  // not an accusation; and no "hubungi kami", because there is nothing for them to do yet.
+  const pendingApproval = !!bill?.pendingApproval;
   const billingBanner = bill && (operatorSuspended || bill.status === "past_due" || bill.status === "suspended") && (
     <Link
       href={operatorSuspended ? "/bantuan" : "/akun/langganan"}
-      className={`block px-4 py-2 text-center text-sm font-medium ${bill.status === "suspended" ? "bg-destructive text-white" : "bg-orange-500 text-white"}`}
+      className={`block px-4 py-2 text-center text-sm font-medium ${
+        pendingApproval ? "bg-amber-500 text-white" : bill.status === "suspended" ? "bg-destructive text-white" : "bg-orange-500 text-white"
+      }`}
     >
-      {operatorSuspended
+      {pendingApproval
+        ? // The reason string already carries the wait and the timeframe, so the banner adds only what it
+          // does NOT say: what still works. Repeating both read as two apologies stacked (measured on
+          // screen), which is how a 30-second-old shop ends up with a two-line orange wall.
+          `${bill.suspendedReason ?? "Toko sedang ditinjau."} Kamu bisa melihat-lihat dulu — penyimpanan aktif setelah disetujui.`
+        : operatorSuspended
         ? `Toko ditangguhkan oleh TokoΦ — mode baca-saja.${bill.suspendedReason ? ` Alasan: ${bill.suspendedReason}.` : ""} Hubungi kami untuk menindaklanjuti →`
         : bill.status === "suspended"
           ? `Langganan ditangguhkan — mode baca-saja. Bayar ${IDR(bill.nextAmount)} untuk mengaktifkan kembali →`

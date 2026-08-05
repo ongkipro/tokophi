@@ -122,6 +122,14 @@ export class ProvisionConflictError extends Error {
   }
 }
 
+/**
+ * Shown to the merchant, verbatim, on their own dashboard the moment they finish signing up — so it
+ * is written to be read by someone who has done nothing wrong, and it says how long. It is also the
+ * `suspended_reason` an operator sees in the queue.
+ */
+export const SIGNUP_PENDING_REASON =
+  "Menunggu persetujuan tim TokoΦ — pendaftaran baru ditinjau dulu, biasanya dalam 1×24 jam.";
+
 export const EMAIL_TAKEN_MSG = "Email sudah terdaftar. Silakan masuk.";
 const SLUG_TAKEN_MSG = "Nama toko itu baru saja dipakai. Coba nama lain sedikit.";
 
@@ -208,7 +216,29 @@ async function insertTenant({
         accountId: acc.id,
         name: storeName,
         slug,
-        status: "trial",
+        // 🟠 A SELF-SERVE STORE IS BORN LOCKED, PENDING REVIEW (0090).
+        //
+        // There is no email verification on the password path and no mailer in this repo to build
+        // one with, so nothing here proves the person controls the address they typed
+        // (`specs/docs/tasks/2026-08-05-signup-open-audit.md`). Handing out a live shop on that
+        // basis is what makes squatting permanent — registering someone else's address blocks the
+        // real owner, who is told only "Email sudah terdaftar" and has no self-service way back.
+        // A human reviewing the queue is the cheapest thing that closes it, and the machinery
+        // already exists: `suspendedAt` (0086) locks writes while leaving the storefront up.
+        //
+        // ⚠️ `approvedAt` stays NULL — that is what separates "nobody has looked yet" from
+        // "an operator locked this for cause", and the merchant is shown different words for each.
+        // Super-admin's own `createStore` does NOT come through here: an operator typing a
+        // merchant in by hand has already vetted them, so that path stays instant.
+        //
+        // The 3-day trial starts now, not at approval. Approving is meant to take hours, and if it
+        // takes longer the operator already has "Perpanjang trial" — a second clock keyed on
+        // approval would be a new mechanism for a case an existing button covers. It also keeps the
+        // subscription underneath in a clean `trial` state, so the billing cron cannot decide a
+        // queued store is overdue and raise it an invoice.
+        status: "suspended",
+        suspendedAt: new Date(),
+        suspendedReason: SIGNUP_PENDING_REASON,
         trialEndsAt,
         firstInvoicePaid: false,
         // ADR 0013 — a NEW store starts on the stable catalog id and therefore never pays the one-way
@@ -223,7 +253,9 @@ async function insertTenant({
     await tx.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: 0, ordersCount: 0, productsCount: 0 });
     await tx.insert(schema.platformActivity).values({
       kind: "signup",
-      text: `Toko baru "${storeName}" mendaftar (${email})`,
+      // The feed is the control plane's inbox — it has to say that something is WAITING, not merely
+      // that something happened, or the queue is only discoverable by browsing the store list.
+      text: `Toko baru "${storeName}" mendaftar (${email}) — menunggu persetujuan`,
       storeId: st.id,
     });
     return { userId: u.id, storeId: st.id, role: "owner", email, name: ownerName, slug };
