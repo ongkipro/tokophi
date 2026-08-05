@@ -53,7 +53,21 @@ export type Quote =
       originFrom: "pickup" | "store-city";
       originName: string | null;
     }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      error: string;
+      /**
+       * TRUE when `error` is the AGGREGATOR'S OWN text, not ours.
+       *
+       * ADR 0004 hides the provider's brand — and its voice — from merchants and shoppers, so the
+       * two public routes substitute their own copy for these and log this one. The SELLER-facing
+       * caller (`actions/shipping.ts` → "Cek Ongkir") keeps showing it: the merchant is who has to
+       * act on "sudah melewati jam cut-off", and the super-admin surface is where brands are
+       * allowed. A single unflagged string cannot tell the two apart, which is why this exists
+       * rather than a blanket rewrite here.
+       */
+      fromProvider?: true;
+    };
 
 export type QuoteInput = {
   storeId: string;
@@ -173,7 +187,9 @@ export async function quoteShipping(input: QuoteInput): Promise<Quote> {
     // Latency scope only — the platform ∩ store filter below still decides what a shopper may pick.
     ...(input.couriers?.length ? { couriers: input.couriers } : {}),
   });
-  if (!r.ok) return { ok: false, error: r.error ?? "Gagal mengambil tarif." };
+  // `r.error` is the aggregator's `text` field, verbatim — flagged so the public (shopper-facing)
+  // routes can substitute their own copy while the seller's Cek Ongkir keeps the diagnostic.
+  if (!r.ok) return { ok: false, error: r.error ?? "Gagal mengambil tarif.", fromProvider: true };
 
   const cod = await getCodPolicy(input.storeId);
   let rates: QuotedRate[] = r.results

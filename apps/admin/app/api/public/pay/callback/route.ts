@@ -4,7 +4,7 @@ import { and, eq, ne, notInArray, or } from "drizzle-orm";
 import { timingSafeEqual } from "node:crypto";
 import { rateLimit } from "@tokophi/lib/cache";
 import { addMonths } from "@tokophi/lib/billing";
-import { clientIp } from "@/lib/public-guard";
+import { clientIp, readPublicBody } from "@/lib/public-guard";
 import { creditSaleForPayment } from "@/lib/ledger-credit";
 import { releasePurchase } from "@/lib/tracking-events";
 
@@ -50,9 +50,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
+  // Capped read — see `lib/public-guard.ts`. A real callback is four scalar fields; nothing bounded
+  // what an unauthenticated caller could push through `req.json()` before the secret check even ran.
+  // (It runs first now, but the cap costs nothing and this endpoint must not be the exception.)
   let body: { trx_id?: string; reff_id?: string; status?: string; paid_at?: string } = {};
+  const raw = await readPublicBody(req, {});
+  if (raw.res) return raw.res;
   try {
-    body = await req.json();
+    body = JSON.parse(raw.text);
   } catch {
     /* tolerate form-encoded / empty */
   }
