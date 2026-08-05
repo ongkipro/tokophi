@@ -2,6 +2,7 @@ import { ArrowDownRight, ArrowUpRight, Wallet, Undo2 } from "lucide-react";
 import { Card } from "@tokophi/ui/card";
 import { cn } from "@tokophi/ui/lib/utils";
 import { IDR, num } from "@tokophi/lib/format";
+import { Sparkline } from "../sparkline";
 import type { MoneyTile, ReturnSummary } from "@/lib/data/dashboard";
 
 /**
@@ -9,9 +10,9 @@ import type { MoneyTile, ReturnSummary } from "@/lib/data/dashboard";
  * period, plus the return rate. Fixed ranges: they do NOT follow the range switcher (that drives
  * the chart below), because a seller centre always shows all three at once.
  *
- * The delta is rendered with its OWN sign (−6,4% when sales FELL). The shared `KpiCard` prints
- * `pct(Math.abs(delta))`, which always emits a leading "+" and leans on the arrow colour alone —
- * a drop reads as "+6.4%" there. Money is the one place that must not be ambiguous.
+ * The delta is rendered with its OWN sign (−6,4% when sales FELL) — money is the one place that must
+ * not be ambiguous. This tile predates `pct()` carrying its own sign and still formats locally; the
+ * shared `KpiCard` reaches for `pct(delta)`, which now emits the same string.
  */
 export function MoneyStrip({ tiles, returns }: { tiles: MoneyTile[]; returns: ReturnSummary }) {
   return (
@@ -19,21 +20,6 @@ export function MoneyStrip({ tiles, returns }: { tiles: MoneyTile[]; returns: Re
       {tiles.map((t) => <SalesTile key={t.key} tile={t} />)}
       <ReturnRateTile returns={returns} />
     </div>
-  );
-}
-
-function Sparkline({ data, up }: { data: number[]; up: boolean }) {
-  if (data.length < 2) return null;
-  const w = 88, h = 32;
-  const max = Math.max(...data), min = Math.min(...data);
-  const span = max - min || 1;
-  const pts = data.map((v, i) => [(i / (data.length - 1)) * w, h - ((v - min) / span) * (h - 4) - 2]);
-  const d = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
-  const stroke = up ? "var(--chart-3)" : "var(--destructive)";
-  return (
-    <svg width={w} height={h} className="overflow-visible" aria-hidden>
-      <path d={d} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }
 

@@ -7,7 +7,7 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 Three defects on the platform-operator identity surface, each measured against a running server before
 and after. ⚠️ **Contract change other surfaces read:** `addStoreUser` now returns
 `password: string | null` plus `outcome`; `apps/admin/lib/session-revocation.ts` **moved** to
-`@tokophi/lib/session-revocation`; `platform_admins` gained `password_changed_at` (migration **0088**).
+`@tokophi/lib/session-revocation`; `platform_admins` gained `password_changed_at` (migration **0089** — it was 0088 until `ka/flow-audit` landed its own).
 
 - 🔴 **`getPlatformSession()` never read the database.** It decoded the JWT and returned the claims,
   so `role` was whatever was true at login for the token's full seven days. Driven with ONE cookie
@@ -30,12 +30,59 @@ and after. ⚠️ **Contract change other surfaces read:** `addStoreUser` now re
   `password_hash` outside `invitePlatformAdmin`'s INSERT, so the super-admin credential exposed in a
   chat transcript could not be rotated through any UI. Avatar menu → **"Ubah kata sandi"**
   (`changePlatformPassword`): current password re-proved, ≥8 chars, must actually differ, audited to
-  `platform_activity`, and it **revokes every other session** — migration 0088 puts 0087's trigger
+  `platform_activity`, and it **revokes every other session** — migration 0089 puts 0087's trigger
   function on `platform_admins` too. Verified in two browsers: the tab that changed it stays in, the
   one holding the old password's session is bounced to `/login`, the old password no longer logs in.
 - Runnable checks: `apps/super-admin/lib/platform-session.test.ts` (6),
   `apps/super-admin/lib/add-store-user.test.ts` (5, proved red against three mutations first), and a
   second DDL suite in `packages/lib/src/session-revocation.test.ts` for the new trigger.
+
+## Unreleased — the gate built to stop the money suites skipping was, in a worktree, skipping
+
+**Measured in `.claude/worktrees/w8-harness` before the fix: 263 passed / 36 skipped, exit 0** — green
+— with all 22 `ledger-credit` tests among the skipped. With `DATABASE_URL` exported: 299 passed, 0
+skipped. **After: 317 passed, 0 skipped, with no `.env` in the worktree and nothing exported.**
+
+`test/db-setup.ts` (the vitest `globalSetup`) derives `<DATABASE_URL>_test`, creates it, migrates it
+and so lets the ledger suites run by default. It read `<its own root>/.env` and nothing else — but
+`.gitignore` is `.env*`, so **a git worktree can never carry one**, and this repo does nearly all of
+its work in worktrees. It printed its banner and skipped, exactly what it was written to stop.
+
+- **The fallback already existed, correctly, a few files over.** `apps/storefront/scripts/check-env.mjs`
+  read the repo root *and* the main checkout three levels up (`<main>/.claude/worktrees/<name>`), with
+  the worktree reason spelled out in its comment; db-setup had a private copy that did not. A private
+  copy is how the weaker version of a rule survives the fix meant to catch it — see the 24-bit password
+  mint. **The lookup is now one module, `@tokophi/lib/env-file`, and both import it.** It is `.mjs`, not
+  `.ts`, because `apps/storefront/scripts/*` run under plain `node`.
+- The 18 `packages/db` npm scripts still restate the same pair declaratively
+  (`dotenv -e ../../.env -e ../../../../../.env`) — they are shell and cannot import a module. Named in
+  `env-file.mjs` so the next layout change finds them.
+- **Every existing contract is unchanged and was re-measured**: a resolved database name that does not
+  end in `_test` still throws; an unreachable database still SKIPS with the loud banner at exit 0
+  (a laptop without Docker gets a green run); `npm run test:db` still turns that skip into exit 1.
+- `test/env-file.test.ts` is the check, and it was proved red first: delete the main-checkout entry
+  from `envFiles()` and two tests fail; re-inline the lookup in either caller and the "one resolver"
+  guard fails (it reads the files' CODE via `test/source-code.ts`, not their text).
+
+### An SVG path made of NaN, and money formatters that printed "RpNaN"
+
+`kpi-card.tsx` guarded its sparkline with `!data.length` while the byte-identical geometry in
+`dashboard/money-strip.tsx` used `data.length < 2`. A one-element series divides by zero in
+`(i / (data.length - 1))`, so the KPI card emitted `d="MNaN,30.0"` and
+`area="MNaN,30.0 L88,32 L0,32 Z"`. **Reachable, not theoretical: on the 1st of any month `/analitik`'s
+"Bulan Ini" resolves to exactly one day** (`inMonth(thisMonth)`), as does any store with a single row
+in `daily_stats` — all four KPI cards then render a NaN path. Two copies with two guards *is* the bug,
+so there is one `components/admin/sparkline.tsx` now (`area` prop for the KPI tiles' gradient, the only
+difference the copies ever had) and `sparkline.test.ts` covers both the geometry and the de-duplication.
+
+`@tokophi/lib/format` had no non-finite floor: `IDR(NaN)` → `"RpNaN"`, `IDR(Infinity, {compact})` →
+`"RpInfinity M"`, `num(NaN)` → `"NaN"`, `share(NaN)` → `"NaN%"`, and `pct(NaN)` → `"NaN%"` **with the
+sign dropped** — the one thing `pct` exists to guarantee. All four now return `NO_FIGURE` (`"—"`): a
+figure with no source is a dash, never a number. ⚠️ **A real `0` is a measurement and still renders**
+(`Number.isFinite(0)`), and `pct()` (delta) and `share()` (part of a whole) stay separate — that
+distinction is what the *"Ditangguhkan 5 +83,3%"* incident cost. `format.test.ts` pins both.
+
+⚠️ Still unfloored, deliberately out of this change's scope: `timeAgo(NaN)` → `"NaN hari lalu"`.
 
 ## Unreleased — The demo store could not be shipped: 160 of 219 orders had no usable address
 

@@ -2,29 +2,7 @@ import { ArrowDownRight, ArrowUpRight, type LucideIcon } from "lucide-react";
 import { Card } from "@tokophi/ui/card";
 import { cn } from "@tokophi/ui/lib/utils";
 import { pct } from "@tokophi/lib/format";
-
-function Sparkline({ data, up }: { data: number[]; up: boolean }) {
-  if (!data.length) return null;
-  const w = 88, h = 32, max = Math.max(...data), min = Math.min(...data);
-  const span = max - min || 1;
-  const pts = data.map((v, i) => [(i / (data.length - 1)) * w, h - ((v - min) / span) * (h - 4) - 2]);
-  const d = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
-  const area = `${d} L${w},${h} L0,${h} Z`;
-  const stroke = up ? "var(--chart-3)" : "var(--destructive)";
-  const id = `spk-${data.length}-${Math.round(data[0])}`;
-  return (
-    <svg width={w} height={h} className="overflow-visible">
-      <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={stroke} stopOpacity="0.22" />
-          <stop offset="100%" stopColor={stroke} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill={`url(#${id})`} />
-      <path d={d} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+import { Sparkline } from "./sparkline";
 
 /**
  * KPI tile: value + signed delta vs the previous period.
@@ -60,7 +38,7 @@ export function KpiCard({
           <div className="text-2xl font-bold tracking-tight tabular-nums">{value}</div>
           <div className="mt-1 text-xs text-muted-foreground">vs {compareLabel}</div>
         </div>
-        <Sparkline data={spark} up={up} />
+        <Sparkline data={spark} up={up} area />
       </div>
     </Card>
   );
