@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Badge } from "@tokophi/ui/badge";
 import { IDR, num } from "@tokophi/lib/format";
 import { BILLING } from "@tokophi/lib/billing";
-import { getStores, getFinanceStats, getSubscriptionStats, getSystemStatus, getServerMetrics, getGmvByCity, getPlatformFloat, getConversion } from "@/lib/data";
+import { getStores, getFinanceStats, getSubscriptionStats, getSystemStatus, getServerMetrics, getGmvByCity, getPlatformFloat, getConversion, getCourierCostAbsorbed } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +14,9 @@ const uptime = (s: number) => {
 };
 
 export default async function AnalitikPage() {
-  const [stores, fin, sub, sys, srv, geo, float, conv] = await Promise.all([
+  const [stores, fin, sub, sys, srv, geo, float, conv, courier] = await Promise.all([
     getStores(), getFinanceStats(), getSubscriptionStats(), getSystemStatus(), getServerMetrics(),
-    getGmvByCity(), getPlatformFloat(), getConversion(),
+    getGmvByCity(), getPlatformFloat(), getConversion(), getCourierCostAbsorbed(),
   ]);
 
   const maxGeoGmv = Math.max(...geo.map((c) => c.gmv), 1);
@@ -88,6 +88,27 @@ export default async function AnalitikPage() {
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 {IDR(float.available)} siap ditarik · {IDR(float.pending)} belum settle · {IDR(float.payoutObligation)} wajib ditransfer. <b>Kewajiban, bukan pendapatan.</b>
+              </p>
+            </div>
+            {/* What carrying parcels costs US. It sits under the float because that is what it
+                drains: on a COD order the courier remits NET of its shipping cost while the merchant
+                is credited the GROSS, and we cover the gap (ADR 0014). Before this it left no trace
+                anywhere — no ledger kind, no column, no screen. */}
+            <div className="border-t pt-3">
+              <div className="flex items-baseline justify-between text-sm">
+                <span className="text-muted-foreground">Ongkir COD yang kami tanggung</span>
+                <span className="font-semibold tabular-nums text-rose-700 dark:text-rose-400">{IDR(courier.codIdr)}</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {num(courier.codOrders)} pesanan COD selesai · ADR 0014: merchant tetap dikredit penuh
+                termasuk ongkir. <b>Biaya kami, bukan potongan merchant.</b>
+                {courier.prepaidIdr > 0 && (
+                  <> Ongkir prabayar {IDR(courier.prepaidIdr)} ({num(courier.prepaidOrders)} pesanan) — <b>mekanisme sama, belum diputuskan.</b></>
+                )}
+                {courier.unrecordedOrders > 0 && (
+                  <> {num(courier.unrecordedOrders)} pesanan dibooking sebelum biayanya dicatat — <b>tidak diketahui, bukan nol</b>.</>
+                )}
+                {" "}Baru ongkir; biaya layanan COD belum bisa dibaca, jadi angka sebenarnya segini <b>atau lebih</b>.
               </p>
             </div>
             <div className="border-t pt-3 text-xs text-muted-foreground">

@@ -181,6 +181,67 @@ export async function getFinanceStats(): Promise<FinanceStats> {
  * This is emphatically NOT platform revenue. Platform revenue is `invoices` (Rp275rb/mo + PPN).
  * Conflating the two is the single most expensive mistake an operator of a marketplace can make.
  */
+/**
+ * WHAT CARRYING PARCELS COSTS US — the courier's shipping cost on orders we have booked.
+ *
+ * The platform absorbs the shipping cost on COD orders (**ADR 0014**): the courier collects the
+ * gross total from the buyer, remits it to us NET of what it keeps, and the merchant is still
+ * credited the gross. That difference leaves the platform's float, and until this it left no trace
+ * anywhere — no ledger kind, no column, no screen.
+ *
+ * ⚠️ Three honesties this type is shaped around, all of which a naive `sum()` would destroy:
+ *
+ * 1. **COD and prepaid are separate numbers.** Only COD is decided by ADR 0014; prepaid runs the
+ *    same shape but is explicitly NOT decided, and the two must never be added into one figure that
+ *    implies they were.
+ * 2. **`NULL` means NOT RECORDED, never zero.** `orders.ka_shipping_cost_idr` arrived with migration
+ *    0088; every booking before it has NULL. Coalescing those to 0 would report a small, confident,
+ *    wrong number — and it would be smallest exactly where the history is longest. They are counted
+ *    separately as `unrecordedOrders`.
+ * 3. **This is the SHIPPING cost only.** KiriminAja documents no COD settlement fee and
+ *    `platform_cod.fee_pct` is read by nothing, so the true absorbed amount is this OR MORE. The
+ *    screen must not present it as the total cost of COD.
+ */
+export type CourierCostAbsorbed = {
+  /** Shipping cost on delivered COD orders — the money ADR 0014 says we absorb. */
+  codIdr: number;
+  codOrders: number;
+  /** Same figure for prepaid orders. Same mechanics; NOT decided by ADR 0014. */
+  prepaidIdr: number;
+  prepaidOrders: number;
+  /** Booked orders whose cost predates 0088. NOT zero-cost — cost unknown. */
+  unrecordedOrders: number;
+};
+
+/**
+ * Only orders that actually reached the buyer are counted. A booking that was cancelled or returned
+ * did not necessarily cost us a full carry, and claiming it did would overstate the very number this
+ * function exists to keep honest.
+ */
+export async function getCourierCostAbsorbed(conn: Pick<typeof db, "execute"> = db): Promise<CourierCostAbsorbed> {
+  const [r] = (await conn.execute(sql`
+    select
+      coalesce(sum(o.ka_shipping_cost_idr) filter (where p.method = 'cod'), 0)::bigint as "codIdr",
+      count(*) filter (where p.method = 'cod'  and o.ka_shipping_cost_idr is not null)::int as "codOrders",
+      coalesce(sum(o.ka_shipping_cost_idr) filter (where p.method is distinct from 'cod'), 0)::bigint as "prepaidIdr",
+      count(*) filter (where p.method is distinct from 'cod' and o.ka_shipping_cost_idr is not null)::int as "prepaidOrders",
+      count(*) filter (where o.ka_shipping_cost_idr is null)::int as "unrecordedOrders"
+      from orders o
+      left join payments p on p.order_id = o.id
+     where o.ka_order_id is not null
+       and o.status = 'selesai'
+  `)) as unknown as {
+    codIdr: string; codOrders: number; prepaidIdr: string; prepaidOrders: number; unrecordedOrders: number;
+  }[];
+  return {
+    codIdr: Number(r?.codIdr ?? 0),
+    codOrders: Number(r?.codOrders ?? 0),
+    prepaidIdr: Number(r?.prepaidIdr ?? 0),
+    prepaidOrders: Number(r?.prepaidOrders ?? 0),
+    unrecordedOrders: Number(r?.unrecordedOrders ?? 0),
+  };
+}
+
 export type PlatformFloat = {
   available: number; // withdrawable by merchants right now
   pending: number; // not yet settled

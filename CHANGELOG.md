@@ -2,6 +2,43 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — the platform absorbs COD ongkir, and now it can see what that costs
+
+**Owner's decision, recorded as [ADR 0014](specs/decisions/0014-platform-absorbs-cod-shipping.md):
+the platform absorbs the courier's shipping cost on COD orders.** The merchant is credited the gross
+order total including ongkir; we settle the courier.
+
+**No money moved — that is the point.** `creditSaleForPayment` already booked the gross; under this
+ADR that is *correct*, not the defect N42 filed it as. What was missing is that the absorbed cost
+left **no trace anywhere**: `ledger_kind` has no cost concept, nothing read the booked cost, and no
+screen showed it. A cost you have decided to absorb still has to be visible, or it grows unwatched —
+and it scales linearly with COD volume, which is the rail we push hardest.
+
+Super Admin → Analitik now shows **"Ongkir COD yang kami tanggung"**, under the merchant-float box
+because that is exactly what it drains. Three honesties the figure is shaped around, each of which a
+naive `sum()` would destroy:
+
+- **`NULL` means NOT RECORDED, never zero.** `orders.ka_shipping_cost_idr` arrived with 0088, so every
+  older booking is NULL. Coalescing those to 0 reports a small, confident, wrong number — smallest
+  exactly where the history is longest. They are counted and named separately.
+- **COD and prepaid stay separate numbers.** Only COD is decided. A prepaid order runs the same shape
+  (merchant credited gross, platform settles the courier by VA) and is **explicitly undecided**; the
+  screen shows it beside the COD figure labelled as such, so it stops being invisible while that call
+  is made. One combined total would imply a decision nobody took.
+- **Only delivered orders count.** A cancelled or returned booking did not necessarily cost a full
+  carry, and counting it would overstate the very number this exists to keep honest.
+
+⚠️ **The gross COD credit now looks even more like the classic "forgot the cost" bug, and it has
+already been re-found once.** `creditSaleForPayment`'s docblock names the ADR, and
+`apps/super-admin/lib/cod-shipping-cost.test.ts` goes red if anyone starts netting the shipping cost
+out of a merchant's credit. **Change the ADR first, then the tests, then the code.** The guard was
+mutation-tested rather than assumed: merging the two flows yields `51000 ≠ 40000`, counting
+non-delivered parcels yields `227000 ≠ 40000`.
+
+🔴 **This is the shipping cost ONLY — the true cost of COD is that or more.** KiriminAja documents no
+settlement fee (no endpoint, no schedule, no webhook) and `platform_cod.fee_pct` sits in the schema
+**read by nothing**, seeded to `0`. The card says so rather than implying completeness.
+
 ## Unreleased — The seed stopped handing out one password, one keep-list entry that never protected anything, and 24 one-centimetre parcels
 
 Three items in `packages/db`, all of them things a *new* deployment gets. ⚠️ **The seed is not a
