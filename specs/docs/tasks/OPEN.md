@@ -22,6 +22,10 @@ working copy carries **26 dirty worktrees, ~60 local branches and a `main` that 
 behind** — five of those worktrees hold a migration journal stamped BELOW main's, which is the
 "applied successfully" silent-skip. Nothing there is safe to mass-commit.
 
+**Security posture in one place → [`../SECURITY.md`](../SECURITY.md)** (new 2026-08-05). It is the
+standing shape — boundaries, identity, isolation, transport, secrets, limits, and §10 "gaps we are
+living with". Findings still belong in `AUDIT-SUMMARY.md`; do not duplicate them there.
+
 Three detailed handoffs sit underneath this index; go to them for reasoning, not to this file:
 - **[`2026-08-05-audit-waves-6-9-handoff.md`](./2026-08-05-audit-waves-6-9-handoff.md)** — the audit
   stream, and its **"do not re-file"** list.
