@@ -1235,3 +1235,30 @@ produced:
 
 Run all three plus the browser checks before any PR. **Nothing runs ESLint automatically**, which is how
 it rotted to 19 errors / 23 warnings in `apps/admin` (pre-existing, itemised in `BACKLOG.md`).
+
+### N49. The credential sweep lexes 455 files to check 1 of them · **S** · NEW
+**MEASURED** while integrating wave 7, after this suite timed out under `npm test` and went red on a
+green codebase. Profile of `packages/lib/src/no-published-credentials.test.ts`:
+
+| step | cost |
+|---|---|
+| `readdirSync` walk of `apps/` | **8 ms** |
+| `readFileSync` all 455 files (3,3 MB) | **24 ms** |
+| lex all of it through the TypeScript scanner | **819 ms** |
+| files whose RAW text contains ANY needle | **1 of 455** |
+
+The filesystem is not the cost and `git ls-files` would buy nothing. The lexer runs so that a
+credential inside a comment does not count — but a file that does not contain the string **at all**
+cannot be a hit, so 454 of the 455 lexes answer a question nobody asked. Lexing only strips comments
+and inserts whitespace, so whitespace-stripped LEXED ⊆ whitespace-stripped RAW: a raw prefilter can
+over-select but never under-select, which is the safe direction.
+
+⚠️ **Why this was NOT done inline.** `SECRETS` holds whitespace-tolerant REGEXES, not literals (an
+`<!-- admin@tokophi.id -->` lexes to `< ! -- admin @ tokophi . id -- >`, which is why the patterns are
+loose in the first place). The prefilter therefore has to re-apply each pattern against
+whitespace-stripped source, and a subtly wrong one makes this guard **silently green forever** — the
+precise failure mode `test/source-code.ts` exists to end, found nine times in nine guards. Do it in
+its own change set and **prove it red against a mutated copy of a real credential first**.
+
+Interim: the timeout is raised to 20 s with the profile written into the file. That is a ceiling, not
+a fix — the work is still 819 ms of CPU competing with 41 other test files.
