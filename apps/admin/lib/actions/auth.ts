@@ -1,9 +1,10 @@
 "use server";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { SESSION_COOKIE, findLogin, verifyPassword, signSession } from "@/lib/auth";
+import { SESSION_COOKIE, SESSION_MAX_AGE, findLogin, verifyPassword, signSession } from "@/lib/auth";
 import { verifyTotp } from "@tokophi/lib/totp";
 import { rateLimit } from "@tokophi/lib/cache";
+import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
 
 export type SignInState = { error?: string; need2fa?: boolean };
 
@@ -37,12 +38,10 @@ export async function signIn(_prev: SignInState, formData: FormData): Promise<Si
     email: row.email,
     name: row.name ?? "",
   });
-  (await cookies()).set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
+  // ⚠️ This site also carried its own `60 * 60 * 24 * 7` while `SESSION_MAX_AGE` sat exported two
+  // imports up — the drift a hand-written options object always produces, and the reason the flags
+  // are a module now.
+  (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions(SESSION_MAX_AGE));
   redirect(row.slug ? `/store/${row.slug}` : "/");
 }
 
