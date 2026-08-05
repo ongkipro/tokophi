@@ -11,7 +11,7 @@ import {
 
 import { PageHeader } from "@/components/admin/page-header";
 import { ProductThumb } from "@/components/admin/product-thumb";
-import { IDR, num, dateTimeShort } from "@tokophi/lib/format";
+import { IDR, num } from "@tokophi/lib/format";
 import type { Product } from "@/lib/mock/store";
 import { cn } from "@tokophi/ui/lib/utils";
 import { toast } from "sonner";
@@ -30,6 +30,8 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator,
 } from "@tokophi/ui/dropdown-menu";
 import { SearchInput } from "@/components/admin/search-input";
+import { ADMIN_LIST_PAGE_SIZE, ListPagination } from "@/components/admin/list-pagination";
+import { DateTimeCell } from "@/components/admin/date-time-cell";
 
 const LOW_STOCK = 20;
 
@@ -55,14 +57,25 @@ const DATE_RANGES = [
 function StockBadge({ stock }: { stock: number }) {
   if (stock <= 0) return <Badge variant="destructive">Habis</Badge>;
   if (stock < LOW_STOCK)
-    return <Badge className="border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/50 dark:text-amber-400">Menipis · {num(stock)}</Badge>;
-  return <Badge className="border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/50 dark:text-emerald-400">Stok {num(stock)}</Badge>;
+    return <Badge className="px-2.5 py-1 border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/50 dark:text-amber-400">Menipis · {num(stock)}</Badge>;
+  return <Badge className="px-2.5 py-1 border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/50 dark:text-emerald-400">Stok {num(stock)}</Badge>;
 }
 
 function StatusBadge({ status }: { status: Product["status"] }) {
   return status === "active"
     ? <Badge variant="secondary">Aktif</Badge>
     : <Badge variant="outline" className="text-muted-foreground">Draft</Badge>;
+}
+
+function ProductPrice({ product }: { product: Product }) {
+  const prices = [...new Set(product.variants?.map((variant) => variant.price) ?? [product.price])].sort((a, b) => a - b);
+  const first = prices[0] ?? product.price;
+  const last = prices.at(-1) ?? first;
+  return <span className="font-medium tabular-nums whitespace-nowrap">{first === last ? IDR(first) : `${IDR(first)} – ${IDR(last)}`}</span>;
+}
+
+function VariantLabel({ variant }: { variant: NonNullable<Product["variants"]>[number] }) {
+  return [variant.option1, variant.option2, variant.option3].filter(Boolean).join(" · ") || variant.sku || "Varian standar";
 }
 
 // Google Product Category on the listing (ADR 0011): the leaf when set, an actionable amber nudge when
@@ -163,6 +176,8 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
   const [gcat, setGcat] = React.useState<"all" | "set" | "unset">("all"); // Google-taxonomy filter (feed health)
   const [view, setView] = React.useState<"grid" | "list">("list");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [page, setPage] = React.useState(1);
+  const [expandedVariants, setExpandedVariants] = React.useState<Set<string>>(new Set());
 
   const counts = React.useMemo(() => ({
     all: products.length,
@@ -202,8 +217,22 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
     { key: "low", label: "Stok Menipis", count: counts.low },
   ];
 
+  const pageCount = Math.max(1, Math.ceil(filtered.length / ADMIN_LIST_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageProducts = filtered.slice((currentPage - 1) * ADMIN_LIST_PAGE_SIZE, currentPage * ADMIN_LIST_PAGE_SIZE);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [search, category, tab, sort, dateRange, gcat]);
+
   const toggle = (id: string) =>
     setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleVariants = (id: string) =>
+    setExpandedVariants((current) => {
+      const next = new Set(current);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   const clearSel = () => setSelected(new Set());
   const [bulkPending, startBulk] = React.useTransition();
   const runBulk = (fn: (ids: string[]) => Promise<{ ok: boolean; count: number }>, verb: string) =>
@@ -219,7 +248,7 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
         toast.error(`Gagal — coba lagi.`);
       }
     });
-  const visibleIds = filtered.map((p) => p.id);
+  const visibleIds = pageProducts.map((p) => p.id);
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(visibleIds));
 
@@ -370,13 +399,11 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
             <Button variant="ghost" size="sm" disabled={bulkPending} onClick={clearSel}>Batal</Button>
           </div>
         </div>
-      ) : (
-        <p className="mb-3 text-xs text-muted-foreground">Menampilkan {num(filtered.length)} dari {num(products.length)} produk</p>
-      )}
+      ) : null}
 
       {/* ⚠️ HEADING ORDER: the page `<h1>` is PageHeader's, and the grid cards below title
           themselves with `<h3>` — h1 → h3, a skipped level, and the only `h3` in the whole admin.
-          Demoting the cards to `<h2>` would put 24 same-level headings under the page title with
+          Demoting the cards to `<h2>` would put repeated same-level headings under the page title with
           nothing naming the region they belong to; naming the region is the fix that carries
           information. `sr-only` because the visible result count above already says it in numbers.
           It sits OUTSIDE the grid/table branch on purpose — both views list the same products. */}
@@ -412,7 +439,7 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
         </Card>
       ) : view === "grid" ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-          {filtered.map((p) => {
+          {pageProducts.map((p) => {
             const isSel = selected.has(p.id);
             return (
               <Card key={p.id} className={cn("group relative overflow-hidden py-0 transition-all hover:-translate-y-0.5 hover:shadow-md", isSel && "ring-2 ring-primary")}>
@@ -428,7 +455,7 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
                 </div>
                 {/* body */}
                 <div className="space-y-1 p-2.5">
-                  <h3 className="truncate text-sm font-medium" title={p.name}>{p.name}</h3>
+                  <h3 className="line-clamp-2 min-h-10 break-words text-sm font-medium" title={p.name}>{p.name}</h3>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-semibold tabular-nums">{IDR(p.price)}</span>
                     <StockBadge stock={p.stock} />
@@ -447,56 +474,90 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Pilih semua" /></TableHead>
-                  <TableHead>Produk</TableHead>
-                  <TableHead className="hidden md:table-cell">Kategori</TableHead>
-                  <TableHead className="text-right">Harga</TableHead>
-                  <TableHead>Stok</TableHead>
-                  <TableHead className="hidden text-right sm:table-cell">Terjual</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="hidden lg:table-cell">Ditambahkan</TableHead>
-                  <TableHead className="w-10" />
+                  <TableHead className="w-12 px-4"><Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Pilih semua" /></TableHead>
+                  <TableHead className="w-[42%] px-4 lg:w-[44%]">Produk</TableHead>
+                  <TableHead className="hidden w-[14%] px-4 lg:table-cell">Kategori</TableHead>
+                  <TableHead className="w-[10rem] px-4">Harga</TableHead>
+                  <TableHead className="px-4">Stok</TableHead>
+                  <TableHead className="hidden px-4 lg:table-cell">Terjual</TableHead>
+                  <TableHead className="px-4">Status</TableHead>
+                  <TableHead className="hidden px-4 xl:table-cell">Ditambahkan</TableHead>
+                  <TableHead className="w-12 px-4" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((p) => {
+                {pageProducts.map((p) => {
                   const isSel = selected.has(p.id);
+                  const hasMultipleVariants = (p.variants?.length ?? 0) > 1;
+                  const variantsOpen = expandedVariants.has(p.id);
                   return (
-                    <TableRow key={p.id} data-state={isSel ? "selected" : undefined} className="cursor-pointer" onClick={() => router.push(`/produk/${p.number ?? p.id}`)}>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox checked={isSel} onCheckedChange={() => toggle(p.id)} aria-label={`Pilih ${p.name}`} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9" />
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{p.name}</p>
-                            {/* The catalog number (ADR 0013) — the id Google/Meta/TikTok name in a
-                                disapproval, so the merchant can map an error back to a product. */}
-                            {!!p.number && <p className="text-xs text-muted-foreground tabular-nums">#{p.number}</p>}
-                            <p className="text-xs text-muted-foreground md:hidden">{p.category}</p>
-                            <div className="mt-1 flex flex-wrap items-center gap-1">
-                              <GoogleCatBadge path={p.googleCategoryPath} />
-                              {p.weightMissing && <WeightWarning />}
+                    <React.Fragment key={p.id}>
+                      <TableRow data-state={isSel ? "selected" : undefined} className="cursor-pointer" onClick={() => router.push(`/produk/${p.number ?? p.id}`)}>
+                        <TableCell className="px-4" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox checked={isSel} onCheckedChange={() => toggle(p.id)} aria-label={`Pilih ${p.name}`} />
+                        </TableCell>
+                        <TableCell className="max-w-[30rem] px-4 py-3.5">
+                          <div className="flex items-start gap-3.5">
+                            <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="mt-0.5 size-10 shrink-0 rounded-md" />
+                            <div className="min-w-0 flex-1">
+                              <Link
+                                href={`/produk/${p.number ?? p.id}`}
+                                className="line-clamp-2 rounded-sm whitespace-normal break-words text-sm font-medium leading-5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                title={p.name}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {p.name}
+                              </Link>
+                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                {!!p.number && <span className="tabular-nums">#{p.number}</span>}
+                                <span className="lg:hidden">{p.category}</span>
+                                {hasMultipleVariants && (
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center gap-0.5 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    aria-expanded={variantsOpen}
+                                    onClick={(event) => { event.stopPropagation(); toggleVariants(p.id); }}
+                                  >
+                                    {num(p.variants!.length)} varian <ChevronDown className={cn("size-3 transition-transform", variantsOpen && "rotate-180")} />
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden text-sm text-muted-foreground md:table-cell">{p.category}</TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">{IDR(p.price)}</TableCell>
-                      <TableCell><StockBadge stock={p.stock} /></TableCell>
-                      <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">{num(p.unitsSold)}</TableCell>
-                      <TableCell><StatusBadge status={p.status} /></TableCell>
-                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground tabular-nums whitespace-nowrap">{dateTimeShort(p.addedTs)}</TableCell>
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}><RowActions id={p.id} number={p.number} /></TableCell>
-                    </TableRow>
+                        </TableCell>
+                        <TableCell className="hidden px-4 py-3.5 lg:table-cell">
+                          <p className="max-w-[10rem] whitespace-normal break-words text-sm leading-5 text-muted-foreground">{p.category}</p>
+                        </TableCell>
+                        <TableCell className="px-4 py-3.5"><ProductPrice product={p} /></TableCell>
+                        <TableCell className="px-4 py-3.5"><StockBadge stock={p.stock} /></TableCell>
+                        <TableCell className="hidden px-4 py-3.5 tabular-nums text-muted-foreground lg:table-cell">{num(p.unitsSold)}</TableCell>
+                        <TableCell className="px-4 py-3.5"><StatusBadge status={p.status} /></TableCell>
+                        <TableCell className="hidden px-4 py-3.5 text-sm text-muted-foreground xl:table-cell"><DateTimeCell value={p.addedTs} /></TableCell>
+                        <TableCell className="px-4 text-right" onClick={(e) => e.stopPropagation()}><RowActions id={p.id} number={p.number} /></TableCell>
+                      </TableRow>
+                      {hasMultipleVariants && variantsOpen && (
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                          <TableCell colSpan={9} className="px-4 py-3">
+                            <div className="ml-14 grid max-w-3xl grid-cols-[minmax(10rem,1fr)_auto_auto] gap-x-6 gap-y-2 text-sm">
+                              {p.variants!.map((variant, index) => (
+                                <React.Fragment key={`${variant.sku ?? "varian"}-${index}`}>
+                                  <span className="truncate text-muted-foreground">{VariantLabel({ variant })}</span>
+                                  <span className="text-right font-medium tabular-nums whitespace-nowrap">{IDR(variant.price)}</span>
+                                  <span className="text-right tabular-nums text-muted-foreground whitespace-nowrap">Stok {num(variant.stock)}</span>
+                                </React.Fragment>
+                              ))}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </TableBody>
             </Table>
           }
           cards={
-              filtered.map((p) => (
+              pageProducts.map((p) => (
                 <DataCard
                   key={p.id}
                   href={`/produk/${p.number ?? p.id}`}
@@ -508,11 +569,11 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
                     />
                   }
                   title={
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{p.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">{p.category}</p>
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="mt-0.5 size-9 shrink-0 rounded-md" />
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 whitespace-normal break-words text-sm font-medium leading-5" title={p.name}>{p.name}</p>
+                        <p className="mt-1 line-clamp-2 whitespace-normal break-words text-xs leading-4 text-muted-foreground">{p.category}</p>
                       </div>
                     </div>
                   }
@@ -531,6 +592,7 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
         />
         </Card>
       )}
+      {filtered.length > 0 && <ListPagination page={currentPage} total={filtered.length} unit="produk" onPageChange={setPage} />}
     </div>
   );
 }

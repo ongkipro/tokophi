@@ -15,6 +15,8 @@ import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@tokophi/ui/dialog";
 
+const leafOf = (path: string) => path.split(" > ").at(-1) || path;
+
 export function GoogleCategoryField({
   value,
   path,
@@ -64,16 +66,16 @@ export function GoogleCategoryField({
   };
 
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-1.5">
       <Label>
-        Kategori Google <span className="font-normal text-muted-foreground">(untuk katalog &amp; iklan)</span>
+        Kategori Google <span className="font-normal text-muted-foreground">(opsional)</span>
       </Label>
 
       {value ? (
         <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2">
           <Tag className="size-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate text-sm" title={path}>
-            {path}
+            {leafOf(path)}
           </span>
           <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(true)}>
             Ubah
@@ -83,7 +85,7 @@ export function GoogleCategoryField({
           </Button>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           {suggestion && (
             <button
               type="button"
@@ -94,7 +96,7 @@ export function GoogleCategoryField({
               <span className="min-w-0 flex-1">
                 <span className="block text-xs text-muted-foreground">Disarankan otomatis</span>
                 <span className="block truncate text-sm font-medium" title={suggestion.path}>
-                  {suggestion.path}
+                  {leafOf(suggestion.path)}
                 </span>
               </span>
               <span className="mt-0.5 shrink-0 text-xs font-medium text-primary">Terapkan</span>
@@ -106,9 +108,7 @@ export function GoogleCategoryField({
         </div>
       )}
 
-      <p className="text-xs text-muted-foreground">
-        Kategori baku Google Product Taxonomy — dipakai untuk feed Google/Meta/TikTok. Beda dari kategori toko Anda di atas.
-      </p>
+      <p className="text-[11px] leading-4 text-muted-foreground">Taxonomy baku untuk feed Google, Meta, dan TikTok.</p>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">

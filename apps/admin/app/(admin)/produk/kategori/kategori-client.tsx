@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Plus,MoreHorizontal, Pencil, ExternalLink, Trash2,
-  Zap, Hand, FolderTree, Sparkles,
+  Zap, Hand, FolderTree,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
@@ -24,6 +24,7 @@ import {
   DropdownMenuSeparator,
 } from "@tokophi/ui/dropdown-menu";
 import { SearchInput } from "@/components/admin/search-input";
+import { ADMIN_LIST_PAGE_SIZE, ListPagination } from "@/components/admin/list-pagination";
 
 function TypeBadge({ type }: { type: Collection["type"] }) {
   return type === "otomatis" ? (
@@ -91,11 +92,20 @@ export function KategoriClient({ collections, storefrontBase }: { collections: C
   const router = useRouter();
   const canWrite = useCan("content:write");
   const [search, setSearch] = React.useState("");
+  const [page, setPage] = React.useState(1);
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return collections;
     return collections.filter((c) => c.name.toLowerCase().includes(q));
+  }, [search]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / ADMIN_LIST_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageCollections = filtered.slice((currentPage - 1) * ADMIN_LIST_PAGE_SIZE, currentPage * ADMIN_LIST_PAGE_SIZE);
+
+  React.useEffect(() => {
+    setPage(1);
   }, [search]);
 
   return (
@@ -152,39 +162,46 @@ export function KategoriClient({ collections, storefrontBase }: { collections: C
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead>Kategori</TableHead>
-                <TableHead className="text-right">Jumlah produk</TableHead>
-                <TableHead className="hidden sm:table-cell">Tipe</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-10" />
+                <TableHead className="w-[40%] px-4">Kategori</TableHead>
+                <TableHead className="px-4 text-right">Jumlah produk</TableHead>
+                <TableHead className="hidden px-4 sm:table-cell">Tipe</TableHead>
+                <TableHead className="px-4">Status</TableHead>
+                <TableHead className="w-12 px-4" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((c) => (
+              {pageCollections.map((c) => (
                 <TableRow
                   key={c.id}
                   className="group cursor-pointer"
                   onClick={() => router.push(`/produk/kategori/${c.id}`)}
                 >
-                  <TableCell>
+                  <TableCell className="max-w-sm px-4 py-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-xl">{c.emoji}</div>
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{c.name}</p>
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-xl">{c.emoji}</div>
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/produk/kategori/${c.id}`}
+                          className="line-clamp-2 rounded-sm whitespace-normal break-words font-medium leading-5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          title={c.name}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {c.name}
+                        </Link>
                         <p className="text-xs text-muted-foreground sm:hidden">
                           {c.type === "otomatis" ? "Otomatis" : "Manual"}
                         </p>
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="px-4 py-3.5 text-right tabular-nums">
                     <span className="font-medium">{num(c.products)}</span>
                     <span className="ml-1 text-xs text-muted-foreground">produk</span>
                   </TableCell>
-                  <TableCell className="hidden sm:table-cell"><TypeBadge type={c.type} /></TableCell>
-                  <TableCell><StatusBadge published={c.published} /></TableCell>
+                  <TableCell className="hidden px-4 py-3.5 sm:table-cell"><TypeBadge type={c.type} /></TableCell>
+                  <TableCell className="px-4 py-3.5"><StatusBadge published={c.published} /></TableCell>
                   <TableCell
-                    className="text-right"
+                    className="px-4 text-right"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <RowActions c={c} storefrontBase={storefrontBase} />
@@ -193,15 +210,9 @@ export function KategoriClient({ collections, storefrontBase }: { collections: C
               ))}
             </TableBody>
           </Table>
+          <ListPagination page={currentPage} total={filtered.length} unit="kategori" onPageChange={setPage} />
         </Card>
       )}
-
-      {/* Footer */}
-      <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Sparkles className="size-3.5" />
-        {num(filtered.length)} kategori
-        {search && ` cocok dari ${num(collections.length)}`}
-      </p>
     </div>
   );
 }

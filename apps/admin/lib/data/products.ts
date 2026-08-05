@@ -1,7 +1,7 @@
 import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Product } from "@/lib/mock/store";
 
 // Flatten the normalized catalog (products ⋈ default variant ⋈ inventory ⋈ primary media)
@@ -60,8 +60,10 @@ function toProduct(r: {
     number: r.number ?? 0,
     emoji: r.emoji ?? "📦",
     image: r.image ?? `/products/${r.name}.webp`,
-    price: r.price ?? 0,
-    stock: r.stock ?? 0,
+    // postgres returns aggregate numerics as strings unless a decoder is attached. Normalise at the
+    // data boundary: `num("24")` deliberately renders "—" because a string is not a verified figure.
+    price: Number(r.price ?? 0),
+    stock: Number(r.stock ?? 0),
     status: r.status === "draft" ? "draft" : "active",
     category: r.category ?? "",
     unitsSold: r.unitsSold,
@@ -86,8 +88,8 @@ export async function getProducts(): Promise<Product[]> {
         unitsSold: schema.products.unitsSold,
         createdAt: schema.products.createdAt,
         googleCategoryPath: schema.products.googleCategoryPath, // functionally dependent on products.id (grouped) — no aggregate needed
-        price: sql<number>`coalesce(min(${schema.productVariants.priceIdr}), 0)`,
-        stock: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)`,
+        price: sql<number>`coalesce(min(${schema.productVariants.priceIdr}), 0)`.mapWith(Number),
+        stock: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)`.mapWith(Number),
         // TRUE if ANY variant has no weight_grams — the checkout then prices that parcel with the 500g
         // fallback (lib/shipping-weight.ts), which can be wrong. Surfaced on the list so the fallback is
         // visible, not silent.
@@ -101,7 +103,33 @@ export async function getProducts(): Promise<Product[]> {
       .where(ne(schema.products.status, "archived"))
       .groupBy(schema.products.id, schema.productMedia.url)
       .orderBy(desc(schema.products.createdAt));
-    return rows.map(toProduct);
+    const productIds = rows.map((row) => row.id);
+    const variants = productIds.length === 0 ? [] : await db
+      .select({
+        productId: schema.productVariants.productId,
+        option1: schema.productVariants.option1,
+        option2: schema.productVariants.option2,
+        option3: schema.productVariants.option3,
+        sku: schema.productVariants.sku,
+        price: schema.productVariants.priceIdr,
+        stock: schema.inventoryLevels.available,
+      })
+      .from(schema.productVariants)
+      .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.productVariants.id))
+      .where(inArray(schema.productVariants.productId, productIds))
+      .orderBy(schema.productVariants.position);
+
+    const variantsByProduct = new Map<string, Product["variants"]>();
+    for (const variant of variants) {
+      const rows = variantsByProduct.get(variant.productId) ?? [];
+      rows.push({ ...variant, stock: variant.stock ?? 0 });
+      variantsByProduct.set(variant.productId, rows);
+    }
+
+    return rows.map((row) => {
+      const productVariants = variantsByProduct.get(row.id) ?? [];
+      return { ...toProduct(row), hasVariants: productVariants.length > 1, variants: productVariants };
+    });
   });
 }
 

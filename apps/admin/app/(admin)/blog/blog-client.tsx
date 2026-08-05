@@ -42,6 +42,7 @@ import {
 import { BlogStatusBadge } from "@/components/admin/blog/status-badge";
 import { AuthorCell } from "@/components/admin/blog/author-cell";
 import { SearchInput } from "@/components/admin/search-input";
+import { ADMIN_LIST_PAGE_SIZE, ListPagination } from "@/components/admin/list-pagination";
 
 function daysAgoLabel(days: number) {
   if (days <= 0) return "hari ini";
@@ -94,6 +95,7 @@ export function BlogClient({ posts, blogs }: { posts: BlogPost[]; blogs: string[
   const canWrite = useCan("content:write");
   const [search, setSearch] = React.useState("");
   const [blog, setBlog] = React.useState<string>("all");
+  const [page, setPage] = React.useState(1);
 
   const counts = React.useMemo(() => {
     const map: Record<string, number> = { all: posts.length };
@@ -110,6 +112,14 @@ export function BlogClient({ posts, blogs }: { posts: BlogPost[]; blogs: string[
       if (q && !p.title.toLowerCase().includes(q)) return false;
       return true;
     });
+  }, [search, blog]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / ADMIN_LIST_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pagePosts = filtered.slice((currentPage - 1) * ADMIN_LIST_PAGE_SIZE, currentPage * ADMIN_LIST_PAGE_SIZE);
+
+  React.useEffect(() => {
+    setPage(1);
   }, [search, blog]);
 
   return (
@@ -190,54 +200,61 @@ export function BlogClient({ posts, blogs }: { posts: BlogPost[]; blogs: string[
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10">
+                <TableHead className="w-12 px-4">
                   <Checkbox aria-label="Pilih semua" />
                 </TableHead>
-                <TableHead>Artikel</TableHead>
-                <TableHead>Blog</TableHead>
-                <TableHead>Penulis</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Tanggal</TableHead>
-                <TableHead className="text-right">Komentar</TableHead>
-                <TableHead className="w-10" />
+                <TableHead className="w-[34%] px-4">Artikel</TableHead>
+                <TableHead className="px-4">Blog</TableHead>
+                <TableHead className="px-4">Penulis</TableHead>
+                <TableHead className="px-4">Status</TableHead>
+                <TableHead className="px-4">Tanggal</TableHead>
+                <TableHead className="px-4 text-right">Komentar</TableHead>
+                <TableHead className="w-12 px-4" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((p) => (
+              {pagePosts.map((p) => (
                 <TableRow
                   key={p.id}
                   onClick={() => router.push(`/blog/${p.id}`)}
                   className="cursor-pointer"
                 >
-                  <TableCell onClick={(e) => e.stopPropagation()}>
+                  <TableCell className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                     <Checkbox aria-label={`Pilih ${p.title}`} />
                   </TableCell>
-                  <TableCell className="max-w-sm">
-                    <p className="truncate font-medium">{p.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">
+                  <TableCell className="w-[34%] max-w-sm px-4 py-3.5">
+                    <Link
+                      href={`/blog/${p.id}`}
+                      className="line-clamp-2 rounded-sm whitespace-normal break-words font-medium leading-5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      title={p.title}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {p.title}
+                    </Link>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
                       {p.excerpt}
                     </p>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="px-4 py-3.5">
                     <Badge variant="outline">{p.blog}</Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="px-4 py-3.5">
                     <AuthorCell name={p.author} />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="px-4 py-3.5">
                     <BlogStatusBadge published={p.published} />
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground tabular-nums whitespace-nowrap">
+                  <TableCell className="px-4 py-3.5 text-sm text-muted-foreground tabular-nums whitespace-nowrap">
                     {daysAgoLabel(p.publishedDaysAgo)}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="px-4 py-3.5 text-right">
                     <span className="inline-flex items-center gap-1 text-sm text-muted-foreground tabular-nums">
                       <MessageSquare className="size-3.5" />
                       {num(p.comments)}
                     </span>
                   </TableCell>
                   <TableCell
-                    className="text-right"
+                    className="px-4 text-right"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <RowActions id={p.id} />
@@ -246,12 +263,9 @@ export function BlogClient({ posts, blogs }: { posts: BlogPost[]; blogs: string[
               ))}
             </TableBody>
           </Table>
+          <ListPagination page={currentPage} total={filtered.length} unit="artikel" onPageChange={setPage} />
         </Card>
       )}
-
-      <p className="mt-3 text-xs text-muted-foreground">
-        {num(filtered.length)} artikel
-      </p>
     </div>
   );
 }
