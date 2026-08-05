@@ -1111,6 +1111,7 @@ end-to-end on 2026-08-05 by DRIVING it, not by reading it.
 | `specs/docs/STATUS.md` | **before you trust a number on a screen** — 🟢 real / 🟡 seeded / 🔴 fake |
 | `specs/docs/SCHEMA.md` | the DB, annotated from the catalog |
 | **`specs/docs/tasks/NEXT.md`** | **what to pick up next — ordered, sized, with acceptance criteria** |
+| **`specs/docs/tasks/OPEN.md`** | **you are starting a session, or on a new machine** — the re-verified short list of open work, the setup, and the traps. `NEXT.md` is the long record and **goes stale** (a 2026-08-05 sweep found 11 entries marked open that had already shipped); this is the index into it. ⚠️ It also carries the disambiguation table for **N36–N43, which each appear TWICE** — quote task titles, never bare numbers. |
 | `specs/docs/BACKLOG.md` | what is actually open |
 | `specs/docs/DEPLOY.md` | ops, env, the cron sidecars, how to verify a deploy really landed |
 | `specs/PRD.md` · `specs/decisions/` | what the product is · **0012 conversion tracking · 0013 catalog ids**. ⚠️ **There is no ADR 0010** — a courier-policy ADR was held for that number and never written, on purpose (the curation it would have recorded was reversed; the live KiriminAja API is the roster). Courier policy = `packages/lib/src/couriers.ts` + "Shipping & COD" above; the reversal is `specs/docs/BACKLOG.md` → "RESOLVED 2026-07-21" |

@@ -1,5 +1,16 @@
 # NEXT — what to pick up, in order
 
+> ## 👉 Starting fresh, or on another machine? Read **[`OPEN.md`](./OPEN.md)** first.
+> It is the short, re-verified list of what is *actually* open, plus the machine setup. **This file
+> goes stale**: a sweep on 2026-08-05 found **eleven** entries still marked open or `NEW` that were
+> already shipped or refuted — one of them filed the same day by the agent that filed it. They are
+> corrected below, but assume drift again by the time you read this. **If a task here disagrees with
+> the code, the code wins — then fix whichever is wrong.**
+>
+> ⚠️ **Task numbers N36–N43 each appear TWICE** — the shipping sweep (#146) and audit wave 7 (#148)
+> both numbered from N36, and nothing has been renumbered. **Always quote the title, never the bare
+> number.** Disambiguation table in `OPEN.md`.
+
 > Standing follow-up list. **Newest state as of 2026-08-01**, after `#117`–`#125` (merged and deployed)
 > and **audit wave 2** (this branch, seven change sets — handoff
 > [`2026-08-01-audit-wave-2.md`](./2026-08-01-audit-wave-2.md), consolidated record
@@ -116,7 +127,15 @@ it guards gets deleted the first time someone needs that sentence. **HTML commen
 authenticates for anyone who already knows it. That was the owner's call — rotating it touches the seed,
 and **the seed is not a migration**, so existing deployments would need a manual data fix. Filed below.
 
-### N29. The seeded password still authenticates · **S** · NEW · owner's call
+### 🟡 N29. The seeded password — **the SEED half is fixed (#150); ROTATION is still outstanding**
+These are two different things and the entry used to conflate them. Verified 2026-08-05:
+**Done** — `DEV_OWNER_PASSWORD` is gone; `seed.ts` mints a fresh `tempPassword()` per account and
+prints them once, and it *throws* if `SEED_OWNER_PASSWORD` is a published one.
+**Still outstanding** — no existing row changed. `2026-08-03-rotate-exposed-owners.md` still reads
+*"🔴 WRITTEN, NOT EXECUTED"*, and `demo@tokophi.com` still authenticates with the published password.
+⚠️ That runbook's own measurement (8 stores / 9 principals) is now stale — production holds **1 store,
+1 user, 1 operator** — so **re-measure before running it**; its "rows must still be 9" check will fail.
+
 `tokophi123` is no longer *published*, but it is still the seeded credential on every deployment that
 already exists. Rotating it means minting per-deploy (`@tokophi/lib/password` already exists, 60-bit)
 **plus a data fix for live deployments stated in the commit body**, because nothing else will apply it.
@@ -210,7 +229,18 @@ rate cache key**, so two carts differing only in box size cannot share a quote. 
 
 ⚠️ **On the seeded demo this changes nothing, correctly** — all 24 products carry `1×1×1 cm`. See N33.
 
-### N33. The seed writes `1×1×1 cm` dimensions, and the BOOKING sends them · **S** · NEW
+### ✅ N33. The seed writes `1×1×1 cm` dimensions — **FIXED in #150**, verified 2026-08-05
+Both seeders now read `packages/db/src/product-dims.ts` (folded polymailer per garment kind) and an
+unknown handle **throws** rather than defaulting. Verified on `origin/main`: `product-dims.ts:66`
+throws, `product-dims.test.ts` covers it, and no seeder writes `lengthCm`/`widthCm`/`heightCm` any more.
+
+⚠️ **The seed is NOT a migration, so this fixed nothing that already exists.** Measured on the shared
+dev DB 2026-08-05: **24 products are still `1×1×1`**, and every production store is likewise
+untouched. A parcel booked from those rows is still declared to the courier as a 1 cm cube, and the
+courier re-measures at pickup and bills the difference. **Backfilling existing stores is separate work
+that nobody has filed** — see `OPEN.md`.
+
+<details><summary>the original entry</summary>
 Every seeded product declares a 1 cm cube. Harmless for the quote (0,17 g volumetric never beats the
 actual weight) but it is **also what `createShipment` books with**, so the parcel is declared to the
 courier as a 1 cm cube. The courier re-measures at pickup; the merchant is billed the difference.
@@ -220,6 +250,7 @@ purpose. ⚠️ **The seed is not a migration** — existing stores keep whateve
 **AC:** either the seed carries believable per-product dimensions, or the columns are left NULL and the
 booking omits them (which is what `kaCreateOrder`'s `?? 10` fallback already handles); plus a decision
 on whether the product editor should require them before a merchant can ship.
+</details>
 
 ### N31. The COD fee KiriminAja charges is never read · **S** · NEW
 Every `shipping_price` result carries `setting.cod_fee`, `minimum_cod_fee` and a computed
@@ -590,7 +621,14 @@ was written to stop.
 one place. Keep the `drop` default explicit while you are in there — we never send it and its default
 is NOT STATED IN DOCS.
 
-### N43. `password.test.ts` is FLAKY under a full run — 1 in 3 · **S** · from #147, not the sweep
+### ✅ N43. `password.test.ts` flake — **ALREADY FIXED in #148**; this entry was stale when filed
+⚠️ **My own filing was wrong, and the reason is worth more than the entry.** It was measured on a
+branch rebased onto `b5f9ded` (#147) — the commit that *introduced* the flake — and the fix landed in
+`46f7144` (#148), **the very next merge**, which that branch had not picked up. Verified on
+`origin/main` 2026-08-05: `test/source-code.ts:260` exports `SOURCE_SCAN_TIMEOUT_MS = 20_000` and
+`password.test.ts:265` passes it to the scanning test. The shared walk was done too (`sources ??=`).
+**Lesson: measure on `origin/main`, not on your own rebased branch — a red you own may already be fixed.**
+
 Measured 2026-08-05 on `ka/flow-audit` rebased onto `b5f9ded`:
 
 ```
@@ -1016,7 +1054,13 @@ checkout**. Full narrative + the measured/inferred split: **[`../AUDIT-SUMMARY.m
 > would prove it was not run. Three claims have already been retracted in this repo for blurring that
 > line — do not upgrade a READ to a MEASURED without running something.
 
-### N36. Three public routes take the TENANT from the BODY, and two are cross-store oracles · **M** · NEW
+### ❌ N36 (wave 7). Tenant from the BODY — **REFUTED, do not implement**
+The code is unchanged and that is now the documented correct answer. `AGENTS.md:986-1004` rules it
+so in as many words: these routes are served by `app.tokophi.com` while the shopper is on
+`<slug>.tokophi.com`, so **the Host carries no tenant**, and moving them into the storefront would
+put the platform's KiriminAja/AutoLaris keys in that container. *"Do not 'fix' it to the Host header
+— that fix is not implementable."* Also listed under "do not re-file" in the waves 6–9 handoff.
+
 **READ** — `promo/route.ts:31-34`, `order/route.ts:192-199`, `ongkir/route.ts:81-88`. All three resolve
 the store from a body field `storeSlug`; the slug is public (it is the storefront hostname).
 
@@ -1041,7 +1085,11 @@ to `x-forwarded-for`), so it resets on every redeploy — and `#147` measured **
 usable *right now*, or the preview endpoint requires the same Host-derived tenant the storefront already
 has. **Do NOT simply lower the rate limit** — that changes the cost of the probe, not its existence.
 
-### N37. No body-size or array-length cap on ANY public route · **S** · NEW
+### ✅ N37 (wave 7). Body-size and array caps — **DONE**, verified 2026-08-05
+`apps/admin/lib/public-guard.ts` exports `MAX_BODY_BYTES = 256 * 1024`, `MAX_CART_ITEMS = 100` and a
+streaming `readPublicBody()` that cancels past the cap; **all four** public routes call it, and the
+array cap returns 413 with a Bahasa message.
+
 **MEASURED** — `grep` for `slice(`/`length >`/`MAX_` across `apps/admin/app/api/public/**`: the only cap
 on any input is `sessionId.slice(0, 64)` (`order/route.ts:782`). `next.config.ts` sets no body limit.
 
@@ -1059,7 +1107,10 @@ returns nothing.
 body-size limit; and a one-line note saying which number was chosen and why (the storefront's 50 is the
 obvious precedent).
 
-### N38. Provider error text is returned verbatim to anonymous shoppers · **S** · NEW
+### ✅ N38 (wave 7). Provider error text — **DONE**, verified 2026-08-05
+`SHIPPING_QUOTE_UNAVAILABLE` / `PAY_START_FAILED` are returned instead; the vendor string goes to
+`console.error` only. `public-guard.test.ts:132` goes red if it reverts.
+
 **READ**, traced at every hop:
 
 ```
@@ -1079,7 +1130,10 @@ here are already correct (fixed Bahasa strings); it is the `{ok:false}` paths th
 
 **AC:** the shopper-facing string is ours on every branch; the vendor's text goes to `console.error` only.
 
-### N39. `npm test` silently skips the 22 money tests inside a worktree — and worktrees are the mandated workflow · **S** · NEW
+### ✅ N39 (wave 7). Money tests skipped in a worktree — **DONE**, verified 2026-08-05
+`test/db-setup.ts` now reads the env file through the shared `packages/lib/src/env-file.mjs`, pinned
+by `test/env-file.test.ts`. A worktree with no `.env` runs the suite instead of skipping it.
+
 **MEASURED**, in `wave7/w7-audit`:
 
 | run | result |
@@ -1104,7 +1158,11 @@ and green**, which is exactly the condition `#129` was written to end.
 **AC:** `test/db-setup.ts` falls back to the main checkout's `.env` the way `check-env.mjs` does, proven
 by running `npm test` in a worktree with no root `.env` and seeing 0 skipped.
 
-### N40. A literal `NaN` in an SVG path, and formatters with no non-finite floor · **S** · NEW
+### ✅ N40 (wave 7). `NaN` in an SVG path — **DONE**, verified 2026-08-05
+The two copies collapsed into `components/admin/sparkline.tsx` (`data.length < 2 → null`), and
+`packages/lib/src/format.ts` added `NO_FIGURE = "—"` with `Number.isFinite` guards on
+`IDR`/`num`/`pct`/`share`. ⚠️ `timeAgo(NaN)` was deliberately left unfloored.
+
 **MEASURED** — the exact expression from `apps/admin/components/admin/kpi-card.tsx:10`, one data point:
 
 ```
@@ -1139,7 +1197,11 @@ proves that discipline has already slipped once. `pct(NaN)` even drops its sign,
 **AC:** the sparkline duplicate is gone; `IDR`/`num`/`pct`/`share` render a defined fallback for
 non-finite input; a test that goes red on `IDR(0/0)`.
 
-### N41. Seed drift that never reached an existing store — five data fixes, ranked · **M** · NEW
+### 🟡 N41 (wave 7). Seed drift — **2 of 5 REFUTED against production, 3 never checked**
+Refuted: the `platform_couriers.services` COD chain, and `sender_kecamatan_id = 6138`. **Still open,
+and never checked against production:** `store_shipping_methods`, `reviews.product_id`,
+`platform_payment_channels`/`platform_payout`. Check before writing anything.
+
 "The seed is not a migration" is already the rule. What had never been counted is **how much is left
 behind**. Ranked by what it costs a live merchant:
 
@@ -1208,7 +1270,11 @@ CLOSING an entry applies just as much to OPENING one.
 **AC:** ① `getPlatformSession` re-reads `platform_admins` (rank and existence) on every call, the same
 one-round-trip shape `getSession()` uses; ② `addStoreUser` returns `password` only when it wrote the hash.
 
-### N44. Empty states: the first screen a new merchant opens is the emptiest · **S** · NEW
+### 🟡 N44 (wave 7). Empty states — **2 fixed, 2 left**, verified 2026-08-05
+Done: `recent-orders.tsx`, `live-activity.tsx` (guarded by `dashboard-empty.test.tsx`). **Left:**
+`pelanggan/segmen/segmen-client.tsx` (a strip reading "0 segmen aktif" over a bare `.map`) and
+`crm/template/template-client.tsx` (unconditional "Variabel tersedia" strip over a bare `.map`).
+
 **READ** — grep finds no zero-length branch in any of the four:
 
 | screen | what a merchant with no data sees |
@@ -1231,7 +1297,11 @@ inventions."*
 **AC:** the four screens render an empty state; a zero baseline renders no delta rather than a fabricated
 one; and if a shared primitive is added, the seventeen existing ones are left alone unless they are worse.
 
-### N45. Accessibility beyond checkout — one heading skip, one screen with no `<h1>`, three unlabelled destructive buttons · **S** · NEW
+### ✅ N45 (wave 7). Accessibility beyond checkout — **DONE (3 of 3)**, verified 2026-08-05
+`produk-client.tsx` gained an `sr-only` `<h2>`, `tema/[id]/builder-client.tsx` an `sr-only` `<h1>`,
+and all three destructive buttons in `promo-editor-client.tsx` are named. Guarded by
+`apps/admin/lib/admin-h1-floor.test.ts`.
+
 **MEASURED** (grep), except where noted:
 
 - **`/produk` skips h1 → h3.** `produk-client.tsx:402` is the **only heading tag in the whole file**

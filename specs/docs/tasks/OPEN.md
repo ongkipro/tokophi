@@ -1,0 +1,172 @@
+# OPEN — what is actually left, and how to pick it up on another machine
+
+**Written 2026-08-05, every entry re-verified against `origin/main` @ `05b3068`.** Read this first.
+
+`NEXT.md` is the long-form record — ~1.500 lines, it keeps closed items on purpose, and **it goes
+stale fast**: this sweep found **eleven** entries still marked open or `NEW` that were already shipped
+or refuted, one of them filed by me the same day. It has been corrected, but assume drift again by the
+time you read this.
+
+> **If this file and `NEXT.md` disagree, check the CODE. Then fix whichever is wrong.**
+> And measure on `origin/main`, never on your own rebased branch — that is how a task got filed for a
+> flake that the very next merge had already fixed.
+
+Two detailed handoffs sit underneath this index; go to them for reasoning, not to this file:
+- **[`2026-08-05-audit-waves-6-9-handoff.md`](./2026-08-05-audit-waves-6-9-handoff.md)** — the audit
+  stream, and its **"do not re-file"** list.
+- **[`2026-08-05-kiriminaja-doc-sweep.md`](./2026-08-05-kiriminaja-doc-sweep.md)** — the shipping /
+  KiriminAja stream.
+
+---
+
+## ⚠️ `NEXT.md` has EIGHT duplicated numbers — always quote the TITLE
+
+The doc sweep (#146) and audit wave 7 (#148) both numbered from N36. #146 landed first, so the numbers
+are its; wave 7 reused them. **Nothing has been renumbered** — renaming another stream's live entries
+mid-flight is how two people work the same id from opposite ends. Wave-7 headings now carry a
+`(wave 7)` suffix where they were rewritten; the rest you disambiguate by title.
+
+| id | #146 — shipping / KiriminAja | #148 — audit wave 7 |
+|---|---|---|
+| N36 | Five status codes unmapped ✅ | Tenant from the BODY ❌ refuted |
+| N37 | `pickup_number` + VA/COD ✅ | Body-size / array caps ✅ |
+| N38 | **Label missing required fields** 🟠 | Provider error text ✅ |
+| N39 | **Webhooks unused** 🔴 blocked | Money tests skipped in a worktree ✅ |
+| N40 | **`v6.1` is vendor-deprecated** 🟠 | `NaN` in an SVG path ✅ |
+| N41 | **Courier holidays (`libur`)** 🟠 | Seed drift 🟡 3 of 5 left |
+| N42 | COD settlement ✅ (ADR 0014) | `SEED_FORCE=1` destroys config ✅ |
+| N43 | flake ✅ (was never real) | Defects only in a commit body ✅ |
+
+(`N18a`/`N18b` look like a collision to a naive grep. They are not.)
+
+---
+
+## 🔴 Needs the owner — nobody else can start these
+
+| | what is actually being asked |
+|---|---|
+| **Prepaid shipping absorption** | [ADR 0014](../../decisions/0014-platform-absorbs-cod-shipping.md) settled COD: the platform absorbs it. **Prepaid runs the identical shape and is undecided** — merchant credited gross, platform settles the courier by VA. The figure is already on Super Admin → Analitik labelled *"belum diputuskan"*. Needs its own ADR. |
+| **N29 — rotate the exposed accounts** | The *seed* is fixed (#150); **no existing row changed**, and `demo@tokophi.com` still authenticates with the published password. Runbook `2026-08-03-rotate-exposed-owners.md` is written and **unrun**. ⚠️ Its measurements are stale (it assumes 8 stores / 9 principals; production now holds 1 store, 1 user, 1 operator) — **re-measure first**. |
+| **N2 — two Cloudflare zone settings** | Approved 2026-08-01, procedure in `CLOUDFLARE-PERF.md`, still not executed. Zone config, no code. Blocked on a token with ruleset permission. |
+| **N1 — impersonation token** | 2-minute JWT in a **query string**, no `jti`, no single-use, and it mints a **7-day** session cookie carrying no impersonation marker. Unchanged. Needs an ADR before code. |
+| **N16 — `tokophi_app` DML on platform tables** | `0012_tenant_rls.sql` still grants full DML on *all* tables; no `REVOKE` anywhere; the `stores` policy is `FOR ALL`, so a tenant can UPDATE its own `comped`/`status`. Architecture decision before the PostgREST cutover. |
+| **N25 — `color_palettes` orphan** | In `SCHEMA.md`, in no migration, read by nothing. Dropping it on the shared dev container is destructive. |
+| **N5 — `dom-size`** | Measured to the end; both options costed; neither taken. A decision, not work. |
+| **N28 — super-admin's 7 screens** | Gating verified, **content never crawled**. Needs the owner's go-ahead to drive `rich.` |
+
+## 🟢 Ready to pick up — no decision needed
+
+Roughly highest value first. **S** ≈ under an hour, **M** ≈ half a day, **L** ≈ more.
+
+| | | |
+|---|---|---|
+| 🔴 **N54** | **There is NO way to create a landing page — the button 404s.** `promo-list-client.tsx:126` links to `/promo/html/baru`; that route only has `[id]/`, which `notFound()`s on a non-UUID. The feature has never been reachable. | **S** |
+| **N38** (shipping) | Label misses required fields. **Four of five are pure plumbing** — service type, both postcodes, sender phone, item prices all already persisted. **Insurance is not stored at all** and needs a column. 🔴 Sorting code is blocked twice (values come from KiriminAja support, and it rides the webhook we do not receive) — and **SPX needs a 2-column one, SPX being the primary courier and the COD rail**. | **M** |
+| **N33 aftermath** | ⚠️ **Nobody has filed this.** #150 fixed the *seed*, but **the seed is not a migration**: 24 dev products and every existing store still carry `1×1×1 cm`, and `createShipment` declares those to the courier, who re-measures and bills the difference. `ops/tokophi-n33-product-dimensions.sql` exists, is **unexecuted**, and ends in `rollback`. | **M** |
+| **N44** (wave 7) | Empty states, 2 screens left: `pelanggan/segmen/segmen-client.tsx` and `crm/template/template-client.tsx` — both print a summary strip over a bare `.map`. | **S** |
+| **N47 · N48** | An operator who forgets their password has **no way back in** (only self-service change exists); and a refused super-admin action **throws into a `startTransition` nobody catches**, so the operator sees nothing. | **S** |
+| **N52** | `CardTitle` is a `<div>`, so 128 card headings are invisible to heading navigation. | **S** |
+| **N46** (wave 7) | The credential sweep still scans `apps/` only (`no-published-credentials.test.ts:25`); 26 files under `packages/{sections,ui}` are outside it, while its sibling already scans every tracked file. | **S** |
+| **N55 · N56** | Colour-only verdict in `return-by-courier.tsx:32` (no icon, word or sign); Puck's vendored ArrayField/zoom controls unnamed. | **S** |
+| **N31** (shipping) | The COD fee KiriminAja charges is never read — `cod_fee`/`minimum_cod_fee`/`cod_fee_amount` come back on every rate and **0 code reads them**; `platform_cod.fee_pct` is written by the seed and read by nobody. This is also what keeps ADR 0014's cost figure incomplete. | **S** |
+| **N40** (shipping) | We book on `v6.1/request_pickup`, which the vendor marks **deprecated**. ⚠️ The v6.2 doc contradicts itself on destination field names — resolve against the sandbox first; booking to the wrong village is what migration 0042 exists to prevent. `shipping_price` v6.1 is *not* deprecated. | **M** |
+| **N41** (wave 7) | Seed drift: 2 of 5 refuted against production. Left, **never checked**: `store_shipping_methods`, `reviews.product_id`, `platform_payment_channels`/`platform_payout`. | **M** |
+| **N35** (shipping) | Show the active KiriminAja env on the super-admin connection card. ⚠️ The entry overstates it — the env **is** already visible on Analitik → Sistem and inside the Test-koneksi result; only the card named in the AC lacks it. | **S** |
+| **N13** | Sitemap `<lastmod>`: pages/blog done. Products + categories are **blocked on a migration** — `products` and `collections` have no `updatedAt`. | **M** |
+
+## 🔴 Blocked on something outside the repo
+
+- **N39 (shipping) — webhooks.** `processed_packages` carries the AWB; this is what makes the resi
+  appear in seconds instead of ≤15 minutes. **The registration endpoint's path is not in the captured
+  docs** — get it from the KiriminAja portal or support. Everything else can be built against a
+  hand-rolled POST. Note there is **no signature scheme** (bare bearer, no HMAC, no replay
+  protection) and **no server-side retry**, so it goes *beside* the poller, never instead of it.
+- **N41 (shipping) — courier holidays.** The schedule endpoint returns a `libur` flag; its path and
+  request body are both absent from the docs. Skipping the endpoint is explicitly allowed, so decide:
+  call it, or record in `KIRIMINAJA.md` that we accept booking onto a closed day.
+
+⚠️ **Outstanding since the E2E run:** sandbox booking `5758-E2E68072665` / pickup `XID-5544692486`
+could not be cancelled. **Do not repeat the booking run** — `2026-08-03-shipping-e2e-runbook.md`.
+
+---
+
+## Getting it running on a new machine
+
+```bash
+git clone git@github.com:ongkipro/tokophi.git && cd tokophi
+git fetch origin
+docker compose up -d db                  # PostgreSQL 16 → localhost:5433, container `tokophi-db`
+npm install
+npm run migrate -w @tokophi/db           # canonical; head is 0089
+npm run dev:admin                        # :3000 Seller   ·   npm run dev:super → :3001 Super Admin
+```
+
+**Secrets are gitignored and not in the repo**: root `.env` (see `.env.example`) plus
+`apps/admin/.env.local` and `apps/super-admin/.env.local`. Ask the owner — never reconstruct one from
+a running container, and never paste one into a chat or a commit.
+
+### 🔴 `main` on an existing checkout is a stale fork — **516 commits behind** `origin/main`
+
+Measured 2026-08-05. **Never branch from local `main`, never push it.** Cut worktrees off the remote:
+
+```bash
+git fetch origin
+git worktree add -b my/branch ../wt-my-branch origin/main
+cd ../wt-my-branch && npm install        # ⚠️ a fresh worktree has NO node_modules
+```
+
+Skip that `npm install` and TypeScript resolves `@tokophi/db` to the *other* checkout — an error that
+points nowhere near its cause.
+
+## Traps
+
+The audit stream's own list is in its handoff (migration re-stamping, `*/` closing a block comment,
+the seven seeders that run on every deploy). These are the ones this stream hit:
+
+- **`drizzle-kit generate` is NOT safe here.** It diffs against the last *snapshot*, which is **0082**
+  — later migrations are hand-written and left none — so it re-emits all of their changes, including
+  `ADD COLUMN` without `IF NOT EXISTS` and unique constraints under *different names* than the ones
+  that exist. Drizzle applies the batch in **one transaction**, so it fails and rolls back everything
+  behind it. **Hand-write the SQL, idempotent, journal entry only.**
+- **Check the highest migration number ON THE REMOTE, not locally.** 0087 was claimed by another
+  branch mid-flight; the colliding migration had to be renumbered to 0088 *and* every reference to it
+  chased down. Also check `_journal.json` for a future-dated `when` — that makes drizzle silently SKIP
+  later migrations while printing "migrations applied successfully".
+- **A fresh worktree cannot `build:admin`** without `apps/admin/.env.local`; it fails on
+  `/api/auth/signout` with "Failed to collect page data", unrelated to your change. Stash and rebuild
+  to confirm before hunting.
+- **The dev DB and the dev servers are shared.** Never `pkill next`; record your PID and kill only
+  that. If you flip a row to test something, flip it back — and say so.
+- **Playwright is global**, not a dependency: import from
+  `/home/fantastico/.nvm/versions/node/v24.16.0/lib/node_modules/playwright/index.mjs`, launch with
+  `{ channel: "chrome" }`.
+
+## Gates — and what each one misses
+
+```bash
+npm test                                  # vitest + astro check ×2 — 486 tests / 55 files, green on 05b3068
+cd apps/admin && npx tsc --noEmit
+cd apps/admin && npx eslint <files>       # eslint must run FROM the workspace dir
+npm run build:admin ; npm run build:super
+```
+
+- **`next build` does not run ESLint.**
+- **ESLint and `next build` do not typecheck test files** — only `tsc --noEmit` does.
+- **All of them stay green on live outages.** This repo's own history: a `ReferenceError` inside a
+  client `<script>` that blocked the entire rate load, and `select sum(…) for update` inside a SQL
+  string Postgres rejects outright. **For anything browser-visible, open a browser.**
+
+## Deploying
+
+Merge to `origin/main` → Coolify rebuilds. **~6 minutes**, then a **60–90 s window of 503** while
+containers swap (admin recovers slightly before the storefront). Watch until all four return:
+
+```bash
+for h in tokophi.com app.tokophi.com rich.tokophi.com toko.tokophi.com; do
+  echo "$h $(curl -s -o /dev/null -w '%{http_code}' https://$h/)"; done
+# 200 / 307 / 307 / 200 is HEALTHY — 307 on app. and rich. is the login redirect.
+```
+
+Migrations run as a one-off `migrate` service that the three apps wait on
+(`service_completed_successfully`), **so if the apps came back, the migration applied**. `seed.ts` is
+a no-op on a live DB (it counts `stores` and skips), so a redeploy never touches real data.
