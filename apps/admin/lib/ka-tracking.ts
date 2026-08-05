@@ -39,11 +39,29 @@ export function outcomeFromTrackingCode(raw: number | string | null | undefined)
   if (/^\d+$/.test(str)) {
     const code = Number(str);
     if (code === 200) return "delivered";
-    if (code === 300) return "canceled";
-    if (code === 301 || (code >= 400 && code <= 406)) return "returned";
-    if (code === 500 || (code >= 700 && code <= 905)) return "problem";
+    // 302 "pickup canceled by seller" ends the shipment exactly as 300 "canceled by client" does.
+    if (code === 300 || code === 302) return "canceled";
+    // 310 "recipient did not order" and 311 "recipient unwilling to pay" are the two refusal codes;
+    // 311 is the COD refusal. Both go to RTS, so they are `returned` — the same place 301 goes.
+    if (code === 301 || code === 310 || code === 311 || (code >= 400 && code <= 406)) return "returned";
+    // 333 (destroyed by courier) and 555 (confiscated by Customs) are documented FINAL states. They
+    // were unmapped, so the order never left `dikirim` and the poller re-queued it every 15 minutes
+    // forever — and the sweep takes only BATCH rows per tick, so parcels that can never resolve
+    // accumulate at the head of the queue and starve the ones with work outstanding. `problem` does
+    // not move the status (a destroyed parcel is neither delivered nor returned, and whether it
+    // should settle as `batal` is a refund/claim decision we do not get to make here) but it does
+    // raise `problem_at`/`problem_note`, so the merchant SEES it instead of it sitting silent.
+    if (code === 333 || code === 500 || code === 555 || (code >= 700 && code <= 905)) return "problem";
+    // 110 "pending direct pickup" is PRE-pickup and must be checked before the 106+ transit range it
+    // falls inside. Mapping it to `shipped` told the merchant and the buyer the parcel was on its
+    // way while it still sat at the origin — and RANK is forward-only, so that lie is permanent.
+    if (code === 110) return "booked";
     if (code >= 106 && code < 200) return "shipped";   // picked up / in transit / re-delivery
     if (code >= 100 && code <= 105) return "booked";   // created / at DC / awaiting AWB
+    // Deliberately unmapped: 210 (SOP violation / over SLA), 211 (violation resolved) and 350
+    // (pickup cancellation REQUESTED — not granted; the courier may still collect). Flagging 210 as
+    // a problem without a path that lowers the flag on 211 would leave a resolved violation showing
+    // as stuck forever, and 350 is a request, not an outcome.
     return null;
   }
   const s = str.toLowerCase();

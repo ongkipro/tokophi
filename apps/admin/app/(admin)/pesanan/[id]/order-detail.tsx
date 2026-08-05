@@ -778,6 +778,45 @@ export function OrderDetail({
                   <span className="font-mono text-[11px] text-muted-foreground">{shipment.kaOrderId}</span>
                 </div>
               )}
+              {shipment.pickupNumber && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">No. penjemputan</span>
+                  <span className="font-mono text-[11px] text-muted-foreground">{shipment.pickupNumber}</span>
+                </div>
+              )}
+              {/* WHO PAYS THE COURIER. On COD the buyer does and there is nothing to chase; on a
+                  prepaid order WE owe the shipping cost, and an unpaid booking never gets a waybill
+                  — the parcel simply does not ship. That case used to be completely invisible:
+                  "Menunggu resi dari kurir" above would sit there forever with nothing saying why.
+                  `unknown` renders nothing at all — every order booked before 0087 has no reading,
+                  and a shrug is not worth a row. */}
+              {booked && shipment.payment.flow !== "unknown" && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Ongkir ke kurir</span>
+                  <span
+                    className={
+                      shipment.payment.blocking
+                        ? "text-right font-medium text-red-600 dark:text-red-400"
+                        : "text-right text-muted-foreground"
+                    }
+                  >
+                    {shipment.paymentLabel}
+                    {shipment.payment.flow === "va" && !shipment.payment.settled && shipment.payment.payUrl && (
+                      <>
+                        {" · "}
+                        <a
+                          href={shipment.payment.payUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline underline-offset-2"
+                        >
+                          Bayar
+                        </a>
+                      </>
+                    )}
+                  </span>
+                </div>
+              )}
               {booked && (
                 <div
                   className={
