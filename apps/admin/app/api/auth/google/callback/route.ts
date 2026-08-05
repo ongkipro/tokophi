@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { SESSION_COOKIE, SESSION_MAX_AGE, signSession } from "@/lib/auth";
 import { OAUTH_STATE_COOKIE, exchangeCode, googleConfig } from "@/lib/google";
 import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
-import { provisionStore, signupOpen } from "@/lib/provision";
+import { ProvisionConflictError, ProvisionInputError, provisionStore, signupOpen } from "@/lib/provision";
 
 // Google OAuth callback: state check → code exchange → id_token verify (JWKS) → find-or-create the
 // user → sign the SAME jose session JWT as lib/auth.ts.
@@ -78,14 +78,26 @@ export async function GET(req: NextRequest) {
     // `row` branch above) is untouched — this only blocks creating a NEW one.
     if (!signupOpen()) return redirectTo("/daftar?error=ditutup");
     // unknown email (or a user with no store yet) → auto-provision a store on the same one-txn path
-    const r = await provisionStore({
-      storeName: profile.name,
-      ownerName: profile.name,
-      email: profile.email,
-      authProvider: "google",
-      googleSub: userId ? null : profile.sub,
-      userId: userId ?? undefined,
-    });
+    //
+    // ⚠️ `provisionStore` now enforces the store-name bounds and reports a lost race, and BOTH arrive
+    // here as a throw. `profile.name` is a Google display name — nobody typed it as a shop name, so a
+    // one-character one is an ordinary event, not an attack. Landing on /daftar with a reason (and
+    // the form right there) is the answer; a 500 was not.
+    let r: Awaited<ReturnType<typeof provisionStore>>;
+    try {
+      r = await provisionStore({
+        storeName: profile.name,
+        ownerName: profile.name,
+        email: profile.email,
+        authProvider: "google",
+        googleSub: userId ? null : profile.sub,
+        userId: userId ?? undefined,
+      });
+    } catch (e) {
+      if (e instanceof ProvisionInputError) return redirectTo("/daftar?error=nama_google");
+      if (e instanceof ProvisionConflictError) return redirectTo("/daftar?error=bentrok");
+      throw e;
+    }
     session = { userId: r.userId, storeId: r.storeId, role: r.role, email: r.email, name: r.name };
     slug = r.slug;
   } else {

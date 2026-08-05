@@ -87,30 +87,51 @@ operator lifts it — that machinery exists since `0086`); or keep signup shut a
 through Super Admin → `createStore`, which is exactly what `signupOpen`'s own comment says the closed
 state is for.
 
-### 2. `uniqueSlug` does not consult the storefront's RESERVED list
+### ✅ 2–4 are DONE (2026-08-05) — and the sweep found a third slugify nobody had counted
 
-`apps/storefront/src/data/store.ts:87` refuses to resolve nine subdomains as a store —
-`www app rich admin api cname toko storefront localhost`. `uniqueSlug` (`provision.ts:43`) knows
-nothing about it. So a shop named "App" gets `slug: "app"`, and the result is a store whose storefront
-is structurally unreachable, with nothing on any screen saying why — plus the platform can never use
-that slug again. **S.** The list has to move somewhere both halves can read; a second copy is how the
-weaker one survives a fix here.
+All three shipped together; the reasoning that outlived them is below.
 
-### 3. Two check-then-insert races, both fail SAFE but both fail UGLY
+**The reserved list is shared, and it is consulted on the way IN.** `RESERVED_SLUGS` moved to
+`@tokophi/lib/store-slug`. `uniqueSlug` now skips a reserved candidate exactly as it skips a taken
+one, so "App" lands on `app-2`; super-admin's `createStore` REFUSES instead and says which slug is
+the problem, because an operator typing a name by hand can simply pick another. Note `toko` is on
+that list **and** is `provisionStore`'s last-resort base, so the skip is load-bearing, not decorative.
 
-`emailTaken` → insert, and `uniqueSlug`'s 25 SELECTs → insert, are each unlocked reads followed by a
-write. `users.email` and `stores.slug` are both `UNIQUE` in the schema, so a concurrent duplicate is
-refused by Postgres rather than duplicated — but it surfaces as an **unhandled throw**, i.e. a Next
-error digest, not one of the messages this action is careful to return. Same shape as the voucher
-`used_count` race, and the same fix: let the constraint be the lock and catch the violation.
+**⚠️ There were TWO slugifys and they had already drifted — then the sink found a THIRD.** Measured:
+`"Café Senja"` → `cafe-senja` (self-serve, NFKD) vs `caf-senja` (operator, no NFKD). Two doors onto
+one product disagreeing about a shop's permanent public address. And **neither was right**: NFKD
+splits `É` into `E` + a combining acute, which is not `[a-z0-9]`, so it became a *separator* —
+`Éni` → `e-ni`. Stripping U+0300–036F after decomposing is what makes NFKD do the job it was reached
+for; the shared rule now yields `cafe-senja` and `toko-ibu-eni`.
 
-### 4. No upper bound on `storeName` / `ownerName`
+The third copy is the one worth remembering: **`packages/db/src/seed.ts` writes `stores.slug`** with
+its own non-NFKD version. It agrees today only because "Batik Nusantara" is pure ASCII. A guard that
+swept for the *name* `slugify` would have flagged it — along with six per-store HANDLE minters
+(collections, landing pages, product editors) that have no business consulting a list of reserved
+subdomains, and converging those would have been a behaviour change dressed as de-duplication. So
+`store-slug.test.ts` claims the **sink**: a file that writes `schema.stores … slug` must import the
+shared rule. Three writers, named, and the list is derived by scanning every tracked file.
 
-`storeName.length < 3` is checked; nothing checks the other end, and both columns are `text()`. Only
-Next's server-action body limit bounds it. The value lands in `stores.name`, `accounts.name` and the
-`platform_activity` line the control plane reads. Also: the **Google path skips even the `>= 3`
-check** — `provisionStore` takes `profile.name` verbatim, and the length rules live in `register.ts`,
-not at the boundary.
+**The races are caught where the database decides them.** `uniqueViolationConstraint`
+(`@tokophi/lib/pg-errors`, pure) reads a `23505` and both paths translate it into the sentence the
+form already had. ⚠️ The field is **`constraint_name`**, not `constraint` — measured against the real
+test database through this repo's driver; `node-postgres` spells it the other way, which is what most
+examples show, and reading that field yields `undefined` for every violation. The constraint NAMES
+come from the migrations, so `packages/db/src/provision-conflicts.test.ts` provokes both violations
+for real: a rename lands as a red test, not as the 500 this change removes.
+
+**The name bounds moved to the boundary**, so the Google path obeys them: the floor lived in
+`registerStore` only, and the ceiling nowhere. `NAME_MAX = 60` is the storefront chat's existing
+`MAX_NAME`, not a second opinion. `provisionStore` now throws `ProvisionInputError` /
+`ProvisionConflictError`; `registerStore` returns them to the form, and the **Google callback**
+redirects to `/daftar?error=nama_google|bentrok` — before this it had no answer at all and a short
+Google display name would have been a 500 on a route whose whole job is to land someone somewhere
+readable.
+
+**Nothing existing is affected.** The seed converge is not a data change: `slugify("Batik
+Nusantara")` is identical under both implementations, and production holds exactly one store —
+`batik-nusantara` (measured 2026-08-05) — which is neither reserved nor spelled differently by the
+new rule.
 
 ---
 

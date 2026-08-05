@@ -11,6 +11,7 @@
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { cached } from "./cache";
+import { RESERVED_SLUGS } from "@tokophi/lib/store-slug";
 
 /** The three product-gallery layouts a merchant can pick in Tema (mirrors `stores.product_gallery_layout`). */
 export type GalleryLayout = "thumbnail-left" | "thumbnail-bottom" | "grid";
@@ -84,7 +85,11 @@ export type StoreInfo = {
 // one renders NOTHING. A missing channel is honest; a dead one is a lie.
 
 // Subdomains that are never a store slug (platform surfaces / conventional hostnames).
-const RESERVED = new Set(["www", "app", "rich", "admin", "api", "cname", "toko", "storefront", "localhost"]);
+//
+// The list moved to `@tokophi/lib/store-slug` so the two store-CREATION paths can consult it too:
+// nothing did, so a shop called "App" was written with `slug: "app"` and the line below then refused
+// to resolve it — a storefront that 404s on its own subdomain, with no screen saying why.
+const RESERVED = RESERVED_SLUGS;
 
 /** lowercase, port-stripped, trailing-dot-stripped hostname. */
 export function normalizeHost(host: string | null | undefined): string {
