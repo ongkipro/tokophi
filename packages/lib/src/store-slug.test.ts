@@ -72,7 +72,11 @@ function repoSources(): string[] {
     .split("\0")
     .filter(Boolean)
     .filter((rel) => !rel.split("/").some((seg) => seg.startsWith(".") || SKIP_DIRS.has(seg)))
-    .filter((rel) => SOURCE.test(rel) && !SELF.includes(rel));
+    // ⚠️ TESTS ARE NOT PRODUCT WRITERS. `provision-conflicts.test.ts` inserts a store with a literal
+    // slug ON PURPOSE — it provokes the unique violation — and must NOT import the shared rule. This
+    // guard flagged it as a fourth writer, which is a false positive in the guard, not a defect in the
+    // test. Excluded by suffix rather than by name: the next such fixture would otherwise repeat it.
+    .filter((rel) => SOURCE.test(rel) && !SELF.includes(rel) && !/\.test\.[cm]?[jt]sx?$/.test(rel));
 }
 
 // ⚠️ THE CLAIM IS ABOUT THE **STORE** SLUG, AND THE SINK IS WHAT IDENTIFIES ONE.
@@ -88,7 +92,11 @@ function repoSources(): string[] {
 // i.e. a THIRD store-slug rule, invisible to a reviewer and to every test, waiting for one accent.
 //
 // So: a file that writes `schema.stores` … `slug` must import the shared rule.
-const WRITES_STORE_SLUG = /insert\s*\(\s*schema\s*\.\s*stores\s*\)[\s\S]{0,400}?\bslug\s*[,:]/;
+// ⚠️ The window is SHORT and stops at the first `)` group on purpose. It was `{0,400}` and that
+// reached past the statement it was anchored on into an unrelated `schema.stores.slug` in a later
+// `delete(...)` line — so whether it fired depended on how many characters sat between two unrelated
+// statements. A guard whose verdict moves with whitespace is not a guard.
+const WRITES_STORE_SLUG = /insert\s*\(\s*schema\s*\.\s*stores\s*\)\s*\.\s*values\s*\(\s*\{[^}]{0,200}?\bslug\b/;
 const IMPORTS_SHARED = /from\s*"@tokophi\/lib\/store-slug"/;
 const REDEFINES_RESERVED = /const\s+RESERVED(?:_SLUGS)?\s*=\s*new\s+Set\s*\(/;
 

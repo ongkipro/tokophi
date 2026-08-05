@@ -1122,6 +1122,7 @@ end-to-end on 2026-08-05 by DRIVING it, not by reading it.
 | Doc | Read it when |
 |---|---|
 | `specs/docs/FLOWS.md` | end-to-end flows. **§5 shipping · §8 ad click → order → conversion.** Read before touching checkout, ongkir, a shipment or a pixel |
+| **`specs/docs/SECURITY.md`** | **trust boundaries, identity/RBAC, tenant isolation, transport, secrets, encryption at rest, every rate limit with its real value — and the gaps we knowingly live with.** Read before touching auth, RLS, the public API or a zone setting. It owns the standing SHAPE; `AUDIT-SUMMARY.md` owns findings |
 | `specs/docs/CODE_MAP.md` | you need to find where a concern lives |
 | `specs/docs/STATUS.md` | **before you trust a number on a screen** — 🟢 real / 🟡 seeded / 🔴 fake |
 | `specs/docs/SCHEMA.md` | the DB, annotated from the catalog |
