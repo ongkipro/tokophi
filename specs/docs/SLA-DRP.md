@@ -50,15 +50,17 @@ container, one region. Cloudflare in front.
 
 ---
 
-## 3. RPO — and the trap that makes the documented number fiction
+## 3. RPO — and the trap that made the documented number fiction (fixed 2026-08-05)
 
-**Observed.** A `backup` service in `docker-compose.coolify.yml` runs
-`pg_dump -Fc` → `/backups`, then `ls -1t | tail -n +8 | xargs rm` (keep the newest 7), then
-`sleep 86400`. Its healthcheck passes only once a dump exists, so it doubles as proof the backup ran.
-The dumps are real and readable: `pg_restore --list` on the newest returns **625 TOC entries / 621
-objects**, 1,2 MB.
+**Observed — current shape** (`docker-compose.coolify.yml`, since #171): a `backup` service dumps
+`pg_dump -Fc` → `/backups` **only if the newest dump is older than 6 h**, waking hourly; writes to
+`.part` and renames on success; prunes by **age** (`-mtime +14`); and its healthcheck goes UNHEALTHY
+after **8 h** without a fresh dump.
 
-> ### 🔴 "Daily, keep-7" implies seven days of recovery points. The measured retention is **5 h 44 min**.
+The dumps are real and readable — `pg_restore --list` on the newest returns **625 TOC entries / 621
+objects**, 1,2 MB. That was never the problem. The retention was, and the box below is why.
+
+> ### ✅ FIXED by #171 — but read this, because the number it replaces is how the bug hid.
 > **Observed 2026-08-05.** All seven dumps on the box are from **the same day** —
 > `10:44:05` through `16:28:01`. The backup container's `StartedAt` is `16:28:01`, **exactly** the
 > newest dump's timestamp.
@@ -72,9 +74,18 @@ objects**, 1,2 MB.
 > "on deploy, plus daily if nobody deploys". On a quiet day RPO ≈ 24 h. On a working day the *interval*
 > shrinks to minutes while the *window* collapses to hours.
 
-**Gap.** `sleep 86400` after an immediate dump is the wrong shape. It wants either a cadence that
-survives restarts (a timestamp file, or a host cron rather than an in-container loop) or a retention
-rule that counts **days covered** rather than **files kept**.
+**Observed — the fix, verified on the container after deploy `4705fdf`:** dump only if the newest is
+older than 6 h (waking hourly), retention by **age** (`-mtime +14`), atomic `.part` → rename, and a
+healthcheck that goes UNHEALTHY after 8 h without a dump instead of passing on any dump ever written.
+
+Proof it works, measured immediately after the deploy that restarted the container: `StartedAt`
+**17:07:46** while the newest dump is **16:56:59** — the new container did **not** dump on start.
+Seven dumps, not eight; zero stale `.part`; health `healthy`.
+
+⚠️ **The fix does not create history retroactively.** The seven dumps on the box are still the ones the
+old code left, spanning `11:08` → `16:56` on 2026-08-05 — the two oldest were evicted by deploys that
+ran before the fix landed. The window **grows to 14 days over the next fortnight**; it is not 14 days
+today. Do not read §4's "logical corruption" row as covered until it has.
 
 🔴 **Gap — the backups are on the machine they protect.** `tokophi-backups` is a Docker volume on
 `45.77.33.112`, beside `tokophi-pgdata`. **There is no offsite copy** — no R2, no S3, nothing in the
