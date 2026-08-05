@@ -30,7 +30,9 @@ export default async function DaftarPage({ searchParams }: { searchParams: Promi
       <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl tracking-tight">TokoΦ</CardTitle>
+            {/* `level={1}` — same reason as /login: this card IS the page, and without it the screen
+                would have no `h1` at all. See the note on `CardTitle` in packages/ui. */}
+            <CardTitle level={1} className="text-2xl tracking-tight">TokoΦ</CardTitle>
             <CardDescription>Pendaftaran ditutup sementara</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-center">
@@ -55,7 +57,7 @@ export default async function DaftarPage({ searchParams }: { searchParams: Promi
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl tracking-tight">TokoΦ</CardTitle>
+          <CardTitle level={1} className="text-2xl tracking-tight">TokoΦ</CardTitle>
           <CardDescription>Buat toko online Anda — gratis 3 hari</CardDescription>
         </CardHeader>
         <CardContent>
