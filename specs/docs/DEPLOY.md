@@ -612,6 +612,19 @@ Everything is host-agnostic (Coolify + git + `pg_dump` + Cloudflare), so:
 2. Install Coolify (`curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash`) + UFW (22/80/443/8000/6001/6002).
 3. In Coolify: same GitHub repo, **Docker Compose** build pack, same `docker-compose.coolify.yml`, set env (real secrets + prod `AUTH_SECRET`).
 4. **DB**: `pg_dump` from the Vultr Postgres volume → restore into the Hetzner Postgres (or let `migrate` rebuild schema + re-seed for a fresh prod). For real data: dump/restore.
+   - ⚠️ **If you take the re-seed path, clear the seed's demo custom domain first or the storefront
+     is unreachable.** `packages/db/src/seed.ts` inserts `store_domains` `host='toko-demo.test'`
+     with `status='active'` and **`is_primary=true`** — deliberately, so the CNAME flow is
+     reproducible from a fresh seed (`.test` never resolves publicly, and the comment there explains
+     the dev use). The consequence on a real deployment is not deliberate: `primaryOrigin()` returns
+     that host, so the shop **301s every other hostname to `http://toko-demo.test/`**. Measured on a
+     freshly seeded stack — the storefront answered `301 → http://toko-demo.test/` on its own
+     assigned domain, while the same host on Vultr answers `200`, because production's rows predate
+     the seed row (**the seed is not a migration** — which cuts both ways: it spares an existing
+     deployment and lands squarely on a new one).
+     Targeted fix, never a re-seed:
+     `update store_domains set host = '<the real storefront host>' where host = 'toko-demo.test';`
+     — or delete the row if the new deployment has no custom-domain demo to show.
 5. **Cloudflare**: point `app.` / `rich.` / storefront DNS at the Hetzner IP (proxied). SSL via Coolify (Let's Encrypt) or CF. Custom merchant domains → CF for SaaS → `cname.tokophi.com`.
 6. Verify, then **destroy the Vultr server** (before credit expiry).
 
