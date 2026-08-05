@@ -11,6 +11,11 @@ time you read this.
 > And measure on `origin/main`, never on your own rebased branch — that is how a task got filed for a
 > flake that the very next merge had already fixed.
 
+▶️ **Wondering what happened on 2026-08-05?**
+[`2026-08-05-session-close.md`](./2026-08-05-session-close.md) is the ledger — nine PRs, two zone
+changes, the verified end state, and what each remaining item belongs to. Start there, then come back
+to this file for the open list.
+
 ⚠️ **Starting fresh on THIS machine? Read
 [`2026-08-05-handoff-and-unfiled-scan.md`](./2026-08-05-handoff-and-unfiled-scan.md) first.** The
 working copy carries **26 dirty worktrees, ~60 local branches and a `main` that is 30 ahead / 522
