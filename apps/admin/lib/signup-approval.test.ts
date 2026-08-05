@@ -80,3 +80,33 @@ describe("the merchant is told they are waiting, not that they were punished", (
     expect(copy(BANNER)).toMatch(/Toko ditangguhkan oleh TokoΦ/);
   });
 });
+
+// ── THE COUNTER AND THE BANNER MUST AGREE ON WHO IS QUEUED ───────────────────────────────────────
+//
+// `computeBilling().pendingApproval` decides it in TypeScript, one store at a time. The Super Admin
+// dashboard counts the whole table, so it asks Postgres the same question in SQL — two expressions
+// of one rule, the shape this repo keeps getting bitten by. If they drift, the operator's queue and
+// the merchant's banner disagree about who is waiting, and nothing errors.
+//
+// `textWithoutComments`, not `codeOnly`: the predicate lives INSIDE a `sql` template, and `codeOnly`
+// makes a literal's contents inert — the same reason `inventory-location.test.ts` reaches for the
+// other helper on its raw-SQL claims.
+describe("the dashboard queue query asks the same question as pendingApproval", () => {
+  const DATA = join(__dirname, "..", "..", "super-admin", "lib", "data.ts");
+
+  it("requires `approved_at IS NULL` AND `suspended_at IS NOT NULL`, not one or the other", () => {
+    const sqlText = textWithoutComments(readFileSync(DATA, "utf8"));
+    const at = sqlText.indexOf("getPendingApprovals");
+    expect(at, "getPendingApprovals is gone — has the queue moved?").toBeGreaterThan(-1);
+    const body = sqlText.slice(at, at + 900);
+    expect(body).toMatch(/approved_at\s+is\s+null/i);
+    expect(body).toMatch(/suspended_at\s+is\s+not\s+null/i);
+  });
+
+  it("is NOT folded into the churn worklist", () => {
+    // `getRiskQueue` answers "who is about to stop paying us" and deliberately excludes operator
+    // suspensions. A queued signup filed there would sit at severity 100 forever and bury the churn
+    // signals that list exists for — its reason union has no member for this, on purpose.
+    expect(read(DATA)).not.toMatch(/kind\s*:\s*"pending_approval"/);
+  });
+});
