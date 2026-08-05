@@ -18,7 +18,7 @@ import {
 } from "@/lib/data/dashboard";
 import type { FunnelDay, DeviceDay } from "@/lib/data/funnel"; // type-only: funnel.ts is server-only
 import type { RegionSale, CustomerMix, CategorySale, ChannelDay, HourPoint, ProductSaleDay, OrderStats } from "@/lib/data/analytics";
-import { IDR, num, pct } from "@tokophi/lib/format";
+import { IDR, NO_FIGURE, num, pct } from "@tokophi/lib/format";
 import { exportCsv } from "@/lib/csv";
 
 // Every number on this page is COUNTED from rows: orders / order_line_items (penjualan, wilayah,
@@ -74,7 +74,10 @@ export function AnalitikClient({
   const kpis = [
     { label: "Penjualan", value: IDR(s.sales.value, { compact: true }), delta: s.sales.delta, icon: Wallet, spark: salesSpark },
     { label: "Pesanan", value: num(s.orders.value), delta: s.orders.delta, icon: ShoppingBag, spark: orderSpark },
-    { label: "Pengunjung", value: visits ? num(visits.value) : "—", delta: visits?.delta ?? 0, icon: Users, spark: salesSpark },
+    // ⚠️ `?? null`, never `?? 0`. No events at all is not "unchanged" — `0` printed a measurement
+    // ("0,0%") beside a value that was already honestly "—", so one tile made two different claims
+    // about the same missing data.
+    { label: "Pengunjung", value: visits ? num(visits.value) : NO_FIGURE, delta: visits?.delta ?? null, icon: Users, spark: salesSpark },
     { label: "Nilai Order Rata-rata", value: IDR(s.aov.value, { compact: true }), delta: s.aov.delta, icon: Receipt, spark: salesSpark },
   ];
 
@@ -82,8 +85,8 @@ export function AnalitikClient({
   const summaryRows = [
     { label: "Total pesanan", value: num(stats.orders) },
     { label: "Total penjualan", value: IDR(stats.revenue) },
-    { label: "Nilai order rata-rata", value: stats.orders ? IDR(stats.aov) : "—" },
-    { label: "Rata-rata item / pesanan", value: stats.orders ? stats.itemsPerOrder.toFixed(1).replace(".", ",") : "—" },
+    { label: "Nilai order rata-rata", value: stats.orders ? IDR(stats.aov) : NO_FIGURE },
+    { label: "Rata-rata item / pesanan", value: stats.orders ? stats.itemsPerOrder.toFixed(1).replace(".", ",") : NO_FIGURE },
   ];
 
   const totalMix = mix.baru + mix.kembali;

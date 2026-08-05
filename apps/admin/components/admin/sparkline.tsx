@@ -24,16 +24,20 @@ export function sparklinePath(data: number[], w = 88, h = 32): { d: string; area
 /**
  * @param area  fill the area under the line with a fading gradient (the KPI tiles). The money strip
  *              draws the stroke alone, which is the only difference the two copies ever had.
+ * @param up    `null` = the tile has NO comparison period, so there is no rise or fall to colour.
+ *              Green would claim growth and red would claim a collapse; both are verdicts over a
+ *              figure that does not exist. It draws muted — the same decision the badge above it
+ *              makes, from the same `delta === null`.
  */
-export function Sparkline({ data, up, area = false }: { data: number[]; up: boolean; area?: boolean }) {
+export function Sparkline({ data, up, area = false }: { data: number[]; up: boolean | null; area?: boolean }) {
   const w = 88, h = 32;
   const path = sparklinePath(data, w, h);
   if (!path) return null;
-  const stroke = up ? "var(--chart-3)" : "var(--destructive)";
+  const stroke = up === null ? "var(--muted-foreground)" : up ? "var(--chart-3)" : "var(--destructive)";
   // Deterministic (no `useId` — these render in server components) and per-tile. `up` is part of it
   // because two tiles with the same series length and first value would otherwise share one gradient,
   // and a falling tile would be filled with the rising tile's green.
-  const id = `spk-${up ? "u" : "d"}-${data.length}-${Math.round(data[0])}`;
+  const id = `spk-${up === null ? "n" : up ? "u" : "d"}-${data.length}-${Math.round(data[0])}`;
   return (
     <svg width={w} height={h} className="overflow-visible" aria-hidden>
       {area && (
