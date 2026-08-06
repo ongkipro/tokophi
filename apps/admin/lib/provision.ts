@@ -2,6 +2,7 @@ import "server-only";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { BILLING } from "@tokophi/lib/billing";
+import { normalizePhone } from "@tokophi/lib/validate";
 import { NAME_MAX, STORE_NAME_MIN, isReservedSlug, slugify } from "@tokophi/lib/store-slug";
 import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
 
@@ -23,6 +24,26 @@ export type ProvisionInput = {
   googleSub?: string | null;
   /** Existing user (e.g. a Google account with no store yet) → reuse it instead of inserting one. */
   userId?: string;
+  /**
+   * ── STEPS ② AND ③ OF THE SIGNUP WIZARD — ALL OPTIONAL, ON PURPOSE ─────────────────────────────
+   *
+   * A shop can be created from step ① alone (name, email, password). Everything here is collected
+   * after the account already exists in the form's state and written in the SAME transaction, so a
+   * merchant who abandons the wizard halfway still HAS a shop — the alternative is a signup that can
+   * fail at step ③ and leave someone with nothing after typing an address.
+   *
+   * Why collect it at signup at all: `store_settings.sender_kecamatan_id` is what prices every
+   * shipment (`shipping-quote.ts`), and a store with none falls back to its registered CITY, fuzzy
+   * matched — a guess, flagged `originFrom: "store-city"`. A Surabaya merchant would quote Yogyakarta
+   * rates until they found the setting. And the queued store is READ-ONLY while it waits for review,
+   * so a "fill this in later" checklist could not be filled in until an operator approved it.
+   */
+  ownerPhone?: string | null;
+  senderAddress?: string | null;
+  senderKecamatanId?: number | null;
+  senderKecamatanName?: string | null;
+  senderKelurahanName?: string | null;
+  senderPostcode?: string | null;
 };
 
 export type ProvisionResult = {
@@ -165,6 +186,23 @@ export async function provisionStore(input: ProvisionInput): Promise<ProvisionRe
   if (storeName.length > NAME_MAX) throw new ProvisionInputError(`Nama toko maksimal ${NAME_MAX} karakter.`);
   if (ownerName.length > NAME_MAX) throw new ProvisionInputError(`Nama pemilik maksimal ${NAME_MAX} karakter.`);
 
+  // The optional wizard fields are normalised and bounded HERE, at the boundary, for the same reason
+  // the name rules moved here: the Google path does not go through the form either. A field that is
+  // present but junk is refused; a field that is ABSENT is not an error — steps ②/③ are skippable.
+  if (input.ownerPhone) {
+    const phone = normalizePhone(input.ownerPhone);
+    // Structure, not carrier — never a prefix list (AGENTS.md: a list would one day refuse a real
+    // customer, silently and permanently).
+    if (!phone) throw new ProvisionInputError("Nomor WhatsApp tidak valid. Contoh: 0812xxxxxxx.");
+    input = { ...input, ownerPhone: phone };
+  }
+  if (input.senderAddress && input.senderAddress.trim().length < 10) {
+    throw new ProvisionInputError("Alamat penjemputan terlalu pendek — tulis jalan, nomor, RT/RW.");
+  }
+  if (input.senderPostcode && !/^\d{5}$/.test(input.senderPostcode.trim())) {
+    throw new ProvisionInputError("Kode pos harus 5 angka.");
+  }
+
   const base = slugify(storeName) || slugify(email.split("@")[0]) || "toko";
   const slug = await uniqueSlug(base);
   const trialEndsAt = new Date(Date.now() + BILLING.TRIAL_DAYS * 86_400_000);
@@ -249,7 +287,19 @@ async function insertTenant({
       .returning();
     await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: new Date() });
     await tx.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
-    await tx.insert(schema.storeSettings).values({ storeId: st.id });
+    // Steps ②/③ land HERE, in the same transaction as the store itself — never as a follow-up write,
+    // which the queued (read-only) store would refuse. `sender_kecamatan_id` is the field that makes
+    // every future shipping quote real instead of a fuzzy match on the city name.
+    await tx.insert(schema.storeSettings).values({
+      storeId: st.id,
+      senderName: ownerName,
+      senderPhone: input.ownerPhone ?? null,
+      senderAddress: input.senderAddress ?? null,
+      senderKecamatanId: input.senderKecamatanId ?? null,
+      senderKecamatanName: input.senderKecamatanName ?? null,
+      senderKelurahanName: input.senderKelurahanName ?? null,
+      senderPostcode: input.senderPostcode ?? null,
+    });
     await tx.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: 0, ordersCount: 0, productsCount: 0 });
     await tx.insert(schema.platformActivity).values({
       kind: "signup",
