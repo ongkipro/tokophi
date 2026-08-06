@@ -80,7 +80,21 @@
     var path = location.pathname.replace(/\/+$/, "") || "/";
 
     // ---- product_view ----
-    if (path.indexOf("/produk/") === 0 && path.length > "/produk/".length) track("product_view");
+    // ⚠️ CORONG IKLAN JUGA HALAMAN PRODUK. Menilai dari jalur URL saja melewatkan `/promo/<handle>`
+    // dan `/lp/<slug>` — halaman produk tunggal yang merchant BAYAR trafiknya — sehingga Analitik
+    // Seller mencatat `purchase` tanpa `product_view` yang mendahuluinya, dan tingkat konversi corong
+    // itu dihitung dari penyebut yang tak pernah terisi. Cacat yang sama persis dengan yang ada di
+    // MarketingPixels (NOTE-26); ditambal sebagai KELAS, bukan satu instans, memakai penanda yang
+    // sama: `data-page-product` yang dipasang OrderFunnel.
+    // ⚠️ DOM dibaca lewat `ready()`: skrip ini ada di <head>, jadi membacanya di sini selalu null —
+    // jebakan yang sudah pernah membuat satu cabang di MarketingPixels mustahil dijangkau.
+    function ready(fn) {
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn, { once: true });
+      else fn();
+    }
+    var isProductPath = path.indexOf("/produk/") === 0 && path.length > "/produk/".length;
+    if (isProductPath) track("product_view");
+    else ready(function () { if (document.querySelector("[data-page-product]")) track("product_view"); });
 
     // ---- checkout_start: the checkout page was opened ----
     if (path === "/checkout") track("checkout_start");
