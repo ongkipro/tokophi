@@ -1,0 +1,123 @@
+---
+interface Props {
+  signupUrl: string;
+}
+
+const { signupUrl } = Astro.props;
+---
+
+<section class="final-cta" aria-labelledby="final-cta-heading" data-motion-reveal>
+  <div class="cta-copy">
+    <h2 id="final-cta-heading">Kelola toko dengan alur yang lebih jelas.</h2>
+    <p>Buat toko, susun katalog, dan proses pesanan dari satu tempat.</p>
+  </div>
+
+  <a class="cta-link" href={signupUrl}>Buat toko</a>
+</section>
+
+<style>
+  .final-cta {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2rem;
+    overflow: hidden;
+    padding: clamp(2rem, 6vw, 4.5rem);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 72%, white);
+    border-radius: clamp(1rem, 2vw, 1.5rem);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    box-shadow: 0 28px 70px -42px color-mix(in srgb, var(--color-primary) 75%, transparent);
+  }
+
+  .final-cta::after {
+    content: "Φ";
+    position: absolute;
+    z-index: -1;
+    right: clamp(-1.25rem, -1vw, -0.5rem);
+    bottom: clamp(-5rem, -8vw, -2.75rem);
+    color: color-mix(in srgb, var(--color-on-primary) 9%, transparent);
+    font-family: var(--font-serif);
+    font-size: clamp(12rem, 30vw, 24rem);
+    font-weight: 600;
+    line-height: 0.72;
+    pointer-events: none;
+  }
+
+  .cta-copy {
+    max-width: 42rem;
+  }
+
+  h2 {
+    max-width: 17ch;
+    font-family: var(--font-serif);
+    font-size: clamp(2rem, 1.4rem + 2.5vw, 3.75rem);
+    font-weight: 600;
+    letter-spacing: -0.022em;
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+
+  .cta-copy > p:last-child {
+    max-width: 35rem;
+    margin-top: 1rem;
+    color: color-mix(in srgb, var(--color-on-primary) 78%, transparent);
+    font-size: 1rem;
+    line-height: 1.65;
+    text-wrap: pretty;
+  }
+
+  .cta-link {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    min-height: 3rem;
+    padding: 0.75rem 1.15rem;
+    border: 1px solid var(--color-on-primary);
+    border-radius: 0.75rem;
+    background: var(--color-on-primary);
+    color: var(--color-primary);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-decoration: none;
+    transition:
+      transform 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .cta-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px -14px rgba(8, 9, 19, 0.7);
+  }
+
+  .cta-link:active {
+    transform: scale(0.98);
+  }
+
+  .cta-link:focus-visible {
+    outline-color: var(--color-on-primary);
+  }
+
+  @media (min-width: 48rem) {
+    .final-cta {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 3rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cta-link {
+      transition: none;
+    }
+
+    .cta-link:hover {
+      transform: none;
+    }
+  }
+</style>

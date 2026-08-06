@@ -1,0 +1,38 @@
+---
+import Base from "./Base.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import MotionLayer from "../components/MotionLayer.astro";
+
+interface Props {
+  title: string;
+  description: string;
+  path: string;
+  jsonLd?: unknown;
+  noindex?: boolean;
+  mainClass?: string;
+}
+
+const {
+  title,
+  description,
+  path,
+  jsonLd,
+  noindex = false,
+  mainClass = "marketing-main",
+} = Astro.props;
+
+const loginUrl = import.meta.env.PUBLIC_LOGIN_URL || "https://app.tokophi.com/login";
+const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
+---
+
+<Base {title} {description} {path} {jsonLd} {noindex}>
+  <div class="shell marketing-shell">
+    <SiteHeader currentPath={path} {loginUrl} {signupUrl} />
+    <main class={mainClass}>
+      <slot />
+    </main>
+    <SiteFooter {loginUrl} {signupUrl} />
+  </div>
+  <MotionLayer />
+</Base>

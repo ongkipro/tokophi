@@ -1,0 +1,34 @@
+---
+import MarketingLayout from "../layouts/MarketingLayout.astro";
+import PageHero from "../components/PageHero.astro";
+import FinalCta from "../components/FinalCta.astro";
+
+const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
+const title = "Cara kerja Tokophi untuk seller online";
+const description = "Pelajari alur Tokophi dari menyiapkan toko dan katalog sampai menerima, memproses, dan mengirim pesanan.";
+const steps = [
+  ["Siapkan toko", "Lengkapi identitas dan informasi dasar yang akan digunakan pada storefront Anda."],
+  ["Susun katalog", "Tambahkan produk, kategori, harga, variasi, dan stok yang akan dilihat pembeli."],
+  ["Terima pesanan", "Periksa detail barang, data penerima, pembayaran, dan layanan pengiriman yang dipilih."],
+  ["Proses pemenuhan", "Siapkan barang dan lanjutkan tahapan pesanan melalui Dashboard Seller."],
+  ["Kirim pesanan", "Gunakan detail pengiriman pada pesanan untuk melanjutkan penyerahan paket."],
+] as const;
+---
+
+<MarketingLayout {title} {description} path="/cara-kerja/">
+  <PageHero eyebrow="Cara kerja" title="Dari toko baru sampai pesanan terkirim." description="Tokophi menyusun perjalanan seller menjadi tahapan yang bisa diperiksa satu per satu." primaryHref={signupUrl} primaryLabel="Mulai buat toko" secondaryHref="/fitur/" secondaryLabel="Pelajari fitur" />
+  <section class="section-block" aria-labelledby="flow-title">
+    <div class="section-heading-wide" data-motion-reveal><h2 id="flow-title">Alur operasional yang mudah diikuti.</h2><p>Tidak semua langkah berlangsung otomatis. Dashboard Seller menunjukkan konteks yang dibutuhkan agar seller dapat mengambil tindakan pada tahap yang tepat.</p></div>
+    <ol class="numbered-flow" data-motion-stagger>
+      {steps.map(([heading, copy]) => <li data-motion-item><h3>{heading}</h3><p>{copy}</p></li>)}
+    </ol>
+  </section>
+  <section class="section-block" aria-labelledby="roles-title">
+    <div class="section-heading-wide" data-motion-reveal><h2 id="roles-title">Dua sisi, satu alur toko.</h2><p>Seller bekerja melalui Dashboard Seller, sementara pembeli berinteraksi melalui storefront. Data pesanan menghubungkan keduanya.</p></div>
+    <div class="content-grid" data-motion-stagger>
+      <article class="content-card" data-motion-item><p class="label">Dashboard Seller</p><h3>Tempat seller mengambil tindakan</h3><p>Kelola produk dan periksa pekerjaan yang mengikuti pesanan masuk.</p></article>
+      <article class="content-card" data-motion-item><p class="label">Storefront</p><h3>Tempat pembeli bertransaksi</h3><p>Jelajahi katalog, tentukan barang, lalu lanjutkan ke checkout.</p></article>
+    </div>
+  </section>
+  <FinalCta {signupUrl} />
+</MarketingLayout>

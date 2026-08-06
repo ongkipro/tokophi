@@ -1,0 +1,32 @@
+---
+import MarketingLayout from "../layouts/MarketingLayout.astro";
+import PageHero from "../components/PageHero.astro";
+import { FeatureIconGrid } from "../components/FeatureIconGrid";
+import FinalCta from "../components/FinalCta.astro";
+
+const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
+const title = "Fitur toko online untuk operasional seller | TokoΦ";
+const description = "Kelola katalog, stok, pesanan, pembayaran, pelanggan, promosi, dan aktivitas toko melalui Dashboard Seller Tokophi.";
+---
+
+<MarketingLayout {title} {description} path="/fitur/">
+  <PageHero eyebrow="Fitur" title="Pekerjaan toko, tersusun dalam satu ruang kerja." description="Dari katalog sampai pesanan, Tokophi membantu seller melihat pekerjaan penting tanpa berpindah-pindah sistem." primaryHref={signupUrl} primaryLabel="Buat toko" secondaryHref="/demo/" secondaryLabel="Lihat demo" />
+  <section class="section-block" aria-labelledby="feature-grid-title">
+    <div class="section-heading-wide" data-motion-reveal>
+      <h2 id="feature-grid-title">Satu sumber untuk pekerjaan harian.</h2>
+      <p>Setiap bagian disusun untuk membantu seller memahami apa yang tersedia, apa yang perlu diperiksa, dan langkah berikutnya.</p>
+    </div>
+    <FeatureIconGrid />
+  </section>
+  <section class="section-block" aria-labelledby="storefront-title">
+    <div class="section-heading-wide" data-motion-reveal>
+      <h2 id="storefront-title">Dashboard Seller dan storefront saling terhubung.</h2>
+      <p>Informasi produk yang dikelola seller menjadi bagian dari pengalaman toko yang dilihat pembeli. Perubahan penting tetap berada dalam alur kerja seller.</p>
+    </div>
+    <div class="content-grid" data-motion-stagger>
+      <article class="content-card" data-motion-item><p class="label">Untuk seller</p><h3>Kelola dari Dashboard Seller</h3><p>Atur katalog, tinjau pesanan, serta lanjutkan pekerjaan operasional dari satu tempat.</p></article>
+      <article class="content-card" data-motion-item><p class="label">Untuk pembeli</p><h3>Belanja melalui storefront</h3><p>Pembeli melihat produk, keranjang, dan checkout melalui toko publik milik seller.</p></article>
+    </div>
+  </section>
+  <FinalCta {signupUrl} />
+</MarketingLayout>

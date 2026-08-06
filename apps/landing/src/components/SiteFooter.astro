@@ -1,20 +1,89 @@
 ---
 import { IDENTITY } from "../lib/identity";
+import { MARKETING_ROUTES } from "../lib/navigation";
 
 interface Props {
   class?: string;
+  loginUrl?: string;
+  signupUrl?: string;
 }
-const { class: className = "" } = Astro.props;
 
-// NO year. The build is static, so `new Date().getFullYear()` freezes at the moment the image was
-// built and is wrong from the next 1 Januari onward — silently, forever, until someone redeploys.
-// A copyright line does not need a year to be valid, and this one can never be stale.
+const {
+  class: className = "",
+  loginUrl = "https://app.tokophi.com/login",
+  signupUrl = "https://app.tokophi.com/daftar",
+} = Astro.props;
 ---
 
-<footer class:list={["shell-foot", className]}>
-  <p>&copy; {IDENTITY.legalName ?? "TokoΦ"}</p>
-  <nav aria-label="Tautan legal">
-    <a href="/privasi/">Kebijakan Privasi</a>
-    <a href="/kontak/">Kontak</a>
+<footer class:list={["site-footer", className]}>
+  <div class="footer-lead">
+    <a href="/" class="wordmark" aria-label="TokoΦ, halaman utama">
+      <span class="wordmark-text">Toko<span class="wordmark-phi">Φ</span></span>
+    </a>
+    <p>Satu alur operasional untuk toko online yang ingin tumbuh tanpa menambah keruwetan.</p>
+  </div>
+
+  <nav class="footer-group" aria-label="Jelajahi Tokophi">
+    <p>Produk</p>
+    {MARKETING_ROUTES.map((route) => <a href={route.href}>{route.label}</a>)}
   </nav>
+
+  <nav class="footer-group" aria-label="Akun dan bantuan">
+    <p>Akun</p>
+    <a href={loginUrl}>Masuk seller</a>
+    <a href={signupUrl}>Buat toko</a>
+    <a href="/kontak/">Kontak</a>
+    <a href="/privasi/">Kebijakan Privasi</a>
+  </nav>
+
+  <div class="footer-bottom">
+    <p>&copy; {IDENTITY.legalName ?? "TokoΦ"}</p>
+    <p>Infrastruktur commerce untuk penjual Indonesia.</p>
+  </div>
 </footer>
+
+<style>
+  .site-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(9rem, 0.55fr));
+    gap: clamp(2rem, 5vw, 5rem);
+    padding-block: clamp(3rem, 6vw, 5rem) 1.5rem;
+    border-top: 1px solid var(--color-line);
+  }
+
+  .footer-lead p {
+    max-width: 29rem;
+    margin-top: 1rem;
+    color: var(--color-muted);
+    font-size: 0.9375rem;
+    line-height: 1.7;
+  }
+
+  .footer-group { display: grid; align-content: start; gap: 0.7rem; }
+  .footer-group p { margin-bottom: 0.2rem; color: var(--color-ink); font-size: 0.8125rem; font-weight: 700; }
+  .footer-group a { color: var(--color-muted); font-size: 0.875rem; transition: color 0.18s ease; }
+  .footer-group a:hover { color: var(--color-ink); }
+
+  .footer-bottom {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-line);
+    color: var(--color-muted);
+    font-size: 0.75rem;
+  }
+
+  @media (max-width: 720px) {
+    .site-footer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .footer-lead { grid-column: 1 / -1; }
+  }
+
+  @media (max-width: 480px) {
+    .site-footer { grid-template-columns: 1fr; }
+    .footer-lead,
+    .footer-bottom { grid-column: auto; }
+    .footer-bottom { flex-direction: column; }
+  }
+</style>

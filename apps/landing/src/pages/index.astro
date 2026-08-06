@@ -1,145 +1,31 @@
 ---
 import { BILLING } from "@tokophi/lib/billing";
-import Base from "../layouts/Base.astro";
-import SiteHeader from "../components/SiteHeader.astro";
-import SiteFooter from "../components/SiteFooter.astro";
+import MarketingLayout from "../layouts/MarketingLayout.astro";
+import LandingHero from "../components/LandingHero.astro";
+import TrustStrip from "../components/TrustStrip.astro";
+import RouteGateway from "../components/RouteGateway.astro";
+import StoreDemo from "../components/StoreDemo.astro";
+import FinalCta from "../components/FinalCta.astro";
 
-// Link targets are configurable at BUILD time (static output) via PUBLIC_* env vars.
-// Production values are the defaults; a dev build can point them at localhost:
-//   PUBLIC_LOGIN_URL=http://localhost:3000/login PUBLIC_SIGNUP_URL=http://localhost:3000/daftar npm run build -w @tokophi/landing
-// `||`, not `??`: an unset Docker ARG becomes an EMPTY STRING env var, not undefined — `??` would
-// keep the "" and render href="" (this shipped once; the live buttons had no target).
-const loginUrl = import.meta.env.PUBLIC_LOGIN_URL || "https://app.tokophi.com/login";
 const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
-
-// ⚠️ "panel admin" is forbidden in user-visible copy (AGENTS.md — the merchant's surface is the
-// SELLER). This <title> is the most-indexed string on the platform and it propagates into og:,
-// twitter: and the JSON-LD `description`, so the wrong word here is the wrong word in five places.
-const title = "TokoΦ — satu panel untuk toko online Anda";
-const description =
-  "TokoΦ menyatukan produk, pesanan, pelanggan, pembayaran, dan pengiriman untuk penjual di Indonesia dalam satu panel. Bahasa Indonesia, rupiah, kurir dan pembayaran lokal — tanpa mendaftar akun kurir atau pembayaran sendiri.";
+const demoUrl = import.meta.env.PUBLIC_DEMO_URL || "https://batik-nusantara.tokophi.id";
+const title = "TokoΦ | Satu panel untuk toko online Anda";
+const description = "Kelola produk, pesanan, pembayaran, dan pengiriman dari satu tempat yang dirancang untuk penjual Indonesia.";
 const url = "https://tokophi.com/";
-const ogImage = new URL("/og.png", url).href;
-
-// Structured data. Deliberately NO `offers`/price: the plan is priced ex-PPN (the merchant pays
-// base + 11%), so quoting a single number here would be a claim we'd have to defend. Say what
-// TokoΦ is, not what it costs.
 const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
-    {
-      "@type": "Organization",
-      "@id": `${url}#organization`,
-      name: "TokoΦ",
-      url,
-      logo: ogImage,
-      description,
-      areaServed: { "@type": "Country", name: "Indonesia" },
-    },
-    {
-      "@type": "WebSite",
-      "@id": `${url}#website`,
-      url,
-      name: "TokoΦ",
-      inLanguage: "id-ID",
-      publisher: { "@id": `${url}#organization` },
-    },
-    {
-      "@type": "SoftwareApplication",
-      name: "TokoΦ",
-      applicationCategory: "BusinessApplication",
-      operatingSystem: "Web",
-      inLanguage: "id-ID",
-      url,
-      publisher: { "@id": `${url}#organization` },
-      description,
-    },
+    { "@type": "Organization", "@id": `${url}#organization`, name: "TokoΦ", url, areaServed: { "@type": "Country", name: "Indonesia" } },
+    { "@type": "WebSite", "@id": `${url}#website`, url, name: "TokoΦ", inLanguage: "id-ID", publisher: { "@id": `${url}#organization` } },
+    { "@type": "SoftwareApplication", name: "TokoΦ", applicationCategory: "BusinessApplication", operatingSystem: "Web", inLanguage: "id-ID", url, description },
   ],
 };
 ---
 
-<Base {title} {description} path="/" {jsonLd}>
-  <div class="shell shell-home">
-    <SiteHeader class="rise" />
-
-    <main class="home-main">
-      <div class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow rise pill" style="animation-delay:60ms">
-            <span class="dot" aria-hidden="true"></span>
-            Untuk penjual di Indonesia
-          </p>
-
-          <h1 class="display rise" style="animation-delay:120ms">
-            Seluruh toko Anda, dalam satu panel.
-          </h1>
-
-          <p class="lede rise" style="animation-delay:180ms">
-            <strong>TokoΦ</strong> menyatukan produk, pesanan, pelanggan, pembayaran, dan pengiriman
-            untuk penjual di Indonesia. Buat toko, susun katalognya, dan urus semuanya dari satu
-            tempat.
-          </p>
-
-          <div class="cta rise" style="animation-delay:240ms">
-            <a href={signupUrl} class="btn btn-primary">Daftar toko</a>
-            <a href={loginUrl} class="btn btn-ghost">Masuk</a>
-          </div>
-
-          {/* The trial length comes from @tokophi/lib/billing, the same constant the Seller panel
-              and the billing cron read — never typed here, where it would drift the day it changes. */}
-          <p class="micro rise" style="animation-delay:300ms">
-            Gratis {BILLING.TRIAL_DAYS} hari untuk mulai. Sudah punya toko di TokoΦ? Langsung masuk.
-          </p>
-        </div>
-
-        <!-- Signature: Φ is the golden ratio, so the mark sits inside a real Fibonacci
-             subdivision (233×144 → 144, 89, 55, 34, 21, 13, 8, 5). Order out of a busy shop. -->
-        <div class="plate-wrap" aria-hidden="true">
-          <svg class="plate" viewBox="0 0 233 144" role="presentation" focusable="false">
-            <g class="plate-grid">
-              <rect x="144" y="0" width="89" height="89" class="plate-fill"></rect>
-              <rect x="0" y="0" width="144" height="144"></rect>
-              <rect x="144" y="0" width="89" height="89"></rect>
-              <rect x="178" y="89" width="55" height="55"></rect>
-              <rect x="144" y="110" width="34" height="34"></rect>
-              <rect x="144" y="89" width="21" height="21"></rect>
-              <rect x="165" y="89" width="13" height="13"></rect>
-              <rect x="170" y="102" width="8" height="8"></rect>
-            </g>
-            <g class="plate-mark">
-              <ellipse cx="72" cy="72" rx="31" ry="39" fill="none" stroke="currentColor" stroke-width="7.5"
-              ></ellipse>
-              <rect x="68.25" y="19" width="7.5" height="106" rx="3.75" fill="currentColor"></rect>
-            </g>
-          </svg>
-        </div>
-      </div>
-
-      <!-- Inside <main> on purpose: these three were siblings of it, so landmark navigation
-           ("jump to main content") skipped the only place the page says what it does. -->
-      <ul class="facts rise" style="animation-delay:360ms">
-        <li>
-          <h2 class="fact-label">Satu panel</h2>
-          <p>Produk, stok, pesanan, pelanggan, diskon, sampai laporan. Tanpa aplikasi tambahan.</p>
-        </li>
-        <li>
-          {/* NOT "tinggal diaktifkan": payment channels are a PLATFORM decision (ADR 0004) and the
-              merchant has no switch for them at all. What is true is the opposite and better —
-              nothing to register, nothing to configure. E-wallet is off the list on purpose: only
-              QRIS + virtual account are enabled channels (packages/db/src/seed.ts). */}
-          <h2 class="fact-label">Bayar &amp; kirim</h2>
-          <p>
-            QRIS, transfer bank, COD, dan kurir dalam negeri — disediakan dan dikelola TokoΦ, tanpa
-            akun sendiri.
-          </p>
-        </li>
-        <li>
-          <h2 class="fact-label">Bahasa kita</h2>
-          <p>Antarmuka Bahasa Indonesia, rupiah tanpa sen, tanggal dan angka dalam format lokal.</p>
-        </li>
-      </ul>
-    </main>
-
-    <SiteFooter class="rise" />
-  </div>
-</Base>
+<MarketingLayout {title} {description} path="/" {jsonLd} mainClass="home-main">
+  <LandingHero {signupUrl} demoUrl="/demo/" />
+  <TrustStrip trialDays={BILLING.TRIAL_DAYS} />
+  <RouteGateway />
+  <StoreDemo {demoUrl} />
+  <FinalCta {signupUrl} />
+</MarketingLayout>

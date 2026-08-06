@@ -1,0 +1,26 @@
+---
+import MarketingLayout from "../layouts/MarketingLayout.astro";
+import PageHero from "../components/PageHero.astro";
+import StoreDemo from "../components/StoreDemo.astro";
+import FinalCta from "../components/FinalCta.astro";
+
+const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
+const demoUrl = import.meta.env.PUBLIC_DEMO_URL || "https://batik-nusantara.tokophi.id";
+const title = "Demo toko online Tokophi";
+const description = "Lihat contoh storefront publik Tokophi dan periksa pengalaman katalog, keranjang, serta checkout dari sisi pembeli.";
+---
+
+<MarketingLayout {title} {description} path="/demo/">
+  <PageHero eyebrow="Demo toko" title="Lihat toko dari sisi pembeli." description="Demo publik membantu Anda memeriksa bentuk storefront sebelum membuat toko sendiri. Gunakan data contoh dan jangan melakukan transaksi nyata." primaryHref={demoUrl} primaryLabel="Buka demo publik" secondaryHref="/cara-kerja/" secondaryLabel="Lihat cara kerja" />
+  <StoreDemo {demoUrl} />
+  <section class="section-block" aria-labelledby="demo-check-title">
+    <div class="section-heading-wide" data-motion-reveal><h2 id="demo-check-title">Apa yang bisa diperiksa?</h2><p>Jelajahi seperti pembeli biasa. Demo berfokus pada pengalaman storefront, bukan akses ke Dashboard Seller.</p></div>
+    <div class="content-grid" data-motion-stagger>
+      <article class="content-card" data-motion-item><p class="label">Katalog</p><h3>Penemuan produk</h3><p>Lihat susunan produk dan informasi yang membantu pembeli memahami penawaran toko.</p></article>
+      <article class="content-card" data-motion-item><p class="label">Keranjang</p><h3>Persiapan checkout</h3><p>Periksa bagaimana barang yang dipilih dirangkum sebelum pembeli melanjutkan.</p></article>
+      <article class="content-card" data-motion-item><p class="label">Checkout</p><h3>Informasi pesanan</h3><p>Lihat alur pengisian informasi yang dibutuhkan untuk membuat pesanan.</p></article>
+      <article class="content-card" data-motion-item><p class="label">Adaptif</p><h3>Tampilan berbagai layar</h3><p>Buka demo dari ponsel atau desktop untuk menilai pengalaman pada perangkat Anda.</p></article>
+    </div>
+  </section>
+  <FinalCta {signupUrl} />
+</MarketingLayout>
