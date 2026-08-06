@@ -25,7 +25,7 @@ import type { FunnelDay } from "@/lib/data/funnel";
 import type { CourierReturns } from "@/lib/data/returns";
 import type { TicketRow } from "@/lib/data/support";
 import type { DayPoint, Product, Order, Activity, Review } from "@/lib/mock/store";
-import { IDR, num, pct } from "@tokophi/lib/format";
+import { IDR, num, pct, share } from "@tokophi/lib/format";
 import { exportCsv } from "@/lib/csv";
 
 export function DashboardClient({
@@ -108,10 +108,18 @@ export function DashboardClient({
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <div>
               <CardTitle>Grafik Penjualan · {rangeLabel(range)}</CardTitle>
-              <CardDescription>
+              {/* ⚠️ EVERY FIGURE ON THIS LINE IS REWRITTEN BY THE RANGE SWITCHER, and it was the
+                  widest re-flow on the dashboard: measured 1440px 2026-08-06, 71,67px between an
+                  all-1 and an all-8 rendering, so each of the four `·` separators landed somewhere
+                  new on every click. tabular-nums pins them.
+                  ⚠️ `share()`, not `toFixed(1)`. Konversi is a part of a whole, and the local copy
+                  printed an ASCII decimal POINT — "konversi 0.0%" — in an id-ID panel where every
+                  other number on the same line carries a comma. It is not `pct()` either: that one
+                  stamps a sign, and this figure is not a change. */}
+              <CardDescription className="tabular-nums">
                 {IDR(s.sales.value)} · {pct(s.sales.delta)} vs {s.compareLabel} · {num(s.orders.value)} pesanan
                 {visits ? ` · ${num(visits.value)} pengunjung` : ""}
-                {conversion ? ` · konversi ${conversion.value.toFixed(1)}%` : ""}
+                {conversion ? ` · konversi ${share(conversion.value)}` : ""}
               </CardDescription>
             </div>
             <div className="hidden items-center gap-4 text-xs text-muted-foreground sm:flex">
@@ -168,7 +176,12 @@ export function DashboardClient({
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                   <div className="h-full rounded-full bg-primary/70" style={{ width: `${(r.count / Math.max(1, orders.length)) * 100}%` }} />
                 </div>
-                <span className="w-6 text-right text-sm font-medium tabular-nums">{r.count}</span>
+                {/* w-11, not w-6. `tabular-nums` only guarantees the digits are the same width — it
+                    cannot make them FIT. Measured 1440px 2026-08-06 on this store: "678" inks
+                    25,7px inside a 24px box, so a three-digit status count spilled left over the
+                    bar it is meant to sit beside, and a four-digit one would spill further. 44px is
+                    the same column width `dashboard/return-by-courier.tsx` uses and holds "1.234". */}
+                <span className="w-11 shrink-0 text-right text-sm font-medium tabular-nums">{num(r.count)}</span>
               </div>
             ))}
           </CardContent>
