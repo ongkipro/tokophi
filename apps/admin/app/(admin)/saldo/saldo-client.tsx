@@ -314,7 +314,7 @@ export function SaldoClient({
           <CardTitle className="flex items-center gap-2">
             <Landmark className="size-4 text-muted-foreground" /> Tarik saldo
           </CardTitle>
-          <CardDescription>Minimum {IDR(ctx.minPayout)}. Dana dikirim ke rekening yang terdaftar.</CardDescription>
+          <CardDescription className="tabular-nums">Minimum {IDR(ctx.minPayout)}. Dana dikirim ke rekening yang terdaftar.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {!hasBank ? (
@@ -388,7 +388,7 @@ export function SaldoClient({
           </div>
             {/* Under BOTH controls now, not inside the input's old grid cell — that placement is what
                 dragged the button's `items-end` baseline down past the input. */}
-            <p className="mt-1.5 text-xs text-muted-foreground">Tersedia {IDR(balance.available)}.</p>
+            <p className="mt-1.5 text-xs text-muted-foreground tabular-nums">Tersedia {IDR(balance.available)}.</p>
           </div>
         </CardContent>
       </Card>

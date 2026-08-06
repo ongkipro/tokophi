@@ -55,7 +55,9 @@ function Tile({ item }: { item: QueueItem }) {
             you cannot finish reading is not a label. Two lines fit every current string; the clamp is
             still there so a future long one degrades instead of shoving the tile. */}
         <div className="mt-1 line-clamp-2 text-sm font-medium">{item.label}</div>
-        <div className="mt-1 line-clamp-2 text-xs text-muted-foreground/75">{clear ? item.done : item.hint}</div>
+        {/* The hint carries figures ("sisa < 20 unit", amounts) under a count that is already
+            tabular; without this the two lines of one tile disagreed. */}
+        <div className="mt-1 line-clamp-2 text-xs text-muted-foreground/75 tabular-nums">{clear ? item.done : item.hint}</div>
       </div>
     </Link>
   );

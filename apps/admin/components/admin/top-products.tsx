@@ -21,7 +21,7 @@ export function TopProducts({ items }: { items: TopProduct[] }) {
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                 <div className="h-full rounded-full bg-primary" style={{ width: `${(p.revenue / max) * 100}%` }} />
               </div>
-              <span className="w-16 shrink-0 text-right text-xs text-muted-foreground">{num(p.units)} terjual</span>
+              <span className="w-16 shrink-0 text-right text-xs text-muted-foreground tabular-nums">{num(p.units)} terjual</span>
             </div>
           </div>
           <span className="w-5 text-right text-xs font-medium text-muted-foreground">#{i + 1}</span>

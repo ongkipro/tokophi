@@ -26,7 +26,7 @@ import {
 
 import { type Product } from "@/lib/mock/store";
 import { toast } from "sonner";
-import { IDR, num } from "@tokophi/lib/format";
+import { IDR, NO_FIGURE, num, share } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { useStoreName } from "@/components/admin/store-context";
 import { GoogleCategoryField } from "./taxonomy-field";
@@ -756,7 +756,12 @@ export function ProductEditor({ product }: { product?: Product }) {
               <p className="text-xs text-muted-foreground">
                 Margin{" "}
                 <span className="font-medium text-foreground tabular-nums">
-                  {priceN > 0 ? `${margin.toFixed(1)}%` : "—"}
+                  {/* `share()`: a gross margin is a part of the price, not a change, so it takes no
+                      "+" — but it DOES go negative when cost exceeds price, and `toFixed` gave that
+                      an ASCII hyphen AND an ASCII decimal point ("-12.5%") next to an `IDR()` on the
+                      same line printing "Rp 12.500". `share` draws the minus the number already has
+                      as U+2212, the way every other figure in this panel draws one. */}
+                  {priceN > 0 ? share(margin) : NO_FIGURE}
                 </span>{" "}
                 · Keuntungan{" "}
                 <span className="font-medium text-foreground tabular-nums">

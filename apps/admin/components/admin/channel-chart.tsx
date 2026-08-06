@@ -2,7 +2,7 @@
 import { Cell, Pie, PieChart } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@tokophi/ui/chart";
 import type { ChannelSlice } from "@/lib/data/dashboard";
-import { IDR } from "@tokophi/lib/format";
+import { IDR, NO_FIGURE, share } from "@tokophi/lib/format";
 
 const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
 const config = { value: { label: "Penjualan" } } satisfies ChartConfig;
@@ -24,7 +24,10 @@ export function ChannelChart({ data }: { data: ChannelSlice[] }) {
           <li key={d.channel} className="flex items-center gap-2 text-sm">
             <span className="size-2.5 shrink-0 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
             <span className="flex-1 text-muted-foreground">{d.channel}</span>
-            <span className="font-medium tabular-nums">{total > 0 ? Math.round((d.value / total) * 100) : 0}%</span>
+            {/* `share()` — a slice of a pie is the definition of a part of a whole. And a total of
+                zero has no slices to be a share OF: it printed "0%" per channel, which reads as a
+                measured nothing rather than as nothing measured. */}
+            <span className="font-medium tabular-nums">{total > 0 ? share((d.value / total) * 100, 0) : NO_FIGURE}</span>
           </li>
         ))}
       </ul>

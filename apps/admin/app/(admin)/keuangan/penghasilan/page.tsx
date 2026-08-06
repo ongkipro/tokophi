@@ -64,7 +64,7 @@ export default async function PenghasilanPage({
             <Clock className="size-4 text-amber-600" /> Belum dilepas
           </p>
           <p className="mt-1 text-3xl font-bold tabular-nums text-muted-foreground">{IDR(f.balance.pending)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-muted-foreground tabular-nums">
             Ditahan sampai <span className="font-medium text-foreground">{num(f.heldOrders)} pesanan</span> berstatus selesai.
             Ini bukan biaya — hanya belum bisa ditarik.
           </p>
@@ -73,7 +73,7 @@ export default async function PenghasilanPage({
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card className="p-4">
-          <p className="text-xs text-muted-foreground">Omzet {days} hari</p>
+          <p className="text-xs text-muted-foreground tabular-nums">Omzet {days} hari</p>
           <p className="mt-1 text-xl font-bold tabular-nums">{IDR(gross)}</p>
         </Card>
         <Card className="p-4">

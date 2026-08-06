@@ -1,9 +1,18 @@
 import { Undo2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
-import { num } from "@tokophi/lib/format";
+import { NO_FIGURE, num, share } from "@tokophi/lib/format";
 
-// `pct()` in lib/format is a *delta* formatter (prefixes "+") — wrong for a rate. Local one.
-const rate = (n: number) => `${(n * 100).toFixed(1)}%`;
+// `share()` is the part-of-a-whole formatter and it is the one this card wants. It is NOT `pct()`:
+// that one stamps a "+"/"−" because it measures a CHANGE, and a return rate is not a change.
+//
+// ⚠️ The local one-liner this replaces — `(n * 100).toFixed(1) + "%"` — got the right IDEA and the
+// wrong OUTPUT: `toFixed` emits an ASCII decimal POINT, so an id-ID panel printed "0.0%" three rows
+// under `return-by-courier.tsx` printing "0,0%" for the same kind of figure. The comment above it
+// said "format locally instead", which is the instruction that produced two divergent copies (this
+// file and `keranjang-client.tsx`) plus one caller that gave up and borrowed `pct()`. A rule
+// re-obeyed by hand at every call site is how that third one happened.
+//
+// `returnRate` arrives as a 0..1 fraction, `share` takes percent — hence the ×100 at each call.
 
 // Shape mirrors `CourierReturns` from `lib/data/returns.ts`. Declared locally on purpose: that
 // module is `server-only` and this card renders inside a client component.
@@ -41,7 +50,7 @@ export function ReturnSummary({ rows }: { rows: CourierReturnRow[] }) {
               <div>
                 <div className="text-xs text-muted-foreground">Tingkat retur (semua)</div>
                 <div className="text-2xl font-semibold tabular-nums">
-                  {rate(shipped ? returned / shipped : 0)}
+                  {share(shipped ? (returned / shipped) * 100 : 0)}
                 </div>
                 <div className="text-xs text-muted-foreground tabular-nums">
                   {num(returned)} dari {num(shipped)} paket terkirim
@@ -50,7 +59,7 @@ export function ReturnSummary({ rows }: { rows: CourierReturnRow[] }) {
               <div>
                 <div className="text-xs text-muted-foreground">Tingkat retur COD</div>
                 <div className="text-2xl font-semibold tabular-nums">
-                  {codShipped === 0 ? "—" : rate(codReturned / codShipped)}
+                  {codShipped === 0 ? NO_FIGURE : share((codReturned / codShipped) * 100)}
                 </div>
                 <div className="text-xs text-muted-foreground tabular-nums">
                   {codShipped === 0
@@ -66,7 +75,7 @@ export function ReturnSummary({ rows }: { rows: CourierReturnRow[] }) {
                   <span className="truncate text-muted-foreground">{r.courier}</span>
                   <span className="tabular-nums">
                     {num(r.returned)}/{num(r.shipped)}{" "}
-                    <span className="text-muted-foreground">({rate(r.returnRate)})</span>
+                    <span className="text-muted-foreground">({share(r.returnRate * 100)})</span>
                   </span>
                 </div>
               ))}

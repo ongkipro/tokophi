@@ -52,4 +52,14 @@ describe("pct is a delta, share is a part of a whole", () => {
     expect(share(83.3)).toBe("83,3%");
     expect(share(83.3)).not.toContain("+");
   });
+
+  // The product editor's gross margin is a share of the price and goes negative when cost exceeds it.
+  // `toFixed()` alone gave it an ASCII hyphen, two lines under a `pct()` printing U+2212.
+  it("a negative share draws the minus it already has — as a minus, not a hyphen", () => {
+    expect(share(-12.5)).toBe("−12,5%");
+    expect(share(-12.5)).not.toContain("-"); // ASCII hyphen
+    // Same rule as `pct`: the sign comes off the number, so a true −0 (and a real 0) carries none.
+    expect(share(-0)).toBe("0,0%");
+    expect(share(-0)).not.toContain("−");
+  });
 });

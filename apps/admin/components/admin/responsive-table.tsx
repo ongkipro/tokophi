@@ -76,7 +76,10 @@ export function DataCard({
   const head = (
     <div className="flex min-w-0 items-center gap-2">
       <div className="min-w-0 flex-1">{title}</div>
-      {meta && <span className="shrink-0 text-xs text-muted-foreground">{meta}</span>}
+      {/* `meta` is the mobile card's timestamp/count slot — its own doc example is `timeAgo(…)`, i.e.
+          a figure that changes on its own between renders. tabular-nums here rather than at each
+          call site, because the shift belongs to the slot, not to any one caller. */}
+      {meta && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{meta}</span>}
     </div>
   );
 
