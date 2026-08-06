@@ -110,3 +110,38 @@ describe("the dashboard queue query asks the same question as pendingApproval", 
     expect(read(DATA)).not.toMatch(/kind\s*:\s*"pending_approval"/);
   });
 });
+
+// ── THE WIZARD'S OPTIONAL STEPS MUST REACH `store_settings`, OR THEY ARE A FORM THAT LIES ────────
+//
+// Steps ② and ③ exist for ONE downstream fact: `sender_kecamatan_id` is what `shipping-quote.ts`
+// prices from. A shop without it falls back to its registered CITY, fuzzy-matched — the response
+// even flags it (`originFrom: "store-city"`). If the wizard collects an address and the insert drops
+// it, every screen still looks right and every quote is a guess; nothing errors, ever.
+describe("signup writes the pickup address it collected", () => {
+  it("provisionStore stores the sender fields on the store_settings row it inserts", () => {
+    const code = read(SELF_SERVE);
+    const at = code.indexOf("insert ( schema . storeSettings )");
+    expect(at, "the store_settings insert moved — check this guard still points at it").toBeGreaterThan(-1);
+    const insert = code.slice(at, at + 700);
+    // The id is the load-bearing one: the name is a label, the id is what a rate is asked for by.
+    expect(insert).toMatch(/senderKecamatanId\s*:/);
+    expect(insert).toMatch(/senderPhone\s*:/);
+    expect(insert).toMatch(/senderAddress\s*:/);
+    expect(insert).toMatch(/senderPostcode\s*:/);
+  });
+
+  it("normalises the phone at the BOUNDARY, not in the form", () => {
+    // The Google path never sees the form, so a rule that lives in the browser is a rule half the
+    // signups skip — the same reason the name bounds moved here.
+    const code = read(SELF_SERVE);
+    expect(code).toMatch(/normalizePhone/);
+    expect(code).toMatch(/from\s*"@tokophi\/lib\/validate"/);
+  });
+
+  it("keeps step ① sufficient — the optional fields are optional in the type too", () => {
+    // A required field here would turn a skipped step into a failed signup.
+    const code = read(SELF_SERVE);
+    expect(code).toMatch(/ownerPhone\s*\?\s*:/);
+    expect(code).toMatch(/senderKecamatanId\s*\?\s*:/);
+  });
+});

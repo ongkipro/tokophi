@@ -48,6 +48,15 @@ export async function registerStore(_prev: RegisterState, formData: FormData): P
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
 
+  // Steps ②/③ of the wizard. Optional by design: step ① alone creates the shop, so a merchant who
+  // stops after it still has one. Read as strings and handed on untouched — `provisionStore`
+  // normalises and bounds them at the boundary, because the Google path never sees this form.
+  const opt = (k: string) => {
+    const v = String(formData.get(k) ?? "").trim();
+    return v || null;
+  };
+  const kecId = Number(formData.get("senderKecamatanId") ?? "");
+
   if (!storeName || !ownerName || !email || !password) return { error: "Semua kolom wajib diisi." };
   if (!EMAIL_RE.test(email)) return { error: "Format email tidak valid." };
   if (password.length < 8) return { error: "Kata sandi minimal 8 karakter." };
@@ -66,6 +75,16 @@ export async function registerStore(_prev: RegisterState, formData: FormData): P
       email,
       passwordHash: hashPassword(password),
       authProvider: "password",
+      ownerPhone: opt("ownerPhone"),
+      senderAddress: opt("senderAddress"),
+      // A district id the browser sent — it is only ever a KiriminAja area id, and `provisionStore`
+      // stores it verbatim because that is the currency `shipping-quote.ts` prices in. An id that
+      // resolves to nothing produces no rates later and the seller fixes it in Pengaturan → Alamat;
+      // it can never mis-price, because a quote is asked for by id, not by name.
+      senderKecamatanId: Number.isFinite(kecId) && kecId > 0 ? kecId : null,
+      senderKecamatanName: opt("senderKecamatanName"),
+      senderKelurahanName: opt("senderKelurahanName"),
+      senderPostcode: opt("senderPostcode"),
     });
   } catch (e) {
     if (e instanceof SignupClosedError) return { error: CLOSED_MSG };
