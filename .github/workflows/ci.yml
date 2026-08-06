@@ -55,7 +55,22 @@ jobs:
       TEST_DB_REQUIRED: "1"
 
     steps:
+      # ⚠️ `fetch-depth: 0` IS LOAD-BEARING, and it is here for exactly one check.
+      #
+      # `verify-migrations` check 4 replays EVERY past revision of `packages/db/drizzle/meta/_journal.json`
+      # in this history and fails on a tag that has quietly gone missing — the class that swallowed
+      # `0046_good_dust` (production never created `kelurahan`, every checkout's ongkir 500'd) and
+      # renumbered `0064_store_public_email` away. Checks 1–3 read the journal against itself and are
+      # structurally blind to it.
+      #
+      # On the default shallow clone that check does not FAIL, it goes VACUOUS: measured on a
+      # `--depth 1` clone of this repo, `git log HEAD -- <journal>` returns **1** revision (the
+      # boundary commit), so "every tag ever recorded" equals "every tag today" and nothing can ever
+      # be missing. A check that cannot go red is decoration — the thing this workflow exists to stop.
+      # The whole history costs 17,9 MiB (`git count-objects -vH`), which is not worth trading for it.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # Node 24 — what the repo is developed on (v24.16.0) and what the Dockerfiles build with.
       - uses: actions/setup-node@v4
@@ -80,10 +95,67 @@ jobs:
       # nothing to do with it, which is how people learn to ignore a check.
       - run: npm ci
 
+      # ── N61 ①: the migration journal, BEFORE anything touches a database ───────────────────────
+      #
+      # It is the only thing that catches two branches both numbering their migration `0064`, and a
+      # `when` stamp that does not increase — which makes drizzle SKIP a migration **while printing
+      # "migrations applied successfully"**. Both have happened here.
+      #
+      # It runs FIRST on purpose. `test/db-setup.ts` migrates `tokophi_test` with these very files, so
+      # a broken journal fails `npm test` further down in a shape that reads like a test bug. Answer
+      # the cheap question (~1 s, no database, no network) before spending 20 minutes on the dear one.
+      #
+      # ⚠️ NOTE ON THE OLD REASON THIS WAS EXCLUDED, which said the `packages/db` scripts "load `.env`
+      # through dotenv, which does not exist on a runner". Measured, that is not what dotenv-cli does:
+      # a `-e` file it cannot find is skipped silently (exit 0), and a key already in the environment
+      # is NOT overridden — so `DATABASE_URL` from the job env above wins, and no fake `.env` has to be
+      # manufactured on the runner. The scripts needed no env plumbing at all. Kept as a note because
+      # the next person will otherwise re-derive the same wrong reason from the same script line.
+      - run: npm run verify-migrations -w @tokophi/db
+
       # `npm test` = vitest run && astro check (storefront) && astro check (landing). The astro half
       # is load-bearing: `SectionRenderer`'s exhaustiveness assertion is only compiled by `astro
       # check`, and for a long time nothing ran it, so that guard was decoration.
+      #
+      # ⚠️ It is ALSO what creates and migrates `tokophi_test` (`test/db-setup.ts`, and with
+      # `TEST_DB_REQUIRED=1` a failure to do so is fatal rather than a skip). The three N61 ② steps
+      # below depend on that side effect — keep them AFTER this one.
       - run: npm test
+
+      # ── N61 ②: RLS, against the database `npm test` just migrated ──────────────────────────────
+      #
+      # `verify-rls` is the gate that sat RED for weeks — its own fixture used the `stores LIMIT 1`
+      # bug, so it compared an empty store's rows against global totals and failed forever. Nobody
+      # read it, and **both cross-tenant leaks fixed in 0058 shipped past it while it was already
+      # failing**. An alarm that is always on is an alarm that is off; an alarm nobody starts is the
+      # same thing with fewer steps.
+      #
+      # Both scripts need the non-owner role `tokophi_app` — created by migration `0012_tenant_rls`
+      # (a `DO $$ … IF NOT EXISTS … CREATE ROLE` block), so a migrated database has it and nothing
+      # extra has to be provisioned on the runner. Verified on a throwaway postgres:16.
+      #
+      # ⚠️ `_test`, not `tokophi`: the job-level `DATABASE_URL` names the database db-setup DERIVES the
+      # test one from, and that base database is created empty by the service container and never
+      # migrated. Pointing these at it would fail on `relation "stores" does not exist`.
+      - name: seed tokophi_test (the RLS verifiers assert over rows, not just the catalog)
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/tokophi_test
+        run: npm run seed -w @tokophi/db
+
+      # Isolation proved as SQL: coverage over every store-scoped table, `stores` itself (the blind
+      # spot 0058 closed), fail-closed with no GUC, WITH CHECK on a cross-tenant write, and the
+      # un-RLS'd child tables that must stay on a reviewed list.
+      - name: verify-rls
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/tokophi_test
+        run: npm run verify-rls -w @tokophi/db
+
+      # The same isolation proved through the code path the admin actually runs — `withTenant()`,
+      # i.e. GUC + `SET LOCAL ROLE`, reads AND writes. Different claim, not a duplicate.
+      - name: verify-rls-app
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/tokophi_test
+        run: npm run verify-rls-app -w @tokophi/db
 
       # `next build` does not typecheck, and neither does ESLint. Only this does — and it is the guard
       # that caught a 4th read site of `suspendedAt` that a manual grep had missed.
@@ -96,6 +168,19 @@ jobs:
 #   · `npm run lint -w @tokophi/admin` — currently red (itemised in specs/docs/BACKLOG.md). Adding it
 #     now would make CI red on day one, which is how a check stops being read. Fix the lint errors,
 #     then add the step.
-#   · `verify-rls` / `verify-ledger` / `verify-migrations` (N61) — the `packages/db` scripts load
-#     `.env` through dotenv, which does not exist on a runner. They need their env handling adjusted
-#     first; a step that fails for the wrong reason teaches people to ignore the right ones.
+#   · `verify-ledger` (N61) — and this one is a DECISION, not a to-do.
+#     ① It answers a question about PRODUCTION DATA: children of `orders` whose parent row is gone,
+#       and what they are worth in a merchant's withdrawable balance. Production carried 48 such rows
+#       (Rp810.000 sitting in `available`). A freshly seeded `tokophi_test` cannot have any, so the
+#       step would be green by construction — the most expensive kind of green there is.
+#     ② The half that IS schema-level — the FKs exist, are VALIDATED, and the trigger fires today —
+#       already runs here: `packages/db/src/verify-ledger.test.ts` asserts all of it against
+#       `tokophi_test` inside `npm test`, including a deliberately planted orphan. A CI step would
+#       duplicate a check that already runs and answer nothing the tests do not.
+#     ③ It is NOT read-only, whatever the file header says: `refusesDanglingInsert` opens a write
+#       transaction (account + store + a dangling ledger row) that always rolls back. Safe against
+#       production, and confirmed so on 2026-08-05 — but it is not something to fire per PR.
+#     PROPOSED instead: a weekly `schedule:` workflow running it against production, with the
+#     credential from a repository secret. Not added here — it needs a secret this branch cannot
+#     create, and slipping a production-touching job into a PR-gate workflow is how the two get
+#     confused later. Filed for NEXT.md (its N61 entry already asks for exactly this cron).
