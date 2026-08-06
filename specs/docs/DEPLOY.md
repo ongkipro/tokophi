@@ -436,6 +436,36 @@ thing it tests has not happened, it is not a check.
 Corollary: `docker ps` during a build shows an extra short-lived Coolify container (a random-looking
 name, `Up N seconds`). That is the build running — its presence means the deploy is *in flight*, not done.
 
+### 🔴 …AND THE IMAGE TAG DOES NOT PROVE THE *ENVIRONMENT* ARRIVED (N60, learned 2026-08-06)
+
+Every check above answers "is the right CODE running". None answers "did the right ENV get in", and
+those are different questions with the same green light. Measured 5→6 August: `SIGNUP_ENABLED=true`
+was saved in Coolify at **17:03 UTC**; deployment #368 had started at **16:59** — Coolify snapshots
+the environment when a deployment BEGINS — so the generated compose read `SIGNUP_ENABLED: ''`.
+Correct image tag, healthy containers, all four hosts 200/307, and `/daftar` still shut. It was found
+only by hand, with `docker exec … printenv`.
+
+**⚠️ The value must be saved BEFORE the deployment starts. Saving it during a build silently misses
+that build** — and the next webhook build (someone else's merge) will pick it up, which makes the
+symptom look intermittent.
+
+Ask the process itself, from inside the container so the secret never reaches your shell history:
+
+```bash
+ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 \
+  'c=$(docker ps --format "{{.Names}}" | grep -m1 "^admin-"); \
+   docker exec "$c" sh -lc "wget -qO- \"http://localhost:3000/api/health/env?secret=\$CRON_SECRET\""'
+```
+
+`{"ok":true,"missing":[]}` is the answer you want. `ok:false` names exactly which REQUIRED variable is
+empty — and the list distinguishes required from optional, because half of them are *supposed* to be
+empty (`SIGNUP_ENABLED` empty = signup closed on purpose; `GOOGLE_CLIENT_ID` empty = the button is
+hidden). It returns **names and presence only, never a value**: half the list is credentials.
+
+The route is excluded from the auth middleware exactly like `api/cron/` — it is asked by a machine
+with no session — and carries its own `CRON_SECRET` gate, fail-closed in production. Left inside the
+matcher it answered **307 to /login**, which `curl` reads as success.
+
 ### Container health is NOT the artefact check either (learned again, 2026-07-30)
 
 `RunningFor` catches the "old containers still serving" case. It does **not** catch these three, all of

@@ -62,7 +62,13 @@ export const config = {
   // the public storefront-facing API (e.g. /api/public/ongkir), and robots.txt (which must be
   // served to crawlers, not redirected to /login). Routes excluded here still get the
   // X-Robots-Tag header from next.config.ts `headers()`.
+  //
+  // ⚠️ `api/health/` is excluded for the same reason as `api/cron/`: it is asked BY A MACHINE that
+  // holds no session — right after a deploy, to find out whether the environment actually arrived
+  // (N60). Left inside the matcher it answered **307 to /login**, which a `curl` reads as "fine" —
+  // measured while building it. It carries its own gate (`CRON_SECRET`, fail-closed in production),
+  // so leaving the matcher does not leave it open.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|products/|api/public/|api/cron/|api/uploads/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|products/|api/public/|api/cron/|api/health/|api/uploads/).*)",
   ],
 };
