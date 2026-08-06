@@ -1,0 +1,91 @@
+# N59 — the first thing in this repo that runs the tests without a human remembering to.
+#
+# WHY IT EXISTS. `main` has shipped RED twice in one week, both times unnoticed for hours:
+# `packages/lib/src/store-slug.test.ts` from #157 until #168, and `apps/admin/lib/seller-entity-links.test.ts`
+# from `e6d557e` until somebody happened to run the full suite. Nothing blocked either merge, because
+# nothing ran. See `specs/docs/tasks/2026-08-06-alerting-gaps.md` ⓐ.
+#
+# The recipient is whoever opens the PR, and the place they will certainly see it is the PR's own
+# status check — the rule this repo keeps relearning: an alarm nobody reads is an alarm that is off.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push supersedes the first: the answer that matters is the one about the latest commit.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: tests · astro check · typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    # ⚠️ THE DATABASE IS NOT OPTIONAL HERE, AND THAT IS THE WHOLE POINT.
+    #
+    # `test/db-setup.ts` derives `<DATABASE_URL>_test`, creates it and migrates it to head. Without a
+    # database it prints a banner and exits 0 — which is exactly how 22 ledger tests (the code that
+    # decides when a sale becomes withdrawable) went unrun for months. `TEST_DB_REQUIRED=1` below
+    # turns that skip into a failure.
+    #
+    # postgres:16 matches `docker-compose.coolify.yml`; the superuser is needed because db-setup
+    # connects to /postgres and issues CREATE DATABASE.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tokophi
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # The suites run against `tokophi_test`, derived from this. The name MUST end in `_test` or
+      # db-setup refuses — the guard that keeps these write-and-rollback suites off a shared database.
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/tokophi
+      TEST_DB_REQUIRED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 24 — what the repo is developed on (v24.16.0) and what the Dockerfiles build with.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      # ⚠️ npm 11 does NOT run a dependency's install scripts unless the package is named. Exactly one
+      # package here has one — `unrs-resolver` (postinstall: fetches its platform napi binary, used by
+      # the ESLint import resolver). It is named rather than reaching for
+      # `--dangerously-allow-all-scripts`: this is a lockfile with hundreds of packages, and "allow
+      # everything" is a supply-chain decision, not an install flag.
+      - run: npm ci --allow-scripts unrs-resolver
+
+      # `npm test` = vitest run && astro check (storefront) && astro check (landing). The astro half
+      # is load-bearing: `SectionRenderer`'s exhaustiveness assertion is only compiled by `astro
+      # check`, and for a long time nothing ran it, so that guard was decoration.
+      - run: npm test
+
+      # `next build` does not typecheck, and neither does ESLint. Only this does — and it is the guard
+      # that caught a 4th read site of `suspendedAt` that a manual grep had missed.
+      - run: npx tsc --noEmit
+        working-directory: apps/admin
+      - run: npx tsc --noEmit
+        working-directory: apps/super-admin
+
+# NOT here yet, deliberately:
+#   · `npm run lint -w @tokophi/admin` — currently red (itemised in specs/docs/BACKLOG.md). Adding it
+#     now would make CI red on day one, which is how a check stops being read. Fix the lint errors,
+#     then add the step.
+#   · `verify-rls` / `verify-ledger` / `verify-migrations` (N61) — the `packages/db` scripts load
+#     `.env` through dotenv, which does not exist on a runner. They need their env handling adjusted
+#     first; a step that fails for the wrong reason teaches people to ignore the right ones.
