@@ -101,8 +101,26 @@ const HAND_ROLLED_MINT =
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 // Dot-directories are skipped wholesale: `.git`, `.astro`, `.next` — and `.claude/worktrees/*`, which
 // on the main checkout holds entire second copies of this repo (another branch's mint is not ours).
-const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage"]);
-const SOURCE = /\.(?:ts|tsx|mts|cts|cjs|astro|mjs|js|jsx)$/;
+// ⚠️ `specs` IS SKIPPED, AND THIS IS THE ONE EXCEPTION WORTH NAMING RATHER THAN LEAVING IMPLICIT.
+//
+// The claim these sweeps make is about code that SHIPS: no second mint, no fixed password reaching
+// the sink. `specs/` ships nothing — it is not built, not served, not imported by any app, and no
+// bundler has ever seen it. What it DOES hold is documentation that QUOTES the historical defects
+// verbatim, which is the point of a post-mortem: `specs/docs/audit-2026-08-01/html/errors.html`
+// shows `hashPassword(DEV_PASSWORD)` and `tempPassword()` as illustrations of what went wrong.
+// Scanned, they read as a second mint and a hashed literal — a guard reporting a defect that is a
+// SCREENSHOT of the defect it was built to catch.
+//
+// Same shape, and the same reasoning, as `store-slug.test.ts` excluding `*.test.*`: a fixture that
+// provokes a violation on purpose is not a writer of one. The cost is stated rather than hidden — a
+// genuine mint hidden under `specs/` would go unseen, and nothing there can be imported by an app,
+// so it could not be reached even if it existed.
+const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", "specs"]);
+// ⚠️ `.html` is SCANNED, not inert, and the reason is one tag: `<script>`. An HTML file executes
+// JavaScript in a browser, so it can hold a mint exactly like a `.js` can — the census below exists
+// precisely so a new file type is CLASSIFIED rather than silently skipped. It entered the repo on
+// 2026-08-06 with the rescued 1 August audit dashboard (`specs/docs/audit-2026-08-01/html/`).
+const SOURCE = /\.(?:ts|tsx|mts|cts|cjs|astro|mjs|js|jsx|html)$/;
 
 // ⚠️ EVERY EXTENSION THE REPO HOLDS IS EITHER SCANNED OR NAMED HERE AS INERT. The list above had
 // `mts` and `cts` — neither of which any file in this repo uses — and not `cjs`, which is a module

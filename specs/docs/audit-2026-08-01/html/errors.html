@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Errors — TokoΦ audit 2026-08-01</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'media',
+  theme: { extend: {
+    fontFamily: {
+      sans: ['ui-sans-serif','system-ui','-apple-system','Segoe UI','Roboto','Helvetica Neue','Arial','sans-serif'],
+      mono: ['ui-monospace','SFMono-Regular','Menlo','Consolas','Liberation Mono','monospace']
+    }
+  }}
+};
+</script>
+<style>
+  :root { color-scheme: light dark; }
+  body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  [id] { scroll-margin-top: 5rem; }
+  code { overflow-wrap: anywhere; }
+  pre code { overflow-wrap: normal; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 font-sans antialiased">
+
+<!-- ============ NAV ============ -->
+<header class="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/90 backdrop-blur">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6">
+    <div class="flex h-14 items-center gap-3">
+      <a href="index.html" class="shrink-0 font-semibold tracking-tight text-slate-900 dark:text-white">TokoΦ<span class="ml-2 font-mono text-[10px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">audit</span></a>
+      <span class="hidden lg:inline font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">2026-08-01 · 86e3ec3</span>
+      <nav class="ml-auto flex items-center gap-0.5 overflow-x-auto text-sm">
+        <a href="index.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Overview</a>
+        <a href="errors.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium bg-indigo-600 text-white">Errors</a>
+        <a href="architecture.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Architecture</a>
+        <a href="streams.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Streams</a>
+        <a href="decisions.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Decisions</a>
+        <a href="merge.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Merge</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-6xl px-4 sm:px-6">
+
+<section class="border-b border-slate-200 py-10 dark:border-slate-800 sm:py-14">
+  <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400">Errors, ranked</p>
+  <h1 class="mt-3 text-4xl font-semibold tracking-tight text-slate-900 dark:text-white">Fifteen errors, blocking to minor</h1>
+  <p class="mt-4 max-w-3xl text-lg text-slate-600 dark:text-slate-400">Each one carries the concrete failure it produces, the <code class="font-mono text-[0.9em]">file:line</code> it lives at, and whether it is fixed. Severity and status are always stated in words as well as colour.</p>
+
+  <!-- legend -->
+  <div class="mt-7 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wider">
+    <span class="rounded bg-rose-100 px-2 py-1 text-rose-800 dark:bg-rose-950 dark:text-rose-300">🔴 Blocking</span>
+    <span class="rounded bg-orange-100 px-2 py-1 text-orange-800 dark:bg-orange-950 dark:text-orange-300">🟠 Serious</span>
+    <span class="rounded bg-amber-100 px-2 py-1 text-amber-800 dark:bg-amber-950 dark:text-amber-300">🟡 Moderate</span>
+    <span class="rounded bg-emerald-100 px-2 py-1 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">🟢 Minor / hygiene</span>
+    <span class="ml-3 rounded border border-emerald-500 px-2 py-1 text-emerald-700 dark:text-emerald-400">✓ Fixed</span>
+    <span class="rounded border border-rose-500 px-2 py-1 text-rose-700 dark:text-rose-400">✗ Not fixed</span>
+    <span class="rounded border border-sky-500 px-2 py-1 text-sky-700 dark:text-sky-400">◑ Deliberately not wired</span>
+    <span class="rounded border border-slate-400 px-2 py-1 text-slate-600 dark:text-slate-300">● Recorded</span>
+  </div>
+
+  <!-- TOC -->
+  <nav class="mt-8 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+    <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">On this page</p>
+    <ol class="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2 lg:grid-cols-3">
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e1"><span class="font-mono">E1</span> — fixed password on every new store owner</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e2"><span class="font-mono">E2</span> — login pages publish credentials</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e3"><span class="font-mono">E3</span> — recovery link never minted</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e4"><span class="font-mono">E4</span> — frozen seed anchors, 2 of them writes</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e5"><span class="font-mono">E5</span> — <code class="font-mono">desc()</code> is NULLS FIRST</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e6"><span class="font-mono">E6</span> — tenant role holds platform DML</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e7"><span class="font-mono">E7</span> — public API tier inside the panel</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e8"><span class="font-mono">E8</span> — no exhaustiveness in SectionRenderer</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e9"><span class="font-mono">E9</span> — <code class="font-mono">admin</code> derived by subtraction</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e10"><span class="font-mono">E10</span> — a toast that lied about a count</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e11"><span class="font-mono">E11</span> — 22 money tests never run</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e12"><span class="font-mono">E12</span> — an alarm that always fires</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e13"><span class="font-mono">E13</span> — browser checks nobody could run</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e14"><span class="font-mono">E14</span> — dead code inventory</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#e15"><span class="font-mono">E15</span> — 19 ESLint errors</a></li>
+    </ol>
+  </nav>
+</section>
+
+<!-- ================= BLOCKING ================= -->
+<section id="blocking" class="pt-12">
+  <div class="flex items-center gap-3">
+    <span class="rounded bg-rose-600 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-widest text-white">🔴 Blocking</span>
+    <span class="h-px flex-1 bg-rose-300 dark:bg-rose-900"></span>
+    <span class="font-mono text-xs text-slate-500">1 error</span>
+  </div>
+
+  <article id="e1" class="mt-6 overflow-hidden rounded-xl border-2 border-rose-300 bg-white shadow-sm dark:border-rose-900 dark:bg-slate-900">
+    <div class="border-b border-rose-200 bg-rose-50 px-5 py-4 dark:border-rose-900/70 dark:bg-rose-950/40">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <span class="font-mono text-xs font-bold text-rose-700 dark:text-rose-400">E1</span>
+          <h2 class="mt-1 text-xl font-semibold tracking-tight text-slate-900 dark:text-white">Every store created from Super Admin got the owner password <code class="font-mono text-[0.9em]">tokophi123</code></h2>
+        </div>
+        <span class="shrink-0 rounded-md border-2 border-emerald-500 bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">✓ FIXED &nbsp;<span class="font-mono text-xs font-normal">wt-sec</span></span>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <code class="select-all rounded bg-white px-2 py-1 font-mono text-xs text-slate-700 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700">apps/super-admin/lib/actions.ts:27</code>
+        <code class="select-all rounded bg-white px-2 py-1 font-mono text-xs text-slate-700 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700">apps/super-admin/lib/actions.ts:107</code>
+      </div>
+    </div>
+    <div class="space-y-4 px-5 py-5 text-slate-700 dark:text-slate-300">
+      <p><code class="font-mono">apps/super-admin/lib/actions.ts:27,107</code> hashed new owners' passwords from the <code class="font-mono">DEV_PASSWORD</code> constant — a string published in this repository and in <code class="font-mono">AGENTS.md</code>.</p>
+      <pre class="overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-[13px] leading-relaxed text-slate-100 dark:bg-black"><code>const DEV_PASSWORD = "tokophi123"; // default local password for provisioned owners/admins
+...
+const [u] = await tx.insert(schema.users).values({ email, name: ownerName,
+  passwordHash: hashPassword(DEV_PASSWORD) }).returning();</code></pre>
+      <div class="rounded-lg border-l-4 border-rose-500 bg-rose-50/70 p-4 dark:bg-rose-950/25">
+        <p class="font-mono text-[11px] uppercase tracking-widest text-rose-700 dark:text-rose-400">The failure</p>
+        <p class="mt-2">An operator onboards <code class="font-mono">budi@tokosaya.com</code>; anyone knowing that email logs in at <code class="font-mono">app.tokophi.com</code> as store <strong>owner</strong> → every order (buyer name, WhatsApp, full delivery address), every customer record, and via <code class="font-mono">settings:write</code> the bank-account and payout actions. Nothing forces a change and nothing expires it. <code class="font-mono">createStore</code> also did not return the password, so it was never handed to the merchant either: the account was <strong>unusable to its owner and usable to anyone who guesses</strong>.</p>
+      </div>
+      <p>The same bug had already been fixed <strong>250 lines below</strong> in <code class="font-mono">invitePlatformAdmin</code> (random <code class="font-mono">tempPassword()</code>, revealed once) — whose own comment asserted the other paths were already correct. <strong>Instance patched, class missed.</strong></p>
+      <div class="rounded-lg bg-emerald-50 p-4 dark:bg-emerald-950/30">
+        <p class="font-mono text-[11px] uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Status: fixed in wt-sec</p>
+        <p class="mt-2 text-sm leading-relaxed"><code class="font-mono">createStore</code> now mints a random password and returns it; the operator sees it once via a persistent toast (a dialog was rejected because the handler <code class="font-mono">router.push</code>es immediately and would unmount it; <code class="font-mono">&lt;Toaster&gt;</code> lives in the root layout and survives navigation). Proven on <code class="font-mono">tokophi_test</code>, rolled back: <code class="font-mono">verify('tokophi123') = false</code>, <code class="font-mono">verify(minted) = true</code>.</p>
+        <p class="mt-2 text-sm leading-relaxed">A class-level test (<code class="font-mono">no-fixed-password.test.ts</code>) scans the action module and fails if any <code class="font-mono">hashPassword()</code> call receives anything but a freshly minted value, if a minting action fails to return it, or if any write is anchored to a frozen date — <strong>proven red (3/5) before green</strong>.</p>
+      </div>
+      <p class="text-sm text-slate-500 dark:text-slate-400">Related: <a class="text-indigo-600 underline decoration-dotted hover:no-underline dark:text-indigo-400" href="decisions.html#d9">D9 — <code class="font-mono">tempPassword()</code> entropy is 24 bits and no login rate-limit was found</a>. And <a class="text-indigo-600 underline decoration-dotted hover:no-underline dark:text-indigo-400" href="index.html#unverified">whether E1 has been exploited in production is UNVERIFIED</a>.</p>
+    </div>
+  </article>
+</section>
+
+<!-- ================= SERIOUS ================= -->
+<section id="serious" class="pt-14">
+  <div class="flex items-center gap-3">
+    <span class="rounded bg-orange-500 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-widest text-white">🟠 Serious</span>
+    <span class="h-px flex-1 bg-orange-300 dark:bg-orange-900"></span>
+    <span class="font-mono text-xs text-slate-500">5 errors</span>
+  </div>
+
+  <!-- E2 -->
+  <article id="e2" class="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div class="border-b border-slate-200 bg-orange-50/60 px-5 py-4 dark:border-slate-800 dark:bg-orange-950/20">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <span class="font-mono text-xs font-bold text-orange-700 dark:text-orange-400">E2</span>
+          <h2 class="mt-1 text-xl font-semibold tracking-tight text-slate-900 dark:text-white">Login pages publish working control-plane credentials</h2>
+        </div>
+        <span class="shrink-0 rounded-md border-2 border-rose-500 bg-rose-50 px-3 py-1.5 text-sm font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">✗ NOT FIXED &nbsp;<span class="font-mono text-xs font-normal">owner decision</span></span>
+      </div>
+      <div class="mt-3"><code class="select-all rounded bg-white px-2 py-1 font-mono text-xs text-slate-700 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700">apps/super-admin/app/login/page.tsx:30</code></div>
+    </div>
+    <div class="space-y-4 px-5 py-5 text-slate-700 dark:text-slate-300">
+      <p>The super-admin login page prints <code class="font-mono">admin@tokophi.id / tokophi123</code>; the admin login has its equivalent. <strong>The seed genuinely creates those rows on deploy</strong>, so on <code class="font-mono">rich.tokophi.com</code> the control plane advertises a working credential on its own login screen.</p>
+      <p class="rounded-lg border-l-4 border-orange-400 bg-orange-50/60 p-4 text-sm dark:bg-orange-950/25"><strong>Owner decision required</strong> — delete the hint, or rotate the seeded password; it touches the seed and both apps. → <a class="text-indigo-600 underline dark:text-indigo-400" href="decisions.html#d3">D3</a></p>
+    </div>
+  </article>
+
+  <!-- E3 -->
+  <article id="e3" class="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div class="border-b border-slate-200 bg-orange-50/60 px-5 py-4 dark:border-slate-800 dark:bg-orange-950/20">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <span class="font-mono text-xs font-bold text-orange-700 dark:text-orange-400">E3</span>
+          <h2 class="mt-1 text-xl font-semibold tracking-tight text-slate-900 dark:text-white">The abandoned-cart recovery link is never minted</h2>
+        </div>
+        <span class="shrink-0 rounded-md border-2 border-sky-500 bg-sky-50 px-3 py-1.5 text-sm font-bold text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">◑ NOT WIRED, DELIBERATELY</span>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <code class="select-all rounded bg-white px-2 py-1 font-mono text-xs text-slate-700 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700">apps/storefront/src/lib/recovery.ts:43</code>
+        <code class="select-all rounded bg-white px-2 py-1 font-mono text-xs text-slate-700 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700">apps/admin/lib/data/checkout.ts:182,205</code>
+      </div>
+    </div>
+    <div class="space-y-4 px-5 py-5 text-slate-700 dark:text-slate-300">
+      <p><code class="font-mono">signRecoveryToken</code> has <strong>zero callers</strong>; none of the 6 <code class="font-mono">wa_templates</code> rows contains a link placeholder or URL; <code class="font-mono">cartMessage</code> fills only <code class="font-mono">{nama, produk, toko}</code>.</p>
+      <div class="rounded-lg border-l-4 border-orange-500 bg-orange-50/70 p-4 dark:bg-orange-950/25">
+        <p class="font-mono text-[11px] uppercase tracking-widest text-orange-700 dark:text-orange-400">The failure</p>
+        <p class="mt-2">The merchant's WhatsApp message contains <strong>no way back</strong>. The shopper must start over. And ~50 lines of storefront code — verifier, “Selamat datang kembali” banner, cart restore, field pre-fill, kecamatan restore — are <strong>unreachable</strong>. Independently confirmed twice.</p>
+      </div>
+      <p>Meanwhile the docs claimed it worked: <code class="font-mono">REQUIREMENTS.md</code> SEC-13 = MET, <code class="font-mono">UI_INVENTORY.md:60</code> = “✅ real DB”, <code class="font-mono">CODE_MAP.md:113</code> = “mints/verifies”, <code class="font-mono">STATUS.md:162</code> = “Recovery links are signed, not guessable”. <strong>This is the exact failure mode <code class="font-mono">STATUS.md</code>'s own opening rule describes.</strong></p>
+      <div class="rounded-lg bg-sky-50 p-4 dark:bg-sky-950/30">
+        <p class="font-mono text-[11px] uppercase tracking-widest text-sky-700 dark:text-sky-400">Status: not wired, deliberately — docs corrected instead</p>
+        <p class="mt-2 text-sm leading-relaxed">Wiring it is not small: the signer lives in <code class="font-mono">apps/storefront/src/lib</code>, which the admin cannot import (needs a move to <code class="font-mono">packages/lib</code>); the read layer does not fetch the store slug; the template needs a <code class="font-mono">{{link}}</code> no existing row has (and the seed is not a migration); and the restore path has <strong>never been run in a browser</strong>.</p>
+        <p class="mt-2 text-sm leading-relaxed">Four docs corrected — SEC-13 is now <code class="font-mono">VACUOUSLY MET — NO LINK IS EVER MINTED</code>, which separates what is true (no raw-id path exists; the verifier is correct and store-bound) from what is not. <code class="font-mono">BACKLOG.md</code> P1 records the four concrete steps and restates the security shape: signed, store-bound, 7-day <code class="font-mono">jose</code> token, <strong>never a raw session id</strong>.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- E4 -->
+  <article id="e4" class="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div class="border-b border-slate-200 bg-orange-50/60 px-5 py-4 dark:border-slate-800 dark:bg-orange-950/20">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <span class="font-mono text-xs font-bold text-orange-700 dark:text-orange-400">E4</span>
+          <h2 class="mt-1 text-xl font-semibold tracking-tight text-slate-900 dark:text-white">Frozen seed anchors in 12 live sites, 2 of them WRITES</h2>
+        </div>
+        <span class="shrink-0 rounded-md border-2 border-emerald-500 bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">✓ FIXED &nbsp;<span class="font-mono text-xs font-normal">wt-fix2</span></span>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <code class="select-all rounded bg-white px-2 py-1 font-mono text-xs text-slate-700 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700">apps/admin/lib/actions/articles.ts</code>
+        <code class="select-all rounded bg-white px-2 py-1 font-mono text-xs text-slate-700 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700">apps/super-admin/lib/actions.ts</code>
+      </div>
+    </div>
+    <div class="space-y-4 px-5 py-5 text-slate-700 dark:text-slate-300">
+      <div class="rounded-lg border-l-4 border-orange-500 bg-orange-50/70 p-4 dark:bg-orange-950/25">
+        <p class="font-mono text-[11px] uppercase tracking-widest text-orange-700 dark:text-orange-400">The two writes</p>
+        <p class="mt-2"><code class="font-mono">apps/admin/lib/actions/articles.ts</code> wrote <code class="font-mono">publishedAt = 2026-06-30</code>, and because the update is a full field replace, <strong>re-saving a published article walked its date backwards</strong> — mechanically identical to the documented voucher bug that made every merchant-created voucher born already expired.</p>
+        <p class="mt-2"><code class="font-mono">apps/super-admin/lib/actions.ts</code> <code class="font-mono">createStore</code> stamped four columns with <code class="font-mono">2026-07-02</code> while computing <code class="font-mono">trialEndsAt</code> from the real clock — <strong>one row, two clocks</strong> — so a store was born ~30 days old with a 3-day trial and <strong>dropped out of <code class="font-mono">newSignups30d</code> permanently on day one</strong>.</p>
+      </div>
+      <div class="rounded-lg bg-emerald-50 p-4 dark:bg-emerald-950/30">
+        <p class="font-mono text-[11px] uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Status: fixed in wt-fix2 — all 12</p>
+        <p class="mt-2 text-sm leading-relaxed">The seed and mock anchors were correctly left frozen. Proven on <code class="font-mono">tokophi_test</code>: three consecutive saves under the old code held <code class="font-mono">2026-06-30</code>; under the new code the date <code class="font-mono">2026-07-20 08:30</code> is unchanged across three saves, and a draft's first publish stamps today.</p>
+      </div>
+      <details class="rounded-lg border border-slate-200 dark:border-slate-800">
+        <summary class="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200">All 13 grep hits — 2 writes, 10 reads, 1 correctly-frozen mock</summary>
+        <div class="overflow-x-auto border-t border-slate-200 dark:border-slate-800">
+          <table class="min-w-full text-sm">
+            <thead class="bg-slate-100 text-left dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">File:line</th><th class="px-3 py-2 font-medium">Kind</th><th class="px-3 py-2 font-medium">Concrete failure on 2026-08-01</th></tr></thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+              <tr><td class="px-3 py-2 font-mono text-xs">apps/super-admin/lib/actions.ts:28</td><td class="px-3 py-2"><span class="font-semibold text-rose-700 dark:text-rose-400">WRITE</span></td><td class="px-3 py-2">Every new store is born 30 days old.</td></tr>
+              <tr><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/actions/articles.ts:8,34</td><td class="px-3 py-2"><span class="font-semibold text-rose-700 dark:text-rose-400">WRITE</span></td><td class="px-3 py-2">A post published today is stamped <strong>30 Juni 2026</strong>; re-saving walks the date backwards.</td></tr>
+              <tr><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/data/customers.ts:7,9</td><td class="px-3 py-2">read</td><td class="px-3 py-2">A customer who registered today → <strong>−32</strong>. Rendered raw: <em>“Pelanggan sejak -32 hari lalu”</em>.</td></tr>
+              <tr><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/data/crm.ts:7</td><td class="px-3 py-2">read</td><td class="px-3 py-2">A follow-up due today computes <strong>+32</strong> → “32 hari lagi”, and the overdue filter <code class="font-mono">f.dueDays &lt;= 0</code> <strong>never fires</strong>.</td></tr>
+              <tr><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/data/reviews.ts:7</td><td class="px-3 py-2">read</td><td class="px-3 py-2"><em>“-32 hari lalu”</em> on a review left today.</td></tr>
+              <tr><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/data/purchases.ts:7</td><td class="px-3 py-2">read</td><td class="px-3 py-2"><em>“-32 hari lalu”</em>; <code class="font-mono">etaDays</code> for a PO due today reads +32.</td></tr>
+              <tr><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/data/articles.ts:7</td><td class="px-3 py-2">read</td><td class="px-3 py-2">negative <code class="font-mono">publishedDaysAgo</code>.</td></tr>
+              <tr><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/data/pages.ts:7</td><td class="px-3 py-2">read</td><td class="px-3 py-2">negative <code class="font-mono">updatedDaysAgo</code>.</td></tr>
+              <tr><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/data/orders.ts:8,49,318</td><td class="px-3 py-2">read</td><td class="px-3 py-2">An order placed 5 minutes ago computes ≈ <strong>−43.000 minutes</strong>.</td></tr>
+              <tr><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/data/activity.ts:10</td><td class="px-3 py-2">read</td><td class="px-3 py-2">Clamped, so a real event reads <em>“baru saja”</em> forever. Less wrong, still wrong.</td></tr>
+              <tr><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/data/checkout.ts:16,18,181</td><td class="px-3 py-2">read</td><td class="px-3 py-2"><strong>Every live abandoned cart reads “baru saja”</strong>, collapsing the age-decay ranking. <code class="font-mono">WINDOW_START</code> is fixed at 2026-06-02, so the “30-day window” is really 60 days and widening.</td></tr>
+              <tr class="bg-slate-50 dark:bg-slate-950/40"><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/mock/store.ts:7</td><td class="px-3 py-2">mock</td><td class="px-3 py-2"><span class="text-emerald-700 dark:text-emerald-400">Fine — that is the mock's own frame. Correctly left frozen.</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="border-t border-slate-200 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400"><strong>Why <code class="font-mono">tsc</code> cannot see any of this:</strong> every one is arithmetic on two valid <code class="font-mono">Date</code> objects producing a valid <code class="font-mono">number</code>. No type error, no runtime error — the screen simply prints a negative or a zero.</p>
+      </details>
+      <p class="text-sm text-slate-500 dark:text-slate-400">Consequence you should know about before merging: un-anchoring <code class="font-mono">checkout.ts</code> drops the Keranjang Ditinggal demo screen from <strong>796 → 6</strong> rows on dev. → <a class="text-indigo-600 underline decoration-dotted hover:no-underline dark:text-indigo-400" href="decisions.html#d8">D8</a></p>
+    </div>
+  </article>
+
+  <!-- E5 -->
+  <article id="e5" class="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div class="border-b border-slate-200 bg-orange-50/60 px-5 py-4 dark:border-slate-800 dark:bg-orange-950/20">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <span class="font-mono text-xs font-bold text-orange-700 dark:text-orange-400">E5</span>
+          <h2 class="mt-1 text-xl font-semibold tracking-tight text-slate-900 dark:text-white"><code class="font-mono text-[0.9em]">desc()</code> in drizzle emits bare <code class="font-mono text-[0.9em]">DESC</code>, which is <code class="font-mono text-[0.9em]">NULLS FIRST</code> in Postgres</h2>
+        </div>
+        <span class="shrink-0 rounded-md border-2 border-emerald-500 bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">✓ FIXED &nbsp;<span class="font-mono text-xs font-normal">wt-order-actions</span></span>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <code class="select-all rounded bg-white px-2 py-1 font-mono text-xs text-slate-700 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700">apps/admin/lib/data/order-detail.ts:306</code>
+        <code class="select-all rounded bg-white px-2 py-1 font-mono text-xs text-slate-700 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700">apps/admin/lib/data/orders.ts:234</code>
+      </div>
+    </div>
+    <div class="space-y-4 px-5 py-5 text-slate-700 dark:text-slate-300">
+      <p><code class="font-mono">data/order-detail.ts:306</code> used <code class="font-mono">desc(payments.paidAt)</code> while <code class="font-mono">data/orders.ts:234</code> used <code class="font-mono">paid_at desc nulls last</code>. <strong>Both files carried comments asserting they matched</strong> — the detail one reads <em>“Must match the LIST's definition exactly … unpaid last … One order, one answer.”</em></p>
+      <div class="rounded-lg border-l-4 border-orange-500 bg-orange-50/70 p-4 dark:bg-orange-950/25">
+        <p class="font-mono text-[11px] uppercase tracking-widest text-orange-700 dark:text-orange-400">The failure — a display defect</p>
+        <p class="mt-2">On an order with one unpaid and one paid payment, the list names the paid method and the detail names the unpaid one — <strong>the merchant reads two different payment methods for one order, depending on which screen they are on.</strong></p>
+      </div>
+      <div class="rounded-lg border-2 border-dashed border-amber-400 bg-amber-50/70 p-4 dark:border-amber-700 dark:bg-amber-950/25">
+        <p class="font-mono text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-400">⚠ Corrected 2026-08-01, after the source record's first draft</p>
+        <p class="mt-2 text-sm">Both data files' comments claim this fact feeds <code class="font-mono">createShipment</code>'s courier cash-collection instruction (COD vs VA), and the source document initially repeated it. <strong>It is false, and it was checked against the code:</strong> <code class="font-mono">apps/admin/lib/actions/shipping.ts:512</code> derives COD independently, via <code class="font-mono">exists (select 1 from payments p where p.order_id = … and p.method = 'cod')</code> — an existence test that no ordering can affect. <strong>E5 is a display defect, not a money or shipping defect</strong>, and its severity is lower than first written.</p>
+        <p class="mt-2 text-sm">Note what that means: the comments asserting the link are themselves wrong, in the same two files whose comments already wrongly asserted the two orderings matched. <strong>The same files carry two false comments each</strong> — the bug was in the code, and so was the misleading explanation of its severity.</p>
+      </div>
+      <p>Reproduced against real Postgres before the fix: <code class="font-mono">list -&gt; cod, detail -&gt; va, DISAGREE</code> — two screens naming two methods for one order.</p>
+      <p class="rounded-lg bg-slate-100 p-4 text-sm dark:bg-slate-800/60"><strong>Latent, not live:</strong> 827 payments, 46 with <code class="font-mono">paid_at IS NULL</code>, but <strong>0 orders</strong> currently carry both shapes. This item was listed under “✅ Closed this session — do not redo” in <code class="font-mono">NEXT.md</code>; <strong>it was not closed</strong>.</p>
+      <div class="rounded-lg bg-emerald-50 p-4 dark:bg-emerald-950/30">
+        <p class="font-mono text-[11px] uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Status: fixed in wt-order-actions</p>
+        <p class="mt-2 text-sm leading-relaxed">One exported <code class="font-mono">latestPaymentFirst()</code> used by both paths, with a real-Postgres test proven red then green.</p>
+      </div>
+      <p class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-950/30"><strong>Same class, lower stakes and NOT fixed:</strong> <code class="font-mono">data/articles.ts:57</code> sorts every draft above every published post in the seller's Blog list.</p>
+    </div>
+  </article>
+
+  <!-- E6 -->
+  <article id="e6" class="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div class="border-b border-slate-200 bg-orange-50/60 px-5 py-4 dark:border-slate-800 dark:bg-orange-950/20">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <span class="font-mono text-xs font-bold text-orange-700 dark:text-orange-400">E6</span>
+          <h2 class="mt-1 text-xl font-semibold tracking-tight text-slate-900 dark:text-white"><code class="font-mono text-[0.9em]">tokophi_app</code> holds full DML on platform tables with RLS off</h2>
+        </div>
+        <span class="shrink-0 rounded-md border-2 border-rose-500 bg-rose-50 px-3 py-1.5 text-sm font-bold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">✗ NOT FIXED &nbsp;<span class="font-mono text-xs font-normal">design decision</span></span>
+      </div>
+    </div>
+    <div class="space-y-4 px-5 py-5 text-slate-700 dark:text-slate-300">
+      <p><code class="font-mono">platform_cod</code>, <code class="font-mono">platform_couriers</code>, <code class="font-mono">platform_payout</code>, <code class="font-mono">platform_payment_channels</code>, <code class="font-mono">plans</code> — and the <code class="font-mono">stores</code> policy is <code class="font-mono">FOR ALL</code>, so the tenant role can UPDATE its own <code class="font-mono">comped</code> / <code class="font-mono">status</code> / <code class="font-mono">trial_ends_at</code>.</p>
+      <pre class="overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-[13px] leading-relaxed text-slate-100 dark:bg-black"><code>platform_payout           | DELETE,INSERT,SELECT,UPDATE   (rowsecurity = f)
+platform_cod              | DELETE,INSERT,SELECT,UPDATE   (rowsecurity = f)
+platform_couriers         | DELETE,INSERT,SELECT,UPDATE   (rowsecurity = f)
+platform_payment_channels | DELETE,INSERT,SELECT,UPDATE   (rowsecurity = f)
+plans                     | DELETE,INSERT,SELECT,UPDATE   (rowsecurity = f)</code></pre>
+      <div class="rounded-lg border-l-4 border-orange-500 bg-orange-50/70 p-4 dark:bg-orange-950/25">
+        <p class="font-mono text-[11px] uppercase tracking-widest text-orange-700 dark:text-orange-400">The failure</p>
+        <p class="mt-2">Latent today; <strong>live the moment a merchant JWT drives that role</strong>, which is exactly the stated production architecture (PostgREST as <code class="font-mono">tokophi_app</code> with the <code class="font-mono">store_id</code> claim feeding the GUC). At that point a merchant's own JWT reaches a role that can <code class="font-mono">UPDATE platform_cod SET max = …</code> or <code class="font-mono">UPDATE stores SET comped = true</code>. <code class="font-mono">verify-rls</code> structurally cannot see this — it derives coverage from <code class="font-mono">store_id</code> columns and these tables have none.</p>
+      </div>
+      <p class="rounded-lg border-l-4 border-orange-400 bg-orange-50/60 p-4 text-sm dark:bg-orange-950/25"><strong>Owner decision required before the VPS cutover.</strong> The shape of the fix would be <code class="font-mono">REVOKE INSERT, UPDATE, DELETE ON platform_* FROM tokophi_app</code> plus column-level grants on <code class="font-mono">stores</code>. → <a class="text-indigo-600 underline dark:text-indigo-400" href="decisions.html#d4">D4</a></p>
+    </div>
+  </article>
+</section>
+
+<!-- ================= MODERATE ================= -->
+<section id="moderate" class="pt-14">
+  <div class="flex items-center gap-3">
+    <span class="rounded bg-amber-400 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-widest text-amber-950">🟡 Moderate</span>
+    <span class="h-px flex-1 bg-amber-300 dark:bg-amber-900"></span>
+    <span class="font-mono text-xs text-slate-500">5 errors</span>
+  </div>
+
+  <div class="mt-6 grid gap-4 lg:grid-cols-2">
+
+    <article id="e7" class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="font-mono text-xs font-bold text-amber-700 dark:text-amber-400">E7</span>
+        <h2 class="mt-1 text-lg font-semibold tracking-tight text-slate-900 dark:text-white">The public API tier lives inside the merchant's panel</h2></div>
+        <span class="shrink-0 rounded-md border border-slate-400 px-2.5 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">● RECORDED</span>
+      </div>
+      <p class="mt-3 text-sm text-slate-700 dark:text-slate-300"><code class="font-mono">/api/public/order|ongkir|promo|pay/callback</code> are route files inside <code class="font-mono">apps/admin</code> and are excluded from its auth middleware (<code class="font-mono">apps/admin/middleware.ts:66</code>).</p>
+      <p class="mt-3 text-sm text-slate-700 dark:text-slate-300">The highest-risk unauthenticated code on the platform sits inside the app named “the merchant's panel”, and <strong>the admin container must be up for any shopper to check out</strong>. Not a defect in itself; it is an architectural fact absent from every existing document, with real availability and blast-radius consequences.</p>
+      <p class="mt-3 text-xs"><a class="text-indigo-600 underline decoration-dotted hover:no-underline dark:text-indigo-400" href="architecture.html#system-map">See it on the system map →</a></p>
+    </article>
+
+    <article id="e8" class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="font-mono text-xs font-bold text-amber-700 dark:text-amber-400">E8</span>
+        <h2 class="mt-1 text-lg font-semibold tracking-tight text-slate-900 dark:text-white"><code class="font-mono text-[0.9em]">SectionRenderer</code> has no <code class="font-mono text-[0.9em]">default:</code> arm and no exhaustiveness assertion</h2></div>
+        <span class="shrink-0 rounded-md border border-slate-400 px-2.5 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">● RECORDED</span>
+      </div>
+      <p class="mt-3 text-sm text-slate-700 dark:text-slate-300">A section type added to <code class="font-mono">SectionConfigMap</code> and forgotten <strong>compiles and renders nothing</strong> on a live storefront — no error, no migration to point at.</p>
+      <p class="mt-3 text-xs"><a class="text-indigo-600 underline decoration-dotted hover:no-underline dark:text-indigo-400" href="architecture.html#store-builder">The 14 section types and the palette-vs-renderer rule →</a></p>
+    </article>
+
+    <article id="e9" class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="font-mono text-xs font-bold text-amber-700 dark:text-amber-400">E9</span>
+        <h2 class="mt-1 text-lg font-semibold tracking-tight text-slate-900 dark:text-white">The <code class="font-mono text-[0.9em]">admin</code> role is derived by subtraction</h2></div>
+        <span class="shrink-0 rounded-md border border-slate-400 px-2.5 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">● RECORDED</span>
+      </div>
+      <p class="mt-3 text-sm text-slate-700 dark:text-slate-300"><code class="font-mono">rbac-policy.ts:68-70</code>. A new owner-only capability <strong>leaks to <code class="font-mono">admin</code> by default</strong> unless explicitly added to the filter. <code class="font-mono">staff</code>/<code class="font-mono">gudang</code> are allow-lists and immune.</p>
+      <p class="mt-3 text-xs"><a class="text-indigo-600 underline decoration-dotted hover:no-underline dark:text-indigo-400" href="architecture.html#rbac">The full capability matrix →</a></p>
+    </article>
+
+    <article id="e10" class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="font-mono text-xs font-bold text-amber-700 dark:text-amber-400">E10</span>
+        <h2 class="mt-1 text-lg font-semibold tracking-tight text-slate-900 dark:text-white"><code class="font-mono text-[0.9em]">markLabelsPrinted</code>'s caller ignored the honest count</h2></div>
+        <span class="shrink-0 rounded-md border-2 border-emerald-500 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">✓ FIXED</span>
+      </div>
+      <p class="mt-3 text-sm text-slate-700 dark:text-slate-300">The action was fixed in #117 to report <code class="font-mono">.returning()</code> rows; <code class="font-mono">massal-client.tsx:120</code> still toasted <code class="font-mono">printedNumbers.length</code> — the number requested, not the number written. If a number belongs to another store, RLS filters it out with no error and the merchant is told 50 were stamped while 47 were.</p>
+      <p class="mt-3 rounded-lg bg-emerald-50 p-3 text-sm dark:bg-emerald-950/30"><strong class="text-emerald-800 dark:text-emerald-300">Fixed in wt-fix2</strong>, and the copy now branches when the two numbers differ instead of lying in the other direction.</p>
+    </article>
+
+    <article id="e11" class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-2">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="font-mono text-xs font-bold text-amber-700 dark:text-amber-400">E11</span>
+        <h2 class="mt-1 text-lg font-semibold tracking-tight text-slate-900 dark:text-white">22 money tests never run</h2></div>
+        <span class="shrink-0 rounded-md border border-slate-400 px-2.5 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">● RECORDED</span>
+      </div>
+      <p class="mt-3 text-sm text-slate-700 dark:text-slate-300"><code class="font-mono">apps/admin/lib/ledger-credit.test.ts</code> skips without <code class="font-mono">TEST_DATABASE_URL</code>. These are <strong>22 tests that pass when wired, but are off by default</strong> — and the ledger is what decides when a sale becomes withdrawable. <code class="font-mono">tokophi_test</code> exists and is now migrated to head; nothing wires it into the default run.</p>
+      <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">This is also the reason the two source documents state different baselines (16 files / 145 tests vs 17 / 167): <strong>the difference is exactly this file</strong>. The code-health scan called wiring it in <em>“the single highest-value follow-up in this document”</em>.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ================= MINOR ================= -->
+<section id="minor" class="pt-14 pb-4">
+  <div class="flex items-center gap-3">
+    <span class="rounded bg-emerald-600 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-widest text-white">🟢 Minor / hygiene</span>
+    <span class="h-px flex-1 bg-emerald-300 dark:bg-emerald-900"></span>
+    <span class="font-mono text-xs text-slate-500">4 errors</span>
+  </div>
+
+  <div class="mt-6 space-y-4">
+    <article id="e12" class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400">E12</span>
+        <h2 class="mt-1 text-lg font-semibold tracking-tight text-slate-900 dark:text-white">An alarm that always fires</h2></div>
+        <span class="shrink-0 rounded-md border border-slate-400 px-2.5 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">● RECORDED</span>
+      </div>
+      <p class="mt-3 text-sm text-slate-700 dark:text-slate-300"><code class="font-mono">check-pixel-defer.mjs</code> can never pass locally (tenant data — the seeded store has only the <code class="font-mono">meta</code> channel enabled). Same family as the <code class="font-mono">verify-rls</code> incident this repo documents, where a verifier sat red for weeks and <strong>two cross-tenant leaks shipped past it</strong>.</p>
+      <details class="mt-3"><summary class="cursor-pointer text-sm font-medium text-indigo-600 dark:text-indigo-400">The script's actual output</summary>
+      <pre class="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-xs leading-relaxed text-slate-100 dark:bg-black"><code>STUBS (synchronous): {"fbq":"function","gtag":"undefined","ttq":"undefined","dataLayerLen":0,"fbqQueueLen":2,"ttqLen":-1}
+vendor &lt;script src&gt; in the served HTML: 0 []
+vendor requests after 3 s with NO interaction: 0
+BUFFERED after firing 3 events with no SDK present: {"fbqQueueLen":3,…}
+vendor requests after interaction: 2  hosts=["connect.facebook.net"]
+FAIL</code></pre>
+      <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Honest caveat carried forward from the scan: it was only proved to fail against the <strong>local seeded</strong> store. It may pass in production if all three channels are configured there — that was <span class="font-mono uppercase text-amber-700 dark:text-amber-400">not verified</span>.</p>
+      </details>
+    </article>
+
+    <article id="e13" class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400">E13</span>
+        <h2 class="mt-1 text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Playwright browsers were not installed on this machine at all</h2></div>
+        <span class="shrink-0 rounded-md border border-slate-400 px-2.5 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">● RECORDED</span>
+      </div>
+      <p class="mt-3 text-sm text-slate-700 dark:text-slate-300">Both repo browser checks were unrunnable as written. <strong>A check nobody can run is not a check.</strong></p>
+    </article>
+
+    <article id="e14" class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400">E14</span>
+        <h2 class="mt-1 text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Dead code</h2></div>
+        <span class="shrink-0 rounded-md border border-slate-400 px-2.5 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">● RECORDED</span>
+      </div>
+      <p class="mt-3 text-sm text-slate-700 dark:text-slate-300"><strong>3 dead tables</strong> (<code class="font-mono">stock_transfers</code>, <code class="font-mono">wa_messages</code>, <code class="font-mono">notification_templates</code>), <strong>9 dead columns</strong>, <strong>~20 dead exports</strong> including two entirely dead modules — <code class="font-mono">packages/lib/src/payment-fees.ts</code> (which <code class="font-mono">AGENTS.md</code> describes as “only used for display”; it is used <strong>nowhere</strong>) and <code class="font-mono">apps/admin/lib/data/payments.ts</code>.</p>
+      <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">Dead UI: <code class="font-mono">#area-derived</code> in <code class="font-mono">checkout.astro:1443</code> — confirmed absent from the rendered DOM, so <code class="font-mono">showArea()</code> always no-ops.</p>
+    </article>
+
+    <article id="e15" class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400">E15</span>
+        <h2 class="mt-1 text-lg font-semibold tracking-tight text-slate-900 dark:text-white"><code class="font-mono text-[0.9em]">apps/admin</code> ESLint: 19 errors / 23 warnings, pre-existing</h2></div>
+        <span class="shrink-0 rounded-md border border-slate-400 px-2.5 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">● RECORDED</span>
+      </div>
+      <p class="mt-3 text-sm text-slate-700 dark:text-slate-300"><strong>12</strong> are “component created during render” (both sites stateless — cosmetic), <strong>5</strong> setState-in-effect, and <strong>2 are false positives</strong> (async server components deliberately calling <code class="font-mono">Date.now()</code>).</p>
+      <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Was 28 errors on 2026-07-31 — someone has been fixing them. <code class="font-mono">next build</code> does not run ESLint, so nothing catches this automatically.</p>
+    </article>
+  </div>
+</section>
+
+<section class="border-t border-slate-200 py-10 dark:border-slate-800">
+  <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Reported as checked-and-fine — the negatives that are worth as much as the findings</h2>
+    <ul class="mt-3 grid gap-2 text-sm text-slate-600 dark:text-slate-400 sm:grid-cols-2">
+      <li><strong class="text-slate-800 dark:text-slate-200">Stock:</strong> the <code class="font-mono">FOR UPDATE</code> lock reads the same row the decrement writes, quantities aggregated by variant before locking, variants locked in sorted id order, no <code class="font-mono">GREATEST(…,0)</code> clamp. Correct.</li>
+      <li><strong class="text-slate-800 dark:text-slate-200">Payout:</strong> <code class="font-mono">pg_advisory_xact_lock(hashtext(storeId)::bigint)</code> — the legal replacement for the <code class="font-mono">sum() … FOR UPDATE</code> Postgres rejects. Correct.</li>
+      <li><strong class="text-slate-800 dark:text-slate-200">Ledger:</strong> <code class="font-mono">creditSaleForPayment</code> excludes <code class="font-mono">batal</code> and <code class="font-mono">retur</code>; double-credit enforced by partial unique indexes. Correct.</li>
+      <li><strong class="text-slate-800 dark:text-slate-200">COD:</strong> derived from the order's own fact, and <code class="font-mono">createShipment</code> refuses a caller whose <code class="font-mono">input.cod</code> disagrees. Not affected by E5.</li>
+      <li><strong class="text-slate-800 dark:text-slate-200">Client <code class="font-mono">&lt;script&gt;</code> blocks:</strong> all 27 extracted and linted for <code class="font-mono">no-undef</code> with browser globals — <strong>zero errors</strong>. The <code class="font-mono">queueSave is not defined</code> class is clean today.</li>
+      <li><strong class="text-slate-800 dark:text-slate-200">Checkout, driven in a browser:</strong> en-US locale, real add-to-cart, real rate load, <strong>0 pageerrors, 0 console errors</strong>, Rp 110.000 + Rp 15.700 = <strong>Rp 125.700</strong>.</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<footer class="border-t border-slate-200 py-8 dark:border-slate-800">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6">
+    <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Sources</p>
+    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Ranking and status from <code class="font-mono">FINDINGS-SOURCE.md</code> §2; failure scenarios, code excerpts and the anchor table from <code class="font-mono">CODE-HEALTH.md</code> §2–§4. Numbers copied verbatim.</p>
+  </div>
+</footer>
+
+</body>
+</html>

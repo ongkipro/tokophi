@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TokoΦ audit — 2026-08-01 — Overview</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'media',
+  theme: { extend: {
+    fontFamily: {
+      sans: ['ui-sans-serif','system-ui','-apple-system','Segoe UI','Roboto','Helvetica Neue','Arial','sans-serif'],
+      mono: ['ui-monospace','SFMono-Regular','Menlo','Consolas','Liberation Mono','monospace']
+    }
+  }}
+};
+</script>
+<style>
+  :root { color-scheme: light dark; }
+  body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  [id] { scroll-margin-top: 5rem; }
+  code { overflow-wrap: anywhere; }
+  pre code { overflow-wrap: normal; }
+  .rule { background-image: repeating-linear-gradient(45deg, currentColor 0 1px, transparent 0 6px); }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 font-sans antialiased">
+
+<!-- ============ NAV (identical on every page) ============ -->
+<header class="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/90 backdrop-blur">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6">
+    <div class="flex h-14 items-center gap-3">
+      <a href="index.html" class="shrink-0 font-semibold tracking-tight text-slate-900 dark:text-white">TokoΦ<span class="ml-2 font-mono text-[10px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">audit</span></a>
+      <span class="hidden lg:inline font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">2026-08-01 · 86e3ec3</span>
+      <nav class="ml-auto flex items-center gap-0.5 overflow-x-auto text-sm">
+        <a href="index.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium bg-indigo-600 text-white">Overview</a>
+        <a href="errors.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Errors</a>
+        <a href="architecture.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Architecture</a>
+        <a href="streams.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Streams</a>
+        <a href="decisions.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Decisions</a>
+        <a href="merge.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Merge</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-6xl px-4 sm:px-6">
+
+<!-- ============ HERO ============ -->
+<section class="border-b border-slate-200 dark:border-slate-800 py-12 sm:py-16">
+  <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400">Audit &amp; work session · 2026-08-01</p>
+  <h1 class="mt-3 text-4xl sm:text-5xl font-semibold tracking-tight text-slate-900 dark:text-white">Ten agents, ten worktrees,<br class="hidden sm:block"> nothing committed.</h1>
+  <p class="mt-5 max-w-3xl text-lg leading-relaxed text-slate-600 dark:text-slate-400">
+    A parallel audit and implementation session run against <code class="font-mono text-[0.9em] text-slate-900 dark:text-slate-200">origin/main</code> @ <code class="font-mono text-[0.9em] text-slate-900 dark:text-slate-200">86e3ec3</code>.
+    Six change sets sit uncommitted in worktrees under <code class="font-mono text-[0.9em] text-slate-900 dark:text-slate-200">.claude/worktrees/</code>, waiting for you to review and commit.
+    Fifteen errors were found and ranked; four are fixed, two need a decision only you can take.
+  </p>
+  <blockquote class="mt-7 border-l-2 border-indigo-500 pl-4 text-slate-700 dark:text-slate-300">
+    <p class="italic">“Verify, or say you did not.”</p>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-500">— the rule from this repo's own <code class="font-mono">STATUS.md</code>, applied throughout. Every number below was produced by running something. Claims that could not be verified are marked <span class="font-mono text-[11px] uppercase tracking-wider rounded bg-slate-200 px-1.5 py-0.5 text-slate-700 dark:bg-slate-800 dark:text-slate-300">unverified</span> and stay marked.</p>
+  </blockquote>
+</section>
+
+<!-- ============ HEADLINE NUMBERS ============ -->
+<section class="py-10 sm:py-12">
+  <h2 class="font-mono text-[11px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-500">The headline numbers</h2>
+  <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <div class="text-3xl font-semibold tabular-nums text-slate-900 dark:text-white">15</div>
+      <div class="mt-1 text-xs leading-snug text-slate-500 dark:text-slate-400">errors ranked<br>E1 – E15</div>
+    </div>
+    <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 dark:border-rose-900/60 dark:bg-rose-950/40">
+      <div class="text-3xl font-semibold tabular-nums text-rose-700 dark:text-rose-300">1</div>
+      <div class="mt-1 text-xs leading-snug text-rose-800/80 dark:text-rose-300/80">blocking<br>(fixed)</div>
+    </div>
+    <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/40">
+      <div class="text-3xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">4</div>
+      <div class="mt-1 text-xs leading-snug text-emerald-800/80 dark:text-emerald-300/80">errors fixed<br>and proven</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <div class="text-3xl font-semibold tabular-nums text-slate-900 dark:text-white">6</div>
+      <div class="mt-1 text-xs leading-snug text-slate-500 dark:text-slate-400">change sets<br>all uncommitted</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <div class="text-3xl font-semibold tabular-nums text-slate-900 dark:text-white">9</div>
+      <div class="mt-1 text-xs leading-snug text-slate-500 dark:text-slate-400">decisions<br>that are yours</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <div class="text-3xl font-semibold tabular-nums text-slate-900 dark:text-white">0</div>
+      <div class="mt-1 text-xs leading-snug text-slate-500 dark:text-slate-400">commits<br>pushes, merges</div>
+    </div>
+  </div>
+  <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+    The six-way tree — all six change sets applied together — builds, type-checks both Next apps, and passes
+    <strong class="font-semibold text-slate-700 dark:text-slate-200">21 files / 180 tests</strong>.
+    Baseline on clean <code class="font-mono">origin/main</code> was <strong class="font-semibold text-slate-700 dark:text-slate-200">16 files / 145 tests</strong>, with
+    <strong class="font-semibold text-rose-600 dark:text-rose-400">1 file / 22 tests skipped</strong> — <a class="underline decoration-dotted hover:no-underline" href="errors.html#e11">22 money tests that pass when wired, but are off by default</a>.
+  </p>
+  <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+    The cross-validation document records its own baseline as <strong>17 files / 167 tests</strong>. <strong>The difference is exactly that skipped file.</strong> Both figures are stated where they were measured rather than merged into one.
+  </p>
+</section>
+
+<!-- ============ SEVERITY SUMMARY ============ -->
+<section id="severity" class="border-t border-slate-200 py-10 dark:border-slate-800 sm:py-12">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">What is broken, by severity</h2>
+  <p class="mt-2 max-w-3xl text-slate-600 dark:text-slate-400">Severity is stated in colour <em>and</em> in words, and so is the fix status. Every row links to its full failure scenario, <code class="font-mono text-[0.9em]">file:line</code> and evidence.</p>
+
+  <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <a href="errors.html#blocking" class="group rounded-lg border-l-4 border-rose-500 border border-slate-200 bg-white p-4 hover:shadow-md dark:border-slate-800 dark:border-l-rose-500 dark:bg-slate-900">
+      <div class="flex items-baseline justify-between"><span class="font-mono text-[11px] uppercase tracking-widest text-rose-600 dark:text-rose-400">🔴 Blocking</span><span class="text-2xl font-semibold tabular-nums text-slate-900 dark:text-white">1</span></div>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Every store created from Super Admin got the owner password <code class="font-mono">tokophi123</code>.</p>
+      <p class="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">✓ FIXED in wt-sec</p>
+    </a>
+    <a href="errors.html#serious" class="group rounded-lg border-l-4 border-orange-500 border border-slate-200 bg-white p-4 hover:shadow-md dark:border-slate-800 dark:border-l-orange-500 dark:bg-slate-900">
+      <div class="flex items-baseline justify-between"><span class="font-mono text-[11px] uppercase tracking-widest text-orange-600 dark:text-orange-400">🟠 Serious</span><span class="text-2xl font-semibold tabular-nums text-slate-900 dark:text-white">5</span></div>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Published credentials · a recovery link never minted · frozen dates written to live rows · <code class="font-mono">NULLS FIRST</code> ordering · tenant role holds DML on platform tables.</p>
+      <p class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">2 fixed · 1 docs-corrected · 2 awaiting your decision</p>
+    </a>
+    <a href="errors.html#moderate" class="group rounded-lg border-l-4 border-amber-400 border border-slate-200 bg-white p-4 hover:shadow-md dark:border-slate-800 dark:border-l-amber-400 dark:bg-slate-900">
+      <div class="flex items-baseline justify-between"><span class="font-mono text-[11px] uppercase tracking-widest text-amber-600 dark:text-amber-400">🟡 Moderate</span><span class="text-2xl font-semibold tabular-nums text-slate-900 dark:text-white">5</span></div>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">The public API tier lives inside the merchant's panel · no exhaustiveness on section rendering · <code class="font-mono">admin</code> role derived by subtraction · a lying toast · 22 money tests that never run.</p>
+      <p class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">1 fixed · 4 recorded</p>
+    </a>
+    <a href="errors.html#minor" class="group rounded-lg border-l-4 border-emerald-500 border border-slate-200 bg-white p-4 hover:shadow-md dark:border-slate-800 dark:border-l-emerald-500 dark:bg-slate-900">
+      <div class="flex items-baseline justify-between"><span class="font-mono text-[11px] uppercase tracking-widest text-emerald-600 dark:text-emerald-400">🟢 Minor</span><span class="text-2xl font-semibold tabular-nums text-slate-900 dark:text-white">4</span></div>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">An alarm that always fires · browser checks nobody could run · dead code inventory · 19 ESLint errors, 2 of them false positives.</p>
+      <p class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">0 fixed · 4 recorded</p>
+    </a>
+  </div>
+
+  <!-- status ledger -->
+  <div class="mt-8 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 text-left dark:bg-slate-900">
+        <tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <th class="px-3 py-2 font-medium">#</th>
+          <th class="px-3 py-2 font-medium">Severity</th>
+          <th class="px-3 py-2 font-medium">What it is</th>
+          <th class="px-3 py-2 font-medium">Status</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e1">E1</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-rose-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-rose-800 dark:bg-rose-950 dark:text-rose-300">🔴 Blocking</span></td><td class="px-3 py-2">Fixed password <code class="font-mono">tokophi123</code> on every provisioned store owner</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-emerald-700 dark:text-emerald-400">✓ FIXED</span> <span class="text-slate-500">wt-sec</span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e2">E2</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-orange-800 dark:bg-orange-950 dark:text-orange-300">🟠 Serious</span></td><td class="px-3 py-2">Login pages publish working control-plane credentials</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-rose-700 dark:text-rose-400">✗ NOT FIXED</span> <span class="text-slate-500">→ <a class="underline decoration-dotted" href="decisions.html#d3">D3</a></span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e3">E3</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-orange-800 dark:bg-orange-950 dark:text-orange-300">🟠 Serious</span></td><td class="px-3 py-2">The abandoned-cart recovery link is never minted</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-sky-700 dark:text-sky-400">◑ NOT WIRED, DELIBERATELY</span> <span class="text-slate-500">docs corrected</span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e4">E4</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-orange-800 dark:bg-orange-950 dark:text-orange-300">🟠 Serious</span></td><td class="px-3 py-2">Frozen seed anchors in 12 live sites, 2 of them writes</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-emerald-700 dark:text-emerald-400">✓ FIXED</span> <span class="text-slate-500">wt-fix2</span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e5">E5</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-orange-800 dark:bg-orange-950 dark:text-orange-300">🟠 Serious</span></td><td class="px-3 py-2"><code class="font-mono">desc()</code> emits bare <code class="font-mono">DESC</code> = <code class="font-mono">NULLS FIRST</code>; list and detail disagree</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-emerald-700 dark:text-emerald-400">✓ FIXED</span> <span class="text-slate-500">wt-order-actions</span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e6">E6</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-orange-800 dark:bg-orange-950 dark:text-orange-300">🟠 Serious</span></td><td class="px-3 py-2"><code class="font-mono">tokophi_app</code> holds full DML on platform tables with RLS off</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-rose-700 dark:text-rose-400">✗ NOT FIXED</span> <span class="text-slate-500">→ <a class="underline decoration-dotted" href="decisions.html#d4">D4</a></span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e7">E7</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-amber-800 dark:bg-amber-950 dark:text-amber-300">🟡 Moderate</span></td><td class="px-3 py-2">The public API tier lives inside the merchant's panel</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-slate-600 dark:text-slate-300">● RECORDED</span> <span class="text-slate-500">architectural fact</span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e8">E8</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-amber-800 dark:bg-amber-950 dark:text-amber-300">🟡 Moderate</span></td><td class="px-3 py-2"><code class="font-mono">SectionRenderer</code> has no <code class="font-mono">default:</code> arm and no exhaustiveness assertion</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-slate-600 dark:text-slate-300">● RECORDED</span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e9">E9</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-amber-800 dark:bg-amber-950 dark:text-amber-300">🟡 Moderate</span></td><td class="px-3 py-2">The <code class="font-mono">admin</code> role is derived by subtraction — new owner caps leak</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-slate-600 dark:text-slate-300">● RECORDED</span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e10">E10</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-amber-800 dark:bg-amber-950 dark:text-amber-300">🟡 Moderate</span></td><td class="px-3 py-2"><code class="font-mono">markLabelsPrinted</code>'s caller ignored the honest count</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-emerald-700 dark:text-emerald-400">✓ FIXED</span> <span class="text-slate-500">wt-fix2</span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e11">E11</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-amber-800 dark:bg-amber-950 dark:text-amber-300">🟡 Moderate</span></td><td class="px-3 py-2">22 money tests never run (<code class="font-mono">TEST_DATABASE_URL</code> unset by default)</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-slate-600 dark:text-slate-300">● RECORDED</span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e12">E12</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">🟢 Minor</span></td><td class="px-3 py-2"><code class="font-mono">check-pixel-defer.mjs</code> can never pass locally — an alarm that always fires</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-slate-600 dark:text-slate-300">● RECORDED</span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e13">E13</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">🟢 Minor</span></td><td class="px-3 py-2">Playwright browsers were not installed at all — both repo browser checks unrunnable</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-slate-600 dark:text-slate-300">● RECORDED</span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e14">E14</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">🟢 Minor</span></td><td class="px-3 py-2">Dead code: 3 tables, 9 columns, ~20 exports, 2 entirely dead modules</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-slate-600 dark:text-slate-300">● RECORDED</span></td></tr>
+        <tr><td class="px-3 py-2 font-mono"><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="errors.html#e15">E15</a></td><td class="px-3 py-2 whitespace-nowrap"><span class="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">🟢 Minor</span></td><td class="px-3 py-2"><code class="font-mono">apps/admin</code> ESLint: 19 errors / 23 warnings, pre-existing</td><td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-slate-600 dark:text-slate-300">● RECORDED</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-3 text-sm"><a href="errors.html" class="font-medium text-indigo-600 hover:underline dark:text-indigo-400">Read every error with its concrete failure scenario →</a></p>
+</section>
+
+<!-- ============ BASELINE GATES ============ -->
+<section id="baseline" class="border-t border-slate-200 py-10 dark:border-slate-800 sm:py-12">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Baseline — clean <code class="font-mono text-[0.85em]">origin/main</code> @ 86e3ec3, before any change</h2>
+  <p class="mt-2 max-w-3xl text-slate-600 dark:text-slate-400">Two gates are red on a clean checkout. Neither is a regression, and both have a named cause.</p>
+  <div class="mt-5 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 text-left dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">Gate</th><th class="px-3 py-2 font-medium">Result</th></tr></thead>
+      <tbody class="divide-y divide-slate-200 bg-white font-mono text-[13px] dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr><td class="px-3 py-2">npx vitest run</td><td class="px-3 py-2"><span class="text-emerald-700 dark:text-emerald-400">PASS</span> — 16 files, 145 tests · <span class="font-semibold text-amber-700 dark:text-amber-400">1 file / 22 tests SKIPPED</span></td></tr>
+        <tr><td class="px-3 py-2">npm run build:admin</td><td class="px-3 py-2"><span class="text-emerald-700 dark:text-emerald-400">PASS</span></td></tr>
+        <tr><td class="px-3 py-2">npm run build:super</td><td class="px-3 py-2"><span class="font-semibold text-rose-700 dark:text-rose-400">FAIL</span> on clean <span class="text-slate-900 dark:text-slate-200">origin/main</span> · <span class="font-semibold text-emerald-700 dark:text-emerald-400">PASS</span> in worktrees where <span class="text-slate-900 dark:text-slate-200">.env.local</span> was copied in — <strong>environmental, not code</strong></td></tr>
+        <tr><td class="px-3 py-2">storefront build (astro build)</td><td class="px-3 py-2"><span class="text-emerald-700 dark:text-emerald-400">PASS</span></td></tr>
+        <tr><td class="px-3 py-2">landing build</td><td class="px-3 py-2"><span class="text-emerald-700 dark:text-emerald-400">PASS</span></td></tr>
+        <tr><td class="px-3 py-2">astro check storefront / landing</td><td class="px-3 py-2">0 errors / 0 errors</td></tr>
+        <tr><td class="px-3 py-2">tsc --noEmit × 7 packages</td><td class="px-3 py-2"><span class="text-emerald-700 dark:text-emerald-400">PASS 7/7</span></td></tr>
+        <tr><td class="px-3 py-2">npm run lint -w @tokophi/admin</td><td class="px-3 py-2"><span class="font-semibold text-rose-700 dark:text-rose-400">FAIL — 19 errors, 23 warnings</span> (pre-existing, in BACKLOG)</td></tr>
+        <tr><td class="px-3 py-2">npm run lint -w @tokophi/super-admin</td><td class="px-3 py-2"><span class="text-emerald-700 dark:text-emerald-400">PASS</span></td></tr>
+        <tr><td class="px-3 py-2">verify-migrations</td><td class="px-3 py-2"><span class="text-emerald-700 dark:text-emerald-400">PASS</span> — 86 entries, last <span class="text-slate-900 dark:text-slate-200">0085</span></td></tr>
+        <tr><td class="px-3 py-2">verify-rls</td><td class="px-3 py-2"><span class="text-emerald-700 dark:text-emerald-400">PASS</span> — RLS <strong>51/52</strong> <span class="font-sans text-xs text-slate-500">← the shared container. On this branch the same count is <strong>50 of 51</strong>; the container carries a sibling branch's <code>color_palettes</code>. Both are stated as measured, not reconciled.</span></td></tr>
+        <tr><td class="px-3 py-2">check-hero-srcset.mjs</td><td class="px-3 py-2"><span class="text-emerald-700 dark:text-emerald-400">PASS</span></td></tr>
+        <tr><td class="px-3 py-2">check-pixel-defer.mjs</td><td class="px-3 py-2"><span class="font-semibold text-rose-700 dark:text-rose-400">FAIL</span> — tenant-data cause, unrelated to any change</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="mt-5 grid gap-4 sm:grid-cols-2">
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white"><code class="font-mono text-[0.9em]">build:super</code> explained</h3>
+      <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400"><code class="font-mono">apps/super-admin/</code> has no <code class="font-mono">.env.local</code> (admin has one, gitignored), so Next never receives <code class="font-mono">DATABASE_URL</code> and page-data collection fails. Exporting the root <code class="font-mono">.env</code> makes it build clean, all 13 routes emitted. Any report of “build:super is broken” is this, not a regression.</p>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white"><code class="font-mono text-[0.9em]">check-pixel-defer.mjs</code> explained</h3>
+      <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">It asserts all three vendor pixels load, but the seeded store has only the <code class="font-mono">meta</code> channel enabled, so <code class="font-mono">gtag</code>/<code class="font-mono">ttq</code> are undefined. Fails identically on clean <code class="font-mono">origin/main</code> and on all six change sets. The deferral itself is correct — 0 vendor <code class="font-mono">&lt;script src&gt;</code> in the served HTML, 0 vendor requests without interaction, the <code class="font-mono">fbq</code> queue buffers, vendors load on click.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VALIDATION CHAIN ============ -->
+<section id="validation-chain" class="border-t border-slate-200 py-10 dark:border-slate-800 sm:py-12">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">The validation chain has three tools and only one is habitually run</h2>
+  <p class="mt-2 text-slate-600 dark:text-slate-400">Demonstrated three separate times this session.</p>
+  <ul class="mt-5 space-y-3">
+    <li class="rounded-lg border-l-4 border-indigo-400 bg-white p-4 text-sm leading-relaxed text-slate-700 shadow-sm dark:bg-slate-900 dark:text-slate-300"><code class="font-mono font-semibold">next build</code> <strong>does not run ESLint</strong> — ESLint was the only gate that caught a backtick inside a JS template literal that had silently terminated a SQL string.</li>
+    <li class="rounded-lg border-l-4 border-indigo-400 bg-white p-4 text-sm leading-relaxed text-slate-700 shadow-sm dark:bg-slate-900 dark:text-slate-300">ESLint and <code class="font-mono font-semibold">next build</code> <strong>do not typecheck test files</strong> — <code class="font-mono">tsc --noEmit</code> was the only gate that caught a non-overlapping type assertion in a newly added test.</li>
+    <li class="rounded-lg border-l-4 border-indigo-400 bg-white p-4 text-sm leading-relaxed text-slate-700 shadow-sm dark:bg-slate-900 dark:text-slate-300"><code class="font-mono font-semibold">tsc</code>, ESLint, <code class="font-mono font-semibold">astro check</code> and the build are <strong>all green on live outages</strong> — this is the repo's own documented history (a <code class="font-mono">ReferenceError</code> inside a client <code class="font-mono">&lt;script&gt;</code>; <code class="font-mono">select sum(…) for update</code> inside a SQL string, which Postgres rejects outright).</li>
+  </ul>
+  <p class="mt-4 rounded-lg bg-indigo-50 p-4 text-sm text-indigo-900 dark:bg-indigo-950/50 dark:text-indigo-200"><strong>Recommendation:</strong> run all three plus the browser checks before any PR. Currently nothing runs ESLint automatically, which is how it rotted to 19 errors.</p>
+</section>
+
+<!-- ============ METHOD ============ -->
+<section id="method" class="border-t border-slate-200 py-10 dark:border-slate-800 sm:py-12">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Method — and why ten worktrees</h2>
+  <div class="mt-4 grid gap-6 lg:grid-cols-2">
+    <div class="space-y-4 text-slate-600 dark:text-slate-400">
+      <p>Ten agents ran in parallel, each in its <strong class="text-slate-800 dark:text-slate-200">own git worktree</strong> branched from <code class="font-mono">origin/main</code>, because <code class="font-mono">AGENTS.md</code> records that concurrent agents sharing one checkout have already caused an outage (<code class="font-mono">queueSave is not defined</code>, which blocked the entire shipping-rate load — no rates → no COD → no order — while typecheck, lint and build all stayed green).</p>
+      <p>Corrections made <em>during</em> the session are kept visible on purpose — several agents disproved claims from the task list, from the repo's own docs, and from each other. Those disproofs are findings, not noise.</p>
+      <p class="rounded-lg border border-slate-200 bg-white p-4 text-sm dark:border-slate-800 dark:bg-slate-900"><strong class="text-slate-900 dark:text-white">Nothing has been committed.</strong> All work sits uncommitted in worktrees under <code class="font-mono">.claude/worktrees/</code> for you to review and commit via lazygit.</p>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Constraints imposed on every agent</h3>
+      <ul class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-400">
+        <li class="flex gap-2"><span class="text-rose-500">✗</span> no commit, no push, no PR, no merge</li>
+        <li class="flex gap-2"><span class="text-rose-500">✗</span> never <code class="font-mono">git stash</code> (global in this repo; has previously written conflict markers into an unrelated file)</li>
+        <li class="flex gap-2"><span class="text-rose-500">✗</span> no <code class="font-mono">npm install</code> — <code class="font-mono">node_modules</code> was hardlinked across worktrees</li>
+        <li class="flex gap-2"><span class="text-amber-500">!</span> the shared Postgres container was <strong>read-only</strong> except inside rolled-back transactions or the separate <code class="font-mono">tokophi_test</code> database</li>
+        <li class="flex gap-2"><span class="text-amber-500">!</span> distinct server ports; PIDs killed individually, never <code class="font-mono">pkill</code></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ UNVERIFIED ============ -->
+<section id="unverified" class="border-t border-slate-200 py-10 dark:border-slate-800 sm:py-12">
+  <div class="rounded-xl border-2 border-dashed border-amber-400 bg-amber-50/60 p-6 dark:border-amber-700 dark:bg-amber-950/25">
+    <div class="flex flex-wrap items-baseline gap-3">
+      <span class="rounded bg-amber-500 px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-widest text-white">Unverified</span>
+      <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Explicitly NOT verified</h2>
+    </div>
+    <p class="mt-3 max-w-3xl text-slate-700 dark:text-slate-300">This list is the point of the report, not a footnote. Any document derived from the source record must carry it forward — and this one does.</p>
+    <ul class="mt-5 grid gap-3 sm:grid-cols-2">
+      <li class="rounded-lg bg-white/80 p-3 text-sm text-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><strong>All production measurements</strong> — byte figures, prod row counts, Lighthouse runs — were taken by the agents that ran them; the cross-validator had no prod access and could not re-check them. Nothing contradicts them.</li>
+      <li class="rounded-lg bg-white/80 p-3 text-sm text-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><strong><code class="font-mono">verify-rls</code> was not re-run by the architecture mapper</strong>; the “green” result comes from the baseline and code-health runs.</li>
+      <li class="rounded-lg bg-white/80 p-3 text-sm text-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><strong>No browser run</strong> for the admin/super-admin changes (frozen dates, password reveal, toast copy) — <code class="font-mono">next build</code> + <code class="font-mono">tsc</code> + vitest is the extent. The repo's own rule is that money and checkout paths must be <em>exercised</em>; that was done for the storefront checkout (Playwright, <code class="font-mono">en-US</code>, 0 pageerrors, Rp110 000 + Rp15 700 = Rp125 700) but not for these admin screens.</li>
+      <li class="rounded-lg bg-white/80 p-3 text-sm text-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><strong>The recovery restore path has never been run in a browser.</strong> That is the finding, not a gap.</li>
+      <li class="rounded-lg bg-white/80 p-3 text-sm text-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><strong>Whether the 86 migration <code class="font-mono">.sql</code> bodies are idempotent</strong> — <code class="font-mono">verify-migrations</code> only proves the journal is sane, and non-idempotency is what stranded 16 migrations for everyone on 2026-07-30.</li>
+      <li class="rounded-lg bg-white/80 p-3 text-sm text-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><strong>Whether E1 has been exploited in production.</strong></li>
+      <li class="rounded-lg bg-white/80 p-3 text-sm text-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><strong>Which deploy target is actually live</strong> — <code class="font-mono">CODE_MAP.md</code> (Vultr/sslip.io) and <code class="font-mono">AGENTS.md</code> (tokophi.com) contradict each other and production was not touched.</li>
+      <li class="rounded-lg bg-white/80 p-3 text-sm text-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><strong><code class="font-mono">accounts</code> tenancy</strong> — no <code class="font-mono">store_id</code>, no RLS; could not be settled as platform-level or store-scoped, so it is excluded from the child-table count of 12.</li>
+      <li class="rounded-lg bg-white/80 p-3 text-sm text-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><strong>The SPX free-return-leg belief</strong> underpinning COD policy — <code class="font-mono">AGENTS.md</code> already marks it UNVERIFIED.</li>
+      <li class="rounded-lg bg-white/80 p-3 text-sm text-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><strong><code class="font-mono">KIRIMINAJA_ENV</code></strong> in production. It defaults to <code class="font-mono">sandbox</code>; an unset env in production silently talks to the sandbox.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ ENTRY POINTS ============ -->
+<section class="border-t border-slate-200 py-10 dark:border-slate-800 sm:py-12">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Where to go next</h2>
+  <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <a href="errors.html" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-indigo-400 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-500">
+      <span class="font-mono text-[11px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">01</span>
+      <h3 class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">Errors →</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">All 15, blocking → minor, each with the concrete failure, <code class="font-mono">file:line</code>, and a status you cannot misread.</p>
+    </a>
+    <a href="architecture.html" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-indigo-400 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-500">
+      <span class="font-mono text-[11px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">02</span>
+      <h3 class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">Architecture →</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Nine diagrams and the structural map — counted from the code and catalog, not quoted from docs. 20 doc/code disagreements tabulated.</p>
+    </a>
+    <a href="streams.html" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-indigo-400 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-500">
+      <span class="font-mono text-[11px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">03</span>
+      <h3 class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">Streams →</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">The six change sets: what each did, its verified numbers, and what it <em>refused</em> to do and why.</p>
+    </a>
+    <a href="decisions.html" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-indigo-400 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-500">
+      <span class="font-mono text-[11px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">04</span>
+      <h3 class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">Decisions →</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">D1–D9. Nine things that are yours to decide, each with enough context to decide it.</p>
+    </a>
+    <a href="merge.html" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-indigo-400 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-500">
+      <span class="font-mono text-[11px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">05</span>
+      <h3 class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">Merge →</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">The order, the two collisions, and why <code class="font-mono">wt-sec</code> before <code class="font-mono">wt-fix2</code> is a safety property rather than a preference.</p>
+    </a>
+    <div class="rounded-xl border border-slate-200 bg-slate-100/60 p-5 dark:border-slate-800 dark:bg-slate-900/50">
+      <span class="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-500">Docs corrected</span>
+      <h3 class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">This session fixed the docs too</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400"><code class="font-mono">REQUIREMENTS.md</code> SEC-13, <code class="font-mono">UI_INVENTORY.md:60</code>, <code class="font-mono">CODE_MAP.md:113</code>, <code class="font-mono">STATUS.md:162</code>, <code class="font-mono">NEXT.md</code> N5/N6/N8/N9/N10/N11/N12/N13 and its false “closed” entry, plus <code class="font-mono">AGENTS.md</code>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DOC CORRECTIONS ============ -->
+<section id="doc-corrections" class="border-t border-slate-200 py-10 dark:border-slate-800 sm:py-12">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Documentation corrections made</h2>
+  <p class="mt-3 max-w-3xl text-slate-600 dark:text-slate-400"><code class="font-mono">STATUS.md</code> was last edited 2026-07-31 yet claims “Refreshed 2026-07-21”, and ten of its numbers are wrong (72→78 tables, 64→86 migrations, 685→827 payments, …).</p>
+  <div class="mt-4 rounded-lg border-l-4 border-rose-500 bg-rose-50 p-4 dark:bg-rose-950/30">
+    <p class="text-sm text-rose-900 dark:text-rose-200"><strong>The dangerous one is line 147:</strong> a bold <em>“Every <code class="font-mono">jwtVerify</code> pins <code class="font-mono">algorithms</code> — ❌ NOT TRUE, do not believe this”</em> naming two files — <strong>both of which now pin <code class="font-mono">HS256</code></strong>. The document misleads in the opposite direction to when it was written, warning about a hole that has been closed.</p>
+  </div>
+  <p class="mt-4 max-w-3xl text-slate-600 dark:text-slate-400">An important distinction for whoever refreshes it: some numbers are stale because <strong class="text-slate-800 dark:text-slate-200">the code changed</strong> (fix them) and others because <strong class="text-slate-800 dark:text-slate-200">the shared dev DB moved on</strong> as other agents seeded (re-stamping those just chases a moving target).</p>
+</section>
+
+</main>
+
+<footer class="border-t border-slate-200 py-8 dark:border-slate-800">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6">
+    <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Sources</p>
+    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Every number on these pages is copied from <code class="font-mono">specs/docs/audit-2026-08-01/FINDINGS-SOURCE.md</code> — the consolidated verified record and the authority on all figures — with detail drawn from <code class="font-mono">ARCHITECTURE.md</code>, <code class="font-mono">CODE-HEALTH.md</code> and <code class="font-mono">CROSS-VALIDATION.md</code> beside it. Nothing has been rounded, softened, or inferred.</p>
+  </div>
+</footer>
+
+</body>
+</html>

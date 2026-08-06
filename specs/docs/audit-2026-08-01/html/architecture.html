@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture — TokoΦ audit 2026-08-01</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'media',
+  theme: { extend: {
+    fontFamily: {
+      sans: ['ui-sans-serif','system-ui','-apple-system','Segoe UI','Roboto','Helvetica Neue','Arial','sans-serif'],
+      mono: ['ui-monospace','SFMono-Regular','Menlo','Consolas','Liberation Mono','monospace']
+    }
+  }}
+};
+</script>
+<style>
+  :root { color-scheme: light dark; }
+  body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  [id] { scroll-margin-top: 5rem; }
+  code { overflow-wrap: anywhere; }
+  pre code { overflow-wrap: normal; }
+  .mermaid { display: flex; justify-content: center; min-height: 2rem; }
+  .mermaid svg { max-width: 100%; height: auto; }
+  .diagram { overflow-x: auto; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 font-sans antialiased">
+
+<!-- ============ NAV ============ -->
+<header class="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/90 backdrop-blur">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6">
+    <div class="flex h-14 items-center gap-3">
+      <a href="index.html" class="shrink-0 font-semibold tracking-tight text-slate-900 dark:text-white">TokoΦ<span class="ml-2 font-mono text-[10px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">audit</span></a>
+      <span class="hidden lg:inline font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">2026-08-01 · 86e3ec3</span>
+      <nav class="ml-auto flex items-center gap-0.5 overflow-x-auto text-sm">
+        <a href="index.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Overview</a>
+        <a href="errors.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Errors</a>
+        <a href="architecture.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium bg-indigo-600 text-white">Architecture</a>
+        <a href="streams.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Streams</a>
+        <a href="decisions.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Decisions</a>
+        <a href="merge.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Merge</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-6xl px-4 sm:px-6">
+
+<section class="border-b border-slate-200 py-10 dark:border-slate-800 sm:py-14">
+  <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400">Structural map · 9 diagrams</p>
+  <h1 class="mt-3 text-4xl font-semibold tracking-tight text-slate-900 dark:text-white">Architecture, counted from the code</h1>
+  <p class="mt-4 max-w-3xl text-lg text-slate-600 dark:text-slate-400">Derived from the <strong class="text-slate-800 dark:text-slate-200">code</strong> and the <strong class="text-slate-800 dark:text-slate-200">Postgres catalog</strong>, not from the existing docs. <code class="font-mono text-[0.9em]">CODE_MAP.md</code>, <code class="font-mono text-[0.9em]">PRD.md</code> and <code class="font-mono text-[0.9em]">AGENTS.md</code> were used only as hypotheses to check — every one of them carries numbers that are now wrong (see <a class="text-indigo-600 underline dark:text-indigo-400" href="#doc-vs-code">§8</a>).</p>
+  <p class="mt-3 max-w-3xl text-sm text-slate-500 dark:text-slate-400">Database inspected: the shared dev container <code class="font-mono">tokophi-db</code> (localhost:5433), read-only. That container is shared with sibling worktrees and carries their migrations — where the container and the branch disagree, both numbers are given.</p>
+  <nav class="mt-8 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+    <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Sections</p>
+    <ol class="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2 lg:grid-cols-3">
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#system-map">1 · System map</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#tenancy">2 · Multi-tenancy &amp; RLS</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#auth">3 · Auth, RBAC, impersonation</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#lifecycle">4 · Order → payment → shipment</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#shipping">5 · Shipping &amp; COD</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#store-builder">6 · Store Builder</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#data-layer">7 · Data layer &amp; migrations</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#doc-vs-code">8 · 20 doc/code disagreements</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#arch-unverified">9 · What could not be verified</a></li>
+    </ol>
+  </nav>
+</section>
+
+<!-- ===== 1 ===== -->
+<section id="system-map" class="py-12">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">1 · Four surfaces, five packages, one database</h2>
+  <div class="diagram mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+<pre class="mermaid">
+flowchart TB
+  subgraph Edge["Cloudflare proxied - tokophi.com"]
+    D1["tokophi.com / www"]
+    D2["app."]
+    D3["rich."]
+    D4["slug.tokophi.com"]
+  end
+
+  LAND["apps/landing&lt;br/&gt;Astro static&lt;br/&gt;NO database"]
+  ADM["apps/admin = Seller&lt;br/&gt;Next.js 16"]
+  SUP["apps/super-admin&lt;br/&gt;Next.js 16"]
+  SF["apps/storefront&lt;br/&gt;Astro SSR"]
+
+  D1 --&gt; LAND
+  D2 --&gt; ADM
+  D3 --&gt; SUP
+  D4 --&gt; SF
+
+  SF --&gt;|"HTTP: ongkir, order, pay"| ADM
+  SUP --&gt;|"signed 2m token"| ADM
+
+  ADM --&gt; PDB[("PostgreSQL 16")]
+  SUP --&gt; PDB
+  SF --&gt; PDB
+
+  ADM --&gt; KA["KiriminAja"]
+  ADM --&gt; AL["AutoLaris"]
+  ADM --&gt; CAPI["Meta / GA4 / TikTok"]
+
+  subgraph PKG["packages"]
+    P1["db"]
+    P2["lib"]
+    P3["ui"]
+    P4["data"]
+    P5["sections"]
+  end
+
+  ADM -.-&gt; PKG
+  SUP -.-&gt; PKG
+  SF -.-&gt; PKG
+</pre>
+  </div>
+
+  <div class="mt-6 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 text-left dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">Surface</th><th class="px-3 py-2 font-medium">Domain it serves</th><th class="px-3 py-2 font-medium">May talk to</th><th class="px-3 py-2 font-medium">DB connection role</th></tr></thead>
+      <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr><td class="px-3 py-2 align-top"><code class="font-mono">apps/admin</code><br><span class="text-xs text-slate-500">“Seller”</span></td><td class="px-3 py-2 align-top">one merchant's shop: catalog, orders, customers, CRM, discounts, content, settings, billing. <strong>Also hosts every public API</strong> the storefront calls.</td><td class="px-3 py-2 align-top">Postgres · KiriminAja · AutoLaris · Meta/GA4/TikTok CAPI</td><td class="px-3 py-2 align-top"><strong>both</strong>: tenant reads/writes drop to <code class="font-mono">tokophi_app</code> via <code class="font-mono">withTenant</code>; auth, billing, public APIs and cron stay <strong>owner</strong></td></tr>
+        <tr><td class="px-3 py-2 align-top"><code class="font-mono">apps/super-admin</code></td><td class="px-3 py-2 align-top">the platform control plane: all stores, plans, invoices, payouts, platform couriers/channels/COD, support tickets, operators</td><td class="px-3 py-2 align-top">Postgres (cross-tenant) · KiriminAja · AutoLaris (connection tests)</td><td class="px-3 py-2 align-top"><strong>owner only</strong> — zero <code class="font-mono">withTenant</code> calls exist in the app</td></tr>
+        <tr><td class="px-3 py-2 align-top"><code class="font-mono">apps/storefront</code></td><td class="px-3 py-2 align-top">every shopper of every store — one container, tenant from the <code class="font-mono">Host</code> header</td><td class="px-3 py-2 align-top">Postgres (read + its own writes) · the admin's <code class="font-mono">/api/public/*</code></td><td class="px-3 py-2 align-top"><strong>owner only</strong> — every <code class="font-mono">src/data/*.ts</code> imports the bare <code class="font-mono">db</code></td></tr>
+        <tr><td class="px-3 py-2 align-top"><code class="font-mono">apps/landing</code></td><td class="px-3 py-2 align-top">the apex front door</td><td class="px-3 py-2 align-top">nothing</td><td class="px-3 py-2 align-top"><strong>none</strong> — deliberate: it must serve when the rest is down</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mt-6 grid gap-4 lg:grid-cols-2">
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Counted, not quoted</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">admin = <strong>55</strong> <code class="font-mono">page.tsx</code> + <strong>12</strong> <code class="font-mono">app/api/**/route.ts</code> + <strong>39</strong> <code class="font-mono">lib/data/*</code> + <strong>40</strong> <code class="font-mono">lib/actions/*</code>. Super-admin = <strong>10</strong> <code class="font-mono">page.tsx</code> (9 under <code class="font-mono">(platform)</code> + <code class="font-mono">/login</code>). Storefront = <strong>22</strong> page routes + <strong>6</strong> API routes.</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Production compose (<code class="font-mono">docker-compose.coolify.yml</code>) declares <strong>13</strong> services: postgres, migrate, admin, super-admin, storefront, landing, cron, cron-tracking, cron-tracking-events, backup + 3 volumes.</p>
+      <p class="mt-2 rounded border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><strong>Source note:</strong> <code class="font-mono">ARCHITECTURE.md</code> states “13 services … + 3 volumes” here and “<strong>10 services</strong>” in §8 row 17 — 10 services plus 3 volumes = the 13 declarations. Both figures are reproduced as written; they are the same file counted two ways.</p>
+    </div>
+    <div class="rounded-lg border-l-4 border-amber-500 bg-white p-4 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white">What breaks if this is misunderstood</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><strong>1.</strong> <code class="font-mono">apps/admin</code> is not only the Seller UI — it is the <strong>public API tier</strong> (<a class="text-indigo-600 underline dark:text-indigo-400" href="errors.html#e7">E7</a>). <code class="font-mono">/api/public/order</code>, <code class="font-mono">/ongkir</code>, <code class="font-mono">/promo</code>, <code class="font-mono">/pay/callback</code> and <code class="font-mono">/api/uploads/[name]</code> live inside it and are excluded from the auth middleware (<code class="font-mono">middleware.ts:66</code>). The admin container must be up for any shopper to check out, on a different origin — which is why every one of those routes carries hand-written CORS headers and a try/catch wrapper.</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><strong>2.</strong> <code class="font-mono">apps/landing</code> having no database is a design decision, not an oversight. Adding a DB read to it removes the only surface that survives a Postgres outage.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 2 ===== -->
+<section id="tenancy" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">2 · Multi-tenancy &amp; RLS — the real numbers</h2>
+  <p class="mt-2 text-slate-600 dark:text-slate-400">Counted from the catalog on 2026-08-01.</p>
+  <div class="mt-5 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 text-left dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">Metric</th><th class="px-3 py-2 font-medium">On this branch (code)</th><th class="px-3 py-2 font-medium">In the shared container</th><th class="px-3 py-2 font-medium">Evidence</th></tr></thead>
+      <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr><td class="px-3 py-2">Tables</td><td class="px-3 py-2 font-semibold tabular-nums">77</td><td class="px-3 py-2 font-semibold tabular-nums">78</td><td class="px-3 py-2 text-xs">The extra one is <code class="font-mono">color_palettes</code>, in <strong>no</strong> <code class="font-mono">schema.ts</code> entry and <strong>no</strong> <code class="font-mono">.sql</code> file on this branch — an unmerged sibling branch's migration.</td></tr>
+        <tr><td class="px-3 py-2">Tables with a <code class="font-mono">store_id</code> column</td><td class="px-3 py-2 font-semibold tabular-nums">51</td><td class="px-3 py-2 tabular-nums">52</td><td class="px-3 py-2 text-xs">catalog query; 52 minus <code class="font-mono">color_palettes</code></td></tr>
+        <tr><td class="px-3 py-2">Tables with RLS enabled</td><td class="px-3 py-2 font-semibold tabular-nums">51</td><td class="px-3 py-2 tabular-nums">52</td><td class="px-3 py-2 text-xs"><code class="font-mono">pg_class.relrowsecurity</code>; = 50 store-scoped + <code class="font-mono">stores</code></td></tr>
+        <tr><td class="px-3 py-2">Store-scoped tables <strong>without</strong> RLS</td><td class="px-3 py-2 font-semibold tabular-nums">1</td><td class="px-3 py-2 tabular-nums">1</td><td class="px-3 py-2 text-xs"><code class="font-mono">platform_activity</code> — deliberate: the platform's own audit log, written before a tenant session exists.</td></tr>
+        <tr><td class="px-3 py-2">Store-scoped tables with <strong>no <code class="font-mono">store_id</code> and no RLS</strong></td><td class="px-3 py-2 font-semibold tabular-nums">12</td><td class="px-3 py-2 tabular-nums">12</td><td class="px-3 py-2 text-xs">the child-table class, below</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">The baseline gate reports this as <code class="font-mono">verify-rls PASS — RLS 51/52</code>, i.e. the container's numbers.</p>
+
+  <div class="mt-6 grid gap-4 lg:grid-cols-2">
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white">The child-table class is <span class="tabular-nums">12</span>, not 11</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">No <code class="font-mono">store_id</code>, no RLS, <code class="font-mono">tokophi_app</code> holds full DML:</p>
+      <p class="mt-2 font-mono text-xs leading-relaxed text-slate-700 dark:text-slate-300">collection_conditions · collection_products · customer_addresses · discount_usages · <strong class="text-rose-600 dark:text-rose-400">flash_sale_items</strong> · fulfillments · inventory_levels · menu_items · order_line_items · product_media · product_options · purchase_order_items</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><strong><code class="font-mono">AGENTS.md</code> lists 11 and omits <code class="font-mono">flash_sale_items</code></strong>, which has FKs to <code class="font-mono">flash_sales</code> (store-scoped, RLS on) and <code class="font-mono">products</code> — squarely in the class the rule was written for. <strong>That class has produced five shipped cross-tenant bugs.</strong></p>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white"><code class="font-mono">stores</code> is policed by <code class="font-mono">id</code>, not <code class="font-mono">store_id</code></h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><code class="font-mono">pg_policies</code> shows <code class="font-mono">stores.tenant_isolation ALL (id = app_current_store_id())</code>, added by migration <code class="font-mono">0058</code>. <strong><code class="font-mono">verify-rls</code> structurally cannot see it</strong>, because that script derives the store-scoped set from <code class="font-mono">store_id</code> columns. This is the documented blind spot, and it is real: <code class="font-mono">stores</code> is the one table that identifies the tenant, and it was invisible to the guard meant to protect it.</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Roles: <code class="font-mono">tokophi</code> is <code class="font-mono">rolsuper=t, rolbypassrls=t</code>; <code class="font-mono">tokophi_app</code> is <code class="font-mono">f/f</code>, so policies actually enforce once <code class="font-mono">set local role</code> has run.</p>
+    </div>
+  </div>
+
+  <h3 class="mt-8 text-lg font-semibold text-slate-900 dark:text-white">How the tenant is resolved on each surface</h3>
+  <div class="diagram mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+<pre class="mermaid">
+flowchart LR
+  subgraph Seller["apps/admin - Seller"]
+    C1["session cookie JWT"] --&gt; C2["getSession + store_users re-check"]
+    C2 --&gt; C3["withCurrentTenant / withTenant"]
+    C3 --&gt; C4["BEGIN; set app.store_id; SET LOCAL ROLE tokophi_app"]
+    C4 --&gt; C5["RLS enforced"]
+  end
+
+  subgraph Store["apps/storefront"]
+    S1["Host header"] --&gt; S2["getStoreByHost"]
+    S2 --&gt; S3["Astro.locals.store"]
+    S3 --&gt; S4["bare db - OWNER, RLS bypassed"]
+  end
+
+  subgraph Public["public APIs in apps/admin"]
+    A1["body.storeSlug"] --&gt; A2["stores WHERE slug"]
+    A2 --&gt; A3["bare db - OWNER + explicit store_id filters"]
+  end
+
+  subgraph Super["apps/super-admin"]
+    P1["platform_session cookie"] --&gt; P2["requirePlatformAdmin"]
+    P2 --&gt; P3["bare db - OWNER, cross-tenant by design"]
+  end
+</pre>
+  </div>
+  <ul class="mt-5 space-y-3 text-sm text-slate-600 dark:text-slate-400">
+    <li><strong class="text-slate-800 dark:text-slate-200">Seller.</strong> <code class="font-mono">withCurrentTenant(fn)</code> (<code class="font-mono">apps/admin/lib/tenant.ts:39-43</code>) reads the session, falls back to the <strong>nil UUID</strong> when there is none (fails closed, matches no rows), and calls <code class="font-mono">withTenant</code> (<code class="font-mono">packages/db/src/rls.ts:10-16</code>), which opens a transaction, runs <code class="font-mono">select set_config('app.store_id', $1, true)</code> then <code class="font-mono">set local role tokophi_app</code>. It also hands <code class="font-mono">storeId</code> back as a <strong>2nd argument</strong> — because RLS does not scope tables that have no <code class="font-mono">store_id</code>.</li>
+    <li><strong class="text-slate-800 dark:text-slate-200">Storefront.</strong> <code class="font-mono">middleware.ts:33-46</code> normalises the <code class="font-mono">Host</code> header and resolves the store. Order: custom domain (a seam, not wired) → <code class="font-mono">&lt;slug&gt;.STOREFRONT_BASE_DOMAIN</code> → first host label → <code class="font-mono">STORE_SLUG</code> env. A <code class="font-mono">RESERVED</code> set stops a platform subdomain resolving as a shop. No match → a clean 404, never a 500. <strong>The store id is never read from a request body.</strong></li>
+    <li><strong class="text-slate-800 dark:text-slate-200">Public APIs.</strong> <code class="font-mono">/api/public/order</code> and <code class="font-mono">/ongkir</code> resolve the store from <code class="font-mono">body.storeSlug</code> and <strong>fail closed on a missing slug</strong> — the old <code class="font-mono">|| "batik-nusantara"</code> default silently attributed stray orders to the demo shop.</li>
+  </ul>
+
+  <h3 class="mt-8 text-lg font-semibold text-slate-900 dark:text-white">The deliberate owner paths</h3>
+  <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Only <strong>two</strong> <code class="font-mono">lib/data/*</code> files and <strong>seven</strong> <code class="font-mono">lib/actions/*</code> files skip the wrapper, and all nine are legitimate. That is a tight, auditable exception list.</p>
+  <div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 text-left dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">Path</th><th class="px-3 py-2 font-medium">Why owner</th><th class="px-3 py-2 font-medium">Scope mechanism</th></tr></thead>
+      <tbody class="divide-y divide-slate-200 bg-white font-mono text-xs dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr><td class="px-3 py-2">apps/admin/lib/auth.ts</td><td class="px-3 py-2 font-sans text-sm">reads <code>users ⋈ store_users</code> <strong>before a session exists</strong></td><td class="px-3 py-2">where users.email = ?</td></tr>
+        <tr><td class="px-3 py-2">apps/admin/lib/actions/{auth,register,profile,security}.ts</td><td class="px-3 py-2 font-sans text-sm">login / signup / own-account edits</td><td class="px-3 py-2">where users.id = session.userId</td></tr>
+        <tr><td class="px-3 py-2">apps/admin/lib/actions/billing.ts</td><td class="px-3 py-2 font-sans text-sm">subscription invoices</td><td class="px-3 py-2">where invoices.store_id = session.storeId</td></tr>
+        <tr><td class="px-3 py-2">apps/admin/lib/actions/{payment-settings,taxonomy}.ts, lib/data/areas.ts</td><td class="px-3 py-2 font-sans text-sm">platform/reference tables — not tenant data at all</td><td class="px-3 py-2">n/a</td></tr>
+        <tr><td class="px-3 py-2">apps/admin/app/api/public/**, app/api/cron/**</td><td class="px-3 py-2 font-sans text-sm">no session exists</td><td class="px-3 py-2">explicit store.id on every query</td></tr>
+        <tr><td class="px-3 py-2">apps/admin/lib/cod.ts, lib/shipping-quote.ts</td><td class="px-3 py-2 font-sans text-sm">called from the public API</td><td class="px-3 py-2">where store_settings.store_id = input.storeId</td></tr>
+        <tr><td class="px-3 py-2">apps/super-admin/**</td><td class="px-3 py-2 font-sans text-sm">cross-tenant by definition</td><td class="px-3 py-2">explicit ids</td></tr>
+        <tr><td class="px-3 py-2">apps/storefront/src/data/**</td><td class="px-3 py-2 font-sans text-sm">read-only catalog, host-resolved</td><td class="px-3 py-2">explicit store.id</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mt-6 rounded-lg border-l-4 border-amber-500 bg-white p-4 dark:bg-slate-900">
+    <h3 class="font-semibold text-slate-900 dark:text-white">Three shipped incident classes, all still live as hazards</h3>
+    <ol class="mt-2 list-decimal space-y-2 pl-5 text-sm text-slate-600 dark:text-slate-400">
+      <li><strong>“RLS will scope it” on a table RLS does not scope.</strong> Before <code class="font-mono">0058</code>, two functions doing <code class="font-mono">.from(stores).limit(1)</code> inside <code class="font-mono">withCurrentTenant</code> returned an <strong>arbitrary store</strong> — a merchant read a stranger's shop name, WhatsApp and subscription countdown, and because the paired write <em>was</em> correctly scoped, pressing Simpan would have renamed their own shop to the leaked one. <strong>The policy is the net; the <code class="font-mono">WHERE</code> is the rule.</strong></li>
+      <li><strong>The child-table class.</strong> A write to any of the 12 tables lands regardless of tenant, and the <em>parent</em> write under RLS <strong>silently no-ops</strong> for a foreign id — neither half errors. <code class="font-mono">verify-rls</code> cannot see this class at all.</li>
+      <li><strong><code class="font-mono">platform_activity</code> is the only intentional store-scoped gap</strong> — treating it as an oversight and “fixing” it would break the super-admin audit log.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===== 3 ===== -->
+<section id="auth" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">3 · Auth, RBAC, and the super-admin impersonation flow</h2>
+  <div class="diagram mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+<pre class="mermaid">
+sequenceDiagram
+  participant Op as Platform operator
+  participant SA as super-admin :3001
+  participant DB as Postgres
+  participant AD as admin :3000
+  participant Br as Browser
+
+  Op-&gt;&gt;SA: click Buka Dashboard Seller
+  SA-&gt;&gt;SA: requirePlatformAdmin owner
+  SA-&gt;&gt;DB: store_users JOIN users WHERE storeId AND role=owner
+  DB--&gt;&gt;SA: owner userId, email, name, slug
+  SA-&gt;&gt;SA: signImpersonation - HS256, aud tokophi:impersonate, exp 2m
+  SA-&gt;&gt;DB: INSERT platform_activity - Impersonate toko oleh operator
+  SA--&gt;&gt;Br: ADMIN_URL /impersonate with token and slug
+  Br-&gt;&gt;AD: GET /impersonate with token
+  AD-&gt;&gt;AD: jwtVerify - audience required, HS256 pinned
+  AD-&gt;&gt;AD: signSession - exp 7d, NO aud, NO impersonation marker
+  AD--&gt;&gt;Br: 307 + Set-Cookie session, maxAge 7d, httpOnly, sameSite lax
+  Br-&gt;&gt;AD: GET /store/slug
+  AD-&gt;&gt;DB: getSession re-checks store_users membership
+</pre>
+  </div>
+
+  <div class="mt-6 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 text-left dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">Piece</th><th class="px-3 py-2 font-medium">File:line</th><th class="px-3 py-2 font-medium">What it mints / checks</th><th class="px-3 py-2 font-medium">Expiry</th></tr></thead>
+      <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr><td class="px-3 py-2">Merchant login</td><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/auth.ts:32-51, :53-55</td><td class="px-3 py-2">scrypt <code class="font-mono">salt:hash</code> verify against <code class="font-mono">users</code>, joined to <code class="font-mono">store_users</code> and <code class="font-mono">stores</code></td><td class="px-3 py-2 whitespace-nowrap">JWT <strong>7d</strong>, cookie <strong>7d</strong></td></tr>
+        <tr><td class="px-3 py-2">Session read</td><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/auth.ts:75-100</td><td class="px-3 py-2">verifies the JWT, then <strong>re-reads <code class="font-mono">store_users</code> on every call</strong> and takes <code class="font-mono">role</code> from the row, not the token. DB error → <code class="font-mono">null</code> (fails closed).</td><td class="px-3 py-2">per request</td></tr>
+        <tr><td class="px-3 py-2">Edge gate</td><td class="px-3 py-2 font-mono text-xs">apps/admin/middleware.ts:18-43</td><td class="px-3 py-2">JWT signature only, no DB. Unauthenticated allow-list: <code class="font-mono">/login</code>, <code class="font-mono">/daftar</code>, <code class="font-mono">/api/auth/google/*</code>, <strong><code class="font-mono">/impersonate</code></strong></td><td class="px-3 py-2">—</td></tr>
+        <tr><td class="px-3 py-2">RBAC enforcement</td><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/rbac.ts:32-43</td><td class="px-3 py-2"><code class="font-mono">requireCapability(cap)</code> → <code class="font-mono">ForbiddenError</code>; <strong>also</strong> blocks every write when the subscription is past grace, except <code class="font-mono">allowSuspended</code></td><td class="px-3 py-2">—</td></tr>
+        <tr><td class="px-3 py-2">Platform session</td><td class="px-3 py-2 font-mono text-xs">apps/super-admin/lib/platform-auth.ts:15,43-56</td><td class="px-3 py-2">cookie <code class="font-mono">platform_session</code> — deliberately a different name from the admin's <code class="font-mono">session</code></td><td class="px-3 py-2">JWT <strong>7d</strong></td></tr>
+        <tr><td class="px-3 py-2">Platform rank</td><td class="px-3 py-2 font-mono text-xs">apps/super-admin/lib/platform-rank.ts</td><td class="px-3 py-2"><code class="font-mono">support</code> 1 &lt; <code class="font-mono">admin</code> 2 &lt; <code class="font-mono">owner</code> 3; unknown role scores 0 (fail closed)</td><td class="px-3 py-2">—</td></tr>
+        <tr class="bg-amber-50 dark:bg-amber-950/20"><td class="px-3 py-2">Impersonation mint</td><td class="px-3 py-2 font-mono text-xs">apps/super-admin/lib/session.ts:28-31</td><td class="px-3 py-2">HS256, <strong>audience <code class="font-mono">tokophi:impersonate</code></strong></td><td class="px-3 py-2 font-semibold whitespace-nowrap">2 minutes</td></tr>
+        <tr class="bg-amber-50 dark:bg-amber-950/20"><td class="px-3 py-2">Impersonation exchange</td><td class="px-3 py-2 font-mono text-xs">apps/admin/app/impersonate/route.ts:30-47</td><td class="px-3 py-2"><code class="font-mono">jwtVerify</code> with <code class="font-mono">audience</code> <strong>required</strong> and <code class="font-mono">algorithms:["HS256"]</code> <strong>pinned</strong>, then re-signs a full session</td><td class="px-3 py-2 font-semibold whitespace-nowrap">7 days</td></tr>
+        <tr><td class="px-3 py-2">Gate + audit</td><td class="px-3 py-2 font-mono text-xs">apps/super-admin/lib/actions.ts:42, :72</td><td class="px-3 py-2"><code class="font-mono">requirePlatformAdmin("owner")</code>; one <code class="font-mono">platform_activity</code> row, kind <code class="font-mono">admin</code></td><td class="px-3 py-2">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="rbac" class="mt-8 text-lg font-semibold text-slate-900 dark:text-white">RBAC capability matrix (verified against <code class="font-mono text-[0.85em]">rbac-policy.ts</code>)</h3>
+  <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Roles are <code class="font-mono">owner | admin | staff | gudang</code> — and the DB enum agrees exactly.</p>
+  <div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 text-left font-medium">Capability</th><th class="px-3 py-2 font-medium">owner</th><th class="px-3 py-2 font-medium">admin</th><th class="px-3 py-2 font-medium">staff</th><th class="px-3 py-2 font-medium">gudang</th></tr></thead>
+      <tbody class="divide-y divide-slate-200 bg-white text-center dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr><td class="px-3 py-1.5 text-left font-mono text-xs">products:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td></tr>
+        <tr><td class="px-3 py-1.5 text-left font-mono text-xs">products:delete</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td><td class="text-slate-300 dark:text-slate-700">·</td></tr>
+        <tr><td class="px-3 py-1.5 text-left font-mono text-xs">discounts:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td></tr>
+        <tr><td class="px-3 py-1.5 text-left font-mono text-xs">content:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td></tr>
+        <tr><td class="px-3 py-1.5 text-left font-mono text-xs">orders:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td></tr>
+        <tr><td class="px-3 py-1.5 text-left font-mono text-xs">inventory:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td><td class="text-emerald-600 dark:text-emerald-400">✓</td></tr>
+        <tr><td class="px-3 py-1.5 text-left font-mono text-xs">purchases:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td><td class="text-emerald-600 dark:text-emerald-400">✓</td></tr>
+        <tr><td class="px-3 py-1.5 text-left font-mono text-xs">customers:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td></tr>
+        <tr><td class="px-3 py-1.5 text-left font-mono text-xs">crm:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td></tr>
+        <tr><td class="px-3 py-1.5 text-left font-mono text-xs">media:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td></tr>
+        <tr><td class="px-3 py-1.5 text-left font-mono text-xs">support:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td></tr>
+        <tr><td class="px-3 py-1.5 text-left font-mono text-xs">chat:read / chat:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td></tr>
+        <tr><td class="px-3 py-1.5 text-left font-mono text-xs">theme:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td><td class="text-slate-300 dark:text-slate-700">·</td></tr>
+        <tr class="bg-amber-50 dark:bg-amber-950/20"><td class="px-3 py-1.5 text-left font-mono text-xs">settings:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td><td class="text-slate-300 dark:text-slate-700">·</td><td class="text-slate-300 dark:text-slate-700">·</td></tr>
+        <tr class="bg-amber-50 dark:bg-amber-950/20"><td class="px-3 py-1.5 text-left font-mono text-xs">integrations:write</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td><td class="text-slate-300 dark:text-slate-700">·</td><td class="text-slate-300 dark:text-slate-700">·</td></tr>
+        <tr class="bg-amber-50 dark:bg-amber-950/20"><td class="px-3 py-1.5 text-left font-mono text-xs">landing:html</td><td class="text-emerald-600 dark:text-emerald-400">✓</td><td class="text-slate-300 dark:text-slate-700">·</td><td class="text-slate-300 dark:text-slate-700">·</td><td class="text-slate-300 dark:text-slate-700">·</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-3 rounded-lg border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">The three highlighted rows are the owner-only set — and <code class="font-mono">admin</code> is derived by <strong>subtraction</strong> (<code class="font-mono">ALL_CAPABILITIES.filter(...)</code>, <code class="font-mono">rbac-policy.ts:68-70</code>), so a <strong>new owner-only capability leaks to <code class="font-mono">admin</code> by default</strong> unless it is added to that filter. <code class="font-mono">staff</code> and <code class="font-mono">gudang</code> are explicit allow-lists and are safe against the same mistake. (<a class="underline" href="errors.html#e9">E9</a>)</p>
+
+  <div class="mt-6 rounded-lg border-2 border-rose-300 bg-white p-5 dark:border-rose-900 dark:bg-slate-900">
+    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Why impersonation is the open security decision</h3>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">The exchange itself is well-built: the audience claim is what stops a stolen 7-day merchant session JWT (same <code class="font-mono">AUTH_SECRET</code>, no <code class="font-mono">aud</code>) being replayed at <code class="font-mono">/impersonate</code>, and the algorithm is pinned. But <strong>the asymmetry is the whole risk</strong>, and it is structural:</p>
+    <ul class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-400">
+      <li>▸ <strong>A 2-minute token buys a 7-day cookie.</strong> The short life of the exchange token bounds nothing after the redirect.</li>
+      <li>▸ <strong>The minted session is indistinguishable from the merchant's own login.</strong> No <code class="font-mono">aud</code>, no <code class="font-mono">imp</code> claim, no operator id, no shortened expiry. Nothing downstream can tell an impersonated request from a real one. Only the mint is audited; <strong>every action taken during the impersonation is attributed to the merchant</strong>.</li>
+      <li>▸ <strong>There is no revocation.</strong> No <code class="font-mono">jti</code>, no token version; a password reset does <strong>not</strong> invalidate an existing JWT. The one thing that ends it early is deleting the owner's <code class="font-mono">store_users</code> row — and the merchant cannot remove themselves.</li>
+      <li>▸ <strong><code class="font-mono">role</code> is taken from the store_users row</strong>, so an impersonated session is exactly as powerful as the merchant's own owner account — including <code class="font-mono">settings:write</code>, <code class="font-mono">integrations:write</code> (tenant secrets) and <code class="font-mono">landing:html</code> (raw markup that executes on the shop's origin).</li>
+    </ul>
+    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">Separately: <code class="font-mono">apps/admin/middleware.ts:49-56</code> rewrites <code class="font-mono">/store/{slug}/…</code> and passes the slug as an <code class="font-mono">x-tokophi-store</code> header <strong>without validating it against the session's store</strong>. The comment says RLS enforces regardless — true for the 51 RLS'd tables and <em>not</em> true for the 12 child tables or any query that omits its <code class="font-mono">storeId</code> filter.</p>
+    <p class="mt-3 text-sm"><a class="font-medium text-indigo-600 underline dark:text-indigo-400" href="decisions.html#d1">This is decision D1 — three defects that compound →</a></p>
+  </div>
+</section>
+
+<!-- ===== 4 ===== -->
+<section id="lifecycle" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">4 · Order → payment → shipment</h2>
+  <div class="diagram mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+<pre class="mermaid">
+flowchart TB
+  CART["storefront cart&lt;br/&gt;localStorage"] --&gt; CO["checkout.astro&lt;br/&gt;UX validation only"]
+  CO --&gt;|"POST /api/public/ongkir op=rates"| Q1["quoteShipping&lt;br/&gt;fast scope: spx, jne"]
+  CO --&gt;|"POST /api/public/order"| API["order route - THE BOUNDARY"]
+
+  API --&gt; V1["re-validate + normalise&lt;br/&gt;@tokophi/lib/validate"]
+  V1 --&gt; V2["areaById destId&lt;br/&gt;kota + provinsi DERIVED"]
+  V2 --&gt; V3["prices from product_variants&lt;br/&gt;+ live flash sale, min only"]
+  V3 --&gt; V4["stock precheck - advisory"]
+  V4 --&gt; V5["RE-QUOTE ongkir&lt;br/&gt;same quoteShipping"]
+  V5 --&gt; V6["voucher priced server-side"]
+  V6 --&gt; V7["PPN on subtotal minus voucher"]
+  V7 --&gt; V8{"COD requested?"}
+  V8 --&gt;|yes| V9["rate.cod AND getCodPolicy.reason&lt;br/&gt;403 if either fails"]
+  V8 --&gt;|no| TX
+  V9 --&gt; TX
+
+  TX["ONE transaction"] --&gt; T1["customer upsert on phone 62xxx"]
+  T1 --&gt; T2["SELECT FOR UPDATE per variant&lt;br/&gt;re-check, no clamp"]
+  T2 --&gt; T3["INSERT orders - snapshot ship_*"]
+  T3 --&gt; T4["INSERT order_line_items"]
+  T4 --&gt; T5["decrement inventory_levels"]
+  T5 --&gt; T6["INSERT payments - menunggu"]
+  T6 --&gt; T7["discount_usages + conditional used_count bump"]
+
+  TX --&gt; POST1["checkout_sessions to pulih"]
+  POST1 --&gt; POST2["enqueuePurchase - hold unless COD"]
+  POST2 --&gt; PAY{"COD?"}
+  PAY --&gt;|yes| DONE["200 - sukses page"]
+  PAY --&gt;|no| AL["alCreatePayment - OUTSIDE the txn"]
+  AL --&gt; ENR["enrich payments row with VA/QR/trxId"]
+  ENR --&gt; DONE
+</pre>
+  </div>
+
+  <p class="mt-6 text-sm font-medium text-slate-600 dark:text-slate-400">Then, asynchronously — the only legal status moves:</p>
+  <div class="diagram mt-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --&gt; baru
+  baru --&gt; diproses
+  baru --&gt; dikirim
+  baru --&gt; batal
+  diproses --&gt; dikirim
+  diproses --&gt; batal
+  dikirim --&gt; selesai
+  dikirim --&gt; batal
+  dikirim --&gt; retur
+  dikirim --&gt; diproses
+  selesai --&gt; retur
+  batal --&gt; [*]
+  retur --&gt; [*]
+</pre>
+  </div>
+  <p class="mt-3 text-sm text-slate-600 dark:text-slate-400"><code class="font-mono">applyOrderStatusChange</code> holds three guards, all load-bearing: same-status no-op, <code class="font-mono">batal</code>/<code class="font-mono">retur</code> terminal, and an explicit <code class="font-mono">ALLOWED</code> table. <code class="font-mono">selesai → retur</code> is the <strong>only</strong> legal exit from <code class="font-mono">selesai</code>. <code class="font-mono">dikirim → diproses</code> exists so a voided shipment can be re-booked.</p>
+
+  <h3 class="mt-8 text-lg font-semibold text-slate-900 dark:text-white">The authoritative boundaries</h3>
+  <div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 text-left dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">Fact</th><th class="px-3 py-2 font-medium">Authoritative source</th><th class="px-3 py-2 font-medium">Evidence</th></tr></thead>
+      <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr><td class="px-3 py-2 font-semibold">Item price</td><td class="px-3 py-2"><code class="font-mono">product_variants.price_idr</code>, floored by a live flash sale (<code class="font-mono">Math.min</code>, never upward)</td><td class="px-3 py-2 font-mono text-xs">order/route.ts:264-309 · :330-382</td></tr>
+        <tr><td class="px-3 py-2 font-semibold">Shipping price</td><td class="px-3 py-2"><code class="font-mono">quoteShipping()</code> — one function, called by both <code class="font-mono">/ongkir</code> and <code class="font-mono">/order</code>; <code class="font-mono">body.shipping.cost</code> is never read</td><td class="px-3 py-2 font-mono text-xs">order/route.ts:433-462</td></tr>
+        <tr><td class="px-3 py-2 font-semibold">Weight</td><td class="px-3 py-2">Σ <code class="font-mono">product_variants.weight_grams</code>, min 1 kg billable</td><td class="px-3 py-2 font-mono text-xs">shipping-quote.ts:160</td></tr>
+        <tr><td class="px-3 py-2 font-semibold">Origin</td><td class="px-3 py-2"><code class="font-mono">store_settings.sender_kecamatan_id</code>; <code class="font-mono">body.originCity</code> no longer exists</td><td class="px-3 py-2 font-mono text-xs">shipping-quote.ts:134-144</td></tr>
+        <tr><td class="px-3 py-2 font-semibold">Province (for COD)</td><td class="px-3 py-2">derived from <code class="font-mono">areaById(destId)</code>, never the typed field</td><td class="px-3 py-2 font-mono text-xs">order/route.ts:230-233</td></tr>
+        <tr><td class="px-3 py-2 font-semibold">Stock</td><td class="px-3 py-2"><code class="font-mono">SELECT … FOR UPDATE</code> on the single default-location row, inside the txn, no clamp</td><td class="px-3 py-2 font-mono text-xs">order/route.ts:591-606</td></tr>
+        <tr><td class="px-3 py-2 font-semibold">COD eligibility</td><td class="px-3 py-2"><code class="font-mono">buildCodPolicy</code> (5 conditions) <strong>and</strong> <code class="font-mono">rate.cod</code> from the live quote — <strong>two</strong> gates</td><td class="px-3 py-2 font-mono text-xs">order/route.ts:504-524</td></tr>
+        <tr><td class="px-3 py-2 font-semibold">Voucher quota</td><td class="px-3 py-2">the conditional <code class="font-mono">UPDATE … WHERE used_count &lt; usage_limit</code>; 0 rows → whole order rolls back, 409</td><td class="px-3 py-2 font-mono text-xs">order/route.ts:700-713</td></tr>
+        <tr><td class="px-3 py-2 font-semibold">Order status</td><td class="px-3 py-2"><code class="font-mono">applyOrderStatusChange</code> — the single writer</td><td class="px-3 py-2 font-mono text-xs">order-status.ts:14-113</td></tr>
+        <tr><td class="px-3 py-2 font-semibold">“Is this order COD?”</td><td class="px-3 py-2"><code class="font-mono">payments.method = 'cod'</code>; <code class="font-mono">input.cod</code> is a claim that is checked, not obeyed</td><td class="px-3 py-2 font-mono text-xs">actions/shipping.ts</td></tr>
+        <tr><td class="px-3 py-2 font-semibold">Money in the ledger</td><td class="px-3 py-2"><code class="font-mono">settleOrderLedger</code> / <code class="font-mono">creditSaleForPayment</code>, guarded by three partial unique indexes; balance is <strong>derived</strong>, never stored</td><td class="px-3 py-2 font-mono text-xs">order-status.ts:112 · lib/ledger-credit.ts</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="mt-5 rounded-lg border-l-4 border-amber-500 bg-white p-4 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-400">
+    <strong class="text-slate-900 dark:text-white">“The form validated it” is the single most expensive wrong belief in this codebase.</strong> <code class="font-mono">checkout.astro</code> re-implements the validation rules and the COD hint purely so the shopper sees an error early; a direct <code class="font-mono">POST</code> bypasses all of it. Every historical hole came from a client claim treated as a fact: <code class="font-mono">price: 0</code> bought goods for nothing, <code class="font-mono">shipping.cost: 0</code> bought free shipping out of the merchant's margin, <code class="font-mono">originCity</code> from the browser priced a Surabaya merchant at Yogyakarta rates, and a typed <code class="font-mono">provinsi</code> pushed COD outside the allow-listed provinces.
+  </div>
+</section>
+
+<!-- ===== 5 ===== -->
+<section id="shipping" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">5 · Shipping &amp; COD</h2>
+  <div class="diagram mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+<pre class="mermaid">
+flowchart TB
+  subgraph Addr["Address cascade"]
+    K1["kecamatan picked from kiriminaja_areas"] --&gt; K2["kelurahan picked from local table"]
+    K2 --&gt; K3["kodepos DERIVED from the kelurahan"]
+    K1 --&gt; K4["kota + provinsi DERIVED"]
+  end
+
+  K1 --&gt;|"district id"| PRICE["shipping_price v6.1&lt;br/&gt;origin + destination + weight&lt;br/&gt;NO subdistrict fields"]
+  K2 -.-&gt;|"NAME + kodepos only"| ADDRTEXT["free text inside the address string"]
+
+  ORIGIN["store_settings.sender_kecamatan_id"] --&gt; PRICE
+  ORIGIN -.-&gt;|"if NULL"| FUZZY["resolveArea on stores.city&lt;br/&gt;originFrom = store-city"]
+  FUZZY --&gt; PRICE
+
+  PRICE --&gt; FILT["filter: platform enabled&lt;br/&gt;INTERSECT store_shipping_methods"]
+  FILT --&gt; RATES["QuotedRate with EFFECTIVE cod flag"]
+</pre>
+  </div>
+  <div class="diagram mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+<pre class="mermaid">
+flowchart LR
+  A["platform_cod.enabled&lt;br/&gt;+ cap + provinces"] --&gt; AND1(("AND"))
+  B["platform_couriers services&lt;br/&gt;codAllowed"] --&gt; AND1
+  C["store_settings.cod_enabled"] --&gt; AND1
+  AND1 --&gt; D["policy.enabled + allows()"]
+  E["KiriminAja live rate cod=true&lt;br/&gt;for THIS route"] --&gt; AND2(("AND"))
+  D --&gt; AND2
+  AND2 --&gt; F["COD offered and accepted"]
+  AND1 -.-&gt;|"any link false"| G["COD silently disappears"]
+</pre>
+  </div>
+
+  <div class="mt-6 grid gap-4 lg:grid-cols-2">
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white">“Kecamatan PRICES, Kelurahan BOOKS” is only half implemented</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><code class="font-mono">kaShippingPrice</code> posts <strong>only</strong> <code class="font-mono">origin, destination, weight, item_value, insurance, courier</code> — no subdistrict fields. Correct, and the rule holds.</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><strong>But nothing books a destination kelurahan.</strong> <code class="font-mono">kaCreateOrder</code> <em>supports</em> <code class="font-mono">destination_kelurahan_id</code>; <code class="font-mono">createShipment</code> never passes it. <code class="font-mono">orders.ship_kelurahan_id</code> and <code class="font-mono">ship_kelurahan_name</code> are <strong class="tabular-nums">0 / 842</strong> filled, and <code class="font-mono">checkout.astro:404</code> states outright: <em>“The order API ignores kelurahan entirely”</em>. Sender side likewise: <code class="font-mono">sender_kelurahan_id</code> is <strong class="tabular-nums">0 / 7</strong> filled. Both columns are <strong>dead</strong>.</p>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white">Origin: the fallback is the default state</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><code class="font-mono">store_settings.sender_kecamatan_id</code> is <strong class="tabular-nums">1 / 7</strong> filled — <strong>six of seven stores</strong> fall to the <code class="font-mono">resolveArea(store.city)</code> fuzzy fallback and are quoted with <code class="font-mono">originFrom: "store-city"</code>. It is flagged in the response by design — but it is the <strong>default state, not the exception</strong>.</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><strong>Two-stage quote:</strong> <code class="font-mono">/ongkir</code> quotes <code class="font-mono">FAST_COURIERS = ["spx","jne"]</code> on first paint (measured 0.5–0.65 s) and everything on <code class="font-mono">all: true</code> (5.45–5.5 s). <code class="font-mono">/order</code> re-quotes scoped to the courier the shopper picked.</p>
+    </div>
+  </div>
+
+  <h3 class="mt-8 text-lg font-semibold text-slate-900 dark:text-white">The COD chain, as it stands in the database today</h3>
+  <div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 text-left dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">Link</th><th class="px-3 py-2 font-medium">Live value</th></tr></thead>
+      <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr><td class="px-3 py-2 font-mono text-xs">platform_cod</td><td class="px-3 py-2"><code class="font-mono">enabled=t</code>, cap <strong>Rp2.000.000</strong>, provinces <code class="font-mono">["DI Yogyakarta","Jawa Tengah","Jawa Barat","DKI Jakarta","Banten","Jawa Timur"]</code></td></tr>
+        <tr><td class="px-3 py-2 font-mono text-xs">platform_couriers[].codAllowed</td><td class="px-3 py-2"><strong><code class="font-mono">spx</code> only</strong>, service types <strong>1</strong> and <strong>3</strong>. Every other enabled courier (jne, jnt, lion, sap, sicepat, anteraja, ninja) has <strong>zero</strong> cod-allowed services</td></tr>
+        <tr><td class="px-3 py-2 font-mono text-xs">store_settings.cod_enabled</td><td class="px-3 py-2"><strong>1 of 7</strong> stores</td></tr>
+        <tr><td class="px-3 py-2 font-mono text-xs">rate.cod (request time)</td><td class="px-3 py-2">a <strong>fourth</strong> gate <code class="font-mono">cod-policy.ts</code> cannot express: KiriminAja's live answer for <em>this</em> route</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-4 rounded-lg border-l-4 border-amber-500 bg-white p-4 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-400">The chain is an <strong>AND of four independent switches owned by four different parties</strong>. Break any one and COD simply is not offered, with no error anywhere: no exception, no log line, no red badge — the option is absent from the checkout and the merchant reports “COD is broken”.</p>
+</section>
+
+<!-- ===== 6 ===== -->
+<section id="store-builder" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">6 · Store Builder / storefront rendering</h2>
+  <div class="diagram mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+<pre class="mermaid">
+flowchart TB
+  ADMT["admin /tema - Puck editor"] --&gt;|"puckConfigFor(type)"| REG["@tokophi/sections&lt;br/&gt;SECTIONS_BY_TEMPLATE_TYPE"]
+  ADMT --&gt;|save| PT[("page_templates&lt;br/&gt;store_id, type, is_default, sections jsonb")]
+
+  PT --&gt; GT["getStoreTemplates&lt;br/&gt;storefront/src/data/theme.ts"]
+  GT --&gt; RT["resolveTemplate:&lt;br/&gt;row template_id, else store default, else null"]
+
+  RT --&gt; H["index.astro&lt;br/&gt;homepage = WHOLE page"]
+  RT --&gt; C["kategori handle astro&lt;br/&gt;category = BODY under CategoryHero"]
+  RT --&gt; P["produk handle astro&lt;br/&gt;product = PDP TAIL only"]
+
+  H --&gt; SR["SectionRenderer.astro&lt;br/&gt;switch on item.type"]
+  C --&gt; SR
+  P --&gt; SR
+  SR --&gt; S14["14 section components"]
+
+  RT -.-&gt;|"null"| FB["hand-built fallback&lt;br/&gt;e.g. ProductListing"]
+</pre>
+  </div>
+  <div class="mt-6 grid gap-4 lg:grid-cols-2">
+    <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+      <p><code class="font-mono">page_templates.type ∈ {homepage, category, product}</code> and the three are <strong>not interchangeable</strong>. A template with <strong>zero sections is treated as absent</strong>, so an empty save cannot blank a page. In the container right now there are exactly <strong>2</strong> templates: one <code class="font-mono">homepage</code> default and one <code class="font-mono">product</code> default — the category path is on the fallback everywhere.</p>
+      <p class="mt-2">The <strong>14</strong> section types: <code class="font-mono">hero, product-listing, image-text, multicolumn, product-grid, category-nav, collection-bento, lookbook, banner-promo, marquee, testimoni, blog, rich-text, faq</code>. The palette is narrower than the renderer, per type: homepage = 13, category = 10, product = 9.</p>
+    </div>
+    <div class="rounded-lg border-l-4 border-amber-500 bg-white p-4 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-400">
+      <h3 class="font-semibold text-slate-900 dark:text-white">Narrow the PALETTE, never the RENDERER</h3>
+      <p class="mt-2"><code class="font-mono">sections</code> is <code class="font-mono">jsonb</code> — a template saved months ago can hold a section type no longer offered for its type, and if the switch stops handling it the section silently vanishes from a <strong>published, live</strong> storefront. <strong>There is no <code class="font-mono">default:</code> arm and no exhaustiveness assertion</strong>, so a type added to <code class="font-mono">SectionConfigMap</code> and forgotten compiles and renders nothing. (<a class="text-indigo-600 underline dark:text-indigo-400" href="errors.html#e8">E8</a>)</p>
+      <p class="mt-2">The other trap: <code class="font-mono">product-listing</code> is the real catalogue (server sort, 12-per-page pagination, empty state); <code class="font-mono">product-grid</code> is a flat slice capped at <code class="font-mono">limit</code>. Offering only the second on a category template silently truncates a merchant's catalogue.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 7 ===== -->
+<section id="data-layer" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">7 · Data layer, and why journal self-consistency is not enough</h2>
+  <div class="diagram mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+<pre class="mermaid">
+flowchart TB
+  SCH["packages/db/src/schema.ts&lt;br/&gt;77 pgTable definitions"] --&gt;|"drizzle-kit generate"| SQL["drizzle/NNNN_*.sql&lt;br/&gt;86 files"]
+  SCH --&gt; SNAP["drizzle/meta/NNNN_snapshot.json"]
+  SQL --&gt; JRN["drizzle/meta/_journal.json&lt;br/&gt;86 entries, 0000-0085"]
+  JRN --&gt;|"drizzle-kit migrate"| PG[("Postgres")]
+  SEED["src/seed.ts + 8 seed-*.ts"] --&gt;|"INSERT only, keep-list"| PG
+
+  VM["verify-migrations.ts"] -.-&gt;|"when increases, idx unique, journal to file"| JRN
+  VR["verify-rls.ts"] -.-&gt;|"derives from store_id columns"| PG
+
+  subgraph Reads
+    R1["apps/admin/lib/data/*&lt;br/&gt;39 files"] --&gt; R2["withCurrentTenant"]
+  end
+  subgraph Writes
+    W1["apps/admin/lib/actions/*&lt;br/&gt;40 files, use server"] --&gt; W2["requireCapability"]
+    W2 --&gt; W3["withTenant"]
+    W3 --&gt; W4["revalidatePath"]
+  end
+  R2 --&gt; PG
+  W3 --&gt; PG
+</pre>
+  </div>
+
+  <div class="mt-6 rounded-lg border-2 border-amber-300 bg-amber-50/50 p-5 dark:border-amber-800 dark:bg-amber-950/20">
+    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Journal archaeology — <span class="tabular-nums">88</span> tags ever recorded, <span class="tabular-nums">86</span> today</h3>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">By replaying all <strong>79 historical revisions</strong> of <code class="font-mono">_journal.json</code>. Two are gone:</p>
+    <div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-100 text-left dark:bg-slate-800"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">Tag</th><th class="px-3 py-2 font-medium">Fate</th><th class="px-3 py-2 font-medium">Consequence at the time</th></tr></thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="px-3 py-2 font-mono text-xs">0046_good_dust</td><td class="px-3 py-2">journal entry whose <code class="font-mono">.sql</code> was <strong>never committed</strong></td><td class="px-3 py-2">Every fresh <code class="font-mono">drizzle-kit migrate</code> died; <strong>production never created the <code class="font-mono">kelurahan</code> table</strong> and <code class="font-mono">/api/public/ongkir</code> 500'd on every checkout.</td></tr>
+          <tr><td class="px-3 py-2 font-mono text-xs">0064_store_public_email</td><td class="px-3 py-2"><strong>renumbered</strong> to <code class="font-mono">0070</code> after a two-branch collision</td><td class="px-3 py-2">Content survived intact; the journal now shows no trace that <code class="font-mono">0064</code> ever meant something else.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-3 text-sm font-medium text-slate-700 dark:text-slate-300">Both are resolved, and both prove the point: <strong><code class="font-mono">verify-migrations</code> checks the journal against itself and is blind to an entry that was removed or renumbered</strong> — a journal missing an entry is perfectly self-consistent.</p>
+  </div>
+
+  <div class="mt-6 grid gap-4 lg:grid-cols-3">
+    <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"><strong class="text-slate-900 dark:text-white">One transaction, whole batch.</strong> Drizzle applies the whole pending batch in ONE transaction. A single “already exists” rolls back every migration behind it and prints nothing. On 2026-07-30 that left <strong>16 migrations unapplied</strong> on the shared dev DB. Hence: every migration must be idempotent.</div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"><strong class="text-slate-900 dark:text-white">A non-increasing <code class="font-mono">when</code> makes drizzle SKIP a migration</strong> while reporting success. That is check #1 in <code class="font-mono">verify-migrations.ts:49-59</code>.</div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"><strong class="text-slate-900 dark:text-white">The seed is not a migration.</strong> It runs on every deploy but does not overwrite data an existing store already has, so a seed change reaches <strong>new</strong> stores only — invisible on dev, live in production.</div>
+  </div>
+  <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">The container has <strong>92</strong> rows in <code class="font-mono">drizzle.__drizzle_migrations</code> — six more than this branch has entries, because it is shared with sibling worktrees. <em>Count files on your branch, not rows in the container.</em></p>
+</section>
+
+<!-- ===== 8 ===== -->
+<section id="doc-vs-code" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">8 · Twenty places the docs disagree with the code</h2>
+  <p class="mt-2 max-w-3xl text-slate-600 dark:text-slate-400">The code wins. Each row is a doc bug. <strong>The most dangerous is not in a doc at all</strong> — row 7 is a <em>code comment</em>, wrong twice, sitting in the file that defines the tenant boundary.</p>
+  <div class="mt-5 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 text-left dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">#</th><th class="px-3 py-2 font-medium">Doc claim</th><th class="px-3 py-2 font-medium">Where</th><th class="px-3 py-2 font-medium">Reality</th></tr></thead>
+      <tbody class="divide-y divide-slate-200 bg-white text-[13px] dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr><td class="px-3 py-2 tabular-nums">1</td><td class="px-3 py-2">“Three surfaces”</td><td class="px-3 py-2 font-mono text-xs">CODE_MAP.md §1, §2</td><td class="px-3 py-2"><strong>Four</strong> — <code class="font-mono">apps/landing</code> is a real deployed service</td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">2</td><td class="px-3 py-2">schema has <strong>68 tables</strong></td><td class="px-3 py-2 font-mono text-xs">CODE_MAP.md §3, §7</td><td class="px-3 py-2"><strong>77</strong> in <code class="font-mono">schema.ts</code>, 78 in the shared container</td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">3</td><td class="px-3 py-2">“<strong>54 tables</strong>”</td><td class="px-3 py-2 font-mono text-xs">AGENTS.md</td><td class="px-3 py-2">77</td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">4</td><td class="px-3 py-2">migrations <strong>0000–0083, 84 files</strong></td><td class="px-3 py-2 font-mono text-xs">CODE_MAP.md §3, §11</td><td class="px-3 py-2"><strong>0000–0085, 86 files</strong>, head <code class="font-mono">0085_payment_lookup_indexes</code></td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">5</td><td class="px-3 py-2">“RLS on <strong>44</strong> store-scoped tables”</td><td class="px-3 py-2 font-mono text-xs">CODE_MAP.md §7</td><td class="px-3 py-2">RLS on <strong>51</strong> tables (50 store-scoped + <code class="font-mono">stores</code> by <code class="font-mono">id</code>)</td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">6</td><td class="px-3 py-2">“<strong>45 of the 46</strong> store-scoped tables”</td><td class="px-3 py-2 font-mono text-xs">AGENTS.md</td><td class="px-3 py-2">50 of 51</td></tr>
+        <tr class="bg-rose-50 dark:bg-rose-950/25"><td class="px-3 py-2 tabular-nums font-bold">7</td><td class="px-3 py-2">“RLS scopes the <strong>36</strong> tables that have a <code class="font-mono">store_id</code>” <strong>and</strong> “<code class="font-mono">stores</code> … has <code class="font-mono">relrowsecurity = false</code>”</td><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/tenant.ts:23-25 — <strong>a code comment</strong></td><td class="px-3 py-2"><strong>51 tables; and <code class="font-mono">stores</code> DOES have RLS since <code class="font-mono">0058</code>.</strong> Wrong twice, in the file that defines the tenant boundary.</td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">8</td><td class="px-3 py-2">“isolates … by <code class="font-mono">store_id</code> (<strong>36/39</strong>)”</td><td class="px-3 py-2 font-mono text-xs">AGENTS.md</td><td class="px-3 py-2">50/51</td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">9</td><td class="px-3 py-2">The <strong>11</strong> store-scoped tables with no <code class="font-mono">store_id</code> and no RLS</td><td class="px-3 py-2 font-mono text-xs">AGENTS.md, child-table rule</td><td class="px-3 py-2"><strong>12</strong> — <code class="font-mono">flash_sale_items</code> is missing from the list</td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">10</td><td class="px-3 py-2">“The order SNAPSHOTS the destination … <code class="font-mono">createShipment</code> books with those exact ids”</td><td class="px-3 py-2 font-mono text-xs">AGENTS.md, Shipping §</td><td class="px-3 py-2"><strong>Never written and never read.</strong> <code class="font-mono">0 / 842</code> orders have either; the route writes 5 <code class="font-mono">ship_*</code> fields, not 7</td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">11</td><td class="px-3 py-2">“<code class="font-mono">kaCreateOrder</code> already sends <code class="font-mono">kelurahan_id</code> when we have one”</td><td class="px-3 py-2 font-mono text-xs">actions/shipping.ts:209-212</td><td class="px-3 py-2">Still true, and the form still does not ask: <code class="font-mono">sender_kelurahan_id</code> = <code class="font-mono">0 / 7</code></td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">12</td><td class="px-3 py-2">“Its own <strong>two</strong> API routes”</td><td class="px-3 py-2 font-mono text-xs">CODE_MAP.md §6</td><td class="px-3 py-2"><strong>Six</strong>; <code class="font-mono">api/chat/send.ts</code> writes three tables</td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">13</td><td class="px-3 py-2">Storefront routes include <code class="font-mono">/akun</code></td><td class="px-3 py-2 font-mono text-xs">CODE_MAP.md §6</td><td class="px-3 py-2">No <code class="font-mono">akun</code> route exists. Undocumented ones that do: <code class="font-mono">/cari, /promo, /promo/[handle], /lp/[slug], /thanks, /kategori, /feed/*.xml, /sitemap.xml, /robots.txt, /404</code></td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">14</td><td class="px-3 py-2">admin = “<strong>39</strong> routes, <strong>22</strong> actions, <strong>22</strong> data”</td><td class="px-3 py-2 font-mono text-xs">CODE_MAP.md §2</td><td class="px-3 py-2"><strong>55</strong> <code class="font-mono">page.tsx</code>, <strong>40</strong> actions, <strong>39</strong> data</td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">15</td><td class="px-3 py-2">super-admin = “<strong>8</strong> routes”; §5 table lists 7</td><td class="px-3 py-2 font-mono text-xs">CODE_MAP.md §2, §5</td><td class="px-3 py-2"><strong>10</strong>; <code class="font-mono">/pencairan</code> (payouts) is missing from the table entirely</td></tr>
+        <tr class="bg-amber-50 dark:bg-amber-950/20"><td class="px-3 py-2 tabular-nums">16</td><td class="px-3 py-2">“Live: Vultr Singapore <code class="font-mono">45.76.146.40</code> … <code class="font-mono">*.sslip.io</code>”</td><td class="px-3 py-2 font-mono text-xs">CODE_MAP.md §11</td><td class="px-3 py-2"><code class="font-mono">AGENTS.md</code> says live on <code class="font-mono">tokophi.com</code>. The two docs contradict each other; <span class="font-mono text-[11px] font-bold uppercase text-amber-700 dark:text-amber-400">unverified</span> which is current — production was not touched</td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">17</td><td class="px-3 py-2">Compose = “Postgres + migrate + 3 apps + billing cron” / “+ backup”</td><td class="px-3 py-2 font-mono text-xs">CODE_MAP.md §2, §11</td><td class="px-3 py-2"><strong>10 services</strong>: postgres, migrate, admin, super-admin, storefront, <strong>landing</strong>, cron, <strong>cron-tracking</strong>, <strong>cron-tracking-events</strong>, backup</td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">18</td><td class="px-3 py-2">Section list including <strong>Countdown</strong></td><td class="px-3 py-2 font-mono text-xs">specs/decisions/0009 §2</td><td class="px-3 py-2"><strong>14</strong> section types, and there is no <code class="font-mono">countdown</code> type</td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">19</td><td class="px-3 py-2">ADR 0009 template resolution</td><td class="px-3 py-2 font-mono text-xs">0009 §3</td><td class="px-3 py-2">Implemented as described, plus an unstated rule: a template with <strong>zero sections is treated as absent</strong></td></tr>
+        <tr><td class="px-3 py-2 tabular-nums">20</td><td class="px-3 py-2">“72 tables, 64 migrations (0000–0063), RLS on 46”</td><td class="px-3 py-2 font-mono text-xs">STATUS.md:3-5</td><td class="px-3 py-2">77 / 86 (0000–0085) / 51. <code class="font-mono">STATUS.md</code> at least dates itself — least misleading of the three</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===== 9 ===== -->
+<section id="arch-unverified" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <div class="rounded-xl border-2 border-dashed border-amber-400 bg-amber-50/60 p-6 dark:border-amber-700 dark:bg-amber-950/25">
+    <div class="flex flex-wrap items-baseline gap-3">
+      <span class="rounded bg-amber-500 px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-widest text-white">Unverified</span>
+      <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">9 · What the architecture mapper could not verify</h2>
+    </div>
+    <p class="mt-3 text-slate-700 dark:text-slate-300">Stated plainly, because a confident wrong entry is worse than a gap.</p>
+    <ol class="mt-4 list-decimal space-y-2 pl-6 text-sm text-slate-700 dark:text-slate-300">
+      <li><strong>Which deployment target is live.</strong> The two docs contradict each other. No SSH to any VPS, no production query, no DNS touched.</li>
+      <li><strong>Whether RLS actually blocks a cross-tenant read at runtime.</strong> The mechanism was confirmed statically (policies exist, <code class="font-mono">tokophi_app</code> has <code class="font-mono">rolbypassrls=f</code>, <code class="font-mono">withTenant</code> issues <code class="font-mono">set local role</code>) but <code class="font-mono">verify-rls</code> / <code class="font-mono">verify-rls-app</code> were <strong>not run</strong> here — both connect and could interfere with sibling agents. The “11/11 green” claim in <code class="font-mono">AGENTS.md</code> is unverified by this mapper.</li>
+      <li><strong>The COD-on-SPX return-leg belief.</strong> A commercial fact about KiriminAja, not something in the code. Remains unverified.</li>
+      <li><strong>KiriminAja / AutoLaris live behaviour.</strong> No provider call was made. <code class="font-mono">KIRIMINAJA_ENV</code> defaults to <code class="font-mono">sandbox</code>; whether production sets it is unverified.</li>
+      <li><strong><code class="font-mono">accounts</code> tenancy.</strong> No <code class="font-mono">store_id</code>, no RLS; not established as platform-level or store-scoped, so it is <strong>not</strong> counted in the 12-table child class. Someone should settle it.</li>
+      <li><strong>The <code class="font-mono">impersonate</code> route in production.</strong> Fully mapped from source, but not exercised end-to-end in a browser; cookie behaviour across real subdomains is asserted by code comments, not measured.</li>
+      <li><strong>Whether the 12 child tables are all reached only through correctly-scoped parents today.</strong> The class and the rule were verified; auditing all 40 action files' call sites is separate work that was not done.</li>
+      <li><strong>Runtime behaviour of anything.</strong> No dev server started, no page rendered, no browser driven <em>for this document</em>. Everything above is source + catalog.</li>
+    </ol>
+  </div>
+</section>
+
+</main>
+
+<footer class="border-t border-slate-200 py-8 dark:border-slate-800">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6">
+    <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Sources</p>
+    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Diagrams and tables reproduced from <code class="font-mono">specs/docs/audit-2026-08-01/ARCHITECTURE.md</code> (diagram source verbatim), with the headline counts cross-checked against <code class="font-mono">FINDINGS-SOURCE.md</code> §3.6.</p>
+  </div>
+</footer>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({ startOnLoad: true, theme: dark ? 'dark' : 'default', securityLevel: 'loose' });
+</script>
+
+</body>
+</html>

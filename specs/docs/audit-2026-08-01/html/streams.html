@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Streams — TokoΦ audit 2026-08-01</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'media',
+  theme: { extend: {
+    fontFamily: {
+      sans: ['ui-sans-serif','system-ui','-apple-system','Segoe UI','Roboto','Helvetica Neue','Arial','sans-serif'],
+      mono: ['ui-monospace','SFMono-Regular','Menlo','Consolas','Liberation Mono','monospace']
+    }
+  }}
+};
+</script>
+<style>
+  :root { color-scheme: light dark; }
+  body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  [id] { scroll-margin-top: 5rem; }
+  code { overflow-wrap: anywhere; }
+  pre code { overflow-wrap: normal; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 font-sans antialiased">
+
+<!-- ============ NAV ============ -->
+<header class="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/90 backdrop-blur">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6">
+    <div class="flex h-14 items-center gap-3">
+      <a href="index.html" class="shrink-0 font-semibold tracking-tight text-slate-900 dark:text-white">TokoΦ<span class="ml-2 font-mono text-[10px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">audit</span></a>
+      <span class="hidden lg:inline font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">2026-08-01 · 86e3ec3</span>
+      <nav class="ml-auto flex items-center gap-0.5 overflow-x-auto text-sm">
+        <a href="index.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Overview</a>
+        <a href="errors.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Errors</a>
+        <a href="architecture.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Architecture</a>
+        <a href="streams.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium bg-indigo-600 text-white">Streams</a>
+        <a href="decisions.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Decisions</a>
+        <a href="merge.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Merge</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-6xl px-4 sm:px-6">
+
+<section class="border-b border-slate-200 py-10 dark:border-slate-800 sm:py-14">
+  <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400">Work delivered · six change sets + two read-only streams</p>
+  <h1 class="mt-3 text-4xl font-semibold tracking-tight text-slate-900 dark:text-white">What each stream did — and what it refused to do</h1>
+  <p class="mt-4 max-w-3xl text-lg text-slate-600 dark:text-slate-400">All verified by the independent cross-validator unless marked otherwise. <strong class="text-slate-800 dark:text-slate-200">The refusals matter as much as the changes</strong>: four tasks on the list turned out to be wrong, stale, or actively harmful, and were disproved with numbers rather than done badly.</p>
+  <nav class="mt-8 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+    <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">The six change sets</p>
+    <ol class="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2 lg:grid-cols-3">
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#wt-perf">1 · <code class="font-mono">wt-perf</code> — DOM reduction</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#wt-seo">2 · <code class="font-mono">wt-seo</code> — headings, sitemap, bytes</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#wt-sec">3 · <code class="font-mono">wt-sec</code> — no fixed password</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#wt-fix2">4 · <code class="font-mono">wt-fix2</code> — un-anchor 12 dates</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#wt-db">5 · <code class="font-mono">wt-db</code> — a backfill, correctly refused</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#wt-order-actions">6 · <code class="font-mono">wt-order-actions</code> — tenant scoping</a></li>
+    </ol>
+    <p class="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Read-only streams — no change set</p>
+    <ol class="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#measurement">7 · Measurement — production, read-only</a></li>
+      <li><a class="text-indigo-600 hover:underline dark:text-indigo-400" href="#arch-stream">8 · Architecture map</a></li>
+    </ol>
+  </nav>
+</section>
+
+<!-- ===== wt-perf ===== -->
+<section id="wt-perf" class="border-b border-slate-200 py-12 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-slate-900 px-2 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-900">wt-perf</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Bundle and DOM</h2>
+    <span class="font-mono text-xs text-slate-500">storefront · <code>Stars.astro</code></span>
+  </div>
+
+  <div class="mt-6 grid gap-5 lg:grid-cols-3">
+    <div class="lg:col-span-2 space-y-4 text-slate-600 dark:text-slate-400">
+      <p>The real cost was <code class="font-mono">Stars.astro</code>: each rating drew two layers of five separate <code class="font-mono">&lt;svg&gt;</code> elements = <strong>26 elements</strong>, twelve times per homepage. Rewritten as one <code class="font-mono">&lt;svg&gt;</code> with five <code class="font-mono">&lt;path&gt;</code>s per layer — <strong>17 elements</strong> each.</p>
+      <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-100 text-left dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">Measure</th><th class="px-3 py-2 font-medium">before</th><th class="px-3 py-2 font-medium">after</th></tr></thead>
+          <tbody class="divide-y divide-slate-200 bg-white tabular-nums dark:divide-slate-800 dark:bg-slate-900/40">
+            <tr><td class="px-3 py-2">Homepage DOM elements</td><td class="px-3 py-2">1023</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">915 (−10.6%)</td></tr>
+            <tr><td class="px-3 py-2"><code class="font-mono">/</code> HTML</td><td class="px-3 py-2">213 192 B</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">210 252 B (−2 940 B)</td></tr>
+            <tr><td class="px-3 py-2"><code class="font-mono">dist/client</code></td><td class="px-3 py-2">—</td><td class="px-3 py-2 font-semibold">0 delta</td></tr>
+            <tr><td class="px-3 py-2">Star widget elements (each of 12)</td><td class="px-3 py-2">26</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">17</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Verified by <strong>pixel A/B</strong> over 40 rating widgets: DPR 8 and DPR 2 byte-identical; DPR 3 differed on <strong>8 of 40</strong> by <strong>1–2 pixels out of 45 288</strong>, max channel delta <strong>5/255</strong>, all on the fractional-fill clip edge. The cross-validator re-ran it and found <strong>36/36 identical at DPR 1 and 2</strong> — <em>if anything the original claim was pessimistic</em>.</p>
+      <div class="rounded-lg border-l-4 border-amber-500 bg-amber-50 p-4 text-sm dark:bg-amber-950/25">
+        <p class="font-mono text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-400">One characterisation was overstated and has been corrected</p>
+        <p class="mt-2 text-slate-700 dark:text-slate-300">“393 of 1023 were <code class="font-mono">&lt;svg&gt;</code>+<code class="font-mono">&lt;path&gt;</code> and 312 of those were stars” — <strong>393 is the whole SVG namespace</strong>, <code class="font-mono">&lt;svg&gt;</code>+<code class="font-mono">&lt;path&gt;</code> is <strong>383</strong>, and <strong>312 is the widget's <em>total</em> element count</strong>, not its SVG share (<strong>240</strong>). Reads as <strong>79%</strong> where the truth is <strong>61%</strong>. The headline numbers are exact; the wording was headed into <code class="font-mono">AGENTS.md</code> and has been corrected.</p>
+      </div>
+      <p class="text-sm"><strong class="text-slate-800 dark:text-slate-200">Honest limit stated:</strong> 915 is under Lighthouse's 1400 median but over its 800 p10 — the audit improves without passing.</p>
+    </div>
+
+    <aside class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-mono text-[11px] uppercase tracking-[0.18em] text-rose-600 dark:text-rose-400">Refused, with numbers</h3>
+      <div class="mt-3 space-y-4 text-sm text-slate-600 dark:text-slate-400">
+        <div>
+          <p class="font-semibold text-slate-800 dark:text-slate-200">N6 — closed, zero code change, hypothesis wrong</p>
+          <p class="mt-1">The client build target is <strong>already <code class="font-mono">esnext</code></strong> (Astro hard-codes it; no <code class="font-mono">build</code> key; no browserslist in the repo). There is also <strong>no bundle to trim</strong> — <code class="font-mono">dist/client</code> contains <strong>zero <code class="font-mono">.js</code> files</strong>; all first-party JS is inline.</p>
+          <p class="mt-1">The 44 KiB <code class="font-mono">unused-javascript</code> and 12 KiB <code class="font-mono">legacy-javascript</code> are <strong>Meta's <code class="font-mono">fbevents.js</code></strong>: 188.8 KB unused of 394.5 KB (<strong>47.9%</strong>), bundling <strong>core-js v3.32.2</strong> — the exact signature the audit detects. A build-target change would have a measured delta of <strong>0 bytes</strong>.</p>
+        </div>
+        <div>
+          <p class="font-semibold text-slate-800 dark:text-slate-200">N5 — both listed candidates were dead ends</p>
+          <p class="mt-1">Deferring carousel slides buys ~30 elements of a 106-element hero and costs the crawler/no-JS copy. Cutting what the default template seeds is <strong>zero delta by construction</strong> — the seed is not a migration and reaches new stores only.</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ===== wt-seo ===== -->
+<section id="wt-seo" class="border-b border-slate-200 py-12 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-slate-900 px-2 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-900">wt-seo</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Headings, sitemap, image bytes</h2>
+  </div>
+
+  <div class="mt-6 space-y-6">
+    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white">N11 — confirmed, and <em>worse</em> than stated</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">A builder homepage <strong>without</strong> a Hero rendered <strong>zero</strong> <code class="font-mono">&lt;h1&gt;</code>; a homepage <strong>with</strong> a Hero rendered <strong>three</strong> (the carousel emitted one per slide).</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Fixed: slide 1 keeps <code class="font-mono">&lt;h1&gt;</code>, slides 2..n become <code class="font-mono">&lt;p&gt;</code>; a Hero-less homepage gets <code class="font-mono">&lt;h1 class="sr-only"&gt;</code> carrying <strong>the store name from the DB, never invented copy</strong>. <code class="font-mono">SectionRenderer</code> untouched — still switches on all 14 types, nothing published can stop rendering.</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><strong>Verified:</strong> 13 pages across 5 stores, <strong>all <code class="font-mono">h1=1</code></strong>. Cross-validator re-verified 3→1 and 0→1 independently against a fresh build.</p>
+    </div>
+
+    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white">N13 — confirmed, <strong>but its stated data source does not exist</strong></h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><code class="font-mono">products.updated_at</code> is not in <code class="font-mono">schema.ts</code> and not in <code class="font-mono">information_schema</code>; <code class="font-mono">collections</code> has neither timestamp. So <code class="font-mono">&lt;lastmod&gt;</code> was emitted <strong>only where a defensible timestamp genuinely exists</strong> — <code class="font-mono">pages.updated_at</code> is real and stamped on every save, so <code class="font-mono">/halaman/*</code> got one (N13 did not even ask for it). Products and categories deliberately get none.</p>
+      <div class="mt-3 rounded-lg bg-slate-100 p-4 text-sm text-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+        <p class="font-semibold">Why <code class="font-mono">created_at</code> was rejected — a reason worth keeping</p>
+        <p class="mt-1">A product created in March and re-priced today would advertise <strong>March</strong> — the page most needing a re-crawl marked as the stalest — and Google discounts <code class="font-mono">lastmod</code> <strong>site-wide</strong> once it finds it inaccurate, which would take the honest blog and page dates down with it.</p>
+      </div>
+      <p class="mt-3 text-sm text-slate-600 dark:text-slate-400"><strong>Sitemap:</strong> <strong class="tabular-nums">55</strong> URLs, <strong class="tabular-nums">21</strong> with <code class="font-mono">&lt;lastmod&gt;</code> (from 15), all <code class="font-mono">YYYY-MM-DD</code>, none in the future, every value reconciled against SQL.</p>
+    </div>
+
+    <div class="rounded-xl border-2 border-emerald-300 bg-white p-5 dark:border-emerald-900 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white">PDP thumbnails had no <code class="font-mono text-[0.9em]">srcset</code> at all</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Found by the measurement stream, <strong>not on any task list</strong> — the <code class="font-mono">&lt;img&gt;</code> inside <code class="font-mono">&lt;button data-thumb&gt;</code> rendered a bare <code class="font-mono">src</code> into a 66 px box.</p>
+      <div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-100 text-left dark:bg-slate-800"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium"></th><th class="px-3 py-2 font-medium">before</th><th class="px-3 py-2 font-medium">after</th><th class="px-3 py-2 font-medium">delta</th></tr></thead>
+          <tbody class="divide-y divide-slate-200 tabular-nums dark:divide-slate-800">
+            <tr><td class="px-3 py-2 font-medium">DPR 1</td><td class="px-3 py-2">153 940 B</td><td class="px-3 py-2">32 198 B</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">−121 742 B (−79%)</td></tr>
+            <tr><td class="px-3 py-2 font-medium">DPR 2</td><td class="px-3 py-2">151 552 B</td><td class="px-3 py-2">42 646 B</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">−108 906 B (−72%)</td></tr>
+            <tr><td class="px-3 py-2 font-medium">DPR 3</td><td class="px-3 py-2">156 926 B</td><td class="px-3 py-2">49 436 B</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">−107 490 B (−69%)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">The <code class="font-mono">sizes</code> was derived from container padding + <code class="font-mono">gap-3</code> + thumbnail count, <strong>not</strong> from the <code class="font-mono">max-w-[7rem]</code> cap: <code class="font-mono">max-w</code> only <em>caps</em> a <code class="font-mono">flex-1 basis-0</code> tile and the measured box is <strong>66 px</strong>, so <code class="font-mono">sizes="112px"</code> would over-claim <strong>1.7×</strong> and cost a whole rung — worth <strong>21 668 B</strong> at DPR 2.</p>
+    </div>
+
+    <div class="grid gap-5 lg:grid-cols-2">
+      <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <h3 class="font-semibold text-slate-900 dark:text-white">Width ladder now reaches 2000</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">In both <code class="font-mono">catalog.ts</code> <code class="font-mono">WIDTHS</code> and the admin <code class="font-mono">?w=</code> allow-list (previously capped at 1200 with no original offered, unlike the static branch which deliberately appends the source).</p>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">The never-upscale guard was verified by calling the route handler directly against fixtures <strong>and</strong> by removing the guard to confirm <code class="font-mono">sharp.resize({fit:"inside"})</code> really does enlarge without it. All <strong>11</strong> <code class="font-mono">imageSrcSet</code> consumers were checked for a missing <code class="font-mono">sizes</code> (a missing one defaults to <code class="font-mono">100vw</code> and would now pull 2000w) — <strong>none missing</strong>.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <h3 class="font-mono text-[11px] uppercase tracking-[0.18em] text-rose-600 dark:text-rose-400">Left open deliberately</h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><code class="font-mono">Header.astro</code> has three more bare <code class="font-mono">&lt;img&gt;</code> sites which render on <strong>every page</strong>. Different file, three separate <code class="font-mono">sizes</code> derivations.</p>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">The new check <strong>prints</strong> them without failing, on the stated reasoning that <em>a check red for work nobody in this change can land is a check everyone learns to ignore</em>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== wt-sec ===== -->
+<section id="wt-sec" class="border-b border-slate-200 py-12 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-rose-600 px-2 py-1 font-mono text-xs font-bold text-white">wt-sec</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">No fixed password in <code class="font-mono text-[0.85em]">createStore</code></h2>
+    <span class="rounded border-2 border-rose-500 px-2 py-0.5 font-mono text-[11px] font-bold uppercase text-rose-700 dark:text-rose-400">closes the one blocking error</span>
+  </div>
+  <div class="mt-6 grid gap-5 lg:grid-cols-3">
+    <div class="lg:col-span-2 space-y-3 text-sm text-slate-600 dark:text-slate-400">
+      <p><a class="font-medium text-indigo-600 underline dark:text-indigo-400" href="errors.html#e1">E1</a> in full. <code class="font-mono">tempPassword()</code> → <code class="font-mono">"tokophi-" + randomBytes(3).toString("hex")</code>; <code class="font-mono">createStore</code> returns <code class="font-mono">password: pw</code>; <code class="font-mono">toko-client.tsx</code> shows it in a <code class="font-mono">duration: Infinity, closeButton: true</code> toast that survives the <code class="font-mono">router.push</code>; both dialogs' hard-coded “Password awal: <code class="font-mono">tokophi123</code>” strings are replaced with “acak … hanya ditampilkan sekali”.</p>
+      <p>The frozen <code class="font-mono">ANCHOR</code> is removed in the same file and <strong>the trial length is unchanged</strong>: <code class="font-mono">BILLING.TRIAL_DAYS</code> is <strong>3</strong>, so <code class="font-mono">BILLING.TRIAL_DAYS * 86_400_000</code> ≡ the old <code class="font-mono">3 * 86_400_000</code>. It now matches <code class="font-mono">apps/admin/lib/provision.ts:95</code>, the self-serve twin, which already used the constant.</p>
+      <div class="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+        <p class="font-semibold text-slate-800 dark:text-slate-200">Verification</p>
+        <ul class="mt-2 space-y-1">
+          <li>▸ Proven on <code class="font-mono">tokophi_test</code>, rolled back: <code class="font-mono">verify('tokophi123') = false</code>, <code class="font-mono">verify(minted) = true</code>.</li>
+          <li>▸ <code class="font-mono">no-fixed-password.test.ts</code> — <strong>proven red (3/5) before green (5/5)</strong>.</li>
+          <li>▸ <code class="font-mono">lint -w @tokophi/super-admin</code> clean on baseline, on wt-sec, and in the six-way tree; <code class="font-mono">tsc -p apps/super-admin</code> rc=0; build succeeds.</li>
+          <li>▸ Full suite on wt-sec alone: <strong>18 files / 172 tests</strong> pass (+5 from the new guard).</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-mono text-[11px] uppercase tracking-[0.18em] text-rose-600 dark:text-rose-400">Refused</h3>
+      <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">A <strong>dialog</strong> to reveal the password was rejected: the handler <code class="font-mono">router.push</code>es immediately and would unmount it. A persistent toast was used instead because <code class="font-mono">&lt;Toaster&gt;</code> lives in the root layout and survives navigation.</p>
+      <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">Widening <code class="font-mono">tempPassword()</code>'s <strong>24 bits</strong> of entropy was <em>not</em> done here — it is unchanged from what <code class="font-mono">resetOwnerPassword</code> already used, and widening it plus adding login throttling is a real follow-up: <a class="text-indigo-600 underline dark:text-indigo-400" href="decisions.html#d9">D9</a>.</p>
+    </aside>
+  </div>
+</section>
+
+<!-- ===== wt-fix2 ===== -->
+<section id="wt-fix2" class="border-b border-slate-200 py-12 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-slate-900 px-2 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-900">wt-fix2</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Un-anchor the 12 frozen dates + an honest count</h2>
+  </div>
+  <div class="mt-6 grid gap-5 lg:grid-cols-3">
+    <div class="lg:col-span-2 space-y-4 text-sm text-slate-600 dark:text-slate-400">
+      <p>All 12 live sites of <a class="font-medium text-indigo-600 underline dark:text-indigo-400" href="errors.html#e4">E4</a>, with the seed and mock anchors correctly left frozen. <code class="font-mono">publishedAtFor(published, current, now)</code> now returns <code class="font-mono">current ?? now</code>, and <code class="font-mono">updateArticle</code> reads the row's own value first — <strong>that read doubles as the RLS tenant check</strong>. <code class="font-mono">publish-date.test.ts</code> 4/4 pass.</p>
+      <p><a class="font-medium text-indigo-600 underline dark:text-indigo-400" href="errors.html#e10">E10</a>: <code class="font-mono">massal-client.tsx</code> now destructures <code class="font-mono">{ done }</code> and branches — a warning toast naming <code class="font-mono">done</code> vs <code class="font-mono">printedNumbers.length</code> when they differ, success otherwise.</p>
+      <p>Also corrected four documents about the recovery link (<a class="font-medium text-indigo-600 underline dark:text-indigo-400" href="errors.html#e3">E3</a>) — independently re-verified: <code class="font-mono">grep -rn signRecoveryToken</code> returns exactly one hit, its own definition. <code class="font-mono">verifyRecoveryToken</code> <em>is</em> reachable, so the verifier lives and the mint does not.</p>
+      <div class="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+        <p class="font-semibold text-slate-800 dark:text-slate-200">Verification</p>
+        <ul class="mt-2 space-y-1">
+          <li>▸ <code class="font-mono">lint -w @tokophi/admin</code>: <strong>42 problems (19 errors, 23 warnings)</strong> over the same 51 files as baseline — rule-id multiset identical. Nothing added, nothing removed.</li>
+          <li>▸ <code class="font-mono">tsc -p apps/admin</code> rc=0; <code class="font-mono">build -w @tokophi/admin</code> succeeds; <strong>18 files / 171 tests</strong> pass.</li>
+        </ul>
+        <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">A wording nit the cross-validator raised: the claim said the lint output was “byte-identical”; the raw text is not — line numbers in <code class="font-mono">massal-client.tsx</code> shift by exactly <strong>+12</strong>, the number of lines added there. The substantive claim holds.</p>
+      </div>
+    </div>
+    <aside class="rounded-xl border-2 border-amber-300 bg-amber-50/60 p-5 dark:border-amber-800 dark:bg-amber-950/25">
+      <h3 class="font-mono text-[11px] uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">A visible demo regression — and it is correct</h3>
+      <p class="mt-3 text-sm text-slate-700 dark:text-slate-300">Un-anchoring <code class="font-mono">checkout.ts</code> moves the Keranjang Ditinggal screen from <strong class="tabular-nums">796 → 6</strong> abandoned carts and <strong class="tabular-nums">340 → 143</strong> orders on <code class="font-mono">batik-nusantara</code>. Verified exactly, read-only, scoped per store.</p>
+      <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">The old <code class="font-mono">WINDOW_START</code> was <code class="font-mono">2026-07-02 − 30d = 2026-06-02</code> with <strong>no upper bound</strong> — <strong>60 days on 1 Agustus and growing daily, under a label that said 30</strong>. The newest <code class="font-mono">ditinggal</code> row is 2026-07-15 and <code class="font-mono">seed:recent</code> inserts no <code class="font-mono">checkout_sessions</code> at all.</p>
+      <p class="mt-2 text-sm font-medium text-slate-800 dark:text-slate-200">The cause is data, not code. The remedy is seeding. → <a class="text-indigo-600 underline dark:text-indigo-400" href="decisions.html#d8">D8</a></p>
+    </aside>
+  </div>
+</section>
+
+<!-- ===== wt-db ===== -->
+<section id="wt-db" class="border-b border-slate-200 py-12 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-slate-900 px-2 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-900">wt-db</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">N8 backfill — correctly refused</h2>
+    <span class="rounded border border-slate-400 px-2 py-0.5 font-mono text-[11px] uppercase text-slate-600 dark:text-slate-300">docs only, no code</span>
+  </div>
+  <p class="mt-5 max-w-3xl text-slate-600 dark:text-slate-400"><code class="font-mono">NEXT.md</code> said “77 rows on production”. <strong>That was the dev count.</strong> Production has <strong>75 orders total</strong> and <strong>65</strong> nulls, and <strong>not one</strong> has a <code class="font-mono">ship_postcode</code>. Every derivation named in the task resolves <strong>zero rows</strong> there.</p>
+
+  <div class="mt-6 grid gap-5 lg:grid-cols-2">
+    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white">Two structural discoveries behind it</h3>
+      <ol class="mt-3 list-decimal space-y-3 pl-5 text-sm text-slate-600 dark:text-slate-400">
+        <li><strong>The id spaces cannot be joined.</strong> <code class="font-mono">orders.ship_kelurahan_id</code> is an integer (KiriminAja village id); <code class="font-mono">kelurahan.id</code> is a text BPS/Kemendagri code (<code class="font-mono">34.02.13.2004</code>). Village → district is not derivable locally at all.</li>
+        <li><strong>Two migrations were lost to number collisions.</strong> <code class="font-mono">ship_kelurahan_id</code> / <code class="font-mono">ship_kelurahan_name</code> exist on the shared dev DB but <strong>in no migration and not in <code class="font-mono">schema.ts</code></strong>; slots <code class="font-mono">0034</code> / <code class="font-mono">0049</code> now belong to another branch. <code class="font-mono">verify-migrations</code> is green because the journal is self-consistent — which is precisely why the loss was never flagged. Consequence: <strong><code class="font-mono">seed:recent</code> cannot run against production</strong> (it selects a column production does not have) and is green on dev only because of <code class="font-mono">push</code> drift.</li>
+      </ol>
+    </div>
+    <div class="rounded-xl border-2 border-rose-300 bg-white p-5 dark:border-rose-900 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white">The trap avoided</h3>
+      <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">The 62 dev postcodes are <strong>fabricated by the seed</strong> (<code class="font-mono">POST_OF[city]</code> + 3 random digits); <strong>59 do not exist in <code class="font-mono">kelurahan</code> at all</strong>. Backfilling from them would have written a confident wrong kecamatan <strong>and silenced <code class="font-mono">destinationGuessed</code> (#117)</strong> — strictly worse than NULL.</p>
+      <p class="mt-3 text-sm font-medium text-slate-800 dark:text-slate-200">Rows stay NULL and stay flagged.</p>
+      <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">Validated on synthetic fixtures inside a rolled-back transaction: unique pair → backfilled, 3-district postcode → left NULL, already-set → not overwritten, second run → 0 rows.</p>
+    </div>
+  </div>
+  <p class="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"><span class="font-mono text-[11px] font-bold uppercase">Unverified</span> — every production figure here (75 orders, 65 null, column absent, 0 postcodes) was taken by the agent that ran it. The cross-validator had no prod access. Nothing contradicts them; everything checkable against the local DB matched to the row.</p>
+</section>
+
+<!-- ===== wt-order-actions ===== -->
+<section id="wt-order-actions" class="border-b border-slate-200 py-12 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-slate-900 px-2 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-900">wt-order-actions</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Tenant scoping + payment ordering</h2>
+  </div>
+  <div class="mt-6 space-y-5">
+    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white">N9 — <code class="font-mono text-[0.9em]">NEXT.md</code> said 7 copies across 4 files. <strong>There were 8.</strong></h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">The eighth is <code class="font-mono">apps/admin/app/api/public/order/route.ts</code>, which had <strong>no <code class="font-mono">store_id</code></strong> and runs as the <strong>owner with RLS off</strong> — and <code class="font-mono">inventory_levels</code> is keyed <code class="font-mono">(variant_id, location_id)</code> with two independent FKs, so nothing forces a variant's inventory row to sit at a location of its own store.</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Extracted to <code class="font-mono">lib/default-location.ts</code> with <code class="font-mono">storeId</code> as a <strong>required parameter</strong> — forgetting the tenant is now a compile error. All 8 sites verified scoped; the emitted SQL carries <code class="font-mono">loc.store_id</code>; <code class="font-mono">tsc</code> clean.</p>
+      <div class="mt-3 rounded-lg border-l-4 border-amber-500 bg-amber-50 p-4 text-sm dark:bg-amber-950/25">
+        <p class="font-semibold text-amber-900 dark:text-amber-200">⚠ Correction to <code class="font-mono">NEXT.md</code>'s framing</p>
+        <p class="mt-1 text-slate-700 dark:text-slate-300">Its claim that “only the last one carries the tenant filter” is <strong>false</strong> — <code class="font-mono">products.ts:91</code> and <code class="font-mono">:135</code> carry it too, and the 4 join-based admin copies run inside <code class="font-mono">withTenant</code> where <code class="font-mono">locations</code> is RLS'd. The genuinely exposed sites were <strong>2</strong>: <code class="font-mono">order-status.ts</code> (reached by <code class="font-mono">ka-tracking.ts</code> on the owner connection) and the public order route. <strong>Treat N9 as a duplication task with two real security sites, not seven.</strong></p>
+      </div>
+    </div>
+
+    <div class="grid gap-5 lg:grid-cols-2">
+      <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <h3 class="font-mono text-[11px] uppercase tracking-[0.18em] text-rose-600 dark:text-rose-400">N10 — stale, nothing to do</h3>
+        <p class="mt-3 text-sm text-slate-600 dark:text-slate-400"><code class="font-mono">promo.ts</code> and <code class="font-mono">landing.ts</code> contain <strong>zero <code class="font-mono">throw</code> statements</strong> and have returned <code class="font-mono">{ ok, error }</code> since they were written; both callers already <code class="font-mono">toast.error</code>.</p>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">The actions that genuinely still throw merchant-facing strings are <code class="font-mono">customers.ts</code> (×3), <code class="font-mono">crm.ts</code> (×3), <code class="font-mono">checkout.ts</code> (×2) and <code class="font-mono">cancelPurchaseOrder</code> — <strong>recorded, not touched</strong>.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <h3 class="font-semibold text-slate-900 dark:text-white">Verification, including a mutation check</h3>
+        <ul class="mt-3 space-y-1.5 text-sm text-slate-600 dark:text-slate-400">
+          <li>▸ <code class="font-mono">build:admin</code> ✓ · vitest <strong>17 files / 150 tests</strong> ✓ · <code class="font-mono">tsc</code> clean · ESLint clean on touched files</li>
+          <li>▸ <strong>Mutation check:</strong> the tenant filter was deleted from the helper, the test went <strong>red</strong>, the filter was restored.</li>
+          <li>▸ <a class="text-indigo-600 underline dark:text-indigo-400" href="errors.html#e5">E5</a> fixed via one exported <code class="font-mono">latestPaymentFirst()</code> used by both paths, with a real-Postgres test proven red then green.</li>
+          <li>▸ Independently checked: tightening the filter changes nothing on real data — every store has 1 location, all <code class="font-mono">is_default</code>; mismatched inventory rows <strong>0/106</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== measurement ===== -->
+<section id="measurement" class="border-b border-slate-200 py-12 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded border border-slate-400 px-2 py-1 font-mono text-xs font-bold text-slate-700 dark:text-slate-300">read-only</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Measurement stream — production, no change set</h2>
+  </div>
+
+  <div class="mt-6 space-y-5">
+    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white">N3 — the question was wrong, not the answer</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">15 desktop runs: <strong>median 99, range 55–100, TBT = 0 in all fifteen</strong>. Bytes and request count <strong>identical every run</strong> (26 requests, 302 KB). Pearson <code class="font-mono">r(score, network-RTT)</code> = <strong>−0.866</strong>; runs ≥95 averaged <strong>64 ms</strong> RTT, runs &lt;95 averaged <strong>632 ms</strong>. The score is a proxy for the measuring machine's link quality.</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><strong>Refused to compare 99 against the old 84</strong> — different machine, different day, incomparable populations.</p>
+      <p class="mt-2 text-sm font-medium text-slate-800 dark:text-slate-200">Recommendation: drop desktop as a KPI or pin it to a fixed measurement host. → <a class="text-indigo-600 underline dark:text-indigo-400" href="decisions.html#d5">D5</a></p>
+    </div>
+
+    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white">N4 — cause found: the hero carousel's autoplay</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Speed Index scores every frame against the <em>last</em> frame; an autoplaying carousel guarantees the last frame differs, so the page is scored as never visually complete. Controlled A/B, one Chrome flag, everything else identical:</p>
+      <div class="mt-3 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-100 text-left dark:bg-slate-800"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium"></th><th class="px-3 py-2 font-medium">SI median</th><th class="px-3 py-2 font-medium">Perf</th><th class="px-3 py-2 font-medium">LCP</th></tr></thead>
+          <tbody class="divide-y divide-slate-200 tabular-nums dark:divide-slate-800">
+            <tr><td class="px-3 py-2 font-medium">autoplay ON</td><td class="px-3 py-2 font-semibold text-rose-700 dark:text-rose-400">7.96 s</td><td class="px-3 py-2">67 / 90 / 88</td><td class="px-3 py-2">1.81–2.09</td></tr>
+            <tr><td class="px-3 py-2 font-medium">autoplay OFF</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">1.87 s</td><td class="px-3 py-2 font-semibold">98 / 97 / 97</td><td class="px-3 py-2">1.82–1.89</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">Ruled out <strong>with evidence</strong>, not assumption: marketing pixels load at <strong>10 780 ms</strong>, <em>after</em> the <strong>10 114 ms</strong> visual change, and the frame pair during which all three vendor bundles execute shows <strong>0.00% pixel change</strong>; CLS <strong>0.000</strong> across all 21 runs; font swap is <strong>167 ms</strong>; no client islands on the homepage.</p>
+      <p class="mt-2 text-sm font-medium text-slate-800 dark:text-slate-200">Recommendation: <strong>do nothing, record it.</strong> The page is genuinely complete at 1.8 s. Chasing the number means delaying the cross-fade past the audit window — buying score with a carousel that feels dead on arrival. <code class="font-mono">prefers-reduced-motion</code> was used as an <em>instrument</em>, not a proposal. → <a class="text-indigo-600 underline dark:text-indigo-400" href="decisions.html#d6">D6</a></p>
+    </div>
+
+    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="font-semibold text-slate-900 dark:text-white">N12 — the claim was wrong; a real bug sat behind it</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Uploads <strong>do</strong> get width variants (<code class="font-mono">?w=</code> returns genuinely different bytes: <strong>3 578 B</strong> @200 → <strong>61 074 B</strong> full), the route sets <code class="font-mono">immutable</code> itself and goes <code class="font-mono">cf-cache-status: HIT</code>, and <code class="font-mono">app.</code>/<code class="font-mono">toko.</code> share anycast IPs, one wildcard cert and HTTP/3 so Chrome coalesces — Lighthouse offers <strong>zero</strong> preconnect savings.</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">The real finding was the PDP thumbnails, above. A full read-only sweep of all <strong>276</strong> text/jsonb columns found <code class="font-mono">page_templates.sections</code> contains <strong>zero</strong> <code class="font-mono">/api/uploads</code> references — <strong>no store currently uses an uploaded hero</strong>, so the ladder gap was pre-emptive.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== arch stream ===== -->
+<section id="arch-stream" class="py-12">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded border border-slate-400 px-2 py-1 font-mono text-xs font-bold text-slate-700 dark:text-slate-300">read-only</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Architecture map — 9 diagrams, no change set</h2>
+  </div>
+  <p class="mt-4 max-w-3xl text-slate-600 dark:text-slate-400">Every non-obvious claim carries <code class="font-mono">file:line</code> or a SQL result. Counted from the code and catalog, not quoted from docs. Highlights beyond <a class="text-indigo-600 underline dark:text-indigo-400" href="errors.html#e7">E7</a>:</p>
+  <ul class="mt-4 grid gap-3 sm:grid-cols-2">
+    <li class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"><strong class="text-slate-900 dark:text-white">Real counts today:</strong> <code class="font-mono">schema.ts</code> = <strong>77 tables</strong>; the container has <strong>78</strong>. <strong>51 tables carry <code class="font-mono">store_id</code>, 50 have RLS</strong>, sole deliberate exception <code class="font-mono">platform_activity</code>.</li>
+    <li class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"><strong class="text-slate-900 dark:text-white">The child-table class is 12, not 11</strong> — <code class="font-mono">AGENTS.md</code> omits <code class="font-mono">flash_sale_items</code>. That class has produced five shipped cross-tenant bugs.</li>
+    <li class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"><strong class="text-slate-900 dark:text-white">Impersonation, mapped end to end:</strong> a 2-minute token buys a <strong>7-day</strong> cookie, the minted session carries <strong>no impersonation marker at all</strong>, there is <strong>no revocation</strong>, and a password reset does not kill it.</li>
+    <li class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"><strong class="text-slate-900 dark:text-white">“Kecamatan PRICES, Kelurahan BOOKS” is half implemented.</strong> <code class="font-mono">ship_kelurahan_id</code>/<code class="font-mono">_name</code> are empty in <strong>842 of 842</strong> rows; sender side empty in <strong>7 of 7</strong> stores.</li>
+    <li class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"><strong class="text-slate-900 dark:text-white">6 of 7 stores have no <code class="font-mono">sender_kecamatan_id</code></strong>, so every quote for them falls back to a fuzzy match. Flagged by design — but it is the <strong>default state, not the exception</strong>.</li>
+    <li class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"><strong class="text-slate-900 dark:text-white">Journal archaeology:</strong> <strong>88 tags ever recorded, 86 today</strong>. Both losses prove <code class="font-mono">verify-migrations</code> checks the journal against itself and is blind to an entry removed or renumbered.</li>
+    <li class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400 sm:col-span-2"><strong class="text-slate-900 dark:text-white">20 doc/code disagreements tabulated.</strong> The most dangerous is not in a doc at all: <code class="font-mono">apps/admin/lib/tenant.ts:23-25</code> is a <strong>code comment</strong> that is wrong twice — it says “36 tables” and says <code class="font-mono">stores</code> has <code class="font-mono">relrowsecurity = false</code>, which migration <code class="font-mono">0058</code> made false. It sits in the file that defines the tenant boundary.</li>
+  </ul>
+  <p class="mt-4 text-sm"><a class="font-medium text-indigo-600 hover:underline dark:text-indigo-400" href="architecture.html">See the full map with all nine diagrams →</a></p>
+</section>
+
+<section class="border-t border-slate-200 py-8 dark:border-slate-800">
+  <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-950/25">
+    <p class="font-mono text-[11px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">Where the sources disagree — reported, not smoothed over</p>
+    <p class="mt-2 text-slate-700 dark:text-slate-300">The test-suite baseline is stated two ways. <code class="font-mono">FINDINGS-SOURCE.md</code> §1 records the clean <code class="font-mono">origin/main</code> baseline as <strong>16 files / 145 tests</strong> (1 file / 22 tests skipped); <code class="font-mono">CROSS-VALIDATION.md</code> §4 records its own baseline column as <strong>17 files / 167 tests</strong>. <strong>The difference is exactly the skipped <code class="font-mono">ledger-credit.test.ts</code></strong> — the 22 money tests of <a class="text-indigo-600 underline dark:text-indigo-400" href="errors.html#e11">E11</a>, which pass when <code class="font-mono">TEST_DATABASE_URL</code> is wired and are off by default. Both figures are reproduced where they were measured; the per-stream figures above (172, 171, 150) come from the cross-validator's runs, and the six-way total of <strong>21 files / 180 tests</strong> is consistent in both documents.</p>
+    <p class="mt-2 text-slate-700 dark:text-slate-300">Two more numbers that differ by measurement context rather than by disagreement: <strong><code class="font-mono">build:super</code></strong> is <strong>FAIL</strong> on clean <code class="font-mono">origin/main</code> (no <code class="font-mono">apps/super-admin/.env.local</code>) and <strong>PASS</strong> in the worktrees where that file was copied in; and the RLS coverage is <strong>51/52</strong> in the shared container but <strong>50 of 51</strong> on this branch, the container carrying a sibling branch's <code class="font-mono">color_palettes</code>.</p>
+  </div>
+</section>
+
+</main>
+
+<footer class="border-t border-slate-200 py-8 dark:border-slate-800">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6">
+    <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Sources</p>
+    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Stream narratives and numbers from <code class="font-mono">FINDINGS-SOURCE.md</code> §3; independent re-verification, per-worktree test counts and the file inventory from <code class="font-mono">CROSS-VALIDATION.md</code> §1–§3.</p>
+  </div>
+</footer>
+
+</body>
+</html>

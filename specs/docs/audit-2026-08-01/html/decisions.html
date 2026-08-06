@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decisions D1–D9 — TokoΦ audit 2026-08-01</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'media',
+  theme: { extend: {
+    fontFamily: {
+      sans: ['ui-sans-serif','system-ui','-apple-system','Segoe UI','Roboto','Helvetica Neue','Arial','sans-serif'],
+      mono: ['ui-monospace','SFMono-Regular','Menlo','Consolas','Liberation Mono','monospace']
+    }
+  }}
+};
+</script>
+<style>
+  :root { color-scheme: light dark; }
+  body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  [id] { scroll-margin-top: 5rem; }
+  code { overflow-wrap: anywhere; }
+  pre code { overflow-wrap: normal; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 font-sans antialiased">
+
+<!-- ============ NAV ============ -->
+<header class="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/90 backdrop-blur">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6">
+    <div class="flex h-14 items-center gap-3">
+      <a href="index.html" class="shrink-0 font-semibold tracking-tight text-slate-900 dark:text-white">TokoΦ<span class="ml-2 font-mono text-[10px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">audit</span></a>
+      <span class="hidden lg:inline font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">2026-08-01 · 86e3ec3</span>
+      <nav class="ml-auto flex items-center gap-0.5 overflow-x-auto text-sm">
+        <a href="index.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Overview</a>
+        <a href="errors.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Errors</a>
+        <a href="architecture.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Architecture</a>
+        <a href="streams.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Streams</a>
+        <a href="decisions.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium bg-indigo-600 text-white">Decisions</a>
+        <a href="merge.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Merge</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-6xl px-4 sm:px-6">
+
+<section class="border-b border-slate-200 py-10 dark:border-slate-800 sm:py-14">
+  <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400">D1 – D9</p>
+  <h1 class="mt-3 text-4xl font-semibold tracking-tight text-slate-900 dark:text-white">Decisions that are yours, not ours</h1>
+  <p class="mt-4 max-w-3xl text-lg text-slate-600 dark:text-slate-400">Nine things nobody took unilaterally. Each carries the evidence, the options, and — where there is one — the recommendation and its cost.</p>
+
+  <div class="mt-8 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+    <a href="#d1" class="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm hover:border-indigo-400 dark:border-slate-800 dark:bg-slate-900"><span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">D1</span> <span class="ml-2 text-slate-700 dark:text-slate-300">Impersonation token</span> <span class="ml-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-rose-700 dark:bg-rose-950 dark:text-rose-300">security</span></a>
+    <a href="#d2" class="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm hover:border-indigo-400 dark:border-slate-800 dark:bg-slate-900"><span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">D2</span> <span class="ml-2 text-slate-700 dark:text-slate-300">Two Cloudflare zone settings</span></a>
+    <a href="#d3" class="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm hover:border-indigo-400 dark:border-slate-800 dark:bg-slate-900"><span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">D3</span> <span class="ml-2 text-slate-700 dark:text-slate-300">Seeded credentials on login</span> <span class="ml-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-rose-700 dark:bg-rose-950 dark:text-rose-300">security</span></a>
+    <a href="#d4" class="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm hover:border-indigo-400 dark:border-slate-800 dark:bg-slate-900"><span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">D4</span> <span class="ml-2 text-slate-700 dark:text-slate-300">Platform-table DML</span> <span class="ml-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-rose-700 dark:bg-rose-950 dark:text-rose-300">security</span></a>
+    <a href="#d5" class="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm hover:border-indigo-400 dark:border-slate-800 dark:bg-slate-900"><span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">D5</span> <span class="ml-2 text-slate-700 dark:text-slate-300">Desktop PageSpeed as a KPI</span></a>
+    <a href="#d6" class="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm hover:border-indigo-400 dark:border-slate-800 dark:bg-slate-900"><span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">D6</span> <span class="ml-2 text-slate-700 dark:text-slate-300">Speed Index / carousel autoplay</span></a>
+    <a href="#d7" class="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm hover:border-indigo-400 dark:border-slate-800 dark:bg-slate-900"><span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">D7</span> <span class="ml-2 text-slate-700 dark:text-slate-300">Mobile score stability</span></a>
+    <a href="#d8" class="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm hover:border-indigo-400 dark:border-slate-800 dark:bg-slate-900"><span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">D8</span> <span class="ml-2 text-slate-700 dark:text-slate-300">Abandoned-cart demo data</span></a>
+    <a href="#d9" class="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm hover:border-indigo-400 dark:border-slate-800 dark:bg-slate-900"><span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">D9</span> <span class="ml-2 text-slate-700 dark:text-slate-300"><code class="font-mono">tempPassword()</code> entropy</span></a>
+  </div>
+</section>
+
+<!-- D1 -->
+<article id="d1" class="border-b border-slate-200 py-10 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-rose-600 px-2.5 py-1 font-mono text-xs font-bold text-white">D1</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">The impersonation token</h2>
+    <span class="font-mono text-xs text-slate-500">NEXT.md N1</span>
+  </div>
+  <div class="mt-5 grid gap-5 lg:grid-cols-3">
+    <div class="lg:col-span-2 space-y-3 text-slate-600 dark:text-slate-400">
+      <p><strong class="text-slate-900 dark:text-white">Three defects compound</strong>, and all three limbs were <strong>verified present</strong>:</p>
+      <ul class="space-y-2 text-sm">
+        <li class="rounded-lg border-l-4 border-rose-400 bg-white p-3 dark:bg-slate-900">Replayable inside its 2-minute window — <code class="font-mono">session.ts:30</code></li>
+        <li class="rounded-lg border-l-4 border-rose-400 bg-white p-3 dark:bg-slate-900">Travels in a <strong>query string</strong> (logs, <code class="font-mono">Referer</code>, browser history) — <code class="font-mono">impersonate/route.ts:22</code></li>
+        <li class="rounded-lg border-l-4 border-rose-400 bg-white p-3 dark:bg-slate-900">Mints a <strong>7-day</strong> session outliving the operator's own — <code class="font-mono">impersonate/route.ts:46</code></li>
+      </ul>
+      <p>Plus what the architecture map found: <strong>no impersonation marker</strong> on the minted session (no <code class="font-mono">aud</code>, no operator id, no shortened expiry), so every action taken during it is attributed to the merchant; <strong>no revocation</strong> (no <code class="font-mono">jti</code>, no token version); and <strong>a password reset does not kill it</strong>. The only kill switch is deleting the owner's <code class="font-mono">store_users</code> row — which the merchant cannot do to themselves.</p>
+      <p class="text-sm"><a class="text-indigo-600 underline dark:text-indigo-400" href="architecture.html#auth">The full flow, mapped end to end, with the sequence diagram →</a></p>
+    </div>
+    <aside class="rounded-xl border-2 border-indigo-300 bg-white p-5 dark:border-indigo-800 dark:bg-slate-900">
+      <h3 class="font-mono text-[11px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">Your options</h3>
+      <ul class="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+        <li>▸ single-use token</li>
+        <li>▸ POST body instead of query string</li>
+        <li>▸ bind the minted session's expiry to <code class="font-mono">platform_session</code></li>
+        <li>▸ all three</li>
+      </ul>
+    </aside>
+  </div>
+</article>
+
+<!-- D2 -->
+<article id="d2" class="border-b border-slate-200 py-10 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-slate-900 px-2.5 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-900">D2</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Two Cloudflare zone settings</h2>
+    <span class="font-mono text-xs text-slate-500">N2</span>
+  </div>
+  <div class="mt-5 space-y-3 text-slate-600 dark:text-slate-400">
+    <p><strong class="text-slate-900 dark:text-white">Already approved 2026-08-01</strong>, procedure written in <code class="font-mono">specs/docs/CLOUDFLARE-PERF.md</code>, <strong>not executed</strong> — wrangler auth is expired and these are zone settings, not Workers.</p>
+    <p>Email Obfuscation injects a render-blocking <code class="font-mono">email-decode.min.js</code> — measured <strong>1 621 ms</strong>, the single largest blocker on the page.</p>
+    <p class="rounded-lg border-l-4 border-amber-500 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">⚠ The static-asset Cache Rule <strong>must not</strong> mark <code class="font-mono">/products/*.webp</code> <code class="font-mono">immutable</code> — a merchant replacing a photo keeps the filename.</p>
+  </div>
+</article>
+
+<!-- D3 -->
+<article id="d3" class="border-b border-slate-200 py-10 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-rose-600 px-2.5 py-1 font-mono text-xs font-bold text-white">D3</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Login pages publishing seeded credentials</h2>
+    <a class="font-mono text-xs text-indigo-600 underline dark:text-indigo-400" href="errors.html#e2">E2</a>
+  </div>
+  <div class="mt-5 grid gap-5 lg:grid-cols-3">
+    <div class="lg:col-span-2 space-y-3 text-slate-600 dark:text-slate-400">
+      <p><code class="font-mono">apps/super-admin/app/login/page.tsx:30</code> prints <code class="font-mono">admin@tokophi.id / tokophi123</code>; the admin login has its equivalent. <strong>The seed genuinely creates those rows on deploy.</strong></p>
+      <p>So on <code class="font-mono">rich.tokophi.com</code> the control plane advertises a working credential on its own login screen.</p>
+    </div>
+    <aside class="rounded-xl border-2 border-indigo-300 bg-white p-5 dark:border-indigo-800 dark:bg-slate-900">
+      <h3 class="font-mono text-[11px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">Your options</h3>
+      <ul class="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+        <li>▸ delete the hint</li>
+        <li>▸ or rotate the seeded password</li>
+      </ul>
+      <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">Either way it touches the seed <strong>and both apps</strong> — which is why it was not taken here.</p>
+    </aside>
+  </div>
+</article>
+
+<!-- D4 -->
+<article id="d4" class="border-b border-slate-200 py-10 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-rose-600 px-2.5 py-1 font-mono text-xs font-bold text-white">D4</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white"><code class="font-mono text-[0.85em]">tokophi_app</code> DML on platform tables</h2>
+    <a class="font-mono text-xs text-indigo-600 underline dark:text-indigo-400" href="errors.html#e6">E6</a>
+  </div>
+  <div class="mt-5 space-y-3 text-slate-600 dark:text-slate-400">
+    <p><strong class="text-slate-900 dark:text-white">A design decision before the PostgREST cutover, not a patch.</strong> Five platform tables carry the COD cap and province allow-list, <code class="font-mono">codAllowed</code> per service, the minimum payout, the enabled payment channels, and plan pricing — with no RLS and no grant restriction — plus a <code class="font-mono">stores</code> policy that is <code class="font-mono">FOR ALL</code>.</p>
+    <p>It is latent only because the SQL running under <code class="font-mono">tokophi_app</code> today is SQL we wrote. <strong>The stated production architecture puts a merchant's own JWT behind that role.</strong></p>
+  </div>
+</article>
+
+<!-- D5 -->
+<article id="d5" class="border-b border-slate-200 py-10 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-slate-900 px-2.5 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-900">D5</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Desktop PageSpeed as a KPI</h2>
+    <span class="font-mono text-xs text-slate-500">N3</span>
+  </div>
+  <div class="mt-5 grid gap-5 lg:grid-cols-3">
+    <div class="lg:col-span-2 space-y-3 text-slate-600 dark:text-slate-400">
+      <p>The measurement says the number <strong>tracks the tester's connection, not the build</strong>: 15 runs, median 99, range 55–100, <strong>TBT = 0 in all fifteen</strong>, bytes and request count identical every run. Pearson <code class="font-mono">r</code> against network RTT = <strong>−0.866</strong>.</p>
+    </div>
+    <aside class="rounded-xl border-2 border-indigo-300 bg-white p-5 dark:border-indigo-800 dark:bg-slate-900">
+      <h3 class="font-mono text-[11px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">Your options</h3>
+      <ul class="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+        <li>▸ drop desktop as a KPI</li>
+        <li>▸ or pin it to a fixed measurement host</li>
+      </ul>
+    </aside>
+  </div>
+</article>
+
+<!-- D6 -->
+<article id="d6" class="border-b border-slate-200 py-10 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-slate-900 px-2.5 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-900">D6</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Speed Index / carousel autoplay</h2>
+    <span class="font-mono text-xs text-slate-500">N4</span>
+  </div>
+  <div class="mt-5 space-y-3 text-slate-600 dark:text-slate-400">
+    <p><strong class="text-slate-900 dark:text-white">The recommendation is to record it and stop tracking it.</strong> Autoplay ON: SI median <strong>7.96 s</strong>. Autoplay OFF: <strong>1.87 s</strong>, perf <strong>98 / 97 / 97</strong>. The page is genuinely complete at 1.8 s — Speed Index scores every frame against the <em>last</em> frame, and an autoplaying carousel guarantees the last frame differs.</p>
+    <p>The alternative buys score with a carousel that feels dead on arrival.</p>
+    <p class="text-sm"><a class="text-indigo-600 underline dark:text-indigo-400" href="streams.html#measurement">The controlled A/B and everything it ruled out with evidence →</a></p>
+  </div>
+</article>
+
+<!-- D7 -->
+<article id="d7" class="border-b border-slate-200 py-10 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-slate-900 px-2.5 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-900">D7</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Mobile score stability</h2>
+    <span class="font-mono text-xs text-slate-500">N7</span>
+  </div>
+  <div class="mt-5 space-y-3 text-slate-600 dark:text-slate-400">
+    <p>Removing <code class="font-mono">scroll</code> from the pixel trigger list stabilises the score — <strong>at the cost of not tracking a reader who scrolls the whole page and never taps</strong>.</p>
+    <p class="rounded-lg border-l-4 border-amber-500 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><code class="font-mono">NEXT.md</code> itself says not to do this for the score alone.</p>
+  </div>
+</article>
+
+<!-- D8 -->
+<article id="d8" class="border-b border-slate-200 py-10 dark:border-slate-800">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-slate-900 px-2.5 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-900">D8</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Abandoned-cart demo data</h2>
+    <a class="font-mono text-xs text-indigo-600 underline dark:text-indigo-400" href="errors.html#e4">E4</a>
+  </div>
+  <div class="mt-5 space-y-3 text-slate-600 dark:text-slate-400">
+    <p>Un-anchoring <code class="font-mono">checkout.ts</code> is correct, and it drops the Keranjang Ditinggal screen from <strong class="text-slate-900 dark:text-white tabular-nums">796 → 6</strong> on dev because <code class="font-mono">seed:recent</code> inserts no <code class="font-mono">checkout_sessions</code>.</p>
+    <p class="rounded-lg border-2 border-rose-300 bg-rose-50 p-4 font-medium text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">The fix is <strong>seeding, not code</strong>. Do not re-anchor the app to make the demo look busy.</p>
+    <p class="text-sm text-slate-500 dark:text-slate-400">Stated here so you decide it rather than discover it after the merge. It does not need to block the merge.</p>
+  </div>
+</article>
+
+<!-- D9 -->
+<article id="d9" class="py-10">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <span class="rounded bg-slate-900 px-2.5 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-900">D9</span>
+    <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white"><code class="font-mono text-[0.85em]">tempPassword()</code> entropy</h2>
+  </div>
+  <div class="mt-5 space-y-3 text-slate-600 dark:text-slate-400">
+    <p><strong class="text-slate-900 dark:text-white">24 bits</strong> (<code class="font-mono">randomBytes(3)</code>), and <strong>no login rate-limit was found</strong>.</p>
+    <p>Unchanged by this session — <code class="font-mono">resetOwnerPassword</code> already used it — but widening it plus throttling is a real follow-up.</p>
+    <p class="text-sm text-slate-500 dark:text-slate-400">Adjacent detail from the code-health scan: the super-admin copy is <code class="font-mono">randomBytes(3)</code> = 24 bits while the admin copy is <code class="font-mono">randomBytes(4)</code> = 32 bits. <strong>Two definitions of the same helper, the weaker one on the control plane.</strong></p>
+  </div>
+</article>
+
+</main>
+
+<footer class="border-t border-slate-200 py-8 dark:border-slate-800">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6">
+    <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Sources</p>
+    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">D1–D9 reproduced from <code class="font-mono">FINDINGS-SOURCE.md</code> §4, with supporting context from <code class="font-mono">ARCHITECTURE.md</code> §3 (impersonation) and <code class="font-mono">CODE-HEALTH.md</code> §2.1 (the two <code class="font-mono">tempPassword()</code> definitions).</p>
+  </div>
+</footer>
+
+</body>
+</html>
