@@ -12,10 +12,35 @@ import {
   getPlatformSession,
 } from "@/lib/platform-auth";
 import { hashPassword } from "@tokophi/lib/password";
-import { rateLimit } from "@tokophi/lib/cache";
+import { clearFailedLogins, rateLimit, recordFailedLogin } from "@tokophi/lib/cache";
 import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
 
 export type SignInState = { error?: string };
+
+/**
+ * One `platform_activity` row per BURST of failed sign-ins on one operator address — never one per
+ * attempt. Threshold, window and the ×5 escalation live in `recordFailedLogin`; this is only the
+ * write.
+ *
+ * 🔴 The password is not a parameter here and is not reachable from here. Email + count + `ts` is the
+ * whole row.
+ *
+ * **This is the half that matters more.** The seller panel reaches one merchant; this login reaches
+ * EVERY tenant, and it is the account whose address the login page used to publish. `storeId` stays
+ * null because an operator belongs to no store — the entry is platform-wide by nature.
+ *
+ * ⚠️ It never throws into the login path: an audit write that fails must not turn a mistyped password
+ * into a crash. The failure goes to the container log instead.
+ */
+async function noteFailedLogin(email: string): Promise<void> {
+  const text = recordFailedLogin("platform", email);
+  if (!text) return;
+  try {
+    await db.insert(schema.platformActivity).values({ kind: "admin", text });
+  } catch (e) {
+    console.error("[platform-auth] failed-login audit write failed", e);
+  }
+}
 
 export async function signIn(_prev: SignInState, formData: FormData): Promise<SignInState> {
   // Brute-force guard on the CONTROL PLANE login — cap attempts per client IP before the (scrypt)
@@ -32,8 +57,10 @@ export async function signIn(_prev: SignInState, formData: FormData): Promise<Si
   const password = String(formData.get("password") ?? "");
   const row = await findAdmin(email);
   if (!row || !verifyPassword(password, row.passwordHash)) {
+    await noteFailedLogin(email);
     return { error: "Email atau kata sandi salah." };
   }
+  clearFailedLogins("platform", email);
   const token = await signPlatformSession({
     adminId: row.id,
     email: row.email,
