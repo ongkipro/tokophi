@@ -42,15 +42,20 @@ function Tile({ item }: { item: QueueItem }) {
         <ArrowRight className="size-4 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
       </div>
       <div>
-        <div className={cn("text-2xl font-bold tabular-nums", clear && "text-muted-foreground")}>
+        {/* Same figure group as `kpi-tile.tsx`: leading-none on the number, then 4px to the lines
+            that name it. It was 2px twice — a micro-step that exists nowhere else on the dashboard,
+            so five tiles that sit directly above the KPI cards were keeping a different rhythm from
+            them. 4px is the scale's "inside a group" step; the three type sizes (24/14/12) are what
+            separate the roles, not a spacing value nothing else uses. */}
+        <div className={cn("text-2xl leading-none font-bold tabular-nums", clear && "text-muted-foreground")}>
           {clear ? "Beres" : num(item.count)}
         </div>
         {/* line-clamp-2, NOT truncate: in the 2-column mobile grid a single line is ~18 characters, so
             `truncate` cut the tiles down to "pesanan siap dipros…" and "Ulasan perlu diti…" — a label
             you cannot finish reading is not a label. Two lines fit every current string; the clamp is
             still there so a future long one degrades instead of shoving the tile. */}
-        <div className="mt-0.5 line-clamp-2 text-sm font-medium">{item.label}</div>
-        <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{clear ? item.done : item.hint}</div>
+        <div className="mt-1 line-clamp-2 text-sm font-medium">{item.label}</div>
+        <div className="mt-1 line-clamp-2 text-xs text-muted-foreground/75">{clear ? item.done : item.hint}</div>
       </div>
     </Link>
   );
@@ -62,7 +67,10 @@ export function ActionQueue({ items, stuck }: { items: QueueItem[]; stuck: Stuck
     <Card>
       <CardHeader>
         <CardTitle>Antrian Kerja</CardTitle>
-        <CardDescription>
+        {/* tabular-nums: the total drops as the seller works through the queue, and this line sits
+            directly above the counts it sums. Measured 1440px, 2026-08-06: the sentence re-flowed by
+            10,4px between an all-1 and an all-8 total, so the words after the number walked. */}
+        <CardDescription className="tabular-nums">
           {total === 0
             ? "Semua beres — tidak ada yang perlu dikerjakan sekarang."
             : `${num(total)} hal perlu ditindaklanjuti sekarang.`}
@@ -79,11 +87,14 @@ export function ActionQueue({ items, stuck }: { items: QueueItem[]; stuck: Stuck
         {stuck.orders > 0 && (
           <Link
             href="/pesanan"
-            className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3 text-sm transition-colors hover:bg-amber-500/[0.12]"
+            className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3 text-sm tabular-nums transition-colors hover:bg-amber-500/[0.12]"
           >
-            <span className="font-semibold tabular-nums text-amber-700 dark:text-amber-400">
+            <span className="font-semibold text-amber-700 dark:text-amber-400">
               {IDR(stuck.value)}
             </span>
+            {/* The rupiah figure was already tabular; the order COUNT beside it was not, and it moves
+                on the same events. Measured 1440px, 2026-08-06: 10,4px of re-flow in this sentence.
+                The class is on the row now, so a number added to either half inherits it. */}
             <span className="text-muted-foreground">
               tertahan di {num(stuck.orders)} pesanan yang belum dikirim — kirim untuk mencairkannya.
             </span>

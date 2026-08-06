@@ -1,7 +1,7 @@
 import { ShieldCheck, TriangleAlert } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@tokophi/ui/card";
 import { cn } from "@tokophi/ui/lib/utils";
-import { num } from "@tokophi/lib/format";
+import { num, share } from "@tokophi/lib/format";
 import type { ReturnSummary } from "@/lib/data/dashboard";
 
 /**
@@ -56,8 +56,12 @@ export function ReturnByCourier({ returns: r }: { returns: ReturnSummary }) {
                 {bad
                   ? <TriangleAlert aria-hidden className="size-3.5 shrink-0 text-destructive" />
                   : <ShieldCheck aria-hidden className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />}
-                <span className="w-11 text-right text-sm font-medium tabular-nums">
-                  {rate.toFixed(1)}%
+                {/* `share()`, not `rate.toFixed(1) + "%"`. This rendered "0.0%" — an ASCII decimal
+                    POINT — on an id-ID panel where the money tile directly above it says "0,0%",
+                    measured in a browser 2026-08-06. It is a part of a whole, so it is not `pct()`
+                    either: that one carries a sign, and a return rate is not a change. */}
+                <span className="w-11 shrink-0 text-right text-sm font-medium tabular-nums">
+                  {share(rate)}
                   <span className="sr-only">{bad ? " — perlu perhatian" : " — sehat"}</span>
                 </span>
                 <span className="w-14 text-right text-xs text-muted-foreground tabular-nums">
