@@ -1,8 +1,8 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { SOURCE_SCAN_TIMEOUT_MS, textWithoutComments } from "../../../test/source-code";
+import { SOURCE_SCAN_TIMEOUT_MS, textOfFile } from "../../../test/source-code";
 
 // NO SHIPPED SCREEN MAY NAME AN ACCOUNT THAT AUTHENTICATES.
 //
@@ -78,8 +78,6 @@ const SECRETS = [
 // credential in a string, an attribute, plain text or an HTML comment, all four of which are caught.
 // Closing it means teaching the scanner where an Astro template's text nodes are, which is a parser,
 // not a lexer, and `test/source-code.ts` explains at length why this repo does not build one.
-const stripComments = textWithoutComments;
-
 function sources(dir: string, acc: string[] = []): string[] {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
@@ -102,13 +100,10 @@ function sources(dir: string, acc: string[] = []): string[] {
 describe("no shipped screen publishes a working credential", () => {
   const files = sources(APPS);
   // Lexed ONCE. `it.each(SECRETS)` runs the sweep three times, and re-lexing 453 files per pattern
-  // cost ~1,5 s of the suite for three identical answers. Same memo as `password.test.ts`.
-  const lexed = new Map<string, string>();
-  const code = (f: string) => {
-    let c = lexed.get(f);
-    if (c === undefined) lexed.set(f, (c = stripComments(readFileSync(f, "utf8"))));
-    return c;
-  };
+  // cost ~1,5 s of the suite for three identical answers. The memo now lives in
+  // `test/source-code.ts` next to the lexer itself — this file kept a private one, which is a second
+  // answer to a question that already had one, and a second answer is what this module exists to end.
+  const code = textOfFile;
 
   it("scans a meaningful number of files (the scan itself must not silently find nothing)", () => {
     // A guard that walks an empty tree passes forever. Pin that it actually looked.

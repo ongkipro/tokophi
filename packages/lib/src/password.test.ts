@@ -1,11 +1,8 @@
-import { readFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { scryptSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { tempPassword, hashPassword, PUBLISHED_PASSWORDS } from "./password";
-import { codeOnly, SOURCE_SCAN_TIMEOUT_MS } from "../../../test/source-code";
+import { SOURCE_SCAN_TIMEOUT_MS, codeOfFile, trackedFiles } from "../../../test/source-code";
 
 // This is the credential handed to a STORE OWNER and to an INVITED OPERATOR. The account it opens
 // reads every buyer's name, WhatsApp number and delivery address, and reaches the payout actions.
@@ -98,10 +95,9 @@ const FIXED_PASSWORD_ALLOWED = new Set<string>();
 const HAND_ROLLED_MINT =
   /\b(?:pw|pass|passwd|password|cred|credential|temp)\w*\s*(?::\s*string\s*)?=\s*[^;]*?\b(?:randomBytes|Math\s*\.\s*random)\s*\(/i;
 
-const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-// Dot-directories are skipped wholesale: `.git`, `.astro`, `.next` — and `.claude/worktrees/*`, which
-// on the main checkout holds entire second copies of this repo (another branch's mint is not ours).
-// ⚠️ `specs` IS SKIPPED, AND THIS IS THE ONE EXCEPTION WORTH NAMING RATHER THAN LEAVING IMPLICIT.
+// Dot-directories and the build directories are dropped by `trackedFiles()` (`test/source-code.ts`),
+// which is also where "and not `.claude/worktrees/*`, another branch's second checkout" is decided.
+// ⚠️ `specs` IS THIS GUARD'S OWN EXTRA SKIP, AND THIS IS THE ONE EXCEPTION WORTH NAMING RATHER THAN LEAVING IMPLICIT.
 //
 // The claim these sweeps make is about code that SHIPS: no second mint, no fixed password reaching
 // the sink. `specs/` ships nothing — it is not built, not served, not imported by any app, and no
@@ -115,7 +111,7 @@ const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 // provokes a violation on purpose is not a writer of one. The cost is stated rather than hidden — a
 // genuine mint hidden under `specs/` would go unseen, and nothing there can be imported by an app,
 // so it could not be reached even if it existed.
-const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", "specs"]);
+const SKIPPED_HERE = (rel: string) => rel.split("/").includes("specs");
 // ⚠️ `.html` is SCANNED, not inert, and the reason is one tag: `<script>`. An HTML file executes
 // JavaScript in a browser, so it can hold a mint exactly like a `.js` can — the census below exists
 // precisely so a new file type is CLASSIFIED rather than silently skipped. It entered the repo on
@@ -150,14 +146,7 @@ const INERT_EXTENSIONS = new Set([
  * and something git does not carry is not in the repo. A build output, a scratch probe or another
  * agent's untracked worktree file is not a shipping credential path.
  */
-function repoFiles(): string[] {
-  const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
-    .split("\0")
-    .filter(Boolean);
-  return tracked
-    .filter((rel) => !rel.split("/").some((seg) => seg.startsWith(".") || SKIP_DIRS.has(seg)))
-    .map((rel) => path.join(REPO_ROOT, rel));
-}
+const repoFiles = (): string[] => trackedFiles().filter((rel) => !SKIPPED_HERE(rel));
 
 /**
  * Every source file in the repo, checked by `inspect`. No list to keep in sync — that was the bug.
@@ -168,13 +157,12 @@ function repoFiles(): string[] {
  * the 24-bit mint name the very patterns below — and a scanner that reports itself is a scanner
  * somebody deletes. Same reason the patterns are assembled from `MINT` rather than written out.
  */
-let sources: Array<[string, string]> | null = null; // lexed once — two scans below, ~1 s each otherwise
+// Lexed once — three scans below, ~0,5 s each otherwise. The memo is `codeOfFile`'s and is shared
+// with every other guard in this worker, so the first of them to run pays and the rest do not.
+const scanned = (): string[] => repoFiles().filter((rel) => SOURCE.test(rel));
 function scanRepo(inspect: (rel: string, code: string) => string[]): string[] {
-  sources ??= repoFiles()
-    .filter((f) => SOURCE.test(f))
-    .map((f) => [path.relative(REPO_ROOT, f), codeOnly(readFileSync(f, "utf8"))]);
   const out: string[] = [];
-  for (const [rel, code] of sources) for (const problem of inspect(rel, code)) out.push(`${rel}: ${problem}`);
+  for (const rel of scanned()) for (const problem of inspect(rel, codeOfFile(rel))) out.push(`${rel}: ${problem}`);
   return out.sort();
 }
 
@@ -301,7 +289,7 @@ describe("the temp password is expensive to guess", () => {
     );
 
     expect(violations, `a SECOND password hasher exists:\n  ${violations.join("\n  ")}`).toEqual([]);
-  });
+  }, SOURCE_SCAN_TIMEOUT_MS);
 
   it("no call site anywhere feeds it a FIXED password — the sink, repo-wide", () => {
     // THE GUARD THIS FILE HAS BEEN ASKING FOR IN A COMMENT. The note on ② above says it plainly: a
@@ -334,7 +322,7 @@ describe("the temp password is expensive to guess", () => {
     // and still fails if the scan (or the module specifier) silently stops matching.
     expect(calls.length, "no hashPassword() call site was found — has the scan stopped reaching them?").toBeGreaterThanOrEqual(8);
     expect(violations, `a fixed password is hashed:\n  ${violations.join("\n  ")}`).toEqual([]);
-  });
+  }, SOURCE_SCAN_TIMEOUT_MS);
 
   it("scans every file type the repo actually holds", () => {
     // The scanner above is only as wide as `SOURCE`, and nothing anywhere said what `SOURCE` was
