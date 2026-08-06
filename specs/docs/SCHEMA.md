@@ -13,15 +13,23 @@
 
 ## 1. Headline numbers (verified)
 
+> ⚠️ **Diukur ulang 2026-08-07, dan berkas ini sudah salah DUA kali sebelumnya** — pembukanya sendiri
+> mengakui "prior versions claimed 57 tables and RLS on 32. Both were wrong", lalu tetap menerbitkan
+> 68/44/46 sampai hari ini. Angka-angka ini DITURUNKAN: hitung dari `packages/db/src/schema.ts` dan
+> `drizzle/meta/_journal.json`, atau jalankan `npm run verify-rls`. **Jangan hitung dari container dev
+> bersama** — ia memuat `color_palettes` dari PR #2 yang belum di-merge dan belum memuat `cron_runs`,
+> jadi totalnya bisa cocok untuk kumpulan tabel yang berbeda.
+
 | Fact | Value | How it was checked |
 |---|---|---|
-| Tables (`public`, `relkind='r'`) | **68** | `select count(*) from pg_class c join pg_namespace n … where n.nspname='public' and c.relkind='r'` |
-| Tables with RLS enabled | **44** | `… and c.relrowsecurity` |
-| Tables carrying a `store_id` column | **45** | `pg_attribute … attname='store_id'` |
-| `store_id` tables **without** RLS | **1** — `platform_activity` | set difference of the two above |
-| Migrations applied | **46** (`0000` … `0045`) | `_journal.json` |
+| Tables (`pgTable(` in `schema.ts`) | **78** | `grep -c 'pgTable(' packages/db/src/schema.ts` — dihitung dari KODE, bukan dari container |
+| Tabel ber-`store_id` | **52** | keluaran `npm run verify-rls -w @tokophi/db` |
+| Di antaranya ber-RLS | **51** | keluaran verifikator yang sama |
+| `store_id` tanpa RLS | **1** — `platform_activity` | disengaja: log audit platform, lintas tenant |
+| Tabel anak tanpa `store_id` & tanpa RLS | **12**, semuanya sudah ditinjau | verifikator mencetak daftarnya; `AGENTS.md` memuat aturannya |
+| Migrasi | **92** (`0000` … `0091`) | `_journal.json` + jumlah berkas `.sql`, keduanya cocok |
 | DB roles | `tokophi` (owner, bypasses RLS) · `tokophi_app` (non-owner, policies enforce) | `pg_roles` |
-| Enums | **42** | `pg_type` ⋈ `pg_enum` |
+| Enums | **44** | `grep -c 'pgEnum(' packages/db/src/schema.ts` |
 | Money representation | `bigint`, whole rupiah, column suffix `_idr` | catalog |
 | Naming | snake_case; PKs are `uuid default gen_random_uuid()` | catalog |
 
@@ -482,7 +490,7 @@ writes `store_settings.cod_enabled = true` for Batik Nusantara and 11 `store_shi
 
 ---
 
-## 4. Enums (42)
+## 4. Enums (44)
 
 | Enum | Values |
 |---|---|
