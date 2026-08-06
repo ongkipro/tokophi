@@ -37,6 +37,9 @@ Three detailed handoffs sit underneath this index; go to them for reasoning, not
   stream, and its **"do not re-file"** list.
 - **[`2026-08-05-kiriminaja-doc-sweep.md`](./2026-08-05-kiriminaja-doc-sweep.md)** — the shipping /
   KiriminAja stream.
+- **[`2026-08-06-alerting-gaps.md`](./2026-08-06-alerting-gaps.md)** — **apa yang gagal DIAM-DIAM dan
+  siapa yang seharusnya diberi tahu.** Bukan daftar bug: semuanya "berfungsi", yang tidak ada adalah
+  penerimanya. Mengelompokkan N57–N63 dan menyebut urutan pengerjaannya.
 - **[`2026-08-05-signup-open-audit.md`](./2026-08-05-signup-open-audit.md)** — what
   `SIGNUP_ENABLED=true` would actually expose, now that #154 made the switch reachable. **Signup is
   still shut.**
@@ -89,6 +92,11 @@ Roughly highest value first. **S** ≈ under an hour, **M** ≈ half a day, **L*
 
 | | | |
 |---|---|---|
+| 🔴 **N59** | **Tidak ada CI — `main` bisa merah dan tak ada yang tahu.** `seller-entity-links.test.ts` merah di `origin/main` @ `e6d557e` SEKARANG, ter-merge begitu saja. ⚠️ Suite butuh Postgres; biarkan DB tak terjangkau GAGAL, bukan SKIP. | **M** |
+| **N60** | **Env yang tak sampai ke container tidak berbunyi apa pun** — Coolify memotret env saat deployment dimulai; sebuah nilai yang disimpan sesudahnya menghasilkan `SIGNUP_ENABLED: ''` dengan semua host sehat. Terjadi dua kali dalam seminggu. | **S** |
+| **N61** | Empat skrip `verify-*` ada, tak satu pun otomatis — termasuk `verify-rls`, pagar yang pernah merah berminggu-minggu. | **S** |
+| **N62** | Login gagal tidak dicatat di mana pun (nol hasil di seluruh repo); rate limit menghitung IP, bukan akun. | **S** |
+| **N63** | Sidecar `cron-tracking` hanya bersuara ke `docker logs` — pernah nol selama seminggu tanpa ada yang sadar. | **S** |
 | **N57** | **Nobody is told when a signup arrives.** Signup is OPEN in production and every new shop lands in the review queue, under a "1×24 jam" promise made on the merchant's own dashboard — while the only traces are pull-only (the dashboard counter, a `platform_activity` row). ⚠️ Decide the transport first (WhatsApp Cloud API vs Telegram/Slack to ourselves); `waLink()` cannot SEND. | **M** |
 | **N58** | **There is no mailer at all** — measured: 0 mail dependencies, and no MX/SPF on `tokophi.id` or `tokophi.com`. Blocks email verification at signup (why the approval queue exists), merchant password reset, invoice delivery. Receiving an address is a separate, free problem (Cloudflare Email Routing). | **L** |
 | 🔴 **N54** | **There is NO way to create a landing page — the button 404s.** `promo-list-client.tsx:126` links to `/promo/html/baru`; that route only has `[id]/`, which `notFound()`s on a non-UUID. The feature has never been reachable. | **S** |
