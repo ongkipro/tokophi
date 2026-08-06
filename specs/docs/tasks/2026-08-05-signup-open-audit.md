@@ -9,6 +9,27 @@ being hypothetical.
 `docker-compose.coolify.yml` is empty on purpose. This document is the list of what has to be true
 before someone sets it.
 
+
+> ## 🔴 SUPERSEDED IN PART — SIGNUP IS **OPEN** SINCE 2026-08-05 EVENING
+>
+> Measured: `SIGNUP_ENABLED=true` in the running admin container, `/daftar` serves a real form
+> (1 `<form>`, not the closed page). Every sentence below that says "signup is still shut" describes
+> the state this document was WRITTEN in, not the state now.
+>
+> **The product decision this document asked for was taken, and it took the cheaper option this
+> document costed:** #169 landed a **review queue** (migration `0090`) instead of email verification.
+> A self-serve signup now creates the store `status: "suspended"`, `suspendedAt` set,
+> `suspendedReason` = the pending-review text, and `approvedAt` **NULL** — that NULL *is* the queue.
+> The seller panel is read-only for it, and the banner says "waiting", not "punished". Operator-created
+> stores are stamped `approvedAt` and never enter the queue. Verified: production migration stamp
+> `1785895700000` matches the journal, 91 migrations applied — `0090` did NOT silently skip.
+>
+> 🔴 **But one gap opened WITH it, and it is not in #169's scope — see `OPEN.md`: an unapproved
+> store's STOREFRONT is fully public.** `getStoreBySlug` filters on nothing but the slug; the
+> storefront source contains **zero** references to `suspended`/`approved_at`, and `StoreInfo` does not
+> even carry `status`. So anyone may now register and immediately hold `<their-slug>.tokophi.com`
+> serving a page with a name they chose, before any human looks.
+
 ---
 
 ## What was verified, not assumed
