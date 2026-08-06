@@ -1,8 +1,8 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { codeOnly, textWithoutComments } from "../../../test/source-code";
+import { SOURCE_SCAN_TIMEOUT_MS, codeOfFile, textOfFile } from "../../../test/source-code";
 
 // The default-location expression must exist ONCE — `lib/inventory-location.ts`.
 //
@@ -76,19 +76,20 @@ describe("the default-location expression lives in exactly one place", () => {
   it("no file outside the helper resolves an inventory row by `is_default`", () => {
     const offenders = sourceFiles(ADMIN)
       .filter((f) => f !== HELPER && !f.endsWith("inventory-location.test.ts"))
-      .filter((f) => {
-        const src = textWithoutComments(readFileSync(join(ADMIN, f), "utf8"));
-        return COPIES.some((re) => re.test(src));
-      });
+      // `textOfFile` memoises the lex per path (`test/source-code.ts`) — one answer per file, shared
+      // with every other guard that reads it in this worker.
+      .filter((f) => COPIES.some((re) => re.test(textOfFile(join(ADMIN, f)))));
     // `provision.ts` CREATES the default location (`isDefault: true`) rather than resolving one, and
     // `theme.ts` uses `page_templates.is_default`, a different column entirely — neither reaches
     // `inventory_levels`, so neither is a copy. If this list ever needs a third entry, check that the
     // new file is really seeding rather than resolving before adding it.
     expect(offenders.filter((f) => f !== "lib/provision.ts" && f !== "lib/actions/theme.ts")).toEqual([]);
-  });
+    // ⏱ Sweeps every `.ts`/`.tsx` under `apps/admin`. The ceiling and the measurement live in ONE
+    // place (`SOURCE_SCAN_TIMEOUT_MS`); do not copy the number here.
+  }, SOURCE_SCAN_TIMEOUT_MS);
 
   it("the helper still filters on the store — the boundary, not the ordering", () => {
-    const src = codeOnly(readFileSync(join(ADMIN, HELPER), "utf8"));
+    const src = codeOfFile(join(ADMIN, HELPER));
     // One per exported function. Losing either turns a tenant boundary back into a row picker — and
     // that loss is exactly what a text match cannot see, because the commented-out line reads the same.
     expect(src.match(/schema\s*\.\s*locations\s*\.\s*storeId/g) ?? []).toHaveLength(2);

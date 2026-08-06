@@ -98,7 +98,7 @@ Put it in `CHANGELOG.md` / `STATUS.md` / here. If your change alters a contract 
 (a data-layer signature, a payment/shipping flag, a DB column), **say so in the commit body** — that is
 the message the other agent will actually see.
 
-Shopify-style commerce SaaS for Indonesia. **No Themes menu, no Apps/Plugins.** **Backend live on local PostgreSQL** (Docker :5433, Drizzle): all 3 surfaces READ + all 12 admin editors WRITE the DB, plus local auth (login/session) + local media upload (see Database below). Bahasa Indonesia UI, IDR. **Prod target = self-hosted Postgres + PostgREST on a VPS (NOT Supabase), deferred.** Full spec: `~/Documents/Development/tokophi/PRD.md`.
+Shopify-style commerce SaaS for Indonesia. **No Themes menu, no Apps/Plugins.** **Backend live on local PostgreSQL** (Docker :5433, Drizzle): all 3 surfaces READ + all 12 admin editors WRITE the DB, plus local auth (login/session) + local media upload (see Database below). Bahasa Indonesia UI, IDR. **Prod target = self-hosted Postgres + PostgREST on a VPS (NOT Supabase), deferred.** Full spec: `specs/PRD.md` (in this repo).
 
 ## 📛 Naming — say "Seller", never "admin panel"
 There are TWO admin surfaces and calling them both "admin" is what has repeatedly confused agents *and* users. The **UI copy** now says:
@@ -241,7 +241,7 @@ as N29); `apps/super-admin/lib/no-fixed-password.test.ts` keeps the stricter loc
 there must be exactly `pw`, and `pw` must come from the mint.
 
 ## Database (local Postgres — `@tokophi/db`)
-Local backend fully wired behind the data layer (all 3 surfaces read + all editors write; auth+RBAC+RLS; real variants). Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (schema mirrors `~/Documents/Development/tokophi/docs/SCHEMA.md`: **54 tables**, snake_case, money = bigint IDR). Single-tenant MVP: one store "Batik Nusantara" (ADR 0008). Auth (local, JWT) + RBAC + RLS are done locally; Storage (self-hosted MinIO/S3) comes with the VPS. **RLS** (migration 0012, extended by 0032 `page_templates`, 0035 `support_*`, 0036 `media`+`payments`, **0058 `stores`**) is enabled on **45 of the 46 store-scoped tables** AND **enforces at runtime**: the admin runs every read (`lib/data/*` via `withCurrentTenant`) + write (`lib/actions/*` via `withTenant`) inside a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`, so tenant queries execute as the non-owner role with policies applied. `npm run verify-rls -w @tokophi/db` derives the store-scoped set from the catalog (every table with a `store_id`) and FAILS if one lacks RLS — **45/46 as of 2026-07-17, and the ONE remaining exception is `platform_activity`** (the platform's own audit log: cross-tenant by design, written before a session exists). `media` + `payments` were retrofitted in 0036; **this doc claimed 36/39 with 3 exceptions long after that was false** — check `npm run verify-rls`, not this sentence. ⚠️ **`stores` is NOT in that count and never could be**: it is keyed by `id`, has no `store_id`, so the catalog query cannot see it — that blind spot leaked two merchants' data across tenants until `0058` put an `id`-based policy on it. Auth (`lib/auth.ts`, pre-session `store_users` read), super-admin (cross-tenant), and the storefront (`Host`-resolved read-only catalog) stay on the owner connection. On the VPS this becomes PostgREST connecting as `tokophi_app` with the JWT `store_id` claim feeding the GUC. **RBAC** (app-layer, `lib/rbac.ts`) is enforced too.
+Local backend fully wired behind the data layer (all 4 surfaces read + all editors write; auth+RBAC+RLS; real variants). Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (annotated in `specs/docs/SCHEMA.md`: **78 tables · 92 migrations `0000`–`0091`**, counted from `packages/db/src/schema.ts` and `drizzle/meta/_journal.json` on 2026-08-07, snake_case, money = bigint IDR). **MULTI-tenant** — the dev DB carries 7 stores and the whole `platformGate` control plane reaches every one of them. (ADR 0008 called it a single-tenant MVP; that stopped being true long ago and this line said otherwise for months.) Auth (local, JWT) + RBAC + RLS are done locally; Storage (self-hosted MinIO/S3) comes with the VPS. **RLS** (migration 0012, extended by 0032 `page_templates`, 0035 `support_*`, 0036 `media`+`payments`, **0058 `stores`**) is enabled on **51 of the 52 store-scoped tables** (measured 2026-08-07 by the verifier itself) AND **enforces at runtime**: the admin runs every read (`lib/data/*` via `withCurrentTenant`) + write (`lib/actions/*` via `withTenant`) inside a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`, so tenant queries execute as the non-owner role with policies applied. `npm run verify-rls -w @tokophi/db` derives the store-scoped set from the catalog (every table with a `store_id`) and FAILS if one lacks RLS — **51/52 as of 2026-08-07, and the ONE remaining exception is `platform_activity`** (the platform's own audit log: cross-tenant by design, written before a session exists). `media` + `payments` were retrofitted in 0036. ⚠️ **THIS PARAGRAPH HAS NOW BEEN WRONG TWICE, AND ONCE IT MOCKED ITS OWN STALE FIGURE WHILE THE STALE FIGURE SAT TEN LINES BELOW IT** (it said 45/46 while `SECURITY.md` already said 51/52, and the sentence saying "this doc claimed 36/39" shared a file with a live `36/39`). The count is DERIVED and moves with every migration: **run `npm run verify-rls -w @tokophi/db` and believe its output, not this sentence.** ⚠️ **`stores` is NOT in that count and never could be**: it is keyed by `id`, has no `store_id`, so the catalog query cannot see it — that blind spot leaked two merchants' data across tenants until `0058` put an `id`-based policy on it. Auth (`lib/auth.ts`, pre-session `store_users` read), super-admin (cross-tenant), and the storefront (`Host`-resolved read-only catalog) stay on the owner connection. On the VPS this becomes PostgREST connecting as `tokophi_app` with the JWT `store_id` claim feeding the GUC. **RBAC** (app-layer, `lib/rbac.ts`) is enforced too.
 ```bash
 docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted volume)
 npm run migrate -w @tokophi/db     # apply versioned migrations (canonical)
@@ -251,7 +251,7 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
 ```
 - Package: `packages/db` → `import { db, schema } from "@tokophi/db"` (server-only; `postgres` is `serverExternalPackages`). `npm run reset` drops `public` + `drizzle` schemas.
 - `DATABASE_URL` lives in root `.env` (tooling) + each app's `.env.local` (Next). Copy from `.env.example`.
-- **Wired to DB** (read via server-only `lib/data/*`, pages `dynamic="force-dynamic"`): **super-admin** (all 5) + **admin** (Produk, Diskon, Pelanggan, Kategori, Pesanan, Halaman, Blog, Inventori, CRM, Pembelian, Segmen, Ulasan, Navigasi, Dashboard, Analitik, Pemasaran — 16 modules) + **storefront** (catalog via `@tokophi/db` at build/SSR). **Reads: done end-to-end.** - **Auth (local, real):** email/password login against `users` (`password_hash` = scrypt `salt:hash`, seeded owner **ongki@batiknusantara.id**, password minted at random per seed run and printed once — N29) ⋈ `store_users` (role). Session = **jose JWT in an httpOnly `session` cookie** (`AUTH_SECRET` env). `lib/auth.ts` (verify/findLogin/signSession/getSession — server-only, Node), `lib/actions/auth.ts` (`signIn`/`signOut`), `app/login/page.tsx`, `middleware.ts` (edge-safe JWT check → redirects to `/login`; excludes `/products`). Topbar shows the session user + "Keluar". Aligns with the VPS/PostgREST **JWT** prod plan. **RBAC** (`lib/rbac.ts` `requireCapability`, role→capability matrix) gates every mutating server action; **RLS** (migration 0012, `withTenant()` + `verify-rls`) isolates the store-scoped tables by `store_id` (36/39 — see above) (enforced under the `tokophi_app` role on the VPS).
+- **Wired to DB** (read via server-only `lib/data/*`, pages `dynamic="force-dynamic"`): **super-admin** (all 5) + **admin** (Produk, Diskon, Pelanggan, Kategori, Pesanan, Halaman, Blog, Inventori, CRM, Pembelian, Segmen, Ulasan, Navigasi, Dashboard, Analitik, Pemasaran — 16 modules) + **storefront** (catalog via `@tokophi/db` at build/SSR). **Reads: done end-to-end.** - **Auth (local, real):** email/password login against `users` (`password_hash` = scrypt `salt:hash`, seeded owner **ongki@batiknusantara.id**, password minted at random per seed run and printed once — N29) ⋈ `store_users` (role). Session = **jose JWT in an httpOnly `session` cookie** (`AUTH_SECRET` env). `lib/auth.ts` (verify/findLogin/signSession/getSession — server-only, Node), `lib/actions/auth.ts` (`signIn`/`signOut`), `app/login/page.tsx`, `middleware.ts` (edge-safe JWT check → redirects to `/login`; excludes `/products`). Topbar shows the session user + "Keluar". Aligns with the VPS/PostgREST **JWT** prod plan. **RBAC** (`lib/rbac.ts` `requireCapability`, role→capability matrix) gates every mutating server action; **RLS** (migration 0012, `withTenant()` + `verify-rls`) isolates the store-scoped tables by `store_id` (the count lives in the verifier's output — see above) (enforced under the `tokophi_app` role on the VPS).
 
 **Writes: DONE across all admin editors** — Produk, Diskon, Halaman, Blog, Kategori, order-status, Inventori-stock, Navigasi, Pelanggan, CRM (follow-up), Segmen, Pembelian (PO create/receive/cancel) all persist via `lib/actions/*` server actions.
 - **Media (local):** the product editor's Media section uploads real files → `apps/admin/public/uploads/` (gitignored) + a `product_media` row (`lib/actions/media.ts` `uploadProductImage`/`deleteProductImage`; 5MB image cap). `getProduct` returns the real `media[]`; the seed loads 5 media rows/product (base + `-2..-5`). Local storage now; on the VPS this becomes MinIO/S3.
@@ -264,10 +264,14 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
     parent id AND every FK in its values — must have been read back from an RLS-protected table inside
     the same `withTenant` txn, and the action must bail if that read returns nothing.** A join to an
     RLS'd table counts **only if a comment says it is the tenant boundary** — otherwise the next
-    "simplification" removes it. The 11 store-scoped tables with no `store_id` and no RLS, on which
+    "simplification" removes it. The 12 store-scoped tables with no `store_id` and no RLS, on which
     `tokophi_app` holds full DML: `collection_conditions`, `collection_products`, `customer_addresses`,
     `discount_usages`, `fulfillments`, `inventory_levels`, `menu_items`, `order_line_items`,
-    `product_media`, `product_options`, `purchase_order_items`.
+    `product_media`, `product_options`, `purchase_order_items`, `flash_sale_items`.
+    ⚠️ **This list said ELEVEN and omitted `flash_sale_items` (0076) for as long as that table has
+    existed.** `verify-rls` has always counted it — it prints `12 un-RLS'd child tables, all reviewed`
+    — so the RUNNABLE check and the PROSE rule disagreed, and the prose is the half people read before
+    writing a child-table write. Do not hand-maintain this list against the verifier: run it.
     Why this keeps happening: the parent write **silently no-ops** under RLS for a foreign id while the
     child write lands anyway — **no error, either way**. And `verify-rls` **structurally cannot catch
     it**: it derives coverage *from `store_id` columns*, so a table without one is invisible to it.
@@ -308,7 +312,8 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
 >   re-mints this tab's cookie with `iat` one second past the stamp.
 >   **Resetting SOMEBODY ELSE's operator password still does not exist** — `NEXT.md` N47.
 
-- **`requirePlatformAdmin(min)` is the first statement of all 27 mutating actions**, and the rank is
+- **`platformGate(min)` is the first statement of every mutating action** (33 call sites over 32 exported
+  actions), and the rank is
   `support` 1 < `admin` 2 < `owner` 3. The ladder lives in `platform-rank.ts` — a PURE module, no DB
   import — because `platform-auth.ts` pulls `@tokophi/db` at module scope, which is why the rule
   guarding every super-admin mutation had no test until 2026-07-31. An unknown role scores 0: fail
@@ -770,9 +775,12 @@ Measured with Lighthouse against production, 2026-07-31. Numbers, not intuition.
   delta's "naik"/"turun"), and both have a **third, neutral state** for "nothing to judge". The
   return tile's `shipped === 0` used to fall into the `!bad` arm and wear the same **emerald** pill a
   genuinely clean rate wears — a healthy verdict on a store that had never posted a parcel.
-  ⚠️ **Still open:** `return-by-courier.tsx` decides a courier's row by bar colour alone
-  (`rate > 5 ? bg-destructive : bg-emerald-500/70`) with a neutral "x,x%" beside it — same class,
-  not fixed here.
+  ✅ **CLOSED (N55, verified in code 2026-08-07):** `return-by-courier.tsx` no longer decides by colour
+  alone — it renders `TriangleAlert`/`ShieldCheck` with `aria-hidden` plus an `sr-only` word, and its
+  own header comment names N55. The bar colour stays as it was; it is now the third signal, not the
+  only one. ⚠️ This line said "Still open" for as long as the fix has existed, and `NEXT.md`/`OPEN.md`
+  said so too — three places asserting a defect that was already gone. **A closed task must be closed
+  everywhere it is named, or the next reader re-fixes it.**
 - **Runnable check: `apps/admin/lib/data/daily-stats.test.ts`.** Its Postgres half runs the real
   exported query under `SET LOCAL ROLE tokophi_app`. `vitest.config.ts` aliases `@/` → `apps/admin/`;
   without it no suite can import `lib/data/*` at all.

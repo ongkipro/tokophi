@@ -1,9 +1,5 @@
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { codeOnly } from "../../../test/source-code";
+import { SOURCE_SCAN_TIMEOUT_MS, codeOfFile, codeOnly, isTestFile, trackedSources } from "../../../test/source-code";
 import { NAME_MAX, RESERVED_SLUGS, STORE_NAME_MIN, isReservedSlug, slugify } from "./store-slug";
 
 // ── ONE SLUGIFY. It is a store's permanent public address, and there were two ────────────────────
@@ -62,22 +58,16 @@ describe("RESERVED_SLUGS", () => {
 // The whole point of this module is that a private copy is how the weaker half survives a fix (the
 // password mint, the session cookie, and now this). So the guard is a repo sweep, not two paths.
 
-const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage"]);
-const SOURCE = /\.(?:ts|tsx|mts|cts|cjs|astro|mjs|js|jsx)$/;
 const SELF = ["packages/lib/src/store-slug.ts", "packages/lib/src/store-slug.test.ts"];
 
-function repoSources(): string[] {
-  return execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
-    .split("\0")
-    .filter(Boolean)
-    .filter((rel) => !rel.split("/").some((seg) => seg.startsWith(".") || SKIP_DIRS.has(seg)))
-    // ⚠️ TESTS ARE NOT PRODUCT WRITERS. `provision-conflicts.test.ts` inserts a store with a literal
-    // slug ON PURPOSE — it provokes the unique violation — and must NOT import the shared rule. This
-    // guard flagged it as a fourth writer, which is a false positive in the guard, not a defect in the
-    // test. Excluded by suffix rather than by name: the next such fixture would otherwise repeat it.
-    .filter((rel) => SOURCE.test(rel) && !SELF.includes(rel) && !/\.test\.[cm]?[jt]sx?$/.test(rel));
-}
+// `trackedSources()` is the ONE lister (`test/source-code.ts`); the two exceptions below are this
+// guard's own and are named here, next to the claim they narrow.
+//
+// ⚠️ TESTS ARE NOT PRODUCT WRITERS. `provision-conflicts.test.ts` inserts a store with a literal
+// slug ON PURPOSE — it provokes the unique violation — and must NOT import the shared rule. This
+// guard flagged it as a fourth writer, which is a false positive in the guard, not a defect in the
+// test. Excluded by suffix rather than by name: the next such fixture would otherwise repeat it.
+const repoSources = (): string[] => trackedSources().filter((rel) => !SELF.includes(rel) && !isTestFile(rel));
 
 // ⚠️ THE CLAIM IS ABOUT THE **STORE** SLUG, AND THE SINK IS WHAT IDENTIFIES ONE.
 //
@@ -101,8 +91,10 @@ const IMPORTS_SHARED = /from\s*"@tokophi\/lib\/store-slug"/;
 const REDEFINES_RESERVED = /const\s+RESERVED(?:_SLUGS)?\s*=\s*new\s+Set\s*\(/;
 
 describe("every writer of stores.slug uses the shared rule", () => {
-  const storeSlugWriters = () =>
-    repoSources().filter((rel) => WRITES_STORE_SLUG.test(codeOnly(readFileSync(path.join(REPO_ROOT, rel), "utf8"))));
+  // `codeOfFile` memoises per path, so these three questions cost ONE lex of the repo between them
+  // rather than three. Each still carries the ceiling: whichever runs first pays for all of them, and
+  // which one that is depends on the runner.
+  const storeSlugWriters = () => repoSources().filter((rel) => WRITES_STORE_SLUG.test(codeOfFile(rel)));
 
   it("finds the three writers, and no more", () => {
     expect(storeSlugWriters().sort()).toEqual(
@@ -112,20 +104,18 @@ describe("every writer of stores.slug uses the shared rule", () => {
         "packages/db/src/seed.ts",
       ].sort(),
     );
-  });
+  }, SOURCE_SCAN_TIMEOUT_MS);
 
   it("and each one imports it", () => {
     for (const rel of storeSlugWriters()) {
-      expect(codeOnly(readFileSync(path.join(REPO_ROOT, rel), "utf8"))).toMatch(IMPORTS_SHARED);
+      expect(codeOfFile(rel), rel).toMatch(IMPORTS_SHARED);
     }
-  });
+  }, SOURCE_SCAN_TIMEOUT_MS);
 
   it("no second reserved-subdomain list", () => {
-    const offenders = repoSources().filter((rel) =>
-      REDEFINES_RESERVED.test(codeOnly(readFileSync(path.join(REPO_ROOT, rel), "utf8"))),
-    );
+    const offenders = repoSources().filter((rel) => REDEFINES_RESERVED.test(codeOfFile(rel)));
     expect(offenders).toEqual([]);
-  });
+  }, SOURCE_SCAN_TIMEOUT_MS);
 
   // Prove the patterns can fire — a sweep nobody has seen red is green for reasons nobody checked.
   it("catches each shape that actually shipped", () => {
@@ -143,7 +133,6 @@ describe("the name bounds", () => {
   it("are a floor and a ceiling, and the ceiling matches the storefront's own MAX_NAME", () => {
     expect(STORE_NAME_MIN).toBe(3);
     expect(NAME_MAX).toBe(60);
-    const chat = readFileSync(path.join(REPO_ROOT, "apps/storefront/src/lib/chat.ts"), "utf8");
-    expect(codeOnly(chat)).toMatch(new RegExp(`MAX_NAME\\s*=\\s*${NAME_MAX}\\b`));
+    expect(codeOfFile("apps/storefront/src/lib/chat.ts")).toMatch(new RegExp(`MAX_NAME\\s*=\\s*${NAME_MAX}\\b`));
   });
 });

@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-TokoΦ is a **Shopify-style commerce SaaS for Indonesia** — Bahasa Indonesia UI, IDR. Three surfaces, one monorepo, one PostgreSQL. **Single-plan billing** (Rp275rb/mo + PPN 11%), all features unlocked. Provider brands (KiriminAja/AutoLaris) hidden from clients (white-label).
+TokoΦ is a **Shopify-style commerce SaaS for Indonesia** — Bahasa Indonesia UI, IDR. **Empat** surface (admin/Seller · super-admin · storefront · landing), satu monorepo, satu PostgreSQL. **Single-plan billing** (Rp275rb/mo + PPN 11%), all features unlocked. Provider brands (KiriminAja/AutoLaris) hidden from clients (white-label).
 
 | Surface | Package | Stack | Who uses it | Port (dev) |
 |---|---|---|---|---|
@@ -28,7 +28,9 @@ tokophi/
     storefront/     # Astro SSR shopper site — ONE deploy serves every store (tenant from the Host header):
                     #   src/middleware.ts → getStoreByHost() → {store, catalog} on Astro.locals
                     #   src/data/store.ts (host→store, RESERVED labels, custom-domain SEAM) · cache.ts (per-store TTL)
-    landing/        # @tokophi/landing — static Astro front door for tokophi.com ("Segera hadir").
+    landing/        # @tokophi/landing — situs pemasaran Astro untuk tokophi.com (9 halaman: fitur,
+                    #   cara-kerja, demo, harga, faq, kontak, pembayaran-pengiriman, privasi, …).
+                    #   Sudah BUKAN "Segera hadir" — string itu tak ada lagi di sana.
                     #   NO database, NO depends_on: postgres — must serve even when the rest is down.
   packages/
     db/             # @tokophi/db — Drizzle schema + migrations + seed + client (server-only)
@@ -48,7 +50,7 @@ tokophi/
 
 | Package | Exports / key modules | Notes |
 |---|---|---|
-| `db` | `db`, `client`, `schema` (**68 tables**), `migrations/` (**0000–0083**, 84 files), `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
+| `db` | `db`, `client`, `schema` (**78 tables**), `migrations/` (**0000–0091**, 92 files), `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
 | `lib` | `./billing` (pricing, `computeBilling`, `storeSegment`, `withPpn`), `./format` (IDR/num), `./couriers`, `./kiriminaja`, `./autolaris`, `./payment-fees`, `./integration-status`, `./totp`, `./cache`, `./colors` | Pure/shared. `kiriminaja`/`autolaris` are `server-only`. |
 | `ui` | 23 components (`button card dialog dropdown-menu table tabs switch …`) + `lib/utils` (cn) + Tailwind tokens | **shadcn on Base UI** — `render` prop not `asChild`, no `Select`. |
 | `data` | menu helpers | small shared. |
@@ -128,7 +130,7 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 
 ## 7. Data mapping (schema domains → SCHEMA.md)
 
-**68 tables** (verified from the catalog — see `SCHEMA.md` §1). Domains: **identity** (accounts, stores, store_stats, users, store_users, locations) · **catalog** (products, product_media, product_options/variants, inventory_levels, collections + membership/conditions, **media**) · **suppliers/purchasing** · **orders/fulfillment** (orders, line_items, payments) · **customers/CRM** (customers — `registered_at` NULL = guest, **checkout_sessions** 0044/0045, segments, leads, followups, wa_templates) · **discounts** · **content** (pages, articles, menus, **page_templates** ADR 0009) · **marketing/analytics** · **platform** (plans[legacy], invoices, platform_activity, platform_admins, platform_payment_gateways/channels/cod, platform_couriers, shipping_aggregator) · **support** (support_tickets, support_messages) · **chat** (chat_visitors, conversations, conversation_messages) · **settings** (store_settings: couriers[], payment_channels[], payment_fee_bearer, tax, sender).
+**78 tables** (diukur ulang 2026-08-07 dari `packages/db/src/schema.ts` + `drizzle/meta/_journal.json` + keluaran `npm run verify-rls` — see `SCHEMA.md` §1). Domains: **identity** (accounts, stores, store_stats, users, store_users, locations) · **catalog** (products, product_media, product_options/variants, inventory_levels, collections + membership/conditions, **media**) · **suppliers/purchasing** · **orders/fulfillment** (orders, line_items, payments) · **customers/CRM** (customers — `registered_at` NULL = guest, **checkout_sessions** 0044/0045, segments, leads, followups, wa_templates) · **discounts** · **content** (pages, articles, menus, **page_templates** ADR 0009) · **marketing/analytics** · **platform** (plans[legacy], invoices, platform_activity, platform_admins, platform_payment_gateways/channels/cod, platform_couriers, shipping_aggregator) · **support** (support_tickets, support_messages) · **chat** (chat_visitors, conversations, conversation_messages) · **settings** (store_settings: couriers[], payment_channels[], payment_fee_bearer, tax, sender).
 
 **RLS** (`0012`) on **44** store-scoped tables, enforced under `tokophi_app` — `checkout_sessions` included, because a half-typed checkout carries a name, a phone and an address. Owner exceptions: auth, super-admin, storefront, `/api/public/*`, cron.
 

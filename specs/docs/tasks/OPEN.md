@@ -11,6 +11,21 @@ time you read this.
 > And measure on `origin/main`, never on your own rebased branch — that is how a task got filed for a
 > flake that the very next merge had already fixed.
 
+🔴 **A MERGE TO `main` CAN FAIL TO DEPLOY, SILENTLY.** Measured 2026-08-07: main sat at `381a8e7`
+for 25+ min while every container stayed on `b22c1ec` and **no image for that sha was ever built** —
+disk fine, nothing unhealthy, **all four hosts green throughout**. Docs-only that time, so nothing
+was lost; the same silence over a checkout fix would read as shipped. **Never treat four green
+hosts as proof a merge landed — compare the container sha to `origin/main`.** DEL-3 / T-11 in
+[`2026-08-06-open-work.md`](./2026-08-06-open-work.md).
+
+🔴 **THERE ARE TWO DOMAINS.** `tokophi.id` is a separate Cloudflare zone and it is where merchant
+storefronts actually serve (`<slug>.tokophi.com` 301s to `<slug>.tokophi.id`), while `app.` and
+`rich.` go the other way — `.id` → `.com`. So `SECURITY.md` §5 describes the REDIRECT domain.
+Measured 2026-08-06 on `.id`: no HSTS, `ssl: full` (origin cert unvalidated), TLS floor **1.0**;
+`.com` has HSTS 1 y, `ssl: strict`, TLS 1.2. HSTS is now on `.id` at the 24 h ramp; the other two
+are decisions that can break the site — and `tokophi.id` **apex returns 503**. Everything open,
+with runnable `Done when`s → [`2026-08-06-open-work.md`](./2026-08-06-open-work.md).
+
 ▶️ **Wondering what happened on 2026-08-05?**
 [`2026-08-05-session-close.md`](./2026-08-05-session-close.md) is the ledger — nine PRs, two zone
 changes, the verified end state, and what each remaining item belongs to. Start there, then come back
@@ -105,15 +120,15 @@ Roughly highest value first. **S** ≈ under an hour, **M** ≈ half a day, **L*
 | **N63** | Sidecar `cron-tracking` hanya bersuara ke `docker logs` — pernah nol selama seminggu tanpa ada yang sadar. | **S** |
 | **N57** | **Nobody is told when a signup arrives.** Signup is OPEN in production and every new shop lands in the review queue, under a "1×24 jam" promise made on the merchant's own dashboard — while the only traces are pull-only (the dashboard counter, a `platform_activity` row). ⚠️ Decide the transport first (WhatsApp Cloud API vs Telegram/Slack to ourselves); `waLink()` cannot SEND. | **M** |
 | **N58** | **There is no mailer at all** — measured: 0 mail dependencies, and no MX/SPF on `tokophi.id` or `tokophi.com`. Blocks email verification at signup (why the approval queue exists), merchant password reset, invoice delivery. Receiving an address is a separate, free problem (Cloudflare Email Routing). | **L** |
-| 🔴 **N54** | **There is NO way to create a landing page — the button 404s.** `promo-list-client.tsx:126` links to `/promo/html/baru`; that route only has `[id]/`, which `notFound()`s on a non-UUID. The feature has never been reachable. | **S** |
+| ✅ **N54 — SUDAH DIKIRIM** (diverifikasi di kode 2026-08-07: `app/(admin)/promo/html/baru/page.tsx` ADA, dan komentarnya sendiri menyebut N54) | ~~**There is NO way to create a landing page — the button 404s.**~~ `promo-list-client.tsx:126` links to `/promo/html/baru`; that route only has `[id]/`, which `notFound()`s on a non-UUID. The feature has never been reachable. | **S** |
 | **N38** (shipping) | Label misses required fields. **Four of five are pure plumbing** — service type, both postcodes, sender phone, item prices all already persisted. **Insurance is not stored at all** and needs a column. 🔴 Sorting code is blocked twice (values come from KiriminAja support, and it rides the webhook we do not receive) — and **SPX needs a 2-column one, SPX being the primary courier and the COD rail**. | **M** |
 | ~~N33 aftermath~~ | ✅ **DONE 2026-08-05 — backfilled on PRODUCTION and dev**, 24 rows each, log: [`2026-08-05-n33-backfill-executed.md`](./2026-08-05-n33-backfill-executed.md). ⚠️ Measured: it is **price-neutral** — 35×26×7 implies 1.062 g volumetric, which rounds into the same 1 kg tier as the existing floor. The value delivered is that the BOOKING now declares a truthful parcel, so the courier's re-measure stops surcharging the merchant. | — |
 | 🟠 **Parcel size ignores quantity** | **NEW, nobody had filed it.** `maxDims()` takes the largest value per axis across cart lines, so a cart of five gamis still declares ONE garment's parcel while the weight grows to 2,5 kg. Deliberate (quote and booking must agree) and therefore not a regression — but volumetric can then only ever dominate on a single bulky item. Decide: sum an axis, scale the smallest, or accept and record it in `KIRIMINAJA.md`. | **S** |
 | **N44** (wave 7) | Empty states, 2 screens left: `pelanggan/segmen/segmen-client.tsx` and `crm/template/template-client.tsx` — both print a summary strip over a bare `.map`. | **S** |
 | **N47 · N48** | An operator who forgets their password has **no way back in** (only self-service change exists); and a refused super-admin action **throws into a `startTransition` nobody catches**, so the operator sees nothing. | **S** |
-| **N52** | `CardTitle` is a `<div>`, so 128 card headings are invisible to heading navigation. | **S** |
+| ✅ **N52 — SUDAH DIKIRIM** (diverifikasi 2026-08-07) | ~~`CardTitle` is a `<div>`~~ — `packages/ui/.../card.tsx` merender `h${level}`, default `h2`, dengan `level` sebagai escape hatch; salinan lokal admin (`apps/admin/components/ui`) sudah tidak ada. | — |
 | **N46** (wave 7) | The credential sweep still scans `apps/` only (`no-published-credentials.test.ts:25`); 26 files under `packages/{sections,ui}` are outside it, while its sibling already scans every tracked file. | **S** |
-| **N55 · N56** | Colour-only verdict in `return-by-courier.tsx:32` (no icon, word or sign); Puck's vendored ArrayField/zoom controls unnamed. | **S** |
+| **N56** (N55 ✅ **SUDAH DIKIRIM**, diverifikasi 2026-08-07: `return-by-courier.tsx` kini membawa `TriangleAlert`/`ShieldCheck` + `sr-only`) | Puck's vendored ArrayField/zoom controls unnamed. | **S** |
 | **N31** (shipping) | The COD fee KiriminAja charges is never read — `cod_fee`/`minimum_cod_fee`/`cod_fee_amount` come back on every rate and **0 code reads them**; `platform_cod.fee_pct` is written by the seed and read by nobody. This is also what keeps ADR 0014's cost figure incomplete. | **S** |
 | **N40** (shipping) | We book on `v6.1/request_pickup`, which the vendor marks **deprecated**. ⚠️ The v6.2 doc contradicts itself on destination field names — resolve against the sandbox first; booking to the wrong village is what migration 0042 exists to prevent. `shipping_price` v6.1 is *not* deprecated. | **M** |
 | **N41** (wave 7) | Seed drift: 2 of 5 refuted against production. Left, **never checked**: `store_shipping_methods`, `reviews.product_id`, `platform_payment_channels`/`platform_payout`. | **M** |
@@ -205,12 +220,18 @@ npm run build:admin ; npm run build:super
 
 ## Deploying
 
-Merge to `origin/main` → Coolify rebuilds. **9–11 minutes** from merge to all four hosts green, with
+Merge to `origin/main` → Coolify rebuilds. **9–11 minutes with an empty queue; ~20 minutes when
+merges land together** (measured 1194 s with four merges queued — Coolify serialises builds), with
 a **~1,5–2,5 min window of 503** while containers swap (admin recovers slightly before the
 storefront). ⚠️ This used to read "~6 minutes / 60–90 s" and both halves were understated — measured
 FOUR times on 2026-08-05: **524 s · 656 s · 558 s · 542 s**, sampled every 25 s. `DEPLOY.md`'s
 "~8–9 min" was the closer of the two figures. The low number is what makes someone conclude a healthy
 deploy has failed and start intervening. Watch until all four return:
+
+⚠️ **Watch for `containers == origin/main`, NEVER for your own merge sha.** With other agents
+merging concurrently the containers skip straight past your commit to the newest one, so a
+sha-specific watch never satisfies and reports a failure that did not happen. (Learned the hard
+way on 2026-08-06: the deploy was healthy for the whole 1800 s the watcher spent waiting.)
 
 ```bash
 for h in tokophi.com app.tokophi.com rich.tokophi.com toko.tokophi.com; do
