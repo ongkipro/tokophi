@@ -63,12 +63,22 @@ jobs:
           node-version: "24"
           cache: npm
 
-      # ⚠️ npm 11 does NOT run a dependency's install scripts unless the package is named. Exactly one
-      # package here has one — `unrs-resolver` (postinstall: fetches its platform napi binary, used by
-      # the ESLint import resolver). It is named rather than reaching for
-      # `--dangerously-allow-all-scripts`: this is a lockfile with hundreds of packages, and "allow
-      # everything" is a supply-chain decision, not an install flag.
-      - run: npm ci --allow-scripts unrs-resolver
+      # ⚠️ npm 11 does NOT run a dependency's install script unless it has been approved, and the
+      # FLAG form (`npm ci --allow-scripts <pkg>`) is refused outright in a project-scoped install —
+      # measured on the first run of this workflow: `EALLOWSCRIPTS … Add the entries to the
+      # "allowScripts" field in package.json, or to .npmrc, instead.` So the approval lives in
+      # `package.json`, written by `npm approve-scripts unrs-resolver` rather than by hand.
+      #
+      # Exactly one package in this lockfile has an install script: `unrs-resolver` (postinstall
+      # fetches its platform napi binary, used by the ESLint import resolver). It is approved BY NAME
+      # AND VERSION (`unrs-resolver@1.12.2`) — npm pins it deliberately, so a version bump re-gates
+      # the script and someone has to look again. That is the feature, not friction: if a bump ever
+      # makes this warn, re-approve it consciously.
+      #
+      # Plain `npm ci` here — NOT `--strict-allow-scripts`. A new dependency arriving with an
+      # unapproved script would then fail THIS step, i.e. a PR going red for a reason that has
+      # nothing to do with it, which is how people learn to ignore a check.
+      - run: npm ci
 
       # `npm test` = vitest run && astro check (storefront) && astro check (landing). The astro half
       # is load-bearing: `SectionRenderer`'s exhaustiveness assertion is only compiled by `astro
