@@ -1,9 +1,10 @@
+import Link from "next/link";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import type { OrderListLine } from "@/components/admin/pesanan/order-list-types";
 
 // Shopee's row leads with the PRODUCT, not the invoice number: a seller packing parcels is looking
 // for the thing on the shelf. Photo + name + `Variasi:` + qty, first two lines, then a count.
-export function OrderProductCell({ lines, lineCount }: { lines: OrderListLine[]; lineCount: number }) {
+export function OrderProductCell({ lines, lineCount, href }: { lines: OrderListLine[]; lineCount: number; href?: string }) {
   if (lines.length === 0) {
     return <span className="text-sm text-muted-foreground">Tidak ada item</span>;
   }
@@ -18,8 +19,14 @@ export function OrderProductCell({ lines, lineCount }: { lines: OrderListLine[];
             className="size-11"
             emojiClassName="text-lg"
           />
-          <div className="min-w-0 leading-tight">
-            <div className="truncate text-sm font-medium">{l.title}</div>
+          <div className="min-w-0 flex-1 leading-tight">
+            {href ? (
+              <Link href={href} className="line-clamp-2 whitespace-normal break-words text-sm font-medium hover:underline" title={l.title}>
+                {l.title}
+              </Link>
+            ) : (
+              <div className="line-clamp-2 whitespace-normal break-words text-sm font-medium" title={l.title}>{l.title}</div>
+            )}
             {l.variant && (
               <div className="truncate text-xs text-muted-foreground">Variasi: {l.variant}</div>
             )}

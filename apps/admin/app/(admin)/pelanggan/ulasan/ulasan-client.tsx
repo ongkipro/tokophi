@@ -236,7 +236,7 @@ function ReviewRow({ review: r }: { review: Review }) {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="font-medium">{r.customer}</div>
-            <div className="truncate text-xs text-muted-foreground">
+            <div className="line-clamp-2 whitespace-normal break-words text-xs text-muted-foreground" title={r.product}>
               membeli {r.product}
             </div>
           </div>

@@ -234,12 +234,12 @@ function ItemRow({
             <Icon className="size-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <p className="truncate text-sm font-semibold leading-tight">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <p className="line-clamp-2 min-w-0 flex-1 break-words text-sm font-semibold leading-tight" title={item.title}>
                 {item.title}
               </p>
               {hasChildren && (
-                <Badge variant="outline" className="h-4 px-1 text-[10px]">
+                <Badge variant="outline" className="h-4 shrink-0 px-1 text-[10px]">
                   Sub-menu
                 </Badge>
               )}
@@ -640,12 +640,12 @@ export function NavigasiClient({ menus: initialMenus }: { menus: NavMenu[] }) {
                       <MenuIcon className="size-4" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate text-sm font-medium">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="line-clamp-2 min-w-0 flex-1 break-words text-sm font-medium" title={m.title}>
                           {m.title}
                         </span>
                         {m.isDefault && (
-                          <Badge variant="outline" className="h-4 px-1 text-[10px]">
+                          <Badge variant="outline" className="h-4 shrink-0 px-1 text-[10px]">
                             Utama
                           </Badge>
                         )}

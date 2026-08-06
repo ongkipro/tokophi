@@ -112,7 +112,7 @@ export function InvoiceDialog({
               <TableBody>
                 {data.lines.map((l) => (
                   <TableRow key={l.id} className="hover:bg-transparent">
-                    <TableCell className="font-medium">{l.product}</TableCell>
+                    <TableCell className="max-w-xs"><span className="line-clamp-2 whitespace-normal break-words font-medium" title={l.product}>{l.product}</span></TableCell>
                     <TableCell className="text-muted-foreground">{l.variant ?? "—"}</TableCell>
                     <TableCell className="text-center tabular-nums">{l.qty}</TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">{IDR(l.price)}</TableCell>

@@ -170,7 +170,7 @@ export function HalamanClient({ pages }: { pages: CmsPage[] }) {
                 <TableHead className="w-10 pl-4">
                   <Checkbox aria-label="Pilih semua" />
                 </TableHead>
-                <TableHead>Judul</TableHead>
+                <TableHead className="w-[34%]">Judul</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Template</TableHead>
                 <TableHead className="text-right">Dilihat</TableHead>
@@ -191,12 +191,17 @@ export function HalamanClient({ pages }: { pages: CmsPage[] }) {
                   >
                     <Checkbox aria-label={`Pilih ${p.title}`} />
                   </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-semibold group-hover:underline">
+                  <TableCell className="max-w-sm">
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <Link
+                        href={`/halaman/${p.id}`}
+                        className="line-clamp-2 whitespace-normal break-words font-semibold group-hover:underline"
+                        title={p.title}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {p.title}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
+                      </Link>
+                      <span className="truncate text-xs text-muted-foreground">
                         /pages/{p.handle}
                       </span>
                     </div>

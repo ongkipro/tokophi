@@ -254,7 +254,7 @@ export function CollectionEditor({ collection, products }: { collection?: Collec
     <div>
       {/* Top bar */}
       <div className="mb-5 flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -270,7 +270,7 @@ export function CollectionEditor({ collection, products }: { collection?: Collec
                 Kategori
               </Link>
             </p>
-            <h1 className="truncate text-xl font-bold tracking-tight">{title}</h1>
+            <h1 className="line-clamp-2 break-words text-xl font-bold tracking-tight" title={title}>{title}</h1>
           </div>
         </div>
 
@@ -569,7 +569,7 @@ export function CollectionEditor({ collection, products }: { collection?: Collec
                             className="flex items-center gap-3 border-b px-3 py-2 text-left last:border-b-0 hover:bg-muted/60"
                           >
                             <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-8" />
-                            <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
+                            <span className="line-clamp-2 min-w-0 flex-1 whitespace-normal break-words text-sm font-medium" title={p.name}>{p.name}</span>
                             <Plus className="size-4 shrink-0 text-muted-foreground" />
                           </button>
                         ))}
@@ -584,7 +584,7 @@ export function CollectionEditor({ collection, products }: { collection?: Collec
                       >
                         <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9" />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{p.name}</p>
+                          <p className="line-clamp-2 whitespace-normal break-words text-sm font-medium" title={p.name}>{p.name}</p>
                           <p className="text-xs text-muted-foreground">{p.category}</p>
                         </div>
                         <span className="shrink-0 text-sm tabular-nums">

@@ -445,7 +445,7 @@ export function ProductEditor({ product }: { product?: Product }) {
     <div>
       {/* Top bar */}
       <div className="mb-5 flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -461,7 +461,7 @@ export function ProductEditor({ product }: { product?: Product }) {
                 Produk
               </Link>
             </p>
-            <h1 className="truncate text-xl font-bold tracking-tight">
+            <h1 className="line-clamp-2 break-words text-xl font-bold tracking-tight" title={isEdit ? name || "Tanpa judul" : "Tambah produk baru"}>
               {isEdit ? name || "Tanpa judul" : "Tambah produk baru"}
             </h1>
           </div>

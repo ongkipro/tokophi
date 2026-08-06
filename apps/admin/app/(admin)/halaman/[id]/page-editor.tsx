@@ -142,7 +142,7 @@ export function PageEditor({ page }: { page?: CmsPage }) {
     <div className="mx-auto max-w-5xl">
       {/* Top bar */}
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <Link
             href="/halaman"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
@@ -156,7 +156,7 @@ export function PageEditor({ page }: { page?: CmsPage }) {
               value was already there; `topBarTitle` computes "Tambah halaman" for exactly this case,
               so the guard was hiding a string it had already built. `article-editor.tsx` next door
               renders its own unconditionally — the two had simply diverged. */}
-          <h1 className="text-lg font-semibold tracking-tight">{topBarTitle}</h1>
+          <h1 className="line-clamp-2 break-words text-lg font-semibold tracking-tight" title={topBarTitle}>{topBarTitle}</h1>
         </div>
         <div className="flex items-center gap-2">
           {isEdit && canWrite && (

@@ -177,8 +177,8 @@ function TemplateCard({ t }: { t: WaTemplate }) {
   return (
     <Card className="gap-0 overflow-hidden py-0">
       <div className="flex items-start justify-between gap-2 border-b p-4">
-        <div className="min-w-0 space-y-1.5">
-          <p className="truncate font-medium leading-tight">{t.name}</p>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <p className="line-clamp-2 break-words font-medium leading-tight" title={t.name}>{t.name}</p>
           <TypeBadge type={t.type} />
         </div>
         <CardActions t={t} />

@@ -63,7 +63,7 @@ export function BantuanClient({ tickets }: { tickets: TicketRow[] }) {
             tickets.map((t, i) => (
               <Link key={t.id} href={`/bantuan/${t.id}`} className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40 ${i > 0 ? "border-t" : ""}`}>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{t.subject}</div>
+                  <div className="line-clamp-2 break-words text-sm font-medium" title={t.subject}>{t.subject}</div>
                   <div className="text-xs text-muted-foreground">Diperbarui {timeAgo(t.minutesAgo)}</div>
                 </div>
                 <TicketStatus status={t.status} />

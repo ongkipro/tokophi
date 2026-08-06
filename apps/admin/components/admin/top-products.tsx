@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { TopProduct } from "@/lib/data/dashboard";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num } from "@tokophi/lib/format";
@@ -11,7 +12,9 @@ export function TopProducts({ items }: { items: TopProduct[] }) {
           <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="size-9" />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-2">
-              <span className="truncate text-sm font-medium">{p.name}</span>
+              <Link href={`/produk/${p.id}`} className="line-clamp-2 min-w-0 flex-1 break-words text-sm font-medium hover:underline" title={p.name}>
+                {p.name}
+              </Link>
               <span className="shrink-0 text-sm font-semibold tabular-nums">{IDR(p.revenue, { compact: true })}</span>
             </div>
             <div className="mt-1.5 flex items-center gap-2">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import { OrderStatusBadge } from "./order-status";
@@ -38,7 +39,9 @@ export function RecentOrders({ orders }: { orders: Order[] }) {
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{o.customer}</div>
+                  <Link href={`/pesanan/${o.id.replace(/^#/, "")}`} className="block truncate text-sm font-medium hover:underline">
+                    {o.customer}
+                  </Link>
                   <div className="text-xs text-muted-foreground">{o.city} · {timeAgo(o.minutesAgo)}</div>
                 </div>
               </div>

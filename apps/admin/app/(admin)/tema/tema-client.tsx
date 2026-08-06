@@ -216,9 +216,9 @@ function TemplateCard({
     <Card className="overflow-hidden">
       <CardContent className="space-y-3 py-5">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <p className="truncate font-medium">{tpl.name}</p>
+              <p className="line-clamp-2 min-w-0 flex-1 break-words font-medium" title={tpl.name}>{tpl.name}</p>
               {tpl.isDefault && (
                 <Badge variant="secondary" className="gap-1">
                   <Star className="size-3" /> Default
@@ -441,7 +441,15 @@ function AssignmentTable({
                         />
                       </TableCell>
                     )}
-                    <TableCell className="font-medium">{r.name}</TableCell>
+                    <TableCell className="max-w-sm">
+                      <Link
+                        href={kind === "collection" ? `/produk/kategori/${r.id}` : `/produk/${r.id}`}
+                        className="line-clamp-2 whitespace-normal break-words font-medium hover:underline"
+                        title={r.name}
+                      >
+                        {r.name}
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       {canWrite ? (
                         <TemplatePicker
