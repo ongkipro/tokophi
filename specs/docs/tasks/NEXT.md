@@ -1691,3 +1691,40 @@ decision about which of the two audiences (operators, merchants, shoppers) email
 ⚠️ Sending and receiving are separate problems and only sending needs SPF/DKIM/DMARC. If all that is
 wanted is an address that can RECEIVE (`support@tokophi.id`), Cloudflare Email Routing forwards to an
 existing inbox for free and needs no provider at all — both zones are already on Cloudflare.
+
+### N59. Tidak ada CI — `main` bisa merah dan tak ada yang tahu · **M** · NEW
+`ls .github/workflows/` → tidak ada. Tak satu pun menjalankan `npm test` selain manusia. Bukti bukan
+hipotetis: `apps/admin/lib/seller-entity-links.test.ts` merah di `origin/main` sejak `e6d557e` dan
+ter-merge begitu saja; hari yang sama `store-slug.test.ts` juga merah sejak #157 sampai #168.
+⚠️ Suite ini butuh Postgres (`test/db-setup.ts` membuat `<DATABASE_URL>_test`) — pakai service
+container, dan biarkan DB tak terjangkau GAGAL (`npm run test:db`), bukan SKIP; skip yang senyap
+persis cara 22 test ledger tidak pernah jalan selama berbulan-bulan.
+Detail + urutan: `2026-08-06-alerting-gaps.md` ⓐ.
+
+### N60. Env yang tak sampai ke container tidak berbunyi apa pun · **S** · NEW
+Terukur 5→6 Agustus: `SIGNUP_ENABLED=true` disimpan jam 17:03 UTC, deployment #368 mulai 16:59 —
+Coolify memotret env saat deployment DIMULAI, jadi compose-nya berbunyi `SIGNUP_ENABLED: ''`.
+Container sehat, semua host 200/307, `/daftar` tetap tertutup, tanpa satu pun sinyal. Kelas yang sama
+terjadi di #154 (variabel tak diteruskan di `docker-compose.coolify.yml`).
+Usul: `/api/health/env` yang menyebut NAMA env kritis + status ADA/KOSONG — jangan pernah nilainya.
+Detail: `2026-08-06-alerting-gaps.md` ⓑ.
+
+### N61. Empat `verify-*` ada, tak satu pun dijalankan otomatis · **S** · NEW
+`verify-rls`, `verify-rls-app`, `verify-migrations`, `verify-ledger` — semuanya read-only. `verify-rls`
+adalah pagar yang pernah merah berminggu-minggu (dua kebocoran lintas-tenant lolos di belakangnya);
+`verify-migrations` satu-satunya yang menangkap tabrakan nomor migrasi. Ikutkan ke N59, plus satu cron
+mingguan untuk `verify-ledger` terhadap produksi. Detail: `2026-08-06-alerting-gaps.md` ⓒ.
+
+### N62. Login gagal tidak dicatat di mana pun · **S** · NEW
+`grep -rn "failed_login|loginFailed|login_attempts"` → nol hasil. Rate limit ada tapi `Map` dalam
+proses: reset tiap redeploy, tak melintasi replika, menghitung IP bukan AKUN. Satu merchant bisa
+diserang 15/menit per alamat sumber tanpa tabel, log, atau layar mana pun mencatatnya.
+Usul: satu baris `platform_activity` per N kegagalan berturut-turut pada satu email — bukan per
+kegagalan, dan jangan pernah menyimpan kata sandinya. Detail: `2026-08-06-alerting-gaps.md` ⓓ.
+
+### N63. Sidecar cron hanya bersuara ke `docker logs` · **S** · NEW
+`cron-tracking` (900 detik) yang membuat resi muncul sendiri. Komentarnya sendiri di
+`docker-compose.coolify.yml:281` merekam `awbFilled` nol SEMINGGU saat ia tidak jalan. Sekarang ia
+mencetak timestamp — ke log container, yang tak seorang pun buka tanpa alasan.
+Usul: simpan `last_run_at` + hasil putaran terakhir, tampilkan di Analitik → Sistem, merah bila > 30
+menit. Detail: `2026-08-06-alerting-gaps.md` ⓔ.
