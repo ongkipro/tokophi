@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createSegment, updateSegment, deleteSegment } from "@/lib/actions/segments";
 import { PageHeader } from "@/components/admin/page-header";
+import { EmptyState } from "@/components/admin/empty-state";
 import { useCan } from "@/components/admin/permissions";
 import { num, pct } from "@tokophi/lib/format";
 import { type CustSegment } from "@/lib/mock/store";
@@ -22,7 +23,7 @@ import { Label } from "@tokophi/ui/label";
 import { Textarea } from "@tokophi/ui/textarea";
 import {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle, DialogTrigger,
+  DialogHeader, DialogTitle,
 } from "@tokophi/ui/dialog";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -148,10 +149,10 @@ function SegmentCard({ segment }: { segment: CustSegment }) {
   );
 }
 
-function CreateSegmentDialog() {
+// Mounted only while open (both the header button and the empty state's CTA open the SAME dialog),
+// so the fields reset for free on close.
+function CreateSegmentDialog({ onOpenChange }: { onOpenChange: (o: boolean) => void }) {
   const router = useRouter();
-  const canWrite = useCan("crm:write");
-  const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const [desc, setDesc] = React.useState("");
   const [pending, startTransition] = React.useTransition();
@@ -164,19 +165,15 @@ function CreateSegmentDialog() {
       try {
         await createSegment({ name, description: desc });
         toast.success("Segmen dibuat");
-        setOpen(false);
-        setName("");
-        setDesc("");
+        onOpenChange(false);
         router.refresh();
       } catch {
         toast.error("Gagal membuat segmen");
       }
     });
   };
-  if (!canWrite) return null;
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button><Plus /> Buat segmen</Button>} />
+    <Dialog open onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Buat segmen baru</DialogTitle>
@@ -215,15 +212,25 @@ function CreateSegmentDialog() {
 }
 
 export function SegmenClient({ segments }: { segments: CustSegment[] }) {
+  const canWrite = useCan("crm:write");
+  const [createOpen, setCreateOpen] = React.useState(false);
   const totalCustomers = segments.reduce((sum, s) => sum + s.count, 0);
+  const empty = segments.length === 0;
 
   return (
     <div>
       <PageHeader title="Segmen" desc="Kelompokkan pelanggan berdasarkan perilaku belanja mereka.">
-        <CreateSegmentDialog />
+        {canWrite && (
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus /> Buat segmen
+          </Button>
+        )}
       </PageHeader>
+      {createOpen && <CreateSegmentDialog onOpenChange={setCreateOpen} />}
 
-      {/* Ringkasan */}
+      {/* Ringkasan — a strip reading "0 segmen aktif · 0 pelanggan tersegmen" is two zeroes where a
+          first-time seller needs a sentence, so it is held back until there is something to count. */}
+      {!empty && (
       <div className="mb-4 flex flex-col gap-3 rounded-lg border bg-muted/40 p-3 text-sm sm:flex-row sm:items-center sm:gap-8">
         <p className="flex items-center gap-2">
           <Users className="size-4 shrink-0 text-primary" />
@@ -238,13 +245,31 @@ export function SegmenClient({ segments }: { segments: CustSegment[] }) {
           </span>
         </p>
       </div>
+      )}
 
-      {/* Grid segmen */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {segments.map((segment) => (
-          <SegmentCard key={segment.id} segment={segment} />
-        ))}
-      </div>
+      {/* Grid segmen. There is no search or filter on this screen, so `kosong` is the only empty
+          state it can reach — and for a staff user the create button does not exist, which is why
+          the CTA is swapped for the sentence naming who can make one. */}
+      {empty ? (
+        <EmptyState
+          card
+          icon={Users}
+          title="Belum ada segmen"
+          desc={
+            canWrite
+              ? "Segmen mengelompokkan pelanggan berdasarkan perilaku belanja, supaya promo dan broadcast WhatsApp bisa ditujukan ke kelompok yang tepat."
+              : "Segmen mengelompokkan pelanggan berdasarkan perilaku belanja. Minta Owner atau Admin toko membuat yang pertama."
+          }
+          action={canWrite ? { label: "Buat segmen", icon: Plus, onClick: () => setCreateOpen(true) } : undefined}
+          secondary={{ label: "Lihat pelanggan", href: "/pelanggan" }}
+        />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {segments.map((segment) => (
+            <SegmentCard key={segment.id} segment={segment} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

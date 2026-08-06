@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/admin/page-header";
+import { EmptyState } from "@/components/admin/empty-state";
 import { fillTemplate } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { createWaTemplate, updateWaTemplate, deleteWaTemplate } from "@/lib/actions/crm";
@@ -307,49 +308,65 @@ function TemplateDialog({
   );
 }
 
-function CreateTemplateButton() {
-  const canWrite = useCan("crm:write");
-  const [open, setOpen] = React.useState(false);
-  if (!canWrite) return null;
-  return (
-    <>
-      <Button onClick={() => setOpen(true)}><Plus /> Buat template</Button>
-      {open && <TemplateDialog onOpenChange={setOpen} />}
-    </>
-  );
-}
-
 export function TemplateClient({ templates }: { templates: WaTemplate[] }) {
+  const canWrite = useCan("crm:write");
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const empty = templates.length === 0;
+
   return (
     <div>
       <PageHeader
         title="Template WhatsApp"
         desc="Pesan siap-pakai untuk follow-up dan broadcast ke pelanggan."
       >
-        <CreateTemplateButton />
+        {canWrite && (
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus /> Buat template
+          </Button>
+        )}
       </PageHeader>
+      {createOpen && <TemplateDialog onOpenChange={setCreateOpen} />}
 
-      {/* Variabel tersedia helper strip */}
-      <div className="mb-5 flex flex-col gap-2.5 rounded-lg border bg-muted/40 p-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5">
-        <span className="text-sm font-medium">Variabel tersedia</span>
-        <div className="flex flex-wrap gap-x-4 gap-y-2">
-          {VARIABLES.map((v) => (
-            <span key={v.token} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <code className="rounded bg-background px-1.5 py-0.5 font-mono text-[11px] text-foreground shadow-sm">
-                {v.token}
-              </code>
-              {v.gloss}
-            </span>
+      {/* Variabel tersedia — reference for templates that exist. With none, it is documentation for
+          a feature the store has no instance of, and the editor dialog already offers the same
+          tokens as insert chips at the moment they are useful. */}
+      {!empty && (
+        <div className="mb-5 flex flex-col gap-2.5 rounded-lg border bg-muted/40 p-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5">
+          <span className="text-sm font-medium">Variabel tersedia</span>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {VARIABLES.map((v) => (
+              <span key={v.token} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <code className="rounded bg-background px-1.5 py-0.5 font-mono text-[11px] text-foreground shadow-sm">
+                  {v.token}
+                </code>
+                {v.gloss}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* No search or filter on this screen, so `kosong` is the only empty state it can reach. */}
+      {empty ? (
+        <EmptyState
+          card
+          icon={MessageSquare}
+          title="Belum ada template"
+          desc={
+            canWrite
+              ? "Template adalah pesan siap-pakai yang terisi sendiri dengan nama pembeli, nomor pesanan, dan totalnya — dipakai saat menindaklanjuti pesanan dan mengirim broadcast."
+              : "Template adalah pesan siap-pakai untuk menindaklanjuti pesanan dan mengirim broadcast. Minta Owner atau Admin toko membuat yang pertama."
+          }
+          action={canWrite ? { label: "Buat template", icon: Plus, onClick: () => setCreateOpen(true) } : undefined}
+          secondary={{ label: "Lihat follow-up", href: "/crm/followup" }}
+        />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {templates.map((t) => (
+            <TemplateCard key={t.id} t={t} />
           ))}
         </div>
-      </div>
-
-      {/* Template grid */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {templates.map((t) => (
-          <TemplateCard key={t.id} t={t} />
-        ))}
-      </div>
+      )}
     </div>
   );
 }

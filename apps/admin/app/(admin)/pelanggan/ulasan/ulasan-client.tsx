@@ -13,6 +13,7 @@ import {
   Clock,
 } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
+import { EmptyState } from "@/components/admin/empty-state";
 import { Card } from "@tokophi/ui/card";
 import { Badge } from "@tokophi/ui/badge";
 import { Button } from "@tokophi/ui/button";
@@ -203,11 +204,30 @@ export function UlasanClient({ reviews }: { reviews: Review[] }) {
               <ReviewRow review={r} />
             </div>
           ))}
-          {rows.length === 0 && (
-            <div className="py-14 text-center text-sm text-muted-foreground">
-              Tidak ada ulasan yang cocok.
-            </div>
-          )}
+          {/* A store that has never had a review used to be told its SEARCH missed — advice about a
+              filter nobody set. There is deliberately no CTA on the `kosong` arm: nothing the seller
+              can press makes a review appear, and a button that cannot work is worse than none. */}
+          {rows.length === 0 &&
+            (reviews.length === 0 ? (
+              <EmptyState
+                icon={Star}
+                title="Belum ada ulasan"
+                desc="Ulasan muncul di sini setelah pembeli menilai produk yang sudah mereka terima."
+              />
+            ) : (
+              <EmptyState
+                kind="filter"
+                title="Tidak ada ulasan yang cocok"
+                desc="Tidak ada ulasan pada tab dan kata kunci ini."
+                action={{
+                  label: "Hapus filter",
+                  onClick: () => {
+                    setTab("semua");
+                    setQuery("");
+                  },
+                }}
+              />
+            ))}
         </div>
 
         {rows.length > 0 && (

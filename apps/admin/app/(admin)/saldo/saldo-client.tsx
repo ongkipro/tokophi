@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowDownToLine, ChevronDown, Clock, Info, Landmark, Loader2, Undo2, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
+import { EmptyState } from "@/components/admin/empty-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Separator } from "@tokophi/ui/separator";
@@ -66,8 +67,23 @@ function movementStatus(m: Movement): { label: string; cls: string } {
   return { label: "Belum ditarik", cls: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" };
 }
 
-function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="p-10 text-center text-sm text-muted-foreground">{children}</p>;
+/**
+ * Saldo filters IN SQL, so a zero-row tab has two causes and they need two sentences. `counts` is
+ * the unfiltered landmark (see the Tabs below) — it is what says whether the ledger has ever held
+ * one of these — while `<paged>.total` is what survived the date/status filter.
+ *
+ * Every one of these three used to read "…pada filter ini" unconditionally, so a seller who had
+ * never withdrawn anything was told to check a filter they had never set, on the money screen.
+ */
+function FilteredEmpty({ what, onClear }: { what: string; onClear: () => void }) {
+  return (
+    <EmptyState
+      kind="filter"
+      title={`Tidak ada ${what} pada rentang ini`}
+      desc="Longgarkan rentang tanggal atau statusnya untuk melihat lebih banyak."
+      action={{ label: "Hapus filter", onClick: onClear }}
+    />
+  );
 }
 
 function MoneyRow({ label, value, muted, strong }: { label: string; value: string; muted?: boolean; strong?: boolean }) {
@@ -157,6 +173,14 @@ export function SaldoClient({
   const { filter } = useSaldoUrl();
   const canWrite = useCan("settings:write");
   const [busy, start] = React.useTransition();
+
+  /**
+   * Wipe every filter this screen owns; `filter()` also resets the page for us.
+   * ⚠️ These are the URL's OWN keys (`dari`/`sampai`), NOT the parsed `LedgerFilters` field names
+   * (`from`/`to`) — `filter()` patches the query string verbatim, so the parsed names delete nothing
+   * and the button silently does nothing. Same keys the Reset in `saldo-filters.tsx` uses.
+   */
+  const clearFilters = () => filter({ dari: undefined, sampai: undefined, status: undefined });
 
   const [amount, setAmount] = React.useState("");
   const [bankName, setBankName] = React.useState(ctx.bankName ?? "");
@@ -397,7 +421,16 @@ export function SaldoClient({
                   <SaldoFilters tab="mutasi" filters={filters} total={movements.total} />
                 </div>
                 {movements.total === 0 ? (
-                  <Empty>Tidak ada mutasi pada filter ini.</Empty>
+                  counts.movements === 0 ? (
+                    <EmptyState
+                      icon={Wallet}
+                      title="Belum ada mutasi saldo"
+                      desc="Setiap pesanan yang selesai menambah saldo di sini, dan setiap penarikan menguranginya."
+                      action={{ label: "Lihat pesanan", href: "/pesanan" }}
+                    />
+                  ) : (
+                    <FilteredEmpty what="mutasi" onClear={clearFilters} />
+                  )
                 ) : (
                   <>
                     <Table>
@@ -483,7 +516,16 @@ export function SaldoClient({
                   <SaldoFilters tab="proses" filters={filters} total={pending.total} />
                 </div>
                 {pending.total === 0 ? (
-                  <Empty>Tidak ada dana tertahan pada filter ini.</Empty>
+                  counts.pending === 0 ? (
+                    <EmptyState
+                      icon={Clock}
+                      title="Tidak ada dana dalam proses"
+                      desc="Dana dari pesanan yang belum selesai ditahan di sini, lalu pindah ke saldo begitu pesanannya diselesaikan."
+                      action={{ label: "Lihat pesanan", href: "/pesanan" }}
+                    />
+                  ) : (
+                    <FilteredEmpty what="dana tertahan" onClear={clearFilters} />
+                  )
                 ) : (
                   <>
                     <Table>
@@ -548,7 +590,20 @@ export function SaldoClient({
                   <SaldoFilters tab="penarikan" filters={filters} total={payouts.total} />
                 </div>
                 {payouts.total === 0 ? (
-                  <Empty>Belum ada penarikan pada filter ini.</Empty>
+                  counts.payouts === 0 ? (
+                    <EmptyState
+                      icon={ArrowDownToLine}
+                      title="Belum ada penarikan"
+                      desc={
+                        hasBank
+                          ? "Riwayat pencairan saldo ke rekening Anda muncul di sini. Cairkan lewat kartu “Tarik saldo” di atas."
+                          : "Riwayat pencairan saldo muncul di sini. Rekening tujuan belum diisi, jadi saldo belum bisa dicairkan."
+                      }
+                      action={hasBank ? undefined : { label: "Atur rekening", onClick: () => filter({ tab: "rekening" }) }}
+                    />
+                  ) : (
+                    <FilteredEmpty what="penarikan" onClear={clearFilters} />
+                  )
                 ) : (
                   <>
                     <Table>

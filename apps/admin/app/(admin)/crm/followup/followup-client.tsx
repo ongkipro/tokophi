@@ -22,6 +22,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
+import { EmptyState } from "@/components/admin/empty-state";
 import { Card } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Badge } from "@tokophi/ui/badge";
@@ -382,16 +383,20 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
 
         {/* table */}
         <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>Pelanggan</TableHead>
-              <TableHead className="hidden sm:table-cell">Jenis</TableHead>
-              <TableHead className="hidden lg:table-cell">Konteks</TableHead>
-              <TableHead className="hidden md:table-cell">Jadwal</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-[1%] pr-4 text-right">Aksi</TableHead>
-            </TableRow>
-          </TableHeader>
+          {/* Column labels describe rows; with zero rows they assert a table there is nothing to
+              read, which reads as a failed load. Same rule as the keranjang table. */}
+          {rows.length > 0 && (
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Pelanggan</TableHead>
+                <TableHead className="hidden sm:table-cell">Jenis</TableHead>
+                <TableHead className="hidden lg:table-cell">Konteks</TableHead>
+                <TableHead className="hidden md:table-cell">Jadwal</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-[1%] pr-4 text-right">Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+          )}
           <TableBody>
             {rows.map((f) => {
               const meta = typeMeta(f.type);
@@ -532,13 +537,34 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
                 </TableRow>
               );
             })}
+            {/* A store with no follow-ups at all was told its filter missed. A follow-up is WRITTEN
+                by pressing "Hubungi via WA" on an abandoned cart (recordCartContact), so that screen
+                is the honest next step — not a create button this page does not have. */}
             {rows.length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell
-                  colSpan={6}
-                  className="py-12 text-center text-sm text-muted-foreground"
-                >
-                  Tidak ada follow-up yang cocok.
+                <TableCell colSpan={6} className="p-0">
+                  {followups.length === 0 ? (
+                    <EmptyState
+                      icon={Send}
+                      title="Belum ada follow-up"
+                      desc="Follow-up tercatat di sini saat Anda menghubungi pembeli dari daftar keranjang ditinggal, supaya tidak ada yang terlewat."
+                      action={{ label: "Lihat keranjang ditinggal", href: "/pelanggan/keranjang" }}
+                    />
+                  ) : (
+                    <EmptyState
+                      kind="filter"
+                      title="Tidak ada follow-up yang cocok"
+                      desc="Tidak ada follow-up pada tab, jenis, dan kata kunci ini."
+                      action={{
+                        label: "Hapus filter",
+                        onClick: () => {
+                          setTab("semua");
+                          setTypeFilter("semua");
+                          setQuery("");
+                        },
+                      }}
+                    />
+                  )}
                 </TableCell>
               </TableRow>
             )}

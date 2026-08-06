@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ShoppingCart, TrendingDown, RotateCcw, Phone, MessageCircle,Check } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
+import { EmptyState } from "@/components/admin/empty-state";
 import { Card } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Separator } from "@tokophi/ui/separator";
@@ -176,16 +177,21 @@ export function KeranjangClient({ carts, metrics }: { carts: AbandonedCart[]; me
         <Separator />
 
         <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="pl-4">Pembeli</TableHead>
-              <TableHead>Isi keranjang</TableHead>
-              <TableHead className="text-right">Nilai</TableHead>
-              <TableHead>Berhenti di</TableHead>
-              <TableHead className="hidden text-right lg:table-cell">Terakhir aktif</TableHead>
-              <TableHead className="pr-4 text-right">Aksi</TableHead>
-            </TableRow>
-          </TableHeader>
+          {/* Six column labels over zero rows read as "the data failed to load", not as "there is
+              nothing here" — the same defect N44 named on the dashboard's recent-orders table. The
+              header describes rows; with no rows there is nothing for it to describe. */}
+          {rows.length > 0 && (
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="pl-4">Pembeli</TableHead>
+                <TableHead>Isi keranjang</TableHead>
+                <TableHead className="text-right">Nilai</TableHead>
+                <TableHead>Berhenti di</TableHead>
+                <TableHead className="hidden text-right lg:table-cell">Terakhir aktif</TableHead>
+                <TableHead className="pr-4 text-right">Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+          )}
           <TableBody>
             {rows.map((c) => (
               <TableRow key={c.id}>
@@ -249,10 +255,32 @@ export function KeranjangClient({ carts, metrics }: { carts: AbandonedCart[]; me
                 </TableCell>
               </TableRow>
             ))}
+            {/* An empty window is GOOD NEWS here — nobody walked away mid-checkout — so it does not
+                borrow the "your search missed" sentence, and it does not get a CTA: there is nothing
+                to press that would put a cart in this list. */}
             {rows.length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
-                  Tidak ada keranjang yang cocok.
+                <TableCell colSpan={6} className="p-0">
+                  {carts.length === 0 ? (
+                    <EmptyState
+                      icon={ShoppingCart}
+                      title="Tidak ada keranjang ditinggal"
+                      desc={`Pembeli yang berhenti di tengah checkout dalam ${metrics.windowDays} hari terakhir muncul di sini, lengkap dengan nomor WhatsApp-nya supaya bisa dihubungi.`}
+                    />
+                  ) : (
+                    <EmptyState
+                      kind="filter"
+                      title="Tidak ada keranjang yang cocok"
+                      desc="Tidak ada keranjang pada tab dan kata kunci ini."
+                      action={{
+                        label: "Hapus filter",
+                        onClick: () => {
+                          setTab("semua");
+                          setQuery("");
+                        },
+                      }}
+                    />
+                  )}
                 </TableCell>
               </TableRow>
             )}
