@@ -1,72 +1,198 @@
 ---
+import { Banknote, Languages, QrCode, Truck } from "lucide-react";
+
 interface Props {
   trialDays: number;
 }
 
 const { trialDays } = Astro.props;
+
+const localCapabilities = [
+  {
+    icon: Languages,
+    title: "Bahasa Indonesia",
+    description: "Dashboard Seller dan tampilan toko menggunakan Bahasa Indonesia.",
+  },
+  {
+    icon: Banknote,
+    title: "Transaksi dalam rupiah",
+    description: "Harga dan total pesanan ditampilkan dalam rupiah.",
+  },
+  {
+    icon: QrCode,
+    title: "Pembayaran lokal",
+    description: "QRIS, transfer bank, dan COD tersedia saat checkout.",
+  },
+  {
+    icon: Truck,
+    title: "Pengiriman dalam negeri",
+    description: "Proses pengiriman mengikuti detail setiap pesanan.",
+  },
+] as const;
 ---
 
-<section class="trust-strip" aria-label="Dukungan operasional TokoΦ">
-  <p class="trust-intro">Gratis {trialDays} hari untuk mulai</p>
+<section class="trust-band" aria-labelledby="trust-title">
+  <header class="trust-lead">
+    <p class="trust-kicker">Dibangun untuk Indonesia</p>
+    <h2 id="trust-title">Coba Tokophi gratis selama {trialDays} hari.</h2>
+    <p class="trust-summary">
+      Kelola toko dengan bahasa, mata uang, metode pembayaran, dan pengiriman yang sesuai untuk
+      Indonesia.
+    </p>
+  </header>
 
-  <ul class="trust-list">
-    <li>Bahasa Indonesia</li>
-    <li>Transaksi dalam rupiah</li>
-    <li>QRIS, transfer bank, dan COD</li>
-    <li>Pengiriman dalam negeri</li>
+  <ul class="trust-list" aria-label="Dukungan operasional lokal">
+    {
+      localCapabilities.map(({ icon: Icon, title, description }) => (
+        <li>
+          <span class="trust-icon" aria-hidden="true">
+            <Icon size={19} strokeWidth={1.7} />
+          </span>
+          <div>
+            <h3>{title}</h3>
+            <p>{description}</p>
+          </div>
+        </li>
+      ))
+    }
   </ul>
 </section>
 
 <style>
-  .trust-strip {
+  .trust-band {
     display: grid;
-    gap: 1rem;
-    padding-block: clamp(1.25rem, 3vw, 1.75rem);
-    border-block: 1px solid var(--color-line);
+    grid-template-columns: minmax(15rem, 0.78fr) minmax(0, 1.62fr);
+    overflow: hidden;
+    border: 1px solid var(--color-line);
+    border-radius: 1rem;
+    background: var(--color-surface);
+    box-shadow: 0 18px 48px -42px rgba(20, 21, 42, 0.42);
   }
 
-  .trust-intro {
-    max-width: 17rem;
+  .trust-lead {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(1.5rem, 3vw, 2.4rem);
+    background:
+      linear-gradient(145deg, transparent 42%, var(--color-primary-soft)),
+      var(--color-surface);
+  }
+
+  .trust-kicker {
+    color: var(--color-primary-ink);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .trust-lead h2 {
+    max-width: 16ch;
+    margin-top: 0.8rem;
     color: var(--color-ink);
-    font-size: 0.875rem;
+    font-family: var(--font-serif);
+    font-size: clamp(1.45rem, 1.18rem + 0.8vw, 2rem);
     font-weight: 600;
-    line-height: 1.5;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+
+  .trust-summary {
+    max-width: 30rem;
+    margin-top: 0.85rem;
+    color: var(--color-muted);
+    font-size: 0.875rem;
+    line-height: 1.65;
+    text-wrap: pretty;
   }
 
   .trust-list {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem 1.25rem;
     margin: 0;
     padding: 0;
+    border-left: 1px solid var(--color-line);
     list-style: none;
   }
 
   .trust-list li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-content: center;
+    gap: 0.85rem;
     min-width: 0;
-    padding-left: 0.75rem;
-    border-left: 1px solid var(--color-hairline);
+    padding: clamp(1.25rem, 2.4vw, 1.8rem);
+  }
+
+  .trust-list li:nth-child(odd) {
+    border-right: 1px solid var(--color-line);
+  }
+
+  .trust-list li:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .trust-icon {
+    display: inline-flex;
+    width: 2.25rem;
+    height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.65rem;
+    background: var(--color-primary-soft);
+    color: var(--color-primary-ink);
+  }
+
+  .trust-list h3 {
     color: var(--color-ink);
     font-size: 0.875rem;
-    font-weight: 550;
-    line-height: 1.45;
+    font-weight: 650;
+    line-height: 1.35;
+    text-wrap: balance;
   }
 
-  @media (min-width: 56rem) {
-    .trust-strip {
-      grid-template-columns: minmax(12rem, 0.75fr) minmax(0, 2.25fr);
-      align-items: center;
-      gap: 2rem;
+  .trust-list p {
+    max-width: 25rem;
+    margin-top: 0.35rem;
+    color: var(--color-muted);
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+
+  @media (max-width: 880px) {
+    .trust-band {
+      grid-template-columns: 1fr;
+    }
+
+    .trust-lead h2 {
+      max-width: 22ch;
     }
 
     .trust-list {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      border-top: 1px solid var(--color-line);
+      border-left: 0;
     }
   }
 
-  @media (max-width: 34rem) {
+  @media (max-width: 560px) {
     .trust-list {
       grid-template-columns: 1fr;
+    }
+
+    .trust-list li,
+    .trust-list li:nth-child(odd),
+    .trust-list li:nth-child(-n + 2) {
+      border-right: 0;
+      border-bottom: 1px solid var(--color-line);
+    }
+
+    .trust-list li:last-child {
+      border-bottom: 0;
     }
   }
 </style>
