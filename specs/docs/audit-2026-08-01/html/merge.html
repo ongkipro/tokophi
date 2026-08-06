@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Merge plan — TokoΦ audit 2026-08-01</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'media',
+  theme: { extend: {
+    fontFamily: {
+      sans: ['ui-sans-serif','system-ui','-apple-system','Segoe UI','Roboto','Helvetica Neue','Arial','sans-serif'],
+      mono: ['ui-monospace','SFMono-Regular','Menlo','Consolas','Liberation Mono','monospace']
+    }
+  }}
+};
+</script>
+<style>
+  :root { color-scheme: light dark; }
+  body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  [id] { scroll-margin-top: 5rem; }
+  code { overflow-wrap: anywhere; }
+  pre code { overflow-wrap: normal; }
+  .mermaid { display: flex; justify-content: center; min-height: 2rem; }
+  .mermaid svg { max-width: 100%; height: auto; }
+  .diagram { overflow-x: auto; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 font-sans antialiased">
+
+<!-- ============ NAV ============ -->
+<header class="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/90 backdrop-blur">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6">
+    <div class="flex h-14 items-center gap-3">
+      <a href="index.html" class="shrink-0 font-semibold tracking-tight text-slate-900 dark:text-white">TokoΦ<span class="ml-2 font-mono text-[10px] uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">audit</span></a>
+      <span class="hidden lg:inline font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">2026-08-01 · 86e3ec3</span>
+      <nav class="ml-auto flex items-center gap-0.5 overflow-x-auto text-sm">
+        <a href="index.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Overview</a>
+        <a href="errors.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Errors</a>
+        <a href="architecture.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Architecture</a>
+        <a href="streams.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Streams</a>
+        <a href="decisions.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">Decisions</a>
+        <a href="merge.html" class="whitespace-nowrap rounded-md px-2.5 py-1.5 font-medium bg-indigo-600 text-white">Merge</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-6xl px-4 sm:px-6">
+
+<section class="border-b border-slate-200 py-10 dark:border-slate-800 sm:py-14">
+  <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400">Merge plan · six change sets, all uncommitted, all branched from 86e3ec3</p>
+  <h1 class="mt-3 text-4xl font-semibold tracking-tight text-slate-900 dark:text-white">The order is a safety property, not a preference</h1>
+  <p class="mt-4 max-w-3xl text-lg text-slate-600 dark:text-slate-400">The six compose — but not in any order. There is exactly <strong class="text-slate-800 dark:text-slate-200">one</strong> real merge conflict in the whole set, and it has a <strong class="text-slate-800 dark:text-slate-200">required direction</strong>: <code class="font-mono">wt-sec</code> must land before <code class="font-mono">wt-fix2</code>, or the person resolving it is one careless click away from re-introducing a published owner password.</p>
+</section>
+
+<!-- ORDER -->
+<section id="order" class="py-12">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Recommended order</h2>
+  <div class="diagram mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+<pre class="mermaid">
+flowchart LR
+  P["1 - wt-perf&lt;br/&gt;smallest surface&lt;br/&gt;inherits nothing"] --&gt; S["2 - wt-seo&lt;br/&gt;largest storefront change&lt;br/&gt;validated on top of perf"]
+  S --&gt; SEC["3 - wt-sec&lt;br/&gt;lands the guard&lt;br/&gt;no-fixed-password.test.ts"]
+  SEC ==&gt;|"REQUIRED: sec BEFORE fix2"| F["4 - wt-fix2&lt;br/&gt;resolve actions.ts here&lt;br/&gt;drop your hunk for that file"]
+  F --&gt; DB["5 - wt-db&lt;br/&gt;docs only"]
+  DB --&gt;|"db first: order-actions owns N9"| OA["6 - wt-order-actions&lt;br/&gt;stock + money write paths&lt;br/&gt;deploys last and alone"]
+</pre>
+  </div>
+  <p class="mt-4 text-slate-600 dark:text-slate-400">The rest is risk ordering: perf is the smallest surface and inherits nothing; seo is the largest storefront change and was validated on top of perf; order-actions is the only set touching stock and money write paths, so it deploys last and alone, <strong>making a rollback unambiguous</strong>.</p>
+  <p class="mt-3 rounded-lg border-l-4 border-amber-500 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><strong>Merges are serialised here</strong> — each triggers a Coolify build — so merge one, watch the deploy land, then release the next. <strong>Do not</strong> re-apply saved plain diffs onto a moved base; that is the one path where <code class="font-mono">NEXT.md</code> collides unnecessarily.</p>
+</section>
+
+<!-- WHY -->
+<section id="why-order" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Why <code class="font-mono text-[0.85em]">wt-sec</code> must precede <code class="font-mono text-[0.85em]">wt-fix2</code></h2>
+  <p class="mt-2 max-w-3xl text-slate-600 dark:text-slate-400">Both orders produce exactly one conflict, in the same file, with the same correct resolution. <strong>They are not equally safe.</strong></p>
+  <div class="mt-6 grid gap-4 lg:grid-cols-2">
+    <div class="rounded-xl border-2 border-emerald-400 bg-white p-5 dark:border-emerald-700 dark:bg-slate-900">
+      <div class="flex items-center gap-2"><span class="rounded bg-emerald-600 px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-wider text-white">✓ sec first — correct</span></div>
+      <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">fix2's author opens the conflict and finds their entire <code class="font-mono">actions.ts</code> change <strong>already present</strong> — the four timestamp edits merged silently because they are byte-identical. The resolution is <em>“drop my hunk for this file”</em>, which is obvious and hard to get wrong.</p>
+      <p class="mt-2 text-sm font-medium text-emerald-800 dark:text-emerald-300">And <code class="font-mono">no-fixed-password.test.ts</code> is already in the tree, so a wrong resolution fails immediately.</p>
+    </div>
+    <div class="rounded-xl border-2 border-rose-400 bg-white p-5 dark:border-rose-800 dark:bg-slate-900">
+      <div class="flex items-center gap-2"><span class="rounded bg-rose-600 px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-wider text-white">✗ fix2 first — dangerous</span></div>
+      <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">sec's author must <strong>delete</strong> <code class="font-mono">DEV_PASSWORD</code> and a comment block a colleague wrote 20 minutes earlier — which looks like reverting someone's work — and the guard that would catch a half-resolution is arriving <em>in the same PR being resolved</em>.</p>
+      <p class="mt-2 text-sm font-medium text-rose-800 dark:text-rose-300">A “keep both, take theirs for the comment” resolution <strong>silently restores <code class="font-mono">hashPassword(DEV_PASSWORD)</code></strong>. That is the published-owner-password bug, back.</p>
+    </div>
+  </div>
+  <p class="mt-4 text-sm text-slate-600 dark:text-slate-400"><strong class="text-slate-800 dark:text-slate-200"><code class="font-mono">wt-db</code> before <code class="font-mono">wt-order-actions</code></strong> is the second positional constraint, and a softer one: their <code class="font-mono">NEXT.md</code> hunks share context lines (N8's body is order-actions' leading context for N9). Three-way merges clean either way, but the second to land inherits the N8/N9 adjacency — and order-actions' author owns N9, so they can also fix the dangling “the count above was seven” sentence, which no longer has a count above it once the heading is rewritten.</p>
+</section>
+
+<!-- COLLISIONS -->
+<section id="collisions" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">The collision matrix</h2>
+  <p class="mt-2 text-slate-600 dark:text-slate-400"><strong>Zero collisions among the original four.</strong> Two appeared once the fix worktrees were added. Confirmed by set intersection: <code class="font-mono">wt-fix2</code>'s only overlaps with any other worktree are those two source files; every other file in all six sets has exactly one author.</p>
+  <div class="mt-5 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 text-left dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">File</th><th class="px-3 py-2 font-medium">Writers</th><th class="px-3 py-2 font-medium">Result</th></tr></thead>
+      <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr class="bg-rose-50 dark:bg-rose-950/25"><td class="px-3 py-2 font-mono text-xs">apps/super-admin/lib/actions.ts</td><td class="px-3 py-2"><strong>wt-sec ∩ wt-fix2</strong></td><td class="px-3 py-2"><span class="font-semibold text-rose-700 dark:text-rose-400">🔴 REAL CONFLICT — 2 hunks.</span> Has a required merge direction.</td></tr>
+        <tr class="bg-amber-50 dark:bg-amber-950/20"><td class="px-3 py-2 font-mono text-xs">apps/admin/lib/data/orders.ts</td><td class="px-3 py-2"><strong>wt-order-actions ∩ wt-fix2</strong></td><td class="px-3 py-2"><span class="font-semibold text-amber-700 dark:text-amber-400">⚠ Not flagged in the brief.</span> Merges <strong>clean</strong> 3-way; merged result verified correct.</td></tr>
+        <tr><td class="px-3 py-2 font-mono text-xs">AGENTS.md</td><td class="px-3 py-2">order-actions, seo, perf, sec — 4 writers</td><td class="px-3 py-2">clean 3-way, 0 conflicts (regions 163, 303, 313, 359, 372, 446 — all disjoint)</td></tr>
+        <tr><td class="px-3 py-2 font-mono text-xs">specs/docs/tasks/NEXT.md</td><td class="px-3 py-2">order-actions, seo, perf, db — 4 writers</td><td class="px-3 py-2">clean 3-way, 0 conflicts. Strict <code class="font-mono">git apply</code> of a <em>plain</em> diff fails between db and order-actions (shared context lines) — the PR path is unaffected.</td></tr>
+        <tr><td class="px-3 py-2 font-mono text-xs">CHANGELOG.md</td><td class="px-3 py-2">seo only</td><td class="px-3 py-2">—</td></tr>
+        <tr><td class="px-3 py-2 font-mono text-xs">specs/docs/{BACKLOG,CODE_MAP,REQUIREMENTS,STATUS,UI_INVENTORY}.md</td><td class="px-3 py-2">fix2 only</td><td class="px-3 py-2">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 2a -->
+  <div class="mt-8 rounded-xl border-2 border-rose-300 bg-white p-5 dark:border-rose-900 dark:bg-slate-900">
+    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Collision 1 · <code class="font-mono text-[0.9em]">apps/super-admin/lib/actions.ts</code></h3>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><code class="font-mono">git merge-file</code> (the same machinery <code class="font-mono">git merge</code> uses) → <strong>rc=2, two conflict hunks</strong>.</p>
+    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400"><strong class="text-slate-800 dark:text-slate-200">Hunk A</strong> — the constants block. wt-sec <em>deletes</em> <code class="font-mono">DEV_PASSWORD</code>, <code class="font-mono">ANCHOR</code> and the local <code class="font-mono">hashPassword</code> (moved to <code class="font-mono">lib/temp-password.ts</code>). wt-fix2 <em>keeps</em> <code class="font-mono">DEV_PASSWORD</code> and the local <code class="font-mono">hashPassword</code>, and <em>replaces</em> the <code class="font-mono">ANCHOR</code> line with an 8-line comment.</p>
+    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400"><strong class="text-slate-800 dark:text-slate-200">Hunk B</strong> — inside the transaction:</p>
+    <pre class="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-[13px] leading-relaxed text-slate-100 dark:bg-black"><code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; wt-sec
+    ...passwordHash: hashPassword(pw) }).returning();
+    const trialEndsAt = new Date(Date.now() + BILLING.TRIAL_DAYS * 86_400_000);
+=======
+    ...passwordHash: hashPassword(DEV_PASSWORD) }).returning();
+    const trialEndsAt = new Date(Date.now() + 3 * 86_400_000);
+&gt;&gt;&gt;&gt;&gt;&gt;&gt; wt-fix2</code></pre>
+    <div class="mt-4 rounded-lg bg-slate-100 p-4 text-sm dark:bg-slate-800/60">
+      <p class="font-semibold text-slate-900 dark:text-white">What did NOT conflict — and this is the important part</p>
+      <p class="mt-1 text-slate-700 dark:text-slate-300">All four timestamp edits — dropping <code class="font-mono">createdAt: ANCHOR</code> on <code class="font-mono">accounts</code>, dropping it on <code class="font-mono">stores</code>, <code class="font-mono">acceptedAt: ANCHOR → new Date()</code>, dropping <code class="font-mono">updatedAt: ANCHOR</code> on <code class="font-mono">store_stats</code> — are <strong>byte-identical in both worktrees</strong>, so git merges them silently. <strong>The two agents independently wrote the same fix, character for character.</strong></p>
+    </div>
+    <p class="mt-4 text-sm text-slate-600 dark:text-slate-400"><strong class="text-slate-900 dark:text-white">Which version wins: <code class="font-mono">wt-sec</code>, wholesale.</strong> It is a strict functional superset for this file. Taking wt-sec's <code class="font-mono">actions.ts</code> verbatim loses <strong>nothing functional</strong> from wt-fix2; it loses only wt-fix2's comment prose, which contains one fact wt-sec's does not — that an anchored store drops out of <code class="font-mono">newSignups30d</code>, the platform's own new-signup count. <em>Graft that one sentence in if you want it; do not graft the code.</em></p>
+    <ul class="mt-3 space-y-1.5 text-sm text-slate-600 dark:text-slate-400">
+      <li>✅ <strong>One clock.</strong> <code class="font-mono">trialEndsAt</code> from <code class="font-mono">Date.now()</code>, <code class="font-mono">acceptedAt: new Date()</code>, and <strong>no</strong> <code class="font-mono">createdAt</code>/<code class="font-mono">updatedAt</code> overrides — those three columns are <code class="font-mono">defaultNow()</code> in the schema.</li>
+      <li>✅ <strong>Trial length unchanged.</strong> <code class="font-mono">BILLING.TRIAL_DAYS</code> is <strong>3</strong>, so the expression is equivalent to the old <code class="font-mono">3 * 86_400_000</code>.</li>
+      <li>✅ <strong>No half-applied mixture.</strong> <code class="font-mono">grep ANCHOR|DEV_PASSWORD|new Date("</code> over the merged file returns only two hits, both inside comments.</li>
+      <li>✅ <code class="font-mono">tsc -p apps/super-admin</code> rc=0, lint clean, <code class="font-mono">no-fixed-password.test.ts</code> <strong>5/5</strong>.</li>
+    </ul>
+
+    <div class="mt-5 rounded-lg border-2 border-dashed border-rose-400 p-4 dark:border-rose-800">
+      <p class="font-mono text-[11px] uppercase tracking-widest text-rose-700 dark:text-rose-400">Negative control — the wrong resolution was actually tried</p>
+      <pre class="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-xs leading-relaxed text-slate-100 dark:bg-black"><code>✓ tempPassword() is random per call
+✓ a stored hash never verifies against a published password
+× every hashPassword() call in actions.ts hashes a freshly minted password
+    → expected 'pw: string' to be 'pw'
+× every action that mints a password hands it back to the operator
+    → createStore must return the minted password: expected '{ ok: boolean; storeId?: string; erro…'
+✓ no write in actions.ts is anchored to a frozen date
+Tests  2 failed | 3 passed (5)</code></pre>
+      <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">Restoring the correct resolution: <strong>5/5 pass</strong>. So the guard exists — <strong>but only once <code class="font-mono">wt-sec</code> has landed.</strong> That is what makes the merge order a safety property.</p>
+    </div>
+  </div>
+
+  <!-- 2b -->
+  <div class="mt-6 rounded-xl border-2 border-amber-300 bg-white p-5 dark:border-amber-800 dark:bg-slate-900">
+    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Collision 2 · <code class="font-mono text-[0.9em]">apps/admin/lib/data/orders.ts</code> — clean, and that is luck</h3>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Both edit the top-of-file region: wt-order-actions adds <code class="font-mono">import { latestPaymentFirst }</code>, wt-fix2 replaces <code class="font-mono">const TODAY = new Date("2026-07-02…")</code> with a comment. <code class="font-mono">git merge-file</code> → <strong>rc=0, zero conflicts</strong>. Merged result verified line by line:</p>
+    <pre class="mt-3 overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-xs leading-relaxed text-slate-100 dark:bg-black"><code>  7: import { latestPaymentFirst } from "@/lib/data/order-payment";
+  9: // ⚠️ THE REAL CLOCK for "x menit lalu" (both call sites below)…
+ 53:     minutesAgo: Math.round((Date.now() - r.placedAt.getTime()) / 60_000),
+241:         order by ${latestPaymentFirst()} limit 1)  as "paymentMethod"
+325:          minutesAgo: Math.round((Date.now() - new Date(r.placedAt).getTime()) / 60_000),</code></pre>
+    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400"><code class="font-mono">TODAY</code> is gone, both call sites are on the real clock, and the payment ordering fragment is present. No dangling reference; it compiles in the six-way tree.</p>
+    <p class="mt-2 text-sm font-medium text-amber-800 dark:text-amber-300"><strong>It was invisible to both its authors.</strong> wt-fix2 replaced the line immediately below wt-order-actions' new import — one line either way and this would have been a second conflict.</p>
+  </div>
+</section>
+
+<!-- COMPOSITION -->
+<section id="composition" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Composition verified — the six-way tree</h2>
+  <p class="mt-2 max-w-3xl text-slate-600 dark:text-slate-400">A scratch worktree built from <code class="font-mono">origin/main</code> with all six diffs applied builds, type-checks both Next apps, passes <strong>180 tests</strong>, lints identically to baseline, and serves correct output. Storefront output is <strong>byte-identical</strong> between the four-way and six-way trees, as it should be — neither fix worktree touches the storefront.</p>
+  <div class="mt-5 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 text-left dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">Measure</th><th class="px-3 py-2 font-medium">baseline</th><th class="px-3 py-2 font-medium">four-way</th><th class="px-3 py-2 font-medium">six-way</th></tr></thead>
+      <tbody class="divide-y divide-slate-200 bg-white tabular-nums dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr><td class="px-3 py-2">homepage <code class="font-mono">&lt;h1&gt;</code> (with hero)</td><td class="px-3 py-2">3</td><td class="px-3 py-2">1</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">1 ✅</td></tr>
+        <tr><td class="px-3 py-2">homepage <code class="font-mono">&lt;h1&gt;</code> (no template)</td><td class="px-3 py-2">1</td><td class="px-3 py-2">1</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">1 ✅</td></tr>
+        <tr><td class="px-3 py-2">homepage DOM elements</td><td class="px-3 py-2">1023</td><td class="px-3 py-2">915</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">915 ✅</td></tr>
+        <tr><td class="px-3 py-2">homepage HTML bytes</td><td class="px-3 py-2">213 192</td><td class="px-3 py-2">212 202</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">212 202 ✅</td></tr>
+        <tr><td class="px-3 py-2"><code class="font-mono">main &gt; *</code> children</td><td class="px-3 py-2">11</td><td class="px-3 py-2">11</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">11 ✅</td></tr>
+        <tr><td class="px-3 py-2">sitemap <code class="font-mono">&lt;lastmod&gt;</code> / <code class="font-mono">&lt;url&gt;</code></td><td class="px-3 py-2">15/55</td><td class="px-3 py-2">21/55</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">21/55 ✅</td></tr>
+        <tr><td class="px-3 py-2">PDP thumbnail <code class="font-mono">sizes</code></td><td class="px-3 py-2">none</td><td class="px-3 py-2">derived</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">identical ✅</td></tr>
+        <tr><td class="px-3 py-2">console errors</td><td class="px-3 py-2">2 (pre-existing)</td><td class="px-3 py-2">2</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">2 ✅</td></tr>
+        <tr><td class="px-3 py-2"><code class="font-mono">tsc -p apps/admin</code> / <code class="font-mono">apps/super-admin</code></td><td class="px-3 py-2">—</td><td class="px-3 py-2">rc 0 / —</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">rc 0 / rc 0 ✅</td></tr>
+        <tr><td class="px-3 py-2"><code class="font-mono">eslint</code> apps/admin</td><td class="px-3 py-2">42 (19E/23W)</td><td class="px-3 py-2">—</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">42 (19E/23W) ✅</td></tr>
+        <tr><td class="px-3 py-2"><code class="font-mono">lint -w @tokophi/super-admin</code></td><td class="px-3 py-2">clean</td><td class="px-3 py-2">—</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">clean ✅</td></tr>
+        <tr><td class="px-3 py-2"><code class="font-mono">astro check</code> storefront</td><td class="px-3 py-2">—</td><td class="px-3 py-2">0 errors</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">0 errors ✅</td></tr>
+        <tr><td class="px-3 py-2"><code class="font-mono">vitest run</code></td><td class="px-3 py-2">17f / 167t <sup class="text-indigo-600 dark:text-indigo-400">†</sup></td><td class="px-3 py-2">19f / 171t</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">21f / 180t ✅</td></tr>
+        <tr><td class="px-3 py-2"><code class="font-mono">check-h1-floor</code> / <code class="font-mono">check-hero-srcset</code></td><td class="px-3 py-2">n/a / PASS</td><td class="px-3 py-2">PASS / PASS</td><td class="px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-400">PASS / PASS ✅</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-3 text-sm text-slate-500 dark:text-slate-400"><sup class="text-indigo-600 dark:text-indigo-400">†</sup> This table reproduces the cross-validator's own baseline column. <code class="font-mono">FINDINGS-SOURCE.md</code> §1 records the clean baseline as <strong>16 files / 145 tests</strong> instead; <strong>the difference is exactly the skipped <code class="font-mono">ledger-credit.test.ts</code></strong> (<a class="underline decoration-dotted" href="errors.html#e11">E11</a>) — 22 money tests that pass when <code class="font-mono">TEST_DATABASE_URL</code> is wired and are off by default. Both are stated as measured rather than merged into one number.</p>
+  <p class="mt-4 text-slate-600 dark:text-slate-400">The interaction originally worried about — the h1 floor counts <code class="font-mono">&lt;h1&gt;</code>s while the Stars rewrite changes element counts — <strong>does not exist</strong>. <code class="font-mono">Stars.astro</code> emits no headings; the floor inspects the saved template's section list, not the rendered DOM. Both effects are present at full strength (915 elements <em>and</em> 1 <code class="font-mono">&lt;h1&gt;</code>), and 212 202 B = 215 142 (seo) − 2 940 (the exact perf saving). <strong>Additive.</strong></p>
+</section>
+
+<!-- RE-RUN -->
+<section id="rerun" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">What to re-run after each merge</h2>
+  <div class="mt-5 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-100 text-left dark:bg-slate-900"><tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><th class="px-3 py-2 font-medium">After</th><th class="px-3 py-2 font-medium">Run</th><th class="px-3 py-2 font-medium">Expect</th></tr></thead>
+      <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr><td class="px-3 py-2 font-semibold whitespace-nowrap">1 · wt-perf</td><td class="px-3 py-2 font-mono text-xs">npx astro build --root apps/storefront; serve; node apps/storefront/scripts/check-hero-srcset.mjs</td><td class="px-3 py-2">build rc=0, PASS, homepage DOM <strong>915</strong></td></tr>
+        <tr><td class="px-3 py-2 font-semibold whitespace-nowrap">2 · wt-seo</td><td class="px-3 py-2 font-mono text-xs">storefront build + serve; check-h1-floor.mjs; check-hero-srcset.mjs; npx tsc --noEmit -p apps/admin/tsconfig.json</td><td class="px-3 py-2">h1-floor <strong>4/4 PASS</strong>, hero PASS, tsc rc=0, sitemap <strong>21/55</strong></td></tr>
+        <tr><td class="px-3 py-2 font-semibold whitespace-nowrap">3 · wt-sec</td><td class="px-3 py-2 font-mono text-xs">npm run lint -w @tokophi/super-admin; npx tsc --noEmit -p apps/super-admin/tsconfig.json; npx vitest run apps/super-admin; npm run build -w @tokophi/super-admin</td><td class="px-3 py-2">lint clean, rc=0, <strong>8 tests</strong> pass, build ok</td></tr>
+        <tr class="bg-rose-50 dark:bg-rose-950/25"><td class="px-3 py-2 font-semibold whitespace-nowrap">4 · wt-fix2</td><td class="px-3 py-2"><strong class="text-rose-800 dark:text-rose-300">Resolve <code class="font-mono">apps/super-admin/lib/actions.ts</code> by keeping the post-wt-sec version verbatim</strong> (drop fix2's hunk for that file); then <code class="font-mono text-xs">npx vitest run apps/super-admin/lib/no-fixed-password.test.ts</code> ← <strong>the guard</strong>; <code class="font-mono text-xs">npx tsc --noEmit -p apps/admin/tsconfig.json</code>; <code class="font-mono text-xs">cd apps/admin &amp;&amp; npx eslint</code>; <code class="font-mono text-xs">npm run build -w @tokophi/admin</code></td><td class="px-3 py-2">guard <strong>5/5</strong>, tsc rc=0, eslint <strong>42 problems (19 errors, 23 warnings)</strong> — no more, no fewer; build ok</td></tr>
+        <tr><td class="px-3 py-2 font-semibold whitespace-nowrap">5 · wt-db</td><td class="px-3 py-2">nothing — docs only. Optionally re-read <code class="font-mono">NEXT.md</code> N8/N9 for the dangling sentence.</td><td class="px-3 py-2">—</td></tr>
+        <tr><td class="px-3 py-2 font-semibold whitespace-nowrap">6 · wt-order-actions</td><td class="px-3 py-2 font-mono text-xs">npx tsc --noEmit -p apps/admin/tsconfig.json; TEST_DATABASE_URL=…/tokophi_test npx vitest run; npm run build -w @tokophi/admin</td><td class="px-3 py-2">rc=0, <strong>21 files / 180 tests</strong>, build ok</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- PROBLEMS -->
+<section id="problems" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Three problems found — none of them in the product code</h2>
+  <div class="mt-6 grid gap-4 lg:grid-cols-3">
+    <div class="rounded-xl border-2 border-amber-300 bg-white p-5 dark:border-amber-800 dark:bg-slate-900">
+      <span class="font-mono text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-400">1 · a coin-flip check</span>
+      <h3 class="mt-1 font-semibold text-slate-900 dark:text-white"><code class="font-mono text-[0.9em]">check-pdp-srcset.mjs</code> is ~50% flaky</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Four consecutive runs against the same build, unchanged DB: <strong>PASS, PASS, FAIL, FAIL</strong>. Same 2-of-4 split on the six-way tree; <strong>not</strong> caused by wt-perf.</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Cause: thumbnail #1 and the main gallery image are the <em>same</em> URL with the <em>same</em> srcset. The main image (380 px box) legitimately fetches the 800 w candidate; whether Chromium then reuses that cached file for the 66 px thumbnail is a timing race. When it does, the check reads <code class="font-mono">currentSrc = 800w</code> and calls it a 6.1× regression — <strong>but zero extra bytes were transferred; it is a cache hit.</strong></p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">The structural assertion (every thumbnail has <code class="font-mono">srcset</code> + <code class="font-mono">sizes</code>) passed <strong>4/4 every time</strong> and is sound. Fix: exempt an <code class="font-mono">&lt;img&gt;</code> whose <code class="font-mono">currentSrc</code> was already requested by another element, or assert on transferred bytes.</p>
+    </div>
+    <div class="rounded-xl border-2 border-amber-300 bg-white p-5 dark:border-amber-800 dark:bg-slate-900">
+      <span class="font-mono text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-400">2 · writes to shared state</span>
+      <h3 class="mt-1 font-semibold text-slate-900 dark:text-white"><code class="font-mono text-[0.9em]">check-h1-floor.mjs</code> writes to the shared dev DB</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">It inserts a <code class="font-mono">page_templates</code> row for a store that has none and deletes it in <code class="font-mono">finally</code> at a <strong>fixed UUID</strong>. It cleaned up correctly here — count 2 before, 2 after, no leftovers.</p>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">But the fixed id means two agents running it concurrently delete each other's row mid-poll, <code class="font-mono">finally</code> does not run on <code class="font-mono">SIGKILL</code>, and <strong>while it runs a real store has a homepage it never built</strong>, visible to any concurrent reader. Consider gating it behind an explicit env var.</p>
+    </div>
+    <div class="rounded-xl border-2 border-rose-300 bg-white p-5 dark:border-rose-900 dark:bg-slate-900">
+      <span class="font-mono text-[11px] uppercase tracking-widest text-rose-700 dark:text-rose-400">3 · the order itself</span>
+      <h3 class="mt-1 font-semibold text-slate-900 dark:text-white">An unsafe merge order</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Covered above. <strong><code class="font-mono">wt-sec</code> → <code class="font-mono">wt-fix2</code> is mandatory</strong>, and it is the only ordering constraint with a security consequence.</p>
+    </div>
+  </div>
+
+  <div class="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+    <h3 class="font-semibold text-slate-900 dark:text-white">One convention worth deciding deliberately</h3>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400"><strong>Only wt-seo updated <code class="font-mono">CHANGELOG.md</code>.</strong> wt-perf ships a rendering change, wt-order-actions changes stock and payment reads, wt-sec closes a credential vulnerability, wt-fix2 changes twelve date computations — none added an entry, while <code class="font-mono">AGENTS.md:68</code> says to record a contract-affecting change there. Because only one agent touched the file there is no merge risk today; <strong>had all five followed the convention it would have been a five-writer collision.</strong></p>
+  </div>
+</section>
+
+<!-- BOTTOM LINE -->
+<section id="bottom-line" class="border-t border-slate-200 py-12 dark:border-slate-800">
+  <h2 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Bottom line</h2>
+  <div class="mt-5 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="min-w-full text-sm">
+      <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-900/40">
+        <tr><td class="px-3 py-2 w-56 font-medium text-slate-700 dark:text-slate-300">Source-file collisions</td><td class="px-3 py-2"><strong>2</strong> — <code class="font-mono">super-admin/lib/actions.ts</code> (real conflict, directional) · <code class="font-mono">admin/lib/data/orders.ts</code> (clean, was unflagged)</td></tr>
+        <tr><td class="px-3 py-2 font-medium text-slate-700 dark:text-slate-300">Doc collisions</td><td class="px-3 py-2"><code class="font-mono">AGENTS.md</code> (4 writers) + <code class="font-mono">NEXT.md</code> (4 writers), both clean 3-way; one cosmetic nit to tidy</td></tr>
+        <tr><td class="px-3 py-2 font-medium text-slate-700 dark:text-slate-300">Claims verified</td><td class="px-3 py-2"><strong>31</strong></td></tr>
+        <tr><td class="px-3 py-2 font-medium text-slate-700 dark:text-slate-300">Claims refuted</td><td class="px-3 py-2"><strong>1</strong> — wt-perf's “393 … 312 of them” denominators (phrasing; headline numbers exact). One more, wt-fix2's “byte-identical lint”, is loose wording over a true substantive claim.</td></tr>
+        <tr class="bg-amber-50 dark:bg-amber-950/20"><td class="px-3 py-2 font-medium text-slate-700 dark:text-slate-300">Claims unverifiable here</td><td class="px-3 py-2"><strong>6</strong> — <span class="font-mono text-[11px] font-bold uppercase text-amber-700 dark:text-amber-400">unverified</span> all production measurements plus two supporting sweeps</td></tr>
+        <tr><td class="px-3 py-2 font-medium text-slate-700 dark:text-slate-300">Compose?</td><td class="px-3 py-2"><strong>Yes</strong> — one hand-resolution, then builds, both apps type-check, 180 tests, lint unchanged, correct served output</td></tr>
+        <tr><td class="px-3 py-2 font-medium text-slate-700 dark:text-slate-300">Blockers</td><td class="px-3 py-2"><strong>None in product code.</strong> <code class="font-mono">check-pdp-srcset.mjs</code> must be fixed before it is trusted; <code class="font-mono">check-h1-floor.mjs</code> needs a guard rail; the <strong>wt-sec → wt-fix2</strong> order is mandatory.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-4 max-w-3xl text-slate-600 dark:text-slate-400">Nothing in the six change sets was found to be broken, substantively overstated, or dangerous to merge. The only outright overclaim is a mis-stated ratio in a comment. The three real problems are a flaky check, a check that writes to shared state, and a merge ordering — <strong>none of them in the product code, and all three cheap to address.</strong></p>
+</section>
+
+</main>
+
+<footer class="border-t border-slate-200 py-8 dark:border-slate-800">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6">
+    <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Sources</p>
+    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Merge order and the collision analysis from <code class="font-mono">FINDINGS-SOURCE.md</code> §5 and <code class="font-mono">CROSS-VALIDATION.md</code> §2, §4–§7. The order diagram is a rendering of the stated sequence; every figure is copied verbatim.</p>
+  </div>
+</footer>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({ startOnLoad: true, theme: dark ? 'dark' : 'default', securityLevel: 'loose' });
+</script>
+
+</body>
+</html>
