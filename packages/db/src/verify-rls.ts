@@ -169,6 +169,10 @@ async function main() {
     "kelurahan", "accounts", "users", "stores",
     // Google Product Taxonomy (0072, ADR 0011): global reference data, same class as kiriminaja_areas.
     "product_taxonomy",
+    // cron_runs (0089): ONE row per sidecar job, keyed by `job` and upserted by api/cron/record-run.ts
+    // — a heartbeat for the platform's own schedulers, read only by super-admin. There is no tenant to
+    // scope it to: a cron loop runs across every store, so a `store_id` on it would have to be a lie.
+    "cron_runs",
   ];
   const noStoreId = await client<{ relname: string }[]>`
     SELECT c.relname FROM pg_class c
