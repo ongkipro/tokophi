@@ -243,6 +243,12 @@ services:
   # one. That guard is a check-then-act with no lock and no idempotency key, so it holds for SEQUENTIAL
   # re-runs and not for genuinely concurrent ones. A real fixed-clock scheduler + an idempotency key is
   # its own piece of work (DEPLOY.md → "Billing cron"); do not half-build one in this string.
+  #
+  # 🔔 `CRON_INTERVAL_SEC` IS DECLARED ONCE AND USED TWICE — by `sleep`, and as `?every=` on the URL.
+  # The endpoint stores it in `cron_runs` (migration 0091) and Super Admin → Analitik → Sistem derives
+  # the "overdue" threshold from it, so the alarm's cadence IS this loop's cadence and cannot drift
+  # from it. **Never inline the number back into the command**: two copies is how a panel keeps
+  # promising 15 minutes about a loop somebody changed to 5. See `app/api/cron/record-run.ts`.
   cron:
     image: alpine:3.20
     restart: unless-stopped
@@ -250,7 +256,8 @@ services:
       admin: { condition: service_healthy }
     environment:
       CRON_SECRET: ${CRON_SECRET:-}
-    command: ["sh", "-c", "while true; do echo \"[cron-billing] $$(date -Iseconds)\"; wget -qO- \"http://admin:3000/api/cron/billing?secret=$$CRON_SECRET\" || echo 'cron billing failed'; echo; sleep 86400; done"]
+      CRON_INTERVAL_SEC: 86400
+    command: ["sh", "-c", "while true; do echo \"[cron-billing] $$(date -Iseconds)\"; wget -qO- \"http://admin:3000/api/cron/billing?secret=$$CRON_SECRET&every=$$CRON_INTERVAL_SEC\" || echo 'cron billing failed'; echo; sleep $$CRON_INTERVAL_SEC; done"]
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1 || exit 1"]
       interval: 30s
@@ -275,11 +282,20 @@ services:
       admin: { condition: service_healthy }
     environment:
       CRON_SECRET: ${CRON_SECRET:-}
+      # 15 minutes — the interval reasoned about above. `sleep` and `?every=` read the SAME variable so
+      # the panel's threshold cannot drift from the loop; see the note on the `cron` service.
+      CRON_INTERVAL_SEC: 900
     # The response body goes to STDOUT, not /dev/null. It used to be discarded, which meant the run
     # summary the endpoint carefully builds — {scanned, advanced, awbFilled, problems, errors} — was
     # unobservable in production: nobody, human or machine, could tell a healthy sweep from one where
     # `awbFilled` had been 0 for a week. `docker logs cron-tracking` is now the record.
-    command: ["sh", "-c", "while true; do echo \"[cron-tracking] $$(date -Iseconds)\"; wget -qO- \"http://admin:3000/api/cron/tracking?secret=$$CRON_SECRET\" || echo 'cron tracking failed'; echo; sleep 900; done"]
+    #
+    # ⚠️ A LOG IS NOT AN ALARM. Nobody opens `docker logs` without already suspecting something, which
+    # is the whole reason `awbFilled` could sit at 0 for a week: the evidence existed and no one was
+    # looking at it. Every tick now also upserts `cron_runs` (0091) and Super Admin → Analitik → Sistem
+    # shows "terakhir jalan N menit lalu" in RED past 2 × this interval. Keep both — the log carries the
+    # detail, the row is what makes someone go and read it.
+    command: ["sh", "-c", "while true; do echo \"[cron-tracking] $$(date -Iseconds)\"; wget -qO- \"http://admin:3000/api/cron/tracking?secret=$$CRON_SECRET&every=$$CRON_INTERVAL_SEC\" || echo 'cron tracking failed'; echo; sleep $$CRON_INTERVAL_SEC; done"]
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1 || exit 1"]
       interval: 30s
@@ -303,7 +319,9 @@ services:
       admin: { condition: service_healthy }
     environment:
       CRON_SECRET: ${CRON_SECRET:-}
-    command: ["sh", "-c", "while true; do wget -qO- \"http://admin:3000/api/cron/tracking-events?secret=$$CRON_SECRET\" || echo 'cron tracking-events failed'; echo; sleep 60; done"]
+      # 60 seconds — the interval reasoned about above, read by BOTH `sleep` and `?every=`.
+      CRON_INTERVAL_SEC: 60
+    command: ["sh", "-c", "while true; do wget -qO- \"http://admin:3000/api/cron/tracking-events?secret=$$CRON_SECRET&every=$$CRON_INTERVAL_SEC\" || echo 'cron tracking-events failed'; echo; sleep $$CRON_INTERVAL_SEC; done"]
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1 || exit 1"]
       interval: 30s

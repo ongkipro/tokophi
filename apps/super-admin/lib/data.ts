@@ -367,8 +367,18 @@ export async function getConversion(): Promise<Conversion> {
  */
 export const kaEnvName = () => process.env.KIRIMINAJA_ENV ?? "sandbox";
 
+/**
+ * One compose cron sidecar's last tick, as recorded by `apps/admin/app/api/cron/record-run.ts`.
+ *
+ * `intervalSec` is the loop's OWN `sleep`, forwarded by the sidecar as `?every=`; the staleness
+ * threshold is derived from it (`analitik/cron-liveness.ts`) so the alarm's cadence cannot drift from
+ * the schedule it is watching. `null` = the caller did not report one, and the reader then refuses to
+ * judge rather than invent a number.
+ */
+export type CronRunRow = { job: string; lastRunAt: Date; intervalSec: number | null; ok: boolean; result: unknown };
+
 // Platform system + integration status.
-export type SystemStatus ={ kiriminaja: boolean; autolaris: boolean; kaEnv: string; stores: number; dbOk: boolean; region: string };
+export type SystemStatus ={ kiriminaja: boolean; autolaris: boolean; kaEnv: string; stores: number; dbOk: boolean; region: string; crons: CronRunRow[] };
 export async function getSystemStatus(): Promise<SystemStatus> {
   let stores = 0;
   let dbOk = true;
@@ -378,6 +388,23 @@ export async function getSystemStatus(): Promise<SystemStatus> {
   } catch {
     dbOk = false;
   }
+  // Cron liveness (0091). Its OWN try/catch: a container running ahead of the migration must not take
+  // out the integrations card beside it — a missing table means "nothing has reported", which is
+  // already the honest neutral state the reader renders for an absent row.
+  let crons: CronRunRow[] = [];
+  try {
+    crons = await db
+      .select({
+        job: schema.cronRuns.job,
+        lastRunAt: schema.cronRuns.lastRunAt,
+        intervalSec: schema.cronRuns.intervalSec,
+        ok: schema.cronRuns.ok,
+        result: schema.cronRuns.result,
+      })
+      .from(schema.cronRuns);
+  } catch (err) {
+    console.error("[super-admin] cron_runs unreadable", err);
+  }
   return {
     kiriminaja: kiriminajaConfigured(),
     autolaris: autolarisConfigured(),
@@ -385,6 +412,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
     stores,
     dbOk,
     region: process.env.DEPLOY_REGION ?? "lokal", // was hardcoded "Singapore" on a laptop
+    crons,
   };
 }
 
