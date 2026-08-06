@@ -1,5 +1,5 @@
 import { withTenant } from "./rls";
-import { db, schema, client } from "./client";
+import { schema, client } from "./client";
 import { eq } from "drizzle-orm";
 
 // Verifies the ACTUAL runtime path the admin now uses: every read/write goes through
@@ -26,7 +26,22 @@ async function count(storeId: string, table: "products" | "discounts", code?: st
 }
 
 async function main() {
-  const [store] = await db.select({ id: schema.stores.id, name: schema.stores.name }).from(schema.stores).limit(1);
+  // ⚠️ This was `.from(stores).limit(1)` — the SAME arbitrary-row fixture that kept `verify-rls`
+  // red for weeks (its note says so in full), left uncorrected in this file because the fix was
+  // applied to the instance rather than to the class. `LIMIT 1` with no ORDER BY returns whatever
+  // Postgres reaches first, and the seed has SEVEN stores, six of them with no products — so
+  // `own > 0` below was one plan change away from failing on a codebase with nothing wrong with it.
+  // Now that CI runs this, a fixture that picks a different row on a different day is not a nuisance,
+  // it is the thing that teaches people to ignore the check. Same deterministic pick as verify-rls:
+  // the store with the most products, ties broken by slug.
+  const [store] = await client<{ id: string; name: string }[]>`
+    SELECT s.id, s.name
+    FROM stores s
+    JOIN products p ON p.store_id = s.id
+    GROUP BY s.id, s.name, s.slug
+    ORDER BY count(p.id) DESC, s.slug
+    LIMIT 1`;
+  if (!store) throw new Error("No store with products — seed first (npm run seed -w @tokophi/db).");
   console.log(`store = ${store.name} (${store.id})\n`);
 
   // READS under the restricted role via withTenant.
