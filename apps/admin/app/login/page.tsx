@@ -1,5 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@tokophi/ui/card";
+import Link from "next/link";
 import { googleEnabled } from "@/lib/google";
+import { FrontDoorShell } from "@/components/admin/front-door/front-door-shell";
 import { LoginForm } from "./login-form";
 
 // Google OAuth error codes bounced back by /api/auth/google/callback.
@@ -13,20 +14,22 @@ const NOTICES: Record<string, string> = {
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          {/* `level={1}`: `CardTitle` defaults to `h2` because a card normally sits under a page
-              `PageHeader`. This page has no PageHeader — measured in a browser, its only heading
-              was this one — so the default would leave the screen with no `h1`. The class still
-              sets the size; the prop changes the tag only. */}
-          <CardTitle level={1} className="text-2xl tracking-tight">TokoΦ</CardTitle>
-          <CardDescription>Masuk ke Dashboard Seller toko Anda</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <LoginForm googleEnabled={googleEnabled()} notice={error ? (NOTICES[error] ?? "Gagal masuk.") : undefined} />
-        </CardContent>
-      </Card>
-    </div>
+    <FrontDoorShell
+      eyebrow="Dashboard Seller"
+      // Ditulis dari sisi orangnya, bukan sisi sistem. Yang lama berbunyi "Masuk ke Dashboard Seller
+      // toko Anda" — menamai FITURNYA. Yang dituju orang bukan sebuah dashboard; yang dituju tokonya.
+      title="Masuk ke tokomu"
+      lead="Kelola pesanan, produk, dan pengiriman dari satu tempat."
+      footer={
+        <>
+          Belum punya toko?{" "}
+          <Link href="/daftar" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
+            Daftar gratis
+          </Link>
+        </>
+      }
+    >
+      <LoginForm googleEnabled={googleEnabled()} notice={error ? (NOTICES[error] ?? "Gagal masuk.") : undefined} />
+    </FrontDoorShell>
   );
 }

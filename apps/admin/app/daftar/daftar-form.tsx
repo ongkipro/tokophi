@@ -1,10 +1,10 @@
 "use client";
-import Link from "next/link";
 import * as React from "react";
 import { useActionState } from "react";
 import { Check, Loader2, Search } from "lucide-react";
 import { registerStore } from "@/lib/actions/register";
 import { slugify } from "@tokophi/lib/store-slug";
+import { STORE_NAME_EVENT } from "@/components/admin/front-door/address-plate";
 import { Button } from "@tokophi/ui/button";
 import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
@@ -154,23 +154,32 @@ export function DaftarForm({ googleEnabled, notice }: { googleEnabled: boolean; 
               maxLength={60}
               placeholder="Batik Nusantara"
               autoComplete="organization"
+              className="h-11"
               value={storeName}
-              onChange={(e) => setStoreName(e.target.value)}
+              onChange={(e) => {
+                setStoreName(e.target.value);
+                // Platnya ada di KOLOM LAIN (panel kanan), cabang React yang berbeda. Satu event
+                // jauh lebih murah daripada mengangkat state ke atas dan mengubah seluruh pintu
+                // depan jadi client component — lihat alasannya di `address-plate.tsx`.
+                window.dispatchEvent(new CustomEvent(STORE_NAME_EVENT, { detail: e.target.value }));
+              }}
             />
             {/* The shop's permanent public address, derived by the SAME rule the server uses
                 (`@tokophi/lib/store-slug`), so the preview cannot promise an address the server would
                 spell differently — "Café Senja" → `cafe-senja`, never `caf-senja`. */}
-            <p className="text-xs text-muted-foreground">
-              Alamat toko: <span className="font-medium text-foreground">{slug || "nama-toko"}.tokophi.id</span>
+            {/* Di ≥lg plat di panel kanan yang memegang peran ini; di bawah itu panelnya disembunyikan,
+                jadi preview-nya harus tetap ada di sini. Bukan duplikasi — dua viewport, satu peran. */}
+            <p className="font-mono text-xs text-muted-foreground lg:hidden">
+              {slug || "nama-toko"}<span className="text-muted-foreground/60">.tokophi.id</span>
             </p>
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" required placeholder="nama@toko.id" autoComplete="email" />
+            <Input id="email" name="email" type="email" required placeholder="nama@toko.id" autoComplete="email" className="h-11" />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="password">Kata sandi</Label>
-            <Input id="password" name="password" type="password" required minLength={8} autoComplete="new-password" />
+            <Input id="password" name="password" type="password" required minLength={8} autoComplete="new-password" className="h-11" />
             <p className="text-xs text-muted-foreground">Minimal 8 karakter.</p>
           </div>
         </div>
@@ -179,11 +188,11 @@ export function DaftarForm({ googleEnabled, notice }: { googleEnabled: boolean; 
         <div ref={step === 1 ? stepRef : undefined} className={`flex flex-col gap-4 ${step === 1 ? "" : "hidden"}`}>
           <div className="flex flex-col gap-2">
             <Label htmlFor="ownerName">Nama lengkap</Label>
-            <Input id="ownerName" name="ownerName" required maxLength={60} placeholder="Nama lengkap Anda" autoComplete="name" />
+            <Input id="ownerName" name="ownerName" required maxLength={60} placeholder="Nama lengkap Anda" autoComplete="name" className="h-11" />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="ownerPhone">WhatsApp</Label>
-            <Input id="ownerPhone" name="ownerPhone" type="tel" inputMode="numeric" placeholder="0812xxxxxxx" autoComplete="tel" />
+            <Input id="ownerPhone" name="ownerPhone" type="tel" inputMode="numeric" placeholder="0812xxxxxxx" autoComplete="tel" className="h-11" />
             <p className="text-xs text-muted-foreground">Dipakai kurir saat menjemput paket. Bisa diisi nanti.</p>
           </div>
         </div>
@@ -256,12 +265,12 @@ export function DaftarForm({ googleEnabled, notice }: { googleEnabled: boolean; 
             <Label htmlFor="senderPostcode">Kode pos</Label>
             {/* Filled from the kelurahan and ALWAYS editable — the districts with no kelurahan data
                 have to be typed, and a locked field would strand exactly those sellers. */}
-            <Input id="senderPostcode" name="senderPostcode" inputMode="numeric" maxLength={5} placeholder="55281" value={postcode} onChange={(e) => setPostcode(e.target.value)} />
+            <Input id="senderPostcode" name="senderPostcode" inputMode="numeric" maxLength={5} placeholder="55281" value={postcode} onChange={(e) => setPostcode(e.target.value)} className="h-11 font-mono" />
           </div>
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="senderAddress">Alamat lengkap</Label>
-            <Input id="senderAddress" name="senderAddress" placeholder="Jl. Melati No. 12, RT 03 / RW 05" autoComplete="street-address" />
+            <Input id="senderAddress" name="senderAddress" placeholder="Jl. Melati No. 12, RT 03 / RW 05" autoComplete="street-address" className="h-11" />
             <p className="text-xs text-muted-foreground">Titik jemput kurir. Bisa diisi nanti di Pengaturan → Alamat.</p>
           </div>
         </div>
@@ -273,34 +282,29 @@ export function DaftarForm({ googleEnabled, notice }: { googleEnabled: boolean; 
         <input type="hidden" name="senderKelurahanName" value={kel} />
 
         {(state?.error || notice || stepError) && (
-          <p className="text-sm text-destructive">{state?.error ?? notice ?? stepError}</p>
+          <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/8 px-3.5 py-2.5 text-sm text-destructive">
+            {state?.error ?? notice ?? stepError}
+          </p>
         )}
 
         <div className="flex gap-2">
           {step > 0 && (
-            <Button type="button" variant="ghost" onClick={() => setStep((s) => s - 1)} disabled={pending}>Kembali</Button>
+            <Button type="button" variant="ghost" className="h-11" onClick={() => setStep((s) => s - 1)} disabled={pending}>Kembali</Button>
           )}
           {step < STEPS.length - 1 ? (
             <>
-              <Button type="button" className="flex-1" onClick={next} disabled={pending}>Lanjut</Button>
+              <Button type="button" className="h-11 flex-1 text-[0.9375rem] transition-transform motion-safe:active:scale-[0.985]" onClick={next} disabled={pending}>Lanjut</Button>
               {/* "Lewati" is a SUBMIT, not a jump to the last step: the shop is created with whatever
                   has been filled so far, which is the promise that makes the later steps optional. */}
               {step > 0 && (
-                <Button type="submit" variant="outline" disabled={pending}>{pending ? "Membuat…" : "Lewati"}</Button>
+                <Button type="submit" variant="outline" className="h-11" disabled={pending}>{pending ? "Membuat…" : "Lewati"}</Button>
               )}
             </>
           ) : (
-            <Button type="submit" className="flex-1" disabled={pending}>{pending ? "Membuat toko…" : "Selesai & buat toko"}</Button>
+            <Button type="submit" className="h-11 flex-1 text-[0.9375rem] transition-transform motion-safe:active:scale-[0.985]" disabled={pending}>{pending ? "Membuat toko…" : "Selesai & buat toko"}</Button>
           )}
         </div>
 
-        <p className="text-center text-xs text-muted-foreground">
-          Gratis 3 hari. Tanpa kartu kredit — bayar setelah masa coba berakhir.
-        </p>
-        <p className="text-center text-sm text-muted-foreground">
-          Sudah punya toko?{" "}
-          <Link href="/login" className="font-medium text-primary hover:underline">Masuk</Link>
-        </p>
       </form>
     </div>
   );

@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useActionState } from "react";
 import { signIn } from "@/lib/actions/auth";
 import { Button } from "@tokophi/ui/button";
@@ -29,11 +28,11 @@ export function LoginForm({ googleEnabled, notice }: { googleEnabled: boolean; n
               not a placeholder. The `placeholder` is the right affordance: it shows the SHAPE without
               naming an account. Do not add it back "for dev convenience"; that is exactly the reason
               it was there. */}
-          <Input id="email" name="email" type="email" placeholder="nama@toko.id" required autoComplete="email" />
+          <Input id="email" name="email" type="email" placeholder="nama@toko.id" required autoComplete="email" className="h-11" />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="password">Kata sandi</Label>
-          <Input id="password" name="password" type="password" required autoComplete="current-password" />
+          <Input id="password" name="password" type="password" required autoComplete="current-password" className="h-11" />
         </div>
         {state?.need2fa && (
           <div className="flex flex-col gap-2">
@@ -42,14 +41,24 @@ export function LoginForm({ googleEnabled, notice }: { googleEnabled: boolean; n
             <p className="text-xs text-muted-foreground">Masukkan 6 digit dari aplikasi authenticator Anda.</p>
           </div>
         )}
-        {(state?.error || notice) && <p className="text-sm text-destructive">{state?.error ?? notice}</p>}
-        <Button type="submit" disabled={pending}>{pending ? "Masuk…" : state?.need2fa ? "Verifikasi" : "Masuk"}</Button>
-        <p className="text-center text-sm text-muted-foreground">
-          Belum punya toko?{" "}
-          <Link href="/daftar" className="font-medium text-primary hover:underline">
-            Daftar gratis
-          </Link>
-        </p>
+        {/* Galat diberi permukaannya sendiri, bukan sebaris teks merah yang mengambang: pada layar
+            yang isinya cuma dua kolom, teks merah telanjang terbaca seperti label, bukan masalah.
+            `role="alert"` supaya pembaca layar mendapatkannya tanpa harus menyusuri ulang. */}
+        {(state?.error || notice) && (
+          <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/8 px-3.5 py-2.5 text-sm text-destructive">
+            {state?.error ?? notice}
+          </p>
+        )}
+        {/* h-11, bukan h-8 default. Ini aksi utama SATU halaman penuh; tinggi tombol baris tabel
+            membuatnya terbaca sebagai kontrol sekunder. `active:scale` memberi umpan balik tekan yang
+            memang diharapkan di ponsel, dan `motion-reduce` mematikannya. */}
+        <Button
+          type="submit"
+          disabled={pending}
+          className="h-11 w-full text-[0.9375rem] transition-transform motion-safe:active:scale-[0.985]"
+        >
+          {pending ? "Masuk…" : state?.need2fa ? "Verifikasi" : "Masuk"}
+        </Button>
       </form>
     </div>
   );

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@tokophi/ui/card";
+import { FrontDoorShell } from "@/components/admin/front-door/front-door-shell";
 import { googleEnabled } from "@/lib/google";
 import { signupOpen } from "@/lib/provision";
 import { DaftarForm } from "./daftar-form";
@@ -54,16 +55,23 @@ export default async function DaftarPage({ searchParams }: { searchParams: Promi
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle level={1} className="text-2xl tracking-tight">TokoΦ</CardTitle>
-          <CardDescription>Buat toko online Anda — gratis 3 hari</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DaftarForm googleEnabled={googleEnabled()} notice={error ? (NOTICES[error] ?? "Gagal mendaftar.") : undefined} />
-        </CardContent>
-      </Card>
-    </div>
+    <FrontDoorShell
+      eyebrow="Buka toko online"
+      claimable
+      // Judulnya menamai HASILNYA, bukan formulirnya. "Buat toko online Anda" menyuruh; ini
+      // menggambarkan apa yang orang itu dapatkan sesudah tiga langkah.
+      title="Tokomu, tayang hari ini"
+      lead="Tiga langkah. Langkah pertama sudah cukup untuk mulai — sisanya bisa dilengkapi nanti."
+      footer={
+        <>
+          Sudah punya toko?{" "}
+          <Link href="/login" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
+            Masuk
+          </Link>
+        </>
+      }
+    >
+      <DaftarForm googleEnabled={googleEnabled()} notice={error ? (NOTICES[error] ?? "Gagal mendaftar.") : undefined} />
+    </FrontDoorShell>
   );
 }
