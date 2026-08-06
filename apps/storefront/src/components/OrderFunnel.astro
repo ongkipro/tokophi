@@ -55,12 +55,21 @@ const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/pub
 
 // ── ID KATALOG UNTUK PIXEL — halaman corong iklan ADALAH halaman produk ──────────────────────────
 //
-// Diukur di produksi 2026-08-06: `/promo/blouse-katun` mengirim **PageView saja** — tanpa
-// `ViewContent`, tanpa satu pun `[data-catalog-id]` di DOM-nya — sementara `/produk/blouse-katun`
-// mengirim PageView + ViewContent lengkap dengan id dan harga. Jadi justru halaman yang merchant
-// BAYAR trafiknya adalah satu-satunya halaman produk yang tak pernah mengaku sebagai produk:
-// tak ada sinyal untuk katalog, tak ada audiens dynamic-ads, tak ada nilai untuk dioptimasi. Yang
-// tercatat cuma PageView lalu Purchase di /thanks, tanpa apa pun di antaranya.
+// Diukur pada server hasil build dengan satu baris `promo_pages` sungguhan (DB dev, Host
+// `toko-demo.test`, keduanya 200): `/promo/blouse-katun` mengirim `/api/track ["visit"]` dan
+// `fbq [init, PageView]` — **tanpa ViewContent, tanpa product_view**, dan tanpa satu pun
+// `[data-catalog-id]` di DOM-nya. Halaman yang sama sebagai PDP mengirim PageView + ViewContent
+// lengkap dengan id dan harga. Jadi justru halaman yang merchant BAYAR trafiknya adalah satu-satunya
+// halaman produk yang tak pernah mengaku sebagai produk: tak ada sinyal untuk katalog, tak ada
+// audiens dynamic-ads, tak ada nilai untuk dioptimasi. Yang tercatat cuma PageView lalu Purchase di
+// /thanks, tanpa apa pun di antaranya.
+//
+// ⚠️ UKUR DI HALAMAN YANG BERSTATUS 200, DAN BUKTIKAN STATUSNYA. Pengukuran pertama untuk temuan ini
+// diambil dari `toko.tokophi.com/promo/<handle>` — yang menjawab **404**, karena produksi belum punya
+// satu pun baris `promo_pages` yang aktif. Halaman 404 itu memang mengirim "PageView saja", jadi
+// angkanya tampak persis seperti cacat yang dicari dan kesimpulannya kebetulan benar karena alasan
+// yang salah. Ini keluarga kesalahan yang sama dengan `check-pixel-defer`, yang seumur hidupnya
+// memeriksa klaim paling keras di berkasnya terhadap sebuah 404 (lihat CLAUDE.md).
 //
 // Dihitung DI SINI, bukan di kedua rute pemanggilnya, karena `/promo/<handle>` dan `/lp/<slug>`
 // sama-sama merender komponen ini — dua salinan perhitungan yang sama adalah cara keduanya
