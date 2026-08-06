@@ -5,6 +5,7 @@ import { decryptSecret, secretScope } from "@/lib/crypto";
 import { sanitize, sendGa4Purchase, sendMetaPurchase, sendTiktokPurchase, type ServerEvent } from "@/lib/capi";
 import { systemDomainFor } from "@/lib/data/domain";
 import { enqueuePurchase } from "@/lib/tracking-events";
+import { cronIntervalSec, recordCronRun } from "../record-run";
 
 // CONVERSION DELIVERY WORKER (ADR 0012 §0.1, §16, §23) — the drain half of `tracking_event_deliveries`.
 // TokoΦ has no worker process, so this is a secured API route hit on a schedule, exactly like
@@ -81,6 +82,7 @@ type Payload = {
 };
 
 export async function GET(req: NextRequest) {
+  const startedAt = Date.now();
   // FAIL CLOSED in production, exactly like cron/tracking and cron/billing.
   const secret = process.env.CRON_SECRET;
   const provided = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
@@ -240,7 +242,14 @@ export async function GET(req: NextRequest) {
       payload: schema.trackingEventDeliveries.payload,
     });
 
-  if (claimed.length === 0) return NextResponse.json({ ok: true, claimed: 0, sent: 0, failed: 0, dead: 0, released, backfilled });
+  // Liveness row (0091) — see `../record-run.ts`. An IDLE tick is still a live tick and must be
+  // recorded: this queue is empty most of the time, so "nothing to do" is the normal healthy shape and
+  // recording only the busy ticks would make a healthy quiet day look identical to a dead container.
+  if (claimed.length === 0) {
+    const idle = { claimed: 0, sent: 0, failed: 0, dead: 0, released, backfilled };
+    await recordCronRun("tracking-events", { ok: true, startedAt, intervalSec: cronIntervalSec(req), result: idle });
+    return NextResponse.json({ ok: true, ...idle });
+  }
 
   let sent = 0;
   let failed = 0;
@@ -392,7 +401,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, claimed: claimed.length, sent, failed, dead, released, backfilled });
+  const summary = { claimed: claimed.length, sent, failed, dead, released, backfilled };
+  await recordCronRun("tracking-events", { ok: true, startedAt, intervalSec: cronIntervalSec(req), result: summary });
+  return NextResponse.json({ ok: true, ...summary });
 }
 
 /**

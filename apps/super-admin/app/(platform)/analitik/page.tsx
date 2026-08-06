@@ -1,9 +1,10 @@
-import { Wallet, TrendingUp, Receipt, ShoppingBag, Truck, CreditCard, Database, Server, Cpu, MemoryStick, CircleCheck, CircleAlert, MapPin } from "lucide-react";
+import { Wallet, TrendingUp, Receipt, ShoppingBag, Truck, CreditCard, Database, Server, Cpu, MemoryStick, CircleCheck, CircleAlert, CircleHelp, MapPin, Timer } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Badge } from "@tokophi/ui/badge";
 import { IDR, num } from "@tokophi/lib/format";
 import { BILLING } from "@tokophi/lib/billing";
 import { getStores, getFinanceStats, getSubscriptionStats, getSystemStatus, getServerMetrics, getGmvByCity, getPlatformFloat, getConversion, getCourierCostAbsorbed } from "@/lib/data";
+import { cronRows } from "./cron-liveness";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,10 @@ export default async function AnalitikPage() {
     { label: "Ditangguhkan", count: sub.suspended, cls: "bg-destructive" },
   ];
   const maxLifecycle = Math.max(...lifecycle.map((f) => f.count), 1);
+
+  // CRON LIVENESS — see `cron-liveness.ts`. The clock lives in there, read once for all three rows;
+  // a `Date.now()` in this component would be an impure render (and `react-hooks/purity` says so).
+  const crons = cronRows(sys.crons);
 
   const integrations = [
     { label: "KiriminAja (kurir)", ok: sys.kiriminaja, icon: Truck, note: sys.kiriminaja ? `Terhubung · ${sys.kaEnv}` : "Belum dikonfigurasi" },
@@ -169,6 +174,38 @@ export default async function AnalitikPage() {
                 {i.ok ? <CircleCheck className="size-4 shrink-0 text-emerald-600" /> : <CircleAlert className="size-4 shrink-0 text-destructive" />}
               </div>
             ))}
+
+            {/*
+              Cron sidecars. They belong on THIS card and not in a corner of their own: the resi poller
+              is as load-bearing as the courier API above it — `awbFilled` sat at 0 for a week because
+              the only evidence lived in `docker logs`, which nobody opens without already suspecting
+              something. The verdict carries a glyph AND a word, never colour alone (WCAG 1.4.1), and
+              has a third NEUTRAL state for "nothing has reported yet" so a fresh deploy does not paint
+              a false alarm the day it lands.
+            */}
+            <p className="pt-1 text-xs font-medium text-muted-foreground">Tugas terjadwal (cron)</p>
+            {crons.map((c) => {
+              const bad = c.state === "late" || c.state === "error";
+              const Icon = c.state === "ok" ? CircleCheck : c.state === "unknown" ? CircleHelp : CircleAlert;
+              return (
+                <div key={c.job} className={`flex items-center gap-3 rounded-lg border p-2.5 ${bad ? "border-destructive/40 bg-destructive/5" : ""}`}>
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Timer className="size-4" /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {c.label} <span className="font-normal text-muted-foreground">· {c.what}</span>
+                    </p>
+                    {/* NOT truncated, unlike the label above it. This line carries the run's own
+                        counters, and on this narrow card `truncate` cut them off at "gagal …" —
+                        hiding "resi terisi 0", the one number the whole panel was built to show. */}
+                    <p className={`text-xs ${bad ? "font-medium text-destructive" : "text-muted-foreground"}`}>
+                      {c.when} · {c.note}
+                    </p>
+                  </div>
+                  <Icon className={`size-4 shrink-0 ${bad ? "text-destructive" : c.state === "ok" ? "text-emerald-600" : "text-muted-foreground"}`} />
+                  <span className="sr-only">{bad ? (c.state === "late" ? "terlambat" : "gagal") : c.state === "ok" ? "normal" : "belum diketahui"}</span>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       </div>

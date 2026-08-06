@@ -5,6 +5,7 @@ import { computeBilling, quote, withPpn } from "@tokophi/lib/billing";
 import { alCreatePayment, autolarisConfigured } from "@tokophi/lib/autolaris";
 
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
+import { cronIntervalSec, recordCronRun } from "../record-run";
 // Daily billing job (schedule via Coolify Scheduled Task / external cron → GET with the secret):
 //   1) sync each store's stored `status` to its real-time EFFECTIVE state
 //   2) for stores whose period ended (past_due/suspended) with no pending subscription invoice,
@@ -22,6 +23,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const startedAt = Date.now();
   const secret = process.env.CRON_SECRET;
   const provided = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
 
@@ -120,5 +122,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, stores: stores.length, statusSynced, invoicesCreated });
+  // Liveness row (0091) — see `../record-run.ts`. A DAILY job is the one whose silence is hardest to
+  // notice: a fortnight of no renewal invoices looks exactly like a fortnight where nothing was due.
+  const summary = { stores: stores.length, statusSynced, invoicesCreated };
+  await recordCronRun("billing", { ok: true, startedAt, intervalSec: cronIntervalSec(req), result: summary });
+  return NextResponse.json({ ok: true, ...summary });
 }

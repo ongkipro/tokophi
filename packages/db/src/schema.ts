@@ -1426,6 +1426,35 @@ export const platformActivity = pgTable("platform_activity", {
   ts: createdAt(),
 });
 
+// ---------- cron liveness — ONE row per sidecar, overwritten every tick (0091) ----------
+//
+// `cron-tracking` is what makes a waybill appear without the merchant pressing anything, and its own
+// compose comment records `awbFilled` sitting at 0 for a WEEK while it was not running. It printed a
+// timestamp per tick — to `docker logs`, which nobody opens without a reason, so the first person who
+// noticed would have been a merchant on the phone about a resi that never came.
+//
+// ⚠️ ONE ROW PER JOB, UPSERTED — deliberately not an append-only log, and deliberately not
+// `platform_activity`. That table is the operator's audit FEED, rendered on the dashboard: at one row
+// per tick these three would write ~1.630 rows a day (tracking-events alone wakes every 60 s) and bury
+// every real event under them, and nothing prunes it. The question this table answers is "is it alive
+// RIGHT NOW", which needs exactly one row, never grows, and costs one PK lookup to read.
+//
+// `interval_sec` is REPORTED BY THE SIDECAR (`?every=<seconds>`), never guessed here: the staleness
+// threshold has to come from the loop's own `sleep`, and a second copy of "900" in application code is
+// a copy that goes stale the day someone changes the compose file. NULL = the caller did not say, and
+// the reader must then decline to judge rather than invent a number.
+//
+// `result` is the endpoint's own run summary ({scanned, advanced, awbFilled, …}). A cron that runs on
+// time and fills nothing, every time, is also a failure — "it ran" alone cannot show that.
+export const cronRuns = pgTable("cron_runs", {
+  job: text().primaryKey(), // "tracking" | "tracking-events" | "billing"
+  lastRunAt: createdAt(),
+  intervalSec: integer(), // the sidecar's own sleep, in seconds; NULL = not reported
+  ok: boolean().notNull().default(true),
+  durationMs: integer(),
+  result: jsonb(),
+});
+
 // Platform operators (US) — the super-admin's own login, separate from store `users`.
 export const platformAdmins = pgTable("platform_admins", {
   id: pk(),
@@ -1607,6 +1636,7 @@ export type StoreSettings = typeof storeSettings.$inferSelect;
 export type Plan = typeof plans.$inferSelect;
 export type Invoice = typeof invoices.$inferSelect;
 export type PlatformActivity = typeof platformActivity.$inferSelect;
+export type CronRun = typeof cronRuns.$inferSelect;
 export type PlatformAdmin = typeof platformAdmins.$inferSelect;
 export type ChatVisitor = typeof chatVisitors.$inferSelect;
 export type NewChatVisitor = typeof chatVisitors.$inferInsert;

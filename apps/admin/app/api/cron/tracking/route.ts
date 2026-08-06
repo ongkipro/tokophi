@@ -3,6 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { and, asc, isNotNull, inArray, sql } from "drizzle-orm";
 import { kaTrack, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { outcomeFromTrackingCode, syncOrderFromKa } from "@/lib/ka-tracking";
+import { cronIntervalSec, recordCronRun } from "../record-run";
 
 // Tracking POLLER (BACKLOG shipping #1/#2) — the pull half. A booking returns `awb: null`; the waybill,
 // and every state after it, only exist once a courier accepts the pickup. This cron sweeps the orders
@@ -64,6 +65,7 @@ function logRaw(fields: Record<string, unknown>) {
 const short = (v: unknown, n = 120) => (typeof v === "string" ? v.slice(0, n) : v ?? null);
 
 export async function GET(req: NextRequest) {
+  const startedAt = Date.now();
   // FAIL CLOSED in production, exactly like cron/billing: an unset secret must mean NO, not "no gate".
   const secret = process.env.CRON_SECRET;
   const provided = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
@@ -76,7 +78,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
+  // 200 with `ok:false`, so the sidecar's `wget` succeeds and nothing in `docker logs` looks broken —
+  // which is precisely why this branch has to be RECORDED as a failed run. A poller that wakes on
+  // schedule and can never fill a waybill is indistinguishable, from the outside, from one that is
+  // working; on the panel it now reads red instead of "terakhir jalan 2 menit lalu".
   if (!kiriminajaConfigured()) {
+    await recordCronRun("tracking", {
+      ok: false,
+      startedAt,
+      intervalSec: cronIntervalSec(req),
+      result: { error: "KiriminAja belum dikonfigurasi." },
+    });
     return NextResponse.json({ ok: false, error: "KiriminAja belum dikonfigurasi." }, { status: 200 });
   }
 
@@ -179,7 +191,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({
-    ok: true, scanned: orders.length, advanced, awbFilled, problems, problemsCleared, errors: errors.length,
-  });
+  // The SAME summary is returned to the caller and stored. `docker logs` keeps its line; the row is
+  // what a human sees without going looking. Storing the counts, not just the timestamp, is the half
+  // that matters here: `awbFilled` was 0 for a week and "the cron ran" would have been true all week.
+  const summary = { scanned: orders.length, advanced, awbFilled, problems, problemsCleared, errors: errors.length };
+  await recordCronRun("tracking", { ok: true, startedAt, intervalSec: cronIntervalSec(req), result: summary });
+  return NextResponse.json({ ok: true, ...summary });
 }
