@@ -102,6 +102,27 @@ architecture decision before the PostgREST cutover.
 
 ## 5. Transport and edge
 
+> ### 🔴 THIS SECTION DESCRIBED ONE ZONE. THERE ARE TWO, AND THE OTHER ONE CARRIES THE SHOPPERS.
+> Corrected 2026-08-07. `tokophi.id` is a **separate** Cloudflare zone (`4ba39c04…`) and it is where
+> merchant storefronts serve — `<slug>.tokophi.com` 301s to `<slug>.tokophi.id`. The platform surfaces
+> go the other way: `app.tokophi.id` / `rich.tokophi.id` 301 **to `.com`**. Everything below is `.com`.
+>
+> | | `tokophi.com` | `tokophi.id` |
+> |---|---|---|
+> | HSTS | `31536000; includeSubDomains` | `31536000; includeSubDomains` ✅ 2026-08-07 |
+> | `ssl` | `strict` | `strict` ✅ 2026-08-07 |
+> | `min_tls_version` | 1.2 | **1.0** — open, T-4 (a compatibility call, not a pure security one) |
+> | origin certificate | `*.tokophi.com` + `tokophi.com` | `*.tokophi.id` + `tokophi.id` ✅ 2026-08-07 |
+>
+> ⚠️ **How `.id` came to be weaker, because the shape is worth remembering.** Traefik serves ONE
+> `defaultCertificate` to any host without its own — that is what gives every `<slug>` TLS, since Let's
+> Encrypt cannot wildcard over HTTP-01. That default was `.com`-only, so `.id` hosts were handed a
+> certificate for the wrong name, and Cloudflare accepted it purely because `.id` ran `ssl: full`, which
+> does not validate the origin. `full` was **load-bearing**, not laziness: `strict` could not have worked.
+> Fixed by issuing a SECOND Origin CA certificate for the `.id` names and adding it to Traefik's list —
+> the default is still `.com`, so nothing that already worked depended on the change. `T-3` has the order.
+
+
 - **Observed 2026-08-05.** All six DNS records are **Cloudflare-proxied**; none DNS-only, no MX. That
   is a standing requirement — the wildcard's TLS is a Cloudflare **Origin CA** cert that browsers do
   not trust directly.
