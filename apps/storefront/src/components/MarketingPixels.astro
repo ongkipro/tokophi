@@ -151,6 +151,22 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
 // matches no Merchant Center offer, and TikTok recommends the sku_id. Nothing is ever DERIVED
 // here — a guessed id matches no catalog item and reports nothing, silently.
 
+// ── NOTE-26 ─────────────────────────────────────────────────────────────────────
+// ⚠️ SEBUAH URL BUKAN DAFTAR HALAMAN PRODUK. `path.indexOf("/produk/") === 0` melewatkan justru
+// halaman yang paling mahal: `/promo/<handle>` dan `/lp/<slug>` — halaman produk tunggal yang
+// merchant BAYAR trafiknya. Diukur di produksi 2026-08-06: `/promo/blouse-katun` mengirim PageView
+// SAJA, sementara `/produk/blouse-katun` mengirim PageView + ViewContent dengan id `1009-1` dan
+// harga. Jadi corong yang dibayar tercatat sebagai PageView lalu Purchase, tanpa apa pun di antara —
+// tak ada audiens dynamic-ads, tak ada nilai yang bisa dioptimasi, dan tak ada ViewContent yang bisa
+// dipasangkan dengan AddToCart-nya. Itu sebabnya sebuah halaman produk bisa terbaca "cuma
+// add-to-cart" di Events Manager: separuh atasnya tak pernah dikirim.
+//
+// Sekarang HALAMANNYA yang menyatakan diri, lewat `data-page-product` (dipasang OrderFunnel), dan
+// penanda itu menang atas jalur URL. Sengaja BUKAN "cari `[data-catalog-id]` mana pun": halaman
+// daftar suatu hari akan memasangnya di kartu produk, dan aturan seperti itu akan melaporkan
+// ViewContent untuk produk pertama yang kebetulan terender. Sebuah penanda eksplisit tak bisa
+// salah baca; sebuah heuristik selalu bisa.
+
 // ── NOTE-17 ─────────────────────────────────────────────────────────────────────
 // AddToCart — delegated (same selectors Analytics.astro uses), so page scripts stay untouched.
 // Registered HERE, not synchronously: a click that landed before DOMContentLoaded would fire
@@ -501,6 +517,9 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         };
       }
       function productContext() {
+        // Halaman yang MENGAKU dirinya halaman produk menang atas tebakan dari URL — lihat NOTE-26.
+        var marked = ctxFrom(document.querySelector("[data-page-product]"));
+        if (marked) return marked;
         if (path.indexOf("/produk/") !== 0) return null;
         return ctxFrom(document.getElementById("add-to-cart")) || ctxFrom(document.querySelector("[data-catalog-id]"));
       }

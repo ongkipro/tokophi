@@ -10,6 +10,7 @@
 // fields are always shown — hiding them would break a COD order.
 import { ShieldCheck, Truck, Lock, Minus, Plus } from "@lucide/astro";
 import { IDR } from "@tokophi/lib/format";
+import { retailerId, type CatalogIdScheme } from "@tokophi/lib/tracking-ids";
 import { computeTax } from "@tokophi/lib/tax";
 import { resolveFormConfig } from "@tokophi/lib/form-config";
 import type { Pkg } from "../lib/packages";
@@ -51,9 +52,42 @@ const fc = resolveFormConfig(formConfig);
 
 const ONGKIR_API = process.env.PUBLIC_ONGKIR_API || "http://localhost:3000/api/public/ongkir";
 const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/public/order";
+
+// ── ID KATALOG UNTUK PIXEL — halaman corong iklan ADALAH halaman produk ──────────────────────────
+//
+// Diukur di produksi 2026-08-06: `/promo/blouse-katun` mengirim **PageView saja** — tanpa
+// `ViewContent`, tanpa satu pun `[data-catalog-id]` di DOM-nya — sementara `/produk/blouse-katun`
+// mengirim PageView + ViewContent lengkap dengan id dan harga. Jadi justru halaman yang merchant
+// BAYAR trafiknya adalah satu-satunya halaman produk yang tak pernah mengaku sebagai produk:
+// tak ada sinyal untuk katalog, tak ada audiens dynamic-ads, tak ada nilai untuk dioptimasi. Yang
+// tercatat cuma PageView lalu Purchase di /thanks, tanpa apa pun di antaranya.
+//
+// Dihitung DI SINI, bukan di kedua rute pemanggilnya, karena `/promo/<handle>` dan `/lp/<slug>`
+// sama-sama merender komponen ini — dua salinan perhitungan yang sama adalah cara keduanya
+// melenceng, dan `tracking-ids.ts` sudah menjadi satu-satunya definisi id katalog (ADR 0013).
+// Lewat helper yang SAMA dengan PDP: id yang ditebak tidak cocok dengan item katalog mana pun dan
+// tak melaporkan apa-apa, diam-diam.
+const funnelStore = Astro.locals.store;
+const funnelProduct = Astro.locals.catalog.findProduct(productHandle);
+const funnelScheme: CatalogIdScheme = funnelStore.catalogIdScheme === "number" ? "number" : "handle";
+// Varian pertama, sama seperti PDP saat halaman baru dibuka: pembeli belum memilih apa pun.
+const funnelCatalogId = funnelProduct
+  ? retailerId(funnelScheme, funnelProduct, {
+      seq: funnelProduct.variants?.[0]?.seq ?? 1,
+      index: 0,
+      count: funnelProduct.variants?.length ?? 1,
+    })
+  : null;
 ---
 
-<section id="order-funnel" class="scroll-mt-4 overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
+<section
+  id="order-funnel"
+  class="scroll-mt-4 overflow-hidden rounded-2xl border border-line bg-white shadow-sm"
+  data-page-product={funnelCatalogId ? "" : undefined}
+  data-catalog-id={funnelCatalogId || undefined}
+  data-catalog-type={funnelCatalogId ? "product" : undefined}
+  data-price={funnelCatalogId ? packages[0].price : undefined}
+>
   {(countdownMinutes > 0 || showScarcity) && (
     <div class="flex items-center justify-between gap-4 bg-brand-700 px-5 py-3 text-white">
       {countdownMinutes > 0 ? (
