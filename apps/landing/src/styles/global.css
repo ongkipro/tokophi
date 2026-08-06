@@ -159,25 +159,18 @@ body::before {
   border-radius: 0.75rem;
 }
 
-.wordmark-tile {
-  display: grid;
-  place-items: center;
-  width: 2.125rem;
-  height: 2.125rem;
-  border-radius: 0.7rem;
-  background-color: var(--color-primary);
-  color: var(--color-on-primary);
-  box-shadow: 0 8px 20px -10px rgba(79, 70, 229, 0.8);
-}
-.wordmark-tile svg {
-  width: 1.35rem;
-  height: 1.35rem;
+.wordmark-text {
+  /* Sedikit lebih besar dari sebelumnya: ubinnya hilang, jadi katanya sendiri yang harus memegang
+     sudut itu. ⚠️ `line-height: 1.2`, bukan 1 — Φ (U+03A6) naik melewati tinggi kapital Latin dan
+     line-height tepat 1 memotong ujung atasnya. */
+  font-size: 1.1875rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
-.wordmark-text {
-  font-size: 1.0625rem;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+.wordmark-phi {
+  color: var(--color-primary);
 }
 
 /* ── Hero ─────────────────────────────────────────────────────────────────── */
