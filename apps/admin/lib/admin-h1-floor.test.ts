@@ -1,8 +1,8 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { textWithoutComments } from "../../../test/source-code";
+import { SOURCE_SCAN_TIMEOUT_MS, textOfFile } from "../../../test/source-code";
 
 // EVERY Seller route ships a top-level heading.
 //
@@ -92,9 +92,9 @@ function resolveLocal(spec: string, from: string): string | null {
   return null;
 }
 
-function localImports(src: string, from: string): string[] {
+function localImports(text: string, from: string): string[] {
   const out: string[] = [];
-  for (const m of textWithoutComments(src).matchAll(/from\s+"([^"]+)"/g)) {
+  for (const m of text.matchAll(/from\s+"([^"]+)"/g)) {
     const hit = resolveLocal(m[1], from);
     if (hit) out.push(hit);
   }
@@ -121,7 +121,14 @@ function ancestorLayouts(page: string): string[] {
   return out;
 }
 
-/** Does anything reachable from these roots emit a top-level heading? */
+// ⏱ Does anything reachable from these roots emit a top-level heading?
+//
+// `textOfFile` memoises the lex per path (`test/source-code.ts`). That is what makes this affordable:
+// there is one assertion PER ROUTE — 60 of them — over import graphs that overlap almost completely
+// (every route reaches the same chrome, the same `components/ui`), so lexing per traversal meant the
+// same files were re-lexed dozens of times. Measured: the file cost **14,1 s** of the suite that way
+// and **1,1 s** with the memo. It was never near the 5 s ceiling because the cost was spread across
+// 60 separate tests — which is exactly why nobody noticed it was the most expensive file in the run.
 function reachesH1(roots: string[]): boolean {
   const seen = new Set<string>();
   const queue = [...roots];
@@ -129,9 +136,9 @@ function reachesH1(roots: string[]): boolean {
     const f = queue.pop()!;
     if (seen.has(f) || f.startsWith(PREVIEW_ONLY)) continue;
     seen.add(f);
-    const src = readFileSync(f, "utf8");
-    if (EMITS_H1.test(textWithoutComments(src))) return true;
-    queue.push(...localImports(src, f));
+    const text = textOfFile(f);
+    if (EMITS_H1.test(text)) return true;
+    queue.push(...localImports(text, f));
   }
   return false;
 }
@@ -146,7 +153,13 @@ describe("every Seller route has an <h1>", () => {
     expect(pages.length).toBeGreaterThan(40);
   });
 
-  it.each(pages.map((p) => [routeOf(p), p] as const))("%s", (_route, page) => {
-    expect(reachesH1([page, ...ancestorLayouts(page)])).toBe(true);
-  });
+  // The ceiling is here rather than on one test because WHICH route runs first is the runner's
+  // choice, and that one pays for the whole graph. See `SOURCE_SCAN_TIMEOUT_MS`.
+  it.each(pages.map((p) => [routeOf(p), p] as const))(
+    "%s",
+    (_route, page) => {
+      expect(reachesH1([page, ...ancestorLayouts(page)])).toBe(true);
+    },
+    SOURCE_SCAN_TIMEOUT_MS,
+  );
 });

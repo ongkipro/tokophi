@@ -1,10 +1,10 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { envFiles, readDatabaseUrl } from "@tokophi/lib/env-file";
-import { codeOnly } from "./source-code";
+import { SOURCE_SCAN_TIMEOUT_MS, codeOfFile, trackedSources } from "./source-code";
 
 // THE GATE THAT WAS BUILT TO STOP SILENT SKIPPING WAS SILENTLY SKIPPING.
 //
@@ -82,19 +82,41 @@ describe("the .env a worktree cannot have", () => {
 });
 
 describe("one resolver, not a third private copy", () => {
-  // Reads the files' CODE, never their text (`test/source-code.ts`): the prose above and in both
-  // targets talks about `.env` constantly, and a comment is not a lookup.
-  const sources = {
-    "test/db-setup.ts": path.join(REPO, "test/db-setup.ts"),
-    "apps/storefront/scripts/check-env.mjs": path.join(REPO, "apps/storefront/scripts/check-env.mjs"),
-  };
+  // ⚠️ THE TITLE SAYS "A THIRD", AND THIS USED TO CHECK EXACTLY TWO NAMED FILES — so a third private
+  // copy was the one thing it could not see. That is the blind spot CLAUDE.md records as "a guard
+  // bound to a LIST has the same hole as a guard that skips a directory by name", and it is the shape
+  // that let a 24-bit password mint survive its own guard. So this is a SINK sweep now: every tracked
+  // source file in the repo, and the two exemptions are named here rather than left implicit.
+  //
+  // Reads each file's CODE, never its text (`test/source-code.ts`): the prose here and in the module
+  // talks about `.env` constantly, and a comment is not a lookup.
+  //
+  // The two shapes of "I found my own .env": a literal filename, or the loader that takes one.
+  const PRIVATE_LOOKUP = /"\s*\.env\s*"|'\s*\.env\s*'|loadEnvFile/;
 
-  for (const [name, file] of Object.entries(sources)) {
-    it(`${name} resolves DATABASE_URL through @tokophi/lib/env-file`, () => {
-      const code = codeOnly(readFileSync(file, "utf8"));
-      expect(code).toMatch(/@tokophi\s*\/\s*lib\s*\/\s*env-file/);
-      // The two shapes of "I found my own .env": a literal filename, or the loader that takes one.
-      expect(code).not.toMatch(/"\s*\.env\s*"|'\s*\.env\s*'|loadEnvFile/);
+  // `packages/lib/src/env-file.mjs` IS the resolver — it must name `.env`, that is its job.
+  // This file is the guard and quotes both shapes above, in code, on purpose.
+  const SELF = new Set(["packages/lib/src/env-file.mjs", "test/env-file.test.ts"]);
+
+  it("no file anywhere resolves a .env of its own", () => {
+    const offenders = trackedSources().filter((rel) => !SELF.has(rel) && PRIVATE_LOOKUP.test(codeOfFile(rel)));
+    expect(offenders, `these must go through @tokophi/lib/env-file: ${offenders.join(", ")}`).toEqual([]);
+  }, SOURCE_SCAN_TIMEOUT_MS);
+
+  // A sweep that swept nothing passes forever, and an exemption list that no longer matches any file
+  // is a sweep with two holes in it. Both are pinned.
+  it("swept the repo, and both exemptions still exist", () => {
+    expect(trackedSources().length).toBeGreaterThan(300);
+    for (const rel of SELF) expect(trackedSources(), rel).toContain(rel);
+    // …and the pattern can fire: the resolver itself is what it is looking for.
+    expect(PRIVATE_LOOKUP.test(codeOfFile("packages/lib/src/env-file.mjs"))).toBe(true);
+  });
+
+  // The two callers that had the private copy keep their own named claim: they must REACH the shared
+  // module. The sweep above proves nobody re-implements it; this proves these two still use it.
+  for (const rel of ["test/db-setup.ts", "apps/storefront/scripts/check-env.mjs"]) {
+    it(`${rel} resolves DATABASE_URL through @tokophi/lib/env-file`, () => {
+      expect(codeOfFile(rel)).toMatch(/@tokophi\s*\/\s*lib\s*\/\s*env-file/);
     });
   }
 });

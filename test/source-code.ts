@@ -75,6 +75,10 @@
 // The honest limit: this is still text matching, one level up. It knows a literal from code; it does
 // not know a `case` in a `switch` from the word `case` somewhere else. Where a guard can import the
 // thing and call it, it should — reading source is the fallback for claims about absence.
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 /** Characters a literal may keep. Everything else is what lets a literal imitate its surroundings. */
@@ -194,30 +198,142 @@ function scan(source: string, inertLiterals: boolean): string {
   return out.join(" ");
 }
 
+// ── ONE ANSWER TO "WHICH FILES?" TOO ──────────────────────────────────────────────────────────────
+//
+// `codeOnly` answered "what does this file execute?" for every guard, and four guards then went on to
+// hand-roll "which files are there?" separately — `git ls-files -z`, split on NUL, drop dot-directories,
+// drop a skip-list, keep a source extension — four times, in four spellings that had already drifted
+// (one returned absolute paths, one repo-relative; one excluded `*.test.ts` and the others did not,
+// which is a REAL difference and stays a per-caller decision, see `isTestFile`).
+//
+// That is the same defect this module was written to end, one question earlier: no shared answer, so
+// every guard invents one and every invention has a different hole. A skip-list is exactly where the
+// holes live — CLAUDE.md records `apps/<app>/public` (assets) being skipped by NAME and taking
+// `apps/admin/app/api/public` (the PUBLIC API) with it, invisible to two sweeps for their whole lives.
+//
+// The listing is also CACHED, and so is the lex. Measured on this machine (657 tracked source files,
+// 4,66 MB): `git ls-files` 11 ms, reading all of them 27 ms, **lexing them 537 ms**. The filesystem is
+// not the cost and never was — the scanner is, and three guards were paying it two and three times
+// over for identical answers.
+
+export const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
+
+// Not code: build output, dependencies, coverage. Dot-directories are dropped wholesale because
+// `.claude/worktrees/` on the main checkout holds entire second copies of this repo — another
+// branch's source is not this branch's source.
+const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage"]);
+const SOURCE_EXT = /\.(?:ts|tsx|mts|cts|cjs|astro|mjs|js|jsx)$/;
+const TEST_FILE = /\.test\.[cm]?[jt]sx?$/;
+
+let tracked: readonly string[] | undefined;
+
+/**
+ * Every file GIT TRACKS, repo-relative, sorted, minus the skipped directories. Listed ONCE per
+ * process. **Every extension**, so a guard can ask what file types exist at all.
+ *
+ * ⚠️ TRACKED, not walked. A filesystem walk made one extension census go RED for anyone who ran
+ * `tsc` before `vitest`: `*.tsbuildinfo` is gitignored, is a build artefact, and appeared in an
+ * ordinary workflow. An alarm that fires on a normal working day is the alarm everybody learns to
+ * scroll past. Tracked is also the honest scope — something git does not carry is not in the repo.
+ */
+export function trackedFiles(): readonly string[] {
+  tracked ??= execFileSync("git", ["ls-files", "-z"], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  })
+    .split("\0")
+    .filter(Boolean)
+    .filter((rel) => !rel.split("/").some((seg) => seg.startsWith(".") || SKIP_DIRS.has(seg)))
+    .sort();
+  return tracked;
+}
+
+/**
+ * {@link trackedFiles} narrowed to the extensions that can hold JavaScript.
+ *
+ * ⚠️ **Scan everything and name your exceptions — never bind a guard to a list of targets.** Narrow
+ * this with a `.filter()` at the call site and say why there, so the exception is visible next to the
+ * claim it weakens. `isTestFile` is provided because "is a test a product writer?" is genuinely a
+ * per-guard question: `store-slug` must exclude them (a fixture inserts a literal slug ON PURPOSE, to
+ * provoke a unique violation) while `password` must not (a fixed password anywhere is the defect).
+ *
+ * ⚠️ A guard whose scope is WIDER than this — `password.test.ts` reads `.html` too, because a browser
+ * executes what is in one — builds its own filter over {@link trackedFiles} and says so. It does not
+ * widen this, because every other guard would silently inherit the change.
+ */
+export function trackedSources(): readonly string[] {
+  return trackedFiles().filter((rel) => SOURCE_EXT.test(rel));
+}
+
+/** A `*.test.ts` / `.test.tsx` / `.test.mjs` …. Whether that is in scope is the CALLER's decision. */
+export const isTestFile = (rel: string): boolean => TEST_FILE.test(rel);
+
+const codeMemo = new Map<string, string>();
+const textMemo = new Map<string, string>();
+const resolve = (file: string) => (path.isAbsolute(file) ? file : path.join(REPO_ROOT, file));
+
+/**
+ * {@link codeOnly} of a file on disk, lexed ONCE per path per process. Repo-relative or absolute.
+ *
+ * The memo is what makes a second assertion over the same sweep free — `store-slug.test.ts` asks
+ * three questions of every file in the repo and used to lex it three times.
+ *
+ * ⚠️ **Never point this at a MUTATED COPY of a product file and then at the original** (or the
+ * reverse): the memo is keyed on the path, and the mutation proofs deliberately write their copy to a
+ * fresh temporary path for that reason. For a string you already hold, call `codeOnly` directly.
+ */
+export function codeOfFile(file: string): string {
+  const abs = resolve(file);
+  let v = codeMemo.get(abs);
+  if (v === undefined) codeMemo.set(abs, (v = codeOnly(readFileSync(abs, "utf8"))));
+  return v;
+}
+
+/** {@link textWithoutComments} of a file on disk, lexed ONCE per path per process. Same caveats. */
+export function textOfFile(file: string): string {
+  const abs = resolve(file);
+  let v = textMemo.get(abs);
+  if (v === undefined) textMemo.set(abs, (v = textWithoutComments(readFileSync(abs, "utf8"))));
+  return v;
+}
+
 /**
  * The timeout a REPO-WIDE source scan needs, and why it is not the 5 s default.
  *
- * A guard that lexes the whole repo is doing real, bounded work. Profiled on this machine while
- * integrating audit wave 7:
+ * A guard that lexes the whole repo is doing real, bounded work. Profiled on this machine
+ * (657 tracked source files, 4,66 MB), one pass, warm:
  *
  * | step                                        | cost        |
  * |---------------------------------------------|-------------|
- * | `readdirSync` walk of `apps/`               | **8 ms**    |
- * | `readFileSync` all 455 files (3,3 MB)       | **24 ms**   |
- * | lex 3,3 MB through the TypeScript scanner   | **819 ms**  |
+ * | `git ls-files` for the whole repo           | **11 ms**   |
+ * | `readFileSync` all 657 files (4,66 MB)      | **27 ms**   |
+ * | lex 4,66 MB through the TypeScript scanner  | **537 ms**  |
  *
- * The filesystem is NOT the cost — swapping the walk for `git ls-files` (also 8 ms) buys nothing.
- * The scanner is. Measured per test, the two that pay it in full are
- * `password.test.ts > is the ONLY mint in the repo` (**3.544 ms**, it scans every tracked file, a
- * wider set than `apps/`) and `no-published-credentials.test.ts > …'the seeded password'` (**2.699 ms**,
- * the first of three patterns fills the memo for the rest). Every other scanning guard is under
- * 130 ms and must NOT be given this — a long timeout on a fast test only hides a future regression.
+ * The filesystem is NOT the cost — swapping the walk for `git ls-files` buys nothing, and both are
+ * now shared anyway (`trackedSources`). The scanner is, so the fix that MATTERS is the memo
+ * (`codeOfFile` / `textOfFile`), not the ceiling: a guard asking three questions of the repo pays
+ * ~537 ms now instead of ~1,6 s. This ceiling is what covers the pass that remains.
  *
- * Solo, both pass comfortably. Under `npm test` they share cores with 41 other test files and both
- * blew past 5 s, so the suite went red on a codebase where nothing was wrong. **A test that fails
- * sometimes teaches people to ignore red**, and this repo has already paid that bill in full:
- * `verify-rls` sat red for weeks, everyone learned to scroll past it, and two cross-tenant leaks
- * shipped past a verifier that was already failing.
+ * ⚠️ **A SYNCHRONOUS test DOES time out under vitest 3** — verified here with a 6 s busy loop, which
+ * fails with *"Test timed out in 5000ms"* exactly like an `await` that never settles. So "it is all
+ * sync, the timer cannot fire" is wrong and must not be used to argue a ceiling away.
+ *
+ * **Measured red, 2026-08-07.** With four busy cores stealing time from vitest's eight workers, the
+ * full suite failed **4 tests**, all of them repo-wide sweeps with no ceiling —
+ * `session-cookie` (9.215 ms and 5.459 ms) and `store-slug` (7.475 ms and 5.540 ms) — while
+ * `password` (7.922 ms) and `no-published-credentials` (5.964 ms) passed on identical work purely
+ * because they carried this constant. Nothing was wrong with the codebase in either run.
+ *
+ * **A test that fails sometimes teaches people to ignore red**, and this repo has already paid that
+ * bill in full: `verify-rls` sat red for weeks, everyone learned to scroll past it, and two
+ * cross-tenant leaks shipped past a verifier that was already failing.
+ *
+ * ⚠️ **Give this ONLY to a test that sweeps a whole app or the whole repo, and never to the suite**
+ * (`testTimeout` in `vitest.config.ts`). A global raise buys the same green run while also hiding
+ * every genuine hang — a DB query that never returns, a fetch with no server behind it — which is
+ * the one failure a timeout exists to report. Per-test is what keeps the fast guards fast: a ceiling
+ * on a 5 ms test means a 200× regression in it goes unreported.
  *
  * ⚠️ **AND THE "REAL FIX" DOES NOT EXIST — I FILED IT WITH A NUMBER I HAD MIS-MEASURED.**
  * The ceiling above was raised alongside `NEXT.md` N49, which claimed a prefilter would be a ~400×

@@ -1,9 +1,5 @@
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { codeOnly } from "../../../test/source-code";
+import { SOURCE_SCAN_TIMEOUT_MS, codeOfFile, isTestFile, trackedSources } from "../../../test/source-code";
 import { ENV_CHECKS, checkEnv } from "./env-health";
 
 // ── THE CENSUS: EVERY VARIABLE THE CODE READS IS CLASSIFIED, OR THIS GOES RED ────────────────────
@@ -16,9 +12,7 @@ import { ENV_CHECKS, checkEnv } from "./env-health";
 //
 // ⚠️ `codeOnly`, never the raw text: `process.env.FOO` inside a comment reads nothing, and this file
 // itself is full of variable names in prose.
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(HERE, "..", "..", "..");
-const ROUTE = path.join(HERE, "..", "app", "api", "health", "env", "route.ts");
+const ROUTE = "apps/admin/app/api/health/env/route.ts";
 
 // Runtime-only names: set by the platform or by a test harness, never by an operator in Coolify, and
 // therefore not something an env health check should ask about. Named explicitly — the rule in this
@@ -33,15 +27,17 @@ const NOT_OPERATOR_SET = new Set([
   "CHECK_BASE_URL", // storefront check harness
 ]);
 
+// `trackedSources()` is the ONE lister; the prefixes below are this guard's scope and nothing else.
+// A test is out of scope on purpose — vitest's own `process.env` reads are not the admin's runtime
+// environment, and asking an operator to classify `TEST_DB_REQUIRED` is how a census gets ignored.
 function envNamesReadBy(dirs: string[]): string[] {
-  const files = execFileSync("git", ["ls-files", "-z", ...dirs], { cwd: REPO_ROOT, encoding: "utf8" })
-    .split("\0")
-    .filter((f) => /\.(?:ts|tsx)$/.test(f) && !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
+  const files = trackedSources().filter(
+    (rel) => dirs.some((d) => rel.startsWith(`${d}/`)) && /\.tsx?$/.test(rel) && !isTestFile(rel),
+  );
   const found = new Set<string>();
   for (const rel of files) {
-    const code = codeOnly(readFileSync(path.join(REPO_ROOT, rel), "utf8"));
     // `codeOnly` joins tokens with single spaces, so the member access arrives spaced out.
-    for (const m of code.matchAll(/process\s*\.\s*env\s*\.\s*([A-Z][A-Z0-9_]*)/g)) found.add(m[1]);
+    for (const m of codeOfFile(rel).matchAll(/process\s*\.\s*env\s*\.\s*([A-Z][A-Z0-9_]*)/g)) found.add(m[1]);
   }
   return [...found].filter((n) => !NOT_OPERATOR_SET.has(n)).sort();
 }
@@ -53,15 +49,19 @@ describe("every env var the admin reads is classified", () => {
     expect(read.length).toBeGreaterThan(8);
     const unclassified = read.filter((n) => !(n in ENV_CHECKS));
     expect(unclassified, `classify these in lib/env-health.ts: ${unclassified.join(", ")}`).toEqual([]);
-  });
+  }, SOURCE_SCAN_TIMEOUT_MS);
 
   it("classifies the ones the SHARED packages read too — they run inside this process", () => {
     // `@tokophi/lib` and `@tokophi/db` are imported by the admin, so their env is the admin's env.
     // `AUTH_SECRET` and `INTEGRATION_TOKEN_KEY` live there, and both are required.
     const read = envNamesReadBy(["packages/lib/src", "packages/db/src"]);
+    // The same floor the sweep above carries, and for the same reason: this one narrows by PATH
+    // PREFIX, so a package move or a rename empties the list and the test passes having read
+    // nothing. `AUTH_SECRET` and `INTEGRATION_TOKEN_KEY` alone put it over this.
+    expect(read.length, "no env var found in the shared packages — has the scan stopped reaching them?").toBeGreaterThan(1);
     const unclassified = read.filter((n) => !(n in ENV_CHECKS));
     expect(unclassified, `classify these in lib/env-health.ts: ${unclassified.join(", ")}`).toEqual([]);
-  });
+  }, SOURCE_SCAN_TIMEOUT_MS);
 
   it("keeps the required set honest — the four that stop the app dead", () => {
     // Not "some are required": these specific ones, because each has a failure this repo has met.
@@ -96,7 +96,7 @@ describe("the health route never reports a value", () => {
     // Presence is a fact an operator needs; the value is one screenshot from being leaked, and half
     // this list is credentials. The route may read CRON_SECRET (its gate) and NODE_ENV (fail-closed);
     // anything else means a value is being touched inside the responder.
-    const code = codeOnly(readFileSync(ROUTE, "utf8"));
+    const code = codeOfFile(ROUTE);
     const names = [...code.matchAll(/process\s*\.\s*env\s*\.\s*([A-Z][A-Z0-9_]*)/g)].map((m) => m[1]);
     expect([...new Set(names)].sort()).toEqual(["CRON_SECRET", "NODE_ENV"]);
     // And it must never index the environment dynamically, which would slip past the check above.
