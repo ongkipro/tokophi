@@ -1650,3 +1650,44 @@ Measured: the viewport-zoom `<select>` and the ArrayField add-button inside
 `node_modules/@measured/puck` have no accessible name. The array field has an override point; the
 zoom control does not. Not ours to patch in place — either an override, or accepted and recorded.
 
+### N57. Nobody is TOLD when a signup arrives — WhatsApp the operator · **M** · NEW
+Self-serve signup is OPEN in production (`SIGNUP_ENABLED=true`, 2026-08-06) and every new shop lands
+suspended in the review queue (0090). The merchant's own dashboard promises **"biasanya dalam 1×24
+jam"** — and nothing anywhere pushes that fact to a human. The only two traces are pull-only:
+the counter on Super Admin → Dashboard (#172) and a `platform_activity` row. If no operator opens the
+control plane that day, the promise is broken by silence.
+
+**⚠️ Email is not the answer here and that is measured, not assumed:** there is no mailer in this
+repo (`nodemailer|resend|postmark|sendgrid|@aws-sdk/client-ses` → 0 dependencies, 2026-08-06) and
+neither `tokophi.id` nor `tokophi.com` has an MX or SPF record. Cart recovery already travels on
+WhatsApp for the same reason. See N58 for the email track, which is a separate, larger piece of work.
+
+**What to build**
+- A notifier fired from `provisionStore`'s transaction **commit**, never inside it — a failed
+  notification must not roll back a shop. Same posture as `checkout-session.ts`: fails quiet.
+- One recipient list, platform-level, in `platform_*` config (not per-store): the operators on duty.
+- Message: shop name, owner email, the district they picked (or "belum diisi"), and a deep link to
+  `rich.tokophi.com/toko/<id>`. The email is the thing being judged — nobody has proved they own it.
+
+**⚠️ Decide the transport first, and record it as an ADR.** `waLink()` only opens a chat in a
+browser — it cannot SEND. Sending needs one of: WhatsApp Cloud API (Meta, template approval, a
+business number), an unofficial gateway (cheap, ToS risk, account bans), or Telegram/Slack to the
+operator instead (no approval, no number, delivered in seconds). The last one is worth costing before
+anyone assumes WhatsApp: the recipient is US, not a merchant, so the channel is our own choice.
+
+**Do not** notify per merchant signup by SMS/WhatsApp to the MERCHANT in the same change — that is a
+different audience, a different consent question, and it needs the verified-identity work in N58.
+
+### N58. There is no mailer at all — decide the email track · **L** · NEW
+Blocks: email verification at signup (the one open item in
+`2026-08-05-signup-open-audit.md` §1, and the reason the approval queue exists), password reset for
+merchants, invoice delivery, and any order email a shopper might expect.
+
+**Measured 2026-08-06:** zero mail dependencies in the repo; `dig MX tokophi.id` and
+`dig MX tokophi.com` both empty; no SPF/DKIM/DMARC on either zone. So this is not "wire a library" —
+it is a provider, a sending domain, DNS records, a template layer, a bounce/complaint path, and a
+decision about which of the two audiences (operators, merchants, shoppers) email is even for.
+
+⚠️ Sending and receiving are separate problems and only sending needs SPF/DKIM/DMARC. If all that is
+wanted is an address that can RECEIVE (`support@tokophi.id`), Cloudflare Email Routing forwards to an
+existing inbox for free and needs no provider at all — both zones are already on Cloudflare.
