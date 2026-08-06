@@ -113,38 +113,61 @@ const FIELD =
       <Fragment>
         {/* ONE form for filters AND sort. Two forms would need two copies of the hidden carry
             fields, and the first one to be submitted would silently discard the other's values. */}
-        <form id="listing-controls" method="get" action={Astro.url.pathname} class="border-b border-line pb-5">
+        <form
+          id="listing-controls"
+          method="get"
+          action={Astro.url.pathname}
+          class="rounded-[1.25rem] border border-line bg-white/80 p-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-cream/80 sm:p-5"
+        >
           {carryParams.map(([k, v]) => <input type="hidden" name={k} value={v} />)}
 
-          <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             {/* The count is the FILTERED total, and the range says which slice is on screen. A bare
                 "14 produk" over a grid of 12 is a page arguing with itself. */}
-            <p class="text-sm text-muted">
-              {sorted.length > 0 ? (
-                <Fragment>
-                  Menampilkan{" "}
-                  <span class="font-medium text-ink tabular-nums">
-                    {num(from + 1)}–{num(from + visible.length)}
-                  </span>{" "}
-                  dari <span class="font-medium text-ink tabular-nums">{num(sorted.length)}</span> produk
-                </Fragment>
-              ) : null}
-            </p>
-
-            <label class="flex items-center gap-2 text-sm text-muted">
-              <span class="hidden sm:inline">Urutkan</span>
-              <div class="relative">
-                <select id="sort-select"
-            aria-label="Urutkan produk" name="sort" class={FIELD}>
-                  {Object.entries(SORTS).map(([k, label]) => (
-                    <option value={k} selected={k === sort}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted" stroke-width={2} />
+            <div class="space-y-2">
+              <div class="flex flex-wrap items-center gap-2.5">
+                <span class="inline-flex min-h-9 items-center rounded-full border border-brand-200 bg-brand-50 px-3 text-xs font-semibold uppercase tracking-[0.16em] text-brand-700">
+                  Katalog
+                </span>
+                <span class="inline-flex min-h-9 items-center rounded-full border border-line bg-cream px-3 text-xs font-medium uppercase tracking-[0.16em] text-muted">
+                  12 / halaman
+                </span>
               </div>
-            </label>
+              <p class="text-sm leading-relaxed text-muted">
+                {sorted.length > 0 ? (
+                  <Fragment>
+                    Menampilkan{" "}
+                    <span class="font-medium text-ink tabular-nums">
+                      {num(from + 1)}–{num(from + visible.length)}
+                    </span>{" "}
+                    dari <span class="font-medium text-ink tabular-nums">{num(sorted.length)}</span> produk di halaman ini
+                  </Fragment>
+                ) : null}
+              </p>
+            </div>
+
+            <div class="flex flex-col gap-2 md:items-end">
+              <label class="flex items-center justify-between gap-3 text-sm text-muted md:justify-end">
+                <span>Urutkan</span>
+                <div class="relative shrink-0">
+                  <select id="sort-select"
+                    aria-label="Urutkan produk"
+                    name="sort"
+                    class={FIELD}
+                  >
+                    {Object.entries(SORTS).map(([k, label]) => (
+                      <option value={k} selected={k === sort}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted" stroke-width={2} />
+                </div>
+              </label>
+              <p class="text-xs text-muted md:text-right">
+                Urutan tersimpan di URL agar mudah dibagikan dan konsisten saat pindah halaman.
+              </p>
+            </div>
             {/* JS off, and no filter bar to borrow a submit button from: without this the sort
                 dropdown is a control that cannot be applied. */}
             <noscript>
@@ -159,7 +182,7 @@ const FIELD =
         </form>
 
         {visible.length > 0 ? (
-          <div class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <div class="mt-8 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 sm:gap-x-5 sm:gap-y-10 lg:grid-cols-4 lg:gap-x-6">
             {/* `level={2}` — the card defaults to h3 and this listing sits under the page's h1, so every
                 listing surface in the shop went h1 → h3. The prop existed for exactly this and not one
                 of the ten call sites passed it. */}

@@ -514,7 +514,7 @@ export function OrderDetail({
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Produk</TableHead>
+                    <TableHead className="w-[48%]">Produk</TableHead>
                     <TableHead className="text-center">Qty</TableHead>
                     <TableHead className="text-right">Harga</TableHead>
                     <TableHead className="text-right">Subtotal</TableHead>
@@ -523,7 +523,7 @@ export function OrderDetail({
                 <TableBody>
                   {lines.map((l, i) => (
                     <TableRow key={i} className="hover:bg-transparent">
-                      <TableCell>
+                      <TableCell className="max-w-md">
                         <div className="flex items-center gap-3">
                           <ProductThumb
                             src={l.image ?? undefined}
@@ -532,8 +532,8 @@ export function OrderDetail({
                             className="size-10"
                             emojiClassName="text-lg"
                           />
-                          <div className="min-w-0 leading-tight">
-                            <div className="font-medium">{l.title}</div>
+                          <div className="min-w-0 flex-1 leading-tight">
+                            <div className="line-clamp-2 whitespace-normal break-words font-medium" title={l.title}>{l.title}</div>
                             <div className="text-xs text-muted-foreground">
                               {l.variant ?? "Tanpa varian"}
                             </div>

@@ -72,43 +72,16 @@ function SaldoChip({ balance }: { balance: TopbarData["balance"] }) {
     // and the store name on a 360px phone, so the NAME gives way (see the store switcher): a seller
     // knows which shop is theirs, and the name is still one tap away in this bar's dropdown and in the
     // sidebar — the balance was nowhere.
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button variant="ghost" className="flex shrink-0 gap-1.5 px-2 font-medium tabular-nums sm:gap-2" aria-label="Saldo">
-            <Wallet className="size-[18px] text-muted-foreground" />
-            <span className="text-sm">{IDR(balance.available, { compact: true })}</span>
-          </Button>
-        }
-      />
-      <DropdownMenuContent align="end" className="w-72">
-        <DropdownMenuLabel>Saldo</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <div className="space-y-2.5 px-2 py-1.5">
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-xs text-muted-foreground">Tersedia</span>
-            <span className="text-sm font-semibold tabular-nums">{IDR(balance.available)}</span>
-          </div>
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-xs text-muted-foreground">Dalam proses</span>
-            <span className="text-sm tabular-nums text-muted-foreground">{IDR(balance.pending)}</span>
-          </div>
-          {balance.returned > 0 && (
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-xs text-muted-foreground">Ditarik kembali (retur)</span>
-              <span className="text-sm tabular-nums text-muted-foreground">{IDR(balance.returned)}</span>
-            </div>
-          )}
-          <p className="border-t pt-2 text-xs leading-relaxed text-muted-foreground">
-            Dana masuk saat pesanan <span className="font-medium text-foreground">selesai</span>.
-          </p>
-        </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="gap-2 font-medium" render={<Link href="/saldo" />}>
-          <Wallet className="size-4" /> Lihat detail &amp; tarik saldo
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      variant="ghost"
+      nativeButton={false}
+      render={<Link href="/saldo" />}
+      className="flex shrink-0 gap-1.5 px-2 font-medium tabular-nums sm:gap-2"
+      aria-label={`Saldo tersedia ${IDR(balance.available)} — buka rincian saldo`}
+    >
+      <Wallet className="size-[18px] text-muted-foreground" />
+      <span className="text-sm">{IDR(balance.available, { compact: true })}</span>
+    </Button>
   );
 }
 

@@ -213,8 +213,8 @@ function LeadCard({ lead, waHref }: { lead: Lead; waHref: string }) {
     <Card className="gap-0 py-0 shadow-xs transition-shadow hover:shadow-md">
       <CardContent className="flex flex-col gap-2 p-3">
         <div className="flex items-start justify-between gap-2">
-          <p className="font-medium leading-tight">{lead.name}</p>
-          <Badge variant="outline" className="gap-1 font-normal">
+          <p className="line-clamp-2 min-w-0 flex-1 break-words font-medium leading-tight" title={lead.name}>{lead.name}</p>
+          <Badge variant="outline" className="shrink-0 gap-1 font-normal">
             <SourceIcon className={`size-3 ${sourceClass}`} />
             {lead.source}
           </Badge>

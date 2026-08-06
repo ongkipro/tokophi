@@ -128,7 +128,7 @@ function SegmentCard({ segment }: { segment: CustSegment }) {
       </div>
 
       <div>
-        <p className="font-medium">{segment.name}</p>
+        <p className="line-clamp-2 break-words font-medium" title={segment.name}>{segment.name}</p>
         <div className="mt-1 flex items-baseline gap-2">
           <span className="text-2xl font-bold tabular-nums">{num(segment.count)}</span>
           <span

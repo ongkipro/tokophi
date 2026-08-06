@@ -162,7 +162,7 @@ export function ArticleEditor({ post, blogs }: { post?: BlogPost; blogs: BlogRef
     <div>
       {/* Top bar */}
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <Link
             href="/blog"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -170,7 +170,7 @@ export function ArticleEditor({ post, blogs }: { post?: BlogPost; blogs: BlogRef
             <ArrowLeft className="size-4" />
             Blog
           </Link>
-          <h1 className="text-xl font-semibold tracking-tight">{topBarTitle}</h1>
+          <h1 className="line-clamp-2 break-words text-xl font-semibold tracking-tight" title={topBarTitle}>{topBarTitle}</h1>
         </div>
         <div className="flex items-center gap-2">
           {isEdit && canWrite && (

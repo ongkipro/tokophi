@@ -52,56 +52,65 @@ const OFF = "border border-line/60 bg-transparent text-muted/60";
 
 {
   totalPages > 1 && (
-    <nav aria-label={label} class="mx-auto mt-12 flex max-w-7xl items-center justify-center gap-2 px-4 sm:px-6">
-      {page > 1 ? (
-        <a href={href(page - 1)} rel="prev" class:list={[CELL, LINK]}>
-          <span aria-hidden="true">‹</span>
-          <span class="ml-1 hidden sm:inline">Sebelumnya</span>
-          <span class="sr-only sm:hidden">Halaman sebelumnya</span>
-        </a>
-      ) : (
-        <span class:list={[CELL, OFF]} aria-hidden="true">
-          <span>‹</span>
-          <span class="ml-1 hidden sm:inline">Sebelumnya</span>
-        </span>
-      )}
+    <nav aria-label={label} class="mx-auto mt-12 max-w-7xl px-4 sm:px-6">
+      <div class="rounded-[1.25rem] border border-line bg-white/75 p-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-cream/80 sm:p-5">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="text-sm font-medium text-ink">Halaman {page} dari {totalPages}</p>
+            <p class="mt-1 text-xs text-muted">Lanjutkan telusuri katalog tanpa kehilangan urutan yang sedang dipilih.</p>
+          </div>
 
-      <ol class="flex items-center gap-1">
-        {slots.map((slot) =>
-          slot === "gap" ? (
-            <li class:list={[CELL, "text-muted"]} aria-hidden="true">
-              …
-            </li>
-          ) : (
-            <li>
-              {slot === page ? (
-                // `aria-current="page"` is what tells a screen reader which one they are ON. Colour
-                // alone would leave that information visible only to people who can see it.
-                <span class:list={[CELL, "bg-brand-600 font-semibold text-white"]} aria-current="page">
-                  {slot}
-                </span>
-              ) : (
-                <a href={href(slot)} class:list={[CELL, LINK]} aria-label={`Halaman ${slot}`}>
-                  {slot}
-                </a>
+          <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+            {page > 1 ? (
+              <a href={href(page - 1)} rel="prev" class:list={[CELL, LINK]}>
+                <span aria-hidden="true">‹</span>
+                <span class="ml-1 hidden sm:inline">Sebelumnya</span>
+                <span class="sr-only sm:hidden">Halaman sebelumnya</span>
+              </a>
+            ) : (
+              <span class:list={[CELL, OFF]} aria-hidden="true">
+                <span>‹</span>
+                <span class="ml-1 hidden sm:inline">Sebelumnya</span>
+              </span>
+            )}
+
+            <ol class="flex items-center gap-1">
+              {slots.map((slot) =>
+                slot === "gap" ? (
+                  <li class:list={[CELL, "text-muted"]} aria-hidden="true">
+                    …
+                  </li>
+                ) : (
+                  <li>
+                    {slot === page ? (
+                      <span class:list={[CELL, "bg-brand-600 font-semibold text-white"]} aria-current="page">
+                        {slot}
+                      </span>
+                    ) : (
+                      <a href={href(slot)} class:list={[CELL, LINK]} aria-label={`Halaman ${slot}`}>
+                        {slot}
+                      </a>
+                    )}
+                  </li>
+                ),
               )}
-            </li>
-          ),
-        )}
-      </ol>
+            </ol>
 
-      {page < totalPages ? (
-        <a href={href(page + 1)} rel="next" class:list={[CELL, LINK]}>
-          <span class="mr-1 hidden sm:inline">Berikutnya</span>
-          <span class="sr-only sm:hidden">Halaman berikutnya</span>
-          <span aria-hidden="true">›</span>
-        </a>
-      ) : (
-        <span class:list={[CELL, OFF]} aria-hidden="true">
-          <span class="mr-1 hidden sm:inline">Berikutnya</span>
-          <span>›</span>
-        </span>
-      )}
+            {page < totalPages ? (
+              <a href={href(page + 1)} rel="next" class:list={[CELL, LINK]}>
+                <span class="mr-1 hidden sm:inline">Berikutnya</span>
+                <span class="sr-only sm:hidden">Halaman berikutnya</span>
+                <span aria-hidden="true">›</span>
+              </a>
+            ) : (
+              <span class:list={[CELL, OFF]} aria-hidden="true">
+                <span class="mr-1 hidden sm:inline">Berikutnya</span>
+                <span>›</span>
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
     </nav>
   )
 }

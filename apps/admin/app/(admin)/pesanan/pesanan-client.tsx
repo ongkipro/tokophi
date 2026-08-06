@@ -180,7 +180,7 @@ export function PesananClient({
                         <span aria-hidden>·</span>
                         <span>{timeAgo(o.minutesAgo)}</span>
                       </div>
-                      <OrderProductCell lines={o.lines} lineCount={o.lineCount} />
+                      <OrderProductCell lines={o.lines} lineCount={o.lineCount} href={`/pesanan/${o.number}`} />
                     </TableCell>
 
                     <TableCell className="py-3">

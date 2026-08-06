@@ -46,7 +46,7 @@ export function PromoListClient({ rows, landings }: { rows: PromoListRow[]; land
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Produk</TableHead>
+                <TableHead className="w-[60%]">Produk</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
@@ -54,10 +54,16 @@ export function PromoListClient({ rows, landings }: { rows: PromoListRow[]; land
             <TableBody>
               {rows.map((r) => (
                 <TableRow key={r.productId}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
+                  <TableCell className="max-w-lg">
+                    <div className="flex min-w-0 items-center gap-3">
                       <ProductThumb src={r.image ?? undefined} alt={r.name} className="h-10 w-10 shrink-0" />
-                      <span className="font-medium">{r.name}</span>
+                      <Link
+                        href={`/promo/${r.productId}`}
+                        className="line-clamp-2 min-w-0 flex-1 whitespace-normal break-words font-medium hover:underline"
+                        title={r.name}
+                      >
+                        {r.name}
+                      </Link>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -130,8 +136,8 @@ export function PromoListClient({ rows, landings }: { rows: PromoListRow[]; land
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Judul / Slug</TableHead>
-                <TableHead>Produk</TableHead>
+                <TableHead className="w-[36%]">Judul / Slug</TableHead>
+                <TableHead className="w-[30%]">Produk</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
@@ -139,16 +145,22 @@ export function PromoListClient({ rows, landings }: { rows: PromoListRow[]; land
             <TableBody>
               {landings.map((l) => (
                 <TableRow key={l.id}>
-                  <TableCell>
+                  <TableCell className="max-w-sm">
                     <div className="flex items-center gap-3">
                       <Code2 className="h-5 w-5 shrink-0 text-muted-foreground" />
-                      <div>
-                        <div className="font-medium">{l.title}</div>
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/promo/html/${l.id}`}
+                          className="line-clamp-2 whitespace-normal break-words font-medium hover:underline"
+                          title={l.title}
+                        >
+                          {l.title}
+                        </Link>
                         <div className="text-xs text-muted-foreground">/lp/{l.slug}</div>
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{l.productName}</TableCell>
+                  <TableCell className="max-w-xs"><span className="line-clamp-2 whitespace-normal break-words text-sm text-muted-foreground" title={l.productName}>{l.productName}</span></TableCell>
                   <TableCell>
                     {l.enabled ? (
                       <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Aktif</Badge>

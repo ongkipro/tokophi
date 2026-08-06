@@ -23,6 +23,7 @@
 import Layout from "../../layouts/Layout.astro";
 import PageHeader from "../../components/PageHeader.astro";
 import ProductListing from "../../components/ProductListing.astro";
+import CategoryNav from "../../components/sections/CategoryNav.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
 
@@ -46,6 +47,7 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
 // Built from the merchant's own data, never from the demo's vertical: the store name, the real
 // product count, and their real category names. Layout clamps to 155 chars on a word boundary.
 const catNames = catalog.collections.map((c) => c.name).filter(Boolean);
+const categoryCount = catalog.collections.length;
 const DESCRIPTION = [
   `Semua produk ${store.name}`,
   products.length ? `${products.length} produk siap kirim.` : null,
@@ -63,7 +65,21 @@ const DESCRIPTION = [
     eyebrow="Katalog"
     title="Semua Produk"
     dek={`Seluruh koleksi ${store.name}, kirim ke seluruh Indonesia.`}
-  />
+  >
+    <div class="mt-5 flex flex-wrap gap-2">
+      <span class="inline-flex min-h-10 items-center rounded-full border border-line bg-white/75 px-4 text-sm font-medium text-ink backdrop-blur">
+        {products.length} produk tersedia
+      </span>
+      <span class="inline-flex min-h-10 items-center rounded-full border border-line bg-white/60 px-4 text-sm text-muted backdrop-blur">
+        {categoryCount} kategori aktif
+      </span>
+      <span class="inline-flex min-h-10 items-center rounded-full border border-brand-200 bg-brand-50 px-4 text-sm text-brand-700">
+        12 produk per halaman
+      </span>
+    </div>
+  </PageHeader>
+
+  <CategoryNav items={[]} />
 
   {
     TEMPLATE ? (

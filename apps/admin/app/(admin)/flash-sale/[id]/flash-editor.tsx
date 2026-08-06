@@ -182,12 +182,10 @@ export function FlashEditor({
               return (
                 <div key={p.id} className={`flex flex-wrap items-center gap-3 rounded-lg border p-3 ${on ? "border-amber-300 bg-amber-50/40" : ""}`}>
                   {/* One switch per product, so this shape multiplies: the catalogue rendered 22
-                      nameless switches in a column (measured 2026-08-05). `truncate` needs a block
-                      box, which is why the label carries `block` — the shared <Label> is a flex
-                      container and would break the ellipsis. */}
+                      nameless switches in a column (measured 2026-08-05). */}
                   <Switch id={`fs-p-${p.id}`} checked={on} onCheckedChange={(v) => toggle(p.id, v, p.basePrice)} disabled={!canWrite} />
                   <div className="min-w-0 flex-1">
-                    <label htmlFor={`fs-p-${p.id}`} className="block truncate text-sm font-medium">{p.title}</label>
+                    <label htmlFor={`fs-p-${p.id}`} className="line-clamp-2 block break-words text-sm font-medium" title={p.title}>{p.title}</label>
                     <div className="text-xs text-muted-foreground">Harga normal {IDR(p.basePrice)}</div>
                   </div>
                   {on && (
