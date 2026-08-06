@@ -118,6 +118,7 @@ Roughly highest value first. **S** ≈ under an hour, **M** ≈ half a day, **L*
 
 | | | |
 |---|---|---|
+| 🔴 **ORDER-FINANCE / #180** | **Reconcile the complete checkout → payment/COD → shipping selection/change → KiriminAja tracking → seller-ledger flow.** Seller receives merchandise proceeds only; buyer bears gateway/COD fees; shipping deltas are auditable; QRIS must be scannable. Assigned to `@irwansyah10`. Canonical task: [`2026-08-06-irwansyah-order-shipping-finance.md`](./2026-08-06-irwansyah-order-shipping-finance.md). | **L** |
 | 🔴 **N59** | **Tidak ada CI — `main` bisa merah dan tak ada yang tahu.** `seller-entity-links.test.ts` merah di `origin/main` @ `e6d557e` SEKARANG, ter-merge begitu saja. ⚠️ Suite butuh Postgres; biarkan DB tak terjangkau GAGAL, bukan SKIP. | **M** |
 | **N60** | **Env yang tak sampai ke container tidak berbunyi apa pun** — Coolify memotret env saat deployment dimulai; sebuah nilai yang disimpan sesudahnya menghasilkan `SIGNUP_ENABLED: ''` dengan semua host sehat. Terjadi dua kali dalam seminggu. | **S** |
 | **N61** | Empat skrip `verify-*` ada, tak satu pun otomatis — termasuk `verify-rls`, pagar yang pernah merah berminggu-minggu. | **S** |
