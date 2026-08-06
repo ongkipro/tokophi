@@ -11,6 +11,13 @@ time you read this.
 > And measure on `origin/main`, never on your own rebased branch — that is how a task got filed for a
 > flake that the very next merge had already fixed.
 
+🔴 **A MERGE TO `main` CAN FAIL TO DEPLOY, SILENTLY.** Measured 2026-08-07: main sat at `381a8e7`
+for 25+ min while every container stayed on `b22c1ec` and **no image for that sha was ever built** —
+disk fine, nothing unhealthy, **all four hosts green throughout**. Docs-only that time, so nothing
+was lost; the same silence over a checkout fix would read as shipped. **Never treat four green
+hosts as proof a merge landed — compare the container sha to `origin/main`.** DEL-3 / T-11 in
+[`2026-08-06-open-work.md`](./2026-08-06-open-work.md).
+
 🔴 **THERE ARE TWO DOMAINS.** `tokophi.id` is a separate Cloudflare zone and it is where merchant
 storefronts actually serve (`<slug>.tokophi.com` 301s to `<slug>.tokophi.id`), while `app.` and
 `rich.` go the other way — `.id` → `.com`. So `SECURITY.md` §5 describes the REDIRECT domain.
