@@ -34,6 +34,15 @@ const REGISTERED = [
 ].map((m) => ({ name: m[1], server: m[2] === "true" }));
 
 describe("the storefront check suite", () => {
+  // Every assertion below is driven by these two lists, and `toEqual([])` / `toEqual(ON_DISK)` are
+  // both satisfied by an empty one. A renamed convention on either side (the `check-*.mjs` glob, or
+  // the `{ name, server }` shape the runner registers) would empty it and turn all three green over
+  // a suite that runs nothing — the exact vacuous pass this file was written to stop, one level up.
+  it("found the checks at all, on disk AND in the runner", () => {
+    expect(ON_DISK.length, "no check-*.mjs on disk — has the naming convention changed?").toBeGreaterThan(4);
+    expect(REGISTERED.length, "run-checks.mjs registers none — has the CHECKS entry shape changed?").toBeGreaterThan(4);
+  });
+
   it("runs every check in the folder", () => {
     expect(REGISTERED.map((c) => c.name).sort()).toEqual(ON_DISK);
   });

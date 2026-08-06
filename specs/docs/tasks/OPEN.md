@@ -11,6 +11,21 @@ time you read this.
 > And measure on `origin/main`, never on your own rebased branch — that is how a task got filed for a
 > flake that the very next merge had already fixed.
 
+🔴 **A MERGE TO `main` CAN FAIL TO DEPLOY, SILENTLY.** Measured 2026-08-07: main sat at `381a8e7`
+for 25+ min while every container stayed on `b22c1ec` and **no image for that sha was ever built** —
+disk fine, nothing unhealthy, **all four hosts green throughout**. Docs-only that time, so nothing
+was lost; the same silence over a checkout fix would read as shipped. **Never treat four green
+hosts as proof a merge landed — compare the container sha to `origin/main`.** DEL-3 / T-11 in
+[`2026-08-06-open-work.md`](./2026-08-06-open-work.md).
+
+🔴 **THERE ARE TWO DOMAINS.** `tokophi.id` is a separate Cloudflare zone and it is where merchant
+storefronts actually serve (`<slug>.tokophi.com` 301s to `<slug>.tokophi.id`), while `app.` and
+`rich.` go the other way — `.id` → `.com`. So `SECURITY.md` §5 describes the REDIRECT domain.
+Measured 2026-08-06 on `.id`: no HSTS, `ssl: full` (origin cert unvalidated), TLS floor **1.0**;
+`.com` has HSTS 1 y, `ssl: strict`, TLS 1.2. HSTS is now on `.id` at the 24 h ramp; the other two
+are decisions that can break the site — and `tokophi.id` **apex returns 503**. Everything open,
+with runnable `Done when`s → [`2026-08-06-open-work.md`](./2026-08-06-open-work.md).
+
 ▶️ **Wondering what happened on 2026-08-05?**
 [`2026-08-05-session-close.md`](./2026-08-05-session-close.md) is the ledger — nine PRs, two zone
 changes, the verified end state, and what each remaining item belongs to. Start there, then come back
@@ -205,12 +220,18 @@ npm run build:admin ; npm run build:super
 
 ## Deploying
 
-Merge to `origin/main` → Coolify rebuilds. **9–11 minutes** from merge to all four hosts green, with
+Merge to `origin/main` → Coolify rebuilds. **9–11 minutes with an empty queue; ~20 minutes when
+merges land together** (measured 1194 s with four merges queued — Coolify serialises builds), with
 a **~1,5–2,5 min window of 503** while containers swap (admin recovers slightly before the
 storefront). ⚠️ This used to read "~6 minutes / 60–90 s" and both halves were understated — measured
 FOUR times on 2026-08-05: **524 s · 656 s · 558 s · 542 s**, sampled every 25 s. `DEPLOY.md`'s
 "~8–9 min" was the closer of the two figures. The low number is what makes someone conclude a healthy
 deploy has failed and start intervening. Watch until all four return:
+
+⚠️ **Watch for `containers == origin/main`, NEVER for your own merge sha.** With other agents
+merging concurrently the containers skip straight past your commit to the newest one, so a
+sha-specific watch never satisfies and reports a failure that did not happen. (Learned the hard
+way on 2026-08-06: the deploy was healthy for the whole 1800 s the watcher spent waiting.)
 
 ```bash
 for h in tokophi.com app.tokophi.com rich.tokophi.com toko.tokophi.com; do
