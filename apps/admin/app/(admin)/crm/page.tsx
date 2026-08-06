@@ -273,7 +273,9 @@ export default async function CrmPage() {
                           {due.text}
                         </span>
                       </div>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {/* The context line carries the invoice number, its amount, or a day count —
+                          30,95px of ink movement per row at 1440px, down a queue of follow-ups. */}
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground tabular-nums">
                         {f.context}
                       </p>
                     </div>

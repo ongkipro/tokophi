@@ -139,7 +139,7 @@ export function UlasanClient({ reviews }: { reviews: Review[] }) {
             </span>
             <Stars rating={Math.round(avg)} className="mb-1.5" />
           </div>
-          <div className="mt-1 text-xs text-muted-foreground">
+          <div className="mt-1 text-xs text-muted-foreground tabular-nums">
             dari {num(reviews.length)} ulasan
           </div>
         </Card>
@@ -233,7 +233,8 @@ export function UlasanClient({ reviews }: { reviews: Review[] }) {
         {rows.length > 0 && (
           <>
             <Separator />
-            <div className="p-4 text-xs text-muted-foreground">
+            {/* Rewritten by the filter tabs and the search box, i.e. by typing. */}
+            <div className="p-4 text-xs text-muted-foreground tabular-nums">
               Menampilkan {num(rows.length)} ulasan
             </div>
           </>

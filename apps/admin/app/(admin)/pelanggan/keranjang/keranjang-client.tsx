@@ -17,12 +17,15 @@ import { CheckoutStepBadge } from "@/components/admin/pelanggan/checkout-step-ba
 import { useCan } from "@/components/admin/permissions";
 import { recordCartContact } from "@/lib/actions/checkout";
 import type { AbandonedCart, CheckoutMetrics } from "@/lib/data/checkout";
-import { IDR, num, timeAgo } from "@tokophi/lib/format";
+import { IDR, num, share, timeAgo } from "@tokophi/lib/format";
 import { SearchInput } from "@/components/admin/search-input";
 
-// Rate → "80,0%" (id-ID decimal comma). NOT `pct()`: that one carries a "+"/"−" sign, which is for
-// deltas. An abandonment rate is a share, not a change.
-const rate = (n: number) => `${(n * 100).toFixed(1).replace(".", ",")}%`;
+// `share()` (@tokophi/lib/format) is the part-of-a-whole formatter. The one-liner that used to live
+// here said the right thing in its comment — not `pct()`, because an abandonment rate is a share and
+// not a change — and then wrote `share()` out again by hand. This file and
+// `components/admin/pesanan/return-summary.tsx` each kept their own copy, and the copies had already
+// DIVERGED: this one remembered `.replace(".", ",")` and that one did not, so the same kind of figure
+// printed "10,9%" here and "0.0%" there. The rate arrives as a 0..1 fraction; `share` takes percent.
 
 function itemsLabel(cart: AbandonedCart): string {
   if (cart.items.length === 0) return "—";
@@ -100,7 +103,7 @@ export function KeranjangClient({ carts, metrics }: { carts: AbandonedCart[]; me
     },
     {
       label: "Tingkat ditinggal",
-      value: rate(metrics.abandonRate),
+      value: share(metrics.abandonRate * 100),
       icon: TrendingDown,
       sub: `${num(metrics.abandoned)} ditinggal ÷ ${num(metrics.abandoned + metrics.orders)} checkout (${num(metrics.orders)} jadi pesanan)`,
     },
@@ -111,7 +114,7 @@ export function KeranjangClient({ carts, metrics }: { carts: AbandonedCart[]; me
       label: "Diselamatkan",
       value: num(metrics.rescued),
       icon: RotateCcw,
-      sub: `${rate(metrics.recoveryRate)} dari ${num(metrics.abandoned + metrics.rescued)} keranjang yang sempat ditinggal · ${IDR(metrics.rescuedValue, { compact: true })} kembali`,
+      sub: `${share(metrics.recoveryRate * 100)} dari ${num(metrics.abandoned + metrics.rescued)} keranjang yang sempat ditinggal · ${IDR(metrics.rescuedValue, { compact: true })} kembali`,
     },
     {
       label: "Punya nomor WA",
@@ -138,7 +141,12 @@ export function KeranjangClient({ carts, metrics }: { carts: AbandonedCart[]; me
               </span>
             </div>
             <div className="mt-3 text-2xl font-bold tracking-tight tabular-nums">{s.value}</div>
-            <div className="mt-1 text-xs text-muted-foreground">{s.sub}</div>
+            {/* The caption is where this card keeps its ARITHMETIC — "632 ditinggal ÷ 798 checkout
+                (166 jadi pesanan)" — three counts and two prose fragments that have to line up
+                across four cards in one row. Measured 1440px, all-1 vs all-8: 27,39px on the first
+                caption, 26,55px on the second, 18,23px on the third. The bold figure above it was
+                already tabular, so the tile read as a fixed number over a sentence that crawled. */}
+            <div className="mt-1 text-xs text-muted-foreground tabular-nums">{s.sub}</div>
           </Card>
         ))}
       </div>
@@ -234,7 +242,7 @@ export function KeranjangClient({ carts, metrics }: { carts: AbandonedCart[]; me
                   {c.waHref ? (
                     <div className="flex items-center justify-end gap-2">
                       {c.contactedLabel && (
-                        <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:inline-flex">
+                        <span className="hidden items-center gap-1 text-xs text-muted-foreground tabular-nums sm:inline-flex">
                           <Check className="size-3" /> WA dibuka {c.contactedLabel}
                         </span>
                       )}
@@ -288,7 +296,8 @@ export function KeranjangClient({ carts, metrics }: { carts: AbandonedCart[]; me
         </Table>
 
         <Separator />
-        <div className="flex flex-col gap-1 p-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        {/* Both counts here are rewritten by the tab filter and the search box, i.e. by typing. */}
+        <div className="flex flex-col gap-1 p-4 text-xs text-muted-foreground tabular-nums sm:flex-row sm:items-center sm:justify-between">
           <span>
             Menampilkan {num(rows.length)} dari {num(counts[tab])} keranjang ({metrics.windowDays} hari terakhir) — yang
             paling layak ditindaklanjuti lebih dulu

@@ -46,7 +46,7 @@ import {
 } from "@tokophi/ui/dialog";
 import { type Segment } from "@/lib/mock/store";
 import type { CustomerRow } from "@/lib/data/customers";
-import { IDR, num } from "@tokophi/lib/format";
+import { IDR, NO_FIGURE, num, share } from "@tokophi/lib/format";
 import { exportCsv } from "@/lib/csv";
 import { useCan } from "@/components/admin/permissions";
 import { createCustomer, deleteCustomer } from "@/lib/actions/customers";
@@ -276,9 +276,11 @@ export function PelangganClient({ customers }: { customers: CustomerRow[] }) {
       label: "Pelanggan VIP",
       value: num(vipCount),
       icon: Crown,
+      // `share()`, not a hand-rolled `Math.round(...) + "%"`. Same figure, one formatter — and the
+      // `customers.length` guard is the denominator rule: 0/0 is NaN, never "0%".
       delta: customers.length
-        ? `${Math.round((vipCount / customers.length) * 100)}% dari total`
-        : "—",
+        ? `${share((vipCount / customers.length) * 100, 0)} dari total`
+        : NO_FIGURE,
     },
     {
       label: "Rata-rata Belanja",
@@ -325,7 +327,9 @@ export function PelangganClient({ customers }: { customers: CustomerRow[] }) {
             <div className="mt-3 text-2xl font-bold tracking-tight tabular-nums">
               {s.value}
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">{s.delta}</div>
+            {/* 8,41px ("7 terdaftar · 18 tamu") and 5,77px ("40% dari total") of ink movement at
+                1440px, under a value that was already tabular. */}
+            <div className="mt-1 text-xs text-muted-foreground tabular-nums">{s.delta}</div>
           </Card>
         ))}
       </div>
@@ -532,7 +536,7 @@ export function PelangganClient({ customers }: { customers: CustomerRow[] }) {
         </Table>
 
         <Separator />
-        <div className="flex items-center justify-between p-4 text-xs text-muted-foreground">
+        <div className="flex items-center justify-between p-4 text-xs text-muted-foreground tabular-nums">
           <span>
             Menampilkan {num(rows.length)} pelanggan
             {selected.size > 0 && ` · ${num(selected.size)} dipilih`}

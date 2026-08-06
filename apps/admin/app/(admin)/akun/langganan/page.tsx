@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getBilling, getMyInvoices } from "@/lib/data/billing";
 import { getPendingSubscription } from "@/lib/actions/billing";
 import { getPlatformChannels } from "@/lib/actions/payment-settings";
-import { IDR } from "@tokophi/lib/format";
+import { IDR, NO_FIGURE } from "@tokophi/lib/format";
 import { BILLING, withPpn } from "@tokophi/lib/billing";
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Badge } from "@tokophi/ui/badge";
@@ -48,16 +48,21 @@ export default async function LanggananPage() {
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground">{bill.status === "trial" ? "Sisa uji coba" : bill.status === "active" ? "Perpanjang dalam" : "Tenggat"}</p>
-                  <p className="mt-0.5 font-medium">{bill.status === "suspended" ? "—" : `${bill.daysLeft} hari`}</p>
+                  <p className="mt-0.5 font-medium tabular-nums">{bill.status === "suspended" ? NO_FIGURE : `${bill.daysLeft} hari`}</p>
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground">Tagihan berikutnya</p>
                   <p className="mt-0.5 font-medium tabular-nums">{IDR(withPpn(bill.nextAmount).total)}{bill.isPromo && <span className="ml-1 text-xs font-normal text-emerald-600">promo</span>}</p>
-                  <p className="text-[11px] text-muted-foreground">{IDR(bill.nextAmount)} + PPN 11% ({IDR(withPpn(bill.nextAmount).ppn)})</p>
+                  {/* The line that shows the arithmetic behind the total above it: two amounts,
+                      59,66px of ink movement at 1440px, under a total that was already tabular. */}
+                  <p className="text-[11px] text-muted-foreground tabular-nums">{IDR(bill.nextAmount)} + PPN 11% ({IDR(withPpn(bill.nextAmount).ppn)})</p>
                 </div>
               </div>
             )}
-            <p className="text-xs text-muted-foreground">
+            {/* Each of these four sentences carries a date and an amount, and the one on screen is
+                chosen by the billing status — so the paragraph is rewritten from underneath. 17,28px
+                at 1440px, 35,38px at 390px where it wraps to three lines. */}
+            <p className="text-xs text-muted-foreground tabular-nums">
               {bill?.status === "trial" && `Uji coba gratis berakhir ${fmtDue}. Lanjutkan hanya ${IDR(BILLING.FIRST_MONTH_IDR)} untuk bulan pertama.`}
               {bill?.status === "active" && `Periode berjalan berakhir ${fmtDue}. Tagihan berikutnya ${IDR(BILLING.MONTHLY_IDR)}.`}
               {bill?.status === "past_due" && `Jatuh tempo ${fmtDue}. Bayar sebelum masa tenggang ${BILLING.GRACE_DAYS} hari habis agar toko tidak ditangguhkan.`}
@@ -78,7 +83,7 @@ export default async function LanggananPage() {
               <Row label="PPN" value="11%" />
               <Row label="Total bulanan (termasuk PPN)" value={IDR(withPpn(BILLING.MONTHLY_IDR).total)} />
             </div>
-            <p className="text-[11px] text-muted-foreground">Harga di atas belum termasuk PPN 11% — ditambahkan saat pembayaran. Bayar tahunan {IDR(withPpn(BILLING.ANNUAL_IDR).total)} (termasuk PPN) · langsung dari trial dapat 13 bulan (1 gratis).</p>
+            <p className="text-[11px] text-muted-foreground tabular-nums">Harga di atas belum termasuk PPN 11% — ditambahkan saat pembayaran. Bayar tahunan {IDR(withPpn(BILLING.ANNUAL_IDR).total)} (termasuk PPN) · langsung dari trial dapat 13 bulan (1 gratis).</p>
             <div className="border-t pt-3 space-y-1.5 text-xs text-muted-foreground">
               {["Semua fitur (produk, order, diskon, CRM, analitik, dll)", "Kurir & pembayaran terintegrasi", "Storefront + custom domain"].map((f) => (
                 <p key={f} className="flex items-start gap-1.5"><CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600" />{f}</p>
@@ -109,7 +114,9 @@ export default async function LanggananPage() {
                   <span className="text-right text-muted-foreground sm:text-left">{jenis(inv.amount)}</span>
                   <span className="text-right tabular-nums">{IDR(inv.amount)}</span>
                   <span><Badge variant="secondary" className={`border-transparent ${INV_STATUS[inv.status].cls}`}>{INV_STATUS[inv.status].label}</Badge></span>
-                  <span className="whitespace-nowrap text-xs text-muted-foreground">{new Date(inv.issuedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
+                  {/* A COLUMN of dates: 14,64–17,77px apart row to row, so the issue dates never
+                      lined up under each other. */}
+                  <span className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">{new Date(inv.issuedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
                   <span className={`flex items-center justify-end gap-1 text-xs font-medium ${inv.status === "menunggu" ? "text-primary" : "text-muted-foreground"}`}>
                     {inv.status === "menunggu" ? "Bayar" : inv.status === "dibayar" ? <><Printer className="size-3.5" /> Cetak</> : "Lihat"}
                   </span>

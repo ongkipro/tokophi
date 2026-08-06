@@ -18,7 +18,7 @@ import {
 } from "@/lib/data/dashboard";
 import type { FunnelDay, DeviceDay } from "@/lib/data/funnel"; // type-only: funnel.ts is server-only
 import type { RegionSale, CustomerMix, CategorySale, ChannelDay, HourPoint, ProductSaleDay, OrderStats } from "@/lib/data/analytics";
-import { IDR, NO_FIGURE, num, pct } from "@tokophi/lib/format";
+import { IDR, NO_FIGURE, num, pct, share } from "@tokophi/lib/format";
 import { exportCsv } from "@/lib/csv";
 
 // Every number on this page is COUNTED from rows: orders / order_line_items (penjualan, wilayah,
@@ -120,7 +120,12 @@ export function AnalitikClient({
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <div>
             <CardTitle>Tren Penjualan</CardTitle>
-            <CardDescription>Total {IDR(s.sales.value)} · {pct(s.sales.delta)} vs {s.compareLabel}</CardDescription>
+            {/* Every figure on this line is rewritten by the range switcher, and neither of them was
+                tabular: measured 1440px, all-1 vs all-8, the money moved 29,67px and the delta
+                10,92px, so the "·" between them landed somewhere new on each click. Its twin on the
+                dashboard (`dashboard-client.tsx`) has carried `tabular-nums` since it was measured
+                at 71,67px; this line is the same sentence and was missed. */}
+            <CardDescription className="tabular-nums">Total {IDR(s.sales.value)} · {pct(s.sales.delta)} vs {s.compareLabel}</CardDescription>
           </div>
           <div className="hidden items-center gap-4 text-xs text-muted-foreground sm:flex">
             <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded bg-[var(--chart-1)]" /> Periode ini</span>
@@ -196,7 +201,8 @@ export function AnalitikClient({
                   ))}
                 </dl>
                 <Separator className="my-4" />
-                <p className="text-xs text-muted-foreground">
+                {/* 18,72px + 8,88px of ink movement, under a <dl> whose own figures are tabular. */}
+                <p className="text-xs text-muted-foreground tabular-nums">
                   Nilai order rata-rata {IDR(stats.aov)} dari {num(stats.orders)} pesanan.
                 </p>
               </>
@@ -227,12 +233,12 @@ export function AnalitikClient({
                       <div className="mb-1 flex items-baseline justify-between text-sm">
                         <span className="font-medium">{f.step}</span>
                         <span className="tabular-nums text-muted-foreground">
-                          {num(f.count)}{i > 0 && <span className="ml-2 text-xs">({stepRate.toFixed(1)}% lanjut)</span>}
+                          {num(f.count)}{i > 0 && <span className="ml-2 text-xs">({share(stepRate)} lanjut)</span>}
                         </span>
                       </div>
                       <div className="h-7 overflow-hidden rounded-lg bg-muted">
-                        <div className="flex h-full items-center rounded-lg bg-primary/85 px-2 text-[11px] font-medium text-primary-foreground" style={{ width: `${width}%` }}>
-                          {width > 14 && `${width.toFixed(0)}%`}
+                        <div className="flex h-full items-center rounded-lg bg-primary/85 px-2 text-[11px] font-medium tabular-nums text-primary-foreground" style={{ width: `${width}%` }}>
+                          {width > 14 && share(width, 0)}
                         </div>
                       </div>
                     </div>
@@ -242,8 +248,11 @@ export function AnalitikClient({
               <Separator className="my-4" />
               <p className="text-xs text-muted-foreground">
                 Tingkat konversi keseluruhan{" "}
-                <span className="font-semibold text-foreground">
-                  {((steps[steps.length - 1].count / steps[0].count) * 100).toFixed(1)}%
+                <span className="font-semibold text-foreground tabular-nums">
+                  {/* ⚠️ THE BOUNDARY IS THE DENOMINATOR. `steps[0].count` is the visit count, and a
+                      store with no visits divided 0/0 → NaN → "NaN%" on the screen. `share()` puts
+                      that on the same NO_FIGURE floor every other formatter here lands on. */}
+                  {steps[0].count ? share((steps[steps.length - 1].count / steps[0].count) * 100) : NO_FIGURE}
                 </span>{" "}
                 — {num(steps[steps.length - 1].count)} pembelian dari {num(steps[0].count)} kunjungan.
               </p>
@@ -291,7 +300,7 @@ export function AnalitikClient({
                 <div key={d.device}>
                   <div className="mb-1 flex justify-between text-sm">
                     <span>{d.device}</span>
-                    <span className="font-medium tabular-nums">{d.pct.toFixed(0)}%</span>
+                    <span className="font-medium tabular-nums">{share(d.pct, 0)}</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-muted">
                     <div className="h-full rounded-full" style={{ width: `${d.pct}%`, background: `var(--chart-${i + 1})` }} />
@@ -304,12 +313,14 @@ export function AnalitikClient({
               <p className="text-xs text-muted-foreground">Belum ada pelanggan dengan pesanan.</p>
             ) : (
               mixRows.map((m, i) => {
-                const share = (m.value / totalMix) * 100;
+                // Named `mixShare`, not `share`: a local of that name shadows the imported
+                // formatter for the whole callback, so the fix below would not have compiled.
+                const mixShare = (m.value / totalMix) * 100;
                 return (
                   <div key={m.type} className="flex items-center gap-2 text-sm">
                     <span className="size-2.5 shrink-0 rounded-full" style={{ background: `var(--chart-${i + 2})` }} />
                     <span className="flex-1 text-muted-foreground">{m.type}</span>
-                    <span className="font-medium tabular-nums">{num(m.value)} · {share.toFixed(0)}%</span>
+                    <span className="font-medium tabular-nums">{num(m.value)} · {share(mixShare, 0)}</span>
                   </div>
                 );
               })

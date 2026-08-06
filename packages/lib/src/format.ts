@@ -58,8 +58,14 @@ export const pct = (n: number | null, digits = 1) => {
 // `keranjang-client.tsx`) duly wrote the same one-liner by hand; the third borrowed the delta
 // formatter. A rule that has to be re-obeyed by hand at every call site is how the third one
 // happened, so here is the thing to reach for.
+// ⚠️ A NEGATIVE SHARE PRINTS A TYPOGRAPHIC MINUS (U+2212), never an ASCII hyphen. Almost every share
+// is non-negative and this branch never fires for them — but the product editor's gross MARGIN is a
+// share of the price that goes negative the moment cost exceeds it, and `toFixed(-12.5)` alone emits
+// "-12,5%" two lines under a `pct()` reading "−6,4%". The sign is still not ADDED (a positive share
+// gets no "+"; that is what makes it a share and not a delta) — only the one the number already has
+// is drawn the way every other figure in this file draws it.
 export const share = (n: number, digits = 1) =>
-  Number.isFinite(n) ? `${n.toFixed(digits).replace(".", ",")}%` : NO_FIGURE;
+  Number.isFinite(n) ? `${n < 0 ? "−" : ""}${Math.abs(n).toFixed(digits).replace(".", ",")}%` : NO_FIGURE;
 
 export const timeAgo = (minutes: number) => {
   if (minutes < 1) return "baru saja";

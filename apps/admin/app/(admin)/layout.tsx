@@ -56,7 +56,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const billingBanner = bill && (operatorSuspended || bill.status === "past_due" || bill.status === "suspended") && (
     <Link
       href={operatorSuspended ? "/bantuan" : "/akun/langganan"}
-      className={`block px-4 py-2 text-center text-sm font-medium ${
+      // tabular-nums: this banner is the widest-travelling figure in the panel and it crosses the
+      // FULL viewport on every route. Measured 1440px, all-1 vs all-8 on
+      // "Tagihan Rp 275.000 menunggu — bayar dalam 1 hari …": 24,67px of ink. It is `text-center`, so
+      // the whole sentence slides both ways around the amount as the countdown ticks down through 10
+      // → 9 and as the invoice total changes.
+      className={`block px-4 py-2 text-center text-sm font-medium tabular-nums ${
         pendingApproval ? "bg-amber-500 text-white" : bill.status === "suspended" ? "bg-destructive text-white" : "bg-orange-500 text-white"
       }`}
     >

@@ -179,7 +179,7 @@ export function PesananClient({
                           {o.id}
                         </Link>
                         <span aria-hidden>·</span>
-                        <span>{timeAgo(o.minutesAgo)}</span>
+                        <span className="tabular-nums">{timeAgo(o.minutesAgo)}</span>
                       </div>
                       <OrderProductCell lines={o.lines} lineCount={o.lineCount} href={`/pesanan/${o.number}`} />
                     </TableCell>

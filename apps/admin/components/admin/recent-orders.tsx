@@ -42,7 +42,9 @@ export function RecentOrders({ orders }: { orders: Order[] }) {
                   <Link href={`/pesanan/${o.id.replace(/^#/, "")}`} className="block truncate text-sm font-medium hover:underline">
                     {o.customer}
                   </Link>
-                  <div className="text-xs text-muted-foreground">{o.city} · {timeAgo(o.minutesAgo)}</div>
+                  {/* Same `timeAgo()` clock as `live-activity.tsx` beside it, so the same rule:
+                      the age is re-derived on every render and the city before it must not move. */}
+                  <div className="text-xs text-muted-foreground tabular-nums">{o.city} · {timeAgo(o.minutesAgo)}</div>
                 </div>
               </div>
             </TableCell>

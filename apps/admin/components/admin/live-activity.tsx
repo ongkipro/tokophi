@@ -39,7 +39,10 @@ export function LiveActivity({ items }: { items: Activity[] }) {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm leading-snug">{a.text}</p>
-                <p className="text-xs text-muted-foreground">{timeAgo(a.minutesAgo)}</p>
+                {/* `timeAgo()` is the one string on this card that changes without anybody acting:
+                    "17 hari lalu" → "18 hari lalu" on the next render. Measured 5,77px of ink per
+                    row at 1440px, and the rows re-render together, so the whole column jittered. */}
+                <p className="text-xs text-muted-foreground tabular-nums">{timeAgo(a.minutesAgo)}</p>
               </div>
             </li>
           );
