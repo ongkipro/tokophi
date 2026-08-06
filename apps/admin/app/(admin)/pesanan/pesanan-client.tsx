@@ -14,6 +14,7 @@ import { OrderFilters, type OrderFiltersValue } from "@/components/admin/pesanan
 import { OrderProductCell } from "@/components/admin/pesanan/order-product-cell";
 import { setOrderStatus } from "@/lib/actions/orders";
 import { IDR, num, timeAgo } from "@tokophi/lib/format";
+import { cn } from "@tokophi/ui/lib/utils";
 import { exportCsv } from "@/lib/csv";
 import {
   ORDER_TABS,
@@ -264,10 +265,19 @@ export function PesananClient({
                   <DataCard
                     key={o.id}
                     href={`/pesanan/${o.number}`}
-                    title={<span className="truncate font-mono text-sm font-medium">{o.id}</span>}
+                    // The card's `href` is meant to make the whole row tappable, but the link is only as
+                    // tall as what it wraps — measured at 390px it was a 186×20 strip, i.e. the order
+                    // number's own line height. `min-h-11` gives the anchor the 44px it was promising.
+                    title={
+                      <span className="flex min-h-11 items-center">
+                        <span className="truncate font-mono text-sm font-medium">{o.id}</span>
+                      </span>
+                    }
                     meta={timeAgo(o.minutesAgo)}
                     badge={<OrderStatusBadge status={o.status} />}
-                    actions={<RowAction o={o} canWrite={canWrite} pending={pending} onAdvance={advance} />}
+                    // `h-11` only here: this branch renders below `md`, so the desktop table's rows
+                    // keep their compact 28px buttons.
+                    actions={<RowAction o={o} canWrite={canWrite} pending={pending} onAdvance={advance} className="h-11 px-4" />}
                     media={<OrderProductCell lines={o.lines} lineCount={o.lineCount} />}
                   >
                     <DataRow label="Pembeli">
@@ -392,29 +402,32 @@ function RowAction({
   canWrite,
   pending,
   onAdvance,
+  className,
 }: {
   o: OrderListRow;
   canWrite: boolean;
   pending: boolean;
   onAdvance: (o: OrderListRow, to: "diproses" | "dikirim" | "selesai" | "batal", label: string) => void;
+  /** The card branch passes `h-11` to reach the 44px touch floor; the table leaves it unset. */
+  className?: string;
 }) {
   if (!canWrite || o.status === "selesai" || o.status === "batal" || o.status === "retur") {
     return (
-      <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/pesanan/${o.number}`} />}>
+      <Button variant="outline" size="sm" className={className} nativeButton={false} render={<Link href={`/pesanan/${o.number}`} />}>
         Lihat
       </Button>
     );
   }
   if (o.status === "baru") {
     return (
-      <Button size="sm" className="gap-1.5" disabled={pending} onClick={() => onAdvance(o, "diproses", "diproses")}>
+      <Button size="sm" className={cn("gap-1.5", className)} disabled={pending} onClick={() => onAdvance(o, "diproses", "diproses")}>
         <PackageCheck className="size-4" /> Proses
       </Button>
     );
   }
   if (o.status === "diproses") {
     return (
-      <Button size="sm" nativeButton={false} render={<Link href={`/pesanan/${o.number}`} />}>
+      <Button size="sm" className={className} nativeButton={false} render={<Link href={`/pesanan/${o.number}`} />}>
         Atur Pengiriman
       </Button>
     );
@@ -424,7 +437,7 @@ function RowAction({
     <Button
       variant="outline"
       size="sm"
-      className="gap-1.5"
+      className={cn("gap-1.5", className)}
       disabled={pending}
       onClick={() => onAdvance(o, "selesai", "diselesaikan")}
     >

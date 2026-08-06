@@ -109,7 +109,7 @@ function WeightWarning() {
   );
 }
 
-function RowActions({ id, number }: { id: string; number?: number }) {
+function RowActions({ id, number, className }: { id: string; number?: number; className?: string }) {
   const canDelete = useCan("products:delete");
   const canWrite = useCan("products:write");
   const router = useRouter();
@@ -132,7 +132,7 @@ function RowActions({ id, number }: { id: string; number?: number }) {
     });
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi produk" />}>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className={className} aria-label="Aksi produk" />}>
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -561,12 +561,19 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
                 <DataCard
                   key={p.id}
                   href={`/produk/${p.number ?? p.id}`}
+                  // Bulk-select on a phone: the box stays 16px, but its hit area was 38×30 (the
+                  // primitive's own `after:-inset-x-3/-inset-y-2`). The wrapper RESERVES 44×44 so the
+                  // widened `::after` cannot spill over the product-name link beside it, and the
+                  // `::after` — not the wrapper — is what actually receives the tap.
                   lead={
-                    <Checkbox
-                      checked={selected.has(p.id)}
-                      onCheckedChange={() => toggle(p.id)}
-                      aria-label={`Pilih ${p.name}`}
-                    />
+                    <span className="flex size-11 items-center justify-center">
+                      <Checkbox
+                        checked={selected.has(p.id)}
+                        onCheckedChange={() => toggle(p.id)}
+                        aria-label={`Pilih ${p.name}`}
+                        className="after:-inset-x-3.5 after:-inset-y-3.5"
+                      />
+                    </span>
                   }
                   title={
                     <div className="flex min-w-0 items-start gap-2.5">
@@ -578,7 +585,8 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
                     </div>
                   }
                   badge={<StatusBadge status={p.status} />}
-                  actions={<RowActions id={p.id} number={p.number} />}
+                  // `size-11` only in the card branch (below `md`); the table keeps its 28px icon button.
+                  actions={<RowActions id={p.id} number={p.number} className="size-11" />}
                 >
                   <DataRow label="Harga" strong>{IDR(p.price)}</DataRow>
                   <DataRow label="Stok"><StockBadge stock={p.stock} /></DataRow>
