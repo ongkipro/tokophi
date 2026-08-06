@@ -39,7 +39,7 @@ HSTS enabled, then raised to a year.
 | production = `origin/main` | admin, super-admin and storefront all on the same image sha, checked on the box after every deploy |
 | HSTS | `max-age=31536000; includeSubDomains` on **all six** hosts including a tenant subdomain · `preload` **off** |
 | session cookie | `Secure` in all seven writers; `NODE_ENV==="production"` evaluates `true` **inside the running container** |
-| signup | **CLOSED.** `/daftar` serves the explanation page with **zero `<form>` elements** |
+| signup | 🔴 **OPENED later the same day** (`SIGNUP_ENABLED=true`, `/daftar` serves a real form). #169 added a review queue — new stores land `suspended` + `approvedAt` NULL. ⚠️ Their **storefront is still public**; see `OPEN.md` |
 | `verify-migrations` | ✅ 90 entries, journal sane |
 | `verify-rls` | ✅ 51/52, sole exception `platform_activity` (dev DB) |
 | `verify-ledger` | ✅ **on PRODUCTION** — 7 child tables, 0 orphans, both balances backed by orders |
@@ -61,9 +61,9 @@ HSTS enabled, then raised to a year.
 
 ## What is left, and who it belongs to
 
-- **Email verification before opening signup** — a product decision, not a task. Signup would create
-  real tenants for unverified addresses; there is no mailer in this repo. Two cheaper alternatives are
-  costed in the audit doc.
+- ~~Email verification before opening signup~~ — **DECIDED**: #169 took the review-queue option this
+  document costed, and signup was opened. Unverified addresses still create rows, but the store is
+  locked until a human clears it. ⚠️ The storefront half of that lock is missing.
 - **The working copy on this machine.** 26 dirty worktrees, ~60 local branches, a global stash entry,
   `main` 30 ahead / 522 behind. **Five worktrees hold a migration journal stamped BELOW main's** — the
   "applied successfully" silent skip. Per-branch triage only the authors can do; the checklist is in
