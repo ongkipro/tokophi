@@ -10,9 +10,9 @@ import { IDENTITY, HAS_CONTACT, MISSING_IDENTITY } from "../lib/identity";
 // submissions would go nowhere while looking like they had been received.
 const loginUrl = import.meta.env.PUBLIC_LOGIN_URL || "https://app.tokophi.com/login";
 
-const title = "Kontak — TokoΦ";
+const title = "Kontak | TokoΦ";
 const description =
-  "Identitas penyelenggara TokoΦ dan cara menghubungi kami — untuk pemilik toko maupun pembeli.";
+  "Identitas penyelenggara TokoΦ dan cara menghubungi kami untuk pemilik toko maupun pembeli.";
 ---
 
 <Base {title} {description} path="/kontak/">
@@ -99,13 +99,13 @@ const description =
         Pertanyaan tentang pesanan, pengiriman, atau pengembalian barang ditangani oleh
         <strong> pemilik toko tempat Anda berbelanja</strong>, bukan oleh kami. Setiap toko
         mencantumkan kanal kontaknya sendiri di halaman Kontak toko tersebut, dan nomor pesanan Anda
-        adalah rujukan tercepat. Kami memproses data pesanan atas nama toko — lihat
+        adalah rujukan tercepat. Kami memproses data pesanan atas nama toko. Lihat
         <a href="/privasi/"> Kebijakan Privasi</a>.
       </p>
 
       <h2>Anda pemilik toko?</h2>
       <p>
-        Sebagian besar hal — pengaturan toko, langganan, pengiriman, pesanan — diatur langsung dari
+        Pengaturan toko, langganan, pengiriman, dan pesanan diatur langsung dari
         panel Seller. <a href={loginUrl}>Masuk ke panel Seller</a>.
       </p>
     </main>

@@ -1,0 +1,63 @@
+<script>
+  import gsap from "gsap";
+  import { ScrollTrigger } from "gsap/ScrollTrigger";
+
+  gsap.registerPlugin(ScrollTrigger);
+
+  const motion = gsap.matchMedia();
+
+  motion.add("(prefers-reduced-motion: no-preference)", () => {
+    document.querySelectorAll<HTMLElement>("[data-motion-hero]").forEach((hero) => {
+      const items = hero.querySelectorAll<HTMLElement>("[data-motion-hero-item]");
+      if (items.length) {
+        gsap.from(items, {
+          autoAlpha: 0,
+          y: 22,
+          duration: 0.72,
+          stagger: 0.09,
+          ease: "power3.out",
+          clearProps: "all",
+        });
+      }
+    });
+
+    gsap.utils.toArray<HTMLElement>("[data-motion-reveal]").forEach((element) => {
+      gsap.from(element, {
+        autoAlpha: 0,
+        y: 28,
+        duration: 0.7,
+        ease: "power3.out",
+        clearProps: "all",
+        scrollTrigger: { trigger: element, start: "top 88%", once: true },
+      });
+    });
+
+    document.querySelectorAll<HTMLElement>("[data-motion-stagger]").forEach((group) => {
+      const items = group.querySelectorAll<HTMLElement>("[data-motion-item]");
+      if (!items.length) return;
+      gsap.from(items, {
+        autoAlpha: 0,
+        y: 24,
+        duration: 0.62,
+        stagger: 0.08,
+        ease: "power2.out",
+        clearProps: "all",
+        scrollTrigger: { trigger: group, start: "top 86%", once: true },
+      });
+    });
+  });
+
+  motion.add("(min-width: 1024px) and (prefers-reduced-motion: no-preference)", () => {
+    gsap.utils.toArray<HTMLElement>("[data-motion-depth]").forEach((element) => {
+      gsap.fromTo(
+        element,
+        { yPercent: -2 },
+        {
+          yPercent: 2,
+          ease: "none",
+          scrollTrigger: { trigger: element, start: "top bottom", end: "bottom top", scrub: 0.6 },
+        },
+      );
+    });
+  });
+</script>

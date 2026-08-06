@@ -1,5 +1,6 @@
 import { defineConfig } from "astro/config";
 import node from "@astrojs/node";
+import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
 
 // TokoΦ landing (apex tokophi.com + www) — the platform's front door.
@@ -11,6 +12,7 @@ export default defineConfig({
   site: "https://tokophi.com",
   output: "static",
   adapter: node({ mode: "standalone" }),
+  integrations: [react()],
   vite: {
     plugins: [tailwindcss()],
   },

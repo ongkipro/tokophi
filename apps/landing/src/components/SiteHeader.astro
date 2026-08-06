@@ -1,17 +1,130 @@
 ---
+import { MobileNav } from "./MobileNav";
+import { MARKETING_ROUTES, isCurrentRoute } from "../lib/navigation";
+
 interface Props {
   class?: string;
+  currentPath?: string;
+  loginUrl?: string;
+  signupUrl?: string;
 }
-const { class: className = "" } = Astro.props;
+
+const {
+  class: className = "",
+  currentPath = Astro.url.pathname,
+  loginUrl: loginUrlProp,
+  signupUrl: signupUrlProp,
+} = Astro.props;
+const loginUrl = loginUrlProp || "https://app.tokophi.com/login";
+const signupUrl = signupUrlProp || "https://app.tokophi.com/daftar";
 ---
 
-<header class:list={["shell-head", className]}>
-  {/* Ubin SVG DIBUANG. Ia menggambar sebuah Φ, lalu menulis "TokoΦ" tepat di sebelahnya — huruf
-      yang sama, dua kali, berdampingan. Sekarang Φ di dalam katanya yang memakai warna merk.
-      ⚠️ Markup ini adalah SATU-SATUNYA salinan `packages/ui/src/components/ui/brand-wordmark.tsx`
-      yang disengaja: berkas ini Astro dan tak bisa meng-import komponen React. Kalau treatment-nya
-      berubah di sana, ubah di sini juga. */}
-  <a href="/" class="wordmark" aria-label="TokoΦ — beranda">
+<header class:list={["shell-head", "site-header", className]}>
+  <a href="/" class="wordmark" aria-label="TokoΦ, halaman utama">
     <span class="wordmark-text">Toko<span class="wordmark-phi">Φ</span></span>
   </a>
+
+  <nav class="desktop-nav" aria-label="Navigasi utama">
+    <ul>
+      {MARKETING_ROUTES.map((route) => {
+        const current = isCurrentRoute(currentPath, route.href);
+        return (
+          <li>
+            <a href={route.href} aria-current={current ? "page" : undefined}>
+              <span class="full-label">{route.label}</span>
+              <span class="short-label">{route.shortLabel ?? route.label}</span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  </nav>
+
+  <div class="desktop-actions">
+    <a href={loginUrl} class="login-link">Masuk</a>
+    <a href={signupUrl} class="header-cta">Buat toko</a>
+  </div>
+
+  <MobileNav
+    client:load
+    routes={MARKETING_ROUTES}
+    {currentPath}
+    {loginUrl}
+    {signupUrl}
+  />
 </header>
+
+<style>
+  .site-header {
+    position: relative;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: 3rem;
+    gap: clamp(1rem, 2.4vw, 2.5rem);
+  }
+
+  .desktop-nav { justify-self: center; }
+  .desktop-nav ul,
+  .desktop-actions { display: flex; align-items: center; }
+  .desktop-nav ul { gap: clamp(0.8rem, 1.45vw, 1.35rem); }
+
+  .desktop-nav a,
+  .login-link {
+    color: var(--color-muted);
+    font-size: 0.8125rem;
+    font-weight: 550;
+    white-space: nowrap;
+    transition: color 0.18s ease;
+  }
+
+  .desktop-nav a:hover,
+  .desktop-nav a[aria-current="page"],
+  .login-link:hover { color: var(--color-ink); }
+
+  .desktop-nav a[aria-current="page"] { font-weight: 700; }
+  .short-label { display: none; }
+
+  .desktop-actions { justify-self: end; gap: 0.85rem; }
+
+  .header-cta {
+    display: inline-flex;
+    min-height: 2.625rem;
+    align-items: center;
+    justify-content: center;
+    padding-inline: 1.05rem;
+    border-radius: 0.7rem;
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    font-size: 0.875rem;
+    font-weight: 650;
+    box-shadow: 0 10px 24px -14px rgba(79, 70, 229, 0.72);
+    transition: background-color 0.18s ease, transform 0.18s ease;
+  }
+
+  .header-cta:hover { background: var(--color-primary-hover); }
+  :global(.mobile-nav-island) { display: none; justify-self: end; }
+
+  @media (max-width: 1180px) {
+    .full-label { display: none; }
+    .short-label { display: inline; }
+  }
+
+  @media (max-width: 1023px) {
+    .site-header { grid-template-columns: 1fr auto; }
+    .desktop-nav,
+    .desktop-actions { display: none; }
+    :global(.mobile-nav-island) { display: block; }
+  }
+
+  @media (hover: hover) {
+    .header-cta:hover { transform: translateY(-1px); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .desktop-nav a,
+    .login-link,
+    .header-cta { transition: none; }
+  }
+</style>

@@ -1,0 +1,22 @@
+---
+import MarketingLayout from "../layouts/MarketingLayout.astro";
+import PageHero from "../components/PageHero.astro";
+import OperationsFaq from "../components/OperationsFaq.astro";
+import FinalCta from "../components/FinalCta.astro";
+
+const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
+const title = "Pertanyaan umum seller | TokoΦ";
+const description = "Jawaban umum tentang toko, Dashboard Seller, pembayaran, pengiriman, demo, dan cara mulai menggunakan Tokophi.";
+---
+
+<MarketingLayout {title} {description} path="/faq/">
+  <PageHero eyebrow="FAQ" title="Jawaban sebelum Anda mulai." description="Pelajari batas peran Tokophi, alur seller, dan pengalaman pembeli sebelum menyiapkan toko." primaryHref={signupUrl} primaryLabel="Buat toko" secondaryHref="/kontak/" secondaryLabel="Hubungi kami" />
+  <OperationsFaq />
+  <section class="section-block" aria-labelledby="next-title">
+    <div class="section-heading-wide" data-motion-reveal><h2 id="next-title">Masih ingin melihat produknya?</h2><p>Buka demo storefront untuk pengalaman pembeli, atau pelajari cara kerja agar alur seller lebih mudah dipahami.</p></div>
+    <div class="faq-routes"><a class="btn btn-ghost" href="/demo/">Lihat demo</a><a class="btn btn-ghost" href="/cara-kerja/">Pelajari cara kerja</a></div>
+  </section>
+  <FinalCta {signupUrl} />
+</MarketingLayout>
+
+<style>.faq-routes { display: flex; flex-wrap: wrap; gap: .75rem; }</style>
