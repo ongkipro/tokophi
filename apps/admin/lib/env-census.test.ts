@@ -55,6 +55,10 @@ describe("every env var the admin reads is classified", () => {
     // `@tokophi/lib` and `@tokophi/db` are imported by the admin, so their env is the admin's env.
     // `AUTH_SECRET` and `INTEGRATION_TOKEN_KEY` live there, and both are required.
     const read = envNamesReadBy(["packages/lib/src", "packages/db/src"]);
+    // The same floor the sweep above carries, and for the same reason: this one narrows by PATH
+    // PREFIX, so a package move or a rename empties the list and the test passes having read
+    // nothing. `AUTH_SECRET` and `INTEGRATION_TOKEN_KEY` alone put it over this.
+    expect(read.length, "no env var found in the shared packages — has the scan stopped reaching them?").toBeGreaterThan(1);
     const unclassified = read.filter((n) => !(n in ENV_CHECKS));
     expect(unclassified, `classify these in lib/env-health.ts: ${unclassified.join(", ")}`).toEqual([]);
   }, SOURCE_SCAN_TIMEOUT_MS);
