@@ -1,18 +1,16 @@
-import { Store } from "lucide-react";
 import { cn } from "@tokophi/ui/lib/utils";
+import { BrandWordmark } from "@tokophi/ui/brand-wordmark";
 
+/**
+ * Tanda merk sidebar Seller. Ubin indigo + ikon `Store` dari lucide DIBUANG — alasannya di
+ * `packages/ui/src/components/ui/brand-wordmark.tsx`: ikon generik di sebelah wordmark yang sudah
+ * memuat Φ membuat mata berhenti di kotak berwarna, bukan di nama produknya.
+ */
 export function Brand({ className }: { className?: string }) {
   return (
-    <div className={cn("flex items-center gap-2.5", className)}>
-      <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-        <Store className="size-[18px]" />
-      </div>
-      {/* leading-tight, NOT leading-none: the Φ (U+03A6) rises above the Latin cap height, and a
-          line-height of exactly 1 clipped its top on the wordmark. */}
-      <div className="leading-tight">
-        <div className="font-semibold tracking-tight">TokoΦ</div>
-        <div className="text-[11px] text-muted-foreground">Dashboard Seller</div>
-      </div>
+    <div className={cn("leading-tight", className)}>
+      <BrandWordmark className="text-[15px]" />
+      <div className="text-[11px] text-muted-foreground">Dashboard Seller</div>
     </div>
   );
 }

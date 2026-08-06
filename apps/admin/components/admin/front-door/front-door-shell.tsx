@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandWordmark } from "@tokophi/ui/brand-wordmark";
 import { AddressPlate } from "./address-plate";
 
 /**
@@ -67,9 +68,10 @@ export function FrontDoorShell({
         <div className="mx-auto w-full max-w-[26rem] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500">
           <Link
             href="/login"
-            className="inline-flex items-baseline rounded-md text-lg font-semibold tracking-[-0.03em] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+            className="inline-flex rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
           >
-            Toko<span className="text-primary">Φ</span>
+            {/* Wordmark-nya bersama sekarang — pintu depan ini sempat menulis salinannya sendiri. */}
+            <BrandWordmark className="text-lg" />
           </Link>
 
           <p className="mt-8 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{eyebrow}</p>

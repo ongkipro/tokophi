@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ShieldCheck, Store, LogOut, KeyRound } from "lucide-react";
+import { ShieldCheck, LogOut, KeyRound } from "lucide-react";
+import { BrandWordmark } from "@tokophi/ui/brand-wordmark";
 import { toast } from "sonner";
 import { cn } from "@tokophi/ui/lib/utils";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
@@ -75,11 +76,10 @@ export function PlatformShell({ admin, openTickets, children }: { admin: Admin; 
       {/* Sidebar */}
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-card md:flex">
         <div className="flex h-14 items-center gap-2.5 border-b px-4">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Store className="size-4" />
-          </span>
+          {/* Ubin + ikon `Store` dibuang — lihat `@tokophi/ui/brand-wordmark`. Φ-nya sudah tanda
+              merknya; ikon generik di sebelahnya cuma memperebutkan perhatian dengan nama produk. */}
           <div className="min-w-0">
-            <div className="truncate text-sm font-bold leading-none">TokoΦ</div>
+            <BrandWordmark className="block truncate text-sm" />
             <div className="mt-1 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
               <ShieldCheck className="size-3 text-primary" /> Super Admin
             </div>

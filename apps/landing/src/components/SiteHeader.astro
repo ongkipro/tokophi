@@ -6,13 +6,12 @@ const { class: className = "" } = Astro.props;
 ---
 
 <header class:list={["shell-head", className]}>
+  {/* Ubin SVG DIBUANG. Ia menggambar sebuah Φ, lalu menulis "TokoΦ" tepat di sebelahnya — huruf
+      yang sama, dua kali, berdampingan. Sekarang Φ di dalam katanya yang memakai warna merk.
+      ⚠️ Markup ini adalah SATU-SATUNYA salinan `packages/ui/src/components/ui/brand-wordmark.tsx`
+      yang disengaja: berkas ini Astro dan tak bisa meng-import komponen React. Kalau treatment-nya
+      berubah di sana, ubah di sini juga. */}
   <a href="/" class="wordmark" aria-label="TokoΦ — beranda">
-    <span class="wordmark-tile" aria-hidden="true">
-      <svg viewBox="0 0 32 32" width="32" height="32" fill="none">
-        <ellipse cx="16" cy="16" rx="7.4" ry="9" stroke="currentColor" stroke-width="2.4"></ellipse>
-        <rect x="14.8" y="3.6" width="2.4" height="24.8" rx="1.2" fill="currentColor"></rect>
-      </svg>
-    </span>
-    <span class="wordmark-text">TokoΦ</span>
+    <span class="wordmark-text">Toko<span class="wordmark-phi">Φ</span></span>
   </a>
 </header>
