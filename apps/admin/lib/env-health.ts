@@ -50,6 +50,7 @@ export const ENV_CHECKS: Record<string, { required: boolean; why: string }> = {
   PUBLIC_APP_URL: { required: false, why: "Dipakai untuk menyusun tautan absolut; ada fallback." },
   STOREFRONT_BASE_DOMAIN: { required: true, why: "Domain induk storefront merchant (<slug>.tokophi.id). Kosong = tautan storefront salah di seluruh panel." },
   CUSTOM_DOMAIN_CNAME_TARGET: { required: false, why: "Target CNAME yang ditampilkan ke merchant saat pasang domain sendiri; ada default." },
+  MARKETING_URL: { required: false, why: "Ke mana wordmark di /login dan /daftar membawa orang keluar; default https://tokophi.com. Salah isi = jalan keluar dari pintu depan menunjuk ke tempat lain." },
 
   SIGNUP_ENABLED: { required: false, why: "KOSONG BERARTI PENDAFTARAN TERTUTUP — itu keadaan yang sah, bukan cacat. Justru variabel inilah yang gagal sampai pada 5–6 Agustus." },
   GOOGLE_CLIENT_ID: { required: false, why: "Kosong = tombol 'Daftar dengan Google' disembunyikan, dan itu default yang jujur." },

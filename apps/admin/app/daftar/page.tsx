@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@tokophi/ui/card";
-import { FrontDoorShell } from "@/components/admin/front-door/front-door-shell";
+import { FrontDoorShell, MARKETING_HOME } from "@/components/admin/front-door/front-door-shell";
 import { googleEnabled } from "@/lib/google";
 import { signupOpen } from "@/lib/provision";
 import { DaftarForm } from "./daftar-form";
@@ -27,30 +26,38 @@ export default async function DaftarPage({ searchParams }: { searchParams: Promi
   const { error } = await searchParams;
 
   if (!signupOpen()) {
+    // Keadaan tertutup memakai kerangka yang SAMA dengan formulirnya. Sebelumnya ia satu kartu
+    // di tengah dengan `min-h-screen` dan sebuah `h1` berbunyi "TokoΦ" — yaitu merk dipakai sebagai
+    // judul halaman, persis pola yang sudah dibuang dari pintu depan, dan `100vh` yang menggoyang
+    // halaman di ponsel. `claimable` sengaja mati: plat alamat mengundang orang mengklaim sesuatu
+    // yang justru sedang tidak bisa diklaim.
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-        <Card className="w-full max-w-sm">
-          <CardHeader className="text-center">
-            {/* `level={1}` — same reason as /login: this card IS the page, and without it the screen
-                would have no `h1` at all. See the note on `CardTitle` in packages/ui. */}
-            <CardTitle level={1} className="text-2xl tracking-tight">TokoΦ</CardTitle>
-            <CardDescription>Pendaftaran ditutup sementara</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 text-center">
-            <p className="text-sm text-muted-foreground">
-              Kami sedang menyiapkan platform dan belum membuka pendaftaran toko baru. Terima kasih
-              atas minatmu — kami akan membukanya kembali segera.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Sudah punya toko?{" "}
-              <Link href="/login" className="font-medium text-primary underline-offset-4 hover:underline">
-                Masuk di sini
-              </Link>
-              .
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <FrontDoorShell
+        eyebrow="Pendaftaran ditutup"
+        title="Belum bisa daftar hari ini"
+        lead="Kami sedang menyiapkan platform dan belum membuka pendaftaran toko baru. Terima kasih atas minatmu."
+        footer={
+          <>
+            Sudah punya toko?{" "}
+            <Link href="/login" className="font-medium text-primary underline-offset-4 hover:underline">
+              Masuk di sini
+            </Link>
+            .
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Pendaftaran akan dibuka kembali segera. Sementara itu, kamu bisa melihat apa saja yang
+          disiapkan di{" "}
+          <a
+            href={MARKETING_HOME}
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            {new URL(MARKETING_HOME).host}
+          </a>
+          .
+        </p>
+      </FrontDoorShell>
     );
   }
 
