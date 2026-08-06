@@ -1,6 +1,14 @@
-import Link from "next/link";
 import { BrandWordmark } from "@tokophi/ui/brand-wordmark";
 import { AddressPlate } from "./address-plate";
+
+/**
+ * Ke mana wordmark-nya membawa orang: situs pemasaran, BUKAN `/`.
+ *
+ * `/` di aplikasi ini adalah Dashboard Seller di balik middleware — dari `/login` ia hanya memantul
+ * balik ke `/login`. Wordmark yang dulu menunjuk ke `/login` juga: di halaman `/login` sendiri itu
+ * tautan mati, dan orang yang menekan logo hampir selalu sedang mencari jalan KELUAR dari formulir.
+ */
+export const MARKETING_HOME = process.env.MARKETING_URL || "https://tokophi.com";
 
 /**
  * PINTU DEPAN Seller — kerangka bersama `/login` dan `/daftar`.
@@ -62,26 +70,48 @@ export function FrontDoorShell({
   footer: React.ReactNode;
 }) {
   return (
-    <div className="grid min-h-screen lg:grid-cols-[46fr_54fr]">
-      {/* ── kiri: formulir ─────────────────────────────────────────────────────────────────── */}
-      <main className="flex flex-col justify-center px-6 py-10 sm:px-10 lg:px-14">
-        <div className="mx-auto w-full max-w-[26rem] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500">
-          <Link
-            href="/login"
-            className="inline-flex rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+    /* `min-h-svh`, TIDAK `min-h-screen`. `min-h-screen` adalah `100vh`, dan di browser ponsel `vh`
+       diukur terhadap viewport BESAR — tinggi layar seolah bilah alamat sedang tersembunyi. Selama
+       bilah itu tampak (yaitu saat halaman baru dibuka), `100vh` lebih tinggi daripada yang terlihat,
+       jadi halaman yang isinya PAS pun tetap bisa digulir beberapa puluh piksel dan memantul. Itulah
+       "goyang" yang dilaporkan. `svh` adalah viewport KECIL — bilah alamat diperhitungkan — sehingga
+       tingginya tidak berubah saat bilah itu muncul/hilang. `dvh` sengaja TIDAK dipakai: ia ikut
+       berubah mengikuti bilah alamat, yang justru menggeser tata letak persis saat orang menggulir. */
+    <div className="grid min-h-svh lg:grid-cols-[46fr_54fr]">
+      {/* ── kiri: formulir ───────────────────────────────────────────────────────────────────
+          Di ponsel kolom ini SETINGGI LAYAR dan halamannya tidak menggulir sama sekali; yang
+          menggulir hanya wilayah tengah, saat isinya memang tak muat (langkah ② dan ③ /daftar di
+          layar 640px, atau kapan pun papan ketik terbuka). Diukur: 360×844 → 0 gulir, 360×640 →
+          langkah ③ butuh 164px lebih. Memaksa SEMUA itu muat berarti memampatkan kolom isian di
+          bawah lantai sentuh 44px — menukar satu cacat dengan yang lebih buruk. Jadi wordmark dan
+          baris "Sudah punya toko?" dipaku, dan hanya isinya yang bergerak: tidak ada pantulan
+          halaman, tidak ada bilah alamat yang muncul-hilang, dan orang tak pernah kehilangan jalan
+          keluar. Di `lg` semuanya kembali ke tata letak biasa. */}
+      <main className="flex h-svh flex-col overflow-hidden px-6 pb-5 pt-6 sm:px-10 lg:h-auto lg:min-h-svh lg:justify-center lg:overflow-visible lg:px-14 lg:py-10">
+        <div className="mx-auto flex min-h-0 w-full max-w-[26rem] flex-1 flex-col lg:flex-none motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500">
+          {/* Tautan KELUAR ke situs pemasaran — lihat `MARKETING_HOME`. `py-2` bukan hiasan: tanpa itu
+              targetnya 28px, di bawah lantai sentuh 44px, padahal ini satu-satunya jalan keluar. */}
+          <a
+            href={MARKETING_HOME}
+            aria-label="TokoΦ — ke beranda"
+            className="inline-flex shrink-0 self-start rounded-md py-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
           >
             {/* Wordmark-nya bersama sekarang — pintu depan ini sempat menulis salinannya sendiri. */}
             <BrandWordmark className="text-lg" />
-          </Link>
+          </a>
 
-          <p className="mt-8 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{eyebrow}</p>
-          {/* Satu-satunya `h1` halaman ini — lantai a11y yang dijaga `admin-h1-floor.test.ts`. */}
-          <h1 className="mt-2 text-[clamp(1.75rem,3.4vw,2.35rem)] font-semibold leading-[1.1] tracking-[-0.035em]">{title}</h1>
-          <p className="mt-2.5 text-[0.9375rem] leading-relaxed text-muted-foreground">{lead}</p>
+          {/* `overscroll-contain`: gulir yang mentok di sini TIDAK diteruskan ke halaman, jadi tak
+              ada efek karet di belakangnya. */}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:flex-none lg:overflow-visible">
+            <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground lg:mt-6">{eyebrow}</p>
+            {/* Satu-satunya `h1` halaman ini — lantai a11y yang dijaga `admin-h1-floor.test.ts`. */}
+            <h1 className="mt-2 text-[clamp(1.75rem,3.4vw,2.35rem)] font-semibold leading-[1.1] tracking-[-0.035em]">{title}</h1>
+            <p className="mt-2.5 text-[0.9375rem] leading-relaxed text-muted-foreground">{lead}</p>
 
-          <div className="mt-7">{children}</div>
+            <div className="mt-6 pb-1 lg:mt-7">{children}</div>
+          </div>
 
-          <div className="mt-7 border-t pt-5 text-sm text-muted-foreground">{footer}</div>
+          <div className="mt-4 shrink-0 border-t pt-4 text-sm text-muted-foreground lg:mt-7 lg:pt-5">{footer}</div>
         </div>
       </main>
 
