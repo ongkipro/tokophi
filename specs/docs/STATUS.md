@@ -1,8 +1,13 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
 > **Refreshed 2026-07-21** against the source tree and the live database
-> (`docker exec tokophi-db psql -U tokophi -d tokophi`) — **72 tables, 64 migrations (0000–0063),
-> RLS on 46** (0058 added `stores`, which is keyed by `id` and which `verify-rls` structurally cannot see).
+> (`docker exec tokophi-db psql -U tokophi -d tokophi`) — **78 tables, 92 migrations (0000–0091),
+> RLS pada 51 dari 52 tabel ber-`store_id`** (diukur ulang 2026-08-07 dari `packages/db/src/schema.ts` + `drizzle/meta/_journal.json` + keluaran `npm run verify-rls`; satu-satunya pengecualian `platform_activity`).
+> ⚠️ Angka ini DITURUNKAN dan bergerak tiap migrasi — **jalankan `npm run verify-rls -w @tokophi/db`**
+> dan percayai keluarannya, bukan baris ini. Baris ini sudah salah dua kali.
+> ⚠️ Dan **JANGAN hitung dari container dev bersama**: ia memuat `color_palettes` dari PR #2 yang belum
+> di-merge dan belum memuat `cron_runs` (0091), jadi totalnya kebetulan sama-sama 78 untuk kumpulan
+> tabel yang BERBEDA. Hitung dari kode.
 > 0062 adds `orders.problem_at`/`problem_note` (stuck-parcel flag); 0063 adds `stores` public address +
 > phone + 5 social handles (footer). Front-end shipped this pass: product search (`/cari`), responsive
 > `srcset` with an allow-listed on-demand resizer, a sale-recovering 404, URL-driven sort, the social

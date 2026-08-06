@@ -1602,7 +1602,10 @@ every list screen's search box, `lib/theme/puck-field-overrides.tsx`, `saldo-fil
 pair, and `order-detail.tsx`'s bare checkboxes. A screen reader announces these as "edit text", with
 no indication of what they filter or what the checkbox will do to an order.
 
-### N52. `CardTitle` is a `<div>`, so 128 card headings are invisible to heading navigation · **S** · NEW
+### N52. ✅ SUDAH DIKIRIM — ~~`CardTitle` is a `<div>`~~ · **S**
+> Diverifikasi di kode 2026-08-07: `packages/ui/src/components/ui/card.tsx` merender `h${level}`
+> (default `h2`, `level` sebagai escape hatch), dan salinan lokal `apps/admin/components/ui` sudah
+> tidak ada. Entri ini tetap ditandai terbuka jauh setelah perbaikannya mendarat.
 **MEASURED**: the admin is a **flat `h1`** on nearly every screen — every card title on every
 dashboard, list and detail page is a styled `div`. A screen-reader user cannot jump between regions;
 they must read linearly through the whole page. Changing the primitive is one edit but it touches
@@ -1620,7 +1623,9 @@ which pins that every route REACHES an `h1` — the floor, not the structure.
 no icon, sign or word. WCAG 1.4.1. The delta figures beside them already carry `+`/`−` (U+2212), so
 the fix is to let the verdict borrow the same signal rather than invent one.
 
-### N54. 🔴 There is NO way to create a landing page — the button 404s · **S** · NEW
+### N54. ✅ SUDAH DIKIRIM — ~~There is NO way to create a landing page~~ · **S**
+> Diverifikasi 2026-08-07: `apps/admin/app/(admin)/promo/html/baru/page.tsx` ADA dan komentarnya
+> sendiri menyebut N54 sebagai yang ditutupnya.
 **MEASURED at HEAD, twice, by reading the two halves against each other:**
 - `apps/admin/app/(admin)/promo/promo-list-client.tsx:126` — the "Buat baru" button is
   `<Link href="/promo/html/baru" />`
@@ -1640,7 +1645,11 @@ Found by the wave-9 labelling sweep, which could not measure `landing-editor-cli
 **because no landing row exists to render** — the a11y gap there is fixed by shape, not by
 measurement, until this is.
 
-### N55. Colour-only verdict, third site · **S** · NEW
+### N55. ✅ SUDAH DIKIRIM — ~~Colour-only verdict, third site~~ · **S**
+> Diverifikasi 2026-08-07: `return-by-courier.tsx` membawa `TriangleAlert`/`ShieldCheck` (`aria-hidden`)
+> plus kata `sr-only`; warna batang kini sinyal KETIGA, bukan satu-satunya. `AGENTS.md` menyebutnya
+> "Still open" di tiga tempat sampai hari ini — tugas yang selesai harus ditutup di SEMUA tempat ia
+> disebut, kalau tidak pembaca berikutnya memperbaikinya lagi.
 `apps/admin/components/admin/return-by-courier.tsx` decides each courier's row by bar colour alone
 (`rate > 5 ? bg-destructive : bg-emerald-500/70`) with a colour-neutral `x,x%` beside it. Same WCAG
 1.4.1 class as the two wave-9 fixed; found while fixing those, outside the two the brief named.
