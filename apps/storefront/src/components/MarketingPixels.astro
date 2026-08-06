@@ -154,9 +154,11 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
 // ── NOTE-26 ─────────────────────────────────────────────────────────────────────
 // ⚠️ SEBUAH URL BUKAN DAFTAR HALAMAN PRODUK. `path.indexOf("/produk/") === 0` melewatkan justru
 // halaman yang paling mahal: `/promo/<handle>` dan `/lp/<slug>` — halaman produk tunggal yang
-// merchant BAYAR trafiknya. Diukur di produksi 2026-08-06: `/promo/blouse-katun` mengirim PageView
-// SAJA, sementara `/produk/blouse-katun` mengirim PageView + ViewContent dengan id `1009-1` dan
-// harga. Jadi corong yang dibayar tercatat sebagai PageView lalu Purchase, tanpa apa pun di antara —
+// merchant BAYAR trafiknya. Diukur 2026-08-06 pada server hasil build dengan baris `promo_pages`
+// sungguhan — BUKAN di produksi, yang belum punya satu pun promo aktif dan menjawab 404 di URL itu;
+// peringatan lengkapnya ada di `OrderFunnel.astro`. `/promo/blouse-katun` mengirim PageView SAJA,
+// sementara `/produk/blouse-katun` mengirim PageView + ViewContent dengan id dan harga. Jadi corong
+// yang dibayar tercatat sebagai PageView lalu Purchase, tanpa apa pun di antara —
 // tak ada audiens dynamic-ads, tak ada nilai yang bisa dioptimasi, dan tak ada ViewContent yang bisa
 // dipasangkan dengan AddToCart-nya. Itu sebabnya sebuah halaman produk bisa terbaca "cuma
 // add-to-cart" di Events Manager: separuh atasnya tak pernah dikirim.
