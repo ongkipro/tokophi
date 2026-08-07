@@ -155,12 +155,16 @@ signups are demonstrably happening. It needs a product answer (404 / neutral pag
 
 **Every remaining blocker is one specific missing thing, not effort:**
 
-| item | blocked on |
-|---|---|
-| SEC-4 + dashboard profiling | a production credential — `demo@tokophi.com`, or super-admin impersonation via `ongkiardiansyah@gmail.com` |
-| DR-1 | a Cloudflare token with **Account → R2 → Edit** + an R2 access key |
-| SEC-1 | a product decision |
-| DOM-2 | nothing — it is buildable now (explicit `Host()` router) |
+- Blocked on **a production credential** — `demo@tokophi.com`'s password, or super-admin impersonation
+  via `ongkiardiansyah@gmail.com`: that is SEC-4 *and* the dashboard profiling, both in one pass.
+- Blocked on **a Cloudflare token** with Account → R2 → Edit plus an R2 access key: that is the offsite
+  backup (DR-1 / T-6).
+- Blocked on **a product decision**: the unapproved-store storefront (SEC-1).
+- Blocked on **nothing at all** — buildable today with the explicit `Host()` router: custom domains
+  (DOM-2), with `beautyinu.co` already waiting on the Cloudflare side.
+
+*(Written as prose deliberately: an ID in the first column of a table parses as a task DECLARATION, and
+this list duplicated DR-1's — the validator caught it. Reference IDs mid-sentence, never leading.)*
 
 ⚠️ **Credentials in memory are not credentials in production.** `ongki@batiknusantara.id / tokophi123`
 is the LOCAL SEED and does not exist on the live database; it cost this session two failed login
