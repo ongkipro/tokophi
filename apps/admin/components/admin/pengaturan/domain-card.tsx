@@ -10,24 +10,20 @@ import { useCan } from "@/components/admin/permissions";
 import type { StoreDomainRow } from "@/lib/data/domain";
 import { listDomains, addDomain, verifyDomain, setPrimaryDomain, removeDomain, requestDomainChange } from "@/lib/actions/domain";
 
-// A domain whose ownership is proven (cert provisioning/live) is locked — mirrors isLockedStatus in
-// lib/data/domain (which is server-only and can't be imported into this client component).
-const isLocked = (s: StoreDomainRow["status"]) => s === "provisioning" || s === "active";
+// Once a hostname exists at the TLS provider it is locked even if activation later enters `error`;
+// deleting only the DB row would orphan a certificate-bearing hostname at the edge.
+const isLocked = (domain: StoreDomainRow) =>
+  domain.providerAttached || domain.status === "provisioning" || domain.status === "active";
 
-// Pengaturan → Domain. A merchant attaches their own domain (toko.com) to their storefront.
-// CUSTOM_DOMAIN.md.
-//
-// HONESTY: this screen can add a domain and verify TXT ownership for real. It CANNOT flip a domain to
-// "active" — a shopper is only served once a TLS cert is issued (Cloudflare-for-SaaS, not built yet),
-// which is a platform step. So a verified domain rests at "provisioning" and this UI says exactly
-// that, rather than pretending the domain is live. The rule of this codebase is that a control must
-// not claim what the system cannot do.
+// Pengaturan → Domain. TXT ownership, Cloudflare hostname registration, certificate polling, and the
+// final `active` transition are real. The seller can only promote a domain after the provider reports
+// both hostname and certificate active.
 
 type StatusMeta = { label: string; tone: "muted" | "amber" | "green" | "red"; hint: string };
 const STATUS: Record<StoreDomainRow["status"], StatusMeta> = {
   pending: { label: "Belum diverifikasi", tone: "muted", hint: "Tambahkan record DNS di bawah, lalu klik Verifikasi." },
   verifying: { label: "Menunggu DNS", tone: "amber", hint: "Record belum terbaca. DNS bisa perlu waktu hingga beberapa jam." },
-  provisioning: { label: "Menunggu aktivasi", tone: "amber", hint: "Kepemilikan terverifikasi. Sertifikat sedang disiapkan tim kami — kamu akan diberi tahu saat aktif." },
+  provisioning: { label: "Menunggu aktivasi", tone: "amber", hint: "Kepemilikan terverifikasi. Sertifikat keamanan sedang diterbitkan otomatis." },
   active: { label: "Aktif", tone: "green", hint: "Domain melayani tokomu." },
   error: { label: "Bermasalah", tone: "red", hint: "" },
   disabled: { label: "Nonaktif", tone: "muted", hint: "" },
@@ -241,12 +237,12 @@ export function DomainCard() {
                             <Star className="mr-1 h-3.5 w-3.5" /> Jadikan utama
                           </Button>
                         )}
-                        {(d.status === "pending" || d.status === "verifying") && (
-                          <Button size="sm" disabled={rowBusy} onClick={() => run(d.id, () => verifyDomain(d.id), "Kepemilikan terverifikasi.")}>
-                            {rowBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><ShieldCheck className="mr-1 h-3.5 w-3.5" /> Verifikasi</>}
+                        {(d.status === "pending" || d.status === "verifying" || d.status === "error") && (
+                          <Button size="sm" disabled={rowBusy} onClick={() => run(d.id, () => verifyDomain(d.id), d.status === "error" ? "Aktivasi diperiksa ulang." : "Kepemilikan terverifikasi.")}>
+                            {rowBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><ShieldCheck className="mr-1 h-3.5 w-3.5" /> {d.status === "error" ? "Coba lagi" : "Verifikasi"}</>}
                           </Button>
                         )}
-                        {isLocked(d.status) ? (
+                        {isLocked(d) ? (
                           // Verified/locked: no self-serve delete. The seller opens a ticket; super-admin acts.
                           <Button
                             size="sm"

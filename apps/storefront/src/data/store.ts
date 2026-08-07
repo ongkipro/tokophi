@@ -2,11 +2,10 @@
 // the tenant is resolved from the request's `Host` header at request time — no per-client build,
 // no STORE_SLUG-per-deploy, no DB access at `astro build` time.
 //
-// Resolution order (first hit wins):
-//   1. custom domain          — `toko-pelanggan.com`      → SEAM, not wired yet (no column; see below)
-//   2. store subdomain        — `<slug>.<STOREFRONT_BASE_DOMAIN>`  e.g. batik-nusantara.toko.tokophi.com
-//   3. first label of the host — `<slug>.anything.else`    e.g. batik-nusantara.127.0.0.1.sslip.io
-//   4. fallback env           — STORE_SLUG / DEFAULT_STORE_SLUG   (local dev + today's single-tenant box)
+//   1. active custom domain   — `toko-pelanggan.com` → `store_domains`
+//   2. store subdomain        — `<slug>.<STOREFRONT_BASE_DOMAIN>`
+//   3. sslip.io development   — `<slug>.127.0.0.1.sslip.io`
+//   4. fallback env           — STORE_SLUG / DEFAULT_STORE_SLUG (localhost / bare IP)
 // Nothing matches → null → middleware renders a clean 404 ("Toko tidak ditemukan"), never a crash.
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
@@ -118,14 +117,16 @@ function slugFromBaseDomain(host: string): string | null {
 }
 
 /**
- * First label of any multi-label host — covers the sslip.io box (`<slug>.203.0.113.10.sslip.io`)
- * without configuring a base domain. Numeric first labels are skipped so a bare IP / bare
- * `1.2.3.4.sslip.io` host isn't read as a store slug.
+ * First label of an sslip.io development host (`<slug>.203.0.113.10.sslip.io`).
+ *
+ * This used to accept `<slug>.anything.else`. Once the custom-domain catch-all router exists, that
+ * would let an unregistered hostname whose first label happened to equal a store slug bypass the
+ * `store_domains status='active'` gate. Production domains must resolve through the explicit base or
+ * active custom-domain paths; this convenience is only for the named development service.
  */
 function slugFromFirstLabel(host: string): string | null {
-  const labels = host.split(".");
-  if (labels.length < 2) return null;
-  const first = labels[0];
+  if (!host.endsWith(".sslip.io")) return null;
+  const first = host.split(".")[0];
   if (!first || RESERVED.has(first) || /^\d+$/.test(first)) return null;
   return first;
 }

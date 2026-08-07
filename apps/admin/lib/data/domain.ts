@@ -17,6 +17,7 @@ export type StoreDomainRow = {
   status: "pending" | "verifying" | "provisioning" | "active" | "error" | "disabled";
   isPrimary: boolean;
   lastError: string | null;
+  providerAttached: boolean;
   // the TXT record the merchant must publish, derived from the token (never the token itself)
   txtName: string;
   txtValue: string;
@@ -76,6 +77,7 @@ export async function getStoreDomains(): Promise<StoreDomainRow[]> {
         status: schema.storeDomains.status,
         isPrimary: schema.storeDomains.isPrimary,
         lastError: schema.storeDomains.lastError,
+        providerId: schema.storeDomains.providerId,
         token: schema.storeDomains.verificationToken,
       })
       .from(schema.storeDomains)
@@ -89,6 +91,7 @@ export async function getStoreDomains(): Promise<StoreDomainRow[]> {
         status: r.status,
         isPrimary: r.isPrimary,
         lastError: r.lastError,
+        providerAttached: Boolean(r.providerId),
         txtName: rec.txtName,
         txtValue: rec.txtValue,
       };

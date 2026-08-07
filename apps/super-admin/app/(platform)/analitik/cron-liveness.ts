@@ -12,11 +12,12 @@ export type { CronRunRow };
 // resi poller is dead is the rule worth testing, and `lib/data.ts` imports `@tokophi/db` at module
 // scope so nothing in it can be imported by a test runner. `cron-liveness.test.ts` sits beside it.
 
-/** The three sidecars in `docker-compose.coolify.yml`, in the order the card lists them. */
+/** The sidecars in `docker-compose.coolify.yml`, in the order the card lists them. */
 export const CRON_JOBS: { job: string; label: string; what: string }[] = [
   // First, and named for what a merchant would notice: this is the loop whose absence produced
   // `awbFilled = 0` for a week with nothing on any screen to say so.
   { job: "tracking", label: "Resi otomatis", what: "mengisi resi & memajukan status pesanan" },
+  { job: "domains", label: "Aktivasi domain", what: "memeriksa hostname & sertifikat SSL merchant" },
   { job: "tracking-events", label: "Pengiriman konversi", what: "mengirim Purchase ke channel iklan" },
   { job: "billing", label: "Tagihan langganan", what: "sinkron status toko & terbitkan tagihan" },
 ];
