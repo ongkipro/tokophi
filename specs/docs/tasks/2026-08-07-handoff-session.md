@@ -30,11 +30,19 @@ hostname `beautyinu.co` created (Free plan allows it). The merchant's DNS was co
 because it looks finished.
 
 ⚠️ This label serves **every** merchant storefront. Get it wrong and they all go down together.
-- The router is `priority=1` (lowest) and Coolify's own routers outrank it, so a catch-all *should*
-  fall through to the storefront, which resolves the tenant from `Host` and 404s what it doesn't know.
-  **That claim is untested. Verify it against the live routing table before merging.**
-- Unresolved: the rule names only `.tokophi.com`, but `.id` is supposed to be the merchant-facing zone,
-  and there is no `.id` anywhere in that compose file. **Establish which is true first.**
+- ⛔ **The catch-all idea was tested and FAILED. Do not build it.** Priority 1 is already occupied by
+  `formalin-web` — a different live application on this same proxy. A tokophi catch-all at priority 1
+  ties with it on every `*.formalin.store` host; raising ours to 2 would hijack their subdomains
+  outright. **Use an explicit `Host()` list** for verified custom domains instead: deterministic, long
+  rule ⇒ high default priority, no collision. Costs one deploy per domain, fine at 7 stores.
+  *(Confirmed true and reusable: every tokophi router sits at 38–100, and the storefront already 404s
+  foreign hosts cleanly — `beautyinu.co`, random hosts, all 404 at `:4327`.)*
+- ✅ **RESOLVED — do not re-investigate.** `.com` is ours (Seller, Super Admin, landing, platform);
+  `.id` is merchants. **`.id` has been live since 16 July** — `batik-nusantara.tokophi.id` → 200,
+  `<slug>.tokophi.com` → 301 → `.id`, `app.tokophi.id` → 301 → `.com`. It is **not** in
+  `docker-compose.coolify.yml`; it lives in `/data/coolify/proxy/dynamic/` (`tokophi-stores-id.yaml`,
+  `tokophi-com-to-id-redirect.yaml`, `tokophi-id-platform-redirect.yaml`), which is **not in the repo**.
+  There is nothing to migrate. DOM-2 is **only** merchant custom domains.
 - Then flip `store_domains.status` to `active` and confirm `curl -sI https://beautyinu.co` → 200.
 
 ### 2. T-9 / UX-1 — platform default theme, decision **B-hard**
@@ -69,3 +77,50 @@ Independent of the B-soft/B-hard question; can ship on its own.
 - Migrations: check `packages/db/drizzle/meta/_journal.json` — a stamp below the newest is **skipped
   silently** while printing success.
 - Other agents share this worktree, this DB and this box. `git status` first; commit with a pathspec.
+
+---
+
+## Complete open backlog, ordered — written without being asked, 2026-08-07
+
+Ranked by *cost of leaving it undone*, not by effort.
+
+### Serving customers wrong / security
+1. **SEC-1 — an unapproved store's storefront is fully public.** `getStoreBySlug` filters on slug only;
+   zero references to `suspended`/`approved_at` in `apps/storefront/src`; `StoreInfo` carries no
+   `status`. Latent today (queue empty, all 6 approved) — **it stops being latent the day signup is
+   busy.** Needs a product decision first: 404, neutral holding page, or serve normally.
+2. **SEC-4 — `Secure` has never been observed on a real `Set-Cookie`.** The code is right
+   (`packages/lib/src/session-cookie.ts`); nobody has watched one production login to confirm it.
+   One login, one header dump. **Cheapest unverified security claim we have.**
+3. **T-4 — `.id` `min_tls_version` is still 1.0.** A compatibility call, not a technical one.
+
+### Losing data
+4. **DR-1 — backups have no offsite copy.** They live on the same VPS as the database. The restore
+   drill passed and RPO was measured, so the *procedure* is proven — **the single point of failure is
+   that one box.** Highest-value infra item here.
+
+### Merchant-visible
+5. **DOM-2 — custom domains.** Cloudflare half done; explicit-`Host()` router remains. `beautyinu.co`
+   is a real merchant waiting. Flip `store_domains.status` → `active` and prove `curl -sI` → 200.
+6. **DOM-1 — `tokophi.id` apex returns 503.**
+7. **T-9 / T-10 — theme default (B-hard) + 1:1 lock.** T-10 is independent and can ship alone.
+
+### Hygiene
+8. **DEL-2 — 11 ESLint errors; `storefront` and `landing` have no lint script at all.** The missing
+   script is worse than the errors: two surfaces are unlinted and nobody sees it.
+9. Repo debt: ~26 dirty worktrees, ~60 branches, 5 with migration journals stamped below main.
+   **The journal one can silently skip a migration — see the CLAUDE.md landmine.**
+
+## What I would tell my replacement about *how* I worked
+
+I was wrong three times today, and all three had the same shape: **I inferred system state from
+configuration instead of observing behaviour.**
+
+- Deploy "broken" → never read the webhook's reply. It said `watch_paths: ["!**/*.md"]`.
+- "No `.id` anywhere" → grepped the repo, never `curl`ed a `.id` host. It had been live for three weeks.
+- "Priority 1 is free" → assumed; another live app was already sitting there.
+
+Each cost more than the fix would have. **Before writing that something is broken, run the one command
+that would prove it works.** And when a second observation seems to confirm the first, check that it
+isn't just the same cause seen twice — I "confirmed" the deploy theory across four merges that were all
+docs-only, and mistook repetition for evidence.
