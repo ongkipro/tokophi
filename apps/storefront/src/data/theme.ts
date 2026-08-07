@@ -3,6 +3,7 @@
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import type { StoredTemplateData } from "@tokophi/sections";
+import { themeSourceStoreId } from "./theme-source";
 import { generateBrandShades, DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
 
 /**
@@ -46,6 +47,9 @@ const withContent = (sections: unknown): StoredTemplateData | null => {
 };
 
 export async function getStoreTemplates(storeId: string): Promise<StoreTemplates> {
+  // Resolved ONCE, here, because this is the single seam every template read passes through. Doing it
+  // at a call site would leave the other call sites serving the merchant's own theme.
+  storeId = themeSourceStoreId(storeId);
   const rows = await db
     .select({
       id: schema.pageTemplates.id,
