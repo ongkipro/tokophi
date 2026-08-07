@@ -106,7 +106,7 @@ describe("cronVerdict", () => {
 });
 
 it("every sidecar in docker-compose.coolify.yml has a row on the card", () => {
-  // A cron nobody lists is a cron nobody misses. These are the three `while true` loops in the compose
-  // file; adding a fourth there without adding it here restores the exact blind spot this closes.
-  expect(CRON_JOBS.map((j) => j.job).sort()).toEqual(["billing", "tracking", "tracking-events"]);
+  // A cron nobody lists is a cron nobody misses. This assertion keeps every compose sidecar visible;
+  // adding another loop without adding it here restores the exact blind spot this closes.
+  expect(CRON_JOBS.map((j) => j.job).sort()).toEqual(["billing", "domains", "tracking", "tracking-events"]);
 });

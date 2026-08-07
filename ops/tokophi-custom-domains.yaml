@@ -1,0 +1,13 @@
+# Cloudflare for SaaS forwards each registered merchant hostname with the original Host header.
+# The named .com/.id routers stay at priorities 1+, while Coolify's default noop is -1000.
+# Priority 0 is therefore the narrow gap this catch-all must occupy: custom hosts reach the shared
+# storefront, but no platform or system storefront host can be hijacked.
+http:
+  routers:
+    tokophi-custom-domains:
+      rule: 'HostRegexp(`^.+$`)'
+      entryPoints:
+        - https
+      priority: 0
+      service: tokophi-stores@docker
+      tls: {}

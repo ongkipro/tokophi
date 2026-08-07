@@ -76,6 +76,9 @@ services:
       AUTOLARIS_API_KEY: ${AUTOLARIS_API_KEY:-}
       AUTOLARIS_CALLBACK_SECRET: ${AUTOLARIS_CALLBACK_SECRET:-}
       CRON_SECRET: ${CRON_SECRET:-}
+      # Cloudflare for SaaS — creates and polls merchant Custom Hostnames after our TXT proof passes.
+      CF_SAAS_ZONE_ID: ${CF_SAAS_ZONE_ID:-}
+      CF_SAAS_API_TOKEN: ${CF_SAAS_API_TOKEN:-}
       # ADR 0012 — encrypts the merchants' own CAPI tokens at rest. WITHOUT IT THE FEATURE IS DEAD ON
       # ARRIVAL, and silently so: the Seller's save is refused with "Kunci enkripsi belum diset" (we
       # never store a token in plaintext), so server-side conversions can never be switched on and
@@ -85,12 +88,12 @@ services:
       # Optional: pins Meta's Graph version (defaults to a pinned one in lib/capi.ts).
       META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
-      # CNAME target a merchant points their custom domain at (Pengaturan → Domain). Defaults to
+      # CNAME target a merchant points their custom domain at (Pengaturan → Domain). The live
+      # Cloudflare-for-SaaS fallback origin is cname.tokophi.cc.
       # ⚠️ The fallback was cname.tokophi.COM until 2026-08-08 and that was WRONG: Cloudflare-for-SaaS
       # runs on the tokophi.cc zone. Coolify overrides this var, so nothing was broken in production —
       # but if the override ever went missing the app would silently advertise a target that can never
       # validate, and merchants would follow it. A wrong default is a bug waiting for a config gap.
-      # only if the platform ever moves the target off that label. See specs/docs/CUSTOM_DOMAIN.md.
       CUSTOM_DOMAIN_CNAME_TARGET: ${CUSTOM_DOMAIN_CNAME_TARGET:-cname.tokophi.cc}
       # ── Self-serve signup master switch (apps/admin/lib/provision.ts `signupOpen()`) ────────────
       # It was NOT forwarded here, so `SIGNUP_ENABLED=true` set in Coolify reached nothing and
@@ -325,6 +328,23 @@ services:
       # 60 seconds — the interval reasoned about above, read by BOTH `sleep` and `?every=`.
       CRON_INTERVAL_SEC: 60
     command: ["sh", "-c", "while true; do wget -qO- \"http://admin:3000/api/cron/tracking-events?secret=$$CRON_SECRET&every=$$CRON_INTERVAL_SEC\" || echo 'cron tracking-events failed'; echo; sleep $$CRON_INTERVAL_SEC; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Cloudflare for SaaS certificate poller. A verified domain is not routable until BOTH the custom
+  # hostname and its edge certificate are active; this is the only process allowed to make that jump.
+  cron-domains:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      admin: { condition: service_healthy }
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-}
+      CRON_INTERVAL_SEC: 300
+    command: ["sh", "-c", "while true; do echo \"[cron-domains] $$(date -Iseconds)\"; wget -qO- \"http://admin:3000/api/cron/domains?secret=$$CRON_SECRET&every=$$CRON_INTERVAL_SEC\" || echo 'cron domains failed'; echo; sleep $$CRON_INTERVAL_SEC; done"]
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1 || exit 1"]
       interval: 30s

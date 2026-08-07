@@ -19,6 +19,7 @@ import {
 import { getStoreSlug } from "@/lib/data/store";
 import { servableVerdict } from "@/lib/domain-servable";
 import { createTicket } from "@/lib/actions/support";
+import { createCustomHostname, getCustomHostname, provisioningState } from "@/lib/cloudflare-saas";
 
 // Custom-domain writes (Pengaturan → Domain). CUSTOM_DOMAIN.md.
 //
@@ -28,12 +29,9 @@ import { createTicket } from "@/lib/actions/support";
 // already claimed by ANOTHER store is rejected by the DB, not by an app-level check that could be
 // forgotten.
 //
-// What this can and cannot do, honestly:
-//  - add + verify TXT ownership is REAL and complete here.
-//  - the jump to `active` (a shopper is actually served on the domain) needs a TLS cert, which is
-//    Cloudflare-for-SaaS territory and is NOT built. So a verified domain rests at `provisioning`, and
-//    the UI says so. It does NOT let the merchant flip it to `active` — that would render a domain the
-//    platform cannot yet serve a cert for.
+// TXT ownership is checked here first. Once it succeeds, the hostname is registered with Cloudflare
+// for SaaS and remains `provisioning` until both the hostname and its edge certificate are active.
+// The domain poller owns that final transition; neither the browser nor the merchant can forge it.
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -126,23 +124,28 @@ export async function addDomain(input: string): Promise<Result> {
 export async function verifyDomain(id: string): Promise<Result> {
   const { storeId } = await requireCapability("settings:write");
 
-  return withTenant(storeId, async (db) => {
+  const ownership = await withTenant(storeId, async (db) => {
     const [row] = await db
-      .select({ host: schema.storeDomains.host, token: schema.storeDomains.verificationToken })
+      .select({
+        host: schema.storeDomains.host,
+        token: schema.storeDomains.verificationToken,
+        providerId: schema.storeDomains.providerId,
+      })
       .from(schema.storeDomains)
       .where(and(eq(schema.storeDomains.id, id), eq(schema.storeDomains.storeId, storeId)))
       .limit(1);
-    if (!row) return { ok: false, error: "Domain tidak ditemukan." };
+    if (!row) return { done: true as const, result: { ok: false as const, error: "Domain tidak ditemukan." } };
+    if (row.providerId) {
+      return { done: false as const, host: row.host, providerId: row.providerId };
+    }
 
     const { txtName, txtValue } = domainRecords(row.host, row.token);
-
     let records: string[][] = [];
     try {
       records = await resolveTxt(txtName);
     } catch (e: unknown) {
-      // ENOTFOUND/ENODATA just means "the record isn't there yet" — a normal, expected state, not an
-      // error to log. Anything else, surface briefly.
-      const code = (e as { code?: string })?.code;
+      const code =
+        e && typeof e === "object" && "code" in e && typeof e.code === "string" ? e.code : undefined;
       const notThere = code === "ENOTFOUND" || code === "ENODATA";
       const stamp = new Date();
       await db
@@ -156,20 +159,27 @@ export async function verifyDomain(id: string): Promise<Result> {
         })
         .where(eq(schema.storeDomains.id, id));
       revalidatePath("/pengaturan");
-      return { ok: false, error: notThere ? "Data TXT belum ditemukan. Tunggu propagasi DNS lalu coba lagi." : "Gagal membaca DNS." };
+      return {
+        done: true as const,
+        result: {
+          ok: false as const,
+          error: notThere ? "Data TXT belum ditemukan. Tunggu propagasi DNS lalu coba lagi." : "Gagal membaca DNS.",
+        },
+      };
     }
 
-    // resolveTxt returns each record as an array of string chunks — join them before comparing.
     const found = records.some((chunks) => chunks.join("") === txtValue);
     const stamp = new Date();
-
     if (!found) {
       await db
         .update(schema.storeDomains)
         .set({ status: "verifying", lastCheckedAt: stamp, lastError: "Nilai TXT belum cocok." })
         .where(eq(schema.storeDomains.id, id));
       revalidatePath("/pengaturan");
-      return { ok: false, error: "Data TXT ditemukan tapi nilainya belum cocok. Pastikan disalin persis." };
+      return {
+        done: true as const,
+        result: { ok: false as const, error: "Data TXT ditemukan tapi nilainya belum cocok. Pastikan disalin persis." },
+      };
     }
 
     // DOM-3 — ownership is proven, but that is NOT the same question as "can this be served?".
@@ -190,11 +200,13 @@ export async function verifyDomain(id: string): Promise<Result> {
         .set({ status: "verifying", lastCheckedAt: stamp, lastError: verdict.message })
         .where(eq(schema.storeDomains.id, id));
       revalidatePath("/pengaturan");
-      return { ok: false, error: verdict.message };
+      return {
+        done: true as const,
+        result: { ok: false as const, error: verdict.message },
+      };
     }
 
-    // Owned AND servable. It rests at `provisioning` — NOT `active` — because a TLS cert still has to
-    // be issued (Cloudflare-for-SaaS, not built yet). The UI says "menunggu aktivasi".
+    // Owned and routable. Persist the verified boundary before registering the provider hostname.
     await db
       .update(schema.storeDomains)
       .set({ status: "provisioning", verifiedAt: stamp, lastCheckedAt: stamp, lastError: null })
@@ -204,9 +216,43 @@ export async function verifyDomain(id: string): Promise<Result> {
       storeId,
       text: `Domain terverifikasi: ${row.host}`,
     });
-    revalidatePath("/pengaturan");
-    return { ok: true };
+    return { done: false as const, host: row.host, providerId: null };
   });
+
+  if (ownership.done) return ownership.result;
+
+  try {
+    const provider = ownership.providerId
+      ? await getCustomHostname(ownership.providerId)
+      : await createCustomHostname(ownership.host);
+    const state = provisioningState(provider);
+    await withTenant(storeId, async (db) => {
+      await db
+        .update(schema.storeDomains)
+        .set({
+          providerId: provider.id,
+          certStatus: state.certStatus,
+          status: state.status,
+          lastCheckedAt: new Date(),
+          lastError: state.error,
+        })
+        .where(and(eq(schema.storeDomains.id, id), eq(schema.storeDomains.storeId, storeId)));
+    });
+    revalidatePath("/pengaturan");
+    return state.status === "error"
+      ? { ok: false, error: state.error ?? "Sertifikat SSL gagal diterbitkan." }
+      : { ok: true };
+  } catch (e: unknown) {
+    const error = e instanceof Error ? e.message : "Sertifikat SSL gagal diterbitkan.";
+    await withTenant(storeId, async (db) => {
+      await db
+        .update(schema.storeDomains)
+        .set({ status: "error", lastCheckedAt: new Date(), lastError: error })
+        .where(and(eq(schema.storeDomains.id, id), eq(schema.storeDomains.storeId, storeId)));
+    });
+    revalidatePath("/pengaturan");
+    return { ok: false, error };
+  }
 }
 
 export async function setPrimaryDomain(id: string): Promise<Result> {
@@ -239,7 +285,11 @@ export async function removeDomain(id: string): Promise<Result> {
 
   return withTenant(storeId, async (db) => {
     const [row] = await db
-      .select({ host: schema.storeDomains.host, status: schema.storeDomains.status })
+      .select({
+        host: schema.storeDomains.host,
+        status: schema.storeDomains.status,
+        providerId: schema.storeDomains.providerId,
+      })
       .from(schema.storeDomains)
       .where(and(eq(schema.storeDomains.id, id), eq(schema.storeDomains.storeId, storeId)))
       .limit(1);
@@ -248,7 +298,7 @@ export async function removeDomain(id: string): Promise<Result> {
     // A domain whose ownership is proven (cert provisioning/live) is LOCKED: removing or swapping it
     // silently could point a live storefront at nothing, or free a host someone relies on. Changing it
     // is a platform decision — the seller raises a ticket (requestDomainChange), super-admin acts.
-    if (isLockedStatus(row.status)) {
+    if (row.providerId || isLockedStatus(row.status)) {
       return {
         ok: false,
         error: "Domain ini sudah terverifikasi dan dikunci. Ajukan perubahan lewat tiket — tim kami yang memprosesnya.",
