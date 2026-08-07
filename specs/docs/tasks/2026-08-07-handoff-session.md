@@ -103,7 +103,10 @@ Ranked by *cost of leaving it undone*, not by effort.
 5. **DOM-2 — custom domains.** Cloudflare half done; explicit-`Host()` router remains. `beautyinu.co`
    is a real merchant waiting. Flip `store_domains.status` → `active` and prove `curl -sI` → 200.
 6. **DOM-1 — `tokophi.id` apex returns 503.**
-7. **T-9 / T-10 — theme default (B-hard) + 1:1 lock.** T-10 is independent and can ship alone.
+7. ~~T-9 / T-10~~ — **both SHIPPED 2026-08-07.** T-10 (`8d3767f`) is live and locking imagery to 1:1.
+   T-9 (`b5278e9`) is deployed **OFF**: `PLATFORM_DEFAULT_THEME_STORE_ID` is unset, so every store still
+   renders its own theme. **Turning it on is a deliberate env-var flip in Coolify, done while watching** —
+   see T-9 in `2026-08-06-open-work.md` for the exact procedure and the blank-value trap.
 
 ### Hygiene
 8. **DEL-2 — 11 ESLint errors; `storefront` and `landing` have no lint script at all.** The missing
@@ -124,3 +127,19 @@ Each cost more than the fix would have. **Before writing that something is broke
 that would prove it works.** And when a second observation seems to confirm the first, check that it
 isn't just the same cause seen twice — I "confirmed" the deploy theory across four merges that were all
 docs-only, and mistook repetition for evidence.
+
+
+## Added 2026-08-07 — two traps this session paid for, in the hope you don't
+
+**1. A pipe swallows the exit status.** `npm run build:admin 2>&1 | tail -6 && git commit …` reads
+`tail`'s status, not `npm`'s. The admin build failed and the commit and PR went out anyway; only reading
+the log caught it. Same shape as the `mv "$f.part" "$f"; echo backup-ok` bug in the backup service.
+**Redirect to a file, capture `$?`, then branch on it.**
+
+**2. A test that cannot fail for the right reason is worse than no test.** A pure resolver placed in a
+module that imports `@tokophi/db` threw on `DATABASE_URL` before any assertion ran — so the mutation
+check "failed" and looked like proof the guard worked. **Always mutation-test: break the logic on
+purpose and confirm the test goes red for the reason you expect**, not merely that it goes red.
+
+Both are the same underlying error as the three inference mistakes listed above: **accepting a signal
+that looks like confirmation without checking what actually produced it.**
