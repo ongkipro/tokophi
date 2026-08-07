@@ -115,9 +115,10 @@ export interface ProductGridConfig {
   limit: number;
   columns: 2 | 3 | 4;
   /**
-   * Product image aspect ratio. Optional — templates saved before this existed (and the fallback
-   * card everywhere else) default to `3:4`, the right shape for clothing. `1:1` suits accessories/
-   * homeware; `4:5` is a slightly taller portrait.
+   * @deprecated DEAD since T-10 — product imagery is LOCKED to 1:1 platform-wide and nothing reads
+   * this. The field survives only because templates saved before the lock still carry a value; the
+   * renderer ignores it by construction (`ProductCard` has no ratio prop at all). Do not re-wire it
+   * without removing the lock first, and do not "clean up" stored values — they are harmless history.
    */
   imageRatio?: "1:1" | "3:4" | "4:5";
 }
@@ -455,7 +456,6 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
     collectionHandle: "",
     limit: 8,
     columns: 4,
-    imageRatio: "3:4",
   },
   "banner-promo": {
     // NOT a promo. The old default shipped "Promo Gajian · Diskon hingga 30% untuk semua kategori"
