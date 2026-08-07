@@ -235,15 +235,8 @@ const fullConfig: Config<SectionConfigMap> = {
             { label: "4", value: 4 },
           ],
         },
-        imageRatio: {
-          type: "select",
-          label: "Rasio Gambar",
-          options: [
-            { label: "Potret 3:4 (pakaian)", value: "3:4" },
-            { label: "Potret 4:5", value: "4:5" },
-            { label: "Kotak 1:1", value: "1:1" },
-          ],
-        },
+        // "Rasio Gambar" removed (T-10): imagery is locked to 1:1 platform-wide. Leaving the control
+        // would be worse than useless — the merchant would pick 4:5, save, and see a square anyway.
       },
       defaultProps: SECTION_DEFAULTS["product-grid"],
       render: (props) => <ProductGrid {...props} />,
