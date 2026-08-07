@@ -11,6 +11,11 @@ time you read this.
 > And measure on `origin/main`, never on your own rebased branch — that is how a task got filed for a
 > flake that the very next merge had already fixed.
 
+▶️ **Picking up the THEME work (T-9 / T-10)? Start at**
+[`2026-08-07-handoff-theme.md`](./2026-08-07-handoff-theme.md) — the decision is already made (B),
+the six ratio sites are listed with line numbers, and the trap that a careless test sails past is
+named. Do not re-open the A/B question.
+
 🔴 **A MERGE TO `main` CAN FAIL TO DEPLOY, SILENTLY.** Measured 2026-08-07: main sat at `381a8e7`
 for 25+ min while every container stayed on `b22c1ec` and **no image for that sha was ever built** —
 disk fine, nothing unhealthy, **all four hosts green throughout**. Docs-only that time, so nothing
