@@ -1,3 +1,32 @@
+> # ⛔ THIS DOCUMENT IS SUPERSEDED ON ONE CRITICAL POINT — READ THIS FIRST
+>
+> **The CNAME target is `cname.tokophi.cc`, NOT `cname.tokophi.cc`  <!-- corrected from .com -->.** Everything below that says
+> `.com` is **wrong** and was overtaken by the domain-topology decision recorded in `CHANGELOG.md`
+> ("Domain topology: storefronts moved to `tokophi.id`, custom domains via Cloudflare-for-SaaS
+> (`cname.tokophi.cc`)").
+>
+> **The code is the authority:**
+> ```
+> apps/admin/lib/data/domain.ts:28
+> export const CNAME_TARGET = process.env.CUSTOM_DOMAIN_CNAME_TARGET || "cname.tokophi.cc";
+> ```
+> Cloudflare for SaaS is enabled on the **`tokophi.cc`** zone (`51168b5b…`), fallback origin
+> `cname.tokophi.cc` is **active**, and Coolify already sets `CUSTOM_DOMAIN_CNAME_TARGET=cname.tokophi.cc`.
+> The three zones: **`.com` = platform** (landing, `app.`, `rich.`) · **`.id` = merchant storefronts**
+> (`<slug>.tokophi.id`) · **`.cc` = the custom-domain fallback origin, and nothing else.**
+>
+> ⚠️ **This stale line cost real work on 2026-08-07.** Trusting it, I set up a fallback origin and
+> registered `beautyinu.co` as a custom hostname **in the wrong zone (`.com`)**, and told the owner to
+> instruct the merchant to CNAME to `cname.tokophi.cc`  <!-- corrected from .com -->. Three stray objects still sit in the `.com`
+> zone because of it. CLAUDE.md already carries the rule I broke: **"If a doc disagrees with the code,
+> the code wins — and the doc is a bug."** Check `CNAME_TARGET` before believing any prose about it.
+>
+> ⚠️ **And do not verify a custom domain by comparing IP ADDRESSES.** `cname.tokophi.cc` is proxied, so
+> its A records are Cloudflare's shared addresses. `beautyinu.co` currently holds **byte-identical** IPs
+> — the merchant copied the right target's addresses into A records — and is still completely
+> unservable, because Cloudflare for SaaS requires a real CNAME. An IP check would have passed it. See
+> `apps/admin/lib/domain-servable.ts` (DOM-3).
+
 # TokoΦ — Custom Domain (CNAME) & Primary Domain Spec
 
 > Spec for BACKLOG **"Custom domain for a merchant"** — this document **supersedes** that three-line
@@ -19,7 +48,7 @@
 |---|---|---|
 | Tenant resolution | `Host` → slug → store, cached per host (TTL `STOREFRONT_CACHE_TTL_MS`, default 15s) | `apps/storefront/src/data/store.ts` |
 | Custom-domain lookup | **Stub.** `async function slugFromCustomDomain(_host) { return null }` — first in the resolution order, so wiring it is a body swap | same, lines 74-81 |
-| `RESERVED` | `www app rich admin api cname toko storefront localhost` — **`cname` is already reserved**, i.e. `cname.tokophi.com` can never be a merchant slug | same, line 32 |
+| `RESERVED` | `www app rich admin api cname toko storefront localhost` — **`cname` is already reserved**, i.e. `cname.tokophi.cc`  <!-- corrected from .com --> can never be a merchant slug | same, line 32 |
 | Per-request origin | `locals.origin` = scheme + **the host the shopper landed on** (from `x-forwarded-proto` / `x-forwarded-host`) | `apps/storefront/src/middleware.ts` lines 48-60 |
 | Canonical / OG | `canonical = new URL(Astro.url.pathname, origin)`, `og:url = canonical`, `og:image` absolutised against `origin` | `apps/storefront/src/layouts/Layout.astro` lines 43-84 |
 | Sitemap / robots | **Do not exist.** `astro.config.mjs` deliberately has **no `site:`** (a hardcoded origin in a one-deploy-many-tenants app is a platform-wide SEO self-destruct) | `apps/storefront/astro.config.mjs` lines 25-27 |
@@ -195,7 +224,7 @@ cert for `*.tokophi.com` which no browser trusts.
 
 **Option A — Cloudflare for SaaS (Custom Hostnames).**
 Cloudflare terminates TLS for the merchant's hostname **at its edge**, then forwards to a *fallback
-origin* in our zone (`cname.tokophi.com` → our Traefik). We register each merchant hostname with
+origin* in our zone (`cname.tokophi.cc`  <!-- corrected from .com --> → our Traefik). We register each merchant hostname with
 Cloudflare via API; Cloudflare performs its own DCV and issues + auto-renews the certificate. We write
 no ACME code, store no certificates, and the custom hostnames inherit Cloudflare's DDoS/WAF/cache like
 the rest of the zone.
@@ -211,7 +240,7 @@ the rest of the zone.
 **Option B — Traefik + Let's Encrypt on demand (HTTP-01 / TLS-ALPN).**
 This is the one that *sounds* free and is not. What breaks, in order of severity:
 
-1. **The merchant's CNAME lands on Cloudflare's proxy IPs, not ours.** `cname.tokophi.com` is a
+1. **The merchant's CNAME lands on Cloudflare's proxy IPs, not ours.** `cname.tokophi.cc`  <!-- corrected from .com --> is a
    **proxied** record (it must be — see gotcha 1). Cloudflare will refuse to serve a hostname it has no
    configuration for; an arbitrary domain CNAME'd into a proxied zone that has not enabled
    Cloudflare-for-SaaS gets an error page, not our origin. So Option B **cannot use a proxied CNAME
@@ -236,7 +265,7 @@ This is the one that *sounds* free and is not. What breaks, in order of severity
    catch-all fallback. Doable, but it is now *two* stateful systems (DB + Traefik file provider) that
    can disagree.
 
-### DECISION 3 — **Cloudflare for SaaS.** Custom Hostnames, fallback origin `cname.tokophi.com`.
+### DECISION 3 — **Cloudflare for SaaS.** Custom Hostnames, fallback origin `cname.tokophi.cc`  <!-- corrected from .com -->.
 
 The trade-off, stated plainly: **we pay a recurring per-hostname fee and deepen our Cloudflare
 dependency, in exchange for not owning certificate lifecycle for domains we do not control, and for not
@@ -247,7 +276,7 @@ cheap about.
 
 ### What must be true for it to work behind the setup in `DEPLOY.md`
 
-1. **`cname.tokophi.com`** — a **proxied** record in the `tokophi.com` zone pointing at the origin
+1. **`cname.tokophi.cc`  <!-- corrected from .com -->** — a **proxied** record in the `tokophi.com` zone pointing at the origin
    (45.77.33.112). It is the fallback origin *and* the CNAME target we publish to merchants. The label
    `cname` is **already in `RESERVED`** (`store.ts` line 32), so it can never be read as a store slug.
 2. **A Traefik catch-all router → storefront.** The existing storefront rule is
@@ -323,7 +352,7 @@ hostname at all. Two records to copy is a small price; the UI shows them togethe
 
 **The failure mode if we skip it** (state it in the PR that ships this, because it is the reason the
 slice exists): anyone in the world can point `bank-example.com` — or a bank's lookalike, or a
-competitor's domain, or any domain in a phishing kit — at `cname.tokophi.com`, and we will happily serve
+competitor's domain, or any domain in a phishing kit — at `cname.tokophi.cc`  <!-- corrected from .com -->, and we will happily serve
 a working, TLS-valid online shop on it. We become an open host for arbitrary hostnames: our
 infrastructure serves the phish, our name appears in the CT logs for it, the abuse report and the
 takedown land on **us**, and Cloudflare (whose edge is issuing those certs) has every reason to
@@ -415,7 +444,7 @@ L ≈ 2 days.
 | **1** | **Schema + the resolution seam** | Migration `0049_store_domains.sql` (enum, table, 3 indexes, RLS `tenant_isolation`); `packages/db/src/schema.ts`; one seeded row for the demo store; `slugFromCustomDomain()` in `apps/storefront/src/data/store.ts` queries `store_domains WHERE host = $1 AND status = 'active'` (host is **already** the cache key — no cache change); `StoreInfo` gains `primaryHost`; `SCHEMA.md` + `DATA_MODEL.md` table count. | `INSERT` a row, then `curl -H 'Host: toko-demo.test' localhost:4327` → the demo store renders. `npm run verify-rls -w @tokophi/db` stays green. **No DNS, no Cloudflare, no UI.** | **M** |
 | **2** | **Primary host + 301 + canonical** | `middleware.ts`: `locals.origin` = **primary** origin (DECISION 2b); 301 non-primary → primary for GET/HEAD, skipping `/api/*` (DECISION 2c). `Layout.astro` needs no change (it already builds from `origin`). | `curl -I -H 'Host: batik-nusantara.tokophi.com'` with a primary custom domain set → `301` to it; `curl -X POST .../api/checkout-session` on the old host → still `200`; view-source on the primary → `canonical` + `og:url` both name the primary. | **S** |
 | **3** | **Verification + admin UI** | `store_domains` server actions (`lib/actions/domain.ts`: add / verify / promote / delete, `requireCapability("settings:write")`, `withTenant`); TXT check via `dns/promises`; `/pengaturan/domain` route + client screen with all seven states; card on `/pengaturan`; `platform_activity` audit. **Still no cert** — a verified domain sits at `provisioning` and is not yet served. | Add a domain in the UI, publish the TXT on a real test domain, click "Verifikasi sekarang" → `verified_at` set. Wrong token → clean error, no state change. | **M** |
-| **4** | **Cloudflare for SaaS** ⚠️ | *Precondition: the §3.4 SNI experiment has been run and its answer written into `DEPLOY.md`.* `cname.tokophi.com` proxied record; Traefik catch-all router at an explicit lowest priority (re-number **all** storefront routers in one pass); provider client (create / poll / delete custom hostname) behind `CF_SAAS_*` env, feature-flagged off when unset; `provider_id` + `cert_status` persistence; poller flips `provisioning → active`. | A real throwaway domain, CNAME'd, resolves over **https** to the store with a browser-trusted cert; `app.tokophi.com` and `rich.tokophi.com` still resolve to the right apps (the priority regression check). | **L** |
+| **4** | **Cloudflare for SaaS** ⚠️ | *Precondition: the §3.4 SNI experiment has been run and its answer written into `DEPLOY.md`.* `cname.tokophi.cc`  <!-- corrected from .com --> proxied record; Traefik catch-all router at an explicit lowest priority (re-number **all** storefront routers in one pass); provider client (create / poll / delete custom hostname) behind `CF_SAAS_*` env, feature-flagged off when unset; `provider_id` + `cert_status` persistence; poller flips `provisioning → active`. | A real throwaway domain, CNAME'd, resolves over **https** to the store with a browser-trusted cert; `app.tokophi.com` and `rich.tokophi.com` still resolve to the right apps (the priority regression check). | **L** |
 | **5** | **Sitemap + robots, primary-aware** | `src/pages/sitemap.xml.ts` + `robots.txt.ts`, both built from `locals.origin`; non-primary robots = `Disallow: /`. Still **no `site:`** in `astro.config.mjs`. | Two stores, two sitemaps, zero cross-contamination of hosts. | **S** |
 | **6** | **Super-admin oversight + polish** | Cross-store domain list + force-remove + cert status in super-admin; error-copy translation table; per-store domain cap; apex-help content. | — | **S/M** |
 
@@ -428,10 +457,10 @@ a real unknown in it.
 
 ## 7. Open questions (for the user)
 
-1. **CNAME target: `cname.tokophi.com`, or a separate brand domain?**
-   Recommendation: **`cname.tokophi.com`** — the label is already `RESERVED` in code (`store.ts` line
+1. **CNAME target: `cname.tokophi.cc`  <!-- corrected from .com -->, or a separate brand domain?**
+   Recommendation: **`cname.tokophi.cc`  <!-- corrected from .com -->** — the label is already `RESERVED` in code (`store.ts` line
    32), it costs nothing, and it is what `DEPLOY.md` already gestures at ("Custom merchant domains → CF
-   for SaaS → `cname.tokophi.com`", line 109). The argument *against*: the merchant's DNS panel then
+   for SaaS → `cname.tokophi.cc`  <!-- corrected from .com -->", line 109). The argument *against*: the merchant's DNS panel then
    shows our brand forever, and a future white-label posture (or selling the platform) would want a
    neutral target. Buying a second domain later means asking every existing merchant to re-point DNS —
    this is the kind of choice that is cheap now and expensive in two years. **Decide now.**
