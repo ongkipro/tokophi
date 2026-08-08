@@ -2,7 +2,7 @@
 import { schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
-import { resolveTxt } from "node:dns/promises";
+import { resolveCname, resolveTxt } from "node:dns/promises";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
@@ -17,6 +17,7 @@ import {
   type StoreDomainRow,
 } from "@/lib/data/domain";
 import { getStoreSlug } from "@/lib/data/store";
+import { servableVerdict } from "@/lib/domain-servable";
 import { createTicket } from "@/lib/actions/support";
 
 // Custom-domain writes (Pengaturan → Domain). CUSTOM_DOMAIN.md.
@@ -171,8 +172,29 @@ export async function verifyDomain(id: string): Promise<Result> {
       return { ok: false, error: "Data TXT ditemukan tapi nilainya belum cocok. Pastikan disalin persis." };
     }
 
-    // Ownership proven. It rests at `provisioning` — NOT `active` — because a TLS cert still has to be
-    // issued (Cloudflare-for-SaaS, not built yet). The UI says "menunggu aktivasi".
+    // DOM-3 — ownership is proven, but that is NOT the same question as "can this be served?".
+    // `beautyinu.co` passed TXT while its apex held hand-copied Cloudflare IPs and no CNAME at all, so
+    // it rested at `provisioning` with a green tick and an empty `last_error` while Cloudflare refused
+    // it outright. A merchant staring at a tick has nothing to act on — worse than a plain failure.
+    let chain: string[] = [];
+    try {
+      chain = await resolveCname(row.host);
+    } catch {
+      // ENODATA/ENOTFOUND here is the DEFECT ITSELF, not a transient: it means the host has A records
+      // (or nothing) rather than a CNAME. Leave `chain` empty and let the verdict speak.
+    }
+    const verdict = servableVerdict(chain, CNAME_TARGET);
+    if (!verdict.servable) {
+      await db
+        .update(schema.storeDomains)
+        .set({ status: "verifying", lastCheckedAt: stamp, lastError: verdict.message })
+        .where(eq(schema.storeDomains.id, id));
+      revalidatePath("/pengaturan");
+      return { ok: false, error: verdict.message };
+    }
+
+    // Owned AND servable. It rests at `provisioning` — NOT `active` — because a TLS cert still has to
+    // be issued (Cloudflare-for-SaaS, not built yet). The UI says "menunggu aktivasi".
     await db
       .update(schema.storeDomains)
       .set({ status: "provisioning", verifiedAt: stamp, lastCheckedAt: stamp, lastError: null })
