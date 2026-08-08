@@ -2,7 +2,7 @@
 // `Host` header, load its catalog, and hand both to every page/component via `Astro.locals`.
 // One deploy serves every store — no per-client build, no STORE_SLUG-per-deploy.
 import { defineMiddleware } from "astro:middleware";
-import { getStoreByHost, normalizeHost, primaryOrigin } from "./data/store";
+import { getLockedStoreByHost, getStoreByHost, normalizeHost, primaryOrigin } from "./data/store";
 import { getCatalog } from "./data/catalog";
 
 const notFoundHtml = (host: string) => `<!doctype html>
@@ -30,12 +30,46 @@ const notFoundHtml = (host: string) => `<!doctype html>
 </html>
 `;
 
+
+const esc = (v: string) => v.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]!);
+
+// Two locks, two truths. Telling a merchant awaiting their first review that they were "ditangguhkan"
+// would accuse them of something they did not do — see the 0090 note in packages/db/src/schema.ts.
+const lockedHtml = (name: string, reason: "awaiting-first-review" | "suspended-for-cause" | null) => {
+  const reviewing = reason !== "suspended-for-cause";
+  const title = reviewing ? "Toko sedang ditinjau" : "Toko sedang tidak aktif";
+  const body = reviewing
+    ? "Toko ini baru dibuat dan sedang kami tinjau sebelum dibuka untuk umum. Prosesnya biasanya tidak lama — tidak ada yang perlu Anda perbaiki."
+    : "Toko ini sedang tidak melayani pesanan untuk sementara.";
+  return `<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>${esc(title)} - ${esc(name)}</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:system-ui,sans-serif;background:#fafafa;color:#18181b;padding:1.5rem}
+main{max-width:32rem;text-align:center}h1{font-size:1.5rem;margin:0 0 .75rem}p{margin:0 0 .75rem;line-height:1.6;color:#52525b}
+small{color:#a1a1aa}</style></head>
+<body><main><h1>${esc(title)}</h1><p><strong>${esc(name)}</strong></p><p>${esc(body)}</p>
+<p><small>Ditenagai TokoΦ.</small></p></main></body></html>`;
+};
+
 export const onRequest = defineMiddleware(async (context, next) => {
   const host = normalizeHost(context.request.headers.get("host") ?? context.url.host);
   const store = await getStoreByHost(host);
 
-  // Unknown host and no fallback store configured → clean 404, never a 500.
   if (!store) {
+    // The host may name a store that EXISTS but is locked. A bare "tidak ditemukan" reads as broken to
+    // the merchant who just signed up and is checking their own shop — and the schema (0090) is explicit
+    // that a fresh signup has done nothing wrong. Say which of the two it is.
+    const locked = await getLockedStoreByHost(host);
+    if (locked) {
+      // 503, not 404: the shop is real and this is temporary. `Retry-After` keeps crawlers from
+      // treating it as gone. ⚠️ Deliberately reveals only that a shop exists and is not open — never
+      // its catalogue, which `getStoreBySlug` still refuses independently of this page.
+      return new Response(lockedHtml(locked.name, locked.reason), {
+        status: 503,
+        headers: { "content-type": "text/html; charset=utf-8", "retry-after": "3600", "cache-control": "no-store" },
+      });
+    }
+    // Unknown host and no fallback store configured → clean 404, never a 500.
     return new Response(notFoundHtml(host), {
       status: 404,
       headers: { "content-type": "text/html; charset=utf-8" },

@@ -12,7 +12,7 @@ import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { cached } from "./cache";
 import { RESERVED_SLUGS } from "@tokophi/lib/store-slug";
-import { isPubliclyServable } from "./store-servable";
+import { isPubliclyServable, lockReason, type LockReason } from "./store-servable";
 
 /** The three product-gallery layouts a merchant can pick in Tema (mirrors `stores.product_gallery_layout`). */
 export type GalleryLayout = "thumbnail-left" | "thumbnail-bottom" | "grid";
@@ -201,15 +201,19 @@ export async function getStoreBySlug(slug: string): Promise<StoreInfo | null> {
   });
 }
 
+/** Every slug a host could name, most specific first. Shared so the locked-store lookup below cannot
+ *  drift from the real resolver — if they disagreed, a locked shop would 404 instead of explaining. */
+async function candidateSlugs(h: string): Promise<string[]> {
+  return [await slugFromCustomDomain(h), slugFromBaseDomain(h), slugFromFirstLabel(h)].filter(
+    (x): x is string => Boolean(x),
+  );
+}
+
 /** The resolved store for an incoming request, or null (→ 404). Cached per host. */
 export async function getStoreByHost(host: string | null | undefined): Promise<StoreInfo | null> {
   const h = normalizeHost(host);
   return cached(`store:host:${h}`, async () => {
-    const candidates = [
-      await slugFromCustomDomain(h),
-      slugFromBaseDomain(h),
-      slugFromFirstLabel(h),
-    ].filter((s): s is string => Boolean(s));
+    const candidates = await candidateSlugs(h);
 
     for (const slug of candidates) {
       const s = await getStoreBySlug(slug);
@@ -249,4 +253,27 @@ export function primaryOrigin(store: StoreInfo, requestedOrigin: string): string
   // A store with an active primary custom domain is canonical THERE, always over https. Otherwise the
   // request origin (the <slug>.tokophi.com subdomain, or localhost in dev) is itself the primary.
   return store.primaryHost ? `https://${store.primaryHost}` : requestedOrigin;
+}
+
+/**
+ * SEC-1 follow-up — the host names a real store that is LOCKED, so we can say so instead of a bare
+ * "tidak ditemukan". Returns null for a host that names nothing.
+ *
+ * ⚠️ SEPARATE from `getStoreBySlug` ON PURPOSE. That function still returns null for a locked store,
+ * so the catalogue stays unreachable BY CONSTRUCTION — there is no path where this lookup can hand a
+ * locked store to the catalogue layer. It reads a name and a reason, nothing else.
+ */
+export async function getLockedStoreByHost(
+  host: string | null | undefined,
+): Promise<{ name: string; reason: LockReason } | null> {
+  const h = normalizeHost(host);
+  for (const slug of await candidateSlugs(h)) {
+    const [row] = await db
+      .select({ name: schema.stores.name, suspendedAt: schema.stores.suspendedAt, approvedAt: schema.stores.approvedAt })
+      .from(schema.stores)
+      .where(eq(schema.stores.slug, slug))
+      .limit(1);
+    if (row && !isPubliclyServable(row)) return { name: row.name, reason: lockReason(row) };
+  }
+  return null;
 }
