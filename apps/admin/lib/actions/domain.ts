@@ -2,7 +2,7 @@
 import { schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
-import { resolveTxt } from "node:dns/promises";
+import { resolveCname, resolveTxt } from "node:dns/promises";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
@@ -17,6 +17,7 @@ import {
   type StoreDomainRow,
 } from "@/lib/data/domain";
 import { getStoreSlug } from "@/lib/data/store";
+import { servableVerdict } from "@/lib/domain-servable";
 import { createTicket } from "@/lib/actions/support";
 import { createCustomHostname, getCustomHostname, provisioningState } from "@/lib/cloudflare-saas";
 
@@ -181,6 +182,31 @@ export async function verifyDomain(id: string): Promise<Result> {
       };
     }
 
+    // DOM-3 — ownership is proven, but that is NOT the same question as "can this be served?".
+    // `beautyinu.co` passed TXT while its apex held hand-copied Cloudflare IPs and no CNAME at all, so
+    // it rested at `provisioning` with a green tick and an empty `last_error` while Cloudflare refused
+    // it outright. A merchant staring at a tick has nothing to act on — worse than a plain failure.
+    let chain: string[] = [];
+    try {
+      chain = await resolveCname(row.host);
+    } catch {
+      // ENODATA/ENOTFOUND here is the DEFECT ITSELF, not a transient: it means the host has A records
+      // (or nothing) rather than a CNAME. Leave `chain` empty and let the verdict speak.
+    }
+    const verdict = servableVerdict(chain, CNAME_TARGET);
+    if (!verdict.servable) {
+      await db
+        .update(schema.storeDomains)
+        .set({ status: "verifying", lastCheckedAt: stamp, lastError: verdict.message })
+        .where(eq(schema.storeDomains.id, id));
+      revalidatePath("/pengaturan");
+      return {
+        done: true as const,
+        result: { ok: false as const, error: verdict.message },
+      };
+    }
+
+    // Owned and routable. Persist the verified boundary before registering the provider hostname.
     await db
       .update(schema.storeDomains)
       .set({ status: "provisioning", verifiedAt: stamp, lastCheckedAt: stamp, lastError: null })

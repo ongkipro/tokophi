@@ -143,3 +143,51 @@ purpose and confirm the test goes red for the reason you expect**, not merely th
 
 Both are the same underlying error as the three inference mistakes listed above: **accepting a signal
 that looks like confirmation without checking what actually produced it.**
+
+
+## Session close 2026-08-07 — measured state, and what each blocker actually is
+
+**Shipped and verified live:** T-10 (`8d3767f`, deploy 407) · T-9 (`b5278e9`, deploy 408, **OFF**).
+
+**Production is now 8 stores, not 7** — `petanihandal` (`jhonkyber@gmail.com`) appeared during the
+session. ⚠️ **That moves SEC-1 out of "latent".** An unapproved store's storefront is fully public, and
+signups are demonstrably happening. It needs a product answer (404 / neutral page / normal), soon.
+
+**Every remaining blocker is one specific missing thing, not effort:**
+
+- Blocked on **a production credential** — `demo@tokophi.com`'s password, or super-admin impersonation
+  via `ongkiardiansyah@gmail.com`: that is SEC-4 *and* the dashboard profiling, both in one pass.
+- Blocked on **a Cloudflare token** with Account → R2 → Edit plus an R2 access key: that is the offsite
+  backup (DR-1 / T-6).
+- Blocked on **a product decision**: the unapproved-store storefront (SEC-1).
+- Blocked on **nothing at all** — buildable today with the explicit `Host()` router: custom domains
+  (DOM-2), with `beautyinu.co` already waiting on the Cloudflare side.
+
+*(Written as prose deliberately: an ID in the first column of a table parses as a task DECLARATION, and
+this list duplicated DR-1's — the validator caught it. Reference IDs mid-sentence, never leading.)*
+
+⚠️ **Credentials in memory are not credentials in production.** `ongki@batiknusantara.id / tokophi123`
+is the LOCAL SEED and does not exist on the live database; it cost this session two failed login
+attempts and one wrong diagnosis. **Check `users` on the box before trusting any login you were told.**
+
+**Performance, measured — no smoking gun found.** Storefront FCP 532ms / load 542ms / 238KB / 0 console
+errors. Seller `/login` FCP 656ms / load 903ms. Landing FCP 596ms. The dashboard page already uses
+`Promise.all`, so it is not serially awaiting. 59 admin pages are `force-dynamic` and 133
+`withCurrentTenant` calls each open their own transaction — a real cost that scales with store count,
+but not a defect. **The authenticated dashboard remains the one thing never measured**, and that is
+exactly where the slowness was reported. Do not theorise about it further until it has been profiled.
+
+Two smaller, real findings: `/hero/` and `/fonts/` (**166KB**) return `cf-cache-status: EXPIRED` while
+`/_astro/` correctly gets `immutable` — they revalidate to origin on every visit and should not.
+And storefront **HTML** is `DYNAMIC` at Cloudflare, i.e. never edge-cached; caching it is a real lever
+but must be done carefully on a multi-tenant SSR site with carts.
+
+**Infra is not tight.** Disk 47GB/169GB (29%), RAM 2.1/7.7GB, load 0.91. Images are NOT the problem —
+0 dangling, 157MB reclaimable. Build cache holds 11.49GB but all of it is under 48h old, and pruning now
+would only slow the next deploy. The growth rate (33→47GB in a day of deploys) is what to watch; a
+weekly `docker builder prune --filter until=168h` is the fix, and it was NOT installed — it is a
+system-wide change and was left for approval.
+
+⚠️ The biggest single-image cost is `_migrate` at **1.94GB × 4 tags** — a container whose only job is to
+run migrations is as large as the full app. Almost certainly inheriting the whole admin build stage.
+Best size win available, and the most isolated to change.
