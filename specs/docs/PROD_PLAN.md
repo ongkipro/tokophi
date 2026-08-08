@@ -60,11 +60,11 @@ tokophi.com                       → Landing/marketing (SaaS)
 app.tokophi.com                   → Merchant admin (Shopify-style: 1 deploy, multi-tenant)
 rich.tokophi.com                  → Super admin (internal)
 *.tokophi.com                     → Storefront default subdomain (opsi)
-cname.tokophi.com                 → target CNAME custom domain + fallback origin (CF for SaaS)
+cname.tokophi.cc                 → target CNAME custom domain + fallback origin (CF for SaaS)
 ```
 
 - **Admin = `app.tokophi.com`** (dikonfirmasi user; gaya Shopify `admin.shopify.com/store/{id}/`). Store-context bisa lewat **path `/store/{slug}/`** (berguna untuk super-admin deep-link/impersonation & merchant multi-toko) — **keputusan terbuka** (default sekarang: scope by session, tanpa path).
-- **Custom domain merchant** (user beli + CNAME sendiri) → `cname.tokophi.com` → **Cloudflare for SaaS** terbitkan SSL otomatis.
+- **Custom domain merchant** (user beli + CNAME sendiri) → `cname.tokophi.cc` → **Cloudflare for SaaS** terbitkan SSL otomatis.
 - **Storefront WAJIB SSR multi-tenant** (bukan SSG per-client) — resolve toko dari `Host` header → 1 deploy layani semua toko + custom domain. Update **ADR 0008**.
 - DB mapping DONE (2026-07-15): tabel `store_domains` (migration 0050) + RLS + resolver `slugFromCustomDomain()`. **Dev-lokal:** resolve via `Host` / `?store=slug`.
 
@@ -109,7 +109,7 @@ VPS (Coolify/Docker): app + rich + storefront-SSR + PgBouncer + Postgres 16 (+op
 - Hosting serius = **VPS + Coolify + Docker**, self-hosted Postgres (bukan Supabase).
 - Cloudflare-native untuk edge/cache/storage/domain.
 - `tokophi.com` = zona hub; **`app.tokophi.com`** (admin) + **`rich.tokophi.com`** (super-admin).
-- Custom domain merchant via **CNAME → `cname.tokophi.com` + Cloudflare for SaaS**; user kelola beli+CNAME.
+- Custom domain merchant via **CNAME → `cname.tokophi.cc` + Cloudflare for SaaS**; user kelola beli+CNAME.
 - Storefront → **SSR multi-tenant** (resolve by hostname).
 - Cache = **Workers KV** (bukan Redis) kecuali BullMQ.
 - Security engine = **hybrid** (edge + `guard()` custom + RLS), bukan crypto from scratch.
@@ -136,7 +136,7 @@ VPS (Coolify/Docker): app + rich + storefront-SSR + PgBouncer + Postgres 16 (+op
 1. Queue: **CF Queues** vs **Inngest** vs **BullMQ+Redis**?
 3. RBAC: tetap **matrix** atau pindah **Casbin**?
 4. App-layer security: **`guard()` custom** vs **Arcjet**?
-5. Nama target CNAME: `cname.tokophi.com`?
+5. Nama target CNAME: `cname.tokophi.cc`?
 6. Spec **signature callback AutoLaris** — konfirmasi ke vendor.
 
 **Urutan implementasi disarankan (saat mulai prod):**
