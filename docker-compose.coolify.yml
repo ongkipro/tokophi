@@ -86,9 +86,12 @@ services:
       META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
       # CNAME target a merchant points their custom domain at (Pengaturan → Domain). Defaults to
-      # cname.tokophi.com in code, which is already RESERVED in the storefront host resolver — set here
+      # ⚠️ The fallback was cname.tokophi.COM until 2026-08-08 and that was WRONG: Cloudflare-for-SaaS
+      # runs on the tokophi.cc zone. Coolify overrides this var, so nothing was broken in production —
+      # but if the override ever went missing the app would silently advertise a target that can never
+      # validate, and merchants would follow it. A wrong default is a bug waiting for a config gap.
       # only if the platform ever moves the target off that label. See specs/docs/CUSTOM_DOMAIN.md.
-      CUSTOM_DOMAIN_CNAME_TARGET: ${CUSTOM_DOMAIN_CNAME_TARGET:-cname.tokophi.com}
+      CUSTOM_DOMAIN_CNAME_TARGET: ${CUSTOM_DOMAIN_CNAME_TARGET:-cname.tokophi.cc}
       # ── Self-serve signup master switch (apps/admin/lib/provision.ts `signupOpen()`) ────────────
       # It was NOT forwarded here, so `SIGNUP_ENABLED=true` set in Coolify reached nothing and
       # `/daftar` stayed shut with no error to explain why — `.env.coolify.example` told the operator

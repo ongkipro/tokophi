@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { chainReachesTarget, normaliseHost, servableVerdict } from "./domain-servable";
 
-const T = "cname.tokophi.com";
+// Arbitrary on purpose — the function takes the target as an argument, so hard-coding the REAL one
+// here would let a future change to CNAME_TARGET pass unnoticed. (It is `cname.tokophi.cc`.)
+const T = "cname.example.test";
 
 describe("servableVerdict", () => {
   // THE bug: apex holds hand-copied Cloudflare IPs, so there is no CNAME at all. DNS returns an empty
@@ -22,7 +24,7 @@ describe("servableVerdict", () => {
   it("accepts a CNAME on target", () => expect(servableVerdict([T], T).servable).toBe(true));
 
   // Resolvers hand back trailing dots and mixed case; neither is a mismatch.
-  it.each(["CNAME.Tokophi.com.", "cname.tokophi.com.", "  CNAME.TOKOPHI.COM  "])(
+  it.each(["CNAME.Example.test.", "cname.example.test.", "  CNAME.EXAMPLE.TEST  "])(
     "accepts %j — trailing dot and case are not mismatches",
     (v) => expect(servableVerdict([v], T).servable).toBe(true),
   );
