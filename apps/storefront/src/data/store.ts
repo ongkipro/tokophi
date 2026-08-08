@@ -12,6 +12,7 @@ import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { cached } from "./cache";
 import { RESERVED_SLUGS } from "@tokophi/lib/store-slug";
+import { isPubliclyServable } from "./store-servable";
 
 /** The three product-gallery layouts a merchant can pick in Tema (mirrors `stores.product_gallery_layout`). */
 export type GalleryLayout = "thumbnail-left" | "thumbnail-bottom" | "grid";
@@ -177,6 +178,11 @@ export async function getStoreBySlug(slug: string): Promise<StoreInfo | null> {
   return cached(`store:slug:${slug}`, async () => {
     const [row] = await db.select().from(schema.stores).where(eq(schema.stores.slug, slug)).limit(1);
     if (!row) return null;
+    // SEC-1 — a LOCKED store is not served to the public. Self-serve signup creates a store suspended
+    // and unapproved, and this function filtered on slug alone, so every pending signup's catalogue was
+    // fully browsable the moment the row existed. Same answer as "no such store": null → 404, so a
+    // locked shop is not distinguishable from one that never existed.
+    if (!isPubliclyServable(row)) return null;
     // The store's primary custom host (if any) — only an ACTIVE, is_primary row counts. A domain still
     // verifying or provisioning is not yet the canonical host, or we would 301 shoppers to a host that
     // does not answer.
