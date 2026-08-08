@@ -4,7 +4,7 @@
 //
 // Pure on purpose — no DNS, no db import — so the decision is testable without a network.
 //
-// ⚠️ NEVER decide this by comparing IP ADDRESSES. `cname.tokophi.com` is itself Cloudflare-proxied, so
+// ⚠️ NEVER decide this by comparing IP ADDRESSES. `cname.tokophi.cc` is itself Cloudflare-proxied, so
 // its A records are Cloudflare's SHARED addresses. A merchant who hand-copies those IPs into an apex A
 // record gets byte-identical addresses and is still completely unservable — that is exactly the case
 // that fooled us. Only the CNAME chain carries the proof.
