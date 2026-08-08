@@ -1635,7 +1635,7 @@ async function main() {
   const [tkt1] = await db.insert(schema.supportTickets).values({ storeId: store.id, subject: "Cara menghubungkan domain kustom?", status: "answered", createdAt: minutesAgo(4 * 60), lastMessageAt: minutesAgo(90) }).returning();
   await db.insert(schema.supportMessages).values([
     { ticketId: tkt1.id, storeId: store.id, sender: "merchant", body: "Halo, saya mau pakai domain sendiri (batiknusantara.id). Bagaimana caranya?", createdAt: minutesAgo(4 * 60) },
-    { ticketId: tkt1.id, storeId: store.id, sender: "platform", body: "Halo! Tambahkan domain di Pengaturan lalu arahkan CNAME ke cname.tokophi.com — kami bantu verifikasi setelahnya.", createdAt: minutesAgo(90) },
+    { ticketId: tkt1.id, storeId: store.id, sender: "platform", body: "Halo! Tambahkan domain di Pengaturan lalu arahkan CNAME ke cname.tokophi.cc — kami bantu verifikasi setelahnya. Pakai CNAME, jangan salin alamat IP.", createdAt: minutesAgo(90) },
   ]);
   const [tkt2] = await db.insert(schema.supportTickets).values({ storeId: store.id, subject: "Tagihan bulan ini belum masuk", status: "open", createdAt: minutesAgo(30), lastMessageAt: minutesAgo(30) }).returning();
   await db.insert(schema.supportMessages).values({ ticketId: tkt2.id, storeId: store.id, sender: "merchant", body: "Saya sudah bayar VA tapi status masih menunggu. Mohon dicek ya.", createdAt: minutesAgo(30) });
