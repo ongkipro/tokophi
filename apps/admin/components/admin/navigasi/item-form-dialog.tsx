@@ -43,13 +43,18 @@ export function ItemFormDialog({
   const [type, setType] = React.useState<NavItemType>("koleksi");
   const [target, setTarget] = React.useState("");
 
-  // Reseed the form whenever the dialog opens (add = blank, edit = current values).
-  React.useEffect(() => {
-    if (!open) return;
-    setTitle(initial?.title ?? "");
-    setType(initial?.type ?? "koleksi");
-    setTarget(initial?.target ?? "");
-  }, [open, initial]);
+  // Reseed the form whenever the dialog opens (add = blank, edit = current values) — during render,
+  // the same [open, initial] Object.is comparison the effect had, minus the post-paint setState
+  // cascade (react-hooks/set-state-in-effect): the old version painted one frame of stale fields.
+  const [prevSeed, setPrevSeed] = React.useState<readonly [boolean, typeof initial]>([open, initial]);
+  if (!Object.is(prevSeed[0], open) || !Object.is(prevSeed[1], initial)) {
+    setPrevSeed([open, initial]);
+    if (open) {
+      setTitle(initial?.title ?? "");
+      setType(initial?.type ?? "koleksi");
+      setTarget(initial?.target ?? "");
+    }
+  }
 
   const canSave = title.trim().length > 0;
 

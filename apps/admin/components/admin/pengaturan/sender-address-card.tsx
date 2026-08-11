@@ -23,7 +23,9 @@ export function SenderAddressCard() {
   // saved value still shows on load, before the kelurahan option list has come back.
   const [postcode, setPostcode] = React.useState("");
   const [kelOptions, setKelOptions] = React.useState<{ name: string; postcode: string }[]>([]);
-  const [kelLoading, setKelLoading] = React.useState(false);
+  // Kecamatan mana yang opsinya SUDAH termuat. "Sedang memuat" = fakta turunan (kecId ≠ loadedFor),
+  // bukan state yang disetel-tangan — versi bendera membutuhkan setState sinkron di dalam effect.
+  const [kelLoadedFor, setKelLoadedFor] = React.useState<number | null>(null);
   const [q, setQ] = React.useState("");
   const [results, setResults] = React.useState<{ id: number; text: string }[]>([]);
   const [searching, setSearching] = React.useState(false);
@@ -44,17 +46,24 @@ export function SenderAddressCard() {
   // The kelurahan list follows the district. ~4% of districts have no kelurahan rows at all, and
   // there the field must not become a required dropdown with nothing in it — the seller writes it
   // into the address instead. An empty required control is a dead end, not a validation.
+  // `kelChoices` below derives the no-district case; the effect only fetches. The old synchronous
+  // `setKelOptions([])` inside the effect was the lint error — and deriving is truer anyway: an
+  // empty list for "no district picked" is a FACT about kecId, not a state transition to perform.
   React.useEffect(() => {
-    if (!kecId) { setKelOptions([]); return; }
+    if (!kecId) return;
     let alive = true;
-    setKelLoading(true);
     kelurahanOptions(kecId).then((rows) => {
       if (!alive) return;
       setKelOptions(rows);
-      setKelLoading(false);
+      setKelLoadedFor(kecId);
     });
     return () => { alive = false; };
   }, [kecId]);
+
+  // Kecamatan kosong ⇒ tidak ada pilihan kelurahan — diturunkan, supaya baris lama distrik
+  // sebelumnya tak pernah tampil untuk distrik yang belum dipilih.
+  const kelChoices = kecId ? kelOptions : [];
+  const kelLoading = !!kecId && kelLoadedFor !== kecId;
 
   const doSearch = async () => {
     if (!q.trim()) return;
@@ -69,7 +78,7 @@ export function SenderAddressCard() {
   // The postcode is never typed — it comes from the kelurahan the seller picked.
   const pickKelurahan = (nextName: string) => {
     setKelName(nextName);
-    setPostcode(kelOptions.find((k) => k.name === nextName)?.postcode ?? "");
+    setPostcode(kelChoices.find((k) => k.name === nextName)?.postcode ?? "");
   };
   const save = () =>
     startTransition(async () => {
@@ -142,9 +151,9 @@ export function SenderAddressCard() {
         {kecId && (
           <div className="space-y-1.5">
             <Label htmlFor="s-kel">
-              Kelurahan / Desa {kelOptions.length === 0 && <span className="text-xs font-normal text-muted-foreground">(tidak tersedia untuk kecamatan ini)</span>}
+              Kelurahan / Desa {kelChoices.length === 0 && <span className="text-xs font-normal text-muted-foreground">(tidak tersedia untuk kecamatan ini)</span>}
             </Label>
-            {kelOptions.length > 0 ? (
+            {kelChoices.length > 0 ? (
               <select
                 id="s-kel"
                 value={kelName}
@@ -153,7 +162,7 @@ export function SenderAddressCard() {
                 className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
               >
                 <option value="">{kelLoading ? "Memuat…" : "Pilih kelurahan…"}</option>
-                {kelOptions.map((k) => (
+                {kelChoices.map((k) => (
                   <option key={k.name} value={k.name}>
                     {k.name} — {k.postcode}
                   </option>
