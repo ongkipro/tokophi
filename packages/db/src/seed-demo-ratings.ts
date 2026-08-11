@@ -12,7 +12,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db, client, schema } from "./client";
 
-const DEMO_SLUG = "batik-nusantara";
+const DEMO_SLUG = "batiknusantara";
 const TODAY = new Date("2026-07-22T00:00:00Z");
 
 const HANDLES = [

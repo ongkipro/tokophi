@@ -53,6 +53,37 @@ small{color:#a1a1aa}</style></head>
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const host = normalizeHost(context.request.headers.get("host") ?? context.url.host);
+
+  // The canonical SCHEME + HOST for THIS request. Built from headers, not from `Astro.url`: behind
+  // Cloudflare the Node adapter sees plain HTTP on the origin, so `Astro.url.protocol` yields
+  // `http://` — canonicals that point at a URL which 301s, wasting a redirect hop on every crawl.
+  // `x-forwarded-proto` is the truth. (Computed BEFORE store resolution because the slug-rename
+  // redirect below needs the scheme on a host that no longer resolves.)
+  const proto = context.request.headers.get("x-forwarded-proto")?.split(",")[0].trim() || "https";
+  const fwdHost = context.request.headers.get("x-forwarded-host")?.split(",")[0].trim();
+  const rawHost = fwdHost || context.request.headers.get("host") || context.url.host;
+  // localhost has no TLS in dev — emitting https:// there would break every link we print.
+  const isLocal = /^(localhost|127\.0\.0\.1)(:|$)/.test(rawHost);
+  const scheme = isLocal ? "http" : proto;
+
+  // SLUG RENAME (2026-08-12): `batik-nusantara` → `batiknusantara` — the demo store's storefront
+  // moved to batiknusantara.tokophi.id. The old label no longer resolves, but signed recovery/WA
+  // links carrying the old host are already in shoppers' chats and search engines hold the old
+  // URLs, so it answers a permanent 301 to the same path + query on the new host instead of the
+  // 404 an unknown host earns. Matches exactly the two label forms the resolver reads a slug from
+  // — `<slug>.<STOREFRONT_BASE_DOMAIN>` and the sslip.io first-label dev form — never a custom
+  // domain that merely starts with the string. Every method redirects: the old host names no
+  // tenant anymore, so there is nothing better to answer with.
+  const OLD_LABEL = "batik-nusantara";
+  const baseDomain = normalizeHost(process.env.STOREFRONT_BASE_DOMAIN);
+  if (
+    (baseDomain !== "" && host === `${OLD_LABEL}.${baseDomain}`) ||
+    (host.endsWith(".sslip.io") && host.split(".")[0] === OLD_LABEL)
+  ) {
+    const newHost = `batiknusantara${host.slice(OLD_LABEL.length)}`;
+    return Response.redirect(`${scheme}://${newHost}${context.url.pathname}${context.url.search}`, 301);
+  }
+
   const store = await getStoreByHost(host);
 
   if (!store) {
@@ -79,19 +110,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   context.locals.store = store;
   context.locals.catalog = await getCatalog(store);
 
-  // The canonical ORIGIN for THIS request. There is no correct value to bake in: one deploy serves
-  // every merchant, so the right host is whatever the shopper actually landed on — a custom domain,
-  // a <slug>.tokophi.com subdomain, or localhost.
-  //
-  // Built from headers, not from `Astro.url`: behind Cloudflare the Node adapter sees plain HTTP on
-  // the origin, so `Astro.url.protocol` yields `http://` — canonicals that point at a URL which 301s,
-  // wasting a redirect hop on every crawl. `x-forwarded-proto` is the truth.
-  const proto = context.request.headers.get("x-forwarded-proto")?.split(",")[0].trim() || "https";
-  const fwdHost = context.request.headers.get("x-forwarded-host")?.split(",")[0].trim();
-  const rawHost = fwdHost || context.request.headers.get("host") || context.url.host;
-  // localhost has no TLS in dev — emitting https:// there would break every link we print.
-  const isLocal = /^(localhost|127\.0\.0\.1)(:|$)/.test(rawHost);
-  const scheme = isLocal ? "http" : proto;
+  // The canonical ORIGIN for THIS request (scheme/host computed at the top). There is no correct
+  // value to bake in: one deploy serves every merchant, so the right host is whatever the shopper
+  // actually landed on — a custom domain, a <slug>.tokophi.com subdomain, or localhost.
 
   // PRIMARY-DOMAIN REDIRECT (the Shopify model the seller picks in Pengaturan → Domain). When a store
   // has an ACTIVE primary custom domain and the shopper landed on a DIFFERENT host that also resolves

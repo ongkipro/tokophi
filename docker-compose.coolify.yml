@@ -41,13 +41,14 @@ services:
     # never touches real orders/invoices/uploads. `seed-templates.ts` has the same shape (it inserts
     # only when the store has no homepage template) and has to be here for a reason worth stating:
     # the demo's batik homepage now lives in `page_templates` as SELLER data, not hard-coded in the
-    # platform. Without this line a deploy would serve batik-nusantara the NEUTRAL fallback — correct
+    # platform. Without this line a deploy would serve batiknusantara the NEUTRAL fallback — correct
     # for a store that has built nothing, wrong for the one that has. Both are idempotent, so ordering
     # after `seed.ts` just means the store exists before we look for its template.
     command: >
       sh -c "cd packages/db &&
       npx drizzle-kit migrate &&
       npx tsx src/seed.ts &&
+      (npx tsx src/rename-batik-slug.ts || echo 'slug rename skipped') &&
       (npx tsx src/seed-templates.ts || echo 'templates seed skipped') &&
       (npx tsx src/seed-journal.ts || echo 'journal seed skipped') &&
       (npx tsx src/seed-taxonomy.ts || echo 'taxonomy seed skipped') &&
@@ -161,7 +162,7 @@ services:
       # (www/app/rich/admin/api/cname/toko/…) never resolve as a slug. STORE_SLUG stays the
       # fallback for hosts that name no store (bare IP, toko.tokophi.com, localhost).
       STOREFRONT_BASE_DOMAIN: ${STOREFRONT_BASE_DOMAIN:-}
-      STORE_SLUG: ${STORE_SLUG:-batik-nusantara}
+      STORE_SLUG: ${STORE_SLUG:-batiknusantara}
     expose:
       - "4327"
     labels:

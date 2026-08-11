@@ -570,7 +570,7 @@ ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 \
   'docker exec -i $(docker ps --format "{{.Names}}" | grep -m1 "^postgres-") psql -U tokophi -d tokophi' <<'SQL'
 select mi.label, mi.target from menu_items mi
   join menus m on m.id = mi.menu_id join stores s on s.id = m.store_id
- where s.slug = 'batik-nusantara';
+ where s.slug = 'batiknusantara';
 SQL
 ```
 

@@ -78,7 +78,7 @@ SURFACES=(
   "https://app.tokophi.com/login|200"             # Seller — merchant panel
   "https://rich.tokophi.com|307|200"              # Super Admin — 307 → /login is HEALTHY
   "https://toko.tokophi.com|200"                  # demo storefront (reserved label)
-  "https://batik-nusantara.tokophi.id|200"        # per-merchant storefront (canonical .id)
+  "https://batiknusantara.tokophi.id|200"        # per-merchant storefront (canonical .id)
 )
 
 # The DB-touching probe. `op:"search"` needs NO storeSlug — only `op:"rates"` was made fatal on a

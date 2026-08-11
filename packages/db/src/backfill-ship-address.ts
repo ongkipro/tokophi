@@ -57,7 +57,7 @@ import {
   type Dest,
 } from "./demo-addresses";
 
-const SLUG = "batik-nusantara";
+const SLUG = "batiknusantara";
 
 // ─────────────────────────────────────────────────────────────────────────────
 type Row = Record<string, string | number | null>;

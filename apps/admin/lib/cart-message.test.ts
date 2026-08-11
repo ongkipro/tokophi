@@ -12,7 +12,7 @@ const ITEMS = [
   { handle: "dress-batik", name: "Dress Batik", variant: "M", qty: 1, price: 250_000 },
   { handle: "kemeja", name: "Kemeja Oversized", variant: "L", qty: 2, price: 180_000 },
 ];
-const LINK = "https://batik-nusantara.tokophi.id/checkout?r=eyJhbGciOiJIUzI1NiJ9.test";
+const LINK = "https://batiknusantara.tokophi.id/checkout?r=eyJhbGciOiJIUzI1NiJ9.test";
 
 describe("cartMessage", () => {
   // THE seed body, verbatim — no {{link}} in it, which is every store that exists today.
