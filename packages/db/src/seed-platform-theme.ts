@@ -21,15 +21,19 @@
 // chain — a second run is a no-op.
 //   npm run seed:platform-theme -w @tokophi/db
 import { db, client, schema } from "./client";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { PLATFORM_THEME_SLUG, PLATFORM_THEME_STORE_ID } from "@tokophi/lib/platform-theme";
 
 // The holder needs an `accounts` parent (stores.account_id is NOT NULL). Fixed for the same reason
 // the store id is: idempotency across deploys. Only this file uses it, so it lives here.
 const PLATFORM_THEME_ACCOUNT_ID = "a0000000-0000-4000-8000-000000000000";
 
-// Copy sources, in preference order. An IN, not one slug: a parallel task is renaming the batik
-// store's slug, and this script must find the rows under either name without a re-deploy race.
+// Copy sources, tried ONE AT A TIME in this order — first hit wins. Two slugs, not one: a parallel
+// task renamed the batik store's slug, and this script must find the rows under either name without
+// a re-deploy race. The order is load-bearing in exactly one state — rename refused because a
+// FOREIGN store already holds `batiknusantara` — where the demo store is still on `batik-nusantara`
+// and picking the other slug would copy a merchant's templates as the platform default. In every
+// other state only one slug exists and the order is moot. (Audit 2026-08-12, D1.)
 const SOURCE_SLUGS = ["batik-nusantara", "batiknusantara"];
 
 const TEMPLATE_TYPES = ["homepage", "category", "product"] as const;
@@ -112,11 +116,19 @@ async function main() {
     return;
   }
 
-  const [source] = await db
-    .select({ id: schema.stores.id, slug: schema.stores.slug })
-    .from(schema.stores)
-    .where(inArray(schema.stores.slug, SOURCE_SLUGS))
-    .limit(1);
+  // One eq() per candidate, sequentially. This was `inArray(...).limit(1)` — no ORDER BY, so which
+  // row an IN returns is plan-dependent and the "preference order" above was a promise the query
+  // never kept. Still insert-if-absent overall: the loop only READS; a second run of the script
+  // short-circuits on `missing.length === 0` before ever getting here.
+  let source: { id: string; slug: string } | undefined;
+  for (const s of SOURCE_SLUGS) {
+    [source] = await db
+      .select({ id: schema.stores.id, slug: schema.stores.slug })
+      .from(schema.stores)
+      .where(eq(schema.stores.slug, s))
+      .limit(1);
+    if (source) break;
+  }
   if (!source) {
     // Not an error: a fresh database seeds the demo store in the same chain, and the next deploy's
     // run of this script completes the copy. The holder existing without templates is harmless — the
