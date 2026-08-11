@@ -1221,10 +1221,17 @@ proves that discipline has already slipped once. `pct(NaN)` even drops its sign,
 **AC:** the sparkline duplicate is gone; `IDR`/`num`/`pct`/`share` render a defined fallback for
 non-finite input; a test that goes red on `IDR(0/0)`.
 
-### 🟡 N41 (wave 7). Seed drift — **2 of 5 REFUTED against production, 3 never checked**
-Refuted: the `platform_couriers.services` COD chain, and `sender_kecamatan_id = 6138`. **Still open,
-and never checked against production:** `store_shipping_methods`, `reviews.product_id`,
-`platform_payment_channels`/`platform_payout`. Check before writing anything.
+### 🟡 N41 (wave 7). Seed drift — **all 5 MEASURED against production 2026-08-12**
+Refuted: 1 (`platform_couriers.services` COD chain), 2 (`sender_kecamatan_id = 6138`), and now
+**5** (`platform_payment_channels` 16 rows/7 enabled — a superset of seed; `platform_payout`
+populated, identical to seed). **Confirmed:** **3** — demo store has 10 `store_shipping_methods`
+rows from an older epoch vs seed's 18, **missing `spx:3` (SPX Economy, the COD rail's second
+service)**; **4** partially — 8 of 76 reviews have `product_id` NULL, and all 8 match a live
+product title exactly, so one `UPDATE … FROM products` backfills them. Both fixes are
+**approval-gated prod SQL, stated but NOT run** in
+[`2026-08-12-n41-seed-drift-parity.md`](./2026-08-12-n41-seed-drift-parity.md) (also the
+full DB-PARITY screen: migrations/schema/RLS/integrity all at parity on prod). Original entry
+kept below for the ranking rationale.
 
 "The seed is not a migration" is already the rule. What had never been counted is **how much is left
 behind**. Ranked by what it costs a live merchant:

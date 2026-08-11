@@ -83,7 +83,7 @@ mid-flight is how two people work the same id from opposite ends. Wave-7 heading
 | N38 | **Label missing required fields** 🟡 plumbing ✅ 2026-08-12; insurance + sorting code open | Provider error text ✅ |
 | N39 | **Webhooks unused** 🔴 blocked | Money tests skipped in a worktree ✅ |
 | N40 | **`v6.1` is vendor-deprecated** 🟠 | `NaN` in an SVG path ✅ |
-| N41 | **Courier holidays (`libur`)** 🟠 | Seed drift 🟡 3 of 5 left |
+| N41 | **Courier holidays (`libur`)** 🟠 | Seed drift 🟡 all 5 measured 2026-08-12; 2 backfills await approval |
 | N42 | COD settlement ✅ (ADR 0014) | `SEED_FORCE=1` destroys config ✅ |
 | N43 | flake ✅ (was never real) | Defects only in a commit body ✅ |
 
@@ -136,8 +136,8 @@ Roughly highest value first. **S** ≈ under an hour, **M** ≈ half a day, **L*
 | **N56** (N55 ✅ **SUDAH DIKIRIM**, diverifikasi 2026-08-07: `return-by-courier.tsx` kini membawa `TriangleAlert`/`ShieldCheck` + `sr-only`) | Puck's vendored ArrayField/zoom controls unnamed. | **S** |
 | ✅ **N31 — SUDAH DIKIRIM** (2026-08-11, branch `feat/n31-cod-fee`) | ~~The COD fee KiriminAja charges is never read~~ — `kaCodFee()` parses `setting.cod_fee`/`minimum_cod_fee`/`cod_fee_amount`, `Rate.codFee` carries it, and Cek Ongkir shows "Biaya COD +Rp…" on effective-COD rates (browser-verified on sandbox). ⚠️ Sisa yang SENGAJA tidak disentuh: `platform_cod.fee_pct` masih ditulis seed & dibaca siapa pun tidak — itu bagian yang membuat angka biaya ADR 0014 belum lengkap. | — |
 | **N40** (shipping) | We book on `v6.1/request_pickup`, which the vendor marks **deprecated**. ⚠️ The v6.2 doc contradicts itself on destination field names — resolve against the sandbox first; booking to the wrong village is what migration 0042 exists to prevent. `shipping_price` v6.1 is *not* deprecated. | **M** |
-| **N41** (wave 7) | Seed drift: 2 of 5 refuted against production. Left, **never checked**: `store_shipping_methods`, `reviews.product_id`, `platform_payment_channels`/`platform_payout`. | **M** |
-| **DB-PARITY** | **Screen local vs Vultr production database for migration/schema/RLS, commerce integrity, seed drift, backup recency, and capacity.** Read-only by default; no cleanup or migration is bundled. Full scope and acceptance criteria: [`2026-08-05-database-screening.md`](./2026-08-05-database-screening.md). | **M** |
+| **N41** (wave 7) | Seed drift: **all 5 now measured against production (2026-08-12)** — 1/2/5 refuted; #3 `store_shipping_methods` DRIFT (demo store 10 rows vs seed's 18, `spx:3` SPX Economy missing); #4 `reviews.product_id` partial (8 of 76 NULL, all backfillable by exact title match). What remains is **approval-gated SQL**, not measurement: [`2026-08-12-n41-seed-drift-parity.md`](./2026-08-12-n41-seed-drift-parity.md). | **S** |
+| **DB-PARITY** | ✅ **Read-only screen RUN 2026-08-12** — prod = journal exactly (94/94 stamps), schema matches code (all diffs are dev-side debris), tenant isolation + commerce integrity all-zero on prod, backups ~6-hourly local-only (newest 3 h old), disk 60%. Report + reusable script: [`2026-08-12-n41-seed-drift-parity.md`](./2026-08-12-n41-seed-drift-parity.md) · `ops/tokophi-db-parity-screen.sql`. **Not run: `verify-ledger` write-probe (owner-gated).** Scope doc: [`2026-08-05-database-screening.md`](./2026-08-05-database-screening.md). | — |
 | **N35** (shipping) | Show the active KiriminAja env on the super-admin connection card. ⚠️ The entry overstates it — the env **is** already visible on Analitik → Sistem and inside the Test-koneksi result; only the card named in the AC lacks it. | **S** |
 | ✅ **N13 — SUDAH DIKIRIM** (2026-08-12) | ~~Sitemap `<lastmod>`: products + categories blocked on a migration~~ — migration `0093_catalog_updated_at` + 10 write-site bumps + emit; products coalesce `created_at`, categories emit only once edited. `2026-08-12-n13-catalog-lastmod.md`. | — |
 
