@@ -147,9 +147,15 @@ export function InventoriClient({ products }: { products: Product[] }) {
   const currentPage = Math.min(page, pageCount);
   const pageProducts = filtered.slice((currentPage - 1) * ADMIN_LIST_PAGE_SIZE, currentPage * ADMIN_LIST_PAGE_SIZE);
 
-  React.useEffect(() => {
+  // Reset ke halaman 1 saat filter berubah — DI RENDER, bukan di effect. Versi effect men-setState
+  // sinkron setelah paint (react-hooks/set-state-in-effect): satu frame menampilkan halaman lama dari
+  // filter baru, lalu render ulang. Pola resmi React "adjust state during render" (prev-tuple,
+  // perbandingan Object.is yang sama dengan deps effect) memotong frame itu dan menghapus cascade.
+  const [prevFilter, setPrevFilter] = React.useState([search, tab] as const);
+  if (prevFilter.some((v, i) => !Object.is(v, ([search, tab] as const)[i]))) {
+    setPrevFilter([search, tab] as const);
     setPage(1);
-  }, [search, tab]);
+  }
 
   return (
     <div>

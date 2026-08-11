@@ -70,7 +70,16 @@ export function CommandPalette({ index }: { index: SearchItem[] }) {
     return { rendered, flat };
   }, [rows]);
 
-  React.useEffect(() => { setActive(0); }, [q]);
+  // Sorotan kembali ke baris pertama saat query berubah ATAU saat palet dibuka — di render (pola
+  // adjust-state-during-render), bukan effect: setState sinkron pasca-paint memicu render kaskade dan
+  // satu frame dengan sorotan lama di hasil baru.
+  const [prevQ, setPrevQ] = React.useState(q);
+  const [prevOpen, setPrevOpen] = React.useState(open);
+  if (!Object.is(prevQ, q) || !Object.is(prevOpen, open)) {
+    setPrevQ(q);
+    setPrevOpen(open);
+    if (!Object.is(prevQ, q) || open) setActive(0);
+  }
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -81,7 +90,8 @@ export function CommandPalette({ index }: { index: SearchItem[] }) {
   }, []);
 
   // Base UI manages focus, but be explicit so the caret lands in the input the instant it opens.
-  React.useEffect(() => { if (open) { setActive(0); requestAnimationFrame(() => inputRef.current?.focus()); } }, [open]);
+  // (setActive(0) on open moved to the render-time adjust above; only the DOM work stays here.)
+  React.useEffect(() => { if (open) requestAnimationFrame(() => inputRef.current?.focus()); }, [open]);
 
   // Keep the highlighted row in view as the arrows move past the fold.
   React.useEffect(() => {

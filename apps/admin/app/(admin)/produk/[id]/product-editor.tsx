@@ -388,10 +388,15 @@ export function ProductEditor({ product }: { product?: Product }) {
     });
   };
 
-  // Keep the handle synced to the title until the user edits it manually.
-  React.useEffect(() => {
+  // Keep the handle synced to the title until the user edits it manually — during render, not in an
+  // effect. Mount is deliberately excluded and that is behaviour-identical: for an existing product
+  // `handleEdited` starts true (init `!!product`), and for a new one `slugify("")` equals the initial
+  // handle anyway, so the old effect's mount run was always a no-op.
+  const [prevName, setPrevName] = React.useState(name);
+  if (!Object.is(prevName, name)) {
+    setPrevName(name);
     if (!handleEdited) setHandle(slugify(name));
-  }, [name, handleEdited]);
+  }
 
   // ---- derived ----
   const priceN = toNum(price);
