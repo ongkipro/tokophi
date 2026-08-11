@@ -2,7 +2,13 @@ import type { Data } from "@measured/puck";
 import { notFound } from "next/navigation";
 import { DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
 import { getSession } from "@/lib/auth";
-import { getBrandColor, getTemplate, TEMPLATE_TYPE_LABELS, type TemplateType } from "@/lib/data/theme";
+import {
+  getBrandColor,
+  getPlatformDefaultSections,
+  getTemplate,
+  TEMPLATE_TYPE_LABELS,
+  type TemplateType,
+} from "@/lib/data/theme";
 import { BuilderClient } from "./builder-client";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +26,17 @@ export default async function TemaBuilderPage({ params }: { params: Promise<{ id
   ]);
   if (!template) notFound();
 
+  // A template the merchant has never filled starts from the PLATFORM DEFAULT's sections, not a
+  // blank canvas — they swap the banner and the copy instead of building a page from nothing.
+  // Prefill only (T-9 decision B, copy-on-FIRST-EDIT): the merchant's own row is written when they
+  // press Publish, through the ordinary saveTemplate path. A template with any content of its own is
+  // never touched — this branch is dead the moment they have saved anything.
+  const own = template.sections as Data | undefined;
+  const hasOwnContent = Array.isArray(own?.content) && own.content.length > 0;
+  const initialData = hasOwnContent
+    ? (own as Data)
+    : (((await getPlatformDefaultSections(template.type as TemplateType)) as Data | null) ?? BLANK_DATA);
+
   return (
     <BuilderClient
       templateId={template.id}
@@ -28,7 +45,7 @@ export default async function TemaBuilderPage({ params }: { params: Promise<{ id
       // they do not offer the same sections. Without this the palette was identical for all three.
       templateType={template.type as TemplateType}
       title={`${TEMPLATE_TYPE_LABELS[template.type as TemplateType]} — ${template.name}`}
-      initialData={(template.sections as Data | undefined) ?? BLANK_DATA}
+      initialData={initialData}
       initialBrandColor={brandColor ?? DEFAULT_BRAND_COLOR}
     />
   );

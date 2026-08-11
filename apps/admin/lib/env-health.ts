@@ -54,6 +54,8 @@ export const ENV_CHECKS: Record<string, { required: boolean; why: string }> = {
   CF_SAAS_API_TOKEN: { required: true, why: "Mendaftarkan dan memeriksa Custom Hostnames. Kosong = domain berhenti di aktivasi SSL." },
   MARKETING_URL: { required: false, why: "Ke mana wordmark di /login dan /daftar membawa orang keluar; default https://tokophi.com. Salah isi = jalan keluar dari pintu depan menunjuk ke tempat lain." },
 
+  PLATFORM_DEFAULT_THEME_STORE_ID: { required: false, why: "stores.id pemegang tema default platform (seed-platform-theme). Kosong = kanvas /tema kosong & storefront hanya render tema toko sendiri — keadaan sah, bukan cacat." },
+
   SIGNUP_ENABLED: { required: false, why: "KOSONG BERARTI PENDAFTARAN TERTUTUP — itu keadaan yang sah, bukan cacat. Justru variabel inilah yang gagal sampai pada 5–6 Agustus." },
   GOOGLE_CLIENT_ID: { required: false, why: "Kosong = tombol 'Daftar dengan Google' disembunyikan, dan itu default yang jujur." },
   GOOGLE_CLIENT_SECRET: { required: false, why: "Sepasang dengan CLIENT_ID; kosong = jalur Google mati, bukan rusak." },

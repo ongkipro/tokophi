@@ -3,7 +3,7 @@
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import type { StoredTemplateData } from "@tokophi/sections";
-import { themeSourceStoreId } from "./theme-source";
+import { needsPlatformFallback, platformDefaultThemeStoreId, withPlatformFallback } from "./theme-source";
 import { generateBrandShades, DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
 
 /**
@@ -46,10 +46,7 @@ const withContent = (sections: unknown): StoredTemplateData | null => {
   return data && Array.isArray(data.content) && data.content.length > 0 ? data : null;
 };
 
-export async function getStoreTemplates(storeId: string): Promise<StoreTemplates> {
-  // Resolved ONCE, here, because this is the single seam every template read passes through. Doing it
-  // at a call site would leave the other call sites serving the merchant's own theme.
-  storeId = themeSourceStoreId(storeId);
+async function collectTemplates(storeId: string): Promise<StoreTemplates> {
   const rows = await db
     .select({
       id: schema.pageTemplates.id,
@@ -73,6 +70,19 @@ export async function getStoreTemplates(storeId: string): Promise<StoreTemplates
   }
 
   return templates;
+}
+
+export async function getStoreTemplates(storeId: string): Promise<StoreTemplates> {
+  // Decision B (theme-source.ts): the store's OWN rows win per slot; only an empty default slot
+  // renders the platform holder's row. Resolved ONCE, here, because this is the single seam every
+  // template read passes through — the fallback done at a call site would leave the other call
+  // sites blank where the platform default should be.
+  const own = await collectTemplates(storeId);
+  const holderId = platformDefaultThemeStoreId();
+  // Skip the second query when it could change nothing: OFF, the holder rendering itself, or a
+  // store whose three default slots are all its own already.
+  if (!holderId || holderId === storeId || !needsPlatformFallback(own)) return own;
+  return withPlatformFallback(own, await collectTemplates(holderId));
 }
 
 /**

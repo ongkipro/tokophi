@@ -19,6 +19,8 @@
  * diacritics, but shop names do — and every borrowed word, owner's name and café in the country goes
  * through this function.
  */
+import { PLATFORM_THEME_SLUG } from "./platform-theme";
+
 export const slugify = (s: string) =>
   s
     .toLowerCase()
@@ -54,6 +56,12 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   "toko",
   "storefront",
   "localhost",
+  // The platform default theme holder (`platform-theme.ts`). Not a hostname convention like the
+  // rest: it protects a FIXED slug the deploy seed (`seed-platform-theme.ts`) must be able to
+  // insert — `stores.slug` is unique, so a merchant registering "tema-platform" first would make
+  // that seed fail on every deploy, silently (the chain runs it non-fatal). Reserving it also keeps
+  // the holder from ever resolving as a merchant subdomain, on top of its `suspendedAt` lock.
+  PLATFORM_THEME_SLUG,
 ]);
 
 export const isReservedSlug = (slug: string): boolean => RESERVED_SLUGS.has(slug);

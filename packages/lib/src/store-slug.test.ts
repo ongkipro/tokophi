@@ -31,8 +31,11 @@ describe("slugify", () => {
 
 describe("RESERVED_SLUGS", () => {
   it("holds exactly the hostnames the storefront refuses to resolve", () => {
+    // `tema-platform` is not a hostname convention like the others: it is the platform default theme
+    // holder's FIXED slug (platform-theme.ts) — reserved so a merchant can never take it before the
+    // deploy seed inserts the holder row. See the note beside it in store-slug.ts.
     expect([...RESERVED_SLUGS].sort()).toEqual(
-      ["admin", "api", "app", "cname", "localhost", "rich", "storefront", "toko", "www"].sort(),
+      ["admin", "api", "app", "cname", "localhost", "rich", "storefront", "tema-platform", "toko", "www"].sort(),
     );
   });
 
@@ -96,18 +99,33 @@ describe("every writer of stores.slug uses the shared rule", () => {
   // which one that is depends on the runner.
   const storeSlugWriters = () => repoSources().filter((rel) => WRITES_STORE_SLUG.test(codeOfFile(rel)));
 
-  it("finds the three writers, and no more", () => {
+  // ⚠️ One writer is a NAMED exception to the import rule, not a hole in it: `seed-platform-theme.ts`
+  // writes `slug: PLATFORM_THEME_SLUG` — a fixed constant, not a slug minted from a user's name — so
+  // there is nothing for `slugify` to do there. The constant itself is pinned against this module
+  // (slugify-identity + RESERVED) by `platform-theme.test.ts`, and the writer must import it from
+  // `@tokophi/lib/platform-theme` rather than spell the string by hand.
+  const CONSTANT_SLUG_WRITERS = new Set(["packages/db/src/seed-platform-theme.ts"]);
+  const IMPORTS_PLATFORM_CONSTANT = /from\s*"@tokophi\/lib\/platform-theme"/;
+
+  it("finds the four writers, and no more", () => {
     expect(storeSlugWriters().sort()).toEqual(
       [
         "apps/admin/lib/provision.ts",
         "apps/super-admin/lib/actions.ts",
         "packages/db/src/seed.ts",
+        "packages/db/src/seed-platform-theme.ts",
       ].sort(),
     );
   }, SOURCE_SCAN_TIMEOUT_MS);
 
-  it("and each one imports it", () => {
+  it("and each one imports it (or, for the named constant writer, the pinned constant)", () => {
     for (const rel of storeSlugWriters()) {
+      if (CONSTANT_SLUG_WRITERS.has(rel)) {
+        expect(codeOfFile(rel), rel).toMatch(IMPORTS_PLATFORM_CONSTANT);
+        // …and it must not ALSO be minting slugs from names — that would make the exception a hole.
+        expect(codeOfFile(rel), rel).not.toMatch(/\bslugify\s*\(/);
+        continue;
+      }
       expect(codeOfFile(rel), rel).toMatch(IMPORTS_SHARED);
     }
   }, SOURCE_SCAN_TIMEOUT_MS);
