@@ -1820,8 +1820,14 @@ async function main() {
     idx: [{ type: "00", name: "ID Express Standard", group: "regular", cod: true }],
     jtcargo: [{ type: "REG", name: "J&T Cargo Regular", group: "cargo", cod: true }],
   };
-  // Couriers the platform does not offer by default (super-admin can switch them on). Cargo/niche.
-  const COURIERS_OFF = ["idx", "jtcargo"];
+  // Couriers the platform does not offer by default (super-admin can switch them on).
+  // ⚠️ ALIGNED TO PRODUCTION 2026-08-12 — this used to be ["idx", "jtcargo"], the opposite of what
+  // production runs (idx=t, jtcargo=t, ninja=f). Forensics showed prod's state is an OPERATOR
+  // decision, not seed residue (no seed epoch ever set idx/jtcargo on; `saveCouriers` is the only
+  // writer of `enabled`, and the operator demonstrably worked that card on 2026-07-16 — see
+  // specs/docs/tasks/2026-08-12-n41-remediation-executed.md §③). The seed follows the operator,
+  // never the other way around; a future flip is a super-admin toggle, not a seed edit.
+  const COURIERS_OFF = ["ninja"];
   await db.insert(schema.platformCouriers).values(
     // KiriminAja codes from the shared roster; niche ones off by default (super-admin toggles).
     COURIERS.map((c) => ({

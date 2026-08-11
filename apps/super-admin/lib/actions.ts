@@ -417,6 +417,12 @@ export async function saveCouriers(updates: { key: string; on: boolean }[]): Pro
   const gate = await platformGate();
   if (!gate.ok) return gate;
   for (const u of updates) await db.update(schema.platformCouriers).set({ enabled: u.on }).where(eq(schema.platformCouriers.courier, u.key));
+  // The ONE writer that flips a courier on/off platform-wide — and until 2026-08-12 the only action
+  // on this card that never logged. That silence made "is prod's idx/jtcargo/ninja state an operator
+  // decision or seed residue?" structurally unanswerable from platform_activity; a day of forensics
+  // (xmin bracketing + seed-epoch archaeology) answered what one log line would have. Same shape as
+  // saveGateways'/saveCodAllowed's entries.
+  if (updates.length) await logPlatform(`Kurir diubah: ${updates.map((u) => `${u.key}=${u.on ? "aktif" : "nonaktif"}`).join(", ")}`);
   revalidatePath("/pengaturan");
   return { ok: true };
 }
