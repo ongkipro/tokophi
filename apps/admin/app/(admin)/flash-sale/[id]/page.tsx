@@ -12,6 +12,9 @@ export default async function EditFlashSale({ params }: { params: Promise<{ id: 
   if (!isUuid(id)) notFound();
   const [sale, products] = await Promise.all([getFlashSale(id), getStoreProductsForFlash()]);
   if (!sale) notFound();
+  // Async SERVER component: computed once per request, never hydrated — the comment above documents
+  // the design. The purity rule doesn't know RSC, so this is a recorded false positive, not a waiver.
+  // eslint-disable-next-line react-hooks/purity -- server-only, per-request timestamp
   const now = Date.now();
   return (
     <FlashEditor
