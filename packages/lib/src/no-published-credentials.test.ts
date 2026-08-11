@@ -24,6 +24,22 @@ import { SOURCE_SCAN_TIMEOUT_MS, textOfFile } from "../../../test/source-code";
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const APPS = join(ROOT, "apps");
 
+// N46 — the sweep walks `packages/` too, not `apps/` alone. 23 `.astro`/`.tsx` files under
+// `packages/{sections,ui}` are markup rendered into merchants' LIVE storefronts, and they were
+// outside this guard for its whole life — the same "never bind a guard to a list of targets" rule
+// this file's own comments make, one scope up (`password.test.ts` next door already walks the whole
+// repo; that widening was #141's fix for exactly this shape).
+const SCAN_ROOTS = [APPS, join(ROOT, "packages")];
+
+// Scan everything and NAME your exceptions. Two files legitimately hold these strings in literals —
+// both PROVED load-bearing (EXEMPT emptied → 3 tests red naming exactly these two, 2026-08-11):
+//   · `packages/db/src/seed.ts` CREATES the seeded accounts — the addresses are its output, and the
+//     seed is not a shipped screen. (Same single-file exemption `password.test.ts` once carried.)
+//   · `packages/lib/src/password.ts` — `PUBLISHED_PASSWORDS` is the DENY-list; refusing `tokophi123`
+//     requires naming it. Inerting it would disarm the refusal this guard exists to keep.
+// Everything else in `packages/` answers to the same rule as `apps/`.
+const EXEMPT = new Set(["packages/db/src/seed.ts", "packages/lib/src/password.ts"]);
+
 // The seeded logins. Both are real rows after `npm run seed`.
 //
 // ⚠️ WHITESPACE-TOLERANT ON PURPOSE — this is not decoration, it is the HTML-comment case.
@@ -78,19 +94,21 @@ const SECRETS = [
 // credential in a string, an attribute, plain text or an HTML comment, all four of which are caught.
 // Closing it means teaching the scanner where an Astro template's text nodes are, which is a parser,
 // not a lexer, and `test/source-code.ts` explains at length why this repo does not build one.
-function sources(dir: string, acc: string[] = []): string[] {
+function sources(dir: string, base: string, acc: string[] = []): string[] {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
     if (e.isDirectory()) {
       if (["node_modules", ".next", "dist"].includes(e.name)) continue;
-      // ⚠️ `public` IS SKIPPED ONLY AS AN APP'S ASSET DIRECTORY (`apps/<app>/public`). Skipping it by
-      // NAME at any depth — which is what this did — also hid `apps/admin/app/api/public`, the PUBLIC
-      // API: four route files, unscanned for this guard's whole life. That is the same blind spot as
-      // a hardcoded file list, spelled differently, and `inventory-location.test.ts` had it too (its
-      // sweep could not see the very route that once held the copy it hunts).
-      if (e.name === "public" && p.slice(APPS.length + 1).split("/").length === 2) continue;
-      sources(p, acc);
+      // ⚠️ `public` IS SKIPPED ONLY AS AN APP'S ASSET DIRECTORY (`apps/<app>/public`, and the same
+      // depth under `packages/`). Skipping it by NAME at any depth — which is what this did — also
+      // hid `apps/admin/app/api/public`, the PUBLIC API: four route files, unscanned for this
+      // guard's whole life. That is the same blind spot as a hardcoded file list, spelled
+      // differently, and `inventory-location.test.ts` had it too (its sweep could not see the very
+      // route that once held the copy it hunts).
+      if (e.name === "public" && p.slice(base.length + 1).split("/").length === 2) continue;
+      sources(p, base, acc);
     } else if (/\.(tsx|ts|astro)$/.test(e.name) && !/\.test\.ts$/.test(e.name)) {
+      if (EXEMPT.has(p.slice(ROOT.length))) continue;
       acc.push(p);
     }
   }
@@ -98,7 +116,7 @@ function sources(dir: string, acc: string[] = []): string[] {
 }
 
 describe("no shipped screen publishes a working credential", () => {
-  const files = sources(APPS);
+  const files = SCAN_ROOTS.flatMap((r) => sources(r, r));
   // Lexed ONCE. `it.each(SECRETS)` runs the sweep three times, and re-lexing 453 files per pattern
   // cost ~1,5 s of the suite for three identical answers. The memo now lives in
   // `test/source-code.ts` next to the lexer itself — this file kept a private one, which is a second
@@ -116,7 +134,7 @@ describe("no shipped screen publishes a working credential", () => {
   it.each(SECRETS)("no app source names $what", ({ pattern }) => {
     const hits = files
       .filter((f) => pattern.test(code(f)))
-      .map((f) => f.slice(APPS.length + 1));
+      .map((f) => f.slice(ROOT.length));
     expect(hits).toEqual([]);
   }, SOURCE_SCAN_TIMEOUT_MS);
 
