@@ -18,7 +18,7 @@
 // against a live DB and never clobbers what a merchant has since edited". That stopped being true at
 // `1c738d4` and the sentence stayed — a comment promising the exact safety the code had just given
 // up. **It UPSERTS: an existing homepage is REPLACED** (the log says `REPLACED`, which is the only
-// reason it was caught). Safe here ONLY because the file is hardcoded to `batik-nusantara`. Read the
+// reason it was caught). Safe here ONLY because the file is hardcoded to `batiknusantara`. Read the
 // full reasoning — and the cost — at the upsert itself in main(). If you ever point this at a real
 // store, restore the guard first.
 //   npm run seed:templates -w @tokophi/db
@@ -26,7 +26,7 @@ import { db, client, schema } from "./client";
 import { and, eq } from "drizzle-orm";
 import type { StoredTemplateData } from "@tokophi/sections";
 
-const DEMO_SLUG = "batik-nusantara";
+const DEMO_SLUG = "batiknusantara";
 
 // Typed against the real contract on purpose. `sections` is jsonb — the DB validates nothing — and the
 // two ways a hand-written template fails are both silent-ish: a typo'd `type` renders NOTHING
@@ -299,7 +299,7 @@ async function main() {
   //
   // This started as "insert only when the store has no homepage template", copying seed-reviews'
   // idempotency so a redeploy could never clobber a merchant's work. That guard was protecting
-  // against a threat THAT CANNOT HAPPEN HERE: this file is hardcoded to `batik-nusantara` and
+  // against a threat THAT CANNOT HAPPEN HERE: this file is hardcoded to `batiknusantara` and
   // touches nothing else. It cannot reach a merchant. What it actually did was silently pin
   // production to whatever shape shipped first — the demo sat on live rendering "Paling Dicari" as
   // 8 cards at 400px for a whole deploy cycle after the template was rewritten to 4×1 + 4×2, and

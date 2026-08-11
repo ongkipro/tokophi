@@ -1,5 +1,5 @@
 // Seed RECENT orders — a targeted top-up that fills the gap between the main seed's fixed anchor and
-// today, for ONE store (batik-nusantara).
+// today, for ONE store (batiknusantara).
 //
 // WHY THIS EXISTS
 // `seed.ts` anchors every date to `TODAY = 2026-06-30`. Wall-clock time does not stop, so the demo
@@ -31,7 +31,7 @@
 import { db, client } from "./client";
 import { sql } from "drizzle-orm";
 
-const SLUG = "batik-nusantara";
+const SLUG = "batiknusantara";
 
 function mulberry32(seed: number) {
   return function () {

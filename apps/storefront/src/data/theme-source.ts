@@ -17,7 +17,7 @@
  *
  * ⚠️ This makes the named store's Store Builder a PLATFORM-WIDE control: editing its theme changes
  * every storefront, with no review step and nothing in the audit trail saying so. That is only
- * acceptable because `batik-nusantara` is OUR demo store (confirmed by the owner, 2026-08-07). **If it
+ * acceptable because `batiknusantara` is OUR demo store (confirmed by the owner, 2026-08-07). **If it
  * ever becomes a real merchant's shop, copy its rows into a platform-owned holder rather than pointing
  * at it live.**
  */

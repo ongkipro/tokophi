@@ -53,10 +53,10 @@ describe("recovery token", () => {
   });
 
   it("builds a URL the storefront actually routes: /checkout?r=<token>", async () => {
-    const url = await recoveryUrl("batik-nusantara.tokophi.id", STORE, SID);
+    const url = await recoveryUrl("batiknusantara.tokophi.id", STORE, SID);
     const u = new URL(url);
     expect(u.protocol).toBe("https:"); // never http — the token is a credential in a query string
-    expect(u.host).toBe("batik-nusantara.tokophi.id");
+    expect(u.host).toBe("batiknusantara.tokophi.id");
     expect(u.pathname).toBe("/checkout");
     // Round-trips after URL parsing — i.e. it survived encodeURIComponent and the query split.
     expect(await verifyRecoveryToken(u.searchParams.get("r")!, STORE)).toBe(SID);

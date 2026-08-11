@@ -21,7 +21,7 @@
 // asset the merchant could have uploaded, and it goes through the same pipeline below.
 //
 // ⚠️ UPSERT-BY-REPLACE, same as seed-templates.ts and for the same reason: hardcoded to
-// `batik-nusantara`, cannot reach a merchant, and an insert-if-absent guard would pin the demo to
+// `batiknusantara`, cannot reach a merchant, and an insert-if-absent guard would pin the demo to
 // whatever shape shipped first. **It DELETES the demo's articles and re-inserts them.** Safe here;
 // wrong for a real store. If you ever point this at one, restore the guard first.
 //   npm run seed:journal -w @tokophi/db
@@ -31,7 +31,7 @@ import sharp from "sharp";
 import { db, client, schema } from "./client";
 import { and, eq } from "drizzle-orm";
 
-const DEMO_SLUG = "batik-nusantara";
+const DEMO_SLUG = "batiknusantara";
 const TODAY = new Date("2026-06-30T00:00:00Z");
 
 // Mirrors apps/admin/lib/image-store.ts. NOT imported from there: that module is `server-only` (it

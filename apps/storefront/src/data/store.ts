@@ -113,7 +113,7 @@ const env = (k: string) => (process.env[k] ?? "").trim();
 
 /**
  * `<slug>.<base>` → slug. Configured base domain (prod), e.g. STOREFRONT_BASE_DOMAIN=tokophi.com
- * → `batik-nusantara.tokophi.com`. The base is the APEX, so the platform's own surfaces
+ * → `batiknusantara.tokophi.com`. The base is the APEX, so the platform's own surfaces
  * (`app.`/`rich.`/`www.`…) are one label deep too — RESERVED keeps them from resolving as a store.
  */
 function slugFromBaseDomain(host: string): string | null {

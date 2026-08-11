@@ -72,10 +72,12 @@ const minutesAgo = (n: number) => new Date(TODAY.getTime() - n * 60_000);
 // Billing lifecycle dates must be relative to the REAL clock (not the TODAY anchor), else trials/
 // periods lapse whenever the deploy date drifts past the anchor — computeBilling uses `new Date()`.
 const fromNow = (days: number) => new Date(Date.now() + days * 86_400_000);
-// ⚠️ This writes `stores.slug` (line ~766) — so it is a STORE slug, and it must be the same rule
-// the two app-side creation paths use. It was a third private copy, without NFKD. It happens to
-// agree today because "Batik Nusantara" is pure ASCII; a demo store with an accent in its name
-// would have been seeded onto a different address than the app would have minted for it.
+// ⚠️ `slugify` writes `stores.slug` for the 6 extra demo stores (line ~1739) — those are STORE
+// slugs, and they must follow the same rule the two app-side creation paths use. It was a third
+// private copy, without NFKD; names that are pure ASCII happened to agree, a demo store with an
+// accent in its name would have been seeded onto a different address than the app would have minted
+// for it. (The ONE main store is the deliberate exception since the 2026-08-12 rename: its slug is
+// the literal `batiknusantara`, not `slugify("Batik Nusantara")` — see the insert.)
 
 // ---- the one store ----
 const STORE = {
@@ -767,7 +769,11 @@ async function main() {
   const [store] = await db.insert(schema.stores).values({
     accountId: account.id,
     name: STORE.name,
-    slug: slugify(STORE.name),
+    // RENAMED 2026-08-12: `batiknusantara`, no hyphen — deliberately NOT `slugify(STORE.name)`,
+    // which yields `batik-nusantara`. The live storefront host is batiknusantara.tokophi.id, so a
+    // fresh DB must be born under the new slug; databases that already exist are brought over by
+    // `rename-batik-slug.ts` in the deploy migrate chain (idempotent, runs before the demo seeds).
+    slug: "batiknusantara",
     city: STORE.city,
     // The shop's OWN CS channel and pitch (migration 0049). These used to be platform CONSTANTS in
     // apps/storefront/src/data/store.ts, so `wa.me/6281234567890` — the canonical Indonesian dummy

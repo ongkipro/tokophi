@@ -22,7 +22,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { suggestGoogleCategory, suggestGender } from "@tokophi/lib/taxonomy-suggest";
 import { packedDims } from "./product-dims";
 
-const DEMO_SLUG = "batik-nusantara";
+const DEMO_SLUG = "batiknusantara";
 // Fixed anchor so re-runs are deterministic; small per-item offset so they sort newest-first sensibly.
 const ANCHOR = new Date("2026-07-22T03:00:00Z");
 

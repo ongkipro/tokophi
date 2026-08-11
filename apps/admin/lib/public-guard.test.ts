@@ -38,10 +38,10 @@ describe("readPublicBody — the byte ceiling on an unauthenticated body", () =>
     });
 
   it("passes an ordinary cart straight through", async () => {
-    const json = JSON.stringify({ storeSlug: "batik-nusantara", items: [{ handle: "x", qty: 1 }] });
+    const json = JSON.stringify({ storeSlug: "batiknusantara", items: [{ handle: "x", qty: 1 }] });
     const out = await readPublicBody(post(json), {});
     expect(out.res).toBeUndefined();
-    expect(JSON.parse(out.text!)).toMatchObject({ storeSlug: "batik-nusantara" });
+    expect(JSON.parse(out.text!)).toMatchObject({ storeSlug: "batiknusantara" });
   });
 
   it("refuses a body over the cap with 413 — the declared length is the fast path", async () => {

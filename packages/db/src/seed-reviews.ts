@@ -27,7 +27,7 @@ function mulberry32(seed: number) {
 // only the wording.
 //
 // ⚠️ NOT "generic enough for any product" (this comment used to claim that, and it is false): every
-// line here talks about FABRIC, STITCHING and FIT. Today only `batik-nusantara` has delivered orders,
+// line here talks about FABRIC, STITCHING and FIT. Today only `batiknusantara` has delivered orders,
 // so only it gets reviews and the claim never bit. The moment a coffee roaster or a phone shop has a
 // `selesai` order, this script would publish "bahannya adem dan jatuhnya bagus di badan" under their
 // product. If that day comes, the fix is NOT more sentences — it is to stop seeding reviews for stores

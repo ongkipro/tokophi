@@ -52,7 +52,7 @@ export function isLockedStatus(status: StoreDomainRow["status"]): boolean {
   return (LOCKED_STATUSES as readonly string[]).includes(status);
 }
 
-/** The always-on, system-assigned storefront address `<slug>.<base>` (e.g. batik-nusantara.tokophi.id).
+/** The always-on, system-assigned storefront address `<slug>.<base>` (e.g. batiknusantara.tokophi.id).
  *  Not a store_domains row — it is DERIVED from the store slug, and the merchant can never change it. */
 export function systemDomainFor(slug: string): string {
   return `${slug}.${BASE_DOMAIN}`;
