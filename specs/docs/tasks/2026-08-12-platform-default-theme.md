@@ -66,6 +66,6 @@
 - The migrate chain seeds the holder automatically on deploy (idempotent; copies from the batik rows
   the first time, no-ops after).
 
-NEXT: PR open — after review + merge + deploy, repoint PLATFORM_DEFAULT_THEME_STORE_ID in Coolify to
+NEXT: PR #262 open (do not merge without the owner) — after review + merge + deploy, repoint PLATFORM_DEFAULT_THEME_STORE_ID in Coolify to
 a0000000-0000-4000-8000-000000000001 (storefront + admin), then verify: a theme-less store renders the
 default, valoish-store regains its own homepage, and a new store's /tema opens pre-filled.
