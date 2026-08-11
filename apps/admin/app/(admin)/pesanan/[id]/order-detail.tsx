@@ -59,6 +59,18 @@ import {
   TableCell,
 } from "@tokophi/ui/table";
 
+// The COD fee the aggregator deducts from the merchant's COD payout (N31) — the number every rate
+// response already carried while nothing displayed it. Generic wording only: the provider's brand
+// stays hidden from merchants (ADR 0004). Nothing to say ⇒ null, never "Rp0".
+function codFeeLabel(fee: Rate["codFee"]): string | null {
+  if (fee.amount !== null) return `Biaya COD +${IDR(fee.amount)}`;
+  if (fee.pct !== null) {
+    const p = `${fee.pct.toLocaleString("id-ID", { maximumFractionDigits: 2 })}%`;
+    return fee.minimum !== null ? `Biaya COD ${p} (min ${IDR(fee.minimum)})` : `Biaya COD ${p}`;
+  }
+  return null;
+}
+
 function initials(name: string) {
   return name
     .split(/\s+/)
@@ -1017,9 +1029,16 @@ export function OrderDetail({
                 </tr>
               </thead>
               <tbody>
-                {rates.map((r, i) => (
+                {rates.map((r, i) => {
+                  // Only on rates whose EFFECTIVE cod flag is true — a fee for an option that is not
+                  // offered would read as a charge on a service that cannot incur it.
+                  const codFee = r.cod ? codFeeLabel(r.codFee) : null;
+                  return (
                   <tr key={r.service + i} className="border-b last:border-0">
-                    <td className="px-3 py-2 font-medium">{r.service}{r.cod && <span className="ml-1.5 rounded bg-emerald-500/12 px-1 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">COD</span>}</td>
+                    <td className="px-3 py-2 font-medium">
+                      {r.service}{r.cod && <span className="ml-1.5 rounded bg-emerald-500/12 px-1 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">COD</span>}
+                      {codFee && <div className="text-[11px] font-normal text-muted-foreground">{codFee}</div>}
+                    </td>
                     <td className="px-3 py-2 text-muted-foreground">{r.etd} hari</td>
                     <td className="px-3 py-2 text-right tabular-nums font-medium">{IDR(r.cost)}</td>
                     {canWrite && !booked && (
@@ -1030,7 +1049,8 @@ export function OrderDetail({
                       </td>
                     )}
                   </tr>
-                ))}
+                  );
+                })}
                 {rates.length === 0 && (
                   <tr><td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">Tidak ada layanan untuk rute ini.</td></tr>
                 )}

@@ -7,13 +7,16 @@ import { normalizePhone } from "@tokophi/lib/validate";
 import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant, type Tx } from "@/lib/tenant";
 import { getCodPolicy } from "@/lib/cod";
-import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
+import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kaCodFee, kiriminajaConfigured, type KaCodFee } from "@tokophi/lib/kiriminaja";
 import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, provinceForDistrict, kelurahanForDistrict } from "@/lib/data/areas";
 import { composePickupAddress } from "@/lib/pickup-address";
 import { applyOrderStatusChange, type OrderStatus } from "@/lib/order-status";
 
-export type Rate = { service: string; code: string; type: string; cost: number; etd: string; cod: boolean; group: string };
+// `codFee` = what the aggregator charges for collecting cash on this service (N31). It is deducted
+// from the merchant's COD payout, so wherever a merchant sees a COD-capable rate they see this too.
+// All-null when the vendor sent no fee config — render nothing, never Rp0.
+export type Rate = { service: string; code: string; type: string; cost: number; etd: string; cod: boolean; group: string; codFee: KaCodFee };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ONE definition of "this order's status is no longer a shipment's to move".
@@ -192,7 +195,7 @@ export async function getShippingRates(input: {
       .filter((x) => !isInstantService({ courier: x.service, group: x.group }))
       // …and only what the platform allows and this store actually offers (see shippingScope).
       .filter((x) => inScope(scope, x.service, x.service_type))
-      .map((x) => ({ service: x.service_name, code: x.service, type: x.service_type, cost: Number(x.cost), etd: x.etd, cod: x.cod && cod.allows(x.service, x.service_type), group: x.group })),
+      .map((x) => ({ service: x.service_name, code: x.service, type: x.service_type, cost: Number(x.cost), etd: x.etd, cod: x.cod && cod.allows(x.service, x.service_type), group: x.group, codFee: kaCodFee(x) })),
   };
 }
 

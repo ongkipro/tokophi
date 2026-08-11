@@ -55,7 +55,39 @@ export async function kaAddressByName(search: string): Promise<KaAddress[]> {
 }
 
 // pricing (express) — origin/destination are kecamatan (district) IDs
-export type KaRate = { service: string; service_name: string; service_type: string; cost: string; etd: string; cod: boolean; group: string };
+export type KaRate = {
+  service: string; service_name: string; service_type: string; cost: string; etd: string; cod: boolean; group: string;
+  // Per-service fee config. `cod_fee` is a FRACTION already divided by 100 (vendor doc: "0.03" = 3%),
+  // `minimum_cod_fee` is an IDR floor, and `cod_fee_amount` is the vendor-computed COD fee in IDR for
+  // THIS quote (from item_value + shipping cost + insurance). Numbers arrive as strings sometimes —
+  // `cost` above already does — so parse through kaCodFee(), never Number() at a call site.
+  setting?: { cod_fee?: string | number; minimum_cod_fee?: string | number; cod_fee_amount?: string | number } | null;
+};
+
+/** The COD fee KiriminAja charges on a rate, parsed (N31). All-null when the vendor sent nothing. */
+export type KaCodFee = {
+  /** vendor-computed COD fee for this quote, IDR */
+  amount: number | null;
+  /** fee rate in PERCENT (vendor sends the fraction: "0.03" → 3) */
+  pct: number | null;
+  /** minimum fee, IDR */
+  minimum: number | null;
+};
+export function kaCodFee(rate: Pick<KaRate, "setting">): KaCodFee {
+  const num = (v: string | number | undefined | null): number | null => {
+    if (v == null || v === "") return null; // Number("") and Number(null) are 0 — a fee of Rp0 would be invented
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  const s = rate.setting;
+  const frac = num(s?.cod_fee);
+  return {
+    amount: num(s?.cod_fee_amount),
+    // ×100 in floating point drifts (0.03 * 100 = 3.0000000000000004) — round to 2 decimals of a percent.
+    pct: frac === null ? null : Math.round(frac * 10_000) / 100,
+    minimum: num(s?.minimum_cod_fee),
+  };
+}
 export async function kaShippingPrice(p: {
   origin: number;
   destination: number;
