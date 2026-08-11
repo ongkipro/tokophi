@@ -34,7 +34,7 @@ import {
   type Rate,
   type TrackResult,
 } from "@/lib/actions/shipping";
-import { buildLabelHtml } from "@/components/admin/pesanan/shipping-label";
+import { buildLabelHtml, composeSenderLine, formatWeight } from "@/components/admin/pesanan/shipping-label";
 import { createOrderPayment } from "@/lib/actions/payments";
 import type { OrderDetail as OrderDetailData } from "@/lib/data/order-detail";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@tokophi/ui/dialog";
@@ -140,7 +140,7 @@ export function OrderDetail({
 }) {
   // Everything below is REAL: `detail` comes from order_line_items / orders / customers /
   // customer_addresses / payments.
-  const { lines, money, shipment, buyer, address, payment } = detail;
+  const { lines, money, shipment, buyer, address, payment, sender } = detail;
   // The order's own destination (orders.city/province) — the only city this parcel is tied to.
   const destination =
     [shipment.city, shipment.province].filter(Boolean).join(", ") || "Kota tujuan tidak tercatat";
@@ -359,28 +359,33 @@ export function OrderDetail({
   // so it survives the popup blocker across an await) or a fresh one.
   const writeLabel = (awb: string, courier: string, win: Window | null) => {
     // Street only when the saved address actually belongs to this order's city; otherwise the
-    // label carries the destination the order recorded and nothing more.
+    // label carries the destination the order recorded and nothing more. The kodepos rides in its
+    // OWN LabelInput slot (destinationPostcode), not glued into this string.
     const dest = usableAddress
-      ? [usableAddress.street, usableAddress.city, usableAddress.province, usableAddress.postcode]
-          .filter(Boolean)
-          .join(", ")
+      ? [usableAddress.street, usableAddress.city, usableAddress.province].filter(Boolean).join(", ")
       : destination;
     let html: string;
     try {
       html = buildLabelHtml({
         awb,
         courier,
+        serviceName: shipment.serviceName ?? shipment.serviceType,
         orderNumber: order.id,
         storeName,
+        senderLine: sender ? composeSenderLine(sender) : null,
+        senderPhone: sender?.phone ?? null,
+        senderPostcode: sender?.postcode ?? null,
         recipient: usableAddress?.recipient ?? buyer?.name ?? order.customer,
         destination: dest,
+        destinationPostcode: usableAddress?.postcode ?? null,
         recipientPhone: usableAddress?.phone ?? buyer?.phone ?? null,
         kaOrderId: shipment.kaOrderId,
         cod: isCod,
         totalLabel: IDR(money.total),
         paymentLabel: payment?.methodLabel ?? "Belum ada pembayaran",
-        items: lines.map((l) => ({ qty: l.qty, title: l.title, variant: l.variant })),
+        items: lines.map((l) => ({ qty: l.qty, title: l.title, variant: l.variant, priceLabel: IDR(l.price) })),
         totalQty,
+        weightLabel: formatWeight(shipment.weightGrams),
       });
     } catch {
       if (win) win.close();
