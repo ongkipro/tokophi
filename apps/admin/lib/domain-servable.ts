@@ -17,21 +17,38 @@ export const chainReachesTarget = (chain: readonly string[], target: string): bo
   return !!t && chain.some((c) => normaliseHost(c) === t);
 };
 
-export type ServableVerdict = { servable: true } | { servable: false; message: string };
+export type ServableVerdict =
+  | { servable: true }
+  | { servable: false; kind: "no-cname" | "wrong-target"; message: string };
 
 /**
- * `chain` is what DNS returned for the host's CNAME. An EMPTY chain is the important case: it means the
- * host has A records instead (or nothing), which is the hand-copied-IP mistake and is NOT servable.
+ * `chain` is what DNS returned for the host's CNAME.
+ *
+ * ⚠️ An EMPTY chain is UNDECIDABLE from here, not wrong — and treating it as wrong was a bug that
+ * blocked a correctly-configured merchant. An APEX cannot hold a literal CNAME (RFC 1034: the apex
+ * already carries SOA/NS), so providers publish ANAME/ALIAS/CNAME-flattening, which resolves as plain
+ * A records — **byte-identical to the hand-copied-IP mistake** from the outside. `beautyinu.co` sat
+ * `active` at Cloudflare while this verdict told its owner to do something impossible ("hapus data
+ * A/IP-nya, arahkan CNAME") — the merchant had done everything right.
+ *
+ * So `no-cname` means "DNS cannot prove it either way — let Cloudflare decide": Cloudflare validates
+ * against what actually RESOLVES, so a flattened apex goes active and a copied-IP setup never does.
+ * Only `wrong-target` — a CNAME that demonstrably points somewhere else — is a hard refusal.
  */
 export const servableVerdict = (chain: readonly string[], target: string): ServableVerdict => {
   if (chain.length === 0)
     return {
       servable: false,
-      message: `Domain ini belum memakai CNAME. Hapus data A/IP-nya, lalu arahkan CNAME ke ${target}. Menyalin alamat IP tidak bisa dipakai.`,
+      kind: "no-cname",
+      message:
+        `Belum terbaca CNAME. Subdomain (mis. www): arahkan CNAME ke ${target}. ` +
+        `Domain utama (apex) tidak bisa CNAME — pakai ANAME/ALIAS/CNAME flattening ke ${target}. ` +
+        `Jika sudah, aktivasi berlanjut otomatis; menyalin alamat IP secara manual tidak bisa dipakai.`,
     };
   if (!chainReachesTarget(chain, target))
     return {
       servable: false,
+      kind: "wrong-target",
       message: `CNAME mengarah ke ${normaliseHost(chain[0]!)}, bukan ke ${target}.`,
     };
   return { servable: true };

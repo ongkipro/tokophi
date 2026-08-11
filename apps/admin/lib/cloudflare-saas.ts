@@ -136,6 +136,22 @@ export async function createCustomHostname(hostname: string, fetcher: Fetcher = 
   ));
 }
 
+/**
+ * The hostname's existing registration in the SaaS zone, or null. Makes `verifyDomain` idempotent:
+ * without it a re-verify always POSTs a duplicate (`providerId` was never selected from the row, so it
+ * was ALWAYS null), and Cloudflare 409s on a hostname that already exists — which is exactly the state
+ * `beautyinu.co` is in, registered at Cloudflare with no id recorded on our side.
+ */
+export async function findCustomHostname(hostname: string, fetcher: Fetcher = fetch): Promise<CustomHostname | null> {
+  const { zoneId } = config();
+  const result = await request(
+    `/zones/${zoneId}/custom_hostnames?hostname=${encodeURIComponent(hostname)}`,
+    { method: "GET" },
+    fetcher,
+  );
+  return Array.isArray(result) && result.length > 0 ? (result[0] as CustomHostname) : null;
+}
+
 export async function getCustomHostname(id: string, fetcher: Fetcher = fetch): Promise<CustomHostname> {
   const { zoneId } = config();
   return parseHostname(await request(
