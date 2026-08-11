@@ -4,6 +4,7 @@ import { eq, asc, sql } from "drizzle-orm";
 import { withCurrentTenant } from "@/lib/tenant";
 import { shipmentPaymentState, shipmentPaymentLabel, type ShipmentPaymentState } from "@/lib/shipment-payment";
 import { latestPaymentFirst } from "@/lib/data/order-payment";
+import { weightForOrder } from "@/lib/shipping-weight";
 
 // The real, per-order truth the detail page needs: line items straight out of `order_line_items`
 // (joined to the variant + product for the variant title / image / emoji), the money columns the
@@ -47,6 +48,20 @@ export type OrderMoney = {
 export type OrderShipment = {
   /** orders.courier — NULL unless a shipment was booked (KiriminAja). */
   courier: string | null;
+  /** orders.service_type (0053) — the raw type code the shopper paid for. */
+  serviceType: string | null;
+  /**
+   * Human service name ("SPX Standard") resolved from `platform_couriers.services` — the same
+   * lateral lookup `bulk-shipping.ts` uses. NULL when the courier/service no longer resolves;
+   * the label then falls back to the raw type code rather than printing nothing.
+   */
+  serviceName: string | null;
+  /**
+   * BILLABLE parcel weight in grams (`weightForOrder().billableGrams`, Σ variant weight ≥ 1 kg) —
+   * the same number `createShipment` declares to the courier, so the label describes the booked
+   * parcel, not a third weight.
+   */
+  weightGrams: number;
   /**
    * orders.awb — the COURIER's waybill. NULL until a courier actually issues one: KiriminAja's
    * request_pickup returns `awb: null` and only fills it once the pickup is accepted. It is never
@@ -128,6 +143,18 @@ export type OrderPaymentRecord = {
   channelCode: string | null;
 };
 
+/**
+ * The seller's pickup identity (`store_settings.sender_*`) — what the LABEL prints in its
+ * "Pengirim" box. NULL when the seller has not saved a pickup address; the label then shows the
+ * store name alone, exactly as before.
+ */
+export type OrderSender = {
+  phone: string | null;
+  address: string | null;
+  kecamatanName: string | null;
+  postcode: string | null;
+};
+
 export type OrderDetail = {
   lines: OrderLine[];
   money: OrderMoney;
@@ -135,6 +162,7 @@ export type OrderDetail = {
   buyer: OrderBuyer | null;
   address: OrderAddress | null;
   payment: OrderPaymentRecord | null;
+  sender: OrderSender | null;
 };
 
 const METHOD_LABEL: Record<string, string> = {
@@ -154,11 +182,21 @@ const FMT = new Intl.DateTimeFormat("id-ID", {
 });
 
 export async function getOrderDetail(number: string): Promise<OrderDetail | null> {
-  return withCurrentTenant(async (db) => {
+  return withCurrentTenant(async (db, storeId) => {
+    // Human service name for the label — same lateral lookup `bulk-shipping.ts` makes; NULL when
+    // the courier/service no longer resolves (a platform-disabled courier must not hide the order).
+    const serviceName = sql<string | null>`(
+      select s->>'name' from platform_couriers pc
+      cross join lateral jsonb_array_elements(pc.services) s
+      where pc.courier = ${schema.orders.courier} and s->>'type' = ${schema.orders.serviceType}
+      limit 1
+    )`;
     const [o] = await db
       .select({
         id: schema.orders.id,
         customerId: schema.orders.customerId,
+        serviceType: schema.orders.serviceType,
+        serviceName,
         subtotal: schema.orders.subtotalIdr,
         discount: schema.orders.discountIdr,
         shipping: schema.orders.shippingIdr,
@@ -341,6 +379,30 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
         }
       : null;
 
+    // Billable weight — the number the booking declares to the courier (label's "Isi" header).
+    const pkg = await weightForOrder(db, o.id);
+
+    // The seller's pickup identity, for the label's "Pengirim" box. `store_settings` is RLS-scoped,
+    // but it is keyed by store_id — filter explicitly rather than trusting RLS blindly.
+    const [ss] = await db
+      .select({
+        phone: schema.storeSettings.senderPhone,
+        address: schema.storeSettings.senderAddress,
+        kecamatanName: schema.storeSettings.senderKecamatanName,
+        postcode: schema.storeSettings.senderPostcode,
+      })
+      .from(schema.storeSettings)
+      .where(eq(schema.storeSettings.storeId, storeId))
+      .limit(1);
+    const sender: OrderSender | null = ss
+      ? {
+          phone: ss.phone?.trim() || null,
+          address: ss.address?.trim() || null,
+          kecamatanName: ss.kecamatanName?.trim() || null,
+          postcode: ss.postcode?.trim() || null,
+        }
+      : null;
+
     // Separate the two COURIER money flows ONCE, here, so no render path has to reason about it.
     // Must sit AFTER `payment`: the COD flag comes from `payments.method` — the same expression
     // lib/cod.ts and the Pesanan tabs partition on — never from the vendor's own payment fields,
@@ -356,6 +418,9 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
       money,
       shipment: {
         courier: o.courier ?? null,
+        serviceType: o.serviceType ?? null,
+        serviceName: o.serviceName ?? null,
+        weightGrams: pkg.billableGrams,
         awb: o.awb ?? null,
         kaOrderId: o.kaOrderId ?? null,
         pickupNumber: o.kaPickupNumber ?? null,
@@ -374,6 +439,7 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
       buyer,
       address,
       payment,
+      sender,
     };
   });
 }

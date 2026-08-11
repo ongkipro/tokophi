@@ -82,21 +82,55 @@ export type LabelInput = {
   /** The REAL courier waybill. Required — there is no label without one. */
   awb: string;
   courier: string;
+  /** Human service name ("SPX Standard") — falls back to the raw `orders.service_type` at the callers. */
+  serviceName?: string | null;
   orderNumber: string;
   storeName: string;
   senderLine?: string | null;
+  senderPhone?: string | null;
+  /** Sender kodepos — its OWN field (label spec), never glued into `senderLine`. */
+  senderPostcode?: string | null;
   recipient: string;
+  /** Street + city + province. The kodepos does NOT ride in here — it has its own slot below. */
   destination: string;
+  /** Recipient kodepos — its own field so a sorter can read it without parsing the address. */
+  destinationPostcode?: string | null;
   recipientPhone?: string | null;
   /** KiriminAja booking reference — printed small, clearly labelled, never as the resi. */
   kaOrderId?: string | null;
   cod: boolean;
   totalLabel: string;
   paymentLabel: string;
-  items: { qty: number; title: string; variant?: string | null }[];
+  items: { qty: number; title: string; variant?: string | null; priceLabel?: string | null }[];
   totalQty: number;
   weightLabel?: string | null;
 };
+
+/**
+ * "1,5 kg" / "800 g" from grams — ONE formatter for both label paths (single + bulk), so the two
+ * can never print the same parcel's weight differently. Callers pass the BILLABLE grams
+ * (`max(actual, 1000)`) because that is the weight the booking declared to the courier — the label
+ * must describe the parcel the courier was told about, not a third number.
+ */
+export function formatWeight(grams: number | null | undefined): string | null {
+  if (!grams || grams <= 0) return null;
+  return grams >= 1000
+    ? `${(grams / 1000).toLocaleString("id-ID", { maximumFractionDigits: 2 })} kg`
+    : `${grams} g`;
+}
+
+/**
+ * The sender's address line under the store name — shared by both label paths. Kodepos is NOT in
+ * here (it has its own `senderPostcode` slot); the kecamatan name gives the locality a sorter
+ * routes on. Returns null when the seller has saved nothing, so the box renders exactly as before.
+ */
+export function composeSenderLine(s: { address?: string | null; kecamatanName?: string | null }): string | null {
+  const line = [s.address, s.kecamatanName]
+    .map((v) => (v ?? "").trim())
+    .filter(Boolean)
+    .join(", ");
+  return line || null;
+}
 
 /**
  * Build the printable label. Throws when there is no AWB — the caller must not be able to print a
@@ -128,6 +162,7 @@ export function buildLabelHtml(i: LabelInput): string {
   .resi { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13pt; font-weight: 700; letter-spacing: .14em; text-align: center; padding-bottom: 1mm; border-bottom: 1px solid #000 }
   .box { border-top: 1px solid #000; padding-top: 1.4mm }
   .lbl { font-size: 6.5pt; text-transform: uppercase; letter-spacing: .09em; color: #555 }
+  .pc { font-size: 9.5pt; font-weight: 800; letter-spacing: .06em }
   .val { font-size: 9pt; font-weight: 600; line-height: 1.3 }
   .items { font-size: 8pt; font-weight: 500; line-height: 1.3 }
   .foot { margin-top: auto; border-top: 1px dashed #000; padding-top: 1.4mm; display: flex; justify-content: space-between; font-size: 7.5pt }
@@ -138,6 +173,7 @@ export function buildLabelHtml(i: LabelInput): string {
     <div class="row">
       <div>
         <div class="courier">${esc(i.courier)}</div>
+        ${i.serviceName ? `<div class="svc" style="font-weight:700;color:#000">${esc(i.serviceName)}</div>` : ""}
         <div class="svc">${esc(i.storeName)} · ${esc(i.orderNumber)}</div>
       </div>
       ${
@@ -151,17 +187,20 @@ export function buildLabelHtml(i: LabelInput): string {
     <div class="resi">${esc(awb)}</div>
 
     <div class="box">
-      <div class="lbl">Penerima</div>
+      <div class="row"><div class="lbl">Penerima</div>${i.destinationPostcode ? `<div class="pc">${esc(i.destinationPostcode)}</div>` : ""}</div>
       <div class="val">${esc(i.recipient)}<br>${esc(i.destination)}${i.recipientPhone ? `<br>${esc(i.recipientPhone)}` : ""}</div>
     </div>
     <div class="box">
-      <div class="lbl">Pengirim</div>
-      <div class="val">${esc(i.storeName)}${i.senderLine ? `<br><span style="font-weight:500">${esc(i.senderLine)}</span>` : ""}</div>
+      <div class="row"><div class="lbl">Pengirim</div>${i.senderPostcode ? `<div class="pc">${esc(i.senderPostcode)}</div>` : ""}</div>
+      <div class="val">${esc(i.storeName)}${i.senderPhone ? `<br>${esc(i.senderPhone)}` : ""}${i.senderLine ? `<br><span style="font-weight:500">${esc(i.senderLine)}</span>` : ""}</div>
     </div>
     <div class="box">
       <div class="lbl">Isi (${i.items.length} item${i.weightLabel ? ` · ${esc(i.weightLabel)}` : ""})</div>
       <div class="items">${i.items
-        .map((l) => `${l.qty}× ${esc(l.title)}${l.variant ? ` (${esc(l.variant)})` : ""}`)
+        .map(
+          (l) =>
+            `${l.qty}× ${esc(l.title)}${l.variant ? ` (${esc(l.variant)})` : ""}${l.priceLabel ? ` @${esc(l.priceLabel)}` : ""}`,
+        )
         .join(" · ")}</div>
     </div>
 

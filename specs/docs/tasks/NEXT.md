@@ -562,6 +562,13 @@ changes what they are owed — that is not a call an audit gets to make. **AC:**
 `specs/decisions/`, and only then a ledger kind for cost.
 
 ### N38. The label is missing required fields · **M** (one part blocked)
+✅ **THE PLUMBING HALF SHIPPED 2026-08-12** (branch `feat/n38-label-fields`, handoff
+[`2026-08-12-n38-label-plumbing.md`](./2026-08-12-n38-label-plumbing.md)): service name, both
+kodepos as their own fields, sender phone + address line, billable weight and per-item prices now
+print on BOTH label paths (single + bulk), verified on a real print preview. It also fixed a
+pre-existing 42703 in `getBulkLabels` (`li.variant` — a column that never existed), which had made
+bulk "Cetak resi" fail on every call. **STILL OPEN in this entry: insurance (needs a column — never
+persisted) and the Sorting Code (🔴 blocked on the vendor, below).**
 `03-important-notes/03-shipping-label.md` is a spec for a label *we* render — **there is no label
 endpoint and no label URL in the booking response**. Against its required-field list, ours omits:
 **service type**, **Insurance Information** (we do send `insurance_amount`), **postal code** on both

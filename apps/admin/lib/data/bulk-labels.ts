@@ -1,7 +1,8 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import { withCurrentTenant } from "@/lib/tenant";
-import { buildLabelHtml } from "@/components/admin/pesanan/shipping-label";
+import { buildLabelHtml, composeSenderLine, formatWeight } from "@/components/admin/pesanan/shipping-label";
+import { DEFAULT_WEIGHT_GRAMS, MIN_BILLABLE_GRAMS } from "@/lib/shipping-weight";
 
 // Many thermal labels, one printable document.
 //
@@ -19,20 +20,40 @@ export async function getBulkLabels(numbers: string[]): Promise<{ html: string |
     // RLS scopes this to the caller's store: a number from another tenant simply returns no row, so
     // a label cannot be minted for someone else's parcel even by guessing.
     const rows = (await db.execute(sql`
-      select o.number, o.awb, o.courier, o.ka_order_id, o.total_idr::int as total,
+      select o.number, o.awb, o.courier, o.service_type, s->>'name' as service_name,
+             o.ka_order_id, o.total_idr::int as total,
              coalesce(o.ship_recipient, c.name, '—') as recipient,
              o.ship_phone, o.ship_address, o.ship_postcode,
              coalesce(o.city, '') as city, coalesce(o.province, '') as province,
              st.name as store_name,
+             ss.sender_phone, ss.sender_address, ss.sender_kecamatan_name, ss.sender_postcode,
+             w.grams,
              p.method::text as method,
              coalesce((
-               select json_agg(json_build_object('qty', li.qty, 'title', li.title, 'variant', li.variant))
-               from order_line_items li where li.order_id = o.id
+               -- ⚠️ The variant TITLE lives on product_variants (order_line_items has only
+               -- variant_id). This used to read li.variant — a column that has never existed —
+               -- so getBulkLabels threw 42703 on EVERY call and bulk "Cetak resi" always failed.
+               select json_agg(json_build_object('qty', li.qty, 'title', li.title,
+                      'variant', pv.title, 'price', li.price_idr::int))
+               from order_line_items li
+               left join product_variants pv on pv.id = li.variant_id
+               where li.order_id = o.id
              ), '[]'::json) as items
       from orders o
       left join customers c on c.id = o.customer_id
       left join stores st on st.id = o.store_id
+      left join store_settings ss on ss.store_id = o.store_id
       left join payments p on p.order_id = o.id
+      left join platform_couriers pc on pc.courier = o.courier
+      left join lateral jsonb_array_elements(pc.services) s on s->>'type' = o.service_type
+      left join lateral (
+        -- Same weight rule as weightForOrder(): Σ variant weight × qty, missing weight = the
+        -- documented default. The 1 kg billable minimum is applied in JS below, once.
+        select sum(coalesce(pv.weight_grams, ${DEFAULT_WEIGHT_GRAMS}) * li.qty)::int as grams
+        from order_line_items li
+        left join product_variants pv on pv.id = li.variant_id
+        where li.order_id = o.id
+      ) w on true
       where o.number in ${numbers} and o.awb is not null
     `)) as unknown as Record<string, unknown>[];
 
@@ -40,27 +61,39 @@ export async function getBulkLabels(numbers: string[]): Promise<{ html: string |
     const skipped = numbers.filter((n) => !found.has(n));
     const parts: string[] = [];
 
+    const idr = (n: number) =>
+      new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
+
     for (const r of rows) {
-      const items = (r.items as { qty: number; title: string; variant?: string | null }[]) ?? [];
+      const items = (r.items as { qty: number; title: string; variant?: string | null; price?: number | null }[]) ?? [];
       const isCod = r.method === "cod";
       try {
         parts.push(
           buildLabelHtml({
             awb: String(r.awb),
             courier: String(r.courier ?? "-"),
+            serviceName: (r.service_name as string) ?? (r.service_type as string) ?? null,
             orderNumber: `#${String(r.number)}`,
             storeName: String(r.store_name ?? "Toko"),
+            senderLine: composeSenderLine({
+              address: r.sender_address as string | null,
+              kecamatanName: r.sender_kecamatan_name as string | null,
+            }),
+            senderPhone: (r.sender_phone as string)?.trim() || null,
+            senderPostcode: (r.sender_postcode as string)?.trim() || null,
             recipient: String(r.recipient),
-            destination: [r.ship_address, r.city, r.province, r.ship_postcode].filter(Boolean).join(", "),
+            // Kodepos deliberately NOT glued in here — it rides in destinationPostcode below.
+            destination: [r.ship_address, r.city, r.province].filter(Boolean).join(", "),
+            destinationPostcode: (r.ship_postcode as string)?.trim() || null,
             recipientPhone: (r.ship_phone as string) ?? null,
             kaOrderId: (r.ka_order_id as string) ?? null,
             cod: isCod,
-            totalLabel: new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(
-              Number(r.total ?? 0),
-            ),
+            totalLabel: idr(Number(r.total ?? 0)),
             paymentLabel: isCod ? "COD (Bayar di Tempat)" : (r.method ? String(r.method).toUpperCase() : "Sudah dibayar"),
-            items,
+            items: items.map((it) => ({ ...it, priceLabel: it.price == null ? null : idr(Number(it.price)) })),
             totalQty: items.reduce((a, i) => a + (i.qty ?? 0), 0),
+            // Billable weight — max(actual, 1 kg), the same floor the quote and the booking apply.
+            weightLabel: formatWeight(Math.max(MIN_BILLABLE_GRAMS, Number(r.grams ?? 0))),
           }),
         );
       } catch {
