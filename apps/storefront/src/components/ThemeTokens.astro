@@ -1,0 +1,38 @@
+---
+// The merchant's design-token overrides (stores.theme, migration 0092) — ONE injection site,
+// used by Layout.astro AND LandingLayout.astro so the two can never drift. Declared after
+// global.css so these custom properties win the cascade, exactly like the brand shades that
+// established the mechanism (ADR 0009).
+//
+// ONLY the dials the merchant actually CHOSE are emitted (`fontChosen`/`toneChosen` from
+// resolveTheme). A store with `theme: NULL` gets the brand shades alone — byte-identical output
+// to before this feature — because `ink`/`muted` derive from the brand hue and injecting them
+// uninvited would retint every live store's text.
+//
+// The display font is SELF-HOSTED (@font-face in styles/global.css, latin + latin-ext subsets in
+// public/fonts). Declaring a family there costs nothing until markup references it; this preload
+// is what puts the CHOSEN one on the wire early — same reasoning as the Inter preload beside it
+// in each layout (the font is referenced from inside a stylesheet, so the browser would only
+// discover it after parsing the CSS, behind an LCP that is mostly render delay).
+const { brandShades, theme } = Astro.locals.catalog;
+
+const vars = [
+  ...Object.entries(brandShades).map(([shade, hex]) => `--color-brand-${shade}: ${hex};`),
+  ...(theme.toneChosen
+    ? [
+        `--color-cream: ${theme.neutrals.cream};`,
+        `--color-ink: ${theme.neutrals.ink};`,
+        `--color-muted: ${theme.neutrals.muted};`,
+        `--color-line: ${theme.neutrals.line};`,
+      ]
+    : []),
+  ...(theme.fontChosen ? [`--font-display: ${theme.font.display};`] : []),
+].join(" ");
+---
+
+{
+  theme.fontChosen && theme.font.displayFile && (
+    <link rel="preload" href={theme.font.displayFile} as="font" type="font/woff2" crossorigin />
+  )
+}
+<style set:html={`:root { ${vars} }`} />

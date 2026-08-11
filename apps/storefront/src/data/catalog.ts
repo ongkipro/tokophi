@@ -14,6 +14,7 @@ import { cached } from "./cache";
 import { STATIC_IMAGE_WIDTHS } from "./static-image-widths";
 import type { StoreInfo } from "./store";
 import { brandShadesFor, getStoreTemplates, resolveTemplate, type StoreTemplates } from "./theme";
+import { resolveTheme, type ResolvedTheme } from "@tokophi/lib/theme";
 
 const slugify = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -140,6 +141,13 @@ export type Catalog = {
   productTemplate: (p: Product) => StoredTemplateData | null;
   /** 11-shade scale derived from the store's brand hex — injected as CSS vars by Layout.astro. */
   brandShades: Record<string, string>;
+  /**
+   * The store's resolved design tokens beyond the brand scale (`stores.theme`, migration 0092):
+   * display font pairing + neutral palette. Injected by ThemeTokens.astro — but ONLY the dials the
+   * merchant actually chose (`fontChosen`/`toneChosen`); a store with no choice renders
+   * byte-identical to before this feature existed.
+   */
+  theme: ResolvedTheme;
   /** `null` = this product has no published reviews. Render NO stars — do not invent a default. */
   productRating: (p: Product | string) => Rating | null;
   /** Real 5★→1★ counts from the review rows. */
@@ -635,6 +643,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       resolveTemplate(templates, collectionTemplateId.get(handle) ?? null, templates.categoryDefault),
     productTemplate: (p) => resolveTemplate(templates, p.templateId, templates.productDefault),
     brandShades: brandShadesFor(store.brandColor),
+    theme: resolveTheme(store),
     productRating: (p) => ratings[typeof p === "string" ? p : p.handle] ?? null,
     // The real 5→1 histogram, counted from the actual review rows — not a curve fitted to a fake mean.
     ratingHistogram: (p) => {

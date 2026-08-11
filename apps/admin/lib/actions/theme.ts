@@ -8,6 +8,7 @@ import { withTenant } from "@/lib/tenant";
 import type { TemplateType } from "@/lib/data/theme";
 import { SECTION_TYPES, type SectionType } from "@tokophi/sections";
 import { GALLERY_LAYOUTS, type GalleryLayout } from "@/lib/gallery-layout";
+import { FONT_PAIRINGS, NEUTRAL_TONES } from "@tokophi/lib/theme";
 
 // ADR 0009 — Store Builder.
 //
@@ -281,6 +282,34 @@ export async function saveBrandColor(hex: string): Promise<ThemeResult> {
   try {
     await withTenant(storeId, async (db) => {
       await db.update(schema.stores).set({ brandColor: hex }).where(eq(schema.stores.id, storeId));
+    });
+  } catch (e) {
+    return fail(e);
+  }
+  revalidatePath("/tema");
+  return { ok: true };
+}
+
+// Design-token choices (Tema panel "Tampilan" dialog) — font pairing + neutral tone, stored as
+// `stores.theme` jsonb (migration 0092). Validated against the same registries the storefront's
+// resolveTheme reads (@tokophi/lib/theme — pure, client-safe), so a value that saves is a value
+// that renders. Only the two known keys are written: whatever else a tampered payload carries is
+// dropped here, not trusted to the reader's leniency.
+export async function saveStoreTheme(input: { font?: string; tone?: string }): Promise<ThemeResult> {
+  const { storeId } = await requireCapability("theme:write");
+  if (input.font !== undefined && !(input.font in FONT_PAIRINGS))
+    return { ok: false, error: "Pilihan font tidak dikenal" };
+  if (input.tone !== undefined && !NEUTRAL_TONES.some((t) => t.id === input.tone))
+    return { ok: false, error: "Pilihan nuansa warna tidak dikenal" };
+  const theme: Record<string, string> = {};
+  if (input.font !== undefined) theme.font = input.font;
+  if (input.tone !== undefined) theme.tone = input.tone;
+  try {
+    await withTenant(storeId, async (db) => {
+      await db
+        .update(schema.stores)
+        .set({ theme: Object.keys(theme).length ? theme : null })
+        .where(eq(schema.stores.id, storeId));
     });
   } catch (e) {
     return fail(e);

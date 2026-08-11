@@ -44,6 +44,95 @@
     U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* ── Merchant-selectable DISPLAY fonts (stores.theme, migration 0092) ──────────────────────────
+   Four curated families the Tema panel offers for `--font-display` (body text stays Inter — one
+   pairing costs the shopper at most ONE extra woff2, and the default costs zero). Declared here
+   unconditionally because an unreferenced @font-face downloads NOTHING: the browser only fetches
+   a face when rendered text actually resolves to it, so four idle declarations are free. The
+   chosen one is injected as a `--font-display` override + preload by ThemeTokens.astro.
+
+   Same recipe as Inter above, for the same measured reasons: SELF-HOSTED (the Google Fonts <link>
+   was render-blocking 1.409 ms in front of an LCP that was 82% render delay), one variable file
+   per subset, latin + latin-ext only (Indonesian is written in latin; unicode-range copied
+   verbatim from Google's own CSS so pasted Cyrillic falls back to the system font), and
+   `font-display: swap`. All four are OFL-1.1 — self-hosting is expressly granted. */
+@font-face {
+  font-family: "Playfair Display";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/fonts/playfair-display-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Playfair Display";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/fonts/playfair-display-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("/fonts/manrope-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("/fonts/manrope-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/lora-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/lora-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/space-grotesk-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/space-grotesk-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+
 /* ONE container serves every store (ADR 0009) — so nothing in this file may be "the demo's taste".
    This header used to read "Brand: elegant women's fashion (Batik Nusantara demo)", and the type
    scale below was exactly that: Playfair Display, an editorial serif, on every heading of every
@@ -56,11 +145,10 @@
    (which the markup already sets) rather than from a second family. */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  /* ⚠️ KEEP THIS TOKEN — it is the seam, not dead weight. `.font-display` is used 47× across 21
-     files; the point is that a per-store font can later be injected here as a CSS custom property
-     exactly the way `--color-brand-*` already is (Layout.astro reads `catalog.brandShades` and
-     writes them into :root). Deleting the token would mean re-threading 47 call sites the day the
-     font picker lands. Until then it deliberately equals --font-sans. */
+  /* ⚠️ THE SEAM IS LIVE NOW (stores.theme, migration 0092): ThemeTokens.astro overrides
+     `--font-display` per store with the pairing the merchant picked in Tema — exactly the way
+     `--color-brand-*` has always been injected. This value is the DEFAULT ("Bawaan"): a store
+     that never picked stays on Inter and gets zero extra font bytes. */
   --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
 
   --color-cream: #faf6f2;
@@ -73,6 +161,10 @@
      (#7a6f72 hits exactly 4.50 on cream but 4.42 on brand-50, so it is NOT enough.) */
   --color-muted: #736669;
   --color-line: #ece3dd;
+  /* ↑ These four neutrals are ALSO per-store now: a merchant who picked a tone in Tema gets them
+     overridden by ThemeTokens.astro with values derived from brand hue × tone
+     (@tokophi/lib/theme generateNeutrals — muted keeps this AA lightness in every tone). The
+     values above stay the no-choice default and must keep matching the `hangat` derivation. */
 
   --color-brand-50: #fdf2f5;
   --color-brand-100: #fbe6ec;

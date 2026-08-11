@@ -138,6 +138,14 @@ export const stores = pgTable("stores", {
   // storefront derives a full 11-shade scale from it (@tokophi/lib/colors). Null = fall back
   // to the default brand hex baked into apps/storefront/src/styles/global.css.
   brandColor: text(),
+  // Design-token choices beyond the single brand colour (@tokophi/lib/theme `StoreTheme`):
+  // `{ font, tone }` — curated font pairing id + neutral-tone id. The storefront derives the
+  // whole neutral palette (surface/text/border) from brandColor × tone, so the batik-boutique
+  // look becomes this store's PRESET rather than the platform default. Null = the original
+  // look (elegan/hangat) — existing stores render unchanged. jsonb (not columns) because the
+  // resolver already validates/defaults every field and future dials (radius, dark) land here
+  // without another migration.
+  theme: jsonb(),
   // Product-page gallery layout the merchant picks in the Store Builder (Tema). One of
   // 'thumbnail-left' (thumbnail rail beside the main image — the default), 'thumbnail-bottom'
   // (rail under the main image), or 'grid' (a 2-column grid of every image, no main/thumbnail

@@ -27,7 +27,7 @@
 | Di antaranya ber-RLS | **51** | keluaran verifikator yang sama |
 | `store_id` tanpa RLS | **1** — `platform_activity` | disengaja: log audit platform, lintas tenant |
 | Tabel anak tanpa `store_id` & tanpa RLS | **12**, semuanya sudah ditinjau | verifikator mencetak daftarnya; `AGENTS.md` memuat aturannya |
-| Migrasi | **92** (`0000` … `0091`) | `_journal.json` + jumlah berkas `.sql`, keduanya cocok |
+| Migrasi | **93** (`0000` … `0092`) | `_journal.json` + jumlah berkas `.sql`, keduanya cocok |
 | DB roles | `tokophi` (owner, bypasses RLS) · `tokophi_app` (non-owner, policies enforce) | `pg_roles` |
 | Enums | **44** | `grep -c 'pgEnum(' packages/db/src/schema.ts` |
 | Money representation | `bigint`, whole rupiah, column suffix `_idr` | catalog |
