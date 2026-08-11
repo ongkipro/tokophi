@@ -1,6 +1,7 @@
 import "server-only";
-import { schema, type PageTemplate } from "@tokophi/db";
+import { db, schema, type PageTemplate } from "@tokophi/db";
 import { withCurrentTenant, withTenant } from "@/lib/tenant";
+import { isUuid } from "@/lib/uuid";
 import { and, asc, eq, ne, sql } from "drizzle-orm";
 
 export type TemplateType = "homepage" | "category" | "product";
@@ -64,6 +65,40 @@ export async function getDefaultHomepage(): Promise<PageTemplate | null> {
       .limit(1);
     return row ?? null;
   });
+}
+
+// ── THE PLATFORM DEFAULT, AS A STARTING CANVAS (T-9 follow-up, 2026-08-12) ────────────────────────
+//
+// A merchant opening a template with NOTHING in it starts from the platform default theme's sections
+// instead of a blank drag-and-drop canvas — same holder store the storefront falls back to at render
+// (decision B, apps/storefront theme-source.ts). Read-only prefill: nothing is written until the
+// merchant presses Publish, and that goes through the ordinary saveTemplate path, which writes the
+// merchant's OWN row. Copy-on-first-edit, not copy-at-provisioning — the recorded decision rejected
+// row-copies ("the seed is not a migration").
+//
+// ⚠️ DELIBERATE CROSS-TENANT READ, on the bare owner `db` — the exception the tenant rule reserves
+// for auth (lib/auth.ts reads store_users before a session exists) and the storefront. The holder is
+// a PLATFORM-owned store (`suspendedAt` set, reserved slug, seed-platform-theme.ts), so this leaks no
+// merchant's content to another merchant; RLS under `withCurrentTenant` could structurally never see
+// another store's rows, which is exactly why this read cannot go through it.
+export async function getPlatformDefaultSections(type: TemplateType): Promise<unknown> {
+  const holderId = process.env.PLATFORM_DEFAULT_THEME_STORE_ID?.trim();
+  // Unset = OFF (blank canvas, as before). Non-UUID would 22P02-throw and 500 the /tema editor —
+  // a typo'd env must degrade to the blank canvas, never take the builder down.
+  if (!holderId || !isUuid(holderId)) return null;
+  const [row] = await db
+    .select({ sections: schema.pageTemplates.sections })
+    .from(schema.pageTemplates)
+    .where(
+      and(
+        eq(schema.pageTemplates.storeId, holderId),
+        eq(schema.pageTemplates.type, type),
+        eq(schema.pageTemplates.isDefault, true),
+      ),
+    )
+    .limit(1);
+  const content = (row?.sections as PuckContent)?.content;
+  return Array.isArray(content) && content.length > 0 ? row!.sections : null;
 }
 
 type PuckContent = { content?: { type?: string }[] } | null;
