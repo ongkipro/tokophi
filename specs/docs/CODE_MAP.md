@@ -50,7 +50,7 @@ tokophi/
 
 | Package | Exports / key modules | Notes |
 |---|---|---|
-| `db` | `db`, `client`, `schema` (**78 tables**), `migrations/` (**0000–0092**, 93 files), `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
+| `db` | `db`, `client`, `schema` (**78 tables**), `migrations/` (**0000–0093**, 94 files), `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
 | `lib` | `./billing` (pricing, `computeBilling`, `storeSegment`, `withPpn`), `./format` (IDR/num), `./couriers`, `./kiriminaja`, `./autolaris`, `./payment-fees`, `./integration-status`, `./totp`, `./cache`, `./colors` | Pure/shared. `kiriminaja`/`autolaris` are `server-only`. |
 | `ui` | 23 components (`button card dialog dropdown-menu table tabs switch …`) + `lib/utils` (cn) + Tailwind tokens | **shadcn on Base UI** — `render` prop not `asChild`, no `Select`. |
 | `data` | menu helpers | small shared. |
