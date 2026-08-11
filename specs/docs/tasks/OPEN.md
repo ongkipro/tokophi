@@ -69,6 +69,23 @@ Three detailed handoffs sit underneath this index; go to them for reasoning, not
 
 ---
 
+## 🕐 Time-gated — earliest 2026-08-12 ≥17:00 WIB: raise custom-domain HSTS to 1y
+
+Filed 2026-08-12, **deliberately not executed early** — the 24 h ramp value was installed
+2026-08-11 evening (origin Traefik middleware `tokophi-custom-hsts`, see
+[`2026-08-12-session-close.md`](./2026-08-12-session-close.md) "Time-gated" board entry and
+`2026-08-11-handoff.md` NEXT #1); give it its full quiet day before promising browsers a year.
+
+- **The edit:** `stsSeconds: 86400 → 31536000` in
+  `/data/coolify/proxy/dynamic/tokophi-custom-domains.yaml` on the VPS. Traefik watches the dynamic
+  dir — hot-reload, no restart, no deploy.
+- **Verify:** re-curl the three custom-domain hosts and confirm
+  `strict-transport-security: max-age=31536000; includeSubDomains` on each.
+- **Who:** owner-executable, or any session with VPS SSH — no decision left in it, only the clock.
+- ⚠️ **One-way door once browsers hold a year**: disabling it later stops us *sending* the header
+  but cannot reach a browser that already stored it — that browser refuses `http://` for up to a
+  year from its last visit. Same ladder `.com` and `.id` walked.
+
 ## ⚠️ `NEXT.md` has EIGHT duplicated numbers — always quote the TITLE
 
 The doc sweep (#146) and audit wave 7 (#148) both numbered from N36. #146 landed first, so the numbers

@@ -2,8 +2,10 @@
 //
 // WHY THIS FILE EXISTS. T-9's `PLATFORM_DEFAULT_THEME_STORE_ID` pointed at `batik-nusantara`'s LIVE
 // rows, and `theme-source.ts` warned in its own doc comment that this is only acceptable while that
-// store is ours: it makes one store's Store Builder a platform-wide control. The batik store is
-// becoming a real merchant's shop, so the default moves here — a holder row with a FIXED id
+// store is ours: it makes one store's Store Builder a platform-wide control. (Owner decision
+// 2026-08-12: the batik store — slug now `batiknusantara` — REMAINS the demo store; the default
+// still moves off its live rows, because a platform-wide control must not live in any servable
+// store.) The default lives here — a holder row with a FIXED id
 // (`@tokophi/lib/platform-theme`) and a RESERVED slug, that no merchant can log into, register, or
 // be served as. Point the env var at PLATFORM_THEME_STORE_ID and the platform default is a store the
 // platform edits, never a live shop.

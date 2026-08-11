@@ -128,7 +128,7 @@ is that witness.
   **Do not install it on `volumdev`.**
 - **Four checks, one per observed failure shape:**
   1. **The 5 public surfaces** — `tokophi.com`, `app.tokophi.com/login`, `rich.tokophi.com`,
-     `toko.tokophi.com`, `batik-nusantara.tokophi.id`. ⚠️ `rich.` answers **307** (middleware redirect
+     `toko.tokophi.com`, `batiknusantara.tokophi.id`. ⚠️ `rich.` answers **307** (middleware redirect
      to `/login`) and that is **healthy** — a probe demanding 200 there would be red forever and
      everyone would learn to ignore it. Redirects are not followed: the 307 *is* the evidence.
   2. **`POST /api/public/ongkir {"op":"search","q":"Semarang"}`** — the only check that proves
@@ -540,7 +540,7 @@ See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!
 | **client admin** (merchants) | `app.tokophi.com` | merchant login + editors |
 | **super-admin** (us) | `rich.tokophi.com` | platform control plane (internal) |
 | **storefront** (demo store) | `toko.tokophi.com` | the demo store — a RESERVED label, never a merchant slug |
-| **storefront** (per merchant) | **`<slug>.tokophi.com`** | e.g. `batik-nusantara.tokophi.com` — **one deploy serves every store**, resolved from the `Host` header (ADR 0009). Set `STOREFRONT_BASE_DOMAIN=tokophi.com` |
+| **storefront** (per merchant) | **`<slug>.tokophi.com`** | e.g. `batiknusantara.tokophi.com` — **one deploy serves every store**, resolved from the `Host` header (ADR 0009). Set `STOREFRONT_BASE_DOMAIN=tokophi.com` |
 
 **⚠️ Why `<slug>.tokophi.com` and NOT `<slug>.toko.tokophi.com`** (decided 2026-07-13): Cloudflare **Universal SSL covers only ONE wildcard level** — `*.tokophi.com` ✅, `*.toko.tokophi.com` ❌. The two-level scheme would force either paid **Advanced Certificate Manager** (~$10/mo) or an origin Let's Encrypt **DNS-01** wildcard served **grey-cloud** (which exposes the origin IP and drops CF's protection). The one-level scheme is free, stays **proxied**, and needs **no code change**. Cost: merchant slugs share the apex namespace with our own surfaces — handled in code by `RESERVED` (`www/app/rich/admin/api/cname/toko/storefront/localhost` never resolve as a store slug, in BOTH host rules).
 
@@ -565,7 +565,7 @@ See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!
    CNAMEs; their apex currently holds **hand-copied A records** of `cname.tokophi.cc`'s shared IPs, which
    Cloudflare-for-SaaS always refuses). Verification now rejects exactly that (DOM-3,
    `apps/admin/lib/domain-servable.ts`) — ⚠️ **never by comparing IPs**, which would have passed it. Still TODO: the provider client in `apps/admin/lib/actions/domain.ts` (register/poll/delete custom hostname via the CF API), a Traefik router for the forwarded custom-hostname traffic — ⚠️ **measured 2026-08-07: a catch-all at `priority=1` is NOT safe.** `formalin-web`, a different live application on this same proxy, already occupies priority 1, so a catch-all ties with it on every `*.formalin.store` host; raising ours to 2 would hijack their subdomains instead. Use an **explicit `Host()` list** for verified domains — deterministic, and its long rule gives it a default priority far above 1. (Confirmed and reusable: every tokophi router sits at 38–100, and the storefront already 404s unknown hosts cleanly.), and the §3.4 SNI check (moot while `tokophi.cc` stays `full`). Pricing: first 100 custom hostnames free, then $0.10/hostname/mo.
-3. **Storefront env** — `STOREFRONT_BASE_DOMAIN=tokophi.com` (enables `<slug>.tokophi.com` → store) and keep `STORE_SLUG=batik-nusantara` as the fallback so `toko.tokophi.com` / bare-IP hosts still serve the demo store. Optional: `STOREFRONT_CACHE_TTL_MS` (default 15000).
+3. **Storefront env** — `STOREFRONT_BASE_DOMAIN=tokophi.com` (enables `<slug>.tokophi.com` → store) and keep `STORE_SLUG=batiknusantara` as the fallback so `toko.tokophi.com` / bare-IP hosts still serve the demo store (slug renamed from `batik-nusantara` 2026-08-12 — an explicitly-set Coolify env overrides the compose default and must be updated too). Optional: `STOREFRONT_CACHE_TTL_MS` (default 15000).
 4. **Cross-surface env** (set AFTER domains, then redeploy) — **all four point at the admin domain** (the AutoLaris pay callback `/api/public/pay/callback` + the ongkir/order public APIs all live in the admin app; the storefront is only a consumer): `PUBLIC_APP_URL=https://app.tokophi.com`, `ADMIN_URL=https://app.tokophi.com`, `PUBLIC_ONGKIR_API=https://app.tokophi.com` (storefront also rewrites `/api/uploads/*` media against this), `PUBLIC_ORDER_API=https://app.tokophi.com`.
 4. **Harden secrets for prod**: rotate `AUTH_SECRET` (strong random — shared across admin+super-admin for cross-subdomain impersonation, gotcha #11), `POSTGRES_PASSWORD`, `CRON_SECRET`; set the **real** `KIRIMINAJA_API_KEY`/`AUTOLARIS_API_KEY` + `AUTOLARIS_CALLBACK_SECRET` (switch `KIRIMINAJA_ENV` sandbox→production when ready).
 5. **AutoLaris callback URL**: the pay callback the gateway hits is `PUBLIC_APP_URL + /api/public/pay/callback` = `https://app.tokophi.com/api/public/pay/callback` (set via `PUBLIC_APP_URL` in step 3; verify it in the AutoLaris dashboard) so paid VAs settle.

@@ -193,7 +193,7 @@ Zone **tokophi.com** → **SSL/TLS** → **Edge Certificates** → **HTTP Strict
 
 ```bash
 for h in tokophi.com www.tokophi.com app.tokophi.com rich.tokophi.com \
-         toko.tokophi.com batik-nusantara.tokophi.com; do
+         toko.tokophi.com batiknusantara.tokophi.com; do
   printf '%-32s %s\n' "$h" "$(curl -sI https://$h/ | grep -i '^strict-transport-security:' | tr -d '\r')"
 done
 ```

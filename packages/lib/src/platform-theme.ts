@@ -4,8 +4,10 @@
  *
  * WHY A HOLDER EXISTS. T-9 first pointed `PLATFORM_DEFAULT_THEME_STORE_ID` at `batik-nusantara`'s
  * live rows, and `theme-source.ts` carried the warning in its own doc comment: that makes one
- * merchant's Store Builder a platform-wide control, acceptable ONLY while that store is ours. It is
- * about to become a real merchant's shop, so the default now lives in a store the platform owns:
+ * merchant's Store Builder a platform-wide control, acceptable ONLY while that store is ours. (The
+ * batik store stays ours — owner decision 2026-08-12: it REMAINS the demo store — but pointing the
+ * platform default at ANY live store's rows was still wrong.) The default now lives in a store the
+ * platform owns:
  * `packages/db/src/seed-platform-theme.ts` creates this row (idempotent, in the deploy's migrate
  * chain) and copies the batik templates into it once. Editing the platform default is then editing
  * a store no merchant holds — never a live shop.

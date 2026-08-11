@@ -475,7 +475,7 @@ nobody has abandoned anything yet. An order counts as a completed checkout **eve
 cancelled**: the checkout still finished.
 
 **Why `abandoned_at` (0045) had to exist.** A checkout that sailed straight through *also* ends as
-`status='pulih'`. On the local data (store `batik-nusantara`, 30-day window anchored at
+`status='pulih'`. On the local data (store `batik-nusantara` — slug since renamed to `batiknusantara`, 30-day window anchored at
 `CHECKOUT_TODAY = 2026-07-02`): **792 ditinggal · 198 orders · 100 rescued · 90 straight-through** →
 abandonRate **80,0%**, recoveryRate **11,2%**. The naive `pulih / (pulih + ditinggal)` reports
 **19,3%** on that same data — it would tell a shop it "rescued" every ordinary sale it ever made. A

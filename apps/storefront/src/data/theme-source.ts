@@ -6,7 +6,10 @@
 // PR #220) was an UNCONDITIONAL OVERRIDE — every store rendered the named store's theme, own rows
 // unserved. That was B-hard, pointed at `batik-nusantara` live, and its own doc comment said what to
 // do the day that store became a real merchant's shop: copy the rows into a platform-owned holder.
-// That day came. The holder exists now (`seed-platform-theme.ts`), and the override becomes what the
+// That day did NOT come — owner decision 2026-08-12: the batik store (slug now `batiknusantara`)
+// REMAINS the demo store. The holder was built anyway, because pointing a platform-wide default at
+// ANY live store's rows was the wrong shape regardless of whose store it is.
+// The holder exists now (`seed-platform-theme.ts`), and the override becomes what the
 // decision statement actually says: a per-slot FALLBACK. A store's own default slot wins when it has
 // content; an empty slot renders the holder's row. A store that customised (e.g. valoish-store)
 // gets its own theme back the moment this deploys with the env repointed at the holder.
