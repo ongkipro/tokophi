@@ -123,7 +123,12 @@ const startServer = async () => {
   server = spawn(process.execPath, [ENTRY], {
     cwd: ROOT,
     detached: true, // its own process group — see stopServer()
-    env: { ...process.env, PORT: String(PORT), HOST: "127.0.0.1", DATABASE_URL },
+    // STOREFRONT_BASE_DOMAIN makes `<slug>.test` resolve for EVERY store, the same way
+    // `<slug>.tokophi.id` does in production (slugFromBaseDomain). Without it the only host the
+    // server can explain is `toko-demo.test` (a store_domains row), so check-h1-floor's per-store
+    // Host headers were answered by the 404 page — for every store but the demo — ever since SEC-6
+    // correctly stopped unexplained hosts from falling back to the default store.
+    env: { ...process.env, PORT: String(PORT), HOST: "127.0.0.1", DATABASE_URL, STOREFRONT_BASE_DOMAIN: "test" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const keep = (b) => serverLog.push(String(b).trimEnd());

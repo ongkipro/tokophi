@@ -98,10 +98,15 @@ await lock`select pg_advisory_lock(${LOCK_KEY})`;
 // second one. That is the hero-carousel defect reintroduced by the homepage fix. One asserts the floor
 // exists, the other asserts the fix did not overshoot; only together do they pin it.
 {
+  // ⚠️ SERVABLE stores only — `suspended_at is null`, the same one-column predicate as the
+  // storefront's own `isPubliclyServable` (src/data/store-servable.ts). The oldest store on the
+  // seeded dev DB is `gadget-murah-id`, deliberately suspended, and SEC-1 404s EVERY path on a
+  // locked store — so "order by created_at limit 1" alone asserted ten 200s about a store the
+  // public is not allowed to see. Do not gate on `status`: the billing cron rewrites that column.
   const [store] = await sql`
     select slug, (select host from store_domains d
                    where d.store_id = s.id and d.is_primary and d.status = 'active' limit 1) as primary_host
-      from stores s order by created_at limit 1`;
+      from stores s where s.suspended_at is null order by created_at limit 1`;
   const host = hostOf(store);
   for (const path of ["/", "/produk", "/kategori", "/blog", "/promo", "/cari", "/kontak", "/keranjang", "/checkout", "/checkout/sukses"]) {
     const { status, body } = await getPath(host, path);
@@ -121,7 +126,7 @@ try {
              where d.store_id = s.id and d.status = 'active' and d.is_primary) as primary_host,
            (select pt.sections from page_templates pt
              where pt.store_id = s.id and pt.type = 'homepage' and pt.is_default limit 1) as homepage
-      from stores s order by s.slug`;
+      from stores s where s.suspended_at is null order by s.slug`;
 
   // ── 1. A homepage WITH a hero — exactly one, however many slides the carousel holds ──────────────
   const withHero = stores.find(
