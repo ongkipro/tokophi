@@ -17,24 +17,47 @@
 
 ## Plan
 
-- [ ] Handoff file committed first (this file).
-- [ ] `@tokophi/lib/platform-theme` — fixed holder `stores.id` + slug constants (pure, no DB).
-- [ ] Reserve the holder slug in `RESERVED_SLUGS` (+ update the pinning test).
-- [ ] `packages/db/src/seed-platform-theme.ts` — idempotent: create holder store (suspended, comped,
+- [x] Handoff file committed first (this file, 45ceff6).
+- [x] `@tokophi/lib/platform-theme` — fixed holder `stores.id` + slug constants (pure, no DB).
+- [x] Reserve the holder slug in `RESERVED_SLUGS` (+ update the pinning test; the repo's slug guard
+      also caught the seed as a fourth writer of `stores.slug` — named as a constant-slug exception).
+- [x] `packages/db/src/seed-platform-theme.ts` — idempotent: create holder store (suspended, comped,
       approved — never publicly servable per `store-servable.ts`), copy `page_templates`
       (homepage/category/product, `is_default` rows) from slug IN ('batik-nusantara','batiknusantara')
       ONLY for types the holder doesn't already have. No schema change, no migration.
-- [ ] Wire it NON-FATAL into `docker-compose.coolify.yml`'s migrate chain (one line; a parallel task
+- [x] Wire it NON-FATAL into `docker-compose.coolify.yml`'s migrate chain (one line; a parallel task
       also edits this file — keep the diff minimal) + forward `PLATFORM_DEFAULT_THEME_STORE_ID` to the
       storefront and admin services (the SIGNUP_ENABLED lesson: an unforwarded var reaches nothing).
-- [ ] Storefront: rework `theme-source.ts` (pure, still no `@tokophi/db` import) from override to
+- [x] Storefront: rework `theme-source.ts` (pure, still no `@tokophi/db` import) from override to
       fallback; `getStoreTemplates` fills only empty default slots from the holder; tests updated.
-- [ ] Admin: `/tema/[id]` prefills an EMPTY template's canvas from the holder's row of the same type
+      Bonus hardening: a non-UUID env value now reads as OFF instead of 22P02-500ing every page.
+- [x] Admin: `/tema/[id]` prefills an EMPTY template's canvas from the holder's row of the same type
       (deliberate cross-tenant owner read, like `lib/auth.ts`); saving writes the merchant's own copy
       through the existing `saveTemplate` path. Render-only until the merchant publishes.
-- [ ] Verify: fresh `npm install`, vitest for touched packages, `npm run build` for admin + storefront
+      `PLATFORM_DEFAULT_THEME_STORE_ID` classified in `env-health.ts` (the census guard caught it).
+- [x] Verify: fresh `npm install`, vitest for touched packages, `npm run build` for admin + storefront
       (super-admin build skipped — known env issue on main).
-- [ ] PR opened (do NOT merge): body carries the decision-B behavior change + deploy notes.
+- [x] PR opened (do NOT merge): body carries the decision-B behavior change + deploy notes.
+
+## Verified (real command results, 2026-08-12)
+
+- Fresh `npm install` in the worktree: exit 0.
+- `npx vitest run` (full): **678 passed / 4 failed — all 4 pre-existing at base `d076cb1`**:
+  `packages/db/src/doc-counts.test.ts` wants docs to say **94** migrations (base's
+  `drizzle/meta/_journal.json` already holds 94 entries; AGENTS/STATUS/CODE_MAP/SCHEMA still say 93,
+  counted 2026-08-11). Not touched here — it is a docs-territory fix for whoever merged `0093`.
+- `npm run check:storefront`: **1 pre-existing error** from #259 (N13): `product-feed.test.ts:10`
+  fixture missing the new required `lastModified` on `Product`. Also not touched here.
+- Targeted suites (theme-source, platform-theme, store-slug, env-census): all green.
+- `npm run build -w @tokophi/storefront`: exit 0. `npm run build:admin`: exit 0 — but only with
+  `DATABASE_URL` (+`AUTH_SECRET`) in the env: page-data collection imports `@tokophi/db`, and a fresh
+  worktree has no `.env.local`. Environmental, not a change in this branch.
+- `npx tsc -p packages/db --noEmit`: exit 0.
+- Seed exercised TWICE against the local dev DB (additive inserts only, no truncation): first run
+  created the holder + copied homepage & product; second run copied 0 (idempotent). ⚠️ Local-only
+  observation: the local batik store's `category` template is not `is_default`, so the script
+  correctly skipped it and will complete on a later run — production (measured 2026-08-07) has all
+  three as `is_default`, so the prod copy gets all three. The holder now exists in the local dev DB.
 
 ## Deploy notes (for the PR body too)
 
@@ -43,4 +66,6 @@
 - The migrate chain seeds the holder automatically on deploy (idempotent; copies from the batik rows
   the first time, no-ops after).
 
-NEXT: build the lib constants + reserved slug, then the seed script.
+NEXT: PR open — after review + merge + deploy, repoint PLATFORM_DEFAULT_THEME_STORE_ID in Coolify to
+a0000000-0000-4000-8000-000000000001 (storefront + admin), then verify: a theme-less store renders the
+default, valoish-store regains its own homepage, and a new store's /tema opens pre-filled.
