@@ -31,8 +31,11 @@ describe("slugify", () => {
 
 describe("RESERVED_SLUGS", () => {
   it("holds exactly the hostnames the storefront refuses to resolve", () => {
+    // `tema-platform` is not a hostname convention like the others: it is the platform default theme
+    // holder's FIXED slug (platform-theme.ts) — reserved so a merchant can never take it before the
+    // deploy seed inserts the holder row. See the note beside it in store-slug.ts.
     expect([...RESERVED_SLUGS].sort()).toEqual(
-      ["admin", "api", "app", "cname", "localhost", "rich", "storefront", "toko", "www"].sort(),
+      ["admin", "api", "app", "cname", "localhost", "rich", "storefront", "tema-platform", "toko", "www"].sort(),
     );
   });
 
