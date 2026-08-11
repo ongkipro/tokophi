@@ -1,6 +1,6 @@
 # OPEN — what is actually left, and how to pick it up on another machine
 
-**Written 2026-08-05, every entry re-verified against `origin/main` @ `05b3068`.** Read this first.
+**Refreshed 2026-08-05 against `origin/main` @ `0b10aed`.** Read this first.
 
 `NEXT.md` is the long-form record — ~1.500 lines, it keeps closed items on purpose, and **it goes
 stale fast**: this sweep found **eleven** entries still marked open or `NEW` that were already shipped
@@ -80,7 +80,7 @@ mid-flight is how two people work the same id from opposite ends. Wave-7 heading
 |---|---|---|
 | N36 | Five status codes unmapped ✅ | Tenant from the BODY ❌ refuted |
 | N37 | `pickup_number` + VA/COD ✅ | Body-size / array caps ✅ |
-| N38 | **Label missing required fields** 🟡 plumbing ✅ 2026-08-12; insurance + sorting code open | Provider error text ✅ |
+| N38 | **Label missing required fields** 🟠 | Provider error text ✅ |
 | N39 | **Webhooks unused** 🔴 blocked | Money tests skipped in a worktree ✅ |
 | N40 | **`v6.1` is vendor-deprecated** 🟠 | `NaN` in an SVG path ✅ |
 | N41 | **Courier holidays (`libur`)** 🟠 | Seed drift 🟡 3 of 5 left |
@@ -88,6 +88,34 @@ mid-flight is how two people work the same id from opposite ends. Wave-7 heading
 | N43 | flake ✅ (was never real) | Defects only in a commit body ✅ |
 
 (`N18a`/`N18b` look like a collision to a naive grep. They are not.)
+
+---
+
+## Recommended next development sequence
+
+This is the smallest safe order after re-checking the current code. Keep each row as a separate change
+set; close or rewrite its `NEXT.md` entry in the same commit. `Observed` means the defect was confirmed
+on `0b10aed`; it does not mean the proposed implementation has been approved.
+
+| order | evidence | work | done when |
+|---|---|---|---|
+| 0 | **Decision needed** | Run N29's credential-rotation procedure after re-measuring principals, and decide prepaid shipping absorption in an ADR. These are security/money gates, not coding tasks. | No published credential authenticates; active sessions are revoked; the prepaid ledger owner is recorded in a new ADR. Production mutation requires explicit owner approval. |
+| 1 | **Observed / spec gap** | N54 — restore a real create path for Landing HTML without weakening the UUID guard. | The “Buat baru” path creates or opens a valid draft in a browser; invalid IDs still 404; targeted test plus `npm test` pass. |
+| 2 | **Observed / `NF-7`** | N46, N44, N52, N55, then N56 — widen the credential guard and close the remaining empty-state/semantic accessibility gaps. | Each source guard fails against the old shape; affected screens are opened at zero data and narrow width; `npm test` and workspace `tsc --noEmit` pass. |
+| 3 | **Observed / `F-P4`, `SEC-9`, `SEC-11`** | N47 then N48 — define owner-only operator recovery and return refused control-plane actions as visible errors. | A reset reveals one temporary password once, writes the audit event, revokes prior sessions, and a denied action shows an error without writing data. |
+| 4 | **Observed / `F-S10`, contract gap** | N31 and N38 — expose provider COD cost and finish the locally renderable label fields. Do not invent Sorting Code or persistence semantics for insurance. | Quote/label fixtures cover fee and fields; browser output matches the captured KiriminAja contract; blocked fields remain explicitly documented. |
+| 5 | **External verification** | N40 — migrate booking from deprecated `v6.1/request_pickup` only after a sandbox contract check settles the contradictory destination fields. | Captured request/response fixture, booking test, and no regression in destination identity. Do not repeat the outstanding E2E booking blindly. |
+| 6 | **Observed / `F-E3`** | N41 (wave 7) seed drift, N35 environment card, and N13 sitemap timestamps. Keep them as separate change sets; N13 requires a migration. | Production is measured before writing; each migration is idempotent and journal-verified; UI/SEO checks prove the consuming path. |
+
+### Specification gaps to close with the code
+
+- Landing HTML creation has no explicit requirement in `REQUIREMENTS.md`; add one with the route and
+  browser check when implementing N54.
+- Operator password recovery needs a recorded policy for owner-to-owner resets before N47 is coded.
+- Shipping-label ownership is split between `FLOWS.md`, `KIRIMINAJA.md`, and N38; make one document the
+  canonical field contract rather than copying the list again.
+- Accessibility acceptance is currently broad (`NF-7`). Add narrow runnable guards for N44/N52/N55/N56
+  instead of declaring the whole surface compliant.
 
 ---
 
@@ -126,7 +154,7 @@ Roughly highest value first. **S** ≈ under an hour, **M** ≈ half a day, **L*
 | **N57** | **Nobody is told when a signup arrives.** Signup is OPEN in production and every new shop lands in the review queue, under a "1×24 jam" promise made on the merchant's own dashboard — while the only traces are pull-only (the dashboard counter, a `platform_activity` row). ⚠️ Decide the transport first (WhatsApp Cloud API vs Telegram/Slack to ourselves); `waLink()` cannot SEND. | **M** |
 | **N58** | **There is no mailer at all** — measured: 0 mail dependencies, and no MX/SPF on `tokophi.id` or `tokophi.com`. Blocks email verification at signup (why the approval queue exists), merchant password reset, invoice delivery. Receiving an address is a separate, free problem (Cloudflare Email Routing). | **L** |
 | ✅ **N54 — SUDAH DIKIRIM** (diverifikasi di kode 2026-08-07: `app/(admin)/promo/html/baru/page.tsx` ADA, dan komentarnya sendiri menyebut N54) | ~~**There is NO way to create a landing page — the button 404s.**~~ `promo-list-client.tsx:126` links to `/promo/html/baru`; that route only has `[id]/`, which `notFound()`s on a non-UUID. The feature has never been reachable. | **S** |
-| **N38** (shipping) | Label misses required fields. ✅ **The four plumbing fields SHIPPED 2026-08-12** (`feat/n38-label-fields`: service name, both kodepos, sender phone/line, weight, item prices — both label paths; also fixed the pre-existing `li.variant` 42703 that failed every bulk print). **STILL OPEN: insurance is not stored at all** and needs a column. 🔴 Sorting code is blocked twice (values come from KiriminAja support, and it rides the webhook we do not receive) — and **SPX needs a 2-column one, SPX being the primary courier and the COD rail**. | **M** |
+| **N38** (shipping) | Label misses required fields. **Four of five are pure plumbing** — service type, both postcodes, sender phone, item prices all already persisted. **Insurance is not stored at all** and needs a column. 🔴 Sorting code is blocked twice (values come from KiriminAja support, and it rides the webhook we do not receive) — and **SPX needs a 2-column one, SPX being the primary courier and the COD rail**. | **M** |
 | ~~N33 aftermath~~ | ✅ **DONE 2026-08-05 — backfilled on PRODUCTION and dev**, 24 rows each, log: [`2026-08-05-n33-backfill-executed.md`](./2026-08-05-n33-backfill-executed.md). ⚠️ Measured: it is **price-neutral** — 35×26×7 implies 1.062 g volumetric, which rounds into the same 1 kg tier as the existing floor. The value delivered is that the BOOKING now declares a truthful parcel, so the courier's re-measure stops surcharging the merchant. | — |
 | 🟠 **Parcel size ignores quantity** | **NEW, nobody had filed it.** `maxDims()` takes the largest value per axis across cart lines, so a cart of five gamis still declares ONE garment's parcel while the weight grows to 2,5 kg. Deliberate (quote and booking must agree) and therefore not a regression — but volumetric can then only ever dominate on a single bulky item. Decide: sum an axis, scale the smallest, or accept and record it in `KIRIMINAJA.md`. | **S** |
 | **N44** (wave 7) | Empty states, 2 screens left: `pelanggan/segmen/segmen-client.tsx` and `crm/template/template-client.tsx` — both print a summary strip over a bare `.map`. | **S** |
@@ -134,12 +162,12 @@ Roughly highest value first. **S** ≈ under an hour, **M** ≈ half a day, **L*
 | ✅ **N52 — SUDAH DIKIRIM** (diverifikasi 2026-08-07) | ~~`CardTitle` is a `<div>`~~ — `packages/ui/.../card.tsx` merender `h${level}`, default `h2`, dengan `level` sebagai escape hatch; salinan lokal admin (`apps/admin/components/ui`) sudah tidak ada. | — |
 | **N46** (wave 7) | The credential sweep still scans `apps/` only (`no-published-credentials.test.ts:25`); 26 files under `packages/{sections,ui}` are outside it, while its sibling already scans every tracked file. | **S** |
 | **N56** (N55 ✅ **SUDAH DIKIRIM**, diverifikasi 2026-08-07: `return-by-courier.tsx` kini membawa `TriangleAlert`/`ShieldCheck` + `sr-only`) | Puck's vendored ArrayField/zoom controls unnamed. | **S** |
-| ✅ **N31 — SUDAH DIKIRIM** (2026-08-11, branch `feat/n31-cod-fee`) | ~~The COD fee KiriminAja charges is never read~~ — `kaCodFee()` parses `setting.cod_fee`/`minimum_cod_fee`/`cod_fee_amount`, `Rate.codFee` carries it, and Cek Ongkir shows "Biaya COD +Rp…" on effective-COD rates (browser-verified on sandbox). ⚠️ Sisa yang SENGAJA tidak disentuh: `platform_cod.fee_pct` masih ditulis seed & dibaca siapa pun tidak — itu bagian yang membuat angka biaya ADR 0014 belum lengkap. | — |
+| **N31** (shipping) | The COD fee KiriminAja charges is never read — `cod_fee`/`minimum_cod_fee`/`cod_fee_amount` come back on every rate and **0 code reads them**; `platform_cod.fee_pct` is written by the seed and read by nobody. This is also what keeps ADR 0014's cost figure incomplete. | **S** |
 | **N40** (shipping) | We book on `v6.1/request_pickup`, which the vendor marks **deprecated**. ⚠️ The v6.2 doc contradicts itself on destination field names — resolve against the sandbox first; booking to the wrong village is what migration 0042 exists to prevent. `shipping_price` v6.1 is *not* deprecated. | **M** |
 | **N41** (wave 7) | Seed drift: 2 of 5 refuted against production. Left, **never checked**: `store_shipping_methods`, `reviews.product_id`, `platform_payment_channels`/`platform_payout`. | **M** |
 | **DB-PARITY** | **Screen local vs Vultr production database for migration/schema/RLS, commerce integrity, seed drift, backup recency, and capacity.** Read-only by default; no cleanup or migration is bundled. Full scope and acceptance criteria: [`2026-08-05-database-screening.md`](./2026-08-05-database-screening.md). | **M** |
 | **N35** (shipping) | Show the active KiriminAja env on the super-admin connection card. ⚠️ The entry overstates it — the env **is** already visible on Analitik → Sistem and inside the Test-koneksi result; only the card named in the AC lacks it. | **S** |
-| ✅ **N13 — SUDAH DIKIRIM** (2026-08-12) | ~~Sitemap `<lastmod>`: products + categories blocked on a migration~~ — migration `0093_catalog_updated_at` + 10 write-site bumps + emit; products coalesce `created_at`, categories emit only once edited. `2026-08-12-n13-catalog-lastmod.md`. | — |
+| **N13** | Sitemap `<lastmod>`: pages/blog done. Products + categories are **blocked on a migration** — `products` and `collections` have no `updatedAt`. | **M** |
 
 ## 🔴 Blocked on something outside the repo
 
@@ -163,7 +191,7 @@ could not be cancelled. **Do not repeat the booking run** — `2026-08-03-shippi
 git clone git@github.com:ongkipro/tokophi.git && cd tokophi
 git fetch origin
 docker compose up -d db                  # PostgreSQL 16 → localhost:5433, container `tokophi-db`
-npm install
+npm ci
 npm run migrate -w @tokophi/db           # canonical; head is 0089
 npm run dev:admin                        # :3000 Seller   ·   npm run dev:super → :3001 Super Admin
 ```
@@ -172,17 +200,20 @@ npm run dev:admin                        # :3000 Seller   ·   npm run dev:super
 `apps/admin/.env.local` and `apps/super-admin/.env.local`. Ask the owner — never reconstruct one from
 a running container, and never paste one into a chat or a commit.
 
-### 🔴 `main` on an existing checkout is a stale fork — **516 commits behind** `origin/main`
+### Existing checkouts may lag while collaborators are working
 
-Measured 2026-08-05. **Never branch from local `main`, never push it.** Cut worktrees off the remote:
+Never assume local `main` is current. Confirm it is clean and matches the remote before branching; if
+it does not, preserve local work and cut a worktree from the remote baseline:
 
 ```bash
 git fetch origin
+git status --short --branch
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 git worktree add -b my/branch ../wt-my-branch origin/main
-cd ../wt-my-branch && npm install        # ⚠️ a fresh worktree has NO node_modules
+cd ../wt-my-branch && npm ci             # a fresh worktree has no node_modules
 ```
 
-Skip that `npm install` and TypeScript resolves `@tokophi/db` to the *other* checkout — an error that
+Skip that `npm ci` and TypeScript resolves `@tokophi/db` to the *other* checkout — an error that
 points nowhere near its cause.
 
 ## Traps
@@ -204,14 +235,14 @@ the seven seeders that run on every deploy). These are the ones this stream hit:
   to confirm before hunting.
 - **The dev DB and the dev servers are shared.** Never `pkill next`; record your PID and kill only
   that. If you flip a row to test something, flip it back — and say so.
-- **Playwright is global**, not a dependency: import from
-  `/home/fantastico/.nvm/versions/node/v24.16.0/lib/node_modules/playwright/index.mjs`, launch with
-  `{ channel: "chrome" }`.
+- **Playwright is a storefront workspace dependency.** Run the repository scripts (for example
+  `npm run audit:responsive -w @tokophi/storefront`) instead of importing from a device-specific
+  global path. The scripts launch Chrome with the repository's pinned package.
 
 ## Gates — and what each one misses
 
 ```bash
-npm test                                  # vitest + astro check ×2 — 486 tests / 55 files, green on 05b3068
+npm test                                  # vitest + Astro checks; current result belongs in the change handoff
 cd apps/admin && npx tsc --noEmit
 cd apps/admin && npx eslint <files>       # eslint must run FROM the workspace dir
 npm run build:admin ; npm run build:super
