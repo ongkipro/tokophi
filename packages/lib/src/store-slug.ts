@@ -62,6 +62,13 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   // that seed fail on every deploy, silently (the chain runs it non-fatal). Reserving it also keeps
   // the holder from ever resolving as a merchant subdomain, on top of its `suspendedAt` lock.
   PLATFORM_THEME_SLUG,
+  // The demo store's PRE-RENAME slug (2026-08-12, `batik-nusantara` → `batiknusantara`). The rename
+  // freed the string, and `slugify("Batik Nusantara")` mints exactly it — but the storefront
+  // middleware answers `batik-nusantara.<base>` with a permanent 301 to the DEMO store's host
+  // BEFORE it resolves a tenant, so a merchant allocated this slug would get a subdomain that
+  // forever serves somebody else's shop. The demonstrated consequence this list requires; reserved
+  // for as long as that redirect exists (apps/storefront/src/middleware.ts, OLD_LABEL).
+  "batik-nusantara",
 ]);
 
 export const isReservedSlug = (slug: string): boolean => RESERVED_SLUGS.has(slug);

@@ -35,7 +35,19 @@ describe("RESERVED_SLUGS", () => {
     // holder's FIXED slug (platform-theme.ts) — reserved so a merchant can never take it before the
     // deploy seed inserts the holder row. See the note beside it in store-slug.ts.
     expect([...RESERVED_SLUGS].sort()).toEqual(
-      ["admin", "api", "app", "cname", "localhost", "rich", "storefront", "tema-platform", "toko", "www"].sort(),
+      [
+        "admin",
+        "api",
+        "app",
+        "batik-nusantara",
+        "cname",
+        "localhost",
+        "rich",
+        "storefront",
+        "tema-platform",
+        "toko",
+        "www",
+      ].sort(),
     );
   });
 
@@ -44,7 +56,12 @@ describe("RESERVED_SLUGS", () => {
     for (const name of ["App", "RICH", "Admin", "Toko", "WWW"]) {
       expect(isReservedSlug(slugify(name))).toBe(true);
     }
-    expect(isReservedSlug(slugify("Batik Nusantara"))).toBe(false);
+    // `batik-nusantara` was freed by the 2026-08-12 rename and would be minted again by exactly this
+    // name — but the storefront middleware 301s `batik-nusantara.<base>` to the DEMO store before it
+    // even resolves a tenant, so a merchant allocated this slug would get a storefront that
+    // permanently serves somebody else's shop. Same class as the `slug: "app"` store, worse outcome
+    // (another tenant's content, not a 404). Reserved for as long as that redirect exists.
+    expect(isReservedSlug(slugify("Batik Nusantara"))).toBe(true);
     expect(isReservedSlug(slugify("Aplikasi Ibu"))).toBe(false);
   });
 
