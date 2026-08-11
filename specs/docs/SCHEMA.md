@@ -323,7 +323,7 @@ abandonRate   = ditinggal / (ditinggal + orders)
 recoveryRate  = rescued   / (rescued + ditinggal)
 ```
 
-Live local state (store `batik-nusantara`, 30-day window anchored at `CHECKOUT_TODAY=2026-07-02`):
+Live local state (store `batik-nusantara` — slug since renamed to `batiknusantara`; 30-day window anchored at `CHECKOUT_TODAY=2026-07-02`):
 **792 `ditinggal` · 198 orders · 100 rescued · 90 straight-through** → abandonRate **80,0%**,
 recoveryRate **11,2%**. `aktif` sessions are excluded from **both** sides of both ratios: the shopper
 is still typing, and nobody has abandoned anything yet.

@@ -777,7 +777,7 @@ the component is proven on two different shapes.
 
 - **[ ] 🔴 The apex `tokophi.id` serves a 503 — nothing is routed to it** (found 2026-07-17, while
   measuring a11y on live; **pre-existing, not caused by that deploy**). `*.tokophi.id` is fine —
-  `batik-nusantara.tokophi.id` returns 200 — and so are `tokophi.com`, `toko.tokophi.com`,
+  `batiknusantara.tokophi.id` returns 200 — and so are `tokophi.com`, `toko.tokophi.com`,
   `app.tokophi.com`. Only the **bare apex** fails, and the response is a 20-byte `text/plain` 503 from
   **Traefik**, not from Astro: no route is bound to that host, so the request never reaches the app.
   Decide what the apex should *be*: sellers live at `<slug>.tokophi.id`, so the apex has no tenant to
@@ -1134,7 +1134,7 @@ confirmed by reading the code, running SQL, or driving a real browser — none i
 ### `/promo` money path
 - [ ] **`OrderFunnel` quotes a total the server does not charge** (`OrderFunnel.astro:234,236` =
   `goods + shipping`, full stop) while `/api/public/order` applies automatic free shipping and PPN.
-  Live right now: `free_ship_enabled = t, free_ship_min_idr = 300000` on batik-nusantara.
+  Live right now: `free_ship_enabled = t, free_ship_min_idr = 300000` on batiknusantara.
 - [ ] **`buildPackages` ignores the live flash price** (`lib/packages.ts:10`) — the landing sells at
   full price, the order charges the sale price, and the COD cash the courier collects differs from the
   number on the button.

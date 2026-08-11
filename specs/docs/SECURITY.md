@@ -228,7 +228,7 @@ with nothing recording it (§2).
 npm run verify-rls -w @tokophi/db          # tenant isolation, table count
 npm test                                    # includes rbac-census, no-published-credentials, password entropy
 git grep -oE 'rateLimit\(`[^`]+`, *[0-9]+, *[0-9_]+' -- apps/ packages/   # §9 table
-for h in tokophi.com app.tokophi.com rich.tokophi.com toko.tokophi.com batik-nusantara.tokophi.com; do
+for h in tokophi.com app.tokophi.com rich.tokophi.com toko.tokophi.com batiknusantara.tokophi.com; do
   curl -sI https://$h/ | grep -i strict-transport-security; done          # §5
 ```
 

@@ -44,7 +44,8 @@ not the global default**.
 ## ⚠️ The seed is not a migration
 Existing deployments keep `theme = NULL` (= unchanged look — safe by design). The batik demo on
 **production** shows the elegan preset only after an explicit data fix:
-`update stores set theme='{"font":"elegan","tone":"hangat"}' where slug='batik-nusantara';`
+`update stores set theme='{"font":"elegan","tone":"hangat"}' where slug='batiknusantara';`
+(slug renamed from `batik-nusantara` 2026-08-12.)
 (Applied to the shared dev DB already. Dev DB also received migrations 0091+0092.)
 
 ## Deferred (known ceilings)
