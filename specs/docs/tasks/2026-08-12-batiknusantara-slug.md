@@ -19,23 +19,23 @@ describe the old slug as history, and the Traefik `.com → .id` redirect files 
 
 ## Plan
 
-- [ ] Handoff file (this one) committed before any code change
-- [ ] `packages/db/src/rename-batik-slug.ts` — idempotent rename, guarded against "already renamed"
+- [x] Handoff file (this one) committed before any code change
+- [x] `packages/db/src/rename-batik-slug.ts` — idempotent rename, guarded against "already renamed"
       and "both slugs exist"; npm script `rename:batik-slug`
-- [ ] Wire it into `docker-compose.coolify.yml` migrate chain, non-fatal, after `seed.ts`
+- [x] Wire it into `docker-compose.coolify.yml` migrate chain, non-fatal, after `seed.ts`
       (which creates the store on a fresh DB) and BEFORE the demo seed scripts
-- [ ] 301 redirect in `apps/storefront/src/middleware.ts` for the old label (base-domain form +
+- [x] 301 redirect in `apps/storefront/src/middleware.ts` for the old label (base-domain form +
       sslip.io first-label form), path + query preserved
-- [ ] Sweep code defaults: compose `STORE_SLUG` default, `seed.ts` store slug, seed/one-off
+- [x] Sweep code defaults: compose `STORE_SLUG` default, `seed.ts` store slug, seed/one-off
       `DEMO_SLUG`/`SLUG` constants (products, journal, templates, demo-ratings, recent,
       backfill-ship-address), landing `PUBLIC_DEMO_URL` fallbacks + displayed address,
       `ops/tokophi-probe.sh` surface URL, current-fact comments
-- [ ] Update tests pinning the old value (`cart-message.test.ts`, `public-guard.test.ts`,
+- [x] Update tests pinning the old value (`cart-message.test.ts`, `public-guard.test.ts`,
       `recovery.test.ts`); leave `store-slug.test.ts` (it tests `slugify()` behaviour, and
       `slugify("Batik Nusantara")` correctly remains `batik-nusantara`)
-- [ ] Verify: fresh `npm install`, test suites for touched packages, builds for admin, storefront,
+- [x] Verify: fresh `npm install`, test suites for touched packages, builds for admin, storefront,
       landing (super-admin build skipped — known env-dependent failure on a clean checkout)
-- [ ] PR (do not merge)
+- [x] PR (do not merge)
 
 ## Deploy notes
 
@@ -49,4 +49,22 @@ describe the old slug as history, and the Traefik `.com → .id` redirect files 
   (`seed:recent`, `seed:products`, …) look for `batiknusantara` and fail loudly (not silently) until
   then.
 
-NEXT: write packages/db/src/rename-batik-slug.ts and wire it into the compose migrate chain.
+## Verified (2026-08-12, real runs)
+
+- `rename-batik-slug.ts` driven against `tokophi_test` through all three states: fresh DB → "nothing
+  to do"; old slug present → renamed (row read back as `batiknusantara`); both slugs present →
+  loud refusal, no write. Fixture rows deleted afterwards.
+- Prod storefront build served locally: `Host: batik-nusantara.tokophi.id` → `301
+  https://batiknusantara.tokophi.id/produk/dress-batik?a=1&b=2` (path + query preserved); sslip.io
+  first-label form 301s the same way; with a renamed store row the new host answers 200; unknown
+  hosts still 404.
+- `npx vitest run` on the touched suites (cart-message, public-guard, recovery, store-slug):
+  35/35 green. Full `npm test`: 668 passed, **4 pre-existing failures** in
+  `packages/db/src/doc-counts.test.ts` — the journal on origin/main (`d076cb1`) already holds 94
+  migrations while AGENTS/STATUS/CODE_MAP/SCHEMA say 93; zero diff on those inputs in this branch,
+  so it is main's doc bug, not this rename's (left for the branch that added `0093`).
+- Builds: storefront ✓, landing ✓, admin ✓ (`build:admin` needs `DATABASE_URL` in a fresh worktree —
+  no `.env.local` here). `astro check` storefront: 1 pre-existing error in `product-feed.test.ts`
+  (missing `lastModified`, introduced by `dfe01a9` on main); landing check clean.
+
+NEXT: merge the PR + watch the Coolify deploy land; update Coolify STORE_SLUG env if it is set explicitly; run `npm run rename:batik-slug -w @tokophi/db` once against the shared dev DB (announce first).
