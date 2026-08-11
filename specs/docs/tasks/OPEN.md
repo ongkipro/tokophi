@@ -139,7 +139,7 @@ Roughly highest value first. **S** ≈ under an hour, **M** ≈ half a day, **L*
 | **N41** (wave 7) | Seed drift: 2 of 5 refuted against production. Left, **never checked**: `store_shipping_methods`, `reviews.product_id`, `platform_payment_channels`/`platform_payout`. | **M** |
 | **DB-PARITY** | **Screen local vs Vultr production database for migration/schema/RLS, commerce integrity, seed drift, backup recency, and capacity.** Read-only by default; no cleanup or migration is bundled. Full scope and acceptance criteria: [`2026-08-05-database-screening.md`](./2026-08-05-database-screening.md). | **M** |
 | **N35** (shipping) | Show the active KiriminAja env on the super-admin connection card. ⚠️ The entry overstates it — the env **is** already visible on Analitik → Sistem and inside the Test-koneksi result; only the card named in the AC lacks it. | **S** |
-| **N13** | Sitemap `<lastmod>`: pages/blog done. Products + categories are **blocked on a migration** — `products` and `collections` have no `updatedAt`. | **M** |
+| ✅ **N13 — SUDAH DIKIRIM** (2026-08-12) | ~~Sitemap `<lastmod>`: products + categories blocked on a migration~~ — migration `0093_catalog_updated_at` + 10 write-site bumps + emit; products coalesce `created_at`, categories emit only once edited. `2026-08-12-n13-catalog-lastmod.md`. | — |
 
 ## 🔴 Blocked on something outside the repo
 

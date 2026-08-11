@@ -131,7 +131,7 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
     // isn't ours (the pattern duplicateProduct already uses).
     const [owned] = await db.select({ id: schema.products.id, number: schema.products.number }).from(schema.products).where(eq(schema.products.id, id)).limit(1);
     if (!owned) return null;
-    await db.update(schema.products).set({ ...productFields(input), hasVariants: usesVariants(input) }).where(eq(schema.products.id, id));
+    await db.update(schema.products).set({ ...productFields(input), hasVariants: usesVariants(input), updatedAt: new Date() }).where(eq(schema.products.id, id));
     // Default location, not just any: new inventory rows must land where the merchant actually stocks.
     const locId = await defaultLocationId(db, sid);
 
@@ -213,7 +213,7 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
 export async function deleteProduct(id: string): Promise<void> {
   const { storeId: sid } = await requireCapability("products:delete");
   await withTenant(sid, (db) =>
-    db.update(schema.products).set({ status: "archived", archivedAt: new Date() }).where(eq(schema.products.id, id)),
+    db.update(schema.products).set({ status: "archived", archivedAt: new Date(), updatedAt: new Date() }).where(eq(schema.products.id, id)),
   );
   revalidatePath("/produk");
 }
@@ -287,7 +287,7 @@ export async function bulkSetProductStatus(ids: string[], status: "active" | "dr
   const { storeId: sid } = await requireCapability("products:write");
   if (!ids.length) return { ok: true, count: 0 };
   await withTenant(sid, (db) =>
-    db.update(schema.products).set({ status }).where(inArray(schema.products.id, ids)),
+    db.update(schema.products).set({ status, updatedAt: new Date() }).where(inArray(schema.products.id, ids)),
   );
   revalidatePath("/produk");
   return { ok: true, count: ids.length };
@@ -298,7 +298,7 @@ export async function bulkDeleteProducts(ids: string[]): Promise<{ ok: boolean; 
   if (!ids.length) return { ok: true, count: 0 };
   // Delete = archive (products are referenced by order_line_items), same as the single delete.
   await withTenant(sid, (db) =>
-    db.update(schema.products).set({ status: "archived", archivedAt: new Date() }).where(inArray(schema.products.id, ids)),
+    db.update(schema.products).set({ status: "archived", archivedAt: new Date(), updatedAt: new Date() }).where(inArray(schema.products.id, ids)),
   );
   revalidatePath("/produk");
   return { ok: true, count: ids.length };

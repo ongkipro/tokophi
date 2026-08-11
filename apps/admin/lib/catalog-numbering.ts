@@ -49,7 +49,7 @@ export async function allocateProductNumber(db: Tx, storeId: string): Promise<nu
 export async function allocateVariantSeq(db: Tx, productId: string): Promise<number | null> {
   const [row] = await db
     .update(schema.products)
-    .set({ variantSeqNext: sql`${schema.products.variantSeqNext} + 1` })
+    .set({ variantSeqNext: sql`${schema.products.variantSeqNext} + 1`, updatedAt: new Date() })
     .where(eq(schema.products.id, productId))
     .returning({ seq: sql<number>`variant_seq_next - 1` });
   return row ? Number(row.seq) : null;

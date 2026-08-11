@@ -886,7 +886,13 @@ diagnose because `useCan` just hides the control.
 `ALL_CAPABILITIES` only, so it lands in `admin` by subtraction) turned the census **red**, 2 of 4
 tests failing on `expect(actual).toEqual(declared)`. Reverted after.
 
-### 🟡 N13. Sitemap `<lastmod>` — pages DONE, products + categories BLOCKED ON A MIGRATION · **M**, not S
+### ✅ N13. Sitemap `<lastmod>` — **CLOSED 2026-08-12** (migration 0093 + write-site bumps + emit)
+Products emit `lastmod` = `updated_at ?? created_at` (coalesced once, in `data/catalog.ts`);
+categories emit it only once edited (no `created_at` to fall back on — no date beats an invented
+one). Column is nullable/no-default on purpose; every admin UPDATE on either table bumps it. Known
+ceiling recorded in the handoff: child-table writes (variants, membership, media) do not bump the
+parent. Handoff: `2026-08-12-n13-catalog-lastmod.md`. The original entry follows for the record:
+#### (superseded) Sitemap `<lastmod>` — pages DONE, products + categories BLOCKED ON A MIGRATION · **M**, not S
 🔴 **`products.updated_at` DOES NOT EXIST.** This entry claimed it does. `products` carries `created_at`
 only, and `collections` has **no timestamp column at all** — `data/catalog.ts`'s own ordering comment
 already said so ("not even `created_at` — checked"). So the only date the sitemap could emit for either
