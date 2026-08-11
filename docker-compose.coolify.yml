@@ -50,6 +50,7 @@ services:
       npx tsx src/seed.ts &&
       (npx tsx src/rename-batik-slug.ts || echo 'slug rename skipped') &&
       (npx tsx src/seed-templates.ts || echo 'templates seed skipped') &&
+      (npx tsx src/seed-platform-theme.ts || echo 'platform theme seed skipped') &&
       (npx tsx src/seed-journal.ts || echo 'journal seed skipped') &&
       (npx tsx src/seed-taxonomy.ts || echo 'taxonomy seed skipped') &&
       (npx tsx src/seed-products.ts || echo 'products seed skipped') &&
@@ -112,6 +113,11 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      # T-9 / UX-1 — same holder id the storefront reads (see the storefront service's note). The
+      # admin uses it for ONE thing: prefilling an empty /tema canvas from the holder's template of
+      # the same type, so a new merchant starts from the platform default instead of a blank page.
+      # Unset = blank canvas, exactly as before.
+      PLATFORM_DEFAULT_THEME_STORE_ID: ${PLATFORM_DEFAULT_THEME_STORE_ID:-}
     expose:
       - "3000"
     healthcheck:
@@ -163,6 +169,13 @@ services:
       # fallback for hosts that name no store (bare IP, toko.tokophi.com, localhost).
       STOREFRONT_BASE_DOMAIN: ${STOREFRONT_BASE_DOMAIN:-}
       STORE_SLUG: ${STORE_SLUG:-batiknusantara}
+      # T-9 / UX-1 decision B — the platform default theme HOLDER's stores.id (seed-platform-theme.ts;
+      # the value to set is PLATFORM_THEME_STORE_ID in @tokophi/lib/platform-theme). A store whose
+      # default homepage/category/product slot is empty renders the holder's row for that slot; a
+      # store's own rows always win. Unset = OFF (each store renders only its own rows). Forwarded
+      # explicitly because a var set in Coolify reaches nothing unless a block forwards it — the
+      # SIGNUP_ENABLED lesson above.
+      PLATFORM_DEFAULT_THEME_STORE_ID: ${PLATFORM_DEFAULT_THEME_STORE_ID:-}
     expose:
       - "4327"
     labels:

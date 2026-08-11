@@ -23,6 +23,7 @@
     "seed:taxonomy": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/seed-taxonomy.ts",
     "seed:products": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/seed-products.ts",
     "seed:demo-ratings": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/seed-demo-ratings.ts",
+    "seed:platform-theme": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/seed-platform-theme.ts",
     "verify-rls": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/verify-rls.ts",
     "verify-rls-app": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/verify-rls-app.ts",
     "seed:recent": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/seed-recent.ts",
