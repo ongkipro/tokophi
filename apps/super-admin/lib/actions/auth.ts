@@ -12,7 +12,7 @@ import {
   getPlatformSession,
 } from "@/lib/platform-auth";
 import { hashPassword } from "@tokophi/lib/password";
-import { clearFailedLogins, rateLimit, recordFailedLogin } from "@tokophi/lib/cache";
+import { clearFailedLogins, failedLoginLocked, rateLimit, recordFailedLogin } from "@tokophi/lib/cache";
 import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
 
 export type SignInState = { error?: string };
@@ -55,6 +55,12 @@ export async function signIn(_prev: SignInState, formData: FormData): Promise<Si
 
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
+  // N62 — the ACCOUNT-keyed brake: the IP cap above cannot see a distributed grind on one operator
+  // address. Checked BEFORE `findAdmin`/`recordFailedLogin`, so a refused attempt costs no scrypt
+  // and does not extend the streak's idle window (see `failedLoginLocked` in cache.ts).
+  if (failedLoginLocked("platform", email)) {
+    return { error: "Terlalu banyak percobaan gagal. Coba lagi dalam 15 menit." };
+  }
   const row = await findAdmin(email);
   if (!row || !verifyPassword(password, row.passwordHash)) {
     await noteFailedLogin(email);

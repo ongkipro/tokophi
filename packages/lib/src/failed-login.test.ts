@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearFailedLogins, recordFailedLogin } from "./cache";
+import { clearFailedLogins, failedLoginLocked, recordFailedLogin } from "./cache";
 import { codeOnly } from "../../../test/source-code";
 
 // A FAILED SIGN-IN WAS WRITTEN NOWHERE.
@@ -212,6 +212,65 @@ describe("both sign-in doors record their failures", () => {
     // ④ the audit text is hand-built at the insert instead of coming from the recorder.
     expect(codeOnly(platform.replace("values({ kind: \"admin\", text })", "values({ kind: \"admin\", text: `gagal: ${email}` })"))).not.toMatch(
       /platformActivity\s*\)\s*\.\s*values\s*\(\s*\{\s*kind\s*:\s*"admin"\s*,\s*text\s*[,}]/,
+    );
+  });
+});
+
+// ── N62, second half: the ACCOUNT lock the IP limiter cannot be ───────────────────────────────────
+//
+// `rateLimit` counts a source; a distributed grind brings its own sources. `failedLoginLocked`
+// refuses sign-in for an ADDRESS whose streak reached 25 — the second escalation rung, so two audit
+// rows always precede a lock and no account ever locks silently.
+describe("account lock (N62)", () => {
+  it("locks at the 25th consecutive failure, not the 24th", () => {
+    const email = addr();
+    for (let i = 0; i < 24; i++) recordFailedLogin("seller", email);
+    expect(failedLoginLocked("seller", email)).toBe(false);
+    recordFailedLogin("seller", email);
+    expect(failedLoginLocked("seller", email)).toBe(true);
+  });
+
+  it("a success unlocks immediately; the other door's streak is untouched", () => {
+    const email = addr();
+    for (let i = 0; i < 25; i++) recordFailedLogin("seller", email);
+    for (let i = 0; i < 25; i++) recordFailedLogin("platform", email);
+    clearFailedLogins("seller", email);
+    expect(failedLoginLocked("seller", email)).toBe(false);
+    expect(failedLoginLocked("platform", email)).toBe(true);
+  });
+
+  it("expires 15 minutes after the last COUNTED failure — and checking it does not extend it", () => {
+    // The caller checks the lock BEFORE recordFailedLogin, so a refused attempt never feeds the
+    // streak — otherwise the attacker's own hammering would hold the victim's lock open forever.
+    // Reading the lock here stands in for exactly that refused attempt.
+    vi.useFakeTimers({ now: new Date("2026-08-12T09:00:00Z") });
+    const email = addr();
+    for (let i = 0; i < 25; i++) recordFailedLogin("seller", email);
+    expect(failedLoginLocked("seller", email)).toBe(true);
+    vi.advanceTimersByTime(15 * 60_000 - 1);
+    expect(failedLoginLocked("seller", email)).toBe(true);
+    vi.advanceTimersByTime(2);
+    expect(failedLoginLocked("seller", email)).toBe(false);
+  });
+});
+
+describe("both sign-in doors refuse a locked account", () => {
+  // Same shape as the DOORS claims above: a unit test cannot see whether signIn consults the lock.
+  // Presence of the CALL with this door's surface and the form's email — the import line alone
+  // cannot satisfy this pattern. Ordering (lock before recorder) is a runtime property carried by
+  // the behavioural test above; source order cannot express it here because `recordFailedLogin`
+  // legitimately appears earlier in both files (inside noteFailedLogin's definition).
+  for (const door of DOORS) {
+    it(`${door.file} consults the lock for ${door.what}`, () => {
+      const src = codeOnly(readFileSync(join(ROOT, door.file), "utf8"));
+      expect(src).toMatch(new RegExp(`failedLoginLocked\\s*\\(\\s*"${door.surface}"\\s*,\\s*email\\s*\\)`));
+    });
+  }
+
+  it("proves that claim can go red — the pattern misses a mutated copy", () => {
+    const admin = readFileSync(join(ROOT, DOORS[0].file), "utf8");
+    expect(codeOnly(admin.replace('failedLoginLocked("seller", email)', "false"))).not.toMatch(
+      /failedLoginLocked\s*\(\s*"seller"\s*,\s*email\s*\)/,
     );
   });
 });

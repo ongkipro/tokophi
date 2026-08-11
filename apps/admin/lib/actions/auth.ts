@@ -3,7 +3,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE, SESSION_MAX_AGE, findLogin, verifyPassword, signSession } from "@/lib/auth";
 import { verifyTotp } from "@tokophi/lib/totp";
-import { clearFailedLogins, rateLimit, recordFailedLogin } from "@tokophi/lib/cache";
+import { clearFailedLogins, failedLoginLocked, rateLimit, recordFailedLogin } from "@tokophi/lib/cache";
 import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
 import { db, schema } from "@tokophi/db";
 
@@ -50,6 +50,12 @@ export async function signIn(_prev: SignInState, formData: FormData): Promise<Si
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const code = String(formData.get("code") ?? "").trim();
+  // N62 — the ACCOUNT-keyed brake: the IP cap above cannot see a distributed grind on one address.
+  // Checked BEFORE `findLogin`/`recordFailedLogin`, so a refused attempt costs no scrypt and does
+  // not extend the streak's idle window (or the attacker would hold the victim's lock open forever).
+  if (failedLoginLocked("seller", email)) {
+    return { error: "Terlalu banyak percobaan gagal. Coba lagi dalam 15 menit." };
+  }
   const row = await findLogin(email);
   if (!row || !verifyPassword(password, row.passwordHash)) {
     await noteFailedLogin(email, row?.storeId ?? null);
