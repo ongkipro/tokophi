@@ -421,7 +421,7 @@ CTAs come from build-time `PUBLIC_LOGIN_URL` / `PUBLIC_SIGNUP_URL`, joined with 
 | # | Condition | Source | Today |
 |---|---|---|---|
 | 1 | platform allows COD at all | `platform_cod.enabled` | **true** |
-| 2 | **this merchant** wants COD | `store_settings.cod_enabled` (0038, default **false**) | **true** for batik-nusantara (the other six demo stores are off — the toggle means something) |
+| 2 | **this merchant** wants COD | `store_settings.cod_enabled` (0038, default **false**) | **true** for batiknusantara (the other six demo stores are off — the toggle means something) |
 | 3 | order total ≤ the cap | `platform_cod.max_amount_idr` (0 = no cap) | **Rp2.000.000** |
 | 4 | destination province is allow-listed | `platform_cod.allowed_provinces` (empty = anywhere) | **6**: DI Yogyakarta, Jawa Tengah, Jawa Barat, DKI Jakarta, Banten, Jawa Timur |
 | 5 | the **service** the shopper picked may carry it | `platform_couriers.services[].cod && .codAllowed !== false`, courier row `enabled` | **SPX only** — SPX Standard (`type=1`) + SPX Economy (`type=3`). Every other courier is `codAllowed=false` **even where KiriminAja reports `cod=true`** |

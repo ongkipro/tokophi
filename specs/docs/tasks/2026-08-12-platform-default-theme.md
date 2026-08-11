@@ -1,5 +1,11 @@
 # Platform default theme — a platform-owned holder + decision-B fallback + /tema prefill
 
+> ⚠️ **SUPERSEDED PREMISE (owner decision, later on 2026-08-12): `batiknusantara` REMAINS the demo
+> store.** The "about to become a real merchant's shop" storyline below was the ask as given at the
+> time and is CANCELLED — no demo-data separation, no production payment cutover for it. Everything
+> this task BUILT stands unchanged and wanted: the platform default must not point at ANY live
+> store's rows, demo or not.
+
 - Branch: `feat/platform-default-theme` (worktree), base `d076cb1` (origin/main, 2026-08-12).
 - Owner ask: `batik-nusantara` is about to become a real merchant's shop. `theme-source.ts` says in its
   own doc comment what to do when that happens: *"copy its rows into a platform-owned holder rather
