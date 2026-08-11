@@ -59,6 +59,12 @@ export type StoreInfo = {
   /** `null` = merchant set no favicon → fall back to the platform icon rather than a broken one. */
   faviconUrl: string | null;
   brandColor: string | null;
+  /**
+   * Design-token choices beyond the brand colour (`stores.theme` jsonb, migration 0092). Passed
+   * raw — `resolveTheme()` (@tokophi/lib/theme) validates and defaults it at render time, so an
+   * unknown value degrades to the original look instead of crashing every page of the store.
+   */
+  theme: unknown;
   /** Product-page gallery layout the merchant picked in Tema. Unknown DB values clamp to the default. */
   productGalleryLayout: GalleryLayout;
   /**
@@ -172,6 +178,7 @@ const toStoreInfo = (r: typeof schema.stores.$inferSelect): StoreInfo => ({
   logoUrl: r.logoUrl,
   faviconUrl: r.faviconUrl,
   brandColor: r.brandColor,
+  theme: r.theme,
   productGalleryLayout: asGalleryLayout(r.productGalleryLayout),
   primaryHost: null, // filled by the caller (getStoreBySlug) — a per-store store_domains lookup
 });

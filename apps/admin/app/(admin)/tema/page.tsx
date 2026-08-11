@@ -5,6 +5,7 @@ import {
   getCollectionAssignments,
   getProductAssignments,
   getProductGalleryLayout,
+  getStoreTheme,
   listTemplates,
 } from "@/lib/data/theme";
 import { TemaClient } from "./tema-client";
@@ -15,12 +16,13 @@ export const dynamic = "force-dynamic";
 // per kategori/produk); the drag-drop Puck builder itself lives at /tema/[id].
 export default async function TemaPage() {
   const session = await getSession();
-  const [templates, collections, products, brandColor, galleryLayout] = await Promise.all([
+  const [templates, collections, products, brandColor, galleryLayout, storeTheme] = await Promise.all([
     listTemplates(),
     getCollectionAssignments(),
     getProductAssignments(),
     session ? getBrandColor(session.storeId) : Promise.resolve(null),
     session ? getProductGalleryLayout(session.storeId) : Promise.resolve("thumbnail-left"),
+    session ? getStoreTheme(session.storeId) : Promise.resolve(null),
   ]);
 
   return (
@@ -30,6 +32,7 @@ export default async function TemaPage() {
       products={products}
       brandColor={brandColor ?? DEFAULT_BRAND_COLOR}
       galleryLayout={galleryLayout}
+      storeTheme={storeTheme}
     />
   );
 }

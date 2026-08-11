@@ -153,6 +153,21 @@ export async function getBrandColor(storeId: string): Promise<string | null> {
   });
 }
 
+// Design-token choices beyond the brand colour (stores.theme jsonb, migration 0092) — raw and
+// untyped on purpose: resolveTheme (@tokophi/lib/theme) is the one validator, on read, everywhere.
+// Same tenant caveat as getBrandColor: `stores` has no store_id (it IS the tenant), so filter
+// explicitly by session storeId.
+export async function getStoreTheme(storeId: string): Promise<unknown> {
+  return withTenant(storeId, async (db) => {
+    const [row] = await db
+      .select({ theme: schema.stores.theme })
+      .from(schema.stores)
+      .where(eq(schema.stores.id, storeId))
+      .limit(1);
+    return row?.theme ?? null;
+  });
+}
+
 // Product-page gallery layout (stores.product_gallery_layout) — same tenant caveat as getBrandColor:
 // `stores` has no store_id (it IS the tenant), so filter explicitly by session storeId.
 export async function getProductGalleryLayout(storeId: string): Promise<string> {

@@ -778,6 +778,12 @@ async function main() {
     // handle, and it does — no number means no button, rather than a button that goes nowhere.
     whatsapp: "6281234500999",
     tagline: "Busana wanita modern — batik & ready-to-wear",
+    // Design tokens (0092): the batik-boutique look is this store's explicit CHOICE now, not the
+    // platform default. elegan/hangat reproduces the original hand-picked palette exactly — the
+    // demo must render identical before/after the token system (that identity is the proof the
+    // derivation is precise). The other demo stores leave `theme` NULL: that exercises the
+    // no-choice fallback every real store starts from.
+    theme: { font: "elegan", tone: "hangat" },
     // Public shop identity (0063) — set ONLY on the primary demo store, and this is the point of it:
     // the storefront footer's FILLED state is what a prospective merchant sees when they look at the
     // demo, so the demo has to show it. The 6 other stores leave all of these NULL (same as whatsapp

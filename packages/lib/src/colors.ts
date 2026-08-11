@@ -4,7 +4,7 @@
 // slightly so they don't turn into neon pastels), convert back to hex.
 export type BrandShades = Record<50 | 100 | 200 | 400 | 500 | 600 | 700, string>;
 
-function hexToHSL(hex: string): { h: number; s: number; l: number } {
+export function hexToHSL(hex: string): { h: number; s: number; l: number } {
   const clean = hex.replace(/^#/, "");
   const r = parseInt(clean.substring(0, 2), 16) / 255;
   const g = parseInt(clean.substring(2, 4), 16) / 255;
@@ -27,7 +27,7 @@ function hexToHSL(hex: string): { h: number; s: number; l: number } {
   return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
 }
 
-function hslToHex(h: number, s: number, l: number): string {
+export function hslToHex(h: number, s: number, l: number): string {
   const sN = s / 100;
   const lN = l / 100;
   const c = (1 - Math.abs(2 * lN - 1)) * sN;

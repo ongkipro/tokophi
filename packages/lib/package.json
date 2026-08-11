@@ -21,6 +21,7 @@
     "./payment-fees": "./src/payment-fees.ts",
     "./validate": "./src/validate.ts",
     "./colors": "./src/colors.ts",
+    "./theme": "./src/theme.ts",
     "./secret": "./src/secret.ts",
     "./pg-errors": "./src/pg-errors.ts",
     "./session-cookie": "./src/session-cookie.ts",

@@ -8,6 +8,7 @@ import "../styles/global.css";
 import Analytics from "../components/Analytics.astro";
 import MarketingPixels from "../components/MarketingPixels.astro";
 import ImageFallback from "../components/ImageFallback.astro";
+import ThemeTokens from "../components/ThemeTokens.astro";
 import { mediaUrl } from "../data/catalog";
 
 interface Props {
@@ -17,8 +18,7 @@ interface Props {
   robots?: string;
 }
 
-const { store, catalog, origin } = Astro.locals;
-const BRAND_SHADES = catalog.brandShades;
+const { store, origin } = Astro.locals;
 const { title, description = store.tagline, image, robots } = Astro.props;
 
 const fullTitle = `${title} - ${store.name}`;
@@ -85,7 +85,8 @@ const ogImage = (() => {
         otherwise only discover it after parsing the CSS. latin only — latin-ext is fetched on demand
         by unicode-range and preloading it would download 84 KB almost nobody needs. */}
     <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <style set:html={`:root { ${Object.entries(BRAND_SHADES).map(([shade, hex]) => `--color-brand-${shade}: ${hex};`).join(" ")} }`} />
+    {/* Merchant design tokens (brand shades + chosen neutrals/display font) — shared with Layout.astro. */}
+    <ThemeTokens />
     <Analytics />
     {/* ⚠️ THE AD FUNNEL'S OWN LAYOUT MUST CARRY THE AD PIXELS. This was missing, so /promo/<handle>,
         /lp/<slug> and /thanks — the pages a merchant sends PAID traffic to, and the page where that

@@ -18,6 +18,7 @@ import {
 import { Can, useCan } from "@/components/admin/permissions";
 import { PageHeader } from "@/components/admin/page-header";
 import { BrandColorDialog } from "@/components/theme/brand-color-dialog";
+import { ThemeTokensDialog } from "@/components/theme/theme-tokens-dialog";
 import { GalleryLayoutDialog } from "@/components/theme/gallery-layout-dialog";
 import { Badge } from "@tokophi/ui/badge";
 import { Button } from "@tokophi/ui/button";
@@ -51,6 +52,8 @@ type Props = {
   products: TemplateAssignment[];
   brandColor: string;
   galleryLayout: string;
+  /** Raw `stores.theme` jsonb — the Tampilan dialog validates it via resolveTheme, like the storefront. */
+  storeTheme: unknown;
 };
 
 const TABS: { key: TemplateType; label: string; desc: string }[] = [
@@ -73,7 +76,7 @@ const TABS: { key: TemplateType; label: string; desc: string }[] = [
 
 const dateFmt = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" });
 
-export function TemaClient({ templates, collections, products, brandColor, galleryLayout }: Props) {
+export function TemaClient({ templates, collections, products, brandColor, galleryLayout, storeTheme }: Props) {
   const canWrite = useCan("theme:write");
   const router = useRouter();
   const [tab, setTab] = React.useState<TemplateType>("homepage");
@@ -114,6 +117,7 @@ export function TemaClient({ templates, collections, products, brandColor, galle
         title="Tema Toko"
         desc="Susun tampilan storefront dengan drag & drop — beranda, kategori, dan produk."
       >
+        <ThemeTokensDialog initialTheme={storeTheme} brandColor={brandColor} />
         <BrandColorDialog initialColor={brandColor} />
         <GalleryLayoutDialog initialLayout={galleryLayout} />
         <Can capability="theme:write">
