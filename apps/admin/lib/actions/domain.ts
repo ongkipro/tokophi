@@ -19,7 +19,7 @@ import {
 import { getStoreSlug } from "@/lib/data/store";
 import { servableVerdict } from "@/lib/domain-servable";
 import { createTicket } from "@/lib/actions/support";
-import { createCustomHostname, getCustomHostname, provisioningState } from "@/lib/cloudflare-saas";
+import { createCustomHostname, findCustomHostname, getCustomHostname, provisioningState } from "@/lib/cloudflare-saas";
 
 // Custom-domain writes (Pengaturan → Domain). CUSTOM_DOMAIN.md.
 //
@@ -136,7 +136,7 @@ export async function verifyDomain(id: string): Promise<Result> {
       .limit(1);
     if (!row) return { done: true as const, result: { ok: false as const, error: "Domain tidak ditemukan." } };
     if (row.providerId) {
-      return { done: false as const, host: row.host, providerId: row.providerId };
+      return { done: false as const, host: row.host, providerId: row.providerId, dnsHint: null };
     }
 
     const { txtName, txtValue } = domainRecords(row.host, row.token);
@@ -194,7 +194,14 @@ export async function verifyDomain(id: string): Promise<Result> {
       // (or nothing) rather than a CNAME. Leave `chain` empty and let the verdict speak.
     }
     const verdict = servableVerdict(chain, CNAME_TARGET);
-    if (!verdict.servable) {
+    // Only `wrong-target` — a CNAME that provably points elsewhere — is a hard stop. `no-cname` falls
+    // THROUGH to Cloudflare: an apex physically cannot hold a CNAME (RFC 1034 — providers publish
+    // ANAME/ALIAS/flattening, which resolves as plain A records), so from DNS alone the correct apex
+    // setup and the copied-IP mistake are the same bytes. Cloudflare validates against what actually
+    // RESOLVES and is the only party that can tell them apart. The hard refusal that used to live
+    // here told `beautyinu.co`'s owner — whose DNS was right and whose hostname Cloudflare had
+    // already activated — to "remove the A records and add a CNAME": an impossible instruction.
+    if (!verdict.servable && verdict.kind === "wrong-target") {
       await db
         .update(schema.storeDomains)
         .set({ status: "verifying", lastCheckedAt: stamp, lastError: verdict.message })
@@ -205,8 +212,12 @@ export async function verifyDomain(id: string): Promise<Result> {
         result: { ok: false as const, error: verdict.message },
       };
     }
+    // The undecidable case's guidance. If Cloudflare has not (yet) activated the hostname, THIS is
+    // what the merchant reads — actionable for both the subdomain and the apex — instead of nothing.
+    const dnsHint = verdict.servable ? null : verdict.message;
 
-    // Owned and routable. Persist the verified boundary before registering the provider hostname.
+    // Owned and routable (or owned, with Cloudflare left to judge the apex case). Persist the
+    // verified boundary before registering the provider hostname.
     await db
       .update(schema.storeDomains)
       .set({ status: "provisioning", verifiedAt: stamp, lastCheckedAt: stamp, lastError: null })
@@ -216,16 +227,22 @@ export async function verifyDomain(id: string): Promise<Result> {
       storeId,
       text: `Domain terverifikasi: ${row.host}`,
     });
-    return { done: false as const, host: row.host, providerId: null };
+    return { done: false as const, host: row.host, providerId: null, dnsHint };
   });
 
   if (ownership.done) return ownership.result;
 
   try {
+    // find-then-create: the hostname may already exist at Cloudflare with no id recorded on our side
+    // (beautyinu.co's exact state — registered manually during the incident). Creating it again 409s,
+    // which would fail the very verify this path exists to complete.
     const provider = ownership.providerId
       ? await getCustomHostname(ownership.providerId)
-      : await createCustomHostname(ownership.host);
+      : ((await findCustomHostname(ownership.host)) ?? (await createCustomHostname(ownership.host)));
     const state = provisioningState(provider);
+    // Not yet active with no CNAME visible → show the DNS guidance. A terminal Cloudflare error is
+    // more specific and still wins; `active` clears everything.
+    const lastError = state.status === "active" ? null : (state.error ?? ownership.dnsHint);
     await withTenant(storeId, async (db) => {
       await db
         .update(schema.storeDomains)
@@ -234,7 +251,7 @@ export async function verifyDomain(id: string): Promise<Result> {
           certStatus: state.certStatus,
           status: state.status,
           lastCheckedAt: new Date(),
-          lastError: state.error,
+          lastError,
         })
         .where(and(eq(schema.storeDomains.id, id), eq(schema.storeDomains.storeId, storeId)));
     });

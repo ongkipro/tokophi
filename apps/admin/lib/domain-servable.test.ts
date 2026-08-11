@@ -8,16 +8,22 @@ const T = "cname.example.test";
 describe("servableVerdict", () => {
   // THE bug: apex holds hand-copied Cloudflare IPs, so there is no CNAME at all. DNS returns an empty
   // chain (ENODATA), and the old code never looked — it stamped verified_at and rested at provisioning.
-  it("refuses a host with no CNAME, and says to remove the IP records", () => {
+  // no-cname is UNDECIDABLE, not wrong: an apex cannot hold a CNAME, and flattening resolves as A
+  // records identical to the copied-IP mistake. The verdict must say so and route to Cloudflare —
+  // the hard refusal here is what told a correctly-configured merchant to do the impossible.
+  it("marks an empty chain no-cname, with guidance covering BOTH the subdomain and the apex", () => {
     const v = servableVerdict([], T);
     expect(v.servable).toBe(false);
+    expect(!v.servable && v.kind).toBe("no-cname");
     expect(!v.servable && v.message).toMatch(/CNAME/);
-    expect(!v.servable && v.message).toMatch(/IP/);
+    expect(!v.servable && v.message).toMatch(/ANAME|ALIAS|flattening/);
+    expect(!v.servable && v.message).toContain(T);
   });
 
-  it("refuses a CNAME pointing somewhere else", () => {
+  it("refuses a CNAME pointing somewhere else — the one case DNS can prove", () => {
     const v = servableVerdict(["shops.someoneelse.net"], T);
     expect(v.servable).toBe(false);
+    expect(!v.servable && v.kind).toBe("wrong-target");
     expect(!v.servable && v.message).toContain("someoneelse.net");
   });
 
