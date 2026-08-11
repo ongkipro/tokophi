@@ -9,8 +9,8 @@ import FinalCta from "../components/FinalCta.astro";
 
 const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
 const demoUrl = import.meta.env.PUBLIC_DEMO_URL || "https://batik-nusantara.tokophi.id";
-const title = "TokoΦ | Satu panel untuk toko online Anda";
-const description = "Kelola produk, pesanan, pembayaran, dan pengiriman dari satu tempat yang dirancang untuk penjual Indonesia.";
+const title = "Platform toko online untuk seller Indonesia";
+const description = "Buat toko online dan kelola produk, stok, pesanan, pembayaran, serta pengiriman dari satu Dashboard Seller berbahasa Indonesia.";
 const url = "https://tokophi.com/";
 const jsonLd = {
   "@context": "https://schema.org",
@@ -23,7 +23,7 @@ const jsonLd = {
 ---
 
 <MarketingLayout {title} {description} path="/" {jsonLd} mainClass="home-main">
-  <LandingHero {signupUrl} demoUrl="/demo/" />
+  <LandingHero {signupUrl} trialDays={BILLING.TRIAL_DAYS} demoUrl="/demo/" />
   <TrustStrip trialDays={BILLING.TRIAL_DAYS} />
   <RouteGateway />
   <StoreDemo {demoUrl} />

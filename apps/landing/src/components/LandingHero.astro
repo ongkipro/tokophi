@@ -1,22 +1,23 @@
 ---
 interface Props {
   signupUrl: string;
+  trialDays: number;
   demoUrl?: string;
 }
 
-const { signupUrl, demoUrl = "#demo" } = Astro.props;
+const { signupUrl, trialDays, demoUrl = "#demo" } = Astro.props;
 ---
 
 <section class="landing-hero" aria-labelledby="hero-title" data-motion-hero>
   <div class="hero-content">
-    <p class="hero-kicker" data-motion-hero-item>Untuk penjual Indonesia</p>
-    <h1 id="hero-title" data-motion-hero-item>Bangun toko online. Kelola semuanya.</h1>
+    <p class="hero-kicker" data-motion-hero-item>Platform toko online untuk seller Indonesia</p>
+    <h1 id="hero-title" data-motion-hero-item>Buka toko online. Kelola operasionalnya dari satu panel.</h1>
     <p class="hero-support" data-motion-hero-item>
-      Kelola produk, pesanan, pembayaran, dan pengiriman dari satu tempat yang dirancang untuk penjual Indonesia.
+      Atur produk dan stok, pantau pesanan, terima pembayaran, lalu proses pengiriman tanpa berpindah-pindah sistem.
     </p>
     <div class="hero-actions" data-motion-hero-item>
-      <a href={signupUrl} class="btn btn-primary">Buat toko</a>
-      <a href={demoUrl} class="btn btn-ghost">Lihat demo</a>
+      <a href={signupUrl} class="btn btn-primary">Mulai gratis {trialDays} hari</a>
+      <a href={demoUrl} class="btn btn-ghost">Lihat toko demo</a>
     </div>
   </div>
 
@@ -40,7 +41,7 @@ const { signupUrl, demoUrl = "#demo" } = Astro.props;
         </g>
       </svg>
     </div>
-    <figcaption>Produk, pesanan, pembayaran, dan pengiriman dalam satu alur.</figcaption>
+    <figcaption>Dari katalog hingga pengiriman, seluruh pekerjaan toko tetap dalam satu alur.</figcaption>
   </figure>
 </section>
 

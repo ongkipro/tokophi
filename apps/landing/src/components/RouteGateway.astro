@@ -1,16 +1,16 @@
 ---
 const routes = [
-  { href: "/fitur/", index: "01", title: "Fitur", copy: "Lihat ruang kerja untuk katalog, pesanan, pelanggan, promosi, dan ringkasan toko." },
-  { href: "/cara-kerja/", index: "02", title: "Cara kerja", copy: "Ikuti alur dari menyiapkan toko sampai memproses dan mengirim pesanan." },
-  { href: "/pembayaran-pengiriman/", index: "03", title: "Pembayaran dan pengiriman", copy: "Pahami kanal pembayaran dan langkah pemenuhan pesanan yang tersedia." },
-  { href: "/demo/", index: "04", title: "Demo toko", copy: "Periksa contoh storefront publik dari sudut pandang pembeli." },
+  { href: "/fitur/", index: "01", title: "Fitur", copy: "Kenali alat untuk mengelola katalog, pesanan, pelanggan, promosi, dan ringkasan toko." },
+  { href: "/cara-kerja/", index: "02", title: "Cara kerja", copy: "Lihat alur dari menyiapkan toko hingga memproses dan mengirim pesanan." },
+  { href: "/pembayaran-pengiriman/", index: "03", title: "Pembayaran dan pengiriman", copy: "Pelajari pilihan pembayaran dan proses pemenuhan pesanan yang tersedia." },
+  { href: "/demo/", index: "04", title: "Demo toko", copy: "Jelajahi contoh toko online seperti yang dilihat pembeli." },
 ] as const;
 ---
 
 <section class="route-gateway" aria-labelledby="gateway-heading">
   <div class="gateway-heading" data-motion-reveal>
     <p>Jelajahi Tokophi</p>
-    <h2 id="gateway-heading">Masuk lewat kebutuhan Anda.</h2>
+    <h2 id="gateway-heading">Temukan yang perlu Anda ketahui.</h2>
   </div>
   <ol data-motion-stagger>
     {routes.map((route) => (

@@ -10,23 +10,23 @@ const { trialDays } = Astro.props;
 const localCapabilities = [
   {
     icon: Languages,
-    title: "Bahasa Indonesia",
-    description: "Dashboard Seller dan tampilan toko menggunakan Bahasa Indonesia.",
+    title: "Antarmuka berbahasa Indonesia",
+    description: "Kelola toko dan layani pembeli dengan tampilan berbahasa Indonesia.",
   },
   {
     icon: Banknote,
-    title: "Transaksi dalam rupiah",
-    description: "Harga dan total pesanan ditampilkan dalam rupiah.",
+    title: "Harga dalam rupiah",
+    description: "Tampilkan harga produk dan total belanja dalam rupiah.",
   },
   {
     icon: QrCode,
-    title: "Pembayaran lokal",
-    description: "QRIS, transfer bank, dan COD tersedia saat checkout.",
+    title: "Metode pembayaran lokal",
+    description: "Sediakan QRIS, transfer bank, atau COD saat checkout.",
   },
   {
     icon: Truck,
     title: "Pengiriman dalam negeri",
-    description: "Proses pengiriman mengikuti detail setiap pesanan.",
+    description: "Kelola proses pengiriman domestik berdasarkan detail setiap pesanan.",
   },
 ] as const;
 ---
@@ -34,10 +34,10 @@ const localCapabilities = [
 <section class="trust-band" aria-labelledby="trust-title">
   <header class="trust-lead">
     <p class="trust-kicker">Dibangun untuk Indonesia</p>
-    <h2 id="trust-title">Coba Tokophi gratis selama {trialDays} hari.</h2>
+    <h2 id="trust-title">Alur kerja yang akrab bagi seller Indonesia.</h2>
     <p class="trust-summary">
-      Kelola toko dengan bahasa, mata uang, metode pembayaran, dan pengiriman yang sesuai untuk
-      Indonesia.
+      Mulai dengan uji coba gratis {trialDays} hari, lalu gunakan Bahasa Indonesia, rupiah, metode
+      pembayaran lokal, dan alur pengiriman dalam negeri.
     </p>
   </header>
 
