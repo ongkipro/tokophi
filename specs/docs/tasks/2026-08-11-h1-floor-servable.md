@@ -33,8 +33,9 @@ from somewhere else.
 
 - [x] Both store queries filter `suspended_at is null`
 - [x] `run-checks.mjs` server env: `STOREFRONT_BASE_DOMAIN=test`
-- [ ] `npm run verify -w @tokophi/storefront` → must reach 6/6 PASS
-- [ ] PR to main (number from `gh pr create` output, never guessed) → merge
+- [x] `npm run verify -w @tokophi/storefront` → **6/6 PASS** (h1-floor 15 ok / 0 fail)
+- [x] `npm test` (vitest + astro check) green against the shared dev DB
+- [x] PR **#253** (number from `gh pr create` output) → squash-merge
 
-NEXT: verify suite green, then PR. No production impact beyond the check scripts — the server env
-line lives only in the check runner.
+NEXT: nothing — task closed. No production impact beyond the check scripts; the env line lives only
+in the check runner. If the stale "seeded suspended" claim resurfaces in older docs, point it here.
