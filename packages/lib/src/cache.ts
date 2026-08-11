@@ -131,3 +131,30 @@ export function recordFailedLogin(surface: LoginSurface, email: string): string 
 export function clearFailedLogins(surface: LoginSurface, email: string): void {
   failures.delete(failedLoginKey(surface, email));
 }
+
+// ── N62, SECOND HALF: THE ACCOUNT-KEYED BRAKE THE IP LIMITER CANNOT BE ──
+// `rateLimit` counts a SOURCE; a distributed grind brings its own sources, so one named account
+// could be tried at 15/min × as many addresses as the attacker holds, forever, with only audit rows
+// to show for it. This lock is keyed on the ACCOUNT: once a streak reaches 25 consecutive failures,
+// sign-in attempts for that address are refused before the password is even checked.
+//
+// · WHY 25 — it is the SECOND escalation rung (5 → 25), so by the time an account locks, TWO audit
+//   rows already name the attack: no lock ever happens silently. And no human's own typo pattern
+//   reaches 25 in a row with not one success in between.
+// · A REFUSED ATTEMPT MUST NOT FEED THE STREAK. The caller checks THIS before calling
+//   `recordFailedLogin`, so a locked attempt does not extend `idleUntil` — otherwise the attacker's
+//   own hammering holds the victim's lock open forever. As written, the lock self-expires 15 minutes
+//   (`FAILED_LOGIN_IDLE_MS`) after the last COUNTED failure.
+// · THE TRADE IS NAMED, NOT HIDDEN: an attacker who can reach the form can lock a victim out for up
+//   to 15 minutes per 25-failure burst. That is the classic lockout-DOS cost of any account brake;
+//   with the alternative — an unbounded distributed grind — it is the cheaper harm, and the 60-bit
+//   mint (`password.ts`) is what makes the remaining throughput (~25 tries / 15 min) worthless.
+// · Same in-process `Map` limitation as everything in this file: per replica, gone on redeploy.
+//   A floor, not a wall; the wall is entropy.
+const FAILED_LOGIN_LOCK_AT = 25;
+
+/** Is sign-in for this address currently refused? Check BEFORE `recordFailedLogin` — see above. */
+export function failedLoginLocked(surface: LoginSurface, email: string): boolean {
+  const e = failures.get(failedLoginKey(surface, email));
+  return e !== undefined && Date.now() <= e.idleUntil && e.count >= FAILED_LOGIN_LOCK_AT;
+}
