@@ -81,7 +81,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     (host.endsWith(".sslip.io") && host.split(".")[0] === OLD_LABEL)
   ) {
     const newHost = `batiknusantara${host.slice(OLD_LABEL.length)}`;
-    return Response.redirect(`${scheme}://${newHost}${context.url.pathname}${context.url.search}`, 301);
+    // `host` is NORMALIZED — normalizeHost strips the port — so the port must come back off the RAW
+    // host, or a dev redirect (`batik-nusantara.127.0.0.1.sslip.io:4327`) lands on a portless host
+    // nothing serves. Prod hosts carry no port, so this is "" there and the Location is unchanged.
+    const port = /:\d+$/.exec(rawHost.trim())?.[0] ?? "";
+    return Response.redirect(`${scheme}://${newHost}${port}${context.url.pathname}${context.url.search}`, 301);
   }
 
   const store = await getStoreByHost(host);
