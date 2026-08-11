@@ -124,8 +124,8 @@ export async function deleteTemplate(id: string): Promise<ThemeResult> {
           throw new RuleError("Template default tidak bisa dihapus — jadikan template lain sebagai default dulu");
         }
       }
-      await db.update(schema.collections).set({ templateId: null }).where(eq(schema.collections.templateId, id));
-      await db.update(schema.products).set({ templateId: null }).where(eq(schema.products.templateId, id));
+      await db.update(schema.collections).set({ templateId: null, updatedAt: new Date() }).where(eq(schema.collections.templateId, id));
+      await db.update(schema.products).set({ templateId: null, updatedAt: new Date() }).where(eq(schema.products.templateId, id));
       await db.delete(schema.pageTemplates).where(eq(schema.pageTemplates.id, id));
     });
     revalidateTheme();
@@ -237,9 +237,9 @@ async function assign(
         if (!tpl) throw new RuleError("Template tidak ditemukan");
       }
       if (kind === "collection") {
-        await db.update(schema.collections).set({ templateId }).where(inArray(schema.collections.id, ids));
+        await db.update(schema.collections).set({ templateId, updatedAt: new Date() }).where(inArray(schema.collections.id, ids));
       } else {
-        await db.update(schema.products).set({ templateId }).where(inArray(schema.products.id, ids));
+        await db.update(schema.products).set({ templateId, updatedAt: new Date() }).where(inArray(schema.products.id, ids));
       }
     });
     revalidateTheme();

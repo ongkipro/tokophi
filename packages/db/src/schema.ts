@@ -301,6 +301,13 @@ export const products = pgTable(
     templateId: uuid().references((): AnyPgColumn => pageTemplates.id),
     archivedAt: ts(),
     createdAt: createdAt(),
+    // N13 — when the merchant last EDITED the row; the sitemap's <lastmod> reads
+    // coalesce(updated_at, created_at). NULLABLE with no default ON PURPOSE: a default-now() would
+    // stamp migration day onto every existing product as if it had just changed, and a backfill
+    // UPDATE inside the migration would overwrite real values if the batch ever re-runs (this repo
+    // demands idempotent migrations for exactly that reason). NULL = never edited since the column
+    // arrived — created_at is then the honest lastmod. Every db.update on this table sets it.
+    updatedAt: ts(),
 
     // ── Stable catalog identity (ADR 0013, migration 0081) ────────────────────────────────────────
     // The merchant-facing product NUMBER, allocated per store from `store_counters` and never reused.
@@ -409,6 +416,10 @@ export const collections = pgTable(
     seoTitle: text(),
     seoDesc: text(),
     archivedAt: ts(),
+    // N13 — same contract as products.updatedAt (nullable, no default, see the comment there).
+    // Collections have NO created_at to fall back on, so the sitemap emits <lastmod> for a category
+    // only once it has actually been edited — no date beats an invented one.
+    updatedAt: ts(),
   },
   (t) => [unique().on(t.storeId, t.handle)],
 );

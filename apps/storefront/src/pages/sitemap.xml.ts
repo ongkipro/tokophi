@@ -33,25 +33,27 @@ export const GET: APIRoute = async ({ locals }) => {
     // from this file: two indexable URLs for one list is a duplicate we would be reporting ourselves.
     { path: "/produk", priority: "0.9", changefreq: "daily" },
     { path: "/kategori", priority: "0.7", changefreq: "weekly" },
-    // ⚠️ NO `<lastmod>` ON CATEGORIES OR PRODUCTS, AND IT IS NOT AN OVERSIGHT.
-    // `collections` has NO timestamp column at all (not even `created_at`) and `products` has only
-    // `created_at` — there is no `updated_at` on either, so the only date this file could emit for
-    // them is one that never moves after the row is written. That is worse than emitting nothing:
-    // Google's documented behaviour is to stop trusting `<lastmod>` for the WHOLE file once it finds
-    // the field unreliable, which would cost the blog and pages entries below their real signal too.
-    // Giving these two a `<lastmod>` is a SCHEMA change (a migration + every write path that must
-    // touch the column), not a sitemap change — tracked in `specs/docs/tasks/NEXT.md` N13.
+    // `<lastmod>` on categories and products — N13, closed 2026-08-12 (migration 0093 added
+    // `updated_at` to both tables; every admin UPDATE on them bumps it). The rule stands: a date
+    // that never moves is worse than none — Google stops trusting `<lastmod>` for the WHOLE file
+    // once it finds the field unreliable. So:
+    //   · products emit `lastModified` = updated_at ?? created_at (a never-edited product's
+    //     creation IS its last modification — coalesced in data/catalog.ts, the one producer);
+    //   · collections emit it only when `updated_at` is set — they have no created_at to fall back
+    //     on, and an invented date is exactly the unreliability the rule forbids.
     //
     // Every category the shop actually renders — a URL that 404s in a sitemap is a negative signal,
     // so only list what /kategori/[handle] resolves.
     ...catalog.collections.map((c) => ({
       path: `/kategori/${c.handle}`,
+      lastmod: c.lastModified ?? undefined,
       priority: "0.8",
       changefreq: "daily",
     })),
     // Products are the pages that earn. Highest priority after the homepage.
     ...catalog.products.map((p) => ({
       path: `/produk/${p.handle}`,
+      lastmod: p.lastModified,
       priority: "0.9",
       changefreq: "weekly",
     })),

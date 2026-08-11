@@ -652,6 +652,13 @@
       "when": 1786441836681,
       "tag": "0092_store_theme_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1786470181705,
+      "tag": "0093_catalog_updated_at",
+      "breakpoints": true
     }
   ]
 }

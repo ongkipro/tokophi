@@ -35,6 +35,9 @@ export type Collection = {
   imageUrl: string;
   /** ADR 0009 — the named `category` template this collection renders with (null = store default). */
   templateId: string | null;
+  /** N13 — when the merchant last edited this collection. NULL = never since the column arrived
+   *  (collections have no created_at to fall back on), and the sitemap then emits no <lastmod>. */
+  lastModified: Date | null;
 };
 
 export type VariantRow = {
@@ -53,6 +56,10 @@ export type VariantRow = {
 };
 export type Product = {
   handle: string;
+  /** N13 — the sitemap's <lastmod>: updated_at when the merchant has edited the row, else
+   *  created_at (a never-edited product's creation IS its last modification). Coalesced HERE, the
+   *  one producer, so no reader re-derives it. */
+  lastModified: Date;
   /** Permanent, per-store catalog number (ADR 0013). The feed and the pixel key items on it. */
   number: number;
   /** Merchant's brand for the feed's `brand` attribute; falls back to the store name. */
@@ -327,6 +334,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
     .map((c) => ({
       handle: c.handle,
       name: c.title,
+      lastModified: c.updatedAt,
       emoji: c.emoji ?? "",
       blurb: c.description ?? "",
       // The Kategori editor writes `collections.image_url`. Until now nothing read it, so a merchant
@@ -365,6 +373,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       ratingCount: schema.products.ratingCount,
       createdAt: schema.products.createdAt,
       templateId: schema.products.templateId,
+      updatedAt: schema.products.updatedAt,
       price: schema.productVariants.priceIdr,
       compareAt: schema.productVariants.compareAtIdr,
       image: schema.productMedia.url,
@@ -524,6 +533,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       : rawVariants;
     return {
       handle: r.handle,
+      lastModified: r.updatedAt ?? r.createdAt,
       number: r.number,
       vendor: r.vendor ?? undefined,
       name: r.name,

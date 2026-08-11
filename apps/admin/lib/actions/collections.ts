@@ -99,7 +99,7 @@ export async function updateCollection(id: string, input: CollectionInput): Prom
     // under RLS before syncChildren rewrites them by raw id — else a foreign id corrupts another store.
     const [owned] = await db.select({ id: schema.collections.id }).from(schema.collections).where(eq(schema.collections.id, id)).limit(1);
     if (!owned) return;
-    await db.update(schema.collections).set(fields(input)).where(eq(schema.collections.id, id));
+    await db.update(schema.collections).set({ ...fields(input), updatedAt: new Date() }).where(eq(schema.collections.id, id));
     await syncChildren(db, id, input);
   });
   revalidatePath("/produk/kategori");
