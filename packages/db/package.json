@@ -27,6 +27,7 @@
     "verify-rls-app": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/verify-rls-app.ts",
     "seed:recent": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/seed-recent.ts",
     "backfill:ship-address": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/backfill-ship-address.ts",
+    "rename:batik-slug": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/rename-batik-slug.ts",
     "verify-migrations": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/verify-migrations.ts",
     "verify-ledger": "dotenv -e ../../.env -e ../../../../../.env -- tsx src/verify-ledger.ts"
   },
