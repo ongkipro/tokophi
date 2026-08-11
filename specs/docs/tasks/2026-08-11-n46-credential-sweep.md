@@ -31,5 +31,5 @@ from the repo root so `packages/...` paths print correctly.
 
 - [x] Scan roots `apps/` + `packages/`, exemptions named with reasons
 - [x] Mutation-proof both directions (plant → red; exemptions emptied → red)
-- [ ] Full `npm test` green
-- [ ] PR (number from `gh pr create` output) → merge
+- [x] Full `npm test` green (vitest + astro check, shared dev DB)
+- [x] PR **#255** (number from `gh pr create` output) → squash-merge
