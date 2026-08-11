@@ -116,12 +116,11 @@ running-but-unhealthy container, not a `created`/`exited` one — the watchdog c
   keeps rollback images when the cheaper cache cleanup is enough. `flock` prevents a manual cleanup
   and cron from overlapping. It never touches volumes or images attached to a container. Logs to
   `/var/log/tokophi-docker-cleanup.log`.
-  ⚠️ **The repo copy is BEHIND the box (verified 2026-08-12):** the tracked
-  `ops/tokophi-docker-cleanup.sh` is still the older daily/80% version — the hourly two-stage script
-  described above was verified on the box (`/etc/cron.d/tokophi-docker-cleanup` = `17 * * * *`,
-  `AGGRESSIVE_PCT=70`, `MIN_FREE_GB=25`, `flock`) but its source was never committed to any branch.
-  **Do not run the `scp` below until the repo copy is brought up to date — it would DOWNGRADE the
-  installed script.**
+  ✅ **Repo copy = the box again (2026-08-12, same day the gap was found):** the tracked
+  `ops/tokophi-docker-cleanup.sh` is now the byte-for-byte copy of the live hourly two-stage script
+  (`17 * * * *`, `AGGRESSIVE_PCT=70`, `MIN_FREE_GB=25`, `flock`), fetched read-only from the box.
+  For a few hours it was the older daily/80% version while the live one had never been committed —
+  the `scp` below would have DOWNGRADED the box; that window is closed and the command is safe again.
   ```bash
   scp ops/tokophi-docker-cleanup.sh root@<box>:/usr/local/bin/tokophi-docker-cleanup.sh
   ssh root@<box> 'chmod 755 /usr/local/bin/tokophi-docker-cleanup.sh
