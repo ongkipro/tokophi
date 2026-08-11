@@ -252,7 +252,17 @@ booking omits them (which is what `kaCreateOrder`'s `?? 10` fallback already han
 on whether the product editor should require them before a merchant can ship.
 </details>
 
-### N31. The COD fee KiriminAja charges is never read · **S** · NEW
+### ✅ N31. The COD fee KiriminAja charges is never read — **CLOSED 2026-08-11**
+`kaCodFee()` (`packages/lib/src/kiriminaja.ts`) now parses `setting.cod_fee` / `minimum_cod_fee` /
+`cod_fee_amount` off every rate (unit-tested against the captured doc's own sample — the fraction is a
+STRING already divided by 100), `getShippingRates` carries it as `Rate.codFee`, and the seller's
+Cek Ongkir dialog renders "Biaya COD +Rp19.005" under each rate whose EFFECTIVE cod flag is true —
+verified in a real browser against the sandbox (SPX Standard +Rp19.005 / SPX Economy +Rp18.762 shown,
+9 non-COD rates clean, 0 console errors). Handoff: [`2026-08-11-n31-cod-fee.md`](./2026-08-11-n31-cod-fee.md).
+⚠️ Deliberately NOT touched, per the task's own scope: shopper checkout pricing, the ledger, and
+`platform_cod.fee_pct` (still written by the seed and read by nobody — that half stays open in `OPEN.md`).
+
+<details><summary>the original entry</summary>
 Every `shipping_price` result carries `setting.cod_fee`, `minimum_cod_fee` and a computed
 `cod_fee_amount` (measured: present on all 4 sandbox services). **Nothing in the repo reads any of
 them** — `grep -rn "cod_fee"` over `apps/` + `packages/` returns nothing.
@@ -260,6 +270,7 @@ them** — `grep -rn "cod_fee"` over `apps/` + `packages/` returns nothing.
 So a merchant selling COD sees the ongkir but not the COD fee that is deducted from their payout. It is
 not a correctness bug (the ledger books what actually arrives) — it is a number we HAVE and do not show.
 **AC:** the COD fee appears next to the COD option wherever a merchant sees the shipping cost.
+</details>
 
 ### 🔵 What the audit CONFIRMED is correct (do not re-check)
 - **Endpoint versions match the docs**, and they genuinely vary per endpoint:
