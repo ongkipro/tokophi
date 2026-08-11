@@ -102,19 +102,36 @@ running-but-unhealthy container, not a `created`/`exited` one — the watchdog c
 - **When it 503s and the containers show `Up (unhealthy)`, check DISK FIRST:** `ssh root@<box> 'df -h /'`
   + `docker logs <postgres> --tail 20`. Full disk + "in recovery mode" ⇒ free space (prune), **do NOT
   redeploy** — a redeploy has to BUILD, which needs the disk it does not have.
+- **Reduce the source, not just the residue (LIVE since 2026-08-05):** the production application's
+  Coolify Watch Paths is `!**/*.md`. Coolify's exclusion-only semantics deploy every non-Markdown
+  change, so code, migrations, Compose, Dockerfiles, and ops still deploy; a Markdown-only commit does
+  not. Measured before enabling it: 8 of 17 pushes in one day changed only Markdown, but each rebuilt
+  all five app images. Verified against the matcher in the installed Coolify 4.1.2: Markdown-only =
+  skip, code-only = deploy, mixed Markdown + code = deploy. Remove this exclusion if Markdown ever
+  becomes a runtime/build input rather than documentation.
 - **Prevention (installed):** `ops/tokophi-docker-cleanup.sh` → `/usr/local/bin/tokophi-docker-cleanup.sh`,
-  run daily 03:30 UTC by `/etc/cron.d/tokophi-docker-cleanup`. Conservative: prunes build cache + UNUSED
-  images **older than 48h** (keeps 48h of rollback history); if disk is already **≥80%** it prunes
-  aggressively (all unused). Never touches volumes or images attached to a container. Logs to
+  run hourly at minute 17 by `/etc/cron.d/tokophi-docker-cleanup`. Normal mode prunes build cache older
+  than 24h and UNUSED images older than 48h. At **≥70% used OR <25 GB free**, it first prunes all unused
+  build cache and measures the disk again; only persistent pressure removes all unused images. This
+  keeps rollback images when the cheaper cache cleanup is enough. `flock` prevents a manual cleanup
+  and cron from overlapping. It never touches volumes or images attached to a container. Logs to
   `/var/log/tokophi-docker-cleanup.log`.
+  ⚠️ **The repo copy is BEHIND the box (verified 2026-08-12):** the tracked
+  `ops/tokophi-docker-cleanup.sh` is still the older daily/80% version — the hourly two-stage script
+  described above was verified on the box (`/etc/cron.d/tokophi-docker-cleanup` = `17 * * * *`,
+  `AGGRESSIVE_PCT=70`, `MIN_FREE_GB=25`, `flock`) but its source was never committed to any branch.
+  **Do not run the `scp` below until the repo copy is brought up to date — it would DOWNGRADE the
+  installed script.**
   ```bash
   scp ops/tokophi-docker-cleanup.sh root@<box>:/usr/local/bin/tokophi-docker-cleanup.sh
   ssh root@<box> 'chmod 755 /usr/local/bin/tokophi-docker-cleanup.sh
-    printf "%s\n" "30 3 * * * root /usr/local/bin/tokophi-docker-cleanup.sh" > /etc/cron.d/tokophi-docker-cleanup
+    printf "%s\n" "17 * * * * root /usr/local/bin/tokophi-docker-cleanup.sh" > /etc/cron.d/tokophi-docker-cleanup
     chmod 644 /etc/cron.d/tokophi-docker-cleanup'
   ```
-- **Better long-term:** enable Coolify's own "Docker Cleanup" (threshold-based) in instance settings so
-  the platform owns this; the cron is the belt-and-braces until then.
+- **Alternative, not an addition:** Coolify's own threshold-based "Docker Cleanup" can replace this
+  cron after its exact image/cache/volume scope is verified. Do not run both: Coolify does not take
+  this script's lock, so two cleaners could overlap. Disable the cron first, and never enable volume
+  pruning.
 
 ## L2 — external probe (BUILT 2026-07-20; **not installed anywhere yet — no alert channel**)
 
@@ -141,11 +158,15 @@ is that witness.
      `{ok:false,"Shipping belum dikonfigurasi."}` — a different problem with a different runbook, and
      the message says which.
   3. **Disk % + free GB over ssh** — the actual leading indicator of 2026-07-18, which nothing watched.
-     Alerts at **≥80% used OR <15 GB free**. 80% is the same number `tokophi-docker-cleanup.sh` uses to
-     switch into aggressive pruning, so crossing it means **the broom has already gone to its strongest
-     setting and is still losing**. 15 GB is roughly one clean deploy (images are ~1.7 GB each, gotcha
-     #8) — below that the box has quietly lost the ability to build its own repair, and remember you
-     **cannot redeploy your way out of a full disk**.
+     Alerts at **≥80% used OR <15 GB free** — the defaults in `ops/tokophi-probe.sh`
+     (`TOKOPHI_PROBE_DISK_PCT` / `TOKOPHI_PROBE_DISK_FREE_GB`). ⚠️ **2026-08-12: the old rationale for
+     80% is stale** — it was "the same number the cleanup uses to go aggressive", but the INSTALLED
+     cleanup now turns aggressive at **70%**, so an 80% alert only fires after the broom's strongest
+     setting is already losing. When this probe is actually installed, set the thresholds BELOW the
+     cleanup's (e.g. **≥65% used OR <25 GB free**) so an alert leaves an investigation window even
+     after the three-pass debounce. The free-space floor is roughly one burst of five-service builds
+     (images are ~1.7 GB each, gotcha #8) — below that the box has quietly lost the ability to build
+     its own repair, and remember you **cannot redeploy your way out of a full disk**.
   4. **L1 heartbeat freshness** — `/var/run/tokophi-watchdog.last`, stale >10 min (10 missed cron ticks)
      ⇒ the watchdog itself is dead. Unhealthy containers are collected from `docker ps` as *context*
      attached to other alerts, never as an alert of their own (a container is briefly unhealthy on
