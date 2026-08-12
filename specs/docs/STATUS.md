@@ -1,8 +1,8 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **Refreshed 2026-07-21** against the source tree and the live database
-> (`docker exec tokophi-db psql -U tokophi -d tokophi`) — **78 tables, 94 migrations (0000–0093),
-> RLS pada 51 dari 52 tabel ber-`store_id`** (diukur ulang 2026-08-07 dari `packages/db/src/schema.ts` + `drizzle/meta/_journal.json` + keluaran `npm run verify-rls`; satu-satunya pengecualian `platform_activity`).
+> **Refreshed 2026-08-12** against the source tree and an isolated migrated database:
+> **80 tables, 95 migrations (0000–0094), RLS pada 52 dari 53 tabel ber-`store_id`** (dihitung dari
+> `packages/db/src/schema.ts`, journal, dan `npm run verify-rls`; pengecualian `platform_activity`).
 > ⚠️ Angka ini DITURUNKAN dan bergerak tiap migrasi — **jalankan `npm run verify-rls -w @tokophi/db`**
 > dan percayai keluarannya, bukan baris ini. Baris ini sudah salah dua kali.
 > ⚠️ Dan **JANGAN hitung dari container dev bersama**: ia memuat `color_palettes` dari PR #2 yang belum

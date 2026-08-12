@@ -647,10 +647,7 @@ async function handle(req: Request) {
   if (!quote.ok) {
     if (quote.fromProvider)
       console.error("[order] courier API refused the quote:", quote.error);
-    return bad(
-      quote.fromProvider ? SHIPPING_QUOTE_UNAVAILABLE : quote.error,
-      "shipping",
-    );
+    return bad(quote.fromProvider ? SHIPPING_QUOTE_UNAVAILABLE : quote.error, "shipping");
   }
   const rate = findRate(quote.rates, svcCode, svcType);
   if (!rate) {

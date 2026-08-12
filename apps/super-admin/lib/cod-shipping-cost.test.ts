@@ -109,8 +109,7 @@ suite("getCourierCostAbsorbed — the cost we absorb, reported honestly (ADR 001
     const { getCourierCostAbsorbed } = await import("./data");
     await expect(
       db.transaction(async (tx) => {
-        await tx.execute(sql`delete from payments`);
-        await tx.execute(sql`delete from orders`);
+        await tx.execute(sql`update orders set ka_order_id = null`);
         const r = await getCourierCostAbsorbed(tx as unknown as Parameters<typeof getCourierCostAbsorbed>[0]);
         expect(r).toEqual({ codIdr: 0, codOrders: 0, prepaidIdr: 0, prepaidOrders: 0, unrecordedOrders: 0 });
         throw new Error("rollback");

@@ -22,14 +22,14 @@
 
 | Fact | Value | How it was checked |
 |---|---|---|
-| Tables (`pgTable(` in `schema.ts`) | **78** | `grep -c 'pgTable(' packages/db/src/schema.ts` — dihitung dari KODE, bukan dari container |
-| Tabel ber-`store_id` | **52** | keluaran `npm run verify-rls -w @tokophi/db` |
-| Di antaranya ber-RLS | **51** | keluaran verifikator yang sama |
+| Tables (`pgTable(` in `schema.ts`) | **80** | `grep -c 'pgTable(' packages/db/src/schema.ts` — dihitung dari KODE, bukan dari container |
+| Tabel ber-`store_id` | **53** | keluaran `npm run verify-rls -w @tokophi/db` |
+| Di antaranya ber-RLS | **52** | keluaran verifikator yang sama |
 | `store_id` tanpa RLS | **1** — `platform_activity` | disengaja: log audit platform, lintas tenant |
 | Tabel anak tanpa `store_id` & tanpa RLS | **12**, semuanya sudah ditinjau | verifikator mencetak daftarnya; `AGENTS.md` memuat aturannya |
-| Migrasi | **94** (`0000` … `0093`) | `_journal.json` + jumlah berkas `.sql`, keduanya cocok — `0093_catalog_updated_at` menambah `products.updated_at` + `collections.updated_at` (N13, nullable tanpa default) |
+| Migrasi | **95** (`0000` … `0094`) | `_journal.json` + jumlah berkas `.sql`, keduanya cocok — `0094_magical_salo` menambah snapshot order finance, booking history, dan ledger reconciliation |
 | DB roles | `tokophi` (owner, bypasses RLS) · `tokophi_app` (non-owner, policies enforce) | `pg_roles` |
-| Enums | **44** | `grep -c 'pgEnum(' packages/db/src/schema.ts` |
+| Enums | **45** | `grep -c 'pgEnum(' packages/db/src/schema.ts` |
 | Money representation | `bigint`, whole rupiah, column suffix `_idr` | catalog |
 | Naming | snake_case; PKs are `uuid default gen_random_uuid()` | catalog |
 
@@ -94,7 +94,7 @@ code rather than on the database:
 
 ---
 
-## 3. Table inventory (all 68)
+## 3. Table inventory (all 80)
 
 Row counts are `pg_stat_user_tables.n_live_tup` on the **local demo seed**; they say nothing about
 production. A `0` in a table the product claims to depend on is a finding, not a footnote — the ones
@@ -490,7 +490,7 @@ writes `store_settings.cod_enabled = true` for Batik Nusantara and 11 `store_shi
 
 ---
 
-## 4. Enums (44)
+## 4. Enums (45)
 
 | Enum | Values |
 |---|---|

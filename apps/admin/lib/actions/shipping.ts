@@ -1114,7 +1114,7 @@ export async function createShipment(input: { orderNumber: string; service: stri
 // pickup nobody knows about.
 export async function cancelShipment(orderNumber: string, reason = "Dibatalkan oleh penjual"): Promise<{ ok: boolean; pending?: boolean; error?: string }> {
   const { storeId } = await requireCapability("orders:write");
-  const order = await withTenant(storeId, async (db) => {
+  const o = await withTenant(storeId, async (db) => {
     const [row] = await db
       .select({
         id: schema.orders.id,
@@ -1132,31 +1132,32 @@ export async function cancelShipment(orderNumber: string, reason = "Dibatalkan o
       .limit(1);
     return row ?? null;
   });
-  if (!order?.awb && !order?.kaOrderId) {
+  if (!o?.awb && !o?.kaOrderId) {
     return { ok: false, error: "Pesanan ini belum punya pengiriman." };
   }
-  if (order.cancellationPending) {
+  if (o.cancellationPending) {
     return {
       ok: false,
       error: "Permintaan pembatalan sebelumnya masih diproses kurir.",
     };
   }
-  if (!order.awb) {
+  if (!o.awb) {
     return {
       ok: false,
       error: "Nomor resi belum terbit dari kurir, dan pembatalan butuh nomor resi. " + "Klik “Lacak” untuk mengambil resi begitu terbit, lalu batalkan.",
     };
   }
-  if (shipmentLocked(order.status)) {
+  if (shipmentLocked(o.status)) {
     return {
       ok: false,
-      error: `Pesanan sudah ${order.status} — pengirimannya tidak bisa dibatalkan lagi.`,
+      error: `Pesanan sudah ${o.status} — pengirimannya tidak bisa dibatalkan lagi.`,
     };
   }
 
+  const ref = o.awb;
   let result: Awaited<ReturnType<typeof kaCancelShipment>>;
   try {
-    result = await kaCancelShipment(order.awb, reason);
+    result = await kaCancelShipment(ref, reason);
   } catch (error) {
     console.error("[shipping] cancellation request outcome unknown", orderNumber, error instanceof Error ? error.name : "UnknownError");
     return {
