@@ -24,47 +24,208 @@ import { sql } from "drizzle-orm";
 // ---------- shared column helpers ----------
 const pk = () => uuid().primaryKey().defaultRandom();
 const money = () => bigint({ mode: "number" });
-const createdAt = () => timestamp({ withTimezone: true }).defaultNow().notNull();
+const createdAt = () =>
+  timestamp({ withTimezone: true }).defaultNow().notNull();
 const ts = () => timestamp({ withTimezone: true });
 
 // ---------- enums ----------
 export const planKey = pgEnum("plan_key", ["pemula", "bisnis", "skala"]);
-export const storeStatus = pgEnum("store_status", ["trial", "active", "past_due", "suspended"]);
-export const storeUserRole = pgEnum("store_user_role", ["owner", "admin", "staff", "gudang"]);
-export const productStatus = pgEnum("product_status", ["active", "draft", "archived"]);
+export const storeStatus = pgEnum("store_status", [
+  "trial",
+  "active",
+  "past_due",
+  "suspended",
+]);
+export const storeUserRole = pgEnum("store_user_role", [
+  "owner",
+  "admin",
+  "staff",
+  "gudang",
+]);
+export const productStatus = pgEnum("product_status", [
+  "active",
+  "draft",
+  "archived",
+]);
 export const collectionType = pgEnum("collection_type", ["manual", "otomatis"]);
 export const collectionMatch = pgEnum("collection_match", ["all", "any"]);
-export const conditionField = pgEnum("condition_field", ["tag", "title", "type", "price", "stock", "category"]);
-export const conditionOperator = pgEnum("condition_operator", ["eq", "neq", "gt", "lt", "contains"]);
-export const poStatus = pgEnum("po_status", ["draft", "dipesan", "sebagian", "diterima"]);
-export const transferStatus = pgEnum("transfer_status", ["draft", "dikirim", "diterima", "batal"]);
+export const conditionField = pgEnum("condition_field", [
+  "tag",
+  "title",
+  "type",
+  "price",
+  "stock",
+  "category",
+]);
+export const conditionOperator = pgEnum("condition_operator", [
+  "eq",
+  "neq",
+  "gt",
+  "lt",
+  "contains",
+]);
+export const poStatus = pgEnum("po_status", [
+  "draft",
+  "dipesan",
+  "sebagian",
+  "diterima",
+]);
+export const transferStatus = pgEnum("transfer_status", [
+  "draft",
+  "dikirim",
+  "diterima",
+  "batal",
+]);
 // `retur` = the parcel came back: refused at the door (the classic COD failure), address dead, or
 // the buyer bounced it. It is NOT `batal` — a cancelled order never shipped, a returned one did,
 // and someone paid to move it twice. Keeping them apart is what makes the COD return rate
 // measurable at all (migration 0039).
-export const orderStatus = pgEnum("order_status", ["baru", "diproses", "dikirim", "selesai", "batal", "retur"]);
-export const financialStatus = pgEnum("financial_status", ["pending", "dibayar", "refund_sebagian", "refund"]);
-export const orderChannel = pgEnum("order_channel", ["meta_ads", "tiktok_ads", "google_ads", "organic", "other"]);
-export const paymentMethod = pgEnum("payment_method", ["transfer", "qris", "ovo", "gopay", "dana", "va", "cod"]);
-export const paymentStatus = pgEnum("payment_status", ["menunggu", "berhasil", "gagal"]);
-export const fulfillmentStatus = pgEnum("fulfillment_status", ["menunggu", "diproses", "dikirim", "terkirim", "batal"]);
-export const customerSegment = pgEnum("customer_segment", ["baru", "reguler", "loyal", "vip"]);
+export const orderStatus = pgEnum("order_status", [
+  "baru",
+  "diproses",
+  "dikirim",
+  "selesai",
+  "batal",
+  "retur",
+]);
+export const financialStatus = pgEnum("financial_status", [
+  "pending",
+  "dibayar",
+  "refund_sebagian",
+  "refund",
+]);
+export const orderChannel = pgEnum("order_channel", [
+  "meta_ads",
+  "tiktok_ads",
+  "google_ads",
+  "organic",
+  "other",
+]);
+export const paymentMethod = pgEnum("payment_method", [
+  "transfer",
+  "qris",
+  "ovo",
+  "gopay",
+  "dana",
+  "va",
+  "cod",
+]);
+export const paymentStatus = pgEnum("payment_status", [
+  "menunggu",
+  "berhasil",
+  "gagal",
+]);
+export const fulfillmentStatus = pgEnum("fulfillment_status", [
+  "menunggu",
+  "diproses",
+  "dikirim",
+  "terkirim",
+  "batal",
+]);
+export const shipmentBookingStatus = pgEnum("shipment_booking_status", [
+  "reserved",
+  "unknown",
+  "accepted",
+  "cancellation_requested",
+  "failed",
+  "voided",
+  "refunded",
+]);
+export const customerSegment = pgEnum("customer_segment", [
+  "baru",
+  "reguler",
+  "loyal",
+  "vip",
+]);
 export const reviewStatus = pgEnum("review_status", ["terbit", "menunggu"]);
-export const leadSource = pgEnum("lead_source", ["whatsapp", "instagram", "tiktok", "referral", "marketplace"]);
-export const leadStage = pgEnum("lead_stage", ["baru", "dihubungi", "nego", "closing", "menang", "kalah"]);
-export const followupType = pgEnum("followup_type", ["keranjang", "pembayaran", "konfirmasi", "pascabeli", "repeat", "ulasan"]);
-export const followupStatus = pgEnum("followup_status", ["menunggu", "terkirim", "dibalas", "selesai"]);
-export const discountKind = pgEnum("discount_kind", ["persen", "nominal", "gratis_ongkir"]);
-export const discountStatus = pgEnum("discount_status", ["aktif", "terjadwal", "nonaktif"]);
+export const leadSource = pgEnum("lead_source", [
+  "whatsapp",
+  "instagram",
+  "tiktok",
+  "referral",
+  "marketplace",
+]);
+export const leadStage = pgEnum("lead_stage", [
+  "baru",
+  "dihubungi",
+  "nego",
+  "closing",
+  "menang",
+  "kalah",
+]);
+export const followupType = pgEnum("followup_type", [
+  "keranjang",
+  "pembayaran",
+  "konfirmasi",
+  "pascabeli",
+  "repeat",
+  "ulasan",
+]);
+export const followupStatus = pgEnum("followup_status", [
+  "menunggu",
+  "terkirim",
+  "dibalas",
+  "selesai",
+]);
+export const discountKind = pgEnum("discount_kind", [
+  "persen",
+  "nominal",
+  "gratis_ongkir",
+]);
+export const discountStatus = pgEnum("discount_status", [
+  "aktif",
+  "terjadwal",
+  "nonaktif",
+]);
 export const contentStatus = pgEnum("content_status", ["terbit", "draft"]);
-export const menuItemType = pgEnum("menu_item_type", ["home", "collection", "product", "page", "blog", "url", "catalog"]);
-export const adChannelKey = pgEnum("ad_channel_key", ["meta", "google", "tiktok"]);
-export const gatewayProvider = pgEnum("gateway_provider", ["midtrans", "xendit", "duitku", "autolaris"]);
-export const aggregatorProvider = pgEnum("aggregator_provider", ["biteship", "rajaongkir", "shipper", "kiriminaja"]);
-export const invoiceStatus = pgEnum("invoice_status", ["dibayar", "menunggu", "gagal"]);
-export const platformActivityKind = pgEnum("platform_activity_kind", ["signup", "upgrade", "payment", "churn", "support", "admin"]);
-export const notificationChannel = pgEnum("notification_channel", ["email", "wa"]);
-export const pageTemplateType = pgEnum("page_template_type", ["homepage", "category", "product"]); // ADR 0009 — Store Builder
+export const menuItemType = pgEnum("menu_item_type", [
+  "home",
+  "collection",
+  "product",
+  "page",
+  "blog",
+  "url",
+  "catalog",
+]);
+export const adChannelKey = pgEnum("ad_channel_key", [
+  "meta",
+  "google",
+  "tiktok",
+]);
+export const gatewayProvider = pgEnum("gateway_provider", [
+  "midtrans",
+  "xendit",
+  "duitku",
+  "autolaris",
+]);
+export const aggregatorProvider = pgEnum("aggregator_provider", [
+  "biteship",
+  "rajaongkir",
+  "shipper",
+  "kiriminaja",
+]);
+export const invoiceStatus = pgEnum("invoice_status", [
+  "dibayar",
+  "menunggu",
+  "gagal",
+]);
+export const platformActivityKind = pgEnum("platform_activity_kind", [
+  "signup",
+  "upgrade",
+  "payment",
+  "churn",
+  "support",
+  "admin",
+]);
+export const notificationChannel = pgEnum("notification_channel", [
+  "email",
+  "wa",
+]);
+export const pageTemplateType = pgEnum("page_template_type", [
+  "homepage",
+  "category",
+  "product",
+]); // ADR 0009 — Store Builder
 export const storeDomainStatus = pgEnum("store_domain_status", [
   "pending", // added, TXT not yet verified
   "verifying", // TXT check in progress
@@ -84,7 +245,9 @@ export const accounts = pgTable("accounts", {
 
 export const stores = pgTable("stores", {
   id: pk(),
-  accountId: uuid().notNull().references(() => accounts.id),
+  accountId: uuid()
+    .notNull()
+    .references(() => accounts.id),
   name: text().notNull(),
   slug: text().notNull().unique(),
   city: text(),
@@ -203,7 +366,9 @@ export const stores = pgTable("stores", {
 // metrics that are otherwise aggregated from each store's orders/products — refreshed by a
 // job in production; seeded directly for the demo. Keeps platform pages off full scans.
 export const storeStats = pgTable("store_stats", {
-  storeId: uuid().primaryKey().references(() => stores.id),
+  storeId: uuid()
+    .primaryKey()
+    .references(() => stores.id),
   gmvIdr: money().notNull().default(0),
   ordersCount: integer().notNull().default(0),
   productsCount: integer().notNull().default(0),
@@ -237,8 +402,12 @@ export const storeUsers = pgTable(
   "store_users",
   {
     id: pk(),
-    storeId: uuid().notNull().references(() => stores.id),
-    userId: uuid().notNull().references(() => users.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id),
     role: storeUserRole().notNull().default("staff"),
     invitedAt: ts(),
     acceptedAt: ts(),
@@ -248,7 +417,9 @@ export const storeUsers = pgTable(
 
 export const locations = pgTable("locations", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   name: text().notNull(),
   address: text(),
   isDefault: boolean().notNull().default(false),
@@ -259,7 +430,9 @@ export const products = pgTable(
   "products",
   {
     id: pk(),
-    storeId: uuid().notNull().references(() => stores.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
     title: text().notNull(),
     handle: text().notNull(),
     // The FULL product story — shown in the "Deskripsi Produk" section BELOW the buy box on the PDP.
@@ -275,7 +448,9 @@ export const products = pgTable(
     seoDesc: text(), // ≤160 chars; storefront meta description prefers this over `description`
     // Standard taxonomy for Google/Meta/TikTok feeds (ADR 0011) — separate from `category`.
     // `google_category_id` is Google Product Taxonomy's own numeric id; the path is cached for feeds.
-    googleCategoryId: integer().references((): AnyPgColumn => productTaxonomy.id),
+    googleCategoryId: integer().references(
+      (): AnyPgColumn => productTaxonomy.id,
+    ),
     googleCategoryPath: text(),
     // Apparel feed attributes Google/Meta require (ADR 0011 Phase 2). `color`/`size` come from the
     // variant options (Warna/Ukuran), `brand` from the store, `condition` is always "new" — so only
@@ -336,7 +511,9 @@ export const products = pgTable(
 // because it is a HOT counter: every product create row-locks it, and parking that lock on a row that
 // billing, branding or settings also write is how a save starts waiting on a product insert.
 export const storeCounters = pgTable("store_counters", {
-  storeId: uuid().primaryKey().references(() => stores.id),
+  storeId: uuid()
+    .primaryKey()
+    .references(() => stores.id),
   // Next product number to hand out. Allocation is ONE statement (insert … on conflict do update …
   // returning), so two concurrent creates in the same store serialise on this row and neither retries.
   productNext: integer().notNull().default(1001),
@@ -344,7 +521,9 @@ export const storeCounters = pgTable("store_counters", {
 
 export const productMedia = pgTable("product_media", {
   id: pk(),
-  productId: uuid().notNull().references(() => products.id),
+  productId: uuid()
+    .notNull()
+    .references(() => products.id),
   url: text().notNull(),
   alt: text(),
   position: integer().notNull().default(0),
@@ -352,42 +531,56 @@ export const productMedia = pgTable("product_media", {
 
 export const productOptions = pgTable("product_options", {
   id: pk(),
-  productId: uuid().notNull().references(() => products.id),
+  productId: uuid()
+    .notNull()
+    .references(() => products.id),
   name: text().notNull(),
   position: integer().notNull().default(0),
 });
 
-export const productVariants = pgTable("product_variants", {
-  id: pk(),
-  productId: uuid().notNull().references(() => products.id),
-  storeId: uuid().notNull().references(() => stores.id),
-  title: text().notNull().default("Default"),
-  sku: text(),
-  barcode: text(),
-  priceIdr: money().notNull().default(0),
-  compareAtIdr: money(),
-  costIdr: money(),
-  weightGrams: integer(),
-  option1: text(),
-  option2: text(),
-  option3: text(),
-  // DISPLAY order. It used to be identity too — the feed's `handle-{n}` ordinal was this column's rank
-  // — which meant dragging a variant re-keyed the catalog item. `seq` took that job (ADR 0013); this
-  // is now only what it says it is.
-  position: integer().notNull().default(0),
-  // Stable per-product variant number, allocated from `products.variant_seq_next` and NEVER reused.
-  // Deleting the middle of three variants leaves -1 and -3; -2 is retired, because handing it to the
-  // next variant would silently re-point a live Meta/Google catalog item at a different SKU.
-  // No default, same reasoning as `products.number`.
-  seq: integer().notNull(),
-}, (t) => [unique().on(t.productId, t.seq)]);
+export const productVariants = pgTable(
+  "product_variants",
+  {
+    id: pk(),
+    productId: uuid()
+      .notNull()
+      .references(() => products.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    title: text().notNull().default("Default"),
+    sku: text(),
+    barcode: text(),
+    priceIdr: money().notNull().default(0),
+    compareAtIdr: money(),
+    costIdr: money(),
+    weightGrams: integer(),
+    option1: text(),
+    option2: text(),
+    option3: text(),
+    // DISPLAY order. It used to be identity too — the feed's `handle-{n}` ordinal was this column's rank
+    // — which meant dragging a variant re-keyed the catalog item. `seq` took that job (ADR 0013); this
+    // is now only what it says it is.
+    position: integer().notNull().default(0),
+    // Stable per-product variant number, allocated from `products.variant_seq_next` and NEVER reused.
+    // Deleting the middle of three variants leaves -1 and -3; -2 is retired, because handing it to the
+    // next variant would silently re-point a live Meta/Google catalog item at a different SKU.
+    // No default, same reasoning as `products.number`.
+    seq: integer().notNull(),
+  },
+  (t) => [unique().on(t.productId, t.seq)],
+);
 
 export const inventoryLevels = pgTable(
   "inventory_levels",
   {
     id: pk(),
-    variantId: uuid().notNull().references(() => productVariants.id),
-    locationId: uuid().notNull().references(() => locations.id),
+    variantId: uuid()
+      .notNull()
+      .references(() => productVariants.id),
+    locationId: uuid()
+      .notNull()
+      .references(() => locations.id),
     available: integer().notNull().default(0),
     incoming: integer().notNull().default(0),
     committed: integer().notNull().default(0),
@@ -400,7 +593,9 @@ export const collections = pgTable(
   "collections",
   {
     id: pk(),
-    storeId: uuid().notNull().references(() => stores.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
     title: text().notNull(),
     handle: text().notNull(),
     description: text(),
@@ -427,8 +622,12 @@ export const collections = pgTable(
 export const collectionProducts = pgTable(
   "collection_products",
   {
-    collectionId: uuid().notNull().references(() => collections.id),
-    productId: uuid().notNull().references(() => products.id),
+    collectionId: uuid()
+      .notNull()
+      .references(() => collections.id),
+    productId: uuid()
+      .notNull()
+      .references(() => products.id),
     position: integer().notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.collectionId, t.productId] })],
@@ -436,7 +635,9 @@ export const collectionProducts = pgTable(
 
 export const collectionConditions = pgTable("collection_conditions", {
   id: pk(),
-  collectionId: uuid().notNull().references(() => collections.id),
+  collectionId: uuid()
+    .notNull()
+    .references(() => collections.id),
   field: conditionField().notNull(),
   operator: conditionOperator().notNull(),
   value: text().notNull(),
@@ -449,7 +650,9 @@ export const collectionConditions = pgTable("collection_conditions", {
 // read the same `config` shape). Rendered live by the storefront's SSR (no rebuild on save).
 export const pageTemplates = pgTable("page_templates", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   type: pageTemplateType().notNull(),
   name: text().notNull(),
   sections: jsonb().notNull().default([]),
@@ -468,8 +671,12 @@ export const promoPages = pgTable(
   "promo_pages",
   {
     id: pk(),
-    storeId: uuid().notNull().references(() => stores.id),
-    productId: uuid().notNull().references(() => products.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    productId: uuid()
+      .notNull()
+      .references(() => products.id),
     enabled: boolean().notNull().default(false),
     headline: text(), // null = use products.title
     subheadline: text(), // null = use products.description
@@ -498,11 +705,15 @@ export const landingPages = pgTable(
   "landing_pages",
   {
     id: pk(),
-    storeId: uuid().notNull().references(() => stores.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
     slug: text().notNull(), // URL segment: /lp/<slug>
     title: text().notNull(), // <title> / OG
     html: text().notNull().default(""), // the pasted custom landing markup (body content)
-    productId: uuid().notNull().references(() => products.id), // the product the checkout orders
+    productId: uuid()
+      .notNull()
+      .references(() => products.id), // the product the checkout orders
     enabled: boolean().notNull().default(false),
     countdownMinutes: integer().notNull().default(0),
     showScarcity: boolean().notNull().default(true),
@@ -516,7 +727,9 @@ export const landingPages = pgTable(
 // ---------- suppliers & purchasing ----------
 export const suppliers = pgTable("suppliers", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   name: text().notNull(),
   contact: text(),
   phone: text(),
@@ -526,21 +739,29 @@ export const suppliers = pgTable("suppliers", {
 // ⚠️ `code` is unique PER STORE (0084). Globally unique was actively broken here: the code is
 // `PO-${Date.now().toString().slice(-6)}`, which REPEATS every ~16.7 minutes, so two purchase orders
 // created anywhere on the platform at the same point in that cycle collided and the second failed.
-export const purchaseOrders = pgTable("purchase_orders", {
-  id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
-  supplierId: uuid().references(() => suppliers.id),
-  code: text().notNull(),
-  status: poStatus().notNull().default("draft"),
-  totalIdr: money().notNull().default(0),
-  etaDate: date(),
-  note: text(),
-  createdAt: createdAt(),
-}, (t) => [unique().on(t.storeId, t.code)]);
+export const purchaseOrders = pgTable(
+  "purchase_orders",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    supplierId: uuid().references(() => suppliers.id),
+    code: text().notNull(),
+    status: poStatus().notNull().default("draft"),
+    totalIdr: money().notNull().default(0),
+    etaDate: date(),
+    note: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [unique().on(t.storeId, t.code)],
+);
 
 export const purchaseOrderItems = pgTable("purchase_order_items", {
   id: pk(),
-  purchaseOrderId: uuid().notNull().references(() => purchaseOrders.id),
+  purchaseOrderId: uuid()
+    .notNull()
+    .references(() => purchaseOrders.id),
   variantId: uuid().references(() => productVariants.id),
   qty: integer().notNull().default(0),
   costIdr: money().notNull().default(0),
@@ -549,7 +770,9 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
 
 export const stockTransfers = pgTable("stock_transfers", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   fromLocation: uuid().references(() => locations.id),
   toLocation: uuid().references(() => locations.id),
   status: transferStatus().notNull().default("draft"),
@@ -568,7 +791,9 @@ export const stockTransfers = pgTable("stock_transfers", {
 // far more reliably than an email, and WhatsApp is the channel every follow-up actually travels on.
 export const customers = pgTable("customers", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   name: text().notNull(),
   email: text(),
   phone: text(),
@@ -603,12 +828,25 @@ export const customers = pgTable("customers", {
 // anonymous carts. `wa_templates` already holds a `keranjang` template — it finally has something
 // real to point at.
 // ─────────────────────────────────────────────────────────────────────────────
-export const checkoutStatus = pgEnum("checkout_status", ["aktif", "ditinggal", "pulih", "kedaluwarsa"]);
-export const checkoutStep = pgEnum("checkout_step", ["keranjang", "kontak", "alamat", "pengiriman", "pembayaran"]);
+export const checkoutStatus = pgEnum("checkout_status", [
+  "aktif",
+  "ditinggal",
+  "pulih",
+  "kedaluwarsa",
+]);
+export const checkoutStep = pgEnum("checkout_step", [
+  "keranjang",
+  "kontak",
+  "alamat",
+  "pengiriman",
+  "pembayaran",
+]);
 
 export const checkoutSessions = pgTable("checkout_sessions", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   // The storefront session id the funnel events already use, so a cart joins to its own journey.
   sessionId: text().notNull(),
   customerId: uuid().references(() => customers.id),
@@ -648,7 +886,9 @@ export const checkoutSessions = pgTable("checkout_sessions", {
 
 export const orders = pgTable("orders", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   number: text().notNull().unique(),
   customerId: uuid().references(() => customers.id),
   status: orderStatus().notNull().default("baru"),
@@ -739,9 +979,79 @@ export const orders = pgTable("orders", {
   placedAt: createdAt(),
 });
 
+// Immutable checkout-time allocation. This is the audit source for seller proceeds; the legacy
+// orders.discount_idr remains a compatibility total but cannot distinguish goods from shipping.
+export const orderFinancials = pgTable(
+  "order_financials",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    orderId: uuid()
+      .notNull()
+      .references(() => orders.id),
+    goodsDiscountIdr: money().notNull().default(0),
+    shippingDiscountIdr: money().notNull().default(0),
+    includedSalesTaxIdr: money().notNull().default(0),
+    goodsProceedsIdr: money().notNull().default(0),
+    shippingChargedIdr: money().notNull().default(0),
+    codFeeBeforeVatIdr: money().notNull().default(0),
+    codFeeVatIdr: money().notNull().default(0),
+    codFeeFinalIdr: money().notNull().default(0),
+    orderPayableIdr: money().notNull().default(0),
+    expectedGatewayFeeIdr: money().notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique().on(t.orderId),
+    index("order_financials_store_idx").on(t.storeId),
+  ],
+);
+
+// Append-only shipment history. A provider reference is persisted before the external call, so an
+// accepted booking can be reconciled even if the post-call local transaction fails.
+export const shipmentBookings = pgTable(
+  "shipment_bookings",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    orderId: uuid()
+      .notNull()
+      .references(() => orders.id),
+    providerReference: text().notNull().unique(),
+    providerBookingId: text().unique(),
+    courier: text().notNull(),
+    serviceType: text().notNull(),
+    serviceName: text().notNull(),
+    status: shipmentBookingStatus().notNull().default("reserved"),
+    shippingChargedIdr: money().notNull().default(0),
+    shippingActualIdr: money().notNull().default(0),
+    shippingDeltaIdr: money().notNull().default(0),
+    sellerDebitIdr: money().notNull().default(0),
+    platformMarginIdr: money().notNull().default(0),
+    failureNote: text(),
+    acceptedAt: ts(),
+    voidedAt: ts(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("shipment_bookings_store_order_idx").on(t.storeId, t.orderId),
+    uniqueIndex("shipment_one_active_per_order")
+      .on(t.orderId)
+      .where(
+        sql`${t.status} in ('reserved', 'unknown', 'accepted', 'cancellation_requested')`,
+      ),
+  ],
+);
+
 export const orderLineItems = pgTable("order_line_items", {
   id: pk(),
-  orderId: uuid().notNull().references(() => orders.id),
+  orderId: uuid()
+    .notNull()
+    .references(() => orders.id),
   variantId: uuid().references(() => productVariants.id),
   title: text().notNull(),
   qty: integer().notNull().default(1),
@@ -751,7 +1061,9 @@ export const orderLineItems = pgTable("order_line_items", {
 
 export const payments = pgTable("payments", {
   id: pk(),
-  orderId: uuid().notNull().references(() => orders.id),
+  orderId: uuid()
+    .notNull()
+    .references(() => orders.id),
   method: paymentMethod().notNull(),
   amountIdr: money().notNull().default(0),
   status: paymentStatus().notNull().default("menunggu"),
@@ -776,7 +1088,9 @@ export const payments = pgTable("payments", {
 
 export const fulfillments = pgTable("fulfillments", {
   id: pk(),
-  orderId: uuid().notNull().references(() => orders.id),
+  orderId: uuid()
+    .notNull()
+    .references(() => orders.id),
   courier: text(),
   trackingNo: text(),
   status: fulfillmentStatus().notNull().default("menunggu"),
@@ -786,7 +1100,9 @@ export const fulfillments = pgTable("fulfillments", {
 // ---------- customers extras ----------
 export const customerAddresses = pgTable("customer_addresses", {
   id: pk(),
-  customerId: uuid().notNull().references(() => customers.id),
+  customerId: uuid()
+    .notNull()
+    .references(() => customers.id),
   label: text(),
   recipient: text(),
   phone: text(),
@@ -798,7 +1114,9 @@ export const customerAddresses = pgTable("customer_addresses", {
 
 export const customerSegments = pgTable("customer_segments", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   name: text().notNull(),
   description: text(),
   rule: jsonb(),
@@ -808,7 +1126,9 @@ export const customerSegments = pgTable("customer_segments", {
 
 export const reviews = pgTable("reviews", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   customerId: uuid().references(() => customers.id),
   productId: uuid().references(() => products.id),
   productName: text(), // denormalized display (some demo reviews reference legacy, non-catalog products)
@@ -823,7 +1143,9 @@ export const reviews = pgTable("reviews", {
 // ---------- CRM ----------
 export const leads = pgTable("leads", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   name: text().notNull(),
   phone: text(),
   source: leadSource().notNull().default("whatsapp"),
@@ -835,7 +1157,9 @@ export const leads = pgTable("leads", {
 
 export const followups = pgTable("followups", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   customerId: uuid().references(() => customers.id),
   phone: text(),
   type: followupType().notNull(),
@@ -848,7 +1172,9 @@ export const followups = pgTable("followups", {
 
 export const waTemplates = pgTable("wa_templates", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   name: text().notNull(),
   type: text(),
   body: text().notNull(),
@@ -856,7 +1182,9 @@ export const waTemplates = pgTable("wa_templates", {
 
 export const waMessages = pgTable("wa_messages", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   followupId: uuid().references(() => followups.id),
   leadId: uuid().references(() => leads.id),
   phone: text(),
@@ -869,23 +1197,31 @@ export const waMessages = pgTable("wa_messages", {
 // to register a string owned it across the whole platform — and Indonesian promo codes collide
 // constantly (GAJIAN, DISKON10, GRATISONGKIR). The rejection also told the second merchant the code was
 // taken, which is a working way to probe a competitor's codes. Reads were always store-scoped.
-export const discounts = pgTable("discounts", {
-  id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
-  code: text().notNull(),
-  kind: discountKind().notNull(),
-  value: integer().notNull().default(0),
-  minPurchaseIdr: money().notNull().default(0),
-  usageLimit: integer(),
-  usedCount: integer().notNull().default(0),
-  startsAt: ts(),
-  endsAt: ts(),
-  status: discountStatus().notNull().default("aktif"),
-}, (t) => [unique().on(t.storeId, t.code)]);
+export const discounts = pgTable(
+  "discounts",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    code: text().notNull(),
+    kind: discountKind().notNull(),
+    value: integer().notNull().default(0),
+    minPurchaseIdr: money().notNull().default(0),
+    usageLimit: integer(),
+    usedCount: integer().notNull().default(0),
+    startsAt: ts(),
+    endsAt: ts(),
+    status: discountStatus().notNull().default("aktif"),
+  },
+  (t) => [unique().on(t.storeId, t.code)],
+);
 
 export const discountUsages = pgTable("discount_usages", {
   id: pk(),
-  discountId: uuid().notNull().references(() => discounts.id),
+  discountId: uuid()
+    .notNull()
+    .references(() => discounts.id),
   orderId: uuid().references(() => orders.id),
   usedAt: createdAt(),
 });
@@ -896,7 +1232,9 @@ export const discountUsages = pgTable("discount_usages", {
 // the window — computed at read time, never stored, so the clock alone flips it on and off.
 export const flashSales = pgTable("flash_sales", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   name: text().notNull(),
   startsAt: ts().notNull(),
   endsAt: ts().notNull(),
@@ -913,8 +1251,12 @@ export const flashSaleItems = pgTable(
   "flash_sale_items",
   {
     id: pk(),
-    flashSaleId: uuid().notNull().references(() => flashSales.id, { onDelete: "cascade" }),
-    productId: uuid().notNull().references(() => products.id),
+    flashSaleId: uuid()
+      .notNull()
+      .references(() => flashSales.id, { onDelete: "cascade" }),
+    productId: uuid()
+      .notNull()
+      .references(() => products.id),
     salePriceIdr: money().notNull(),
   },
   (t) => [unique().on(t.flashSaleId, t.productId)],
@@ -925,7 +1267,9 @@ export const pages = pgTable(
   "pages",
   {
     id: pk(),
-    storeId: uuid().notNull().references(() => stores.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
     title: text().notNull(),
     handle: text().notNull(),
     body: text(),
@@ -939,7 +1283,9 @@ export const pages = pgTable(
 
 export const blogs = pgTable("blogs", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   title: text().notNull(),
   handle: text().notNull(),
 });
@@ -948,8 +1294,12 @@ export const articles = pgTable(
   "articles",
   {
     id: pk(),
-    blogId: uuid().notNull().references(() => blogs.id),
-    storeId: uuid().notNull().references(() => stores.id),
+    blogId: uuid()
+      .notNull()
+      .references(() => blogs.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
     title: text().notNull(),
     handle: text().notNull(),
     body: text(),
@@ -967,14 +1317,18 @@ export const articles = pgTable(
 
 export const menus = pgTable("menus", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   name: text().notNull(),
   handle: text().notNull(),
 });
 
 export const menuItems = pgTable("menu_items", {
   id: pk(),
-  menuId: uuid().notNull().references(() => menus.id),
+  menuId: uuid()
+    .notNull()
+    .references(() => menus.id),
   parentId: uuid().references((): AnyPgColumn => menuItems.id),
   label: text().notNull(),
   type: menuItemType().notNull().default("url"),
@@ -985,7 +1339,9 @@ export const menuItems = pgTable("menu_items", {
 // ---------- marketing & analytics ----------
 export const adChannels = pgTable("ad_channels", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   key: adChannelKey().notNull(),
   name: text(),
   brand: text(),
@@ -1004,7 +1360,9 @@ export const adChannels = pgTable("ad_channels", {
 
 export const adMetrics = pgTable("ad_metrics", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   channelKey: adChannelKey(), // null = province rollup across all channels
   date: date().notNull(),
   province: text(),
@@ -1026,7 +1384,9 @@ export const storeTrackingChannels = pgTable(
   "store_tracking_channels",
   {
     id: pk(),
-    storeId: uuid().notNull().references(() => stores.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
     channel: adChannelKey().notNull(), // meta | google | tiktok
     enabled: boolean().notNull().default(false), // merchant switched browser tracking on
     pixelId: text(), // Meta Pixel ID · GA4 Measurement ID (G-XXXX) · TikTok Pixel ID — PUBLIC
@@ -1077,7 +1437,9 @@ export const trackingEventDeliveries = pgTable(
   "tracking_event_deliveries",
   {
     id: pk(),
-    storeId: uuid().notNull().references(() => stores.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
     channel: adChannelKey().notNull(), // meta | google | tiktok
     eventName: text().notNull(), // Purchase (MVP) — the normalized name, mapped per provider in the sender
     // Shared with the browser pixel so the provider de-duplicates instead of double-counting.
@@ -1114,7 +1476,9 @@ export const trackingEventDeliveries = pgTable(
 // number on /analitik is genuinely counted from rows, in dev and in prod alike.
 export const analyticsEvents = pgTable("analytics_events", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   ts: createdAt(),
   type: text().notNull(),
   sessionId: text(),
@@ -1138,7 +1502,9 @@ export const analyticsDaily = pgTable(
   "analytics_daily",
   {
     id: pk(),
-    storeId: uuid().notNull().references(() => stores.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
     date: date().notNull(),
     salesIdr: money().notNull().default(0),
     orders: integer().notNull().default(0),
@@ -1173,12 +1539,19 @@ export const analyticsDaily = pgTable(
 //     the door and settles days later. Crediting there is crediting money nobody has.
 // It is a platform setting (`platform_payout.release_on`) rather than a constant, so it can be
 // loosened without a deploy — but it defaults to the safe end on purpose.
-export const ledgerKind = pgEnum("ledger_kind", ["sale", "retur", "payout", "adjustment"]);
+export const ledgerKind = pgEnum("ledger_kind", [
+  "sale",
+  "retur",
+  "payout",
+  "adjustment",
+]);
 export const ledgerStatus = pgEnum("ledger_status", ["pending", "available"]);
 
 export const ledgerEntries = pgTable("ledger_entries", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   orderId: uuid().references(() => orders.id),
   // The payment that actually collected the money (migration 0041). A `sale` entry exists because
   // a shopper PAID — so the entry points at the payment, and a partial unique index
@@ -1186,6 +1559,8 @@ export const ledgerEntries = pgTable("ledger_entries", {
   // impossible. Gateway callbacks retry; buttons get double-clicked. The guarantee lives in the
   // DB, not in the hope that the caller fires exactly once.
   paymentId: uuid().references(() => payments.id),
+  shipmentBookingId: uuid().references(() => shipmentBookings.id),
+  component: text(),
   payoutId: uuid(),
   kind: ledgerKind().notNull(),
   status: ledgerStatus().notNull().default("pending"),
@@ -1198,11 +1573,18 @@ export const ledgerEntries = pgTable("ledger_entries", {
   availableAt: ts(),
 });
 
-export const payoutStatus = pgEnum("payout_status", ["menunggu", "diproses", "selesai", "gagal"]);
+export const payoutStatus = pgEnum("payout_status", [
+  "menunggu",
+  "diproses",
+  "selesai",
+  "gagal",
+]);
 
 export const payouts = pgTable("payouts", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   amountIdr: money().notNull().default(0),
   status: payoutStatus().notNull().default("menunggu"),
   // Snapshotted from store_settings at request time: if the merchant later edits their bank
@@ -1226,7 +1608,9 @@ export const platformPayout = pgTable("platform_payout", {
 });
 
 export const storeSettings = pgTable("store_settings", {
-  storeId: uuid().primaryKey().references(() => stores.id),
+  storeId: uuid()
+    .primaryKey()
+    .references(() => stores.id),
   // PPN on storefront sales. OFF by default — opt-in, so no existing store starts charging tax; the
   // order API only applies it (orders.tax_idr) when tax_enabled=true. Rate is the merchant's PPN %.
   taxEnabled: boolean().notNull().default(false),
@@ -1370,7 +1754,9 @@ export const storePaymentMethods = pgTable(
   "store_payment_methods",
   {
     id: pk(),
-    storeId: uuid().notNull().references(() => stores.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
     method: text().notNull(),
     enabled: boolean().notNull().default(true),
   },
@@ -1381,7 +1767,9 @@ export const storeShippingMethods = pgTable(
   "store_shipping_methods",
   {
     id: pk(),
-    storeId: uuid().notNull().references(() => stores.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
     courier: text().notNull(),
     service: text().notNull(),
     enabled: boolean().notNull().default(true),
@@ -1391,14 +1779,18 @@ export const storeShippingMethods = pgTable(
 
 export const domains = pgTable("domains", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   hostname: text().notNull(),
   verified: boolean().notNull().default(false),
 });
 
 export const notificationTemplates = pgTable("notification_templates", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   event: text().notNull(),
   channel: notificationChannel().notNull(),
   subject: text(),
@@ -1418,7 +1810,9 @@ export const plans = pgTable("plans", {
 export const invoices = pgTable("invoices", {
   id: pk(),
   number: text().notNull().unique(),
-  accountId: uuid().notNull().references(() => accounts.id),
+  accountId: uuid()
+    .notNull()
+    .references(() => accounts.id),
   storeId: uuid().references(() => stores.id),
   planKey: planKey().notNull(),
   amountIdr: money().notNull().default(0),
@@ -1493,7 +1887,9 @@ export const platformAdmins = pgTable("platform_admins", {
 // ---------- media library (Shopify-style Files) — all uploaded images for a store ----------
 export const media = pgTable("media", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   url: text().notNull(), // /api/uploads/<name>
   filename: text().notNull(), // original filename (display)
   mime: text().notNull(),
@@ -1516,7 +1912,9 @@ export const storeDomains = pgTable(
   "store_domains",
   {
     id: pk(),
-    storeId: uuid().notNull().references(() => stores.id, { onDelete: "cascade" }),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
     host: text().notNull(), // normalised: lowercase, no scheme/port/trailing dot
     status: storeDomainStatus().notNull().default("pending"),
     isPrimary: boolean().notNull().default(false), // at most ONE per store (partial unique index)
@@ -1533,15 +1931,23 @@ export const storeDomains = pgTable(
     hostKey: uniqueIndex("store_domains_host_key").on(t.host),
     storeIdx: index("store_domains_store_idx").on(t.storeId),
     // at most one primary per store — partial unique
-    onePrimary: uniqueIndex("store_domains_one_primary").on(t.storeId).where(sql`is_primary`),
+    onePrimary: uniqueIndex("store_domains_one_primary")
+      .on(t.storeId)
+      .where(sql`is_primary`),
   }),
 );
 
 // ---------- support tickets (2-sided: merchant ↔ platform) ----------
-export const ticketStatus = pgEnum("ticket_status", ["open", "answered", "closed"]);
+export const ticketStatus = pgEnum("ticket_status", [
+  "open",
+  "answered",
+  "closed",
+]);
 export const supportTickets = pgTable("support_tickets", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   subject: text().notNull(),
   status: ticketStatus().notNull().default("open"), // open = awaiting platform · answered = platform replied · closed
   lastMessageAt: createdAt(),
@@ -1549,9 +1955,13 @@ export const supportTickets = pgTable("support_tickets", {
 });
 export const supportMessages = pgTable("support_messages", {
   id: pk(),
-  ticketId: uuid().notNull().references(() => supportTickets.id),
+  ticketId: uuid()
+    .notNull()
+    .references(() => supportTickets.id),
   // denormalized on purpose: every RLS policy (0012) keys on store_id (migration 0035).
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   sender: text().notNull(), // "merchant" | "platform"
   body: text().notNull(),
   createdAt: createdAt(),
@@ -1564,15 +1974,28 @@ export const supportMessages = pgTable("support_messages", {
 // support ticket does not have, plus a spam surface, a block-list and an upgrade path to
 // `customers` — none of which belongs on a ticket row. The volume shapes differ by ~100×, and the
 // hot path (chat polling) must not share indexes with the cold one.
-export const chatVisitorStatus = pgEnum("chat_visitor_status", ["active", "blocked"]);
-export const conversationStatus = pgEnum("conversation_status", ["open", "snoozed", "closed"]);
-export const messageSender = pgEnum("message_sender", ["customer", "merchant", "system"]);
+export const chatVisitorStatus = pgEnum("chat_visitor_status", [
+  "active",
+  "blocked",
+]);
+export const conversationStatus = pgEnum("conversation_status", [
+  "open",
+  "snoozed",
+  "closed",
+]);
+export const messageSender = pgEnum("message_sender", [
+  "customer",
+  "merchant",
+  "system",
+]);
 
 // The subject of the shopper's signed `tokophi_chat` cookie (`vid`). Created on the FIRST message,
 // never on page load — a bot that never types leaves no row.
 export const chatVisitors = pgTable("chat_visitors", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   customerId: uuid().references(() => customers.id), // set on identity upgrade (checkout)
   name: text(), // what the shopper typed ("Nama") — only if they typed it
   phone: text(),
@@ -1586,8 +2009,12 @@ export const chatVisitors = pgTable("chat_visitors", {
 
 export const conversations = pgTable("conversations", {
   id: pk(),
-  storeId: uuid().notNull().references(() => stores.id),
-  visitorId: uuid().notNull().references(() => chatVisitors.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
+  visitorId: uuid()
+    .notNull()
+    .references(() => chatVisitors.id),
   customerId: uuid().references(() => customers.id), // denormalized on upgrade (fast inbox join)
   orderId: uuid().references(() => orders.id),
   status: conversationStatus().notNull().default("open"),
@@ -1604,11 +2031,15 @@ export const conversations = pgTable("conversations", {
 
 export const conversationMessages = pgTable("conversation_messages", {
   id: pk(),
-  conversationId: uuid().notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  conversationId: uuid()
+    .notNull()
+    .references(() => conversations.id, { onDelete: "cascade" }),
   // DENORMALIZED on purpose: every RLS policy keys on store_id (0012). A join-based policy would be
   // slower and inconsistent with the other 38 store-scoped tables. support_messages got this wrong
   // (fixed in 0035) — don't repeat it.
-  storeId: uuid().notNull().references(() => stores.id),
+  storeId: uuid()
+    .notNull()
+    .references(() => stores.id),
   sender: messageSender().notNull(),
   senderUserId: uuid().references(() => users.id), // which staff replied (null for customer/system)
   body: text().notNull(), // ≤ 2000 chars, checked in the action/route (not a CHECK)
@@ -1639,6 +2070,8 @@ export type Order = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
 export type OrderLineItem = typeof orderLineItems.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
+export type OrderFinancial = typeof orderFinancials.$inferSelect;
+export type ShipmentBooking = typeof shipmentBookings.$inferSelect;
 export type Fulfillment = typeof fulfillments.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
 export type Lead = typeof leads.$inferSelect;

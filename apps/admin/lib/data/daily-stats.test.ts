@@ -5,6 +5,8 @@ import { sql } from "drizzle-orm";
 import { getSeries, getSummary, shiftMonth } from "./dashboard";
 import type { DayPoint } from "@/lib/mock/store";
 import type { HourPoint } from "./analytics";
+import type { Tx } from "@/lib/tenant";
+import type { ReconciliationMismatch } from "./reconciliation";
 
 // The Dashboard / Analitik daily series — the numbers a merchant opens every morning.
 //
@@ -108,11 +110,14 @@ type Db = typeof db;
 let dailyStatsRows: (typeof import("./analytics"))["dailyStatsRows"];
 let hourlyStatsRows: (typeof import("./analytics"))["hourlyStatsRows"];
 let SERIES_DAYS: number;
+let reconciliationMismatchRows: (db: Tx, storeId: string, limit?: number) => Promise<ReconciliationMismatch[]>;
 
 beforeAll(async () => {
   if (!URL) return;
   process.env.DATABASE_URL ??= URL;
   ({ dailyStatsRows, hourlyStatsRows, SERIES_DAYS } = await import("./analytics"));
+  // Dynamic by design: skipped DB suites must not initialize @tokophi/db without DATABASE_URL.
+  ({ reconciliationMismatchRows } = await import("./reconciliation"));
   client = postgres(URL, { max: 1 });
   db = drizzle(client, { casing: "snake_case" });
 });
@@ -142,10 +147,12 @@ async function mkStore(tx: Db): Promise<string> {
 }
 /** An order placed at a WIB wall-clock instant. `total`/`tax` are what the revenue expression uses. */
 async function mkOrder(tx: Db, storeId: string, wib: string, total: number, opts: { tax?: number; status?: string } = {}) {
-  await tx.execute(sql`
+  const inserted = await rows(tx, sql`
     insert into orders (store_id, number, status, placed_at, total_idr, tax_idr)
     values (${storeId}, ${"DS-" + ++seq}, ${opts.status ?? "selesai"}::order_status,
-            timezone('Asia/Jakarta', ${wib}::timestamp), ${total}, ${opts.tax ?? 0})`);
+            timezone('Asia/Jakarta', ${wib}::timestamp), ${total}, ${opts.tax ?? 0})
+    returning id`);
+  return inserted[0].id as string;
 }
 // The suite's `db` is a bare drizzle handle; `dailyStatsRows` takes the schema-typed `Tx` that
 // `withTenant` hands out. Same object at runtime — one cast at the seam, not one per call site.
@@ -243,6 +250,66 @@ suite("daily series, derived from orders (real Postgres, under RLS)", () => {
       await asTenant(tx, mine);
       const days = await daily(tx);
       expect(days[days.length - 1].sales).toBe(10_000);
+    });
+  });
+
+  it("uses immutable Seller proceeds and accepted shipping debit, while the view remains tenant-scoped", async () => {
+    await inTxn(async (tx) => {
+      const mine = await mkStore(tx);
+      const theirs = await mkStore(tx);
+      const today = await wibDate(tx, 0);
+      const mineOrder = await mkOrder(tx, mine, `${today} 08:00`, 120_000);
+      const theirOrder = await mkOrder(tx, theirs, `${today} 08:00`, 999_000);
+      await tx.execute(sql`
+        insert into order_financials
+          (store_id, order_id, goods_proceeds_idr, shipping_charged_idr, order_payable_idr)
+        values
+          (${mine}, ${mineOrder}, 100000, 20000, 120000),
+          (${theirs}, ${theirOrder}, 999000, 0, 999000)`);
+      await tx.execute(sql`
+        insert into shipment_bookings
+          (store_id, order_id, provider_reference, courier, service_type, service_name, shipping_charged_idr,
+           shipping_actual_idr, seller_debit_idr, platform_margin_idr, status, accepted_at)
+        values
+          (${mine}, ${mineOrder}, ${"DS-BOOK-" + ++seq}, 'spx', '1', 'SPX Standard', 20000,
+           30000, 10000, 0, 'accepted', now())`);
+      await asTenant(tx, mine);
+
+      const days = await daily(tx);
+      expect(days[days.length - 1].sales).toBe(90_000);
+    });
+  });
+
+  it("the mismatch report is tenant-scoped and returns only inconsistent snapshots", async () => {
+    await inTxn(async (tx) => {
+      const mine = await mkStore(tx);
+      const theirs = await mkStore(tx);
+      const mineOrder = await mkOrder(tx, mine, `${await wibDate(tx)} 10:00`, 120_000);
+      const theirOrder = await mkOrder(tx, theirs, `${await wibDate(tx)} 10:00`, 999_000);
+      await tx.execute(sql`
+        insert into order_financials
+          (store_id, order_id, goods_proceeds_idr, shipping_charged_idr, order_payable_idr)
+        values
+          (${mine}, ${mineOrder}, 100000, 20000, 120001),
+          (${theirs}, ${theirOrder}, 999000, 0, 999001)`);
+      await asTenant(tx, mine);
+
+      const report = await reconciliationMismatchRows(tx as unknown as Tx, mine);
+      expect(report).toHaveLength(1);
+      expect(report[0].orderPayable).toBe(120_001);
+    });
+  });
+
+  it("the checkout allocation is immutable after insert", async () => {
+    await inTxn(async (tx) => {
+      const storeId = await mkStore(tx);
+      const orderId = await mkOrder(tx, storeId, `${await wibDate(tx)} 11:00`, 100_000);
+      await tx.execute(sql`
+        insert into order_financials (store_id, order_id, goods_proceeds_idr, order_payable_idr)
+        values (${storeId}, ${orderId}, 100000, 100000)`);
+      await expect(
+        tx.execute(sql`update order_financials set goods_proceeds_idr = 1 where order_id = ${orderId}`),
+      ).rejects.toThrow(/immutable/i);
     });
   });
 

@@ -140,11 +140,13 @@ const store = Astro.locals.store;
     // "Subtotal 300.000 · Ongkir 25.000 · Total 300.000" and 25rb simply vanished, with no line to
     // explain it. On the COD panel that missing number is the cash a courier will ask for.
     var disc = order.discount || 0;
-    // Exclusive PPN adds on top; inclusive PPN is already inside the subtotal. This used to be inferred
-    // from `subtotal + ongkir + tax === total`, which a discount breaks — so any voucher flipped the
-    // label to "Termasuk PPN" on tax that had in fact been added on top. Now the discount is part of
-    // the identity, so the test describes the real arithmetic.
-    var taxExclusive = tax > 0 && Math.round((order.subtotal || 0) + shipPrice + tax - disc) === Math.round(order.total || 0);
+    var codFeeBeforeVat = order.codFeeBeforeVat || 0;
+    var codFeeVat = order.codFeeVat || 0;
+    var codFee = order.codFee || (codFeeBeforeVat + codFeeVat);
+    var gatewayFee = order.paymentFee || 0;
+    var buyerPayable = order.buyerPayable || order.total || 0;
+    var orderBaseTotal = Math.max(0, (order.total || 0) - codFee);
+    var taxExclusive = tax > 0 && Math.round((order.subtotal || 0) + shipPrice + tax - disc) === Math.round(orderBaseTotal);
 
     summary.innerHTML =
       '<div class="rounded-lg border border-[var(--co-line)] bg-white p-5 sm:p-6">' +
@@ -156,10 +158,13 @@ const store = Astro.locals.store;
       (disc > 0 ? '<div class="flex items-center justify-between text-emerald-600"><span>Diskon</span><span class="font-medium tabular-nums">−' + idr.format(disc) + "</span></div>" : "") +
       (taxExclusive ? '<div class="flex items-center justify-between"><span class="text-[var(--co-muted)]">PPN</span><span class="font-medium text-ink tabular-nums">' + idr.format(tax) + "</span></div>" : "") +
       (tax > 0 && !taxExclusive ? '<div class="flex items-center justify-between text-xs"><span class="text-[var(--co-muted)]">Termasuk PPN</span><span class="text-[var(--co-muted)] tabular-nums">' + idr.format(tax) + "</span></div>" : "") +
+      (codFeeBeforeVat > 0 ? '<div class="flex items-center justify-between"><span class="text-[var(--co-muted)]">Biaya COD</span><span class="font-medium text-ink tabular-nums">' + idr.format(codFeeBeforeVat) + "</span></div>" : "") +
+      (codFeeVat > 0 ? '<div class="flex items-center justify-between"><span class="text-[var(--co-muted)]">PPN biaya COD</span><span class="font-medium text-ink tabular-nums">' + idr.format(codFeeVat) + "</span></div>" : "") +
+      (gatewayFee > 0 ? '<div class="flex items-center justify-between"><span class="text-[var(--co-muted)]">Biaya pembayaran</span><span class="font-medium text-ink tabular-nums">' + idr.format(gatewayFee) + "</span></div>" : "") +
       "</div>" +
       '<div class="mt-4 flex items-center justify-between border-t border-[var(--co-line)] pt-4">' +
-      '<span class="text-base font-medium text-ink">Total</span>' +
-      '<span class="text-2xl font-semibold text-ink tabular-nums">' + idr.format(order.total || 0) + "</span>" +
+      '<span class="text-base font-medium text-ink">Total dibayar</span>' +
+      '<span class="text-2xl font-semibold text-ink tabular-nums">' + idr.format(buyerPayable) + "</span>" +
       "</div>" +
       "</div>";
 
@@ -213,10 +218,16 @@ const store = Astro.locals.store;
       if (pay.virtualAccount) lines += kv("Nomor Virtual Account", esc(pay.virtualAccount), true);
       if (pay.paymentCode) lines += kv("Kode Pembayaran", esc(pay.paymentCode), true);
       if (pay.qr) {
+        var qrImage = typeof pay.qrImage === "string" && pay.qrImage.indexOf("data:image/png;base64,") === 0
+          ? '<img src="' + esc(pay.qrImage) + '" alt="Kode QRIS untuk pembayaran pesanan ' + esc(order.number || "") + '" width="320" height="320" class="mx-auto h-auto w-full max-w-[320px] bg-white" />'
+          : '<p class="rounded border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-800">Gambar QR tidak tersedia. Salin payload QRIS di bawah ke aplikasi pembayaran.</p>';
         lines +=
-          '<div class="py-1.5"><p class="text-sm text-[var(--co-muted)]">Kode QRIS</p>' +
-          '<p class="mt-1 break-all rounded border border-[var(--co-line)] bg-[var(--co-panel)] p-2 font-mono text-xs text-ink">' +
-          esc(pay.qr) + "</p></div>";
+          '<div class="py-2"><p class="text-sm font-medium text-ink">Scan QRIS</p>' +
+          '<div class="mt-2 rounded-lg bg-white p-4">' + qrImage + "</div>" +
+          '<label class="mt-3 block text-xs text-[var(--co-muted)]" for="qris-payload">Payload QRIS (fallback)</label>' +
+          '<textarea id="qris-payload" readonly rows="3" class="mt-1 w-full resize-none break-all rounded border border-[var(--co-line)] bg-[var(--co-panel)] p-2 font-mono text-xs text-ink">' +
+          esc(pay.qr) + "</textarea>" +
+          '<button type="button" data-copy-qr class="mt-2 rounded-lg border border-[var(--co-line)] px-3 py-2 text-xs font-medium text-ink">Salin payload QRIS</button></div>';
       }
       // ⚠️ THE GATEWAY'S ADMIN FEE IS ADDED AFTER THE SHOPPER AGREED TO THE TOTAL, and both numbers
       // sit on this one screen: the summary above says `order.total`, this box says `pay.total`, which
@@ -224,8 +235,8 @@ const store = Astro.locals.store;
       // account, no callback ever fires, and the order sits unpaid with nobody able to explain why.
       // Name the fee instead of letting two totals argue silently. (`orders`/`payments` keep the
       // pre-fee amount, which is correct — the fee is the gateway's, not the merchant's revenue.)
-      var payTotal = pay.total || order.total || 0;
-      var adminFee = Math.max(0, payTotal - (order.total || 0));
+      var payTotal = pay.total || buyerPayable;
+      var adminFee = Math.max(0, Number(pay.admin ?? gatewayFee));
       lines +=
         '<div class="mt-1 border-t border-[var(--co-line)] pt-3">' +
         (adminFee > 0
@@ -237,6 +248,14 @@ const store = Astro.locals.store;
           ? '<p class="mt-2 text-xs text-[var(--co-muted)]">Transfer <span class="font-medium text-ink">persis</span> sejumlah Total bayar di atas — kurang atau lebih membuat pembayaran tidak terdeteksi otomatis.</p>'
           : "") +
         "</div>";
+      if (pay.expiresAt) {
+        var expiry = new Date(pay.expiresAt);
+        if (!Number.isNaN(expiry.getTime())) {
+          lines += '<p class="mt-3 text-xs text-[var(--co-muted)]">Berlaku sampai ' +
+            esc(new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(expiry)) +
+            " WIB.</p>";
+        }
+      }
       if (pay.url) {
         lines +=
           '<a href="' + esc(pay.url) +
@@ -249,6 +268,17 @@ const store = Astro.locals.store;
         lines,
         "accent",
       );
+      var copyQr = payBox.querySelector("[data-copy-qr]");
+      if (copyQr) {
+        copyQr.addEventListener("click", function () {
+          navigator.clipboard.writeText(String(pay.qr || "")).then(function () {
+            copyQr.textContent = "Payload tersalin";
+          }).catch(function () {
+            var payload = document.getElementById("qris-payload");
+            if (payload) { payload.focus(); payload.select(); }
+          });
+        });
+      }
     }
 
     var noteEl = document.getElementById("order-note");

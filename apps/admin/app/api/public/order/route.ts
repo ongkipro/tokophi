@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { alCreatePayment, autolarisConfigured } from "@tokophi/lib/autolaris";
+import QRCode from "qrcode";
+import { calculateOrderFinance } from "@tokophi/lib/order-finance";
+import {
+  PAYMENT_FEES,
+  paymentFee,
+  type FeeKind,
+} from "@tokophi/lib/payment-fees";
 import {
   normalizePhone,
   normalizeName,
@@ -30,7 +37,10 @@ import { IDR } from "@tokophi/lib/format";
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 import { applyDiscount } from "@/lib/promo";
 import { activeFlashPrices } from "@/lib/flash";
-import { clientContextFromRequest, enqueuePurchase } from "@/lib/tracking-events";
+import {
+  clientContextFromRequest,
+  enqueuePurchase,
+} from "@/lib/tracking-events";
 import { adChannel } from "@/lib/ad-channel";
 import { defaultInventoryLevelId } from "@/lib/inventory-location";
 
@@ -59,7 +69,13 @@ export function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS });
 }
 
-type Item = { handle?: string; name?: string; price?: number; variant?: string; qty?: number };
+type Item = {
+  handle?: string;
+  name?: string;
+  price?: number;
+  variant?: string;
+  qty?: number;
+};
 
 /** A rejected request: one Bahasa message the shopper can act on, plus the field it belongs to. */
 const bad = (error: string, field?: string, status = 400) =>
@@ -78,7 +94,8 @@ const bad = (error: string, field?: string, status = 400) =>
  * The throw path below already used this sentence. Both now do, so there is one string and no way
  * for the rc-path to drift back to the provider's.
  */
-const PAY_START_FAILED = "Pembayaran tidak dapat dimulai. Hubungi penjual dengan nomor pesanan ini.";
+const PAY_START_FAILED =
+  "Pembayaran tidak dapat dimulai. Hubungi penjual dengan nomor pesanan ini.";
 
 // ── THE ONE `inventory_levels` ROW A SALE TOUCHES ────────────────────────────────────────────────
 //
@@ -110,7 +127,10 @@ const PAY_START_FAILED = "Pembayaran tidak dapat dimulai. Hubungi penjual dengan
 
 /** Thrown inside the write transaction when a variant sold out between the pre-check and the lock. */
 class OutOfStock extends Error {
-  constructor(public product: string, public available: number) {
+  constructor(
+    public product: string,
+    public available: number,
+  ) {
     super("out of stock");
   }
 }
@@ -138,7 +158,10 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("[order] unhandled:", err);
     return NextResponse.json(
-      { ok: false, error: "Terjadi kesalahan saat memproses pesanan. Coba lagi sebentar." },
+      {
+        ok: false,
+        error: "Terjadi kesalahan saat memproses pesanan. Coba lagi sebentar.",
+      },
       { status: 500, headers: CORS },
     );
   }
@@ -152,17 +175,37 @@ async function handle(req: Request) {
     sessionId?: string; // the storefront checkout session this order came from (checkout_sessions)
     items?: Item[];
     customer?: { name?: string; phone?: string; email?: string };
-    address?: { alamat?: string; kota?: string; provinsi?: string; kodepos?: string };
+    address?: {
+      alamat?: string;
+      kota?: string;
+      provinsi?: string;
+      kodepos?: string;
+    };
     // `cost` is deliberately NOT read — the price is re-quoted below. `service`/`serviceType` ARE:
     // they say WHICH service the shopper picked, which is a choice, not a price.
-    shipping?: { label?: string; cost?: number; service?: string; serviceType?: string; destId?: number };
+    shipping?: {
+      label?: string;
+      cost?: number;
+      service?: string;
+      serviceType?: string;
+      destId?: number;
+    };
     destId?: number; // KiriminAja district id the ongkir quote was issued for
     channelCode?: string;
     discountCode?: string; // PROMO P0 — a voucher; validated + priced by lib/promo (never trusted from the body)
     // ADR 0012 — the ad platforms' own cookies, read on the storefront. OPAQUE: never authorization,
     // never priced against, never stored beyond the conversion row; only forwarded to the merchant's
     // own pixel provider as match keys. Length-bounded in clientContextFromRequest.
-    trackingCookies?: { fbp?: string; fbc?: string; ga?: string; gcl?: string; ttp?: string; ttclid?: string; utmSource?: string; utmMedium?: string };
+    trackingCookies?: {
+      fbp?: string;
+      fbc?: string;
+      ga?: string;
+      gcl?: string;
+      ttp?: string;
+      ttclid?: string;
+      utmSource?: string;
+      utmMedium?: string;
+    };
   };
   // Capped read — see `lib/public-guard.ts`. `req.json()` buffers whatever arrives: a 64 MB body was
   // accepted, parsed and held in this process's heap before this line existed.
@@ -239,6 +282,36 @@ async function handle(req: Request) {
     .where(eq(schema.stores.slug, slug))
     .limit(1);
   if (!store) return bad("Toko tidak ditemukan.");
+  const checkoutSessionId =
+    typeof body.sessionId === "string" ? body.sessionId.slice(0, 64) : "";
+  if (checkoutSessionId) {
+    const [existingOrder] = await db
+      .select({ number: schema.orders.number })
+      .from(schema.checkoutSessions)
+      .innerJoin(
+        schema.orders,
+        eq(schema.orders.id, schema.checkoutSessions.recoveredOrderId),
+      )
+      .where(
+        and(
+          eq(schema.checkoutSessions.storeId, store.id),
+          eq(schema.checkoutSessions.sessionId, checkoutSessionId),
+        ),
+      )
+      .limit(1);
+    if (existingOrder) {
+      return NextResponse.json(
+        {
+          ok: false,
+          orderCreated: true,
+          orderNumber: existingOrder.number,
+          error: `Pesanan ${existingOrder.number} sudah tercatat. Jangan kirim ulang checkout ini.`,
+          code: "order_already_created",
+        },
+        { status: 409, headers: CORS },
+      );
+    }
+  }
 
   // ── VALIDATE + NORMALISE THE SHOPPER'S INPUT ──────────────────────────────────────────────────
   // The rules live in @tokophi/lib/validate and are shared with the checkout form, which runs them
@@ -278,7 +351,11 @@ async function handle(req: Request) {
   // to trust them for COD — so there is no reason to store them either.
   const destId = Number(body.shipping?.destId ?? body.destId);
   const area = await areaById(destId);
-  if (!area) return bad("Kecamatan tujuan tidak valid — pilih dari daftar.", "kecamatan");
+  if (!area)
+    return bad(
+      "Kecamatan tujuan tidak valid — pilih dari daftar.",
+      "kecamatan",
+    );
   const kota = area.city ?? null;
   const provinsi = area.province ?? null;
 
@@ -287,14 +364,26 @@ async function handle(req: Request) {
   // into every line item — i.e. the shopper's browser priced the goods, so `price: 0` bought them
   // for nothing. Same class of hole as the client-posted ongkir below. Stock is checked BEFORE
   // anything is written, so an out-of-stock cart is rejected cleanly (real oversell prevention).
-  const resolved: { variantId: string; title: string; price: number; qty: number; handle: string }[] = [];
+  const resolved: {
+    variantId: string;
+    title: string;
+    price: number;
+    qty: number;
+    handle: string;
+  }[] = [];
   // Flash sale (PROMO P3): productId → promo price for sales live RIGHT NOW. Applied below per line,
   // ONLY when it undercuts the variant's base price — the storefront advertised it, so the order must
   // honour it; this is where that advertised price becomes money.
   const flash = await activeFlashPrices(store.id);
   // Collected across the WHOLE cart, not thrown at the first mismatch: the shopper should be told
   // everything that moved in one go, and the client needs every corrected price to repair the cart.
-  const priceChanges: { handle: string; variant: string; title: string; was: number; now: number }[] = [];
+  const priceChanges: {
+    handle: string;
+    variant: string;
+    title: string;
+    was: number;
+    now: number;
+  }[] = [];
 
   for (const i of items) {
     const qty = Math.max(1, Math.floor(Number(i.qty) || 1));
@@ -309,7 +398,11 @@ async function handle(req: Request) {
         ),
       )
       .limit(1);
-    if (!prod) return bad(`Produk "${i.name ?? i.handle}" sudah tidak tersedia.`, "items");
+    if (!prod)
+      return bad(
+        `Produk "${i.name ?? i.handle}" sudah tidak tersedia.`,
+        "items",
+      );
 
     const vars = await db
       .select({
@@ -360,12 +453,17 @@ async function handle(req: Request) {
         .where(eq(schema.inventoryLevels.id, preInvId));
       available = Number(inv?.available ?? 0);
     }
-    if (available < qty) return bad(`Stok "${prod.title}" tidak mencukupi (sisa ${available}).`, "items");
+    if (available < qty)
+      return bad(
+        `Stok "${prod.title}" tidak mencukupi (sisa ${available}).`,
+        "items",
+      );
 
     // A live flash sale price overrides the base, but only DOWNWARD (never raises it — a misconfigured
     // sale above list still charges list). Same object the storefront shows as the struck-through deal.
     const flashPrice = flash.get(prod.id);
-    const unitPrice = flashPrice != null ? Math.min(match.price, flashPrice) : match.price;
+    const unitPrice =
+      flashPrice != null ? Math.min(match.price, flashPrice) : match.price;
 
     // ── THE CART IS REFUSED IF ITS PRICE MOVED ───────────────────────────────────────────────────
     //
@@ -388,13 +486,22 @@ async function handle(req: Request) {
     // and it re-quotes from a fresh page load anyway.
     const quoted = Number(i.price);
     if (Number.isFinite(quoted) && quoted > 0 && quoted !== unitPrice) {
-      priceChanges.push({ handle: i.handle!, variant: i.variant ?? "", title: prod.title, was: quoted, now: unitPrice });
+      priceChanges.push({
+        handle: i.handle!,
+        variant: i.variant ?? "",
+        title: prod.title,
+        was: quoted,
+        now: unitPrice,
+      });
     }
 
     resolved.push({
       variantId: match.id,
       // The line-item title comes from the DB too — the client's `name` is decoration.
-      title: match.title && match.title !== "Default" ? `${prod.title} — ${match.title}` : prod.title,
+      title:
+        match.title && match.title !== "Default"
+          ? `${prod.title} — ${match.title}`
+          : prod.title,
       price: unitPrice,
       qty,
       handle: i.handle!,
@@ -426,7 +533,10 @@ async function handle(req: Request) {
   if (priceChanges.length) {
     const first = priceChanges[0];
     const arah = first.now > first.was ? "naik" : "turun";
-    const extra = priceChanges.length > 1 ? ` (dan ${priceChanges.length - 1} produk lain)` : "";
+    const extra =
+      priceChanges.length > 1
+        ? ` (dan ${priceChanges.length - 1} produk lain)`
+        : "";
     return NextResponse.json(
       {
         ok: false,
@@ -434,7 +544,11 @@ async function handle(req: Request) {
         error:
           `Harga "${first.title}" ${arah} dari ${IDR(first.was)} menjadi ${IDR(first.now)}${extra}. ` +
           `Keranjang sudah diperbarui — periksa totalnya, lalu tekan Bayar lagi.`,
-        repriced: priceChanges.map((c) => ({ handle: c.handle, variant: c.variant, price: c.now })),
+        repriced: priceChanges.map((c) => ({
+          handle: c.handle,
+          variant: c.variant,
+          price: c.now,
+        })),
       },
       { status: 409, headers: CORS },
     );
@@ -450,7 +564,12 @@ async function handle(req: Request) {
   // up, no explanation, and on COD it is the cash the courier asks for.
   // The per-line prices go back too, so the success page can render the lines the ORDER holds
   // rather than the ones the tab remembered.
-  const lines = resolved.map((r) => ({ handle: r.handle, title: r.title, qty: r.qty, price: r.price }));
+  const lines = resolved.map((r) => ({
+    handle: r.handle,
+    title: r.title,
+    qty: r.qty,
+    price: r.price,
+  }));
 
   // ── PPN: server-priced, like everything else here ─────────────────────────────────────────────
   // Read the store's tax settings and compute PPN on the goods subtotal (NOT ongkir — shipping is a
@@ -458,8 +577,11 @@ async function handle(req: Request) {
   // checkout display uses, so the shopper is charged exactly what they were shown.
   const [taxCfg] = await db
     .select({
-      enabled: schema.storeSettings.taxEnabled, ratePct: schema.storeSettings.taxRatePct, inclusive: schema.storeSettings.taxInclusive,
-      freeShipEnabled: schema.storeSettings.freeShipEnabled, freeShipMinIdr: schema.storeSettings.freeShipMinIdr,
+      enabled: schema.storeSettings.taxEnabled,
+      ratePct: schema.storeSettings.taxRatePct,
+      inclusive: schema.storeSettings.taxInclusive,
+      freeShipEnabled: schema.storeSettings.freeShipEnabled,
+      freeShipMinIdr: schema.storeSettings.freeShipMinIdr,
     })
     .from(schema.storeSettings)
     .where(eq(schema.storeSettings.storeId, store.id))
@@ -493,7 +615,11 @@ async function handle(req: Request) {
     storeId: store.id,
     storeCity: store.city,
     destinationId: destId,
-    items: resolved.map((r) => ({ variantId: r.variantId, handle: r.handle, qty: r.qty })),
+    items: resolved.map((r) => ({
+      variantId: r.variantId,
+      handle: r.handle,
+      qty: r.qty,
+    })),
     itemValue: subtotal, // the SERVER-priced goods value (insurance) — not the cart's claim
     // ⚠️ SCOPED TO THE COURIER THEY PICKED — and this line is load-bearing in BOTH directions.
     //
@@ -519,12 +645,19 @@ async function handle(req: Request) {
   // page. OUR failures ("Tujuan belum dipilih.", "Alamat pengambilan toko belum diatur.") are still
   // returned as-is: those are ours to say, and they are the ones anyone can act on.
   if (!quote.ok) {
-    if (quote.fromProvider) console.error("[order] courier API refused the quote:", quote.error);
-    return bad(quote.fromProvider ? SHIPPING_QUOTE_UNAVAILABLE : quote.error, "shipping");
+    if (quote.fromProvider)
+      console.error("[order] courier API refused the quote:", quote.error);
+    return bad(
+      quote.fromProvider ? SHIPPING_QUOTE_UNAVAILABLE : quote.error,
+      "shipping",
+    );
   }
   const rate = findRate(quote.rates, svcCode, svcType);
   if (!rate) {
-    return bad("Layanan pengiriman yang dipilih tidak tersedia lagi. Muat ulang halaman checkout.", "shipping");
+    return bad(
+      "Layanan pengiriman yang dipilih tidak tersedia lagi. Muat ulang halaman checkout.",
+      "shipping",
+    );
   }
   const shippingCost = Math.round(rate.cost);
 
@@ -538,7 +671,12 @@ async function handle(req: Request) {
   let appliedDiscountId: string | null = null;
   let appliedDiscountCode = "";
   if (body.discountCode) {
-    const dres = await applyDiscount({ storeId: store.id, code: body.discountCode, subtotal, shippingCost });
+    const dres = await applyDiscount({
+      storeId: store.id,
+      code: body.discountCode,
+      subtotal,
+      shippingCost,
+    });
     if (!dres.ok) return bad(dres.error, "discount");
     voucherPriceOff = dres.priceOff;
     voucherShipOff = dres.shipOff;
@@ -550,7 +688,10 @@ async function handle(req: Request) {
   // Store-level: goods subtotal ≥ merchant's threshold ⇒ ongkir free, no code needed. Server-priced,
   // so a client can't fake the threshold. It and a `gratis_ongkir` VOUCHER both zero the SAME ongkir —
   // take the LARGER shipping reduction (not the sum), never charging the courier's cost twice.
-  const autoFreeShip = taxCfg?.freeShipEnabled && subtotal >= (taxCfg?.freeShipMinIdr ?? 0) ? shippingCost : 0;
+  const autoFreeShip =
+    taxCfg?.freeShipEnabled && subtotal >= (taxCfg?.freeShipMinIdr ?? 0)
+      ? shippingCost
+      : 0;
   const shipOff = Math.max(voucherShipOff, autoFreeShip);
   const discountIdr = voucherPriceOff + shipOff;
 
@@ -558,9 +699,32 @@ async function handle(req: Request) {
   // it discounts ongkir, which is not in the PPN base to begin with.
   const tax = computeTax(Math.max(0, subtotal - voucherPriceOff), taxSettings);
 
-  // Exclusive PPN adds on top; inclusive PPN is already inside `subtotal` (addToTotal = 0). Either way
-  // the COD-cap check below and the payment amount both see the real amount the shopper pays.
-  const total = subtotal + shippingCost + tax.addToTotal - discountIdr;
+  const paymentKind = isCod ? "cod" : "prepaid";
+  const baseFinance = calculateOrderFinance({
+    subtotalIdr: subtotal,
+    goodsDiscountIdr: voucherPriceOff,
+    shippingListIdr: shippingCost,
+    shippingDiscountIdr: shipOff,
+    salesTaxLiabilityIdr: tax.taxIdr,
+    salesTaxAddedIdr: tax.addToTotal,
+    paymentKind,
+  });
+  const gatewayKind = payChannel?.kind as FeeKind | undefined;
+  const expectedGatewayFee =
+    !isCod && gatewayKind && gatewayKind in PAYMENT_FEES
+      ? paymentFee(gatewayKind, baseFinance.orderPayableIdr)
+      : 0;
+  const finance = calculateOrderFinance({
+    subtotalIdr: subtotal,
+    goodsDiscountIdr: voucherPriceOff,
+    shippingListIdr: shippingCost,
+    shippingDiscountIdr: shipOff,
+    salesTaxLiabilityIdr: tax.taxIdr,
+    salesTaxAddedIdr: tax.addToTotal,
+    paymentKind,
+    gatewayFeeIdr: expectedGatewayFee,
+  });
+  const total = finance.orderPayableIdr;
 
   // ── COD is a MONEY decision, so it is enforced here, not in the storefront UI ──────────────────
   // All five switches must agree (lib/cod.ts): platform on, merchant on, total ≤ the platform cap,
@@ -579,14 +743,26 @@ async function handle(req: Request) {
     // parcel booked COD on a service that will not collect COD there.
     if (!rate.cod) {
       return NextResponse.json(
-        { ok: false, error: "COD tidak tersedia untuk layanan dan tujuan ini.", code: "cod_not_allowed" },
+        {
+          ok: false,
+          error: "COD tidak tersedia untuk layanan dan tujuan ini.",
+          code: "cod_not_allowed",
+        },
         { status: 403, headers: CORS },
       );
     }
     const policy = await getCodPolicy(store.id);
-    const reason = policy.reason({ courier: svcCode, serviceType: svcType, total, province: provinsi });
+    const reason = policy.reason({
+      courier: svcCode,
+      serviceType: svcType,
+      total,
+      province: provinsi,
+    });
     if (reason) {
-      return NextResponse.json({ ok: false, error: reason, code: "cod_not_allowed" }, { status: 403, headers: CORS });
+      return NextResponse.json(
+        { ok: false, error: reason, code: "cod_not_allowed" },
+        { status: 403, headers: CORS },
+      );
     }
   }
 
@@ -603,7 +779,8 @@ async function handle(req: Request) {
   // transaction open.
   // Payment channel is known before the write; the row is created INSIDE the txn (below) so an order
   // can never commit without one.
-  const payMethod = channelCode === "QRIS" ? "qris" : channelCode === "DANA" ? "dana" : "va";
+  const payMethod =
+    channelCode === "QRIS" ? "qris" : channelCode === "DANA" ? "dana" : "va";
   const alConfigured = autolarisConfigured();
   let customerId: string;
   let order: { id: string; number: string };
@@ -614,7 +791,12 @@ async function handle(req: Request) {
       const [existing] = await tx
         .select({ id: schema.customers.id })
         .from(schema.customers)
-        .where(and(eq(schema.customers.storeId, store.id), eq(schema.customers.phone, phone)))
+        .where(
+          and(
+            eq(schema.customers.storeId, store.id),
+            eq(schema.customers.phone, phone),
+          ),
+        )
         .limit(1);
       if (existing) {
         cid = existing.id;
@@ -622,12 +804,24 @@ async function handle(req: Request) {
         // ever blanking what we already had.
         await tx
           .update(schema.customers)
-          .set({ name, ...(email ? { email } : {}), city: kota, province: provinsi })
+          .set({
+            name,
+            ...(email ? { email } : {}),
+            city: kota,
+            province: provinsi,
+          })
           .where(eq(schema.customers.id, existing.id));
       } else {
         const [ins] = await tx
           .insert(schema.customers)
-          .values({ storeId: store.id, name, email, phone, city: kota, province: provinsi })
+          .values({
+            storeId: store.id,
+            name,
+            email,
+            phone,
+            city: kota,
+            province: provinsi,
+          })
           .returning({ id: schema.customers.id });
         cid = ins.id;
       }
@@ -666,7 +860,9 @@ async function handle(req: Request) {
       // decrement below cannot re-resolve to a different one (two variants can never share a row —
       // `unique(variant_id, location_id)`).
       const spend = new Map<string, { qty: number; title: string }>();
-      for (const [variantId, need] of [...needByVariant.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+      for (const [variantId, need] of [...needByVariant.entries()].sort(
+        (a, b) => a[0].localeCompare(b[0]),
+      )) {
         // Resolve tenant-scoped FIRST, then lock THAT id. ⚠️ A null is REFUSED here, never skipped:
         // this is the gate in front of a stock write, the variant is already known to be this
         // store's (its product was read with `storeId = store.id`), so "no row" is "no stock" —
@@ -706,44 +902,78 @@ async function handle(req: Request) {
       const number =
         "PHI-" +
         Date.now().toString().slice(-9) +
-        Math.floor(Math.random() * 46656).toString(36).toUpperCase().padStart(3, "0");
-      const [ord] = await tx.insert(schema.orders).values({
-    storeId: store.id, number, customerId: cid, status: "baru", financialStatus: "pending", channel: adChannel(body.trackingCookies),
-    subtotalIdr: subtotal, shippingIdr: shippingCost, taxIdr: tax.taxIdr, discountIdr, totalIdr: total,
-    // The courier the shopper actually picked — `rate.code`, i.e. the courier of the fresh server-side
-    // quote we matched (svcCode === rate.code by findRate), never the client's raw claim. Recording it
-    // here is what makes the per-courier COD return-rate report a `group by courier` instead of an
-    // impossibility: without it a regular checkout booked no courier and orders.courier stayed NULL.
-    courier: rate.code,
-    // …and WHICH of that courier's services. `courier` alone is ambiguous — SPX Standard (type 1) and
-    // SPX Economy (type 3) are different products at different prices, and we already matched the
-    // shopper's pick on courier+type in the fresh quote above, so throwing the type away here is
-    // throwing away the only record of what they actually bought. The admin needs it to auto-book the
-    // right service, and it is the join key to platform_couriers.services[].group (1 day / reguler /
-    // ekonomi / cargo). Same omission `courier` itself had until d562ee2.
-    serviceType: rate.type,
-    city: kota, province: provinsi,
+        Math.floor(Math.random() * 46656)
+          .toString(36)
+          .toUpperCase()
+          .padStart(3, "0");
+      const [ord] = await tx
+        .insert(schema.orders)
+        .values({
+          storeId: store.id,
+          number,
+          customerId: cid,
+          status: "baru",
+          financialStatus: "pending",
+          channel: adChannel(body.trackingCookies),
+          subtotalIdr: subtotal,
+          shippingIdr: shippingCost,
+          taxIdr: tax.taxIdr,
+          discountIdr,
+          totalIdr: total,
+          // The courier the shopper actually picked — `rate.code`, i.e. the courier of the fresh server-side
+          // quote we matched (svcCode === rate.code by findRate), never the client's raw claim. Recording it
+          // here is what makes the per-courier COD return-rate report a `group by courier` instead of an
+          // impossibility: without it a regular checkout booked no courier and orders.courier stayed NULL.
+          courier: rate.code,
+          // …and WHICH of that courier's services. `courier` alone is ambiguous — SPX Standard (type 1) and
+          // SPX Economy (type 3) are different products at different prices, and we already matched the
+          // shopper's pick on courier+type in the fresh quote above, so throwing the type away here is
+          // throwing away the only record of what they actually bought. The admin needs it to auto-book the
+          // right service, and it is the join key to platform_couriers.services[].group (1 day / reguler /
+          // ekonomi / cargo). Same omission `courier` itself had until d562ee2.
+          serviceType: rate.type,
+          city: kota,
+          province: provinsi,
 
-    // SNAPSHOT the shipping address onto the order (0042). It is deliberately NOT a lookup back to
-    // `customer_addresses`: that lives on the CUSTOMER and changes. Without this, a buyer who moves
-    // house silently moves every past order with them — reprint an old label and the parcel goes to
-    // the wrong door. The address belongs to the TRANSACTION, not the person.
-    //
-    // `shipDistrictId` is the KiriminAja kecamatan this order's ongkir was quoted against; it is the
-    // same id the COD province gate refuses to trust the typed city over, and it is what the courier
-    // will actually be booked to.
-    shipRecipient: name,
-    shipPhone: phone, // canonical 62xxx — the format KiriminAja books against
-    shipAddress: alamat,
-    shipPostcode: kodepos,
-    shipDistrictId: destId,
-  }).returning({ id: schema.orders.id, number: schema.orders.number });
+          // SNAPSHOT the shipping address onto the order (0042). It is deliberately NOT a lookup back to
+          // `customer_addresses`: that lives on the CUSTOMER and changes. Without this, a buyer who moves
+          // house silently moves every past order with them — reprint an old label and the parcel goes to
+          // the wrong door. The address belongs to the TRANSACTION, not the person.
+          //
+          // `shipDistrictId` is the KiriminAja kecamatan this order's ongkir was quoted against; it is the
+          // same id the COD province gate refuses to trust the typed city over, and it is what the courier
+          // will actually be booked to.
+          shipRecipient: name,
+          shipPhone: phone, // canonical 62xxx — the format KiriminAja books against
+          shipAddress: alamat,
+          shipPostcode: kodepos,
+          shipDistrictId: destId,
+        })
+        .returning({ id: schema.orders.id, number: schema.orders.number });
+
+      await tx.insert(schema.orderFinancials).values({
+        storeId: store.id,
+        orderId: ord.id,
+        goodsDiscountIdr: finance.goodsDiscountIdr,
+        shippingDiscountIdr: finance.shippingDiscountIdr,
+        includedSalesTaxIdr: finance.includedSalesTaxIdr,
+        goodsProceedsIdr: finance.goodsProceedsIdr,
+        shippingChargedIdr: finance.shippingChargedIdr,
+        codFeeBeforeVatIdr: finance.codFeeBeforeVatIdr,
+        codFeeVatIdr: finance.codFeeVatIdr,
+        codFeeFinalIdr: finance.codFeeFinalIdr,
+        orderPayableIdr: finance.orderPayableIdr,
+        expectedGatewayFeeIdr: finance.gatewayFeeIdr,
+      });
 
       for (const r of resolved) {
         await tx.insert(schema.orderLineItems).values({
-          orderId: ord.id, variantId: r.variantId,
+          orderId: ord.id,
+          variantId: r.variantId,
           title: r.title,
-          qty: r.qty, priceIdr: r.price, totalIdr: r.price * r.qty,
+          qty: r.qty,
+          priceIdr: r.price,
+          totalIdr: r.price * r.qty,
         });
       }
 
@@ -760,8 +990,11 @@ async function handle(req: Request) {
         // This is an UNGUARDED write, so it does not resolve anything: it writes the id the loop
         // above locked, which is the only place the tenant filter and the stock check happened. No
         // null can reach here — that loop threw.
-        await tx.update(schema.inventoryLevels)
-          .set({ available: sql`${schema.inventoryLevels.available} - ${need.qty}` })
+        await tx
+          .update(schema.inventoryLevels)
+          .set({
+            available: sql`${schema.inventoryLevels.available} - ${need.qty}`,
+          })
           .where(eq(schema.inventoryLevels.id, invId));
       }
 
@@ -772,13 +1005,27 @@ async function handle(req: Request) {
       // unconfigured-AutoLaris dev store inserts nothing and is handled below.)
       if (isCod) {
         await tx.insert(schema.payments).values({
-          orderId: ord.id, storeId: store.id, method: "cod", amountIdr: total, status: "menunggu",
-          provider: "cod", reffId: ord.number, channelCode: "COD", total,
+          orderId: ord.id,
+          storeId: store.id,
+          method: "cod",
+          amountIdr: total,
+          status: "menunggu",
+          provider: "cod",
+          reffId: ord.number,
+          channelCode: "COD",
+          total,
         });
       } else if (alConfigured) {
         await tx.insert(schema.payments).values({
-          orderId: ord.id, storeId: store.id, method: payMethod, amountIdr: total, status: "menunggu",
-          provider: "autolaris", reffId: ord.number, channelCode, total,
+          orderId: ord.id,
+          storeId: store.id,
+          method: payMethod,
+          amountIdr: total,
+          status: "menunggu",
+          provider: "autolaris",
+          reffId: ord.number,
+          channelCode,
+          total,
         });
       }
 
@@ -790,7 +1037,9 @@ async function handle(req: Request) {
       // the bare `usedCount + 1` let every one of them through. The conditional update is the lock:
       // Postgres serialises the row, and whoever loses updates 0 rows and rolls the whole order back.
       if (appliedDiscountId) {
-        await tx.insert(schema.discountUsages).values({ discountId: appliedDiscountId, orderId: ord.id });
+        await tx
+          .insert(schema.discountUsages)
+          .values({ discountId: appliedDiscountId, orderId: ord.id });
         const bumped = await tx
           .update(schema.discounts)
           .set({ usedCount: sql`${schema.discounts.usedCount} + 1` })
@@ -809,12 +1058,20 @@ async function handle(req: Request) {
   } catch (err) {
     if (err instanceof OutOfStock) {
       // 409, not 500: nothing was written (the txn rolled back) and the shopper can act on it.
-      return bad(`Stok "${err.product}" tidak mencukupi (sisa ${err.available}).`, "items", 409);
+      return bad(
+        `Stok "${err.product}" tidak mencukupi (sisa ${err.available}).`,
+        "items",
+        409,
+      );
     }
     if (err instanceof VoucherExhausted) {
       // Same shape: the txn rolled back, so no order and no redemption were written. Tell the shopper
       // to drop the code rather than leaving them at a generic failure they cannot act on.
-      return bad(`Kuota voucher "${err.code}" baru saja habis. Hapus kodenya untuk melanjutkan.`, "discount", 409);
+      return bad(
+        `Kuota voucher "${err.code}" baru saja habis. Hapus kodenya untuk melanjutkan.`,
+        "discount",
+        409,
+      );
     }
     throw err; // → the wrapper above, which answers WITH CORS instead of a bare Next 500
   }
@@ -829,19 +1086,25 @@ async function handle(req: Request) {
   // Scoped to (store_id, session_id) — the UNIQUE key — so this can only ever touch a session that
   // belongs to the store the order was just created in. Non-fatal by design: a paid order must never
   // fail because a marketing table did.
-  const checkoutSessionId = typeof body.sessionId === "string" ? body.sessionId.slice(0, 64) : "";
+  // Defined immediately after tenant resolution so the same browser session is also the order's
+  // idempotency key. Once recovered_order_id is filled, a retry can no longer create a second order.
   if (checkoutSessionId) {
     try {
-      await db.update(schema.checkoutSessions).set({
-        status: "pulih",
-        recoveredOrderId: order.id,
-        recoveredAt: new Date(),
-        customerId, // the guest finally has a customer row — link it back
-        updatedAt: new Date(),
-      }).where(and(
-        eq(schema.checkoutSessions.storeId, store.id),
-        eq(schema.checkoutSessions.sessionId, checkoutSessionId),
-      ));
+      await db
+        .update(schema.checkoutSessions)
+        .set({
+          status: "pulih",
+          recoveredOrderId: order.id,
+          recoveredAt: new Date(),
+          customerId, // the guest finally has a customer row — link it back
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.checkoutSessions.storeId, store.id),
+            eq(schema.checkoutSessions.sessionId, checkoutSessionId),
+          ),
+        );
     } catch (err) {
       console.error("[order] checkout session recover failed", err);
     }
@@ -861,26 +1124,80 @@ async function handle(req: Request) {
   // `browserPurchase` tells the storefront pixel whether THIS page view is a conversion: true for COD,
   // false for prepaid — /checkout/sukses shows an UNPAID virtual account, and counting that as a sale
   // would report every abandoned VA screen as revenue.
-  let tracking: { eventId: string; contentIds: string[]; browserPurchase: boolean } | null = null;
+  let tracking: {
+    eventId: string;
+    contentIds: string[];
+    browserPurchase: boolean;
+  } | null = null;
   try {
     // Both paths enqueue HERE, because this request is the only place the shopper's user agent, IP and
     // ad-platform cookies exist — a prepaid row is just created on hold and released by the callback.
-    const client = clientContextFromRequest(req, clientIp(req), body.trackingCookies);
-    const facts = await enqueuePurchase(store.id, order.id, client, { hold: !isCod });
-    if (facts) tracking = { eventId: facts.eventId, contentIds: facts.contentIds, browserPurchase: isCod };
+    const client = clientContextFromRequest(
+      req,
+      clientIp(req),
+      body.trackingCookies,
+    );
+    const facts = await enqueuePurchase(store.id, order.id, client, {
+      hold: !isCod,
+    });
+    if (facts)
+      tracking = {
+        eventId: facts.eventId,
+        contentIds: facts.contentIds,
+        browserPurchase: isCod,
+      };
   } catch (err) {
     console.error("[order] tracking enqueue failed", err);
   }
 
   // COD → the payment row was already written inside the order txn (collected on delivery, no gateway).
   if (isCod) {
-    return NextResponse.json({ ok: true, orderNumber: order.number, cod: true, subtotal, lines, shipping: shippingCost, tax: tax.taxIdr, discount: discountIdr, total, tracking }, { headers: CORS });
+    return NextResponse.json(
+      {
+        ok: true,
+        orderNumber: order.number,
+        cod: true,
+        subtotal,
+        lines,
+        shipping: shippingCost,
+        tax: tax.taxIdr,
+        discount: discountIdr,
+        goodsDiscount: finance.goodsDiscountIdr,
+        shippingDiscount: finance.shippingDiscountIdr,
+        codFee: finance.codFeeFinalIdr,
+        codFeeBeforeVat: finance.codFeeBeforeVatIdr,
+        codFeeVat: finance.codFeeVatIdr,
+        total,
+        buyerPayable: finance.buyerPayableIdr,
+        tracking,
+      },
+      { headers: CORS },
+    );
   }
 
   // AutoLaris: the pending payment row already exists (written in the txn); the gateway call below
   // enriches it. If AutoLaris isn't configured, no row was written and there is nothing to enrich.
   if (!alConfigured) {
-    return NextResponse.json({ ok: true, orderNumber: order.number, error: "Pembayaran belum dikonfigurasi.", tracking }, { headers: CORS });
+    return NextResponse.json(
+      {
+        ok: false,
+        orderCreated: true,
+        orderNumber: order.number,
+        error:
+          "Pesanan sudah tercatat, tetapi pembayaran belum dapat dibuat. Jangan kirim ulang pesanan ini.",
+        code: "payment_start_failed",
+        payError: "Pembayaran belum dikonfigurasi.",
+        subtotal,
+        lines,
+        shipping: shippingCost,
+        tax: tax.taxIdr,
+        discount: discountIdr,
+        total,
+        buyerPayable: finance.buyerPayableIdr,
+        tracking,
+      },
+      { status: 503, headers: CORS },
+    );
   }
   // THIS is where the double charge came from. `alCreatePayment` does an unguarded `await res.json()`
   // (packages/lib/src/autolaris.ts), so a network blip or a gateway's HTML 502 page THROWS rather
@@ -895,9 +1212,13 @@ async function handle(req: Request) {
   let pay: Awaited<ReturnType<typeof alCreatePayment>>;
   try {
     pay = await alCreatePayment({
-      reffId: order.number, channelCode, amount: total,
-      customerId, customerName: name,
-      customerPhone: phone, customerEmail: email || "order@tokophi.id",
+      reffId: order.number,
+      channelCode,
+      amount: total,
+      customerId,
+      customerName: name,
+      customerPhone: phone,
+      customerEmail: email || "order@tokophi.id",
       // WITH the token — the endpoint fails closed and a bare URL was a 401 on every real payment.
       callbackUrl: payCallbackUrl(),
     });
@@ -906,38 +1227,119 @@ async function handle(req: Request) {
     pay = { ok: false, error: PAY_START_FAILED };
   }
   if (!pay.ok) {
-    // The gateway's `ket` is the PROVIDER's copy (measured: "Unauthorized" on a bad key) — logged,
-    // never served. See PAY_START_FAILED.
-    console.error("[order] payment gateway refused for", order.number, "—", pay.error);
+    // The order and its pending payment shell already exist. Report a PARTIAL FAILURE, not success:
+    // checkout keeps the order context and the session id prevents a second order on retry.
+    console.error(
+      "[order] payment gateway refused for",
+      order.number,
+      "—",
+      pay.error,
+    );
     return NextResponse.json(
-      { ok: true, orderNumber: order.number, payError: PAY_START_FAILED, tracking },
-      { headers: CORS },
+      {
+        ok: false,
+        orderCreated: true,
+        orderNumber: order.number,
+        error:
+          "Pesanan sudah tercatat, tetapi pembayaran belum dapat dibuat. Jangan kirim ulang pesanan ini.",
+        code: "payment_start_failed",
+        payError: PAY_START_FAILED,
+        subtotal,
+        lines,
+        shipping: shippingCost,
+        tax: tax.taxIdr,
+        discount: discountIdr,
+        total,
+        buyerPayable: finance.buyerPayableIdr,
+        tracking,
+      },
+      { status: 502, headers: CORS },
     );
   }
   // Enrich the pending payment row (created atomically in the txn) with the gateway's VA/trxId/fees.
   // If this UPDATE were to fail, the order still has its payment row (pending) and the callback can
   // still match it by reffId — no orphaned order, no double bill on retry.
-  await db.update(schema.payments).set({
-    trxId: pay.trxId, adminFee: pay.admin ?? 0, total: pay.total ?? total,
-    virtualAccount: pay.virtualAccount, qr: pay.qr, url: pay.url, paymentCode: pay.paymentCode,
-  }).where(eq(schema.payments.orderId, order.id));
+  const actualGatewayFee = Math.max(
+    0,
+    Math.round(pay.admin ?? Math.max(0, (pay.total ?? total) - total)),
+  );
+  const actualBuyerPayable = Math.round(pay.total ?? total + actualGatewayFee);
+  await db
+    .update(schema.payments)
+    .set({
+      trxId: pay.trxId,
+      amountIdr: Math.round(pay.amount ?? total),
+      adminFee: actualGatewayFee,
+      total: actualBuyerPayable,
+      virtualAccount: pay.virtualAccount,
+      qr: pay.qr,
+      url: pay.url,
+      paymentCode: pay.paymentCode,
+    })
+    .where(eq(schema.payments.orderId, order.id));
+  let qrImage: string | null = null;
+  if (pay.qr) {
+    try {
+      qrImage = await QRCode.toDataURL(pay.qr, {
+        margin: 4,
+        width: 320,
+        errorCorrectionLevel: "M",
+      });
+    } catch (error) {
+      console.error(
+        "[order] QRIS image generation failed for",
+        order.number,
+        error,
+      );
+    }
+  }
   // `payChannel` is set by the gate above for every non-COD order, and the COD path returned long
   // before here — so the `??` is unreachable. It exists because this line runs AFTER the payment was
   // created, and it must not be the thing that throws. It used to be
   // `AUTOLARIS_KNOWN_CHANNELS.find(...)!` — a non-null assertion against a roster this endpoint no
   // longer validates against, so a channel enabled in the DB but missing from that list would 500
   // with the shopper's money already in flight and the order already written.
-  const channel = payChannel ?? { code: channelCode, label: channelCode, kind: "va" };
-  return NextResponse.json({
-    ok: true, orderNumber: order.number,
-    // The ongkir + total the SERVER decided, echoed back so a stale quote in the browser cannot leave
-    // the shopper believing a number the order does not contain.
-    subtotal, lines, shipping: shippingCost, tax: tax.taxIdr, discount: discountIdr, total,
-    tracking,
-    payment: {
-      channel: { code: channel.code, label: channel.label, kind: channel.kind },
-      virtualAccount: pay.virtualAccount, qr: pay.qr, paymentCode: pay.paymentCode, url: pay.url,
-      amount: pay.amount, admin: pay.admin, total: pay.total,
+  const channel = payChannel ?? {
+    code: channelCode,
+    label: channelCode,
+    kind: "va",
+  };
+  return NextResponse.json(
+    {
+      ok: true,
+      orderNumber: order.number,
+      // The ongkir + total the SERVER decided, echoed back so a stale quote in the browser cannot leave
+      // the shopper believing a number the order does not contain.
+      subtotal,
+      lines,
+      shipping: shippingCost,
+      tax: tax.taxIdr,
+      discount: discountIdr,
+      goodsDiscount: finance.goodsDiscountIdr,
+      shippingDiscount: finance.shippingDiscountIdr,
+      total,
+      gatewayFeeExpected: finance.gatewayFeeIdr,
+      gatewayFeeActual: actualGatewayFee,
+      buyerPayable: actualBuyerPayable,
+      feeMismatch: actualGatewayFee !== finance.gatewayFeeIdr,
+      tracking,
+      payment: {
+        channel: {
+          code: channel.code,
+          label: channel.label,
+          kind: channel.kind,
+        },
+        virtualAccount: pay.virtualAccount,
+        qr: pay.qr,
+        qrImage,
+        paymentCode: pay.paymentCode,
+        url: pay.url,
+        amount: pay.amount ?? total,
+        admin: actualGatewayFee,
+        total: actualBuyerPayable,
+        expiresAt: pay.expiresAt,
+      },
     },
-  }, { headers: CORS });
+    { headers: CORS },
+  );
 }

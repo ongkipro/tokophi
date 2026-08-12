@@ -1,10 +1,10 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
+import { requestPayoutInTenant } from "@/lib/payout";
 import {
   getExportRows,
   getInvoiceDetail,
@@ -30,87 +30,9 @@ export async function requestPayout(
   amount: number,
 ): Promise<{ ok: boolean; error?: string; payoutId?: string }> {
   const { storeId } = await requireCapability("settings:write");
-
-  return withTenant(storeId, async (db) => {
-    // Bank details first — there is nowhere to send the money without them.
-    const [settings] = (await db.execute(sql`
-      select bank_name as "bankName", bank_account as "bankAccount", bank_holder as "bankHolder"
-      from store_settings where store_id = ${storeId} limit 1
-    `)) as unknown as { bankName: string | null; bankAccount: string | null; bankHolder: string | null }[];
-
-    if (!settings?.bankAccount || !settings?.bankName) {
-      return { ok: false, error: "Lengkapi rekening bank dulu sebelum menarik saldo." };
-    }
-
-    const [policy] = (await db.execute(sql`
-      select min_payout_idr as "minPayout" from platform_payout limit 1
-    `)) as unknown as { minPayout: string | number }[];
-    const minPayout = Number(policy?.minPayout ?? 50_000);
-
-    // ── Serialise concurrent withdrawals for THIS store ──────────────────────
-    //
-    // The race is real: two "Tarik" clicks landing together could each read the same balance, each
-    // pass the "do you have enough?" test, and the merchant walks away with twice their money.
-    // Checking and then writing is not enough — the check has to HOLD until the write lands.
-    //
-    // A transaction-scoped ADVISORY lock keyed on the store does exactly that: the second request
-    // blocks here until this transaction commits, and only then reads a balance that already
-    // includes this payout's negative entry. It is released automatically on commit or rollback.
-    //
-    // NOT `FOR UPDATE`, for two reasons:
-    //   1. `select sum(amount_idr) … for update` is what this originally said, and Postgres rejects
-    //      it outright — "FOR UPDATE is not allowed with aggregate functions". EVERY withdrawal
-    //      threw. The guard against losing money was itself the thing that broke the feature.
-    //   2. Even written legally, row-locking the ledger locks a table that grows forever, so each
-    //      withdrawal would be slower than the last. The advisory lock is one key, regardless of size.
-    //
-    // `tsc` cannot see inside a SQL string, so nothing caught this until a payout was actually
-    // attempted. Money paths must be EXERCISED, not typechecked.
-    await db.execute(sql`select pg_advisory_xact_lock(hashtext(${storeId})::bigint)`);
-
-    const [bal] = (await db.execute(sql`
-      select coalesce(sum(amount_idr), 0)::bigint as "available"
-      from ledger_entries
-      where store_id = ${storeId} and status = 'available'
-    `)) as unknown as { available: string | number }[];
-    const available = Number(bal?.available ?? 0);
-
-    const want = Math.floor(amount);
-    if (!Number.isFinite(want) || want <= 0) return { ok: false, error: "Jumlah tidak valid." };
-    if (want < minPayout) {
-      return { ok: false, error: `Minimum penarikan Rp${minPayout.toLocaleString("id-ID")}.` };
-    }
-    if (want > available) {
-      return { ok: false, error: "Saldo tersedia tidak mencukupi." };
-    }
-
-    // Bank details are SNAPSHOTTED onto the payout: if the merchant edits their account later, a
-    // historical payout must still show where the money actually went.
-    const [payout] = await db
-      .insert(schema.payouts)
-      .values({
-        storeId,
-        amountIdr: want,
-        status: "menunggu",
-        bankName: settings.bankName,
-        bankAccount: settings.bankAccount,
-        bankHolder: settings.bankHolder,
-      })
-      .returning({ id: schema.payouts.id });
-
-    await db.insert(schema.ledgerEntries).values({
-      storeId,
-      payoutId: payout.id,
-      kind: "payout",
-      status: "available", // it leaves the available pool immediately — it is spoken for
-      amountIdr: -want,
-      note: "Penarikan saldo",
-      availableAt: new Date(),
-    });
-
-    revalidatePath("/saldo");
-    return { ok: true, payoutId: payout.id };
-  });
+  const result = await withTenant(storeId, (db) => requestPayoutInTenant(db, storeId, amount));
+  if (result.ok) revalidatePath("/saldo");
+  return result;
 }
 
 /** Rekening tujuan pencairan. */

@@ -223,6 +223,10 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
         coalesce(o.city,'')                                     as "city",
         o.ship_address                                          as "address",
         o.total_idr::bigint                                     as "total",
+        e.seller_entitlement_idr::bigint                      as "sellerEntitlement",
+        coalesce(f.goods_discount_idr, 0)::bigint               as "goodsDiscount",
+        coalesce(f.shipping_discount_idr, 0)::bigint            as "shippingDiscount",
+        (f.order_id is null)                                    as "allocationLegacy",
         o.status::text                                          as "status",
         (o.financial_status = 'dibayar')                        as "paid",
         o.courier                                               as "courier",
@@ -241,13 +245,17 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
         (select payments.method::text from payments where payments.order_id = o.id
          order by ${latestPaymentFirst()} limit 1)               as "paymentMethod"
       from orders o
+      join order_seller_entitlements e on e.order_id = o.id
+      left join order_financials f on f.order_id = o.id
       left join customers c on c.id = o.customer_id
       ${rowWhere}
       order by o.placed_at desc
       limit ${pageSize} offset ${offset}
     `)) as unknown as {
       id: string; number: string; buyer: string; city: string; address: string | null;
-      total: string | number; status: Order["status"]; paid: boolean; courier: string | null;
+      total: string | number; sellerEntitlement: string | number;
+      goodsDiscount: string | number; shippingDiscount: string | number; allocationLegacy: boolean;
+      status: Order["status"]; paid: boolean; courier: string | null;
       awb: string | null; problem: boolean; problemNote: string | null;
       placedAt: Date; paymentMethod: string | null;
     }[];
@@ -316,9 +324,13 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
           city: r.city,
           address: r.address,
           total: Number(r.total),
+          sellerEntitlement: Number(r.sellerEntitlement),
           paymentMethod: r.paymentMethod,
           paid: Boolean(r.paid),
           status: r.status,
+          goodsDiscount: Number(r.goodsDiscount),
+          shippingDiscount: Number(r.shippingDiscount),
+          allocationLegacy: Boolean(r.allocationLegacy),
           courier: r.courier,
           awb: r.awb,
           problem: Boolean(r.problem),

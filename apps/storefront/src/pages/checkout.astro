@@ -5,6 +5,7 @@ import CheckoutLayout from "../layouts/CheckoutLayout.astro";
 import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings, storeFreeShip } from "../data/catalog";
 import { noVariantChoice } from "../lib/cart-variant";
 import { db, schema } from "@tokophi/db";
+import { PAYMENT_FEES, type FeeKind } from "@tokophi/lib/payment-fees";
 import { and, eq } from "drizzle-orm";
 import { verifyRecoveryToken } from "../lib/recovery";
 
@@ -38,7 +39,17 @@ const payDesc = (kind: string, label: string) =>
   : kind === "ewallet" ? `Bayar pakai saldo ${label}`
   : kind === "retail" ? `Bayar tunai di gerai ${label}`
   : "Bayar online";
-const PAYMENTS = (await enabledPaymentChannels()).map((c) => ({ id: c.code, label: c.label, kind: c.kind, desc: payDesc(c.kind, c.label) }));
+const PAYMENTS = (await enabledPaymentChannels()).map((c) => {
+  const fee = PAYMENT_FEES[c.kind as FeeKind];
+  return {
+    id: c.code,
+    label: c.label,
+    kind: c.kind,
+    desc: payDesc(c.kind, c.label),
+    feeType: fee?.type ?? "flat",
+    feeValue: fee?.value ?? 0,
+  };
+});
 
 // Group by kind. A flat list of 6 radios made the five Virtual Accounts look like five unrelated
 // choices, so the shopper had to read every row to find their bank. Grouping is the whole job of this
@@ -242,6 +253,14 @@ if (rToken) {
         <div id="summary-discount-row" class="flex items-center justify-between text-emerald-600" hidden>
           <span id="summary-discount-label">Diskon voucher</span>
           <span id="summary-discount" class="font-medium tabular-nums">−Rp0</span>
+        </div>
+        <div id="summary-fee-row" class="flex items-center justify-between" hidden>
+          <span id="summary-fee-label" class="text-[var(--co-muted)]">Biaya pembayaran</span>
+          <span id="summary-fee" class="font-medium text-ink tabular-nums">Rp0</span>
+        </div>
+        <div id="summary-cod-vat-row" class="flex items-center justify-between" hidden>
+          <span class="text-[var(--co-muted)]">PPN biaya COD</span>
+          <span id="summary-cod-vat" class="font-medium text-ink tabular-nums">Rp0</span>
         </div>
       </div>
 
@@ -665,6 +684,9 @@ if (rToken) {
                       name="payment"
                       value={group.items[0].id}
                       data-label={group.items[0].label}
+                      data-kind={group.items[0].kind}
+                      data-fee-type={group.items[0].feeType}
+                      data-fee-value={group.items[0].feeValue}
                       class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
                     />
                     <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black/[0.04] text-[var(--co-muted)] ring-1 ring-[var(--co-line)] transition-colors group-has-[:checked]:bg-[var(--co-accent-weak)] group-has-[:checked]:text-[var(--co-accent)] group-has-[:checked]:ring-[var(--co-accent-ring)]">
@@ -722,6 +744,9 @@ if (rToken) {
                             name="va_bank"
                             value={pm.id}
                             data-label={pm.label}
+                            data-kind={pm.kind}
+                            data-fee-type={pm.feeType}
+                            data-fee-value={pm.feeValue}
                             class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
                           />
                           <span class="min-w-0 flex-1 text-sm font-medium text-ink">{pm.short}</span>
@@ -747,6 +772,7 @@ if (rToken) {
                     name="payment"
                     value="cod"
                     data-label="COD (Bayar di Tempat)"
+                    data-kind="cod"
                     disabled
                     class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
                   />
@@ -814,6 +840,14 @@ if (rToken) {
               <div id="summary2-ppn-row" class="flex items-center justify-between" hidden>
                 <span id="summary2-ppn-label" class="text-[var(--co-muted)]">PPN</span>
                 <span id="summary2-ppn" class="font-medium tabular-nums text-ink">Rp0</span>
+              </div>
+              <div id="summary2-fee-row" class="flex items-center justify-between" hidden>
+                <span id="summary2-fee-label" class="text-[var(--co-muted)]">Biaya pembayaran</span>
+                <span id="summary2-fee" class="font-medium tabular-nums text-ink">Rp0</span>
+              </div>
+              <div id="summary2-cod-vat-row" class="flex items-center justify-between" hidden>
+                <span class="text-[var(--co-muted)]">PPN biaya COD</span>
+                <span id="summary2-cod-vat" class="font-medium tabular-nums text-ink">Rp0</span>
               </div>
             </div>
           </div>
@@ -1197,6 +1231,9 @@ if (rToken) {
       });
       sync();
     })();
+    form.addEventListener("change", function (e) {
+      if (e.target && (e.target.name === "payment" || e.target.name === "va_bank")) recompute();
+    });
 
     // ---- WhatsApp: digits only ----
     // Letters in a phone field are never a real number, and the field is the one the merchant will
@@ -1265,6 +1302,30 @@ if (rToken) {
     function selectedShipping() {
       var el = selectedShippingEl();
       return el ? Number(el.getAttribute("data-price")) : 0;
+    }
+
+    function selectedPaymentEl() {
+      var payment = form.querySelector('input[name="payment"]:checked');
+      if (payment && payment.value === "__va") {
+        return form.querySelector('input[name="va_bank"]:checked');
+      }
+      return payment;
+    }
+
+    function codCharges(base) {
+      var beforeVat = Math.round(base * 0.03 / 0.97);
+      var vat = Math.round(beforeVat * 0.11);
+      return { fee: beforeVat, vat: vat, label: "Biaya COD" };
+    }
+
+    function paymentCharges(base) {
+      var payment = selectedPaymentEl();
+      if (!payment) return { fee: 0, vat: 0, label: "Biaya pembayaran" };
+      if (payment.getAttribute("data-kind") === "cod") return codCharges(base);
+      var type = payment.getAttribute("data-fee-type");
+      var value = Number(payment.getAttribute("data-fee-value") || 0);
+      var fee = type === "pct" ? Math.round(base * value) : Math.round(value);
+      return { fee: Math.max(0, fee), vat: 0, label: "Biaya pembayaran" };
     }
 
     // ---- COD availability — the same five conditions the order API enforces ----
@@ -1339,7 +1400,9 @@ if (rToken) {
     function syncCod() {
       if (!codOption || !codRadio) return;
       var shipEl = form.querySelector('input[name="shipping"]:checked');
-      var total = subtotal + selectedShipping() + ppnAdd(taxableGoods()) - totalDisc(selectedShipping());
+      var base = subtotal + selectedShipping() + ppnAdd(taxableGoods()) - totalDisc(selectedShipping());
+      var cod = codCharges(base);
+      var total = base + cod.fee + cod.vat;
       var allowed =
         !!COD_ENABLED &&
         !!shipEl &&
@@ -1397,7 +1460,9 @@ if (rToken) {
       var waived = shipWaived(ship);
       var shipFree = ship > 0 && waived >= ship;
       var shipText = shipFree ? "GRATIS" : idr.format(ship);
-      var total = idr.format(subtotal + ship + ppn - totalDisc(ship));
+      var base = subtotal + ship + ppn - totalDisc(ship);
+      var charges = paymentCharges(base);
+      var total = idr.format(base + charges.fee + charges.vat);
       // The discount row carries the voucher's PRICE cut only; the ongkir cut shows as GRATIS above.
       togglePpn("summary-discount-row", "summary-discount", voucherPriceOff > 0, "−" + idr.format(voucherPriceOff));
       // The PPN row shows only when exclusive PPN adds to the bill (ppn > 0). Inclusive PPN doesn't
@@ -1405,6 +1470,14 @@ if (rToken) {
       var ppnText = idr.format(ppn);
       togglePpn("summary-ppn-row", "summary-ppn", ppn > 0, ppnText);
       togglePpn("summary2-ppn-row", "summary2-ppn", ppn > 0, ppnText);
+      var feeText = idr.format(charges.fee);
+      togglePpn("summary-fee-row", "summary-fee", charges.fee > 0, feeText);
+      togglePpn("summary2-fee-row", "summary2-fee", charges.fee > 0, feeText);
+      setText("summary-fee-label", charges.label);
+      setText("summary2-fee-label", charges.label);
+      var codVatText = idr.format(charges.vat);
+      togglePpn("summary-cod-vat-row", "summary-cod-vat", charges.vat > 0, codVatText);
+      togglePpn("summary2-cod-vat-row", "summary2-cod-vat", charges.vat > 0, codVatText);
       // FOUR destinations, ONE string, computed once. The total is on screen in the desktop panel,
       // the top mobile bar, the bottom mobile bar and the bottom bar's detail — and two totals that
       // can disagree is worse than no total at all: the shopper reads one and is charged the other.
@@ -2445,6 +2518,8 @@ if (rToken) {
         }
         payEl = bankEl;
       }
+      var previewBase = subtotal + ship + ppnAdd(taxableGoods()) - totalDisc(ship);
+      var previewCharges = paymentCharges(previewBase);
 
       var order = {
         createdAt: new Date().toISOString(),
@@ -2469,7 +2544,10 @@ if (rToken) {
         items: cart,
         subtotal: subtotal,
         tax: 0, // set from the server response below (PPN is priced server-side)
-        total: subtotal + ship,
+        paymentFee: previewCharges.fee,
+        paymentFeeVat: previewCharges.vat,
+        total: previewBase + previewCharges.fee + previewCharges.vat,
+        buyerPayable: previewBase + previewCharges.fee + previewCharges.vat,
       };
 
       // The ad platforms' own cookies, read here because this is the only moment they exist on the
@@ -2506,7 +2584,10 @@ if (rToken) {
       }
 
       function finish() {
-        try { localStorage.setItem("lastOrder", JSON.stringify(order)); } catch (e2) {}
+        try {
+          localStorage.setItem("lastOrder", JSON.stringify(order));
+          sessionStorage.removeItem(SID_KEY);
+        } catch (e2) {}
         window.location.href = "/checkout/sukses";
       }
       function fail(msg) {
@@ -2577,6 +2658,33 @@ if (rToken) {
         .then(function (r) { return r.json(); })
         .then(function (res) {
           if (!res.ok) {
+            if (res.orderCreated && res.orderNumber) {
+              // The order already exists, so another submit would create a duplicate bill/order.
+              // Keep both the cart and this session id: the API uses the recovered checkout session
+              // as its idempotency key and will refuse a replay of the same checkout.
+              settled = true;
+              order.number = res.orderNumber;
+              order.paymentError = res.payError || res.error;
+              if (typeof res.shipping === "number") order.shipping.price = res.shipping;
+              if (typeof res.tax === "number") order.tax = res.tax;
+              if (typeof res.total === "number") order.total = res.total;
+              if (typeof res.buyerPayable === "number") order.buyerPayable = res.buyerPayable;
+              if (Array.isArray(res.lines) && res.lines.length) order.items = res.lines;
+              if (res.tracking) order.tracking = res.tracking;
+              try { localStorage.setItem("lastOrder", JSON.stringify(order)); } catch (e) {}
+              if (err) {
+                err.textContent =
+                  "Pesanan " + res.orderNumber +
+                  " sudah tercatat, tetapi pembayaran belum berhasil dibuat. " +
+                  "Jangan klik Bayar lagi. Hubungi Seller dan sebutkan nomor pesanan ini.";
+                err.classList.remove("hidden");
+              }
+              if (btn) {
+                btn.disabled = true;
+                btn.textContent = "Pesanan sudah tercatat";
+              }
+              return;
+            }
             // ── THE CART'S PRICE MOVED (409 + `repriced`) ──────────────────────────────────────
             // The endpoint refuses rather than charging a number the shopper never agreed to. It
             // sends the CORRECTED prices with the refusal, and they are load-bearing: the cart lives
@@ -2610,6 +2718,14 @@ if (rToken) {
           if (typeof res.shipping === "number") order.shipping.price = res.shipping;
           if (typeof res.tax === "number") order.tax = res.tax;
           if (typeof res.total === "number") order.total = res.total;
+          if (typeof res.goodsDiscount === "number") order.goodsDiscount = res.goodsDiscount;
+          if (typeof res.shippingDiscount === "number") order.shippingDiscount = res.shippingDiscount;
+          if (typeof res.codFee === "number") order.codFee = res.codFee;
+          if (typeof res.codFeeBeforeVat === "number") order.codFeeBeforeVat = res.codFeeBeforeVat;
+          if (typeof res.codFeeVat === "number") order.codFeeVat = res.codFeeVat;
+          if (typeof res.gatewayFeeActual === "number") order.paymentFee = res.gatewayFeeActual;
+          if (typeof res.buyerPayable === "number") order.buyerPayable = res.buyerPayable;
+          order.feeMismatch = !!res.feeMismatch;
           // ⚠️ The SUBTOTAL and the LINE PRICES too — this comment promised "what the order actually
           // says, not what this tab last calculated" while leaving the one field that lies. Both came
           // from `localStorage.cart`, captured at add-to-cart and kept forever, so a flash sale that

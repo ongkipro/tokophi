@@ -1,8 +1,12 @@
 import "server-only";
 import { schema } from "@tokophi/db";
-import { eq, asc, sql } from "drizzle-orm";
+import { eq, asc, desc, sql } from "drizzle-orm";
 import { withCurrentTenant } from "@/lib/tenant";
-import { shipmentPaymentState, shipmentPaymentLabel, type ShipmentPaymentState } from "@/lib/shipment-payment";
+import {
+  shipmentPaymentState,
+  shipmentPaymentLabel,
+  type ShipmentPaymentState,
+} from "@/lib/shipment-payment";
 import { latestPaymentFirst } from "@/lib/data/order-payment";
 import { weightForOrder } from "@/lib/shipping-weight";
 
@@ -43,6 +47,29 @@ export type OrderMoney = {
   computedTotal: number;
   /** True when the stored total or subtotal does not reconcile with the real rows. */
   mismatch: boolean;
+};
+
+export type OrderFinancialBreakdown = {
+  source: "snapshot" | "legacy";
+  goodsDiscount: number;
+  shippingDiscount: number;
+  goodsProceeds: number;
+  shippingCharged: number;
+  shippingActual: number | null;
+  shippingDelta: number;
+  sellerShippingDebit: number;
+  platformShippingMargin: number;
+  sellerEntitlement: number;
+  salesTaxLiability: number;
+  codFeeBeforeVat: number;
+  codFeeVat: number;
+  gatewayFeeExpected: number;
+  gatewayFeeActual: number;
+  buyerPayable: number;
+  ledgerSum: number;
+  ledgerExpected: number;
+  bookingCount: number;
+  reconciliationStatus: "cocok" | "selisih" | "legacy";
 };
 
 export type OrderShipment = {
@@ -163,6 +190,7 @@ export type OrderDetail = {
   address: OrderAddress | null;
   payment: OrderPaymentRecord | null;
   sender: OrderSender | null;
+  financial: OrderFinancialBreakdown;
 };
 
 const METHOD_LABEL: Record<string, string> = {
@@ -181,7 +209,9 @@ const FMT = new Intl.DateTimeFormat("id-ID", {
   timeZone: "Asia/Jakarta",
 });
 
-export async function getOrderDetail(number: string): Promise<OrderDetail | null> {
+export async function getOrderDetail(
+  number: string,
+): Promise<OrderDetail | null> {
   return withCurrentTenant(async (db, storeId) => {
     // Human service name for the label — same lateral lookup `bulk-shipping.ts` makes; NULL when
     // the courier/service no longer resolves (a platform-disabled courier must not hide the order).
@@ -202,6 +232,8 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
         shipping: schema.orders.shippingIdr,
         tax: schema.orders.taxIdr,
         total: schema.orders.totalIdr,
+        status: schema.orders.status,
+        financialStatus: schema.orders.financialStatus,
         city: schema.orders.city,
         province: schema.orders.province,
         courier: schema.orders.courier,
@@ -241,8 +273,14 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
         image,
       })
       .from(schema.orderLineItems)
-      .leftJoin(schema.productVariants, eq(schema.productVariants.id, schema.orderLineItems.variantId))
-      .leftJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
+      .leftJoin(
+        schema.productVariants,
+        eq(schema.productVariants.id, schema.orderLineItems.variantId),
+      )
+      .leftJoin(
+        schema.products,
+        eq(schema.products.id, schema.productVariants.productId),
+      )
       .where(eq(schema.orderLineItems.orderId, o.id))
       .orderBy(asc(schema.orderLineItems.id));
 
@@ -345,7 +383,9 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
           // The order carries its own destination city; when the saved address points somewhere
           // else, this address is NOT this parcel's destination and the page must say so.
           cityMatchesOrder:
-            !!a.city && !!o.city && a.city.trim().toLowerCase() === o.city.trim().toLowerCase(),
+            !!a.city &&
+            !!o.city &&
+            a.city.trim().toLowerCase() === o.city.trim().toLowerCase(),
         };
       }
     }
@@ -378,6 +418,83 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
           channelCode: p.channelCode ?? null,
         }
       : null;
+
+    const [financial] = await db
+      .select()
+      .from(schema.orderFinancials)
+      .where(eq(schema.orderFinancials.orderId, o.id))
+      .limit(1);
+    const bookings = await db
+      .select()
+      .from(schema.shipmentBookings)
+      .where(eq(schema.shipmentBookings.orderId, o.id))
+      .orderBy(desc(schema.shipmentBookings.createdAt));
+    const acceptedBooking =
+      bookings.find(
+        (booking) =>
+          booking.status === "accepted" ||
+          booking.status === "cancellation_requested",
+      ) ?? null;
+    const [ledger] = (await db.execute(sql`
+      select coalesce(sum(amount_idr), 0)::bigint as total
+        from ledger_entries
+       where store_id = ${storeId} and order_id = ${o.id}
+    `)) as unknown as { total: string | number }[];
+    const goodsProceeds = Number(financial?.goodsProceedsIdr ?? o.total);
+    const shippingCharged = Number(financial?.shippingChargedIdr ?? o.shipping);
+    const shippingActual = acceptedBooking
+      ? Number(acceptedBooking.shippingActualIdr)
+      : null;
+    const sellerDebit = Number(acceptedBooking?.sellerDebitIdr ?? 0);
+    const gatewayExpected = Number(financial?.expectedGatewayFeeIdr ?? 0);
+    const gatewayActual = Number(p?.adminFee ?? 0);
+    const buyerPayable = Number(
+      p?.total && p.total > 0
+        ? p.total
+        : (financial?.orderPayableIdr ?? o.total),
+    );
+    const sellerEntitlement = goodsProceeds - sellerDebit;
+    let ledgerExpected = sellerEntitlement;
+    if (o.status === "batal" || o.status === "retur")
+      ledgerExpected = -sellerDebit;
+    const ledgerSum = Number(ledger?.total ?? 0);
+    const mismatch =
+      !!financial &&
+      (Number(financial.orderPayableIdr) !== o.total ||
+        (!!p &&
+          Number(p.total ?? 0) !==
+            Number(financial.orderPayableIdr) + gatewayActual) ||
+        (!!p && gatewayExpected !== gatewayActual) ||
+        (!!acceptedBooking &&
+          Number(acceptedBooking.shippingDeltaIdr) !==
+            shippingActual! - shippingCharged) ||
+        (o.financialStatus === "dibayar" && ledgerSum !== ledgerExpected));
+    const financialBreakdown: OrderFinancialBreakdown = {
+      source: financial ? "snapshot" : "legacy",
+      goodsDiscount: Number(financial?.goodsDiscountIdr ?? o.discount),
+      shippingDiscount: Number(financial?.shippingDiscountIdr ?? 0),
+      goodsProceeds,
+      shippingCharged,
+      shippingActual,
+      shippingDelta: Number(acceptedBooking?.shippingDeltaIdr ?? 0),
+      sellerShippingDebit: sellerDebit,
+      platformShippingMargin: Number(acceptedBooking?.platformMarginIdr ?? 0),
+      sellerEntitlement,
+      salesTaxLiability: o.tax,
+      codFeeBeforeVat: Number(financial?.codFeeBeforeVatIdr ?? 0),
+      codFeeVat: Number(financial?.codFeeVatIdr ?? 0),
+      gatewayFeeExpected: gatewayExpected,
+      gatewayFeeActual: gatewayActual,
+      buyerPayable,
+      ledgerSum,
+      ledgerExpected,
+      bookingCount: bookings.length,
+      reconciliationStatus: financial
+        ? mismatch
+          ? "selisih"
+          : "cocok"
+        : "legacy",
+    };
 
     // Billable weight — the number the booking declares to the courier (label's "Isi" header).
     const pkg = await weightForOrder(db, o.id);
@@ -440,6 +557,7 @@ export async function getOrderDetail(number: string): Promise<OrderDetail | null
       address,
       payment,
       sender,
+      financial: financialBreakdown,
     };
   });
 }

@@ -84,7 +84,7 @@ async function al<T = Record<string, unknown>>(path: string, body: unknown): Pro
 export type AlPayment = {
   ok: boolean;
   trxId?: string; virtualAccount?: string; qr?: string; paymentCode?: string; url?: string;
-  amount?: number; admin?: number; total?: number; error?: string;
+  amount?: number; admin?: number; total?: number; expiresAt?: string; error?: string;
 };
 
 // expired: default +24h, format YYYYMMDDHHMMSS
@@ -99,6 +99,7 @@ export async function alCreatePayment(input: {
   customerId: string; customerName: string; customerPhone: string; customerEmail: string;
   callbackUrl: string;
 }): Promise<AlPayment> {
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const r = await al<{ rc: string; ket?: string; data?: {
     trx_id?: string; virtual_account?: string; qr?: string; payment_code?: string; url?: string;
     amount?: number; admin?: number; total?: number;
@@ -109,7 +110,7 @@ export async function alCreatePayment(input: {
     customer_name: input.customerName,
     customer_phone: input.customerPhone,
     customer_email: input.customerEmail,
-    expired: expiryStamp(24 * 60 * 60 * 1000),
+    expired: expiryStamp(expiresAt.getTime() - Date.now()),
     amount: String(input.amount),
     callback_url: input.callbackUrl,
   });
@@ -118,7 +119,7 @@ export async function alCreatePayment(input: {
   return {
     ok: true, trxId: d.trx_id, virtualAccount: d.virtual_account || undefined, qr: d.qr || undefined,
     paymentCode: d.payment_code || undefined, url: d.url || undefined,
-    amount: d.amount, admin: d.admin, total: d.total,
+    amount: d.amount, admin: d.admin, total: d.total, expiresAt: expiresAt.toISOString(),
   };
 }
 
