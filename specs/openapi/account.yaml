@@ -1,0 +1,934 @@
+openapi: 3.1.0
+info:
+  title: TokoPhi Account API
+  version: 1.0.0
+  description: |
+    PROPOSED AND NOT DEPLOYED. Central global-buyer identity and order-hub contract.
+    This contract is separate from tenant/headless /api/v1. Merchant storefronts receive
+    only consented store-bounded projections through authorization-code + PKCE handoff.
+  license:
+    name: Proprietary
+    url: https://tokophi.com/terms
+x-tokophi-contract-status: proposed-not-deployed
+servers:
+  - url: https://account.tokophi.com/api/v1
+    description: Proposed production origin; not deployed
+security:
+  - accountSession: []
+tags:
+  - name: Authorization
+    description: Browser handoff between central account and a registered storefront client.
+  - name: Authentication
+    description: Phone challenge and verification without account enumeration.
+  - name: Account
+    description: The authenticated buyer's own profile and closure lifecycle.
+  - name: Orders
+    description: Bounded cross-store projections of the authenticated buyer's own orders.
+  - name: Stores
+    description: Order-derived merchant history for the authenticated buyer; not a wishlist, follow graph, or marketing audience.
+  - name: Addresses
+    description: Global saved delivery addresses; historical order snapshots are immutable.
+  - name: Connections
+    description: Consented store links visible to the buyer, never cross-store merchant data.
+  - name: Sessions
+    description: Central account device/session visibility and revocation.
+paths:
+  /authorize:
+    get:
+      tags: [Authorization]
+      operationId: authorizeStorefront
+      summary: Authorize a registered storefront client
+      description: Browser endpoint. Requires an existing or newly verified central session and explicit store consent. Returns one short-lived, single-use code to the exact registered redirect URI.
+      security:
+        - accountSession: []
+        - {}
+      parameters:
+        - { $ref: '#/components/parameters/ClientId' }
+        - { $ref: '#/components/parameters/RedirectUri' }
+        - { $ref: '#/components/parameters/ResponseType' }
+        - { $ref: '#/components/parameters/Scope' }
+        - { $ref: '#/components/parameters/State' }
+        - { $ref: '#/components/parameters/CodeChallenge' }
+        - { $ref: '#/components/parameters/CodeChallengeMethod' }
+      responses:
+        '302':
+          description: Redirect to the exact registered redirect URI with code and state, or with an OAuth-style error and state.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '400': { $ref: '#/components/responses/InvalidAuthorizationRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /token:
+    post:
+      tags: [Authorization]
+      operationId: exchangeAuthorizationCode
+      summary: Exchange an authorization code
+      description: Same-origin storefront BFF or another accepted confidential/public client exchanges a single-use PKCE-bound code. Browser JavaScript must not persist returned tokens.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TokenExchangeRequest' }
+      responses:
+        '200':
+          description: Store-bounded buyer grant and projection.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenExchangeResponse' }
+        '400': { $ref: '#/components/responses/InvalidGrant' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/challenges:
+    post:
+      tags: [Authentication]
+      operationId: createPhoneChallenge
+      summary: Start a phone verification challenge
+      description: Returns the same safe response shape whether or not an account exists. Delivery/provider detail is not disclosed.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChallengeRequest' }
+      responses:
+        '202':
+          description: Challenge accepted or safely simulated.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChallengeAccepted' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/verifications:
+    post:
+      tags: [Authentication]
+      operationId: verifyPhoneChallenge
+      summary: Verify a phone challenge
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VerificationRequest' }
+      responses:
+        '200':
+          description: Verification accepted; central host-scoped session is established where the client is a browser.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: Proposed HttpOnly Secure host-scoped central account session; exact name/lifetime remain an accepted implementation gate.
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerificationResult' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /account:
+    get:
+      tags: [Account]
+      operationId: getAccount
+      summary: Get the authenticated buyer account
+      responses:
+        '200':
+          description: Own account profile.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    patch:
+      tags: [Account]
+      operationId: updateAccount
+      summary: Update non-sensitive profile fields
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountUpdate' }
+      responses:
+        '200':
+          description: Updated account profile.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    delete:
+      tags: [Account]
+      operationId: requestAccountClosure
+      summary: Request account closure
+      description: Revokes central sessions and starts the approved two-layer closure workflow; it never deletes or mutates store commerce books directly.
+      responses:
+        '202':
+          description: Closure request accepted.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClosureStatus' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /account/cod-trust:
+    get:
+      tags: [Account]
+      operationId: getOwnCodTrustStatus
+      summary: Get the buyer's own COD eligibility status
+      description: |
+        Returns a transparent, appealable COD-only restriction projection; prepaid methods remain
+        available. Only reviewed courier outcomes 310 (recipient says the order was not placed) and
+        311 (recipient refuses COD payment) may count. Phone or address matches may support identity
+        review but can never create a strike by themselves. The service must preserve raw provider
+        evidence before enabling this policy; a generic return reason is insufficient.
+      responses:
+        '200':
+          description: Own COD trust status without a public numeric credit score.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CodTrustStatus' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /orders:
+    get:
+      tags: [Orders]
+      operationId: listOwnOrders
+      summary: List the buyer's linked cross-store order projections
+      parameters:
+        - { $ref: '#/components/parameters/OrderStatus' }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Paginated safe order projections.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderPage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /orders/{orderId}:
+    get:
+      tags: [Orders]
+      operationId: getOwnOrder
+      summary: Get one linked order projection
+      parameters:
+        - { $ref: '#/components/parameters/OrderId' }
+      responses:
+        '200':
+          description: Buyer-safe order detail projection.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderDetail' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /order-claims:
+    post:
+      tags: [Orders]
+      operationId: claimHistoricalOrder
+      summary: Claim an eligible historical order
+      description: Requires current verified account control and order-specific possession proof. Phone match alone is never sufficient.
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderClaimRequest' }
+      responses:
+        '202':
+          description: Claim accepted for bounded verification or completed without disclosing other orders.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderClaimStatus' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /stores:
+    get:
+      tags: [Stores]
+      operationId: listPreviouslyPurchasedStores
+      summary: List stores represented in the buyer's eligible linked orders
+      description: |
+        Deduplicates stores from eligible linked or claimed orders and orders them by
+        most recent purchase by default. Browsing, checkout capture, phone matches,
+        and consent without an eligible order never add a store. `storefront_url`
+        opens the current catalog; clients must not reconstruct an old cart or assume
+        historical price, promotion, publication, or stock.
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Paginated order-derived store history.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StoreHistoryPage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /addresses:
+    get:
+      tags: [Addresses]
+      operationId: listOwnAddresses
+      summary: List saved addresses
+      responses:
+        '200':
+          description: Own saved addresses.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Address' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    post:
+      tags: [Addresses]
+      operationId: createAddress
+      summary: Create a saved address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressInput' }
+      responses:
+        '201':
+          description: Address created.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Address' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /addresses/{addressId}:
+    patch:
+      tags: [Addresses]
+      operationId: updateAddress
+      summary: Update a saved address
+      parameters:
+        - { $ref: '#/components/parameters/AddressId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressInput' }
+      responses:
+        '200':
+          description: Address updated; historical order snapshots are unchanged.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Address' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Addresses]
+      operationId: deleteAddress
+      summary: Delete a saved address
+      parameters:
+        - { $ref: '#/components/parameters/AddressId' }
+      responses:
+        '204':
+          description: Address deleted; historical order snapshots are unchanged.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /connections:
+    get:
+      tags: [Connections]
+      operationId: listStoreConnections
+      summary: List the buyer's connected stores
+      responses:
+        '200':
+          description: Own consented store connections.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/StoreConnection' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /connections/{storeSlug}:
+    delete:
+      tags: [Connections]
+      operationId: revokeStoreConnection
+      summary: Revoke a store connection
+      description: Stops new global aggregation/projection access; does not delete the store's customer or commerce records.
+      parameters:
+        - { $ref: '#/components/parameters/StoreSlug' }
+      responses:
+        '204':
+          description: Connection revoked.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /sessions:
+    get:
+      tags: [Sessions]
+      operationId: listOwnSessions
+      summary: List central account sessions/devices
+      responses:
+        '200':
+          description: Own active sessions with bounded device/activity metadata.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /sessions/{sessionId}:
+    delete:
+      tags: [Sessions]
+      operationId: revokeSession
+      summary: Revoke one central account session
+      parameters:
+        - { $ref: '#/components/parameters/SessionId' }
+      responses:
+        '204':
+          description: Session revoked.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /sessions/revoke-all:
+    post:
+      tags: [Sessions]
+      operationId: revokeAllSessions
+      summary: Revoke every central account session
+      responses:
+        '204':
+          description: All sessions, including the current one, revoked.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+components:
+  securitySchemes:
+    accountSession:
+      type: apiKey
+      in: cookie
+      name: __Host-tokophi-account
+      description: Proposed central host-scoped HttpOnly Secure session cookie; exact name/lifetime remain an implementation gate.
+  headers:
+    NoStore:
+      description: Sensitive responses must not be stored by browsers or shared caches.
+      schema:
+        type: string
+        const: private, no-store
+  parameters:
+    ClientId:
+      name: client_id
+      in: query
+      required: true
+      schema: { type: string, minLength: 3, maxLength: 100 }
+    RedirectUri:
+      name: redirect_uri
+      in: query
+      required: true
+      schema: { type: string, format: uri }
+    ResponseType:
+      name: response_type
+      in: query
+      required: true
+      schema: { type: string, const: code }
+    Scope:
+      name: scope
+      in: query
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 300 }
+    State:
+      name: state
+      in: query
+      required: true
+      schema: { type: string, minLength: 16, maxLength: 512 }
+    CodeChallenge:
+      name: code_challenge
+      in: query
+      required: true
+      schema: { type: string, minLength: 43, maxLength: 128 }
+    CodeChallengeMethod:
+      name: code_challenge_method
+      in: query
+      required: true
+      schema: { type: string, const: S256 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: page_size
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    OrderStatus:
+      name: status
+      in: query
+      schema: { type: string, enum: [active, completed] }
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 100 }
+    AddressId:
+      name: addressId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    StoreSlug:
+      name: storeSlug
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$', minLength: 3, maxLength: 63 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 16, maxLength: 128 }
+  responses:
+    InvalidRequest:
+      description: Invalid or incomplete request.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    InvalidAuthorizationRequest:
+      description: Invalid client, redirect, scope, PKCE, or state request; no redirect is performed when the redirect URI is untrusted.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    InvalidGrant:
+      description: Authorization code is invalid, expired, replayed, or not bound to this client/redirect/PKCE verifier.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthenticated:
+      description: Missing, expired, or revoked central account session.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource is absent or not owned/visible by the authenticated buyer.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: State, replay, default-address, closure, or ownership conflict.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: Shared abuse/provider-budget limit reached; response does not reveal account existence.
+      headers:
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required: [ok, code, error]
+      properties:
+        ok: { type: boolean, const: false }
+        code: { type: string, minLength: 3, maxLength: 80 }
+        error: { type: string, minLength: 1, maxLength: 300 }
+        field: { type: string, maxLength: 80 }
+        retry_after_seconds: { type: integer, minimum: 1 }
+    TokenExchangeRequest:
+      type: object
+      additionalProperties: false
+      required: [grant_type, client_id, redirect_uri, code, code_verifier]
+      properties:
+        grant_type: { type: string, const: authorization_code }
+        client_id: { type: string, minLength: 3, maxLength: 100 }
+        redirect_uri: { type: string, format: uri }
+        code: { type: string, minLength: 32, maxLength: 512 }
+        code_verifier: { type: string, minLength: 43, maxLength: 128 }
+    TokenExchangeResponse:
+      type: object
+      additionalProperties: false
+      required: [token_type, access_token, expires_in, scope, buyer]
+      properties:
+        token_type: { type: string, const: Bearer }
+        access_token: { type: string, minLength: 32 }
+        expires_in: { type: integer, minimum: 1, maximum: 3600 }
+        scope: { type: string }
+        buyer: { $ref: '#/components/schemas/StoreBuyerProjection' }
+    ChallengeRequest:
+      type: object
+      additionalProperties: false
+      required: [phone, purpose]
+      properties:
+        phone: { type: string, pattern: '^\+62[0-9]{8,13}$' }
+        purpose: { type: string, enum: [sign_in, connect_store, claim_order, change_phone, recovery] }
+    ChallengeAccepted:
+      type: object
+      additionalProperties: false
+      required: [challenge_id, expires_in, resend_after]
+      properties:
+        challenge_id: { type: string, format: uuid }
+        expires_in: { type: integer, minimum: 60, maximum: 1800 }
+        resend_after: { type: integer, minimum: 1, maximum: 600 }
+    VerificationRequest:
+      type: object
+      additionalProperties: false
+      required: [challenge_id, code]
+      properties:
+        challenge_id: { type: string, format: uuid }
+        code: { type: string, pattern: '^[0-9]{4,8}$' }
+    VerificationResult:
+      type: object
+      additionalProperties: false
+      required: [account, next_action]
+      properties:
+        account: { $ref: '#/components/schemas/Account' }
+        next_action: { type: string, enum: [account, consent, claim, phone_change_complete] }
+    Account:
+      type: object
+      additionalProperties: false
+      required: [id, name, phone, phone_verified, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        phone: { type: string, pattern: '^\+62[0-9]{8,13}$' }
+        phone_verified: { type: boolean }
+        email: { type: [string, 'null'], format: email, maxLength: 254 }
+        status: { type: string, enum: [active, recovery_pending, suspended, closure_pending] }
+        created_at: { type: string, format: date-time }
+    AccountUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: [string, 'null'], format: email, maxLength: 254 }
+    ClosureStatus:
+      type: object
+      additionalProperties: false
+      required: [status, requested_at]
+      properties:
+        status: { type: string, enum: [closure_pending, closed] }
+        requested_at: { type: string, format: date-time }
+        effective_at: { type: [string, 'null'], format: date-time }
+    CodTrustEvent:
+      type: object
+      additionalProperties: false
+      required: [event_id, order_number, outcome_code, category, occurred_at, expires_at, review_status]
+      properties:
+        event_id: { type: string, minLength: 8, maxLength: 100 }
+        order_number: { type: string, pattern: '^PHI-[A-Z0-9-]+$', maxLength: 80 }
+        outcome_code: { type: integer, enum: [310, 311] }
+        category: { type: string, enum: [not_ordered, refused_cod_payment] }
+        occurred_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        review_status: { type: string, enum: [confirmed, overturned] }
+    CodTrustStatus:
+      type: object
+      additionalProperties: false
+      required: [status, cod_available, prepaid_available, verified_refusals, threshold, window_days, restriction_days, policy_version, events]
+      properties:
+        status: { type: string, enum: [eligible, warning, restricted, review] }
+        cod_available: { type: boolean }
+        prepaid_available: { type: boolean, const: true }
+        verified_refusals: { type: integer, minimum: 0, maximum: 3 }
+        threshold: { type: integer, const: 3 }
+        window_days: { type: integer, const: 180 }
+        restriction_days: { type: integer, const: 90 }
+        restriction_ends_at: { type: [string, 'null'], format: date-time }
+        policy_version: { type: string, minLength: 1, maxLength: 40 }
+        events:
+          type: array
+          maxItems: 3
+          items: { $ref: '#/components/schemas/CodTrustEvent' }
+        explanation: { type: [string, 'null'], maxLength: 500 }
+        appeal_url: { type: [string, 'null'], format: uri }
+    StoreBuyerProjection:
+      type: object
+      additionalProperties: false
+      required: [subject, name, phone, store_slug, consent_version]
+      properties:
+        subject: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        phone: { type: string, pattern: '^\+62[0-9]{8,13}$' }
+        email: { type: [string, 'null'], format: email, maxLength: 254 }
+        store_slug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+        consent_version: { type: string, minLength: 1, maxLength: 40 }
+    MerchantSummary:
+      type: object
+      additionalProperties: false
+      required: [slug, name]
+      properties:
+        slug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        logo_url: { type: [string, 'null'], format: uri }
+        support_url: { type: [string, 'null'], format: uri }
+    OrderSummaryFields:
+      type: object
+      required: [id, number, merchant, placed_at, status, financial_status, total_idr]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string, pattern: '^PHI-[A-Z0-9-]+$', maxLength: 80 }
+        merchant: { $ref: '#/components/schemas/MerchantSummary' }
+        placed_at: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [baru, diproses, dikirim, selesai, batal, retur]
+          description: Canonical orders.status value; clients localize the buyer-facing label.
+        financial_status:
+          type: string
+          enum: [pending, dibayar, refund_sebagian, refund]
+          description: Canonical orders.financial_status value; distinct from fulfillment state.
+        total_idr: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        item_preview: { type: string, maxLength: 200 }
+        tracking_number: { type: [string, 'null'], maxLength: 100 }
+    OrderSummary:
+      allOf:
+        - { $ref: '#/components/schemas/OrderSummaryFields' }
+      unevaluatedProperties: false
+    OrderPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, page_size, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrderSummary' }
+        page: { type: integer, minimum: 1 }
+        page_size: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    StoreHistoryItem:
+      type: object
+      additionalProperties: false
+      required: [merchant, storefront_status, last_order_at, last_order_number, eligible_order_count]
+      properties:
+        merchant: { $ref: '#/components/schemas/MerchantSummary' }
+        storefront_url:
+          type: [string, 'null']
+          format: uri
+          description: Current public storefront destination, or null when unavailable.
+        storefront_status:
+          type: string
+          enum: [available, unavailable]
+        last_order_at: { type: string, format: date-time }
+        last_order_number: { type: string, minLength: 1, maxLength: 80 }
+        eligible_order_count: { type: integer, minimum: 1 }
+        item_preview: { type: [string, 'null'], maxLength: 200 }
+    StoreHistoryPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, page_size, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/StoreHistoryItem' }
+        page: { type: integer, minimum: 1 }
+        page_size: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    OrderLine:
+      type: object
+      additionalProperties: false
+      description: Immutable order_line_items projection. The stored title already includes the accepted variant label.
+      required: [title, qty, price_idr, total_idr]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 320 }
+        qty: { type: integer, minimum: 1 }
+        price_idr: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        total_idr: { type: integer, minimum: 0, maximum: 9007199254740991 }
+    AddressSnapshot:
+      type: object
+      additionalProperties: false
+      description: Immutable delivery snapshot from the accepted order. Nullable values preserve honest partial history for legacy orders.
+      required: [recipient, phone, address, district_id, city, province, postcode]
+      properties:
+        recipient: { type: [string, 'null'], maxLength: 120 }
+        phone: { type: [string, 'null'], minLength: 8, maxLength: 20 }
+        address: { type: [string, 'null'], maxLength: 500 }
+        district_id:
+          type: [integer, 'null']
+          minimum: 1
+          description: KiriminAja destination ID used for the accepted quote and shipment booking.
+        district: { type: [string, 'null'], maxLength: 120, description: 'Derived display label, not the shipping authority.' }
+        city: { type: [string, 'null'], maxLength: 120 }
+        province: { type: [string, 'null'], maxLength: 120 }
+        postcode: { type: [string, 'null'], pattern: '^[0-9]{5}$' }
+    PaymentSummary:
+      type: object
+      additionalProperties: false
+      required: [method, status, amount_idr, admin_fee_idr, total_idr]
+      properties:
+        method: { type: string, enum: [transfer, qris, ovo, gopay, dana, va, cod] }
+        status: { type: string, enum: [menunggu, berhasil, gagal] }
+        amount_idr: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        admin_fee_idr: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        total_idr: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        reference: { type: [string, 'null'], minLength: 1, maxLength: 100 }
+        provider_transaction_id: { type: [string, 'null'], minLength: 1, maxLength: 200 }
+        provider: { type: [string, 'null'], maxLength: 80 }
+        channel_code: { type: [string, 'null'], maxLength: 80 }
+        virtual_account: { type: [string, 'null'], maxLength: 100 }
+        payment_code: { type: [string, 'null'], maxLength: 200 }
+        payment_url: { type: [string, 'null'], format: uri }
+    TrackingEvent:
+      type: object
+      additionalProperties: false
+      required: [occurred_at, status, label]
+      properties:
+        occurred_at: { type: string, format: date-time }
+        status: { type: string, enum: [accepted, pickup, in_transit, delivered, returned, canceled, problem] }
+        label: { type: string, minLength: 1, maxLength: 200 }
+        location: { type: [string, 'null'], maxLength: 200 }
+        note: { type: [string, 'null'], maxLength: 500 }
+    OrderDetail:
+      allOf:
+        - { $ref: '#/components/schemas/OrderSummaryFields' }
+        - type: object
+          required: [items, subtotal_idr, shipping_idr, tax_idr, discount_idr, total_idr, delivery, payment]
+          properties:
+            items:
+              type: array
+              minItems: 1
+              items: { $ref: '#/components/schemas/OrderLine' }
+            subtotal_idr: { type: integer, minimum: 0, maximum: 9007199254740991 }
+            shipping_idr: { type: integer, minimum: 0, maximum: 9007199254740991 }
+            tax_idr: { type: integer, minimum: 0, maximum: 9007199254740991 }
+            discount_idr: { type: integer, minimum: 0, maximum: 9007199254740991 }
+            delivery: { $ref: '#/components/schemas/AddressSnapshot' }
+            courier: { type: [string, 'null'], maxLength: 80 }
+            service_type: { type: [string, 'null'], maxLength: 80 }
+            shipping_problem:
+              type: [object, 'null']
+              additionalProperties: false
+              required: [since, note]
+              properties:
+                since: { type: string, format: date-time }
+                note: { type: string, minLength: 1, maxLength: 500 }
+            tracking_events:
+              type: array
+              items: { $ref: '#/components/schemas/TrackingEvent' }
+            returned_at: { type: [string, 'null'], format: date-time }
+            return_reason: { type: [string, 'null'], maxLength: 500 }
+            payment:
+              oneOf:
+                - { $ref: '#/components/schemas/PaymentSummary' }
+                - { type: 'null' }
+              description: Null for honest legacy or unconfigured-payment records; never fabricate instructions.
+      unevaluatedProperties: false
+    OrderClaimRequest:
+      type: object
+      additionalProperties: false
+      required: [store_slug, order_reference, possession_proof]
+      properties:
+        store_slug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+        order_reference: { type: string, minLength: 4, maxLength: 100 }
+        possession_proof: { type: string, minLength: 8, maxLength: 512, writeOnly: true }
+        consent_version: { type: string, minLength: 1, maxLength: 40 }
+    OrderClaimStatus:
+      type: object
+      additionalProperties: false
+      required: [claim_id, status]
+      properties:
+        claim_id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, linked, rejected] }
+    AddressFields:
+      type: object
+      required: [label, recipient, phone, address, district_id, city, province, postcode]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 60 }
+        recipient: { type: string, minLength: 1, maxLength: 120 }
+        phone: { type: string, minLength: 8, maxLength: 20 }
+        address: { type: string, minLength: 1, maxLength: 500 }
+        district_id:
+          type: integer
+          minimum: 1
+          description: KiriminAja destination ID required to re-quote shipping before checkout acceptance.
+        district: { type: [string, 'null'], maxLength: 120, description: Derived display label. }
+        city: { type: string, minLength: 1, maxLength: 120 }
+        province: { type: string, minLength: 1, maxLength: 120 }
+        postcode: { type: string, pattern: '^[0-9]{5}$' }
+        is_default: { type: boolean, default: false }
+    AddressInput:
+      allOf:
+        - { $ref: '#/components/schemas/AddressFields' }
+      unevaluatedProperties: false
+    Address:
+      allOf:
+        - { $ref: '#/components/schemas/AddressFields' }
+        - type: object
+          required: [id, created_at]
+          properties:
+            id: { type: string, format: uuid }
+            created_at: { type: string, format: date-time }
+      unevaluatedProperties: false
+    StoreConnection:
+      type: object
+      additionalProperties: false
+      required: [merchant, status, consent_version, linked_at]
+      properties:
+        merchant: { $ref: '#/components/schemas/MerchantSummary' }
+        status: { type: string, enum: [active, revoked] }
+        consent_version: { type: string, minLength: 1, maxLength: 40 }
+        linked_at: { type: string, format: date-time }
+        revoked_at: { type: [string, 'null'], format: date-time }
+    Session:
+      type: object
+      additionalProperties: false
+      required: [id, current, device_label, created_at, last_active_at]
+      properties:
+        id: { type: string, format: uuid }
+        current: { type: boolean }
+        device_label: { type: string, minLength: 1, maxLength: 120 }
+        approximate_location: { type: [string, 'null'], maxLength: 120 }
+        created_at: { type: string, format: date-time }
+        last_active_at: { type: string, format: date-time }

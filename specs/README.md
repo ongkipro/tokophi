@@ -27,7 +27,9 @@ Written from the code and the database, and re-verified 2026-07-14. **They are t
 | **[docs/SCHEMA.md](docs/SCHEMA.md)** | The database, **generated from `information_schema` / `pg_class`** — 70 tables, 51 migrations, RLS on 45. Not from memory |
 | **[docs/BACKLOG.md](docs/BACKLOG.md)** | What is left, honestly — including the five things that are currently lying, leaking, or unmeasurable |
 
-**Supporting:** [ARCHITECTURE](docs/ARCHITECTURE.md) · [CONCEPT](docs/CONCEPT.md) ·
+**Supporting:** [TOKOPHI_ACCOUNT_SPEC](docs/TOKOPHI_ACCOUNT_SPEC.md) ·
+[TOKOPHI_ACCOUNT_UI_UX_GUIDE](docs/TOKOPHI_ACCOUNT_UI_UX_GUIDE.md) ·
+[ARCHITECTURE](docs/ARCHITECTURE.md) · [CONCEPT](docs/CONCEPT.md) ·
 [CHAT_SPEC](docs/CHAT_SPEC.md) · [DEPLOY](docs/DEPLOY.md) · [CODE_MAP](docs/CODE_MAP.md) ·
 [UI_INVENTORY](docs/UI_INVENTORY.md) · [WORKLOG](docs/WORKLOG.md) · [PROD_PLAN](docs/PROD_PLAN.md) ·
 [DATA_MODEL](docs/DATA_MODEL.md) · [TASKS](docs/TASKS.md) · **wireframes/**
