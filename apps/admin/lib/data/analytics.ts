@@ -83,9 +83,10 @@ export async function dailyStatsRows(db: Tx): Promise<DayPoint[]> {
       ),
       o as (
         select ${dayOf(sql`o.placed_at`)}               as day,
-               sum(o.total_idr - o.tax_idr)::bigint     as sales,
+               sum(e.seller_entitlement_idr)::bigint    as sales,
                count(*)::int                            as orders
           from orders o
+          join order_seller_entitlements e on e.order_id = o.id
          where ${NOT_CANCELLED}
            and o.placed_at >= ${midnightDaysAgo(SERIES_DAYS)}
          group by 1
@@ -139,9 +140,10 @@ export async function hourlyStatsRows(db: Tx): Promise<HourPoint[]> {
     const rows = (await db.execute(sql`
       select ${dayKey(sql`o.placed_at`)}                as "date",
              ${hourOf(sql`o.placed_at`)}                as "hour",
-             sum(o.total_idr - o.tax_idr)::bigint       as "sales",
+             sum(e.seller_entitlement_idr)::bigint       as "sales",
              count(*)::int                              as "orders"
         from orders o
+        join order_seller_entitlements e on e.order_id = o.id
        where ${NOT_CANCELLED}
          and o.placed_at >= ${midnightDaysAgo(2)}
        group by 1, 2
@@ -176,8 +178,9 @@ export async function getRegionSales(limit = 6): Promise<RegionSale[]> {
   return withCurrentTenant(async (db: Tx) => {
     const rows = (await db.execute(sql`
       select coalesce(nullif(o.city, ''), 'Tidak diketahui') as "city",
-             sum(o.total_idr - o.tax_idr)::bigint as "sales"
+             sum(e.seller_entitlement_idr)::bigint as "sales"
       from orders o
+      join order_seller_entitlements e on e.order_id = o.id
       where ${NOT_CANCELLED}
       group by 1
       order by "sales" desc
@@ -247,8 +250,9 @@ export async function getChannelSalesDaily(): Promise<ChannelDay[]> {
     const rows = (await db.execute(sql`
       select ${dayKey(sql`o.placed_at`)}          as "date",
              o.channel::text                      as "channel",
-             sum(o.total_idr - o.tax_idr)::bigint as "value"
+             sum(e.seller_entitlement_idr)::bigint as "value"
       from orders o
+      join order_seller_entitlements e on e.order_id = o.id
       where ${NOT_CANCELLED}
       group by 1, 2
     `)) as unknown as { date: string; channel: string; value: string | number }[];
@@ -294,7 +298,7 @@ export async function getOrderStats(): Promise<OrderStats> {
   return withCurrentTenant(async (db: Tx) => {
     const rows = (await db.execute(sql`
       select count(*)::int as "orders",
-             coalesce(sum(o.total_idr - o.tax_idr), 0)::bigint as "revenue",
+             coalesce(sum(e.seller_entitlement_idr), 0)::bigint as "revenue",
              coalesce((
                select sum(li.qty)
                from order_line_items li
@@ -302,6 +306,7 @@ export async function getOrderStats(): Promise<OrderStats> {
                where o2.status <> 'batal'
              ), 0)::int as "items"
       from orders o
+      join order_seller_entitlements e on e.order_id = o.id
       where ${NOT_CANCELLED}
     `)) as unknown as { orders: number; revenue: string | number; items: number }[];
 

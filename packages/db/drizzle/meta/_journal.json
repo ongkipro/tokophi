@@ -659,6 +659,13 @@
       "when": 1786470181705,
       "tag": "0093_catalog_updated_at",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1786475026516,
+      "tag": "0094_magical_salo",
+      "breakpoints": true
     }
   ]
 }

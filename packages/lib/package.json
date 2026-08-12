@@ -19,6 +19,7 @@
     "./password": "./src/password.ts",
     "./integration-status": "./src/integration-status.ts",
     "./payment-fees": "./src/payment-fees.ts",
+    "./order-finance": "./src/order-finance.ts",
     "./validate": "./src/validate.ts",
     "./colors": "./src/colors.ts",
     "./theme": "./src/theme.ts",

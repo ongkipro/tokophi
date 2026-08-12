@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ArrowRight, Clock, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock, CheckCircle2 } from "lucide-react";
 import { Card } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
 import { getFinanceSummary, getEarnings, getChannelMix, type Period } from "@/lib/data/finance";
+import { getReconciliationMismatches } from "@/lib/data/reconciliation";
 import { IDR, num } from "@tokophi/lib/format";
 import { PeriodTabs } from "./period-tabs";
 import { EarningsChart } from "@/components/admin/keuangan/earnings-chart";
@@ -28,10 +29,11 @@ export default async function PenghasilanPage({
   const raw = Number(sp.hari);
   const days: Period = (PERIODS as number[]).includes(raw) ? (raw as Period) : 30;
 
-  const [f, rows, channels] = await Promise.all([
+  const [f, rows, channels, mismatches] = await Promise.all([
     getFinanceSummary(days),
     getEarnings(days),
     getChannelMix(days),
+    getReconciliationMismatches(),
   ]);
   const gross = rows.reduce((a, r) => a + r.gross, 0);
   const shipping = rows.reduce((a, r) => a + r.shipping, 0);
@@ -45,6 +47,26 @@ export default async function PenghasilanPage({
       <PageHeader title="Penghasilan" desc="Hasil penjualan — yang sudah cair dan yang masih ditahan." />
 
       <PeriodTabs days={days} />
+      {mismatches.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <AlertTriangle className="size-4 text-amber-600" />
+            {num(mismatches.length)} pesanan perlu direkonsiliasi
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Periksa alokasi checkout, biaya provider, dan ledger pada{" "}
+            {mismatches.slice(0, 3).map((row, index) => (
+              <span key={row.orderNumber}>
+                {index > 0 && ", "}
+                <Link className="font-medium text-foreground underline" href={`/pesanan/${row.orderNumber}`}>
+                  {row.orderNumber}
+                </Link>
+              </span>
+            ))}
+            {mismatches.length > 3 && `, serta ${num(mismatches.length - 3)} lainnya`}.
+          </p>
+        </Card>
+      )}
 
       {/* The split that gives this page its reason to exist. Same two figures as Keuangan's header,
           deliberately: this page explains them, the summary only reports them. */}
@@ -73,7 +95,7 @@ export default async function PenghasilanPage({
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card className="p-4">
-          <p className="text-xs text-muted-foreground tabular-nums">Omzet {days} hari</p>
+          <p className="text-xs text-muted-foreground tabular-nums">Hak Seller {days} hari</p>
           <p className="mt-1 text-xl font-bold tabular-nums">{IDR(gross)}</p>
         </Card>
         <Card className="p-4">
@@ -89,8 +111,8 @@ export default async function PenghasilanPage({
       <Card className="p-5">
         <p className="text-sm font-medium">Penghasilan harian</p>
         <p className="mb-3 text-xs text-muted-foreground">
-          Omzet dan ongkir per hari. Hari tanpa penjualan tetap ditampilkan sebagai kosong — itu juga
-          informasi.
+          Hak Seller setelah diskon barang dan selisih ongkir per hari. Ongkir pembeli ditampilkan
+          terpisah karena bukan saldo yang dapat ditarik.
         </p>
         {activeDays === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">

@@ -16,7 +16,16 @@ import { applyOrderStatusChange, type OrderStatus } from "@/lib/order-status";
 // `codFee` = what the aggregator charges for collecting cash on this service (N31). It is deducted
 // from the merchant's COD payout, so wherever a merchant sees a COD-capable rate they see this too.
 // All-null when the vendor sent no fee config — render nothing, never Rp0.
-export type Rate = { service: string; code: string; type: string; cost: number; etd: string; cod: boolean; group: string; codFee: KaCodFee };
+export type Rate = {
+  service: string;
+  code: string;
+  type: string;
+  cost: number;
+  etd: string;
+  cod: boolean;
+  group: string;
+  codFee: KaCodFee;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ONE definition of "this order's status is no longer a shipment's to move".
@@ -36,8 +45,7 @@ export type Rate = { service: string; code: string; type: string; cost: number; 
 // Widening the machine's guard to include `selesai` would silently kill the return path; narrowing
 // this one to match the machine would re-open the un-completion hole. The difference is deliberate —
 // so it lives in ONE helper with this note, not copied into four `if`s.
-const shipmentLocked = (status: string | null | undefined): boolean =>
-  status === "selesai" || status === "batal" || status === "retur";
+const shipmentLocked = (status: string | null | undefined): boolean => status === "selesai" || status === "batal" || status === "retur";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The SAME two-level filter the storefront applies (/api/public/ongkir): the platform (super-admin)
@@ -52,13 +60,19 @@ const shipmentLocked = (status: string | null | undefined): boolean =>
 // ─────────────────────────────────────────────────────────────────────────────
 async function shippingScope(storeId: string): Promise<{ platformOn: string[]; services: Set<string> | null }> {
   const platformRows = await db
-    .select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled })
+    .select({
+      courier: schema.platformCouriers.courier,
+      enabled: schema.platformCouriers.enabled,
+    })
     .from(schema.platformCouriers);
   const platformOn = platformRows.filter((p) => p.enabled && !isInstantCourier(p.courier)).map((p) => p.courier);
 
   const picked = await withTenant(storeId, (db) =>
     db
-      .select({ courier: schema.storeShippingMethods.courier, service: schema.storeShippingMethods.service })
+      .select({
+        courier: schema.storeShippingMethods.courier,
+        service: schema.storeShippingMethods.service,
+      })
       .from(schema.storeShippingMethods)
       .where(eq(schema.storeShippingMethods.enabled, true)),
   );
@@ -66,27 +80,23 @@ async function shippingScope(storeId: string): Promise<{ platformOn: string[]; s
   return { platformOn, services };
 }
 
-const inScope = (scope: { platformOn: string[]; services: Set<string> | null }, courier: string, type: string) =>
-  (!scope.platformOn.length || scope.platformOn.includes(courier)) &&
-  (!scope.services || scope.services.has(`${courier}:${type}`));
+const inScope = (scope: { platformOn: string[]; services: Set<string> | null }, courier: string, type: string) => (!scope.platformOn.length || scope.platformOn.includes(courier)) && (!scope.services || scope.services.has(`${courier}:${type}`));
 
 /** Package rows for an order: real variant weights + product dimensions. ONE definition, so the
  *  price the seller is quoted and the parcel that is booked are built from the same numbers. */
 async function packageRows(db: Tx, orderId: string) {
   return db
     .select({
-      weight: schema.productVariants.weightGrams, qty: schema.orderLineItems.qty,
-      l: schema.products.lengthCm, w: schema.products.widthCm, h: schema.products.heightCm,
+      weight: schema.productVariants.weightGrams,
+      qty: schema.orderLineItems.qty,
+      l: schema.products.lengthCm,
+      w: schema.products.widthCm,
+      h: schema.products.heightCm,
     })
     .from(schema.orderLineItems)
     .leftJoin(schema.productVariants, eq(schema.productVariants.id, schema.orderLineItems.variantId))
     .leftJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
     .where(eq(schema.orderLineItems.orderId, orderId));
-}
-
-async function packageWeight(db: Tx, orderId: string): Promise<number> {
-  const rows = await packageRows(db, orderId);
-  return rows.reduce((a, r) => a + (r.weight ?? 0) * (r.qty ?? 1), 0);
 }
 
 // Live shipping rates from KiriminAja for an order's destination.
@@ -108,21 +118,34 @@ async function packageWeight(db: Tx, orderId: string): Promise<number> {
 // and the merchant eats the difference with the courier. Same lesson as the ongkir origin (now the
 // seller's pickup district) and the COD province (now the KiriminAja district id): a claim from
 // the client is not a fact. There is no fallback parameter to fall back TO — that is the point.
-export async function getShippingRates(input: {
-  orderNumber: string;
-}): Promise<{ ok: boolean; rates: Rate[]; origin?: string; destination?: string; codEnabled?: boolean; error?: string }> {
+export async function getShippingRates(input: { orderNumber: string }): Promise<{
+  ok: boolean;
+  rates: Rate[];
+  origin?: string;
+  destination?: string;
+  codEnabled?: boolean;
+  error?: string;
+}> {
   // `orders:write`, not merely a session. This is a `"use server"` action that spends REAL KiriminAja
   // quota (one live rate call per invocation) and it was the only door into this file that any signed-in
   // store user could open — a `gudang` account, which the RBAC matrix deliberately keeps out of every
   // other shipping action, could loop it over the store's order numbers. It is also the read that
   // `createShipment` is paired with, so the two should demand the same capability.
   const session = await requireCapability("orders:write");
-  if (!kiriminajaConfigured()) return { ok: false, rates: [], error: "KiriminAja belum dikonfigurasi oleh platform (super-admin → Pengaturan)." };
+  if (!kiriminajaConfigured())
+    return {
+      ok: false,
+      rates: [],
+      error: "KiriminAja belum dikonfigurasi oleh platform (super-admin → Pengaturan).",
+    };
 
   const ctx = await withCurrentTenant(async (db) => {
     const [store] = await db.select({ city: schema.stores.city }).from(schema.stores).where(eq(schema.stores.id, session.storeId)).limit(1);
     const [settings] = await db
-      .select({ kecamatanId: schema.storeSettings.senderKecamatanId, kecamatanName: schema.storeSettings.senderKecamatanName })
+      .select({
+        kecamatanId: schema.storeSettings.senderKecamatanId,
+        kecamatanName: schema.storeSettings.senderKecamatanName,
+      })
       .from(schema.storeSettings)
       .limit(1);
     const order = input.orderNumber
@@ -140,8 +163,8 @@ export async function getShippingRates(input: {
             .limit(1)
         )[0]
       : undefined;
-    const weight = order ? await packageWeight(db, order.id) : 0;
-    return { storeCity: store?.city ?? "Yogyakarta", settings, order, weight };
+    const pkgRows = order ? await packageRows(db, order.id) : [];
+    return { storeCity: store?.city ?? "Yogyakarta", settings, order, pkgRows };
   });
 
   // ORIGIN = the seller's saved pickup address (Pengaturan → Alamat) — the address the courier is
@@ -154,15 +177,18 @@ export async function getShippingRates(input: {
     origin = opts[0]?.id;
     originName = opts[0]?.text ? `${opts[0].text} (perkiraan — alamat jemput belum diatur)` : ctx.storeCity;
   }
-  if (!origin) return { ok: false, rates: [], error: "Alamat pengambilan toko belum diatur (Pengaturan → Alamat)." };
+  if (!origin)
+    return {
+      ok: false,
+      rates: [],
+      error: "Alamat pengambilan toko belum diatur (Pengaturan → Alamat).",
+    };
 
   // DESTINATION — the order's own district id first; a city name only when there is no snapshot.
   let destination = ctx.order?.districtId ?? undefined;
   let destinationName = "";
   if (destination) {
-    destinationName = (await provinceForDistrict(destination))
-      ? `${ctx.order?.city ?? ""} (kecamatan tujuan pesanan)`.trim()
-      : String(destination);
+    destinationName = (await provinceForDistrict(destination)) ? `${ctx.order?.city ?? ""} (kecamatan tujuan pesanan)`.trim() : String(destination);
   } else if (ctx.order?.city) {
     // Pre-0042 orders carry no district snapshot. Fuzzy-match their city — and SAY it is a guess.
     // `resolveArea("Surabaya")[0]` once returned "Bandar Surabaya, Lampung Tengah, LAMPUNG": the
@@ -171,14 +197,35 @@ export async function getShippingRates(input: {
     destination = destOpts[0]?.id;
     destinationName = destOpts[0]?.text ? `${destOpts[0].text} (perkiraan dari nama kota)` : ctx.order.city;
   }
-  if (!destination) return { ok: false, rates: [], error: "Kecamatan tujuan pesanan tidak diketahui — pesanan ini tidak bisa dihitung ongkirnya." };
+  if (!destination)
+    return {
+      ok: false,
+      rates: [],
+      error: "Kecamatan tujuan pesanan tidak diketahui — pesanan ini tidak bisa dihitung ongkirnya.",
+    };
 
-  // 1 kg courier minimum, applied ONCE to the real summed weight (it used to be applied to a
-  // fabricated one, which hid how wrong the number was).
-  const weight = Math.max(1000, ctx.weight || 0);
+  const actualWeight = ctx.pkgRows.reduce((sum, row) => sum + (row.weight ?? 0) * (row.qty ?? 1), 0);
+  const weight = Math.max(1000, actualWeight);
+  const lengthCm = Math.max(0, ...ctx.pkgRows.map((row) => row.l ?? 0)) || undefined;
+  const widthCm = Math.max(0, ...ctx.pkgRows.map((row) => row.w ?? 0)) || undefined;
+  const heightCm = Math.max(0, ...ctx.pkgRows.map((row) => row.h ?? 0)) || undefined;
   const itemValue = Number(ctx.order?.subtotal ?? 0);
-  const r = await kaShippingPrice({ origin, destination, weight, itemValue, insurance: 0 });
-  if (!r.ok) return { ok: false, rates: [], error: r.error ?? "Gagal mengambil tarif dari KiriminAja." };
+  const r = await kaShippingPrice({
+    origin,
+    destination,
+    weight,
+    lengthCm,
+    widthCm,
+    heightCm,
+    itemValue,
+    insurance: 0,
+  });
+  if (!r.ok)
+    return {
+      ok: false,
+      rates: [],
+      error: r.error ?? "Gagal mengambil tarif dari KiriminAja.",
+    };
   const scope = await shippingScope(session.storeId);
   // Same EFFECTIVE COD flag the storefront sees (lib/cod.ts): the merchant's own switch + the
   // platform's per-service allowance. Booking a COD shipment on a service the platform disallowed
@@ -195,7 +242,16 @@ export async function getShippingRates(input: {
       .filter((x) => !isInstantService({ courier: x.service, group: x.group }))
       // …and only what the platform allows and this store actually offers (see shippingScope).
       .filter((x) => inScope(scope, x.service, x.service_type))
-      .map((x) => ({ service: x.service_name, code: x.service, type: x.service_type, cost: Number(x.cost), etd: x.etd, cod: x.cod && cod.allows(x.service, x.service_type), group: x.group, codFee: kaCodFee(x) })),
+      .map((x) => ({
+        service: x.service_name,
+        code: x.service,
+        type: x.service_type,
+        cost: Number(x.cost),
+        etd: x.etd,
+        cod: x.cod && cod.allows(x.service, x.service_type),
+        group: x.group,
+        codFee: kaCodFee(x),
+      })),
   };
 }
 
@@ -227,9 +283,13 @@ export async function kelurahanOptions(districtId: number): Promise<{ name: stri
 // coordinates. `store_settings.sender_lat/sender_lng` still exist in the DB but are DEAD: neither
 // read nor written here. Don't wire them back.
 export type SenderAddress = {
-  name: string; phone: string; address: string;
-  kecamatanId: number | null; kecamatanName: string;
-  kelurahanId: number | null; kelurahanName: string;
+  name: string;
+  phone: string;
+  address: string;
+  kecamatanId: number | null;
+  kecamatanName: string;
+  kelurahanId: number | null;
+  kelurahanName: string;
   postcode: string;
 };
 
@@ -239,9 +299,13 @@ export async function getSenderAddress(): Promise<SenderAddress | null> {
     const [s] = await db.select().from(schema.storeSettings).limit(1);
     if (!s) return null;
     return {
-      name: s.senderName ?? "", phone: s.senderPhone ?? "", address: s.senderAddress ?? "",
-      kecamatanId: s.senderKecamatanId ?? null, kecamatanName: s.senderKecamatanName ?? "",
-      kelurahanId: s.senderKelurahanId ?? null, kelurahanName: s.senderKelurahanName ?? "",
+      name: s.senderName ?? "",
+      phone: s.senderPhone ?? "",
+      address: s.senderAddress ?? "",
+      kecamatanId: s.senderKecamatanId ?? null,
+      kecamatanName: s.senderKecamatanName ?? "",
+      kelurahanId: s.senderKelurahanId ?? null,
+      kelurahanName: s.senderKelurahanName ?? "",
       postcode: s.senderPostcode ?? "",
     };
   });
@@ -251,12 +315,7 @@ export async function getSenderAddress(): Promise<SenderAddress | null> {
 // Alamat Pengirim card previews the EXACT string this booking sends. See the note there for why the
 // kelurahan + postcode have to ride inside the address text.
 
-export async function saveSenderAddress(input: {
-  name: string; phone: string; address: string;
-  kecamatanId: number | null; kecamatanName: string;
-  kelurahanId?: number | null; kelurahanName?: string;
-  postcode?: string;
-}): Promise<{ ok: boolean; error?: string }> {
+export async function saveSenderAddress(input: { name: string; phone: string; address: string; kecamatanId: number | null; kecamatanName: string; kelurahanId?: number | null; kelurahanName?: string; postcode?: string }): Promise<{ ok: boolean; error?: string }> {
   const { storeId } = await requireCapability("settings:write");
   // 5 digits or nothing. Normalised, not rejected — an odd postcode must never block saving an
   // address (same rule as the phone below); it just doesn't get written.
@@ -269,11 +328,19 @@ export async function saveSenderAddress(input: {
     // address because of a phone format would be a worse bug than the format.
     senderPhone: normalizePhone(input.phone) ?? input.phone,
     senderAddress: input.address,
-    senderKecamatanId: input.kecamatanId, senderKecamatanName: input.kecamatanName,
-    senderKelurahanId: input.kelurahanId ?? null, senderKelurahanName: input.kelurahanName ?? "",
+    senderKecamatanId: input.kecamatanId,
+    senderKecamatanName: input.kecamatanName,
+    senderKelurahanId: input.kelurahanId ?? null,
+    senderKelurahanName: input.kelurahanName ?? "",
   };
   await withTenant(storeId, (db) =>
-    db.insert(schema.storeSettings).values({ storeId, ...values }).onConflictDoUpdate({ target: schema.storeSettings.storeId, set: values }),
+    db
+      .insert(schema.storeSettings)
+      .values({ storeId, ...values })
+      .onConflictDoUpdate({
+        target: schema.storeSettings.storeId,
+        set: values,
+      }),
   );
   revalidatePath("/pengaturan");
   return { ok: true };
@@ -316,7 +383,13 @@ export type PlatformService = {
   codAllowed: boolean; // …and the platform permits it
 };
 
-type StoredService = { type: string; name: string; group: string; cod: boolean; codAllowed?: boolean };
+type StoredService = {
+  type: string;
+  name: string;
+  group: string;
+  cod: boolean;
+  codAllowed?: boolean;
+};
 
 /** Services the PLATFORM has enabled — the pool a merchant may offer. Global table → owner conn. */
 export async function getPlatformServices(): Promise<PlatformService[]> {
@@ -371,9 +444,7 @@ export async function getStoreServices(): Promise<{ courier: string; type: strin
   });
 }
 
-export async function saveStoreServices(
-  services: { courier: string; type: string }[],
-): Promise<{ ok: boolean; error?: string }> {
+export async function saveStoreServices(services: { courier: string; type: string }[]): Promise<{ ok: boolean; error?: string }> {
   const { storeId } = await requireCapability("settings:write");
   // The UI cannot show an instant courier, but the action is the boundary — a hand-posted payload
   // must not persist one either (@tokophi/lib/couriers).
@@ -383,7 +454,12 @@ export async function saveStoreServices(
     await db.delete(schema.storeShippingMethods);
     if (clean.length) {
       await db.insert(schema.storeShippingMethods).values(
-        clean.map((s) => ({ storeId, courier: s.courier, service: s.type, enabled: true })),
+        clean.map((s) => ({
+          storeId,
+          courier: s.courier,
+          service: s.type,
+          enabled: true,
+        })),
       );
     }
   });
@@ -406,18 +482,27 @@ export async function setCodEnabled(on: boolean): Promise<{ ok: boolean; error?:
     db
       .insert(schema.storeSettings)
       .values({ storeId, codEnabled: on })
-      .onConflictDoUpdate({ target: schema.storeSettings.storeId, set: { codEnabled: on } }),
+      .onConflictDoUpdate({
+        target: schema.storeSettings.storeId,
+        set: { codEnabled: on },
+      }),
   );
   revalidatePath("/pengaturan");
   return { ok: true };
 }
 
 /** Automatic free shipping (PROMO P1, store_settings.free_ship_*). subtotal ≥ minIdr ⇒ ongkir gratis. */
-export async function getFreeShip(): Promise<{ enabled: boolean; minIdr: number }> {
+export async function getFreeShip(): Promise<{
+  enabled: boolean;
+  minIdr: number;
+}> {
   if (!(await getSession())) return { enabled: false, minIdr: 0 };
   return withCurrentTenant(async (db) => {
     const [s] = await db
-      .select({ enabled: schema.storeSettings.freeShipEnabled, minIdr: schema.storeSettings.freeShipMinIdr })
+      .select({
+        enabled: schema.storeSettings.freeShipEnabled,
+        minIdr: schema.storeSettings.freeShipMinIdr,
+      })
       .from(schema.storeSettings)
       .limit(1);
     return { enabled: !!s?.enabled, minIdr: s?.minIdr ?? 0 };
@@ -430,8 +515,15 @@ export async function setFreeShip(input: { enabled: boolean; minIdr: number }): 
   await withTenant(storeId, (db) =>
     db
       .insert(schema.storeSettings)
-      .values({ storeId, freeShipEnabled: input.enabled, freeShipMinIdr: minIdr })
-      .onConflictDoUpdate({ target: schema.storeSettings.storeId, set: { freeShipEnabled: input.enabled, freeShipMinIdr: minIdr } }),
+      .values({
+        storeId,
+        freeShipEnabled: input.enabled,
+        freeShipMinIdr: minIdr,
+      })
+      .onConflictDoUpdate({
+        target: schema.storeSettings.storeId,
+        set: { freeShipEnabled: input.enabled, freeShipMinIdr: minIdr },
+      }),
   );
   revalidatePath("/pengaturan");
   return { ok: true };
@@ -478,16 +570,20 @@ export type CreateShipmentResult = {
   destinationGuessed?: string;
 };
 
-export async function createShipment(input: {
-  orderNumber: string; service: string; serviceType: string; serviceName: string; cost: number;
-  insurance?: boolean; cod?: boolean;
-}): Promise<CreateShipmentResult> {
+export async function createShipment(input: { orderNumber: string; service: string; serviceType: string; serviceName: string; cost: number; insurance?: boolean; cod?: boolean }): Promise<CreateShipmentResult> {
   const { storeId } = await requireCapability("orders:write");
-  if (!kiriminajaConfigured()) return { ok: false, error: "KiriminAja belum dikonfigurasi oleh platform." };
+  if (!kiriminajaConfigured())
+    return {
+      ok: false,
+      error: "KiriminAja belum dikonfigurasi oleh platform.",
+    };
   // A shipment can only be booked with an expedition courier — the instant (rider) booking path was
   // removed with the feature (@tokophi/lib/couriers). This is the boundary, not the UI.
   if (isInstantCourier(input.service)) {
-    return { ok: false, error: "Kurir instan tidak didukung — gunakan layanan ekspedisi." };
+    return {
+      ok: false,
+      error: "Kurir instan tidak didukung — gunakan layanan ekspedisi.",
+    };
   }
 
   // The service must be one the PLATFORM enables and this store OFFERS. The rate list already
@@ -495,7 +591,10 @@ export async function createShipment(input: {
   // must not book a courier the platform switched off.
   const scope = await shippingScope(storeId);
   if (!inScope(scope, input.service, input.serviceType)) {
-    return { ok: false, error: `Layanan ${input.serviceName} tidak aktif untuk toko ini (Pengaturan → Jasa Kirim).` };
+    return {
+      ok: false,
+      error: `Layanan ${input.serviceName} tidak aktif untuk toko ini (Pengaturan → Jasa Kirim).`,
+    };
   }
 
   const data = await withTenant(storeId, async (db) => {
@@ -503,16 +602,29 @@ export async function createShipment(input: {
     const [o] = await db
       .select({
         id: schema.orders.id,
-        number: schema.orders.number, city: schema.orders.city, province: schema.orders.province, awb: schema.orders.awb,
-        kaOrderId: schema.orders.kaOrderId, status: schema.orders.status,
-        subtotal: schema.orders.subtotalIdr, total: schema.orders.totalIdr,
+        number: schema.orders.number,
+        city: schema.orders.city,
+        province: schema.orders.province,
+        awb: schema.orders.awb,
+        kaOrderId: schema.orders.kaOrderId,
+        status: schema.orders.status,
+        subtotal: schema.orders.subtotalIdr,
+        shipping: schema.orders.shippingIdr,
+        total: schema.orders.totalIdr,
         // Address SNAPSHOT (migration 0042) — where THIS parcel goes. See the note below.
-        shipRecipient: schema.orders.shipRecipient, shipPhone: schema.orders.shipPhone,
-        shipAddress: schema.orders.shipAddress, shipPostcode: schema.orders.shipPostcode,
+        shipRecipient: schema.orders.shipRecipient,
+        shipPhone: schema.orders.shipPhone,
+        shipAddress: schema.orders.shipAddress,
+        shipPostcode: schema.orders.shipPostcode,
         shipDistrictId: schema.orders.shipDistrictId,
-        custName: schema.customers.name, custPhone: schema.customers.phone,
+        custName: schema.customers.name,
+        custPhone: schema.customers.phone,
         // ⚠️ Whether this parcel is COD is a FACT ABOUT THE ORDER, not a checkbox. See the booking below.
         isCod: sql<boolean>`exists (select 1 from payments p where p.order_id = ${schema.orders.id} and p.method = 'cod')`,
+        hasSuccessfulPayment: sql<boolean>`exists (
+          select 1 from payments p
+           where p.order_id = ${schema.orders.id} and p.status = 'berhasil'
+        )`,
       })
       .from(schema.orders)
       .leftJoin(schema.customers, eq(schema.customers.id, schema.orders.customerId))
@@ -532,19 +644,30 @@ export async function createShipment(input: {
   if (input.cod !== undefined && !!input.cod !== !!o.isCod) {
     return {
       ok: false,
-      error: o.isCod
-        ? `Pesanan ${o.number} dibayar COD — resi harus dibuat dengan penagihan COD.`
-        : `Pesanan ${o.number} sudah dibayar di muka — resi tidak boleh menagih COD lagi.`,
+      error: o.isCod ? `Pesanan ${o.number} dibayar COD — resi harus dibuat dengan penagihan COD.` : `Pesanan ${o.number} sudah dibayar di muka — resi tidak boleh menagih COD lagi.`,
     };
   }
-  if (o.kaOrderId) return { ok: false, error: `Pesanan sudah dibooking ke kurir (${o.kaOrderId}).` };
+  if (!o.isCod && !o.hasSuccessfulPayment) {
+    return {
+      ok: false,
+      error: `Pesanan ${o.number} belum dibayar. Pengiriman prepaid hanya dapat dibuat setelah pembayaran berhasil.`,
+    };
+  }
+  if (o.kaOrderId)
+    return {
+      ok: false,
+      error: `Pesanan sudah dibooking ke kurir (${o.kaOrderId}).`,
+    };
   // A terminal order cannot be booked — refuse BEFORE calling KiriminAja, so we never create a real
   // courier booking for an order we would then decline to record a status for. `batal`/`retur` the
   // state machine would refuse anyway; `selesai` it would NOT (see shipmentLocked), and for a
   // `selesai` COD order accepting this would mean un-completing a sale whose cash is already
   // collected and credited to the ledger.
   if (shipmentLocked(o.status)) {
-    return { ok: false, error: `Pesanan sudah ${o.status} — tidak bisa dibuatkan pengiriman.` };
+    return {
+      ok: false,
+      error: `Pesanan sudah ${o.status} — tidak bisa dibuatkan pengiriman.`,
+    };
   }
 
   // The sender address is the pickup origin. KiriminAja rejects request_pickup without a
@@ -596,7 +719,11 @@ export async function createShipment(input: {
     // "Bandar Surabaya, Lampung Tengah, LAMPUNG" is only visible if we print the MATCH.
     destinationGuessed = guess?.text || o.city || undefined;
   }
-  if (!destDistrictId) return { ok: false, error: `Area tujuan "${o.city}" tidak ditemukan di KiriminAja.` };
+  if (!destDistrictId)
+    return {
+      ok: false,
+      error: `Area tujuan "${o.city}" tidak ditemukan di KiriminAja.`,
+    };
   const destAddress = o.shipAddress?.trim() || o.city || "-";
   if (!o.shipAddress?.trim()) {
     // Never book a parcel with no street. A courier cannot deliver to a city name.
@@ -606,25 +733,179 @@ export async function createShipment(input: {
     };
   }
 
-  if (input.cod) {
+  if (o.isCod) {
     const policy = await getCodPolicy(storeId);
     // The province is taken from the DISTRICT the parcel is booked to, not from the free-text
     // province on the order: platform_cod.allowed_provinces bounds a real financial risk, and a
     // typed string is a claim while a district id is where the parcel physically goes (lib/data/areas).
     const province = (await provinceForDistrict(destDistrictId)) ?? o.province;
     const reason = policy.reason({
-      courier: input.service, serviceType: input.serviceType,
-      total: Number(o.total), province,
+      courier: input.service,
+      serviceType: input.serviceType,
+      total: Number(o.total),
+      province,
     });
     if (reason) return { ok: false, error: reason };
   }
+
+  // Re-price the chosen service on the server immediately before booking. `input.cost` is display
+  // state from the browser and is deliberately ignored here.
+  const live = await getShippingRates({ orderNumber: input.orderNumber });
+  if (!live.ok)
+    return {
+      ok: false,
+      error: live.error ?? "Tarif pengiriman tidak dapat diperbarui.",
+    };
+  const selectedRate = live.rates.find((rate) => rate.code === input.service && rate.type === input.serviceType);
+  if (!selectedRate) {
+    return {
+      ok: false,
+      error: "Layanan ini tidak tersedia pada tarif terbaru. Pilih layanan lain.",
+    };
+  }
+  const serverCost = Math.max(0, Math.round(selectedRate.cost));
+  if (serverCost !== Math.max(0, Math.round(input.cost))) {
+    return {
+      ok: false,
+      error: `Tarif berubah menjadi Rp${serverCost.toLocaleString("id-ID")}. Periksa dan konfirmasi ulang sebelum booking.`,
+    };
+  }
+  const bookingId = crypto.randomUUID();
+  const providerReference = `${input.orderNumber.replace(/[^A-Za-z0-9]/g, "")}${bookingId.slice(0, 8)}`;
+
+  // Reserve the surcharge before calling KiriminAja. The same per-store advisory lock is used by
+  // requestPayout(), so a withdrawal cannot race this debit.
+  const reservation = await withTenant(storeId, async (db) => {
+    await db.execute(sql`select pg_advisory_xact_lock(hashtext(${storeId})::bigint)`);
+    const [locked] = await db
+      .select({
+        id: schema.orders.id,
+        status: schema.orders.status,
+        kaOrderId: schema.orders.kaOrderId,
+        isCod: sql<boolean>`exists (
+          select 1 from payments p
+           where p.order_id = ${schema.orders.id} and p.method = 'cod'
+        )`,
+        hasSuccessfulPayment: sql<boolean>`exists (
+          select 1 from payments p
+           where p.order_id = ${schema.orders.id} and p.status = 'berhasil'
+        )`,
+      })
+      .from(schema.orders)
+      .where(eq(schema.orders.number, input.orderNumber))
+      .limit(1)
+      .for("update");
+    if (!locked || shipmentLocked(locked.status)) {
+      return {
+        ok: false as const,
+        error: "Pesanan tidak lagi dapat dibuatkan pengiriman.",
+      };
+    }
+    if (locked.kaOrderId) {
+      return {
+        ok: false as const,
+        error: `Pesanan sudah dibooking ke kurir (${locked.kaOrderId}).`,
+      };
+    }
+    if (!locked.isCod && !locked.hasSuccessfulPayment) {
+      return {
+        ok: false as const,
+        error: "Pembayaran belum berhasil. Pengiriman tidak jadi direservasi.",
+      };
+    }
+    const [existing] = await db
+      .select({ status: schema.shipmentBookings.status })
+      .from(schema.shipmentBookings)
+      .where(
+        sql`${schema.shipmentBookings.orderId} = ${locked.id}
+          and ${schema.shipmentBookings.status} in ('reserved', 'unknown', 'accepted', 'cancellation_requested')`,
+      )
+      .limit(1);
+    if (existing) {
+      return {
+        ok: false as const,
+        error: existing.status === "unknown" ? "Status booking sebelumnya belum diketahui. Jangan booking ulang; rekonsiliasikan referensi provider lebih dulu." : existing.status === "cancellation_requested" ? "Pembatalan pengiriman masih diproses kurir." : "Pengiriman sedang atau sudah dibooking. Muat ulang pesanan.",
+      };
+    }
+
+    const [money] = await db
+      .select({
+        shippingCharged: schema.orderFinancials.shippingChargedIdr,
+        goodsProceeds: schema.orderFinancials.goodsProceedsIdr,
+      })
+      .from(schema.orderFinancials)
+      .where(eq(schema.orderFinancials.orderId, locked.id))
+      .limit(1);
+    const shippingCharged = Number(money?.shippingCharged ?? o.shipping ?? 0);
+    const sellerDebit = Math.max(0, serverCost - shippingCharged);
+    const platformMargin = Math.max(0, shippingCharged - serverCost);
+    const orderDebit = Math.min(sellerDebit, Number(money?.goodsProceeds ?? 0));
+    const balanceDebit = sellerDebit - orderDebit;
+    const [balance] = (await db.execute(sql`
+      select coalesce(sum(amount_idr), 0)::bigint as available
+        from ledger_entries
+       where store_id = ${storeId} and status = 'available'
+    `)) as unknown as { available: string | number }[];
+    if (balanceDebit > Number(balance?.available ?? 0)) {
+      return {
+        ok: false as const,
+        error: `Saldo Seller tidak cukup untuk selisih ongkir Rp${sellerDebit.toLocaleString("id-ID")}.`,
+      };
+    }
+
+    await db.insert(schema.shipmentBookings).values({
+      id: bookingId,
+      storeId,
+      orderId: locked.id,
+      providerReference,
+      courier: input.service,
+      serviceType: input.serviceType,
+      serviceName: selectedRate.service,
+      status: "reserved",
+      shippingChargedIdr: shippingCharged,
+      shippingActualIdr: serverCost,
+      shippingDeltaIdr: serverCost - shippingCharged,
+      sellerDebitIdr: sellerDebit,
+      platformMarginIdr: platformMargin,
+    });
+    if (orderDebit > 0) {
+      await db.insert(schema.ledgerEntries).values({
+        storeId,
+        orderId: locked.id,
+        shipmentBookingId: bookingId,
+        component: "shipping-order-debit",
+        kind: "adjustment",
+        status: "pending",
+        amountIdr: -orderDebit,
+        note: `Selisih ongkir ${input.orderNumber}`,
+      });
+    }
+    if (balanceDebit > 0) {
+      await db.insert(schema.ledgerEntries).values({
+        storeId,
+        orderId: locked.id,
+        shipmentBookingId: bookingId,
+        component: "shipping-balance-debit",
+        kind: "adjustment",
+        status: "available",
+        amountIdr: -balanceDebit,
+        note: `Selisih ongkir ${input.orderNumber}`,
+        availableAt: new Date(),
+      });
+    }
+    return { ok: true as const };
+  });
+  if (!reservation.ok) return reservation;
 
   // Pickup = TOMORROW 10:00 WIB. The date must be computed in Asia/Jakarta, not in the server's
   // timezone, or a UTC box books the wrong day. 10:00 and not 15:00 because couriers enforce a
   // daily cut-off and reject anything past it — the sandbox rejects J&T outright at 15:00
   // ("telah melewati batas pemrosesan ekspedisi (Pukul 14:53:00 WIB)").
   const jkt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit",
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   }).format(new Date(Date.now() + 24 * 60 * 60 * 1000));
   const schedule = `${jkt} 10:00:00`;
   // real package weight (Σ variant weight × qty, ≥1kg) + dimensions (max per axis across items)
@@ -635,68 +916,107 @@ export async function createShipment(input: {
   const width = Math.max(0, ...pkgRows.map((r) => r.w ?? 0)) || undefined;
   const height = Math.max(0, ...pkgRows.map((r) => r.h ?? 0)) || undefined;
 
-  const r = await kaCreateOrder(
-    {
-      name: s.senderName || "Toko", phone: s.senderPhone || "081200000000",
-      // Kelurahan + postcode ride INSIDE the address — KaSender has no field for either (see
-      // composePickupAddress). Falls back to "-" only when the seller has written nothing at all.
-      address:
-        composePickupAddress({
-          address: s.senderAddress,
-          kelurahanName: s.senderKelurahanName,
-          postcode: s.senderPostcode,
-        }) || "-",
-      kecamatanId: s.senderKecamatanId, kelurahanId: s.senderKelurahanId,
-    },
-    {
-      orderRef: input.orderNumber.replace(/[^A-Za-z0-9]/g, ""),
-      // Recipient/phone come from the order snapshot too — the customer row can have moved on since
-      // the parcel was bought (that is exactly why 0042 froze them onto the order).
-      destName: o.shipRecipient?.trim() || o.custName || "Penerima",
-      destPhone: o.shipPhone?.trim() || o.custPhone || "081200000000",
-      destAddress,
-      destKecamatanId: destDistrictId,
-      destZipcode: o.shipPostcode?.trim() || undefined,
-      weight, width, length, height, itemValue: o.subtotal || o.total || 0, itemName: `Pesanan ${o.number}`,
-      service: input.service, serviceType: input.serviceType, shippingCost: input.cost,
-      // ── COD IS DERIVED FROM THE ORDER, NEVER FROM THE CALLER ────────────────────────────────
-      //
-      // This was `input.cod ? total : 0` — a free parameter — and the two callers got it wrong in
-      // opposite, expensive directions:
-      //
-      //  · `bulkGenerateResi` passed `!!rate.cod`, which is the SERVICE's capability (KiriminAja ×
-      //    platform `codAllowed` × the store's `cod_enabled`), i.e. `true` for EVERY order on an SPX
-      //    service in a COD-enabled store. But the bulk queue deliberately holds PREPAID orders too
-      //    (`financial_status='dibayar' OR has-cod-payment`). Measured on batik-nusantara today:
-      //    `cod_enabled = t` and **75 prepaid orders in that queue** — one click on "Generate resi"
-      //    booked every one of them with `cod = orders.total_idr`, so the courier would knock and ask
-      //    a buyer who has already paid to pay again, in cash, at the door.
-      //  · the order detail's checkbox defaults to `false` and is never seeded from the order, so a
-      //    genuine COD parcel was booked telling the courier to collect **0** — then "Tandai selesai"
-      //    credits the merchant the full sale as `available` for cash nobody ever collected, and the
-      //    platform pays out its own money.
-      //
-      // `payments.method = 'cod'` is the only thing that says what the shopper agreed to pay, and it
-      // is the same expression the Pesanan tabs already partition on (`IS_COD`, lib/data/orders.ts).
-      // `input.cod` is now a claim we CHECK, not an instruction we obey.
-      cod: o.isCod ? (o.total || o.subtotal || 0) : 0,
-      insuranceAmount: input.insurance ? (o.subtotal || o.total || 0) : 0,
-    },
-    schedule,
-  );
+  let r: Awaited<ReturnType<typeof kaCreateOrder>>;
+  try {
+    r = await kaCreateOrder(
+      {
+        name: s.senderName || "Toko",
+        phone: s.senderPhone || "081200000000",
+        address:
+          composePickupAddress({
+            address: s.senderAddress,
+            kelurahanName: s.senderKelurahanName,
+            postcode: s.senderPostcode,
+          }) || "-",
+        kecamatanId: s.senderKecamatanId,
+        kelurahanId: s.senderKelurahanId,
+      },
+      {
+        orderRef: providerReference,
+        destName: o.shipRecipient?.trim() || o.custName || "Penerima",
+        destPhone: o.shipPhone?.trim() || o.custPhone || "081200000000",
+        destAddress,
+        destKecamatanId: destDistrictId,
+        destZipcode: o.shipPostcode?.trim() || undefined,
+        weight,
+        width,
+        length,
+        height,
+        itemValue: o.subtotal || o.total || 0,
+        itemName: `Pesanan ${o.number}`,
+        service: input.service,
+        serviceType: input.serviceType,
+        shippingCost: serverCost,
+        cod: o.isCod ? o.total || o.subtotal || 0 : 0,
+        insuranceAmount: input.insurance ? o.subtotal || o.total || 0 : 0,
+      },
+      schedule,
+    );
+  } catch (error) {
+    // A timeout/non-JSON 5xx is not a rejection: the provider may have accepted the booking and
+    // lost only the response. Keep the debit reserved and block retries until the stable provider
+    // reference is reconciled. Reversing here would fund a second booking against the same order.
+    await withTenant(storeId, async (db) => {
+      await db
+        .update(schema.shipmentBookings)
+        .set({
+          status: "unknown",
+          failureNote: "Respons provider tidak diterima; status wajib direkonsiliasi.",
+        })
+        .where(eq(schema.shipmentBookings.id, bookingId));
+    });
+    console.error("[shipping] booking outcome unknown", input.orderNumber, error instanceof Error ? error.name : "UnknownError");
+    return {
+      ok: false,
+      error: `Status booking ${input.orderNumber} belum diketahui karena respons kurir terputus. ` + "Jangan booking ulang; hubungi support untuk rekonsiliasi referensi provider.",
+    };
+  }
   if (!r.ok) {
+    await withTenant(storeId, async (db) => {
+      await db.execute(sql`select pg_advisory_xact_lock(hashtext(${storeId})::bigint)`);
+      await db
+        .update(schema.shipmentBookings)
+        .set({
+          status: "failed",
+          failureNote: (r.error ?? "Provider menolak booking").slice(0, 500),
+        })
+        .where(eq(schema.shipmentBookings.id, bookingId));
+      await db.execute(sql`
+        insert into ledger_entries
+          (store_id, order_id, shipment_booking_id, component, kind, status, amount_idr, note, available_at)
+        select store_id, order_id, shipment_booking_id, component || '-reversal', 'adjustment',
+               status, -amount_idr, 'Pembatalan reservasi ongkir ' || ${input.orderNumber},
+               case when status = 'available' then now() end
+          from ledger_entries
+         where shipment_booking_id = ${bookingId}
+           and component in ('shipping-order-debit', 'shipping-balance-debit')
+        on conflict do nothing
+      `);
+    });
     const e = (r.error ?? "").toLowerCase();
     // KiriminAja's rejections are actionable — surface WHAT to fix, not just that it failed.
-    const hint = e.includes("prefix")
-      ? " (daftarkan prefix order_id di KiriminAja Dashboard, atau set KIRIMINAJA_ORDER_PREFIX)"
-      : e.includes("batas pemrosesan") || e.includes("penjadwalan")
-        ? " (kurir ini sudah melewati jam cut-off — coba layanan lain atau jadwalkan besok)"
-        : "";
-    return { ok: false, error: (r.error ?? "Gagal membuat pengiriman.") + hint };
+    const hint = e.includes("prefix") ? " (daftarkan prefix order_id di KiriminAja Dashboard, atau set KIRIMINAJA_ORDER_PREFIX)" : e.includes("batas pemrosesan") || e.includes("penjadwalan") ? " (kurir ini sudah melewati jam cut-off — coba layanan lain atau jadwalkan besok)" : "";
+    return {
+      ok: false,
+      error: (r.error ?? "Gagal membuat pengiriman.") + hint,
+    };
   }
 
   // Only a waybill KiriminAja actually returned lands in `awb`. Nothing is substituted for it.
   const awb = r.awb ?? null;
+
+  // Persist the provider identity first. If the wider order update below fails, reconciliation still
+  // has the exact outbound reference and KiriminAja booking id and must not book a second parcel.
+  await withTenant(storeId, (db) =>
+    db
+      .update(schema.shipmentBookings)
+      .set({
+        status: "accepted",
+        providerBookingId: r.kaOrderId ?? null,
+        acceptedAt: new Date(),
+      })
+      .where(eq(schema.shipmentBookings.id, bookingId)),
+  );
   // ⚠️ The KiriminAja call above is OUTSIDE this transaction, and must stay there — never hold a row
   // lock across the network (the invariant ka-tracking.ts spells out).
   await withTenant(storeId, async (db) => {
@@ -705,9 +1025,7 @@ export async function createShipment(input: {
     // `selesai`/`retur` while we are on the wire, and this write would then walk it back to
     // `diproses`. Same defect cancelShipment had; the booking window is merely narrower, which is the
     // only reason it is rarer rather than safer.
-    const [cur] = await db
-      .select({ id: schema.orders.id, status: schema.orders.status })
-      .from(schema.orders).where(eq(schema.orders.number, input.orderNumber)).limit(1).for("update");
+    const [cur] = await db.select({ id: schema.orders.id, status: schema.orders.status }).from(schema.orders).where(eq(schema.orders.number, input.orderNumber)).limit(1).for("update");
     if (!cur) return;
 
     // ── 1. The SHIPMENT fields. Not status, not the state machine's business — and written
@@ -731,16 +1049,18 @@ export async function createShipment(input: {
     // while the order reads "dibooking". Stored verbatim; `lib/shipment-payment.ts` is the ONE place
     // that separates the COD flow (buyer pays the courier — nothing for us to settle) from the VA
     // flow, and it decides from the ORDER's COD flag, never from these columns.
-    await db.update(schema.orders)
+    await db
+      .update(schema.orders)
       .set({
-        awb, courier: input.service, serviceType: input.serviceType, kaOrderId: r.kaOrderId,
+        awb,
+        courier: input.service,
+        serviceType: input.serviceType,
+        kaOrderId: r.kaOrderId,
         kaPickupNumber: r.pickupNumber ?? null,
         kaPaymentStatus: r.paymentStatus ?? null,
         kaPaymentUrl: r.paymentUrl ?? null,
-        // The COST side of ongkir — `input.cost` is the number we just told the courier to charge.
-        // `shipping_idr` is the shopper's side and the two can differ (the seller may book a
-        // cheaper service than the shopper picked). Recording it changes no money today.
-        kaShippingCostIdr: input.cost,
+        // The live server quote is the amount sent to KiriminAja and reserved in the ledger.
+        kaShippingCostIdr: serverCost,
       })
       .where(eq(schema.orders.id, cur.id));
 
@@ -769,7 +1089,14 @@ export async function createShipment(input: {
     }
   });
   revalidatePath(`/pesanan/${input.orderNumber}`);
-  return { ok: true, awb, kaOrderId: r.kaOrderId, pickupNumber: r.pickupNumber, awbPending: !awb, destinationGuessed };
+  return {
+    ok: true,
+    awb,
+    kaOrderId: r.kaOrderId,
+    pickupNumber: r.pickupNumber,
+    awbPending: !awb,
+    destinationGuessed,
+  };
 }
 
 // ---- Cancel / void a shipment → clears the booking from the order ----
@@ -785,81 +1112,86 @@ export async function createShipment(input: {
 // own message and leave the order untouched, because the booking DOES still exist on their side:
 // silently clearing courier/ka_order_id here would desync us from the courier and strand a real
 // pickup nobody knows about.
-export async function cancelShipment(orderNumber: string, reason = "Dibatalkan oleh penjual"): Promise<{ ok: boolean; error?: string }> {
+export async function cancelShipment(orderNumber: string, reason = "Dibatalkan oleh penjual"): Promise<{ ok: boolean; pending?: boolean; error?: string }> {
   const { storeId } = await requireCapability("orders:write");
   const o = await withTenant(storeId, async (db) => {
     const [row] = await db
-      .select({ awb: schema.orders.awb, kaOrderId: schema.orders.kaOrderId, status: schema.orders.status })
-      .from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1);
+      .select({
+        id: schema.orders.id,
+        awb: schema.orders.awb,
+        kaOrderId: schema.orders.kaOrderId,
+        status: schema.orders.status,
+        cancellationPending: sql<boolean>`exists (
+          select 1 from shipment_bookings b
+           where b.order_id = ${schema.orders.id}
+             and b.status = 'cancellation_requested'
+        )`,
+      })
+      .from(schema.orders)
+      .where(eq(schema.orders.number, orderNumber))
+      .limit(1);
     return row ?? null;
   });
-  if (!o?.awb && !o?.kaOrderId) return { ok: false, error: "Pesanan ini belum punya pengiriman." };
-  // ⚠️ CANCEL TAKES THE AWB, AND ONLY THE AWB. KiriminAja's own doc is explicit —
-  // *"awb: AWB Number Already Obtained, **Not Order ID**"* — and this used to be
-  // `o.awb ?? o.kaOrderId`, so a booking whose waybill had not landed yet was cancelled by sending
-  // the ORDER ID. Measured against the sandbox: booking `5758-E2E68072665` (awb null, as every fresh
-  // booking is) came back **"Paket tidak ditemukan"**, and the shipment stayed live at the courier
-  // while the merchant was told the cancel had been *refused* — an error that reads like the parcel
-  // does not exist, on the one parcel they just created.
-  //
-  // That window is exactly when a merchant wants to cancel: they booked by mistake, seconds ago. So
-  // the honest answer is not a vendor error string, it is what to do about it.
+  if (!o?.awb && !o?.kaOrderId) {
+    return { ok: false, error: "Pesanan ini belum punya pengiriman." };
+  }
+  if (o.cancellationPending) {
+    return {
+      ok: false,
+      error: "Permintaan pembatalan sebelumnya masih diproses kurir.",
+    };
+  }
   if (!o.awb) {
     return {
       ok: false,
-      error:
-        "Nomor resi belum terbit dari kurir, dan pembatalan butuh nomor resi. " +
-        "Klik “Lacak” untuk mengambil resi begitu terbit, lalu batalkan.",
+      error: "Nomor resi belum terbit dari kurir, dan pembatalan butuh nomor resi. " + "Klik “Lacak” untuk mengambil resi begitu terbit, lalu batalkan.",
     };
   }
-  const ref = o.awb;
-  // TERMINAL ORDERS ARE NOT RE-BOOKABLE, so they must not be walked back to `diproses`. `selesai`
-  // means delivered — and for COD, cash collected and the ledger credited; `batal`/`retur` the state
-  // machine refuses on its own. Refuse before calling KiriminAja: there is nothing to cancel on a
-  // parcel that already arrived, and a courier-side cancel we then refuse to record is worse than
-  // not asking.
   if (shipmentLocked(o.status)) {
-    return { ok: false, error: `Pesanan sudah ${o.status} — pengirimannya tidak bisa dibatalkan lagi.` };
+    return {
+      ok: false,
+      error: `Pesanan sudah ${o.status} — pengirimannya tidak bisa dibatalkan lagi.`,
+    };
   }
-  // ⚠️ OUTSIDE any transaction, and it must stay that way — no row lock across the network.
-  const r = await kaCancelShipment(ref, reason);
-  if (!r.ok) return { ok: false, error: `KiriminAja menolak pembatalan: ${r.error ?? "gagal"}. Pengiriman masih terdaftar di kurir.` };
+
+  const ref = o.awb;
+  let result: Awaited<ReturnType<typeof kaCancelShipment>>;
+  try {
+    result = await kaCancelShipment(ref, reason);
+  } catch (error) {
+    console.error("[shipping] cancellation request outcome unknown", orderNumber, error instanceof Error ? error.name : "UnknownError");
+    return {
+      ok: false,
+      error: "Respons kurir terputus saat meminta pembatalan. Status pengiriman tidak diubah; periksa tracking sebelum mencoba lagi.",
+    };
+  }
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: `KiriminAja menolak pembatalan: ${result.error ?? "gagal"}. Pengiriman masih terdaftar di kurir.`,
+    };
+  }
+
   await withTenant(storeId, async (db) => {
-    // Re-read UNDER LOCK: the tracking poller may have advanced this order while we were on the network
-    // (that call is not instant, and ka-tracking writes the same row). Without the lock this is the
-    // read-then-write race 9772246 closed in setOrderStatus, reopened one file over.
-    const [cur] = await db
-      .select({ id: schema.orders.id, status: schema.orders.status })
-      .from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1).for("update");
-    if (!cur) return;
+    await db.execute(sql`select pg_advisory_xact_lock(hashtext(${storeId})::bigint)`);
+    const [current] = await db.select({ id: schema.orders.id }).from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1).for("update");
+    if (!current) return;
 
-    // The booking IS void at the courier now, so the shipment fields are cleared EITHER WAY — showing
-    // a resi that no longer exists is the worse lie. These are not status and not the state machine's
-    // business.
-    await db.update(schema.orders)
-      .set({ awb: null, courier: null, kaOrderId: null })
-      .where(eq(schema.orders.id, cur.id));
-
-    // Status goes through the ONE writer. If the order went terminal while we were away, leave it
-    // alone entirely: the parcel's fate is no longer ours to assert.
-    //
-    // Back to `diproses` = "needs (re)booking". This voids the courier booking, NOT the order (that
-    // is setOrderStatus→batal), so no inventory or ledger movement must occur — and via
-    // `applyOrderStatusChange` that is now enforced by the machine rather than asserted by this
-    // comment: `diproses` triggers neither the restore (batal/retur only) nor any branch of
-    // settleOrderLedger. Clearing awb/courier/kaOrderId while leaving status='dikirim' used to leave
-    // the order labelled "Dikirim" with no shipment, and the poller (kaOrderId now null) could never
-    // move it.
-    if (!shipmentLocked(cur.status)) {
-      await applyOrderStatusChange(db, {
-        storeId,
-        order: { id: cur.id, status: cur.status as OrderStatus },
-        status: "diproses",
-      });
-    }
+    // KiriminAja status=true means the request was queued, not that the shipment cost was voided.
+    // Preserve the AWB/provider ids and every debit until a provider reconciliation confirms refund.
+    await db
+      .update(schema.shipmentBookings)
+      .set({
+        status: "cancellation_requested",
+        failureNote: "Pembatalan diminta; menunggu konfirmasi void/refund provider.",
+      })
+      .where(
+        sql`${schema.shipmentBookings.orderId} = ${current.id}
+          and ${schema.shipmentBookings.status} = 'accepted'`,
+      );
   });
   revalidatePath(`/pesanan/${orderNumber}`);
-  return { ok: true };
+  return { ok: true, pending: true };
 }
 
 // ---- Track a shipment → the real KiriminAja response; syncs the courier AWB the moment it exists ----
@@ -884,13 +1216,16 @@ export type TrackResult = {
 export async function trackShipment(orderNumber: string): Promise<TrackResult> {
   const { storeId } = await requireCapability("orders:write");
   const row = await withTenant(storeId, async (db) => {
-    const [o] = await db
-      .select({ kaOrderId: schema.orders.kaOrderId, awb: schema.orders.awb })
-      .from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1);
+    const [o] = await db.select({ kaOrderId: schema.orders.kaOrderId, awb: schema.orders.awb }).from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1);
     return o ?? null;
   });
   const ref = row?.kaOrderId ?? row?.awb ?? null;
-  if (!ref) return { ok: false, message: "Pesanan ini belum punya pengiriman.", history: [] };
+  if (!ref)
+    return {
+      ok: false,
+      message: "Pesanan ini belum punya pengiriman.",
+      history: [],
+    };
 
   const r = await kaTrack(ref);
   if (!r.ok) {
@@ -901,22 +1236,26 @@ export async function trackShipment(orderNumber: string): Promise<TrackResult> {
       kaOrderId: ref,
       awb: row?.awb ?? null,
       history: [],
-      message: unavailable
-        ? "KiriminAja belum punya data lacak untuk pengiriman ini — kurir belum menjemput/memproses paket. Nomor resi terbit setelah paket diproses kurir."
-        : (r.error ?? "Tracking belum tersedia."),
+      message: unavailable ? "KiriminAja belum punya data lacak untuk pengiriman ini — kurir belum menjemput/memproses paket. Nomor resi terbit setelah paket diproses kurir." : (r.error ?? "Tracking belum tersedia."),
     };
   }
 
   const data = (r.data ?? {}) as {
-    awb?: string; waybill?: string; status?: string;
-    history?: { date?: string; time?: string; desc?: string; description?: string; status?: string }[];
+    awb?: string;
+    waybill?: string;
+    status?: string;
+    history?: {
+      date?: string;
+      time?: string;
+      desc?: string;
+      description?: string;
+      status?: string;
+    }[];
   };
   // A waybill is only a waybill if it isn't just our own booking reference echoed back.
   const realAwb = [data.awb, data.waybill].find((x) => !!x && x !== ref) ?? null;
   if (realAwb) {
-    await withTenant(storeId, (db) =>
-      db.update(schema.orders).set({ awb: realAwb }).where(eq(schema.orders.number, orderNumber)),
-    );
+    await withTenant(storeId, (db) => db.update(schema.orders).set({ awb: realAwb }).where(eq(schema.orders.number, orderNumber)));
     revalidatePath(`/pesanan/${orderNumber}`);
   }
   const history = (data.history ?? []).map((h) => ({
@@ -930,11 +1269,7 @@ export async function trackShipment(orderNumber: string): Promise<TrackResult> {
     status: data.status ?? null,
     history,
     pending: history.length === 0,
-    message: realAwb
-      ? `Nomor resi kurir diterima: ${realAwb}`
-      : history.length
-        ? `Update terakhir: ${history[history.length - 1].desc}`
-        : "Pengiriman terdaftar di KiriminAja — belum ada pergerakan dari kurir.",
+    message: realAwb ? `Nomor resi kurir diterima: ${realAwb}` : history.length ? `Update terakhir: ${history[history.length - 1].desc}` : "Pengiriman terdaftar di KiriminAja — belum ada pergerakan dari kurir.",
   };
 }
 
@@ -946,17 +1281,24 @@ export async function trackShipment(orderNumber: string): Promise<TrackResult> {
 export async function fillDemoResi(orderNumber: string): Promise<{ ok: boolean; error?: string; awb?: string }> {
   const { storeId } = await requireCapability("orders:write");
   if ((process.env.KIRIMINAJA_ENV ?? "sandbox") === "production") {
-    return { ok: false, error: "Isi resi contoh hanya untuk demo/sandbox — tidak tersedia di produksi." };
+    return {
+      ok: false,
+      error: "Isi resi contoh hanya untuk demo/sandbox — tidak tersedia di produksi.",
+    };
   }
-  const demoAwb = "DEMO" + orderNumber.replace(/[^A-Za-z0-9]/g, "").slice(-10).toUpperCase();
+  const demoAwb =
+    "DEMO" +
+    orderNumber
+      .replace(/[^A-Za-z0-9]/g, "")
+      .slice(-10)
+      .toUpperCase();
   const res = await withTenant(storeId, async (db) => {
-    const [row] = await db
-      .select({ id: schema.orders.id, courier: schema.orders.courier })
-      .from(schema.orders)
-      .where(eq(schema.orders.number, orderNumber))
-      .limit(1);
+    const [row] = await db.select({ id: schema.orders.id, courier: schema.orders.courier }).from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1);
     if (!row) return { ok: false as const, error: "Pesanan tidak ditemukan." };
-    await db.update(schema.orders).set({ awb: demoAwb, courier: row.courier ?? "spx" }).where(eq(schema.orders.id, row.id));
+    await db
+      .update(schema.orders)
+      .set({ awb: demoAwb, courier: row.courier ?? "spx" })
+      .where(eq(schema.orders.id, row.id));
     return { ok: true as const };
   });
   if (!res.ok) return res;

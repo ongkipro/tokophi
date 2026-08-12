@@ -52,6 +52,10 @@ export type OrderListRow = {
   city: string;
   address: string | null;
   total: number;
+  sellerEntitlement: number;
+  goodsDiscount: number;
+  shippingDiscount: number;
+  allocationLegacy: boolean;
   paymentMethod: string | null;  // payments.method, null when the order has no payment row
   paid: boolean;                 // financial_status = 'dibayar'
   status: "baru" | "diproses" | "dikirim" | "selesai" | "batal" | "retur";

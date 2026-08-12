@@ -737,6 +737,7 @@ async function truncateAll() {
   const rows = await client<{ table_name: string }[]>`
     select table_name from information_schema.tables
     where table_schema = 'public'
+      and table_type = 'BASE TABLE'
       and table_name not in ('__drizzle_migrations', 'kiriminaja_areas', 'kelurahan', 'product_taxonomy')`;
   const list = rows.map((r) => `"${r.table_name}"`).join(", ");
   if (list) await client.unsafe(`truncate ${list} restart identity cascade`);

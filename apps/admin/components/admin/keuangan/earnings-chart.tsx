@@ -12,8 +12,7 @@ import { IDR } from "@tokophi/lib/format";
 // than a line closing over them. A shop that sold nothing for a week must LOOK like it.
 
 const config = {
-  gross: { label: "Omzet", color: "var(--chart-1)" },
-  shipping: { label: "Ongkir", color: "var(--chart-2)" },
+  gross: { label: "Hak Seller", color: "var(--chart-1)" },
 } satisfies ChartConfig;
 
 /** "2026-07-02" → "2 Jul". Charts get the short form; the number itself lives in the tooltip. */
@@ -43,10 +42,7 @@ export function EarningsChart({ rows }: { rows: EarningRow[] }) {
             />
           }
         />
-        {/* Stacked: ongkir sits ON TOP of omzet because the shopper paid both in one transfer — they
-            are parts of the same bar, not two competing series. */}
-        <Bar dataKey="gross" stackId="a" fill="var(--color-gross)" radius={[0, 0, 3, 3]} />
-        <Bar dataKey="shipping" stackId="a" fill="var(--color-shipping)" radius={[3, 3, 0, 0]} />
+        <Bar dataKey="gross" fill="var(--color-gross)" radius={[3, 3, 0, 0]} />
       </BarChart>
     </ChartContainer>
   );

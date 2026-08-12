@@ -31,34 +31,30 @@ export type Db = typeof rootDb;
 /**
  * Book the `sale` for ONE collected payment.
  *
- * `amount_idr` is the payment's `amount_idr` (the order total the merchant is owed), NOT `total` —
- * `total` adds the gateway's admin fee, which is the gateway's money and never was the merchant's.
- * That also keeps the Dashboard revenue, the Pesanan list and the Saldo ledger the same number.
- *
- * ⚠️ **On a COD order this credits the GROSS total, ongkir included, and that is DELIBERATE —
- * ADR 0014.** The courier collects the gross from the buyer and remits it NET of the shipping cost
- * it keeps, so the merchant's balance is larger than the cash that reached us and the platform
- * covers the gap from its own float. That is the owner's decision, not an oversight: the platform
- * absorbs the courier's shipping cost on COD. It looks exactly like the classic "forgot the cost"
- * bug and has already been re-found once — **do not net the shipping cost out here.** The absorbed
- * amount is reported instead, on Super Admin → Analitik (`getCourierCostAbsorbed`), and pinned by
- * `apps/super-admin/lib/cod-shipping-cost.test.ts`. Change the ADR first, then the tests, then this.
+ * New orders credit the immutable `order_financials.goods_proceeds_idr`: merchandise after its own
+ * discount and included tax, never shipping, gateway fee, COD fee, or fee VAT. Legacy orders have
+ * no trustworthy goods/shipping discount split, so their historical `payments.amount_idr` behavior
+ * remains unchanged rather than fabricating a backfill.
  *
  * Status follows the release rule (`platform_payout.release_on = 'selesai'`): the credit lands
  * `pending` and is released to `available` by `setOrderStatus` when the order reaches `selesai`.
  * A payment collected on an already-finished order (`selesai`/`retur` — e.g. COD collected on
  * delivery, or a backfill) is booked `available` straight away: it has already met the rule.
  */
-export async function creditSaleForPayment(db: Db, paymentId: string): Promise<void> {
+export async function creditSaleForPayment(
+  db: Db,
+  paymentId: string,
+): Promise<void> {
   await db.execute(sql`
     insert into ledger_entries (store_id, order_id, payment_id, kind, status, amount_idr, note, available_at)
     select coalesce(p.store_id, o.store_id), o.id, p.id, 'sale',
            case when o.status in ('selesai', 'retur') then 'available' else 'pending' end::ledger_status,
-           p.amount_idr,
+           coalesce(f.goods_proceeds_idr, p.amount_idr),
            'Penjualan ' || o.number,
            case when o.status in ('selesai', 'retur') then now() end
       from payments p
       join orders o on o.id = p.order_id
+      left join order_financials f on f.order_id = o.id
      where p.id = ${paymentId}
        and p.status = 'berhasil'
        -- A cancelled OR RETURNED order collected nothing; money that still arrives is refunded, not
@@ -83,7 +79,10 @@ export async function creditSaleForPayment(db: Db, paymentId: string): Promise<v
  * them. Idempotent: a payment already `berhasil` is not touched (the `menunggu` guard), and the
  * credit itself is guarded by the unique index anyway.
  */
-export async function collectCodOnDelivery(db: Db, orderId: string): Promise<string[]> {
+export async function collectCodOnDelivery(
+  db: Db,
+  orderId: string,
+): Promise<string[]> {
   const rows = (await db.execute(sql`
     update payments
        set status = 'berhasil', paid_at = coalesce(paid_at, now())
@@ -102,7 +101,10 @@ export async function collectCodOnDelivery(db: Db, orderId: string): Promise<str
 }
 
 /** Book every already-collected (`berhasil`) payment on an order. */
-export async function creditSalesForOrder(db: Db, orderId: string): Promise<void> {
+export async function creditSalesForOrder(
+  db: Db,
+  orderId: string,
+): Promise<void> {
   const rows = (await db.execute(sql`
     select id from payments where order_id = ${orderId} and status = 'berhasil'
   `)) as unknown as { id: string }[];
@@ -120,7 +122,12 @@ export async function creditSalesForOrder(db: Db, orderId: string): Promise<void
  */
 export async function settleOrderLedger(
   db: Db,
-  args: { storeId: string; orderId: string; status: string; prevStatus: string },
+  args: {
+    storeId: string;
+    orderId: string;
+    status: string;
+    prevStatus: string;
+  },
 ): Promise<void> {
   const { storeId, orderId, status, prevStatus } = args;
 
@@ -134,7 +141,6 @@ export async function settleOrderLedger(
     // prepaid order whose payment landed before the ledger existed). Double-credit is impossible:
     // the unique indexes decide that, not this call site.
     await creditSalesForOrder(db, orderId);
-
   }
 
   // ── Release: WHEN does a sale become withdrawable? ─────────────────────────
@@ -157,7 +163,12 @@ export async function settleOrderLedger(
     await db.execute(sql`
       update ledger_entries
          set status = 'available', available_at = now()
-       where order_id = ${orderId} and kind = 'sale' and status = 'pending'
+       where order_id = ${orderId}
+         and status = 'pending'
+         and (
+           kind = 'sale'
+           or (kind = 'adjustment' and component = 'shipping-order-debit')
+         )
     `);
   }
 
@@ -183,6 +194,23 @@ export async function settleOrderLedger(
         join orders o on o.id = l.order_id
        where l.order_id = ${orderId} and l.kind = 'sale'
       on conflict do nothing
+    `);
+  }
+
+  // An accepted courier booking stays chargeable when the order is cancelled or returned. Its
+  // order-funded debit therefore leaves the pending pool and becomes an available charge; unlike
+  // merchandise it is never reversed merely because the parcel/order later failed.
+  if (status === "retur" || status === "batal") {
+    await db.execute(sql`
+      update ledger_entries l
+         set status = 'available', available_at = coalesce(available_at, now())
+        from shipment_bookings b
+       where l.order_id = ${orderId}
+         and l.shipment_booking_id = b.id
+         and l.kind = 'adjustment'
+         and l.component = 'shipping-order-debit'
+         and l.status = 'pending'
+         and b.status in ('accepted', 'cancellation_requested')
     `);
   }
 }

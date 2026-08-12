@@ -29,9 +29,9 @@ export type Period = 7 | 30 | 90;
 export type FinanceSummary = {
   balance: Balance;
   billing: BillingState | null;
-  /** Gross sales in the window, EXCLUDING cancelled/returned — those are not sales. */
+  /** Net Seller entitlement in the window, excluding platform-controlled money. */
   revenue: number;
-  /** What the shopper paid for shipping in the window. Recorded on the order (orders.shipping_idr). */
+  /** Shipping actually charged to the buyer after Seller-funded shipping discounts. */
   shippingIn: number;
   orders: number;
   /** Orders whose money the platform still holds (they have not reached `selesai`). */
@@ -75,20 +75,20 @@ const PREV_WIN = (days: number) => sql`
   and (o.placed_at at time zone 'Asia/Jakarta')::date
       <  (now() at time zone 'Asia/Jakarta')::date - ((${days} - 1) || ' days')::interval`;
 
-// Revenue/earnings sums subtract orders.tax_idr: collected PPN is a liability owed onward to the
-// state, not the merchant's earnings, so counting it would overstate revenue. (tax_idr is 0 on every
-// order until a merchant opts into PPN, so this is a no-op on existing data and correct going forward.)
+// Seller earnings come from the central order_seller_entitlements view. New orders use the immutable
+// allocation and accepted shipping debits; legacy rows retain their historical expression.
 export async function getFinanceSummary(days: Period = 30): Promise<FinanceSummary> {
   const [balance, billing] = await Promise.all([getBalance(), getBilling()]);
   const agg = await withCurrentTenant(async (db) => {
     const [row] = (await db.execute(sql`
       select
-        coalesce(sum(o.total_idr - o.tax_idr) filter (where ${WIN(days)}), 0)::bigint as "revenue",
-        coalesce(sum(o.shipping_idr) filter (where ${WIN(days)}), 0)::bigint as "shippingIn",
+        coalesce(sum(e.seller_entitlement_idr) filter (where ${WIN(days)}), 0)::bigint as "revenue",
+        coalesce(sum(e.shipping_charged_idr) filter (where ${WIN(days)}), 0)::bigint as "shippingIn",
         count(*)                     filter (where ${WIN(days)})::int        as "orders",
         count(*)                     filter (where o.status in ('baru','diproses','dikirim'))::int as "heldOrders",
-        coalesce(sum(o.total_idr - o.tax_idr) filter (where ${PREV_WIN(days)}), 0)::bigint as "prevRevenue"
+        coalesce(sum(e.seller_entitlement_idr) filter (where ${PREV_WIN(days)}), 0)::bigint as "prevRevenue"
       from orders o
+      join order_seller_entitlements e on e.order_id = o.id
       where ${SALES}
     `)) as unknown as Record<string, string | number>[];
     return {
@@ -121,13 +121,14 @@ export async function getEarnings(days: Period = 30): Promise<EarningRow[]> {
         )::date as day
       )
       select to_char(s.day, 'YYYY-MM-DD')              as day,
-             coalesce(sum(o.total_idr - o.tax_idr), 0)::bigint as gross,
-             coalesce(sum(o.shipping_idr), 0)::bigint  as shipping,
+             coalesce(sum(e.seller_entitlement_idr), 0)::bigint as gross,
+             coalesce(sum(e.shipping_charged_idr), 0)::bigint  as shipping,
              count(o.id)::int                          as orders
       from span s
       left join orders o
         on (o.placed_at at time zone 'Asia/Jakarta')::date = s.day
        and ${SALES}
+      left join order_seller_entitlements e on e.order_id = o.id
       group by s.day
       order by s.day
     `)) as unknown as Record<string, string | number>[];
@@ -148,10 +149,11 @@ export async function getEarnings(days: Period = 30): Promise<EarningRow[]> {
 export async function getChannelMix(days: Period = 30): Promise<ChannelSlice[]> {
   return withCurrentTenant(async (db) => {
     const rows = (await db.execute(sql`
-      select o.channel::text as channel, coalesce(sum(o.total_idr - o.tax_idr), 0)::bigint as value
+      select o.channel::text as channel, coalesce(sum(e.seller_entitlement_idr), 0)::bigint as value
       from orders o
+      join order_seller_entitlements e on e.order_id = o.id
       where ${SALES} and ${WIN(days)}
-      group by 1 having sum(o.total_idr) > 0 order by 2 desc
+      group by 1 having sum(e.seller_entitlement_idr) > 0 order by 2 desc
     `)) as unknown as Record<string, string | number>[];
     return rows.map((r) => ({ channel: CHANNEL_LABEL[String(r.channel)] ?? String(r.channel), value: Number(r.value ?? 0) }));
   });
