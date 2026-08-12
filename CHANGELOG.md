@@ -2,7 +2,7 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
-## Unreleased — order finance now has one immutable allocation and one Seller entitlement
+## 2026-08-12 — order finance now has one immutable allocation and one Seller entitlement
 
 Issue #180 supersedes ADR 0014 through
 [ADR 0015](specs/decisions/0015-net-seller-proceeds-and-shipping-reconciliation.md). New orders now
@@ -30,10 +30,11 @@ allocated honestly.
   the same `order_seller_entitlements` view. The Seller order detail shows expected versus actual
   gateway, shipping, buyer payment, and ledger values; a tenant-scoped mismatch report flags drift.
 - Migration `0094_magical_salo` adds the allocation, booking history, ledger component keys,
-  immutability trigger, RLS policies, and security-invoker entitlement view. It was verified only
-  against an isolated local test database; no shared/production migration or historical backfill ran.
-- Production rollout remains blocked until a provider-backed sandbox fixture confirms COD settlement
-  and cancellation/refund semantics, followed by explicit owner approval for migration `0094`.
+  immutability trigger, RLS policies, and security-invoker entitlement view. Production rollout was
+  explicitly approved and deployed through PR #272 on 2026-08-12; the new storefront artefact and
+  database-backed ongkir probe were green after replacement. No historical backfill, real payment,
+  or KiriminAja booking was performed during the release. Provider settlement evidence was not
+  independently re-read during deployment.
 
 ## Superseded 2026-08-12 — the platform absorbs COD ongkir, and now it can see what that costs
 
