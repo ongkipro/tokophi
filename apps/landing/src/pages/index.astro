@@ -2,10 +2,12 @@
 import { BILLING } from "@tokophi/lib/billing";
 import MarketingLayout from "../layouts/MarketingLayout.astro";
 import LandingHero from "../components/LandingHero.astro";
+import CapabilityOverview from "../components/CapabilityOverview.astro";
 import TrustStrip from "../components/TrustStrip.astro";
 import RouteGateway from "../components/RouteGateway.astro";
 import StoreDemo from "../components/StoreDemo.astro";
 import FinalCta from "../components/FinalCta.astro";
+import OperationsFaq from "../components/OperationsFaq.astro";
 
 const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
 const demoUrl = import.meta.env.PUBLIC_DEMO_URL || "https://batiknusantara.tokophi.id";
@@ -25,7 +27,34 @@ const jsonLd = {
 <MarketingLayout {title} {description} path="/" {jsonLd} mainClass="home-main">
   <LandingHero {signupUrl} trialDays={BILLING.TRIAL_DAYS} demoUrl="/demo/" />
   <TrustStrip trialDays={BILLING.TRIAL_DAYS} />
-  <RouteGateway />
+  <CapabilityOverview />
+
+
+  <section class="section-block" aria-labelledby="workflow-heading">
+    <div class="section-heading-wide" data-motion-reveal>
+      <h2 id="workflow-heading">Satu alur untuk seluruh pekerjaan toko.</h2>
+      <p class="section-lede">
+        Kelola produk, layani pesanan pembeli, terima pembayaran, hingga proses pengiriman tanpa harus merangkai berbagai aplikasi.
+      </p>
+    </div>
+    <ul class="numbered-flow" data-motion-stagger>
+      <li data-motion-item>
+        <h3>Siapkan katalog dan varian</h3>
+        <p>Unggah foto, tentukan harga, dan atur ketersediaan stok untuk setiap varian produk yang Anda jual.</p>
+      </li>
+      <li data-motion-item>
+        <h3>Terima pesanan secara langsung</h3>
+        <p>Pembeli dapat memilih metode pembayaran lokal dan opsi pengiriman saat checkout tanpa perlu konfirmasi manual.</p>
+      </li>
+      <li data-motion-item>
+        <h3>Proses pengiriman dan terima pembayaran</h3>
+        <p>Gunakan dashboard untuk memproses pengiriman dalam negeri dan melacak status pembayaran hingga pesanan selesai.</p>
+      </li>
+    </ul>
+  </section>
+
   <StoreDemo {demoUrl} />
+  <OperationsFaq />
+  <RouteGateway />
   <FinalCta {signupUrl} />
 </MarketingLayout>

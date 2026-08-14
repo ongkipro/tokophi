@@ -21,34 +21,24 @@ const { signupUrl, trialDays, demoUrl = "#demo" } = Astro.props;
     </div>
   </div>
 
-  {/* Replace this honest abstract signature only after a current, privacy-reviewed product capture exists. */}
-  <figure class="proof-slot" data-motion-hero-item>
-    <div class="proof-art" aria-hidden="true">
-      <svg viewBox="0 0 233 144" role="presentation" focusable="false">
-        <g class="proof-grid">
-          <rect x="144" y="0" width="89" height="89" class="proof-fill"></rect>
-          <rect x="0" y="0" width="144" height="144"></rect>
-          <rect x="144" y="0" width="89" height="89"></rect>
-          <rect x="178" y="89" width="55" height="55"></rect>
-          <rect x="144" y="110" width="34" height="34"></rect>
-          <rect x="144" y="89" width="21" height="21"></rect>
-          <rect x="165" y="89" width="13" height="13"></rect>
-          <rect x="170" y="102" width="8" height="8"></rect>
-        </g>
-        <g class="proof-mark">
-          <ellipse cx="72" cy="72" rx="31" ry="39"></ellipse>
-          <path d="M72 19v106"></path>
-        </g>
-      </svg>
+  <figure class="hero-proof" data-motion-hero-item>
+    <div class="proof-frame">
+      <img 
+        src="/storefront-demo-mobile.webp" 
+        width="390" 
+        height="844" 
+        alt="Tampilan toko online Tokophi di layar handphone" 
+        loading="eager" 
+        decoding="sync"
+      />
     </div>
-    <figcaption>Dari katalog hingga pengiriman, seluruh pekerjaan toko tetap dalam satu alur.</figcaption>
   </figure>
 </section>
 
 <style>
   .landing-hero {
     display: grid;
-    grid-template-columns: minmax(0, 1.03fr) minmax(17rem, 0.97fr);
+    grid-template-columns: minmax(0, 1.05fr) minmax(16rem, 0.95fr);
     align-items: center;
     gap: clamp(2.5rem, 7vw, 6rem);
     min-height: min(43rem, calc(100dvh - 10rem));
@@ -99,54 +89,33 @@ const { signupUrl, trialDays, demoUrl = "#demo" } = Astro.props;
     margin-top: 1.8rem;
   }
 
-  .proof-slot {
+  .hero-proof {
     min-width: 0;
     margin: 0;
   }
 
-  .proof-art {
+  .proof-frame {
+    display: flex;
+    justify-content: center;
     overflow: hidden;
+    padding: clamp(1.25rem, 4vw, 2.5rem) clamp(1.25rem, 4vw, 2.5rem) 0;
     border: 1px solid var(--color-line);
-    border-radius: 1rem;
-    background: var(--color-surface);
-    box-shadow:
-      0 1px 2px rgba(20, 21, 42, 0.04),
-      0 30px 70px -38px rgba(20, 21, 42, 0.32);
+    border-radius: 1.25rem;
+    background: var(--color-primary-soft);
   }
 
-  .proof-art svg {
+
+  .proof-frame img {
     display: block;
-    width: 100%;
+    width: min(100%, 21rem);
     height: auto;
-    color: var(--color-primary);
-  }
-
-  .proof-grid rect {
-    fill: none;
-    stroke: var(--color-hairline);
-    stroke-width: 1;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .proof-grid .proof-fill {
-    fill: var(--plate-fill);
-    stroke: none;
-  }
-
-  .proof-mark ellipse,
-  .proof-mark path {
-    fill: none;
-    stroke: currentColor;
-    stroke-linecap: round;
-    stroke-width: 7.5;
-  }
-
-  figcaption {
-    margin-top: 0.75rem;
-    color: var(--color-muted);
-    font-size: 0.75rem;
-    line-height: 1.5;
-    text-align: center;
+    max-height: 32rem;
+    object-fit: cover;
+    object-position: top;
+    border: 1px solid var(--color-line);
+    border-bottom: 0;
+    border-radius: 0.9rem 0.9rem 0 0;
+    box-shadow: 0 24px 48px -32px rgba(20, 21, 42, 0.45);
   }
 
   @media (max-width: 800px) {
@@ -155,9 +124,9 @@ const { signupUrl, trialDays, demoUrl = "#demo" } = Astro.props;
       min-height: auto;
       padding-block: clamp(3rem, 12vw, 5rem);
     }
-
-    .proof-slot {
-      width: min(100%, 34rem);
+    .proof-frame {
+      max-width: 24rem;
+      margin-inline: auto;
     }
   }
 

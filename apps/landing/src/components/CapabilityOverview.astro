@@ -1,0 +1,119 @@
+---
+const capabilities = [
+  {
+    title: "Katalog dan stok",
+    description: "Atur produk, kategori, variasi, harga, foto, dan jumlah stok dari satu ruang kerja.",
+  },
+  {
+    title: "Pesanan dan pemenuhan",
+    description: "Periksa barang, data penerima, pembayaran, serta layanan pengiriman sebelum memproses pesanan.",
+  },
+  {
+    title: "Pelanggan dan promosi",
+    description: "Kelola informasi pelanggan dan aktivitas promosi toko bersama pekerjaan operasional lainnya.",
+  },
+  {
+    title: "Ringkasan toko",
+    description: "Pantau aktivitas operasional dan penjualan melalui ringkasan di Dashboard Seller.",
+  },
+] as const;
+---
+
+<section class="capabilities" aria-labelledby="capabilities-heading">
+  <header data-motion-reveal>
+    <h2 id="capabilities-heading">Pekerjaan harian, tersusun di Dashboard Seller.</h2>
+    <p>Informasi penting tetap terhubung sejak produk diterbitkan sampai pesanan selesai diproses.</p>
+  </header>
+
+  <ul data-motion-stagger>
+    {capabilities.map(({ title, description }) => (
+      <li data-motion-item>
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </li>
+    ))}
+  </ul>
+</section>
+
+<style>
+  .capabilities {
+    padding-block: clamp(4rem, 9vw, 8rem);
+    border-top: 1px solid var(--color-line);
+  }
+
+  header {
+    max-width: 44rem;
+  }
+
+  h2 {
+    max-width: 18ch;
+    font-family: var(--font-serif);
+    font-size: clamp(2rem, 1.45rem + 2vw, 3.35rem);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.06;
+    text-wrap: balance;
+  }
+
+  header > p {
+    max-width: 38rem;
+    margin-top: 1rem;
+    color: var(--color-muted);
+    font-size: 1rem;
+    line-height: 1.7;
+    text-wrap: pretty;
+  }
+
+  ul {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: clamp(2.5rem, 6vw, 4.5rem);
+    border-top: 1px solid var(--color-line);
+    list-style: none;
+  }
+
+  li {
+    min-width: 0;
+    padding: clamp(1.5rem, 3vw, 2.5rem) clamp(1rem, 3vw, 2.5rem) clamp(1.5rem, 3vw, 2.5rem) 0;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  li:nth-child(odd) {
+    padding-right: clamp(1.5rem, 5vw, 4rem);
+    border-right: 1px solid var(--color-line);
+  }
+
+  li:nth-child(even) {
+    padding-left: clamp(1.5rem, 5vw, 4rem);
+  }
+
+  h3 {
+    color: var(--color-ink);
+    font-size: clamp(1.1rem, 1rem + 0.35vw, 1.3rem);
+    font-weight: 650;
+    letter-spacing: -0.012em;
+    line-height: 1.35;
+  }
+
+  li p {
+    max-width: 31rem;
+    margin-top: 0.65rem;
+    color: var(--color-muted);
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    text-wrap: pretty;
+  }
+
+  @media (max-width: 42rem) {
+    ul {
+      grid-template-columns: 1fr;
+    }
+
+    li,
+    li:nth-child(odd),
+    li:nth-child(even) {
+      padding-inline: 0;
+      border-right: 0;
+    }
+  }
+</style>

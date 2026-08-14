@@ -157,15 +157,11 @@ is that witness.
      `{ok:false,"Shipping belum dikonfigurasi."}` — a different problem with a different runbook, and
      the message says which.
   3. **Disk % + free GB over ssh** — the actual leading indicator of 2026-07-18, which nothing watched.
-     Alerts at **≥80% used OR <15 GB free** — the defaults in `ops/tokophi-probe.sh`
-     (`TOKOPHI_PROBE_DISK_PCT` / `TOKOPHI_PROBE_DISK_FREE_GB`). ⚠️ **2026-08-12: the old rationale for
-     80% is stale** — it was "the same number the cleanup uses to go aggressive", but the INSTALLED
-     cleanup now turns aggressive at **70%**, so an 80% alert only fires after the broom's strongest
-     setting is already losing. When this probe is actually installed, set the thresholds BELOW the
-     cleanup's (e.g. **≥65% used OR <25 GB free**) so an alert leaves an investigation window even
-     after the three-pass debounce. The free-space floor is roughly one burst of five-service builds
-     (images are ~1.7 GB each, gotcha #8) — below that the box has quietly lost the ability to build
-     its own repair, and remember you **cannot redeploy your way out of a full disk**.
+     Alerts at **≥65% used OR <25 GB free**, before `tokophi-docker-cleanup.sh` becomes aggressive at
+     70%. This leaves an investigation window even after the probe's three-pass debounce. The free-space
+     floor covers a burst of five-service builds (images are ~1.7 GB each, gotcha #8) — below that the
+     box is losing the ability to build its own repair, and remember you
+     **cannot redeploy your way out of a full disk**.
   4. **L1 heartbeat freshness** — `/var/run/tokophi-watchdog.last`, stale >10 min (10 missed cron ticks)
      ⇒ the watchdog itself is dead. Unhealthy containers are collected from `docker ps` as *context*
      attached to other alerts, never as an alert of their own (a container is briefly unhealthy on

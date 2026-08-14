@@ -1,63 +1,32 @@
-<script>
-  import gsap from "gsap";
-  import { ScrollTrigger } from "gsap/ScrollTrigger";
+<style is:global>
+  @media (prefers-reduced-motion: no-preference) {
+    [data-motion-hero-item] {
+      animation: hero-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
 
-  gsap.registerPlugin(ScrollTrigger);
+    .hero-content > [data-motion-hero-item]:nth-child(2) {
+      animation-delay: 70ms;
+    }
 
-  const motion = gsap.matchMedia();
+    .hero-content > [data-motion-hero-item]:nth-child(3) {
+      animation-delay: 140ms;
+    }
 
-  motion.add("(prefers-reduced-motion: no-preference)", () => {
-    document.querySelectorAll<HTMLElement>("[data-motion-hero]").forEach((hero) => {
-      const items = hero.querySelectorAll<HTMLElement>("[data-motion-hero-item]");
-      if (items.length) {
-        gsap.from(items, {
-          autoAlpha: 0,
-          y: 22,
-          duration: 0.72,
-          stagger: 0.09,
-          ease: "power3.out",
-          clearProps: "all",
-        });
-      }
-    });
+    .hero-content > [data-motion-hero-item]:nth-child(4),
+    .hero-proof[data-motion-hero-item] {
+      animation-delay: 210ms;
+    }
+  }
 
-    gsap.utils.toArray<HTMLElement>("[data-motion-reveal]").forEach((element) => {
-      gsap.from(element, {
-        autoAlpha: 0,
-        y: 28,
-        duration: 0.7,
-        ease: "power3.out",
-        clearProps: "all",
-        scrollTrigger: { trigger: element, start: "top 88%", once: true },
-      });
-    });
+  @keyframes hero-enter {
+    from {
+      opacity: 0;
+      transform: translateY(1rem);
+    }
 
-    document.querySelectorAll<HTMLElement>("[data-motion-stagger]").forEach((group) => {
-      const items = group.querySelectorAll<HTMLElement>("[data-motion-item]");
-      if (!items.length) return;
-      gsap.from(items, {
-        autoAlpha: 0,
-        y: 24,
-        duration: 0.62,
-        stagger: 0.08,
-        ease: "power2.out",
-        clearProps: "all",
-        scrollTrigger: { trigger: group, start: "top 86%", once: true },
-      });
-    });
-  });
-
-  motion.add("(min-width: 1024px) and (prefers-reduced-motion: no-preference)", () => {
-    gsap.utils.toArray<HTMLElement>("[data-motion-depth]").forEach((element) => {
-      gsap.fromTo(
-        element,
-        { yPercent: -2 },
-        {
-          yPercent: 2,
-          ease: "none",
-          scrollTrigger: { trigger: element, start: "top bottom", end: "bottom top", scrub: 0.6 },
-        },
-      );
-    });
-  });
-</script>
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>

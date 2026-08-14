@@ -47,8 +47,6 @@
 :root {
   color-scheme: light;
   --radius-md: 0.75rem;
-  --glow: rgba(79, 70, 229, 0.14);
-  --grid: rgba(20, 21, 42, 0.028);
   --plate-fill: rgba(79, 70, 229, 0.05);
 }
 
@@ -72,8 +70,6 @@
     --color-primary-soft: #1b1e3d;
     --color-on-primary: #ffffff;
 
-    --glow: rgba(99, 91, 255, 0.2);
-    --grid: rgba(255, 255, 255, 0.028);
     --plate-fill: rgba(129, 122, 255, 0.07);
   }
 }
@@ -87,25 +83,6 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   overflow-x: hidden;
-}
-
-/* Fixed backdrop as a layer (not background-attachment: fixed — that stutters on
-   mobile Safari). Soft indigo glow overhead + a hairline grid: the page sits on
-   graph paper, which is what an admin panel is. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    radial-gradient(58rem 34rem at 50% -10rem, var(--glow), transparent 72%),
-    linear-gradient(to right, var(--grid) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
-  background-size:
-    100% 100%,
-    3.5rem 3.5rem,
-    3.5rem 3.5rem;
 }
 
 *:focus-visible {

@@ -48,21 +48,20 @@ FAIL_THRESHOLD="${TOKOPHI_PROBE_FAIL_THRESHOLD:-3}"
 # This is the actual leading indicator of the 2026-07-18 outage and NOTHING currently watches it.
 # Two thresholds, because percent alone lies on a big disk and free-space alone lies on a small one:
 #
-#   DISK_PCT_MAX=80   — the same number `tokophi-docker-cleanup.sh` uses to switch into aggressive
-#                       pruning. Crossing it means the daily broom has already gone to its strongest
-#                       setting and the disk is STILL filling: the safety-net is losing, which is
-#                       exactly the moment a human should hear about it — not at 95%, when there is
-#                       no room left to even build the fix.
-#   DISK_FREE_MIN_GB=15 — a deploy BUILDS on this box, and the images are ~1.7 GB each (DEPLOY.md
-#                       gotcha #8) before build cache. Under ~15 GB there is not room for one clean
-#                       deploy, so the box has quietly lost the ability to ship its own repair. Note
+#   DISK_PCT_MAX=65   — warn before `tokophi-docker-cleanup.sh` switches to aggressive pruning at
+#                       70%. Three failed 5-minute probes still leave time for the hourly broom to
+#                       run, and enough headroom to investigate a deployment loop.
+#   DISK_FREE_MIN_GB=25 — a deploy BUILDS on this box, and the images are ~1.7 GB each (DEPLOY.md
+#                       gotcha #8) before build cache. Under ~25 GB there is too little margin for a
+#                       burst of five-service builds, so the box is losing the ability to ship its
+#                       own repair. Note
 #                       what happened last time: with the disk full you cannot redeploy your way out,
 #                       because a redeploy needs the disk it does not have.
 #
 # Both are advisory-early on purpose: at 100% Postgres PANICs mid-checkpoint and every surface that
 # reads it 503s. We want to be shouting long before that line.
-DISK_PCT_MAX="${TOKOPHI_PROBE_DISK_PCT:-80}"
-DISK_FREE_MIN_GB="${TOKOPHI_PROBE_DISK_FREE_GB:-15}"
+DISK_PCT_MAX="${TOKOPHI_PROBE_DISK_PCT:-65}"
+DISK_FREE_MIN_GB="${TOKOPHI_PROBE_DISK_FREE_GB:-25}"
 
 # ── Threshold: L1 heartbeat staleness ───────────────────────────────────────────────────────────
 # `ops/tokophi-watchdog.sh` rewrites /var/run/tokophi-watchdog.last EVERY minute, healing or not.
