@@ -4,7 +4,28 @@
 > ▶ **The queue itself lives in [`tasks/NEXT.md`](./tasks/NEXT.md)** — ordered, sized, with AC.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-07-13) · **LIVE ON `tokophi.com`** (landing · `app.` admin · `rich.` super-admin · `toko.` demo · **`<slug>.tokophi.com` = per-merchant storefront**, Cloudflare-proxied HTTPS, Vultr SG + Coolify) · RBAC + RLS enforcing · single-plan billing (PPN 11%) · super-admin store-control · client Akun section · support tiket 2-sisi · manual invoice + reminder · image→WebP · **self-serve signup `/daftar` + Google OAuth (flagged)** · **storefront SSR + `Host`-header MULTI-TENANT (one deploy serves every store)** · **Tema: named template variants + per-kategori/produk assignment** · chat spec written (not built) · provider brands hidden (white-label)
+## ▶ CURRENT STATE (2026-08-15) · **TokoΦ v1.0.0 RELEASED & LIVE ON `tokophi.com`** · Monorepo updated to v1.0.0 · 80 PostgreSQL Tables · 95 Migrations (`0000` through `0094_magical_salo`) · 53 Store-Scoped RLS Tables · 90 Vitest Test Suites (722/722 Tests Passed Green) · Storefront & Landing Astro Checks 0 Errors · Production Witness Probe Verified Live (All 5 Surfaces OK, DB Ongkir OK, Disk 16%, Watchdog Heartbeat Active) · Master README & AI/Collaborator Protocol Fully Synchronized
+
+## 2026-08-15 — TokoΦ v1.0.0 Release Edition & Master README Overhaul
+
+- **Scope:** Bumping all 10 monorepo package definitions to `1.0.0`, overhauling `README.md` to serve as the definitive system architecture & quickstart reference, conducting live production deployment witness checks (`ops/tokophi-probe.sh`), and codifying the mandatory AI/Collaborator task, log, and reporting protocol in `AGENTS.md` and `README.md`.
+- **Version Synchronization:**
+  - `package.json`: `"version": "1.0.0"`
+  - `apps/admin/package.json`: `"version": "1.0.0"`
+  - `apps/super-admin/package.json`: `"version": "1.0.0"`
+  - `apps/storefront/package.json`: `"version": "1.0.0"`
+  - `apps/landing/package.json`: `"version": "1.0.0"`
+  - `packages/db/package.json`: `"version": "1.0.0"`
+  - `packages/lib/package.json`: `"version": "1.0.0"`
+  - `packages/ui/package.json`: `"version": "1.0.0"`
+  - `packages/sections/package.json`: `"version": "1.0.0"`
+  - `packages/data/package.json`: `"version": "1.0.0"`
+- **Verification & Test Status:**
+  - `npm test` -> **82 passed / 8 skipped without DB env (90 total Vitest files, 722 total tests)**.
+  - `check:storefront` -> **0 errors, 0 warnings**.
+  - `check:landing` -> **0 errors, 0 warnings**.
+  - `ops/tokophi-probe.sh` -> **All 5 public surfaces 200/307, DB KiriminAja 200 with rows, SSH reachable, Root disk 16% used, Watchdog heartbeat 53s old**.
+
 
 
 

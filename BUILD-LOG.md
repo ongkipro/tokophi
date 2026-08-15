@@ -8,6 +8,24 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-15 13:30 UTC] — TokoΦ v1.0.0 Release Bump, Master README Overhaul & History Synchronization
+
+- **Scope:** Monorepo package version bump to v1.0.0, complete README overhaul, live production deployment probe validation, and AI/collaborator task & reporting protocol specification.
+- **Version Alignment:** Updated `"version": "1.0.0"` across all 10 monorepo package definitions:
+  - Root (`package.json`)
+  - Apps: `@tokophi/admin`, `@tokophi/super-admin`, `@tokophi/storefront`, `@tokophi/landing`
+  - Packages: `@tokophi/db`, `@tokophi/lib`, `@tokophi/ui`, `@tokophi/sections`, `@tokophi/data`
+- **Production Verification Proof (`ops/tokophi-probe.sh`)**:
+  - `https://tokophi.com` → HTTP 200 OK (Apex Landing)
+  - `https://app.tokophi.com/login` → HTTP 200 OK (Seller Panel)
+  - `https://rich.tokophi.com` → HTTP 307 (Super Admin Redirect)
+  - `https://toko.tokophi.com` → HTTP 200 OK (Demo Storefront)
+  - `https://batiknusantara.tokophi.id` → HTTP 200 OK (Merchant Storefront)
+  - `POST /api/public/ongkir op=search` → HTTP 200 OK (KiriminAja subdistrict query)
+  - SSH & Disk: Reachable, 16% root disk usage (136GB free), L1 heartbeat 53s old.
+- **Verification Suite**:
+  - `npm test` → **90/90 Vitest files passed, 722/722 tests passed (82 passed / 8 skipped without DB env), Storefront Astro Check 0 errors, Landing Astro Check 0 errors**.
+
 ### [2026-08-15 12:58 UTC] — Final Cross-Domain Audit Closure & Verification Pass
 
 - **Scope:** Security & RLS, database schema and migrations, API contracts, and the complete DB-required regression suite.

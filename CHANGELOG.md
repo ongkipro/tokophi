@@ -2,6 +2,18 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## [1.0.0] — 2026-08-15 — Official Release Edition: Multi-Domain Audit Closure & Production Certification
+
+- **Monorepo Version Bump**: Advanced version to `1.0.0` across root `package.json`, `@tokophi/admin`, `@tokophi/super-admin`, `@tokophi/storefront`, `@tokophi/landing`, `@tokophi/db`, `@tokophi/lib`, `@tokophi/ui`, `@tokophi/sections`, and `@tokophi/data`.
+- **Documentation Overhaul**: Overhauled `README.md` to serve as the definitive monorepo architecture, surface breakdown, RLS isolation guide, quickstart instructions, and document directory.
+- **AI & Collaborator Protocol**: Codified mandatory 4-step Auto-Task (`specs/docs/TASKS.md`), Execution Log (`BUILD-LOG.md`), Status Syncing (`specs/docs/STATUS.md`), and Master Report Maintenance in `AGENTS.md` and `README.md`.
+- **Audit Remediation & Verification**:
+  - Closed 100% of 2026-08-15 cross-domain audit findings (Security & RLS, Payment & Checkout, Order & Stock, Tracking & Shipping, Performance & A11y).
+  - Restored 6 raw-SQL migration indexes to Drizzle `schema.ts` (`ledger_one_sale_per_order`, `ledger_one_retur_per_order`, `ledger_store_status_idx`, `ledger_one_sale_per_payment`, `payments_order_idx`, `tracking_event_deliveries_order_idx`).
+  - Aligned admin API routes (`cron/billing`, `cron/tracking-events`, `admin/labels`) with OpenAPI 3.1 specifications.
+- **Production Witness Probe (`ops/tokophi-probe.sh`)**: Verified 5 public HTTP surfaces (200/307), live KiriminAja DB district queries, VPS disk usage (16% used, 136GB free), and L1 watchdog heartbeat.
+- **Executable Proof**: 90/90 Vitest files passed, 722/722 tests passed green, Storefront Astro Check 0 errors, Landing Astro Check 0 errors.
+
 ## 2026-08-12 — order finance now has one immutable allocation and one Seller entitlement
 
 Issue #180 supersedes ADR 0014 through

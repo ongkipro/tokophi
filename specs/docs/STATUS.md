@@ -1,6 +1,6 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **Refreshed 2026-08-15 12:58 UTC** against the current source tree after final cross-domain remediation and re-verification.
+> **Refreshed 2026-08-15 13:30 UTC — TokoΦ v1.0.0 Release Edition** against the current source tree after complete version bump, master README overhaul, and production probe verification.
 >
 > **Executable verification is green:** **90/90 Vitest files passed and 722/722 tests passed** with the database-required suite enabled. The root command also completed Storefront Astro checking (**119 files, 0 errors, 0 warnings, 14 hints**) and Landing Astro checking (**29 files, 0 errors, 0 warnings, 0 hints**). Admin and DB TypeScript checks exited successfully.
 >
