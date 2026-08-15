@@ -103,8 +103,12 @@ const STORES_SQL = sql`
   ) p on true
 `;
 
-export async function getStores(): Promise<Store[]> {
-  const rows = (await db.execute(sql`${STORES_SQL} order by "gmv" desc nulls last`)) as unknown as StoreRow[];
+export async function getStores(
+  { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {},
+): Promise<Store[]> {
+  const rows = (await db.execute(
+    sql`${STORES_SQL} order by "gmv" desc nulls last limit ${limit} offset ${offset}`,
+  )) as unknown as StoreRow[];
   return rows.map(rowToStore);
 }
 
@@ -493,17 +497,25 @@ export type Platform = {
 };
 
 export async function getPlatform(): Promise<Platform> {
-  const [stores, sub] = await Promise.all([getStores(), getSubscriptionStats()]);
+  const [sub, gmvRes, totalRes, new30dRes] = await Promise.all([
+    getSubscriptionStats(),
+    db.execute(sql`select coalesce(sum(total_idr), 0)::bigint as gmv from orders where status <> 'batal'`),
+    db.execute(sql`select count(*)::int as count from stores`),
+    db.execute(sql`select count(*)::int as count from stores where created_at >= now() - interval '30 days'`),
+  ]);
+  const gmv = Number((gmvRes[0] as Record<string, unknown> | undefined)?.gmv ?? 0);
+  const totalStores = Number((totalRes[0] as Record<string, unknown> | undefined)?.count ?? 0);
+  const newSignups30d = Number((new30dRes[0] as Record<string, unknown> | undefined)?.count ?? 0);
   const paying = sub.active; // non-comped, inside a paid period
   return {
     mrr: sub.mrr,
-    gmv: stores.reduce((a, s) => a + s.gmv, 0), // merchants' transaction value — NOT our revenue
-    totalStores: stores.length,
+    gmv, // merchants' transaction value across ALL stores — NOT our revenue
+    totalStores,
     activeStores: sub.active + sub.vip,
     trialStores: sub.trial,
     pastDueStores: sub.pastDue,
     suspendedStores: sub.suspended,
-    newSignups30d: stores.filter((s) => s.createdDaysAgo <= 30).length,
+    newSignups30d,
     arpu: paying ? Math.round(sub.mrr / paying) : 0,
   };
 }
@@ -676,12 +688,21 @@ export async function getRiskQueue(): Promise<RiskStore[]> {
   return out.sort((a, b) => b.severity - a.severity || a.name.localeCompare(b.name));
 }
 
-export async function getActivity(): Promise<PActivity[]> {
-  const rows = await db.select().from(schema.platformActivity).orderBy(asc(schema.platformActivity.ts));
-  // ts ascending gives oldest-first; the feed shows most-recent first
-  return rows
-    .map((r) => ({ id: r.id, kind: r.kind, text: r.text, minutesAgo: minutesBetween(r.ts) }))
-    .sort((a, b) => a.minutesAgo - b.minutesAgo);
+export async function getActivity(
+  { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {},
+): Promise<PActivity[]> {
+  const rows = await db
+    .select()
+    .from(schema.platformActivity)
+    .orderBy(desc(schema.platformActivity.ts))
+    .limit(limit)
+    .offset(offset);
+  return rows.map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    text: r.text,
+    minutesAgo: minutesBetween(r.ts),
+  }));
 }
 
 // ---- platform settings (pengaturan) ----

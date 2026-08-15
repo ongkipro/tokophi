@@ -15,7 +15,31 @@
 // Defaults (`bawaan` + `hangat`) reproduce the current global.css values byte-for-byte-ish
 // (±1/255 from HSL rounding), so every existing live store renders unchanged until its owner
 // actually picks something.
-import { hexToHSL, hslToHex, DEFAULT_BRAND_COLOR } from "./colors";
+import { hexToHSL, hslToHex, DEFAULT_BRAND_COLOR, generateBrandShades } from "./colors";
+
+export function generateTenantThemeVariables(brandHex: string | null | undefined, storeTheme: unknown): string {
+  const color = brandHex || DEFAULT_BRAND_COLOR;
+  const shades = generateBrandShades(color);
+  const resolved = resolveTheme({ brandColor: color, theme: storeTheme });
+  
+  const vars: string[] = [];
+  for (const [shade, hex] of Object.entries(shades)) {
+    vars.push(`--color-brand-${shade}: ${hex};`);
+  }
+  
+  if (resolved.toneChosen) {
+    vars.push(`--color-cream: ${resolved.neutrals.cream};`);
+    vars.push(`--color-ink: ${resolved.neutrals.ink};`);
+    vars.push(`--color-muted: ${resolved.neutrals.muted};`);
+    vars.push(`--color-line: ${resolved.neutrals.line};`);
+  }
+  
+  if (resolved.fontChosen) {
+    vars.push(`--font-display: ${resolved.font.display};`);
+  }
+  
+  return vars.join(" ");
+}
 
 // ---------- neutrals ----------
 

@@ -40,12 +40,34 @@ through SSH + `docker`, and rollback is `git revert` + push + webhook (~8–9 mi
 ## ⚠️ Gotchas / errors hit → fixes (READ before re-deploying or migrating)
 
 1. **Nixpacks / base-directory FAILS on npm workspaces.** Building `apps/admin` alone can't resolve `@tokophi/*`. → **Docker Compose build pack**, each service `build.context: .` (repo root) + `dockerfile: apps/<app>/Dockerfile`.
-2. **`next build` throws `[@tokophi/db] DATABASE_URL is not set`.** Next collects data for API routes at build → imports `@tokophi/db`, which throws if the env is unset. → Pass a **dummy DATABASE_URL only on the build RUN** (`postgres://build:build@localhost:5432/build`); postgres.js is lazy so nothing connects. Runtime uses the real URL from compose. (In `apps/admin/Dockerfile` + `apps/super-admin/Dockerfile`.)
+2. **`next build` throws `[@tokophi/db] DATABASE_URL is not set`.** Next collects data for API routes at build → imports `@tokophi/db`, which in production now defaults to the restricted app-role path unless `DATABASE_RUNTIME_ROLE=owner` is explicit. → Pass a **dummy DATABASE_URL only on the build RUN** (`postgres://build:build@localhost:5432/build`) **and** set `DATABASE_RUNTIME_ROLE=owner`; postgres.js is lazy so nothing connects. Runtime uses the real URL from compose. (In `apps/admin/Dockerfile` + `apps/super-admin/Dockerfile`.)
 3. **Storefront (Astro) is SSR** (`@astrojs/node` standalone, `output: 'server'`) — reads Postgres at **server BOOT** (module-level in `src/data/catalog.ts`), NOT at `astro build`. So the image builds WITHOUT a DB (bundling only) and the container starts in **seconds** (`node dist/server/entry.mjs`), eliminating the deploy downtime the old SSG build-at-start caused. Dynamic routes (`produk/[handle]`, `kategori/[handle]`) resolve per-request from `Astro.params` (real + virtual collections; 404 on miss) — **no `getStaticPaths`**. `HOST=0.0.0.0`/`PORT=4327` via env. (Converted 2026-07-10; previously SSG-built-at-start.)
 4. **`super-admin` has no `public/` dir** — don't `COPY` it in that Dockerfile.
 5. **Migrate step**: the npm scripts wrap commands in `dotenv -e ../../.env`, which has no `.env` in Docker. → Run raw: `cd packages/db && npx drizzle-kit migrate && npx tsx src/seed.ts && npx tsx src/seed-areas.ts`, with `DATABASE_URL` in env. `drizzle.config.ts` reads `process.env.DATABASE_URL` directly. `migrate` reuses the **admin image** (has drizzle-kit + tsx + `packages/db`).
 6. **`seed-areas` needs `packages/db/data/kiriminaja-areas.csv`** (400KB, **tracked in git** — Coolify clones from GitHub, so it must be committed). Made non-fatal (`|| echo skipped`) so a hiccup doesn't block the apps.
-7. **RLS migration creates the `tokophi_app` role** → the migrate connection must be a **superuser**; the postgres image's `POSTGRES_USER=tokophi` is superuser of its DB, so OK. App `DATABASE_URL` connects as owner `tokophi` and switches role per-txn (RLS) — do not point apps at `tokophi_app` directly.
+7. **RLS migration creates the `tokophi_app` role** → the migrate connection must be a **superuser**; the postgres image's `POSTGRES_USER=tokophi` is superuser of its DB, so OK. The repo is now **prepared** for a restricted runtime path (`DATABASE_RUNTIME_ROLE=app` + `APP_DATABASE_URL`), but the canonical deploy must stay on owner `DATABASE_URL` today because `apps/admin` is still a mixed-privilege process: merchant tenant queries use `withTenant()` / `withCurrentTenant()`, while `/api/public/*`, cron routes, and cross-tenant owner reads still use the owner path on purpose. Do **not** connect directly as `tokophi_app` — migration `0012` creates it as `NOLOGIN`.
+
+   ```sql
+   create role tokophi_runtime
+     login
+     password 'replace-me'
+     nosuperuser nocreatedb nocreaterole inherit noreplication;
+   grant tokophi_app to tokophi_runtime;
+   ```
+
+   Verify the future restricted path the same way the app uses it:
+
+   ```sql
+   select current_user, session_user;
+   select rolname, rolbypassrls from pg_roles where rolname in ('tokophi_runtime', 'tokophi_app');
+   begin;
+   select set_config('app.store_id', '<store-uuid>', true);
+   set local role tokophi_app;
+   select count(*) from products;
+   rollback;
+   ```
+
+   `tokophi_runtime` inherits today's `tokophi_app` grants — not a perfect least-privilege boundary. Platform tables that intentionally stay outside RLS still require the owner path, and the merchant admin cannot switch to `APP_DATABASE_URL` until those owner-only call sites are split onto an explicit second pool. Any future tightening should start by removing unnecessary grants from `tokophi_app`, not by widening more app traffic back onto `DATABASE_URL`.
 8. **Images are ~1.7GB** (full `node_modules` + `next start`, not standalone) — deliberate for reliability on a monorepo; disk is 350GB so fine. Optimize to standalone later only if needed.
 9. **`.env*` is gitignored** → templates need an allow rule (`!.env.coolify.example` in `.gitignore`).
 10. **Vultr has no Jakarta** (SG is closest, ~20-30ms) and **includes IPv4**; **Hetzner charges a small IPv4 fee** and its Asia region is Singapore-only (AMD CPX/CCX, no cloud GPU).
@@ -157,15 +179,11 @@ is that witness.
      `{ok:false,"Shipping belum dikonfigurasi."}` — a different problem with a different runbook, and
      the message says which.
   3. **Disk % + free GB over ssh** — the actual leading indicator of 2026-07-18, which nothing watched.
-     Alerts at **≥80% used OR <15 GB free** — the defaults in `ops/tokophi-probe.sh`
-     (`TOKOPHI_PROBE_DISK_PCT` / `TOKOPHI_PROBE_DISK_FREE_GB`). ⚠️ **2026-08-12: the old rationale for
-     80% is stale** — it was "the same number the cleanup uses to go aggressive", but the INSTALLED
-     cleanup now turns aggressive at **70%**, so an 80% alert only fires after the broom's strongest
-     setting is already losing. When this probe is actually installed, set the thresholds BELOW the
-     cleanup's (e.g. **≥65% used OR <25 GB free**) so an alert leaves an investigation window even
-     after the three-pass debounce. The free-space floor is roughly one burst of five-service builds
-     (images are ~1.7 GB each, gotcha #8) — below that the box has quietly lost the ability to build
-     its own repair, and remember you **cannot redeploy your way out of a full disk**.
+     Alerts at **≥65% used OR <25 GB free**, before `tokophi-docker-cleanup.sh` becomes aggressive at
+     70%. This leaves an investigation window even after the probe's three-pass debounce. The free-space
+     floor covers a burst of five-service builds (images are ~1.7 GB each, gotcha #8) — below that the
+     box is losing the ability to build its own repair, and remember you
+     **cannot redeploy your way out of a full disk**.
   4. **L1 heartbeat freshness** — `/var/run/tokophi-watchdog.last`, stale >10 min (10 missed cron ticks)
      ⇒ the watchdog itself is dead. Unhealthy containers are collected from `docker ps` as *context*
      attached to other alerts, never as an alert of their own (a container is briefly unhealthy on

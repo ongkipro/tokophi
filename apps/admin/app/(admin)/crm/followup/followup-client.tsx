@@ -405,7 +405,7 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
               const isDone = status === "selesai";
               const tpl =
                 templates.find((t) => t.type === f.type) ?? templates[0];
-              const primaryLink = waLink(f.phone, buildMessage(f, tpl.body, storeName));
+              const primaryLink = waLink(f.phone, buildMessage(f, tpl?.body ?? "", storeName));
 
               return (
                 <TableRow key={f.id} className="hover:bg-muted/40">

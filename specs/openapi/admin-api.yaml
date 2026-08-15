@@ -1,0 +1,347 @@
+openapi: 3.1.0
+info:
+  title: TokoΦ Admin API
+  version: 1.0.0
+  description: |
+    Administrative HTTP contract for bulk shipping labels and secured scheduled
+    jobs. Label generation uses the signed seller session and tenant-scoped RBAC.
+    Cron routes run cross-tenant maintenance and therefore require `CRON_SECRET`
+    in production.
+servers:
+  - url: https://app.tokophi.com
+    description: Production admin API origin
+  - url: http://localhost:3000
+    description: Local admin application
+tags:
+  - name: Labels
+    description: Tenant-scoped printable shipping labels.
+  - name: Cron
+    description: Machine-invoked, cross-tenant scheduled jobs.
+paths:
+  /api/admin/labels:
+    post:
+      operationId: createBulkLabels
+      tags: [Labels]
+      summary: Build one printable document for selected orders
+      description: |
+        Requires the `orders:write` capability. At most the first 50 submitted
+        order numbers are inspected. Only tenant-owned orders with a usable AWB
+        produce labels; every omitted number is reported in `skipped`.
+      security:
+        - sellerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkLabelsRequest'
+      responses:
+        '200':
+          description: Printable labels were generated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkLabelsSuccess'
+        '400':
+          description: No order numbers were supplied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminError'
+        '401':
+          description: Seller session is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminError'
+        '403':
+          description: Session role lacks `orders:write`, or the store is read-only/suspended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminError'
+        '409':
+          description: None of the selected tenant-owned orders has a printable AWB.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/cron/billing:
+    get:
+      operationId: runBillingCron
+      tags: [Cron]
+      summary: Synchronize billing states and create renewal invoices
+      description: |
+        Walks all stores, synchronizes stored subscription status, and creates a
+        monthly subscription invoice when one is due and no pending invoice exists.
+      security:
+        - cronHeaderAuth: []
+        - cronQueryAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CronSecretQuery'
+        - $ref: '#/components/parameters/CronInterval'
+      responses:
+        '200':
+          description: Billing sweep completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingCronResult'
+        '401':
+          $ref: '#/components/responses/CronUnauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/cron/domains:
+    get:
+      operationId: runDomainProvisioningCron
+      tags: [Cron]
+      summary: Refresh provisioning custom domains
+      description: Checks up to 20 provisioning domains and persists provider certificate state.
+      security:
+        - cronHeaderAuth: []
+        - cronQueryAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CronSecretQuery'
+        - $ref: '#/components/parameters/CronInterval'
+      responses:
+        '200':
+          description: Domain sweep completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainCronResult'
+        '401':
+          $ref: '#/components/responses/CronUnauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/cron/order-expiry:
+    get:
+      operationId: runOrderExpiryCron
+      tags: [Cron]
+      summary: Cancel expired unpaid prepaid orders
+      description: |
+        Finds prepaid orders still new and unpaid 24 hours after placement, then
+        rechecks each candidate under row locks before atomically cancelling it,
+        failing its payment, and restoring inventory. COD orders are excluded.
+      security:
+        - cronHeaderAuth: []
+        - cronQueryAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CronSecretQuery'
+        - $ref: '#/components/parameters/CronInterval'
+      responses:
+        '200':
+          description: Expiry sweep completed. `ok` is false when one or more candidates failed while the sweep continued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderExpiryCronResult'
+        '401':
+          $ref: '#/components/responses/CronUnauthorized'
+        '500':
+          description: The expiry candidate query or outer sweep failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderExpiryCronResult'
+  /api/cron/tracking:
+    get:
+      operationId: runShipmentTrackingCron
+      tags: [Cron]
+      summary: Poll courier tracking for active shipments
+      description: |
+        Polls up to 100 booked, non-terminal orders, fills newly assigned AWBs,
+        advances order state forward, and records encountered tracking problems.
+      security:
+        - cronHeaderAuth: []
+        - cronQueryAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CronSecretQuery'
+        - $ref: '#/components/parameters/CronInterval'
+      responses:
+        '200':
+          description: "Tracking sweep result. A missing KiriminAja configuration is reported as HTTP 200 with `ok: false`."
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/TrackingCronResult'
+                  - $ref: '#/components/schemas/CronOperationError'
+        '401':
+          $ref: '#/components/responses/CronUnauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/cron/tracking-events:
+    get:
+      operationId: runTrackingEventDeliveryCron
+      tags: [Cron]
+      summary: Deliver due advertising conversion events
+      description: |
+        Claims up to 50 due conversion deliveries, sends them to their configured
+        providers, applies retry/dead-letter policy, releases held events, and
+        backfills delivery state where required.
+      security:
+        - cronHeaderAuth: []
+        - cronQueryAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CronSecretQuery'
+        - $ref: '#/components/parameters/CronInterval'
+      responses:
+        '200':
+          description: Conversion-delivery sweep completed, including an idle sweep with all counters at zero.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackingEventsCronResult'
+        '401':
+          $ref: '#/components/responses/CronUnauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    sellerSession:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Signed TokoΦ seller session JWT.
+    cronHeaderAuth:
+      type: apiKey
+      in: header
+      name: X-Cron-Secret
+      description: Shared secret for scheduled jobs.
+    cronQueryAuth:
+      type: apiKey
+      in: query
+      name: secret
+      description: Shared cron secret fallback. Prefer the header form so credentials do not enter URLs or logs.
+  parameters:
+    CronSecretQuery:
+      name: secret
+      in: query
+      required: false
+      deprecated: true
+      description: Cron secret fallback represented explicitly for documentation; prefer `X-Cron-Secret`.
+      schema:
+        type: string
+    CronInterval:
+      name: every
+      in: query
+      required: false
+      description: |
+        Scheduling sidecar cadence in seconds, stored only for liveness monitoring.
+        Values outside 1 through 604800 are treated as unreported.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 604800
+  responses:
+    CronUnauthorized:
+      description: Missing or invalid cron secret. Production fails closed when `CRON_SECRET` is unset.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CronUnauthorizedError'
+    InternalError:
+      description: Unexpected server failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AdminError'
+  schemas:
+    AdminError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+      additionalProperties: true
+    CronUnauthorizedError:
+      type: object
+      required: [ok, error]
+      properties:
+        ok:
+          const: false
+        error:
+          const: unauthorized
+    CronOperationError:
+      type: object
+      required: [ok, error]
+      properties:
+        ok:
+          const: false
+        error:
+          type: string
+    BulkLabelsRequest:
+      type: object
+      required: [numbers]
+      properties:
+        numbers:
+          type: array
+          minItems: 1
+          description: Order numbers in requested print order. Only the first 50 are processed.
+          items:
+            type: string
+            minLength: 1
+    BulkLabelsSuccess:
+      type: object
+      required: [html, skipped]
+      properties:
+        html:
+          type: string
+          contentMediaType: text/html
+          description: Complete printable HTML document containing every generated label.
+        skipped:
+          type: array
+          description: Submitted order numbers that were missing, cross-tenant, or lacked a usable AWB.
+          items:
+            type: string
+    BillingCronResult:
+      type: object
+      required: [ok, stores, statusSynced, invoicesCreated]
+      properties:
+        ok: { const: true }
+        stores: { type: integer, minimum: 0 }
+        statusSynced: { type: integer, minimum: 0 }
+        invoicesCreated: { type: integer, minimum: 0 }
+    DomainCronResult:
+      type: object
+      required: [ok, scanned, activated, pending, failed]
+      properties:
+        ok: { const: true }
+        scanned: { type: integer, minimum: 0, maximum: 20 }
+        activated: { type: integer, minimum: 0 }
+        pending: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+    OrderExpiryCronResult:
+      type: object
+      required: [ok, scanned, cancelled, skipped, errors]
+      properties:
+        ok: { type: boolean }
+        scanned: { type: integer, minimum: 0 }
+        cancelled: { type: integer, minimum: 0 }
+        skipped: { type: integer, minimum: 0 }
+        errors: { type: integer, minimum: 0 }
+    TrackingCronResult:
+      type: object
+      required: [ok, scanned, advanced, awbFilled, problems, problemsCleared, errors]
+      properties:
+        ok: { const: true }
+        scanned: { type: integer, minimum: 0, maximum: 100 }
+        advanced: { type: integer, minimum: 0 }
+        awbFilled: { type: integer, minimum: 0 }
+        problems: { type: integer, minimum: 0 }
+        problemsCleared: { type: integer, minimum: 0 }
+        errors: { type: integer, minimum: 0 }
+    TrackingEventsCronResult:
+      type: object
+      required: [ok, claimed, sent, failed, dead, released, backfilled]
+      properties:
+        ok: { const: true }
+        claimed: { type: integer, minimum: 0, maximum: 50 }
+        sent: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+        dead: { type: integer, minimum: 0 }
+        released: { type: integer, minimum: 0 }
+        backfilled: { type: integer, minimum: 0 }

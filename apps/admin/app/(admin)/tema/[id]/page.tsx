@@ -4,6 +4,7 @@ import { DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
 import { getSession } from "@/lib/auth";
 import {
   getBrandColor,
+  getStoreTheme,
   getPlatformDefaultSections,
   getTemplate,
   TEMPLATE_TYPE_LABELS,
@@ -20,9 +21,10 @@ const BLANK_DATA: Data = { content: [], root: {} };
 export default async function TemaBuilderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getSession();
-  const [template, brandColor] = await Promise.all([
+  const [template, brandColor, storeTheme] = await Promise.all([
     getTemplate(id),
     session ? getBrandColor(session.storeId) : Promise.resolve(null),
+    session ? getStoreTheme(session.storeId) : Promise.resolve(null),
   ]);
   if (!template) notFound();
 
@@ -47,6 +49,7 @@ export default async function TemaBuilderPage({ params }: { params: Promise<{ id
       title={`${TEMPLATE_TYPE_LABELS[template.type as TemplateType]} — ${template.name}`}
       initialData={initialData}
       initialBrandColor={brandColor ?? DEFAULT_BRAND_COLOR}
+      initialStoreTheme={storeTheme}
     />
   );
 }

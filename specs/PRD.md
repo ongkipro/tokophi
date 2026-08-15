@@ -88,10 +88,13 @@ A sale lands `pending` and is released to `available` when the order reaches
 ### 3.3 COD is booked at the door
 
 With COD the platform holds **nothing** when the order is placed. The payment row is created `menunggu`
-and must stay that way. It becomes `berhasil` only when the parcel is delivered — which in this product
-the merchant signals by moving the order to `selesai` (there is no courier "delivered" webhook yet).
-A refused parcel goes `batal` / `retur`, where the pending payment is **failed**: cash that was never
-collected is never booked.
+and must stay that way. The tracking poller treats KiriminAja's numeric status `200` as `delivered`;
+`syncOrderFromKa` maps that outcome to `selesai` and runs the same atomic order transition used by the
+merchant action. Entering `selesai` flips the pending COD payment to `berhasil`, marks the order paid,
+and books the sale as `available` because the order is already complete. A merchant can still move an
+order to `selesai` manually; there is no courier push webhook. Free-text tracking status never triggers
+a money-moving delivery outcome. A refused parcel goes `batal` / `retur`, where the pending payment is
+**failed**: cash that was never collected is never booked.
 
 ### 3.4 Payouts
 

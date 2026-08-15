@@ -1,3 +1,6 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
@@ -18,31 +21,36 @@ export function OPTIONS() {
 }
 
 export async function POST(req: Request) {
-  const limited = rateLimited(req, "promo", 30, 60_000, CORS);
-  if (limited) return limited;
-
-  let body: { storeSlug?: string; code?: string; subtotal?: number; shipping?: number };
-  // Capped read — see `lib/public-guard.ts`. This route has no array to bound, but `req.json()` will
-  // happily buffer a 64 MB body for four scalar fields.
-  const raw = await readPublicBody(req, CORS);
-  if (raw.res) return raw.res;
   try {
-    body = JSON.parse(raw.text);
-  } catch {
-    return NextResponse.json({ ok: false, error: "Permintaan tidak valid." }, { status: 400, headers: CORS });
+    const limited = rateLimited(req, "promo", 30, 60_000, CORS);
+    if (limited) return limited;
+
+    let body: { storeSlug?: string; code?: string; subtotal?: number; shipping?: number };
+    // Capped read — see `lib/public-guard.ts`. This route has no array to bound, but `req.json()` will
+    // happily buffer a 64 MB body for four scalar fields.
+    const raw = await readPublicBody(req, CORS);
+    if (raw.res) return raw.res;
+    try {
+      body = JSON.parse(raw.text);
+    } catch {
+      return NextResponse.json({ ok: false, error: "Permintaan tidak valid." }, { status: 400, headers: CORS });
+    }
+
+    const slug = (body.storeSlug ?? "").trim();
+    if (!slug) return NextResponse.json({ ok: false, error: "Toko tidak dikenali." }, { status: 400, headers: CORS });
+    const [store] = await db.select({ id: schema.stores.id }).from(schema.stores).where(eq(schema.stores.slug, slug)).limit(1);
+    if (!store) return NextResponse.json({ ok: false, error: "Toko tidak ditemukan." }, { status: 404, headers: CORS });
+
+    const subtotal = Math.max(0, Math.round(Number(body.subtotal) || 0));
+    const shipping = Math.max(0, Math.round(Number(body.shipping) || 0));
+    const res = await applyDiscount({ storeId: store.id, code: body.code ?? "", subtotal, shippingCost: shipping });
+    if (!res.ok) return NextResponse.json({ ok: false, error: res.error }, { headers: CORS });
+    return NextResponse.json(
+      { ok: true, code: res.discount.code, kind: res.discount.kind, priceOff: res.priceOff, shipOff: res.shipOff },
+      { headers: CORS },
+    );
+  } catch (err) {
+    console.error("[api/public/promo] handler error", err);
+    return NextResponse.json({ ok: false, error: "Gagal memproses voucher." }, { status: 500, headers: CORS });
   }
-
-  const slug = (body.storeSlug ?? "").trim();
-  if (!slug) return NextResponse.json({ ok: false, error: "Toko tidak dikenali." }, { status: 400, headers: CORS });
-  const [store] = await db.select({ id: schema.stores.id }).from(schema.stores).where(eq(schema.stores.slug, slug)).limit(1);
-  if (!store) return NextResponse.json({ ok: false, error: "Toko tidak ditemukan." }, { status: 404, headers: CORS });
-
-  const subtotal = Math.max(0, Math.round(Number(body.subtotal) || 0));
-  const shipping = Math.max(0, Math.round(Number(body.shipping) || 0));
-  const res = await applyDiscount({ storeId: store.id, code: body.code ?? "", subtotal, shippingCost: shipping });
-  if (!res.ok) return NextResponse.json({ ok: false, error: res.error }, { headers: CORS });
-  return NextResponse.json(
-    { ok: true, code: res.discount.code, kind: res.discount.kind, priceOff: res.priceOff, shipOff: res.shipOff },
-    { headers: CORS },
-  );
 }

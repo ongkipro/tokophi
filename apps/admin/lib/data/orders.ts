@@ -2,7 +2,7 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { likeContains } from "@tokophi/lib/like";
-import { eq, sql, type SQL } from "drizzle-orm";
+import { desc, eq, sql, type SQL } from "drizzle-orm";
 import type { Order } from "@/lib/mock/store";
 import { latestPaymentFirst } from "@/lib/data/order-payment";
 
@@ -56,9 +56,14 @@ function toOrder(r: {
   };
 }
 
-export async function getOrders(): Promise<Order[]> {
+export async function getOrders(
+  { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {},
+): Promise<Order[]> {
   return withCurrentTenant(async (db) => {
-    const rows = await q(db);
+    const rows = await q(db)
+      .orderBy(desc(schema.orders.placedAt))
+      .limit(limit)
+      .offset(offset);
     return rows.map(toOrder).sort((a, b) => a.minutesAgo - b.minutesAgo);
   });
 }

@@ -14,20 +14,12 @@
 // is what puts the CHOSEN one on the wire early — same reasoning as the Inter preload beside it
 // in each layout (the font is referenced from inside a stylesheet, so the browser would only
 // discover it after parsing the CSS, behind an LCP that is mostly render delay).
-const { brandShades, theme } = Astro.locals.catalog;
+import { generateTenantThemeVariables } from "@tokophi/lib/theme";
 
-const vars = [
-  ...Object.entries(brandShades).map(([shade, hex]) => `--color-brand-${shade}: ${hex};`),
-  ...(theme.toneChosen
-    ? [
-        `--color-cream: ${theme.neutrals.cream};`,
-        `--color-ink: ${theme.neutrals.ink};`,
-        `--color-muted: ${theme.neutrals.muted};`,
-        `--color-line: ${theme.neutrals.line};`,
-      ]
-    : []),
-  ...(theme.fontChosen ? [`--font-display: ${theme.font.display};`] : []),
-].join(" ");
+const { store } = Astro.locals;
+const { theme } = Astro.locals.catalog;
+
+const vars = generateTenantThemeVariables(store.brandColor, store.theme);
 ---
 
 {
@@ -35,4 +27,4 @@ const vars = [
     <link rel="preload" href={theme.font.displayFile} as="font" type="font/woff2" crossorigin />
   )
 }
-<style set:html={`:root { ${vars} }`} />
+<style id="tokophi-tenant-theme" set:html={`:root { ${vars} }`} />

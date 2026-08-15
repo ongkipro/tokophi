@@ -293,7 +293,7 @@ export const DISCOUNTS: Discount[] = [
 ];
 
 // ---- CMS: pages (modeled on Shopify Page: title/handle/body/isPublished/templateSuffix/seo) ----
-export type CmsPage = { id: string; title: string; handle: string; published: boolean; updatedDaysAgo: number; template: string; views: number };
+export type CmsPage = { id: string; title: string; handle: string; body?: string; published: boolean; updatedDaysAgo: number; template: string; views: number };
 export const PAGES: CmsPage[] = [
   { id: "PG-1", title: "Tentang Kami", handle: "tentang-kami", published: true, updatedDaysAgo: 3, template: "page", views: 1240 },
   { id: "PG-2", title: "Kontak", handle: "kontak", published: true, updatedDaysAgo: 12, template: "page.contact", views: 980 },

@@ -1,28 +1,16 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **Refreshed 2026-08-12** against the source tree and an isolated migrated database:
-> **80 tables, 95 migrations (0000–0094), RLS pada 52 dari 53 tabel ber-`store_id`** (dihitung dari
-> `packages/db/src/schema.ts`, journal, dan `npm run verify-rls`; pengecualian `platform_activity`).
-> ⚠️ Angka ini DITURUNKAN dan bergerak tiap migrasi — **jalankan `npm run verify-rls -w @tokophi/db`**
-> dan percayai keluarannya, bukan baris ini. Baris ini sudah salah dua kali.
-> ⚠️ Dan **JANGAN hitung dari container dev bersama**: ia memuat `color_palettes` dari PR #2 yang belum
-> di-merge dan belum memuat `cron_runs` (0091), jadi totalnya kebetulan sama-sama 78 untuk kumpulan
-> tabel yang BERBEDA. Hitung dari kode.
-> 0062 adds `orders.problem_at`/`problem_note` (stuck-parcel flag); 0063 adds `stores` public address +
-> phone + 5 social handles (footer). Front-end shipped this pass: product search (`/cari`), responsive
-> `srcset` with an allow-listed on-demand resizer, a sale-recovering 404, URL-driven sort, the social
-> footer, and a11y (skip link, reduced-motion, 44px targets). Core Web Vitals measured excellent on prod
-> mobile 3× (LCP 348–552ms, CLS 0). ⚠️ The #15 local-`main` divergence is RESOLVED as superseded — see
-> BACKLOG; do not resurrect those 25 commits.
-> ⚠️ The local DB reports **68** applied migrations against 62 files on this branch: the Postgres container is
-> **shared with other worktrees** that carry their own migrations. Count files on your branch, not rows in `drizzle`.
-> Not against the older docs in this folder, which have been wrong three times in ways that mattered.
+> **Refreshed 2026-08-15 12:58 UTC** against the current source tree after final cross-domain remediation and re-verification.
 >
-> **The rule: verify, or say you did not.** This project has shipped a fee-bearer feature that was never
-> implemented, an ad dashboard with no integration behind it, a courier roster that contradicted the
-> live API, a Saldo chip showing `sum(payments)` as if all of it were withdrawable, and a ledger that
-> nothing ever credited. **Each of those looked exactly like working software.**
-
+> **Executable verification is green:** **90/90 Vitest files passed and 722/722 tests passed** with the database-required suite enabled. The root command also completed Storefront Astro checking (**119 files, 0 errors, 0 warnings, 14 hints**) and Landing Astro checking (**29 files, 0 errors, 0 warnings, 0 hints**). Admin and DB TypeScript checks exited successfully.
+>
+> **Audit remediation closure:** **100% of the tracked 2026-08-15 remediation findings are resolved.** SQL-level and application-path RLS verification passed; the 95-entry migration journal is healthy through `0094_magical_salo`; and all six audited migration-defined indexes now have exact Drizzle schema parity.
+>
+> **API contract result:** **zero implementation drift remains across endpoints currently documented in the OpenAPI 3.1 corpus.** Scope disclosure: six live same-origin Storefront endpoints — `checkout-session`, `search`, `track`, and `chat/{read,send,poll}` — are not yet represented in `specs/openapi/storefront-api.yaml`, so complete route coverage must not be claimed until they are added.
+>
+> **Regression coverage disclosure:** the six restored index declarations are correct on disk, but `packages/db/src/schema-indexes.test.ts` does not yet pin them. Extend that test before treating future parity as automatically guarded.
+>
+> **The rule: verify, or say you did not.** The counts and closure statements above are backed by the commands recorded in `BUILD-LOG.md`; corpus-completeness and regression-pinning follow-ups remain stated rather than hidden.
 > **2026-08-12 — the demo store.** Its slug is now **`batiknusantara`** (renamed from
 > `batik-nusantara`, PR #261; storefront `batiknusantara.tokophi.id`, the old host 301s). Older
 > measurements below that name the old slug are history, not errors. **Owner decision the same day:

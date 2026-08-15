@@ -1,7 +1,8 @@
 # TokoΦ — Prototype task breakdown
 
-> Granular, executable work items to take the prototype from **UI-mock** → **working product**.
-> Higher-level priorities live in `BACKLOG.md`; this is the detailed plan. Updated 2026-07-03.
+> **Refreshed 2026-08-15 12:58 UTC** — **90/90 Test Files Passed; 722/722 Tests Passed** with DB-required suites enabled.
+> **Tracked audit remediation:** **100% resolved and re-verified.** RLS passed, the 95-entry migration journal is healthy through `0094_magical_salo`, documented OpenAPI operations have zero implementation drift, and all six audited migration-defined indexes have full Drizzle parity.
+> **Coverage follow-ups remain explicit:** six Storefront same-origin API routes are absent from the OpenAPI corpus, and the six restored index declarations are not yet pinned in `schema-indexes.test.ts`.
 > **Legend:** `[ ]` todo · `[~]` partial · `[x]` done · size **S**/**M**/**L** · AC = acceptance criteria.
 > **How to work:** pull the top unchecked task in the current epic → ship → check it → add a CHANGELOG line → update `UI_INVENTORY.md` if a screen changed.
 

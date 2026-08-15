@@ -1,0 +1,743 @@
+openapi: 3.1.0
+info:
+  title: TokoΦ Storefront API
+  version: 1.0.0
+  description: |
+    Public HTTP contract used by TokoΦ storefronts for checkout, promotion
+    previews, shipping quotes, and AutoLaris payment callbacks. Shopper-facing
+    endpoints are unauthenticated and rate-limited by client IP. Monetary values
+    are integer Indonesian rupiah unless stated otherwise.
+servers:
+  - url: https://app.tokophi.com
+    description: Production admin and public API origin
+  - url: http://localhost:3000
+    description: Local admin application
+tags:
+  - name: Orders
+    description: Storefront checkout and order creation.
+  - name: Promotions
+    description: Voucher previews used during checkout.
+  - name: Shipping
+    description: Destination lookup and shipping-rate quotes.
+  - name: Payment callbacks
+    description: Secured callbacks from the payment provider.
+security: []
+paths:
+  /api/public/order:
+    options:
+      operationId: preflightPublicOrder
+      tags: [Orders]
+      summary: Negotiate cross-origin access for order creation
+      responses:
+        '204':
+          $ref: '#/components/responses/CorsPreflight'
+    post:
+      operationId: createPublicOrder
+      tags: [Orders]
+      summary: Create and price a storefront order
+      description: |
+        Revalidates the customer, destination, products, stock, current prices,
+        promotion, shipping service, tax, and payment policy before writing the
+        order. Client-supplied item and shipping prices are never authoritative.
+        A checkout `sessionId` makes repeat submissions detectable.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '200':
+          description: Order created and either configured for COD or paired with a prepaid payment.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/CodOrderSuccess'
+                  - $ref: '#/components/schemas/PrepaidOrderSuccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: COD is not allowed for the selected service, destination, or order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodNotAllowedError'
+        '409':
+          description: The checkout was already recorded, a price changed, or stock/voucher availability changed concurrently.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/OrderError'
+                  - $ref: '#/components/schemas/OrderAlreadyCreatedError'
+                  - $ref: '#/components/schemas/RepricedOrderError'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          description: The order was committed, but the payment provider refused or failed to create the payment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentStartFailure'
+        '503':
+          description: The order was committed, but the payment provider is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentStartFailure'
+  /api/public/promo:
+    options:
+      operationId: preflightPublicPromo
+      tags: [Promotions]
+      summary: Negotiate cross-origin access for promotion previews
+      responses:
+        '204':
+          $ref: '#/components/responses/CorsPreflight'
+    post:
+      operationId: previewPromotion
+      tags: [Promotions]
+      summary: Preview a voucher against checkout amounts
+      description: |
+        Calculates the current goods and shipping discounts for display. Order
+        creation always recalculates the voucher and remains authoritative.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromoPreviewRequest'
+      responses:
+        '200':
+          description: "Voucher preview result. Business-rule failures also use HTTP 200 with `ok: false`."
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/PromoPreviewSuccess'
+                  - $ref: '#/components/schemas/PublicError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Store slug was not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicError'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/public/ongkir:
+    options:
+      operationId: preflightPublicShipping
+      tags: [Shipping]
+      summary: Negotiate cross-origin access for shipping operations
+      responses:
+        '204':
+          $ref: '#/components/responses/CorsPreflight'
+    post:
+      operationId: runShippingOperation
+      tags: [Shipping]
+      summary: Search destinations, list villages, or quote shipping
+      description: |
+        Dispatches by the request body's `op` discriminator. A rate quote derives
+        cart weight and available courier services from server-owned product,
+        courier, store, and pickup-address data.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OngkirRequest'
+      responses:
+        '200':
+          description: "Operation result. Configuration, store, or quote failures may use HTTP 200 with `ok: false`."
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/AreaSearchSuccess'
+                  - $ref: '#/components/schemas/KelurahanSuccess'
+                  - $ref: '#/components/schemas/ShippingRatesSuccess'
+                  - $ref: '#/components/schemas/PublicError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          description: Shipping operation failed unexpectedly.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicError'
+  /api/public/pay/callback:
+    post:
+      operationId: receivePaymentCallback
+      tags: [Payment callbacks]
+      summary: Apply a payment-provider status callback
+      description: |
+        Matches a payment or subscription invoice by `trx_id` or `reff_id` and
+        applies forward-only, idempotent PAID/EXPIRED transitions. PAID callbacks
+        are ignored when the submitted amount does not match the stored amount.
+        Authorized callbacks are acknowledged with HTTP 200 even when no record
+        or supported transition matches.
+      security:
+        - callbackHeaderAuth: []
+        - callbackQueryAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CallbackTokenQuery'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCallbackRequest'
+      responses:
+        '200':
+          description: Callback acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Acknowledgement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          description: Callback rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    const: false
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    callbackHeaderAuth:
+      type: apiKey
+      in: header
+      name: X-Callback-Token
+      description: Shared AutoLaris callback secret.
+    callbackQueryAuth:
+      type: apiKey
+      in: query
+      name: token
+      description: Shared callback secret fallback. Prefer the header form so credentials do not enter URLs or logs.
+  parameters:
+    CallbackTokenQuery:
+      name: token
+      in: query
+      required: false
+      deprecated: true
+      description: Callback secret fallback represented explicitly for documentation; prefer `X-Callback-Token`.
+      schema:
+        type: string
+  headers:
+    RetryAfter:
+      description: Seconds until the current rate-limit window permits another request.
+      schema:
+        type: integer
+        minimum: 1
+  responses:
+    CorsPreflight:
+      description: Cross-origin request accepted.
+      headers:
+        Access-Control-Allow-Origin:
+          schema:
+            type: string
+        Access-Control-Allow-Methods:
+          schema:
+            type: string
+        Access-Control-Allow-Headers:
+          schema:
+            type: string
+    BadRequest:
+      description: Malformed JSON, an unknown operation, or invalid checkout input.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicError'
+    Unauthorized:
+      description: Missing or invalid callback secret.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicError'
+    PayloadTooLarge:
+      description: Request body exceeds 256 KiB or a cart exceeds 100 lines.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicError'
+    RateLimited:
+      description: Per-IP fixed-window rate limit exceeded.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicError'
+    InternalError:
+      description: Unexpected server failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicError'
+  schemas:
+    PublicError:
+      type: object
+      required: [ok, error]
+      properties:
+        ok:
+          const: false
+        error:
+          type: string
+        field:
+          type: string
+      additionalProperties: true
+    OrderError:
+      allOf:
+        - $ref: '#/components/schemas/PublicError'
+    CodNotAllowedError:
+      allOf:
+        - $ref: '#/components/schemas/PublicError'
+        - type: object
+          required: [code]
+          properties:
+            code:
+              const: cod_not_allowed
+    OrderAlreadyCreatedError:
+      allOf:
+        - $ref: '#/components/schemas/PublicError'
+        - type: object
+          required: [orderCreated, orderNumber, code]
+          properties:
+            orderCreated:
+              const: true
+            orderNumber:
+              type: string
+            code:
+              const: order_already_created
+    RepricedOrderError:
+      allOf:
+        - $ref: '#/components/schemas/PublicError'
+        - type: object
+          required: [field, repriced]
+          properties:
+            field:
+              const: items
+            repriced:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/RepricedLine'
+    RepricedLine:
+      type: object
+      required: [handle, variant, price]
+      properties:
+        handle:
+          type: string
+        variant:
+          type: string
+        price:
+          type: integer
+          minimum: 0
+    CreateOrderRequest:
+      type: object
+      required: [storeSlug, items, customer, address, shipping]
+      properties:
+        storeSlug:
+          type: string
+          minLength: 1
+        sessionId:
+          type: string
+          maxLength: 64
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/OrderItemInput'
+        customer:
+          $ref: '#/components/schemas/CustomerInput'
+        address:
+          $ref: '#/components/schemas/AddressInput'
+        shipping:
+          $ref: '#/components/schemas/SelectedShippingInput'
+        destId:
+          type: integer
+          minimum: 1
+          description: Legacy top-level destination district ID; `shipping.destId` is preferred.
+        channelCode:
+          type: string
+          default: cod
+          description: "`cod` or an enabled platform payment-channel code."
+        discountCode:
+          type: string
+        trackingCookies:
+          $ref: '#/components/schemas/TrackingCookies'
+      anyOf:
+        - required: [destId]
+        - properties:
+            shipping:
+              type: object
+              required: [destId]
+              properties:
+                destId:
+                  type: integer
+                  minimum: 1
+    OrderItemInput:
+      type: object
+      required: [handle, qty]
+      properties:
+        handle:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          description: Display-only client label; never authoritative.
+        price:
+          type: number
+          exclusiveMinimum: 0
+          description: Previously displayed unit price, used only to detect stale carts.
+        variant:
+          type: string
+        qty:
+          type: integer
+          minimum: 1
+    CustomerInput:
+      type: object
+      required: [name, phone]
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+          description: Indonesian WhatsApp number; normalized to the `62...` form.
+        email:
+          type: string
+          format: email
+    AddressInput:
+      type: object
+      required: [alamat, kodepos]
+      properties:
+        alamat:
+          type: string
+        kota:
+          type: string
+          description: Accepted for compatibility but the stored city is derived from the destination ID.
+        provinsi:
+          type: string
+          description: Accepted for compatibility but the stored province is derived from the destination ID.
+        kodepos:
+          type: string
+          pattern: '^[0-9]{5}$'
+    SelectedShippingInput:
+      type: object
+      required: [service, serviceType]
+      properties:
+        label:
+          type: string
+        cost:
+          type: number
+          minimum: 0
+          deprecated: true
+          description: Ignored. Shipping is re-quoted by the server.
+        service:
+          type: string
+          description: Courier code.
+        serviceType:
+          type: string
+          description: Courier service type.
+        destId:
+          type: integer
+          minimum: 1
+          description: KiriminAja destination district ID.
+    TrackingCookies:
+      type: object
+      description: Opaque attribution values; they are not authorization credentials.
+      properties:
+        fbp: { type: string }
+        fbc: { type: string }
+        ga: { type: string }
+        gcl: { type: string }
+        ttp: { type: string }
+        ttclid: { type: string }
+        utmSource: { type: string }
+        utmMedium: { type: string }
+    OrderLine:
+      type: object
+      required: [handle, title, qty, price]
+      properties:
+        handle: { type: string }
+        title: { type: string }
+        qty: { type: integer, minimum: 1 }
+        price: { type: integer, minimum: 0 }
+    TrackingResult:
+      oneOf:
+        - type: object
+          required: [eventId, contentIds, browserPurchase]
+          properties:
+            eventId: { type: string }
+            contentIds:
+              type: array
+              items: { type: string }
+            browserPurchase: { type: boolean }
+        - type: 'null'
+    OrderTotals:
+      type: object
+      required: [subtotal, lines, shipping, tax, discount, total, buyerPayable, tracking]
+      properties:
+        subtotal: { type: integer, minimum: 0 }
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderLine'
+        shipping: { type: integer, minimum: 0 }
+        tax: { type: integer, minimum: 0 }
+        discount: { type: integer, minimum: 0 }
+        goodsDiscount: { type: integer, minimum: 0 }
+        shippingDiscount: { type: integer, minimum: 0 }
+        total: { type: integer, minimum: 0 }
+        buyerPayable: { type: integer, minimum: 0 }
+        tracking:
+          $ref: '#/components/schemas/TrackingResult'
+    CodOrderSuccess:
+      allOf:
+        - $ref: '#/components/schemas/OrderTotals'
+        - type: object
+          required: [ok, orderNumber, cod, codFee, codFeeBeforeVat, codFeeVat]
+          properties:
+            ok: { const: true }
+            orderNumber: { type: string }
+            cod: { const: true }
+            codFee: { type: integer, minimum: 0 }
+            codFeeBeforeVat: { type: integer, minimum: 0 }
+            codFeeVat: { type: integer, minimum: 0 }
+    PrepaidOrderSuccess:
+      allOf:
+        - $ref: '#/components/schemas/OrderTotals'
+        - type: object
+          required: [ok, orderNumber, gatewayFeeExpected, gatewayFeeActual, feeMismatch, payment]
+          properties:
+            ok: { const: true }
+            orderNumber: { type: string }
+            gatewayFeeExpected: { type: integer, minimum: 0 }
+            gatewayFeeActual: { type: integer, minimum: 0 }
+            feeMismatch: { type: boolean }
+            payment:
+              $ref: '#/components/schemas/PaymentInstructions'
+    PaymentInstructions:
+      type: object
+      required: [channel, amount, admin, total]
+      properties:
+        channel:
+          type: object
+          required: [code, label, kind]
+          properties:
+            code: { type: string }
+            label: { type: string }
+            kind: { type: string }
+        virtualAccount: { type: string }
+        qr: { type: string }
+        qrImage:
+          type: [string, 'null']
+          contentEncoding: base64
+          contentMediaType: image/png
+        paymentCode: { type: string }
+        url: { type: string, format: uri }
+        amount: { type: number, minimum: 0 }
+        admin: { type: integer, minimum: 0 }
+        total: { type: integer, minimum: 0 }
+        expiresAt: { type: string, format: date-time }
+    PaymentStartFailure:
+      allOf:
+        - $ref: '#/components/schemas/PublicError'
+        - $ref: '#/components/schemas/OrderTotals'
+        - type: object
+          required: [orderCreated, orderNumber, code, payError]
+          properties:
+            orderCreated: { const: true }
+            orderNumber: { type: string }
+            code: { const: payment_start_failed }
+            payError: { type: string }
+    PromoPreviewRequest:
+      type: object
+      required: [storeSlug, code]
+      properties:
+        storeSlug: { type: string, minLength: 1 }
+        code: { type: string, minLength: 1 }
+        subtotal: { type: number, minimum: 0, default: 0 }
+        shipping: { type: number, minimum: 0, default: 0 }
+    PromoPreviewSuccess:
+      type: object
+      required: [ok, code, kind, priceOff, shipOff]
+      properties:
+        ok: { const: true }
+        code: { type: string }
+        kind:
+          type: string
+          enum: [persen, nominal, gratis_ongkir]
+        priceOff: { type: integer, minimum: 0 }
+        shipOff: { type: integer, minimum: 0 }
+    OngkirRequest:
+      oneOf:
+        - $ref: '#/components/schemas/AreaSearchRequest'
+        - $ref: '#/components/schemas/KelurahanRequest'
+        - $ref: '#/components/schemas/ShippingRatesRequest'
+      discriminator:
+        propertyName: op
+        mapping:
+          search: '#/components/schemas/AreaSearchRequest'
+          kelurahan: '#/components/schemas/KelurahanRequest'
+          rates: '#/components/schemas/ShippingRatesRequest'
+    AreaSearchRequest:
+      type: object
+      required: [op, q]
+      properties:
+        op: { const: search }
+        q: { type: string }
+    KelurahanRequest:
+      type: object
+      required: [op, destinationId]
+      properties:
+        op: { const: kelurahan }
+        destinationId: { type: integer, minimum: 1 }
+    ShippingRatesRequest:
+      type: object
+      required: [op, storeSlug, destinationId, items]
+      properties:
+        op: { const: rates }
+        storeSlug: { type: string, minLength: 1 }
+        destinationId: { type: integer, minimum: 1 }
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ShippingItemInput'
+        itemValue:
+          type: number
+          minimum: 0
+          description: Declared goods value used for insurance during quote preview; order creation re-prices it.
+        all:
+          type: boolean
+          default: false
+          description: Quote all permitted couriers instead of the fast default set.
+    ShippingItemInput:
+      type: object
+      required: [qty]
+      properties:
+        handle: { type: string }
+        variant: { type: string }
+        variantId: { type: string, format: uuid }
+        qty: { type: integer, minimum: 1 }
+      anyOf:
+        - required: [variantId]
+        - required: [handle]
+    Area:
+      type: object
+      required: [id, text]
+      properties:
+        id: { type: integer, minimum: 1 }
+        text: { type: string }
+        district: { type: string }
+        city: { type: string }
+        province: { type: string }
+    AreaSearchSuccess:
+      type: object
+      required: [ok, results]
+      properties:
+        ok: { const: true }
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Area'
+    Kelurahan:
+      type: object
+      required: [name, postcode]
+      properties:
+        name: { type: string }
+        postcode: { type: string, pattern: '^[0-9]{5}$' }
+    KelurahanSuccess:
+      type: object
+      required: [ok, kelurahan]
+      properties:
+        ok: { const: true }
+        kelurahan:
+          type: array
+          items:
+            $ref: '#/components/schemas/Kelurahan'
+    ShippingRate:
+      type: object
+      required: [name, code, type, cost, etd, cod, group]
+      properties:
+        name: { type: string }
+        code: { type: string }
+        type: { type: string }
+        cost: { type: number, minimum: 0 }
+        etd: { type: string }
+        cod: { type: boolean }
+        group:
+          type: string
+          enum: [cargo, regular, next_day, economy, one_day]
+    ShippingRatesSuccess:
+      type: object
+      required: [ok, rates, weight, billableWeight, weightFallback, codEnabled, origin, originFrom, originName]
+      properties:
+        ok: { const: true }
+        rates:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShippingRate'
+        weight: { type: integer, minimum: 0, description: Actual cart weight in grams. }
+        billableWeight: { type: integer, minimum: 1000, description: Courier-billable weight in grams. }
+        weightFallback:
+          type: array
+          items: { type: string }
+        codEnabled: { type: boolean }
+        origin: { type: integer, minimum: 1 }
+        originFrom:
+          type: string
+          enum: [pickup, store-city]
+        originName:
+          type: [string, 'null']
+    PaymentCallbackRequest:
+      type: object
+      properties:
+        trx_id: { type: string }
+        reff_id: { type: string }
+        status:
+          type: string
+          enum: [PAID, EXPIRED]
+        paid_at:
+          type: string
+          format: date-time
+          description: Accepted for provider compatibility; the server records its own transition time.
+        amount:
+          oneOf:
+            - type: number
+              minimum: 0
+            - type: string
+              pattern: '^[0-9]+(?:\.[0-9]+)?$'
+      anyOf:
+        - required: [trx_id]
+        - required: [reff_id]
+    Acknowledgement:
+      type: object
+      required: [ok]
+      properties:
+        ok: { const: true }

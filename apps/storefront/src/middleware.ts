@@ -60,8 +60,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // `x-forwarded-proto` is the truth. (Computed BEFORE store resolution because the slug-rename
   // redirect below needs the scheme on a host that no longer resolves.)
   const proto = context.request.headers.get("x-forwarded-proto")?.split(",")[0].trim() || "https";
-  const fwdHost = context.request.headers.get("x-forwarded-host")?.split(",")[0].trim();
-  const rawHost = fwdHost || context.request.headers.get("host") || context.url.host;
+  const isCleanHost = (h: string) => /^[a-zA-Z0-9.-]+(:[0-9]+)?$/.test(h);
+  const fwdHostRaw = context.request.headers.get("x-forwarded-host")?.split(",")[0].trim() || "";
+  const fwdHost = isCleanHost(fwdHostRaw) ? fwdHostRaw : "";
+  const reqHost = context.request.headers.get("host") ?? context.url.host;
+  const rawHost = fwdHost || (isCleanHost(reqHost) ? reqHost : context.url.host);
   // localhost has no TLS in dev — emitting https:// there would break every link we print.
   const isLocal = /^(localhost|127\.0\.0\.1)(:|$)/.test(rawHost);
   const scheme = isLocal ? "http" : proto;

@@ -6,8 +6,9 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY . .
 RUN npm ci
-# dummy DATABASE_URL just for build (postgres.js is lazy; runtime uses the real URL from compose)
-RUN DATABASE_URL=postgres://build:build@localhost:5432/build npm run build -w @tokophi/super-admin
+# `@tokophi/db` now defaults production imports to the restricted app-role path. Build uses the owner
+# path explicitly with a dummy URL so route collection can import the module without a real database.
+RUN DATABASE_RUNTIME_ROLE=owner DATABASE_URL=postgres://build:build@localhost:5432/build npm run build -w @tokophi/super-admin
 
 ENV NODE_ENV=production PORT=3001
 EXPOSE 3001

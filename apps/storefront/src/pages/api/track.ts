@@ -100,10 +100,15 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
   // 2) Per-IP budget. A hammering script burns its window and stops counting.
   if (!rateLimit(`track:${clientIp(request, clientAddress)}`)) return noContent("rate-limited");
 
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (contentLength > 65_536) return bad("payload too large");
+
   // sendBeacon posts a Blob — parse the body by hand rather than trusting the content-type.
   let body: unknown;
   try {
-    body = JSON.parse(await request.text());
+    const raw = await request.text();
+    if (raw.length > 65_536) return bad("payload too large");
+    body = JSON.parse(raw);
   } catch {
     return bad("invalid json");
   }

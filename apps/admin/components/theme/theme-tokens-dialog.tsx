@@ -37,9 +37,11 @@ import {
 export function ThemeTokensDialog({
   initialTheme,
   brandColor,
+  onPreviewChange,
 }: {
   initialTheme: unknown;
   brandColor: string;
+  onPreviewChange?: (theme: { font: FontPairingId; tone: NeutralTone }) => void;
 }) {
   const canWrite = useCan("theme:write");
   // resolveTheme is the one validator — garbage in the column degrades here exactly as it would
@@ -49,6 +51,17 @@ export function ThemeTokensDialog({
   const [tone, setTone] = React.useState<NeutralTone>(resolved.tone);
   const [open, setOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
+  const openedWith = React.useRef<{ font: FontPairingId; tone: NeutralTone }>({ font: resolved.font.id, tone: resolved.tone });
+  const savedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    setFont(resolved.font.id);
+    setTone(resolved.tone);
+  }, [resolved.font.id, resolved.tone]);
+
+  React.useEffect(() => {
+    onPreviewChange?.({ font, tone });
+  }, [font, onPreviewChange, tone]);
 
   const handleSave = () => {
     if (!canWrite) {
@@ -62,6 +75,7 @@ export function ThemeTokensDialog({
           toast.error(res.error);
           return;
         }
+        savedRef.current = true;
         toast.success("Tampilan toko tersimpan");
         setOpen(false);
       } catch {
@@ -71,7 +85,23 @@ export function ThemeTokensDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          openedWith.current = { font, tone };
+          savedRef.current = false;
+          setOpen(true);
+          return;
+        }
+        setOpen(false);
+        if (!savedRef.current) {
+          setFont(openedWith.current.font);
+          setTone(openedWith.current.tone);
+          onPreviewChange?.(openedWith.current);
+        }
+      }}
+    >
       <DialogTrigger
         render={
           <Button variant="ghost" size="sm">

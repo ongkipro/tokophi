@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: tokophi
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tokophi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: tokophi
     volumes:
       - tokophi-pgdata:/var/lib/postgresql/data
@@ -36,8 +36,8 @@ services:
       # fine. A seed that writes FILES must mount the volume those files live on.
       - tokophi-uploads:/app/apps/admin/public/uploads
     environment:
-      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:-tokophi}@postgres:5432/tokophi
-    # `seed.ts` is a NO-OP on a live DB — it counts `stores` and skips when any exist, so a redeploy
+      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/tokophi
+      DATABASE_RUNTIME_ROLE: owner
     # never touches real orders/invoices/uploads. `seed-templates.ts` has the same shape (it inserts
     # only when the store has no homepage template) and has to be here for a reason worth stating:
     # the demo's batik homepage now lives in `page_templates` as SELLER data, not hard-coded in the
@@ -69,8 +69,9 @@ services:
       # persist uploaded media across redeploys (next start runs from /app/apps/admin)
       - tokophi-uploads:/app/apps/admin/public/uploads
     environment:
-      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:-tokophi}@postgres:5432/tokophi
-      AUTH_SECRET: ${AUTH_SECRET:-dev-insecure-change-me}
+      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/tokophi
+      DATABASE_RUNTIME_ROLE: app
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
       KIRIMINAJA_ENV: ${KIRIMINAJA_ENV:-sandbox}
       KIRIMINAJA_API_KEY: ${KIRIMINAJA_API_KEY:-}
       KIRIMINAJA_ORDER_PREFIX: ${KIRIMINAJA_ORDER_PREFIX:-}
@@ -136,8 +137,9 @@ services:
       postgres: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
     environment:
-      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:-tokophi}@postgres:5432/tokophi
-      AUTH_SECRET: ${AUTH_SECRET:-dev-insecure-change-me}
+      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/tokophi
+      DATABASE_RUNTIME_ROLE: app
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
       ADMIN_URL: ${ADMIN_URL:-}
       KIRIMINAJA_ENV: ${KIRIMINAJA_ENV:-sandbox}
       KIRIMINAJA_API_KEY: ${KIRIMINAJA_API_KEY:-}
@@ -161,7 +163,8 @@ services:
       postgres: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
     environment:
-      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:-tokophi}@postgres:5432/tokophi
+      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/tokophi
+      DATABASE_RUNTIME_ROLE: app
       PUBLIC_ONGKIR_API: ${PUBLIC_ONGKIR_API:-}
       PUBLIC_ORDER_API: ${PUBLIC_ORDER_API:-}
       # Host-header multi-tenant (ADR 0009): `<slug>.tokophi.com` → that store. RESERVED labels
@@ -222,10 +225,8 @@ services:
       # cheaper place). priority 100 > the Coolify-generated routers, so it wins for this host.
       - traefik.enable=true
       - traefik.http.middlewares.www-to-apex.redirectregex.regex=^https?://www\.tokophi\.com/(.*)
-      # NOT `$${1}`: Coolify hands these labels straight to the Docker API without docker-compose's
-      # `$$` → `$` unescaping, so `$${1}` reaches Traefik verbatim and it emits a literal `${1}`
-      # in the Location header (shipped exactly that way once — https://tokophi.com/${1}).
-      - traefik.http.middlewares.www-to-apex.redirectregex.replacement=https://tokophi.com/${1}
+      # Escaped $${1} for docker-compose parsing validation
+      - traefik.http.middlewares.www-to-apex.redirectregex.replacement=https://tokophi.com/$${1}
       - traefik.http.middlewares.www-to-apex.redirectregex.permanent=true
       - traefik.http.routers.www-apex.rule=Host(`www.tokophi.com`)
       - traefik.http.routers.www-apex.entryPoints=https
@@ -348,6 +349,23 @@ services:
       timeout: 5s
       retries: 3
 
+  # order expiry worker — cancels unpaid orders past expiry and restores stock.
+  # Runs every 300 seconds (5 minutes).
+  cron-order-expiry:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      admin: { condition: service_healthy }
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-}
+      CRON_INTERVAL_SEC: 300
+    command: ["sh", "-c", "while true; do echo \"[cron-order-expiry] $$(date -Iseconds)\"; wget -qO- \"http://admin:3000/api/cron/order-expiry?secret=$$CRON_SECRET&every=$$CRON_INTERVAL_SEC\" || echo 'cron order-expiry failed'; echo; sleep $$CRON_INTERVAL_SEC; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   # Cloudflare for SaaS certificate poller. A verified domain is not routable until BOTH the custom
   # hostname and its edge certificate are active; this is the only process allowed to make that jump.
   cron-domains:
@@ -388,7 +406,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
     environment:
-      PGPASSWORD: ${POSTGRES_PASSWORD:-tokophi}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     volumes:
       - tokophi-backups:/backups
     command:

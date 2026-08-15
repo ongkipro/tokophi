@@ -14,27 +14,22 @@ import { saveTemplate } from "@/lib/actions/theme";
 import { useCan } from "@/components/admin/permissions";
 import { Button } from "@tokophi/ui/button";
 import { BrandColorDialog } from "@/components/theme/brand-color-dialog";
-import { generateBrandShades } from "@tokophi/lib/colors";
-
-/** `{50: hex}` → `{"--color-brand-50": hex}` — the names `globals.css` and the storefront both use. */
-function brandVars(hex: string): React.CSSProperties {
-  return Object.fromEntries(
-    Object.entries(generateBrandShades(hex)).map(([shade, value]) => [`--color-brand-${shade}`, value]),
-  ) as React.CSSProperties;
-}
-
+import { ThemeTokensDialog } from "@/components/theme/theme-tokens-dialog";
+import { generateTenantThemeVariables, type FontPairingId, type NeutralTone } from "@tokophi/lib/theme";
 export function BuilderClient({
   templateId,
   templateType,
   title,
   initialData,
   initialBrandColor,
+  initialStoreTheme,
 }: {
   templateId: string;
   templateType: TemplateType;
   title: string;
   initialData: Data;
   initialBrandColor: string;
+  initialStoreTheme: unknown;
 }) {
   const canWrite = useCan("theme:write");
   // Publish is the ONLY save — there is no draft column and no autosave — and for a default homepage
@@ -50,10 +45,33 @@ export function BuilderClient({
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
   const [isPending, startTransition] = React.useTransition();
+  const [previewBrandColor, setPreviewBrandColor] = React.useState(initialBrandColor);
+  const [previewTheme, setPreviewTheme] = React.useState<{ font: FontPairingId; tone: NeutralTone }>(() => {
+    const theme = (initialStoreTheme ?? {}) as { font?: FontPairingId; tone?: NeutralTone };
+    return { font: theme.font ?? "bawaan", tone: theme.tone ?? "hangat" };
+  });
   // Only the sections that belong on THIS page type. Memoised because Puck re-mounts on a new config
   // object, which would drop the merchant's in-progress edits on every render.
   const config = React.useMemo(() => puckConfigFor(templateType), [templateType]);
 
+  React.useEffect(() => {
+    setPreviewBrandColor(initialBrandColor);
+  }, [initialBrandColor]);
+
+  React.useEffect(() => {
+    const theme = (initialStoreTheme ?? {}) as { font?: FontPairingId; tone?: NeutralTone };
+    setPreviewTheme({ font: theme.font ?? "bawaan", tone: theme.tone ?? "hangat" });
+  }, [initialStoreTheme]);
+
+  const previewCss = React.useMemo(
+    () => `:root { ${generateTenantThemeVariables(previewBrandColor, previewTheme)} }`,
+    [previewBrandColor, previewTheme],
+  );
+
+  const handlePreviewTheme = React.useCallback((next: { font: FontPairingId; tone: NeutralTone }) => {
+    setPreviewTheme(next);
+  }, []);
+  
   const handlePublish = (data: Data) => {
     if (!canWrite) {
       toast.error("Akses ditolak — peran Anda tidak bisa mengubah tema toko");
@@ -79,7 +97,8 @@ export function BuilderClient({
     // first version of this fix changed nothing at all, and a browser check (`--color-brand-600` on
     // the wrapper → `null`) is the only reason that was caught. Map to the same
     // `--color-brand-<shade>` names `globals.css` declares and the storefront's Layout emits.
-    <div className="h-screen w-full" style={brandVars(initialBrandColor)}>
+    <div className="h-screen w-full">
+      <style id="tokophi-tenant-theme" dangerouslySetInnerHTML={{ __html: previewCss }} />
       {/* ⚠️ THIS ROUTE HAD NO `<h1>` AT ALL — measured in a browser, not inferred. It is FULL-BLEED
           (`admin-chrome.tsx` `FULL_BLEED`), so the sidebar and topbar are gone too, and everything
           Puck renders starts at `<h2>` (its `headerTitle`, "Components", "Outline", "Page"). A
@@ -125,7 +144,8 @@ export function BuilderClient({
                 <ArrowLeft data-icon="inline-start" />
                 Kembali ke Daftar Template
               </Button>
-              <BrandColorDialog initialColor={initialBrandColor} />
+              <ThemeTokensDialog initialTheme={previewTheme} brandColor={previewBrandColor} onPreviewChange={handlePreviewTheme} />
+              <BrandColorDialog initialColor={previewBrandColor} onPreviewChange={setPreviewBrandColor} />
               {/* Puck's own Publish button never changes during the round-trip, so two clicks wrote
                   twice. Swallow it while saving and say so — every sibling dialog in this app
                   ("Menyimpan…") already does. */}

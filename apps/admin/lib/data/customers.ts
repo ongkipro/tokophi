@@ -50,9 +50,16 @@ function toCustomer(r: {
   };
 }
 
-export async function getCustomers(): Promise<CustomerRow[]> {
+export async function getCustomers(
+  { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {},
+): Promise<CustomerRow[]> {
   return withCurrentTenant(async (db) => {
-    const rows = await db.select().from(schema.customers).orderBy(desc(schema.customers.totalSpentIdr));
+    const rows = await db
+      .select()
+      .from(schema.customers)
+      .orderBy(desc(schema.customers.totalSpentIdr))
+      .limit(limit)
+      .offset(offset);
     return rows.map(toCustomer);
   });
 }

@@ -21,13 +21,31 @@ import {
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
-export function BrandColorDialog({ initialColor }: { initialColor: string }) {
+export function BrandColorDialog({
+  initialColor,
+  onPreviewChange,
+}: {
+  initialColor: string;
+  onPreviewChange?: (hex: string) => void;
+}) {
   const canWrite = useCan("theme:write");
   const [hex, setHex] = React.useState(initialColor || DEFAULT_BRAND_COLOR);
+  const [open, setOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
+  const openedWith = React.useRef(initialColor || DEFAULT_BRAND_COLOR);
+  const savedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    setHex(initialColor || DEFAULT_BRAND_COLOR);
+  }, [initialColor]);
 
   const valid = HEX_RE.test(hex);
   const shades = valid ? generateBrandShades(hex) : null;
+
+  const preview = React.useCallback((next: string) => {
+    setHex(next);
+    if (HEX_RE.test(next)) onPreviewChange?.(next);
+  }, [onPreviewChange]);
 
   const handleSave = () => {
     if (!canWrite) {
@@ -41,8 +59,13 @@ export function BrandColorDialog({ initialColor }: { initialColor: string }) {
     startTransition(async () => {
       try {
         const res = await saveBrandColor(hex);
-        if (res.ok) toast.success("Warna brand tersimpan");
-        else toast.error(res.error);
+        if (res.ok) {
+          savedRef.current = true;
+          toast.success("Warna brand tersimpan");
+          setOpen(false);
+        } else {
+          toast.error(res.error);
+        }
       } catch {
         toast.error("Gagal menyimpan warna brand");
       }
@@ -50,7 +73,22 @@ export function BrandColorDialog({ initialColor }: { initialColor: string }) {
   };
 
   return (
-    <Dialog>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          openedWith.current = hex;
+          savedRef.current = false;
+          setOpen(true);
+          return;
+        }
+        setOpen(false);
+        if (!savedRef.current) {
+          setHex(openedWith.current);
+          onPreviewChange?.(openedWith.current);
+        }
+      }}
+    >
       <DialogTrigger
         render={
           <Button variant="ghost" size="sm">
@@ -83,13 +121,13 @@ export function BrandColorDialog({ initialColor }: { initialColor: string }) {
                 id="brand-color"
                 type="color"
                 value={valid ? hex : DEFAULT_BRAND_COLOR}
-                onChange={(e) => setHex(e.target.value)}
+                onChange={(e) => preview(e.target.value)}
                 className="h-9 w-14 cursor-pointer rounded-lg border border-input bg-transparent p-1"
               />
             </div>
             <div className="flex-1 space-y-1.5">
               <Label htmlFor="brand-hex">Kode Hex</Label>
-              <Input id="brand-hex" value={hex} onChange={(e) => setHex(e.target.value)} placeholder="#a85572" />
+              <Input id="brand-hex" value={hex} onChange={(e) => preview(e.target.value)} placeholder="#a85572" />
             </div>
           </div>
 

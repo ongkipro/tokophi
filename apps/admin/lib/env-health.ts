@@ -61,8 +61,10 @@ export const ENV_CHECKS: Record<string, { required: boolean; why: string }> = {
   GOOGLE_CLIENT_SECRET: { required: false, why: "Sepasang dengan CLIENT_ID; kosong = jalur Google mati, bukan rusak." },
   GOOGLE_REDIRECT_URI: { required: false, why: "Sepasang dengan CLIENT_ID." },
   META_GRAPH_API_VERSION: { required: false, why: "Versi Graph API untuk CAPI; ada default di kode." },
+  GOOGLE_SGTM_ENDPOINT: { required: false, why: "Endpoint Server-side GTM untuk Google Ads/GA4; kosong = sinyal browser sahaja." },
+  APP_DATABASE_URL: { required: false, why: "Connection string untuk tokophi_app (unprivileged role RLS); kosong = fallback ke DATABASE_URL." },
+  DATABASE_RUNTIME_ROLE: { required: false, why: "Peran PostgreSQL runtime (tokophi_app vs owner); kosong = ikuti kredensial koneksi." },
   CHECKOUT_RECOVERY_SECRET: { required: false, why: "Menandatangani tautan pemulihan keranjang; ada fallback ke AUTH_SECRET." },
-
   NODE_ENV: { required: false, why: "Disetel runtime, bukan oleh operator — didaftar agar sensusnya lengkap." },
 };
 

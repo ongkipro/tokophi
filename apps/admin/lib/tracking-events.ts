@@ -35,6 +35,9 @@ export type ClientContext = {
   fbp?: string | null;
   fbc?: string | null;
   gaClientId?: string | null;
+  /** Paid Google click ids, decoded from `_gcl_aw` / `_gcl_gb` for the sGTM Ads tag. */
+  gclid?: string | null;
+  gbraid?: string | null;
   /** TikTok's first-party cookie and click id — the pair that plays `fbp`/`fbc`'s role for TikTok. */
   ttp?: string | null;
   ttclid?: string | null;
@@ -45,9 +48,14 @@ export type ClientContext = {
 export function clientContextFromRequest(
   req: Request,
   ip: string | null,
-  cookies: { fbp?: unknown; fbc?: unknown; ga?: unknown; gcl?: unknown; ttp?: unknown; ttclid?: unknown } | undefined,
+  cookies:
+    | { fbp?: unknown; fbc?: unknown; ga?: unknown; gcl?: unknown; gclid?: unknown; gbraid?: unknown; ttp?: unknown; ttclid?: unknown }
+    | undefined,
 ): ClientContext {
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 256) : null);
+  const gcl = str(cookies?.gcl);
+  const gclid = str(cookies?.gclid) ?? (/^GCL\.\d{9,}\.(.+)$/.exec(gcl ?? "")?.[1] || null);
+  const gbraid = str(cookies?.gbraid) ?? (/^GB\.\d+\.(.+)$/.exec(gcl ?? "")?.[1] || null);
   const origin = req.headers.get("origin") ?? req.headers.get("referer") ?? null;
   return {
     userAgent: str(req.headers.get("user-agent")),
@@ -59,6 +67,8 @@ export function clientContextFromRequest(
     fbp: str(cookies?.fbp),
     fbc: str(cookies?.fbc),
     gaClientId: str(cookies?.ga),
+    gclid,
+    gbraid,
     ttp: str(cookies?.ttp),
     ttclid: str(cookies?.ttclid),
     // Meta requires `event_source_url` on website events. The checkout's own origin is the honest

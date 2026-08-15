@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { db, schema } from "@tokophi/db";
-import { and, asc, isNotNull, inArray, sql } from "drizzle-orm";
-import { kaTrack, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
+import { db } from "@tokophi/db";
+import { sql } from "drizzle-orm";
+import { KaTransportError, kaTrack, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { outcomeFromTrackingCode, syncOrderFromKa } from "@/lib/ka-tracking";
 import { cronIntervalSec, recordCronRun } from "../record-run";
 
@@ -24,11 +24,9 @@ import { cronIntervalSec, recordCronRun } from "../record-run";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Cap per run — each item is a live KiriminAja call. ⚠️ This is a CAP, not rate limiting: the loop below
-// fires up to 100 requests back-to-back with no pacing, no concurrency limit and no 429 handling. The
-// comment here used to claim it protected against rate-limiting; it does not. It bounds one sweep, which
-// is why the ORDER BY beneath it matters — with a cap and no fairness, the excess is starved, not queued.
-const BATCH = 100;
+// Each store gets its own bounded slice. The query interleaves slice position across stores, so a
+// busy merchant cannot consume the whole tick before another merchant receives even one poll.
+const PER_STORE_BATCH = 5;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RAW TRACKING EVIDENCE — one greppable line per poll (`docker logs cron-tracking | grep ka-raw`).
@@ -64,6 +62,10 @@ function logRaw(fields: Record<string, unknown>) {
 /** Truncated so a courier essay cannot flood the log; text messages are safe, addresses are not. */
 const short = (v: unknown, n = 120) => (typeof v === "string" ? v.slice(0, n) : v ?? null);
 
+// Client errors are retryable only when the protocol explicitly says "try later" or the current
+// resource state may change. Every other 4xx is a permanent rejection of this tracking request.
+const RETRYABLE_4XX: Record<number, true> = { 408: true, 409: true, 423: true, 425: true, 429: true };
+
 export async function GET(req: NextRequest) {
   const startedAt = Date.now();
   // FAIL CLOSED in production, exactly like cron/billing: an unset secret must mean NO, not "no gate".
@@ -78,7 +80,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  // 200 with `ok:false`, so the sidecar's `wget` succeeds and nothing in `docker logs` looks broken —
+  try {
   // which is precisely why this branch has to be RECORDED as a failed run. A poller that wakes on
   // schedule and can never fill a waybill is indistinguishable, from the outside, from one that is
   // working; on the panel it now reads red instead of "terakhir jalan 2 menit lalu".
@@ -92,24 +94,47 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "KiriminAja belum dikonfigurasi." }, { status: 200 });
   }
 
-  // Booked, in-flight orders: they have a KiriminAja booking (ka_order_id) and haven't reached a
-  // terminal state. `selesai`/`retur`/`batal` are done — nothing left to poll.
-  // ORDER BY is load-bearing, not cosmetic. This was a bare `.limit(BATCH)` with no ordering: Postgres
-  // may return the same arbitrary 100 rows every tick, so past ~100 in-flight orders some could go
-  // unpolled FOREVER — and the ones starved were as likely to be the AWB-less ones (the only ones with
-  // work outstanding) as any other. Orders still waiting for a waybill go first, then the oldest.
-  const orders = await db
-    .select({ number: schema.orders.number, kaOrderId: schema.orders.kaOrderId, awb: schema.orders.awb })
-    .from(schema.orders)
-    .where(and(isNotNull(schema.orders.kaOrderId), inArray(schema.orders.status, ["diproses", "dikirim"])))
-    .orderBy(sql`${schema.orders.awb} is not null`, asc(schema.orders.placedAt))
-    .limit(BATCH);
+  // Rank independently inside every store, then execute round 1 for all stores before round 2, etc.
+  // Already-flagged parcels sort behind healthy work: they remain eligible for recovery polling when
+  // a store has spare capacity, but a permanent rejection cannot occupy all five slots forever.
+  const orders = (await db.execute(sql`
+    with ranked as (
+      select
+        number,
+        ka_order_id as "kaOrderId",
+        awb,
+        store_id::text as "storeId",
+        row_number() over (
+          partition by store_id
+          order by (problem_at is not null), (awb is not null), placed_at, id
+        ) as poll_round
+      from orders
+      where ka_order_id is not null
+        and status in ('diproses', 'dikirim')
+    )
+    select number, "kaOrderId", awb, "storeId"
+    from ranked
+    where poll_round <= ${PER_STORE_BATCH}
+    order by poll_round, "storeId"
+  `)) as unknown as { number: string; kaOrderId: string; awb: string | null; storeId: string }[];
 
   let advanced = 0;
   let awbFilled = 0;
   let problems = 0;
   let problemsCleared = 0;
   const errors: string[] = [];
+  const flagPermanentError = async (orderNumber: string, httpStatus: number, detail?: string) => {
+    problems++;
+    const suffix = detail ? `: ${detail}` : ".";
+    const note = `KiriminAja menolak permintaan pelacakan secara permanen (HTTP ${httpStatus})${suffix}`;
+    console.warn("[cron/tracking] permanent courier rejection", orderNumber, "HTTP", httpStatus);
+    try {
+      await syncOrderFromKa(orderNumber, "problem", null, note);
+    } catch (err) {
+      console.error("[cron/tracking] failed to flag permanent courier rejection", orderNumber, err);
+      errors.push(orderNumber);
+    }
+  };
   for (const o of orders) {
     const ref = o.kaOrderId ?? o.awb;
     if (!ref) continue;
@@ -121,15 +146,36 @@ export async function GET(req: NextRequest) {
     try {
       r = await kaTrack(ref);
     } catch (err) {
-      console.error("[cron/tracking] tracking pull failed", o.number, err);
-      errors.push(o.number);
+      if (
+        err instanceof KaTransportError &&
+        err.httpStatus >= 400 &&
+        err.httpStatus < 500 &&
+        !RETRYABLE_4XX[err.httpStatus]
+      ) {
+        logRaw({ order: o.number, ref, sentAs: o.kaOrderId ? "ka_order_id" : "awb", ok: false, httpStatus: err.httpStatus });
+        await flagPermanentError(o.number, err.httpStatus);
+      } else {
+        console.error("[cron/tracking] tracking pull failed", o.number, err);
+        errors.push(o.number);
+      }
       continue;
     }
     if (!r.ok) {
-      // Blocker (i) lives HERE. "No tracking yet" and "you asked with an id we do not recognise" are
-      // the same silent `continue`, and only KiriminAja's own error text tells them apart. Capture it.
-      logRaw({ order: o.number, ref, sentAs: o.kaOrderId ? "ka_order_id" : "awb", ok: false, err: short(r.error) });
-      continue; // no tracking yet (courier hasn't processed it) — try again next run
+      // A permanent client rejection will never heal through retries. Flag it and rank it behind
+      // healthy work on later ticks; transient 4xx responses remain eligible for the next tick.
+      logRaw({
+        order: o.number,
+        ref,
+        sentAs: o.kaOrderId ? "ka_order_id" : "awb",
+        ok: false,
+        httpStatus: r.httpStatus,
+        err: short(r.error),
+      });
+      if (r.httpStatus >= 400 && r.httpStatus < 500 && !RETRYABLE_4XX[r.httpStatus]) {
+        const detail = short(r.error);
+        await flagPermanentError(o.number, r.httpStatus, typeof detail === "string" ? detail : undefined);
+      }
+      continue;
     }
     // `text`/`status_text` are read ONLY for the evidence log — nothing maps off them. Both spellings
     // have been seen in KiriminAja responses and neither is guaranteed; `r.data` is `unknown`, so
@@ -196,5 +242,15 @@ export async function GET(req: NextRequest) {
   // that matters here: `awbFilled` was 0 for a week and "the cron ran" would have been true all week.
   const summary = { scanned: orders.length, advanced, awbFilled, problems, problemsCleared, errors: errors.length };
   await recordCronRun("tracking", { ok: true, startedAt, intervalSec: cronIntervalSec(req), result: summary });
-  return NextResponse.json({ ok: true, ...summary });
+    return NextResponse.json({ ok: true, ...summary });
+  } catch (error) {
+    console.error("[cron/tracking] sweep failed", error);
+    await recordCronRun("tracking", {
+      ok: false,
+      startedAt,
+      intervalSec: cronIntervalSec(req),
+      result: { error: error instanceof Error ? error.message : "sweep failed" },
+    });
+    return NextResponse.json({ ok: false, error: "sweep failed" }, { status: 500 });
+  }
 }

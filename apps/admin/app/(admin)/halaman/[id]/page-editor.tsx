@@ -63,7 +63,7 @@ export function PageEditor({ page }: { page?: CmsPage }) {
   const [title, setTitle] = React.useState(page?.title ?? "");
   const [handle, setHandle] = React.useState(page?.handle ?? "");
   const [handleEdited, setHandleEdited] = React.useState(Boolean(page));
-  const [body, setBody] = React.useState(page ? seedBody(page.title) : "");
+  const [body, setBody] = React.useState(page ? page.body ?? "" : "");
   const [published, setPublished] = React.useState(page?.published ?? true);
   const [template, setTemplate] = React.useState(page?.template ?? "page");
   const [seoTitle, setSeoTitle] = React.useState("");

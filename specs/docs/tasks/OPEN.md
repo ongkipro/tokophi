@@ -1,6 +1,6 @@
 # OPEN — what is actually left, and how to pick it up on another machine
 
-**Written 2026-08-05, every entry re-verified against `origin/main` @ `05b3068`.** Read this first.
+**Refreshed 2026-08-15 against execution pass (14/14 core execution plan tasks completed & verified).** Read `2026-08-15-next-execution-plan.md` for details.
 
 `NEXT.md` is the long-form record — ~1.500 lines, it keeps closed items on purpose, and **it goes
 stale fast**: this sweep found **eleven** entries still marked open or `NEW` that were already shipped
@@ -108,6 +108,34 @@ mid-flight is how two people work the same id from opposite ends. Wave-7 heading
 
 ---
 
+## Recommended next development sequence
+
+This is the smallest safe order after re-checking the current code. Keep each row as a separate change
+set; close or rewrite its `NEXT.md` entry in the same commit. `Observed` means the defect was confirmed
+on `0b10aed`; it does not mean the proposed implementation has been approved.
+
+| order | evidence | work | done when |
+|---|---|---|---|
+| 0 | **Decision needed** | Run N29's credential-rotation procedure after re-measuring principals, and decide prepaid shipping absorption in an ADR. These are security/money gates, not coding tasks. | No published credential authenticates; active sessions are revoked; the prepaid ledger owner is recorded in a new ADR. Production mutation requires explicit owner approval. |
+| 1 | **Observed / spec gap** | N54 — restore a real create path for Landing HTML without weakening the UUID guard. | The “Buat baru” path creates or opens a valid draft in a browser; invalid IDs still 404; targeted test plus `npm test` pass. |
+| 2 | **Observed / `NF-7`** | N46, N44, N52, N55, then N56 — widen the credential guard and close the remaining empty-state/semantic accessibility gaps. | Each source guard fails against the old shape; affected screens are opened at zero data and narrow width; `npm test` and workspace `tsc --noEmit` pass. |
+| 3 | **Observed / `F-P4`, `SEC-9`, `SEC-11`** | N47 then N48 — define owner-only operator recovery and return refused control-plane actions as visible errors. | A reset reveals one temporary password once, writes the audit event, revokes prior sessions, and a denied action shows an error without writing data. |
+| 4 | **Observed / `F-S10`, contract gap** | N31 and N38 — expose provider COD cost and finish the locally renderable label fields. Do not invent Sorting Code or persistence semantics for insurance. | Quote/label fixtures cover fee and fields; browser output matches the captured KiriminAja contract; blocked fields remain explicitly documented. |
+| 5 | **External verification** | N40 — migrate booking from deprecated `v6.1/request_pickup` only after a sandbox contract check settles the contradictory destination fields. | Captured request/response fixture, booking test, and no regression in destination identity. Do not repeat the outstanding E2E booking blindly. |
+| 6 | **Observed / `F-E3`** | N41 (wave 7) seed drift, N35 environment card, and N13 sitemap timestamps. Keep them as separate change sets; N13 requires a migration. | Production is measured before writing; each migration is idempotent and journal-verified; UI/SEO checks prove the consuming path. |
+
+### Specification gaps to close with the code
+
+- Landing HTML creation has no explicit requirement in `REQUIREMENTS.md`; add one with the route and
+  browser check when implementing N54.
+- Operator password recovery needs a recorded policy for owner-to-owner resets before N47 is coded.
+- Shipping-label ownership is split between `FLOWS.md`, `KIRIMINAJA.md`, and N38; make one document the
+  canonical field contract rather than copying the list again.
+- Accessibility acceptance is currently broad (`NF-7`). Add narrow runnable guards for N44/N52/N55/N56
+  instead of declaring the whole surface compliant.
+
+---
+
 ## 🔴 Needs the owner — nobody else can start these
 
 | | what is actually being asked |
@@ -180,7 +208,7 @@ could not be cancelled. **Do not repeat the booking run** — `2026-08-03-shippi
 git clone git@github.com:ongkipro/tokophi.git && cd tokophi
 git fetch origin
 docker compose up -d db                  # PostgreSQL 16 → localhost:5433, container `tokophi-db`
-npm install
+npm ci
 npm run migrate -w @tokophi/db           # canonical; head is 0089
 npm run dev:admin                        # :3000 Seller   ·   npm run dev:super → :3001 Super Admin
 ```
@@ -189,17 +217,20 @@ npm run dev:admin                        # :3000 Seller   ·   npm run dev:super
 `apps/admin/.env.local` and `apps/super-admin/.env.local`. Ask the owner — never reconstruct one from
 a running container, and never paste one into a chat or a commit.
 
-### 🔴 `main` on an existing checkout is a stale fork — **516 commits behind** `origin/main`
+### Existing checkouts may lag while collaborators are working
 
-Measured 2026-08-05. **Never branch from local `main`, never push it.** Cut worktrees off the remote:
+Never assume local `main` is current. Confirm it is clean and matches the remote before branching; if
+it does not, preserve local work and cut a worktree from the remote baseline:
 
 ```bash
 git fetch origin
+git status --short --branch
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 git worktree add -b my/branch ../wt-my-branch origin/main
-cd ../wt-my-branch && npm install        # ⚠️ a fresh worktree has NO node_modules
+cd ../wt-my-branch && npm ci             # a fresh worktree has no node_modules
 ```
 
-Skip that `npm install` and TypeScript resolves `@tokophi/db` to the *other* checkout — an error that
+Skip that `npm ci` and TypeScript resolves `@tokophi/db` to the *other* checkout — an error that
 points nowhere near its cause.
 
 ## Traps
@@ -221,14 +252,14 @@ the seven seeders that run on every deploy). These are the ones this stream hit:
   to confirm before hunting.
 - **The dev DB and the dev servers are shared.** Never `pkill next`; record your PID and kill only
   that. If you flip a row to test something, flip it back — and say so.
-- **Playwright is global**, not a dependency: import from
-  `/home/fantastico/.nvm/versions/node/v24.16.0/lib/node_modules/playwright/index.mjs`, launch with
-  `{ channel: "chrome" }`.
+- **Playwright is a storefront workspace dependency.** Run the repository scripts (for example
+  `npm run audit:responsive -w @tokophi/storefront`) instead of importing from a device-specific
+  global path. The scripts launch Chrome with the repository's pinned package.
 
 ## Gates — and what each one misses
 
 ```bash
-npm test                                  # vitest + astro check ×2 — 486 tests / 55 files, green on 05b3068
+npm test                                  # vitest + Astro checks; current result belongs in the change handoff
 cd apps/admin && npx tsc --noEmit
 cd apps/admin && npx eslint <files>       # eslint must run FROM the workspace dir
 npm run build:admin ; npm run build:super

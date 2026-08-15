@@ -15,12 +15,20 @@
 
 const DEV_FALLBACK = "dev-insecure-secret-change-me"; // the exact string the call sites used before
 
+const INSECURE_LITERALS = [
+  "dev-insecure-secret-change-me",
+  "dev-insecure-change-me",
+  "dev-insecure-secret",
+  "dev-insecure-key",
+];
+
 function resolveAuthSecret(): string {
   const s = process.env.AUTH_SECRET;
-  if (s && s.length >= 16) return s;
+  const isInsecure = !s || s.length < 16 || INSECURE_LITERALS.some((l) => s.includes(l));
+  if (!isInsecure) return s!;
   if (process.env.NODE_ENV === "production") {
     throw new Error(
-      "[auth] AUTH_SECRET is unset or too short in production — refusing to sign or verify tokens with an insecure key. Set a strong AUTH_SECRET (32+ random chars) in the environment.",
+      "[auth] AUTH_SECRET is unset, too short, or uses a known insecure literal in production — refusing to sign or verify tokens with an insecure key. Set a strong AUTH_SECRET (32+ random chars) in the environment.",
     );
   }
   return DEV_FALLBACK;

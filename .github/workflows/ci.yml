@@ -122,6 +122,10 @@ jobs:
       # below depend on that side effect — keep them AFTER this one.
       - run: npm test
 
+      # Browser-driven storefront performance and responsive-image gates: builds when stale, starts
+      # one isolated storefront server, and runs all six registered checks with a failing exit code.
+      - run: npm run verify -w @tokophi/storefront
+
       # ── N61 ②: RLS, against the database `npm test` just migrated ──────────────────────────────
       #
       # `verify-rls` is the gate that sat RED for weeks — its own fixture used the `stores LIMIT 1`

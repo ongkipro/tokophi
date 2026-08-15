@@ -24,9 +24,14 @@ export const POST: APIRoute = async (ctx) => {
   if (!rateLimit(`chat:send:ip:${ip}`, LIMITS.msgPerIpMin.limit, LIMITS.msgPerIpMin.windowMs))
     return json({ error: "Terlalu banyak pesan. Coba lagi sebentar lagi." }, 429);
 
+  const contentLength = Number(ctx.request.headers.get("content-length") ?? "0");
+  if (contentLength > 65_536) return json({ error: "Payload terlalu besar" }, 413);
+
   let payload: Record<string, unknown>;
   try {
-    payload = JSON.parse(await ctx.request.text());
+    const raw = await ctx.request.text();
+    if (raw.length > 65_536) return json({ error: "Payload terlalu besar" }, 413);
+    payload = JSON.parse(raw);
   } catch {
     return json({ error: "invalid json" }, 400);
   }

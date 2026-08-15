@@ -21,12 +21,19 @@ export class KaTransportError extends Error {
   }
 }
 
-async function ka<T = Record<string, unknown>>(path: string, body: unknown = {}, method: "POST" | "GET" = "POST"): Promise<T> {
+type KaHttpResponse<T> = { body: T; httpStatus: number };
+
+async function ka<T = Record<string, unknown>>(
+  path: string,
+  body: unknown = {},
+  method: "POST" | "GET" = "POST",
+): Promise<KaHttpResponse<T>> {
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: { Authorization: `Bearer ${KEY}`, Accept: "application/json", "Content-Type": "application/json" },
     body: method === "GET" ? undefined : JSON.stringify(body),
     cache: "no-store",
+    signal: AbortSignal.timeout(8000),
   });
   // This was a bare `await res.json()`, which never looked at the HTTP status. An HTML 502/504 from
   // KiriminAja's gateway therefore threw a raw JSON parse error ("Unexpected token <") from deep
@@ -41,7 +48,7 @@ async function ka<T = Record<string, unknown>>(path: string, body: unknown = {},
   // actionable rejection ("sudah melewati jam cut-off") into a generic crash.
   const raw = await res.text();
   try {
-    return JSON.parse(raw) as T;
+    return { body: JSON.parse(raw) as T, httpStatus: res.status };
   } catch {
     throw new KaTransportError(path, res.status, raw.slice(0, 200).replace(/\s+/g, " ").trim() || "(empty)");
   }
@@ -50,7 +57,7 @@ async function ka<T = Record<string, unknown>>(path: string, body: unknown = {},
 // area search: name → { id (kecamatan/district), text } — used to resolve origin/destination for pricing
 export type KaAddress = { id: number; text: string };
 export async function kaAddressByName(search: string): Promise<KaAddress[]> {
-  const r = await ka<{ status: boolean; data?: KaAddress[] }>("/api/mitra/v2/get_address_by_name", { search });
+  const { body: r } = await ka<{ status: boolean; data?: KaAddress[] }>("/api/mitra/v2/get_address_by_name", { search });
   return r.status && Array.isArray(r.data) ? r.data : [];
 }
 
@@ -112,7 +119,7 @@ export async function kaShippingPrice(p: {
   const key = `ka:price:${p.origin}:${p.destination}:${p.weight}:${p.lengthCm ?? 0}x${p.widthCm ?? 0}x${p.heightCm ?? 0}:${p.itemValue ?? 0}:${p.insurance ?? 0}:${(p.couriers ?? []).join(",")}`;
   const hit = cacheGet<{ ok: boolean; results: KaRate[] }>(key);
   if (hit) return hit;
-  const r = await ka<{ status: boolean; text?: string; results?: KaRate[] }>("/api/mitra/v6.1/shipping_price", {
+  const { body: r } = await ka<{ status: boolean; text?: string; results?: KaRate[] }>("/api/mitra/v6.1/shipping_price", {
     origin: p.origin,
     destination: p.destination,
     weight: p.weight,
@@ -157,7 +164,7 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
   // order reads "dibooking". For a COD parcel the vendor ignores `payment_method` entirely and
   // settles from the buyer. These were parsed away for both, which made the first case invisible.
   // `apps/admin/lib/shipment-payment.ts` is the ONE place that separates the two.
-  const r = await ka<{
+  const { body: r } = await ka<{
     status: boolean; text?: string; pickup_number?: string;
     payment_status?: string; qr_url?: string | null;
     details?: { order_id: string; kj_order_id: string; awb: string | null; service: string; service_type: string }[];
@@ -206,14 +213,14 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
 // ⚠️ Cancellation is only possible BEFORE the courier collects, and a non-COD void is queued for up
 // to 48 h — `status: true` means "accepted for cancellation", not "cancelled".
 export async function kaCancelShipment(awb: string, reason: string): Promise<{ ok: boolean; error?: string }> {
-  const r = await ka<{ status: boolean; text?: string }>("/api/mitra/v3/cancel_shipment", { awb, reason });
+  const { body: r } = await ka<{ status: boolean; text?: string }>("/api/mitra/v3/cancel_shipment", { awb, reason });
   return { ok: !!r.status, error: r.status ? undefined : r.text };
 }
 
 // express tracking by order id / AWB
-export async function kaTrack(orderId: string): Promise<{ ok: boolean; data?: unknown; error?: string }> {
-  const r = await ka<{ status: boolean; text?: string; data?: unknown }>("/api/mitra/tracking", { order_id: orderId });
-  return { ok: !!r.status, data: r.data, error: r.status ? undefined : r.text };
+export async function kaTrack(orderId: string): Promise<{ ok: boolean; data?: unknown; error?: string; httpStatus: number }> {
+  const { body: r, httpStatus } = await ka<{ status: boolean; text?: string; data?: unknown }>("/api/mitra/tracking", { order_id: orderId });
+  return { ok: !!r.status, data: r.data, error: r.status ? undefined : r.text, httpStatus };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -269,7 +276,7 @@ export async function kaServices(): Promise<{ ok: boolean; services: KaService[]
 export async function kaTestConnection(): Promise<{ ok: boolean; env: string; provinces?: number; message: string }> {
   if (!KEY) return { ok: false, env: ENV, message: "API key belum diisi (KIRIMINAJA_API_KEY)." };
   try {
-    const r = await ka<{ status: boolean; datas?: unknown[] }>("/api/mitra/province", {});
+    const { body: r } = await ka<{ status: boolean; datas?: unknown[] }>("/api/mitra/province", {});
     const n = (r.datas ?? []).length;
     return r.status
       ? { ok: true, env: ENV, provinces: n, message: `Terhubung ke KiriminAja (${ENV}) — ${n} provinsi.` }

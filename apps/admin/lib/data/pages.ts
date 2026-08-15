@@ -8,12 +8,13 @@ import type { CmsPage } from "@/lib/mock/store";
 // touched after the seed was written rendered a NEGATIVE age. The seed may be anchored; the app is not.
 
 function toPage(r: {
-  id: string; title: string; handle: string; status: "terbit" | "draft"; template: string | null; views: number; updatedAt: Date;
+  id: string; title: string; handle: string; body: string | null; status: "terbit" | "draft"; template: string | null; views: number; updatedAt: Date;
 }): CmsPage {
   return {
     id: r.id,
     title: r.title,
     handle: r.handle,
+    body: r.body ?? "",
     published: r.status === "terbit",
     updatedDaysAgo: Math.round((Date.now() - r.updatedAt.getTime()) / 86_400_000),
     template: r.template ?? "page",

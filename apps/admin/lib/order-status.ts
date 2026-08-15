@@ -5,6 +5,14 @@ import { defaultInventoryLevelId } from "./inventory-location";
 
 export type OrderStatus = "baru" | "diproses" | "dikirim" | "selesai" | "batal" | "retur";
 
+export type OrderStatusChangeResult = { applied: boolean; reason?: string };
+export type OrderStatusChangeArgs = {
+  storeId: string;
+  order: { id: string; status: OrderStatus };
+  status: OrderStatus;
+  returnReason?: string;
+};
+
 // The order state machine — inventory + payments + ledger — minus the auth/tenant wrapper, so it is
 // callable with a `db`/`tx` and can be exercised against a real Postgres. `setOrderStatus` (the server
 // action in actions/orders.ts) does requireCapability + withTenant + the order lookup, then calls this
@@ -14,8 +22,8 @@ export type OrderStatus = "baru" | "diproses" | "dikirim" | "selesai" | "batal" 
 // depends on it, and the row is updated to the new status here.
 export async function applyOrderStatusChange(
   db: Db,
-  args: { storeId: string; order: { id: string; status: OrderStatus }; status: OrderStatus; returnReason?: string },
-): Promise<void> {
+  args: OrderStatusChangeArgs,
+): Promise<OrderStatusChangeResult> {
   const { storeId, order, status, returnReason } = args;
 
   // Idempotent + terminal-safe. A repeat or concurrent call with the SAME status is a no-op, and a
@@ -25,8 +33,9 @@ export async function applyOrderStatusChange(
   //     an active order with nothing decremented (oversell)
   // The FOR UPDATE lock in setOrderStatus serializes concurrent calls, so the second one reads the
   // already-updated status and lands on one of these guards instead of re-running the restore.
-  if (order.status === status) return;
-  if (order.status === "batal" || order.status === "retur") return;
+  if (order.status === status) return { applied: false, reason: "status-unchanged" };
+  if (order.status === "batal" || order.status === "retur")
+    return { applied: false, reason: "terminal-order" };
 
   // ── AND THE TRANSITION ITSELF MUST BE ONE WE ALLOW ──────────────────────────────────────────────
   //
@@ -40,7 +49,9 @@ export async function applyOrderStatusChange(
   // runtime check, so the UI hiding these is not the boundary — this is.
   const ALLOWED: Record<string, string[]> = {
     baru: ["diproses", "dikirim", "batal"],
-    diproses: ["dikirim", "batal"],
+    // Tracking can skip pickup/in-transit events, so a courier-confirmed delivery or return may be
+    // the first update after booking. Those outcomes must still run COD collection/ledger or restore.
+    diproses: ["dikirim", "selesai", "batal", "retur"],
     // `diproses` = the shipment was VOIDED and the order needs (re)booking. `cancelShipment` routes
     // through here, and this transition was missing — so voiding a shipment on a `dikirim` order
     // silently did nothing: the AWB and courier were cleared while the status stayed "Dikirim", which
@@ -53,7 +64,8 @@ export async function applyOrderStatusChange(
     // claw-back that reverses the sale correctly.
     selesai: ["retur"],
   };
-  if (!ALLOWED[order.status]?.includes(status)) return;
+  if (!ALLOWED[order.status]?.includes(status))
+    return { applied: false, reason: "transition-not-allowed" };
 
   // Cancelling OR returning a live order → put the stock back. `batal` never shipped; `retur` shipped
   // and came back — but in BOTH cases the goods are on the merchant's shelf again, so both must restore
@@ -105,4 +117,6 @@ export async function applyOrderStatusChange(
   // The order's money moves with its status — booked/released/clawed back — inside THIS transaction,
   // so the book can never disagree with the order it describes.
   await settleOrderLedger(db, { storeId, orderId: order.id, status, prevStatus: order.status });
+
+  return { applied: true };
 }

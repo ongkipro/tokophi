@@ -130,10 +130,11 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
 // the reason Google Ads recorded nothing at all.
 
 // ── NOTE-15 ─────────────────────────────────────────────────────────────────────
-// TikTok's click id arrives ONCE, as a URL parameter on the landing page, and is gone by the time
-// the shopper reaches checkout — so it is persisted here, on the first page they see. It is
-// TikTok's strongest match key, the role `_fbc` plays for Meta, and we were dropping it.
-// Stored for 28 days, which is TikTok's own attribution window; the cookie survives the visit.
+// Google Ads click ids also arrive only on the landing URL. Capture `gclid` and `gbraid` immediately
+// into host-only `tphi_gclid` / `tphi_gbraid` session cookies, then mirror their standard `_gcl_aw` /
+// `_gcl_gb` shapes. Checkout already forwards those standard cookies with the order, so the paid
+// callback can deliver the same attribution to the server-side GA4/sGTM dispatcher.
+// TikTok's equivalent stays in localStorage for its documented 28-day attribution window.
 
 // ── NOTE-16 ─────────────────────────────────────────────────────────────────────
 // The catalog id for the product page we are on, and whether it is a variant GROUP. A shopper
@@ -195,24 +196,16 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
 // ── NOTE-20 ─────────────────────────────────────────────────────────────────────
 // Purchase — once per order (localStorage guard), with value + content_ids + advanced matching.
 // 
-// ⚠️ THIS PAGE IS NOT PROOF OF PAYMENT. /checkout/sukses is where an UNPAID virtual account or QR
-// is displayed — the shopper still has to go and pay it. Firing Purchase here for a prepaid order
-// would report a conversion for every abandoned VA screen and every failed gateway call, and
-// inflate the merchant's ROAS with sales that never happened.
-// 
-// So the SERVER decides, per order, whether this page is a conversion: `tracking.browserPurchase`
-// is true for COD (payment on delivery — the order IS the sale, signed off 2026-07-29) and false
-// for prepaid, which is counted instead by the Conversions API when the gateway callback
-// confirms the money. Same `event_id` on both sides, so nothing is ever counted twice.
-// 
-// Consequence, stated plainly: a store on prepaid channels with server-side tracking OFF records
-// no Purchase at all. That is the honest half of the trade — the Seller UI says so on the card.
+// ⚠️ `/checkout/sukses` is where an unpaid virtual account or QR is displayed. Meta and TikTok still
+// obey the server's `tracking.browserPurchase` decision: COD fires on order creation; prepaid is held
+// for the gateway callback. Google Ads is deliberately dual-path: its browser purchase/conversion tag
+// fires for both COD and prepaid order submissions, while the server-side GA4/sGTM copy for prepaid is
+// released only after payment. Both carry the same `transaction_id`, so Google can de-duplicate the
+// browser and server copies instead of silently losing every prepaid Ads conversion.
 
 // ── NOTE-21 ─────────────────────────────────────────────────────────────────────
-// POSITIVE gate: fire only when the server SAID this is a conversion. The negative form
-// (`=== false`) leaked — if the server's enqueue threw, `tracking` comes back null, the order
-// has no flag, and a prepaid sale on an unpaid VA page was reported as revenue anyway.
-// Orders written before this shipped carry no flag either, and they are equally unknowable.
+// The positive `browserPurchase` gate remains load-bearing for Meta and TikTok. A false/missing flag
+// becomes a Google-only browser event, never an all-provider Purchase.
 
 // ── NOTE-22 ─────────────────────────────────────────────────────────────────────
 // Ids + de-dup key from the SERVER (order API `tracking`). The cart's handles are the
@@ -246,6 +239,28 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
 {/* ⚠️ gtag.js is NOT a <head> <script async> any more — it is injected by `later()` in the inline
     script below, together with Meta's and TikTok's. See the DEFERRED LOADING note there for the
     measurement. `async` still blocks: it competes for the main thread the moment it arrives. */}
+<script is:inline>
+  (function () {
+    try {
+      var q = new URLSearchParams(location.search);
+      var now = Math.floor(Date.now() / 1000);
+      var suffix = "; Path=/; SameSite=Lax" + (location.protocol === "https:" ? "; Secure" : "");
+      var clicks = [
+        ["gclid", "tphi_gclid", "_gcl_aw", "GCL." + now + "."],
+        ["gbraid", "tphi_gbraid", "_gcl_gb", "GB.1."],
+      ];
+      for (var i = 0; i < clicks.length; i++) {
+        var v = String(q.get(clicks[i][0]) || "").trim().slice(0, 220);
+        if (v) document.cookie = clicks[i][1] + "=" + encodeURIComponent(v) + suffix;
+        else {
+          var m = document.cookie.match(new RegExp("(^|;\\s*)" + clicks[i][1] + "=([^;]+)"));
+          v = m ? decodeURIComponent(m[2]).slice(0, 220) : "";
+        }
+        if (v) document.cookie = clicks[i][2] + "=" + encodeURIComponent(clicks[i][3] + v) + suffix;
+      }
+    } catch (e) {}
+  })();
+</script>
 
 {pixels.length > 0 && (
   <script is:inline define:vars={{ META: meta, GOOGLE: google, TIKTOK: tiktok }}>
@@ -385,7 +400,7 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         // `value`; on every browsing event `value` already IS the goods total, so it stands in.
         var goods = typeof data.goods === "number" && data.goods > 0 ? data.goods : evt !== "Purchase" && val !== null ? val : null;
         var cur = data.currency || "IDR";
-        if (META) safe(function () {
+        if (META && !data.googleOnly) safe(function () {
           var opts = data.eventId ? { eventID: data.eventId } : undefined;
           if (evt === "PageView") { window.fbq("track", "PageView"); return; }
           // see NOTE-8 in the frontmatter above
@@ -396,7 +411,7 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           if (opts) window.fbq("track", evt, d, opts);
           else window.fbq("track", evt, d);
         });
-        if (TIKTOK) safe(function () {
+        if (TIKTOK && !data.googleOnly) safe(function () {
           // see NOTE-9 in the frontmatter above
           var map = { ViewContent: "ViewContent", AddToCart: "AddToCart", InitiateCheckout: "InitiateCheckout", Purchase: "Purchase" };
           if (evt === "PageView") return; // ttq.page() already fired at load
@@ -578,20 +593,22 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
       // see NOTE-20 in the frontmatter above
       // ⚠️ BOTH conversion pages. `/checkout/sukses` is the storefront checkout's; `/thanks` is the ad
       // funnel's (/promo, /lp). The funnel's page was omitted, so the one flow a merchant PAYS for
-      // recorded no browser Purchase at all — and the `browserPurchase` gate below is what keeps that
-      // honest either way, because the server decides per order whether the money has actually landed.
+      // reports the same server-issued id and catalog facts as the standard checkout.
       if (path === "/checkout/sukses" || path === "/thanks") {
         var order = null;
         try { order = JSON.parse(localStorage.getItem("lastOrder") || "null"); } catch (e) {}
-        // see NOTE-21 in the frontmatter above
-        if (order && !(order.tracking && order.tracking.browserPurchase === true)) order = null;
+        var browserPurchase = !!(order && order.tracking && order.tracking.browserPurchase === true);
+        var googleOnly = !!order && !browserPurchase;
+        // Meta/TikTok require the positive server gate. Google Ads reports both order modes.
+        if (order && googleOnly && !GOOGLE) order = null;
         if (order) {
           var key = String(order.number || order.createdAt || "");
           var seen = [];
           try { seen = JSON.parse(localStorage.getItem("tphi:px:purchased") || "[]"); } catch (e) {}
           if (!Array.isArray(seen)) seen = [];
-          if (key && seen.indexOf(key) === -1) {
-            seen.push(key);
+          var seenKey = browserPurchase ? key : "google:" + key;
+          if (key && seen.indexOf(seenKey) === -1) {
+            seen.push(seenKey);
             try { localStorage.setItem("tphi:px:purchased", JSON.stringify(seen.slice(-20))); } catch (e) {}
             var items = Array.isArray(order.items) ? order.items : [];
             // see NOTE-22 in the frontmatter above
@@ -624,21 +641,23 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
                 })
               : null;
             var data = { value: Number(order.total || 0), currency: "IDR", contentIds: ids, numItems: qty || items.length, orderId: key, eventId: tr.eventId || null,
-              goods: goods, shipping: shipCost, tax: taxAmt, lineItems: lineItems };
+              goods: goods, shipping: shipCost, tax: taxAmt, lineItems: lineItems, googleOnly: googleOnly };
 
             // Advanced matching (opt-in per channel): hash email/phone, attach, THEN fire Purchase.
             var email = order.contact && order.contact.email ? String(order.contact.email).trim().toLowerCase() : "";
             var phone = order.shippingAddress && order.shippingAddress.whatsapp ? digits(order.shippingAddress.whatsapp) : "";
             var phoneE164 = order.shippingAddress && order.shippingAddress.whatsapp ? e164(order.shippingAddress.whatsapp) : "";
-            var wantAM = (META && META.advancedMatching) || (TIKTOK && TIKTOK.advancedMatching) || (GOOGLE && GOOGLE.advancedMatching);
+            var wantAM = googleOnly
+              ? GOOGLE && GOOGLE.advancedMatching
+              : (META && META.advancedMatching) || (TIKTOK && TIKTOK.advancedMatching) || (GOOGLE && GOOGLE.advancedMatching);
             if (wantAM && (email || phone)) {
               // THREE hashes, not two: Meta's phone and TikTok's differ by one character, and one
               // digest cannot serve both. Google takes the raw values (gtag hashes them itself).
               Promise.all([email ? sha256(email) : null, phone ? sha256(phone) : null, phoneE164 ? sha256(phoneE164) : null]).then(function (h) {
                 var em = h[0], ph = h[1], phPlus = h[2];
                 // see NOTE-24 in the frontmatter above
-                if (META && META.advancedMatching && (em || ph)) safe(function () { var am = {}; if (em) am.em = em; if (ph) am.ph = ph; window.fbq("init", META.pixelId, am); });
-                if (TIKTOK && TIKTOK.advancedMatching && (em || phPlus)) safe(function () { var id = {}; if (em) id.email = em; if (phPlus) id.phone_number = phPlus; window.ttq.identify(id); });
+                if (!googleOnly && META && META.advancedMatching && (em || ph)) safe(function () { var am = {}; if (em) am.em = em; if (ph) am.ph = ph; window.fbq("init", META.pixelId, am); });
+                if (!googleOnly && TIKTOK && TIKTOK.advancedMatching && (em || phPlus)) safe(function () { var id = {}; if (em) id.email = em; if (phPlus) id.phone_number = phPlus; window.ttq.identify(id); });
                 // see NOTE-25 in the frontmatter above
                 // Gated on the ADS destination, not on the pixel field. The Seller UI tells the merchant
                 // to put GA4's `G-…` in "ID Pixel/Tag" and the `AW-…/label` in the separate Ads field —

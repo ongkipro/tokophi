@@ -28,7 +28,7 @@ export function PajakCard() {
 
   const save = () =>
     start(async () => {
-      const r = await saveTaxSettings({ enabled, ratePct: Number(rate.replace(/\D/g, "")) || 0, inclusive });
+      const r = await saveTaxSettings({ enabled, ratePct: Number(rate.replace(/[^0-9.]/g, "")) || 0, inclusive });
       if (r.ok) toast.success("Pengaturan pajak disimpan.");
       else toast.error(r.error ?? "Gagal menyimpan.");
     });

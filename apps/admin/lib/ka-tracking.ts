@@ -179,12 +179,15 @@ export async function syncOrderFromKa(
       // The drizzle tx has the same query surface as the root db the state machine is typed against
       // (Tx === Db === typeof rootDb) — withTenant casts the same way. So the whole change (inventory,
       // payments, ledger) runs inside THIS transaction, atomic like a manual status change.
-      await applyOrderStatusChange(tx as unknown as Parameters<typeof applyOrderStatusChange>[0], {
-        storeId: order.storeId,
-        order: { id: order.id, status: cur },
-        status: target,
-      });
-      changed.push(`status:${cur}→${target}`);
+      const result = await applyOrderStatusChange(
+        tx as unknown as Parameters<typeof applyOrderStatusChange>[0],
+        {
+          storeId: order.storeId,
+          order: { id: order.id, status: cur },
+          status: target,
+        },
+      );
+      if (result.applied) changed.push(`status:${cur}→${target}`);
     }
   });
   if (!found) return { ok: false, changed: [], error: `order ${orderNumber} not found` };

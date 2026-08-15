@@ -1,94 +1,76 @@
-# Tasks: Tokophi Multi-page Marketing Site
+# TokoΦ — Audit Remediation & System Perfection Tasks
 
-**Source:** `PRD.md`
+> Traceable task backlog for resolving audit findings from Claude, Codex, and OMP.
+> Each task traces to a verified finding, names exact files, and carries a runnable "Done when" check.
 
-**Worktree:** `~/Projects/tokophi-landing-v2`
+## Stage 0: Security & Infra Blockers
 
-**Branch:** `feat/landing-v2`
+### Task 0.1: Remove Published Insecure Secrets & Harden `resolveAuthSecret()`
+- **Tracing:** `SEC-C1` / `SEC-001`
+- **Target Files:** `docker-compose.coolify.yml`, `packages/lib/src/secret.ts`
+- **Change:**
+  1. Update `docker-compose.coolify.yml` to remove default string `${AUTH_SECRET:-dev-insecure-change-me}` and `${POSTGRES_PASSWORD:-tokophi}`, replacing with required variable expansion `${AUTH_SECRET:?AUTH_SECRET must be set}` and `${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}`.
+  2. Update `packages/lib/src/secret.ts` to reject known insecure fallback literals (`dev-insecure-change-me`, `dev-insecure-*`, `dev-insecure-secret-change-me`) even if length >= 16.
+- **Done when:** `vitest run packages/lib/src/secret.test.ts` passes and `resolveAuthSecret("dev-insecure-change-me")` throws in production runtime.
 
-## Safety rules
+### Task 0.2: Fix Traefik Docker Compose Syntax
+- **Tracing:** `INF-C2`
+- **Target Files:** `docker-compose.coolify.yml`
+- **Change:** Fix `${1}` invalid interpolation syntax in `docker-compose.coolify.yml` Traefik label definitions.
+- **Done when:** `docker compose -f docker-compose.coolify.yml config -q` runs cleanly without syntax parsing errors.
 
-- Work only in the dedicated landing worktree.
-- Do not commit, push, merge, or deploy without explicit approval.
-- Do not publish unapproved fee or settlement claims.
-- Preserve unrelated changes from other devices and collaborators.
+---
 
-## Architecture and foundation
+## Stage 1: Merchant Data Loss & Admin UI Fixes
 
-- [x] **T-MP-01: Specify the route and component architecture**
-  - **Requirement:** PR-LP-09
-  - **Result:** Shared Astro layout, static route ownership, one React island, shadcn server render,
-    centralized motion, content boundaries, and validation gates are documented in `PRD.md`.
+### Task 1.1: Fix CMS Page Body Loading & Preservation
+- **Tracing:** `ADM-C1` / `CMS-001`
+- **Target Files:** `apps/admin/lib/data/pages.ts`, `apps/admin/app/(admin)/halaman/[id]/page-editor.tsx`
+- **Change:**
+  1. Include `body` column in `toPage()` and `getPage()` in `apps/admin/lib/data/pages.ts`.
+  2. Update `page-editor.tsx` to load and preserve `page.body` instead of overwriting with `seedBody(page.title)`.
+- **Done when:** Opening an existing page in page editor displays its real `body`, and saving updates `body` without generating filler text.
 
-- [x] **T-MP-02: Add Astro React, shadcn, Lucide, and GSAP foundations**
-  - **Requirement:** PR-LP-12
-  - **Result:** Direct dependencies resolve, Astro React is configured, and shadcn semantic tokens
-    map to the existing Tokophi light/dark brand tokens.
+### Task 1.2: Fix Decimal Tax Rate Input Parsing
+- **Tracing:** `ADM-C2`
+- **Target Files:** `apps/admin/app/(admin)/pengaturan/pajak-card.tsx`
+- **Change:** Fix string replacement logic in `pajak-card.tsx` so decimal numbers (e.g. `11.5`) parse correctly to `11.5` instead of stripping the period (`115` -> `100%`).
+- **Done when:** Inputting `11.5` sets `rate` to `11.5` and saves correctly.
 
-- [x] **T-MP-03: Build the shared adaptive marketing shell**
-  - **Requirement:** PR-LP-10
-  - **Result:** Shared header, active desktop navigation, accessible shadcn mobile Sheet, maintained
-    footer routes, login, and signup actions are implemented.
+### Task 1.3: Add Safe Navigation for Empty Follow-up Templates
+- **Tracing:** `ADM-C3`
+- **Target Files:** `apps/admin/app/(admin)/crm/followup/followup-client.tsx`
+- **Change:** Replace direct dereference `templates[0].body` with safe optional chaining `templates[0]?.body ?? ""`.
+- **Done when:** Loading the Followup client screen with 0 templates renders without crashing.
 
-## Pages and content
+---
 
-- [x] **T-MP-04: Refactor the homepage into a concise route gateway**
-  - **Requirement:** PR-LP-09
-  - **Result:** The homepage now introduces the product, routes visitors by intent, presents demo
-    proof, and closes with one create-store action.
+## Stage 2: Multi-Tenant RLS & Operations
 
-- [x] **T-MP-05: Build the canonical features page**
-  - **Requirement:** PR-LP-12
-  - **Result:** Six verified capability groups use shadcn cards and explicit Lucide imports without
-    an additional hydrated island.
+### Task 2.1: Enforce Restricted DB Role (`tokophi_app`) in Compose
+- **Tracing:** `INF-H3` / `TEN-001`
+- **Target Files:** `docker-compose.coolify.yml`
+- **Change:** Set `DATABASE_RUNTIME_ROLE: app` for `admin`, `super-admin`, and `storefront` services in `docker-compose.coolify.yml`.
+- **Done when:** Production Compose configuration executes app services under `tokophi_app` role with PostgreSQL RLS active.
 
-- [x] **T-MP-06: Build the workflow page**
-  - **Requirement:** PR-LP-09
-  - **Result:** The page explains setup, catalog, incoming orders, fulfillment, and shipping without
-    unsupported automation language.
+### Task 2.2: Schedule Order Expiry Cron Worker
+- **Tracing:** `ORD-H1` / `OPS-001`
+- **Target Files:** `docker-compose.coolify.yml`
+- **Change:** Add `order-expiry-cron` runner service in `docker-compose.coolify.yml` calling `/api/cron/order-expiry`.
+- **Done when:** `docker compose config` includes `order-expiry` cron service with `CRON_SECRET` authentication.
 
-- [x] **T-MP-07: Build the payment and shipping page**
-  - **Requirement:** PR-LP-09
-  - **Result:** QRIS, bank transfer, COD, and shipping are explained while fee, payout, and
-    settlement details remain explicitly gated by Issue `#180`.
+### Task 2.3: Fix 50-Store Truncation in Super Admin KPIs
+- **Tracing:** `SUPER-001`
+- **Target Files:** `apps/super-admin/lib/data.ts`
+- **Change:** Add dedicated SQL aggregate queries for total stores, platform GMV, and active signups instead of slicing `getStores()` default 50 rows.
+- **Done when:** `getPlatformStats()` computes aggregates across the entire `stores` table regardless of row count.
 
-- [x] **T-MP-08: Build dedicated demo and FAQ pages**
-  - **Requirement:** PR-LP-09
-  - **Result:** Both routes have unique metadata, verified copy, and privacy-safe demo imagery.
+---
 
-## Motion, SEO, and quality
+## Stage 3: Payment Verification & Final Validation
 
-- [x] **T-MP-09: Implement centralized GSAP motion**
-  - **Requirement:** PR-LP-11
-  - **Result:** Hero entrance, section reveal, grouped reveal, and desktop-only demo depth use
-    transform/opacity, `matchMedia`, ScrollTrigger, and reduced-motion guards.
-
-- [x] **T-MP-10: Complete metadata, sitemap, and internal linking**
-  - **Requirement:** PR-LP-09
-  - **Result:** All eight canonical routes have unique metadata, working internal links, and sitemap
-    entries. Visible marketing copy contains no separator-style em/en dash.
-
-- [x] **T-MP-11: Validate routes, devices, accessibility, and hydration**
-  - **Requirement:** PR-LP-10
-  - **Evidence:** Astro check/build and `git diff --check` pass. Browser automation reports no route,
-    overflow, heading, duplicate-ID, internal-link, console, dark-mode, or reduced-motion failure at
-    320, 390, 768, 1024, 1280, and 1440 CSS pixels. The mobile dialog traps focus and closes with
-    Escape. `/fitur/` contains one hydrated island, `MobileNav`.
-
-## Remaining product proof
-
-- [ ] **T-MP-12: Add a current privacy-safe Dashboard Seller capture**
-  - **Requirement:** PR-LP-09
-  - **Blocked by:** An approved seeded-demo capture source.
-  - **Done when:** The image contains no production personal data, has explicit dimensions and alt
-    text, and replaces the abstract hero artwork after browser review.
-
-## Deferred
-
-- [ ] **T-MP-13: Publish approved pricing and fee details**
-  - **Requirement:** PR-LP-09
-  - **Blocked by:** Accepted and implemented order-finance policy in GitHub Issue `#180`.
-
-- [ ] **T-MP-14: Add approved analytics events**
-  - **Requirement:** PR-LP-09
-  - **Blocked by:** Product-owner provider and privacy approval.
+### Task 3.1: Harden Payment Callback & Identity Matching
+- **Tracing:** `PAY-001` / `PAY-H1` / `SEC-M5`
+- **Target Files:** `apps/admin/app/api/public/pay/callback/route.ts`, `packages/lib/src/pay-callback.ts`
+- **Change:** Enforce exact single-payment resolution by `trx_id` / `payment_id` and accept `x-callback-token` header authentication.
+- **Done when:** `npm test` passes `pay-callback.test.ts` and payment callback rejects ambiguous multi-row matches.

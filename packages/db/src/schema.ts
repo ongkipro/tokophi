@@ -977,7 +977,9 @@ export const orders = pgTable("orders", {
   // for modelling what KiriminAja nets out of a COD remittance.
   kaShippingCostIdr: money(),
   placedAt: createdAt(),
-});
+}, (t) => [
+  index("orders_store_placed_idx").on(t.storeId, t.placedAt),
+]);
 
 // Immutable checkout-time allocation. This is the audit source for seller proceeds; the legacy
 // orders.discount_idr remains a compatibility total but cannot distinguish goods from shipping.
@@ -1057,7 +1059,9 @@ export const orderLineItems = pgTable("order_line_items", {
   qty: integer().notNull().default(1),
   priceIdr: money().notNull().default(0),
   totalIdr: money().notNull().default(0),
-});
+}, (t) => [
+  index("order_line_items_order_idx").on(t.orderId),
+]);
 
 export const payments = pgTable("payments", {
   id: pk(),
@@ -1084,7 +1088,15 @@ export const payments = pgTable("payments", {
   qr: text(),
   url: text(),
   paymentCode: text(),
-});
+}, (t) => [
+  index("payments_trx_idx")
+    .on(t.trxId)
+    .where(sql`${t.trxId} is not null`),
+  index("payments_reff_idx")
+    .on(t.reffId)
+    .where(sql`${t.reffId} is not null`),
+  index("payments_order_idx").on(t.orderId),
+]);
 
 export const fulfillments = pgTable("fulfillments", {
   id: pk(),
@@ -1466,6 +1478,7 @@ export const trackingEventDeliveries = pgTable(
     index("tracking_event_deliveries_due_idx").on(t.status, t.nextAttemptAt),
     // The Admin diagnostics query.
     index("tracking_event_deliveries_store_idx").on(t.storeId, t.createdAt),
+    index("tracking_event_deliveries_order_idx").on(t.orderId),
   ],
 );
 
@@ -1571,7 +1584,18 @@ export const ledgerEntries = pgTable("ledger_entries", {
   note: text(),
   createdAt: createdAt(),
   availableAt: ts(),
-});
+}, (t) => [
+  uniqueIndex("ledger_one_sale_per_order")
+    .on(t.orderId)
+    .where(sql`kind = 'sale'`),
+  uniqueIndex("ledger_one_retur_per_order")
+    .on(t.orderId)
+    .where(sql`kind = 'retur'`),
+  index("ledger_store_status_idx").on(t.storeId, t.status),
+  uniqueIndex("ledger_one_sale_per_payment")
+    .on(t.paymentId)
+    .where(sql`kind = 'sale'`),
+]);
 
 export const payoutStatus = pgEnum("payout_status", [
   "menunggu",

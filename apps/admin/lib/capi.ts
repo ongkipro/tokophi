@@ -68,6 +68,9 @@ export type ServerEvent = {
     /** TikTok's `_ttp` cookie and `ttclid` click id — its equivalents of `fbp`/`fbc`. */
     ttp?: string | null;
     ttclid?: string | null;
+    /** Paid Google click ids, recovered from the session `_gcl_aw` / `_gcl_gb` cookie. */
+    gclid?: string | null;
+    gbraid?: string | null;
   };
 };
 
@@ -350,6 +353,8 @@ export async function sendGa4Purchase(args: {
   measurementId: string;
   apiSecret: string;
   clientId: string;
+  /** `AW-…/label`, exposed to an sGTM Google Ads Conversion Tracking tag as event data. */
+  adsSendTo?: string | null;
   event: ServerEvent;
 }): Promise<SendResult> {
   const { event } = args;
@@ -359,9 +364,24 @@ export async function sendGa4Purchase(args: {
   // four days after checkout hits it every time). So we send, and let Google clamp; the sale is
   // reported, dated later than it happened. That trade is deliberate — under-reporting revenue is worse
   // than mis-dating it — and it is why `timestamp_micros` is still sent rather than omitted.
-  const url =
-    `https://www.google-analytics.com/mp/collect` +
-    `?measurement_id=${encodeURIComponent(args.measurementId)}&api_secret=${encodeURIComponent(args.apiSecret)}`;
+  const endpoint = (process.env.GOOGLE_SGTM_ENDPOINT || "https://www.google-analytics.com")
+    .trim()
+    .replace(/\/+$/, "");
+  let url: string;
+  try {
+    const parsed = new URL(endpoint.endsWith("/mp/collect") ? endpoint : `${endpoint}/mp/collect`);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new Error("unsupported protocol");
+    parsed.searchParams.set("measurement_id", args.measurementId);
+    parsed.searchParams.set("api_secret", args.apiSecret);
+    url = parsed.toString();
+  } catch {
+    return {
+      ok: false,
+      retryable: false,
+      errorCode: "invalid_sgtm_endpoint",
+      errorMessage: "GOOGLE_SGTM_ENDPOINT must be an absolute HTTP(S) URL.",
+    };
+  }
   // Hashed user data — MP does have a documented contract for it (top-level `user_data` with
   // `sha256_email_address` / `sha256_phone_number`), contrary to what this file used to claim. Phone
   // must be E.164 **with** the `+` before hashing, or the digest matches nothing.
@@ -369,8 +389,8 @@ export async function sendGa4Purchase(args: {
   const ga_phone = hashPhone(event.identity?.phone, { e164: true });
   const body: Record<string, unknown> = {
     client_id: args.clientId,
-    // `eventTime` is Unix SECONDS; MP wants microseconds. Backdating beyond 72 h is silently dropped,
-    // which is why the guard above refuses to send instead of recording a delivery that never happened.
+    // `eventTime` is Unix SECONDS; MP wants microseconds. Google accepts old events and clamps them to
+    // its 72-hour boundary, so preserving the original time is still more truthful than omitting it.
     timestamp_micros: event.eventTime * 1_000_000,
     ...(ga_email || ga_phone
       ? {
@@ -394,6 +414,15 @@ export async function sendGa4Purchase(args: {
           currency: event.currency,
           ...(typeof event.shipping === "number" && event.shipping > 0 ? { shipping: event.shipping } : {}),
           ...(typeof event.tax === "number" && event.tax > 0 ? { tax: event.tax } : {}),
+          // These fields are consumed by an optional server-side GTM container. Its GA4 client exposes
+          // them as event data, and the per-store `send_to` lets one shared container route the
+          // purchase to the merchant's own Google Ads Conversion Tracking tag. Direct GA4 MP accepts
+          // them as event parameters; a linked GA4 → Ads import still de-duplicates on transaction_id.
+          event_id: event.eventId,
+          ...(args.adsSendTo ? { send_to: args.adsSendTo } : {}),
+          ...(event.client?.gclid ? { gclid: event.client.gclid } : {}),
+          ...(event.client?.gbraid ? { gbraid: event.client.gbraid } : {}),
+          ...((event.sourceUrl || event.fallbackUrl) ? { page_location: event.sourceUrl || event.fallbackUrl } : {}),
           // Item-scoped price and quantity are what fill GA4's Monetisation → Ecommerce purchases
           // report; without them "Item revenue" and "Items purchased" are structurally zero.
           items: event.lineItems?.length

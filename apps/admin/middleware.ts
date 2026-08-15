@@ -36,7 +36,13 @@ export async function middleware(req: NextRequest) {
   // on THIS domain — must run unauthenticated (cross-subdomain cookies aren't shared).
   const isImpersonate = pathname === "/impersonate";
   if (!valid && !isLogin && !isDaftar && !isGoogleAuth && !isImpersonate) {
-    return noRobots(NextResponse.redirect(new URL("/login", req.url)));
+    if (pathname.startsWith("/api/public/") || pathname.startsWith("/api/cron/")) {
+      // Public & Cron APIs handle their own secret/public gates inside handlers
+    } else if (pathname.startsWith("/api/")) {
+      return noRobots(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
+    } else {
+      return noRobots(NextResponse.redirect(new URL("/login", req.url)));
+    }
   }
   if (valid && (isLogin || isDaftar)) {
     return noRobots(NextResponse.redirect(new URL("/", req.url)));

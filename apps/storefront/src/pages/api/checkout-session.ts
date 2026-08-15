@@ -123,10 +123,14 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
   if (!store) return noContent("unknown-store");
   if (isBot(request.headers.get("user-agent") ?? "")) return noContent("bot");
   if (!rateLimit(`checkout:${clientIp(request, clientAddress)}`)) return noContent("rate-limited");
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (contentLength > 131_072) return noContent("payload-too-large");
 
   let body: Record<string, unknown>;
   try {
-    body = JSON.parse(await request.text()) as Record<string, unknown>;
+    const raw = await request.text();
+    if (raw.length > 131_072) return noContent("payload-too-large");
+    body = JSON.parse(raw) as Record<string, unknown>;
   } catch {
     return noContent("invalid-json");
   }

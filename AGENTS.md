@@ -81,6 +81,8 @@ are building one product together, not racing. Everything below was learned by b
   and their stash left untouched, but only because it happened to be clean at HEAD. **To compare against
   an older version, use `git show <ref>:<path> > /tmp/…`** — never move the working tree out from under
   someone.
+
+- **AI Execution History & Record-Keeping Mandate.** Any AI agent executing tasks on this repository MUST log completed tasks, decisions, test results, and file changes in `BUILD-LOG.md` (and `specs/docs/tasks/`) after every execution pass. Never complete a task without leaving a precise, traceable record of what was done, verified, and updated.
 - **Symlinks that leave your worktree.** `~/Documents/Development/tokophi` → `<repo>/specs` **in the
   MAIN checkout, on branch `main`**. Editing "the docs" through that path writes into main's working
   tree, not your branch — your commit will not contain it and main will be left dirty for whoever
