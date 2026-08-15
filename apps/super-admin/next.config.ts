@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: path.resolve(__dirname, "../../"),
+  },
   transpilePackages: ["@tokophi/ui", "@tokophi/lib", "@tokophi/db"],
   serverExternalPackages: ["postgres"],
   // The platform control plane (rich.tokophi.com) must never be indexed. `headers()` matches

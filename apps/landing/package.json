@@ -14,7 +14,7 @@
     "@astrojs/node": "^9.2.1",
     "@astrojs/react": "^4.4.2",
     "@tokophi/lib": "*",
-    "@tokophi/ui": "^0.0.0",
+    "@tokophi/ui": "*",
     "astro": "^5.14.1",
     "gsap": "^3.15.0",
     "lucide-react": "^1.29.0",

@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: path.resolve(__dirname, "../../"),
+  },
   transpilePackages: ["@tokophi/data", "@tokophi/db", "@tokophi/lib", "@tokophi/sections", "@tokophi/ui"],
   serverExternalPackages: ["postgres", "sharp"],
   // The whole merchant admin (app.tokophi.com) must stay out of search engines: login, /daftar,
