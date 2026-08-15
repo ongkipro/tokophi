@@ -118,6 +118,14 @@ The responsive audit fails on **any horizontal overflow** — the one symptom th
 
 ---
 
+### 🤖 AI, Agent & Collaborator Working Protocol
+
+All AI engines (OMP, Claude, Codex, Pi, Antigravity) and human collaborators MUST adhere to the execution standard detailed in [`AGENTS.md`](AGENTS.md):
+1. **Auto Task Updates**: Real-time tracking of task progress in [`specs/docs/TASKS.md`](specs/docs/TASKS.md).
+2. **Execution & Build Logging**: Mandatory append of session logs, changed files, and runnable test verification to [`BUILD-LOG.md`](BUILD-LOG.md).
+3. **Status Syncing**: Keep executable metrics and timestamps current in [`specs/docs/STATUS.md`](specs/docs/STATUS.md).
+4. **Master Documentation**: Maintain [`specs/docs/TOKOPHI_MASTER_ENGINEERING_REPORT.md`](specs/docs/TOKOPHI_MASTER_ENGINEERING_REPORT.md) and task specifications under [`specs/docs/tasks/`](specs/docs/tasks/).
+
 ## Docs
 
 | | |

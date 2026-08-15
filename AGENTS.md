@@ -1,5 +1,30 @@
 # TokoΦ — working agreement (read before coding)
 
+## 🤖 AI, AGENT & COLLABORATOR AUTO-EXECUTION, TASK & REPORTING PROTOCOL
+
+Every AI model (OMP, Claude, Codex, Pi, Antigravity, sub-agents) and human collaborator operating on this repository MUST strictly follow this mandatory 4-step task management, reporting, and execution log protocol:
+
+1. **Auto-Task Tracking (`specs/docs/TASKS.md`)**:
+   - Check `specs/docs/TASKS.md` before starting any work item.
+   - If working on a new task or sub-item, explicitly record or pick it in `specs/docs/TASKS.md`.
+   - Maintain real-time state flags (`[ ]` todo → `[~]` in progress → `[x]` done).
+   - **Rule:** Never yield or complete work without marking its task entry `[x]` done in `TASKS.md`.
+
+2. **Execution Logging & History (`BUILD-LOG.md`)**:
+   - Every finished task, bug fix, feature implementation, or audit pass MUST append a structured log entry to `BUILD-LOG.md`.
+   - **Log Entry Standard**:
+     - Timestamp in UTC (`YYYY-MM-DD HH:MM UTC`)
+     - Executor identity (e.g. `Main Session`, `SecurityRLSAuditor`, `Collaborator`)
+     - Task / Scope ID (`SEC-C1`, `INF-C2`, `ADM-001`, `PAY-001`, etc.)
+     - Modified file inventory
+     - Concrete verification proof (`npm test` numbers, `check:storefront`, `check:landing`, `ops/tokophi-probe.sh` output)
+
+3. **Status Synchronization (`specs/docs/STATUS.md`)**:
+   - Update `specs/docs/STATUS.md` timestamp and verifiable system health metrics (passing test count, Astro check status, migration counts) whenever changes alter platform state or API contracts.
+
+4. **Master Engineering Report & Task Specs (`specs/docs/`)**:
+   - For major features, multi-domain audits, or architectural decisions, maintain `specs/docs/TOKOPHI_MASTER_ENGINEERING_REPORT.md` and task specifications under `specs/docs/tasks/` so incoming agents and collaborators inherit complete context and history.
+
 ## 🤝 MULTIPLE AGENTS SHARE THIS WORKTREE — read this first
 
 More than one Claude runs against this repo, this database and this machine **at the same time**. We
