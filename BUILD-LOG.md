@@ -8,6 +8,26 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-15 13:58 UTC] — Coolify Production Monorepo Deployment & Turbopack Root Fix
+
+- **Scope:** Resolved Coolify Docker monorepo build failures for `@tokophi/admin` and `@tokophi/super-admin`, queued deployment 447, and verified 100% production container health & probe pass.
+- **Files Modified:**
+  - `apps/admin/next.config.ts`: Set `turbopack: { root: path.resolve(__dirname, "../../") }`.
+  - `apps/super-admin/next.config.ts`: Set `turbopack: { root: path.resolve(__dirname, "../../") }`.
+  - `apps/landing/package.json`: Synced `@tokophi/ui` dependency version to `*`.
+- **Verification Executed:**
+  - Local Docker Build: `docker build -f apps/super-admin/Dockerfile -t tokophi-super-test .` → **Successfully built image 58fbcdb00484**.
+  - Local Docker Build: `docker build -f apps/admin/Dockerfile -t tokophi-admin-test .` → **Successfully built image 51a0eb62da5b**.
+  - Coolify Deployment Queue ID 447 → **Swapped & Healthy (all containers: super-admin, admin, storefront, landing, postgres)**.
+  - `ops/tokophi-probe.sh` → **100% GREEN (exit 0)**:
+    - `https://tokophi.com` → 200 OK
+    - `https://app.tokophi.com/login` → 200 OK
+    - `https://rich.tokophi.com` → 307 (Redirect to Login)
+    - `https://rich.tokophi.com/update-log` → 307 (Update Log surface active and protected)
+    - `https://toko.tokophi.com` → 200 OK
+    - `https://batiknusantara.tokophi.id` → 200 OK
+    - `POST /api/public/ongkir op=search` → 200 OK
+
 ### [2026-08-15 13:33 UTC] — Super Admin Human Development Update Log Surface Addition
 
 - **Scope:** Created dedicated Super Admin menu surface `/update-log` for human operators (Paduka Ongki & team) to view concise development summaries, version history, bug locations, solutions, and verification proof.
