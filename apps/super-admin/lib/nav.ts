@@ -1,4 +1,4 @@
-import { LayoutDashboard, Store, CreditCard, BarChart3, Settings, LifeBuoy, Banknote, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Store, CreditCard, BarChart3, Settings, LifeBuoy, Banknote, History, type LucideIcon } from "lucide-react";
 
 export type NavItem = { label: string; href: string; icon: LucideIcon };
 
@@ -9,5 +9,6 @@ export const NAV: NavItem[] = [
   { label: "Pencairan", href: "/pencairan", icon: Banknote },
   { label: "Tiket", href: "/tiket", icon: LifeBuoy },
   { label: "Analitik", href: "/analitik", icon: BarChart3 },
+  { label: "Update Log", href: "/update-log", icon: History },
   { label: "Pengaturan", href: "/pengaturan", icon: Settings },
 ];
