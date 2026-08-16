@@ -222,3 +222,26 @@
 - **Astro Type & Template Check (Landing):** `astro check --root apps/landing` → 0 errors, 0 warnings.
 - **Admin App Build:** `DATABASE_RUNTIME_ROLE=owner DATABASE_URL=... npm run build:admin` → Compiled successfully, static pages generated.
 - **Super-Admin App Build:** `DATABASE_RUNTIME_ROLE=owner DATABASE_URL=... npm run build:super` → Compiled successfully, static pages generated.
+
+---
+
+## 2026-08-16 — CI restored to green; shared dev DB caught up (Main Session, interactive Claude)
+
+- **Scope:** `CI-VERIFY-DB` — the storefront verify step added by `d5bf796` (direct push) ran two
+  steps too early, against the job-level `DATABASE_URL` = the empty, never-migrated base `tokophi`
+  database. Every storefront route 500'd on `relation "store_domains" does not exist`, so main's CI
+  sat red from 2026-08-15 06:20Z through all three direct pushes — the exact failure the ci.yml
+  comment two blocks below it (“`_test`, not `tokophi`”) already warned about.
+- **Files:** `.github/workflows/ci.yml` (verify step moved AFTER the `seed tokophi_test` step, env
+  pinned to `tokophi_test`, `npx playwright install --with-deps chromium` added — four of the six
+  checks drive a browser and the runner ships none), `BUILD-LOG.md`, `specs/docs/TASKS.md`.
+- **Verification:**
+  - Root cause isolated by reproduction, not by reading: fresh DB `tokophi_ci_repro` → migrate
+    **95/95 applied, exit 0**, `store_domains` present; then the full CI test path
+    (`TEST_DB_REQUIRED=1`, fresh `_test`) → **exit 0**, astro checks 0 errors. Local green + CI red
+    ⇒ the delta was the verify step's database, confirmed in the step log (repeated router 500s).
+  - Post-merge proof is the sha-bound CI run on this commit (watched to completion; reported in the
+    session transcript — a watch attached to “the latest run” has burned this repo before).
+- **Also this pass:** shared dev DB (`localhost:5433/tokophi`) was one migration behind merged main
+  (`0094_magical_salo` unapplied — `order_financials` missing for every local session). Applied via
+  `npm run migrate`; stamp now `1786475026516`, table present.

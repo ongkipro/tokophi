@@ -122,10 +122,6 @@ jobs:
       # below depend on that side effect — keep them AFTER this one.
       - run: npm test
 
-      # Browser-driven storefront performance and responsive-image gates: builds when stale, starts
-      # one isolated storefront server, and runs all six registered checks with a failing exit code.
-      - run: npm run verify -w @tokophi/storefront
-
       # ── N61 ②: RLS, against the database `npm test` just migrated ──────────────────────────────
       #
       # `verify-rls` is the gate that sat RED for weeks — its own fixture used the `stores LIMIT 1`
@@ -145,6 +141,22 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/tokophi_test
         run: npm run seed -w @tokophi/db
+
+      # Browser-driven storefront performance/responsive-image gates: builds, starts ONE storefront,
+      # runs all six registered checks. Two requirements this step's FIRST placement ignored (it ran
+      # right after `npm test`, against the job-level DATABASE_URL — the empty, never-migrated base
+      # `tokophi` — so every route 500'd on `relation "store_domains" does not exist`, exactly the
+      # failure the `_test, not tokophi` warning above already named; main sat red 2026-08-15/16):
+      #   1. a MIGRATED **and SEEDED** database — `tokophi_test`: `npm test` migrates it, the seed
+      #      step directly above populates it (`toko-demo.test` itself is a `store_domains` row);
+      #   2. a BROWSER — four of the six checks drive chromium, and the runner image ships none.
+      #      `--with-deps` because headless chromium's shared libraries are not guaranteed either.
+      - name: install chromium for the storefront checks
+        run: npx playwright install --with-deps chromium
+      - name: storefront verify suite (6 browser/HTTP checks)
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/tokophi_test
+        run: npm run verify -w @tokophi/storefront
 
       # Isolation proved as SQL: coverage over every store-scoped table, `stores` itself (the blind
       # spot 0058 closed), fail-closed with no GUC, WITH CHECK on a cross-tenant write, and the

@@ -9,6 +9,7 @@
 ---
 
 ## Epic 0 — Monorepo hygiene (foundation)
+- [x] **CI: storefront verify step needs a migrated+seeded DB and a browser** · **S** · moved after `seed tokophi_test`, env pinned to `_test`, chromium installed. Was red on main 2026-08-15/16 (`store_domains does not exist` — empty base DB). AC: sha-bound CI run green. See BUILD-LOG 2026-08-16.
 - [x] Monorepo (npm workspaces): `apps/admin`, `apps/super-admin`, `packages/ui`, `packages/lib`. Both build.
 - [ ] **De-dup admin → shared packages** · **M** · migrate `apps/admin` to import `@tokophi/ui` + `@tokophi/lib`; delete its local `components/ui` + `lib/format`/`utils`. AC: admin builds using the packages, zero duplicate UI, console clean.
 - [ ] **Turborepo pipeline** · **S** · add `turbo.json` (build/lint/dev). AC: `turbo run build` builds both apps with caching.
