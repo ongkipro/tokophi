@@ -1,8 +1,139 @@
-# TokoΦ — Ringkasan Audit (wave 1–7)
+# TokoΦ — Pre-Release Audit and Remediation Summary (2026-08-16)
 
-> **Untuk Paduka Ongki.** Ini rekap enam gelombang audit (2026-08-01 → 2026-08-03) plus satu gelombang
-> ketujuh yang mengaudit bagian yang belum pernah disentuh siapa pun. Ditulis dari **bukti** — commit
-> body, file guard, dan pengukuran yang dijalankan ulang — bukan dari ingatan.
+> **Status:** Observed audit report, not a production certification.
+>
+> **Change boundary:** Source, configuration, schema, documentation, tests, and local runtime were inspected. No production mutation, deployment, payment, courier booking, payout, DNS change, or secret read was performed.
+>
+> **Execution contract:** [`REQUIREMENTS.md`](./REQUIREMENTS.md) owns accepted behavior. Root [`TASKS.md`](../../TASKS.md) owns the active implementation sequence. This document owns dated audit evidence only.
+
+## Release verdict
+
+**Not ready for unrestricted production release.**
+
+The repository has a strong technical base: all workspace TypeScript/Astro checks complete, the dedicated local database suite passes all 90 files and 722 tests, migration and RLS verifiers pass, and local browser exercises reached seller, storefront, landing, cart, checkout, and suspended-store states. Those controls do not cover the remaining release blockers. Thirteen P0 tasks still permit false success, cross-state corruption, replay, owner-database fallback, unauditable impersonation, or direct API behavior that contradicts storefront availability.
+
+The active queue contains **42 tasks: 13 P0, 20 P1, and 9 P2**. Stage 7 is the only release gate. A green default `npm test` is not full evidence because it runs **82 files / 662 tests and skips 8 DB-coupled files / 60 tests** without the dedicated database. The DB-backed run passes **90 files / 722 tests**.
+
+## Scope and evidence
+
+| Area | Evidence collected | Boundary |
+|---|---|---|
+| Repository structure | All workspaces, deployable surfaces, schema/migrations, scripts, CI, Docker Compose, OpenAPI, and canonical specification directories mapped | Generated/cache/vendor directories excluded from source conclusions |
+| Data and tenancy | Drizzle schema, 95-entry migration journal, RLS verifiers, tenant context, object ownership, app/owner DB connection behavior | Local PostgreSQL only; production DB was not read |
+| Security | Auth/session/cookie flows, seller/platform RBAC, public APIs, cron/webhook paths, upload/storage, impersonation, secrets scan | No credential contents or live auth sessions inspected |
+| Commerce correctness | Cart/order/payment/inventory/ledger/payout/shipping transitions and concurrency boundaries traced | No real payment, courier, payout, or order mutation |
+| UI and responsive behavior | Seller and storefront route sweeps, keyboard/menu behavior, product editor, cart/checkout, landing, suspended storefront | Local development surfaces; no production certification |
+| Delivery and operations | Compose validation, CI workflow, build/check scripts, release/readiness claims, observability and backup documentation | No deploy, restore drill, external provider call, or live rollback |
+| Documentation | Requirement, task, audit, status, architecture, security, API, operations, and release claims cross-checked against code and executable evidence | Historical prose remains evidence, never implementation truth |
+
+## Gate results
+
+| Gate | Result | Release meaning |
+|---|---|---|
+| `npm test` | 82 files passed, 8 skipped; 662 tests passed, 60 skipped | Offline signal only; DB suites did not run |
+| DB-backed suite | 90 files passed; 722 tests passed | Strong local DB evidence |
+| Admin TypeScript | 0 errors | Pass |
+| Super Admin TypeScript | 0 errors | Pass |
+| Storefront Astro check | 0 errors, 0 warnings, 14 hints | Pass with non-blocking hints |
+| Landing Astro check | 0 errors, 0 warnings, 0 hints | Pass |
+| Admin + Super Admin lint | 6 errors, 4 warnings | Release gate fails |
+| Migration verifier | 95 entries through `0094`; pass | Pass |
+| RLS verifier | 52/53 store-scoped tables plus the documented `platform_activity` exception; pass | Existing verifier passes; direct `inventory_levels` isolation and runtime DB identity remain open |
+| Compose config | Parses with validation-only required values | Syntax passes; effective restricted runtime identity is not proven |
+| Secret scanner | Repository scan completed; no confirmed source secret in the audited paths | Does not cure the reusable responsive-audit credential |
+| OpenAPI lint | Both files parse with 7 warnings | Syntax signal only; route coverage and reproducibility remain open |
+| Traceability checker | 31 structural findings | Documentation gate fails |
+| Responsive seller sweep | Shared topbar overflows by 27 px at 320 CSS px on all 15 sampled seller routes | Accessibility/responsive gate fails |
+
+## Active remediation map
+
+### P0 — release blockers
+
+| Task | Requirement | Finding and root cause |
+|---|---|---|
+| 4.1 | NF-10 | Responsive audit script embeds reusable seller credentials. |
+| 4.2 | F-T9 | `/api/public/order` resolves an active product but does not enforce store public availability; a suspended store can still receive direct API attempts. |
+| 4.3 | F-M13 | Payment request creation is check-then-create; concurrent requests can create more than one provider/local payment. |
+| 4.4 | F-C6 | Incoming Inventory derives receipt quantities instead of reading persisted receipt facts. |
+| 4.5 | F-C7 | Quick stock edit broadcasts one aggregate quantity across variants instead of updating the selected variant with stale-write protection. |
+| 4.6 | F-C10 | `Buat PO` closes a dialog but creates no purchase order. |
+| 4.7 | F-P7 | Navigation creation can report success without a committed menu transaction. |
+| 4.8 | F-O8 | Public order idempotency uses a preflight read; concurrent submissions can pass before either transaction claims the checkout session. |
+| 4.9 | F-C11 | Purchase-order receipt reads state before the transaction and does not serialize concurrent receipt attempts. |
+| 4.10 | F-M14 | Subscription callbacks can regress a paid invoice and extend entitlement again on later replay/out-of-order events. |
+| 4.11 | SEC-10 | Impersonation places a reusable JWT in a URL, permits replay until expiry, and drops operator identity from the merchant session. |
+| 4.12 | SEC-18 | `DATABASE_RUNTIME_ROLE=app` can silently reuse the owner `DATABASE_URL`; a label claims RLS while bare queries retain owner power. |
+| 4.13 | SEC-16 | First-party callback/cron credentials are accepted in query strings; callback identity must also resolve exactly one payment. |
+
+### P1 — high-priority correctness and release governance
+
+| Tasks | Requirements | Scope |
+|---|---|---|
+| 5.1–5.3 | F-S12, F-C8, SEC-15 | Shipment reconciliation, truthful product controls, race-safe invitations |
+| 5.4–5.6 | F-F10, F-F11, F-C9 | Checkout error states, 320 px topbar, state-aware navigation guards |
+| 5.7–5.8 | NF-9, F-K11 | Full commerce lifecycle integration test and explicit TokoΦ Account release decision |
+| 5.9–5.10 | F-T10, F-M15 | Deterministic multi-store context and locked payout transitions |
+| 5.11–5.13 | NF-13, NF-14, NF-15 | Green lint baseline, four production builds in CI, reproducible HTTP contract coverage |
+| 5.14–5.15 | NF-16, NF-17 | One documentation authority map and repaired active traceability |
+| 5.16 | F-F12 | Persisted CMS page bodies must not be replaced with title-derived filler |
+| 5.17–5.18 | SEC-9, F-S8 | Platform role enforcement at route entry and honest known-versus-legacy-unknown courier analytics |
+| 5.19–5.20 | F-S9/F-S10, F-T6 | Evidence-backed COD return economics and a real Google OAuth contract smoke test |
+
+### P2 — hardening and lean cleanup
+
+| Tasks | Requirements | Scope |
+|---|---|---|
+| 6.1–6.3 | NF-18, F-T8, NF-6 | Explicit offline/release commands, direct inventory RLS, shared production rate limits |
+| 6.4–6.6 | NF-19, SEC-17, NF-12 | Confirmed dependency removal, active SVG handling, bounded release-critical modules |
+| 6.7–6.9 | NF-20, NF-21, F-F7 | Remove runtime mock fixtures from production type paths; standardize package manager/lockfiles; persist per-store public contact email |
+
+## Second-pass gap review
+
+The final cross-check found five accepted requirements that had evidence but no executable closure task, plus five partial requirements that were already owned by adjacent tasks but not traced there:
+
+- **Platform route roles (`SEC-9`):** `platform-auth.ts` carries the operator role and privileged actions check it, but `apps/super-admin/middleware.ts` proves only that a platform session cookie exists. Route-entry authorization remains explicit Task 5.17; hiding navigation is not enforcement.
+- **Courier return analytics (`F-S8`):** the public-order route already snapshots its server-verified courier and service type for new orders, correcting the earlier assumption that all new data was missing. Legacy null-courier rows remain unknowable. Task 5.18 therefore owns honest per-courier denominators and a separate unknown-coverage count, not fabricated backfill.
+- **COD economics (`F-S9`, `F-S10`):** the SPX return-cost premise has no written KiriminAja evidence, while `platform_cod.fee_pct` is seeded to zero and unused. Task 5.19 blocks policy expansion or charging until provider evidence and a complete owner-approved money contract exist.
+- **Google OAuth (`F-T6`):** local tests cover mocked protocol branches, not a real provider/account exchange. Task 5.20 requires an environment-only test client and browser smoke test; credentials remain outside repository evidence.
+- **Per-store contact email (`F-F7`):** the storefront correctly removed the shared Batik Nusantara address because the store model has no public email field. Task 6.9 adds tenant-owned persistence and preserves an honest empty state.
+- **Existing-task traceability:** Tasks 4.2, 4.4, 5.5, 5.8, 6.2, and 6.3 now explicitly own the related `F-P4`, `SEC-6`/`F-C2`, `NF-7`, `F-K12`/`F-K13`, `SEC-1`/`F-T1`, and `F-F5` partial requirements. This changes planning coverage only; no requirement was promoted to MET.
+
+## Documentation contract verification
+
+The canonical pack was revalidated after the ownership, status, table, link, and identifier repairs:
+
+- `check-traceability.py specs --stage ready --format json` scanned **128 files**, **65 declarations**, and **12 recognized historical task contracts** with **0 findings**.
+- The same checker passed at `--stage verified` with **0 findings**. This covers resolvable numeric references, duplicate declarations, accountable ownership, Markdown table structure, local links, task primaries, and stage-aware claim/evidence rules.
+- An independent root-queue contract scan found **42 active Stage 4–6 tasks**: **13 P0, 20 P1, and 9 P2**. Every task has one requirement, target files, a bounded change, and an observable `Done when`; no task ID is duplicated and every primary requirement resolves in [`REQUIREMENTS.md`](./REQUIREMENTS.md).
+
+This is current planning evidence, not a permanent repository gate. Task 5.15 / `NF-17` still owns the repository-local `npm run verify:traceability` command and CI enforcement; neither is claimed as implemented by this documentation pass.
+
+## Regression review
+
+- **Landing:** Typecheck passes; canonical route/content claims remain subject to the documentation and release gates.
+- **Storefront:** Home, listing, PDP, cart, checkout, and suspended-store behavior were exercised locally. The storefront correctly refuses a suspended host, but the public order API does not share that boundary yet.
+- **Seller Admin:** Navigation, product list/editor, inventory, purchasing, settings, and responsive topbar paths were inspected. False-success controls and state/persistence mismatches are represented in Tasks 4.4–4.7 and 5.2/5.6/5.16.
+- **Super Admin:** Platform actions, route-level role boundaries, payout/impersonation paths, and COD analytics/economics were traced. UI hiding is not accepted as authorization, a state-machine guard, provider evidence, or an honest legacy-data denominator.
+- **Backend and data:** Existing migration/RLS/ledger guards are materially useful. The uncovered failures sit at concurrency, effective runtime identity, direct child-table isolation, and incomplete end-to-end composition.
+- **Delivery:** Compose syntax is healthy, but CI does not prove all deployable builds, lint is red, the release command can skip DB tests, and backup/restore claims lack a current executable drill.
+
+## Security audit interpretation
+
+The automated source scanner and targeted manual review found no confirmed plaintext secret in the audited source set. That is not a clean security certification. Security remains blocked by the embedded audit credential, URL-borne reusable credentials, replayable impersonation, lost operator provenance, incomplete platform route-role enforcement, in-process rate limits, active SVG acceptance, and unproven restricted DB identity. Security statuses in `REQUIREMENTS.md` must change only after the corresponding executable acceptance checks pass.
+
+## Implementation rule
+
+Implement only from root `TASKS.md`, in wave order. Shared-file lanes remain sequential; independent lanes may run in parallel. Each task must update its requirement status from executable evidence, not from code inspection alone. Production deployment remains a separate approval-gated action after Stage 7.
+
+---
+
+# Historical Audit Record — Waves 1–8
+
+## Original Wave 1–8 Summary
+
+> **Untuk Paduka Ongki.** Ini rekap delapan gelombang audit: wave 1–7 mencatat pemeriksaan 2026-08-01
+> sampai 2026-08-03, dan wave 8 menambahkan bukti pre-release 2026-08-16. Ditulis dari **bukti** —
+> commit body, file guard, source review, browser exercise, dan pengukuran yang dijalankan ulang.
 >
 > **Aturan main dokumen ini:** repo ini punya budaya "temuan tanpa angka itu opini". Jadi setiap temuan
 > di bawah membawa angka yang membuktikannya. Di Bagian 5 (temuan baru), setiap poin diberi label
@@ -519,7 +650,75 @@ show nothing rather than '+100%' or '0%' — both of which would be inventions."
 - **Laporan HTML: TIDAK ADA.** `find` atas seluruh repo (di luar `node_modules`/`.git`) mengembalikan
   **nol** file `.html`. **[DIUKUR]** Tidak dibuat — itu keputusan yang belum diambil.
 
+## Wave 8 — Pre-Release Production Readiness Audit (2026-08-16)
+
+### Decision
+
+TokoΦ is an advanced pre-release system, not yet ready for unrestricted production release. Core tenant/RBAC/backend invariants are substantial, but seven P0 failures can still produce unauthorized order acceptance, duplicate payable bills, fabricated inventory information, or UI success without a durable write.
+
+This wave is a planning and evidence update only. No production data, deployment, payment, courier booking, payout, or remediation code was changed.
+
+### Evidence executed
+
+| Evidence | Result |
+|---|---|
+| Repository suite | 90/90 test files passed; 722/722 tests passed |
+| DB-coupled suite | 90/90 test files and 722/722 tests passed against the dedicated local test database |
+| Storefront Astro check | 0 errors |
+| Landing Astro check | 0 errors |
+| Local browser exercise | Seller login/dashboard; product list/editor; inventory; purchasing; navigation; active storefront home/list/PDP/cart/checkout; desktop and mobile samples |
+| Tenant-state probe | Active tenant served; suspended tenant returned not found at storefront entry |
+| Live read-only probe | `app.tokophi.com` returned HSTS; `tokophi.com` redirected to Cloudflare 404 |
+
+Passing tests are baseline evidence, not release evidence for the missing contracts. The current suite does not cover the complete cart → order → payment callback → inventory/ledger lifecycle.
+
+### Accepted findings
+
+| Priority | Count | Release treatment |
+|---|---:|---|
+| P0 — release blockers | 7 | Must be fixed and reproduced green before unrestricted release |
+| P1 — high priority | 8 | Must be fixed or explicitly deferred by an owner with release impact recorded |
+| P2 — hardening | 6 | Scheduled after functional contracts; security items remain release-sensitive |
+
+#### P0 — release blockers
+
+1. `apps/admin/scripts/audit-responsive.mjs` contains a reusable default seller credential.
+2. `/api/public/order` accepts a valid order for a suspended store although the storefront blocks the tenant.
+3. Concurrent payment-request creation can create more than one payable provider bill for one order.
+4. Incoming Inventory derives receipt quantities from a fixed percentage instead of persisted receipt facts.
+5. The multi-variant quick inventory editor sends the same aggregate stock value to every variant.
+6. The product editor's `Buat PO` dialog can close without creating a purchase order.
+7. Navigation menu creation reports success without inserting the menu row.
+
+#### P1 — high priority
+
+1. Courier cancellation can succeed remotely and fail locally without a durable reconciliation state.
+2. Product sales-channel and tag controls do not round-trip through the save contract.
+3. Store-user invitation handling can misreport outcome across mail/DB failure and uniqueness races.
+4. Checkout district search presents lookup failure as no results and can leave the field unusable.
+5. The shared seller topbar produces 27 px horizontal overflow at 320 px on all 15 sampled routes.
+6. The product editor warns about unsaved changes even when untouched and does not model save success/failure correctly.
+7. No full lifecycle integration test covers order, payment callback, stock, ledger, replay, and tenant isolation together.
+8. TokoΦ Account remains a standalone localStorage prototype with no recorded production-release decision.
+
+#### P2 — hardening
+
+1. Impersonation exchange drops the platform operator identity after the merchant token is minted.
+2. `inventory_levels` has no direct tenant RLS policy, relying on parent-relation isolation.
+3. Public rate limits are process-local and reset across replicas/restarts.
+4. First-party cron/callback endpoints accept reusable secrets in query parameters.
+5. SVG upload validation does not neutralize active SVG content.
+6. `checkout.astro` (~2,759 lines) and `product-editor.tsx` (~1,364 lines) are oversized release-critical modules.
+
+### Traceability and execution
+
+- Accepted contracts and statuses: [`REQUIREMENTS.md`](./REQUIREMENTS.md).
+- Exact target files, changes, and runnable acceptance checks: repository-root [`TASKS.md`](../../TASKS.md), Stages 4–7.
+- Current queue and handoff entrypoint: [`tasks/OPEN.md`](./tasks/OPEN.md).
+- Development order: three dependency-aware waves with independent lanes. Payment identity, inventory mutation, product editor, checkout, and migration-number contracts have a single owner per wave to prevent parallel implementations from defining competing behavior.
+
 ---
+
 
 ## Lampiran — gerbang yang hanya menyala kalau dijalankan
 
@@ -538,4 +737,4 @@ file test), dan `npm run verify-rls`. Ketiganya hijau saat outage sungguhan pern
 
 ---
 
-*Ditulis 2026-08-03, branch `wave7/w7-audit`, dari `origin/main` @ `b5f9ded`.*
+*Originally written 2026-08-03 from `origin/main` @ `b5f9ded`; refreshed 2026-08-16 with wave 8 evidence and the accepted pre-release queue.*
