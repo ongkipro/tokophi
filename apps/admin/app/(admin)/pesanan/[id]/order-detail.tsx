@@ -218,7 +218,10 @@ export function OrderDetail({
   const canBookShipment = isCod || payment?.status === "berhasil";
   // A gateway bill (VA/QRIS/DANA) exists only when the payments row carries a channel code.
   const hasBill = !!payment?.channelCode;
-  const canBill = !payment || (!hasBill && payment.status !== "berhasil");
+  const canBill =
+    !payment ||
+    payment.status === "gagal" ||
+    (!hasBill && payment.status !== "berhasil");
 
   const action = primaryAction(order.status);
   const router = useRouter();
@@ -424,17 +427,52 @@ export function OrderDetail({
     { code: "DANA", label: "DANA" },
   ];
   const [billOpen, setBillOpen] = React.useState(false);
+  const [billIntentChannel, setBillIntentChannel] = React.useState<string | null>(
+    null,
+  );
+  const [billTerminalFailure, setBillTerminalFailure] =
+    React.useState(false);
+  const billIntent = React.useRef<{
+    requestKey: string;
+    channelCode: string;
+  } | null>(null);
+  const openBill = () => {
+    // Closing and deliberately reopening after a persisted terminal failure starts a new intent.
+    // Ordinary retries (including a concurrent/in-progress response) retain the exact same key.
+    if (billTerminalFailure) {
+      billIntent.current = null;
+      setBillIntentChannel(null);
+      setBillTerminalFailure(false);
+    }
+    setBillOpen(true);
+  };
   const createBill = (channelCode: string) => {
+    if (!billIntent.current) {
+      billIntent.current = {
+        requestKey: globalThis.crypto.randomUUID(),
+        channelCode,
+      };
+      setBillIntentChannel(channelCode);
+    }
+    const intent = billIntent.current;
     startRate(async () => {
       const r = await createOrderPayment(
         order.id.replace("#", ""),
-        channelCode,
+        intent.channelCode,
+        intent.requestKey,
       );
       if (r.ok) {
         toast.success("Tagihan pembayaran dibuat.");
         setBillOpen(false);
         router.refresh();
-      } else toast.error(r.error ?? "Gagal membuat tagihan");
+        return;
+      }
+      toast.error(r.error);
+      if (r.terminal) {
+        setBillTerminalFailure(true);
+        setBillOpen(false);
+        router.refresh();
+      }
     });
   };
   const PAY_STATUS: Record<string, { label: string; cls: string }> = {
@@ -1216,7 +1254,7 @@ export function OrderDetail({
                   size="sm"
                   className="w-full"
                   disabled={ratePending}
-                  onClick={() => setBillOpen(true)}
+                  onClick={openBill}
                 >
                   <CreditCard className="size-4" /> Buat Tagihan
                 </Button>
@@ -1720,7 +1758,11 @@ export function OrderDetail({
               <Button
                 key={c.code}
                 variant="outline"
-                disabled={ratePending}
+                disabled={
+                  ratePending ||
+                  (billIntentChannel !== null &&
+                    billIntentChannel !== c.code)
+                }
                 onClick={() => createBill(c.code)}
               >
                 {c.label}
