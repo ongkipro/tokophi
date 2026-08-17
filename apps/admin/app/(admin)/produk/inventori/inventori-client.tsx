@@ -7,7 +7,13 @@ import { toast } from "sonner";
 import { updateStock } from "@/lib/actions/inventory";
 import { useCan } from "@/components/admin/permissions";
 import {
-  Boxes, Minus, Plus,AlertTriangle, PackageX, Warehouse, Download,
+  Boxes,
+  Minus,
+  Plus,
+  AlertTriangle,
+  PackageX,
+  Warehouse,
+  Download,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
@@ -23,14 +29,23 @@ import { Button } from "@tokophi/ui/button";
 import { Badge } from "@tokophi/ui/badge";
 import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@tokophi/ui/table";
 import { SearchInput } from "@/components/admin/search-input";
-import { ADMIN_LIST_PAGE_SIZE, ListPagination } from "@/components/admin/list-pagination";
+import {
+  ADMIN_LIST_PAGE_SIZE,
+  ListPagination,
+} from "@/components/admin/list-pagination";
 
 const LOW_STOCK = 20;
 
 type TabKey = "all" | "low" | "out";
-
 
 function StockStatusBadge({ qty }: { qty: number }) {
   if (qty <= 0) return <Badge variant="destructive">Habis</Badge>;
@@ -47,22 +62,50 @@ function StockStatusBadge({ qty }: { qty: number }) {
   );
 }
 
-function StatCard({ icon, label, value, accent }: {
-  icon: React.ReactNode; label: string; value: string; accent?: string;
+function StatCard({
+  icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  accent?: string;
 }) {
   return (
     <Card className="py-0">
       <CardContent className="flex items-center gap-3 p-4">
-        <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", accent ?? "bg-muted text-muted-foreground")}>
+        <div
+          className={cn(
+            "flex size-9 shrink-0 items-center justify-center rounded-lg",
+            accent ?? "bg-muted text-muted-foreground",
+          )}
+        >
           {icon}
         </div>
         <div className="min-w-0">
           <p className="truncate text-xs text-muted-foreground">{label}</p>
-          <p className="text-lg font-semibold tabular-nums tracking-tight">{value}</p>
+          <p className="text-lg font-semibold tabular-nums tracking-tight">
+            {value}
+          </p>
         </div>
       </CardContent>
     </Card>
   );
+}
+
+function stockByVariant(products: Product[]): Record<string, number | ""> {
+  const stock: Record<string, number | ""> = {};
+  for (const product of products) {
+    for (const variant of product.variants ?? [])
+      stock[variant.id] = variant.stock;
+  }
+  return stock;
+}
+
+function stockNumber(value: number | "" | undefined): number {
+  return typeof value === "number" ? value : 0;
 }
 
 export function InventoriClient({
@@ -75,32 +118,82 @@ export function InventoriClient({
   const [search, setSearch] = React.useState("");
   const [tab, setTab] = React.useState<TabKey>("all");
   const [page, setPage] = React.useState(1);
-  // Editable quantities kept in local state, seeded from the mock stock. Clamped at 0.
-  const [qty, setQty] = React.useState<Record<string, number>>(() =>
-    Object.fromEntries(products.map((p) => [p.id, p.stock])),
+  // Local edits survive ordinary client renders. A Server Component refresh replaces `products`
+  // with a new payload, so reset every row—including unchanged/missing rows—to database truth.
+  const [sourceProducts, setSourceProducts] = React.useState(products);
+  const [qty, setQty] = React.useState<Record<string, number | "">>(() =>
+    stockByVariant(products),
+  );
+  if (products !== sourceProducts) {
+    setSourceProducts(products);
+    setQty(stockByVariant(products));
+  }
+
+  const getProductQty = React.useCallback(
+    (p: Product) => {
+      return (p.variants ?? []).reduce<number>(
+        (acc, v) => acc + stockNumber(qty[v.id]),
+        0,
+      );
+    },
+    [qty],
   );
 
-  const setStock = (id: string, next: number) =>
-    setQty((s) => ({ ...s, [id]: Math.max(0, Math.round(Number.isFinite(next) ? next : 0)) }));
-  const bump = (id: string, delta: number) => setStock(id, (qty[id] ?? 0) + delta);
+  const setStock = (id: string, next: number | "") =>
+    setQty((stock) => ({ ...stock, [id]: next }));
+  const bump = (id: string, delta: number) => {
+    const current = stockNumber(qty[id]);
+    setStock(id, Math.max(0, current + delta));
+  };
 
   // Persist only the rows whose stock the user changed.
   const router = useRouter();
   const canWrite = useCan("inventory:write");
   const [pending, startTransition] = React.useTransition();
-  const changed = products.filter((p) => (qty[p.id] ?? 0) !== p.stock);
+  const changed = React.useMemo(() => {
+    const list: NonNullable<Product["variants"]>[0][] = [];
+    for (const p of products) {
+      for (const v of p.variants ?? []) {
+        if ((qty[v.id] ?? 0) !== v.stock && qty[v.id] !== "") list.push(v);
+      }
+    }
+    return list;
+  }, [products, qty]);
+
   const save = () => {
-    if (!canWrite) { toast.error("Akses ditolak — peran Anda tidak bisa mengubah stok"); return; }
+    if (!canWrite) {
+      toast.error("Akses ditolak — peran Anda tidak bisa mengubah stok");
+      return;
+    }
     if (!changed.length) return;
     startTransition(async () => {
       try {
-        // Send the loaded value as `expected` so the server can skip rows a sale/PO changed since the
-        // page opened, instead of overwriting them back up.
-        const res = await updateStock(changed.map((p) => ({ productId: p.id, available: qty[p.id] ?? 0, expected: p.stock })));
-        if (res.skipped > 0) {
-          toast.warning(`${res.updated} stok diperbarui; ${res.skipped} dilewati karena berubah sejak halaman dibuka. Memuat ulang…`);
+        const res = await updateStock(
+          changed.map((v) => ({
+            variantId: v.id,
+            available: qty[v.id] as number,
+            expected: v.stock,
+          })),
+        );
+
+        if (res.stale.length > 0) {
+          const names = res.stale.map((s) => {
+            const p = products.find((p) =>
+              p.variants?.some((v) => v.id === s.variantId),
+            );
+            const v = p?.variants?.find((v) => v.id === s.variantId);
+            const vName = v
+              ? [v.option1, v.option2, v.option3].filter(Boolean).join(" - ")
+              : "";
+            return p ? `${p.name}${vName ? ` (${vName})` : ""}` : s.variantId;
+          });
+          toast.error(
+            `Gagal: stok kedaluwarsa untuk ${names.join(", ")}. Memuat ulang...`,
+          );
+        } else if (res.invalid.length > 0 || res.missing.length > 0) {
+          toast.error("Gagal: beberapa varian tidak valid atau hilang.");
         } else {
-          toast.success(`Stok ${res.updated} produk diperbarui`);
+          toast.success(`Stok ${res.updated.length} varian diperbarui`);
         }
         router.refresh();
       } catch {
@@ -111,32 +204,46 @@ export function InventoriClient({
 
   // Stats recompute live from the edited quantities (Total SKU is constant).
   const stats = React.useMemo(() => {
-    let low = 0, out = 0, value = 0;
+    let low = 0,
+      out = 0,
+      value = 0;
     for (const p of products) {
-      const q = qty[p.id] ?? 0;
+      let q = 0;
+      for (const v of p.variants ?? []) {
+        const vq = typeof qty[v.id] === "number" ? (qty[v.id] as number) : 0;
+        q += vq;
+        value += vq * v.price;
+      }
       if (q <= 0) out++;
       if (q < LOW_STOCK) low++;
-      value += q * p.price;
     }
     return { total: products.length, low, out, value };
   }, [products, qty]);
 
-  const counts = React.useMemo(() => ({
-    all: products.length,
-    low: products.filter((p) => (qty[p.id] ?? 0) < LOW_STOCK).length,
-    out: products.filter((p) => (qty[p.id] ?? 0) <= 0).length,
-  }), [products, qty]);
+  const counts = React.useMemo(
+    () => ({
+      all: products.length,
+      low: products.filter((p) => getProductQty(p) < LOW_STOCK).length,
+      out: products.filter((p) => getProductQty(p) <= 0).length,
+    }),
+    [products, getProductQty],
+  );
 
   const filtered = React.useMemo(() => {
     const s = search.trim().toLowerCase();
     return products.filter((p) => {
-      const q = qty[p.id] ?? 0;
+      const q = getProductQty(p);
       if (tab === "low" && q >= LOW_STOCK) return false;
       if (tab === "out" && q > 0) return false;
-      if (s && !p.name.toLowerCase().includes(s) && !p.id.toLowerCase().includes(s)) return false;
+      if (
+        s &&
+        !p.name.toLowerCase().includes(s) &&
+        !p.id.toLowerCase().includes(s)
+      )
+        return false;
       return true;
     });
-  }, [products, search, tab, qty]);
+  }, [products, search, tab, getProductQty]);
 
   const TABS: { key: TabKey; label: string; count: number }[] = [
     { key: "all", label: "Semua", count: counts.all },
@@ -144,9 +251,15 @@ export function InventoriClient({
     { key: "out", label: "Habis", count: counts.out },
   ];
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / ADMIN_LIST_PAGE_SIZE));
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filtered.length / ADMIN_LIST_PAGE_SIZE),
+  );
   const currentPage = Math.min(page, pageCount);
-  const pageProducts = filtered.slice((currentPage - 1) * ADMIN_LIST_PAGE_SIZE, currentPage * ADMIN_LIST_PAGE_SIZE);
+  const pageProducts = filtered.slice(
+    (currentPage - 1) * ADMIN_LIST_PAGE_SIZE,
+    currentPage * ADMIN_LIST_PAGE_SIZE,
+  );
 
   // Reset ke halaman 1 saat filter berubah — DI RENDER, bukan di effect. Versi effect men-setState
   // sinkron setelah paint (react-hooks/set-state-in-effect): satu frame menampilkan halaman lama dari
@@ -160,7 +273,10 @@ export function InventoriClient({
 
   return (
     <div>
-      <PageHeader title="Inventori" desc="Pantau dan sesuaikan stok produk Anda.">
+      <PageHeader
+        title="Inventori"
+        desc="Pantau dan sesuaikan stok produk Anda."
+      >
         <Button
           variant="outline"
           onClick={() =>
@@ -171,8 +287,7 @@ export function InventoriClient({
                 return {
                   Produk: p.name,
                   Kategori: p.category,
-                  Stok: qty[p.id] ?? p.stock,
-                  Dipesan: receipt?.ordered ?? "",
+                  Stok: getProductQty(p),
                   Diterima: receipt?.received ?? "",
                   Masuk: receipt?.incoming ?? "",
                 };
@@ -184,14 +299,22 @@ export function InventoriClient({
         </Button>
         {canWrite && (
           <Button onClick={save} disabled={pending || changed.length === 0}>
-            {pending ? "Menyimpan…" : changed.length ? `Simpan ${changed.length} perubahan` : "Simpan"}
+            {pending
+              ? "Menyimpan…"
+              : changed.length
+                ? `Simpan ${changed.length} perubahan`
+                : "Simpan"}
           </Button>
         )}
       </PageHeader>
 
       {/* Stat cards */}
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard icon={<Boxes className="size-4" />} label="Total SKU" value={num(stats.total)} />
+        <StatCard
+          icon={<Boxes className="size-4" />}
+          label="Total SKU"
+          value={num(stats.total)}
+        />
         <StatCard
           icon={<AlertTriangle className="size-4" />}
           label="Stok menipis"
@@ -219,11 +342,20 @@ export function InventoriClient({
             onClick={() => setTab(t.key)}
             className={cn(
               "flex items-center gap-2 whitespace-nowrap border-b-2 px-3 pb-2.5 pt-1 text-sm font-medium transition-colors",
-              tab === t.key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+              tab === t.key
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
             {t.label}
-            <span className={cn("rounded-full px-1.5 text-[11px] tabular-nums", tab === t.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
+            <span
+              className={cn(
+                "rounded-full px-1.5 text-[11px] tabular-nums",
+                tab === t.key
+                  ? "bg-primary/10 text-primary"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
               {t.count}
             </span>
           </button>
@@ -249,13 +381,22 @@ export function InventoriClient({
             {/* Same split as /produk: an empty catalog is not a search that missed. */}
             {products.length === 0 ? (
               <>
-                <p className="text-sm font-medium">Belum ada produk untuk dipantau</p>
-                <p className="text-sm text-muted-foreground">Stok muncul di sini setelah Anda menambahkan produk di menu Produk.</p>
+                <p className="text-sm font-medium">
+                  Belum ada produk untuk dipantau
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Stok muncul di sini setelah Anda menambahkan produk di menu
+                  Produk.
+                </p>
               </>
             ) : (
               <>
-                <p className="text-sm font-medium">Tidak ada produk ditemukan</p>
-                <p className="text-sm text-muted-foreground">Coba ubah kata kunci atau filter Anda.</p>
+                <p className="text-sm font-medium">
+                  Tidak ada produk ditemukan
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Coba ubah kata kunci atau filter Anda.
+                </p>
               </>
             )}
           </CardContent>
@@ -268,19 +409,30 @@ export function InventoriClient({
                 <TableHead className="w-[40%] lg:w-[44%]">Produk</TableHead>
                 <TableHead className="hidden sm:table-cell">SKU</TableHead>
                 <TableHead className="text-center">Tersedia</TableHead>
-                <TableHead className="hidden text-right md:table-cell">Masuk</TableHead>
+                <TableHead className="hidden text-right md:table-cell">
+                  Masuk
+                </TableHead>
                 <TableHead>Status stok</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pageProducts.map((p) => {
-                const q = qty[p.id] ?? 0;
+              {pageProducts.flatMap((p) => {
+                const totalQ = getProductQty(p);
                 const receipt = receipts[p.id];
-                return (
-                  <TableRow key={p.id}>
+
+                const productRow = (
+                  <TableRow
+                    key={p.id}
+                    className={p.hasVariants ? "bg-muted/30" : undefined}
+                  >
                     <TableCell className="max-w-[32rem] py-3.5">
                       <div className="flex items-start gap-3.5">
-                        <ProductThumb src={p.image} emoji={p.emoji} alt={p.name} className="mt-0.5 size-10 shrink-0 rounded-md" />
+                        <ProductThumb
+                          src={p.image}
+                          emoji={p.emoji}
+                          alt={p.name}
+                          className="mt-0.5 size-10 shrink-0 rounded-md"
+                        />
                         <div className="min-w-0 flex-1">
                           <Link
                             href={`/produk/${p.number ?? p.id}`}
@@ -289,62 +441,179 @@ export function InventoriClient({
                           >
                             {p.name}
                           </Link>
-                          <p className="mt-1 line-clamp-2 whitespace-normal break-words text-xs leading-4 text-muted-foreground">{p.category}</p>
+                          <p className="mt-1 line-clamp-2 whitespace-normal break-words text-xs leading-4 text-muted-foreground">
+                            {p.category}
+                          </p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="hidden py-3.5 sm:table-cell">
-                      <span className="font-mono text-xs text-muted-foreground">{p.id}</span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {!p.hasVariants ? p.variants?.[0]?.sku || "—" : "—"}
+                      </span>
                     </TableCell>
                     <TableCell className="py-3.5">
-                      <div className="mx-auto flex w-fit items-center gap-1">
-                        <Label htmlFor={`qty-${p.id}`} className="sr-only">Stok {p.name}</Label>
-                        <Button
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label={`Kurangi stok ${p.name}`}
-                          disabled={q <= 0}
-                          onClick={() => bump(p.id, -1)}
-                        >
-                          <Minus />
-                        </Button>
-                        <Input
-                          id={`qty-${p.id}`}
-                          inputMode="numeric"
-                          value={q}
-                          onChange={(e) => setStock(p.id, parseInt(e.target.value.replace(/\D/g, ""), 10) || 0)}
-                          className="h-7 w-14 px-1 text-center text-sm tabular-nums"
-                          aria-label={`Stok tersedia ${p.name}`}
-                        />
-                        <Button
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label={`Tambah stok ${p.name}`}
-                          onClick={() => bump(p.id, 1)}
-                        >
-                          <Plus />
-                        </Button>
-                      </div>
+                      {!p.hasVariants && p.variants?.[0] ? (
+                        <div className="mx-auto flex w-fit items-center gap-1">
+                          <Label
+                            htmlFor={`qty-${p.variants[0].id}`}
+                            className="sr-only"
+                          >
+                            Stok {p.name}
+                          </Label>
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label={`Kurangi stok ${p.name}`}
+                            disabled={stockNumber(qty[p.variants[0].id]) <= 0}
+                            onClick={() => bump(p.variants![0].id, -1)}
+                          >
+                            <Minus />
+                          </Button>
+                          <Input
+                            id={`qty-${p.variants[0].id}`}
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={qty[p.variants[0].id] ?? 0}
+                            onChange={(e) => {
+                              const next = e.currentTarget.valueAsNumber;
+                              setStock(
+                                p.variants![0].id,
+                                e.currentTarget.value === "" ||
+                                  !Number.isFinite(next)
+                                  ? ""
+                                  : next,
+                              );
+                            }}
+                            className="h-7 w-14 px-1 text-center text-sm tabular-nums"
+                            aria-label={`Stok tersedia ${p.name}`}
+                          />
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label={`Tambah stok ${p.name}`}
+                            onClick={() => bump(p.variants![0].id, 1)}
+                          >
+                            <Plus />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="text-center font-medium tabular-nums">
+                          {num(totalQ)}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="hidden py-3.5 text-right tabular-nums md:table-cell">
                       {receipt ? (
                         <div>
-                          <div>{receipt.incoming > 0 ? `+${num(receipt.incoming)}` : "—"}</div>
+                          <div>
+                            {receipt.incoming > 0
+                              ? `+${num(receipt.incoming)}`
+                              : "—"}
+                          </div>
                           <div className="mt-0.5 text-xs text-muted-foreground">
-                            {num(receipt.received)}/{num(receipt.ordered)} diterima
+                            {num(receipt.received)}/{num(receipt.ordered)}{" "}
+                            diterima
                           </div>
                         </div>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="py-3.5"><StockStatusBadge qty={q} /></TableCell>
+                    <TableCell className="py-3.5">
+                      <StockStatusBadge qty={totalQ} />
+                    </TableCell>
                   </TableRow>
                 );
+
+                if (!p.hasVariants) return [productRow];
+
+                const variantRows = (p.variants ?? []).map((v) => {
+                  const editedQty = qty[v.id] ?? 0;
+                  const vq = stockNumber(editedQty);
+                  const vName = [v.option1, v.option2, v.option3]
+                    .filter(Boolean)
+                    .join(" - ");
+                  return (
+                    <TableRow
+                      key={v.id}
+                      className="border-t-0 bg-muted/10 transition-colors hover:bg-muted/30"
+                    >
+                      <TableCell className="py-2.5 pl-12">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-border" />
+                          <span className="text-sm font-medium">
+                            {vName || "Default"}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden py-2.5 sm:table-cell">
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {v.sku || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <div className="mx-auto flex w-fit items-center gap-1">
+                          <Label htmlFor={`qty-${v.id}`} className="sr-only">
+                            Stok {p.name} - {vName}
+                          </Label>
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label={`Kurangi stok ${p.name} ${vName}`}
+                            disabled={vq <= 0}
+                            onClick={() => bump(v.id, -1)}
+                          >
+                            <Minus />
+                          </Button>
+                          <Input
+                            id={`qty-${v.id}`}
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={editedQty}
+                            onChange={(e) => {
+                              const next = e.currentTarget.valueAsNumber;
+                              setStock(
+                                v.id,
+                                e.currentTarget.value === "" ||
+                                  !Number.isFinite(next)
+                                  ? ""
+                                  : next,
+                              );
+                            }}
+                            className="h-7 w-14 px-1 text-center text-sm tabular-nums"
+                            aria-label={`Stok tersedia ${p.name} ${vName}`}
+                          />
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label={`Tambah stok ${p.name} ${vName}`}
+                            onClick={() => bump(v.id, 1)}
+                          >
+                            <Plus />
+                          </Button>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden py-2.5 text-right md:table-cell" />
+                      <TableCell className="py-2.5">
+                        <StockStatusBadge qty={vq} />
+                      </TableCell>
+                    </TableRow>
+                  );
+                });
+
+                return [productRow, ...variantRows];
               })}
             </TableBody>
           </Table>
-          <ListPagination page={currentPage} total={filtered.length} unit="produk" onPageChange={setPage} />
+          <ListPagination
+            page={currentPage}
+            total={filtered.length}
+            unit="produk"
+            onPageChange={setPage}
+          />
         </Card>
       )}
     </div>

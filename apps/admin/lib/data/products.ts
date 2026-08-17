@@ -3,6 +3,7 @@ import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Product } from "@/lib/mock/store";
+import { defaultLocationId } from "@/lib/inventory-location";
 
 // Flatten the normalized catalog (products ⋈ default variant ⋈ inventory ⋈ primary media)
 // back into the admin's flat `Product` shape — signatures unchanged, screens untouched.
@@ -39,19 +40,51 @@ const selectProduct = {
   sku: schema.productVariants.sku,
 };
 
-function base(db: Tx) {
+function base(db: Tx, sid: string, locId: string | null) {
   return db
     .select(selectProduct)
     .from(schema.products)
-    .leftJoin(schema.productVariants, and(eq(schema.productVariants.productId, schema.products.id), eq(schema.productVariants.position, 0)))
-    .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.productVariants.id))
-    .leftJoin(schema.productMedia, and(eq(schema.productMedia.productId, schema.products.id), eq(schema.productMedia.position, 0)));
+    .leftJoin(
+      schema.productVariants,
+      and(
+        eq(schema.productVariants.productId, schema.products.id),
+        eq(schema.productVariants.position, 0),
+        eq(schema.productVariants.storeId, sid),
+      ),
+    )
+    .leftJoin(
+      schema.inventoryLevels,
+      locId
+        ? and(
+            eq(schema.inventoryLevels.variantId, schema.productVariants.id),
+            eq(schema.inventoryLevels.locationId, locId),
+          )
+        : sql`1=0`,
+    )
+    .leftJoin(
+      schema.productMedia,
+      and(
+        eq(schema.productMedia.productId, schema.products.id),
+        eq(schema.productMedia.position, 0),
+      ),
+    );
 }
 
 function toProduct(r: {
-  id: string; name: string; handle: string; number?: number; emoji: string | null; status: "active" | "draft" | "archived";
-  category: string | null; unitsSold: number; createdAt: Date; price: number | null; stock: number | null; image: string | null;
-  weightMissing?: boolean; googleCategoryPath?: string | null;
+  id: string;
+  name: string;
+  handle: string;
+  number?: number;
+  emoji: string | null;
+  status: "active" | "draft" | "archived";
+  category: string | null;
+  unitsSold: number;
+  createdAt: Date;
+  price: number | null;
+  stock: number | null;
+  image: string | null;
+  weightMissing?: boolean;
+  googleCategoryPath?: string | null;
 }): Product {
   return {
     id: r.id,
@@ -74,7 +107,8 @@ function toProduct(r: {
 }
 
 export async function getProducts(): Promise<Product[]> {
-  return withCurrentTenant(async (db) => {
+  return withCurrentTenant(async (db, sid) => {
+    const locId = await defaultLocationId(db, sid);
     // list shows the "from" price (min variant) + TOTAL stock across all variants
     const rows = await db
       .select({
@@ -88,8 +122,14 @@ export async function getProducts(): Promise<Product[]> {
         unitsSold: schema.products.unitsSold,
         createdAt: schema.products.createdAt,
         googleCategoryPath: schema.products.googleCategoryPath, // functionally dependent on products.id (grouped) — no aggregate needed
-        price: sql<number>`coalesce(min(${schema.productVariants.priceIdr}), 0)`.mapWith(Number),
-        stock: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)`.mapWith(Number),
+        price:
+          sql<number>`coalesce(min(${schema.productVariants.priceIdr}), 0)`.mapWith(
+            Number,
+          ),
+        stock:
+          sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)`.mapWith(
+            Number,
+          ),
         // TRUE if ANY variant has no weight_grams — the checkout then prices that parcel with the 500g
         // fallback (lib/shipping-weight.ts), which can be wrong. Surfaced on the list so the fallback is
         // visible, not silent.
@@ -97,27 +137,72 @@ export async function getProducts(): Promise<Product[]> {
         image: schema.productMedia.url,
       })
       .from(schema.products)
-      .leftJoin(schema.productVariants, eq(schema.productVariants.productId, schema.products.id))
-      .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.productVariants.id))
-      .leftJoin(schema.productMedia, and(eq(schema.productMedia.productId, schema.products.id), eq(schema.productMedia.position, 0)))
-      .where(ne(schema.products.status, "archived"))
+      .leftJoin(
+        schema.productVariants,
+        and(
+          eq(schema.productVariants.productId, schema.products.id),
+          eq(schema.productVariants.storeId, sid),
+        ),
+      )
+      .leftJoin(
+        schema.inventoryLevels,
+        locId
+          ? and(
+              eq(schema.inventoryLevels.variantId, schema.productVariants.id),
+              eq(schema.inventoryLevels.locationId, locId),
+            )
+          : sql`1=0`,
+      )
+      .leftJoin(
+        schema.productMedia,
+        and(
+          eq(schema.productMedia.productId, schema.products.id),
+          eq(schema.productMedia.position, 0),
+        ),
+      )
+      .where(
+        and(
+          eq(schema.products.storeId, sid),
+          ne(schema.products.status, "archived"),
+        ),
+      )
       .groupBy(schema.products.id, schema.productMedia.url)
       .orderBy(desc(schema.products.createdAt));
     const productIds = rows.map((row) => row.id);
-    const variants = productIds.length === 0 ? [] : await db
-      .select({
-        productId: schema.productVariants.productId,
-        option1: schema.productVariants.option1,
-        option2: schema.productVariants.option2,
-        option3: schema.productVariants.option3,
-        sku: schema.productVariants.sku,
-        price: schema.productVariants.priceIdr,
-        stock: schema.inventoryLevels.available,
-      })
-      .from(schema.productVariants)
-      .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.productVariants.id))
-      .where(inArray(schema.productVariants.productId, productIds))
-      .orderBy(schema.productVariants.position);
+    const variants =
+      productIds.length === 0
+        ? []
+        : await db
+            .select({
+              id: schema.productVariants.id,
+              productId: schema.productVariants.productId,
+              option1: schema.productVariants.option1,
+              option2: schema.productVariants.option2,
+              option3: schema.productVariants.option3,
+              sku: schema.productVariants.sku,
+              price: schema.productVariants.priceIdr,
+              stock: schema.inventoryLevels.available,
+            })
+            .from(schema.productVariants)
+            .leftJoin(
+              schema.inventoryLevels,
+              locId
+                ? and(
+                    eq(
+                      schema.inventoryLevels.variantId,
+                      schema.productVariants.id,
+                    ),
+                    eq(schema.inventoryLevels.locationId, locId),
+                  )
+                : sql`1=0`,
+            )
+            .where(
+              and(
+                inArray(schema.productVariants.productId, productIds),
+                eq(schema.productVariants.storeId, sid),
+              ),
+            )
+            .orderBy(schema.productVariants.position);
 
     const variantsByProduct = new Map<string, Product["variants"]>();
     for (const variant of variants) {
@@ -128,7 +213,11 @@ export async function getProducts(): Promise<Product[]> {
 
     return rows.map((row) => {
       const productVariants = variantsByProduct.get(row.id) ?? [];
-      return { ...toProduct(row), hasVariants: productVariants.length > 1, variants: productVariants };
+      return {
+        ...toProduct(row),
+        hasVariants: productVariants.length > 1,
+        variants: productVariants,
+      };
     });
   });
 }
@@ -144,17 +233,25 @@ export async function getProducts(): Promise<Product[]> {
  * different product in every store, and a 4-digit number is enumerable in a way a UUID never was — so
  * this is precisely the query where "the WHERE is the rule and the policy is only the net" has to hold.
  */
-export async function resolveProductIdByNumber(number: number): Promise<string | null> {
+export async function resolveProductIdByNumber(
+  number: number,
+): Promise<string | null> {
   // ⚠️ The UPPER bound is not decoration. `products.number` is `integer`, and Postgres answers a
   // larger literal with 22003 ("out of range") — a different error class from the 22P02 the route's
   // shape test guards, and it throws from inside the render, i.e. a 500 rather than a 404. A merchant
   // fat-fingering `/produk/10422222222` is all it takes.
-  if (!Number.isInteger(number) || number <= 0 || number > 2_147_483_647) return null;
+  if (!Number.isInteger(number) || number <= 0 || number > 2_147_483_647)
+    return null;
   return withCurrentTenant(async (db, storeId) => {
     const [row] = await db
       .select({ id: schema.products.id })
       .from(schema.products)
-      .where(and(eq(schema.products.storeId, storeId), eq(schema.products.number, number)))
+      .where(
+        and(
+          eq(schema.products.storeId, storeId),
+          eq(schema.products.number, number),
+        ),
+      )
       .limit(1);
     return row?.id ?? null;
   });
@@ -166,15 +263,19 @@ export async function productNumberById(id: string): Promise<number | null> {
     const [row] = await db
       .select({ number: schema.products.number })
       .from(schema.products)
-      .where(and(eq(schema.products.storeId, storeId), eq(schema.products.id, id)))
+      .where(
+        and(eq(schema.products.storeId, storeId), eq(schema.products.id, id)),
+      )
       .limit(1);
     return row?.number ?? null;
   });
 }
-
 export async function getProduct(id: string): Promise<Product | null> {
-  return withCurrentTenant(async (db) => {
-    const rows = await base(db).where(eq(schema.products.id, id)).limit(1);
+  return withCurrentTenant(async (db, sid) => {
+    const locId = await defaultLocationId(db, sid);
+    const rows = await base(db, sid, locId)
+      .where(and(eq(schema.products.id, id), eq(schema.products.storeId, sid)))
+      .limit(1);
     if (!rows[0]) return null;
     const media = await db
       .select({ id: schema.productMedia.id, url: schema.productMedia.url })
@@ -190,17 +291,21 @@ export async function getProduct(id: string): Promise<Product | null> {
         heightCm: schema.products.heightCm,
       })
       .from(schema.products)
-      .where(eq(schema.products.id, id))
+      .where(and(eq(schema.products.id, id), eq(schema.products.storeId, sid)))
       .limit(1);
 
     // option definitions (names, in order) + every variant with its option values + stock
     const optionRows = await db
-      .select({ name: schema.productOptions.name, position: schema.productOptions.position })
+      .select({
+        name: schema.productOptions.name,
+        position: schema.productOptions.position,
+      })
       .from(schema.productOptions)
       .where(eq(schema.productOptions.productId, id))
       .orderBy(schema.productOptions.position);
     const variantRows = await db
       .select({
+        id: schema.productVariants.id,
         option1: schema.productVariants.option1,
         option2: schema.productVariants.option2,
         option3: schema.productVariants.option3,
@@ -211,26 +316,56 @@ export async function getProduct(id: string): Promise<Product | null> {
         stock: schema.inventoryLevels.available,
       })
       .from(schema.productVariants)
-      .leftJoin(schema.inventoryLevels, eq(schema.inventoryLevels.variantId, schema.productVariants.id))
-      .where(eq(schema.productVariants.productId, id))
+      .leftJoin(
+        schema.inventoryLevels,
+        locId
+          ? and(
+              eq(schema.inventoryLevels.variantId, schema.productVariants.id),
+              eq(schema.inventoryLevels.locationId, locId),
+            )
+          : sql`1=0`,
+      )
+      .where(
+        and(
+          eq(schema.productVariants.productId, id),
+          eq(schema.productVariants.storeId, sid),
+        ),
+      )
       .orderBy(schema.productVariants.position);
 
-    const variants = variantRows.map((v) => ({ option1: v.option1, option2: v.option2, option3: v.option3, sku: v.sku, price: v.price, stock: v.stock ?? 0 }));
+    const variants = variantRows.map((v) => ({
+      id: v.id,
+      option1: v.option1,
+      option2: v.option2,
+      option3: v.option3,
+      sku: v.sku,
+      price: v.price,
+      stock: v.stock ?? 0,
+    }));
     // per-option distinct values, derived from the variants (preserve first-seen order)
     const options = optionRows.map((o, i) => {
-      const key = (`option${i + 1}`) as "option1" | "option2" | "option3";
+      const key = `option${i + 1}` as "option1" | "option2" | "option3";
       const seen = new Set<string>();
       const values: string[] = [];
       for (const v of variants) {
         const val = v[key];
-        if (val && !seen.has(val)) { seen.add(val); values.push(val); }
+        if (val && !seen.has(val)) {
+          seen.add(val);
+          values.push(val);
+        }
       }
       return { name: o.name, values };
     });
 
-    const defaultVariant = variantRows.slice().sort((a, b) => a.position - b.position)[0];
+    const defaultVariant = variantRows
+      .slice()
+      .sort((a, b) => a.position - b.position)[0];
     return {
-      ...toProduct(rows[0]), media, hasVariants: prod?.hasVariants ?? false, options, variants,
+      ...toProduct(rows[0]),
+      media,
+      hasVariants: prod?.hasVariants ?? false,
+      options,
+      variants,
       weightGrams: defaultVariant?.weightGrams ?? null,
       lengthCm: prod?.lengthCm ?? null,
       widthCm: prod?.widthCm ?? null,
