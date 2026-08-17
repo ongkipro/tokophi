@@ -8,6 +8,19 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-18] — Stage 4 Tasks 4.1–4.5 Integration Proof
+
+- **Scope:** Integrated the independently reviewed Task 4.1 credential hardening, Task 4.2 public-store availability guard, Task 4.3 durable payment-request idempotency, Task 4.4 persisted receipt facts, and Task 4.5 per-variant stock update contract on `integration/stage4-p0-wave1`.
+- **Task 4.3:** `createOrderPayment` now claims a store-scoped caller request key before provider I/O, persists `in_progress`/`accepted`/`failed`, rejects intent reuse, and replays the stored terminal result and local payment identity after module reload.
+- **Task 4.5:** Inventory edits now submit variant id, exact intended stock, and expected prior stock; the tenant transaction conditionally updates the selected row only, and stale rows are reloaded with a visible conflict message.
+- **Integrated Verification:**
+  - `TEST_DB_REQUIRED=1 vitest run apps/admin/scripts/audit-responsive.test.ts apps/admin/app/api/public/order/route.test.ts apps/admin/lib/payment-request.test.ts apps/admin/lib/data/inventory.test.ts apps/admin/lib/actions/inventory.test.ts` → **5 files and 12 tests passed** against real PostgreSQL.
+  - `tsc --noEmit -p apps/admin/tsconfig.json` → **0 errors**.
+  - Focused ESLint across every integrated Admin source and test file → **0 errors and 0 warnings**.
+  - `DATABASE_URL=... npm run migrate -w @tokophi/db` after migration `0095_payment_request_idempotency` was already applied → **rerun completed successfully**.
+  - Task 4.5 browser proof at 1365×768 and 390×844 changed only the selected variant, retained the persisted sibling quantity after reload, surfaced an externally injected stale conflict, and showed no mobile horizontal overflow.
+- **Branch Evidence:** `fix/task-4.1-audit-credentials`, `fix/task-4.2-store-availability`, `fix/task-4.3-payment-idempotency`, `fix/task-4.4-inventory-receipts`, and `fix/task-4.5-variant-stock` are pushed. The current `origin/main` `TASKS.md` predates the separate canonical Stage 4 planning changes, so this integration branch does not replace or duplicate that unmerged source of truth.
+
 ### [2026-08-17 16:41 UTC] — Task 4.1 Responsive-Audit Credential Removal
 
 - **Scope:** Completed Stage 4 Task 4.1 from `docs/canonical-planning-contracts`: the Seller responsive audit no longer embeds a reusable account and exits before browser launch when either required credential is absent.
